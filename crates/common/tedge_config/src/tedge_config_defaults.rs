@@ -1,6 +1,6 @@
-use crate::models::FilePath;
 use crate::IpAddress;
 use crate::TEdgeConfigLocation;
+use crate::{models::FilePath, TemplatesSet};
 use crate::{Flag, Port};
 use std::path::Path;
 
@@ -36,6 +36,9 @@ pub struct TEdgeConfigDefaults {
 
     /// Default path for c8y root certificates
     pub default_c8y_root_cert_path: FilePath,
+
+    /// Default c8y smartrest templates
+    pub default_c8y_smartrest_templates: TemplatesSet,
 
     /// Default mapper timestamp bool
     pub default_mapper_timestamp: Flag,
@@ -85,6 +88,7 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
             default_run_path: run_path.into(),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
             default_mqtt_bind_address: IpAddress::default(),
+            default_c8y_smartrest_templates: TemplatesSet::default(),
         }
     }
 }
@@ -112,6 +116,7 @@ fn test_from_tedge_config_location() {
             default_run_path: FilePath::from("/run"),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
             default_mqtt_bind_address: IpAddress::default(),
+            default_c8y_smartrest_templates: TemplatesSet::default(),
         }
     );
 }

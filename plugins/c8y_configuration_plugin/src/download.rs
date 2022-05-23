@@ -1,23 +1,22 @@
+use crate::config::FileEntry;
 use crate::error::ConfigManagementError;
-use crate::smartrest::TryIntoOperationStatusMessage;
-use crate::{error, PluginConfig};
+use crate::{error, PluginConfig, CONFIG_CHANGE_TOPIC};
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_smartrest::error::SmartRestSerializerError;
 use c8y_smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_smartrest::smartrest_serializer::{
     CumulocitySupportedOperations, SmartRest, SmartRestSerializer,
     SmartRestSetOperationToExecuting, SmartRestSetOperationToFailed,
-    SmartRestSetOperationToSuccessful,
+    SmartRestSetOperationToSuccessful, TryIntoOperationStatusMessage,
 };
 use download::{Auth, DownloadInfo, Downloader};
 use mqtt_channel::{Connection, Message, SinkExt, Topic};
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
-
-const CONFIG_CHANGE_TOPIC: &str = "tedge/configuration_change";
+use std::path::PathBuf;
+use tedge_utils::file::{get_filename, get_metadata, PermissionEntry};
+use tracing::{info, warn};
 
 pub async fn handle_config_download_request(
     plugin_config: &PluginConfig,
@@ -29,19 +28,41 @@ pub async fn handle_config_download_request(
     let executing_message = DownloadConfigFileStatusMessage::executing()?;
     let () = mqtt_client.published.send(executing_message).await?;
 
-    // Add validation if the config_type exists in
-    let changed_file = smartrest_request.config_type.clone();
+    let target_config_type = smartrest_request.config_type.clone();
+    let mut target_file_entry = FileEntry::default();
 
-    match download_config_file(plugin_config, smartrest_request, tmp_dir, http_client).await {
+    let download_result = {
+        match plugin_config.get_file_entry_from_type(&target_config_type) {
+            Ok(file_entry) => {
+                target_file_entry = file_entry;
+                download_config_file(
+                    smartrest_request.url.as_str(),
+                    PathBuf::from(&target_file_entry.path),
+                    tmp_dir,
+                    target_file_entry.file_permissions,
+                    http_client,
+                )
+                .await
+            }
+            Err(err) => Err(err.into()),
+        }
+    };
+
+    match download_result {
         Ok(_) => {
+            info!("The configuration download for '{target_config_type}' is successful.");
+
             let successful_message = DownloadConfigFileStatusMessage::successful(None)?;
             let () = mqtt_client.published.send(successful_message).await?;
 
-            let notification_message = get_file_change_notification_message(changed_file);
+            let notification_message =
+                get_file_change_notification_message(&target_file_entry.path, &target_config_type);
             let () = mqtt_client.published.send(notification_message).await?;
             Ok(())
         }
         Err(err) => {
+            error!("The configuration download for '{target_config_type}' failed.",);
+
             let failed_message = DownloadConfigFileStatusMessage::failed(err.to_string())?;
             let () = mqtt_client.published.send(failed_message).await?;
             Err(err)
@@ -50,14 +71,15 @@ pub async fn handle_config_download_request(
 }
 
 async fn download_config_file(
-    plugin_config: &PluginConfig,
-    smartrest_request: SmartRestConfigDownloadRequest,
+    download_url: &str,
+    file_path: PathBuf,
     tmp_dir: PathBuf,
+    file_permissions: PermissionEntry,
     http_client: &mut impl C8YHttpProxy,
 ) -> Result<(), anyhow::Error> {
     // Convert smartrest request to config download request struct
     let mut config_download_request =
-        ConfigDownloadRequest::try_new(smartrest_request, plugin_config, tmp_dir)?;
+        ConfigDownloadRequest::try_new(download_url, file_path, tmp_dir, file_permissions)?;
 
     // Confirm that the file has write access before any http request attempt
     let () = config_download_request.has_write_access()?;
@@ -80,62 +102,58 @@ async fn download_config_file(
     Ok(())
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConfigDownloadRequest {
     pub download_info: DownloadInfo,
-    pub destination_path: PathBuf,
+    pub file_path: PathBuf,
     pub tmp_dir: PathBuf,
+    pub file_permissions: PermissionEntry,
     pub file_name: String,
 }
 
 impl ConfigDownloadRequest {
     fn try_new(
-        request: SmartRestConfigDownloadRequest,
-        plugin_config: &PluginConfig,
+        download_url: &str,
+        file_path: PathBuf,
         tmp_dir: PathBuf,
+        file_permissions: PermissionEntry,
     ) -> Result<Self, ConfigManagementError> {
-        // Check if the requested config type is in the plugin config list
-        let all_file_paths = plugin_config.get_all_file_paths();
-        if !all_file_paths.contains(&request.config_type) {
-            return Err(ConfigManagementError::InvalidRequestedConfigType {
-                path: request.config_type,
-            });
-        }
-
-        let destination_path = PathBuf::from(request.config_type);
-        let file_name = Self::get_filename(destination_path.clone())?;
+        let file_name = get_filename(file_path.clone()).ok_or_else(|| {
+            ConfigManagementError::FileNameNotFound {
+                path: file_path.clone(),
+            }
+        })?;
 
         Ok(Self {
             download_info: DownloadInfo {
-                url: request.url,
+                url: download_url.into(),
                 auth: None,
             },
-            destination_path,
+            file_path,
             tmp_dir,
+            file_permissions,
             file_name,
         })
     }
 
-    fn get_filename(path: PathBuf) -> Result<String, ConfigManagementError> {
-        let filename = path
-            .file_name()
-            .ok_or_else(|| ConfigManagementError::FileNameNotFound { path: path.clone() })?
-            .to_str()
-            .ok_or_else(|| ConfigManagementError::InvalidFileName { path: path.clone() })?
-            .to_string();
-        Ok(filename)
-    }
-
     fn has_write_access(&self) -> Result<(), ConfigManagementError> {
-        // The file does not exist before downloading a file
-        if !&self.destination_path.is_file() {
-            return Ok(());
-        }
-        // Need a permission check when the file exists already
-        let metadata = Self::get_metadata(&self.destination_path)?;
+        let metadata =
+            if self.file_path.is_file() {
+                get_metadata(&self.file_path)?
+            } else {
+                // If the file does not exist before downloading file, check the directory perms
+                let parent_dir = &self.file_path.parent().ok_or_else(|| {
+                    ConfigManagementError::NoWriteAccess {
+                        path: self.file_path.clone(),
+                    }
+                })?;
+                get_metadata(parent_dir)?
+            };
+
+        // Write permission check
         if metadata.permissions().readonly() {
-            Err(error::ConfigManagementError::ReadOnlyFile {
-                path: self.destination_path.clone(),
+            Err(ConfigManagementError::NoWriteAccess {
+                path: self.file_path.clone(),
             })
         } else {
             Ok(())
@@ -146,19 +164,13 @@ impl ConfigDownloadRequest {
         Downloader::new(&self.file_name, &None, &self.tmp_dir)
     }
 
-    fn get_metadata(path: &Path) -> Result<std::fs::Metadata, ConfigManagementError> {
-        fs::metadata(&path).map_err(|_| ConfigManagementError::FileNotAccessible {
-            path: path.to_path_buf(),
-        })
-    }
-
     fn move_file(&self) -> Result<(), ConfigManagementError> {
         let src = &self.tmp_dir.join(&self.file_name);
-        let dest = &self.destination_path;
+        let dest = &self.file_path;
 
-        let original_permission_mode = match self.destination_path.is_file() {
+        let original_permission_mode = match self.file_path.is_file() {
             true => {
-                let metadata = Self::get_metadata(&self.destination_path)?;
+                let metadata = get_metadata(&self.file_path)?;
                 let mode = metadata.permissions().mode();
                 Some(mode)
             }
@@ -170,20 +182,28 @@ impl ConfigDownloadRequest {
             dest: dest.to_path_buf(),
         })?;
 
-        // Change the file permission back to the original one
-        if let Some(mode) = original_permission_mode {
-            let mut permissions = Self::get_metadata(&self.destination_path)?.permissions();
-            let _ = permissions.set_mode(mode);
-            let _ = std::fs::set_permissions(&self.destination_path, permissions);
-        }
+        let file_permissions = if let Some(mode) = original_permission_mode {
+            // Use the same file permission as the original one
+            PermissionEntry::new(None, None, Some(mode))
+        } else {
+            // Set the user, group, and mode as given for a new file
+            self.file_permissions.clone()
+        };
+
+        let () = file_permissions.apply(&self.file_path)?;
 
         Ok(())
     }
 }
 
-pub fn get_file_change_notification_message(config_type: String) -> Message {
-    let notification = json!({ "changedFile": config_type }).to_string();
-    Message::new(&Topic::new_unchecked(CONFIG_CHANGE_TOPIC), notification)
+pub fn get_file_change_notification_message(file_path: &str, config_type: &str) -> Message {
+    let notification = json!({ "path": file_path }).to_string();
+    let topic = Topic::new(format!("{CONFIG_CHANGE_TOPIC}/{config_type}").as_str())
+        .unwrap_or_else(|_err| {
+            warn!("The type cannot be used as a part of the topic name. Using {CONFIG_CHANGE_TOPIC} instead.");
+            Topic::new_unchecked(CONFIG_CHANGE_TOPIC)
+        });
+    Message::new(&topic, notification)
 }
 
 struct DownloadConfigFileStatusMessage {}
@@ -213,28 +233,17 @@ impl TryIntoOperationStatusMessage for DownloadConfigFileStatusMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::FileEntry;
     use assert_matches::*;
-    use c8y_smartrest::smartrest_deserializer::SmartRestRequestGeneric;
-    use std::collections::HashSet;
 
     #[test]
     fn create_config_download_request() -> Result<(), anyhow::Error> {
-        let payload = "524,rina0005,https://test.cumulocity.com/inventory/binaries/70208,/etc/tedge/tedge.toml";
-        let smartrest_request = SmartRestConfigDownloadRequest::from_smartrest(payload)?;
-        let plugin_config = PluginConfig {
-            files: HashSet::from([
-                FileEntry::new("/etc/tedge/tedge.toml".to_string()),
-                FileEntry::new("/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string()),
-                FileEntry::new("/etc/tedge/mosquitto-conf/tedge-mosquitto.conf".to_string()),
-                FileEntry::new("/etc/mosquitto/mosquitto.conf".to_string()),
-            ]),
-        };
         let config_download_request = ConfigDownloadRequest::try_new(
-            smartrest_request,
-            &plugin_config,
+            "https://test.cumulocity.com/inventory/binaries/70208",
+            PathBuf::from("/etc/tedge/tedge.toml"),
             PathBuf::from("/tmp"),
+            PermissionEntry::default(),
         )?;
+
         assert_eq!(
             config_download_request,
             ConfigDownloadRequest {
@@ -242,8 +251,9 @@ mod tests {
                     url: "https://test.cumulocity.com/inventory/binaries/70208".to_string(),
                     auth: None
                 },
-                destination_path: PathBuf::from("/etc/tedge/tedge.toml"),
+                file_path: PathBuf::from("/etc/tedge/tedge.toml"),
                 tmp_dir: PathBuf::from("/tmp"),
+                file_permissions: PermissionEntry::new(None, None, None),
                 file_name: "tedge.toml".to_string()
             }
         );
@@ -251,26 +261,16 @@ mod tests {
     }
 
     #[test]
-    fn requested_config_does_not_match_config_plugin() -> Result<(), anyhow::Error> {
-        let payload = "524,rina0005,https://test.cumulocity.com/inventory/binaries/70208,/etc/tedge/not_in_config.toml";
-        let smartrest_request = SmartRestConfigDownloadRequest::from_smartrest(payload)?;
-        let plugin_config = PluginConfig {
-            files: HashSet::from([
-                FileEntry::new("/etc/tedge/tedge.toml".to_string()),
-                FileEntry::new("/etc/tedge/mosquitto-conf/c8y-bridge.conf".to_string()),
-                FileEntry::new("/etc/tedge/mosquitto-conf/tedge-mosquitto.conf".to_string()),
-                FileEntry::new("/etc/mosquitto/mosquitto.conf".to_string()),
-            ]),
-        };
-        let config_download_request = ConfigDownloadRequest::try_new(
-            smartrest_request,
-            &plugin_config,
+    fn create_config_download_request_without_file_name() -> Result<(), anyhow::Error> {
+        let error = ConfigDownloadRequest::try_new(
+            "https://test.cumulocity.com/inventory/binaries/70208",
+            PathBuf::from("/"),
             PathBuf::from("/tmp"),
-        );
-        assert_matches!(
-            config_download_request,
-            Err(ConfigManagementError::InvalidRequestedConfigType { .. })
-        );
+            PermissionEntry::default(),
+        )
+        .unwrap_err();
+
+        assert_matches!(error, ConfigManagementError::FileNameNotFound { .. });
         Ok(())
     }
 

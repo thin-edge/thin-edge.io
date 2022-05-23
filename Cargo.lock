@@ -19,7 +19,7 @@ checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
 name = "agent_interface"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "csv",
  "download",
@@ -271,7 +271,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "batcher"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "time",
  "tokio",
@@ -358,7 +358,7 @@ checksum = "c4872d67bab6358e59559027aa3b9157c53d9358c51423c17554809a8858e0f8"
 
 [[package]]
 name = "c8y_api"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "agent_interface",
  "anyhow",
@@ -389,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_configuration_plugin"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -416,8 +416,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "c8y_log_plugin"
+version = "0.7.0"
+dependencies = [
+ "anyhow",
+ "assert_matches",
+ "c8y_api",
+ "c8y_smartrest",
+ "clap 3.1.18",
+ "csv",
+ "easy_reader",
+ "glob",
+ "inotify",
+ "mockall 0.11.0",
+ "mqtt_channel",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tedge_config",
+ "tedge_utils",
+ "tempfile",
+ "test-case",
+ "thiserror",
+ "time",
+ "tokio",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "c8y_smartrest"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "agent_interface",
  "anyhow",
@@ -441,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_translator"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -481,7 +510,7 @@ checksum = "2fff2a6927b3bb87f9595d67196a70493f627687a71d87a0d692242c33f58c11"
 
 [[package]]
 name = "certificate"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -559,7 +588,7 @@ dependencies = [
 
 [[package]]
 name = "clock"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "mockall 0.10.2",
  "time",
@@ -846,7 +875,7 @@ checksum = "1435fa1053d8b2fbbe9be7e97eca7f33d37b28409959813daefc1446a14247f1"
 
 [[package]]
 name = "download"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "backoff",
@@ -864,6 +893,16 @@ dependencies = [
  "tokio",
  "tokio-test",
  "url",
+]
+
+[[package]]
+name = "easy_reader"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f5ce6d7f6b0c1a6330fb8450f49a8423b78e30d04132146938c35baab3877eb"
+dependencies = [
+ "fnv",
+ "rand",
 ]
 
 [[package]]
@@ -954,7 +993,7 @@ dependencies = [
 
 [[package]]
 name = "flockfile"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "assert_matches",
  "nix",
@@ -1122,6 +1161,12 @@ name = "gimli"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78cc372d058dcf6d5ecd98510e7fbc9e5aec4d21de70f65fea8fecebcd881bd4"
+
+[[package]]
+name = "glob"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
 name = "h2"
@@ -1321,6 +1366,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "inotify"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abf888f9575c290197b2c948dc9e9ff10bd1a39ad1ea8585f734585fa6b9d3f9"
+dependencies = [
+ "bitflags",
+ "futures-core",
+ "inotify-sys",
+ "libc",
+ "tokio",
+]
+
+[[package]]
+name = "inotify-sys"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e05c02b5e89bff3b946cedeca278abc628fe811e604f027c45a8aa3cf793d0eb"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1399,7 +1466,7 @@ dependencies = [
 
 [[package]]
 name = "json-writer"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "serde_json",
@@ -1440,7 +1507,7 @@ dependencies = [
 
 [[package]]
 name = "logged_command"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -1601,7 +1668,7 @@ dependencies = [
 
 [[package]]
 name = "mqtt_channel"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1616,7 +1683,7 @@ dependencies = [
 
 [[package]]
 name = "mqtt_tests"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "fastrand",
@@ -1976,7 +2043,7 @@ dependencies = [
 
 [[package]]
 name = "plugin_sm"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "agent_interface",
  "anyhow",
@@ -2525,7 +2592,7 @@ dependencies = [
 
 [[package]]
 name = "sawtooth_publisher"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "async-log",
  "env_logger 0.9.0",
@@ -2787,7 +2854,7 @@ dependencies = [
 
 [[package]]
 name = "tedge"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2820,7 +2887,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_agent"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "agent_interface",
  "anyhow",
@@ -2853,7 +2920,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_apama_plugin"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "clap 3.1.18",
  "roxmltree",
@@ -2864,7 +2931,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_apt_plugin"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap 3.1.18",
@@ -2880,7 +2947,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_config"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "assert_matches",
  "certificate",
@@ -2895,38 +2962,15 @@ dependencies = [
 
 [[package]]
 name = "tedge_dummy_plugin"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "clap 3.1.18",
  "thiserror",
 ]
 
 [[package]]
-name = "tedge_logfile_request_plugin"
-version = "0.6.4"
-dependencies = [
- "anyhow",
- "async-trait",
- "c8y_api",
- "c8y_smartrest",
- "csv",
- "futures",
- "mockall 0.10.2",
- "mqtt_channel",
- "reqwest",
- "serde",
- "serde_json",
- "tedge_config",
- "tempfile",
- "thiserror",
- "tokio",
- "toml",
- "tracing",
-]
-
-[[package]]
 name = "tedge_mapper"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "agent_interface",
  "anyhow",
@@ -2969,7 +3013,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_users"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "thiserror",
  "users",
@@ -2977,7 +3021,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_utils"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2994,7 +3038,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_watchdog"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap 3.1.18",
@@ -3070,7 +3114,7 @@ checksum = "b1141d4d61095b28419e22cb0bbf02755f5e54e0526f97f1e3d1d160e60885fb"
 
 [[package]]
 name = "thin_edge_json"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "assert_matches",

@@ -75,12 +75,12 @@ jobs:
           command: deb
           args: -p tedge_agent
 
-      - name: Build tedge_logfile_request_plugin debian package
+      - name: Build c8y_log_plugin debian package
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p tedge_logfile_request_plugin
+          args: -p c8y_log_plugin 
 
       - name: Build c8y_configuration_plugin debian package
         uses: actions-rs/cargo@v1
@@ -201,8 +201,8 @@ jobs:
       - name: Strip tedge_apama_plugin
         run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_apama_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_apama_plugin
 
-      - name: Strip tedge_logfile_request_plugin
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_logfile_request_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_logfile_request_plugin
+      - name: Strip c8y_log_plugin 
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/c8y_log_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/c8y_log_plugin
 
       - name: Strip c8y_configuration_plugin
         run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/c8y_configuration_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/c8y_configuration_plugin
@@ -242,12 +242,12 @@ jobs:
           command: deb
           args: -p tedge_apama_plugin --no-strip --no-build --target=${{ matrix.target }}
 
-      - name: build tedge_logfile_request_plugin debian package for target
+      - name: build c8y_log_plugin debian package for target
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: deb
-          args: -p tedge_logfile_request_plugin --no-strip --no-build --target=${{ matrix.target }}
+          args: -p c8y_log_plugin --no-strip --no-build --target=${{ matrix.target }}
 
       - name: build c8y_configuration_plugin debian package for target
         uses: actions-rs/cargo@v1

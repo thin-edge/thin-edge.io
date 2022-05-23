@@ -41,9 +41,9 @@ install_tedge_plugins() {
     wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_apama_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
     dpkg -i /tmp/tedge/tedge_apama_plugin_${VERSION}_${ARCH}.deb
 
-    # Download and install logfile plugin
-    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_logfile_request_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
-    dpkg -i /tmp/tedge/tedge_logfile_request_plugin_${VERSION}_${ARCH}.deb
+    # Download and install c8y log plugin
+    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/c8y_log_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
+    dpkg -i /tmp/tedge/c8y_log_plugin_${VERSION}_${ARCH}.deb
 
     # Download and install configuration plugin
     wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/c8y_configuration_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
