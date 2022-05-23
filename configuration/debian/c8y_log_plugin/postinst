@@ -5,4 +5,14 @@ set -e
 ### Create supported operation files
 c8y_log_plugin --init
 
+# Reenable the services only if systemctl is available
+if command -v systemctl >/dev/null; then
+    ### Enable the sm services if the device is connected to c8y cloud
+    if [ -f "/etc/tedge/mosquitto-conf/c8y-bridge.conf" ]; then
+        # start and enable c8y-log-plugin
+        systemctl start c8y-log-plugin.service
+        systemctl enable c8y-log-plugin.service
+    fi
+fi
+
 #DEBHELPER#
