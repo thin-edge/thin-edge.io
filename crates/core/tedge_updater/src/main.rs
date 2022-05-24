@@ -70,7 +70,7 @@ fn run(operation: PluginOp) -> Result<i32, anyhow::Error> {
 
             // TODO: add error handling
             // TODO: consider --config-dir option
-            run_hook("/etc/tedge/hooks/hoo-start-or-rollback", exitcode.to_string().as_str());
+            run_hook("/etc/tedge/hooks/hook-start-or-rollback", exitcode.to_string().as_str());
 
             Ok(exitcode)
         }
