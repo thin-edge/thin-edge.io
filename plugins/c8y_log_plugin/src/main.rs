@@ -4,13 +4,16 @@ mod logfile_request;
 
 use anyhow::Result;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
-use c8y_smartrest::smartrest_deserializer::{SmartRestLogRequest, SmartRestRequestGeneric};
 use c8y_smartrest::topic::C8yTopic;
+use c8y_smartrest::{
+    smartrest_deserializer::{SmartRestLogRequest, SmartRestRequestGeneric},
+    smartrest_serializer::TryIntoOperationStatusMessage,
+};
 use clap::Parser;
 
 use inotify::{EventMask, EventStream};
 use inotify::{Inotify, WatchMask};
-use mqtt_channel::{Connection, StreamExt};
+use mqtt_channel::{Connection, SinkExt, StreamExt};
 use std::{
     fs::OpenOptions,
     io::Write,
@@ -23,7 +26,9 @@ use tedge_config::{
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
 use tracing::{error, info};
 
-use crate::logfile_request::{handle_dynamic_log_type_update, handle_logfile_request_operation};
+use crate::logfile_request::{
+    handle_dynamic_log_type_update, handle_logfile_request_operation, LogfileRequest,
+};
 
 const DEFAULT_PLUGIN_CONFIG_FILE: &str = "c8y/c8y-log-plugin.toml";
 const AFTER_HELP_TEXT: &str = r#"On start, `c8y_log_plugin` notifies the cloud tenant of the log types listed in the `CONFIG_FILE`, sending this list with a `118` on `c8y/s/us`.
@@ -106,6 +111,7 @@ async fn run(
                     if let Ok(payload) = message.payload_str() {
                         let result = match payload.split(',').next().unwrap_or_default() {
                             "522" => {
+                                info!("Log request received: {payload}");
                                 // retrieve smartrest object from payload
                                 let smartrest_obj = SmartRestLogRequest::from_smartrest(&payload)?;
                                 handle_logfile_request_operation(
@@ -123,7 +129,11 @@ async fn run(
                         };
 
                         if let Err(err) = result {
-                            error!("Handling of operation: '{}' failed with {}", payload, err);
+                            let error_message = format!("Handling of operation: '{}' failed with {}", payload, err);
+                            error!("{}", error_message);
+                            let failed_msg = LogfileRequest::failed(error_message)?;
+                            let () = mqtt_client.published.send(failed_msg).await?;
+
                         }
                     }
                 }
