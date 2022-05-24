@@ -3,16 +3,16 @@
 
 Thanks for taking the time to contribute to thin-edge.io!
 
-Contributing is not limited to writing code and submitting a PR. Feel free to submit an [issue](https://github.com/thin-edge/thin-edge.io/issues) or comment on an existing one to report a bug, provide feedback, or suggest a new feature. You can also join us on GitHub Discussions.
+Contributing is not limited to writing code and submitting a PR. Feel free to submit an [issue](https://github.com/thin-edge/thin-edge.io/issues) or comment on an existing one to report a bug, provide feedback, or suggest a new feature. You can also join us on GitHub Discussions.
 
 Of course, contributing code is more than welcome! If you're planning to submit a PR to implement a new feature or fix a bug, please open an issue that explains the change and the motivation for it.
 
 If you are interested in contributing documentation, please note the following:
 
 - Doc issues are labeled with the `doc` label.
-- The thin-edge.io docs content is in the `docs/src/` directory.
+- The thin-edge.io docs content is in the `docs/src/` directory.
 
-[How to build from source.](./BUILDING.md)
+[How to build from source.](./docs/src/BUILDING.md)
 
 <br/>
 <br/>
@@ -25,11 +25,11 @@ PRs should generally address only 1 issue at a time. If you need to fix two bugs
 
 When possible, fill out as much detail in the pull request template as is reasonable. Most important is to reference the GitHub issue that you are addressing with the PR.
 
-**NOTE:** GitHub has [a feature](https://docs.github.com/en/github/managing-your-work-on-github/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword) that will automatically close issues referenced with a keyword (such as "Fixes") by a PR or commit once the PR/commit is merged. Don't use these keywords. We don't want issues to be automatically closed. We want our testers to independently verify and close them.
+**NOTE:** GitHub has [a feature](https://docs.github.com/en/github/managing-your-work-on-github/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword) that will automatically close issues referenced with a keyword (such as "Fixes") by a PR or commit once the PR/commit is merged. Don't use these keywords. We don't want issues to be automatically closed. We want our testers to independently verify and close them.
 
 ## Writing good commit messages
 
-Git commit messages should explain the how and why of your change and be separated into a brief subject line followed by a more detailed body. When in doubt, follow this guide for good commit messages and you can’t go wrong: [https://chris.beams.io/posts/git-commit/](https://chris.beams.io/posts/git-commit/).
+Git commit messages should explain the how and why of your change and be separated into a brief subject line followed by a more detailed body. When in doubt, follow this guide for good commit messages and you can’t go wrong: [https://chris.beams.io/posts/git-commit/](https://chris.beams.io/posts/git-commit/).
 
 ## Reviewing, addressing feedback, and merging
 

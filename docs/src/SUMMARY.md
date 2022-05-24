@@ -5,7 +5,7 @@
 - [Introduction](001_overview.md)
 
 - [User Documentation](user_doc.md)
-  - [Tutorials](tutorials/README.md)
+  - [Tutorials](tutorials/tutorials.md)
     - [Connect my device to Cumulocity IoT](./tutorials/connect-c8y.md)
     - [Connect my device to Azure IoT](./tutorials/connect-azure.md)
     - [Send Thin Edge Json data](./tutorials/send-thin-edge-data.md)
@@ -16,7 +16,7 @@
     - [Write my software management plugin](./tutorials/write-my-software-management-plugin.md)
     - [Supported Operations Management for Cumulocity IoT](./tutorials/supported_operations.md)
 
-  - [How-to Guides](howto-guides/README.md)
+  - [How-to Guides](howto-guides/howto-guides.md)
     - [Installation](howto-guides/002_installation.md)
     - [How to create a test certificate](./howto-guides/003_registration.md)
     - [How to connect a cloud end-point](./howto-guides/004_connect.md)
@@ -39,7 +39,7 @@
     - [How to add custom fragments to Cumulocity](./howto-guides/022_c8y_fragments.md)
 
 - [Developer Documentation](dev_doc.md)
-  - [Architecture](architecture/README.md)
+  - [Architecture](architecture/architecture.md)
     - [Thin Edge Json](architecture/thin-edge-json.md)
     - [The Mapper](architecture/mapper.md)
     - [Software Management](architecture/software-management.md)
@@ -56,7 +56,7 @@
 
   - [Building](./BUILDING.md)
 
-- [Command Line Reference](references/README.md)
+- [Command Line Reference](references/references.md)
   - [The `tedge` command](./references/tedge.md)
   - [The `tedge config` command](./references/tedge-config.md)
   - [The `tedge cert` command](./references/tedge-cert.md)
