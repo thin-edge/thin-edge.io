@@ -6,7 +6,7 @@ use std::{
 use easy_reader::EasyReader;
 use glob::glob;
 use time::OffsetDateTime;
-use tracing::{info, log::Log};
+use tracing::info;
 
 use crate::{config::LogPluginConfig, error::LogRetrievalError};
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
@@ -72,35 +72,39 @@ fn read_log_content(
         let file = std::fs::File::open(&logfile)?;
         let file_name = format!(
             "filename: {}\n",
-            logfile.file_name().unwrap().to_str().unwrap()
+            logfile.file_name().unwrap().to_str().unwrap() // never fails because we check file exists
         );
-        let mut reader = EasyReader::new(file)?;
-        reader.eof();
-
-        while line_counter < max_lines {
-            if let Some(haystack) = reader.prev_line()? {
-                if let Some(needle) = &filter_text {
-                    if haystack.contains(needle) {
-                        file_content_as_vec.push_front(format!("{}\n", haystack));
-                        line_counter += 1;
+        let reader = EasyReader::new(file);
+        match reader {
+            Ok(mut reader) => {
+                reader.eof();
+                while line_counter < max_lines {
+                    if let Some(haystack) = reader.prev_line()? {
+                        if let Some(needle) = &filter_text {
+                            if haystack.contains(needle) {
+                                file_content_as_vec.push_front(format!("{}\n", haystack));
+                                line_counter += 1;
+                            }
+                        } else {
+                            file_content_as_vec.push_front(format!("{}\n", haystack));
+                            line_counter += 1;
+                        }
+                    } else {
+                        // there are no more lines.prev_line()
+                        break;
                     }
-                } else {
-                    file_content_as_vec.push_front(format!("{}\n", haystack));
-                    line_counter += 1;
                 }
-            } else {
-                // there are no more lines.prev_line()
-                break;
+
+                file_content_as_vec.push_front(file_name);
+
+                let file_content = file_content_as_vec
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect::<String>();
+                Ok((line_counter, file_content))
             }
+            Err(_err) => Ok((line_counter, String::new())),
         }
-
-        file_content_as_vec.push_front(file_name);
-
-        let file_content = file_content_as_vec
-            .iter()
-            .map(|x| x.to_string())
-            .collect::<String>();
-        Ok((line_counter, file_content))
     }
 }
 
