@@ -9,7 +9,7 @@ we recommend you to read [the Cumulocity user guide](https://cumulocity.com/guid
 
 To enable the feature, first you need to install the `c8y_configuration_plugin` binary on your device.
 
-### Using the `get-thin-edge_io.sh` script for Debian OS distribution (Recommended)
+### Using the `get-thin-edge_io.sh` script on Debian based distributions (Recommended)
 
 If your device supports `apt` as a package manager,
 you can install all `thin-edge.io` packages including the `c8y_configuration_plugin` by the `get-thin-edge_io.sh` script.
@@ -20,9 +20,9 @@ this package is installed, by default.
 curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
 ```
 
-### Using the `c8y_configuration_plugin` Debian package for Debian OS distribution
+### Using the `c8y_configuration_plugin` Debian package on Debian based distributions
 
-For Debian OS distribution, we provide the `c8y_configuration_plugin_<version>_<arch>.deb` package as a release asset [here](https://github.com/thin-edge/thin-edge.io/releases).
+For Debian based distributions, we provide the `c8y_configuration_plugin_<version>_<arch>.deb` package as a release asset [here](https://github.com/thin-edge/thin-edge.io/releases).
 
 In case that you didn't use the `get-thin-edge_io.sh` script, you can download the `c8y_configuration_plugin_<version>_<arch>.deb`  package on our [Releases](https://github.com/thin-edge/thin-edge.io/releases) and install it.
 
@@ -30,7 +30,7 @@ In case that you didn't use the `get-thin-edge_io.sh` script, you can download t
 sudo apt install ./path/to/package/c8y_configuration_plugin_<version>_<arch>.deb
 ```
 
-### Extracting from debian package for non-Debian OS distribution
+### Extracting from debian package on non-Debian based distributions
 
 Get the `c8y_configuration_plugin_<version>_<arch>.deb` from our [Releases](https://github.com/thin-edge/thin-edge.io/releases).
 Then, run this command in the directory where the package is stored.
@@ -62,7 +62,7 @@ sudo cp <repository_root>/configuration/init/systemd/c8y-configuration-plugin.se
 Before starting anything, make sure [your device is connected to Cumulocity](./../tutorials/connect-c8y.md).
 
 **Step 0**
-Only if you didn't install `c8y_configuration_plugin` by the debian package,
+Unless you installed `c8y_configuration_plugin` using the debian package,
 you need one additional step to initialize the plugin. Run this command.
 
 ```shell
@@ -70,11 +70,11 @@ sudo c8y_configuration_plugin --init
 ```
 
 **Step 1**
-Open the file `/etc/tedge/c8y/c8y-configuration-plugin.toml` and edit the file.
+Open the file `/etc/tedge/c8y/c8y-configuration-plugin.toml` and add entries for the configuration files that you'd like to manage from Cumulocity cloud in the following format:
 
 ```toml
 files = [
-    { path = '/etc/tedge/tedge.toml' },
+    { path = '/etc/tedge/tedge.toml', type = 'tedge.toml'},
     { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge.conf' },
     { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf', type = 'tedge-mosquitto.conf' },
     { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto.conf' },
@@ -82,7 +82,11 @@ files = [
 ]
 ```
 
-Add the files you want to configure from the cloud using the [format described in the reference guide](./../references/c8y-configuration-management.md#configuration).
+* `path` is the full path to the configuration file.
+* `type` is a unique alias for each file entry which will be used to represent that file in Cumulocity UI.
+* `user`, `group` and `mode` are UNIX file permission settings to be used to create a configuration file. If not provided, the files will be created with `root` user. If the file exists already, its ownership will be retained.
+
+For more details on this configuration file format, refer to the [reference guide](./../references/c8y-configuration-management.md#configuration).
 
 > Note: You can also configure the `c8y-configuration-plugin.toml` from the cloud later.
 
@@ -123,6 +127,9 @@ You can choose the file that you uploaded from the **AVAILABLE SUPPORTED CONFIGU
 
 After the operation created gets marked SUCCESSFUL, reload the page.
 Then you can find new supported configuration types as you defined.
+
+> Note: All configuration updates are notified over MQTT giving the opportunity to software components installed on the device or a child device can react to these updates.
+> For more details, refer to the [Notifications section of the specification](./../references/c8y-configuration-management.md#notifications).
 
 To get to know more about the `c8y_configuration_plugin`, refer to [Specifications of Device Configuration Management using Cumulocity](./../references/c8y-configuration-management.md).
 
