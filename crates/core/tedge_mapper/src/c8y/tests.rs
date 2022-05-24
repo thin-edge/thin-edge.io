@@ -57,13 +57,8 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
     // Start SM Mapper
     let sm_mapper = start_c8y_mapper(broker.port).await;
 
-    // Expect both 118 and 500 messages has been received on `c8y/s/us`, if no msg received for the timeout the test fails.
-    mqtt_tests::assert_received_all_expected(
-        &mut messages,
-        TEST_TIMEOUT_MS,
-        &["software-management", "500\n"],
-    )
-    .await;
+    // Expect 500 messages has been received on `c8y/s/us`, if no msg received for the timeout the test fails.
+    mqtt_tests::assert_received_all_expected(&mut messages, TEST_TIMEOUT_MS, &["500\n"]).await;
 
     sm_mapper.unwrap().abort();
 }
@@ -300,7 +295,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     mqtt_tests::assert_received_all_expected(
         &mut responses,
         TEST_TIMEOUT_MS,
-        &["software-management", "500\n", "503,c8y_SoftwareUpdate,\n"],
+        &["500\n", "503,c8y_SoftwareUpdate,\n"],
     )
     .await;
 
@@ -896,6 +891,7 @@ impl C8YHttpProxy for FakeC8YHttpProxy {
 
     async fn upload_log_binary(
         &mut self,
+        _log_type: &str,
         _log_content: &str,
     ) -> Result<String, SMCumulocityMapperError> {
         Ok("fake/upload/url".into())

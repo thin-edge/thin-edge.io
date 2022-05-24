@@ -42,6 +42,7 @@ pub trait C8YHttpProxy: Send + Sync {
 
     async fn upload_log_binary(
         &mut self,
+        log_type: &str,
         log_content: &str,
     ) -> Result<String, SMCumulocityMapperError>;
 
@@ -269,20 +270,6 @@ impl JwtAuthHttpProxy {
         Ok(internal_id)
     }
 
-    fn create_log_event(&self) -> C8yCreateEvent {
-        let c8y_managed_object = C8yManagedObject {
-            id: self.end_point.c8y_internal_id.clone(),
-        };
-
-        C8yCreateEvent::new(
-            Some(c8y_managed_object),
-            "c8y_Logfile".to_string(),
-            OffsetDateTime::now_utc(),
-            "software-management".to_string(),
-            HashMap::new(),
-        )
-    }
-
     fn create_event(
         &self,
         event_type: String,
@@ -388,11 +375,12 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
 
     async fn upload_log_binary(
         &mut self,
+        log_type: &str,
         log_content: &str,
     ) -> Result<String, SMCumulocityMapperError> {
         let token = self.get_jwt_token().await?;
 
-        let log_event = self.create_log_event();
+        let log_event = self.create_event(log_type.to_string(), None, None);
         let event_response_id = self.send_event_internal(log_event).await?;
         let binary_upload_event_url = self
             .end_point

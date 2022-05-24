@@ -5,7 +5,9 @@
 - [Introduction](001_overview.md)
 
 - [User Documentation](user_doc.md)
+
   - [Tutorials](tutorials/README.md)
+
     - [Connect my device to Cumulocity IoT](./tutorials/connect-c8y.md)
     - [Connect my device to Azure IoT](./tutorials/connect-azure.md)
     - [Send Thin Edge Json data](./tutorials/send-thin-edge-data.md)
@@ -37,10 +39,14 @@
     - [How to monitor health of tedge daemons](./howto-guides/020_monitor_tedge_health.md)
     - [How to enable systemd watchdog monitoring for tedge services?](./howto-guides/021_enable_tedge_watchdog_using_systemd.md)
     - [How to add custom fragments to Cumulocity](./howto-guides/022_c8y_fragments.md)
+    - [How to retrieve logs with the log plugin](./howto-guides/023_c8y_log_plugin.md)
+    - [How to use Cumulocity Custom SmartREST 2.0 Templates with `thin-edge.io`](./howto-guides/024_smartrest_templates.md)
     - [How to manage configuration files with Cumulocity](./howto-guides/025_config_management_plugin.md)
 
 - [Developer Documentation](dev_doc.md)
+
   - [Architecture](architecture/README.md)
+
     - [Thin Edge Json](architecture/thin-edge-json.md)
     - [The Mapper](architecture/mapper.md)
     - [Software Management](architecture/software-management.md)
@@ -52,6 +58,7 @@
   - [Device Configuration Management using Cumulocity](./references/c8y-configuration-management.md)
 
   - [APIs](api.md)
+
     - [The Bridged Topics](./references/bridged-topics.md)
     - [The Software Management Plugin API](./references/plugin-api.md)
 

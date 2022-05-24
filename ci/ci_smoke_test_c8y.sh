@@ -76,7 +76,7 @@ PATH=$PATH:/usr/sbin
 
 python3 -m venv ~/env-c8y-api
 source ~/env-c8y-api/bin/activate
-pip3 install c8y-api
+pip3 install c8y-api retry-decorator
 export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
 
 # after calling the script, the ID should be a numeric value

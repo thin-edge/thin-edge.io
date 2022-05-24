@@ -4,10 +4,10 @@ members = [
     "crates/core/*",
     "crates/tests/*",
     "plugins/c8y_configuration_plugin",
+    "plugins/c8y_log_plugin",
     "plugins/tedge_apt_plugin",
     "plugins/tedge_dummy_plugin",
     "plugins/tedge_apama_plugin",
-    "plugins/log_request_plugin",
 ]
 resolver = "2"
 
