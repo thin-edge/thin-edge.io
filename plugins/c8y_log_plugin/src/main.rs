@@ -106,6 +106,7 @@ async fn run(
                     if let Ok(payload) = message.payload_str() {
                         let result = match payload.split(',').next().unwrap_or_default() {
                             "522" => {
+                                info!("Log request received: {payload}");
                                 // retrieve smartrest object from payload
                                 let smartrest_obj = SmartRestLogRequest::from_smartrest(&payload)?;
                                 handle_logfile_request_operation(
@@ -123,7 +124,8 @@ async fn run(
                         };
 
                         if let Err(err) = result {
-                            error!("Handling of operation: '{}' failed with {}", payload, err);
+                            let error_message = format!("Handling of operation: '{}' failed with {}", payload, err);
+                            error!("{}", error_message);
                         }
                     }
                 }
