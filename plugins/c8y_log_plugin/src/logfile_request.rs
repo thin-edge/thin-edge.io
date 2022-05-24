@@ -6,9 +6,9 @@ use std::{
 use easy_reader::EasyReader;
 use glob::glob;
 use time::OffsetDateTime;
-use tracing::info;
+use tracing::{info, log::Log};
 
-use crate::config::LogPluginConfig;
+use crate::{config::LogPluginConfig, error::LogRetrievalError};
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use c8y_smartrest::{
     smartrest_deserializer::SmartRestLogRequest,
@@ -64,11 +64,9 @@ fn read_log_content(
     mut line_counter: usize,
     max_lines: usize,
     filter_text: &Option<String>,
-) -> Result<(usize, String), anyhow::Error> {
+) -> Result<(usize, String), LogRetrievalError> {
     if line_counter >= max_lines {
-        Err(anyhow::anyhow!(
-            "`max_lines` filled. No more logs to return."
-        ))
+        Err(LogRetrievalError::MaxLines)
     } else {
         let mut file_content_as_vec = VecDeque::new();
         let file = std::fs::File::open(&logfile)?;
@@ -128,9 +126,11 @@ pub fn new_read_logs(
                 line_counter = lines;
                 output.push_str(&file_content);
             }
-            Err(_e) => {
-                // TODO filter this error for `max_lines` error only
+            Err(_error @ LogRetrievalError::MaxLines) => {
                 break;
+            }
+            Err(error) => {
+                return Err(error.into());
             }
         };
     }
@@ -141,7 +141,7 @@ pub fn new_read_logs(
 fn filter_logs_on_type(
     smartrest_obj: &SmartRestLogRequest,
     plugin_config: &LogPluginConfig,
-) -> Result<Vec<PathBuf>, anyhow::Error> {
+) -> Result<Vec<PathBuf>, LogRetrievalError> {
     let mut files_to_send = Vec::new();
     for files in &plugin_config.files {
         let maybe_file_path = files.path.as_str(); // because it can be a glob pattern
@@ -156,14 +156,20 @@ fn filter_logs_on_type(
             }
         }
     }
-    Ok(files_to_send)
+    if files_to_send.is_empty() {
+        Err(LogRetrievalError::NoLogsAvailableForType {
+            log_type: smartrest_obj.log_type.to_string(),
+        })
+    } else {
+        Ok(files_to_send)
+    }
 }
 
 /// filter a vector of pathbufs according to `smartrest_obj.date_from` and `smartrest_obj.date_to`
 fn filter_logs_path_on_metadata(
     smartrest_obj: &SmartRestLogRequest,
     mut logs_path_vec: Vec<PathBuf>,
-) -> Result<Vec<PathBuf>, anyhow::Error> {
+) -> Result<Vec<PathBuf>, LogRetrievalError> {
     let mut out = vec![];
 
     logs_path_vec.sort_by_key(|pathbuf| {
@@ -185,7 +191,14 @@ fn filter_logs_path_on_metadata(
             out.push(file_pathbuf);
         }
     }
-    Ok(out)
+
+    if out.is_empty() {
+        Err(LogRetrievalError::NoLogsAvailableForType {
+            log_type: smartrest_obj.log_type.to_string(),
+        })
+    } else {
+        Ok(out)
+    }
 }
 
 /// executes the log file request
@@ -193,34 +206,44 @@ fn filter_logs_path_on_metadata(
 /// - sends request executing (mqtt)
 /// - uploads log content (http)
 /// - sends request successful (mqtt)
+async fn execute_logfile_request_operation(
+    smartrest_request: &SmartRestLogRequest,
+    plugin_config: &LogPluginConfig,
+    mqtt_client: &mut Connection,
+    http_client: &mut JwtAuthHttpProxy,
+) -> Result<(), anyhow::Error> {
+    let executing = LogfileRequest::executing()?;
+    let () = mqtt_client.published.send(executing).await?;
+
+    let log_content = new_read_logs(&smartrest_request, &plugin_config)?;
+
+    let upload_event_url = http_client
+        .upload_log_binary(&smartrest_request.log_type, &log_content)
+        .await?;
+
+    let successful = LogfileRequest::successful(Some(upload_event_url))?;
+    let () = mqtt_client.published.send(successful).await?;
+
+    info!("Log request processed.");
+    Ok(())
+}
 pub async fn handle_logfile_request_operation(
     smartrest_request: &SmartRestLogRequest,
     plugin_config: &LogPluginConfig,
     mqtt_client: &mut Connection,
     http_client: &mut JwtAuthHttpProxy,
 ) -> Result<(), anyhow::Error> {
-    match {
-        let executing = LogfileRequest::executing()?;
-        let () = mqtt_client.published.send(executing).await?;
-
-        let log_content = new_read_logs(&smartrest_request, &plugin_config)?;
-
-        let upload_event_url = http_client
-            .upload_log_binary(&smartrest_request.log_type, &log_content)
-            .await?;
-
-        let successful = LogfileRequest::successful(Some(upload_event_url))?;
-        let () = mqtt_client.published.send(successful).await?;
-
-        info!("Log request processed.");
-        Ok(())
-    } {
+    match execute_logfile_request_operation(
+        smartrest_request,
+        plugin_config,
+        mqtt_client,
+        http_client,
+    )
+    .await
+    {
         Ok(()) => Ok(()),
         Err(error) => {
-            let error_message = format!(
-                "Handling of operation: '{:#?}' failed with {}",
-                smartrest_request, error
-            );
+            let error_message = format!("Handling of operation failed with {}", error);
             let failed_msg = LogfileRequest::failed(error_message)?;
             let () = mqtt_client.published.send(failed_msg).await?;
             Err(error)
