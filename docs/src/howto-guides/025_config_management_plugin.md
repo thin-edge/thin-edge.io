@@ -128,7 +128,7 @@ You can choose the file that you uploaded from the **AVAILABLE SUPPORTED CONFIGU
 After the operation created gets marked SUCCESSFUL, reload the page.
 Then you can find new supported configuration types as you defined.
 
-> Note: All configuration updates are notified over MQTT giving the opportunity to software components installed on the device or a child device can react to these updates.
+> Note: All configuration updates are notified over `tedge/configuration_change/<config-type>` MQTT topic, giving the opportunity to software components installed on the device or a child device to react to these updates.
 > For more details, refer to the [Notifications section of the specification](./../references/c8y-configuration-management.md#notifications).
 
 To get to know more about the `c8y_configuration_plugin`, refer to [Specifications of Device Configuration Management using Cumulocity](./../references/c8y-configuration-management.md).
