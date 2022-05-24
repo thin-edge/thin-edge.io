@@ -41,6 +41,7 @@
     - [How to add custom fragments to Cumulocity](./howto-guides/022_c8y_fragments.md)
     - [How to retrieve logs with the log plugin](./howto-guides/023_c8y_log_plugin.md)
     - [How to use Cumulocity Custom SmartREST 2.0 Templates with `thin-edge.io`](./howto-guides/024_smartrest_templates.md)
+    - [How to manage configuration files with Cumulocity](./howto-guides/025_config_management_plugin.md)
 
 - [Developer Documentation](dev_doc.md)
 
