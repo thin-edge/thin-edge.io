@@ -199,20 +199,33 @@ pub async fn handle_logfile_request_operation(
     mqtt_client: &mut Connection,
     http_client: &mut JwtAuthHttpProxy,
 ) -> Result<(), anyhow::Error> {
-    let executing = LogfileRequest::executing()?;
-    let () = mqtt_client.published.send(executing).await?;
+    match {
+        let executing = LogfileRequest::executing()?;
+        let () = mqtt_client.published.send(executing).await?;
 
-    let log_content = new_read_logs(&smartrest_request, &plugin_config)?;
+        let log_content = new_read_logs(&smartrest_request, &plugin_config)?;
 
-    let upload_event_url = http_client
-        .upload_log_binary(&smartrest_request.log_type, &log_content)
-        .await?;
+        let upload_event_url = http_client
+            .upload_log_binary(&smartrest_request.log_type, &log_content)
+            .await?;
 
-    let successful = LogfileRequest::successful(Some(upload_event_url))?;
-    let () = mqtt_client.published.send(successful).await?;
+        let successful = LogfileRequest::successful(Some(upload_event_url))?;
+        let () = mqtt_client.published.send(successful).await?;
 
-    info!("Log request processed.");
-    Ok(())
+        info!("Log request processed.");
+        Ok(())
+    } {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            let error_message = format!(
+                "Handling of operation: '{:#?}' failed with {}",
+                smartrest_request, error
+            );
+            let failed_msg = LogfileRequest::failed(error_message)?;
+            let () = mqtt_client.published.send(failed_msg).await?;
+            Err(error)
+        }
+    }
 }
 
 /// updates the log types on Cumulocity
