@@ -6,6 +6,7 @@ use std::{
 use easy_reader::EasyReader;
 use glob::glob;
 use time::OffsetDateTime;
+use tracing::info;
 
 use crate::config::LogPluginConfig;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
@@ -210,6 +211,7 @@ pub async fn handle_logfile_request_operation(
     let successful = LogfileRequest::successful(Some(upload_event_url))?;
     let () = mqtt_client.published.send(successful).await?;
 
+    info!("Log request processed.");
     Ok(())
 }
 
