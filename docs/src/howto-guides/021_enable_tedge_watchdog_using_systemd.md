@@ -16,7 +16,7 @@ using the `systemd` is a two-step process.
 ### Step 1: Enable the `watchdog` feature in the `systemd` service file
 For example to enable the `watchdog` feature for `tedge-mapper-c8y` service, update systemd service file as shown below.
 
-Add `tedge_watchdog.service` in  `After` under `[Unit]` section.
+Add `tedge-watchdog.service` in  `After` under `[Unit]` section.
 Add `WatchdogSec=5` under `[Service]` section.
 
 The sample service file after updating looks as below.
@@ -24,7 +24,7 @@ The sample service file after updating looks as below.
 ```shell
 [Unit]
 Description=tedge-mapper-c8y converts Thin Edge JSON measurements to Cumulocity JSON format.
-After=syslog.target network.target mosquitto.service tedge_watchdog.service
+After=syslog.target network.target mosquitto.service tedge-watchdog.service
 
 [Service]
 User=tedge-mapper
