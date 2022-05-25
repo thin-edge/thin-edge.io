@@ -13,7 +13,7 @@ impl Message for NoMessage {}
 
 /// A macro to define a enum type grouping several message types
 ///
-/// `message_type!(Input[Msg1,Msg2]);` expends to:
+/// `message_type!(Msg[Msg1,Msg2]);` expends to:
 ///
 /// ```no_run
 /// # use tedge_actors::Message;
@@ -23,19 +23,19 @@ impl Message for NoMessage {}
 /// # struct Msg2 {}
 ///
 /// #[derive(Clone, Debug)]
-/// enum Input {
+/// enum Msg {
 ///     Msg1(Msg1),
 ///     Msg2(Msg2),
 /// }
-/// impl Message for Input {}
-/// impl Into<Input> for Msg1 {
-///     fn into(self) -> Input {
-///        Input::Msg1(self)
+/// impl Message for Msg {}
+/// impl From<Msg1> for Msg {
+///     fn from(m: Msg1) -> Msg {
+///        Msg::Msg1(m)
 ///     }
 /// }
-/// impl Into<Input> for Msg2 {
-///     fn into(self) -> Input {
-///        Input::Msg2(self)
+/// impl From<Msg2> for Msg {
+///     fn from(m: Msg2) -> Msg {
+///        Msg::Msg2(m)
 ///     }
 /// }
 /// ```
@@ -48,11 +48,11 @@ macro_rules! message_type {
                 $x($x),
             )*
         }
-        impl Message for Input {}
+        impl Message for $t {}
         $(
-            impl Into<$t> for $x {
-                fn into(self) -> $t {
-                    $t::$x(self)
+            impl From<$x> for $t {
+                fn from(m: $x) -> $t {
+                    $t::$x(m)
                 }
             }
         )*
