@@ -48,6 +48,10 @@ install_tedge_plugins() {
     # Download and install c8y log plugin
     wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/c8y_log_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
     dpkg -i /tmp/tedge/c8y_log_plugin_${VERSION}_${ARCH}.deb
+    
+    # Download and install tedge_watchdog
+    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_watchdog_${VERSION}_${ARCH}.deb -P /tmp/tedge
+    dpkg -i /tmp/tedge/tedge_watchdog_${VERSION}_${ARCH}.deb
 }
 
 if [ $# -lt 3 ]; then
