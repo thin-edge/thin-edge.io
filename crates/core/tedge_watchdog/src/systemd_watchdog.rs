@@ -14,7 +14,7 @@ use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, MqttBindAddressSetting, MqttPortSetting,
     TEdgeConfigLocation,
 };
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 #[derive(Serialize, Deserialize)]
 pub struct HealthStatus {
@@ -49,7 +49,7 @@ pub async fn start_watchdog(tedge_config_dir: PathBuf) -> Result<(), anyhow::Err
                         service,
                         &req_topic,
                         &res_topic,
-                        interval / 2,
+                        interval / 4,
                     )
                     .await
                 }));
@@ -98,6 +98,7 @@ async fn monitor_tedge_service(
 
                 let p: HealthStatus = serde_json::from_str(message)?;
 
+                debug!("Sending notification for {} with pid: {}", name, p.pid);
                 notify_systemd(p.pid, "WATCHDOG=1")?;
             }
             Ok(None) => {}
