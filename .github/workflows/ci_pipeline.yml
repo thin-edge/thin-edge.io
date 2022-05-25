@@ -191,6 +191,13 @@ jobs:
           command: deb
           args: -p tedge_agent
 
+      - name: Build tedge_watchdog debian package
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_watchdog
+
       - name: Build c8y_log_plugin debian package
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -310,6 +317,9 @@ jobs:
       - name: Strip tedge_agent
         run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_agent || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_agent
 
+      - name: Strip tedge_watchdog
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_watchdog || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_watchdog
+
       - name: Strip tedge_apt_plugin
         run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_apt_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_apt_plugin
 
@@ -342,6 +352,13 @@ jobs:
         with:
           command: deb
           args: -p tedge_agent --no-strip --no-build --target=${{ matrix.target }}
+
+      - name: build tedge_watchdog debian package for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_watchdog --no-strip --no-build --target=${{ matrix.target }}
 
       - name: build tedge_apt_plugin debian package for target
         uses: actions-rs/cargo@v1
@@ -444,7 +461,7 @@ jobs:
         continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto libmosquitto1 collectd-core
+        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge_watchdog tedge mosquitto libmosquitto1 collectd-core
 
       - name: install mosquitto
         run: sudo apt-get --assume-yes install mosquitto
@@ -463,6 +480,9 @@ jobs:
 
       - name: install tedge agent package
         run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_amd64.deb
+
+      - name: install tedge watchdog package
+        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_amd64.deb
 
       - name: install tedge plugin packages
         run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_amd64.deb
@@ -519,6 +539,9 @@ jobs:
 
       - name: install tedge agent package
         run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_amd64.deb
+
+      - name: install tedge watchdog package
+        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_amd64.deb
 
       - name: install tedge plugin packages
         run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_amd64.deb
@@ -587,7 +610,7 @@ jobs:
         continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
+        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge_watchdog tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
 
       - name: install mosquitto
         run: sudo apt-get --assume-yes install mosquitto
@@ -609,6 +632,9 @@ jobs:
 
       - name: install tedge agent package
         run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_armhf.deb
+
+      - name: install tedge watchdog package
+        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_armhf.deb
 
       - name: install tedge plugin packages
         run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
@@ -711,7 +737,7 @@ jobs:
         continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
+        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge_watchdog tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
 
       - name: install mosquitto
         run: sudo apt-get --assume-yes install mosquitto
@@ -733,6 +759,9 @@ jobs:
 
       - name: install tedge agent package
         run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_armhf.deb
+
+      - name: install tedge watchdog package
+        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_armhf.deb
 
       - name: install tedge plugin packages
         run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
@@ -836,7 +865,7 @@ jobs:
         continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
+        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge_watchdog tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
 
       - name: install mosquitto
         run: sudo apt-get --assume-yes install mosquitto
@@ -858,6 +887,9 @@ jobs:
 
       - name: install tedge agent package
         run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_armhf.deb
+
+      - name: install tedge watchdog package
+        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_armhf.deb
 
       - name: install tedge plugin packages
         run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
@@ -961,7 +993,7 @@ jobs:
         continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
+        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge_watchdog tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
 
       - name: install mosquitto
         run: sudo apt-get --assume-yes install mosquitto
@@ -983,6 +1015,9 @@ jobs:
 
       - name: install tedge agent package
         run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_armhf.deb
+
+      - name: install tedge watchdog package
+        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_armhf.deb
 
       - name: install tedge plugin packages
         run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
