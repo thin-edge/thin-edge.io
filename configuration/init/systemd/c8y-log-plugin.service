@@ -1,6 +1,6 @@
 [Unit]
 Description=Thin-edge logfile retriever for Cumulocity
-After=syslog.target network.target mosquitto.service
+After=tedge-mapper-c8y.service
 
 [Service]
 User=root
