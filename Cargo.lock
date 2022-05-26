@@ -622,6 +622,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "command_plugin"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "tedge_actors",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

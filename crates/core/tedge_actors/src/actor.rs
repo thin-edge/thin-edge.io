@@ -35,13 +35,18 @@ pub trait Actor: 'static + Sized + Send + Sync {
 
 /// A state machine that reacts to input messages by producing output messages
 #[async_trait]
-pub trait Reactor<Input, Output>: 'static + Sized + Send + Sync {
+pub trait Reactor<Input, Output>: 'static + Send + Sync {
     /// React to an input message, possibly generating output messages
     async fn react(
         &mut self,
         message: Input,
         output: &mut Recipient<Output>,
-    ) -> Result<(), RuntimeError>;
+    ) -> Result<Option<Box<dyn Task>>, RuntimeError>;
+}
+
+#[async_trait]
+pub trait Task: Send {
+    async fn run(self: Box<Self>) -> Result<(), RuntimeError>;
 }
 
 /// An handle to an inactive actor instance
