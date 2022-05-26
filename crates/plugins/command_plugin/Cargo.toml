@@ -1,0 +1,11 @@
+[package]
+name = "command_plugin"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-process = "1.4"
+async-trait = "0.1"
+tedge_actors = { path = "../../core/tedge_actors" }
