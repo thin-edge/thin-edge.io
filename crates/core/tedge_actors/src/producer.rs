@@ -1,4 +1,4 @@
-use crate::{Message, Reactor, Recipient, RuntimeError};
+use crate::{Message, Reactor, Recipient, RuntimeError, Sender};
 use async_trait::async_trait;
 use std::fmt::Debug;
 
@@ -6,7 +6,7 @@ use std::fmt::Debug;
 #[async_trait]
 pub trait Producer<M: Message> {
     /// Produce the messages of this source sending them to the given recipient
-    async fn produce_messages(self, output: impl Recipient<M>) -> Result<(), RuntimeError>;
+    async fn produce_messages(self, output: Recipient<M>) -> Result<(), RuntimeError>;
 }
 
 /// Akin to `/dev/null`
@@ -18,25 +18,31 @@ pub struct DevNull;
 
 #[async_trait]
 impl<M: Message> Producer<M> for DevNull {
-    async fn produce_messages(self, _output: impl Recipient<M>) -> Result<(), RuntimeError> {
+    async fn produce_messages(self, _output: Recipient<M>) -> Result<(), RuntimeError> {
         Ok(())
     }
 }
 
 #[async_trait]
-impl<M: Message> Recipient<M> for DevNull {
+impl<M: Message> Sender<M> for DevNull {
     async fn send_message(&mut self, _message: M) -> Result<(), RuntimeError> {
         Ok(())
+    }
+
+    fn clone(&self) -> Recipient<M> {
+        Box::new(DevNull)
     }
 }
 
 #[async_trait]
 impl<I: Message, O: Message> Reactor<I, O> for DevNull {
-    async fn react(
-        &mut self,
-        _message: I,
-        _output: &mut impl Recipient<O>,
-    ) -> Result<(), RuntimeError> {
+    async fn react(&mut self, _message: I, _output: &mut Recipient<O>) -> Result<(), RuntimeError> {
         Ok(())
+    }
+}
+
+impl<M: Message> Into<Recipient<M>> for DevNull {
+    fn into(self) -> Recipient<M> {
+        Box::new(self)
     }
 }

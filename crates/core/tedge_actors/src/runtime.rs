@@ -1,6 +1,4 @@
-use crate::{
-    ActiveActor, Actor, ActorInstance, MailBox, Producer, Reactor, Recipient, RuntimeError,
-};
+use crate::{ActiveActor, Actor, ActorInstance, MailBox, Producer, Reactor, RuntimeError, Sender};
 use futures::executor::ThreadPool;
 use futures::Future;
 
@@ -20,15 +18,11 @@ impl ActorRuntime {
     }
 
     /// Launch an actor instance, returning an handle to stop it
-    pub async fn run<A: Actor, R: Recipient<A::Output>>(
-        &self,
-        instance: ActorInstance<A, R>,
-    ) -> ActiveActor<A, R> {
+    pub async fn run<A: Actor>(&self, instance: ActorInstance<A>) -> ActiveActor<A> {
         let mut mailbox = instance.mailbox;
         let mut recipient = instance.recipient;
         let event_recipient = recipient.clone();
         let input = mailbox.get_address();
-        let output = recipient.clone();
 
         match instance.actor.start().await {
             Ok((source, mut reactor)) => {
@@ -49,7 +43,7 @@ impl ActorRuntime {
             }
         }
 
-        ActiveActor { input, output }
+        ActiveActor { input }
     }
 
     fn spawn<Task>(&self, task: Task)

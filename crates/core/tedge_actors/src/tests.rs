@@ -1,9 +1,6 @@
 use crate::runtime::ActorRuntime;
 use crate::*;
 use async_trait::async_trait;
-use futures::lock::Mutex;
-use std::ops::Deref;
-use std::sync::Arc;
 
 /// An actor that converts string messages to uppercase
 struct UppercaseConverter;
@@ -30,7 +27,7 @@ impl Reactor<String, String> for UppercaseConverter {
     async fn react(
         &mut self,
         message: String,
-        output: &mut impl Recipient<String>,
+        output: &mut Recipient<String>,
     ) -> Result<(), RuntimeError> {
         output.send_message(message.to_uppercase()).await
     }
@@ -46,14 +43,13 @@ fn it_works() {
         .into_iter()
         .map(|s| s.to_string())
         .collect();
-    let output = Arc::new(Mutex::new(vec![]));
+    let mut output: MailBox<String> = MailBox::new();
 
-    let actor = instance::<UppercaseConverter>(&())
-        .expect("Fail to build the actor")
-        .with_recipient(output.clone());
-    let source = instance::<Vec<String>>(&input)
-        .expect("Fail to build a source from input")
-        .with_recipient(actor.address());
+    let mut actor = instance::<UppercaseConverter>(&()).expect("Fail to build the actor");
+    let mut source = instance::<Vec<String>>(&input).expect("Fail to build a source from input");
+
+    actor.set_recipient(output.get_address().into());
+    source.set_recipient(actor.address().into());
 
     let runtime = ActorRuntime::try_new().expect("Fail to create the runtime");
 
@@ -61,10 +57,13 @@ fn it_works() {
         runtime.run(source).await;
         runtime.run(actor).await;
 
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        let mut expected = expected.into_iter();
+        assert_eq!(output.next_message().await, expected.next());
+        assert_eq!(output.next_message().await, expected.next());
+        assert_eq!(output.next_message().await, expected.next());
 
-        let output = output.lock().await;
-        assert_eq!(&expected, output.deref());
+        // TODO Handle end of input
+        // assert_eq!(output.next_message().await, None);
     })
 }
 
