@@ -35,7 +35,7 @@ impl Reactor<MeasurementGroup, MqttMessage> for C8Y {
     async fn react(
         &mut self,
         measurements: MeasurementGroup,
-        output: &mut impl Recipient<MqttMessage>,
+        output: &mut Recipient<MqttMessage>,
     ) -> Result<(), RuntimeError> {
         if let Ok(c8y_payload) = C8Y::serialize(measurements) {
             let _ = output

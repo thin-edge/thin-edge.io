@@ -30,7 +30,7 @@ impl Reactor<MqttMessage, MeasurementGroup> for ThinEdgeJson {
     async fn react(
         &mut self,
         message: MqttMessage,
-        output: &mut impl Recipient<MeasurementGroup>,
+        output: &mut Recipient<MeasurementGroup>,
     ) -> Result<(), RuntimeError> {
         if let Ok(measurements) = ThinEdgeJson::parse(message.payload) {
             let _ = output.send_message(measurements).await;

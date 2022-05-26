@@ -72,7 +72,7 @@ impl Reactor<MqttMessage, MqttMessage> for MqttMessageSink {
     async fn react(
         &mut self,
         message: MqttMessage,
-        _output: &mut impl Recipient<MqttMessage>,
+        _output: &mut Recipient<MqttMessage>,
     ) -> Result<(), RuntimeError> {
         let topic = mqtt_channel::Topic::new_unchecked(&message.topic);
         let payload = message.payload;
@@ -85,7 +85,7 @@ impl Reactor<MqttMessage, MqttMessage> for MqttMessageSink {
 impl Producer<MqttMessage> for MqttMessageSource {
     async fn produce_messages(
         mut self,
-        mut output: impl Recipient<MqttMessage>,
+        mut output: Recipient<MqttMessage>,
     ) -> Result<(), RuntimeError> {
         while let Some(raw_message) = self.mqtt_sub.next().await {
             let message = MqttMessage {

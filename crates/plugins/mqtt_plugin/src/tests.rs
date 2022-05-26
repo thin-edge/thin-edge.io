@@ -12,15 +12,15 @@ async fn it_works() -> Result<(), anyhow::Error> {
     let mut output = broker.messages_published_on(output_topic).await;
 
     // Create actor instances
-    let main_actor = instance::<UppercaseConverter>(&output_topic.to_string())?;
-    let mqtt_actor = instance::<MqttConnection>(&MqttConfig {
+    let mut main_actor = instance::<UppercaseConverter>(&output_topic.to_string())?;
+    let mut mqtt_actor = instance::<MqttConnection>(&MqttConfig {
         port: broker.port,
         subscriptions: vec![input_topic.to_string()],
     })?;
 
     // Connect the actors: `main_actor <=> mqtt_actor`
-    let main_actor = main_actor.with_recipient(mqtt_actor.address());
-    let mqtt_actor = mqtt_actor.with_recipient(main_actor.address());
+    main_actor.set_recipient(mqtt_actor.address().into());
+    mqtt_actor.set_recipient(main_actor.address().into());
 
     // One can then run the actors
     let runtime = ActorRuntime::try_new().expect("Fail to create the runtime");
@@ -72,7 +72,7 @@ impl Reactor<MqttMessage, MqttMessage> for UppercaseConverter {
     async fn react(
         &mut self,
         message: MqttMessage,
-        output: &mut impl Recipient<MqttMessage>,
+        output: &mut Recipient<MqttMessage>,
     ) -> Result<(), RuntimeError> {
         let response = MqttMessage {
             topic: self.output_topic.clone(),
