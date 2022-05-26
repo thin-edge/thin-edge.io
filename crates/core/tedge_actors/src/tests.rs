@@ -154,17 +154,17 @@ fn output_messages_can_be_sent_asynchronously() {
 }
 
 #[derive(Clone, Debug)]
-struct Msg1 {
+pub struct Msg1 {
     x: i32,
 }
 #[derive(Clone, Debug)]
-enum Msg2 {
+pub enum Msg2 {
     A,
     B,
     C,
 }
 #[derive(Clone, Debug)]
-struct Msg3 {
+pub struct Msg3 {
     x: String,
 }
 

@@ -12,6 +12,10 @@ pub use producer::*;
 pub use recipient::*;
 pub use runtime::*;
 
+#[macro_use]
+mod macros;
+pub use macros::*;
+
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests;
