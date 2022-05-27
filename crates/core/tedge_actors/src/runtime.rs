@@ -1,4 +1,4 @@
-use crate::{ActiveActor, Actor, ActorInstance, Producer, Reactor, RuntimeError, Task};
+use crate::{ActiveActor, Actor, ActorInstance, RuntimeError, RuntimeHandler, Task};
 use futures::channel::mpsc;
 use futures::channel::mpsc::UnboundedReceiver;
 use futures::channel::mpsc::UnboundedSender;
@@ -29,6 +29,7 @@ impl ActorRuntime {
                 futures::select! {
                     maybe_task =  task_receiver.next() => {
                         if let Some(task) = maybe_task {
+                            // FIXME: one should call `ActorRuntime::spawn`
                             if let Err(error) = task.run().await {
                                 eprintln!("Error: {}", error);
                             }
@@ -63,35 +64,28 @@ impl ActorRuntime {
     ) -> Result<ActiveActor<A>, RuntimeError> {
         let mut mailbox = instance.mailbox;
         let mut recipient = instance.recipient;
-        let mut task_sender = self.task_sender.clone();
-        let mut error_sender = self.error_sender.clone();
 
-        let actor = A::try_new(instance.config)?;
+        let mut actor = A::try_new(instance.config)?;
+        actor.start(self.handler(), recipient.clone()).await?;
+
         let input = mailbox.get_address();
+        let mut runtime = self.handler();
 
-        match actor.start().await {
-            Ok((source, mut reactor)) => {
-                // TODO: to be replaced by a task
-                let source_recipient = recipient.clone();
-                self.spawn(source.produce_messages(source_recipient));
-
-                self.spawn(async move {
-                    while let Some(message) = mailbox.next_message().await {
-                        if let Some(task) = reactor.react(message, &mut recipient).await? {
-                            task_sender.send(task).await?;
-                        }
-                    }
-
-                    Ok(())
-                });
+        self.spawn(async move {
+            while let Some(message) = mailbox.next_message().await {
+                actor.react(message, &mut runtime, &mut recipient).await?;
             }
 
-            Err(error) => {
-                let _ = error_sender.send(error).await;
-            }
-        }
+            Ok(())
+        });
 
         Ok(ActiveActor { input })
+    }
+
+    pub fn handler(&self) -> RuntimeHandler {
+        RuntimeHandler {
+            task_sender: self.task_sender.clone(),
+        }
     }
 
     fn spawn<Task>(&self, task: Task)

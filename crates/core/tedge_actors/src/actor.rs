@@ -1,6 +1,8 @@
 use crate::runtime::ActorRuntime;
 use crate::*;
 use async_trait::async_trait;
+use futures::channel::mpsc::UnboundedSender;
+use futures::SinkExt;
 
 /// An actor is a state machine consuming & producing messages
 ///
@@ -20,32 +22,39 @@ pub trait Actor: 'static + Sized + Send + Sync {
     /// The type of output messages this actor produces
     type Output: Message;
 
-    /// The actual type of the source for spontaneous messages
-    type Producer: Producer<Self::Output>;
-
-    /// The actual type of the source for spontaneous messages
-    type Reactor: Reactor<Self::Input, Self::Output>;
-
     /// Create a new instance of this actor
     fn try_new(config: Self::Config) -> Result<Self, RuntimeError>;
 
-    /// Start the actor returning a message source and a reactor
-    async fn start(self) -> Result<(Self::Producer, Self::Reactor), RuntimeError>;
-}
+    /// Start the actor
+    async fn start(
+        &mut self,
+        runtime: RuntimeHandler,
+        output: Recipient<Self::Output>,
+    ) -> Result<(), RuntimeError>;
 
-/// A state machine that reacts to input messages by producing output messages
-#[async_trait]
-pub trait Reactor<Input, Output>: 'static + Send + Sync {
-    /// React to an input message, possibly generating output messages
+    /// React to an input message,
+    /// possibly generating output messages and returning a message source
     async fn react(
         &mut self,
-        message: Input,
-        output: &mut Recipient<Output>,
-    ) -> Result<Option<Box<dyn Task>>, RuntimeError>;
+        message: Self::Input,
+        runtime: &mut RuntimeHandler,
+        output: &mut Recipient<Self::Output>,
+    ) -> Result<(), RuntimeError>;
+}
+
+/// A runtime handler passed to actors to launch background tasks
+pub struct RuntimeHandler {
+    pub(crate) task_sender: UnboundedSender<Box<dyn Task>>,
+}
+
+impl RuntimeHandler {
+    pub async fn spawn(&mut self, task: impl Task) -> Result<(), RuntimeError> {
+        Ok(self.task_sender.send(Box::new(task)).await?)
+    }
 }
 
 #[async_trait]
-pub trait Task: Send {
+pub trait Task: 'static + Send + Sync {
     async fn run(self: Box<Self>) -> Result<(), RuntimeError>;
 }
 
@@ -95,11 +104,16 @@ pub struct ActiveActor<A: Actor> {
 }
 
 /// A vector can be used as a message source - mostly useful for tests
+struct VecSource<M: Message> {
+    messages: Vec<M>,
+    output: Recipient<M>,
+}
+
 #[async_trait]
-impl<M: Message> Producer<M> for Vec<M> {
-    async fn produce_messages(self, mut output: Recipient<M>) -> Result<(), RuntimeError> {
-        for message in self.into_iter() {
-            output.send_message(message).await?;
+impl<M: Message> Task for VecSource<M> {
+    async fn run(mut self: Box<Self>) -> Result<(), RuntimeError> {
+        for message in self.messages.into_iter() {
+            self.output.send_message(message.clone()).await?;
         }
         Ok(())
     }
@@ -110,14 +124,30 @@ impl<M: Message> Actor for Vec<M> {
     type Config = Vec<M>;
     type Input = NoMessage;
     type Output = M;
-    type Producer = Vec<M>;
-    type Reactor = DevNull;
 
     fn try_new(config: Self::Config) -> Result<Self, RuntimeError> {
         Ok(config)
     }
 
-    async fn start(self) -> Result<(Self::Producer, Self::Reactor), RuntimeError> {
-        Ok((self, DevNull))
+    async fn start(
+        &mut self,
+        mut runtime: RuntimeHandler,
+        output: Recipient<Self::Output>,
+    ) -> Result<(), RuntimeError> {
+        runtime
+            .spawn(VecSource {
+                messages: self.clone(),
+                output,
+            })
+            .await
+    }
+
+    async fn react(
+        &mut self,
+        _message: Self::Input,
+        _runtime: &mut RuntimeHandler,
+        _output: &mut Recipient<Self::Output>,
+    ) -> Result<(), RuntimeError> {
+        Ok(())
     }
 }

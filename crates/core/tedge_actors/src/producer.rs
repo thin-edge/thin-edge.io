@@ -1,4 +1,4 @@
-use crate::{Message, Reactor, Recipient, RuntimeError, Sender, Task};
+use crate::{Message, Recipient, RuntimeError, Sender};
 use async_trait::async_trait;
 use std::fmt::Debug;
 
@@ -31,17 +31,6 @@ impl<M: Message> Sender<M> for DevNull {
 
     fn clone(&self) -> Recipient<M> {
         Box::new(DevNull)
-    }
-}
-
-#[async_trait]
-impl<I: Message, O: Message> Reactor<I, O> for DevNull {
-    async fn react(
-        &mut self,
-        _message: I,
-        _output: &mut Recipient<O>,
-    ) -> Result<Option<Box<dyn Task>>, RuntimeError> {
-        Ok(None)
     }
 }
 

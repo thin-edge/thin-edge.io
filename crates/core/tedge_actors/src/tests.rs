@@ -1,4 +1,3 @@
-use crate::runtime::ActorRuntime;
 use crate::*;
 use async_trait::async_trait;
 
@@ -10,27 +9,26 @@ impl Actor for UppercaseConverter {
     type Config = ();
     type Input = String;
     type Output = String;
-    type Producer = DevNull;
-    type Reactor = Self;
 
     fn try_new(_config: Self::Config) -> Result<Self, RuntimeError> {
         Ok(UppercaseConverter)
     }
 
-    async fn start(self) -> Result<(Self::Producer, Self::Reactor), RuntimeError> {
-        Ok((DevNull, self))
+    async fn start(
+        &mut self,
+        mut _runtime: RuntimeHandler,
+        _output: Recipient<Self::Output>,
+    ) -> Result<(), RuntimeError> {
+        Ok(())
     }
-}
 
-#[async_trait]
-impl Reactor<String, String> for UppercaseConverter {
     async fn react(
         &mut self,
         message: String,
+        _runtime: &mut RuntimeHandler,
         output: &mut Recipient<String>,
-    ) -> Result<Option<Box<dyn Task>>, RuntimeError> {
-        output.send_message(message.to_uppercase()).await?;
-        Ok(None)
+    ) -> Result<(), RuntimeError> {
+        Ok(output.send_message(message.to_uppercase()).await?)
     }
 }
 
@@ -79,31 +77,31 @@ impl Actor for AsyncUppercaseConverter {
     type Config = ();
     type Input = String;
     type Output = String;
-    type Producer = DevNull;
-    type Reactor = Self;
 
     fn try_new(_config: Self::Config) -> Result<Self, RuntimeError> {
         Ok(AsyncUppercaseConverter)
     }
 
-    async fn start(self) -> Result<(Self::Producer, Self::Reactor), RuntimeError> {
-        Ok((DevNull, self))
+    async fn start(
+        &mut self,
+        mut _runtime: RuntimeHandler,
+        _output: Recipient<Self::Output>,
+    ) -> Result<(), RuntimeError> {
+        Ok(())
     }
-}
 
-#[async_trait]
-impl Reactor<String, String> for AsyncUppercaseConverter {
     async fn react(
         &mut self,
         message: String,
+        runtime: &mut RuntimeHandler,
         output: &mut Recipient<String>,
-    ) -> Result<Option<Box<dyn Task>>, RuntimeError> {
-        let task = UppercaseTask {
-            input: message,
-            output: output.clone(),
-        };
-
-        Ok(Some(Box::new(task)))
+    ) -> Result<(), RuntimeError> {
+        runtime
+            .spawn(UppercaseTask {
+                input: message,
+                output: output.clone(),
+            })
+            .await
     }
 }
 
