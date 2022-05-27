@@ -6,7 +6,7 @@
 ///   The root issue is that the tedge_actor and mqtt_channel crates use queue in a different manner.
 use async_trait::async_trait;
 use mqtt_channel::{SinkExt, StreamExt, UnboundedReceiver, UnboundedSender};
-use tedge_actors::{Actor, Message, Producer, Reactor, Recipient, RuntimeError};
+use tedge_actors::{Actor, Message, Producer, Reactor, Recipient, RuntimeError, Task};
 
 #[derive(Clone, Debug)]
 pub struct MqttMessage {
@@ -41,10 +41,9 @@ impl Actor for MqttConnection {
     type Producer = MqttMessageSource;
     type Reactor = MqttMessageSink;
 
-    fn try_new(config: &Self::Config) -> Result<Self, RuntimeError> {
+    fn try_new(config: Self::Config) -> Result<Self, RuntimeError> {
         let subscriptions = config
             .subscriptions
-            .clone()
             .try_into()
             .expect("valid topic patterns");
         let mqtt_config = mqtt_channel::Config::default()
@@ -73,11 +72,12 @@ impl Reactor<MqttMessage, MqttMessage> for MqttMessageSink {
         &mut self,
         message: MqttMessage,
         _output: &mut Recipient<MqttMessage>,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<Option<Box<dyn Task>>, RuntimeError> {
         let topic = mqtt_channel::Topic::new_unchecked(&message.topic);
         let payload = message.payload;
         let raw_message = mqtt_channel::Message::new(&topic, payload);
-        Ok(self.mqtt_pub.send(raw_message).await?)
+        self.mqtt_pub.send(raw_message).await?;
+        Ok(None)
     }
 }
 

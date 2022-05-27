@@ -12,11 +12,11 @@ async fn it_works() -> Result<(), anyhow::Error> {
     let mut output = broker.messages_published_on(output_topic).await;
 
     // Create actor instances
-    let mut main_actor = instance::<UppercaseConverter>(&output_topic.to_string())?;
-    let mut mqtt_actor = instance::<MqttConnection>(&MqttConfig {
+    let mut main_actor = instance::<UppercaseConverter>(output_topic.to_string());
+    let mut mqtt_actor = instance::<MqttConnection>(MqttConfig {
         port: broker.port,
         subscriptions: vec![input_topic.to_string()],
-    })?;
+    });
 
     // Connect the actors: `main_actor <=> mqtt_actor`
     main_actor.set_recipient(mqtt_actor.address().into());
@@ -24,8 +24,8 @@ async fn it_works() -> Result<(), anyhow::Error> {
 
     // One can then run the actors
     let runtime = ActorRuntime::try_new().expect("Fail to create the runtime");
-    runtime.run(main_actor).await;
-    runtime.run(mqtt_actor).await;
+    runtime.run(main_actor).await?;
+    runtime.run(mqtt_actor).await?;
 
     // Any messages published on the input topic ...
     broker.publish(input_topic, "msg 1").await?;
@@ -56,10 +56,8 @@ impl Actor for UppercaseConverter {
     type Producer = DevNull;
     type Reactor = Self;
 
-    fn try_new(config: &Self::Config) -> Result<Self, RuntimeError> {
-        Ok(UppercaseConverter {
-            output_topic: config.clone(),
-        })
+    fn try_new(output_topic: Self::Config) -> Result<Self, RuntimeError> {
+        Ok(UppercaseConverter { output_topic })
     }
 
     async fn start(self) -> Result<(Self::Producer, Self::Reactor), RuntimeError> {
@@ -73,11 +71,12 @@ impl Reactor<MqttMessage, MqttMessage> for UppercaseConverter {
         &mut self,
         message: MqttMessage,
         output: &mut Recipient<MqttMessage>,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<Option<Box<dyn Task>>, RuntimeError> {
         let response = MqttMessage {
             topic: self.output_topic.clone(),
             payload: message.payload.to_uppercase(),
         };
-        output.send_message(response).await
+        output.send_message(response).await?;
+        Ok(None)
     }
 }

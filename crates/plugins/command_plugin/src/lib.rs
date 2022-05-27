@@ -19,7 +19,7 @@ impl Actor for CommandRunner {
     type Producer = DevNull;
     type Reactor = CommandRunner;
 
-    fn try_new(_config: &Self::Config) -> Result<Self, RuntimeError> {
+    fn try_new(_config: Self::Config) -> Result<Self, RuntimeError> {
         Ok(CommandRunner)
     }
 

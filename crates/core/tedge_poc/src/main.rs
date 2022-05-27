@@ -18,13 +18,10 @@ async fn main() {
     };
 
     // Create actor instances
-    let mut c8y = instance::<C8Y>(&measurement_output).expect("a c8y actor instance");
-    let c8y_mqtt_con =
-        instance::<MqttConnection>(&c8y_mqtt_config).expect("an mqtt actor to connect to c8y");
-    let mut thin_edge_json =
-        instance::<ThinEdgeJson>(&()).expect("an actor translating thin-edge json");
-    let mut thin_edge_json_mqtt_con = instance::<MqttConnection>(&thin_edge_json_mqtt_config)
-        .expect("an mqtt actor to connect to the local MQTT bus");
+    let mut c8y = instance::<C8Y>(measurement_output);
+    let c8y_mqtt_con = instance::<MqttConnection>(c8y_mqtt_config);
+    let mut thin_edge_json = instance::<ThinEdgeJson>(());
+    let mut thin_edge_json_mqtt_con = instance::<MqttConnection>(thin_edge_json_mqtt_config);
 
     // Connect the actors
     thin_edge_json_mqtt_con.set_recipient(thin_edge_json.address().into());
@@ -34,10 +31,19 @@ async fn main() {
     // Run the actors
     let runtime = ActorRuntime::try_new().expect("Fail to create the runtime");
 
-    runtime.run(c8y).await;
-    runtime.run(c8y_mqtt_con).await;
-    runtime.run(thin_edge_json).await;
-    runtime.run(thin_edge_json_mqtt_con).await;
+    runtime.run(c8y).await.expect("a running c8y actor");
+    runtime
+        .run(c8y_mqtt_con)
+        .await
+        .expect("a running mqtt actor connected to c8y");
+    runtime
+        .run(thin_edge_json)
+        .await
+        .expect("a running actor translating thin-edge json");
+    runtime
+        .run(thin_edge_json_mqtt_con)
+        .await
+        .expect("a running mqtt actor connected to the local MQTT bus");
 
     // FIXME ;-)
     std::thread::sleep(std::time::Duration::from_secs(100));
