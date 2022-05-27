@@ -111,7 +111,7 @@ impl DeviceMonitor {
                     let health_status = json!({
                         "status": "up",
                         "pid": process::id(),
-                        "time": OffsetDateTime::now_utc().unix_timestamp()
+                        "time": OffsetDateTime::now_utc().unix_timestamp(),
                     })
                     .to_string();
                     let health_message = Message::new(&health_status_topic, health_status);

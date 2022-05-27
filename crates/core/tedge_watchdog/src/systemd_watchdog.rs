@@ -188,3 +188,40 @@ fn get_watchdog_sec(service_file: &str) -> Result<u64, WatchdogError> {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Result;
+    use serde_json::json;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_get_latest_health_status_message() -> Result<()> {
+        let (mut sender, mut receiver) = mpsc::unbounded::<Message>();
+        let health_topic = Topic::new("tedge/health/test-service").expect("Valid topic");
+
+        for x in 1..5i64 {
+            let health_status = json!({
+                "status": "up",
+                "pid": 123u32,
+                "time": x,
+            })
+            .to_string();
+            let health_message = Message::new(&health_topic, health_status);
+            sender.publish(health_message).await?;
+        }
+
+        let health_status = get_latest_health_status_message(3, &mut receiver).await;
+        assert_eq!(health_status.time, 3);
+
+        let timeout_error = tokio::time::timeout(
+            tokio::time::Duration::from_secs(1),
+            get_latest_health_status_message(5, &mut receiver),
+        )
+        .await;
+        assert!(timeout_error.is_err());
+
+        Ok(())
+    }
+}
