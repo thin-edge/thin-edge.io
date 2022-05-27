@@ -1,5 +1,6 @@
 use crate::error::WatchdogError;
 use freedesktop_entry_parser::parse_entry;
+use futures::channel::mpsc;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use mqtt_channel::{Config, Message, PubChannel, Topic};
@@ -14,12 +15,14 @@ use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, MqttBindAddressSetting, MqttPortSetting,
     TEdgeConfigLocation,
 };
+use time::OffsetDateTime;
 use tracing::{debug, error, info, warn};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct HealthStatus {
     status: String,
     pid: u32,
+    time: i64,
 }
 
 pub async fn start_watchdog(tedge_config_dir: PathBuf) -> Result<(), anyhow::Error> {
@@ -90,26 +93,53 @@ async fn monitor_tedge_service(
 
         let start = Instant::now();
 
-        match tokio::time::timeout(tokio::time::Duration::from_secs(interval), received.next())
-            .await
+        let request_timestamp = OffsetDateTime::now_utc().unix_timestamp();
+        match tokio::time::timeout(
+            tokio::time::Duration::from_secs(interval),
+            get_latest_health_status_message(request_timestamp, &mut received),
+        )
+        .await
         {
-            Ok(Some(msg)) => {
-                let message = msg.payload_str()?;
-
-                let p: HealthStatus = serde_json::from_str(message)?;
-
-                debug!("Sending notification for {} with pid: {}", name, p.pid);
-                notify_systemd(p.pid, "WATCHDOG=1")?;
+            Ok(health_status) => {
+                debug!(
+                    "Sending notification for {} with pid: {}",
+                    name, health_status.pid
+                );
+                notify_systemd(health_status.pid, "WATCHDOG=1")?;
             }
-            Ok(None) => {}
-            Err(elapsed) => {
-                warn!("The {name} failed with {elapsed}");
+            Err(_) => {
+                warn!("No health check response received from {name} in time");
             }
         }
 
         let elapsed = start.elapsed();
         if elapsed < tokio::time::Duration::from_secs(interval) {
             tokio::time::sleep(tokio::time::Duration::from_secs(interval) - elapsed).await;
+        }
+    }
+}
+
+async fn get_latest_health_status_message(
+    request_timestamp: i64,
+    messages: &mut mpsc::UnboundedReceiver<Message>,
+) -> HealthStatus {
+    loop {
+        if let Some(message) = messages.next().await {
+            if let Ok(message) = message.payload_str() {
+                debug!("Health response received: {}", message);
+                if let Ok(health_status) = serde_json::from_str::<HealthStatus>(message) {
+                    if health_status.time >= request_timestamp {
+                        return health_status;
+                    } else {
+                        debug!(
+                            "Ignoring stale health response: {:?} older than request time: {}",
+                            health_status, request_timestamp
+                        );
+                    }
+                } else {
+                    error!("Invalid health response received: {}", message);
+                }
+            }
         }
     }
 }
