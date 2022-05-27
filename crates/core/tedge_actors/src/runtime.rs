@@ -57,15 +57,19 @@ impl ActorRuntime {
     }
 
     /// Launch an actor instance, returning an handle to stop it
-    pub async fn run<A: Actor>(&self, instance: ActorInstance<A>) -> ActiveActor<A> {
+    pub async fn run<A: Actor>(
+        &self,
+        instance: ActorInstance<A>,
+    ) -> Result<ActiveActor<A>, RuntimeError> {
         let mut mailbox = instance.mailbox;
         let mut recipient = instance.recipient;
         let mut task_sender = self.task_sender.clone();
         let mut error_sender = self.error_sender.clone();
 
+        let actor = A::try_new(instance.config)?;
         let input = mailbox.get_address();
 
-        match instance.actor.start().await {
+        match actor.start().await {
             Ok((source, mut reactor)) => {
                 // TODO: to be replaced by a task
                 let source_recipient = recipient.clone();
@@ -87,7 +91,7 @@ impl ActorRuntime {
             }
         }
 
-        ActiveActor { input }
+        Ok(ActiveActor { input })
     }
 
     fn spawn<Task>(&self, task: Task)

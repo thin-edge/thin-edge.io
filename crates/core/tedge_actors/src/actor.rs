@@ -27,7 +27,7 @@ pub trait Actor: 'static + Sized + Send + Sync {
     type Reactor: Reactor<Self::Input, Self::Output>;
 
     /// Create a new instance of this actor
-    fn try_new(config: &Self::Config) -> Result<Self, RuntimeError>;
+    fn try_new(config: Self::Config) -> Result<Self, RuntimeError>;
 
     /// Start the actor returning a message source and a reactor
     async fn start(self) -> Result<(Self::Producer, Self::Reactor), RuntimeError>;
@@ -51,9 +51,9 @@ pub trait Task: Send {
 
 /// An handle to an inactive actor instance
 ///
-/// Such instances have each an address to be used to interconnect the actors.
+/// An inactive instance encapsulates the actor config with a mailbox and connection to peers.
 pub struct ActorInstance<A: Actor> {
-    pub actor: A,
+    pub config: A::Config,
     pub mailbox: MailBox<A::Input>,
     pub recipient: Recipient<A::Output>,
 }
@@ -61,16 +61,15 @@ pub struct ActorInstance<A: Actor> {
 /// Build a new actor instance with an address
 ///
 /// The output of this instance will have to be connected to other actors using their addresses.
-pub fn instance<A: Actor>(config: &A::Config) -> Result<ActorInstance<A>, RuntimeError> {
-    let actor = A::try_new(config)?;
+pub fn instance<A: Actor>(config: A::Config) -> ActorInstance<A> {
     let mailbox = MailBox::new();
     let recipient = Box::new(DevNull);
 
-    Ok(ActorInstance {
-        actor,
+    ActorInstance {
+        config,
         mailbox,
         recipient,
-    })
+    }
 }
 
 impl<A: Actor> ActorInstance<A> {
@@ -84,7 +83,7 @@ impl<A: Actor> ActorInstance<A> {
         self.recipient = recipient;
     }
 
-    pub async fn run(self, runtime: &ActorRuntime) -> ActiveActor<A> {
+    pub async fn run(self, runtime: &ActorRuntime) -> Result<ActiveActor<A>, RuntimeError> {
         runtime.run(self).await
     }
 }
@@ -114,8 +113,8 @@ impl<M: Message> Actor for Vec<M> {
     type Producer = Vec<M>;
     type Reactor = DevNull;
 
-    fn try_new(config: &Self::Config) -> Result<Self, RuntimeError> {
-        Ok(config.clone())
+    fn try_new(config: Self::Config) -> Result<Self, RuntimeError> {
+        Ok(config)
     }
 
     async fn start(self) -> Result<(Self::Producer, Self::Reactor), RuntimeError> {

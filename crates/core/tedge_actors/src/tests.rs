@@ -13,7 +13,7 @@ impl Actor for UppercaseConverter {
     type Producer = DevNull;
     type Reactor = Self;
 
-    fn try_new(_config: &Self::Config) -> Result<Self, RuntimeError> {
+    fn try_new(_config: Self::Config) -> Result<Self, RuntimeError> {
         Ok(UppercaseConverter)
     }
 
@@ -46,8 +46,8 @@ fn it_works() {
         .collect();
     let mut output: MailBox<String> = MailBox::new();
 
-    let mut actor = instance::<UppercaseConverter>(&()).expect("Fail to build the actor");
-    let mut source = instance::<Vec<String>>(&input).expect("Fail to build a source from input");
+    let mut actor = instance::<UppercaseConverter>(());
+    let mut source = instance::<Vec<String>>(input);
 
     actor.set_recipient(output.get_address().into());
     source.set_recipient(actor.address().into());
@@ -55,8 +55,11 @@ fn it_works() {
     let runtime = ActorRuntime::try_new().expect("Fail to create the runtime");
 
     futures::executor::block_on(async {
-        runtime.run(source).await;
-        runtime.run(actor).await;
+        runtime
+            .run(source)
+            .await
+            .expect("Fail to produce input from source");
+        runtime.run(actor).await.expect("Fail to run the actor");
 
         let mut expected = expected.into_iter();
         assert_eq!(output.next_message().await, expected.next());
@@ -79,7 +82,7 @@ impl Actor for AsyncUppercaseConverter {
     type Producer = DevNull;
     type Reactor = Self;
 
-    fn try_new(_config: &Self::Config) -> Result<Self, RuntimeError> {
+    fn try_new(_config: Self::Config) -> Result<Self, RuntimeError> {
         Ok(AsyncUppercaseConverter)
     }
 
@@ -131,8 +134,8 @@ fn output_messages_can_be_sent_asynchronously() {
         .collect();
     let mut output: MailBox<String> = MailBox::new();
 
-    let mut actor = instance::<AsyncUppercaseConverter>(&()).expect("Fail to build the actor");
-    let mut source = instance::<Vec<String>>(&input).expect("Fail to build a source from input");
+    let mut actor = instance::<AsyncUppercaseConverter>(());
+    let mut source = instance::<Vec<String>>(input);
 
     actor.set_recipient(output.get_address().into());
     source.set_recipient(actor.address().into());
@@ -140,9 +143,11 @@ fn output_messages_can_be_sent_asynchronously() {
     let runtime = ActorRuntime::try_new().expect("Fail to create the runtime");
 
     futures::executor::block_on(async {
-        runtime.run(source).await;
-        runtime.run(actor).await;
-
+        runtime
+            .run(source)
+            .await
+            .expect("Fail to produce input from source");
+        runtime.run(actor).await.expect("Fail to run the actor");
         let mut expected = expected.into_iter();
         assert_eq!(output.next_message().await, expected.next());
         assert_eq!(output.next_message().await, expected.next());

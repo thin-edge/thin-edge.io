@@ -9,7 +9,10 @@ pub type Recipient<M> = Box<dyn Sender<M>>;
 
 #[async_trait]
 pub trait Sender<M>: 'static + Send + Sync {
+    /// Send a message returning an error if the recipient is no more expecting messages
     async fn send_message(&mut self, message: M) -> Result<(), RuntimeError>;
+
+    /// Clone this handle in order to send messages to the same recipient from another thread
     fn clone(&self) -> Recipient<M>;
 }
 
