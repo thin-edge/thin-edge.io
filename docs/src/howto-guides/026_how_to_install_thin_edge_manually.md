@@ -223,6 +223,20 @@ Limit the file's permission to read only:
 chmod 444 /etc/tedge/system.toml
 ```
 
-We are finally ready to [connect to Cumulocity](../tutorials/connect-c8y.md)!
+Finally, add the thin-edge services to start after boot: 
 
+> As root:
+```
+rc-update add tedge-agent default
+rc-update add tedge-mapper-c8y default
+```
+
+And start the services:
+
+```
+rc-service tedge-agent start
+rc-service tedge-mapper-c8y start
+```
+
+We are finally ready to [connect to Cumulocity](../tutorials/connect-c8y.md)!
 
