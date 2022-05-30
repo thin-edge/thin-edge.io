@@ -24,3 +24,4 @@
 22. [How to retrieve logs with the log plugin](./023_c8y_log_plugin.md)
 23. [How to add C8Y SmartRest Templates](./024_smartrest_templates.md)
 24. [How to manage configuration files with Cumulocity](./025_config_management_plugin.md)
+25. [How to install thin-edge manually with openrc](./026_how_to_install_thin_edge_manually.md)
