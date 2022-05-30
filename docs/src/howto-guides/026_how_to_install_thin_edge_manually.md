@@ -1,0 +1,228 @@
+# How to install thin-edge manually with openrc
+
+This tutorial will demo how to install thin-edge manually for a non-debian linux distribution that uses OpenRC as its init system.
+The aim of this tutorial is to show how to get started with Cumulocity even if your current system is not supported by the default installation of thin-edge.
+For reference, this tutorial is done with the following system specs:
+
+- Operating System: Linux gentoo
+- Linux kernel version: 5.15.41-gentoo-x86\_64
+- Architecture: x86\_64
+- Init system: OpenRC
+- Package manager: emerge
+
+## Prerequisites
+
+If you wish to [build binaries from source](#building-from-source), you will to install rust from https://www.rust-lang.org/tools/install.
+
+
+## Step 0: Getting the thin-edge binaries
+
+There are two options here:
+
+- [building from source](#building-from-source)
+- [extracting binaries from debian files](#extracting-binaries-from-debian-files)
+
+Please choose one.
+
+### Building from source
+
+To build from source, download the **Source code (zip)** from the [latest releases page](https://github.com/thin-edge/thin-edge.io/releases/latest).
+
+<p align="center">
+  <img src="./images/manual_installation-download_source_code.png" alt="Sublime's custom image"/>
+</p>
+
+Once downloaded, unzip it and enter the thin-edge.io directory and build the project with the `--release` flag:
+
+
+```shell
+unzip thin-edge*.zip
+cd thin-edge*/
+cargo build --release
+```
+
+This will build the thin-edge binaries in the target/release directory. You will then need to move each binary to `/usr/bin` or an equivalent location in $PATH.
+A minimal thin-edge installation requires three components:
+
+- tedge CLI
+- tedge agent
+- tedge mapper
+
+> As root:
+```shell
+mv target/release/tedge /usr/bin
+mv target/release/tedge_agent /usr/bin
+mv target/release/tedge_mapper /usr/bin
+```
+
+You should now have access to the `tedge`, `tedge_agent` and `tedge_mapper` binaries.
+
+<p align="center">
+  <img src="./images/manual_installation-tedge_binary_dry_run.png" alt="Sublime's custom image"/>
+</p>
+
+
+
+### Extracting binaries from debian files
+
+Download the debian files from the [latest releases page](https://github.com/thin-edge/thin-edge.io/releases/latest).
+For a minimal configuration of thin-edge with Cumulocity, you will need to download:
+
+- tedge\_{VERSION}\_amd64.deb
+- tedge\_agent\_{VERSION}\_amd64.deb
+- tedge\_mapper\_{VERSION}\_amd64.deb
+
+<p align="center">
+  <img src="./images/manual_installation-minimum_deb_packages.png" alt="Sublime's custom image"/>
+</p>
+
+Next, unpack each deb file and copy the binary to `/usr/bin`.
+For `tedge` debian package do:
+
+```shell
+ar -x tedge_*_amd64.deb | tar -xf data.tar.xz
+```
+This unpacks two directories `usr/bin/`, move its contents to `/usr/bin`
+
+> As root:
+```shell
+mv usr/bin/tedge /usr/bin
+```
+
+> Note: Do the same for tedge\_agent and tedge\_mapper debian packages.
+
+
+## Step 1: Creating the tedge user
+
+The next step is to create the tedge user. This is normally taken care by the debian package for the `tedge` CLI tool.
+
+To do this in Gentoo, for example, you can:
+
+> As root:
+```shell
+groupadd --system tedge
+
+useradd --system --no-create-home -c "" -s /sbin/nologin -g tedge tedge
+```
+
+Now that we have created the tedge user, we need to allow the tedge user to call commands with `sudo` without requiring a password:
+
+> As root:
+```shell
+echo "tedge  ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init" >/etc/sudoers.d/tedge
+```
+## Step 2: Creating thin-edge directories and files using --init flag
+
+Next, we should create files and directories required by thin-edge. To do this, we run all three binaries with the `--init` flag, in super user mode:
+
+> As root:
+```shell
+tedge --init
+tedge_agent --init
+tedge_mapper --init c8y
+```
+
+This should show the following output:
+
+<p align="center">
+  <img src="./images/manual_installation-binaries_init.png" alt="Sublime's custom image"/>
+</p>
+
+> Note: you can ignore the Connection refused error.
+
+Ensure that running the init has created the following files and directories in `/etc/tedge`:
+
+<p align="center">
+  <img src="./images/manual_installation-tedge_directories.png" alt="Sublime's custom image"/>
+</p>
+
+## Step 3: Creating mosquitto bridge
+
+To create the mosquitto bridge simply run:
+
+> As root:
+```shell
+echo "include_dir /etc/tedge/mosquitto-conf" >> /etc/mosquitto/mosquitto.conf
+```
+You can test that `mosquitto` works by running: 
+
+> As root:
+```shell
+mosquitto --config-file /etc/mosquitto/mosquitto.conf
+```
+
+## Step 4: Creating OpenRC service files
+
+You will need service files for tedge\_agent and tedge\_mapper. For example:
+
+> Note that, for Cumulocity, the `tedge connect` command expects three service files called: mosquitto, tedge-agent and tedge-mapper-c8y
+
+For the `tedge-agent` service an example file is the following:
+> FILE: /etc/init.d/tedge-agent
+```sh
+#!/sbin/runscript
+
+start() {
+   ebegin "Starting tedge-agent"
+   start-stop-daemon --start --background --exec tedge_agent
+   eend $?
+}
+
+stop() {
+    ebegin "Stopping tedge-agent"
+    start-stop-daemon --stop --exec tedge_agent
+    eend $?
+}
+```
+
+For the `tedge-mapper-c8y` service an example file is the following:
+> FILE: /etc/init.d/tedge-mapper-c8y
+```sh
+#!/sbin/runscript
+
+start() {
+   ebegin "Starting tedge-mapper-c8y"
+   start-stop-daemon --start --background --exec tedge_mapper c8y
+   eend $?
+}
+
+stop() {
+   ebegin "Stopping tedge-mapper-c8y"
+   start-stop-daemon --stop --exec tedge_mapper
+   eend $?
+}
+```
+
+> As root:
+
+```sh
+chmod +x /etc/init.d/tedge-agent
+chmod +x /etc/init.d/tedge-mapper-c8y
+```
+
+Next, we need to add a `system.toml` to `/etc/tedge/`, telling it to use OpenRC. To do this create the following file:
+
+> As root:
+
+> FILE: /etc/tedge/system.toml
+```sh
+[init]
+name = "OpenRC"
+is_available = ["/sbin/rc-service", "-l"]
+restart = ["/sbin/rc-service", "{}", "restart"]
+stop =  ["/sbin/rc-service", "{}", "stop"]
+enable =  ["/sbin/rc-update", "add", "{}"]
+disable =  ["/sbin/rc-update", "delete", "{}"]
+is_active = ["/sbin/rc-service", "{}", "status"]
+```
+
+Limit the file's permission to read only:
+
+> As root:
+```sh
+chmod 444 /etc/tedge/system.toml
+```
+
+We are finally ready to [connect to Cumulocity](../tutorials/connect-c8y.md)!
+
+
