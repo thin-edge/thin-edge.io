@@ -38,10 +38,12 @@ which = "4.2"
 assert_cmd = "2.0"
 assert_matches = "1.5"
 mockito = "0.31"
+mqtt_tests = { path = "../../tests/mqtt_tests" }
 pem = "1.0"
 predicates = "2.1"
 tempfile = "3.2"
 test-case = "2.0"
+tokio = { version = "1.12" }
 
 [features]
 integration-test = []
