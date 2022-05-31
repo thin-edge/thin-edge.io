@@ -1,4 +1,4 @@
-# How to install thin-edge manually with openrc
+# How to install thin-edge manually with OpenRC
 
 This tutorial will demo how to install thin-edge manually for a non-debian linux distribution that uses OpenRC as its init system.
 The aim of this tutorial is to show how to get started with Cumulocity even if your current system is not supported by the default installation of thin-edge.
@@ -8,23 +8,15 @@ For reference, this tutorial is done with the following system specs:
 - Linux kernel version: 5.15.41-gentoo-x86\_64
 - Architecture: x86\_64
 - Init system: OpenRC
-- Package manager: emerge
 
 ## Prerequisites
 
 If you wish to [build binaries from source](#building-from-source), you will to install rust from https://www.rust-lang.org/tools/install.
 
+You will also need to have moquitto installed. Check your package manager for an available version, or you can [building from source](https://github.com/eclipse/mosquitto). (If you build from source, add `WITH_TLS=yes` flag to make).
 
-## Step 0: Getting the thin-edge binaries
 
-There are two options here:
-
-- [building from source](#building-from-source)
-- [extracting binaries from debian files](#extracting-binaries-from-debian-files)
-
-Please choose one.
-
-### Building from source
+## Building from source
 
 To build from source, download the **Source code (zip)** from the [latest releases page](https://github.com/thin-edge/thin-edge.io/releases/latest).
 
@@ -48,11 +40,10 @@ A minimal thin-edge installation requires three components:
 - tedge agent
 - tedge mapper
 
-> As root:
 ```shell
-mv target/release/tedge /usr/bin
-mv target/release/tedge_agent /usr/bin
-mv target/release/tedge_mapper /usr/bin
+sudo mv target/release/tedge /usr/bin
+sudo mv target/release/tedge_agent /usr/bin
+sudo mv target/release/tedge_mapper /usr/bin
 ```
 
 You should now have access to the `tedge`, `tedge_agent` and `tedge_mapper` binaries.
@@ -63,7 +54,7 @@ You should now have access to the `tedge`, `tedge_agent` and `tedge_mapper` bina
 
 
 
-### Extracting binaries from debian files
+## Extracting binaries from debian files
 
 Download the debian files from the [latest releases page](https://github.com/thin-edge/thin-edge.io/releases/latest).
 For a minimal configuration of thin-edge with Cumulocity, you will need to download:
@@ -84,9 +75,8 @@ ar -x tedge_*_amd64.deb | tar -xf data.tar.xz
 ```
 This unpacks two directories `usr/bin/`, move its contents to `/usr/bin`
 
-> As root:
 ```shell
-mv usr/bin/tedge /usr/bin
+sudo mv usr/bin/tedge /usr/bin
 ```
 
 > Note: Do the same for tedge\_agent and tedge\_mapper debian packages.
@@ -98,28 +88,25 @@ The next step is to create the tedge user. This is normally taken care by the de
 
 To do this in Gentoo, for example, you can:
 
-> As root:
 ```shell
-groupadd --system tedge
+sudo groupadd --system tedge
 
-useradd --system --no-create-home -c "" -s /sbin/nologin -g tedge tedge
+sudo useradd --system --no-create-home -c "" -s /sbin/nologin -g tedge tedge
 ```
 
 Now that we have created the tedge user, we need to allow the tedge user to call commands with `sudo` without requiring a password:
 
-> As root:
 ```shell
-echo "tedge  ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init" >/etc/sudoers.d/tedge
+sudo echo "tedge  ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init" >/etc/sudoers.d/tedge
 ```
 ## Step 2: Creating thin-edge directories and files using --init flag
 
 Next, we should create files and directories required by thin-edge. To do this, we run all three binaries with the `--init` flag, in super user mode:
 
-> As root:
 ```shell
-tedge --init
-tedge_agent --init
-tedge_mapper --init c8y
+sudo tedge --init
+sudo tedge_agent --init
+sudo tedge_mapper --init c8y
 ```
 
 This should show the following output:
@@ -140,15 +127,13 @@ Ensure that running the init has created the following files and directories in 
 
 To create the mosquitto bridge simply run:
 
-> As root:
 ```shell
-echo "include_dir /etc/tedge/mosquitto-conf" >> /etc/mosquitto/mosquitto.conf
+sudo echo "include_dir /etc/tedge/mosquitto-conf" >> /etc/mosquitto/mosquitto.conf
 ```
 You can test that `mosquitto` works by running: 
 
-> As root:
 ```shell
-mosquitto --config-file /etc/mosquitto/mosquitto.conf
+sudo mosquitto --config-file /etc/mosquitto/mosquitto.conf
 ```
 
 ## Step 4: Creating OpenRC service files
@@ -193,16 +178,14 @@ stop() {
 }
 ```
 
-> As root:
 
 ```sh
-chmod +x /etc/init.d/tedge-agent
-chmod +x /etc/init.d/tedge-mapper-c8y
+sudo chmod +x /etc/init.d/tedge-agent
+sudo chmod +x /etc/init.d/tedge-mapper-c8y
 ```
 
 Next, we need to add a `system.toml` to `/etc/tedge/`, telling it to use OpenRC. To do this create the following file:
 
-> As root:
 
 > FILE: /etc/tedge/system.toml
 ```sh
@@ -218,24 +201,22 @@ is_active = ["/sbin/rc-service", "{}", "status"]
 
 Limit the file's permission to read only:
 
-> As root:
 ```sh
-chmod 444 /etc/tedge/system.toml
+sudo chmod 444 /etc/tedge/system.toml
 ```
 
 Finally, add the thin-edge services to start after boot: 
 
-> As root:
 ```
-rc-update add tedge-agent default
-rc-update add tedge-mapper-c8y default
+sudo rc-update add tedge-agent default
+sudo rc-update add tedge-mapper-c8y default
 ```
 
 And start the services:
 
 ```
-rc-service tedge-agent start
-rc-service tedge-mapper-c8y start
+sudo rc-service tedge-agent start
+sudo rc-service tedge-mapper-c8y start
 ```
 
 We are finally ready to [connect to Cumulocity](../tutorials/connect-c8y.md)!
