@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use mqtt_plugin::MqttMessage;
-use tedge_actors::{Actor, DevNull, Reactor, Recipient, RuntimeError, Task};
+use tedge_actors::{Actor, Recipient, RuntimeError, RuntimeHandler};
 use telemetry_plugin::MeasurementGroup;
 use thin_edge_json::group::MeasurementGrouperError;
 use thin_edge_json::parser::ThinEdgeJsonParserError;
@@ -13,29 +13,29 @@ impl Actor for ThinEdgeJson {
     type Config = ();
     type Input = MqttMessage;
     type Output = MeasurementGroup;
-    type Producer = DevNull;
-    type Reactor = Self;
 
     fn try_new(_config: Self::Config) -> Result<Self, RuntimeError> {
         Ok(ThinEdgeJson {})
     }
 
-    async fn start(self) -> Result<(Self::Producer, Self::Reactor), RuntimeError> {
-        Ok((DevNull, self))
+    async fn start(
+        &mut self,
+        _runtime: RuntimeHandler,
+        _output: Recipient<Self::Output>,
+    ) -> Result<(), RuntimeError> {
+        Ok(())
     }
-}
 
-#[async_trait]
-impl Reactor<MqttMessage, MeasurementGroup> for ThinEdgeJson {
     async fn react(
         &mut self,
         message: MqttMessage,
+        _runtime: &mut RuntimeHandler,
         output: &mut Recipient<MeasurementGroup>,
-    ) -> Result<Option<Box<dyn Task>>, RuntimeError> {
+    ) -> Result<(), RuntimeError> {
         if let Ok(measurements) = ThinEdgeJson::parse(message.payload) {
             let _ = output.send_message(measurements).await;
         }
-        Ok(None)
+        Ok(())
     }
 }
 

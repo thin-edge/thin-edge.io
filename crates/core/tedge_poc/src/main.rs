@@ -1,6 +1,6 @@
 use c8y_plugin::C8Y;
 use mqtt_plugin::{MqttConfig, MqttConnection};
-use tedge_actors::{instance, ActorRuntime};
+use tedge_actors::{instance, Runtime};
 use thin_edge_json_plugin::ThinEdgeJson;
 
 #[tokio::main]
@@ -9,10 +9,12 @@ async fn main() {
     let measurement_input = "tedge/measurements".to_string();
     let measurement_output = "c8y/measurement/measurements/create".to_string();
     let c8y_mqtt_config = MqttConfig {
+        session_name: "tedge-c8y".to_string(),
         port: local_mqtt_port,
         subscriptions: vec![],
     };
     let thin_edge_json_mqtt_config = MqttConfig {
+        session_name: "tedge-measurement".to_string(),
         port: local_mqtt_port,
         subscriptions: vec![measurement_input],
     };
@@ -29,7 +31,7 @@ async fn main() {
     c8y.set_recipient(c8y_mqtt_con.address().into());
 
     // Run the actors
-    let runtime = ActorRuntime::try_new().expect("Fail to create the runtime");
+    let mut runtime = Runtime::try_new().expect("Fail to create the runtime");
 
     runtime.run(c8y).await.expect("a running c8y actor");
     runtime
@@ -45,6 +47,5 @@ async fn main() {
         .await
         .expect("a running mqtt actor connected to the local MQTT bus");
 
-    // FIXME ;-)
-    std::thread::sleep(std::time::Duration::from_secs(100));
+    runtime.run_to_completion().await
 }

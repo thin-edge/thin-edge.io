@@ -7,7 +7,7 @@ pub use response::*;
 
 use crate::task::RunCommandTask;
 use async_trait::async_trait;
-use tedge_actors::{Actor, DevNull, Reactor, Recipient, RuntimeError, Task};
+use tedge_actors::{Actor, Recipient, RuntimeError, RuntimeHandler};
 
 pub struct CommandRunner;
 
@@ -16,28 +16,28 @@ impl Actor for CommandRunner {
     type Config = ();
     type Input = CommandRequest;
     type Output = CommandStatus;
-    type Producer = DevNull;
-    type Reactor = CommandRunner;
 
     fn try_new(_config: Self::Config) -> Result<Self, RuntimeError> {
         Ok(CommandRunner)
     }
 
-    async fn start(self) -> Result<(Self::Producer, Self::Reactor), RuntimeError> {
-        Ok((DevNull, CommandRunner))
+    async fn start(
+        &mut self,
+        _runtime: RuntimeHandler,
+        _output: Recipient<CommandStatus>,
+    ) -> Result<(), RuntimeError> {
+        Ok(())
     }
-}
 
-#[async_trait]
-impl Reactor<CommandRequest, CommandStatus> for CommandRunner {
     async fn react(
         &mut self,
         request: CommandRequest,
+        runtime: &mut RuntimeHandler,
         output: &mut Recipient<CommandStatus>,
-    ) -> Result<Option<Box<dyn Task>>, RuntimeError> {
+    ) -> Result<(), RuntimeError> {
         let task = match request {
             CommandRequest::RunCommand(command) => RunCommandTask::new(command, output.clone()),
         };
-        Ok(Some(Box::new(task)))
+        runtime.spawn(task).await
     }
 }

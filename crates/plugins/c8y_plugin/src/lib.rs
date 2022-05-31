@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use c8y_translator::json::CumulocityJsonError;
 use mqtt_plugin::MqttMessage;
-use tedge_actors::{Actor, DevNull, Reactor, Recipient, RuntimeError, Task};
+use tedge_actors::{Actor, Recipient, RuntimeError, RuntimeHandler};
 use telemetry_plugin::{Measurement, MeasurementGroup};
 use thin_edge_json::measurement::MeasurementVisitor;
 use time::OffsetDateTime;
@@ -16,8 +16,6 @@ impl Actor for C8Y {
     type Config = String;
     type Input = MeasurementGroup;
     type Output = MqttMessage;
-    type Producer = DevNull;
-    type Reactor = Self;
 
     fn try_new(c8y_measurement_topic: Self::Config) -> Result<Self, RuntimeError> {
         Ok(C8Y {
@@ -25,18 +23,20 @@ impl Actor for C8Y {
         })
     }
 
-    async fn start(self) -> Result<(Self::Producer, Self::Reactor), RuntimeError> {
-        Ok((DevNull, self))
+    async fn start(
+        &mut self,
+        _runtime: RuntimeHandler,
+        _output: Recipient<MqttMessage>,
+    ) -> Result<(), RuntimeError> {
+        Ok(())
     }
-}
 
-#[async_trait]
-impl Reactor<MeasurementGroup, MqttMessage> for C8Y {
     async fn react(
         &mut self,
         measurements: MeasurementGroup,
+        _runtime: &mut RuntimeHandler,
         output: &mut Recipient<MqttMessage>,
-    ) -> Result<Option<Box<dyn Task>>, RuntimeError> {
+    ) -> Result<(), RuntimeError> {
         if let Ok(c8y_payload) = C8Y::serialize(measurements) {
             let _ = output
                 .send_message(MqttMessage {
@@ -45,7 +45,7 @@ impl Reactor<MeasurementGroup, MqttMessage> for C8Y {
                 })
                 .await;
         }
-        Ok(None)
+        Ok(())
     }
 }
 

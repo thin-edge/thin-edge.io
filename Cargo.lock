@@ -1802,9 +1802,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "mqtt_channel",
+ "futures",
  "mqtt_tests",
+ "rumqttc",
  "tedge_actors",
+ "thiserror",
  "tokio",
 ]
 
