@@ -46,7 +46,7 @@ jobs:
         continue-on-error: true
 
       - name: purge
-        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto libmosquitto1 collectd-core
+        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge_watchdog tedge mosquitto libmosquitto1 collectd-core
 
       - name: install mosquitto
         run: sudo apt-get --assume-yes install mosquitto
@@ -65,6 +65,9 @@ jobs:
 
       - name: install tedge agent package
         run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_amd64.deb
+
+      - name: install tedge watchdog package
+        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_amd64.deb
 
       - name: install tedge plugin packages
         run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_amd64.deb
@@ -127,6 +130,9 @@ jobs:
 
       - name: install tedge agent package
         run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_amd64.deb
+
+      - name: install tedge watchdog package
+        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_amd64.deb
 
       - name: install tedge plugin packages
         run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_amd64.deb
@@ -200,7 +206,7 @@ jobs:
       # mosquitto-clients is required for system test only, but has dependency on libmosquitto1.
       # therefore, we need to purge it here, and mosquitto-clients is required only for RPi.
       - name: purge
-        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
+        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge_watchdog tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
 
       - name: install mosquitto
         run: sudo apt-get --assume-yes install mosquitto
@@ -222,6 +228,9 @@ jobs:
 
       - name: install tedge agent package
         run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_armhf.deb
+
+      - name: install tedge watchdog package
+        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_armhf.deb
 
       - name: install tedge plugin packages
         run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
