@@ -1,5 +1,6 @@
 use crate::*;
 use async_trait::async_trait;
+use std::collections::HashSet;
 
 /// An actor that converts string messages to uppercase
 struct UppercaseConverter;
@@ -50,7 +51,7 @@ fn it_works() {
     actor.set_recipient(output.get_address().into());
     source.set_recipient(actor.address().into());
 
-    let runtime = ActorRuntime::try_new().expect("Fail to create the runtime");
+    let mut runtime = Runtime::try_new().expect("Fail to create the runtime");
 
     futures::executor::block_on(async {
         runtime
@@ -84,7 +85,7 @@ impl Actor for AsyncUppercaseConverter {
 
     async fn start(
         &mut self,
-        mut _runtime: RuntimeHandler,
+        _runtime: RuntimeHandler,
         _output: Recipient<Self::Output>,
     ) -> Result<(), RuntimeError> {
         Ok(())
@@ -126,7 +127,7 @@ fn output_messages_can_be_sent_asynchronously() {
         .into_iter()
         .map(|s| s.to_string())
         .collect();
-    let expected: Vec<String> = vec!["FOO", "BAR", "ZOO"]
+    let expected: HashSet<String> = vec!["FOO", "BAR", "ZOO"]
         .into_iter()
         .map(|s| s.to_string())
         .collect();
@@ -138,7 +139,7 @@ fn output_messages_can_be_sent_asynchronously() {
     actor.set_recipient(output.get_address().into());
     source.set_recipient(actor.address().into());
 
-    let runtime = ActorRuntime::try_new().expect("Fail to create the runtime");
+    let mut runtime = Runtime::try_new().expect("Fail to create the runtime");
 
     futures::executor::block_on(async {
         runtime
@@ -146,10 +147,14 @@ fn output_messages_can_be_sent_asynchronously() {
             .await
             .expect("Fail to produce input from source");
         runtime.run(actor).await.expect("Fail to run the actor");
-        let mut expected = expected.into_iter();
-        assert_eq!(output.next_message().await, expected.next());
-        assert_eq!(output.next_message().await, expected.next());
-        assert_eq!(output.next_message().await, expected.next());
+
+        // The task being asynchronous, the messages might be processed in a different order
+        let mut actual_output = HashSet::new();
+        actual_output.insert(output.next_message().await.expect("a 1st message"));
+        actual_output.insert(output.next_message().await.expect("a 2nd message"));
+        actual_output.insert(output.next_message().await.expect("a 3rd message"));
+
+        assert_eq!(actual_output, expected);
 
         // TODO Handle end of input
         // assert_eq!(output.next_message().await, None);

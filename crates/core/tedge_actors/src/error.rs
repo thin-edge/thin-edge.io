@@ -12,6 +12,9 @@ pub enum RuntimeError {
 
     #[error("Send failed: the channel is closed")]
     SendError(#[from] futures::channel::mpsc::SendError),
+
+    #[error("The background task has been cancelled")]
+    Canceled(#[from] futures::channel::oneshot::Canceled),
 }
 
 impl From<futures::io::Error> for RuntimeError {

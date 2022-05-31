@@ -1,8 +1,5 @@
-use crate::runtime::ActorRuntime;
 use crate::*;
 use async_trait::async_trait;
-use futures::channel::mpsc::UnboundedSender;
-use futures::SinkExt;
 
 /// An actor is a state machine consuming & producing messages
 ///
@@ -42,22 +39,6 @@ pub trait Actor: 'static + Sized + Send + Sync {
     ) -> Result<(), RuntimeError>;
 }
 
-/// A runtime handler passed to actors to launch background tasks
-pub struct RuntimeHandler {
-    pub(crate) task_sender: UnboundedSender<Box<dyn Task>>,
-}
-
-impl RuntimeHandler {
-    pub async fn spawn(&mut self, task: impl Task) -> Result<(), RuntimeError> {
-        Ok(self.task_sender.send(Box::new(task)).await?)
-    }
-}
-
-#[async_trait]
-pub trait Task: 'static + Send + Sync {
-    async fn run(self: Box<Self>) -> Result<(), RuntimeError>;
-}
-
 /// An handle to an inactive actor instance
 ///
 /// An inactive instance encapsulates the actor config with a mailbox and connection to peers.
@@ -92,7 +73,7 @@ impl<A: Actor> ActorInstance<A> {
         self.recipient = recipient;
     }
 
-    pub async fn run(self, runtime: &ActorRuntime) -> Result<ActiveActor<A>, RuntimeError> {
+    pub async fn run(self, runtime: &mut Runtime) -> Result<ActiveActor<A>, RuntimeError> {
         runtime.run(self).await
     }
 }
