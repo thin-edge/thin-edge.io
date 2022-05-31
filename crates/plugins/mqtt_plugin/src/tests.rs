@@ -14,6 +14,7 @@ async fn it_works() -> Result<(), anyhow::Error> {
     // Create actor instances
     let mut main_actor = instance::<UppercaseConverter>(output_topic.to_string());
     let mut mqtt_actor = instance::<MqttConnection>(MqttConfig {
+        session_name: "test-mqtt-plugin".to_string(),
         port: broker.port,
         subscriptions: vec![input_topic.to_string()],
     });
@@ -23,9 +24,12 @@ async fn it_works() -> Result<(), anyhow::Error> {
     mqtt_actor.set_recipient(main_actor.address().into());
 
     // One can then run the actors
-    let runtime = ActorRuntime::try_new().expect("Fail to create the runtime");
+    let mut runtime = Runtime::try_new().expect("Fail to create the runtime");
     runtime.run(main_actor).await?;
     runtime.run(mqtt_actor).await?;
+
+    // Give some time for the actor to start
+    tokio::time::sleep(Duration::from_millis(10)).await;
 
     // Any messages published on the input topic ...
     broker.publish(input_topic, "msg 1").await?;
@@ -53,30 +57,29 @@ impl Actor for UppercaseConverter {
     type Config = String;
     type Input = MqttMessage;
     type Output = MqttMessage;
-    type Producer = DevNull;
-    type Reactor = Self;
 
     fn try_new(output_topic: Self::Config) -> Result<Self, RuntimeError> {
         Ok(UppercaseConverter { output_topic })
     }
 
-    async fn start(self) -> Result<(Self::Producer, Self::Reactor), RuntimeError> {
-        Ok((DevNull, self))
+    async fn start(
+        &mut self,
+        _runtime: RuntimeHandler,
+        _output: Recipient<Self::Output>,
+    ) -> Result<(), RuntimeError> {
+        Ok(())
     }
-}
 
-#[async_trait]
-impl Reactor<MqttMessage, MqttMessage> for UppercaseConverter {
     async fn react(
         &mut self,
         message: MqttMessage,
+        _runtime: &mut RuntimeHandler,
         output: &mut Recipient<MqttMessage>,
-    ) -> Result<Option<Box<dyn Task>>, RuntimeError> {
+    ) -> Result<(), RuntimeError> {
         let response = MqttMessage {
             topic: self.output_topic.clone(),
             payload: message.payload.to_uppercase(),
         };
-        output.send_message(response).await?;
-        Ok(None)
+        output.send_message(response).await
     }
 }

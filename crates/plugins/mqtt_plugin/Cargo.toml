@@ -7,10 +7,12 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
-mqtt_channel = { path = "../../common/mqtt_channel" }
+futures = "0.3"
+rumqttc = "0.10"
 tedge_actors = { path = "../../core/tedge_actors" }
+tokio = { version = "1.17", features = ["rt-multi-thread", "macros"] }  # required by rumqttc
+thiserror = "1.0"
 
 [dev-dependencies]
 anyhow = "1.0"
 mqtt_tests = { path = "../../tests/mqtt_tests" }
-tokio = { version = "1.17", features = ["rt", "macros"] }
