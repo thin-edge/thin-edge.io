@@ -21,7 +21,7 @@ say Rust or Python.
 
 ## Grow your skills
 
-* Explore the [tutorials and use-cases](tutorials/README.md).
-* Understand the [architecture](architecture/README.md).
-* Use the [how-to guides](howto-guides/README.md) on a daily basis.
-* Refer to the [reference guides](references/README.md) for any in-depth details.
+* Explore the [tutorials and use-cases](tutorials/tutorials.md).
+* Understand the [architecture](architecture/architecture.md).
+* Use the [how-to guides](howto-guides/howto-guides.md) on a daily basis.
+* Refer to the [reference guides](references/references.md) for any in-depth details.

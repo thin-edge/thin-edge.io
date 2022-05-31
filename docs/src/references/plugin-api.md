@@ -4,7 +4,7 @@ Thin-edge uses plugins to delegate to the appropriate package managers and insta
 all the software management operations: installation of packages, uninstallations and queries.
 
 * A package manager plugin acts as a facade for a specific package manager.
-* A plugin is an executable that follows the [plugin API](./#plugin-api).
+* A plugin is an executable that follows the [plugin API](#plugin-api).
 * On a device, several plugins can be installed to deal with different kinds of software modules.
 * The filename of a plugin is used by thin-edge to determine the appropriate plugin for a software module.
 * All the actions on a software module are directed to the plugin bearing the name that matches the module type name.
@@ -29,7 +29,7 @@ all the software management operations: installation of packages, uninstallation
 
 On start-up and sighup, the sm-agent registers the plugins as follow:
 1. Iterate over the executable file of the directory `/etc/tedge/sm-plugins`.
-2. Check the executable is indeed a plugin, calling the [`list`](./#the_list_command) command.
+2. Check the executable is indeed a plugin, calling the [`list`](#the-list-command) command.
 
 ## Plugin API
 
