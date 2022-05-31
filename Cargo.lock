@@ -3066,6 +3066,7 @@ dependencies = [
  "tedge_config",
  "tedge_utils",
  "thiserror",
+ "time",
  "tokio",
  "tracing",
 ]
