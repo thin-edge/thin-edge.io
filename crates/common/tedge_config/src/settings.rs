@@ -102,6 +102,25 @@ impl ConfigSetting for C8yRootCertPathSetting {
 }
 
 ///
+/// Smartrest templates to subsribe to.
+///
+/// Example: template1,template2
+///
+#[derive(Debug)]
+pub struct C8ySmartRestTemplates;
+
+impl ConfigSetting for C8ySmartRestTemplates {
+    const KEY: &'static str = "c8y.smartrest.templates";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Set of SmartRest templates for the device ",
+        "Example: template1,template2"
+    );
+
+    type Value = TemplatesSet;
+}
+
+///
 /// Tenant endpoint URL of Azure IoT tenant.
 ///
 /// Example: MyAzure.azure-devices.net

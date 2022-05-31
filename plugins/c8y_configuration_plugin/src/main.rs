@@ -1,7 +1,6 @@
 mod config;
 mod download;
 mod error;
-mod smartrest;
 mod upload;
 
 use crate::config::PluginConfig;
@@ -14,8 +13,9 @@ use c8y_smartrest::smartrest_deserializer::{
 };
 use c8y_smartrest::topic::C8yTopic;
 use clap::Parser;
-use mqtt_channel::{SinkExt, StreamExt};
-use std::path::PathBuf;
+use mqtt_channel::{Message, SinkExt, StreamExt, Topic};
+use std::fs;
+use std::path::{Path, PathBuf};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, MqttPortSetting, TEdgeConfig, TmpPathSetting,
     DEFAULT_TEDGE_CONFIG_PATH,
@@ -23,7 +23,10 @@ use tedge_config::{
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
 use tracing::{debug, error, info};
 
-const DEFAULT_PLUGIN_CONFIG_FILE_PATH: &str = "/etc/tedge/c8y/c8y-configuration-plugin.toml";
+pub const DEFAULT_PLUGIN_CONFIG_FILE_PATH: &str = "/etc/tedge/c8y/c8y-configuration-plugin.toml";
+pub const DEFAULT_PLUGIN_CONFIG_TYPE: &str = "c8y-configuration-plugin";
+pub const CONFIG_CHANGE_TOPIC: &str = "tedge/configuration_change";
+
 const AFTER_HELP_TEXT: &str = r#"On start, `c8y_configuration_plugin` notifies the cloud tenant of the managed configuration files, listed in the `CONFIG_FILE`, sending this list with a `119` on `c8y/s/us`.
 `c8y_configuration_plugin` subscribes then to `c8y/s/ds` listening for configuration operation requests (messages `524` and `526`).
 notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
@@ -60,11 +63,14 @@ pub struct ConfigPluginOpt {
 }
 
 async fn create_mqtt_client(mqtt_port: u16) -> Result<mqtt_channel::Connection, anyhow::Error> {
+    let mut topic_filter =
+        mqtt_channel::TopicFilter::new_unchecked(C8yTopic::SmartRestRequest.as_str());
+    let _ = topic_filter
+        .add_unchecked(format!("{CONFIG_CHANGE_TOPIC}/{DEFAULT_PLUGIN_CONFIG_TYPE}").as_str());
+
     let mqtt_config = mqtt_channel::Config::default()
         .with_port(mqtt_port)
-        .with_subscriptions(mqtt_channel::TopicFilter::new_unchecked(
-            C8yTopic::SmartRestRequest.as_str(),
-        ));
+        .with_subscriptions(topic_filter);
 
     let mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
     Ok(mqtt_client)
@@ -94,23 +100,27 @@ async fn main() -> Result<(), anyhow::Error> {
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
     let tedge_config = config_repository.load()?;
 
-    let plugin_config = PluginConfig::new(config_plugin_opt.config_file);
-
-    // Create required clients
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
     let mut http_client = create_http_client(&tedge_config).await?;
-
     let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
 
-    run(plugin_config, mqtt_port, &mut http_client, tmp_dir).await
+    run(
+        mqtt_port,
+        &mut http_client,
+        tmp_dir,
+        &config_plugin_opt.config_file,
+    )
+    .await
 }
 
 async fn run(
-    plugin_config: PluginConfig,
     mqtt_port: u16,
     http_client: &mut impl C8YHttpProxy,
     tmp_dir: PathBuf,
+    config_file_path: &Path,
 ) -> Result<(), anyhow::Error> {
+    let mut plugin_config = PluginConfig::new(config_file_path);
+
     let mut mqtt_client = create_mqtt_client(mqtt_port).await?;
 
     // Publish supported configuration types
@@ -118,45 +128,64 @@ async fn run(
     debug!("Plugin init message: {:?}", msg);
     let () = mqtt_client.published.send(msg).await?;
 
+    // Get pending operations
+    let msg = Message::new(
+        &Topic::new_unchecked(C8yTopic::SmartRestResponse.as_str()),
+        "500",
+    );
+    let () = mqtt_client.published.send(msg).await?;
+
     // Mqtt message loop
     while let Some(message) = mqtt_client.received.next().await {
         debug!("Received {:?}", message);
         if let Ok(payload) = message.payload_str() {
-            let result = match payload.split(',').next().unwrap_or_default() {
-                "524" => {
-                    let config_download_request =
-                        SmartRestConfigDownloadRequest::from_smartrest(payload)?;
+            let result = if let "tedge/configuration_change/c8y-configuration-plugin" =
+                message.topic.name.as_str()
+            {
+                // Reload the plugin config file
+                plugin_config = PluginConfig::new(config_file_path);
+                // Resend the supported config types
+                let msg = plugin_config.to_supported_config_types_message()?;
+                mqtt_client.published.send(msg).await?;
+                Ok(())
+            } else {
+                match payload.split(',').next().unwrap_or_default() {
+                    "524" => {
+                        let config_download_request =
+                            SmartRestConfigDownloadRequest::from_smartrest(payload)?;
 
-                    handle_config_download_request(
-                        &plugin_config,
-                        config_download_request,
-                        tmp_dir.clone(),
-                        &mut mqtt_client,
-                        http_client,
-                    )
-                    .await
-                }
-                "526" => {
-                    // retrieve config file upload smartrest request from payload
-                    let config_upload_request =
-                        SmartRestConfigUploadRequest::from_smartrest(payload)?;
+                        handle_config_download_request(
+                            &plugin_config,
+                            config_download_request,
+                            tmp_dir.clone(),
+                            &mut mqtt_client,
+                            http_client,
+                        )
+                        .await
+                    }
+                    "526" => {
+                        // retrieve config file upload smartrest request from payload
+                        let config_upload_request =
+                            SmartRestConfigUploadRequest::from_smartrest(payload)?;
 
-                    // handle the config file upload request
-                    handle_config_upload_request(
-                        config_upload_request,
-                        &mut mqtt_client,
-                        http_client,
-                    )
-                    .await
-                }
-                _ => {
-                    // Ignore operation messages not meant for this plugin
-                    Ok(())
+                        // handle the config file upload request
+                        handle_config_upload_request(
+                            &plugin_config,
+                            config_upload_request,
+                            &mut mqtt_client,
+                            http_client,
+                        )
+                        .await
+                    }
+                    _ => {
+                        // Ignore operation messages not meant for this plugin
+                        Ok(())
+                    }
                 }
             };
 
             if let Err(err) = result {
-                error!("Handling of operation: '{}' failed with {}", payload, err);
+                error!("Handling of operation: '{payload}' failed with {err}");
             }
         }
     }
@@ -174,6 +203,26 @@ fn init(cfg_dir: PathBuf) -> Result<(), anyhow::Error> {
 }
 
 fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
+    create_directory_with_user_group(&format!("{config_dir}/c8y"), "root", "root", 0o775)?;
+    create_file_with_user_group(
+        &format!("{config_dir}/c8y/c8y-configuration-plugin.toml"),
+        "root",
+        "root",
+        0o644,
+    )?;
+    let example_config = r#"# Add the configurations to be managed by c8y-configuration-plugin
+
+files = [
+#    { path = '/etc/tedge/tedge.toml' },
+#    { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge.conf' },
+#    { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf', type = 'tedge-mosquitto.conf' },
+#    { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto.conf' },
+#    { path = '/etc/tedge/c8y/example.txt', type = 'example', user = 'tedge', group = 'tedge', mode = 0o444 }
+]"#;
+    fs::write(
+        &format!("{config_dir}/c8y/c8y-configuration-plugin.toml"),
+        example_config,
+    )?;
     create_directory_with_user_group(
         &format!("{config_dir}/operations/c8y"),
         "tedge",
@@ -197,13 +246,10 @@ fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, path::Path, time::Duration};
-
-    use crate::config::FileEntry;
-
     use super::*;
     use c8y_api::http_proxy::MockC8YHttpProxy;
     use mockall::predicate;
+    use std::{path::Path, time::Duration};
 
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
@@ -211,10 +257,7 @@ mod tests {
     #[serial_test::serial]
     async fn test_message_dispatch() -> anyhow::Result<()> {
         let test_config_path = "/some/test/config";
-
-        let plugin_config = PluginConfig {
-            files: HashSet::from([FileEntry::new(test_config_path.to_string())]),
-        };
+        let test_config_type = "c8y-configuration-plugin";
 
         let broker = mqtt_tests::test_mqtt_broker();
 
@@ -223,18 +266,21 @@ mod tests {
         let mut http_client = MockC8YHttpProxy::new();
         http_client
             .expect_upload_config_file()
-            .with(predicate::eq(Path::new(test_config_path)))
-            .return_once(|_path| Ok("http://server/some/test/config/url".to_string()));
+            .with(
+                predicate::eq(Path::new(test_config_path)),
+                predicate::eq(test_config_type),
+            )
+            .return_once(|_path, _type| Ok("http://server/some/test/config/url".to_string()));
 
         let tmp_dir = tempfile::tempdir()?;
 
         // Run the plugin's runtime logic in an async task
         tokio::spawn(async move {
             let _ = run(
-                plugin_config,
                 broker.port,
                 &mut http_client,
                 tmp_dir.path().to_path_buf(),
+                PathBuf::from(test_config_path).as_path(),
             )
             .await;
         });
@@ -243,7 +289,7 @@ mod tests {
         mqtt_tests::assert_received_all_expected(
             &mut messages,
             TEST_TIMEOUT_MS,
-            &[format!("119,{test_config_path}")],
+            &[format!("119,{test_config_type}")],
         )
         .await;
 
@@ -251,7 +297,7 @@ mod tests {
         let _ = broker
             .publish(
                 "c8y/s/ds",
-                format!("526,tedge-device,{test_config_path}").as_str(),
+                format!("526,tedge-device,{test_config_type}").as_str(),
             )
             .await?;
 

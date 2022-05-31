@@ -3,6 +3,7 @@ use std::process;
 use batcher::{BatchConfigBuilder, BatchDriver, BatchDriverInput, BatchDriverOutput, Batcher};
 use mqtt_channel::{Connection, Message, QoS, SinkExt, StreamExt, Topic, TopicFilter};
 use serde_json::json;
+use time::OffsetDateTime;
 use tracing::{error, info, instrument};
 
 use super::{batcher::MessageBatch, collectd::CollectdMessage, error::DeviceMonitorError};
@@ -109,7 +110,8 @@ impl DeviceMonitor {
                 if health_check_topics.accept(&message) {
                     let health_status = json!({
                         "status": "up",
-                        "pid": process::id()
+                        "pid": process::id(),
+                        "time": OffsetDateTime::now_utc().unix_timestamp(),
                     })
                     .to_string();
                     let health_message = Message::new(&health_status_topic, health_status);

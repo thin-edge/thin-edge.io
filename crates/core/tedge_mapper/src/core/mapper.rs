@@ -7,6 +7,7 @@ use mqtt_channel::{
     UnboundedSender,
 };
 use serde_json::json;
+use time::OffsetDateTime;
 use tracing::{error, info, instrument};
 
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
@@ -133,7 +134,8 @@ impl Mapper {
         if self.health_check_topics.accept(&message) {
             let health_status = json!({
                 "status": "up",
-                "pid": process::id()
+                "pid": process::id(),
+                "time": OffsetDateTime::now_utc().unix_timestamp(),
             })
             .to_string();
             let health_message = Message::new(&self.health_status_topic, health_status);
@@ -242,7 +244,7 @@ mod tests {
         let common_health_check_topic = "tedge/health-check";
         let health_status = broker
             .wait_for_response_on_publish(
-                &common_health_check_topic,
+                common_health_check_topic,
                 "",
                 &health_topic,
                 Duration::from_secs(1),
@@ -252,6 +254,7 @@ mod tests {
         let health_status: Value = serde_json::from_str(health_status.as_str())?;
         assert_json_include!(actual: &health_status, expected: json!({"status": "up"}));
         assert!(health_status["pid"].is_number());
+        assert!(health_status["time"].is_number());
 
         Ok(())
     }

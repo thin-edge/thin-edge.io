@@ -1,5 +1,6 @@
 use crate::error::WatchdogError;
 use freedesktop_entry_parser::parse_entry;
+use futures::channel::mpsc;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use mqtt_channel::{Config, Message, PubChannel, Topic};
@@ -14,12 +15,14 @@ use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, MqttBindAddressSetting, MqttPortSetting,
     TEdgeConfigLocation,
 };
-use tracing::{error, info, warn};
+use time::OffsetDateTime;
+use tracing::{debug, error, info, warn};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct HealthStatus {
     status: String,
     pid: u32,
+    time: i64,
 }
 
 pub async fn start_watchdog(tedge_config_dir: PathBuf) -> Result<(), anyhow::Error> {
@@ -49,7 +52,7 @@ pub async fn start_watchdog(tedge_config_dir: PathBuf) -> Result<(), anyhow::Err
                         service,
                         &req_topic,
                         &res_topic,
-                        interval / 2,
+                        interval / 4,
                     )
                     .await
                 }));
@@ -90,25 +93,53 @@ async fn monitor_tedge_service(
 
         let start = Instant::now();
 
-        match tokio::time::timeout(tokio::time::Duration::from_secs(interval), received.next())
-            .await
+        let request_timestamp = OffsetDateTime::now_utc().unix_timestamp();
+        match tokio::time::timeout(
+            tokio::time::Duration::from_secs(interval),
+            get_latest_health_status_message(request_timestamp, &mut received),
+        )
+        .await
         {
-            Ok(Some(msg)) => {
-                let message = msg.payload_str()?;
-
-                let p: HealthStatus = serde_json::from_str(message)?;
-
-                notify_systemd(p.pid, "WATCHDOG=1")?;
+            Ok(health_status) => {
+                debug!(
+                    "Sending notification for {} with pid: {}",
+                    name, health_status.pid
+                );
+                notify_systemd(health_status.pid, "WATCHDOG=1")?;
             }
-            Ok(None) => {}
-            Err(elapsed) => {
-                warn!("The {name} failed with {elapsed}");
+            Err(_) => {
+                warn!("No health check response received from {name} in time");
             }
         }
 
         let elapsed = start.elapsed();
         if elapsed < tokio::time::Duration::from_secs(interval) {
             tokio::time::sleep(tokio::time::Duration::from_secs(interval) - elapsed).await;
+        }
+    }
+}
+
+async fn get_latest_health_status_message(
+    request_timestamp: i64,
+    messages: &mut mpsc::UnboundedReceiver<Message>,
+) -> HealthStatus {
+    loop {
+        if let Some(message) = messages.next().await {
+            if let Ok(message) = message.payload_str() {
+                debug!("Health response received: {}", message);
+                if let Ok(health_status) = serde_json::from_str::<HealthStatus>(message) {
+                    if health_status.time >= request_timestamp {
+                        return health_status;
+                    } else {
+                        debug!(
+                            "Ignoring stale health response: {:?} older than request time: {}",
+                            health_status, request_timestamp
+                        );
+                    }
+                } else {
+                    error!("Invalid health response received: {}", message);
+                }
+            }
         }
     }
 }
@@ -155,5 +186,42 @@ fn get_watchdog_sec(service_file: &str) -> Result<u64, WatchdogError> {
         Err(WatchdogError::NoWatchdogSec {
             file: service_file.to_string(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Result;
+    use serde_json::json;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_get_latest_health_status_message() -> Result<()> {
+        let (mut sender, mut receiver) = mpsc::unbounded::<Message>();
+        let health_topic = Topic::new("tedge/health/test-service").expect("Valid topic");
+
+        for x in 1..5i64 {
+            let health_status = json!({
+                "status": "up",
+                "pid": 123u32,
+                "time": x,
+            })
+            .to_string();
+            let health_message = Message::new(&health_topic, health_status);
+            sender.publish(health_message).await?;
+        }
+
+        let health_status = get_latest_health_status_message(3, &mut receiver).await;
+        assert_eq!(health_status.time, 3);
+
+        let timeout_error = tokio::time::timeout(
+            tokio::time::Duration::from_secs(1),
+            get_latest_health_status_message(5, &mut receiver),
+        )
+        .await;
+        assert!(timeout_error.is_err());
+
+        Ok(())
     }
 }

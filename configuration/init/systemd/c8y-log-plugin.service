@@ -1,0 +1,12 @@
+[Unit]
+Description=Thin-edge logfile retriever for Cumulocity
+After=tedge-mapper-c8y.service
+
+[Service]
+User=root
+ExecStart=/usr/bin/c8y_log_plugin
+Restart=on-failure
+RestartPreventExitStatus=255
+
+[Install]
+WantedBy=multi-user.target

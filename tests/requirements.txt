@@ -6,4 +6,4 @@ junitparser == 2.2.0
 junit2html == 30.0.6
 psutil == 5.9.0
 c8y-api == 1.1.1
-
+retry-decorator == 1.1.1

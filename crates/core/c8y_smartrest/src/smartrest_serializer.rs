@@ -1,6 +1,8 @@
 use crate::error::SmartRestSerializerError;
+use crate::topic::C8yTopic;
 use agent_interface::{OperationStatus, SoftwareUpdateResponse};
 use csv::{QuoteStyle, WriterBuilder};
+use mqtt_channel::Message;
 use serde::{Deserialize, Serialize, Serializer};
 
 pub type SmartRest = String;
@@ -207,6 +209,33 @@ fn serialize_smartrest<S: Serialize>(record: S) -> Result<String, SmartRestSeria
     wtr.serialize(record)?;
     let csv = String::from_utf8(wtr.into_inner()?)?;
     Ok(csv)
+}
+
+/// Helper to generate a SmartREST operation status message
+pub trait TryIntoOperationStatusMessage {
+    fn executing() -> Result<Message, SmartRestSerializerError> {
+        let status = Self::status_executing()?;
+        Ok(Self::create_message(status))
+    }
+
+    fn successful(parameter: Option<String>) -> Result<Message, SmartRestSerializerError> {
+        let status = Self::status_successful(parameter)?;
+        Ok(Self::create_message(status))
+    }
+
+    fn failed(failure_reason: String) -> Result<Message, SmartRestSerializerError> {
+        let status = Self::status_failed(failure_reason)?;
+        Ok(Self::create_message(status))
+    }
+
+    fn create_message(payload: SmartRest) -> Message {
+        let topic = C8yTopic::SmartRestResponse.to_topic().unwrap(); // never fail
+        Message::new(&topic, payload)
+    }
+
+    fn status_executing() -> Result<SmartRest, SmartRestSerializerError>;
+    fn status_successful(parameter: Option<String>) -> Result<SmartRest, SmartRestSerializerError>;
+    fn status_failed(failure_reason: String) -> Result<SmartRest, SmartRestSerializerError>;
 }
 
 #[cfg(test)]

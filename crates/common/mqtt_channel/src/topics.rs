@@ -74,7 +74,7 @@ impl TopicFilter {
         }
     }
 
-    /// Check if the pattern is valid and at it to this topic filter.
+    /// Check if the pattern is valid and add it to this topic filter.
     pub fn add(&mut self, pattern: &str) -> Result<(), MqttError> {
         let pattern = String::from(pattern);
         if rumqttc::valid_filter(&pattern) {
@@ -83,6 +83,12 @@ impl TopicFilter {
         } else {
             Err(MqttError::InvalidFilter { pattern })
         }
+    }
+
+    /// Assuming the pattern is valid and add it to this topic filter.
+    pub fn add_unchecked(&mut self, pattern: &str) {
+        let pattern = String::from(pattern);
+        self.patterns.push(pattern);
     }
 
     /// Add all the other topics to this one.

@@ -27,6 +27,7 @@ use tedge_config::{
     TEdgeConfigLocation, TmpPathSetting, DEFAULT_LOG_PATH, DEFAULT_RUN_PATH,
 };
 use tedge_utils::file::create_directory_with_user_group;
+use time::OffsetDateTime;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -296,7 +297,8 @@ impl SmAgent {
                 topic if self.config.request_topics_health.accept_topic(topic) => {
                     let health_status = json!({
                         "status": "up",
-                        "pid": process::id()
+                        "pid": process::id(),
+                        "time": OffsetDateTime::now_utc().unix_timestamp(),
                     })
                     .to_string();
                     let health_message =
