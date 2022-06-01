@@ -99,12 +99,13 @@ Now that we have created the tedge user, we need to allow the tedge user to call
 ```shell
 sudo echo "tedge  ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init" >/etc/sudoers.d/tedge
 ```
-## Step 2: Creating thin-edge.io directories and files using --init flag
 
-Next, we should create files and directories required by thin-edge.io. To do this, we run all three binaries with the `--init` flag, in super user mode:
+Next, create the files and directories required by thin-edge.io and restart mosquitto too.
 
 ```shell
+sudo rc-service mosquitto stop
 sudo tedge --init
+sudo rc-service mosquitto start
 sudo tedge_agent --init
 sudo tedge_mapper --init c8y
 ```
@@ -115,7 +116,7 @@ This should show the following output:
   <img src="./images/manual_installation-binaries_init.png" alt="Sublime's custom image"/>
 </p>
 
-> Note: you can ignore the Connection refused error.
+> Note: if you do not restart mosquitto you will see a Connection refused error. Do not worry, this error can be ignored.
 
 Ensure that running the init has created the following files and directories in `/etc/tedge`:
 
