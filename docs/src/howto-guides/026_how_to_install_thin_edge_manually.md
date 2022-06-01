@@ -1,7 +1,7 @@
-# How to install thin-edge manually with OpenRC
+# How to install thin-edge.io manually with OpenRC
 
-This tutorial will demo how to install thin-edge manually for a non-debian linux distribution that uses OpenRC as its init system.
-The aim of this tutorial is to show how to get started with Cumulocity even if your current system is not supported by the default installation of thin-edge.
+This tutorial will demo how to install thin-edge.io manually for a non-debian linux distribution that uses OpenRC as its init system.
+The aim of this tutorial is to show how to get started with Cumulocity IoT even if your current system is not supported by the default installation of thin-edge.io.
 For reference, this tutorial is done with the following system specs:
 
 - Operating System: Linux gentoo
@@ -13,7 +13,7 @@ For reference, this tutorial is done with the following system specs:
 
 If you wish to [build binaries from source](#building-from-source), you will to install rust from https://www.rust-lang.org/tools/install.
 
-You will also need to have moquitto installed. Check your package manager for an available version, or you can [building from source](https://github.com/eclipse/mosquitto). (If you build from source, add `WITH_TLS=yes` flag to make).
+You will also need to have mosquitto installed. Check your package manager for an available version, or you can [building from source](https://github.com/eclipse/mosquitto). (If you build from source, add `WITH_TLS=yes` flag to make).
 
 
 ## Building from source
@@ -33,8 +33,8 @@ cd thin-edge*/
 cargo build --release
 ```
 
-This will build the thin-edge binaries in the target/release directory. You will then need to move each binary to `/usr/bin` or an equivalent location in $PATH.
-A minimal thin-edge installation requires three components:
+This will build the thin-edge.io binaries in the target/release directory. You will then need to move each binary to `/usr/bin` or an equivalent location in $PATH.
+A minimal thin-edge.io installation requires three components:
 
 - tedge CLI
 - tedge agent
@@ -57,7 +57,7 @@ You should now have access to the `tedge`, `tedge_agent` and `tedge_mapper` bina
 ## Extracting binaries from debian files
 
 Download the debian files from the [latest releases page](https://github.com/thin-edge/thin-edge.io/releases/latest).
-For a minimal configuration of thin-edge with Cumulocity, you will need to download:
+For a minimal configuration of thin-edge.io with Cumulocity IoT, you will need to download:
 
 - tedge\_{VERSION}\_amd64.deb
 - tedge\_agent\_{VERSION}\_amd64.deb
@@ -99,9 +99,9 @@ Now that we have created the tedge user, we need to allow the tedge user to call
 ```shell
 sudo echo "tedge  ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init" >/etc/sudoers.d/tedge
 ```
-## Step 2: Creating thin-edge directories and files using --init flag
+## Step 2: Creating thin-edge.io directories and files using --init flag
 
-Next, we should create files and directories required by thin-edge. To do this, we run all three binaries with the `--init` flag, in super user mode:
+Next, we should create files and directories required by thin-edge.io. To do this, we run all three binaries with the `--init` flag, in super user mode:
 
 ```shell
 sudo tedge --init
@@ -140,7 +140,7 @@ sudo mosquitto --config-file /etc/mosquitto/mosquitto.conf
 
 You will need service files for tedge\_agent and tedge\_mapper. For example:
 
-> Note that, for Cumulocity, the `tedge connect` command expects three service files called: mosquitto, tedge-agent and tedge-mapper-c8y
+> Note that, for Cumulocity IoT, the `tedge connect` command expects three service files called: mosquitto, tedge-agent and tedge-mapper-c8y
 
 For the `tedge-agent` service an example file is the following:
 > FILE: /etc/init.d/tedge-agent
@@ -205,7 +205,7 @@ Limit the file's permission to read only:
 sudo chmod 444 /etc/tedge/system.toml
 ```
 
-Finally, add the thin-edge services to start after boot: 
+Finally, add the thin-edge.io services to start after boot: 
 
 ```
 sudo rc-update add tedge-agent default
