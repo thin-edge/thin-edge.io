@@ -58,7 +58,7 @@ impl TEdgeComponent for AzureMapper {
         let mut mapper = create_mapper(AZURE_MAPPER_NAME, mqtt_host, mqtt_port, converter).await?;
 
         mapper
-            .run()
+            .run(None)
             .instrument(info_span!(AZURE_MAPPER_NAME))
             .await?;
 

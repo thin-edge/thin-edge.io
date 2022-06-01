@@ -924,7 +924,7 @@ async fn start_c8y_mapper(mqtt_port: u16) -> Result<JoinHandle<()>, anyhow::Erro
     .await?;
 
     let mapper_task = tokio::spawn(async move {
-        let _ = mapper.run().await;
+        let _ = mapper.run(None).await;
     });
     Ok(mapper_task)
 }

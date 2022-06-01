@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::{
     c8y::converter::CumulocityConverter,
@@ -79,11 +79,18 @@ impl TEdgeComponent for CumulocityMapper {
             http_proxy,
         )?);
 
-        let mut mapper =
-            create_mapper(CUMULOCITY_MAPPER_NAME, mqtt_host, mqtt_port, converter).await?;
+        let mut mapper = create_mapper(
+            CUMULOCITY_MAPPER_NAME,
+            mqtt_host.clone(),
+            mqtt_port,
+            converter,
+        )
+        .await?;
+
+        let ops_dir = PathBuf::from(format!("{}/operations/c8y", &config_dir));
 
         mapper
-            .run()
+            .run(Some(ops_dir))
             .instrument(info_span!(CUMULOCITY_MAPPER_NAME))
             .await?;
 
@@ -210,7 +217,7 @@ mod tests {
         // run tedge_mapper in background
         tokio::spawn(async move {
             mapper
-                .run()
+                .run(None)
                 .instrument(info_span!(CUMULOCITY_MAPPER_NAME_TEST))
                 .await
                 .unwrap();

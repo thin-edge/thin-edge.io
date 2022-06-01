@@ -467,6 +467,7 @@ dependencies = [
  "time",
  "tokio",
  "toml",
+ "tracing",
 ]
 
 [[package]]
@@ -3002,6 +3003,7 @@ dependencies = [
  "download",
  "flockfile",
  "futures",
+ "inotify",
  "logged_command",
  "mockall 0.11.0",
  "mockito",

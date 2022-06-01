@@ -49,9 +49,6 @@ pub enum CumulocityMapperError {
         operation_name: String,
     },
 
-    #[error("An unknown operation template: {0}")]
-    UnknownOperation(String),
-
     #[error(transparent)]
     FromOperationLogs(#[from] OperationLogsError),
 

@@ -1,3 +1,4 @@
+use crate::c8y::dynamic_discovery::DiscoverOp;
 use async_trait::async_trait;
 use mqtt_channel::{Message, Topic, TopicFilter};
 use std::fmt::Display;
@@ -66,6 +67,25 @@ pub trait Converter: Send + Sync {
     /// Typically used to do some processing on all messages received on mapper startup and derive additional messages out of those.
     fn sync_messages(&mut self) -> Vec<Message> {
         vec![]
+    }
+
+    fn try_process_operation_update_message(
+        &mut self,
+        _input: &DiscoverOp,
+    ) -> Result<Option<Message>, Self::Error> {
+        Ok(None)
+    }
+
+    fn process_operation_update_message(&mut self, message: DiscoverOp) -> Message {
+        let message_or_err = self.try_process_operation_update_message(&message);
+        match message_or_err {
+            Ok(Some(msg)) => msg,
+            Ok(None) => Message::new(
+                &self.get_mapper_config().errors_topic,
+                "No operation update required",
+            ),
+            Err(err) => self.new_error_message(err),
+        }
     }
 }
 
