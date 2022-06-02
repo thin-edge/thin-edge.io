@@ -75,6 +75,13 @@ jobs:
           command: deb
           args: -p tedge_agent
 
+      - name: Build tedge_watchdog debian package
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_watchdog
+
       - name: Build c8y_log_plugin debian package
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -195,6 +202,9 @@ jobs:
       - name: Strip tedge_agent
         run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_agent || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_agent
 
+      - name: Strip tedge_watchdog
+        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_watchdog || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_watchdog
+
       - name: Strip tedge_apt_plugin
         run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_apt_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_apt_plugin
 
@@ -227,6 +237,13 @@ jobs:
         with:
           command: deb
           args: -p tedge_agent --no-strip --no-build --target=${{ matrix.target }}
+
+      - name: build tedge_watchdog debian package for target
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: deb
+          args: -p tedge_watchdog --no-strip --no-build --target=${{ matrix.target }}
 
       - name: build tedge_apt_plugin debian package for target
         uses: actions-rs/cargo@v1
