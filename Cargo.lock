@@ -2923,6 +2923,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "tedge_config",
+ "tedge_test_utils",
  "tedge_users",
  "tedge_utils",
  "tempfile",
@@ -3029,6 +3030,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_test_utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
 name = "tedge_users"
 version = "0.7.0"
 dependencies = [
@@ -3113,15 +3123,6 @@ dependencies = [
  "proc-macro2 1.0.38",
  "quote 1.0.18",
  "syn 1.0.94",
-]
-
-[[package]]
-name = "test_utils"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "tempfile",
- "toml",
 ]
 
 [[package]]

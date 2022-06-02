@@ -1,5 +1,5 @@
 [package]
-name = "test_utils"
+name = "tedge_test_utils"
 version = "0.1.0"
 edition = "2021"
 

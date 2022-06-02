@@ -1,79 +1,65 @@
 use std::{
     fs::{self, OpenOptions},
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
+    sync::Arc,
 };
 use tempfile::TempDir;
 
-struct TempTedgeDir {
-    temp_dir: TempDir,
+pub struct TempTedgeDir {
+    pub temp_dir: Arc<TempDir>,
+    current_file_path: PathBuf,
 }
 
-struct TedgeChildTempDir {
-    child_temp_dir: PathBuf,
-}
-
-struct TedgeTempFile {
+pub struct TempTedgeFile {
     file_path: PathBuf,
 }
 
 impl TempTedgeDir {
     pub fn new() -> Self {
         let temp_dir = TempDir::new().unwrap();
-        TempTedgeDir { temp_dir }
+        let current_file_path = temp_dir.path().to_path_buf();
+        TempTedgeDir {
+            temp_dir: Arc::new(temp_dir),
+            current_file_path,
+        }
     }
 
-    pub fn dir(&self, directory_name: &str) -> TedgeChildTempDir {
+    pub fn dir(&self, directory_name: &str) -> TempTedgeDir {
         let root = self.temp_dir.path().to_path_buf();
-        let path = root.join(directory_name);
+        let path = root
+            .join(self.current_file_path.to_path_buf())
+            .join(directory_name);
 
         if !path.exists() {
             let () = fs::create_dir(&path).unwrap();
         };
 
-        TedgeChildTempDir {
-            child_temp_dir: path,
+        TempTedgeDir {
+            temp_dir: self.temp_dir.clone(),
+            current_file_path: path,
         }
     }
 
-    pub fn file(&self, file_name: &str) -> TedgeTempFile {
+    pub fn file(&self, file_name: &str) -> TempTedgeFile {
         let root = self.temp_dir.path().to_path_buf();
-        let path = root.join(file_name);
+        let path = root
+            .join(self.current_file_path.to_path_buf())
+            .join(file_name);
 
         if !path.exists() {
             let _file = fs::File::create(&path).unwrap();
         };
-        TedgeTempFile { file_path: path }
+        TempTedgeFile { file_path: path }
+    }
+
+    pub fn path(&self) -> &Path {
+        Path::new(self.temp_dir.path())
     }
 }
 
-impl TedgeChildTempDir {
-    fn file(&self, file_name: &str) -> TedgeTempFile {
-        let root = self.child_temp_dir.to_path_buf();
-        let path = root.join(file_name);
-
-        if !path.exists() {
-            let _file = fs::File::create(&path).unwrap();
-        };
-        TedgeTempFile { file_path: path }
-    }
-
-    fn dir(&self, directory_name: &str) -> Self {
-        let root = self.child_temp_dir.to_path_buf();
-        let path = root.join(directory_name);
-
-        if !path.exists() {
-            let () = fs::create_dir(&path).unwrap();
-        };
-
-        TedgeChildTempDir {
-            child_temp_dir: path,
-        }
-    }
-}
-
-impl TedgeTempFile {
-    fn with_raw_content(self, content: &str) {
+impl TempTedgeFile {
+    pub fn with_raw_content(self, content: &str) {
         let mut file = OpenOptions::new()
             .write(true)
             .create(false)
@@ -82,7 +68,7 @@ impl TedgeTempFile {
         file.write_all(content.as_bytes()).unwrap();
     }
 
-    fn with_toml_content(self, content: toml::Value) {
+    pub fn with_toml_content(self, content: toml::Value) {
         let mut file = OpenOptions::new()
             .write(true)
             .create(false)
@@ -90,6 +76,10 @@ impl TedgeTempFile {
             .unwrap();
         let file_content = content.to_string();
         file.write_all(file_content.as_bytes()).unwrap();
+    }
+
+    pub fn path(&self) -> &Path {
+        Path::new(&self.file_path)
     }
 }
 
