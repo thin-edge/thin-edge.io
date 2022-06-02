@@ -182,9 +182,7 @@ impl PluginConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
-    use std::path::PathBuf;
-    use tempfile::TempDir;
+    use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
 
     const PLUGIN_CONFIG_FILE: &str = "c8y-configuration-plugin.toml";
@@ -397,8 +395,8 @@ mod tests {
         file_content: &str,
         expected_config: PluginConfig,
     ) -> anyhow::Result<()> {
-        let (_dir, config_root_path) = create_temp_plugin_config(file_content)?;
-        let tmp_path_to_plugin_config = config_root_path.join(PLUGIN_CONFIG_FILE);
+        let dir = create_temp_plugin_config(file_content)?;
+        let tmp_path_to_plugin_config = dir.path().join(PLUGIN_CONFIG_FILE);
         let tmp_path_to_plugin_config_str =
             tmp_path_to_plugin_config.as_path().display().to_string();
 
@@ -470,12 +468,9 @@ mod tests {
     }
 
     // Need to return TempDir, otherwise the dir will be deleted when this function ends.
-    fn create_temp_plugin_config(content: &str) -> std::io::Result<(TempDir, PathBuf)> {
-        let temp_dir = TempDir::new()?;
-        let config_root = temp_dir.path().to_path_buf();
-        let config_file_path = config_root.join(PLUGIN_CONFIG_FILE);
-        let mut file = fs::File::create(config_file_path.as_path())?;
-        file.write_all(content.as_bytes())?;
-        Ok((temp_dir, config_root))
+    fn create_temp_plugin_config(content: &str) -> std::io::Result<TempTedgeDir> {
+        let temp_dir = TempTedgeDir::new();
+        temp_dir.file(PLUGIN_CONFIG_FILE).with_raw_content(content);
+        Ok(temp_dir)
     }
 }

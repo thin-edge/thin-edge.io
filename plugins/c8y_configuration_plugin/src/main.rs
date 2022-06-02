@@ -250,6 +250,7 @@ mod tests {
     use c8y_api::http_proxy::MockC8YHttpProxy;
     use mockall::predicate;
     use std::{path::Path, time::Duration};
+    use tedge_test_utils::fs::TempTedgeDir;
 
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
@@ -272,7 +273,7 @@ mod tests {
             )
             .return_once(|_path, _type| Ok("http://server/some/test/config/url".to_string()));
 
-        let tmp_dir = tempfile::tempdir()?;
+        let tmp_dir = TempTedgeDir::new();
 
         // Run the plugin's runtime logic in an async task
         tokio::spawn(async move {
