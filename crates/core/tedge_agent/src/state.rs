@@ -123,28 +123,26 @@ mod tests {
         StateRepository, StateStatus,
     };
 
-    use tempfile::tempdir;
+    use tedge_test_utils::fs::TempTedgeDir;
 
     #[tokio::test]
     async fn agent_state_repository_not_exists_fail() {
-        let temp_dir = tempdir().unwrap();
-        let repo = AgentStateRepository::new(temp_dir.into_path());
+        let temp_dir = TempTedgeDir::new();
+        let repo = AgentStateRepository::new(temp_dir.path().to_path_buf());
 
         repo.load().await.unwrap_err();
     }
 
     #[tokio::test]
     async fn agent_state_repository_exists_loads_some() {
-        let temp_dir = tempdir().unwrap();
-
-        let _ = tokio::fs::create_dir(temp_dir.path().join(".agent/")).await;
-        let destination_path = temp_dir.path().join(".agent/current-operation");
-
+        let temp_dir = TempTedgeDir::new();
         let content = "operation_id = \'1234\'\noperation = \"list\"";
+        temp_dir
+            .dir(".agent")
+            .file("current-operation")
+            .with_raw_content(content);
 
-        let _ = tokio::fs::write(destination_path, content.as_bytes()).await;
-
-        let repo = AgentStateRepository::new(temp_dir.into_path());
+        let repo = AgentStateRepository::new(temp_dir.path().to_path_buf());
 
         let data = repo.load().await.unwrap();
         assert_eq!(
@@ -158,16 +156,14 @@ mod tests {
 
     #[tokio::test]
     async fn agent_state_repository_exists_loads_some_restart_variant() {
-        let temp_dir = tempdir().unwrap();
-
-        let _ = tokio::fs::create_dir(temp_dir.path().join(".agent/")).await;
-        let destination_path = temp_dir.path().join(".agent/current-operation");
-
+        let temp_dir = TempTedgeDir::new();
         let content = "operation_id = \'1234\'\noperation = \"Restarting\"";
+        temp_dir
+            .dir(".agent")
+            .file("current-operation")
+            .with_raw_content(content);
 
-        let _ = tokio::fs::write(destination_path, content.as_bytes()).await;
-
-        let repo = AgentStateRepository::new(temp_dir.into_path());
+        let repo = AgentStateRepository::new(temp_dir.path().to_path_buf());
 
         let data = repo.load().await.unwrap();
         assert_eq!(
@@ -181,16 +177,14 @@ mod tests {
 
     #[tokio::test]
     async fn agent_state_repository_exists_loads_none() {
-        let temp_dir = tempdir().unwrap();
-
-        let _ = tokio::fs::create_dir(temp_dir.path().join(".agent/")).await;
-        let destination_path = temp_dir.path().join(".agent/current-operation");
-
+        let temp_dir = TempTedgeDir::new();
         let content = "";
+        temp_dir
+            .dir(".agent")
+            .file("current-operation")
+            .with_raw_content(content);
 
-        let _ = tokio::fs::write(destination_path, content.as_bytes()).await;
-
-        let repo = AgentStateRepository::new(temp_dir.into_path());
+        let repo = AgentStateRepository::new(temp_dir.path().to_path_buf());
 
         let data = repo.load().await.unwrap();
         assert_eq!(
@@ -204,12 +198,10 @@ mod tests {
 
     #[tokio::test]
     async fn agent_state_repository_exists_store() {
-        let temp_dir = tempdir().unwrap();
+        let temp_dir = TempTedgeDir::new();
+        temp_dir.dir(".agent").file("current-operation");
 
-        let _ = tokio::fs::create_dir(temp_dir.path().join(".agent/")).await;
-        let destination_path = temp_dir.path().join(".agent/current-operation");
-
-        let repo = AgentStateRepository::new(temp_dir.into_path());
+        let repo = AgentStateRepository::new(temp_dir.path().to_path_buf());
 
         repo.store(&State {
             operation_id: Some("1234".into()),
@@ -218,7 +210,12 @@ mod tests {
         .await
         .unwrap();
 
-        let data = tokio::fs::read_to_string(destination_path).await.unwrap();
+        let data = tokio::fs::read_to_string(&format!(
+            "{}/.agent/current-operation",
+            &temp_dir.temp_dir.path().to_str().unwrap()
+        ))
+        .await
+        .unwrap();
 
         assert_eq!(data, "operation_id = \'1234\'\noperation = \'list\'\n");
     }

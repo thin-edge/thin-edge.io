@@ -19,7 +19,7 @@ use plugin_sm::{
     plugin_manager::{ExternalPlugins, Plugins},
 };
 use serde_json::json;
-use std::process;
+use std::process::{self, Command};
 use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, LogPathSetting,
@@ -555,20 +555,17 @@ impl SmAgent {
             .await?;
         let () = restart_operation::create_slash_run_file(&self.config.run_dir)?;
 
-        let _process_result = std::process::Command::new("sudo").arg("sync").status();
-        // state = "Restarting"
-        match std::process::Command::new("sudo")
-            .arg(INIT_COMMAND)
-            .arg("6")
-            .status()
-        {
-            Ok(process_status) => {
-                if !process_status.success() {
-                    return Err(AgentError::CommandFailed);
+        let command_vec = get_restart_operation_commands();
+        for mut command in command_vec {
+            match command.status() {
+                Ok(status) => {
+                    if !status.success() {
+                        return Err(AgentError::CommandFailed);
+                    }
                 }
-            }
-            Err(e) => {
-                return Err(AgentError::FromIo(e));
+                Err(e) => {
+                    return Err(AgentError::FromIo(e));
+                }
             }
         }
 
@@ -631,6 +628,30 @@ impl SmAgent {
     }
 }
 
+#[cfg(test)]
+fn get_restart_operation_commands() -> Vec<Command> {
+    let mut vec = vec![];
+    // running `echo 6` with no sudo
+    let mut command = std::process::Command::new(INIT_COMMAND);
+    command.arg("6");
+    vec.push(command);
+    vec
+}
+
+#[cfg(not(test))]
+fn get_restart_operation_commands() -> Vec<Command> {
+    let mut vec = vec![];
+    // sync first
+    let mut sync_command = std::process::Command::new("sudo");
+    sync_command.arg("sync");
+    vec.push(sync_command);
+    // running `sudo init 6`
+    let mut command = std::process::Command::new("sudo");
+    command.arg(INIT_COMMAND).arg("6");
+    vec.push(command);
+    vec
+}
+
 fn get_default_plugin(
     config_location: &TEdgeConfigLocation,
 ) -> Result<Option<SoftwareType>, AgentError> {
@@ -643,7 +664,6 @@ fn get_default_plugin(
 #[cfg(test)]
 mod tests {
 
-    use std::io::Write;
     use std::path::PathBuf;
 
     use assert_json_diff::assert_json_include;
@@ -651,9 +671,10 @@ mod tests {
 
     use super::*;
 
+    use tedge_test_utils::fs::TempTedgeDir;
+
     const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "tedge_agent/tedge_agent_restart";
 
-    #[ignore]
     #[tokio::test]
     async fn check_agent_restart_file_is_created() -> Result<(), AgentError> {
         assert_eq!(INIT_COMMAND, "echo");
@@ -666,19 +687,19 @@ mod tests {
         .unwrap();
 
         // calling handle_restart_operation should create a file in /run/tedge_agent_restart
-        let (_, mut output_stream) = mqtt_tests::output_stream();
+        let (_output, mut output_stream) = mqtt_tests::output_stream();
         let response_topic_restart =
             Topic::new(RestartOperationResponse::topic_name()).expect("Invalid topic");
         let () = agent
             .handle_restart_operation(&mut output_stream, &response_topic_restart)
             .await?;
-        assert!(
-            std::path::Path::new(&dir.path().join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART)).exists()
-        );
-
-        // removing the file
-        let () =
-            std::fs::remove_file(&dir.path().join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART)).unwrap();
+        assert!(std::path::Path::new(
+            &dir.temp_dir
+                .path()
+                .join("run/")
+                .join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART)
+        )
+        .exists());
 
         Ok(())
     }
@@ -689,39 +710,26 @@ mod tests {
         Message::new(&topic, payload)
     }
 
-    fn create_temp_tedge_config() -> std::io::Result<(tempfile::TempDir, TEdgeConfigLocation)> {
-        let dir = tempfile::TempDir::new()?;
-
-        let dir_path = dir.path().join(".agent");
-        std::fs::create_dir(&dir_path).unwrap();
-
-        let () = {
-            let _file = std::fs::File::create(dir.path().join(".agent/current-operation")).unwrap();
-        };
-
-        let dir_path = dir.path().join("sm-plugins");
-        std::fs::create_dir(dir_path).unwrap();
-
-        let dir_path = dir.path().join("lock");
-        std::fs::create_dir(dir_path).unwrap();
-
-        let dir_path = dir.path().join("logs");
-        std::fs::create_dir(dir_path).unwrap();
-
+    fn create_temp_tedge_config() -> std::io::Result<(TempTedgeDir, TEdgeConfigLocation)> {
+        let ttd = TempTedgeDir::new();
+        ttd.dir(".agent").file("current-operation");
+        ttd.dir("sm-plugins");
+        ttd.dir("logs");
+        ttd.dir("run").dir("tedge_agent");
+        ttd.dir("run").dir("lock");
         let toml_conf = &format!(
             r#"
             [logs]
             path = '{}'
             [run]
             path = '{}'"#,
-            &dir.path().join("logs").to_str().unwrap(),
-            &dir.path().to_str().unwrap()
+            &ttd.temp_dir.path().join("logs").to_str().unwrap(),
+            &ttd.temp_dir.path().join("run").to_str().unwrap()
         );
+        ttd.file("tedge.toml").with_raw_content(toml_conf);
 
-        let config_location = TEdgeConfigLocation::from_custom_root(dir.path());
-        let mut file = std::fs::File::create(config_location.tedge_config_file_path())?;
-        file.write_all(toml_conf.as_bytes())?;
-        Ok((dir, config_location))
+        let config_location = TEdgeConfigLocation::from_custom_root(ttd.temp_dir.path());
+        Ok((ttd, config_location))
     }
 
     #[tokio::test]
@@ -752,7 +760,7 @@ mod tests {
 
             let plugins = Arc::new(Mutex::new(
                 ExternalPlugins::open(
-                    PathBuf::from(&dir.path()).join("sm-plugins"),
+                    PathBuf::from(&dir.temp_dir.path()).join("sm-plugins"),
                     get_default_plugin(&agent.config.config_location).unwrap(),
                     Some("sudo".into()),
                 )
@@ -796,7 +804,7 @@ mod tests {
 
             let plugins = Arc::new(Mutex::new(
                 ExternalPlugins::open(
-                    PathBuf::from(&dir.path()).join("sm-plugins"),
+                    PathBuf::from(&dir.temp_dir.path()).join("sm-plugins"),
                     get_default_plugin(&agent.config.config_location).unwrap(),
                     Some("sudo".into()),
                 )
