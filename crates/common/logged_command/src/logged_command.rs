@@ -141,16 +141,17 @@ impl LoggedCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::*;
+    use tedge_test_utils::fs::TempTedgeDir;
     use tokio::fs::File;
 
     #[tokio::test]
     async fn on_execute_are_logged_command_line_exit_status_stdout_and_stderr(
     ) -> Result<(), anyhow::Error> {
         // Prepare a log file
-        let tmp_dir = TempDir::new()?;
-        let log_file_path = tmp_dir.path().join("operation.log");
-        let log_file = File::create(log_file_path.clone()).await?;
+        let tmp_dir = TempTedgeDir::new();
+        let tmp_file = tmp_dir.file("operation.log");
+        let log_file_path = tmp_file.path();
+        let log_file = File::create(&log_file_path).await?;
         let mut logger = BufWriter::new(log_file);
 
         // Prepare a command
@@ -160,7 +161,7 @@ mod tests {
         // Execute the command with logging
         let _ = command.execute(&mut logger).await;
 
-        let log_content = String::from_utf8(std::fs::read(&log_file_path)?)?;
+        let log_content = String::from_utf8(std::fs::read(log_file_path)?)?;
         assert_eq!(
             log_content,
             r#"----- $ echo "Hello" "World!"
@@ -180,9 +181,10 @@ EOF
     #[tokio::test]
     async fn on_execute_with_error_stderr_is_logged() -> Result<(), anyhow::Error> {
         // Prepare a log file
-        let tmp_dir = TempDir::new()?;
-        let log_file_path = tmp_dir.path().join("operation.log");
-        let log_file = File::create(log_file_path.clone()).await?;
+        let tmp_dir = TempTedgeDir::new();
+        let tmp_file = tmp_dir.file("operation.log");
+        let log_file_path = tmp_file.path();
+        let log_file = File::create(&log_file_path).await?;
         let mut logger = BufWriter::new(log_file);
 
         // Prepare a command that triggers some content on stderr
@@ -213,9 +215,10 @@ EOF
     #[tokio::test]
     async fn on_execution_error_are_logged_command_line_and_error() -> Result<(), anyhow::Error> {
         // Prepare a log file
-        let tmp_dir = TempDir::new()?;
-        let log_file_path = tmp_dir.path().join("operation.log");
-        let log_file = File::create(log_file_path.clone()).await?;
+        let tmp_dir = TempTedgeDir::new();
+        let tmp_file = tmp_dir.file("operation.log");
+        let log_file_path = tmp_file.path();
+        let log_file = File::create(&log_file_path).await?;
         let mut logger = BufWriter::new(log_file);
 
         // Prepare a command that cannot be executed

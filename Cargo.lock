@@ -1528,7 +1528,7 @@ dependencies = [
  "async-trait",
  "log",
  "serial_test",
- "tempfile",
+ "tedge_test_utils",
  "test-case",
  "thiserror",
  "tokio",
