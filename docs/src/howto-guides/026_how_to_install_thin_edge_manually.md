@@ -150,7 +150,7 @@ For the `tedge-agent` service an example file is the following:
 
 start() {
    ebegin "Starting tedge-agent"
-   start-stop-daemon --start --background --exec tedge_agent
+   start-stop-daemon --user tedge --start --background --exec tedge_agent
    eend $?
 }
 
@@ -168,7 +168,7 @@ For the `tedge-mapper-c8y` service an example file is the following:
 
 start() {
    ebegin "Starting tedge-mapper-c8y"
-   start-stop-daemon --start --background --exec tedge_mapper c8y
+   start-stop-daemon --user tedge --start --background --exec tedge_mapper c8y
    eend $?
 }
 
