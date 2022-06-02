@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr};
 use tedge_config::*;
-use tempfile::TempDir;
+use tedge_test_utils::fs::TempTedgeDir;
 
 #[test]
 fn test_parse_config_with_all_values() -> Result<(), TEdgeConfigError> {
@@ -878,11 +878,10 @@ cert_path = "/path/to/cert"
     Ok(())
 }
 
-fn create_temp_tedge_config(content: &str) -> std::io::Result<(TempDir, TEdgeConfigLocation)> {
-    let dir = TempDir::new()?;
+fn create_temp_tedge_config(content: &str) -> std::io::Result<(TempTedgeDir, TEdgeConfigLocation)> {
+    let dir = TempTedgeDir::new();
+    dir.file("tedge.toml").with_raw_content(content);
     let config_location = TEdgeConfigLocation::from_custom_root(dir.path());
-    let mut file = std::fs::File::create(config_location.tedge_config_file_path())?;
-    file.write_all(content.as_bytes())?;
     Ok((dir, config_location))
 }
 
