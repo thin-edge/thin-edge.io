@@ -9,6 +9,7 @@
 			<![CDATA[ ]]>
 		</purpose>
 	</description>
+  <skipped reason="Test execution disabled due to #1088"/>
 	<classification>
 		<groups inherit="true">
 			<group>
