@@ -45,12 +45,12 @@ def check_files_created():
 
 
 def create_example_logs():
-    file_names = ["example-log1", "example-log2", "example-log3"]
+    file_names = ["software-log1", "software-log2", "software-log3"]
     file_sizes = [50, 100, 250]
     time_stamps = [
-        "2021-11-18T13:15:10Z",
-        "2021-11-19T21:15:10Z",
-        "2021-11-20T13:15:10Z",
+        "2022-06-04T13:15:10Z",
+        "2022-06-05T21:15:10Z",
+        "2022-06-06T13:15:10Z",
     ]
     os.mkdir("/tmp/sw_logs")
     for idx, file_name in enumerate(file_names):

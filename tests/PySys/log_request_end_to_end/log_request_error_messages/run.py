@@ -21,16 +21,24 @@ from environment_c8y import EnvironmentC8y
 
 class LogRequestVerifySearchTextError(EnvironmentC8y):
     operation_id = None
+    systemctl = "/usr/bin/systemctl"
 
     def setup(self):
         super().setup()
         self.create_logs_for_test()
+        # Start c8y logfile request service
+        log_file_daemon = self.startProcess(
+            command=self.sudo,
+            arguments=[self.systemctl, "start", "c8y-log-plugin.service"],
+            stdouterr="log_file_daemon",
+        )
+
         self.addCleanupFunction(self.cleanup_logs)
 
     def execute(self):
         log_file_request_payload = {
-            "dateFrom": "2021-11-15T18:55:49+0530",
-            "dateTo": "2021-11-21T18:55:49+0530",
+            "dateFrom": "2022-06-04T12:55:49+0530",
+            "dateTo": "2022-06-06T13:55:49+0530",
             "logFile": "software-management",
             "searchText": "Error",
             "maximumLines": 25,
@@ -68,7 +76,7 @@ class LogRequestVerifySearchTextError(EnvironmentC8y):
             arguments=["sh", "-c", "mv /tmp/sw_logs/* /var/log/tedge/agent/"],
             stdouterr="move_logs",
         )
-
+       
     def download_file_and_verify_error_messages(self, url):
         get_response = requests.get(
             url, auth=(self.project.c8yusername, self.project.c8ypass), stream=False
@@ -83,7 +91,7 @@ class LogRequestVerifySearchTextError(EnvironmentC8y):
 
         rm_logs = self.startProcess(
             command=self.sudo,
-            arguments=["sh", "-c", "rm -rf /var/log/tedge/agent/example-*"],
+            arguments=["sh", "-c", "rm -rf /var/log/tedge/agent/software-log*"],
             stdouterr="rm_logs",
         )
 
@@ -105,3 +113,9 @@ class LogRequestVerifySearchTextError(EnvironmentC8y):
                 ],
                 stdouterr="send_failed",
             )
+
+        log_file_daemon = self.startProcess(
+            command=self.sudo,
+            arguments=[self.systemctl, "stop", "c8y-log-plugin.service"],
+            stdouterr="log_file_daemon",
+        )
