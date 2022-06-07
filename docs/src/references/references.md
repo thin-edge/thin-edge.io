@@ -13,3 +13,6 @@ Following sections show the tedge sub commands.
 
 Software Management (under development)
 * [Plugin API](./plugin-api.md)
+
+Thin-edge.io configuration files
+* [Thin-edge.io configuration files](./thin-edge-config-files.md)
