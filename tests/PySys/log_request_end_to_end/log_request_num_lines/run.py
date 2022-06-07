@@ -25,17 +25,23 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
     def setup(self):
         super().setup()
         self.create_logs_for_test()
+        # Start c8y logfile request service
+        log_file_daemon = self.startProcess(
+            command=self.sudo,
+            arguments=[self.systemctl, "start", "c8y-log-plugin.service"],
+            stdouterr="log_file_daemon",
+        )
         self.addCleanupFunction(self.cleanup_logs)
 
     def execute(self):
         log_file_request_payload = {
-            "dateFrom": "2021-11-15T18:55:49+0530",
-            "dateTo": "2021-11-21T18:55:49+0530",
+            "dateFrom": "2022-06-04T12:55:49+0530",
+            "dateTo": "2022-06-06T13:55:49+0530",
             "logFile": "software-management",
             "searchText": "",
             "maximumLines": 300,
         }
-
+        
         self.operation_id = self.cumulocity.trigger_log_request(
             log_file_request_payload, self.project.deviceid
         )
@@ -76,7 +82,7 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
         nlines = len(get_response.content.decode("utf-8").split("\n")[:-1])
         self.log.info("nlines %s", nlines)
         # The log lines are concatenated from 3 different log files, so there will be 3 extra lines.
-        if nlines == 303:
+        if nlines == 302:
             return True
         else:
             return False
@@ -106,3 +112,9 @@ class LogRequestVerifyNumberOfLines(EnvironmentC8y):
                 ],
                 stdouterr="send_failed",
             )
+
+        log_file_daemon = self.startProcess(
+            command=self.sudo,
+            arguments=[self.systemctl, "stop", "c8y-log-plugin.service"],
+            stdouterr="log_file_daemon",
+        )

@@ -95,18 +95,21 @@ class Cumulocity(object):
         return header
 
     def trigger_log_request(self, log_file_request_payload, device_id):
+        self.device_fragment = self.get_thin_edge_device_by_name(device_id)      
         url = f"{self.c8y_url}/devicecontrol/operations"
         log_file_request_payload = {
-            "deviceId": device_id,
+            "deviceId": self.device_fragment["id"],
             "description": "Log file request",
             "c8y_LogfileRequest": log_file_request_payload,
         }
+ 
         req = requests.post(
             url,
             json=log_file_request_payload,
             headers=self.get_header(),
             timeout=self.timeout_req,
         )
+
         jresponse = json.loads(req.text)
 
         operation_id = jresponse.get("id")
@@ -131,6 +134,7 @@ class Cumulocity(object):
         # check if the response contains the logfile
         log_file = log_response.get("file")
         self.log.info("log response %s", log_file)
+
         if log_file != None:
             ret = log_file
         return ret
