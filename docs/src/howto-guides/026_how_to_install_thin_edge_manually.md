@@ -213,12 +213,5 @@ sudo rc-update add tedge-agent default
 sudo rc-update add tedge-mapper-c8y default
 ```
 
-And start the services:
-
-```
-sudo rc-service tedge-agent start
-sudo rc-service tedge-mapper-c8y start
-```
-
 We are finally ready to [connect to Cumulocity](../tutorials/connect-c8y.md)!
 
