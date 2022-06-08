@@ -1,6 +1,6 @@
 [package]
 name = "plugin_sm"
-version = "0.7.0"
+version = "0.7.1"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
