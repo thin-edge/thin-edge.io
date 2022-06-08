@@ -1,6 +1,7 @@
 [package]
 name = "sawtooth_publisher"
-version = "0.7.0"
+version = "0.7.1"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

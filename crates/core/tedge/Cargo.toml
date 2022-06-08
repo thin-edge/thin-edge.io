@@ -1,9 +1,9 @@
 [package]
 name = "tedge"
-version = "0.7.0"
+version = "0.7.1"
+authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
-authors = ["thin-edge.io team <info@thin-edge.io>"]
 license = "Apache-2.0"
 readme = "README.md"
 description = "tedge is the cli tool for thin-edge.io"
