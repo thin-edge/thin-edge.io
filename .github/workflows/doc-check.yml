@@ -2,9 +2,8 @@ name: Documentation check
 
 on:
   workflow_dispatch:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, 'release-*' ]
     paths:
       # Any files in the /docs directory at the root of the repository.
       - 'docs/**'
@@ -21,7 +20,7 @@ jobs:
         uses: peaceiris/actions-mdbook@v1
         # https://github.com/marketplace/actions/mdbook-action
         with:
-          mdbook-version: "0.4.10"
+          mdbook-version: "0.4.18"
           # mdbook-version: 'latest'
 
       - name: Install mdbook-toc

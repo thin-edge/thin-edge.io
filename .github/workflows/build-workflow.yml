@@ -1,13 +1,9 @@
 name: build-workflow
 
 on:
-  workflow_run:
-    workflows: ["commit-workflow"]
-    branches: [main]
-    types:
-      - completed
+  push:
+    branches: [ main, 'release-*' ]
   workflow_dispatch:
-    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,7 +12,6 @@ jobs:
   build_amd64:
     name: Build tedge and mapper Debian packages for amd64
     runs-on: Ubuntu-20.04
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Checkout
@@ -38,7 +33,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: install
-          args: cargo-deb --version 1.34.2
+          args: cargo-deb --version 1.38.1
 
       - name: Build tedge debian package
         uses: actions-rs/cargo@v1
@@ -134,7 +129,7 @@ jobs:
   build_matrix_arm:
     name: Build tedge and mapper Debian for armv7
     runs-on: Ubuntu-20.04
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
     strategy:
       matrix:
         # Currently only arm targets, as we use a custom strip binary !
@@ -168,7 +163,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: install
-          args: cargo-deb --version 1.34.2
+          args: cargo-deb --version 1.38.1
 
       - name: install cargo-strip
         uses: actions-rs/cargo@v1
