@@ -209,7 +209,7 @@ fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
         &format!("{config_dir}/c8y/c8y-configuration-plugin.toml"),
         "root",
         "root",
-        0o644,
+        0o775,
     )?;
     let example_config = r#"# Add the configurations to be managed by c8y-configuration-plugin
 
