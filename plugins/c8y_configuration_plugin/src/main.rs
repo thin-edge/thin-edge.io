@@ -21,6 +21,7 @@ use tedge_config::{
     DEFAULT_TEDGE_CONFIG_PATH,
 };
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
+use tedge_utils::inotify::*;
 use tracing::{debug, error, info};
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_PATH: &str = "/etc/tedge/c8y/c8y-configuration-plugin.toml";
@@ -134,65 +135,65 @@ async fn run(
         "500",
     );
     let () = mqtt_client.published.send(msg).await?;
+    let mut inotify_stream = inofity_file_watch_stream(config_file_path, WatchMask::CLOSE_WRITE)?;
 
-    // Mqtt message loop
-    while let Some(message) = mqtt_client.received.next().await {
-        debug!("Received {:?}", message);
-        if let Ok(payload) = message.payload_str() {
-            let result = if let "tedge/configuration_change/c8y-configuration-plugin" =
-                message.topic.name.as_str()
-            {
-                // Reload the plugin config file
-                plugin_config = PluginConfig::new(config_file_path);
-                // Resend the supported config types
-                let msg = plugin_config.to_supported_config_types_message()?;
-                mqtt_client.published.send(msg).await?;
-                Ok(())
-            } else {
-                match payload.split(',').next().unwrap_or_default() {
-                    "524" => {
-                        let config_download_request =
-                            SmartRestConfigDownloadRequest::from_smartrest(payload)?;
+    loop {
+        tokio::select! {
+            message = mqtt_client.received.next() => {
+                if let Some(message) = message {
+                    debug!("Received {:?}", message);
+                    if let Ok(payload) = message.payload_str() {
+                            match payload.split(',').next().unwrap_or_default() {
+                                "524" => {
+                                    let config_download_request =
+                                        SmartRestConfigDownloadRequest::from_smartrest(payload)?;
 
-                        handle_config_download_request(
-                            &plugin_config,
-                            config_download_request,
-                            tmp_dir.clone(),
-                            &mut mqtt_client,
-                            http_client,
-                        )
-                        .await
-                    }
-                    "526" => {
-                        // retrieve config file upload smartrest request from payload
-                        let config_upload_request =
-                            SmartRestConfigUploadRequest::from_smartrest(payload)?;
+                                    handle_config_download_request(
+                                        &plugin_config,
+                                        config_download_request,
+                                        tmp_dir.clone(),
+                                        &mut mqtt_client,
+                                        http_client,
+                                    )
+                                    .await?
+                                }
+                                "526" => {
+                                    // retrieve config file upload smartrest request from payload
+                                    let config_upload_request =
+                                        SmartRestConfigUploadRequest::from_smartrest(payload)?;
 
-                        // handle the config file upload request
-                        handle_config_upload_request(
-                            &plugin_config,
-                            config_upload_request,
-                            &mut mqtt_client,
-                            http_client,
-                        )
-                        .await
+                                    // handle the config file upload request
+                                    handle_config_upload_request(
+                                        &plugin_config,
+                                        config_upload_request,
+                                        &mut mqtt_client,
+                                        http_client,
+                                    )
+                                    .await?
+                                }
+                                _ => {
+                                    // Ignore operation messages not meant for this plugin
+                                }
+                            }
+                        }
+                    } else {
+                        return Ok(());
                     }
-                    _ => {
-                        // Ignore operation messages not meant for this plugin
-                        Ok(())
-                    }
+            }
+        Some(Ok(event)) = inotify_stream.next() => {
+            match event.mask {
+                EventMask::CLOSE_WRITE => {
+                        // Reload the plugin config file
+                        plugin_config = PluginConfig::new(config_file_path);
+                        // Resend the supported config types
+                        let msg = plugin_config.to_supported_config_types_message()?;
+                        mqtt_client.published.send(msg).await?;
                 }
-            };
-
-            if let Err(err) = result {
-                error!("Handling of operation: '{payload}' failed with {err}");
+                _ => {}
             }
         }
+        }
     }
-
-    mqtt_client.close().await;
-
-    Ok(())
 }
 
 fn init(cfg_dir: PathBuf) -> Result<(), anyhow::Error> {
