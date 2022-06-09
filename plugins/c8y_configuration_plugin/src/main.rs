@@ -249,8 +249,7 @@ files = [
 mod tests {
     use super::*;
     use c8y_api::http_proxy::MockC8YHttpProxy;
-    use mockall::predicate;
-    use std::{path::Path, time::Duration};
+    use std::time::Duration;
     use tedge_test_utils::fs::TempTedgeDir;
 
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
@@ -258,7 +257,6 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[serial_test::serial]
     async fn test_message_dispatch() -> anyhow::Result<()> {
-        let test_config_path = "/some/test/config";
         let test_config_type = "c8y-configuration-plugin";
 
         let broker = mqtt_tests::test_mqtt_broker();
@@ -268,13 +266,10 @@ mod tests {
         let mut http_client = MockC8YHttpProxy::new();
         http_client
             .expect_upload_config_file()
-            .with(
-                predicate::eq(Path::new(test_config_path)),
-                predicate::eq(test_config_type),
-            )
             .return_once(|_path, _type| Ok("http://server/some/test/config/url".to_string()));
 
         let tmp_dir = TempTedgeDir::new();
+        let file = tmp_dir.file("test_file");
 
         // Run the plugin's runtime logic in an async task
         tokio::spawn(async move {
@@ -282,7 +277,7 @@ mod tests {
                 broker.port,
                 &mut http_client,
                 tmp_dir.path().to_path_buf(),
-                PathBuf::from(test_config_path).as_path(),
+                file.path(),
             )
             .await;
         });
