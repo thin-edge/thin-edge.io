@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::{
     fs::File,
-    io::BufWriter,
+    io::{BufWriter, Write},
     path::Path,
     process::{Command, ExitStatus, Stdio},
 };
@@ -33,13 +33,65 @@ fn exit_with_error<T>(code: i32, message: &str) -> T {
 fn run(operation: PluginOp) -> Result<i32, anyhow::Error> {
     match operation {
         PluginOp::UpdateList { plugin_name } => {
-            
-            // TODO: add error handling
-            // TODO: consider --config-dir option
-            run_hook("/etc/tedge/hooks/hook-stop-and-snapshot", "");
-
+            let mut clouds: Vec<String> = Vec::new();
             let mut failed = false;
 
+            let mut buffer = String::new();
+            std::io::stdin().read_line(&mut buffer)?;
+
+            let _ = run_hook(format!("/etc/tedge/hooks/hook-stop-and-snapshot-{plugin_name}").as_str(), "");
+
+            // check for existing bridges
+            // TODO: maybe better to have a tedge command as "tedge connected list", as here trying
+            //       to interpret files in mosquitto conf folder.
+            const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf"; // NOTE: stolen from tedge/src/cli/connect/command.rs
+            const TEDGE_BRIDGE_CONF_POSTFIX: &str = "-bridge.conf"; // TODO: definition is just made here, might be better part of tedge CLI.
+
+            let config_location = DEFAULT_TEDGE_CONFIG_PATH; // NOTE: hardcoded here, maybe allow to set with option "--config-dir"
+
+            let bridge_cfg_dir = Path::new(config_location).join(TEDGE_BRIDGE_CONF_DIR_PATH);
+            let walker = globwalk::GlobWalkerBuilder::from_patterns(
+                bridge_cfg_dir,
+                &[format!("*{}", TEDGE_BRIDGE_CONF_POSTFIX)],
+            )
+            .max_depth(1)
+            .build()
+            .unwrap_or_else(|e: globwalk::GlobError| {
+                exit_with_error(2, format!("Cannot build globwalk, error: '{}'", e).as_str())
+            })
+            .into_iter()
+            .filter_map(Result::ok);
+
+            for img in walker {
+                let cloud_name = img
+                    .path()
+                    .file_name()
+                    .unwrap_or_else(|| {
+                        exit_with_error(2, "Cannot read bridge-config filename from folder.")
+                    })
+                    .to_str()
+                    .unwrap_or_else(|| {
+                        exit_with_error(2, "Cannot handle bridge-config filename as string.")
+                    })
+                    .strip_suffix(TEDGE_BRIDGE_CONF_POSTFIX)
+                    .unwrap_or_else(|| {
+                        exit_with_error(2, "Cannot strip suffix from bridge-config filename.")
+                    });
+                clouds.push(cloud_name.to_string());
+                println!("Found cloud connection: {}", cloud_name);
+            }
+
+            // disconnect all clouds
+            for cloud in clouds.clone().into_iter() {
+                println!("Disconnecting {}", cloud);
+                match run_tedge_cli(&format!("disconnect {}", cloud)) {
+                    Ok(_) => (),
+                    Err(e) => {
+                        eprintln!("Error occurred when calling tedge CLI: {}", e);
+                        failed = true; // one cloud failed to disconnect, so fail entire update
+                    }
+                }
+            }
             // NOTE: Here is point-of-no-return. SM Agent was stopped
 
             let exitcode = if failed {
@@ -51,9 +103,16 @@ fn run(operation: PluginOp) -> Result<i32, anyhow::Error> {
                 // exec plugin and forward STDIN
                 println!("Executing: {} update-list", plugin_name);
 
-                let status = Command::new(plugin_name)
-                    .args(vec!["update-list"])
-                    .status();
+                let mut status = Command::new(format!("/etc/tedge/sm-plugins/{plugin_name}"))
+                    .args(vec!["update-list"]).stdin(std::process::Stdio::piped())
+                    .spawn()?;
+
+                dbg!(&status);
+                let cmd_stdin = status.stdin.as_mut().unwrap();
+                let _ = cmd_stdin.write_all(buffer.as_bytes());
+
+                let status = status.wait();
+
                 status_to_exitcode(status)
             };
 
@@ -68,27 +127,23 @@ fn run(operation: PluginOp) -> Result<i32, anyhow::Error> {
                 ),
             };
 
-            // TODO: add error handling
-            // TODO: consider --config-dir option
-            run_hook("/etc/tedge/hooks/hook-start-or-rollback", exitcode.to_string().as_str());
+            let _ = run_hook(format!("/etc/tedge/hooks/hook-start-or-rollback-{plugin_name}").as_str(), exitcode.to_string().as_str());
 
             Ok(exitcode)
         }
     }
 }
 
-fn run_hook(hook_path: &str, args: &str) -> std::result::Result<i32, String> {
+fn run_hook(hook_path: &str, args: &str) -> std::result::Result<ExitStatus, std::io::Error> {
     let args: Vec<&str> = args.split_whitespace().collect();
 
     println!("Executing hook '{}'", hook_path);
 
-    // TODO: add error handling
-    let status = Command::new("sudo")
+    Command::new("sudo")
         .arg(hook_path)
         .args(args)
         .stdin(Stdio::null())
-        .status();
-    Ok(0)
+        .status()
 }
 
 fn run_tedge_cli(args: &str) -> std::result::Result<i32, String> {
