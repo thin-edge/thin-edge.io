@@ -8,8 +8,6 @@ use c8y_smartrest::smartrest_deserializer::{SmartRestLogRequest, SmartRestReques
 use c8y_smartrest::topic::C8yTopic;
 use clap::Parser;
 
-use inotify::{EventMask, EventStream};
-use inotify::{Inotify, WatchMask};
 use mqtt_channel::{Connection, StreamExt};
 use std::{
     fs::OpenOptions,
@@ -21,6 +19,7 @@ use tedge_config::{
     DEFAULT_TEDGE_CONFIG_PATH,
 };
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
+use tedge_utils::inotify::{inofity_file_watch_stream, EventMask, WatchMask};
 use tracing::{error, info};
 
 use crate::logfile_request::{handle_dynamic_log_type_update, handle_logfile_request_operation};
@@ -77,19 +76,6 @@ pub async fn create_http_client(
     Ok(http_proxy)
 }
 
-fn create_inofity_file_watch_stream(
-    config_file: &Path,
-) -> Result<EventStream<[u8; 1024]>, anyhow::Error> {
-    let buffer = [0; 1024];
-    let mut inotify = Inotify::init().expect("Error while initializing inotify instance");
-
-    inotify
-        .add_watch(&config_file, WatchMask::CLOSE_WRITE)
-        .expect("Failed to add file watch");
-
-    Ok(inotify.event_stream(buffer)?)
-}
-
 async fn run(
     config_file: &Path,
     mqtt_client: &mut Connection,
@@ -97,7 +83,7 @@ async fn run(
 ) -> Result<(), anyhow::Error> {
     let mut plugin_config = handle_dynamic_log_type_update(mqtt_client, config_file).await?;
 
-    let mut inotify_stream = create_inofity_file_watch_stream(config_file)?;
+    let mut inotify_stream = inofity_file_watch_stream(config_file, WatchMask::CLOSE_WRITE)?;
 
     loop {
         tokio::select! {
@@ -134,16 +120,13 @@ async fn run(
                     return Ok(());
                 }
             }
-            Some(event_or_error) = inotify_stream.next() => {
-                if let Ok(event) = event_or_error {
-                    match event.mask {
-                        EventMask::CLOSE_WRITE => {
-                            plugin_config = handle_dynamic_log_type_update(mqtt_client, config_file).await?;
-                        }
-                        _ => {}
+            Some(Ok(event)) = inotify_stream.next() => {
+                match event.mask {
+                    EventMask::CLOSE_WRITE => {
+                        plugin_config = handle_dynamic_log_type_update(mqtt_client, config_file).await?;
                     }
+                    _ => {}
                 }
-
             }
         }
     }
