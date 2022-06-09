@@ -15,7 +15,8 @@ logging = ["tracing", "tracing-subscriber"]
 [dependencies]
 anyhow = "1.0"
 futures = "0.3"
-nix = "0.23.1"
+inotify_crate = { version = "0.10", package = "inotify" }
+nix = "0.23"
 tempfile = "3.2"
 thiserror = "1.0"
 tokio = { version = "1.12", default_features = false, features = [ "fs", "io-util", "macros", "signal"] }
