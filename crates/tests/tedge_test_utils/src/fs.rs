@@ -56,6 +56,10 @@ impl TempTedgeDir {
     pub fn path(&self) -> &Path {
         Path::new(self.temp_dir.path())
     }
+
+    pub fn to_path_buf(&self) -> PathBuf {
+        PathBuf::from(self.path())
+    }
 }
 
 impl TempTedgeFile {
@@ -80,6 +84,10 @@ impl TempTedgeFile {
 
     pub fn path(&self) -> &Path {
         Path::new(&self.file_path)
+    }
+
+    pub fn to_path_buf(&self) -> PathBuf {
+        PathBuf::from(self.path())
     }
 }
 
