@@ -50,6 +50,6 @@ mqtt_tests = { path = "../../tests/mqtt_tests" }
 predicates = "2.1"
 tedge_users = { path = "../../common/tedge_users"}
 tedge_utils = { path = "../../common/tedge_utils"}
-tempfile = "3.2"
+tedge_test_utils = { path = "../../tests/tedge_test_utils"}
 tokio-test = "0.4"
 serial_test = "0.6"

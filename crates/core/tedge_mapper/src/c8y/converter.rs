@@ -837,11 +837,11 @@ pub fn get_child_id_from_topic(topic: &str) -> Result<Option<String>, Conversion
 #[cfg(test)]
 mod tests {
     use plugin_sm::operation_logs::OperationLogs;
-    use tempfile::TempDir;
+    use tedge_test_utils::fs::TempTedgeDir;
 
     #[tokio::test]
     async fn test_execute_operation_is_not_blocked() {
-        let log_dir = TempDir::new().unwrap();
+        let log_dir = TempTedgeDir::new();
         let operation_logs = OperationLogs::try_new(log_dir.path().to_path_buf()).unwrap();
 
         let now = std::time::Instant::now();

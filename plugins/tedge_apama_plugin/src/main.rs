@@ -326,51 +326,38 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::{self, File};
 
-    use tempfile::TempDir;
+    use tedge_test_utils::fs::TempTedgeDir;
 
     use crate::get_project_name;
 
     #[test]
     fn get_project_name_project_descriptor_xml() {
-        let temp_dir = TempDir::new().unwrap();
-        let project_dir_path = temp_dir.path();
-        let project_descriptor_path = project_dir_path.join(".project");
-
-        fs::write(
-            project_descriptor_path.as_path(),
-            r#"<projectDescription><name>quickstart-project</name></projectDescription>"#,
-        )
-        .expect("Failed to create project descriptor xml file");
-
-        assert_eq!(get_project_name(project_dir_path), "quickstart-project");
+        let temp_dir = TempTedgeDir::new();
+        let content = r#"<projectDescription><name>quickstart-project</name></projectDescription>"#;
+        temp_dir.file(".project").with_raw_content(content);
+        assert_eq!(get_project_name(temp_dir.path()), "quickstart-project");
     }
 
     #[test]
     fn get_project_name_empty_project() {
-        let temp_dir = TempDir::new().unwrap();
-        let project_dir_path = temp_dir.path();
-        let project_descriptor_path = project_dir_path.join(".project");
-        File::create(project_descriptor_path.as_path())
-            .expect("Failed to create empty project descriptor xml file");
-
+        let temp_dir = TempTedgeDir::new();
+        temp_dir.file(".project");
         assert_eq!(get_project_name(temp_dir.path()), "unnamed");
     }
 
     #[test]
     fn get_project_name_empty_project_descriptor() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = TempTedgeDir::new();
         assert_eq!(get_project_name(temp_dir.path()), "unnamed");
     }
 
     #[test]
     fn get_project_name_invalid_project_descriptor() {
-        let temp_dir = TempDir::new().unwrap();
-        let project_dir_path = temp_dir.path();
-        let project_descriptor_path = project_dir_path.join(".project");
-
-        fs::write(project_descriptor_path.clone(), "not an xml").unwrap();
-        assert_eq!(get_project_name(project_dir_path), "unnamed");
+        let temp_dir = TempTedgeDir::new();
+        temp_dir
+            .file(".project")
+            .with_raw_content("not an xml content");
+        assert_eq!(get_project_name(temp_dir.path()), "unnamed");
     }
 }

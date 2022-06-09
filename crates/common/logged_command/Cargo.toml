@@ -16,5 +16,5 @@ tokio = { version = "1.8", features = [ "fs", "io-util", "macros", "process", "r
 anyhow = "1.0"
 assert_matches = "1.5"
 serial_test = "0.6"
-tempfile = "3.2"
+tedge_test_utils = { path = "../../tests/tedge_test_utils" }
 test-case = "2.0"

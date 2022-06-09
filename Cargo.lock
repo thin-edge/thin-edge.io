@@ -406,8 +406,8 @@ dependencies = [
  "serde_json",
  "serial_test",
  "tedge_config",
+ "tedge_test_utils",
  "tedge_utils",
- "tempfile",
  "test-case",
  "thiserror",
  "tokio",
@@ -1528,7 +1528,7 @@ dependencies = [
  "async-trait",
  "log",
  "serial_test",
- "tempfile",
+ "tedge_test_utils",
  "test-case",
  "thiserror",
  "tokio",
@@ -2923,9 +2923,9 @@ dependencies = [
  "serde_json",
  "serial_test",
  "tedge_config",
+ "tedge_test_utils",
  "tedge_users",
  "tedge_utils",
- "tempfile",
  "thiserror",
  "time",
  "tokio",
@@ -2940,7 +2940,7 @@ version = "0.7.1"
 dependencies = [
  "clap 3.1.18",
  "roxmltree",
- "tempfile",
+ "tedge_test_utils",
  "thiserror",
  "zip",
 ]
@@ -2968,6 +2968,7 @@ dependencies = [
  "assert_matches",
  "certificate",
  "serde",
+ "tedge_test_utils",
  "tedge_users",
  "tedge_utils",
  "tempfile",
@@ -3015,9 +3016,9 @@ dependencies = [
  "serde_json",
  "serial_test",
  "tedge_config",
+ "tedge_test_utils",
  "tedge_users",
  "tedge_utils",
- "tempfile",
  "test-case",
  "thin_edge_json",
  "thiserror",
@@ -3026,6 +3027,15 @@ dependencies = [
  "tokio-test",
  "toml",
  "tracing",
+]
+
+[[package]]
+name = "tedge_test_utils"
+version = "0.7.1"
+dependencies = [
+ "anyhow",
+ "tempfile",
+ "toml",
 ]
 
 [[package]]

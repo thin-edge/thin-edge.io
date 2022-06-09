@@ -94,8 +94,8 @@ fn create_inotify_with_non_existing_dir() {
 
 #[test]
 fn create_inotify_with_right_directory() {
-    use tempfile::TempDir;
-    let dir = TempDir::new().unwrap().into_path();
-    let res = create_inotify_watch(dir);
+    use tedge_test_utils::fs::TempTedgeDir;
+    let dir = TempTedgeDir::new();
+    let res = create_inotify_watch(dir.path().to_path_buf());
     assert!(res.is_ok());
 }
