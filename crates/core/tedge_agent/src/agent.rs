@@ -290,6 +290,7 @@ impl SmAgent {
         responses: &mut impl PubChannel,
         plugins: &Arc<Mutex<ExternalPlugins>>,
     ) -> Result<(), AgentError> {
+        info!("Starting message processing");
         while let Some(message) = requests.next().await {
             debug!("Request {:?}", message);
             match &message.topic {
@@ -346,7 +347,7 @@ impl SmAgent {
                         .handle_restart_operation(responses, &self.config.response_topic_restart)
                         .await
                     {
-                        error!("{}", error);
+                        error!("Restart operation handling failed: {}", error);
 
                         self.persistance_store.clear().await?;
                         let status = OperationStatus::Failed;
@@ -542,6 +543,7 @@ impl SmAgent {
         responses: &mut impl PubChannel,
         topic: &Topic,
     ) -> Result<(), AgentError> {
+        debug!("Persisting restart operation");
         self.persistance_store
             .update(&StateStatus::Restart(RestartOperationStatus::Restarting))
             .await?;
@@ -551,10 +553,14 @@ impl SmAgent {
         let () = responses
             .publish(Message::new(topic, executing_response.to_bytes()?))
             .await?;
+
+        debug!("Creating restart operation signal file");
         let () = restart_operation::create_slash_run_file(&self.config.run_dir)?;
 
+        debug!("Sync all pending writes to disk");
         let _process_result = std::process::Command::new("sudo").arg("sync").status();
-        // state = "Restarting"
+
+        debug!("Run restart command");
         match std::process::Command::new("sudo")
             .arg(INIT_COMMAND)
             .arg("6")
@@ -577,6 +583,7 @@ impl SmAgent {
         &self,
         responses: &mut impl PubChannel,
     ) -> Result<(), AgentError> {
+        info!("Processing pending operations");
         let state: Result<State, _> = self.persistance_store.load().await;
         let mut status = OperationStatus::Failed;
 
@@ -619,10 +626,9 @@ impl SmAgent {
             };
 
             let response = SoftwareRequestResponse::new(&id, status);
+            let operation_status_message = Message::new(topic, response.to_bytes()?);
 
-            let () = responses
-                .publish(Message::new(topic, response.to_bytes()?))
-                .await?;
+            let () = responses.publish(operation_status_message).await?;
         }
 
         Ok(())
@@ -649,7 +655,7 @@ mod tests {
 
     use super::*;
 
-    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "tedge_agent/tedge_agent_restart";
+    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "lock/tedge_agent_restart";
 
     #[ignore]
     #[tokio::test]

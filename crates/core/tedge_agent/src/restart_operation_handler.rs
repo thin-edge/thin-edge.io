@@ -10,7 +10,7 @@ pub mod restart_operation {
     };
     use time::OffsetDateTime;
 
-    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "tedge_agent/tedge_agent_restart";
+    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "lock/device_restart";
     const SLASH_PROC_UPTIME: &str = "/proc/uptime";
 
     /// creates an empty file in /run

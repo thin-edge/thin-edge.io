@@ -26,10 +26,11 @@ pub async fn init_session(config: &Config) -> Result<(), MqttError> {
                     return Err(err);
                 };
                 let subscriptions = config.subscriptions.filters();
-                if subscriptions.is_empty() {
-                    break;
+                for subscription in subscriptions {
+                    mqtt_client
+                        .subscribe(subscription.path, config.subscriptions.qos)
+                        .await?;
                 }
-                mqtt_client.subscribe_many(subscriptions).await?;
             }
 
             Ok(Event::Incoming(Packet::SubAck(_))) => {

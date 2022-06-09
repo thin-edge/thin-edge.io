@@ -7,7 +7,7 @@ use mqtt_channel::{
     UnboundedSender,
 };
 use serde_json::json;
-use tracing::{error, info, instrument};
+use tracing::{debug, error, info, instrument};
 
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 
@@ -130,6 +130,7 @@ impl Mapper {
     }
 
     async fn process_message(&mut self, message: Message) {
+        debug!("Received message: {:?}", message);
         if self.health_check_topics.accept(&message) {
             let health_status = json!({
                 "status": "up",
