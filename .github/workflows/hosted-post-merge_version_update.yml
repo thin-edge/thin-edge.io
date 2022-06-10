@@ -1,7 +1,7 @@
 name: hosted-post-merge_version_update
+
 on:
   workflow_dispatch:
-    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -31,13 +31,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: install
-          args: --version 0.16.2 cargo-release
+          args: --version 0.21.0 cargo-release
 
       - name: Increment version and tag
         uses: actions-rs/cargo@v1
         with:
           command: release
-          args: patch --skip-publish --skip-push --skip-tag -vv --no-dev-version --no-confirm
+          args: patch --no-publish --no-push --no-tag -vv --no-dev-version --no-confirm
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v3
@@ -46,4 +46,4 @@ jobs:
           delete-branch: true
           title: Patch version bump
           body: Patch version bump
-          reviewers: itsyitsy
+          reviewers: rina23q
