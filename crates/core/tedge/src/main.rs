@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
 
-use std::path::PathBuf;
+use std::path::Path;
 
 use anyhow::Context;
 use clap::Parser;
@@ -47,8 +47,8 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
-fn initialize_tedge(cfg_dir: &PathBuf) -> anyhow::Result<()> {
-    let config_dir = cfg_dir.as_path().display().to_string();
+fn initialize_tedge(cfg_dir: &Path) -> anyhow::Result<()> {
+    let config_dir = cfg_dir.display().to_string();
     create_directory_with_user_group(&config_dir, "tedge", "tedge", 0o775)?;
     create_directory_with_user_group("/var/log/tedge", "tedge", "tedge", 0o775)?;
     create_directory_with_user_group(
