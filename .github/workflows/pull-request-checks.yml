@@ -1,4 +1,4 @@
-name: commit-workflow
+name: Pull Request Checks
 
 on:
   workflow_dispatch:
@@ -8,9 +8,86 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  block-fixup:
+    name: Block fixup commits
+    runs-on: Ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Block Fixup Commit Merge
+        # https://github.com/13rac1/block-fixup-merge-action
+        uses: 13rac1/block-fixup-merge-action@v2.0.0
+
+  # JOB to run change detection
+  changes:
+    name: Filter changes
+    runs-on: Ubuntu-20.04
+    # Set job outputs to values from filter step
+    outputs:
+      docs: ${{ steps.filter.outputs.docs }}
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      # For pull requests it's not necessary to checkout the code
+      - uses: dorny/paths-filter@v2
+        # https://github.com/dorny/paths-filter
+        id: filter
+        with:
+          filters: |
+            docs:
+              - 'docs/**'
+            rust:
+              - 'crates/**'
+              - 'plugins/**'
+
+  mdbook-build-check:
+    name: Run mdbook build
+    runs-on: ubuntu-20.04
+    needs: changes
+    if: ${{ needs.changes.outputs.docs == 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup mdBook
+        uses: peaceiris/actions-mdbook@v1
+        # https://github.com/marketplace/actions/mdbook-action
+        with:
+          mdbook-version: "0.4.18"
+          #mdbook-version: 'latest'
+
+      - name: Install mdbook-toc
+        uses: actions-rs/install@v0.1
+        # https://github.com/marketplace/actions/rust-cargo-install
+        with:
+          crate: mdbook-toc
+          version: latest
+
+      - name: Install mdbook-mermaid
+        uses: actions-rs/install@v0.1
+        # https://github.com/marketplace/actions/rust-cargo-install
+        with:
+          crate: mdbook-mermaid
+          version: latest
+
+      - name: Install mdbook-linkcheck
+        uses: actions-rs/install@v0.1
+        # https://github.com/marketplace/actions/rust-cargo-install
+        with:
+          crate: mdbook-linkcheck
+          version: latest
+
+      - name: Run mdbook build
+        run: |
+          ls -l
+          cd docs
+          mdbook build
+
   cargo-fmt:
     name: Run cargo fmt
     runs-on: Ubuntu-20.04
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
 
     steps:
       - name: Checkout
@@ -33,6 +110,8 @@ jobs:
   cargo-clippy:
     name: Run cargo clippy
     runs-on: Ubuntu-20.04
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
 
     steps:
       - name: Checkout
@@ -63,6 +142,49 @@ jobs:
         with:
           toolchain: 1.58.1
           command: clippy
+
+  cargo-audit:
+    name: Run cargo audit
+    runs-on: Ubuntu-20.04
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Cargo audit
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: audit
+
+  cargo-outdated:
+    name: Run cargo outdated
+    runs-on: Ubuntu-20.04
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Cargo outdated --version
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: outdated
+          args: --version
+
+      - name: Cargo outdated
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: outdated
 
   cargo-test:
     name: Run cargo test
@@ -192,3 +314,43 @@ jobs:
           command: test
           args: --release --no-run --target=armv7-unknown-linux-gnueabihf
 
+### Disable cargo-tarpaulin as some tests failed only in this step
+#  cargo-tarpaulin:
+#    name: Run cargo tarpaulin
+#    runs-on: Ubuntu-20.04
+#
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#
+#      - name: Install rust v1.58.1
+#        uses: actions-rs/toolchain@v1
+#        with:
+#          toolchain: 1.58.1
+#          override: true
+#
+#      - name: Enable cache
+#        # https://github.com/marketplace/actions/rust-cache
+#        uses: Swatinem/rust-cache@v1
+#
+#      - name: install libssl
+#        run: sudo apt install libssl-dev
+#
+#      - name: Cargo install tarpaulin
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: install
+#          args: cargo-tarpaulin
+#
+#      - name: Cargo tarpaulin
+#        uses: actions-rs/cargo@v1
+#        # https://github.com/marketplace/actions/rust-cargo
+#        with:
+#          command: tarpaulin
+#          args: --skip-clean --avoid-cfg-tarpaulin -v --out Xml
+#
+#      - name: Upload to codecov.io
+#        uses: codecov/codecov-action@v1
+#        with:
+#          token: ${{secrets.CODECOV_TOKEN}}
