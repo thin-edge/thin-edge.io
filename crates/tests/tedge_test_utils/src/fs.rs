@@ -15,8 +15,8 @@ pub struct TempTedgeFile {
     file_path: PathBuf,
 }
 
-impl TempTedgeDir {
-    pub fn new() -> Self {
+impl Default for TempTedgeDir {
+    fn default() -> Self {
         let temp_dir = TempDir::new().unwrap();
         let current_file_path = temp_dir.path().to_path_buf();
         TempTedgeDir {
@@ -24,12 +24,16 @@ impl TempTedgeDir {
             current_file_path,
         }
     }
+}
+
+impl TempTedgeDir {
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn dir(&self, directory_name: &str) -> TempTedgeDir {
         let root = self.temp_dir.path().to_path_buf();
-        let path = root
-            .join(self.current_file_path.to_path_buf())
-            .join(directory_name);
+        let path = root.join(&self.current_file_path).join(directory_name);
 
         if !path.exists() {
             let () = fs::create_dir(&path).unwrap();
@@ -43,9 +47,7 @@ impl TempTedgeDir {
 
     pub fn file(&self, file_name: &str) -> TempTedgeFile {
         let root = self.temp_dir.path().to_path_buf();
-        let path = root
-            .join(self.current_file_path.to_path_buf())
-            .join(file_name);
+        let path = root.join(&self.current_file_path).join(file_name);
 
         if !path.exists() {
             let _file = fs::File::create(&path).unwrap();
