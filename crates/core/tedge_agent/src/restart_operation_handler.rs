@@ -1,13 +1,7 @@
 pub mod restart_operation {
 
     use crate::error::AgentError;
-    use std::{
-        fs::File,
-        fs::OpenOptions,
-        io::Read,
-        io::Write,
-        path::{Path, PathBuf},
-    };
+    use std::{fs::File, fs::OpenOptions, io::Read, io::Write, path::Path};
     use time::OffsetDateTime;
 
     const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "tedge_agent/tedge_agent_restart";
@@ -20,7 +14,7 @@ pub mod restart_operation {
     /// ```
     /// let () = RestartOperationHelper::create_slash_run_file()?;
     /// ```
-    pub fn create_slash_run_file(run_dir: &PathBuf) -> Result<(), AgentError> {
+    pub fn create_slash_run_file(run_dir: &Path) -> Result<(), AgentError> {
         let path = &run_dir.join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART);
         let path = Path::new(path);
 
@@ -40,13 +34,13 @@ pub mod restart_operation {
         Ok(())
     }
 
-    pub fn slash_run_file_exists(run_dir: &PathBuf) -> bool {
+    pub fn slash_run_file_exists(run_dir: &Path) -> bool {
         let path = &run_dir.join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART);
         std::path::Path::new(path).exists()
     }
 
     /// returns the datetime of `SLASH_RUN_PATH_TEDGE_AGENT_RESTART` "modified at".
-    fn get_restart_file_datetime(run_dir: &PathBuf) -> Result<time::OffsetDateTime, AgentError> {
+    fn get_restart_file_datetime(run_dir: &Path) -> Result<time::OffsetDateTime, AgentError> {
         let mut file = File::open(&run_dir.join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART))?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
@@ -100,15 +94,15 @@ pub mod restart_operation {
     }
 
     /// checks if system rebooted by comparing dt of tedge_agent_restart with dt of system restart.
-    pub fn has_rebooted(run_dir: &PathBuf) -> Result<bool, AgentError> {
+    pub fn has_rebooted(run_dir: &Path) -> Result<bool, AgentError> {
         // there is no slash run file after the reboot, so we assume success.
         // this is true for most of the cases as "/run/" is normally cleared after a reboot.
-        if !slash_run_file_exists(&run_dir) {
+        if !slash_run_file_exists(run_dir) {
             return Ok(true);
         }
 
         let system_reboot_dt = get_system_uptime()?;
-        let tedge_restart_file_dt = get_restart_file_datetime(&run_dir)?;
+        let tedge_restart_file_dt = get_restart_file_datetime(run_dir)?;
 
         Ok(system_reboot_dt > tedge_restart_file_dt)
     }
