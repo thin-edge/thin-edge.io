@@ -108,7 +108,7 @@ async fn run(
                             "522" => {
                                 info!("Log request received: {payload}");
                                 // retrieve smartrest object from payload
-                                let smartrest_obj = SmartRestLogRequest::from_smartrest(&payload)?;
+                                let smartrest_obj = SmartRestLogRequest::from_smartrest(payload)?;
                                 handle_logfile_request_operation(
                                     &smartrest_obj,
                                     &plugin_config,
@@ -134,16 +134,10 @@ async fn run(
                     return Ok(());
                 }
             }
-            Some(event_or_error) = inotify_stream.next() => {
-                if let Ok(event) = event_or_error {
-                    match event.mask {
-                        EventMask::CLOSE_WRITE => {
-                            plugin_config = handle_dynamic_log_type_update(mqtt_client, config_file).await?;
-                        }
-                        _ => {}
-                    }
+            Some(Ok(event)) = inotify_stream.next() => {
+                if event.mask == EventMask::CLOSE_WRITE {
+                    plugin_config = handle_dynamic_log_type_update(mqtt_client, config_file).await?;
                 }
-
             }
         }
     }
@@ -184,10 +178,10 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn init(config_dir: &PathBuf, logs_dir: &PathBuf) -> Result<(), anyhow::Error> {
+fn init(config_dir: &Path, logs_dir: &Path) -> Result<(), anyhow::Error> {
     info!("Creating supported operation files");
-    let config_dir = config_dir.as_path().display().to_string();
-    let logs_dir = logs_dir.as_path().display().to_string();
+    let config_dir = config_dir.display().to_string();
+    let logs_dir = logs_dir.display().to_string();
     let () = create_init_logs_directories_and_files(config_dir.as_str(), logs_dir.as_str())?;
     Ok(())
 }
@@ -206,7 +200,9 @@ fn create_default_log_plugin_file(path_to_toml: &str, logs_dir: &str) -> Result<
         .append(true)
         .create(false)
         .open(path_to_toml)
-        .expect(&format!("Unable to open file: {}", path_to_toml));
+        .map_err(|error| {
+            anyhow::anyhow!("Unable to open file: {}. Error: {}", path_to_toml, error)
+        })?;
     toml_file.write_all(data.to_string().as_bytes())?;
     Ok(())
 }

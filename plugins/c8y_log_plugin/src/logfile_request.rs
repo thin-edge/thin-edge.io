@@ -115,8 +115,8 @@ pub fn new_read_logs(
 ) -> Result<String, anyhow::Error> {
     let mut output = String::new();
     // first filter logs on type
-    let mut logfiles_to_read = filter_logs_on_type(&smartrest_obj, &plugin_config)?;
-    logfiles_to_read = filter_logs_path_on_metadata(&smartrest_obj, logfiles_to_read)?;
+    let mut logfiles_to_read = filter_logs_on_type(smartrest_obj, plugin_config)?;
+    logfiles_to_read = filter_logs_path_on_metadata(smartrest_obj, logfiles_to_read)?;
 
     let mut line_counter = 0usize;
     for logfile in logfiles_to_read {
@@ -184,7 +184,7 @@ fn filter_logs_path_on_metadata(
         };
         // if the file metadata can not be read, we set the file's metadata
         // to UNIX_EPOCH (Jan 1st 1970)
-        return OffsetDateTime::UNIX_EPOCH;
+        OffsetDateTime::UNIX_EPOCH
     });
     logs_path_vec.reverse(); // to get most recent
 
@@ -219,7 +219,7 @@ async fn execute_logfile_request_operation(
     let executing = LogfileRequest::executing()?;
     let () = mqtt_client.published.send(executing).await?;
 
-    let log_content = new_read_logs(&smartrest_request, &plugin_config)?;
+    let log_content = new_read_logs(smartrest_request, plugin_config)?;
 
     let upload_event_url = http_client
         .upload_log_binary(&smartrest_request.log_type, &log_content)
