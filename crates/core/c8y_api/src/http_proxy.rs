@@ -283,7 +283,7 @@ impl JwtAuthHttpProxy {
         C8yCreateEvent::new(
             Some(c8y_managed_object),
             event_type.clone(),
-            event_time.unwrap_or(OffsetDateTime::now_utc()),
+            event_time.unwrap_or_else(OffsetDateTime::now_utc),
             event_text.unwrap_or(event_type),
             HashMap::new(),
         )
