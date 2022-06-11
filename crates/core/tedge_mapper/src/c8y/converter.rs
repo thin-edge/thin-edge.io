@@ -357,13 +357,13 @@ where
         message: &DiscoverOp,
     ) -> Result<Option<Message>, ConversionError> {
         match message.event_type {
-            EventType::ADD => {
+            EventType::Add => {
                 let ops_dir = message.ops_dir.clone();
                 let op_name = message.operation_name.clone();
                 let op = get_operation(ops_dir.join(op_name))?;
                 self.operations.add_operation(op);
             }
-            EventType::REMOVE => {
+            EventType::Remove => {
                 self.operations.remove_operation(&message.operation_name);
             }
         }
@@ -379,7 +379,7 @@ async fn parse_c8y_topics(
 ) -> Result<Vec<Message>, ConversionError> {
     match process_smartrest(
         message.payload_str()?,
-        &operations,
+        operations,
         http_proxy,
         operation_logs,
     )
@@ -721,7 +721,7 @@ async fn process_smartrest(
     match message_id {
         "528" => forward_software_request(payload, http_proxy).await,
         "510" => forward_restart_request(payload),
-        template => forward_operation_request(payload, template, &operations, operation_logs).await,
+        template => forward_operation_request(payload, template, operations, operation_logs).await,
     }
 }
 

@@ -4,6 +4,7 @@ use c8y_smartrest::error::{
 use plugin_sm::operation_logs::OperationLogsError;
 
 #[derive(thiserror::Error, Debug)]
+#[allow(clippy::large_enum_variant)]
 #[allow(clippy::enum_variant_names)]
 pub enum CumulocityMapperError {
     #[error(transparent)]

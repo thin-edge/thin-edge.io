@@ -5,6 +5,9 @@ use mqtt_channel::MqttError;
 use tedge_config::TEdgeConfigError;
 use thin_edge_json::serialize::ThinEdgeJsonSerializationError;
 
+// allowing enum_variant_names due to a False positive where it is
+// detected that "all variants have the same prefix: `From`"
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, thiserror::Error)]
 pub enum MapperError {
     #[error(transparent)]

@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum EventType {
-    ADD,
-    REMOVE,
+    Add,
+    Remove,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -54,23 +54,21 @@ pub fn process_inotify_events(
     if let Some(ops_name) = event.clone().name {
         let operation_name = ops_name
             .to_str()
-            .ok_or(DynamicDiscoverOpsError::NotAnOperationName(
-                ops_name.clone(),
-            ));
+            .ok_or_else(|| DynamicDiscoverOpsError::NotAnOperationName(ops_name.clone()));
 
         match operation_name {
             Ok(ops_name) => match event.mask {
                 EventMask::DELETE => {
                     return Ok(Some(DiscoverOp {
                         ops_dir,
-                        event_type: EventType::REMOVE,
+                        event_type: EventType::Remove,
                         operation_name: ops_name.to_string(),
                     }))
                 }
                 EventMask::CLOSE_WRITE => {
                     return Ok(Some(DiscoverOp {
                         ops_dir,
-                        event_type: EventType::ADD,
+                        event_type: EventType::Add,
                         operation_name: ops_name.to_string(),
                     }))
                 }
