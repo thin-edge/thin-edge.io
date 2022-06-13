@@ -12,9 +12,7 @@ TODO: Add motivation for child-device concept. Somethin like:
     - SW Management plugin API
     - Configuration Management
     - Logging Management
-
-TODO: Add restriction: "Those interfaces that are not provided via network (e.g. just via CLI) are not accessible from an external child device. That means for those a local process on the thin-edge device would be required."
-
+    
 * Each public interface that provides child-device support has an optional field "child-device ID".
 
 * Interfaces available on MQTT (as measurements, alarms, events) manage the field "child-device ID" as last topic of a message.
@@ -37,4 +35,7 @@ TODO: Add restriction: "Those interfaces that are not provided via network (e.g.
 
 - If empty or no child-device ID is given, the thin-edge device is assumed to be meant.
 
-NOTE: Multilevel childs are not yet covered.
+
+TODO: Add restriction: "Those interfaces that are not provided via network (e.g. just via CLI) are not accessible from an external child device. That means for those a local process on the thin-edge device would be required."
+
+TODO: Multilevel childs are not yet covered.
