@@ -2,13 +2,24 @@ use crate::{Message, RuntimeError};
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 
 /// A recipient for messages of type `M`
 pub type Recipient<M> = Box<dyn Sender<M>>;
 
+impl<M: 'static> Debug for Recipient<M> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 #[async_trait]
 pub trait Sender<M>: 'static + Send + Sync {
+    /// Name of the recipient
+    fn name(&self) -> &str {
+        "anonymous recipient"
+    }
+
     /// Send a message returning an error if the recipient is no more expecting messages
     async fn send_message(&mut self, message: M) -> Result<(), RuntimeError>;
 
