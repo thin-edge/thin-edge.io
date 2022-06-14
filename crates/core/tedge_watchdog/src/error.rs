@@ -25,6 +25,6 @@ pub enum WatchdogError {
     #[error(transparent)]
     ParseSystemdFile(#[from] std::io::Error),
 
-    #[error("Did not find the WatchdogSec{file}")]
+    #[error("Did not find the WatchdogSec in {file}")]
     NoWatchdogSec { file: String },
 }
