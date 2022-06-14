@@ -1,10 +1,7 @@
-pub use inotify_crate::EventMask;
-pub use inotify_crate::WatchMask;
-use inotify_crate::{EventStream, Inotify};
+pub use inotify::EventMask;
+pub use inotify::WatchMask;
+use inotify::{EventStream, Inotify};
 use std::path::Path;
-
-pub fn inofity_file_watch_stream(
-    config_file: &Path,
 
 #[derive(thiserror::Error, Debug)]
 pub enum InotifyError {
