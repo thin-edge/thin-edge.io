@@ -32,6 +32,10 @@ TODO: Add motivation for child-device concept. Somethin like:
     /etc/tedge/sm-plugins/CODESYS-handler   install foo v1.2 /path/to/file <child-device ID>
     /etc/tedge/sm-plugins/serial-programmer install foo v1.2 /path/to/file <child-device ID>
   ```
+  Alternative with child-device ID in the path (avoids conflicts between filename over (child)devices), and allows thin-edge to gather a list of child devices (e.g. to ask each SW Man plugins for a Software List):
+  ```
+    /etc/tedge/sm-plugins/<child-device ID>/CODESYS-handler   install foo v1.2 /path/to/file
+  ```
 
 - If empty or no child-device ID is given, the thin-edge device is assumed to be meant.
 
