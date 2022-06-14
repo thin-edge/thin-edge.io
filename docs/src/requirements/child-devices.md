@@ -36,7 +36,7 @@ TODO: Add somehow statement below as definition:
      and which child-device ID to use
    
 
-* **Use-Case 2: Applying/updating data-mapping configuration of PLCs using Configuration Management**
+* **Use-Case 2: Viewing/applying data-mapping configuration of PLCs using Configuration Management**
    - the process' configuration (see process configuration file in use-case 1) is managed by Configuration Management
    - each PLC appears as child-device in the Cloud, that supports individual Configuration Management functionality per child-device
    - thereby data mapping can be changed or extended from cloud side
@@ -62,4 +62,15 @@ NOTE 2: Use-case(s) with external device that can directly access thin-edge inte
 
 - **Requirement 3:** When data is pushed to thin-edge for a child-device, thin-edge will take care that the child-device exists in the Cloud, and creates it if needed.
 
-- **Requirement 4:** Thin-edge is stateless in terms of child devices. I.e. it does not store a list of child-devices of even a state of those. All knowledge about child-devices is in the applications that provide/consume data and functionality from/to child-devices.  
+- **Requirement 4:** Thin-edge is stateless in terms of child devices. I.e. it does not store a list of child-devices of even a state of those. All knowledge about child-devices is in the applications that provide/consume data and functionality from/to child-devices. 
+
+- Requrirement 5: thin-edge fetches the Configuration from the device and pushed to the cloud
+    - Thin-edge should deliver the config upload request from the cloud to the appropriate child device process
+    - Expose an API with which the child device process can upload the snapshot of the config file binary to the thin-edge device.
+    - Thin-edge should then upload and associate these config files with their corresponding device twin in the cloud.
+    - Thin-edge must make sure that config files uploaded by one child device should not overwrite the config uploaded by another child, even if they are of the same type
+
+- Requrirement 6: thin-edge downloads configuration file from the cloud and delivers the configuration to the child-device process
+    - Thin-edge should deliver the "apply config request" along with any assiciated binaries from the cloud to the appropriate child device process
+    - Applying the config file is the responsibility of the child device process itself
+    - Thin-edge must make sure that a config file downlaoded for one child device does not overwrite the config file downloaded for another child, even if they are of the same type
