@@ -19,7 +19,7 @@ use tedge_config::{
     DEFAULT_TEDGE_CONFIG_PATH,
 };
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
-use tedge_utils::inotify::{inofity_file_watch_stream, EventMask, WatchMask};
+use tedge_utils::inotify::{inofity_stream, EventMask, WatchMask};
 use tracing::{error, info};
 
 use crate::logfile_request::{handle_dynamic_log_type_update, handle_logfile_request_operation};
@@ -83,7 +83,7 @@ async fn run(
 ) -> Result<(), anyhow::Error> {
     let mut plugin_config = handle_dynamic_log_type_update(mqtt_client, config_file).await?;
 
-    let mut inotify_stream = inofity_file_watch_stream(config_file, WatchMask::CLOSE_WRITE)?;
+    let mut inotify_stream = inofity_stream(config_file, WatchMask::CLOSE_WRITE)?;
 
     loop {
         tokio::select! {

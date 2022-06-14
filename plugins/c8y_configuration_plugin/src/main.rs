@@ -3,9 +3,9 @@ mod download;
 mod error;
 mod upload;
 
-use crate::config::PluginConfig;
 use crate::download::handle_config_download_request;
 use crate::upload::handle_config_upload_request;
+use crate::{config::PluginConfig, upload::handle_dynamic_config_update};
 use anyhow::Result;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use c8y_smartrest::smartrest_deserializer::{
@@ -13,7 +13,7 @@ use c8y_smartrest::smartrest_deserializer::{
 };
 use c8y_smartrest::topic::C8yTopic;
 use clap::Parser;
-use mqtt_channel::{Message, SinkExt, StreamExt, Topic};
+use mqtt_channel::{Connection, Message, SinkExt, StreamExt, Topic};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tedge_config::{
@@ -102,11 +102,12 @@ async fn main() -> Result<(), anyhow::Error> {
     let tedge_config = config_repository.load()?;
 
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
+    let mut mqtt_client = create_mqtt_client(mqtt_port).await?;
     let mut http_client = create_http_client(&tedge_config).await?;
     let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
 
     run(
-        mqtt_port,
+        &mut mqtt_client,
         &mut http_client,
         tmp_dir,
         &config_plugin_opt.config_file,
@@ -115,14 +116,12 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 
 async fn run(
-    mqtt_port: u16,
+    mqtt_client: &mut Connection,
     http_client: &mut impl C8YHttpProxy,
     tmp_dir: PathBuf,
     config_file_path: &Path,
 ) -> Result<(), anyhow::Error> {
     let mut plugin_config = PluginConfig::new(config_file_path);
-
-    let mut mqtt_client = create_mqtt_client(mqtt_port).await?;
 
     // Publish supported configuration types
     let msg = plugin_config.to_supported_config_types_message()?;
@@ -135,7 +134,7 @@ async fn run(
         "500",
     );
     let () = mqtt_client.published.send(msg).await?;
-    let mut inotify_stream = inofity_file_watch_stream(config_file_path, WatchMask::CLOSE_WRITE)?;
+    let mut inotify_stream = inofity_stream(config_file_path, WatchMask::CLOSE_WRITE)?;
 
     loop {
         tokio::select! {
@@ -143,7 +142,7 @@ async fn run(
                 if let Some(message) = message {
                     debug!("Received {:?}", message);
                     if let Ok(payload) = message.payload_str() {
-                            match payload.split(',').next().unwrap_or_default() {
+                            let result = match payload.split(',').next().unwrap_or_default() {
                                 "524" => {
                                     let config_download_request =
                                         SmartRestConfigDownloadRequest::from_smartrest(payload)?;
@@ -152,10 +151,10 @@ async fn run(
                                         &plugin_config,
                                         config_download_request,
                                         tmp_dir.clone(),
-                                        &mut mqtt_client,
+                                        mqtt_client,
                                         http_client,
                                     )
-                                    .await?
+                                    .await
                                 }
                                 "526" => {
                                     // retrieve config file upload smartrest request from payload
@@ -166,28 +165,28 @@ async fn run(
                                     handle_config_upload_request(
                                         &plugin_config,
                                         config_upload_request,
-                                        &mut mqtt_client,
+                                        mqtt_client,
                                         http_client,
                                     )
-                                    .await?
+                                    .await
                                 }
                                 _ => {
                                     // Ignore operation messages not meant for this plugin
+                                    Ok(())
                                 }
-                            }
-                        }
+                            };
+                         if let Err(err) = result {
+                            error!("Handling of operation: '{payload}' failed with {err}");
+                        }}
                     } else {
+                        // message is None and the connection has been closed
                         return Ok(());
                     }
             }
         Some(Ok(event)) = inotify_stream.next() => {
             match event.mask {
                 EventMask::CLOSE_WRITE => {
-                        // Reload the plugin config file
-                        plugin_config = PluginConfig::new(config_file_path);
-                        // Resend the supported config types
-                        let msg = plugin_config.to_supported_config_types_message()?;
-                        mqtt_client.published.send(msg).await?;
+                    plugin_config = handle_dynamic_config_update(mqtt_client, config_file_path).await?;
                 }
                 _ => {}
             }
@@ -264,6 +263,7 @@ mod tests {
         let mut messages = broker.messages_published_on("c8y/s/us").await;
 
         let mut http_client = MockC8YHttpProxy::new();
+        let mut mqtt_client = create_mqtt_client(broker.port).await?;
         http_client
             .expect_upload_config_file()
             .return_once(|_path, _type| Ok("http://server/some/test/config/url".to_string()));
@@ -274,7 +274,7 @@ mod tests {
         // Run the plugin's runtime logic in an async task
         tokio::spawn(async move {
             let _ = run(
-                broker.port,
+                &mut mqtt_client,
                 &mut http_client,
                 tmp_dir.path().to_path_buf(),
                 file.path(),
