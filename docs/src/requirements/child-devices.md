@@ -45,7 +45,18 @@ That document summarises a collection of use-cases and requirements, based on ex
 
 NOTE 1: The PLCs are already long time in production and must not be touched/modified (to avoid any risc in the production line).
 NOTE 2: Could be also another PLC than CODESYS or even another device than a PLC.
-  
+NOTE 3: Use-case(s) with external device than can directly access thin-edge interfaces (e.g. tedge/measurements) not yet covered.
+
 # Requirements
 
-- **Requirement 1:** TODO
+- **Requirement 1:** Thin-edge has to provide child-device support for interfaces: <br/>
+     - Measurements/Alarm/Events<br/>
+     - Configuration Managements<br/>
+     - Software Managements Plugin API<br/>
+
+- **Requirement 2:** Where thin-edge provides child-device support it uses according meachnisms from the Cloud to appear according data/functionality as own device underneath the thin-edge device in the Cloud.
+
+- **Requirement 3:** When data is pushed to thin-edge for a child-device, thin-edge will take care that the child-device exists in the Cloud, and creates it if needed.
+
+- **Requirement 4:** Thin-edge is stateless in terms of child devices. I.e. it does not store a list of child-devices of even a state of those. All knowledge about child-devices is in the applications that provide/consume data and functionality from/to child-devices.  
+
