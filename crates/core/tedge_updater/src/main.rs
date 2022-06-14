@@ -2,7 +2,7 @@ use clap::Parser;
 use std::{
     fs::File,
     io::{BufWriter, Write},
-    path::Path,
+    path::{Path, PathBuf},
     process::{Command, ExitStatus, Stdio},
 };
 
@@ -39,7 +39,13 @@ fn run(operation: PluginOp) -> Result<i32, anyhow::Error> {
             let mut buffer = String::new();
             std::io::stdin().read_line(&mut buffer)?;
 
-            let _ = run_hook(format!("/etc/tedge/hooks/hook-stop-and-snapshot-{plugin_name}").as_str(), "");
+            let plugin_name_file = PathBuf::from(&plugin_name);
+            let filename = plugin_name_file.file_name().unwrap().to_str().unwrap();
+
+            let _ = run_hook(
+                format!("/etc/tedge/hooks/hook-stop-and-snapshot-{filename}").as_str(),
+                "",
+            );
 
             // check for existing bridges
             // TODO: maybe better to have a tedge command as "tedge connected list", as here trying
@@ -103,8 +109,9 @@ fn run(operation: PluginOp) -> Result<i32, anyhow::Error> {
                 // exec plugin and forward STDIN
                 println!("Executing: {} update-list", plugin_name);
 
-                let mut status = Command::new(format!("/etc/tedge/sm-plugins/{plugin_name}"))
-                    .args(vec!["update-list"]).stdin(std::process::Stdio::piped())
+                let mut status = Command::new(format!("/etc/tedge/sm-plugins/{filename}"))
+                    .args(vec!["update-list"])
+                    .stdin(std::process::Stdio::piped())
                     .spawn()?;
 
                 dbg!(&status);
@@ -127,7 +134,10 @@ fn run(operation: PluginOp) -> Result<i32, anyhow::Error> {
                 ),
             };
 
-            let _ = run_hook(format!("/etc/tedge/hooks/hook-start-or-rollback-{plugin_name}").as_str(), exitcode.to_string().as_str());
+            let _ = run_hook(
+                format!("/etc/tedge/hooks/hook-start-or-rollback-{plugin_name}").as_str(),
+                exitcode.to_string().as_str(),
+            );
 
             Ok(exitcode)
         }
@@ -180,7 +190,7 @@ fn store_exitcode(exit_code: i32) -> std::io::Result<()> {
     Ok(())
 }
 
-fn status_to_exitcode(status : Result<ExitStatus, std::io::Error>) -> i32 {
+fn status_to_exitcode(status: Result<ExitStatus, std::io::Error>) -> i32 {
     let exit_code;
 
     match status {
