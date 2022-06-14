@@ -17,6 +17,9 @@ That document summarises a collection of use-cases and requirements, based on ex
 5) The child device process itself is resposible for pushing these binaries to the physical device itself and applying it there.
 6) Each child device has a unique ID that can be used to identify/distinguish between them
 
+TODO: Add somehow statement below as definition: 
+"PLCs are already long time in production-line and no additional software can be installed (e.g. MQTT client) or configuration changed, to make the PLC capbable to communicate with the thin-edge device. That is to avoid any risc in the production line. Instead the thin-edge device must use existing interfaces from the PLC."
+
 ## Questions
 1) Are child devices and their unique IDs static and known at thin-edge provisioning time, or do they dynamically get connected to thin-edge?
 2) Should thin-edge provide routing of data between child devices (from one child device to another)?
@@ -28,24 +31,25 @@ That document summarises a collection of use-cases and requirements, based on ex
 * **Use-Case 1: Gathering telemetry data from connected PLCs and handle as Measurements, Alarms or Events**
    - a process on the thin-edge device collects process-data from a CODESYS PLC via local network (using the CODESYS PLC handler)
    - per each connected PLC a process is running
+   - the process pushes gathered PLC's process-data to thin-edge measurements, alarms or events
    - the process has a configuration file that contains mapping information, meaning which process-data to push to which thin-edge measurement, alarm or event;
      and which child-device ID to use
    
 
 * **Use-Case 2: Applying/updating data-mapping configuration of PLCs using Configuration Management**
    - the process' configuration (see process configuration file in use-case 1) is managed by Configuration Management
-   - each PLC appears as child-device in the Cloud, that supports individual Configuration Management functionality per child-device 
+   - each PLC appears as child-device in the Cloud, that supports individual Configuration Management functionality per child-device
+   - thereby data mapping can be changed or extended from cloud side
 
 * **Use-Case 3: Update application on connected PLCs using Software Management**
-   - a commandline tool on the thin-edge device is capable to remove or update the CODESYS application running on the connected PLCs (using the CODESYS PLC handler)
-   - a Software Management plugin (one for all PLCs or individual plugins per PLC) uses the commandline tool remove or update 
-     the CODESYS application on the according PLC on request
-   - each PLC appears as child-device in the Cloud, that supports individual Software Management functionality per child-device 
+   - each PLC appears as child-device in the Cloud, that supports individual Software Management functionality    
+   - a commandline tool on the thin-edge device is capable to send a CODESYS application (one file) to a connected PLC, and start it
+   - on an incoming SW Management update request for a PLC that commandline tool is invoked to install the CODESYS application on the according PLC
 
 
-NOTE 1: The PLCs are already long time in production and must not be touched/modified (to avoid any risc in the production line).
-NOTE 2: Could be also another PLC than CODESYS or even another device than a PLC.
-NOTE 3: Use-case(s) with external device than can directly access thin-edge interfaces (e.g. tedge/measurements) not yet covered.
+NOTE 1: For use-cases above the external device could be also another PLC than CODESYS or even another device than a PLC.
+
+NOTE 2: Use-case(s) with external device that can directly access thin-edge interfaces (e.g. tedge/measurements) not yet covered.
 
 # Requirements
 
@@ -54,9 +58,8 @@ NOTE 3: Use-case(s) with external device than can directly access thin-edge inte
      - Configuration Managements<br/>
      - Software Managements Plugin API<br/>
 
-- **Requirement 2:** Where thin-edge provides child-device support it uses according meachnisms from the Cloud to appear according data/functionality as own device underneath the thin-edge device in the Cloud.
+- **Requirement 2:** Where thin-edge provides child-device support it uses corresponding Clouds' child device meachnism, to associate data/functionality of that child-device as own device underneath the thin-edge device.
 
 - **Requirement 3:** When data is pushed to thin-edge for a child-device, thin-edge will take care that the child-device exists in the Cloud, and creates it if needed.
 
 - **Requirement 4:** Thin-edge is stateless in terms of child devices. I.e. it does not store a list of child-devices of even a state of those. All knowledge about child-devices is in the applications that provide/consume data and functionality from/to child-devices.  
-
