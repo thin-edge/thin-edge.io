@@ -45,8 +45,12 @@ impl std::fmt::Display for FilePath {
     }
 }
 
+// If we `impl From<FilePath> for PathBuf` as suggested by clippy,
+// Then we can no more have a generic implementation
+// `impl<T> From<T> for FilePath where PathBuf: From<T>`
+#[allow(clippy::from_over_into)]
 impl Into<PathBuf> for FilePath {
     fn into(self) -> PathBuf {
-        PathBuf::from(self.0)
+        self.0
     }
 }
