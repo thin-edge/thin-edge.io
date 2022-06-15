@@ -8,7 +8,7 @@ TODO: Add motivation for child-device concept. Somethin like:<br/>
 That document summarises a collection of use-cases and requirements, based on experiences of Sofware AG and some customers/partners.
 
 ## Definition
-1) A child device is a physical device connected to the thin-edge device (typically a gateway device)  or even over IP.
+1) A child device is a physical device (a PLC or a sensor) connected to the thin-edge device (typically a gateway device) over the network (io-link, fieldbus or even over IP).
 2) Generally there are two kinds of child devices:
    - a) A dumb device that is connected to the thin-edge device via an IO-Link or fieldbus, that can't run the processing logic that sends/receives data to/from the thin-edge device. For such devices, the processing logic will be running on the thin-edge device itself.
    - b) A smart device that is connected to the thin-edge device over an IP network, with the processing logic running on that device itself. Its interactions with the thin-edge device will only be over the network
