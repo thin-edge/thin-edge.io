@@ -38,25 +38,22 @@ pub async fn start_watchdog(tedge_config_dir: PathBuf) -> Result<(), anyhow::Err
 }
 
 async fn start_watchdog_for_self() {
-    tokio::spawn(async move {
-        match get_watchdog_sec("/lib/systemd/system/tedge-watchdog.service") {
-            Ok(interval) => loop {
-                let _ = notify_systemd(process::id(), "WATCHDOG=1").map_err(|e| {
-                    eprintln!("{}", e);
-                });
-                tokio::time::sleep(tokio::time::Duration::from_secs(interval / 4)).await;
-            },
-
-            Err(_) => {
-                warn!(
-                    "Watchdog is not enabled for tedge-watchdog: {}",
-                    WatchdogError::NoWatchdogSec {
-                        file: "tedge-watchdog.service".to_string()
-                    }
-                );
-            }
+    match get_watchdog_sec("/lib/systemd/system/tedge-watchdog.service") {
+        Ok(interval) => {
+            let _handle = tokio::spawn(async move {
+                loop {
+                    let _ = notify_systemd(process::id(), "WATCHDOG=1").map_err(|e| {
+                        eprintln!("{}", e);
+                    });
+                    tokio::time::sleep(tokio::time::Duration::from_secs(interval / 4)).await;
+                }
+            });
         }
-    });
+
+        Err(e) => {
+            warn!("Watchdog is not enabled for tedge-watchdog: {}", e);
+        }
+    }
 }
 
 async fn start_watchdog_for_tedge_services(tedge_config_dir: PathBuf) {
