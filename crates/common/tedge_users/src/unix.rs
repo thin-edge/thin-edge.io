@@ -33,6 +33,9 @@ struct InnerUserManager {
     guard: Option<users::switch::SwitchUserGuard>,
 }
 
+// this clippy warning is misleading because `UserManager` should only
+// be crated once. There should be no "default" implemented for it
+#[allow(clippy::new_without_default)]
 impl UserManager {
     /// Create a `UserManager`.
     ///
