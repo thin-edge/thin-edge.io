@@ -30,29 +30,37 @@ pub async fn start_watchdog(tedge_config_dir: PathBuf) -> Result<(), anyhow::Err
     notify_systemd(process::id(), "--ready")?;
 
     // Send heart beat notifications to systemd, to notify about its own health status
-    start_watchdog_for_self().await;
+    start_watchdog_for_self().await?;
 
     // Monitor health of tedge services
     start_watchdog_for_tedge_services(tedge_config_dir).await;
     Ok(())
 }
 
-async fn start_watchdog_for_self() {
+async fn start_watchdog_for_self() -> Result<(), WatchdogError> {
     match get_watchdog_sec("/lib/systemd/system/tedge-watchdog.service") {
         Ok(interval) => {
             let _handle = tokio::spawn(async move {
                 loop {
                     let _ = notify_systemd(process::id(), "WATCHDOG=1").map_err(|e| {
-                        eprintln!("{}", e);
+                        eprintln!("Notifying systemd failed with {}", e);
                     });
                     tokio::time::sleep(tokio::time::Duration::from_secs(interval / 4)).await;
                 }
             });
+            Ok(())
         }
 
-        Err(e) => {
-            warn!("Watchdog is not enabled for tedge-watchdog: {}", e);
-        }
+        Err(e) => match e {
+            WatchdogError::NoWatchdogSec { file } => {
+                warn!(
+                    "Watchdog is not enabled for tedge-watchdog : {}",
+                    WatchdogError::NoWatchdogSec { file }
+                );
+                Ok(())
+            }
+            e => Err(e),
+        },
     }
 }
 
