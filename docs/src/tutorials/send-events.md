@@ -47,6 +47,12 @@ When the `time` field is not provided, thin-edge.io will use the current system 
 When you want to skip both fields, use an empty payload to indicate the same.
 There are no such restrictions on the `<event-type>` value.
 
+### Sending events from child devices
+
+Events for child devices can be sent by publishing the event payload to `tedge/events/<event-type>/<child-device-id>` topic,
+where the `child-device-id` is the unique device id of the child device.
+The event payload structure is the same, as described in the previous section.
+
 ## Cloud data mapping
 
 If the device is connected to some supported IoT cloud platform, an event that is triggered locally on thin-edge.io will be forwarded to the connected cloud platform as well.
@@ -81,6 +87,11 @@ The Cumulocity JSON mapping of the same event would be as follows:
     }
 }
 ```
+
+The `c8y-device-id` is the internal id of that device in Cumulocity cloud,
+and not the `device-id` of the thin-edge device or the `child-device-id` of the child device.
+The mapper will keep the mapping between these thin-edge device ids and Cumulocity internal ids cached internally,
+to avoid repeated lookup with the cloud on every message mapping.
 
 > Note: Mapped events will be sent to Cumulocity via MQTT if the incoming Thin Edge JSON event payload size is less than 16K bytes. If higher, HTTP will be used.
 
