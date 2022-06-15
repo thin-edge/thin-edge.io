@@ -51,16 +51,14 @@ async fn start_watchdog_for_self() -> Result<(), WatchdogError> {
             Ok(())
         }
 
-        Err(e) => match e {
-            WatchdogError::NoWatchdogSec { file } => {
-                warn!(
-                    "Watchdog is not enabled for tedge-watchdog : {}",
-                    WatchdogError::NoWatchdogSec { file }
-                );
-                Ok(())
-            }
-            e => Err(e),
-        },
+        Err(WatchdogError::NoWatchdogSec { file }) => {
+            warn!(
+                "Watchdog is not enabled for tedge-watchdog : {}",
+                WatchdogError::NoWatchdogSec { file }
+            );
+            Ok(())
+        }
+        Err(e) => Err(e),
     }
 }
 
