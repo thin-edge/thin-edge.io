@@ -29,6 +29,40 @@ pub async fn start_watchdog(tedge_config_dir: PathBuf) -> Result<(), anyhow::Err
     // Send ready notification to systemd.
     notify_systemd(process::id(), "--ready")?;
 
+    // Send heart beat notifications to systemd, to notify about its own health status
+    start_watchdog_for_self().await?;
+
+    // Monitor health of tedge services
+    start_watchdog_for_tedge_services(tedge_config_dir).await;
+    Ok(())
+}
+
+async fn start_watchdog_for_self() -> Result<(), WatchdogError> {
+    match get_watchdog_sec("/lib/systemd/system/tedge-watchdog.service") {
+        Ok(interval) => {
+            let _handle = tokio::spawn(async move {
+                loop {
+                    let _ = notify_systemd(process::id(), "WATCHDOG=1").map_err(|e| {
+                        eprintln!("Notifying systemd failed with {}", e);
+                    });
+                    tokio::time::sleep(tokio::time::Duration::from_secs(interval / 4)).await;
+                }
+            });
+            Ok(())
+        }
+
+        Err(WatchdogError::NoWatchdogSec { file }) => {
+            warn!(
+                "Watchdog is not enabled for tedge-watchdog : {}",
+                WatchdogError::NoWatchdogSec { file }
+            );
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+
+async fn start_watchdog_for_tedge_services(tedge_config_dir: PathBuf) {
     let tedge_services = vec![
         "tedge-mapper-c8y",
         "tedge-mapper-az",
@@ -65,7 +99,6 @@ pub async fn start_watchdog(tedge_config_dir: PathBuf) -> Result<(), anyhow::Err
         }
     }
     futures::future::join_all(watchdog_tasks).await;
-    Ok(())
 }
 
 async fn monitor_tedge_service(
@@ -115,6 +148,7 @@ async fn monitor_tedge_service(
         let elapsed = start.elapsed();
         if elapsed < tokio::time::Duration::from_secs(interval) {
             tokio::time::sleep(tokio::time::Duration::from_secs(interval) - elapsed).await;
+            warn!("tedge systemd watchdog not started because no services to monitor")
         }
     }
 }
