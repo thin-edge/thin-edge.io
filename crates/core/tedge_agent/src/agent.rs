@@ -144,7 +144,7 @@ impl SmAgentConfig {
 
         let tedge_download_dir = tedge_config.query_string(TmpPathSetting)?.into();
 
-        let tedge_log_dir: String = tedge_config.query_string(LogPathSetting)?.into();
+        let tedge_log_dir: String = tedge_config.query_string(LogPathSetting)?;
         let tedge_log_dir = PathBuf::from(&format!("{tedge_log_dir}/{AGENT_LOG_PATH}"));
         let tedge_run_dir = tedge_config.query_string(RunPathSetting)?.into();
 

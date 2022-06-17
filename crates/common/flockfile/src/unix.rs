@@ -108,7 +108,7 @@ impl AsRef<Path> for Flockfile {
 /// Check `run_dir`/lock/ for a lock file of a given `app_name`
 pub fn check_another_instance_is_not_running(
     app_name: &str,
-    run_dir: &PathBuf,
+    run_dir: &Path,
 ) -> Result<Flockfile, FlockfileError> {
     match Flockfile::new_lock(
         run_dir

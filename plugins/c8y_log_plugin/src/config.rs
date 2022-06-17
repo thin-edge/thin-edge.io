@@ -33,8 +33,7 @@ impl Borrow<String> for FileEntry {
 
 impl LogPluginConfig {
     pub fn new(config_file_path: &Path) -> Self {
-        let config = Self::read_config(config_file_path);
-        config
+        Self::read_config(config_file_path)
     }
 
     pub fn read_config(path: &Path) -> Self {

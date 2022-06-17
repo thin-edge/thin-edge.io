@@ -171,25 +171,20 @@ async fn process_inotify_and_mqtt_messages(
                         }
                     }
                 }
-                event = inotify_events.next() => {
-                    match event {
-                        Some(ev) => {
-                            match ev {
-                                Ok(ev_string) => {
-
-                                            match  process_inotify_events(dir.clone(), ev_string) {
-                                                Ok(Some(discovered_ops)) => {
-                                                    let _ = mapper.output.send(mapper.converter.process_operation_update_message(discovered_ops)).await;
-                                                }
-                                                Ok(None) => {}
-                                                Err(e) => {eprintln!("Processing inotify event failed due to {}", e);}
-                                            }
-
-
-                                } Err(e) => {eprintln!("Failed to extract event {}", e);}
+                Some(event_or_error) = inotify_events.next() => {
+                    match event_or_error {
+                        Ok(event) =>  {
+                            match  process_inotify_events(dir.clone(), event) {
+                                Ok(Some(discovered_ops)) => {
+                                    let _ = mapper.output.send(mapper.converter.process_operation_update_message(discovered_ops)).await;
+                                }
+                                Ok(None) => {}
+                                Err(e) => {eprintln!("Processing inotify event failed due to {}", e);}
                             }
                         }
-                        None => {}
+                        Err(error) => {
+                            eprintln!("Failed to extract event {}", error);
+                        }
                     }
                 }
             }

@@ -37,7 +37,7 @@ pub async fn init_session(config: &Config) -> Result<(), MqttError> {
             }
 
             Err(err) => {
-                eprintln!("Connection Error {}", err.to_string());
+                eprintln!("Connection Error {}", err);
                 break;
             }
             _ => (),
@@ -77,7 +77,7 @@ pub async fn clear_session(config: &Config) -> Result<(), MqttError> {
             }
 
             Err(err) => {
-                eprintln!("Connection Error {}", err.to_string());
+                eprintln!("Connection Error {}", err);
                 break;
             }
             _ => (),

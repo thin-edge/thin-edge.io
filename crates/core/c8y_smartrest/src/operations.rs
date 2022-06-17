@@ -42,25 +42,15 @@ impl Operation {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Operations {
     operations: Vec<Operation>,
     operations_by_trigger: HashMap<String, usize>,
 }
 
-impl Default for Operations {
-    fn default() -> Self {
-        Self {
-            operations: vec![],
-            operations_by_trigger: HashMap::new(),
-        }
-    }
-}
-
 impl Operations {
     pub fn add_operation(&mut self, operation: Operation) {
         if self.operations.iter().any(|o| o.name.eq(&operation.name)) {
-            return;
         } else {
             if let Some(detail) = operation.exec() {
                 if let Some(on_message) = &detail.on_message {

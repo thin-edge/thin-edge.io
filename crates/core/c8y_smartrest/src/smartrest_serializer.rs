@@ -201,11 +201,13 @@ where
 }
 
 fn serialize_smartrest<S: Serialize>(record: S) -> Result<String, SmartRestSerializerError> {
-    let mut wtr = WriterBuilder::new()
-        .has_headers(false)
-        .quote_style(QuoteStyle::Never)
-        .double_quote(false)
-        .from_writer(vec![]);
+    let mut wtr = Box::new(
+        WriterBuilder::new()
+            .has_headers(false)
+            .quote_style(QuoteStyle::Never)
+            .double_quote(false)
+            .from_writer(vec![]),
+    );
     wtr.serialize(record)?;
     let csv = String::from_utf8(wtr.into_inner()?)?;
     Ok(csv)

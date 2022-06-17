@@ -84,10 +84,9 @@ async fn main() -> anyhow::Result<()> {
         tedge_config::TEdgeConfigLocation::from_custom_root(&mapper_opt.config_dir);
     let config = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone()).load()?;
     // Run only one instance of a mapper
-    let _flock = check_another_instance_is_not_running(
-        &mapper_opt.name.to_string(),
-        &config.query(RunPathSetting)?.into(),
-    )?;
+
+    let run_dir: PathBuf = config.query(RunPathSetting)?.into();
+    let _flock = check_another_instance_is_not_running(&mapper_opt.name.to_string(), &run_dir)?;
 
     if mapper_opt.init {
         component.init(&mapper_opt.config_dir).await

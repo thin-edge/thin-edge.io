@@ -1,6 +1,10 @@
 use agent_interface::SoftwareUpdateResponse;
 use std::path::PathBuf;
 
+// allowing large size difference between variants warning,
+// because the enum `SmartRestSerializerError` is already Boxed
+// in `SMCumulocityMapperError`
+#[allow(clippy::large_enum_variant)]
 #[derive(thiserror::Error, Debug)]
 pub enum SmartRestSerializerError {
     #[error("The operation status is not supported. {response:?}")]
@@ -77,7 +81,7 @@ pub enum SMCumulocityMapperError {
     FromReqwest(#[from] reqwest::Error),
 
     #[error(transparent)]
-    FromSmartRestSerializer(#[from] SmartRestSerializerError),
+    FromSmartRestSerializer(#[from] Box<SmartRestSerializerError>),
 
     #[error(transparent)]
     FromSmartRestDeserializer(#[from] SmartRestDeserializerError),
