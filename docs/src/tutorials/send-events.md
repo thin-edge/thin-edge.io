@@ -82,16 +82,12 @@ The Cumulocity JSON mapping of the same event would be as follows:
     "type":"login_event",
     "text":"A user just logged in",
     "time":"2021-01-01T05:30:45+00:00",
-    "source": {
-        "id":"<c8y-device-id>"
-    }
+    "externalSource":{
+        "externalId":"<child-device-id>",
+        "type":"c8y_Serial"
+  }
 }
 ```
-
-The `c8y-device-id` is the internal id of that device in Cumulocity cloud,
-and not the `device-id` of the thin-edge device or the `child-device-id` of the child device.
-The mapper will keep the mapping between these thin-edge device ids and Cumulocity internal ids cached internally,
-to avoid repeated lookup with the cloud on every message mapping.
 
 > Note: Mapped events will be sent to Cumulocity via MQTT if the incoming Thin Edge JSON event payload size is less than 16K bytes. If higher, HTTP will be used.
 
