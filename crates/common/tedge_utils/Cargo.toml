@@ -11,20 +11,27 @@ description = "tedge_utils provide utilities for thin-edge.io components"
 # No features on by default
 default = []
 logging = ["tracing", "tracing-subscriber"]
+fs-notify = ["inotify"]
 
 [dependencies]
 anyhow = "1.0"
+async-stream = "0.3"
 futures = "0.3"
-nix = "0.23.1"
+nix = "0.24"
+inotify = { version = "0.10", optional = true}
+strum_macros = "0.24"
 tempfile = "3.2"
 thiserror = "1.0"
 tokio = { version = "1.12", default_features = false, features = [ "fs", "io-util", "macros", "signal"] }
 tracing = { version = "0.1", features = [], optional = true }
 tracing-subscriber = { version = "0.3", optional = true, features = [ "time" ] }
+try-traits = "0.1"
 users = "0.11.0"
 
 [dev-dependencies]
 assert_matches = "1.5"
+maplit = "1.0"
+tedge_test_utils = { path = "../../tests/tedge_test_utils" }
 tokio = { version = "1.12", features = [ "rt-multi-thread"] }
 whoami = "1.2.1"
 

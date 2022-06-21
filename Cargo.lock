@@ -883,7 +883,7 @@ dependencies = [
  "backoff",
  "log",
  "mockito",
- "nix",
+ "nix 0.23.1",
  "regex",
  "reqwest",
  "serde",
@@ -1010,7 +1010,7 @@ name = "flockfile"
 version = "0.7.2"
 dependencies = [
  "assert_matches",
- "nix",
+ "nix 0.23.1",
  "tempfile",
  "thiserror",
  "tracing",
@@ -1535,6 +1535,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "maplit"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
+
+[[package]]
 name = "matches"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1753,6 +1759,18 @@ checksum = "9f866317acbd3a240710c63f065ffb1e4fd466259045ccb504130b7f668f35c6"
 dependencies = [
  "bitflags",
  "cc",
+ "cfg-if 1.0.0",
+ "libc",
+ "memoffset",
+]
+
+[[package]]
+name = "nix"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f17df307904acd05aa8e32e97bb20f2a0df1728bbc2d771ae8f9a90463441e9"
+dependencies = [
+ "bitflags",
  "cfg-if 1.0.0",
  "libc",
  "memoffset",
@@ -2833,6 +2851,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
+name = "strum_macros"
+version = "0.24.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4faebde00e8ff94316c01800f9054fd2ba77d30d9e922541913051d1d978918b"
+dependencies = [
+ "heck 0.4.0",
+ "proc-macro2 1.0.38",
+ "quote 1.0.18",
+ "rustversion",
+ "syn 1.0.94",
+]
+
+[[package]]
 name = "syn"
 version = "0.15.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3004,7 +3035,6 @@ dependencies = [
  "download",
  "flockfile",
  "futures",
- "inotify",
  "logged_command",
  "mockall 0.11.0",
  "mockito",
@@ -3052,13 +3082,19 @@ version = "0.7.2"
 dependencies = [
  "anyhow",
  "assert_matches",
+ "async-stream",
  "futures",
- "nix",
+ "inotify",
+ "maplit",
+ "nix 0.24.1",
+ "strum_macros",
+ "tedge_test_utils",
  "tempfile",
  "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "try-traits",
  "users",
  "whoami",
 ]
@@ -3431,6 +3467,12 @@ name = "try-lock"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
+
+[[package]]
+name = "try-traits"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9373e3d7b53927daabbec34ebd9cfda454cc0888939e5e3e929c324e0645c1f8"
 
 [[package]]
 name = "tungstenite"
