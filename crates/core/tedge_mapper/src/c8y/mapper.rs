@@ -51,9 +51,8 @@ impl TEdgeComponent for CumulocityMapper {
 
     async fn init(&self, cfg_dir: &Path) -> Result<(), anyhow::Error> {
         info!("Initialize tedge mapper c8y");
-        let config_dir = cfg_dir.display().to_string();
-        create_directories(&config_dir)?;
-        let operations = Operations::try_new(&format!("{config_dir}/operations"), "c8y")?;
+        create_directories(cfg_dir)?;
+        let operations = Operations::try_new(format!("{}/operations", cfg_dir.display()), "c8y")?;
         self.init_session(CumulocityMapper::subscriptions(&operations)?)
             .await?;
         Ok(())
@@ -98,22 +97,22 @@ impl TEdgeComponent for CumulocityMapper {
     }
 }
 
-fn create_directories(config_dir: &str) -> Result<(), anyhow::Error> {
+fn create_directories(config_dir: &Path) -> Result<(), anyhow::Error> {
     create_directory_with_user_group(
-        &format!("{config_dir}/operations/c8y"),
+        format!("{}/operations/c8y", config_dir.display()),
         "tedge",
         "tedge",
         0o775,
     )?;
     create_file_with_user_group(
-        &format!("{config_dir}/operations/c8y/c8y_SoftwareUpdate"),
+        format!("{}/operations/c8y/c8y_SoftwareUpdate", config_dir.display()),
         "tedge",
         "tedge",
         0o644,
         None,
     )?;
     create_file_with_user_group(
-        &format!("{config_dir}/operations/c8y/c8y_Restart"),
+        format!("{}/operations/c8y/c8y_Restart", config_dir.display()),
         "tedge",
         "tedge",
         0o644,

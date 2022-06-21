@@ -212,9 +212,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
 fn init(config_dir: &Path, logs_dir: &Path) -> Result<(), anyhow::Error> {
     info!("Creating supported operation files");
-    let config_dir = config_dir.display().to_string();
-    let logs_dir = logs_dir.display().to_string();
-    let () = create_init_logs_directories_and_files(config_dir.as_str(), logs_dir.as_str())?;
+    let () = create_init_logs_directories_and_files(config_dir, logs_dir)?;
     Ok(())
 }
 
@@ -229,33 +227,53 @@ fn init(config_dir: &Path, logs_dir: &Path) -> Result<(), anyhow::Error> {
 /// - CONFIG_DIR/operations/c8y/c8y_LogfileRequest
 /// - CONFIG_DIR/c8y/c8y-log-plugin.toml
 fn create_init_logs_directories_and_files(
-    config_dir: &str,
-    logs_dir: &str,
+    config_dir: &Path,
+    logs_dir: &Path,
 ) -> Result<(), anyhow::Error> {
     // creating logs_dir
-    create_directory_with_user_group(&format!("{logs_dir}/tedge"), "tedge", "tedge", 0o755)?;
-    create_directory_with_user_group(&format!("{logs_dir}/tedge/agent"), "tedge", "tedge", 0o755)?;
-    // creating /operations/c8y directories
-    create_directory_with_user_group(&format!("{config_dir}/operations"), "tedge", "tedge", 0o755)?;
     create_directory_with_user_group(
-        &format!("{config_dir}/operations/c8y"),
+        format!("{}/tedge", logs_dir.display()),
+        "tedge",
+        "tedge",
+        0o755,
+    )?;
+    create_directory_with_user_group(
+        format!("{}/tedge/agent", logs_dir.display()),
+        "tedge",
+        "tedge",
+        0o755,
+    )?;
+    // creating /operations/c8y directories
+    create_directory_with_user_group(
+        format!("{}/operations", config_dir.display()),
+        "tedge",
+        "tedge",
+        0o755,
+    )?;
+    create_directory_with_user_group(
+        format!("{}/operations/c8y", config_dir.display()),
         "tedge",
         "tedge",
         0o755,
     )?;
     // creating c8y_LogfileRequest operation file
     create_file_with_user_group(
-        &format!("{config_dir}/operations/c8y/c8y_LogfileRequest"),
+        format!("{}/operations/c8y/c8y_LogfileRequest", config_dir.display()),
         "tedge",
         "tedge",
         0o644,
         None,
     )?;
     // creating c8y directory
-    create_directory_with_user_group(&format!("{config_dir}/c8y"), "root", "root", 0o1777)?;
+    create_directory_with_user_group(
+        format!("{}/c8y", config_dir.display()),
+        "root",
+        "root",
+        0o1777,
+    )?;
 
     // creating c8y-log-plugin.toml
-    let logs_path = format!("{logs_dir}/tedge/agent/software-*");
+    let logs_path = format!("{}/tedge/agent/software-*", logs_dir.display());
     let data = format!(
         r#"files = [
     {{ type = "software-management", path = "{logs_path}" }},
@@ -263,7 +281,7 @@ fn create_init_logs_directories_and_files(
     );
 
     create_file_with_user_group(
-        &format!("{config_dir}/{DEFAULT_PLUGIN_CONFIG_FILE}"),
+        format!("{}/{DEFAULT_PLUGIN_CONFIG_FILE}", config_dir.display()),
         "root",
         "root",
         0o644,

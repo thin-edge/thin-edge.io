@@ -250,13 +250,17 @@ async fn process_mqtt_message(
 
 fn init(cfg_dir: PathBuf) -> Result<(), anyhow::Error> {
     info!("Creating supported operation files");
-    let config_dir = cfg_dir.as_path().display().to_string();
-    let () = create_operation_files(config_dir.as_str())?;
+    let () = create_operation_files(&cfg_dir)?;
     Ok(())
 }
 
-fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
-    create_directory_with_user_group(&format!("{config_dir}/c8y"), "root", "root", 0o1777)?;
+fn create_operation_files(config_dir: &Path) -> Result<(), anyhow::Error> {
+    create_directory_with_user_group(
+        format!("{}/c8y", config_dir.display()),
+        "root",
+        "root",
+        0o1777,
+    )?;
     let example_config = r#"# Add the configurations to be managed by c8y-configuration-plugin
 
 files = [
@@ -268,7 +272,7 @@ files = [
 ]"#;
 
     create_file_with_user_group(
-        &format!("{config_dir}/c8y/c8y-configuration-plugin.toml"),
+        format!("{}/c8y/c8y-configuration-plugin.toml", config_dir.display()),
         "root",
         "root",
         0o644,
@@ -276,20 +280,26 @@ files = [
     )?;
 
     create_directory_with_user_group(
-        &format!("{config_dir}/operations/c8y"),
+        format!("{}/operations/c8y", config_dir.display()),
         "tedge",
         "tedge",
         0o775,
     )?;
     create_file_with_user_group(
-        &format!("{config_dir}/operations/c8y/c8y_UploadConfigFile"),
+        format!(
+            "{}/operations/c8y/c8y_UploadConfigFile",
+            config_dir.display()
+        ),
         "tedge",
         "tedge",
         0o644,
         None,
     )?;
     create_file_with_user_group(
-        &format!("{config_dir}/operations/c8y/c8y_DownloadConfigFile"),
+        format!(
+            "{}/operations/c8y/c8y_DownloadConfigFile",
+            config_dir.display()
+        ),
         "tedge",
         "tedge",
         0o644,
