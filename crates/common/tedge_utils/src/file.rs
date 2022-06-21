@@ -1,10 +1,15 @@
 use nix::unistd::*;
-use std::fs::File;
 use std::os::linux::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 use users::{get_group_by_name, get_user_by_name};
+
+#[derive(Debug)]
+pub enum FileCreateStatus {
+    CreateNew,
+    AlreadyExists,
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum FileError {
@@ -37,13 +42,13 @@ pub fn create_directory_with_user_group(
     mode: u32,
 ) -> Result<(), FileError> {
     let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
-    let () = perm_entry.create_directory(Path::new(dir))?;
+    let _ = perm_entry.create_directory(Path::new(dir))?;
     Ok(())
 }
 
 pub fn create_directory_with_mode(dir: &str, mode: u32) -> Result<(), FileError> {
     let perm_entry = PermissionEntry::new(None, None, Some(mode));
-    let () = perm_entry.create_directory(Path::new(dir))?;
+    let _ = perm_entry.create_directory(Path::new(dir))?;
     Ok(())
 }
 
@@ -52,16 +57,14 @@ pub fn create_file_with_user_group(
     user: &str,
     group: &str,
     mode: u32,
-) -> Result<(), FileError> {
+) -> Result<FileCreateStatus, FileError> {
     let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
-    let () = perm_entry.create_file(Path::new(file))?;
-    Ok(())
+    perm_entry.create_file(Path::new(file))
 }
 
-pub fn create_file_with_mode(file: &str, mode: u32) -> Result<(), FileError> {
+pub fn create_file_with_mode(file: &str, mode: u32) -> Result<FileCreateStatus, FileError> {
     let perm_entry = PermissionEntry::new(None, None, Some(mode));
-    let () = perm_entry.create_file(Path::new(file))?;
-    Ok(())
+    perm_entry.create_file(Path::new(file))
 }
 
 #[derive(Debug, PartialEq, Eq, Default, Clone)]
@@ -97,13 +100,15 @@ impl PermissionEntry {
         Ok(())
     }
 
-    fn create_directory(&self, dir: &Path) -> Result<(), FileError> {
+    fn create_directory(&self, dir: &Path) -> Result<FileCreateStatus, FileError> {
         match fs::create_dir(dir) {
             Ok(_) => {
                 let () = self.apply(dir)?;
-                Ok(())
+                Ok(FileCreateStatus::CreateNew)
             }
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                Ok(FileCreateStatus::AlreadyExists)
+            }
             Err(e) => Err(FileError::DirectoryCreateFailed {
                 dir: dir.display().to_string(),
                 from: e,
@@ -111,13 +116,19 @@ impl PermissionEntry {
         }
     }
 
-    fn create_file(&self, file: &Path) -> Result<(), FileError> {
-        match File::create(file) {
+    fn create_file(&self, file: &Path) -> Result<FileCreateStatus, FileError> {
+        match fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(file)
+        {
             Ok(_) => {
                 let () = self.apply(file)?;
-                Ok(())
+                Ok(FileCreateStatus::CreateNew)
             }
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                Ok(FileCreateStatus::AlreadyExists)
+            }
             Err(e) => Err(FileError::FileCreateFailed {
                 file: file.display().to_string(),
                 from: e,

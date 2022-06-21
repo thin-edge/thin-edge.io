@@ -20,7 +20,9 @@ use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, LogPathSetting, MqttPortSetting, TEdgeConfig,
     DEFAULT_TEDGE_CONFIG_PATH,
 };
-use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
+use tedge_utils::file::{
+    create_directory_with_user_group, create_file_with_user_group, FileCreateStatus,
+};
 use tracing::{error, info};
 
 use crate::logfile_request::{handle_dynamic_log_type_update, handle_logfile_request_operation};
@@ -197,7 +199,7 @@ fn create_default_log_plugin_file(path_to_toml: &str, logs_dir: &str) -> Result<
     };
 
     let mut toml_file = OpenOptions::new()
-        .append(true)
+        .append(false)
         .create(false)
         .open(path_to_toml)
         .map_err(|error| {
@@ -244,17 +246,20 @@ fn create_init_logs_directories_and_files(
     // creating c8y-log-plugin.toml
 
     // NOTE: file needs 775 permission or inotify can not watch for changes inside the file
-    create_file_with_user_group(
+    let status = create_file_with_user_group(
         &format!("{config_dir}/{DEFAULT_PLUGIN_CONFIG_FILE}"),
         "tedge",
         "tedge",
         0o775,
     )?;
 
-    // append default content to c8y-log-plugin.toml
-    create_default_log_plugin_file(
-        &format!("{config_dir}/{DEFAULT_PLUGIN_CONFIG_FILE}"),
-        logs_dir,
-    )?;
+    if let FileCreateStatus::CreateNew = status {
+        // append default content to c8y-log-plugin.toml
+        create_default_log_plugin_file(
+            &format!("{config_dir}/{DEFAULT_PLUGIN_CONFIG_FILE}"),
+            logs_dir,
+        )?;
+    }
+
     Ok(())
 }
