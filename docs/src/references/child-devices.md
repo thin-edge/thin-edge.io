@@ -1,9 +1,4 @@
-# Child Device Concept (Solution Proposal)
-
-Thin-edge provides a child-device concept to 
-TODO: Add motivation for child-device concept. Somethin like:
--- Device-side and Cloud-side structural view (that might match the physical structure)
--- Features are available per child-device (e.g. Software Management with one SW list per child device, ...)
+# Child Solution Proposals
 
 * Child-Device support is provided on thin-edge public interfaces as below:
     - tedge/measurements
