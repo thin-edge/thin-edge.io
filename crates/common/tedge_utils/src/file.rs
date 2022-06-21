@@ -141,22 +141,18 @@ impl PermissionEntry {
 }
 
 pub fn change_user_and_group(file: &Path, user: &str, group: &str) -> Result<(), FileError> {
-    let ud = match get_user_by_name(user) {
-        Some(user) => user.uid(),
-        None => {
-            return Err(FileError::UserNotFound { user: user.into() });
-        }
-    };
+    let ud = get_user_by_name(user)
+        .map(|u| u.uid())
+        .ok_or_else(|| FileError::UserNotFound { user: user.into() })?;
+
     let uid = get_metadata(Path::new(file))?.st_uid();
 
-    let gd = match get_group_by_name(group) {
-        Some(group) => group.gid(),
-        None => {
-            return Err(FileError::GroupNotFound {
-                group: group.into(),
-            });
-        }
-    };
+    let gd = get_group_by_name(group)
+        .map(|g| g.gid())
+        .ok_or_else(|| FileError::GroupNotFound {
+            group: group.into(),
+        })?;
+
     let gid = get_metadata(Path::new(file))?.st_gid();
 
     // if user and group are same as existing, then do not change
@@ -168,12 +164,9 @@ pub fn change_user_and_group(file: &Path, user: &str, group: &str) -> Result<(),
 }
 
 fn change_user(file: &Path, user: &str) -> Result<(), FileError> {
-    let ud = match get_user_by_name(user) {
-        Some(user) => user.uid(),
-        None => {
-            return Err(FileError::UserNotFound { user: user.into() });
-        }
-    };
+    let ud = get_user_by_name(user)
+        .map(|u| u.uid())
+        .ok_or_else(|| FileError::UserNotFound { user: user.into() })?;
 
     let uid = get_metadata(Path::new(file))?.st_uid();
 
@@ -186,14 +179,11 @@ fn change_user(file: &Path, user: &str) -> Result<(), FileError> {
 }
 
 fn change_group(file: &Path, group: &str) -> Result<(), FileError> {
-    let gd = match get_group_by_name(group) {
-        Some(group) => group.gid(),
-        None => {
-            return Err(FileError::GroupNotFound {
-                group: group.into(),
-            });
-        }
-    };
+    let gd = get_group_by_name(group)
+        .map(|g| g.gid())
+        .ok_or_else(|| FileError::GroupNotFound {
+            group: group.into(),
+        })?;
 
     let gid = get_metadata(Path::new(file))?.st_gid();
 
