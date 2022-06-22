@@ -126,6 +126,47 @@ core contributors = [SAG, IFM]
   Reaching that goal is possible because of the employed merge strategies (read
   below).
 - merge strategies
+  Merging is the way how the project accepts and implements changes.
+
+  Because of the pursued "everygreen master", merging is implemented in a
+  certain way that forbids several bad practices which could lead to a breaking
+  build on the `master`/`main` branch, and a special workflow is implemented to
+  ensure not only the "evergreen master" but also to streamline the workflow for
+  integrating pull requests.
+
+  The following actions are **not** allowed:
+
+  * Committing to `master`/`main` directly
+  * Squash-Merging of pull requests (which is equivalent to committing to
+    `master`/`main` directly).
+    The github repository is configured to not allow squash merges.
+  * Merging of "!fixup" or "!squash" commits. A github actions
+    job is employed to block pull requests from being merged if such commits are
+    in the PR branch. Rebase should be used to clean those up.
+
+  It is explicitely _not_ forbidden to have merge-commits in a pull request.
+  Long-running pull requests that contain a large number of changes and are
+  developed over a long period might contain merges. They might even merge
+  `master`/`main` to get up-to-date with the latest developments. Though it is
+  not encouraged to have such long-running pull requests and discouraged to
+  merge `master`/`main` into a PR branch, the project acknowledges that
+  sometimes it is not avoidable.
+
+  To summarize, the following requirements have to be met before a pull request
+  can be merged:
+
+  * Reviews of the relevant persons (ensured via github setting)
+  * Status checks (CI, lints, etc) (ensured via github setting)
+      * builds, tests, lints are green (ensured via github action)
+      * Commit linting (ensured via github action)
+      * No missing `Signed-off-by` lines (ensured via github action)
+      * No "!fixup"/"!squash" commits in the pull request (ensured via github
+        action)
+  * Conversations must be resolved (ensured via github setting)
+
+  Merging itself is implemented via a "merge bot": [bors-ng](https://bors.tech).
+  bors-ng is used to prevent "merge skew" or "semantic merge conflicts"
+  (read more [here](https://bors.tech/essay/2017/02/02/pitch/)).
 - Dependency updates
 - License linting
 
