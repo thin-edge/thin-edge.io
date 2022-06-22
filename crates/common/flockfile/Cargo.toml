@@ -1,6 +1,6 @@
 [package]
 name = "flockfile"
-version = "0.7.1"
+version = "0.7.2"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
