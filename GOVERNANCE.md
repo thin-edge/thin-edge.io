@@ -102,6 +102,17 @@ core contributors = [SAG, IFM]
 
 - clear commits
 - Ensuring the Signed-off-by-trailer
+  Contributors need to sign the "Contributor License Agreement". They do so by
+  signing off each individual commit with a so-called "Signed-off-by Trailer".
+  Git offers the `--signoff`/`-s` flags when using `git-commit` to commit
+  changes.
+
+  To ensure that all commits have the trailer present in the commit message, a
+  CI lint is installed in the github actions workflows of the project. This lint
+  blocks pull requests to be merged if one or more of the commits of the pull
+  request misses the `Signed-off-by` trailer.
+
+  As a result, it is not possible to merge pull requests that miss the trailer.
 - coding styleguide
 - testing
 - benchmarks
