@@ -72,3 +72,4 @@
   - [The `tedge connect` command](./references/tedge-connect.md)
   - [The `tedge disconnect` command](./references/tedge-disconnect.md)
   - [The `tedge mqtt` command](./references/tedge-mqtt.md)
+  - [Thin-edge.io configuration files](./references/thin-edge-config-files.md)
