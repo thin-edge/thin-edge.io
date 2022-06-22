@@ -101,6 +101,51 @@ core contributors = [SAG, IFM]
 
 
 - clear commits
+  Having clear, consise and well-written commit messages for all changes is not
+  only a indicator for the seriousness of the project, but also a way to ensure
+  sustainable development via replicability of the sources of the project.
+
+  Because of this, we try to ensure the highest possible quality for each
+  individual commit message.
+
+  Because such a thing cannot necessarily or in full be enforced via tooling, it
+  remains mainly the obligation of a reviewer of a changeset to ensure
+
+  * Seclusiveness of the individual commits
+  * that one commit is one atomic change, and not an accummulation of several
+    individual and seperate changes
+  * that the commit message of the change expresses why the change was made
+
+  Every reviewer of a pull request is asked to review not only the changes, but
+  also the commit messages.
+  Reviewers are explicitely empowered and actually encouraged to block pull
+  requests that contain commit messages that do not meet a certain standard
+  even and especially also if the proposed changes are acknowledged.
+
+  The contributor should document why they implemented a change properly. A good
+  rule of thumb is that if a change is larger than 60 lines, a commit message
+  without a body won't suffice anymore.
+  The more lines are touched by an individual commit, the more lines should be
+  used to explain the change.
+
+  The project implements lints using github actions to meet such criteria.
+
+  Also, some hard criteria is checked via github action lints:
+
+  * The `Signed-off-by` trailer lint must be present in all commits (also see
+    section "Ensuring the Signed-off-by-trailer")
+  * The commit body must meet the default formatting of a commit message, that
+    is
+    * Subject line not longer than 50 characters
+    * Subject capitalized
+    * No period at the end of the subject
+    * Imperative mood in the subject
+    * Second line empty
+    * Body lines not longer than 72 characters
+
+  Commits using the `--fixup` or `--squash` feature of `git-commit` are allowed,
+  but won't be merged (read more about this in the "merge strategies" section).
+
 - Ensuring the Signed-off-by-trailer
   Contributors need to sign the "Contributor License Agreement". They do so by
   signing off each individual commit with a so-called "Signed-off-by Trailer".
