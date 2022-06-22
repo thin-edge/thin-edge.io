@@ -118,8 +118,14 @@ core contributors = [SAG, IFM]
 - benchmarks
 - documentation builds
 - keeping spec up to date
-- merge strategies
 - evergreen master
+  The project pursues the "evergreen master" strategy. That means that at every
+  point in time, the commit that `master`/`main` points to must successfully
+  build and pass all tests successfully.
+
+  Reaching that goal is possible because of the employed merge strategies (read
+  below).
+- merge strategies
 - Dependency updates
 - License linting
 
