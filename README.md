@@ -1,11 +1,10 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.txt)
 [![Discord Shield](https://discord.com/api/guilds/832211156520796171/widget.png?style=shield)](https://discord.gg/SvqWp6nrsK)
 [![Twitter Badge](https://img.shields.io/twitter/follow/thin_edge_io?style=social)](https://twitter.com/thin_edge_io)
-[![codecov](https://codecov.io/gh/thin-edge/thin-edge.io/branch/main/graph/badge.svg?token=ZE7576TLOK)](https://codecov.io/gh/thin-edge/thin-edge.io)
-[![commit-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/commit-workflow.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/commit-workflow.yml)
+[![Build and Deploy to Github Pages](https://github.com/thin-edge/thin-edge.io/actions/workflows/gh-pages.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/gh-pages.yml)
+[![ci_pipeline](https://github.com/thin-edge/thin-edge.io/actions/workflows/ci_pipeline.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/ci_pipeline.yml)
 [![build-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml)
-[![integration-test-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/integration-test-workflow.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/integration-test-workflow.yml)
-[![system-test-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/system-test-workflow.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/system-test-workflow.yml)
+<!--- [![codecov](https://codecov.io/gh/thin-edge/thin-edge.io/branch/main/graph/badge.svg?token=ZE7576TLOK)](https://codecov.io/gh/thin-edge/thin-edge.io)  --->
 
 <!-- PROJECT LOGO -->
 <br />
