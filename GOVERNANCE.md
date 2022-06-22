@@ -114,6 +114,8 @@ core contributors = [SAG, IFM]
 
   As a result, it is not possible to merge pull requests that miss the trailer.
 - coding styleguide
+  Coding style is enforced via `rustfmt` in its default configuration.
+  Compliance with the coding style is enforced via CI.
 - testing
 - benchmarks
 - documentation builds
