@@ -171,6 +171,9 @@ core contributors = [SAG, IFM]
   Rust and do not rely on external services.
 - benchmarks
 - documentation builds
+  Source code documentation as well as other documentation is tested via github
+  actions workflows as well, to ensure that a developer is able to build all
+  relevant documentation on their local machine.
 - keeping spec up to date
 - evergreen master
   The project pursues the "evergreen master" strategy. That means that at every
