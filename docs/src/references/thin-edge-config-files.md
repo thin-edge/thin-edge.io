@@ -132,7 +132,7 @@ So, the below line has to be added to your `mosquitto.conf` file manually.
 
 ```include_dir /global/path/to/config/dir/tedge/mosquitto-conf```
 
-### Step 2: `tedge connect <cloud[c8y/az]> using the `--config-dir` option
+### Step 2: `tedge connect <cloud[c8y/az]>` using the `--config-dir` option
 
 Use the below command to connect to `Cumulocity IoT or Azure IoT Hub` cloud using `--config-dir`
 
