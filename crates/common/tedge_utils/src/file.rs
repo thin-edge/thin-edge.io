@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::{fs, io};
 use users::{get_group_by_name, get_user_by_name};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum FileCreateStatus {
     CreateNew,
     AlreadyExists,
@@ -100,15 +100,13 @@ impl PermissionEntry {
         Ok(())
     }
 
-    fn create_directory(&self, dir: &Path) -> Result<FileCreateStatus, FileError> {
+    fn create_directory(&self, dir: &Path) -> Result<(), FileError> {
         match fs::create_dir(dir) {
             Ok(_) => {
                 let () = self.apply(dir)?;
-                Ok(FileCreateStatus::CreateNew)
+                Ok(())
             }
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                Ok(FileCreateStatus::AlreadyExists)
-            }
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
             Err(e) => Err(FileError::DirectoryCreateFailed {
                 dir: dir.display().to_string(),
                 from: e,
@@ -246,6 +244,22 @@ mod tests {
         let perm = meta.permissions();
         println!("{:o}", perm.mode());
         assert!(format!("{:o}", perm.mode()).contains("644"));
+    }
+
+    #[test]
+    fn create_file_already_exists() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("file").display().to_string();
+
+        let user = whoami::username();
+
+        // Create a new file
+        let status = create_file_with_user_group(file_path.as_str(), &user, &user, 0o775).unwrap();
+        assert_eq!(status, FileCreateStatus::CreateNew);
+
+        // Create a file that already exists
+        let status = create_file_with_user_group(file_path.as_str(), &user, &user, 0o775).unwrap();
+        assert_eq!(status, FileCreateStatus::AlreadyExists);
     }
 
     #[test]
