@@ -225,6 +225,15 @@ core contributors = [SAG, IFM]
   bors-ng is used to prevent "merge skew" or "semantic merge conflicts"
   (read more [here](https://bors.tech/essay/2017/02/02/pitch/)).
 - Dependency updates
+  Dependencies should be kept in sync over all crates in the project. That means
+  that different crates of the project should try to use dependencies in the
+  same versions, but also that dependencies should be harmonized in a way that a
+  specific problem should not be solved with more than one external library at a
+  time.
+  Updates of dependencies is automated via a github bot
+  ([dependabot](https://github.com/dependabot)).
+  To ensure harmonization of dependencies, a dedicated team (see "Team
+  Structure") is responsible for keeping an eye on the list of dependencies.
 - License linting
 
 ## Related
