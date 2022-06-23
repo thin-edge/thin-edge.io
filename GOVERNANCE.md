@@ -235,6 +235,14 @@ core contributors = [SAG, IFM]
   To ensure harmonization of dependencies, a dedicated team (see "Team
   Structure") is responsible for keeping an eye on the list of dependencies.
 - License linting
+  License linting describes the act of checking the licenses of dependencies and
+  whether they meet a certain criteria.
+  For example, it is not feasible to import an external library that is licensed
+  as GPL-3.0 in an Apache-2.0 licensed codebase.
+  Because of this, a github action is installed to lint the licenses of
+  dependencies. This action runs as a normal lint (see "evergreen master") and
+  blocks pull requests if dependencies get imported that do not meet a set of
+  rules agreed upon by the project.
 
 ## Related
 
