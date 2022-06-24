@@ -108,14 +108,19 @@ async fn run(
                             "522" => {
                                 info!("Log request received: {payload}");
                                 // retrieve smartrest object from payload
-                                let smartrest_obj = SmartRestLogRequest::from_smartrest(payload)?;
-                                handle_logfile_request_operation(
-                                    &smartrest_obj,
-                                    &plugin_config,
-                                    mqtt_client,
-                                    http_client,
-                                )
-                                .await
+                                let maybe_smartrest_obj = SmartRestLogRequest::from_smartrest(payload);
+                                if let Ok(smartrest_obj) = maybe_smartrest_obj {
+                                    handle_logfile_request_operation(
+                                        &smartrest_obj,
+                                        &plugin_config,
+                                        mqtt_client,
+                                        http_client,
+                                    )
+                                    .await
+                                } else {
+                                    error!("Incorrect SmartREST payload: {}", payload);
+                                    Ok(())
+                                }
                             }
                             _ => {
                                 // Ignore operation messages not meant for this plugin
