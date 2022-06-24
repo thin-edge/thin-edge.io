@@ -255,16 +255,18 @@ pub async fn handle_logfile_request_operation(
     }
 }
 
+pub(crate) fn read_log_config(config_dir: &Path) -> LogPluginConfig {
+    LogPluginConfig::new(config_dir)
+}
+
 /// updates the log types on Cumulocity
 /// sends 118,typeA,typeB,... on mqtt
 pub async fn handle_dynamic_log_type_update(
+    plugin_config: &LogPluginConfig,
     mqtt_client: &mut Connection,
-    config_dir: &Path,
-) -> Result<LogPluginConfig, anyhow::Error> {
-    let plugin_config = LogPluginConfig::new(config_dir);
+) -> Result<(), anyhow::Error> {
     let msg = plugin_config.to_supported_config_types_message()?;
-    let () = mqtt_client.published.send(msg).await?;
-    Ok(plugin_config)
+    Ok(mqtt_client.published.send(msg).await?)
 }
 
 #[cfg(test)]
