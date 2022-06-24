@@ -151,31 +151,40 @@ async fn run(
             } else {
                 match payload.split(',').next().unwrap_or_default() {
                     "524" => {
-                        let config_download_request =
-                            SmartRestConfigDownloadRequest::from_smartrest(payload)?;
-
-                        handle_config_download_request(
-                            &plugin_config,
-                            config_download_request,
-                            tmp_dir.clone(),
-                            &mut mqtt_client,
-                            http_client,
-                        )
-                        .await
+                        let maybe_config_download_request =
+                            SmartRestConfigDownloadRequest::from_smartrest(payload);
+                        if let Ok(config_download_request) = maybe_config_download_request {
+                            handle_config_download_request(
+                                &plugin_config,
+                                config_download_request,
+                                tmp_dir.clone(),
+                                &mut mqtt_client,
+                                http_client,
+                            )
+                            .await
+                        } else {
+                            error!("Incorrect Download SmartREST payload: {}", payload);
+                            Ok(())
+                        }
                     }
                     "526" => {
                         // retrieve config file upload smartrest request from payload
-                        let config_upload_request =
-                            SmartRestConfigUploadRequest::from_smartrest(payload)?;
+                        let maybe_config_upload_request =
+                            SmartRestConfigUploadRequest::from_smartrest(payload);
 
-                        // handle the config file upload request
-                        handle_config_upload_request(
-                            &plugin_config,
-                            config_upload_request,
-                            &mut mqtt_client,
-                            http_client,
-                        )
-                        .await
+                        if let Ok(config_upload_request) = maybe_config_upload_request {
+                            // handle the config file upload request
+                            handle_config_upload_request(
+                                &plugin_config,
+                                config_upload_request,
+                                &mut mqtt_client,
+                                http_client,
+                            )
+                            .await
+                        } else {
+                            error!("Incorrect Upload SmartREST payload: {}", payload);
+                            Ok(())
+                        }
                     }
                     _ => {
                         // Ignore operation messages not meant for this plugin
