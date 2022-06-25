@@ -7,7 +7,7 @@ use users::{get_group_by_name, get_user_by_name};
 
 #[derive(Debug, PartialEq)]
 pub enum FileCreateStatus {
-    CreateNew,
+    CreatedNew,
     AlreadyExists,
 }
 
@@ -42,14 +42,12 @@ pub fn create_directory_with_user_group(
     mode: u32,
 ) -> Result<(), FileError> {
     let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
-    let _ = perm_entry.create_directory(Path::new(dir))?;
-    Ok(())
+    perm_entry.create_directory(Path::new(dir))
 }
 
 pub fn create_directory_with_mode(dir: &str, mode: u32) -> Result<(), FileError> {
     let perm_entry = PermissionEntry::new(None, None, Some(mode));
-    let _ = perm_entry.create_directory(Path::new(dir))?;
-    Ok(())
+    perm_entry.create_directory(Path::new(dir))
 }
 
 pub fn create_file_with_user_group(
@@ -114,6 +112,10 @@ impl PermissionEntry {
         }
     }
 
+    /// This function creates file if it does not exist in the given path
+    /// and returns FileCreateStatus::CreatedStatus.
+    /// If the file exists then it will return FileCreateStatus::AlreadyExists
+    /// Else it retruns FileError.
     fn create_file(&self, file: &Path) -> Result<FileCreateStatus, FileError> {
         match fs::OpenOptions::new()
             .create_new(true)
@@ -122,7 +124,7 @@ impl PermissionEntry {
         {
             Ok(_) => {
                 let () = self.apply(file)?;
-                Ok(FileCreateStatus::CreateNew)
+                Ok(FileCreateStatus::CreatedNew)
             }
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
                 Ok(FileCreateStatus::AlreadyExists)
@@ -255,7 +257,7 @@ mod tests {
 
         // Create a new file
         let status = create_file_with_user_group(file_path.as_str(), &user, &user, 0o775).unwrap();
-        assert_eq!(status, FileCreateStatus::CreateNew);
+        assert_eq!(status, FileCreateStatus::CreatedNew);
 
         // Create a file that already exists
         let status = create_file_with_user_group(file_path.as_str(), &user, &user, 0o775).unwrap();

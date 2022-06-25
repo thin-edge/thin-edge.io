@@ -213,7 +213,7 @@ fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
         0o644,
     )?;
 
-    if let FileCreateStatus::CreateNew = status {
+    if let FileCreateStatus::CreatedNew = status {
         let example_config = r#"# Add the configurations to be managed by c8y-configuration-plugin
         files = [
             #    { path = '/etc/tedge/tedge.toml' },

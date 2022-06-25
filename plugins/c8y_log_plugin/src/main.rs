@@ -11,11 +11,8 @@ use clap::Parser;
 use inotify::{EventMask, EventStream};
 use inotify::{Inotify, WatchMask};
 use mqtt_channel::{Connection, StreamExt};
-use std::{
-    fs::OpenOptions,
-    io::Write,
-    path::{Path, PathBuf},
-};
+use std::fs;
+use std::path::{Path, PathBuf};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, LogPathSetting, MqttPortSetting, TEdgeConfig,
     DEFAULT_TEDGE_CONFIG_PATH,
@@ -188,27 +185,6 @@ fn init(config_dir: &Path, logs_dir: &Path) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-/// append the log plugin file with software-management logs
-/// assumes file is already created.
-fn create_default_log_plugin_file(path_to_toml: &str, logs_dir: &str) -> Result<(), anyhow::Error> {
-    let logs_path = format!("{logs_dir}/tedge/agent/software-*");
-    let data = toml::toml! {
-        files = [
-            { type = "software-management", path = logs_path }
-        ]
-    };
-
-    let mut toml_file = OpenOptions::new()
-        .append(false)
-        .create(false)
-        .open(path_to_toml)
-        .map_err(|error| {
-            anyhow::anyhow!("Unable to open file: {}. Error: {}", path_to_toml, error)
-        })?;
-    toml_file.write_all(data.to_string().as_bytes())?;
-    Ok(())
-}
-
 /// for the log plugin to work the following directories and files are needed:
 ///
 /// Directories:
@@ -242,22 +218,28 @@ fn create_init_logs_directories_and_files(
         0o755,
     )?;
     // creating c8y directory
-    create_directory_with_user_group(&format!("{config_dir}/c8y"), "tedge", "tedge", 0o755)?;
-    // creating c8y-log-plugin.toml
+    create_directory_with_user_group(&format!("{config_dir}/c8y"), "root", "root", 0o755)?;
 
+    // creating c8y-log-plugin.toml
     // NOTE: file needs 775 permission or inotify can not watch for changes inside the file
     let status = create_file_with_user_group(
         &format!("{config_dir}/{DEFAULT_PLUGIN_CONFIG_FILE}"),
-        "tedge",
-        "tedge",
+        "root",
+        "root",
         0o775,
     )?;
 
-    if let FileCreateStatus::CreateNew = status {
-        // append default content to c8y-log-plugin.toml
-        create_default_log_plugin_file(
+    if let FileCreateStatus::CreatedNew = status {
+        let logs_path = format!("{logs_dir}/tedge/agent/software-*");
+        let data = toml::toml! {
+            files = [
+                { type = "software-management", path = logs_path }
+            ]
+        };
+
+        fs::write(
             &format!("{config_dir}/{DEFAULT_PLUGIN_CONFIG_FILE}"),
-            logs_dir,
+            &data.to_string(),
         )?;
     }
 
