@@ -11,15 +11,12 @@ use clap::Parser;
 use inotify::{EventMask, EventStream};
 use inotify::{Inotify, WatchMask};
 use mqtt_channel::{Connection, StreamExt};
-use std::fs;
 use std::path::{Path, PathBuf};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, LogPathSetting, MqttPortSetting, TEdgeConfig,
     DEFAULT_TEDGE_CONFIG_PATH,
 };
-use tedge_utils::file::{
-    create_directory_with_user_group, create_file_with_user_group, FileCreateStatus,
-};
+use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
 use tracing::{error, info};
 
 use crate::logfile_request::{handle_dynamic_log_type_update, handle_logfile_request_operation};
@@ -216,32 +213,26 @@ fn create_init_logs_directories_and_files(
         "tedge",
         "tedge",
         0o755,
+        None,
     )?;
     // creating c8y directory
     create_directory_with_user_group(&format!("{config_dir}/c8y"), "root", "root", 0o755)?;
 
     // creating c8y-log-plugin.toml
     // NOTE: file needs 775 permission or inotify can not watch for changes inside the file
-    let status = create_file_with_user_group(
+    let logs_path = format!("{logs_dir}/tedge/agent/software-*");
+    let data = toml::toml! {
+        files = [
+            { type = "software-management", path = logs_path }
+        ]
+    };
+    create_file_with_user_group(
         &format!("{config_dir}/{DEFAULT_PLUGIN_CONFIG_FILE}"),
         "root",
         "root",
         0o775,
+        Some(&data.to_string()),
     )?;
-
-    if let FileCreateStatus::CreatedNew = status {
-        let logs_path = format!("{logs_dir}/tedge/agent/software-*");
-        let data = toml::toml! {
-            files = [
-                { type = "software-management", path = logs_path }
-            ]
-        };
-
-        fs::write(
-            &format!("{config_dir}/{DEFAULT_PLUGIN_CONFIG_FILE}"),
-            &data.to_string(),
-        )?;
-    }
 
     Ok(())
 }

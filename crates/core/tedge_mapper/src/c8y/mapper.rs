@@ -110,12 +110,14 @@ fn create_directories(config_dir: &str) -> Result<(), anyhow::Error> {
         "tedge",
         "tedge",
         0o644,
+        None,
     )?;
     create_file_with_user_group(
         &format!("{config_dir}/operations/c8y/c8y_Restart"),
         "tedge",
         "tedge",
         0o644,
+        None,
     )?;
     Ok(())
 }

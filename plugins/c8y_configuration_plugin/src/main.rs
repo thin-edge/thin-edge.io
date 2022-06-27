@@ -14,15 +14,12 @@ use c8y_smartrest::smartrest_deserializer::{
 use c8y_smartrest::topic::C8yTopic;
 use clap::Parser;
 use mqtt_channel::{Message, SinkExt, StreamExt, Topic};
-use std::fs;
 use std::path::{Path, PathBuf};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, MqttPortSetting, TEdgeConfig, TmpPathSetting,
     DEFAULT_TEDGE_CONFIG_PATH,
 };
-use tedge_utils::file::{
-    create_directory_with_user_group, create_file_with_user_group, FileCreateStatus,
-};
+use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
 use tracing::{debug, error, info};
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_PATH: &str = "/etc/tedge/c8y/c8y-configuration-plugin.toml";
@@ -206,27 +203,22 @@ fn init(cfg_dir: PathBuf) -> Result<(), anyhow::Error> {
 
 fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
     create_directory_with_user_group(&format!("{config_dir}/c8y"), "root", "root", 0o775)?;
-    let status = create_file_with_user_group(
+    let example_config = r#"# Add the configurations to be managed by c8y-configuration-plugin
+    files = [
+        #    { path = '/etc/tedge/tedge.toml' },
+        #    { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge.conf' },
+        #    { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf', type = 'tedge-mosquitto.conf' },
+        #    { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto.conf' },
+        #    { path = '/etc/tedge/c8y/example.txt', type = 'example', user = 'tedge', group = 'tedge', mode = 0o444 }
+    ]"#;
+
+    create_file_with_user_group(
         &format!("{config_dir}/c8y/c8y-configuration-plugin.toml"),
         "root",
         "root",
         0o644,
+        Some(example_config),
     )?;
-
-    if let FileCreateStatus::CreatedNew = status {
-        let example_config = r#"# Add the configurations to be managed by c8y-configuration-plugin
-        files = [
-            #    { path = '/etc/tedge/tedge.toml' },
-            #    { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge.conf' },
-            #    { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf', type = 'tedge-mosquitto.conf' },
-            #    { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto.conf' },
-            #    { path = '/etc/tedge/c8y/example.txt', type = 'example', user = 'tedge', group = 'tedge', mode = 0o444 }
-        ]"#;
-        fs::write(
-            &format!("{config_dir}/c8y/c8y-configuration-plugin.toml"),
-            example_config,
-        )?;
-    }
 
     create_directory_with_user_group(
         &format!("{config_dir}/operations/c8y"),
@@ -239,12 +231,14 @@ fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
         "tedge",
         "tedge",
         0o644,
+        None,
     )?;
     create_file_with_user_group(
         &format!("{config_dir}/operations/c8y/c8y_DownloadConfigFile"),
         "tedge",
         "tedge",
         0o644,
+        None,
     )?;
     Ok(())
 }
