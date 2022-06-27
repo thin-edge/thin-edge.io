@@ -202,7 +202,7 @@ fn init(cfg_dir: PathBuf) -> Result<(), anyhow::Error> {
 }
 
 fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
-    create_directory_with_user_group(&format!("{config_dir}/c8y"), "root", "root", 0o775)?;
+    create_directory_with_user_group(&format!("{config_dir}/c8y"), "root", "root", 0o1777)?;
     let example_config = r#"# Add the configurations to be managed by c8y-configuration-plugin
     files = [
         #    { path = '/etc/tedge/tedge.toml' },
@@ -224,7 +224,7 @@ fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
         &format!("{config_dir}/operations/c8y"),
         "tedge",
         "tedge",
-        0o775,
+        0o1777,
     )?;
     create_file_with_user_group(
         &format!("{config_dir}/operations/c8y/c8y_UploadConfigFile"),

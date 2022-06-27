@@ -191,7 +191,7 @@ fn init(config_dir: &Path, logs_dir: &Path) -> Result<(), anyhow::Error> {
 ///
 /// Files:
 /// - CONFIG_DIR/operations/c8y/c8y_LogfileRequest
-/// - CONFIG_DIR/c8y/log/c8y-log-plugin.toml
+/// - CONFIG_DIR/c8y/c8y-log-plugin.toml
 fn create_init_logs_directories_and_files(
     config_dir: &str,
     logs_dir: &str,
@@ -212,14 +212,13 @@ fn create_init_logs_directories_and_files(
         &format!("{config_dir}/operations/c8y/c8y_LogfileRequest"),
         "tedge",
         "tedge",
-        0o755,
+        0o644,
         None,
     )?;
     // creating c8y directory
-    create_directory_with_user_group(&format!("{config_dir}/c8y"), "root", "root", 0o755)?;
+    create_directory_with_user_group(&format!("{config_dir}/c8y"), "root", "root", 0o1777)?;
 
     // creating c8y-log-plugin.toml
-    // NOTE: file needs 775 permission or inotify can not watch for changes inside the file
     let logs_path = format!("{logs_dir}/tedge/agent/software-*");
     let data = toml::toml! {
         files = [
@@ -230,7 +229,7 @@ fn create_init_logs_directories_and_files(
         &format!("{config_dir}/{DEFAULT_PLUGIN_CONFIG_FILE}"),
         "root",
         "root",
-        0o775,
+        0o644,
         Some(&data.to_string()),
     )?;
 
