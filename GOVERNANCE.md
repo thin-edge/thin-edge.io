@@ -221,7 +221,6 @@ core contributors = [SAG, IFM]
       * No missing `Signed-off-by` lines (ensured via github action)
       * No "!fixup"/"!squash" commits in the pull request (ensured via github
         action)
-  * Conversations must be resolved (ensured via github setting)
 
   Merging itself is implemented via a "merge bot": [bors-ng](https://bors.tech).
   bors-ng is used to prevent "merge skew" or "semantic merge conflicts"
