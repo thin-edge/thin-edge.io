@@ -167,8 +167,10 @@ core contributors = [SAG, IFM]
   The main objective with this is that a developer should be able to simply run
   `cargo test` on their local machine to be able to see whether CI would succeed
   for changes they submit in a pull request.
-  Thus, all tests (unit tests, but also integration tests) are implemented in
+  Thus, all CI tests (unit tests, but also integration tests) are implemented in
   Rust and do not rely on external services.
+  End-to-end system tests - that depend on external services - are run outside the CI pipeline,
+  to avoid inconsistent test outcomes because of external issues.
 - benchmarks
 - documentation builds
   Source code documentation as well as other documentation is tested via github
