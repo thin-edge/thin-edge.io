@@ -213,6 +213,7 @@ fn init(cfg_dir: PathBuf) -> Result<(), anyhow::Error> {
 fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
     create_directory_with_user_group(&format!("{config_dir}/c8y"), "root", "root", 0o1777)?;
     let example_config = r#"# Add the configurations to be managed by c8y-configuration-plugin
+
 files = [
 #    { path = '/etc/tedge/tedge.toml' },
 #    { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge.conf' },
