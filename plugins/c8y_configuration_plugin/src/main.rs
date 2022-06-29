@@ -224,7 +224,7 @@ fn create_operation_files(config_dir: &str) -> Result<(), anyhow::Error> {
         &format!("{config_dir}/operations/c8y"),
         "tedge",
         "tedge",
-        0o1777,
+        0o775,
     )?;
     create_file_with_user_group(
         &format!("{config_dir}/operations/c8y/c8y_UploadConfigFile"),
