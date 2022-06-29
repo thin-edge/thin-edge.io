@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use clock::Timestamp;
+use json_writer::JsonWriter;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -29,6 +30,8 @@ pub struct ThinEdgeEventData {
 }
 
 pub mod error {
+    use json_writer::JsonWriterError;
+
     #[derive(thiserror::Error, Debug)]
     pub enum ThinEdgeJsonDeserializerError {
         #[error("Unsupported topic: {0}")]
@@ -39,6 +42,11 @@ pub mod error {
 
         #[error(transparent)]
         SerdeJsonError(#[from] serde_json::error::Error),
+
+        #[error(transparent)]
+        JsonWriterError(#[from] JsonWriterError),
+        // #[error(transparent)]
+        // SerdeJsonError(#[from] serde_json::Error),
     }
 }
 
@@ -46,19 +54,36 @@ impl ThinEdgeEvent {
     pub fn try_from(
         mqtt_topic: &str,
         mqtt_payload: &str,
+        may_be_child: Option<&str>,
     ) -> Result<Self, ThinEdgeJsonDeserializerError> {
         let topic_split: Vec<&str> = mqtt_topic.split('/').collect();
-        if topic_split.len() == 3 {
+        if topic_split.len() >= 3 {
             let event_name = topic_split[2];
             if event_name.is_empty() {
                 return Err(ThinEdgeJsonDeserializerError::EmptyEventName);
             }
 
-            let event_data = if mqtt_payload.is_empty() {
+            let mut event_data = if mqtt_payload.is_empty() {
                 None
             } else {
                 Some(serde_json::from_str(mqtt_payload)?)
             };
+
+            if let Some(c_id) = may_be_child {
+                let mut json = JsonWriter::with_capacity(1024);
+                json.write_open_obj();
+                let _ = json.write_key("externalId");
+                let _ = json.write_str(c_id);
+                let _ = json.write_key("type");
+                let _ = json.write_str("c8y_Serial");
+                let _ = json.write_close_obj();
+                event_data.as_mut().map(|e: &mut ThinEdgeEventData| {
+                    e.extras.insert(
+                        "externalSource".into(),
+                        serde_json::from_str(&json.into_string().ok()?).ok()?,
+                    )
+                });
+            }
 
             Ok(Self {
                 name: event_name.into(),
@@ -146,21 +171,21 @@ mod tests {
         expected_event: ThinEdgeEvent,
     ) {
         let event =
-            ThinEdgeEvent::try_from(event_topic, event_payload.to_string().as_str()).unwrap();
+            ThinEdgeEvent::try_from(event_topic, event_payload.to_string().as_str(), None).unwrap();
 
         assert_eq!(event, expected_event);
     }
 
     #[test]
     fn event_translation_empty_event_name() {
-        let result = ThinEdgeEvent::try_from("tedge/events/", "{}");
+        let result = ThinEdgeEvent::try_from("tedge/events/", "{}", None);
 
         assert_matches!(result, Err(ThinEdgeJsonDeserializerError::EmptyEventName));
     }
 
     #[test]
     fn event_translation_more_than_three_topic_levels() {
-        let result = ThinEdgeEvent::try_from("tedge/events/page/click", "{}");
+        let result = ThinEdgeEvent::try_from("tedge/events/page/click", "{}", None);
 
         assert_matches!(
             result,
@@ -184,7 +209,7 @@ mod tests {
 
     #[test]
     fn test_serialize() -> Result<()> {
-        let result = ThinEdgeEvent::try_from("tedge/events/click_event", "")?;
+        let result = ThinEdgeEvent::try_from("tedge/events/click_event", "", None)?;
         assert_eq!(result.name, "click_event".to_string());
         assert_matches!(result.data, None);
         Ok(())
@@ -203,8 +228,11 @@ mod tests {
             }
         });
 
-        let result =
-            ThinEdgeEvent::try_from("tedge/events/click_event", event_json.to_string().as_str())?;
+        let result = ThinEdgeEvent::try_from(
+            "tedge/events/click_event",
+            event_json.to_string().as_str(),
+            None,
+        )?;
 
         assert_eq!(result.name, "click_event".to_string());
         let event_data = result.data.unwrap();

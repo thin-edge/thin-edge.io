@@ -104,4 +104,7 @@ pub enum ConversionError {
 
     #[error(transparent)]
     FromOperationLogsError(#[from] plugin_sm::operation_logs::OperationLogsError),
+
+    #[error("The given Child ID '{id}' is not registered with Cumulocity. To send the events to the child device, it has to be registered first.")]
+    ChildDeviceNotRegistered { id: String },
 }

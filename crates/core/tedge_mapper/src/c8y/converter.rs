@@ -92,6 +92,7 @@ where
             "tedge/alarms/+/+",
             "c8y-internal/alarms/+/+",
             "tedge/events/+",
+            "tedge/events/+/+",
         ]
         .try_into()
         .expect("topics that mapper should subscribe to");
@@ -143,6 +144,7 @@ where
             "tedge/alarms/+/+",
             "c8y-internal/alarms/+/+",
             "tedge/events/+",
+            "tedge/events/+/+",
         ]
         .try_into()
         .expect("topics that mapper should subscribe to");
@@ -185,7 +187,7 @@ where
     ) -> Result<Vec<Message>, ConversionError> {
         let mut vec: Vec<Message> = Vec::new();
 
-        let maybe_child_id = get_child_id_from_topic(&input.topic.name)?;
+        let maybe_child_id = get_child_id_from_measurement_topic(&input.topic.name)?;
         let c8y_json_payload = match maybe_child_id {
             Some(child_id) => {
                 // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
@@ -224,31 +226,79 @@ where
         &mut self,
         input: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        let tedge_event = ThinEdgeEvent::try_from(input.topic.name.as_str(), input.payload_str()?)?;
-        let c8y_event = C8yCreateEvent::try_from(tedge_event)?;
+        let mut vec: Vec<Message> = Vec::new();
+        let c8y_event;
+        // check if there is a childid in the topic, if not create the child before forwarding the event message
+        let child_id: Option<String> = get_child_id_from_event_topic(&input.topic.name);
 
-        // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
-        let message = if c8y_event.extras.is_empty() {
-            let smartrest_event = Self::serialize_to_smartrest(&c8y_event)?;
-            let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
+        let message = match child_id {
+            Some(ref c_id) => {
+                if !self.children.contains(c_id) {
+                    self.children.insert(c_id.clone());
+                    vec.push(Message::new(
+                        &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
+                        format!("101,{c_id},{c_id},thin-edge.io-child"),
+                    ));
+                }
 
-            Message::new(&smartrest_topic, smartrest_event)
-        } else {
-            // If the message contains extra fields other than `text` and `time`, convert to Cumulocity JSON
-            let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
-            let json_mqtt_topic = Topic::new_unchecked(C8Y_JSON_MQTT_EVENTS_TOPIC);
+                let tedge_event =
+                    ThinEdgeEvent::try_from(&input.topic.name, input.payload_str()?, Some(c_id))?;
 
-            Message::new(&json_mqtt_topic, cumulocity_event_json)
+                c8y_event = C8yCreateEvent::try_from(tedge_event)?;
+                // If the message contains extra fields other than `text` and `time`, convert to Cumulocity JSON
+                let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
+
+                Message::new(
+                    &Topic::new_unchecked(C8Y_JSON_MQTT_EVENTS_TOPIC.into()),
+                    cumulocity_event_json,
+                )
+            }
+            None => {
+                let tedge_event =
+                    ThinEdgeEvent::try_from(input.topic.name.as_str(), input.payload_str()?, None)?;
+                c8y_event = C8yCreateEvent::try_from(tedge_event)?;
+
+                // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
+                if c8y_event.extras.is_empty() {
+                    let smartrest_event = Self::serialize_to_smartrest(&c8y_event)?;
+                    let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
+
+                    Message::new(&smartrest_topic, smartrest_event)
+                } else {
+                    // If the message contains extra fields other than `text` and `time`, convert to Cumulocity JSON
+                    let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
+                    let json_mqtt_topic = Topic::new_unchecked(C8Y_JSON_MQTT_EVENTS_TOPIC);
+
+                    Message::new(&json_mqtt_topic, cumulocity_event_json)
+                }
+            }
         };
 
         // If the MQTT message size is well within the Cumulocity MQTT size limit, use MQTT to send the mapped event as well
         if input.payload_bytes().len() < self.size_threshold.0 {
-            Ok(vec![message])
+            vec.push(message)
+        // If the message size is larger than the MQTT size limit, use HTTP to send the mapped event
         } else {
-            // If the message size is larger than the MQTT size limit, use HTTP to send the mapped event
-            let _ = self.http_proxy.send_event(c8y_event).await?;
-            Ok(vec![])
+            match child_id {
+                Some(id) => {
+                    if self.children.contains(&id) {
+                        let _ = self.http_proxy.send_event(c8y_event).await?;
+                        return Ok(vec![]);
+                    } else {
+                        return Err(ConversionError::ChildDeviceNotRegistered {
+                            id: id.to_string(),
+                        });
+                    }
+                }
+                // Parent device
+                None => {
+                    let _ = self.http_proxy.send_event(c8y_event).await?;
+                    return Ok(vec![]);
+                }
+            }
         }
+
+        Ok(vec)
     }
 
     fn serialize_to_smartrest(c8y_event: &C8yCreateEvent) -> Result<String, ConversionError> {
@@ -825,12 +875,21 @@ fn get_inventory_fragments(file_path: &str) -> Result<serde_json::Value, Convers
     }
 }
 
-pub fn get_child_id_from_topic(topic: &str) -> Result<Option<String>, ConversionError> {
+pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>, ConversionError> {
     match topic.strip_prefix("tedge/measurements/").map(String::from) {
         Some(maybe_id) if maybe_id.is_empty() => {
             Err(ConversionError::InvalidChildId { id: maybe_id })
         }
         option => Ok(option),
+    }
+}
+
+pub fn get_child_id_from_event_topic(topic: &str) -> Option<String> {
+    let v: Vec<&str> = topic.splitn(4, '/').collect();
+    if v.len() >= 4 {
+        Some(v[3].to_string())
+    } else {
+        None
     }
 }
 
