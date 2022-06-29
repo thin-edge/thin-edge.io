@@ -109,7 +109,7 @@ jobs:
 
 ##################################################################################
 
-  build-matrix-arm:
+  build-arm-matrix:
     name: Build for ${{ matrix.target }}
     runs-on: Ubuntu-20.04
     strategy:
