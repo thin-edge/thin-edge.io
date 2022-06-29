@@ -226,9 +226,9 @@ fn create_init_logs_directories_and_files(
     // creating c8y-log-plugin.toml
     let logs_path = format!("{logs_dir}/tedge/agent/software-*");
     let data = format!(
-        "files = [
-    {{ type = \"software-management\", path = \"{logs_path}\" }},
-]"
+        r#"files = [
+    {{ type = "software-management", path = "{logs_path}" }},
+]"#
     );
 
     create_file_with_user_group(
