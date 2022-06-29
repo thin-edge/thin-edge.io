@@ -1,11 +1,19 @@
 # Child Devices
 
-Child devices typically are special-purpose hardware devices designed to do just a single task or a handful of tasks at best.
-Since these devices can't (or don't want, out of security reasons) connect to the cloud directly, they get connected to the cloud via a gateway device.
-The gateway device (where thin-edge is installed) is the root device and these hardware devices are child devices of that root gateway device.
-The gateway then takes care of routing all the data exchanges happening beetween the device and the cloud.
-Multiple such child devices could be connected to a single gateway and in such cases,
-the gateway should ensure that the data from these devices reach their corrsponding device twins in the cloud and vice-versa.
+## Child Device Model
+* A child device implies two aspects:
+  - a "physical child-device" on device site
+  - a "cloud child device-twin" (a logical representation of the physical device in the cloud)
+  - ?an edge child device-twin (a logical representation of the physical device in thin-edge)
+* Physical child devices typically are special-purpose hardware devices designed to do just a single task or a handful of tasks at best. 
+* These devices can't (or don't want, out of security reasons) connect to the cloud directly. Instead they get connected to the cloud via a gateway device.
+* The gateway device runs thin-edge, and all physical child devices are connected to the gateway device via network, fieldbus or any other channel. 
+* The gateway device appears in the cloud with it's digital device-twin, with one digital device-twin per each physical child-device underneath.
+* The relation between a physical child-device and the according cloud device-twin is made with a child-id.
+* The gateway takes care of routing all data/requests/responses beetween the physical child-devices and the related cloud child-device twins.
+* Multiple physical child devices could be connected to a single gateway.
+
+TODO: do not forget, a child-device could be also logical (a process running on the gateway)
 
 These devices might generate some telemetry data based on the actions that they perform.
 They'll typically have some factory-installed apps, which can be configured to specific customer environments using configurations.
