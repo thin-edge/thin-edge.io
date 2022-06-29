@@ -15,6 +15,28 @@
 
 TODO: do not forget, a child-device could be also logical (a process running on the gateway)
 
+# User Journey
+
+## Connecting a smart physical child-device (featuring MQTT client) to the cloud via the gateway
+- User creates the child-device twin in the cloud, with a unique child-id and supported operations
+- User plugs physical child-device to the gateway
+- User configures the broker IP/Port/Certificate and child-id in the physical child-device
+- User configures the root certificate in the gateway
+- Physical child-device asks thin-edge to validate if cloud child-device twin with the same child-id exists
+- Gateway consults cloud to confirm if cloud child-device twin with child-id exists
+- Result of the validation is reported to the physical child-device
+- If the validation succeeds, the physical child-device starts sending/receiving data/operations
+- If the validation fails, the physical child-device can either create the cloud child-devive twin, or repeat the validation until a 3rd party creates the cloud child-device twin, or signal an error to the user.
+
+## Connecting a non-smart / closed physical child-device to the cloud via the gateway
+TBD
+
+## Sending telemetry data from physical child-device to its cloud child-device twin
+TBD 
+
+## Sending operations from the cloud child-device twin to the physical child-device
+TBD
+
 These devices might generate some telemetry data based on the actions that they perform.
 They'll typically have some factory-installed apps, which can be configured to specific customer environments using configurations.
 Even though these apps can be reconfigured to adjust their functionality, updating these apps themselves with newer versions are rarely done.
