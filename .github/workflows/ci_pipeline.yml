@@ -181,26 +181,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Workaround Stop collectd mapper
-        run: sudo systemctl stop tedge-mapper-collectd
+      - name: Clean up ${{ matrix.rpi }}
+        run: ./ci/installation_scripts/clean_up_rpi.sh
         continue-on-error: true
-
-      - name: disconnect c8y
-        run: sudo tedge disconnect c8y
-        # We need to continue when there is no tedge already installed
-        continue-on-error: true
-
-      - name: disconnect az
-        run: sudo tedge disconnect az
-        # We need to continue when there is no tedge already installed
-        continue-on-error: true
-
-      - name: Stop apama
-        run: sudo systemctl stop apama
-        continue-on-error: true
-
-      - name: purge
-        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge_watchdog tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
 
 #################################################################################
 
