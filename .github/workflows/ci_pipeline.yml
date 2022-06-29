@@ -65,32 +65,8 @@ jobs:
           name: debian-packages-amd64
           path: debian-package_unpack
 
-      - name: install mosquitto
-        run: sudo apt-get --assume-yes install mosquitto
-
-      - name: install libmosquitto1
-        run: sudo apt-get --assume-yes install libmosquitto1
-
-      - name: install collectd-core
-        run: sudo apt-get --assume-yes install collectd-core
-
-      - name: install tedge package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_0.*_amd64.deb
-
-      - name: install tedge mapper package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_mapper_*_amd64.deb
-
-      - name: install tedge agent package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_amd64.deb
-
-      - name: install tedge watchdog package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_amd64.deb
-
-      - name: install tedge plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_amd64.deb
-
-      - name: install c8y plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_amd64.deb
+      - name: Install artifacts on amd64
+        run: ./ci/installation_scripts/install_for_amd64.sh debian-package_unpack
 
       - name: Run tedge help
         run: tedge --help
