@@ -1,5 +1,5 @@
 use nix::unistd::*;
-use std::fs::File;
+use std::io::Write;
 use std::os::linux::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -28,6 +28,9 @@ pub enum FileError {
 
     #[error("The path is not accessible. {path:?}")]
     PathNotAccessible { path: PathBuf },
+
+    #[error("Writing the content to the file failed: {file:?}.")]
+    WriteContentFailed { file: String, from: std::io::Error },
 }
 
 pub fn create_directory_with_user_group(
@@ -37,14 +40,12 @@ pub fn create_directory_with_user_group(
     mode: u32,
 ) -> Result<(), FileError> {
     let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
-    let () = perm_entry.create_directory(Path::new(dir))?;
-    Ok(())
+    perm_entry.create_directory(Path::new(dir))
 }
 
 pub fn create_directory_with_mode(dir: &str, mode: u32) -> Result<(), FileError> {
     let perm_entry = PermissionEntry::new(None, None, Some(mode));
-    let () = perm_entry.create_directory(Path::new(dir))?;
-    Ok(())
+    perm_entry.create_directory(Path::new(dir))
 }
 
 pub fn create_file_with_user_group(
@@ -52,16 +53,10 @@ pub fn create_file_with_user_group(
     user: &str,
     group: &str,
     mode: u32,
+    default_content: Option<&str>,
 ) -> Result<(), FileError> {
     let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
-    let () = perm_entry.create_file(Path::new(file))?;
-    Ok(())
-}
-
-pub fn create_file_with_mode(file: &str, mode: u32) -> Result<(), FileError> {
-    let perm_entry = PermissionEntry::new(None, None, Some(mode));
-    let () = perm_entry.create_file(Path::new(file))?;
-    Ok(())
+    perm_entry.create_file(Path::new(file), default_content)
 }
 
 #[derive(Debug, PartialEq, Eq, Default, Clone)]
@@ -111,12 +106,31 @@ impl PermissionEntry {
         }
     }
 
-    fn create_file(&self, file: &Path) -> Result<(), FileError> {
-        match File::create(file) {
-            Ok(_) => {
+    /// This function creates a file with a given path, specific access privileges and with the given content.
+    /// If the file already exists, then it will not be re-created and it will not overwrite/append the contents of the file.
+    /// This method returns
+    ///     Ok() when file is created and the content is written successfully into the file.
+    ///     Ok() when the file aleady exists
+    ///     Err(_) When it can not create the file with the appropriate owner and access permissions.
+    fn create_file(&self, file: &Path, default_content: Option<&str>) -> Result<(), FileError> {
+        match fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(file)
+        {
+            Ok(mut f) => {
                 let () = self.apply(file)?;
+                if let Some(default_content) = default_content {
+                    f.write(default_content.as_bytes()).map_err(|e| {
+                        FileError::WriteContentFailed {
+                            file: file.display().to_string(),
+                            from: e,
+                        }
+                    })?;
+                }
                 Ok(())
             }
+
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
             Err(e) => Err(FileError::FileCreateFailed {
                 file: file.display().to_string(),
@@ -229,7 +243,7 @@ mod tests {
         let file_path = temp_dir.path().join("file").display().to_string();
 
         let user = whoami::username();
-        let _ = create_file_with_user_group(file_path.as_str(), &user, &user, 0o644).unwrap();
+        let _ = create_file_with_user_group(file_path.as_str(), &user, &user, 0o644, None).unwrap();
         assert!(Path::new(file_path.as_str()).exists());
         let meta = std::fs::metadata(file_path.as_str()).unwrap();
         let perm = meta.permissions();
@@ -238,13 +252,38 @@ mod tests {
     }
 
     #[test]
+    fn create_file_with_default_content() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("file").display().to_string();
+        let user = whoami::username();
+
+        let example_config = r#"# Add the configurations to be managed by c8y-configuration-plugin
+        files = [
+        #    { path = '/etc/tedge/tedge.toml' },
+        ]"#;
+
+        // Create a new file with default content
+        create_file_with_user_group(
+            file_path.as_str(),
+            &user,
+            &user,
+            0o775,
+            Some(&example_config.to_string()),
+        )
+        .unwrap();
+
+        let content = fs::read(file_path).unwrap();
+        assert_eq!(example_config.as_bytes(), content);
+    }
+
+    #[test]
     fn create_file_wrong_user() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
 
         let user = whoami::username();
-        let err =
-            create_file_with_user_group(file_path.as_str(), "test", &user, 0o775).unwrap_err();
+        let err = create_file_with_user_group(file_path.as_str(), "test", &user, 0o775, None)
+            .unwrap_err();
 
         assert!(err.to_string().contains("User not found"));
     }
@@ -255,8 +294,8 @@ mod tests {
         let file_path = temp_dir.path().join("file").display().to_string();
 
         let user = whoami::username();
-        let err =
-            create_file_with_user_group(file_path.as_str(), &user, "test", 0o775).unwrap_err();
+        let err = create_file_with_user_group(file_path.as_str(), &user, "test", 0o775, None)
+            .unwrap_err();
 
         assert!(err.to_string().contains("Group not found"));
         fs::remove_file(file_path.as_str()).unwrap();
@@ -309,7 +348,7 @@ mod tests {
         let file_path = temp_dir.path().join("file").display().to_string();
 
         let user = whoami::username();
-        let _ = create_file_with_user_group(file_path.as_str(), &user, &user, 0o644).unwrap();
+        let _ = create_file_with_user_group(file_path.as_str(), &user, &user, 0o644, None).unwrap();
         assert!(Path::new(file_path.as_str()).exists());
 
         let meta = fs::metadata(file_path.as_str()).unwrap();
