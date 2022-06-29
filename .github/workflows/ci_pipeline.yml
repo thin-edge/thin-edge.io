@@ -209,56 +209,22 @@ jobs:
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
-      - name: install mosquitto
-        run: sudo apt-get --assume-yes install mosquitto
-
-      - name: install libmosquitto1
-        run: sudo apt-get --assume-yes install libmosquitto1
-
-      - name: install mosquitto-clients
-        run: sudo apt-get --assume-yes install mosquitto-clients
-
-      - name: install collectd-core
-        run: sudo apt-get --assume-yes install collectd-core collectd
-
-      - name: install tedge package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_0.*_armhf.deb
-
-      - name: install tedge mapper package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_mapper_*_armhf.deb
-
-      - name: install tedge agent package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_armhf.deb
-
-      - name: install tedge watchdog package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_armhf.deb
-
-      - name: install tedge plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
-
-      - name: install c8y plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_armhf.deb
-
-      - name: configure collectd
-        run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
-
-      - uses: actions/download-artifact@v3
+      - name: Download sawtooth publisher
+        uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: sawtooth_publisher_armv7-unknown-linux-gnueabihf
           path: /home/pi/examples
 
-      - name: chmod publisher
-        run: chmod +x /home/pi/examples/sawtooth_publisher
-
-      - uses: actions/download-artifact@v3
+      - name: Download tedge_dummy_plugin
+        uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
           path: /home/pi/tedge_dummy_plugin
 
-      - name: chmod dummy_plugin
-        run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
+      - name: Install all
+        run: ./ci/installation_scripts/install_for_arm.sh debian-package_unpack
 
       - name: Configure Bridge
         run: ./ci/configure_bridge.sh
