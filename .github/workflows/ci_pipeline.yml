@@ -140,152 +140,24 @@ jobs:
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
 
-      - name: install cargo-deb
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: install
-          args: cargo-deb --version 1.38.1
-
-      - name: install cargo-strip
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: install
-          args: cargo-strip
-
       - name: Build for ${{ matrix.target }}
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          use-cross: true
-          command: build
-          args: --release --target=${{ matrix.target }}
+        run: ./ci/build_scripts/build_for_arm.sh ${{ matrix.target }}
 
-      - name: apt update
-        run: sudo apt update
-
-      # armv7 uses `arm-linux-gnueabihf-strip`; aarch64 uses `aarch64-linux-gnu-strip`
-      # It appears `aarch64-linux-gnu-strip` seems to work explicitly on other arm bins but not other way around.
-      - name: Install binutils to add `strip` for striping arm binaries
-        run: sudo apt-get --assume-yes install binutils-arm-linux-gnueabihf binutils-aarch64-linux-gnu
-
-      - name: Strip tedge
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge
-
-      - name: Strip tedge_mapper
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_mapper || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_mapper
-
-      - name: Strip tedge_agent
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_agent || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_agent
-
-      - name: Strip tedge_watchdog
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_watchdog || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_watchdog
-
-      - name: Strip tedge_apt_plugin
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_apt_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_apt_plugin
-
-      - name: Strip tedge_apama_plugin
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_apama_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_apama_plugin
-
-      - name: Strip c8y_log_plugin 
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/c8y_log_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/c8y_log_plugin
-
-      - name: Strip c8y_configuration_plugin
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/c8y_configuration_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/c8y_configuration_plugin
-
-      - name: build tedge debian package for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge --no-strip --no-build --target=${{ matrix.target }}
-
-      - name: build tedge_mapper debian package for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge_mapper --no-strip --no-build --target=${{ matrix.target }}
-
-      - name: build tedge_agent debian package for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge_agent --no-strip --no-build --target=${{ matrix.target }}
-
-      - name: build tedge_watchdog debian package for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge_watchdog --no-strip --no-build --target=${{ matrix.target }}
-
-      - name: build tedge_apt_plugin debian package for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge_apt_plugin --no-strip --no-build --target=${{ matrix.target }}
-
-      - name: build tedge_apama_plugin debian package for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge_apama_plugin --no-strip --no-build --target=${{ matrix.target }}
-
-      - name: build c8y_log_plugin debian package for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p c8y_log_plugin --no-strip --no-build --target=${{ matrix.target }}
-
-      - name: build c8y_configuration_plugin debian package for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p c8y_configuration_plugin --no-strip --no-build --target=${{ matrix.target }}
-
-      - name: build sawtooth publisher
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          use-cross: true
-          command: build
-          args: --release -p sawtooth_publisher --target=${{ matrix.target }}
-
-      - name: Strip workaround sawtooth_publisher
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/sawtooth_publisher || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/sawtooth_publisher
-
-      - name: upload debian packages as zip
+      - name: Upload debian packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
           name: debian-packages-${{ matrix.target }}
           path: target/${{ matrix.target }}/debian/*.deb
 
-      - name: upload sawtooth publisher as zip
+      - name: Upload sawtooth publisher as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
           name: sawtooth_publisher_${{ matrix.target }}
           path: target/${{ matrix.target }}/release/sawtooth_publisher
 
-      - name: Build tedge_dummy_plugin
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: build
-          args: --release -p tedge_dummy_plugin
-
-      - name: Strip workaround for tedge_dummy_plugin
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_dummy_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_dummy_plugin
-
-      - name: Upload dummy-plugin
+      - name: Upload dummy-plugin as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
