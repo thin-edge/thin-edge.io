@@ -356,11 +356,12 @@ where
         &mut self,
         message: &DiscoverOp,
     ) -> Result<Option<Message>, ConversionError> {
+        dbg!(&message);
         match message.event_type {
             EventType::Add => {
                 let ops_dir = message.ops_dir.clone();
                 let op_name = message.operation_name.clone();
-                let op = get_operation(ops_dir.join(op_name))?;
+                let op = get_operation(&ops_dir, &op_name)?;
                 self.operations.add_operation(op);
             }
             EventType::Remove => {

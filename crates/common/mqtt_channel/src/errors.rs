@@ -38,6 +38,9 @@ pub enum MqttError {
         "The send channel of the connection has been closed and no more messages can be published"
     )]
     SendOnClosedConnection,
+
+    #[error(transparent)]
+    FromInotifyError(#[from] tedge_utils::fs_notify::NotifyStreamError),
 }
 
 impl MqttError {

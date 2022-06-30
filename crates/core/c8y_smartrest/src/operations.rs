@@ -123,8 +123,9 @@ fn get_operations(dir: impl AsRef<Path>, cloud_name: &str) -> Result<Operations,
     Ok(operations)
 }
 
-pub fn get_operation(path: PathBuf) -> Result<Operation, OperationsError> {
-    let mut details = match fs::read(&path) {
+pub fn get_operation(path: &Path, file_name: &str) -> Result<Operation, OperationsError> {
+    let full_path = path.join(file_name);
+    let mut details = match fs::read(&full_path) {
         Ok(bytes) => toml::from_slice::<Operation>(bytes.as_slice())
             .map_err(|e| OperationsError::TomlError(path.to_path_buf(), e))?,
 

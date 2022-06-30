@@ -90,7 +90,7 @@ impl TEdgeComponent for CumulocityMapper {
         let ops_dir = PathBuf::from(format!("{}/operations/c8y", &config_dir));
 
         mapper
-            .run(Some(ops_dir))
+            .run(Some(&ops_dir))
             .instrument(info_span!(CUMULOCITY_MAPPER_NAME))
             .await?;
 
