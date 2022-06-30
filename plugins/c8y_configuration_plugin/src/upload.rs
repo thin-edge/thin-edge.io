@@ -89,6 +89,18 @@ pub async fn handle_config_upload_request(
     Ok(())
 }
 
+pub(crate) async fn handle_dynamic_config_update(
+    mqtt_client: &mut Connection,
+    config_file_path: &Path,
+) -> Result<PluginConfig> {
+    // Reload the plugin config file
+    let plugin_config = PluginConfig::new(config_file_path);
+    // Resend the supported config types
+    let msg = plugin_config.to_supported_config_types_message()?;
+    mqtt_client.published.send(msg).await?;
+    Ok(plugin_config)
+}
+
 async fn upload_config_file(
     config_file_path: &Path,
     config_type: &str,
