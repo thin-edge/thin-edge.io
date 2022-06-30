@@ -25,6 +25,9 @@ pub enum MapperError {
 
     #[error(transparent)]
     FromFlockfile(#[from] flockfile::FlockfileError),
+
+    #[error(transparent)]
+    FromNotifyFs(#[from] tedge_utils::fs_notify::NotifyStreamError),
 }
 
 #[derive(Debug, thiserror::Error)]
