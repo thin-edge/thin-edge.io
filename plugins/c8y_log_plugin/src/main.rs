@@ -225,17 +225,18 @@ fn create_init_logs_directories_and_files(
 
     // creating c8y-log-plugin.toml
     let logs_path = format!("{logs_dir}/tedge/agent/software-*");
-    let data = toml::toml! {
-        files = [
-            { type = "software-management", path = logs_path }
-        ]
-    };
+    let data = format!(
+        r#"files = [
+    {{ type = "software-management", path = "{logs_path}" }},
+]"#
+    );
+
     create_file_with_user_group(
         &format!("{config_dir}/{DEFAULT_PLUGIN_CONFIG_FILE}"),
         "root",
         "root",
         0o644,
-        Some(&data.to_string()),
+        Some(&data),
     )?;
 
     Ok(())
