@@ -112,10 +112,9 @@ impl Plugin for Updater {
         _logger: &mut BufWriter<File>,
         maybe_plugin: Option<&str>,
     ) -> Result<(), SoftwareError> {
-        use fork::daemon;
+        use fork::{daemon,Fork};
 
-        match daemon(false, true) {
-            Ok(_a) => {
+        if let Ok(Fork::Child) = daemon(false, true) {
                 let mut command = if let Some(sudo) = &self.sudo {
                     let mut command = Command::new(sudo);
                     command.arg(&self.path);
@@ -161,10 +160,9 @@ impl Plugin for Updater {
                 }
                 let _ = child.wait();
             }
-            Err(err) => {
-                dbg!(err);
-            }
-        }
+            else {
+                dbg!("Fork failed for some reason");
+            };
 
         Ok(())
     }
