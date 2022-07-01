@@ -118,9 +118,12 @@ impl Plugin for Updater {
                 let mut command = if let Some(sudo) = &self.sudo {
                     let mut command = Command::new(sudo);
                     command.arg(&self.path);
+                    command.stdin(std::process::Stdio::piped());
                     command
                 } else {
-                    Command::new(&self.path)
+                    let mut command = Command::new(&self.path);
+                    command.stdin(std::process::Stdio::piped());
+                    command
                 };
                 command.arg(UPDATE_LIST);
 
