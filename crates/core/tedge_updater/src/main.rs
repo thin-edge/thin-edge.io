@@ -75,7 +75,7 @@ fn run(operation: PluginOp) -> Result<i32, anyhow::Error> {
             };
 
             let _ = run_hook(
-                format!("/etc/tedge/hooks/hook-start-or-rollback-{plugin_name}").as_str(),
+                format!("/etc/tedge/hooks/hook-start-or-rollback-{filename}").as_str(),
                 exitcode.to_string().as_str(),
             );
 
