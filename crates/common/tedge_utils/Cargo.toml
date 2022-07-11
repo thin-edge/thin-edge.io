@@ -17,6 +17,7 @@ fs-notify = ["inotify"]
 anyhow = "1.0"
 async-stream = "0.3"
 futures = "0.3"
+maplit = "1.0"
 nix = "0.24"
 inotify = { version = "0.10", optional = true}
 strum_macros = "0.24"
@@ -30,7 +31,6 @@ users = "0.11.0"
 
 [dev-dependencies]
 assert_matches = "1.5"
-maplit = "1.0"
 tedge_test_utils = { path = "../../tests/tedge_test_utils" }
 tokio = { version = "1.12", features = [ "rt-multi-thread"] }
 whoami = "1.2.1"

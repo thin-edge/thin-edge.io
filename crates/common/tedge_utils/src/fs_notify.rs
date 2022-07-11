@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     hash::Hash,
     path::{Path, PathBuf},
 };
@@ -7,10 +7,12 @@ use std::{
 use async_stream::try_stream;
 pub use futures::{pin_mut, Stream, StreamExt};
 use inotify::{EventMask, Inotify, WatchMask};
+use maplit::{btreeset, hashmap};
 use strum_macros::Display;
+use tracing::warn;
 use try_traits::default::TryDefault;
 
-#[derive(Debug, Display, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, Display, PartialEq, Eq, Clone, Hash, PartialOrd, Ord)]
 pub enum Masks {
     Modified,
     Deleted,
@@ -54,50 +56,84 @@ pub enum NotifyStreamError {
     #[error("Error normalising watcher for: {path:?}")]
     ErrorNormalisingWatcher { path: PathBuf },
 
-    // FIXME: how to show which mask is unsupported when inotify::WatchMask
-    // does not impl Display?
-    #[error("Unsupported mask.")]
-    UnsupportedWatchMask,
+    #[error("Unsupported mask: {mask:?}")]
+    UnsupportedWatchMask { mask: WatchMask },
 
     #[error("Expected watch directory to be: {expected:?} but was: {actual:?}")]
     WrongParentDirectory { expected: PathBuf, actual: PathBuf },
+
+    #[error("Watcher: {mask} is duplicated for file: {path:?}")]
+    DuplicateWatcher { mask: Masks, path: PathBuf },
 }
 
 #[derive(Debug, Default, Clone)]
 struct WatchDescriptor {
-    pub dir_path: PathBuf,
-    pub key: HashMap<String, Vec<Masks>>,
-}
-
-impl Eq for WatchDescriptor {}
-
-impl PartialEq for WatchDescriptor {
-    fn eq(&self, other: &Self) -> bool {
-        self.dir_path == other.dir_path && self.key == other.key
-    }
-}
-
-impl Hash for WatchDescriptor {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.dir_path.hash(state);
-        for key in self.key.keys() {
-            key.hash(state);
-        }
-    }
+    pub description: HashMap<PathBuf, HashMap<String, Vec<Masks>>>,
 }
 
 impl WatchDescriptor {
-    fn new(dir_path: PathBuf, file_name: String, masks: Vec<Masks>) -> Self {
-        let mut hm = HashMap::new();
-        hm.insert(file_name, masks);
-        Self { dir_path, key: hm }
+    fn new() -> Self {
+        Self::default()
+    }
+
+    /// inserts new values in `self.description`. this takes care of inserting
+    /// - new keys (dir_path, file_name)
+    /// - inserting or appending new masks
+    /// NOTE: though it is not a major concern, the `masks` entry is unordered
+    /// vec![Masks::Deleted, Masks::Modified] does not equal vec![Masks::Modified, Masks::Deleted]
+    fn insert(&mut self, dir_path: PathBuf, file_name: String, masks: Vec<Masks>) {
+        let root_directory_entry = self.description.entry(dir_path).or_insert(hashmap! {});
+        let file_entry = root_directory_entry
+            .entry(file_name)
+            .or_insert_with(|| masks.clone());
+        // if `entry_masks` does not contain some of `masks`, insert them.
+        for mask in &masks {
+            if !file_entry.contains(mask) {
+                file_entry.push(mask.to_owned())
+            }
+        }
+    }
+
+    /// get a set of `Masks` for a given `dir_path`
+    fn get_mask_set_for_directory(&self, dir_path: PathBuf) -> Option<Vec<Masks>> {
+        let mut set = btreeset! {};
+        let hash_map = self.description.get(&dir_path)?;
+
+        for masks in hash_map.values() {
+            for mask in masks {
+                set.insert(mask.to_owned());
+            }
+        }
+
+        let v = Vec::from_iter(set);
+        Some(v)
     }
 }
+
+//impl Eq for WatchDescriptor {}
+//
+//impl PartialEq for WatchDescriptor {
+//    fn eq(&self, other: &Self) -> bool {
+//        true
+//        //self.dir_path == other.dir_path && other.key.keys().all(|f| self.key.keys().any(|x| x == f))
+//        //self.dir_path == other.dir_path && self.key == other.key
+//    }
+//}
+
+//impl Hash for WatchDescriptor {
+//    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//        todo!()
+//        //self.dir_path.hash(state);
+//        //for key in self.key.keys() {
+//        //    key.hash(state);
+//        //}
+//    }
+//}
 
 pub struct NotifyStream {
     buffer: [u8; 1024],
     inotify: Inotify,
-    watchers: Option<HashSet<WatchDescriptor>>,
+    watchers: WatchDescriptor,
 }
 
 impl TryDefault for NotifyStream {
@@ -111,7 +147,7 @@ impl TryDefault for NotifyStream {
                 Ok(Self {
                     buffer,
                     inotify,
-                    watchers: None,
+                    watchers: WatchDescriptor::default(),
                 })
             }
             Err(err) => Err(NotifyStreamError::FromIOError(err)),
@@ -215,40 +251,30 @@ impl NotifyStream {
         file: String,
         masks: &[Masks],
     ) -> Result<(), NotifyStreamError> {
-        // the first step if to normalise `dir_path` and `file`
-        // this step is done just in case `file` is not just the name
-        // but is a partial path to the file. For more info see the
-        // function's docstring.
         let (dir_path, file) = normalising_watch_dir_and_file(dir_path, &file)?;
         let dir_path = dir_path.as_path();
 
-        if let Some(mut watcher) = self.watchers.clone() {
-            let mut all_flags: HashSet<_> = watcher
-                .iter()
-                .flat_map(|set| set.key.values())
-                .flatten()
-                .collect();
-            for mask in masks {
-                all_flags.insert(mask);
-            }
-
+        if self.watchers.description.is_empty() {
             let watch_mask = pipe_masks_into_watch_mask(masks);
             let _ = self.inotify.add_watch(dir_path, watch_mask);
-            let wd = WatchDescriptor::new(dir_path.to_path_buf(), file, masks.to_vec());
-            watcher.insert(wd);
-            self.watchers = Some(watcher);
+            let mut wd = WatchDescriptor::new();
+            wd.insert(dir_path.to_path_buf(), file, masks.to_vec());
+            self.watchers = wd;
         } else {
-            let watch_mask = pipe_masks_into_watch_mask(masks);
+            self.watchers
+                .insert(dir_path.to_path_buf(), file, masks.to_vec());
+            let masks = self
+                .watchers
+                .get_mask_set_for_directory(dir_path.to_path_buf()) // TODO: fix unwrap
+                .unwrap();
+
+            let watch_mask = pipe_masks_into_watch_mask(&masks);
             let _ = self.inotify.add_watch(dir_path, watch_mask);
-            let wd = WatchDescriptor::new(dir_path.to_path_buf(), file, masks.to_vec());
-            let mut hs = HashSet::new();
-            hs.insert(wd);
-            self.watchers = Some(hs);
         }
         Ok(())
     }
 
-    /// create an fs notification event stream
+    //// create an fs notification event stream
     pub fn stream(mut self) -> impl Stream<Item = Result<(PathBuf, Masks), NotifyStreamError>> {
         try_stream! {
             let mut notify_service = self.inotify.event_stream(self.buffer)?;
@@ -256,14 +282,20 @@ impl NotifyStream {
                 match event_or_error {
                     Ok(event) => {
                         let event_mask: Masks = event.mask.into();
+                        // in case the watch mask matches to an unsupported event, print this out
+                        // as a warning so that it this event is transparent to the user of the
+                        // crate.
+                        if let Masks::Undefined = event_mask {
+                            warn!("Unsupported mask: {:?}", event.mask);
+                        }
                         // because watching a file or watching a direcotry is implemented as
                         // watching a directory, we can ignore the case where &event.name is None
                         if let Some(event_name) = &event.name {
                             let notify_file_name = event_name.to_str().ok_or_else(|| NotifyStreamError::ErrorCreatingStream)?;
                             // inotify triggered for a file named `notify_file_name`. Next we need
                             // to see if we have a matching entry WITH a matching flag/mask in `self.watchers`
-                            for watcher in self.watchers.as_ref().ok_or_else(|| NotifyStreamError::ErrorCreatingStream)? {
-                                for (file_name, flags) in &watcher.key {
+                            for (dir_path, key) in &self.watchers.description {
+                                for (file_name, flags) in key {
                                     for flag in flags {
                                         // There are two cases:
                                         // 1. we added a file watch
@@ -279,7 +311,7 @@ impl NotifyStream {
                                         // here the file we are watching is *given* - so we can yield events with the
                                         // corresponding `event_name` and mask.
                                         if file_name.eq(notify_file_name) && event_mask.clone().eq(flag) {
-                                            let full_path = watcher.dir_path.join(file_name.clone());
+                                            let full_path = dir_path.join(file_name.clone());
                                             yield (full_path, event_mask.clone())
                                         // for case 2. our input could have been something like:
                                         // notify_service.add_watcher(
@@ -289,13 +321,16 @@ impl NotifyStream {
                                         //  )
                                         // here the file we are watching is not known to us, so we match only on event mask
                                         } else if file_name.eq("*")  && event_mask.clone().eq(flag) {
-                                            let full_path = watcher.dir_path.join(notify_file_name);
+                                            let full_path = dir_path.join(notify_file_name);
                                             yield (full_path, event_mask.clone())
                                         }
                                     }
                                 }
+
                             }
                         }
+                        // there should never be an "if let None = &event.name" because add_watcher
+                        // will always add a watcher as a directory
                     },
                     Err(error) => {
                         // any error comming out of `notify_service.next()` will be
@@ -340,13 +375,115 @@ pub fn fs_notify_stream(
     }
     Ok(fs_notification_service.stream())
 }
+
 #[cfg(test)]
+#[cfg(feature = "fs-notify")]
+#[cfg(feature = "tracing")]
 mod tests {
     use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-    use super::{fs_notify_stream, pin_mut, Masks, NotifyStreamError, Stream, StreamExt};
+    use futures::{pin_mut, Stream, StreamExt};
+
     use maplit::hashmap;
     use tedge_test_utils::fs::TempTedgeDir;
+    use try_traits::default::TryDefault;
+
+    use crate::fs_notify::Masks;
+
+    use super::{fs_notify_stream, NotifyStream, NotifyStreamError, WatchDescriptor};
+
+    #[test]
+    /// this test checks the underlying data structure `WatchDescriptor.description`
+    /// three files are created:
+    /// - file_a, file_b at root level of `TempTedgeDir`
+    /// - file_c, at level: `TempTedgeDir`/new_dir
+    fn test_watch_descriptor_data_field() {
+        let ttd = TempTedgeDir::new();
+        let new_dir = ttd.dir("new_dir");
+        ttd.file("file_a");
+        ttd.file("file_b");
+        new_dir.file("file_c");
+
+        let expected_data_structure = hashmap! {
+            ttd.path().to_path_buf() => hashmap! {
+                String::from("file_a") => vec![Masks::Created, Masks::Deleted],
+                String::from("file_b") => vec![Masks::Created, Masks::Modified]
+            },
+            new_dir.path().to_path_buf() => hashmap! {
+                String::from("file_c") => vec![Masks::Modified]
+            }
+
+        };
+        let expected_hash_set_for_root_dir = vec![Masks::Modified, Masks::Deleted, Masks::Created];
+        let expected_hash_set_for_new_dir = vec![Masks::Modified];
+
+        let mut actual_data_structure = WatchDescriptor::new();
+        actual_data_structure.insert(
+            ttd.path().to_path_buf(),
+            String::from("file_a"),
+            vec![Masks::Created],
+        );
+        actual_data_structure.insert(
+            ttd.path().to_path_buf(),
+            String::from("file_b"),
+            vec![Masks::Created, Masks::Modified],
+        );
+        actual_data_structure.insert(
+            new_dir.path().to_path_buf(),
+            String::from("file_c"),
+            vec![Masks::Modified],
+        );
+        // NOTE: re-adding `file_a` with an extra mask
+        actual_data_structure.insert(
+            ttd.path().to_path_buf(),
+            String::from("file_a"),
+            vec![Masks::Deleted],
+        );
+        assert!(actual_data_structure
+            .description
+            .eq(&expected_data_structure));
+
+        assert_eq!(
+            actual_data_structure
+                .get_mask_set_for_directory(ttd.path().to_path_buf())
+                .unwrap(),
+            expected_hash_set_for_root_dir
+        );
+
+        assert_eq!(
+            actual_data_structure
+                .get_mask_set_for_directory(new_dir.path().to_path_buf())
+                .unwrap(),
+            expected_hash_set_for_new_dir
+        );
+    }
+
+    #[test]
+    fn test_add_watcher() {
+        let ttd = TempTedgeDir::new();
+        let new_dir = ttd.dir("new_dir");
+        ttd.file("file_a");
+        ttd.file("file_b");
+        new_dir.file("file_c");
+
+        let mut notify_service = NotifyStream::try_default().unwrap();
+        notify_service
+            .add_watcher(ttd.path(), String::from("file_a"), &[Masks::Created])
+            .unwrap();
+        notify_service
+            .add_watcher(
+                ttd.path(),
+                String::from("file_a"),
+                &[Masks::Created, Masks::Deleted],
+            )
+            .unwrap();
+        notify_service
+            .add_watcher(ttd.path(), String::from("file_b"), &[Masks::Modified])
+            .unwrap();
+        notify_service
+            .add_watcher(new_dir.path(), String::from("file_c"), &[Masks::Deleted])
+            .unwrap();
+    }
 
     async fn assert_stream(
         mut inputs: HashMap<String, Vec<Masks>>,
