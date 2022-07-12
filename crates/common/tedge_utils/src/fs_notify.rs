@@ -110,26 +110,6 @@ impl WatchDescriptor {
     }
 }
 
-//impl Eq for WatchDescriptor {}
-//
-//impl PartialEq for WatchDescriptor {
-//    fn eq(&self, other: &Self) -> bool {
-//        true
-//        //self.dir_path == other.dir_path && other.key.keys().all(|f| self.key.keys().any(|x| x == f))
-//        //self.dir_path == other.dir_path && self.key == other.key
-//    }
-//}
-
-//impl Hash for WatchDescriptor {
-//    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-//        todo!()
-//        //self.dir_path.hash(state);
-//        //for key in self.key.keys() {
-//        //    key.hash(state);
-//        //}
-//    }
-//}
-
 pub struct NotifyStream {
     buffer: [u8; 1024],
     inotify: Inotify,

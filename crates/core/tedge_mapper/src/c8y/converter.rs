@@ -356,7 +356,6 @@ where
         &mut self,
         message: &DiscoverOp,
     ) -> Result<Option<Message>, ConversionError> {
-        dbg!(&message);
         match message.event_type {
             EventType::Add => {
                 let ops_dir = message.ops_dir.clone();
