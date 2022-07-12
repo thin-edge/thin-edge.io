@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use tedge_utils::fs_notify::Masks;
+use tedge_utils::fs_notify::FileEvent;
 use tracing::log::warn;
 
 const C8Y_PREFIX: &str = "c8y_";
@@ -45,7 +45,7 @@ fn operation_name_is_valid(operation: &str) -> bool {
 
 pub fn process_inotify_events(
     path: &Path,
-    mask: Masks,
+    mask: FileEvent,
 ) -> Result<Option<DiscoverOp>, DynamicDiscoverOpsError> {
     let operation_name = path
         .file_name()
@@ -58,12 +58,12 @@ pub fn process_inotify_events(
 
     if operation_name_is_valid(operation_name) {
         match mask {
-            Masks::Deleted => Ok(Some(DiscoverOp {
+            FileEvent::Deleted => Ok(Some(DiscoverOp {
                 ops_dir: parent_dir.to_path_buf(),
                 event_type: EventType::Remove,
                 operation_name: operation_name.to_string(),
             })),
-            Masks::Created => Ok(Some(DiscoverOp {
+            FileEvent::Created => Ok(Some(DiscoverOp {
                 ops_dir: parent_dir.to_path_buf(),
                 event_type: EventType::Add,
                 operation_name: operation_name.to_string(),

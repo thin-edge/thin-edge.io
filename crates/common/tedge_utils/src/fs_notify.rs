@@ -13,31 +13,31 @@ use tracing::warn;
 use try_traits::default::TryDefault;
 
 #[derive(Debug, Display, PartialEq, Eq, Clone, Hash, PartialOrd, Ord)]
-pub enum Masks {
+pub enum FileEvent {
     Modified,
     Deleted,
     Created,
     Undefined,
 }
 
-impl From<Masks> for WatchMask {
-    fn from(masks: Masks) -> Self {
+impl From<FileEvent> for WatchMask {
+    fn from(masks: FileEvent) -> Self {
         match masks {
-            Masks::Modified => WatchMask::MODIFY,
-            Masks::Deleted => WatchMask::DELETE,
-            Masks::Created => WatchMask::CREATE,
-            Masks::Undefined => WatchMask::empty(),
+            FileEvent::Modified => WatchMask::MODIFY,
+            FileEvent::Deleted => WatchMask::DELETE,
+            FileEvent::Created => WatchMask::CREATE,
+            FileEvent::Undefined => WatchMask::empty(),
         }
     }
 }
 
-impl From<EventMask> for Masks {
+impl From<EventMask> for FileEvent {
     fn from(em: EventMask) -> Self {
         match em {
-            EventMask::MODIFY => Masks::Modified,
-            EventMask::DELETE => Masks::Deleted,
-            EventMask::CREATE => Masks::Created,
-            _ => Masks::Undefined,
+            EventMask::MODIFY => FileEvent::Modified,
+            EventMask::DELETE => FileEvent::Deleted,
+            EventMask::CREATE => FileEvent::Created,
+            _ => FileEvent::Undefined,
         }
     }
 }
@@ -63,12 +63,12 @@ pub enum NotifyStreamError {
     WrongParentDirectory { expected: PathBuf, actual: PathBuf },
 
     #[error("Watcher: {mask} is duplicated for file: {path:?}")]
-    DuplicateWatcher { mask: Masks, path: PathBuf },
+    DuplicateWatcher { mask: FileEvent, path: PathBuf },
 }
 
 #[derive(Debug, Default, Clone)]
 struct WatchDescriptor {
-    pub description: HashMap<PathBuf, HashMap<String, Vec<Masks>>>,
+    pub description: HashMap<PathBuf, HashMap<String, Vec<FileEvent>>>,
 }
 
 impl WatchDescriptor {
@@ -81,7 +81,7 @@ impl WatchDescriptor {
     /// - inserting or appending new masks
     /// NOTE: though it is not a major concern, the `masks` entry is unordered
     /// vec![Masks::Deleted, Masks::Modified] does not equal vec![Masks::Modified, Masks::Deleted]
-    fn insert(&mut self, dir_path: PathBuf, file_name: String, masks: Vec<Masks>) {
+    fn insert(&mut self, dir_path: PathBuf, file_name: String, masks: Vec<FileEvent>) {
         let root_directory_entry = self.description.entry(dir_path).or_insert(hashmap! {});
         let file_entry = root_directory_entry
             .entry(file_name)
@@ -95,7 +95,7 @@ impl WatchDescriptor {
     }
 
     /// get a set of `Masks` for a given `dir_path`
-    fn get_mask_set_for_directory(&self, dir_path: PathBuf) -> Option<Vec<Masks>> {
+    fn get_mask_set_for_directory(&self, dir_path: PathBuf) -> Option<Vec<FileEvent>> {
         let mut set = btreeset! {};
         let hash_map = self.description.get(&dir_path)?;
 
@@ -189,7 +189,7 @@ fn normalising_watch_dir_and_file(
 /// to allow notify to watch for multiple events (CLOSE_WRITE, CREATE, MODIFY, etc...)
 /// our internal enum `Masks` needs to be converted into a single `WatchMask` via bitwise OR
 /// operations. (Note, our `Masks` type is an enum, `WatchMask` is a bitflag)
-pub(crate) fn pipe_masks_into_watch_mask(masks: &[Masks]) -> WatchMask {
+pub(crate) fn pipe_masks_into_watch_mask(masks: &[FileEvent]) -> WatchMask {
     let mut watch_mask = WatchMask::empty();
     for mask in masks {
         watch_mask |= mask.clone().into()
@@ -249,7 +249,7 @@ impl NotifyStream {
         &mut self,
         dir_path: &Path,
         file: String,
-        masks: &[Masks],
+        masks: &[FileEvent],
     ) -> Result<(), NotifyStreamError> {
         let (dir_path, file) = normalising_watch_dir_and_file(dir_path, &file)?;
         let dir_path = dir_path.as_path();
@@ -275,17 +275,17 @@ impl NotifyStream {
     }
 
     //// create an fs notification event stream
-    pub fn stream(mut self) -> impl Stream<Item = Result<(PathBuf, Masks), NotifyStreamError>> {
+    pub fn stream(mut self) -> impl Stream<Item = Result<(PathBuf, FileEvent), NotifyStreamError>> {
         try_stream! {
             let mut notify_service = self.inotify.event_stream(self.buffer)?;
             while let Some(event_or_error) = notify_service.next().await {
                 match event_or_error {
                     Ok(event) => {
-                        let event_mask: Masks = event.mask.into();
+                        let event_mask: FileEvent = event.mask.into();
                         // in case the watch mask matches to an unsupported event, print this out
                         // as a warning so that it this event is transparent to the user of the
                         // crate.
-                        if let Masks::Undefined = event_mask {
+                        if let FileEvent::Undefined = event_mask {
                             warn!("Unsupported mask: {:?}", event.mask);
                         }
                         // because watching a file or watching a direcotry is implemented as
@@ -367,8 +367,9 @@ impl NotifyStream {
 /// ).unwrap();
 /// ```
 pub fn fs_notify_stream(
-    input: &[(&Path, String, &[Masks])],
-) -> Result<impl Stream<Item = Result<(PathBuf, Masks), NotifyStreamError>>, NotifyStreamError> {
+    input: &[(&Path, String, &[FileEvent])],
+) -> Result<impl Stream<Item = Result<(PathBuf, FileEvent), NotifyStreamError>>, NotifyStreamError>
+{
     let mut fs_notification_service = NotifyStream::try_default()?;
     for (dir_path, file_name, flags) in input {
         fs_notification_service.add_watcher(dir_path, file_name.to_owned(), flags)?;
@@ -388,7 +389,7 @@ mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
     use try_traits::default::TryDefault;
 
-    use crate::fs_notify::Masks;
+    use crate::fs_notify::FileEvent;
 
     use super::{fs_notify_stream, NotifyStream, NotifyStreamError, WatchDescriptor};
 
@@ -406,38 +407,39 @@ mod tests {
 
         let expected_data_structure = hashmap! {
             ttd.path().to_path_buf() => hashmap! {
-                String::from("file_a") => vec![Masks::Created, Masks::Deleted],
-                String::from("file_b") => vec![Masks::Created, Masks::Modified]
+                String::from("file_a") => vec![FileEvent::Created, FileEvent::Deleted],
+                String::from("file_b") => vec![FileEvent::Created, FileEvent::Modified]
             },
             new_dir.path().to_path_buf() => hashmap! {
-                String::from("file_c") => vec![Masks::Modified]
+                String::from("file_c") => vec![FileEvent::Modified]
             }
 
         };
-        let expected_hash_set_for_root_dir = vec![Masks::Modified, Masks::Deleted, Masks::Created];
-        let expected_hash_set_for_new_dir = vec![Masks::Modified];
+        let expected_hash_set_for_root_dir =
+            vec![FileEvent::Modified, FileEvent::Deleted, FileEvent::Created];
+        let expected_hash_set_for_new_dir = vec![FileEvent::Modified];
 
         let mut actual_data_structure = WatchDescriptor::new();
         actual_data_structure.insert(
             ttd.path().to_path_buf(),
             String::from("file_a"),
-            vec![Masks::Created],
+            vec![FileEvent::Created],
         );
         actual_data_structure.insert(
             ttd.path().to_path_buf(),
             String::from("file_b"),
-            vec![Masks::Created, Masks::Modified],
+            vec![FileEvent::Created, FileEvent::Modified],
         );
         actual_data_structure.insert(
             new_dir.path().to_path_buf(),
             String::from("file_c"),
-            vec![Masks::Modified],
+            vec![FileEvent::Modified],
         );
         // NOTE: re-adding `file_a` with an extra mask
         actual_data_structure.insert(
             ttd.path().to_path_buf(),
             String::from("file_a"),
-            vec![Masks::Deleted],
+            vec![FileEvent::Deleted],
         );
         assert!(actual_data_structure
             .description
@@ -468,27 +470,31 @@ mod tests {
 
         let mut notify_service = NotifyStream::try_default().unwrap();
         notify_service
-            .add_watcher(ttd.path(), String::from("file_a"), &[Masks::Created])
+            .add_watcher(ttd.path(), String::from("file_a"), &[FileEvent::Created])
             .unwrap();
         notify_service
             .add_watcher(
                 ttd.path(),
                 String::from("file_a"),
-                &[Masks::Created, Masks::Deleted],
+                &[FileEvent::Created, FileEvent::Deleted],
             )
             .unwrap();
         notify_service
-            .add_watcher(ttd.path(), String::from("file_b"), &[Masks::Modified])
+            .add_watcher(ttd.path(), String::from("file_b"), &[FileEvent::Modified])
             .unwrap();
         notify_service
-            .add_watcher(new_dir.path(), String::from("file_c"), &[Masks::Deleted])
+            .add_watcher(
+                new_dir.path(),
+                String::from("file_c"),
+                &[FileEvent::Deleted],
+            )
             .unwrap();
     }
 
     async fn assert_stream(
-        mut inputs: HashMap<String, Vec<Masks>>,
+        mut inputs: HashMap<String, Vec<FileEvent>>,
         stream: Result<
-            impl Stream<Item = Result<(PathBuf, Masks), NotifyStreamError>>,
+            impl Stream<Item = Result<(PathBuf, FileEvent), NotifyStreamError>>,
             NotifyStreamError,
         >,
     ) {
@@ -518,16 +524,16 @@ mod tests {
         let ttd_clone = ttd.clone();
 
         let expected_events = hashmap! {
-            String::from("file_a") => vec![Masks::Created],
-            String::from("file_b") => vec![Masks::Created, Masks::Modified]
+            String::from("file_a") => vec![FileEvent::Created],
+            String::from("file_b") => vec![FileEvent::Created, FileEvent::Modified]
         };
 
         let stream = fs_notify_stream(&[
-            (ttd.path(), String::from("file_a"), &[Masks::Created]),
+            (ttd.path(), String::from("file_a"), &[FileEvent::Created]),
             (
                 ttd.path(),
                 String::from("file_b"),
-                &[Masks::Created, Masks::Modified],
+                &[FileEvent::Created, FileEvent::Modified],
             ),
         ]);
 
@@ -551,15 +557,15 @@ mod tests {
         let ttd_clone = ttd.clone();
 
         let expected_events = hashmap! {
-            String::from("file_a") => vec![Masks::Created],
-            String::from("file_b") => vec![Masks::Modified],
-            String::from("file_c") => vec![Masks::Created, Masks::Deleted]
+            String::from("file_a") => vec![FileEvent::Created],
+            String::from("file_b") => vec![FileEvent::Modified],
+            String::from("file_c") => vec![FileEvent::Created, FileEvent::Deleted]
         };
 
         let stream = fs_notify_stream(&[(
             ttd.path(),
             String::from("*"),
-            &[Masks::Created, Masks::Modified, Masks::Deleted],
+            &[FileEvent::Created, FileEvent::Modified, FileEvent::Deleted],
         )]);
 
         let fs_notify_handler = tokio::task::spawn(async move {

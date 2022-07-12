@@ -7,7 +7,7 @@ use mqtt_channel::{
 use serde_json::json;
 use std::path::Path;
 use std::{process, time::Duration};
-use tedge_utils::fs_notify::{fs_notify_stream, pin_mut, Masks};
+use tedge_utils::fs_notify::{fs_notify_stream, pin_mut, FileEvent};
 use time::OffsetDateTime;
 use tracing::{error, info, instrument, warn};
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
@@ -149,8 +149,11 @@ impl Mapper {
 
 async fn process_messages(mapper: &mut Mapper, path: Option<&Path>) -> Result<(), MqttError> {
     if let Some(path) = path {
-        let fs_notification_stream =
-            fs_notify_stream(&[(path, String::from("*"), &[Masks::Created, Masks::Deleted])])?;
+        let fs_notification_stream = fs_notify_stream(&[(
+            path,
+            String::from("*"),
+            &[FileEvent::Created, FileEvent::Deleted],
+        )])?;
         pin_mut!(fs_notification_stream);
 
         loop {

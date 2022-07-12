@@ -17,7 +17,7 @@ use tedge_config::{
 use tedge_utils::fs_notify::{fs_notify_stream, pin_mut};
 use tedge_utils::{
     file::{create_directory_with_user_group, create_file_with_user_group},
-    fs_notify::Masks,
+    fs_notify::FileEvent,
 };
 use tracing::{error, info};
 
@@ -87,7 +87,7 @@ async fn run(
     let fs_notification_stream = fs_notify_stream(&[(
         config_dir,
         config_file.to_string(),
-        &[Masks::Modified, Masks::Deleted],
+        &[FileEvent::Modified, FileEvent::Deleted],
     )])?;
     pin_mut!(fs_notification_stream);
 
@@ -132,7 +132,7 @@ async fn run(
                 }
             }
             Some(Ok((path, mask))) = fs_notification_stream.next() => {
-                if (mask == Masks::Modified) | (mask == Masks::Deleted) {
+                if (mask == FileEvent::Modified) | (mask == FileEvent::Deleted) {
                     plugin_config = handle_dynamic_log_type_update(mqtt_client, &path).await?;
                 }
             }
