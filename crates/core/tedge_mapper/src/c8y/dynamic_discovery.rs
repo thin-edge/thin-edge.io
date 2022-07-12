@@ -63,15 +63,11 @@ pub fn process_inotify_events(
                 event_type: EventType::Remove,
                 operation_name: operation_name.to_string(),
             })),
-            FileEvent::Created => Ok(Some(DiscoverOp {
+            FileEvent::Created | FileEvent::Modified => Ok(Some(DiscoverOp {
                 ops_dir: parent_dir.to_path_buf(),
                 event_type: EventType::Add,
                 operation_name: operation_name.to_string(),
             })),
-            mask => {
-                warn!("Did nothing for mask: {}", mask);
-                Ok(None)
-            }
         }
     } else {
         Ok(None)
