@@ -2,7 +2,6 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use tedge_utils::fs_notify::FileEvent;
-use tracing::log::warn;
 
 const C8Y_PREFIX: &str = "c8y_";
 
