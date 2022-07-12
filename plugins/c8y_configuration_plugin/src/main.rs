@@ -19,8 +19,11 @@ use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, MqttPortSetting, TEdgeConfig, TmpPathSetting,
     DEFAULT_TEDGE_CONFIG_PATH,
 };
-use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
 use tedge_utils::fs_notify::{fs_notify_stream, pin_mut, FileEvent};
+use tedge_utils::{
+    file::{create_directory_with_user_group, create_file_with_user_group},
+    fs_notify::Watch,
+};
 use tracing::{debug, error, info};
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE: &str = "c8y/c8y-configuration-plugin.toml";
@@ -137,7 +140,7 @@ async fn run(
 
     let fs_notification_stream = fs_notify_stream(&[(
         config_dir,
-        config_file.to_string(),
+        Watch::File(config_file.to_string()),
         &[FileEvent::Modified, FileEvent::Deleted],
     )])?;
     pin_mut!(fs_notification_stream);

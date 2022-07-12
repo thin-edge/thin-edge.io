@@ -14,7 +14,7 @@ use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, LogPathSetting, MqttPortSetting, TEdgeConfig,
     DEFAULT_TEDGE_CONFIG_PATH,
 };
-use tedge_utils::fs_notify::{fs_notify_stream, pin_mut};
+use tedge_utils::fs_notify::{fs_notify_stream, pin_mut, Watch};
 use tedge_utils::{
     file::{create_directory_with_user_group, create_file_with_user_group},
     fs_notify::FileEvent,
@@ -86,7 +86,7 @@ async fn run(
 
     let fs_notification_stream = fs_notify_stream(&[(
         config_dir,
-        config_file.to_string(),
+        Watch::File(config_file.to_string()),
         &[FileEvent::Modified, FileEvent::Deleted],
     )])?;
     pin_mut!(fs_notification_stream);
