@@ -45,8 +45,6 @@ pub mod error {
 
         #[error(transparent)]
         JsonWriterError(#[from] JsonWriterError),
-        // #[error(transparent)]
-        // SerdeJsonError(#[from] serde_json::Error),
     }
 }
 
