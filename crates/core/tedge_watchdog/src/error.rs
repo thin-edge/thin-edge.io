@@ -11,6 +11,9 @@ pub enum WatchdogError {
     #[error("Fail to run `{cmd}`: {from}")]
     CommandExecError { cmd: String, from: std::io::Error },
 
+    #[error("Talking to systemd failed")]
+    SystemdNotifyFailed,
+
     #[error(transparent)]
     FromTedgeConfigError(#[from] TEdgeConfigError),
 

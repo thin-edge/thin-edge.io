@@ -7,10 +7,7 @@ use mqtt_channel::{Config, Message, PubChannel, Topic};
 use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
-use std::{
-    path::PathBuf,
-    process::{self, Command, ExitStatus, Stdio},
-};
+use std::{path::PathBuf, process};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, MqttBindAddressSetting, MqttPortSetting,
     TEdgeConfigLocation,
@@ -27,7 +24,7 @@ pub struct HealthStatus {
 
 pub async fn start_watchdog(tedge_config_dir: PathBuf) -> Result<(), anyhow::Error> {
     // Send ready notification to systemd.
-    notify_systemd(process::id(), "--ready")?;
+    notify_systemd(process::id(), systemd::daemon::STATE_READY)?;
 
     // Send heart beat notifications to systemd, to notify about its own health status
     start_watchdog_for_self().await?;
@@ -42,9 +39,11 @@ async fn start_watchdog_for_self() -> Result<(), WatchdogError> {
         Ok(interval) => {
             let _handle = tokio::spawn(async move {
                 loop {
-                    let _ = notify_systemd(process::id(), "WATCHDOG=1").map_err(|e| {
-                        eprintln!("Notifying systemd failed with {}", e);
-                    });
+                    let _ = notify_systemd(process::id(), systemd::daemon::STATE_WATCHDOG).map_err(
+                        |e| {
+                            eprintln!("Notifying systemd failed with {}", e);
+                        },
+                    );
                     tokio::time::sleep(tokio::time::Duration::from_secs(interval / 4)).await;
                 }
             });
@@ -140,7 +139,7 @@ async fn monitor_tedge_service(
                     "Sending notification for {} with pid: {}",
                     name, health_status.pid
                 );
-                notify_systemd(health_status.pid, "WATCHDOG=1")?;
+                notify_systemd(health_status.pid, systemd::daemon::STATE_WATCHDOG)?;
             }
             Err(_) => {
                 warn!("No health check response received from {name} in time");
@@ -193,16 +192,24 @@ fn get_mqtt_config(
     Ok(mqtt_config)
 }
 
-fn notify_systemd(pid: u32, status: &str) -> Result<ExitStatus, WatchdogError> {
-    let pid_opt = format!("--pid={pid}");
-    Command::new("systemd-notify")
-        .args([status, &pid_opt])
-        .stdin(Stdio::null())
-        .status()
-        .map_err(|err| WatchdogError::CommandExecError {
+fn notify_systemd(pid: u32, state: &str) -> Result<(), WatchdogError> {
+    // SAFETY: on linux, PIDs do exceed i32::MAX. stdlib returns a u32 only because non-linux may
+    // use PIDs bigger than i32::MAX, but as we're on linux anyways and we're talking to systemd
+    // here (another indicator that we're on linux), this can be considered safe.
+    let pid = pid as i32;
+
+    let worked = systemd::daemon::pid_notify(pid, false, [(state, "1")].iter()).map_err(|err| {
+        WatchdogError::CommandExecError {
             cmd: String::from("systemd-notify"),
             from: err,
-        })
+        }
+    })?;
+
+    if !worked {
+        return Err(WatchdogError::SystemdNotifyFailed);
+    }
+
+    Ok(())
 }
 
 fn get_watchdog_sec(service_file: &str) -> Result<u64, WatchdogError> {
