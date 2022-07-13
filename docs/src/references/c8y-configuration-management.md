@@ -73,11 +73,20 @@ The `c8y_configuration_plugin` configuration is stored by default under `/etc/te
 This [TOML](https://toml.io/en/) file defines the list of files to be managed from the cloud tenant.
 Each configuration file is defined by a record with:
 * The full `path` to the file.
+
+  By default it is treated as a local filesysten path.
+
+  If it contains the prefix `mqtt://` it is treated as MQTT topic structure, where another process/external device is expected to provide/consume the configuration file.
+  
+  On file downloaded from the cloud to the device, the `c8y_configuration_plugin` publishs the content to the MQTT topic `{path}`, instead of writing it to a local filesystem path.
+  
+  On file upload to the cloud, the `c8y_configuration_plugin` publishs an empty message to the MQTT topic `{path}/retrieval` to request the process/external device to publish the current configuration file content to the MQTT topic `{path}`. Then `c8y_configuration_plugin` consumes the content from MQTT topic `{path}` instead of reading a local filesystem path.
 * An optional configuration `type`. If not provided, the `path` is used as `type`.
 * Optional unix file ownership: `user`, `group` and octal `mode`.  
   These are only used when a configuration file pushed from the cloud doesn't exist on the device.
   When a configuration file is already present on the device, this plugin never changes file ownership,
   ignoring these parameters.
+* Optional `childid`. If provided, it is interpreted as unique child-device id and the configuration file is associated with corresponding cloud's child-device twin. If not provided the configuration is associated with cloud's thin-edge device twin. 
 
 ```shell
 $ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
@@ -86,6 +95,8 @@ files = [
     { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf' },
     { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf' },
     { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto', user = 'mosquitto', group = 'mosquitto', mode = 0o644 }
+    { path = '/etc/child1/foo.conf', type = 'foo', childid = 'child1'  },
+    { path = 'mqtt://configs/child2/bar.conf', type = 'bar', childid = 'child2'  }
   ]
 ```
 
@@ -155,6 +166,34 @@ the `c8y_configuration_plugin` service notifies this update over MQTT.
   where `{type}` is the type of the configuration file that have been updated,
   for instance `tedge/configuration_change/tedge.toml`
 * Each message provides the path to the freshly updated file as in `{ "path": "/etc/tedge/tedge.toml" }`.
+
+Note that:
+* If no specific type has been assigned to a configuration file, then the path to this file is used as its type.
+  Update notifications for that file are then published on the topic `tedge/configuration_change/{path}`,
+  for instance `tedge/configuration_change//etc/tedge/mosquitto-conf/c8y-bridge.conf`.
+* Since the type of configuration file is used as an MQTT topic name, the characters `#` and `+` cannot be used in a type name.
+  If such a character is used in a type name (or in the path of a configuration file without explicit type),
+  then the whole plugin configuration `/etc/tedge/c8y/c8y-configuration-plugin.toml` is considered ill-formed.
+  
+## Configuration via MQTT
+
+The configuration of the `c8y_configuration_plugin` (i.E. the content of its TOML file) is additionaly provided on MQTT. That allows adding configurations without need for local filesystem access (e.g. for external devices or containers).
+
+* Each file record of the TOML is reflected on a corresponding topic, as `tedge/configuration_config/{childid}/{type}`,
+  where `{childid}` is the childid and `{type}` is the type of the file record.
+  For configurations that have no childid the `{childid}` is not part of the topic structure.
+  
+  Examples:<br/>
+  `tedge/configuration_config/tedge.toml`<br/>
+  `tedge/configuration_config/child1/foo`
+* Each message provides all information of the corresponding file record.
+
+  Examples:<br/>
+  `{ path = '/etc/tedge/tedge.toml', type = 'tedge.toml' }`, for topic `tedge/configuration_config/tedge.toml`<br/>
+  `{ path = '/etc/child1/foo.conf', type = 'foo', childid = 'child1' }`, for topic `tedge/configuration_config/child1/foo`
+* The `c8y_configuration_plugin` publishs on start and on each change all file records to `tedge/configuration_config/`
+* The `c8y_configuration_plugin` publishs all file records with retain flag, to be visible any time on MQTT.
+* The `c8y_configuration_plugin` processes each message that is published to topic structure `tedge/configuration_config/`, stores the resulting configuration change it's configuration TOML file and adopts it immediately.
 
 Note that:
 * If no specific type has been assigned to a configuration file, then the path to this file is used as its type.
