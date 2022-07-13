@@ -5,9 +5,8 @@ name: ci_pipeline
 #  are there four times and are almost identical. They only differ in a character
 #  a,b,c,d that we use to select a runner.
 #
+# TODO: Safely move cargo test on amd64 to bash script
 # TODO: Reduce complexity by moving functionality to bash scripts
-# TODO: Think about automated generation of this workflow, there is
-#   duplicated code, especially in the later sections
 # TODO: Smoke testing on Azure is disabled, we should check if it works out
 #   with 4 runners in parallel or enable only one
 
@@ -18,126 +17,17 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
 
 jobs:
-  cargo-fmt:
-    name: Run cargo fmt
-    runs-on: Ubuntu-20.04
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Cargo fmt --version
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: fmt
-          args: --version
-
-      - name: Cargo fmt
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: fmt
-          args: -- --check
-
-  python-black:
-    name: Python static checks
-    runs-on: Ubuntu-20.04
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Run black
-        uses: rickstaa/action-black@v1
-        with:
-          black_args: ". --check"
-
-  cargo-clippy:
-    name: Run cargo clippy
-    runs-on: Ubuntu-20.04
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: enable toolchain via github action
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: 1.58.1
-          components: rustfmt, clippy
-          override: true
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Cargo clippy --version
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          toolchain: 1.58.1
-          command: clippy
-          args: --version
-
-      - name: Cargo clippy
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          toolchain: 1.58.1
-          command: clippy
-
-  cargo-test:
-    name: Run cargo test
-    runs-on: Ubuntu-20.04
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: enable toolchain via github action
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: 1.58.1
-          override: true
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Cargo version
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: version
-
-      - name: Cargo build dummy plugin
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: build
-          args: -p tedge_dummy_plugin
-
-      - name: Cargo test
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: test
-          args: --no-fail-fast
-
-
-###############################################################################
-
-  build_amd64:
-    name: Build tedge and mapper Debian packages for amd64
+  build-amd64:
+    name: Build for amd64
     runs-on: Ubuntu-20.04
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: enable toolchain via github action
+      - name: Enable toolchain via github action
         # https://github.com/actions-rs/toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -148,75 +38,8 @@ jobs:
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
 
-      - name: Install cargo-deb
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: install
-          args: cargo-deb --version 1.38.1
-
-      - name: Build tedge debian package
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge
-
-      - name: Build tedge_mapper debian package
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge_mapper
-
-      - name: Build tedge_apt_plugin debian package
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge_apt_plugin
-
-      - name: Build tedge_apama_plugin debian package
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge_apama_plugin
-
-      - name: Build tedge_agent debian package
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge_agent
-
-      - name: Build tedge_watchdog debian package
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge_watchdog
-
-      - name: Build c8y_log_plugin debian package
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p c8y_log_plugin
-
-      - name: Build c8y_configuration_plugin debian package
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p c8y_configuration_plugin
-
-      - name: build sawtooth-publisher for amd64
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: build
-          args: --release -p sawtooth_publisher
+      - name: Build packages for amd64
+        run: ./ci/build_scripts/build_for_amd64.sh
 
       - name: Upload artifacts as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
@@ -225,29 +48,69 @@ jobs:
           name: debian-packages-amd64
           path: target/debian/*.deb
 
-      - name: upload amd64 sawtooth-publisher as zip
-        # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: sawtooth_publisher_amd64
-          path: target/release/sawtooth_publisher
+#################################################################################
 
-      - name: Build tedge_dummy_plugin
+  install-and-use-amd64:
+    name: Install artifacts on amd64
+    runs-on: Ubuntu-20.04
+    needs: build-amd64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v3
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: debian-packages-amd64
+          path: debian-package_unpack
+
+      - name: Install artifacts on amd64
+        run: ./ci/installation_scripts/install_for_amd64.sh debian-package_unpack
+
+      - name: Run tedge help
+        run: tedge --help
+
+#################################################################################
+
+  cargo-test-features-amd64:
+    name: Run cargo test features
+    runs-on: Ubuntu-20.04
+    needs: build-amd64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Enable toolchain via github action
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.58.1
+          override: true
+
+      - name: Enable cache
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Compile test
+        run: ./ci/integration_test/cargo_test_for_amd64.sh
+
+        # If this command is ported to bash script, it runs tests that should be skipped.
+        # The tests could fail if GitHub blocks external connections.
+        # It seems like they rarely do.
+      - name: Cargo test features
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
-          command: build
-          args: --release -p tedge_dummy_plugin
+          command: test
+          args: --verbose --features integration-test,requires-sudo -- \
+            --skip sending_and_receiving_a_message
 
-      - name: upload dummy-plugin
-        # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: tedge_dummy_plugin_amd64
-          path: target/release/tedge_dummy_plugin
+##################################################################################
 
-  build_matrix_arm:
-    name: Build tedge and mapper Debian for armv7
+  build-arm-matrix:
+    name: Build for ${{ matrix.target }}
     runs-on: Ubuntu-20.04
     strategy:
       matrix:
@@ -262,10 +125,10 @@ jobs:
           ]
 
     steps:
-      - name: checkout
+      - name: Checkout
         uses: actions/checkout@v2
 
-      - name: enable toolchain via github action
+      - name: Enable toolchain via github action
         # https://github.com/actions-rs/toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -277,152 +140,24 @@ jobs:
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v1
 
-      - name: install cargo-deb
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: install
-          args: cargo-deb --version 1.38.1
+      - name: Build for ${{ matrix.target }}
+        run: ./ci/build_scripts/build_for_arm.sh ${{ matrix.target }}
 
-      - name: install cargo-strip
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: install
-          args: cargo-strip
-
-      - name: build cross release for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          use-cross: true
-          command: build
-          args: --release --target=${{ matrix.target }}
-
-      - name: apt update
-        run: sudo apt update
-
-      # armv7 uses `arm-linux-gnueabihf-strip`; aarch64 uses `aarch64-linux-gnu-strip`
-      # It appears `aarch64-linux-gnu-strip` seems to work explicitly on other arm bins but not other way around.
-      - name: Install binutils to add `strip` for striping arm binaries
-        run: sudo apt-get --assume-yes install binutils-arm-linux-gnueabihf binutils-aarch64-linux-gnu
-
-      - name: Strip tedge
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge
-
-      - name: Strip tedge_mapper
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_mapper || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_mapper
-
-      - name: Strip tedge_agent
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_agent || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_agent
-
-      - name: Strip tedge_watchdog
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_watchdog || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_watchdog
-
-      - name: Strip tedge_apt_plugin
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_apt_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_apt_plugin
-
-      - name: Strip tedge_apama_plugin
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_apama_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_apama_plugin
-
-      - name: Strip c8y_log_plugin 
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/c8y_log_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/c8y_log_plugin
-
-      - name: Strip c8y_configuration_plugin
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/c8y_configuration_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/c8y_configuration_plugin
-
-      - name: build tedge debian package for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge --no-strip --no-build --target=${{ matrix.target }}
-
-      - name: build tedge_mapper debian package for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge_mapper --no-strip --no-build --target=${{ matrix.target }}
-
-      - name: build tedge_agent debian package for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge_agent --no-strip --no-build --target=${{ matrix.target }}
-
-      - name: build tedge_watchdog debian package for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge_watchdog --no-strip --no-build --target=${{ matrix.target }}
-
-      - name: build tedge_apt_plugin debian package for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge_apt_plugin --no-strip --no-build --target=${{ matrix.target }}
-
-      - name: build tedge_apama_plugin debian package for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p tedge_apama_plugin --no-strip --no-build --target=${{ matrix.target }}
-
-      - name: build c8y_log_plugin debian package for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p c8y_log_plugin --no-strip --no-build --target=${{ matrix.target }}
-
-      - name: build c8y_configuration_plugin debian package for target
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: deb
-          args: -p c8y_configuration_plugin --no-strip --no-build --target=${{ matrix.target }}
-
-      - name: build sawtooth publisher
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          use-cross: true
-          command: build
-          args: --release -p sawtooth_publisher --target=${{ matrix.target }}
-
-      - name: Strip workaround sawtooth_publisher
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/sawtooth_publisher || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/sawtooth_publisher
-
-      - name: upload debian packages as zip
+      - name: Upload debian packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
           name: debian-packages-${{ matrix.target }}
           path: target/${{ matrix.target }}/debian/*.deb
 
-      - name: upload sawtooth publisher as zip
+      - name: Upload sawtooth publisher as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
           name: sawtooth_publisher_${{ matrix.target }}
           path: target/${{ matrix.target }}/release/sawtooth_publisher
 
-      - name: Build tedge_dummy_plugin
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: build
-          args: --release -p tedge_dummy_plugin
-
-      - name: Strip workaround for tedge_dummy_plugin
-        run: arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/tedge_dummy_plugin || aarch64-linux-gnu-strip target/${{ matrix.target }}/release/tedge_dummy_plugin
-
-      - name: Upload dummy-plugin
+      - name: Upload dummy-plugin as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v2
         with:
@@ -431,247 +166,73 @@ jobs:
 
 #################################################################################
 
-  install-and-use-amd64:
-    runs-on: Ubuntu-20.04
-    needs: [build_amd64]
-
-    steps:
-      - name: checkout
-        uses: actions/checkout@v2
-
-      - uses: actions/download-artifact@v3
-        # https://github.com/marketplace/actions/download-a-build-artifact
-        with:
-          name: debian-packages-amd64
-          path: debian-package_unpack
-
-      - name: Workaround Stop collectd mapper
-        run: sudo systemctl stop tedge-mapper-collectd
-        continue-on-error: true
-
-      - name: disconnect c8y
-        run: sudo tedge disconnect c8y
-        # We need to continue when there is no tedge already installed
-        continue-on-error: true
-
-      - name: disconnect az
-        run: sudo tedge disconnect az
-        # We need to continue when there is no tedge already installed
-        continue-on-error: true
-
-      - name: purge
-        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge_watchdog tedge mosquitto libmosquitto1 collectd-core
-
-      - name: install mosquitto
-        run: sudo apt-get --assume-yes install mosquitto
-
-      - name: install libmosquitto1
-        run: sudo apt-get --assume-yes install libmosquitto1
-
-      - name: install collectd-core
-        run: sudo apt-get --assume-yes install collectd-core
-
-      - name: install tedge package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_0.*_amd64.deb
-
-      - name: install tedge mapper package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_mapper_*_amd64.deb
-
-      - name: install tedge agent package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_amd64.deb
-
-      - name: install tedge watchdog package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_amd64.deb
-
-      - name: install tedge plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_amd64.deb
-
-      - name: install c8y plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_amd64.deb
-
-      - name: run tedge help
-        run: tedge --help
-
-        # For Analytics: replace the default config file with tedge custom config file
-      - name: configure collectd
-        run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
-
-  cargo-test-features:
-    name: Run cargo test features
-    runs-on: Ubuntu-20.04
-    needs: install-and-use-amd64
+  clean-up-rpi-matrix:
+    strategy:
+      matrix:
+        rpi: [ m32sd10a, m32sd10b, m32sd10c, m32sd10d ]
+    runs-on:
+      - self-hosted
+      - Linux
+      - ARM
+      - offsite_${{ matrix.rpi }}
+    needs: build-arm-matrix
 
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: enable toolchain via github action
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: 1.58.1
-          override: true
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - uses: actions/download-artifact@v3
-        # https://github.com/marketplace/actions/download-a-build-artifact
-        with:
-          name: debian-packages-amd64
-          path: debian-package_unpack
-
-      - name: install mosquitto
-        run: sudo apt-get --assume-yes install mosquitto
-
-      - name: install libmosquitto1
-        run: sudo apt-get --assume-yes install libmosquitto1
-
-      - name: install collectd-core
-        run: sudo apt-get --assume-yes install collectd-core
-
-      - name: install tedge package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_0.*_amd64.deb
-
-      - name: install tedge mapper package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_mapper_*_amd64.deb
-
-      - name: install tedge agent package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_amd64.deb
-
-      - name: install tedge watchdog package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_amd64.deb
-
-      - name: install tedge plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_amd64.deb
-
-      - name: install c8y plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_amd64.deb
-
-      - name: Cargo test features (compile)
-        # Compile in advance to avoid that cargo compiles during the test run
-        # this seems to have an impact on some tests as the timing differs
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: test
-          args: --verbose --no-run --features integration-test
-
-      - name: Cargo build dummy plugin
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: -p tedge_dummy_plugin
-
-        # To run the test for features here is kind of experimental
-        # they could fail if GitHub blocks external connections.
-        # It seems like they rarely do.
-      - name: Cargo test features
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: test
-          args: --verbose --features integration-test,requires-sudo -- \
-            --skip sending_and_receiving_a_message
+      - name: Clean up ${{ matrix.rpi }}
+        run: ./ci/installation_scripts/clean_up_rpi.sh
+        continue-on-error: true
 
 #################################################################################
 
-  install-and-use-rpi_m32sd10a:
-    runs-on: [self-hosted, Linux, ARM, offsite_m32sd10a]
-    needs: [build_matrix_arm]
+  install-and-use-rpi-matrix:
+    strategy:
+      matrix:
+        rpi: [ m32sd10a, m32sd10b, m32sd10c, m32sd10d ]
+    runs-on:
+      - self-hosted
+      - Linux
+      - ARM
+      - offsite_${{ matrix.rpi }}
+    needs: clean-up-rpi-matrix
 
     steps:
-      - name: checkout
+      - name: Checkout
         uses: actions/checkout@v2
 
-      - uses: actions/download-artifact@v3
+      - name: Download release artifacts
+        uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: debian-packages-armv7-unknown-linux-gnueabihf
           path: debian-package_unpack
 
-      - name: Workaround Stop collectd mapper
-        run: sudo systemctl stop tedge-mapper-collectd
-        continue-on-error: true
-
-      - name: disconnect c8y
-        run: sudo tedge disconnect c8y
-        # We need to continue when there is no tedge already installed
-        continue-on-error: true
-
-      - name: disconnect az
-        run: sudo tedge disconnect az
-        # We need to continue when there is no tedge already installed
-        continue-on-error: true
-
-      - name: Stop apama
-        run: sudo systemctl stop apama
-        continue-on-error: true
-
-      - name: purge
-        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge_watchdog tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
-
-      - name: install mosquitto
-        run: sudo apt-get --assume-yes install mosquitto
-
-      - name: install libmosquitto1
-        run: sudo apt-get --assume-yes install libmosquitto1
-
-      - name: install mosquitto-clients
-        run: sudo apt-get --assume-yes install mosquitto-clients
-
-      - name: install collectd-core
-        run: sudo apt-get --assume-yes install collectd-core collectd
-
-      - name: install tedge package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_0.*_armhf.deb
-
-      - name: install tedge mapper package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_mapper_*_armhf.deb
-
-      - name: install tedge agent package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_armhf.deb
-
-      - name: install tedge watchdog package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_armhf.deb
-
-      - name: install tedge plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
-
-      - name: install c8y plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_armhf.deb
-
-      - name: run tedge help
-        run: tedge --help
-
-      - name: configure collectd
-        run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
-
-      - uses: actions/download-artifact@v3
+      - name: Download sawtooth publisher
+        uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: sawtooth_publisher_armv7-unknown-linux-gnueabihf
           path: /home/pi/examples
 
-      - name: chmod publisher
-        run: chmod +x /home/pi/examples/sawtooth_publisher
-
-      - uses: actions/download-artifact@v3
+      - name: Download tedge_dummy_plugin
+        uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
           name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
           path: /home/pi/tedge_dummy_plugin
 
-      - name: chmod dummy_plugin
-        run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
+      - name: Install all
+        run: ./ci/installation_scripts/install_for_arm.sh debian-package_unpack
 
       - name: Configure Bridge
         run: ./ci/configure_bridge.sh
         env:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: m32sd10a
+          C8YTENANT: ${{ secrets.SECRET_C8YTENANT }}
+          C8YDEVICE: ${{ matrix.rpi }}
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
@@ -682,8 +243,8 @@ jobs:
         env:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: m32sd10a
+          C8YTENANT: ${{ secrets.SECRET_C8YTENANT }}
+          C8YDEVICE: ${{ matrix.rpi }}
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
@@ -703,675 +264,88 @@ jobs:
 
 #################################################################################
 
-  install-and-use-rpi_m32sd10b:
-    runs-on: [self-hosted, Linux, ARM, offsite_m32sd10b]
-    needs: [build_matrix_arm]
+  system-test-offsite-matrix:
+    strategy:
+      matrix:
+        rpi: [ m32sd10a, m32sd10b, m32sd10c, m32sd10d ]
+    runs-on:
+      - self-hosted
+      - Linux
+      - ARM
+      - offsite_${{ matrix.rpi }}
+    needs: install-and-use-rpi-matrix
 
     steps:
-      - name: checkout
+      - name: Checkout
         uses: actions/checkout@v2
 
-      - uses: actions/download-artifact@v3
-        # https://github.com/marketplace/actions/download-a-build-artifact
-        with:
-          name: debian-packages-armv7-unknown-linux-gnueabihf
-          path: debian-package_unpack
-
-      - name: Workaround Stop collectd mapper
-        run: sudo systemctl stop tedge-mapper-collectd
+      - name: Run all Tests
+        run:  bash ./ci/ci_run_all_tests.sh
         continue-on-error: true
-
-      - name: disconnect c8y
-        run: sudo tedge disconnect c8y
-        # We need to continue when there is no tedge already installed
-        continue-on-error: true
-
-      - name: disconnect az
-        run: sudo tedge disconnect az
-        # We need to continue when there is no tedge already installed
-        continue-on-error: true
-
-      - name: Stop apama
-        run: sudo systemctl stop apama
-        continue-on-error: true
-
-      - name: purge
-        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge_watchdog tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
-
-      - name: install mosquitto
-        run: sudo apt-get --assume-yes install mosquitto
-
-      - name: install libmosquitto1
-        run: sudo apt-get --assume-yes install libmosquitto1
-
-      - name: install mosquitto-clients
-        run: sudo apt-get --assume-yes install mosquitto-clients
-
-      - name: install collectd-core
-        run: sudo apt-get --assume-yes install collectd-core collectd
-
-      - name: install tedge package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_0.*_armhf.deb
-
-      - name: install tedge mapper package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_mapper_*_armhf.deb
-
-      - name: install tedge agent package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_armhf.deb
-
-      - name: install tedge watchdog package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_armhf.deb
-
-      - name: install tedge plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
-
-      - name: install c8y plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_armhf.deb
-
-      - name: run tedge help
-        run: tedge --help
-
-        # replace the default config file with tedge custom config file
-      - name: configure collectd
-        run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
-
-      - uses: actions/download-artifact@v3
-        # https://github.com/marketplace/actions/download-a-build-artifact
-        with:
-          name: sawtooth_publisher_armv7-unknown-linux-gnueabihf
-          path: /home/pi/examples
-
-      - name: chmod publisher
-        run: chmod +x /home/pi/examples/sawtooth_publisher
-
-      - uses: actions/download-artifact@v3
-        # https://github.com/marketplace/actions/download-a-build-artifact
-        with:
-          name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
-          path: /home/pi/tedge_dummy_plugin
-
-      - name: chmod dummy_plugin
-        run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
-
-      - name: Configure Bridge
-        run: ./ci/configure_bridge.sh
+        if: true
         env:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: m32sd10b
+          C8YDEVICE: ${{ matrix.rpi }}
+          C8YTENANT: ${{ secrets.SECRET_C8YTENANT }}
+          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
-          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
-      - name: Run smoke test for Cumulocity
-        run: ./ci/ci_smoke_test_c8y.sh
+      - name: Run all plugin tests
+        run:  bash ./ci/ci_run_all_plugin_tests.sh
+        continue-on-error: true
+        if: true
         env:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: m32sd10b
+          C8YDEVICE: ${{ matrix.rpi }}
+          C8YTENANT: ${{ secrets.SECRET_C8YTENANT }}
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
-# Run tests for Azure
-# Enable this, when we have decided about how many runners we use
-#
-#      - name: Run Smoke Test for Azure
-#        run: ./ci/ci_smoke_test_az.sh
-#        env:
-#          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
-#          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
-#          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
-#          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
-#          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
-
-#################################################################################
-
-  install-and-use-rpi_m32sd10c:
-    runs-on: [self-hosted, Linux, ARM, offsite_m32sd10c]
-    needs: [build_matrix_arm]
-
-    steps:
-      - name: checkout
-        uses: actions/checkout@v2
-
-      - uses: actions/download-artifact@v3
-        # https://github.com/marketplace/actions/download-a-build-artifact
-        with:
-          name: debian-packages-armv7-unknown-linux-gnueabihf
-          path: debian-package_unpack
-
-      - name: Workaround Stop collectd mapper
-        run: sudo systemctl stop tedge-mapper-collectd
+      - name: Run all sm tests
+        run:  bash ./ci/ci_run_all_sm_tests.sh
         continue-on-error: true
-
-      - name: disconnect c8y
-        run: sudo tedge disconnect c8y
-        # We need to continue when there is no tedge already installed
-        continue-on-error: true
-
-      - name: disconnect az
-        run: sudo tedge disconnect az
-        # We need to continue when there is no tedge already installed
-        continue-on-error: true
-
-      - name: Stop apama
-        run: sudo systemctl stop apama
-        continue-on-error: true
-
-      - name: purge
-        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge_watchdog tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
-
-      - name: install mosquitto
-        run: sudo apt-get --assume-yes install mosquitto
-
-      - name: install libmosquitto1
-        run: sudo apt-get --assume-yes install libmosquitto1
-
-      - name: install mosquitto-clients
-        run: sudo apt-get --assume-yes install mosquitto-clients
-
-      - name: install collectd-core
-        run: sudo apt-get --assume-yes install collectd-core collectd
-
-      - name: install tedge package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_0.*_armhf.deb
-
-      - name: install tedge mapper package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_mapper_*_armhf.deb
-
-      - name: install tedge agent package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_armhf.deb
-
-      - name: install tedge watchdog package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_armhf.deb
-
-      - name: install tedge plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
-
-      - name: install c8y plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_armhf.deb
-
-      - name: run tedge help
-        run: tedge --help
-
-        # replace the default config file with tedge custom config file
-      - name: configure collectd
-        run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
-
-      - uses: actions/download-artifact@v3
-        # https://github.com/marketplace/actions/download-a-build-artifact
-        with:
-          name: sawtooth_publisher_armv7-unknown-linux-gnueabihf
-          path: /home/pi/examples
-
-      - name: chmod publisher
-        run: chmod +x /home/pi/examples/sawtooth_publisher
-
-      - uses: actions/download-artifact@v3
-        # https://github.com/marketplace/actions/download-a-build-artifact
-        with:
-          name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
-          path: /home/pi/tedge_dummy_plugin
-
-      - name: chmod dummy_plugin
-        run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
-
-      - name: Configure Bridge
-        run: ./ci/configure_bridge.sh
+        if: true
         env:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: m32sd10c
+          C8YDEVICE: ${{ matrix.rpi }}
+          C8YTENANT: ${{ secrets.SECRET_C8YTENANT }}
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
           C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
-      - name: Run smoke test for Cumulocity
-        run: ./ci/ci_smoke_test_c8y.sh
+      - name: Run all statistics tests
+        run:  bash ./ci/ci_run_statistics.sh
+        continue-on-error: true
+        if: true
         env:
           C8YPASS: ${{ secrets.SECRET_C8YPASS }}
           C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: m32sd10c
+          C8YDEVICE: ${{ matrix.rpi }}
+          C8YTENANT: ${{ secrets.SECRET_C8YTENANT }}
+          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
           TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
           EXAMPLEDIR: /home/pi/examples
-          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
 
-# Run tests for Azure
-# Enable this, when we have decided about how many runners we use
-#
-#      - name: Run Smoke Test for Azure
-#        run: ./ci/ci_smoke_test_az.sh
-#        env:
-#          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
-#          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
-#          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
-#          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
-#          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
-
-#################################################################################
-
-  install-and-use-rpi_m32sd10d:
-    runs-on: [self-hosted, Linux, ARM, offsite_m32sd10d]
-    needs: [build_matrix_arm]
-
-    steps:
-      - name: checkout
-        uses: actions/checkout@v2
-
-      - uses: actions/download-artifact@v3
-        # https://github.com/marketplace/actions/download-a-build-artifact
+      - name: Upload results as zip
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v2
         with:
-          name: debian-packages-armv7-unknown-linux-gnueabihf
-          path: debian-package_unpack
-
-      - name: Workaround Stop collectd mapper
-        run: sudo systemctl stop tedge-mapper-collectd
-        continue-on-error: true
-
-      - name: disconnect c8y
-        run: sudo tedge disconnect c8y
-        # We need to continue when there is no tedge already installed
-        continue-on-error: true
-
-      - name: disconnect az
-        run: sudo tedge disconnect az
-        # We need to continue when there is no tedge already installed
-        continue-on-error: true
-
-      - name: Stop apama
-        run: sudo systemctl stop apama
-        continue-on-error: true
-
-      - name: purge
-        run: sudo dpkg -P c8y_configuration_plugin tedge_agent c8y_log_plugin tedge_mapper tedge_apt_plugin tedge_apama_plugin tedge_watchdog tedge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
-
-      - name: install mosquitto
-        run: sudo apt-get --assume-yes install mosquitto
-
-      - name: install libmosquitto1
-        run: sudo apt-get --assume-yes install libmosquitto1
-
-      - name: install mosquitto-clients
-        run: sudo apt-get --assume-yes install mosquitto-clients
-
-      - name: install collectd-core
-        run: sudo apt-get --assume-yes install collectd-core collectd
-
-      - name: install tedge package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_0.*_armhf.deb
-
-      - name: install tedge mapper package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_mapper_*_armhf.deb
-
-      - name: install tedge agent package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_agent_*_armhf.deb
-
-      - name: install tedge watchdog package
-        run: sudo dpkg -i ./debian-package_unpack/tedge_watchdog_*_armhf.deb
-
-      - name: install tedge plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/tedge_*_plugin_*_armhf.deb
-
-      - name: install c8y plugin packages
-        run: sudo dpkg -i ./debian-package_unpack/c8y_*_plugin_*_armhf.deb
-
-      - name: run tedge help
-        run: tedge --help
-
-      - name: configure collectd
-        run: sudo cp "/etc/tedge/contrib/collectd/collectd.conf" "/etc/collectd/collectd.conf"
-
-      - uses: actions/download-artifact@v3
-        # https://github.com/marketplace/actions/download-a-build-artifact
-        with:
-          name: sawtooth_publisher_armv7-unknown-linux-gnueabihf
-          path: /home/pi/examples
-
-      - name: chmod publisher
-        run: chmod +x /home/pi/examples/sawtooth_publisher
-
-      - uses: actions/download-artifact@v3
-        # https://github.com/marketplace/actions/download-a-build-artifact
-        with:
-          name: tedge_dummy_plugin_armv7-unknown-linux-gnueabihf
-          path: /home/pi/tedge_dummy_plugin
-
-      - name: chmod dummy_plugin
-        run: chmod +x /home/pi/tedge_dummy_plugin/tedge_dummy_plugin
-
-      - name: Configure Bridge
-        run: ./ci/configure_bridge.sh
-        env:
-          C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: m32sd10d
-          TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-          EXAMPLEDIR: /home/pi/examples
-          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
-
-      - name: Run smoke test for Cumulocity
-        run: ./ci/ci_smoke_test_c8y.sh
-        env:
-          C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-          C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-          C8YDEVICE: m32sd10d
-          TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-          EXAMPLEDIR: /home/pi/examples
-          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
-
-# Run tests for Azure
-# Enable this, when we have decided about how many runners we use
-#
-#      - name: Run Smoke Test for Azure
-#        run: ./ci/ci_smoke_test_az.sh
-#        env:
-#          SASKEYQUEUE: ${{ secrets.SASKEYQUEUE }}
-#          SASKEYIOTHUB: ${{ secrets.SASKEYIOTHUB }}
-#          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
-#          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
-#          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
-
-#################################################################################
-
-  system-test_offsite_a:
-    runs-on: [self-hosted, Linux, ARM, offsite_m32sd10a]
-    needs: [install-and-use-rpi_m32sd10a]
-
-    steps:
-
-    - name: checkout
-      uses: actions/checkout@v2
-
-    - name: Run all Tests
-      run:  bash  ./ci/ci_run_all_tests.sh
-      continue-on-error: true
-      if: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: m32sd10a
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-
-    - name: Run all plugin tests
-      run:  bash  ./ci/ci_run_all_plugin_tests.sh
-      continue-on-error: true
-      if: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: m32sd10a
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-    - name: Run all sm tests
-      run:  bash  ./ci/ci_run_all_sm_tests.sh
-      continue-on-error: true
-      if: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: m32sd10a
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-    - name: Run all statistics tests
-      run:  bash  ./ci/ci_run_statistics.sh
-      continue-on-error: true
-      if: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: m32sd10a
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-
-    - name: upload results as zip
-      # https://github.com/marketplace/actions/upload-a-build-artifact
-      uses: actions/upload-artifact@v2
-      with:
-        name: results_pysys_offsite_m32sd10a
-        path: tests/
-
-#################################################################################
-
-  system-test_offsite_b:
-    runs-on: [self-hosted, Linux, ARM, offsite_m32sd10b]
-    needs: [install-and-use-rpi_m32sd10b]
-
-    steps:
-
-    - name: checkout
-      uses: actions/checkout@v2
-
-    - name: Run all Tests
-      run:  bash  ./ci/ci_run_all_tests.sh
-      continue-on-error: true
-      if: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: m32sd10b
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-
-    - name: Run all plugin tests
-      run:  bash  ./ci/ci_run_all_plugin_tests.sh
-      continue-on-error: true
-      if: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: m32sd10b
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-    - name: Run all sm tests
-      run:  bash  ./ci/ci_run_all_sm_tests.sh
-      continue-on-error: true
-      if: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: m32sd10b
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-    - name: Run all statistics tests
-      run:  bash  ./ci/ci_run_statistics.sh
-      continue-on-error: true
-      if: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: m32sd10b
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-
-    - name: upload results as zip
-      # https://github.com/marketplace/actions/upload-a-build-artifact
-      uses: actions/upload-artifact@v2
-      with:
-        name: results_pysys_offsite_m32sd10b
-        path: tests/
-
-#################################################################################
-
-  system-test_offsite_c:
-    runs-on: [self-hosted, Linux, ARM, offsite_m32sd10c]
-    needs: [install-and-use-rpi_m32sd10c]
-
-    steps:
-
-    - name: checkout
-      uses: actions/checkout@v2
-
-    - name: Run all Tests
-      run:  bash  ./ci/ci_run_all_tests.sh
-      continue-on-error: true
-      if: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: m32sd10c
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-
-    - name: Run all plugin tests
-      run:  bash  ./ci/ci_run_all_plugin_tests.sh
-      continue-on-error: true
-      if: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: m32sd10c
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-    - name: Run all sm tests
-      run:  bash  ./ci/ci_run_all_sm_tests.sh
-      continue-on-error: true
-      if: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: m32sd10c
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-    - name: Run all statistics tests
-      run:  bash  ./ci/ci_run_statistics.sh
-      continue-on-error: true
-      if: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: m32sd10c
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-
-    - name: upload results as zip
-      # https://github.com/marketplace/actions/upload-a-build-artifact
-      uses: actions/upload-artifact@v2
-      with:
-        name: results_pysys_offsite_m32sd10c
-        path: tests/
-
-#################################################################################
-
-  system-test_offsite_d:
-    runs-on: [self-hosted, Linux, ARM, offsite_m32sd10d]
-    needs: [install-and-use-rpi_m32sd10d]
-
-    steps:
-
-    - name: checkout
-      uses: actions/checkout@v2
-
-    - name: Run all Tests
-      run:  bash  ./ci/ci_run_all_tests.sh
-      continue-on-error: true
-      if: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: m32sd10d
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-
-    - name: Run all plugin tests
-      run:  bash  ./ci/ci_run_all_plugin_tests.sh
-      continue-on-error: true
-      if: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: m32sd10d
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-    - name: Run all sm tests
-      run:  bash  ./ci/ci_run_all_sm_tests.sh
-      continue-on-error: true
-      if: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: m32sd10d
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-    - name: Run all statistics tests
-      run:  bash  ./ci/ci_run_statistics.sh
-      continue-on-error: true
-      if: true
-      env:
-            C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-            C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-            C8YDEVICE: m32sd10d
-            C8YTENANT: ${{secrets.SECRET_C8YTENANT}}
-            C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-            TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-            EXAMPLEDIR: /home/pi/examples
-
-    - name: upload results as zip
-      # https://github.com/marketplace/actions/upload-a-build-artifact
-      uses: actions/upload-artifact@v2
-      with:
-        name: results_pysys_offsite_m32sd10d
-        path: tests/
+          name: results_pysys_offsite_${{ matrix.rpi }}
+          path: tests/
 
 #############################################################################
 
-  system-test_postprocessing:
-    needs: [system-test_offsite_a, system-test_offsite_b, system-test_offsite_c, system-test_offsite_d]
+  system-test-postprocessing:
     runs-on: Ubuntu-20.04
-    steps:
+    needs: system-test-offsite-matrix
 
-    - name: checkout
+    steps:
+    - name: Checkout
       uses: actions/checkout@v2
 
     # Trigger repo dispatch here.
@@ -1388,28 +362,28 @@ jobs:
 #          event-type: postprocess
 #          repository: abelikt/thin-edge.io_analytics
 
-    - name: download result a
+    - name: Download result a
       uses: actions/download-artifact@v3
       # https://github.com/marketplace/actions/download-a-build-artifact
       with:
         name: results_pysys_offsite_m32sd10a
         path: results/results_pysys_offsite_m32sd10a
 
-    - name: download result b
+    - name: Download result b
       uses: actions/download-artifact@v3
       # https://github.com/marketplace/actions/download-a-build-artifact
       with:
         name: results_pysys_offsite_m32sd10b
         path: results/results_pysys_offsite_m32sd10b
 
-    - name: download result c
+    - name: Download result c
       uses: actions/download-artifact@v3
       # https://github.com/marketplace/actions/download-a-build-artifact
       with:
         name: results_pysys_offsite_m32sd10c
         path: results/results_pysys_offsite_m32sd10c
 
-    - name: download result d
+    - name: Download result d
       uses: actions/download-artifact@v3
       # https://github.com/marketplace/actions/download-a-build-artifact
       with:
@@ -1419,14 +393,14 @@ jobs:
     - name: Build report
       run: ./ci/report/build.sh
 
-    - name: upload report as zip
+    - name: Upload report as zip
       # https://github.com/marketplace/actions/upload-a-build-artifact
       uses: actions/upload-artifact@v2
       with:
         name: report_matrix_${{ github.run_number }}
         path: results/report.zip
 
-    - name: upload report as html
+    - name: Upload report as html
       # https://github.com/marketplace/actions/upload-a-build-artifact
       uses: actions/upload-artifact@v2
       with:
