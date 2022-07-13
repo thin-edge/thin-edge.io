@@ -249,7 +249,7 @@ where
                 let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
 
                 Message::new(
-                    &Topic::new_unchecked(C8Y_JSON_MQTT_EVENTS_TOPIC.into()),
+                    &Topic::new_unchecked(C8Y_JSON_MQTT_EVENTS_TOPIC),
                     cumulocity_event_json,
                 )
             }
