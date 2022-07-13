@@ -55,7 +55,7 @@ impl ThinEdgeEvent {
         may_be_child: Option<&str>,
     ) -> Result<Self, ThinEdgeJsonDeserializerError> {
         let topic_split: Vec<&str> = mqtt_topic.split('/').collect();
-        if topic_split.len() >= 3 {
+        if topic_split.len() <= 4 {
             let event_name = topic_split[2];
             if event_name.is_empty() {
                 return Err(ThinEdgeJsonDeserializerError::EmptyEventName);
@@ -182,8 +182,8 @@ mod tests {
     }
 
     #[test]
-    fn event_translation_more_than_three_topic_levels() {
-        let result = ThinEdgeEvent::try_from("tedge/events/page/click", "{}", None);
+    fn event_translation_more_than_four_topic_levels() {
+        let result = ThinEdgeEvent::try_from("tedge/events/page/click/click", "{}", None);
 
         assert_matches!(
             result,
