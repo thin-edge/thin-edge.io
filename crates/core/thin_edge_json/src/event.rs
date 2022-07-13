@@ -194,6 +194,42 @@ mod tests {
     }
 
     #[test]
+    fn event_translation_for_child_dev() {
+        let pay_load = json!({
+            "text": "Someone clicked",
+            "time": "2021-04-23T19:00:00+05:00",
+        });
+        let mut extras = HashMap::new();
+        let mut json = JsonWriter::with_capacity(1024);
+        json.write_open_obj();
+        let _ = json.write_key("externalId");
+        let _ = json.write_str("test_child");
+        let _ = json.write_key("type");
+        let _ = json.write_str("c8y_Serial");
+        let _ = json.write_close_obj();
+        extras.insert(
+            "externalSource".into(),
+            serde_json::from_str(&json.into_string().unwrap()).unwrap(),
+        );
+
+        let expected_event = ThinEdgeEvent {
+            name: "click_event".into(),
+            data: Some(ThinEdgeEventData {
+                text: Some("Someone clicked".into()),
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                extras: extras,
+            }),
+        };
+        let event = ThinEdgeEvent::try_from(
+            "tedge/events/click_event/test_child",
+            pay_load.to_string().as_str(),
+            Some("test_child"),
+        )
+        .unwrap();
+        assert_eq!(event, expected_event);
+    }
+
+    #[test]
     fn event_translation_empty_payload() -> Result<()> {
         let event_data = ThinEdgeEventData {
             text: Some("foo".to_string()),
