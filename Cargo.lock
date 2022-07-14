@@ -1524,7 +1524,6 @@ version = "0.7.2"
 dependencies = [
  "anyhow",
  "assert_matches",
- "async-trait",
  "log",
  "serial_test",
  "tedge_test_utils",
