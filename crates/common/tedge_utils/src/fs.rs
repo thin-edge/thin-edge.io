@@ -43,6 +43,8 @@ pub async fn atomically_write_file_async(
         return Err(err);
     }
 
+    file.flush().await?;
+
     if let Err(err) = tokio_fs::rename(tempfile.as_ref(), dest).await {
         let () = tokio_fs::remove_file(tempfile).await?;
         return Err(err);
