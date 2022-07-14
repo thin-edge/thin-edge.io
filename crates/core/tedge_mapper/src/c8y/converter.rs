@@ -276,29 +276,26 @@ where
 
         // If the MQTT message size is well within the Cumulocity MQTT size limit, use MQTT to send the mapped event as well
         if input.payload_bytes().len() < self.size_threshold.0 {
-            vec.push(message)
+            vec.push(message);
+            Ok(vec)
         // If the message size is larger than the MQTT size limit, use HTTP to send the mapped event
         } else {
             match child_id {
                 Some(id) => {
                     if self.children.contains(&id) {
                         let _ = self.http_proxy.send_event(c8y_event).await?;
-                        return Ok(vec![]);
+                        Ok(vec![])
                     } else {
-                        return Err(ConversionError::ChildDeviceNotRegistered {
-                            id: id.to_string(),
-                        });
+                        Err(ConversionError::ChildDeviceNotRegistered { id: id.to_string() })
                     }
                 }
                 // Parent device
                 None => {
                     let _ = self.http_proxy.send_event(c8y_event).await?;
-                    return Ok(vec![]);
+                    Ok(vec![])
                 }
             }
         }
-
-        Ok(vec)
     }
 
     fn serialize_to_smartrest(c8y_event: &C8yCreateEvent) -> Result<String, ConversionError> {

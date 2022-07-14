@@ -55,7 +55,7 @@ impl ThinEdgeEvent {
         may_be_child: Option<&str>,
     ) -> Result<Self, ThinEdgeJsonDeserializerError> {
         let topic_split: Vec<&str> = mqtt_topic.split('/').collect();
-        if topic_split.len() <= 4 {
+        if topic_split.len() == 3 || topic_split.len() == 4 {
             let event_name = topic_split[2];
             if event_name.is_empty() {
                 return Err(ThinEdgeJsonDeserializerError::EmptyEventName);
