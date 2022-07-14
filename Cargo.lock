@@ -3017,7 +3017,6 @@ dependencies = [
  "serial_test",
  "tedge_config",
  "tedge_test_utils",
- "tedge_users",
  "tedge_utils",
  "test-case",
  "thin_edge_json",
