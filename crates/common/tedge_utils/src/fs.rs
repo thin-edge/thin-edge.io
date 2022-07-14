@@ -18,6 +18,8 @@ pub fn atomically_write_file_sync(
         return Err(err);
     }
 
+    file.flush()?;
+
     if let Err(err) = std_fs::rename(tempfile.as_ref(), dest) {
         let _ = std_fs::remove_file(tempfile);
         return Err(err);
