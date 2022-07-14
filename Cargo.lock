@@ -2069,7 +2069,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
- "tedge_utils",
  "tempfile",
  "test-case",
  "thiserror",
