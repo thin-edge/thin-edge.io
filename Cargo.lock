@@ -2875,7 +2875,6 @@ dependencies = [
  "base64",
  "certificate",
  "clap 3.1.18",
- "futures",
  "hyper",
  "mockito",
  "mqtt_tests",
