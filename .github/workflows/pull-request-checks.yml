@@ -160,33 +160,6 @@ jobs:
         with:
           command: audit
 
-  cargo-outdated:
-    name: Run cargo outdated
-    runs-on: Ubuntu-20.04
-    needs: changes
-    if: ${{ needs.changes.outputs.rust == 'true' }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Cargo outdated --version
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: outdated
-          args: --version
-
-      - name: Cargo outdated
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: outdated
-
   cargo-test:
     name: Run cargo test
     runs-on: Ubuntu-20.04
