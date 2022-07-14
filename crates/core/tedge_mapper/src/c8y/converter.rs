@@ -229,7 +229,7 @@ where
         let mut vec: Vec<Message> = Vec::new();
         let c8y_event;
         // check if there is a childid in the topic, if not create the child before forwarding the event message
-        let child_id: Option<String> = get_child_id_from_event_topic(&input.topic.name);
+        let child_id: Option<String> = get_child_id_from_event_topic(&input.topic.name)?;
 
         let message = match child_id {
             Some(ref c_id) => {
@@ -884,12 +884,21 @@ pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>
     }
 }
 
-pub fn get_child_id_from_event_topic(topic: &str) -> Option<String> {
-    let v: Vec<&str> = topic.splitn(4, '/').collect();
-    if v.len() >= 4 {
-        Some(v[3].to_string())
-    } else {
-        None
+pub fn get_child_id_from_event_topic(topic: &str) -> Result<Option<String>, ConversionError> {
+    match topic.strip_prefix("tedge/events/").map(String::from) {
+        Some(child_ev_topic) => {
+            let v: Vec<&str> = child_ev_topic.splitn(2, '/').collect();
+            if v.len() >= 2 {
+                let maybe_child_id = v[1].to_string();
+                if !maybe_child_id.is_empty() {
+                    return Ok(Some(maybe_child_id));
+                } else {
+                    return Err(ConversionError::InvalidChildId { id: maybe_child_id });
+                }
+            }
+            Ok(None)
+        }
+        option => Ok(option),
     }
 }
 
@@ -897,6 +906,10 @@ pub fn get_child_id_from_event_topic(topic: &str) -> Option<String> {
 mod tests {
     use plugin_sm::operation_logs::OperationLogs;
     use tedge_test_utils::fs::TempTedgeDir;
+
+    use crate::core::error::ConversionError;
+
+    use super::get_child_id_from_event_topic;
 
     #[tokio::test]
     async fn test_execute_operation_is_not_blocked() {
@@ -914,5 +927,26 @@ mod tests {
         // a result between now and elapsed that is not 0 probably means that the operations are
         // blocking and that you probably removed a tokio::spawn handle (;
         assert_eq!(now.elapsed().as_secs(), 0);
+    }
+
+    #[test]
+    fn empty_child_id() {
+        let err = get_child_id_from_event_topic("tedge/events/type/").unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            ConversionError::InvalidChildId { id: "".into() }.to_string()
+        );
+    }
+
+    #[test]
+    fn right_child_id() {
+        let res = get_child_id_from_event_topic("tedge/events/type/hello").unwrap();
+        assert_eq!(res, Some("hello".to_string()));
+    }
+
+    #[test]
+    fn invalid_child_event_topic() {
+        let res = get_child_id_from_event_topic("test/cloud").unwrap();
+        assert_eq!(res, None);
     }
 }
