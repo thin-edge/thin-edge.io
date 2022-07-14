@@ -28,7 +28,6 @@ async-trait = "0.1"
 clap = { version = "3.0", features = ["cargo", "derive"] }
 flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
-mockall = "0.10"
 mqtt_channel = { path = "../../common/mqtt_channel" }
 plugin_sm = { path = "../plugin_sm" }
 serde = { version = "1.0", features = ["derive"] }

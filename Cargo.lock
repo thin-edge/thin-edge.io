@@ -2913,7 +2913,6 @@ dependencies = [
  "clap 3.1.18",
  "flockfile",
  "futures",
- "mockall 0.10.2",
  "mqtt_channel",
  "mqtt_tests",
  "once_cell",
