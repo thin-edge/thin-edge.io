@@ -3051,7 +3051,6 @@ name = "tedge_utils"
 version = "0.7.2"
 dependencies = [
  "assert_matches",
- "futures",
  "nix",
  "tempfile",
  "thiserror",
