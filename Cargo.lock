@@ -888,7 +888,6 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "tedge_utils",
  "tempfile",
  "test-case",
  "thiserror",
