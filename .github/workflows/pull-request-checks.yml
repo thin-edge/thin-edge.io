@@ -20,6 +20,21 @@ jobs:
         # https://github.com/13rac1/block-fixup-merge-action
         uses: 13rac1/block-fixup-merge-action@v2.0.0
 
+  udeps:
+    name: Check for unused dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+      - name: Run cargo-udeps
+        uses: aig787/cargo-udeps-action@v1
+        with:
+          version: 'latest'
+          args: '--all-features'
+
   # JOB to run change detection
   changes:
     name: Filter changes
