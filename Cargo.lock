@@ -1528,7 +1528,6 @@ dependencies = [
  "serial_test",
  "tedge_test_utils",
  "test-case",
- "thiserror",
  "tokio",
 ]
 
