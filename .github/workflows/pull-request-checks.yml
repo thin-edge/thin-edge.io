@@ -41,6 +41,22 @@ jobs:
               - 'crates/**'
               - 'plugins/**'
 
+  udeps:
+    name: Check for unused dependencies
+    runs-on: ubuntu-latest
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+      - name: Run cargo-udeps
+        uses: aig787/cargo-udeps-action@v1
+        with:
+          version: 'latest'
+          args: '--all-features'
+
   mdbook-build-check:
     name: Run mdbook build
     runs-on: ubuntu-20.04

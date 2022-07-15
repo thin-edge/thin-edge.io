@@ -6,9 +6,7 @@ edition = "2021"
 rust-version = "1.58.1"
 
 [dependencies]
-async-trait = "0.1"
 log = "0.4"
-thiserror = "1.0"
 tokio = { version = "1.8", features = [ "fs", "io-util", "macros", "process", "rt" ] }
 
 
