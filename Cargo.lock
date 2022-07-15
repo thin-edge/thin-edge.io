@@ -2890,7 +2890,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tedge_config",
- "tedge_users",
  "tedge_utils",
  "tempfile",
  "test-case",
