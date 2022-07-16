@@ -3035,14 +3035,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tedge_users"
-version = "0.7.2"
-dependencies = [
- "thiserror",
- "users",
-]
-
-[[package]]
 name = "tedge_utils"
 version = "0.7.2"
 dependencies = [
