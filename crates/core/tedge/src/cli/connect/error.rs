@@ -1,5 +1,3 @@
-use tedge_users::UserSwitchError;
-
 #[derive(thiserror::Error, Debug)]
 pub enum ConnectError {
     #[error("Couldn't load certificate, provide valid certificate path in configuration. Use 'tedge config --set'")]
@@ -51,7 +49,4 @@ pub enum ConnectError {
 
     #[error("Could not parse certificate")]
     RumqttcCertificate,
-
-    #[error(transparent)]
-    UserSwitchError(#[from] UserSwitchError),
 }

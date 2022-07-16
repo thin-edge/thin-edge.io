@@ -2885,7 +2885,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tedge_config",
- "tedge_users",
  "tedge_utils",
  "tempfile",
  "test-case",
@@ -2918,7 +2917,6 @@ dependencies = [
  "serial_test",
  "tedge_config",
  "tedge_test_utils",
- "tedge_users",
  "tedge_utils",
  "thiserror",
  "time",
@@ -3028,14 +3026,6 @@ dependencies = [
  "anyhow",
  "tempfile",
  "toml",
-]
-
-[[package]]
-name = "tedge_users"
-version = "0.7.2"
-dependencies = [
- "thiserror",
- "users",
 ]
 
 [[package]]

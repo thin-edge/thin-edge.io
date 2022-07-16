@@ -140,7 +140,7 @@ impl PermissionEntry {
     }
 }
 
-fn change_user_and_group(file: &Path, user: &str, group: &str) -> Result<(), FileError> {
+pub fn change_user_and_group(file: &Path, user: &str, group: &str) -> Result<(), FileError> {
     let ud = match get_user_by_name(user) {
         Some(user) => user.uid(),
         None => {

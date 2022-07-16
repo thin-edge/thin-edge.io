@@ -47,7 +47,6 @@ assert-json-diff = "2.0"
 once_cell = "1.8"
 mqtt_tests = { path = "../../tests/mqtt_tests" }
 predicates = "2.1"
-tedge_users = { path = "../../common/tedge_users"}
 tedge_utils = { path = "../../common/tedge_utils"}
 tedge_test_utils = { path = "../../tests/tedge_test_utils"}
 tokio-test = "0.4"
