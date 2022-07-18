@@ -1,11 +1,11 @@
-use json_writer::{JsonWriter, JsonWriterError};
+use std::collections::HashMap;
+
 use thin_edge_json::measurement::MeasurementVisitor;
-use time::{format_description, OffsetDateTime};
+use time::OffsetDateTime;
 
 pub struct C8yJsonSerializer {
-    json: JsonWriter,
-    is_within_group: bool,
-    timestamp_present: bool,
+    json: InnerJson,
+    in_group: Option<String>,
     default_timestamp: OffsetDateTime,
 }
 
@@ -15,7 +15,45 @@ pub enum C8yJsonSerializationError {
     MeasurementCollectorError(#[from] MeasurementStreamError),
 
     #[error(transparent)]
-    JsonWriterError(#[from] JsonWriterError),
+    JsonWriterError(#[from] serde_json::Error),
+}
+
+#[derive(Debug, serde::Serialize)]
+struct InnerJson {
+    #[serde(rename = "type")]
+    type_: InnerJsonType,
+
+    #[serde(rename = "externalSource")]
+    external_source: Option<ExternalSource>,
+
+    value: Option<f64>,
+
+    #[serde(with = "time::serde::rfc3339::option")]
+    time: Option<OffsetDateTime>,
+
+    #[serde(flatten)]
+    groups: HashMap<String, HashMap<String, f64>>,
+
+    #[serde(flatten)]
+    values: HashMap<String, f64>,
+}
+
+#[derive(Debug, serde::Serialize)]
+enum InnerJsonType {
+    #[serde(rename = "ThinEdgeMeasurement")]
+    ThinEdgeMeasurement,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ExternalSource {
+    external_id: String,
+    type_: ExternalSourceType,
+}
+
+#[derive(Debug, serde::Serialize)]
+enum ExternalSourceType {
+    #[serde(rename = "c8y_Serial")]
+    C8YSerial,
 }
 
 #[derive(thiserror::Error, Debug, PartialEq)]
@@ -35,61 +73,43 @@ pub enum MeasurementStreamError {
 
 impl C8yJsonSerializer {
     pub fn new(default_timestamp: OffsetDateTime, maybe_child_id: Option<&str>) -> Self {
-        let capa = 1024; // XXX: Choose a capacity based on expected JSON length.
-        let mut json = JsonWriter::with_capacity(capa);
-
-        json.write_open_obj();
-        let _ = json.write_key("type");
-        let _ = json.write_str("ThinEdgeMeasurement");
+        let mut json = InnerJson {
+            type_: InnerJsonType::ThinEdgeMeasurement,
+            external_source: None,
+            value: None,
+            time: None,
+            groups: HashMap::new(),
+            values: HashMap::new(),
+        };
 
         if let Some(child_id) = maybe_child_id {
             // In case the measurement is addressed to a child-device use fragment
             // "externalSource" to tell c8Y identity API to use child-device
             // object referenced by "externalId", instead of root device object
             // referenced by MQTT client's Device ID.
-            let _ = json.write_key("externalSource");
-            json.write_open_obj();
-            let _ = json.write_key("externalId");
-            let _ = json.write_str(child_id);
-            let _ = json.write_key("type");
-            let _ = json.write_str("c8y_Serial");
-            json.write_close_obj();
+            json.external_source = Some(ExternalSource {
+                external_id: child_id.to_string(),
+                type_: ExternalSourceType::C8YSerial,
+            });
         }
 
         Self {
             json,
-            is_within_group: false,
-            timestamp_present: false,
+            in_group: None,
             default_timestamp,
         }
     }
 
     fn end(&mut self) -> Result<(), C8yJsonSerializationError> {
-        if self.is_within_group {
-            return Err(MeasurementStreamError::UnexpectedEndOfData.into());
-        }
-
-        if !self.timestamp_present {
+        if self.json.time.is_none() {
             self.visit_timestamp(self.default_timestamp)?;
         }
-
-        assert!(self.timestamp_present);
-
-        self.json.write_close_obj();
-        Ok(())
-    }
-
-    fn write_value_obj(&mut self, value: f64) -> Result<(), C8yJsonSerializationError> {
-        self.json.write_open_obj();
-        self.json.write_key("value")?;
-        self.json.write_f64(value)?;
-        self.json.write_close_obj();
         Ok(())
     }
 
     pub fn into_string(&mut self) -> Result<String, C8yJsonSerializationError> {
         self.end()?;
-        Ok(self.json.clone().into_string()?)
+        Ok(serde_json::to_string(&self.json)?)
     }
 }
 
@@ -97,54 +117,35 @@ impl MeasurementVisitor for C8yJsonSerializer {
     type Error = C8yJsonSerializationError;
 
     fn visit_timestamp(&mut self, timestamp: OffsetDateTime) -> Result<(), Self::Error> {
-        if self.is_within_group {
-            return Err(MeasurementStreamError::UnexpectedTimestamp.into());
-        }
-
-        self.json.write_key("time")?;
-        self.json.write_str(
-            timestamp
-                .format(&format_description::well_known::Rfc3339)
-                .unwrap()
-                .as_str(),
-        )?;
-
-        self.timestamp_present = true;
+        self.json.time = Some(timestamp);
         Ok(())
     }
 
     fn visit_measurement(&mut self, key: &str, value: f64) -> Result<(), Self::Error> {
-        self.json.write_key(key)?;
-
-        if self.is_within_group {
-            self.write_value_obj(value)?;
+        if let Some(group_name) = self.in_group.as_ref() {
+            let group = self
+                .json
+                .groups
+                .entry(group_name.to_string())
+                .or_insert_with(HashMap::new);
+            group.insert(key.to_string(), value);
         } else {
-            self.json.write_open_obj();
-            self.json.write_key(key)?;
-            self.write_value_obj(value)?;
-            self.json.write_close_obj();
+            self.json.values.insert(key.to_string(), value);
         }
         Ok(())
     }
 
     fn visit_start_group(&mut self, group: &str) -> Result<(), Self::Error> {
-        if self.is_within_group {
+        if self.in_group.is_some() {
             return Err(MeasurementStreamError::UnexpectedStartOfGroup.into());
         }
 
-        self.json.write_key(group)?;
-        self.json.write_open_obj();
-        self.is_within_group = true;
+        self.in_group = Some(group.to_string());
         Ok(())
     }
 
     fn visit_end_group(&mut self) -> Result<(), Self::Error> {
-        if !self.is_within_group {
-            return Err(MeasurementStreamError::UnexpectedEndOfGroup.into());
-        }
-
-        self.json.write_close_obj();
-        self.is_within_group = false;
+        self.in_group = None;
         Ok(())
     }
 }
