@@ -266,16 +266,4 @@ mod tests {
         assert_eq!(expected_error, result.unwrap_err().to_string());
         Ok(())
     }
-
-    #[test]
-    fn serialize_unexpected_end_of_message() -> anyhow::Result<()> {
-        let mut serializer = ThinEdgeJsonSerializer::new();
-        serializer.visit_start_group("location")?;
-        serializer.visit_measurement("alti", 2100.4)?;
-        serializer.visit_measurement("longi", 2200.4)?;
-        let expected_error = "Unexpected end of data";
-        let result = serializer.into_string();
-        assert_eq!(expected_error, result.unwrap_err().to_string());
-        Ok(())
-    }
 }
