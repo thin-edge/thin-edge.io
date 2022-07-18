@@ -8,6 +8,7 @@ rust-version = "1.58.1"
 [dependencies]
 clock = { path = "../../common/clock" }
 json-writer = { path = "../../common/json_writer" }
+serde_json = "1.0"
 thin_edge_json = { path = "../thin_edge_json" }
 thiserror = "1.0"
 time = "0.3"

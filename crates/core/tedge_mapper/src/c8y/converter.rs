@@ -34,6 +34,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use tedge_config::{get_tedge_config, ConfigSettingAccessor, LogPathSetting};
+
 use thin_edge_json::{alarm::ThinEdgeAlarm, event::ThinEdgeEvent};
 use time::format_description::well_known::Rfc3339;
 
@@ -228,8 +229,9 @@ where
     ) -> Result<Vec<Message>, ConversionError> {
         let mut vec = Vec::new();
         let c8y_event;
-        // check if there is a childid in the topic, if not create the child before forwarding the event message
-        let child_id = get_child_id_from_event_topic(&input.topic.name)?;
+
+        let mut tedge_event = ThinEdgeEvent::try_from(&input.topic.name, input.payload_str()?)?;
+        let child_id = tedge_event.source.clone();
 
         let message = match child_id {
             Some(ref c_id) => {
@@ -240,10 +242,7 @@ where
                         format!("101,{c_id},{c_id},thin-edge.io-child"),
                     ));
                 }
-
-                let tedge_event =
-                    ThinEdgeEvent::try_from(&input.topic.name, input.payload_str()?, Some(c_id))?;
-
+                let _ = json::from_thin_edge_json_child_event(c_id, &mut tedge_event.data)?;
                 c8y_event = C8yCreateEvent::try_from(tedge_event)?;
                 let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
 
@@ -253,8 +252,6 @@ where
                 )
             }
             None => {
-                let tedge_event =
-                    ThinEdgeEvent::try_from(input.topic.name.as_str(), input.payload_str()?, None)?;
                 c8y_event = C8yCreateEvent::try_from(tedge_event)?;
 
                 // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
@@ -875,32 +872,10 @@ pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>
     }
 }
 
-pub fn get_child_id_from_event_topic(topic: &str) -> Result<Option<String>, ConversionError> {
-    match topic.strip_prefix("tedge/events/").map(String::from) {
-        Some(child_ev_topic) => {
-            let v: Vec<&str> = child_ev_topic.splitn(2, '/').collect();
-            if v.len() >= 2 {
-                let maybe_child_id = v[1].to_string();
-                if !maybe_child_id.is_empty() {
-                    return Ok(Some(maybe_child_id));
-                } else {
-                    return Err(ConversionError::InvalidChildId { id: maybe_child_id });
-                }
-            }
-            Ok(None)
-        }
-        None => Ok(None),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use plugin_sm::operation_logs::OperationLogs;
     use tedge_test_utils::fs::TempTedgeDir;
-
-    use crate::core::error::ConversionError;
-
-    use super::get_child_id_from_event_topic;
 
     #[tokio::test]
     async fn test_execute_operation_is_not_blocked() {
@@ -918,26 +893,5 @@ mod tests {
         // a result between now and elapsed that is not 0 probably means that the operations are
         // blocking and that you probably removed a tokio::spawn handle (;
         assert_eq!(now.elapsed().as_secs(), 0);
-    }
-
-    #[test]
-    fn empty_child_id() {
-        let err = get_child_id_from_event_topic("tedge/events/type/").unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            ConversionError::InvalidChildId { id: "".into() }.to_string()
-        );
-    }
-
-    #[test]
-    fn right_child_id() {
-        let res = get_child_id_from_event_topic("tedge/events/type/hello").unwrap();
-        assert_eq!(res, Some("hello".to_string()));
-    }
-
-    #[test]
-    fn invalid_child_event_topic() {
-        let res = get_child_id_from_event_topic("test/cloud").unwrap();
-        assert_eq!(res, None);
     }
 }

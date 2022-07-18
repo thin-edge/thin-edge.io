@@ -353,6 +353,7 @@ mod tests {
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 extras: HashMap::new(),
             }),
+            source: None,
         },
         C8yCreateEvent {
             source: None,
@@ -371,6 +372,7 @@ mod tests {
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 extras: HashMap::new(),
             }),
+            source: None,
         },
         C8yCreateEvent {
             source: None,
@@ -389,6 +391,7 @@ mod tests {
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 extras: HashMap::new(),
             }),
+            source: None,
         },
         C8yCreateEvent {
             source: None,
@@ -419,6 +422,7 @@ mod tests {
                 time: None,
                 extras: HashMap::new(),
             }),
+            source: None,
         };
 
         let actual_c8y_event = C8yCreateEvent::try_from(tedge_event)?;
@@ -437,6 +441,7 @@ mod tests {
         let tedge_event = ThinEdgeEvent {
             name: "empty_event".into(),
             data: None,
+            source: None,
         };
 
         let actual_c8y_event = C8yCreateEvent::try_from(tedge_event)?;
