@@ -192,17 +192,39 @@ mod tests {
         serializer.visit_measurement("lati", 2300.4)?;
         serializer.visit_end_group()?;
         serializer.visit_measurement("pressure", 255.0)?;
-        let body = r#""temperature":25.5,"location":{"alti":2100.4,"longi":2200.4,"lati":2300.4},"pressure":255.0}"#;
-        let expected_output = format!(
-            r#"{{"time":"{}",{}"#,
-            timestamp
-                .format(&format_description::well_known::Rfc3339)
-                .unwrap()
-                .as_str(),
-            body
-        );
-        let output = serializer.into_string()?;
-        assert_eq!(expected_output, output);
+
+        assert!(serializer.json.timestamp.is_some());
+        assert_eq!(serializer.json.timestamp.clone().unwrap(), timestamp);
+
+        // We cannot reliably compare float values for equality, so this must suffice:
+        assert!(serializer.json.values.get("temperature").is_some());
+
+        // We cannot reliably compare float values for equality, so this must suffice:
+        assert!(serializer.json.values.get("pressure").is_some());
+
+        assert!(serializer.json.groups.get("location").is_some());
+        assert!(serializer
+            .json
+            .groups
+            .get("location")
+            .unwrap()
+            .get("alti")
+            .is_some());
+        assert!(serializer
+            .json
+            .groups
+            .get("location")
+            .unwrap()
+            .get("longi")
+            .is_some());
+        assert!(serializer
+            .json
+            .groups
+            .get("location")
+            .unwrap()
+            .get("lati")
+            .is_some());
+
         Ok(())
     }
 
