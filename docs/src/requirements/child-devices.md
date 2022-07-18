@@ -2,8 +2,9 @@
 
 ## Child Device Model
 * A child device implies two aspects:
-  - a "physical child-device" on device site
-  - a "cloud child device-twin" (a logical representation of the physical device in the cloud)
+  - an _endpoint at the device side_, that represents the child-device; that could be a pysical device that is connected to the thin-edge device (e.g. a PLC, a fieldbus device, a sensor or any other kind of device);
+   or a container or local process running on the thin-edge device
+  - a _cloud child device-twin_ that represents the child-device in the cloud
   - ?an edge child device-twin (a logical representation of the physical device in thin-edge)
 * Physical child devices typically are special-purpose hardware devices designed to do just a single task or a handful of tasks at best. 
 * These devices can't (or don't want, out of security reasons) connect to the cloud directly. Instead they get connected to the cloud via a gateway device.
@@ -15,18 +16,64 @@
 
 TODO: do not forget, a child-device could be also logical (a process running on the gateway)
 
+# Initialisation of a Child-Device
+Before a child-device could be put into action, both aspects from above (_Device-Side Endpoint_ and _Cloud Child Device-Twin_) need to be initialised.
+
+* Initialisation: Device-Side Endpoint
+
+   ...TODO...
+
+* Initialisation: Cloud Child Device-Twin
+
+  Two levels of initialisations have to take place for the cloud child device-twin: 
+  1) creating the new child-device twin in the cloud
+  2) declaring capabilities on the new child-device twin, i.E.:
+     - declaring supported operations (e.g. sw-update, config-man, log-man, ...)
+     - declaring supported types (e.g. sw module-type, config-type, log-type, ...)
+
 # User Journey
 
-## Connecting a smart physical child-device (featuring MQTT client) to the cloud via the gateway
-- User creates the child-device twin in the cloud, with a unique child-id and supported operations
-- User plugs physical child-device to the gateway
-- User configures the broker IP/Port/Certificate and child-id in the physical child-device
-- User configures the root certificate in the gateway
-- Physical child-device asks thin-edge to validate if cloud child-device twin with the same child-id exists
-- Gateway consults cloud to confirm if cloud child-device twin with child-id exists
-- Result of the validation is reported to the physical child-device
-- If the validation succeeds, the physical child-device starts sending/receiving data/operations
-- If the validation fails, the physical child-device can either create the cloud child-devive twin, or repeat the validation until a 3rd party creates the cloud child-device twin, or signal an error to the user.
+## Definition of Personas used in the user journeys below
+* __Device Operator__ (the one who maintains/operates the device in the field in the shopfloor)
+* __Agent Developer__ (the one who adapts and deploys thin-edge to the device)
+* __Device App Developer__ (the one who implements the device application that makes use of thin-edge APIs)
+* __Solution Architect__ (the one, who is in authority for the whole end-to-end picture (from devices to cloud) )
+
+
+## Journey: Connecting a physical child-device to the cloud via the gateway
+
+Preface: There are two options to create a child-device twin in the cloud:
+  1) by cloud site or by some customer specific tool/app on-top of the cloud
+  2) by the thin-edge device<br/>
+     a) automatically no 1st data push<br/>
+     b) intentionally by configuration or external device request
+
+Same two options are possible for declaring capabilities.
+
+Scenarios below are per each combination of those options:
+
+* __Scenario 1: Child Device-Twin created by Cloud, Child-Device Capabilties declared by thin-edge__
+  1. Device Operator creates the child-device twin in the cloud, with a unique child-id.
+  2. Device Operator plugs the physical child-device to the gateway.
+  3. Device Operator configures physical child-device's capabilities on the gateway (e.g. config management items, ...).
+  4. Device Operator installs any needed device-specific sw components that translates the thin-edge protocol into the device-specific protocol (e.g. SW Man Plugins, ...).
+  5. Device Operator configures address and credentials/certificate of the gateway to the pyhiscal child-device (e.g. broker IP/Port/Certificate).
+  6. Device Operator configures unique child-id of the cloud's child device-twin in the physical child device.
+  7. Device Operator validates if all capabilities of the child-device are working.
+     TODO: How? -> Logfiles of thin-edge(?). Needed to try everything by hand(CfgMan,...)???
+  TODO: In case of any error use thin-edge logs to identify and solve the problem.
+
+* __Scenario 2: Child Device-Twin created by thin-edge, Child-Device Capabilties declared by thin-edge__
+  
+  ...TODO...
+  
+* __Scenario 3: Child Device-Twin created by Cloud, Child-Device Capabilties declared by Cloud__
+  
+  ...TODO...
+
+* __Scenario 4: Child Device-Twin created by thin-edge, Child-Device Capabilties declared by Cloud__
+  
+  ...TODO...
 
 ## Connecting a non-smart / closed physical child-device to the cloud via the gateway
 TBD
