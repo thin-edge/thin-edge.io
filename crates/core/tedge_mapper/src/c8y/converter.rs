@@ -278,19 +278,17 @@ where
             vec.push(message);
             Ok(vec)
         // If the message size is larger than the MQTT size limit, use HTTP to send the mapped event
-        } else {
-            if let Some(id) = child_id {
-                if self.children.contains(&id) {
-                    let _ = self.http_proxy.send_event(c8y_event).await?;
-                    Ok(vec![])
-                } else {
-                    Err(ConversionError::ChildDeviceNotRegistered { id: id.to_string() })
-                }
-            } else {
-                // Parent device
+        } else if let Some(id) = child_id {
+            if self.children.contains(&id) {
                 let _ = self.http_proxy.send_event(c8y_event).await?;
                 Ok(vec![])
+            } else {
+                Err(ConversionError::ChildDeviceNotRegistered { id: id.to_string() })
             }
+        } else {
+            // Parent device
+            let _ = self.http_proxy.send_event(c8y_event).await?;
+            Ok(vec![])
         }
     }
 
