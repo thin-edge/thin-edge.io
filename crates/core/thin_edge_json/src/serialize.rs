@@ -71,13 +71,6 @@ impl ThinEdgeJsonSerializer {
         }
     }
 
-    fn end(&mut self) -> Result<(), ThinEdgeJsonSerializationError> {
-        if self.within_group.is_some() {
-            return Err(MeasurementStreamError::UnexpectedEndOfData.into());
-        }
-        Ok(())
-    }
-
     pub fn bytes(mut self) -> Result<Vec<u8>, ThinEdgeJsonSerializationError> {
         self.into_string().map(String::into_bytes)
     }
