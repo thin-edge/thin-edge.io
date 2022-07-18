@@ -226,10 +226,10 @@ where
         &mut self,
         input: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        let mut vec: Vec<Message> = Vec::new();
+        let mut vec = Vec::new();
         let c8y_event;
         // check if there is a childid in the topic, if not create the child before forwarding the event message
-        let child_id: Option<String> = get_child_id_from_event_topic(&input.topic.name)?;
+        let child_id = get_child_id_from_event_topic(&input.topic.name)?;
 
         let message = match child_id {
             Some(ref c_id) => {
@@ -279,20 +279,17 @@ where
             Ok(vec)
         // If the message size is larger than the MQTT size limit, use HTTP to send the mapped event
         } else {
-            match child_id {
-                Some(id) => {
-                    if self.children.contains(&id) {
-                        let _ = self.http_proxy.send_event(c8y_event).await?;
-                        Ok(vec![])
-                    } else {
-                        Err(ConversionError::ChildDeviceNotRegistered { id: id.to_string() })
-                    }
-                }
-                // Parent device
-                None => {
+            if let Some(id) = child_id {
+                if self.children.contains(&id) {
                     let _ = self.http_proxy.send_event(c8y_event).await?;
                     Ok(vec![])
+                } else {
+                    Err(ConversionError::ChildDeviceNotRegistered { id: id.to_string() })
                 }
+            } else {
+                // Parent device
+                let _ = self.http_proxy.send_event(c8y_event).await?;
+                Ok(vec![])
             }
         }
     }
@@ -894,7 +891,7 @@ pub fn get_child_id_from_event_topic(topic: &str) -> Result<Option<String>, Conv
             }
             Ok(None)
         }
-        option => Ok(option),
+        None => Ok(None),
     }
 }
 
