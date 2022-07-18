@@ -1,12 +1,25 @@
+use std::collections::HashMap;
+
 use crate::measurement::MeasurementVisitor;
-use json_writer::{JsonWriter, JsonWriterError};
-use time::{format_description, OffsetDateTime};
+use time::OffsetDateTime;
 
 pub struct ThinEdgeJsonSerializer {
-    json: JsonWriter,
-    is_within_group: bool,
-    default_timestamp: Option<OffsetDateTime>,
-    timestamp_present: bool,
+    json: InnerJson,
+    within_group: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct InnerJson {
+    #[serde(with = "time::serde::rfc3339::option")]
+    #[serde(rename = "time")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    timestamp: Option<OffsetDateTime>,
+
+    #[serde(flatten)]
+    values: HashMap<String, f64>,
+
+    #[serde(flatten)]
+    groups: HashMap<String, HashMap<String, f64>>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -24,7 +37,7 @@ pub enum ThinEdgeJsonSerializationError {
     InvalidUtf8ConversionToString(std::string::FromUtf8Error),
 
     #[error(transparent)]
-    JsonWriterError(#[from] JsonWriterError),
+    JsonWriterError(#[from] serde_json::Error),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -48,40 +61,29 @@ impl ThinEdgeJsonSerializer {
     }
 
     pub fn new_with_timestamp(default_timestamp: Option<OffsetDateTime>) -> Self {
-        let capa = 1024; // XXX: Choose a capacity based on expected JSON length.
-        let mut json = JsonWriter::with_capacity(capa);
-        json.write_open_obj();
-
         Self {
-            json,
-            is_within_group: false,
-            default_timestamp,
-            timestamp_present: false,
+            json: InnerJson {
+                timestamp: default_timestamp,
+                groups: HashMap::new(),
+                values: HashMap::new(),
+            },
+            within_group: None,
         }
     }
 
     fn end(&mut self) -> Result<(), ThinEdgeJsonSerializationError> {
-        if self.is_within_group {
+        if self.within_group.is_some() {
             return Err(MeasurementStreamError::UnexpectedEndOfData.into());
         }
-
-        if !self.timestamp_present {
-            if let Some(default_timestamp) = self.default_timestamp {
-                let () = self.visit_timestamp(default_timestamp)?;
-            }
-        }
-
-        self.json.write_close_obj();
         Ok(())
     }
 
     pub fn bytes(mut self) -> Result<Vec<u8>, ThinEdgeJsonSerializationError> {
-        Ok(self.into_string()?.into_bytes())
+        self.into_string().map(String::into_bytes)
     }
 
     pub fn into_string(&mut self) -> Result<String, ThinEdgeJsonSerializationError> {
-        self.end()?;
-        Ok(self.json.clone().into_string()?)
+        serde_json::to_string(&self.json).map_err(ThinEdgeJsonSerializationError::from)
     }
 }
 
@@ -95,44 +97,43 @@ impl MeasurementVisitor for ThinEdgeJsonSerializer {
     type Error = ThinEdgeJsonSerializationError;
 
     fn visit_timestamp(&mut self, timestamp: OffsetDateTime) -> Result<(), Self::Error> {
-        if self.is_within_group {
+        if self.within_group.is_some() {
             return Err(MeasurementStreamError::UnexpectedTimestamp.into());
         }
 
-        self.json.write_key("time")?;
-        self.json.write_str(
-            timestamp
-                .format(&format_description::well_known::Rfc3339)?
-                .as_str(),
-        )?;
-        self.timestamp_present = true;
+        self.json.timestamp = Some(timestamp);
         Ok(())
     }
 
     fn visit_measurement(&mut self, name: &str, value: f64) -> Result<(), Self::Error> {
-        self.json.write_key(name)?;
-        self.json.write_f64(value)?;
+        if let Some(group_name) = self.within_group.as_ref() {
+            let group = self
+                .json
+                .groups
+                .entry(group_name.to_string())
+                .or_insert_with(HashMap::new);
+            group.insert(name.to_string(), value);
+        } else {
+            self.json.values.insert(name.to_string(), value);
+        }
         Ok(())
     }
 
     fn visit_start_group(&mut self, group: &str) -> Result<(), Self::Error> {
-        if self.is_within_group {
+        if self.within_group.is_some() {
             return Err(MeasurementStreamError::UnexpectedStartOfGroup.into());
         }
 
-        self.json.write_key(group)?;
-        self.json.write_open_obj();
-        self.is_within_group = true;
+        self.within_group = Some(group.to_string());
         Ok(())
     }
 
     fn visit_end_group(&mut self) -> Result<(), Self::Error> {
-        if !self.is_within_group {
+        if self.within_group.is_none() {
             return Err(MeasurementStreamError::UnexpectedEndOfGroup.into());
         }
 
-        self.json.write_close_obj();
-        self.is_within_group = false;
+        self.within_group = None;
         Ok(())
     }
 }
@@ -140,6 +141,8 @@ impl MeasurementVisitor for ThinEdgeJsonSerializer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use time::format_description;
 
     fn test_timestamp() -> OffsetDateTime {
         OffsetDateTime::now_utc()
