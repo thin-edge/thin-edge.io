@@ -56,7 +56,7 @@ impl TempTedgeDir {
     }
 
     pub fn path(&self) -> &Path {
-        Path::new(self.temp_dir.path())
+        self.current_file_path.as_path()
     }
 
     pub fn to_path_buf(&self) -> PathBuf {
@@ -82,6 +82,10 @@ impl TempTedgeFile {
             .unwrap();
         let file_content = content.to_string();
         file.write_all(file_content.as_bytes()).unwrap();
+    }
+
+    pub fn delete(self) {
+        std::fs::remove_file(self.path()).unwrap();
     }
 
     pub fn path(&self) -> &Path {
