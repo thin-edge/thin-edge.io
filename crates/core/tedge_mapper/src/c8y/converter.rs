@@ -245,7 +245,6 @@ where
                     ThinEdgeEvent::try_from(&input.topic.name, input.payload_str()?, Some(c_id))?;
 
                 c8y_event = C8yCreateEvent::try_from(tedge_event)?;
-                // If the message contains extra fields other than `text` and `time`, convert to Cumulocity JSON
                 let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
 
                 Message::new(
