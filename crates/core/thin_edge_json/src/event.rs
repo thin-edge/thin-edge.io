@@ -30,7 +30,6 @@ pub struct ThinEdgeEventData {
 }
 
 pub mod error {
-    use json_writer::JsonWriterError;
 
     #[derive(thiserror::Error, Debug)]
     pub enum ThinEdgeJsonDeserializerError {
@@ -42,9 +41,6 @@ pub mod error {
 
         #[error(transparent)]
         SerdeJsonError(#[from] serde_json::error::Error),
-
-        #[error(transparent)]
-        JsonWriterError(#[from] JsonWriterError),
     }
 }
 

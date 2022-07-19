@@ -34,7 +34,6 @@ use std::{
     path::{Path, PathBuf},
 };
 use tedge_config::{get_tedge_config, ConfigSettingAccessor, LogPathSetting};
-
 use thin_edge_json::{alarm::ThinEdgeAlarm, event::ThinEdgeEvent};
 use time::format_description::well_known::Rfc3339;
 
