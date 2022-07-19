@@ -62,7 +62,7 @@ impl ThinEdgeEvent {
                 Some(serde_json::from_str(mqtt_payload)?)
             };
 
-            // If source is external source
+            // The 4th part of the topic name is the event source - if any
             let external_source = if topic_split.len() == 4 {
                 Some(topic_split[3].to_string())
             } else {

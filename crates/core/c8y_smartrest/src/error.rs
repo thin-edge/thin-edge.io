@@ -1,4 +1,5 @@
 use agent_interface::SoftwareUpdateResponse;
+use json_writer::JsonWriterError;
 use std::path::PathBuf;
 
 // allowing large size difference between variants warning,
@@ -115,4 +116,10 @@ pub enum SMCumulocityMapperError {
 
     #[error(transparent)]
     FromTimeParse(#[from] time::error::Parse),
+
+    #[error(transparent)]
+    JsonWriterError(#[from] JsonWriterError),
+
+    #[error(transparent)]
+    FromSerdeJson(#[from] serde_json::Error),
 }

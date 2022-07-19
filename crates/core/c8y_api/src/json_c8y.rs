@@ -6,6 +6,7 @@ use agent_interface::{
 
 use c8y_smartrest::error::SMCumulocityMapperError;
 use download::DownloadInfo;
+use json_writer::JsonWriter;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thin_edge_json::event::ThinEdgeEvent;
@@ -135,7 +136,7 @@ impl TryFrom<ThinEdgeEvent> for C8yCreateEvent {
         let event_type = event.name;
         let text;
         let time;
-        let extras;
+        let mut extras;
         match event.data {
             None => {
                 text = event_type.clone();
@@ -146,6 +147,9 @@ impl TryFrom<ThinEdgeEvent> for C8yCreateEvent {
                 text = event_data.text.unwrap_or_else(|| event_type.clone());
                 time = event_data.time.unwrap_or_else(OffsetDateTime::now_utc);
                 extras = event_data.extras;
+                if let Some(source) = event.source {
+                    update_the_external_source_event(&mut extras, &source)?;
+                }
             }
         }
 
@@ -190,6 +194,24 @@ fn combine_version_and_type(
             None => EMPTY_STRING.into(),
         },
     }
+}
+fn update_the_external_source_event(
+    extras: &mut HashMap<String, Value>,
+    source: &str,
+) -> Result<(), SMCumulocityMapperError> {
+    let mut json = JsonWriter::with_capacity(1024);
+    let _ = json.write_open_obj();
+    let _ = json.write_key("externalId");
+    let _ = json.write_str(source);
+    let _ = json.write_key("type");
+    let _ = json.write_str("c8y_Serial");
+    let _ = json.write_close_obj();
+    extras.insert(
+        "externalSource".into(),
+        serde_json::from_str(&json.into_string()?)?,
+    );
+
+    Ok(())
 }
 
 #[cfg(test)]

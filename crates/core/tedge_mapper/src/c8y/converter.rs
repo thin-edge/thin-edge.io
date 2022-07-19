@@ -229,44 +229,24 @@ where
         let mut vec = Vec::new();
         let c8y_event;
 
-        let mut tedge_event = ThinEdgeEvent::try_from(&input.topic.name, input.payload_str()?)?;
+        let tedge_event = ThinEdgeEvent::try_from(&input.topic.name, input.payload_str()?)?;
         let child_id = tedge_event.source.clone();
 
-        let message = match child_id {
-            Some(ref c_id) => {
-                if !self.children.contains(c_id) {
-                    self.children.insert(c_id.clone());
-                    vec.push(Message::new(
-                        &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
-                        format!("101,{c_id},{c_id},thin-edge.io-child"),
-                    ));
-                }
-                let _ = json::from_thin_edge_json_child_event(c_id, &mut tedge_event.data)?;
-                c8y_event = C8yCreateEvent::try_from(tedge_event)?;
-                let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
+        Self::create_external_source_if_does_not_exist(self, &tedge_event, &mut vec);
 
-                Message::new(
-                    &Topic::new_unchecked(C8Y_JSON_MQTT_EVENTS_TOPIC),
-                    cumulocity_event_json,
-                )
-            }
-            None => {
-                c8y_event = C8yCreateEvent::try_from(tedge_event)?;
+        // Convert the external source event message to Cumulocity JSON message.
+        c8y_event = C8yCreateEvent::try_from(tedge_event)?;
 
-                // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
-                if c8y_event.extras.is_empty() {
-                    let smartrest_event = Self::serialize_to_smartrest(&c8y_event)?;
-                    let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
-
-                    Message::new(&smartrest_topic, smartrest_event)
-                } else {
-                    // If the message contains extra fields other than `text` and `time`, convert to Cumulocity JSON
-                    let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
-                    let json_mqtt_topic = Topic::new_unchecked(C8Y_JSON_MQTT_EVENTS_TOPIC);
-
-                    Message::new(&json_mqtt_topic, cumulocity_event_json)
-                }
-            }
+        // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
+        let message = if c8y_event.extras.is_empty() {
+            let smartrest_event = Self::serialize_to_smartrest(&c8y_event)?;
+            let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
+            Message::new(&smartrest_topic, smartrest_event)
+        } else {
+            // If the message contains extra fields other than `text` and `time`, convert to Cumulocity JSON
+            let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
+            let json_mqtt_topic = Topic::new_unchecked(C8Y_JSON_MQTT_EVENTS_TOPIC);
+            Message::new(&json_mqtt_topic, cumulocity_event_json)
         };
 
         // If the MQTT message size is well within the Cumulocity MQTT size limit, use MQTT to send the mapped event as well
@@ -296,6 +276,23 @@ where
             c8y_event.text,
             c8y_event.time.format(&Rfc3339)?
         ))
+    }
+
+    fn create_external_source_if_does_not_exist(
+        &mut self,
+        tedge_event: &ThinEdgeEvent,
+        vec: &mut Vec<Message>,
+    ) {
+        if let Some(c_id) = tedge_event.source.clone() {
+            // Create the external source if it does not exists
+            if !self.children.contains(&c_id) {
+                self.children.insert(c_id.clone());
+                vec.push(Message::new(
+                    &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
+                    format!("101,{c_id},{c_id},thin-edge.io-child"),
+                ));
+            }
+        }
     }
 }
 

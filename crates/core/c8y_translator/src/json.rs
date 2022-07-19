@@ -15,8 +15,7 @@
 
 use crate::serializer;
 use clock::{Clock, WallClock};
-use json_writer::{JsonWriter, JsonWriterError};
-use thin_edge_json::{event::ThinEdgeEventData, parser::*};
+use thin_edge_json::parser::*;
 use time::{self, OffsetDateTime};
 
 #[derive(thiserror::Error, Debug)]
@@ -26,9 +25,6 @@ pub enum CumulocityJsonError {
 
     #[error(transparent)]
     ThinEdgeJsonParserError(#[from] ThinEdgeJsonParserError),
-
-    #[error(transparent)]
-    JsonWriterError(#[from] JsonWriterError),
 }
 
 /// Converts from thin-edge measurement JSON to C8Y measurement JSON
@@ -56,27 +52,6 @@ fn from_thin_edge_json_with_timestamp(
     let mut serializer = serializer::C8yJsonSerializer::new(timestamp, maybe_child_id);
     let () = parse_str(input, &mut serializer)?;
     Ok(serializer.into_string()?)
-}
-
-pub fn from_thin_edge_json_child_event(
-    c_id: &str,
-    event_data: &mut Option<ThinEdgeEventData>,
-) -> Result<(), CumulocityJsonError> {
-    let mut json = JsonWriter::with_capacity(1024);
-    let _ = json.write_open_obj();
-    let _ = json.write_key("externalId");
-    let _ = json.write_str(c_id);
-    let _ = json.write_key("type");
-    let _ = json.write_str("c8y_Serial");
-    let _ = json.write_close_obj();
-    event_data.as_mut().map(|e: &mut ThinEdgeEventData| {
-        e.extras.insert(
-            "externalSource".into(),
-            serde_json::from_str(&json.into_string().ok()?).ok()?,
-        )
-    });
-
-    Ok(())
 }
 
 #[cfg(test)]
