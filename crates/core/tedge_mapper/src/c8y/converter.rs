@@ -232,9 +232,8 @@ where
         let tedge_event = ThinEdgeEvent::try_from(&input.topic.name, input.payload_str()?)?;
         let child_id = tedge_event.source.clone();
 
-        Self::create_external_source_if_does_not_exist(self, &tedge_event, &mut vec);
+        self.create_external_source_if_does_not_exist(&tedge_event, &mut vec);
 
-        // Convert the external source event message to Cumulocity JSON message.
         c8y_event = C8yCreateEvent::try_from(tedge_event)?;
 
         // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
@@ -249,20 +248,21 @@ where
             Message::new(&json_mqtt_topic, cumulocity_event_json)
         };
 
+        // vec.len() == 1, means the child device is not registered with c8y cloud.
+        // So, before forwarding the message, check if the size is bigger than
+        // the supported MQTT threshold. If so, then ask to register the device first.
+        if vec.len() == 1 && message.payload_bytes().len() > self.size_threshold.0 {
+            return Err(ConversionError::ChildDeviceNotRegistered {
+                id: child_id.unwrap_or_else(|| "".into()),
+            });
+        }
+
         // If the MQTT message size is well within the Cumulocity MQTT size limit, use MQTT to send the mapped event as well
-        if input.payload_bytes().len() < self.size_threshold.0 {
+        if message.payload_bytes().len() < self.size_threshold.0 {
             vec.push(message);
             Ok(vec)
         // If the message size is larger than the MQTT size limit, use HTTP to send the mapped event
-        } else if let Some(id) = child_id {
-            if self.children.contains(&id) {
-                let _ = self.http_proxy.send_event(c8y_event).await?;
-                Ok(vec![])
-            } else {
-                Err(ConversionError::ChildDeviceNotRegistered { id: id.to_string() })
-            }
         } else {
-            // Parent device
             let _ = self.http_proxy.send_event(c8y_event).await?;
             Ok(vec![])
         }

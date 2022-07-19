@@ -115,7 +115,4 @@ pub enum SMCumulocityMapperError {
 
     #[error(transparent)]
     FromTimeParse(#[from] time::error::Parse),
-
-    #[error(transparent)]
-    FromSerdeJson(#[from] serde_json::Error),
 }
