@@ -214,31 +214,3 @@ TO BE DECIDED: Behaviour of the plugin when there is no retain message. Shall it
 
 **Proposal 3:**<br/>
 TODO (idea: using HTTP instead of MQTT retain messages)
-
-## Configuration via MQTT
-
-The configuration of the `c8y_configuration_plugin` (i.E. the content of its TOML file) is additionaly provided on MQTT. That allows adding configurations without need for local filesystem access (e.g. for external devices or containers).
-
-* Each file record of the TOML is reflected on a corresponding topic, as `tedge/configuration_config/{childid}/{type}`,
-  where `{childid}` is the childid and `{type}` is the type of the file record.
-  For configurations that have no childid the `{childid}` is not part of the topic structure.
-  
-  Examples:<br/>
-  `tedge/configuration_config/tedge.toml`<br/>
-  `tedge/configuration_config/child1/foo`
-* Each message provides all information of the corresponding file record.
-
-  Examples:<br/>
-  `{ path = '/etc/tedge/tedge.toml', type = 'tedge.toml' }`, for topic `tedge/configuration_config/tedge.toml`<br/>
-  `{ path = '/etc/child1/foo.conf', type = 'foo', childid = 'child1' }`, for topic `tedge/configuration_config/child1/foo`
-* The `c8y_configuration_plugin` publishs on start and on each change all file records to `tedge/configuration_config/`
-* The `c8y_configuration_plugin` publishs all file records with retain flag, to be visible any time on MQTT.
-* The `c8y_configuration_plugin` processes each message that is published to topic structure `tedge/configuration_config/`, stores the resulting configuration change it's configuration TOML file and adopts it immediately.
-
-Note that:
-* If no specific type has been assigned to a configuration file, then the path to this file is used as its type.
-  Update notifications for that file are then published on the topic `tedge/configuration_change/{path}`,
-  for instance `tedge/configuration_change//etc/tedge/mosquitto-conf/c8y-bridge.conf`.
-* Since the type of configuration file is used as an MQTT topic name, the characters `#` and `+` cannot be used in a type name.
-  If such a character is used in a type name (or in the path of a configuration file without explicit type),
-  then the whole plugin configuration `/etc/tedge/c8y/c8y-configuration-plugin.toml` is considered ill-formed.
