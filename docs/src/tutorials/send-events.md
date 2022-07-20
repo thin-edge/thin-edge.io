@@ -106,8 +106,15 @@ The payload format must be as follows:
 
 Here is a sample event triggered for a `login_event` event type for the `external_sensor` child device:
 
-Topic: 
-`tedge/events/login_event/external_sensor`
+Command to send the event from a external device as below:
+
+```shell
+$ sudo tedge mqtt pub tedge/events/login_event/external_sensor '{
+    "type":"login_event",
+    "text":"A user just logged in",
+    "time":"2021-01-01T05:30:45+00:00"
+}'
+```
 
 Payload:
 
