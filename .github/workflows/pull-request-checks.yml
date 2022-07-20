@@ -160,6 +160,34 @@ jobs:
         with:
           command: audit
 
+  cargo-outdated:
+    name: Run cargo outdated
+    runs-on: ubuntu-20.04
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: Swatinem/rust-cache@v1
+      - name: cargo outdated
+        continue-on-error: true
+        uses: actions-rs/cargo@v1
+        with:
+          command: outdated
+      - name: Post to PR
+        if: ${{ failure() }}
+        uses: mshick/add-pr-comment@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          message: |
+            cargo-outdated failed for this PR, please check whether all
+            dependencies are up to date.
+            If this PR did not add any dependencies, there should be a
+            dependabot PR to "main" that must be merged to update the
+            dependencies and this PR should be rebased afterwards.
+
+
   cargo-test:
     name: Run cargo test
     runs-on: Ubuntu-20.04
