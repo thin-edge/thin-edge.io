@@ -199,7 +199,18 @@ files = [
 ```
 
 **Proposal 2:**<br/>
-TODO (idea: using MQTT, but retain message instead of request via sub-topic `retrieval`)
+   ...the configuration file's record field `path` can be prefixed with `mqtt://`. Then it's value is treated as MQTT topic structure, where another process/external device is expected to provide/consume the configuration file.
+  * The `c8y_configuration_plugin` expects the process/external device always putting the latest config file as retain message to the MQTT topic `{path}`. Then the plugin consumes that retain message whenever a cloud request comes in.<br/>
+  Example Flow:
+    * external device `child1`: starts
+    * external device `child1`: publishs all its config files to MQTT (with retain); example: `configs/bar.conf`
+    * at some point a config retrieval for `configs/bar.conf` for `child1` arrives at C8Y config plugin
+    * C8Y config plugin: subscribes to `configs/bar.conf` and gets immediately the config file content from the retained message
+    * C8Y config plugin: sends the MQTT payload as config file to C8Y
+
+The responsibility to assure that the latest config file content is on the MQTT bus is always on the process/external device. 
+
+TO BE DECIDED: Behaviour of the plugin when there is no retain message. Shall it send an error or an empty config file to the cloud?
 
 **Proposal 3:**<br/>
 TODO (idea: using HTTP instead of MQTT retain messages)
