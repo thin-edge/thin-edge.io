@@ -410,6 +410,7 @@ dependencies = [
  "tedge_utils",
  "test-case",
  "thiserror",
+ "time",
  "tokio",
  "toml",
  "tracing",

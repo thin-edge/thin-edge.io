@@ -13,13 +13,16 @@ use c8y_smartrest::smartrest_deserializer::{
 };
 use c8y_smartrest::topic::C8yTopic;
 use clap::Parser;
-use mqtt_channel::{Message, SinkExt, StreamExt, Topic};
+use mqtt_channel::{Connection, Message, SinkExt, StreamExt, Topic};
+use serde_json::json;
 use std::path::{Path, PathBuf};
+use std::process;
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, MqttPortSetting, TEdgeConfig, TmpPathSetting,
     DEFAULT_TEDGE_CONFIG_PATH,
 };
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
+use time::OffsetDateTime;
 use tracing::{debug, error, info};
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_PATH: &str = "/etc/tedge/c8y/c8y-configuration-plugin.toml";
@@ -66,6 +69,11 @@ async fn create_mqtt_client(mqtt_port: u16) -> Result<mqtt_channel::Connection, 
         mqtt_channel::TopicFilter::new_unchecked(C8yTopic::SmartRestRequest.as_str());
     let _ = topic_filter
         .add_unchecked(format!("{CONFIG_CHANGE_TOPIC}/{DEFAULT_PLUGIN_CONFIG_TYPE}").as_str());
+    let _ = topic_filter.add_all(
+        health_check_topics()
+            .try_into()
+            .expect("Invalid topic filter"),
+    );
 
     let mqtt_config = mqtt_channel::Config::default()
         .with_port(mqtt_port)
@@ -81,6 +89,13 @@ pub async fn create_http_client(
     let mut http_proxy = JwtAuthHttpProxy::try_new(tedge_config).await?;
     let () = http_proxy.init().await?;
     Ok(http_proxy)
+}
+
+pub fn health_check_topics() -> Vec<&'static str> {
+    vec![
+        "tedge/health-check",
+        "tedge/health-check/c8y-configuration-plugin",
+    ]
 }
 
 #[tokio::main]
@@ -135,59 +150,94 @@ async fn run(
     let () = mqtt_client.published.send(msg).await?;
 
     // Mqtt message loop
+    proocess_mqtt_messages(
+        &mut plugin_config,
+        &mut mqtt_client,
+        config_file_path,
+        http_client,
+        tmp_dir,
+    )
+    .await?;
+
+    mqtt_client.close().await;
+
+    Ok(())
+}
+
+async fn proocess_mqtt_messages(
+    plugin_config: &mut PluginConfig,
+    mqtt_client: &mut Connection,
+    config_file_path: &Path,
+    http_client: &mut impl C8YHttpProxy,
+    tmp_dir: PathBuf,
+) -> Result<(), anyhow::Error> {
+    let response_topic_health = Topic::new_unchecked("tedge/health/c8y-configuration-plugin");
     while let Some(message) = mqtt_client.received.next().await {
         debug!("Received {:?}", message);
         if let Ok(payload) = message.payload_str() {
-            let result = if let "tedge/configuration_change/c8y-configuration-plugin" =
-                message.topic.name.as_str()
-            {
-                // Reload the plugin config file
-                plugin_config = PluginConfig::new(config_file_path);
-                // Resend the supported config types
-                let msg = plugin_config.to_supported_config_types_message()?;
-                mqtt_client.published.send(msg).await?;
-                Ok(())
-            } else {
-                match payload.split(',').next().unwrap_or_default() {
-                    "524" => {
-                        let maybe_config_download_request =
-                            SmartRestConfigDownloadRequest::from_smartrest(payload);
-                        if let Ok(config_download_request) = maybe_config_download_request {
-                            handle_config_download_request(
-                                &plugin_config,
-                                config_download_request,
-                                tmp_dir.clone(),
-                                &mut mqtt_client,
-                                http_client,
-                            )
-                            .await
-                        } else {
-                            error!("Incorrect Download SmartREST payload: {}", payload);
-                            Ok(())
-                        }
-                    }
-                    "526" => {
-                        // retrieve config file upload smartrest request from payload
-                        let maybe_config_upload_request =
-                            SmartRestConfigUploadRequest::from_smartrest(payload);
+            let result = match message.topic.name.as_str() {
+                "tedge/configuration_change/c8y-configuration-plugin" => {
+                    // Reload the plugin config file
+                    let plugin_config = PluginConfig::new(config_file_path);
+                    // Resend the supported config types
+                    let msg = plugin_config.to_supported_config_types_message()?;
+                    mqtt_client.published.send(msg).await?;
+                    Ok(())
+                }
+                "tedge/health-check" | "tedge/health-check/c8y-configuration-plugin" => {
+                    let health_status = json!({
+                        "status": "up",
+                        "pid": process::id(),
+                        "time": OffsetDateTime::now_utc().unix_timestamp(),
+                    })
+                    .to_string();
 
-                        if let Ok(config_upload_request) = maybe_config_upload_request {
-                            // handle the config file upload request
-                            handle_config_upload_request(
-                                &plugin_config,
-                                config_upload_request,
-                                &mut mqtt_client,
-                                http_client,
-                            )
-                            .await
-                        } else {
-                            error!("Incorrect Upload SmartREST payload: {}", payload);
+                    let health_message = Message::new(&response_topic_health, health_status);
+                    let _ = mqtt_client.published.send(health_message).await;
+                    Ok(())
+                }
+                _ => {
+                    match payload.split(',').next().unwrap_or_default() {
+                        "524" => {
+                            let maybe_config_download_request =
+                                SmartRestConfigDownloadRequest::from_smartrest(payload);
+                            if let Ok(config_download_request) = maybe_config_download_request {
+                                handle_config_download_request(
+                                    plugin_config,
+                                    config_download_request,
+                                    tmp_dir.clone(),
+                                    mqtt_client,
+                                    http_client,
+                                )
+                                .await
+                            } else {
+                                error!("Incorrect Download SmartREST payload: {}", payload);
+                                Ok(())
+                            }
+                        }
+                        "526" => {
+                            // retrieve config file upload smartrest request from payload
+                            let maybe_config_upload_request =
+                                SmartRestConfigUploadRequest::from_smartrest(payload);
+
+                            if let Ok(config_upload_request) = maybe_config_upload_request {
+                                // handle the config file upload request
+                                handle_config_upload_request(
+                                    plugin_config,
+                                    config_upload_request,
+                                    mqtt_client,
+                                    http_client,
+                                )
+                                .await
+                            } else {
+                                error!("Incorrect Upload SmartREST payload: {}", payload);
+                                Ok(())
+                            }
+                        }
+                        _ => {
+                            // Ignore operation messages not meant for this plugin
                             Ok(())
                         }
-                    }
-                    _ => {
-                        // Ignore operation messages not meant for this plugin
-                        Ok(())
                     }
                 }
             };
@@ -197,9 +247,6 @@ async fn run(
             }
         }
     }
-
-    mqtt_client.close().await;
-
     Ok(())
 }
 

@@ -68,6 +68,8 @@ async fn start_watchdog_for_tedge_services(tedge_config_dir: PathBuf) {
         "tedge-mapper-az",
         "tedge-mapper-collectd",
         "tedge-agent",
+        "c8y-log-plugin",
+        "c8y-configuration-plugin",
     ];
 
     let watchdog_tasks = FuturesUnordered::new();

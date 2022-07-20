@@ -12,13 +12,16 @@ use clap::Parser;
 use config::LogPluginConfig;
 use inotify::{EventMask, EventStream};
 use inotify::{Inotify, WatchMask};
-use mqtt_channel::{Connection, StreamExt};
+use mqtt_channel::{Connection, Message, SinkExt, StreamExt, Topic, TopicFilter};
+use serde_json::json;
 use std::path::{Path, PathBuf};
+use std::process;
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, LogPathSetting, MqttPortSetting, TEdgeConfig,
     DEFAULT_TEDGE_CONFIG_PATH,
 };
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
+use time::OffsetDateTime;
 use tracing::{error, info};
 
 use crate::logfile_request::{
@@ -59,7 +62,11 @@ async fn create_mqtt_client(
     tedge_config: &TEdgeConfig,
 ) -> Result<mqtt_channel::Connection, anyhow::Error> {
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
-    let mut topics = mqtt_channel::TopicFilter::new_unchecked(C8yTopic::SmartRestRequest.as_str());
+    let mut topics: TopicFilter = health_check_topics()
+        .try_into()
+        .expect("Invalid topic filter");
+
+    topics.add_unchecked(C8yTopic::SmartRestRequest.as_str());
     // subscribing also to c8y bridge health topic to know when the bridge is up
     topics.add(C8Y_BRIDGE_HEALTH_TOPIC)?;
 
@@ -69,6 +76,10 @@ async fn create_mqtt_client(
 
     let mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
     Ok(mqtt_client)
+}
+
+pub fn health_check_topics() -> Vec<&'static str> {
+    vec!["tedge/health-check", "tedge/health-check/c8y-log-plugin"]
 }
 
 pub async fn create_http_client(
@@ -103,46 +114,7 @@ async fn run(
     loop {
         tokio::select! {
                 message = mqtt_client.received.next() => {
-                if let Some(message) = message {
-                    if is_c8y_bridge_up(&message) {
-                        plugin_config = read_log_config(config_file);
-                        let () = handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
-                    }
-                    if let Ok(payload) = message.payload_str() {
-                        let result = match payload.split(',').next().unwrap_or_default() {
-                            "522" => {
-                                info!("Log request received: {payload}");
-                                // retrieve smartrest object from payload
-                                let maybe_smartrest_obj = SmartRestLogRequest::from_smartrest(payload);
-                                if let Ok(smartrest_obj) = maybe_smartrest_obj {
-                                    handle_logfile_request_operation(
-                                        &smartrest_obj,
-                                        &plugin_config,
-                                        mqtt_client,
-                                        http_client,
-                                    )
-                                    .await
-                                } else {
-                                    error!("Incorrect SmartREST payload: {}", payload);
-                                    Ok(())
-                                }
-                            }
-                            _ => {
-                                // Ignore operation messages not meant for this plugin
-                                Ok(())
-                            }
-                        };
-
-                        if let Err(err) = result {
-                            let error_message = format!("Handling of operation: '{}' failed with {}", payload, err);
-                            error!("{}", error_message);
-                        }
-                    }
-                }
-                else {
-                    // message is None and the connection has been closed
-                    return Ok(());
-                }
+               process_mqtt_messages(message, &plugin_config, mqtt_client, http_client, config_file).await?;
             }
             Some(Ok(event)) = inotify_stream.next() => {
                 if event.mask == EventMask::CLOSE_WRITE {
@@ -152,6 +124,72 @@ async fn run(
             }
         }
     }
+}
+
+pub async fn process_mqtt_messages(
+    message: Option<Message>,
+    plugin_config: &LogPluginConfig,
+    mqtt_client: &mut Connection,
+    http_client: &mut JwtAuthHttpProxy,
+    config_file: &Path,
+) -> Result<(), anyhow::Error> {
+    let response_topic_health = Topic::new_unchecked("tedge/health/c8y-log-plugin");
+    if let Some(message) = message {
+        if is_c8y_bridge_up(&message) {
+            let plugin_config = read_log_config(config_file);
+            let () = handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
+        }
+        match message.topic.name.as_str() {
+            "tedge/health-check" | "tedge/health-check/c8y-log-plugin" => {
+                let health_status = json!({
+                    "status": "up",
+                    "pid": process::id(),
+                    "time": OffsetDateTime::now_utc().unix_timestamp(),
+                })
+                .to_string();
+
+                let health_message = Message::new(&response_topic_health, health_status);
+                let _ = mqtt_client.published.send(health_message).await;
+                return Ok(());
+            }
+            _ => {
+                if let Ok(payload) = message.payload_str() {
+                    let result = match payload.split(',').next().unwrap_or_default() {
+                        "522" => {
+                            info!("Log request received: {payload}");
+                            // retrieve smartrest object from payload
+                            let maybe_smartrest_obj = SmartRestLogRequest::from_smartrest(payload);
+                            if let Ok(smartrest_obj) = maybe_smartrest_obj {
+                                handle_logfile_request_operation(
+                                    &smartrest_obj,
+                                    plugin_config,
+                                    mqtt_client,
+                                    http_client,
+                                )
+                                .await
+                            } else {
+                                error!("Incorrect SmartREST payload: {}", payload);
+                                Ok(())
+                            }
+                        }
+                        _ => {
+                            // Ignore operation messages not meant for this plugin
+                            Ok(())
+                        }
+                    };
+
+                    if let Err(err) = result {
+                        let error_message =
+                            format!("Handling of operation: '{}' failed with {}", payload, err);
+                        error!("{}", error_message);
+                    }
+                }
+                return Ok(());
+            }
+        }
+    }
+    // message is None and the connection has been closed
+    Ok(())
 }
 
 #[tokio::main]
