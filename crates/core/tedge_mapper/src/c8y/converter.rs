@@ -226,15 +226,14 @@ where
         &mut self,
         input: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        let mut vec = Vec::new();
-        let c8y_event;
+        let mut messages = Vec::new();
 
         let tedge_event = ThinEdgeEvent::try_from(&input.topic.name, input.payload_str()?)?;
         let child_id = tedge_event.source.clone();
 
-        self.create_external_source_if_does_not_exist(&tedge_event, &mut vec);
+        let need_registration = self.register_external_device(&tedge_event, &mut messages);
 
-        c8y_event = C8yCreateEvent::try_from(tedge_event)?;
+        let c8y_event = C8yCreateEvent::try_from(tedge_event)?;
 
         // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
         let message = if c8y_event.extras.is_empty() {
@@ -248,24 +247,20 @@ where
             Message::new(&json_mqtt_topic, cumulocity_event_json)
         };
 
-        // vec.len() == 1, means the child device is not registered with c8y cloud.
-        // So, before forwarding the message, check if the size is bigger than
-        // the supported MQTT threshold. If so, then ask to register the device first.
-        if vec.len() == 1 && message.payload_bytes().len() > self.size_threshold.0 {
+        if self.can_send_over_mqtt(&message) {
+            // The message can be sent via MQTT
+            messages.push(message);
+        } else if !need_registration {
+            // The message must be sent over HTTP
+            let _ = self.http_proxy.send_event(c8y_event).await?;
+            return Ok(vec![]);
+        } else {
+            // The message should be sent over HTTP but this cannot be done
             return Err(ConversionError::ChildDeviceNotRegistered {
                 id: child_id.unwrap_or_else(|| "".into()),
             });
         }
-
-        // If the MQTT message size is well within the Cumulocity MQTT size limit, use MQTT to send the mapped event as well
-        if message.payload_bytes().len() < self.size_threshold.0 {
-            vec.push(message);
-            Ok(vec)
-        // If the message size is larger than the MQTT size limit, use HTTP to send the mapped event
-        } else {
-            let _ = self.http_proxy.send_event(c8y_event).await?;
-            Ok(vec![])
-        }
+        Ok(messages)
     }
 
     fn serialize_to_smartrest(c8y_event: &C8yCreateEvent) -> Result<String, ConversionError> {
@@ -278,21 +273,27 @@ where
         ))
     }
 
-    fn create_external_source_if_does_not_exist(
+    fn register_external_device(
         &mut self,
         tedge_event: &ThinEdgeEvent,
-        vec: &mut Vec<Message>,
-    ) {
+        messages: &mut Vec<Message>,
+    ) -> bool {
         if let Some(c_id) = tedge_event.source.clone() {
             // Create the external source if it does not exists
             if !self.children.contains(&c_id) {
                 self.children.insert(c_id.clone());
-                vec.push(Message::new(
+                messages.push(Message::new(
                     &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
                     format!("101,{c_id},{c_id},thin-edge.io-child"),
                 ));
+                return true;
             }
         }
+        false
+    }
+
+    fn can_send_over_mqtt(&self, message: &Message) -> bool {
+        message.payload_bytes().len() < self.size_threshold.0
     }
 }
 
