@@ -85,3 +85,59 @@ The Cumulocity JSON mapping of the same event would be as follows:
 > Note: Mapped events will be sent to Cumulocity via MQTT if the incoming Thin Edge JSON event payload size is less than 16K bytes. If higher, HTTP will be used.
 
 Find more information about events data model in Cumulocity [here](https://cumulocity.com/guides/concepts/domain-model/#events).
+
+## Sending an event for a child/external device to the cloud
+
+An event for a child/external device can be triggered on thin-edge.io by sending an MQTT message in Thin Edge JSON format to certain MQTT topics.
+
+The scheme of the topic to publish the event data is as follows:
+
+`tedge/events/<event-type>/<child-device-id>`
+
+The payload format must be as follows:
+
+```json
+{
+    "type":"<event type>",
+    "text": "<event text>",
+    "time": "<Timestamp in ISO-8601 format>"
+}
+```
+
+Here is a sample event triggered for a `login_event` event type for the `external_sensor` child device:
+
+Topic: 
+`tedge/events/login_event/external_sensor`
+
+Payload:
+
+```json
+{
+    "type": "login_event",
+    "text": "A user just logged in",
+    "time": "2021-01-01T05:30:45+00:00"
+}
+```
+### Mapping of events to cloud-specific data format
+
+If the child/external device is connected to some supported IoT cloud platform, an event that is triggered locally on thin-edge.io will be forwarded to the connected cloud platform as well.
+The mapping of thin-edge events data to its respective cloud-native representation will be done by the corresponding cloud mapper process.
+
+#### Cumulocity cloud data mapping
+
+The Cumulocity mapper will convert Thin Edge JSON events into its Cumulocity JSON equivalent and sends them to the Cumulocity cloud.
+
+The translated payload will be in the below format.
+
+```json
+{
+    "type": "login_event",
+    "text": "A user just logged in",
+    "time": "2021-01-01T05:30:45+00:00",
+    "externalSource":{
+        "externalId": "external_sensor",
+        "type": "c8y_Serial"
+  }
+}
+```
+Here the `externalId` will be derived from the `child-device-id` of the `child device event topic`.
