@@ -79,6 +79,7 @@ Each configuration file is defined by a record with:
   When a configuration file is already present on the device, this plugin never changes file ownership,
   ignoring these parameters.
 * Optional `childid`. For details see section "Configuration files for child devices" below.
+* Optional `protocol`. Valid values are "http" or "filesystem". For details see section "Configuration files for child devices" below.
 
 ```shell
 $ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
@@ -166,51 +167,101 @@ Note that:
   then the whole plugin configuration `/etc/tedge/c8y/c8y-configuration-plugin.toml` is considered ill-formed.
 
 ## Configuration files for child devices
-TODO: add a refrence to the 'child-device model'.
 
-
-To manage configuration files for child-devices the C8Y plugin provides two aspects:
+To manage configuration files for child-devices the `c8y_configuration_plugin` supports two aspects:
 1) Allowing to associate a configuration file with a cloud's child-device twin
-2) Allowing to consume/provide a configuration file via network
+2) Allowing to consume/provide a configuration file from/to an external device via network
 
-* For aspect (1) it provides the field `childid` for records in the `c8y_configuration_plugin` configuration (see section 'Configuration' above). That field is interpreted as unique child-device id and the record's configuration file is associated with corresponding cloud's child-device twin. If not provided the configuration is associated with cloud's thin-edge device twin.<br/> 
-  Example:
+**Details to Aspect 1: Associating to cloud's child-device twin**
+
+For aspect (1) the plugin provides the field `childid` for all records in the `c8y_configuration_plugin` configuration (reference to section 'Configuration' above). That field is interpreted as unique child-device id and the plugin associates the record's configuration file with corresponding cloud's child-device twin. If not provided the configuration file is associated with cloud's thin-edge device twin.
+
+Example:
+```shell
+$ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
+files = [
+    { path = '/etc/tedge/tedge.toml', type = 'tedge.toml' },              # appears in the cloud on the thin-edge device
+    { path = '/etc/child1/foo.conf', type = 'foo', childid = 'child1'  }  # appears in the cloud on the child-device 'child1'
+  ]
+```
+
+Note that the `c8y_configuration_plugin` does not create any child-device twin in the cloud. Instead the clouds child-device twin must be created upfront. However the plugin takes care to set all capabilities (supported operations, config-types) on that child-device twin in the cloud in the same way as it does for the thin-edge device.
+
+
+**Details to Aspect 2: Consuming/providing configuration files via network**
+
+For aspect (2) there are two proposals as below. Decision has to been taken which proposal to follow.
+
+**Proposal 1:**
+
+The `c8y_configuration_plugin` configuration's record field `path` (reference to section 'Configuration' above) can be prefixed with "mqtt://". Then it's value is treated as MQTT topic structure, where another process/external device is expected to provide/consume the configuration file.
+
+The `c8y_configuration_plugin` expects the process/external device always putting the latest config file as retain message to the MQTT topic `{path}`. Then the plugin consumes that retain message whenever a cloud request comes in.
+
+Example Plugin Config:
 ```shell
 $ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
 files = [
     { path = '/etc/tedge/tedge.toml', type = 'tedge.toml' },
-    { path = '/etc/child1/foo.conf', type = 'foo', childid = 'child1'  }
+    { path = 'mqtt://configs/bar.conf', type = 'bar.conf', childid = 'child1'  }
   ]
 ```
 
-* For aspect (2) ... see three proposals below (to be decided)<br/> 
+Example Flow:
 
-**Proposal 1:**<br/>
-   ...the configuration file's record field `path` can be prefixed with `mqtt://`. Then it's value is treated as MQTT topic structure, where another process/external device is expected to provide/consume the configuration file.
-  * On file downloaded from the cloud to the device, the `c8y_configuration_plugin` publishs the content to the MQTT topic `{path}`, instead of writing it to a local filesystem path.
-  * On file upload to the cloud, the `c8y_configuration_plugin` publishs an empty message to the MQTT topic `{path}/retrieval` to request the process/external device to publish the current configuration file content to the MQTT topic `{path}`. Then `c8y_configuration_plugin` consumes the content from MQTT topic `{path}` instead of reading a local filesystem path.<br/> 
-  Example:
+**Start Behaviour:**
+  * external device `child1`: starts
+  * external device `child1`: publishs all its config files to MQTT (with retain); Example: Publish to topic `configs/bar.conf`
+
+**Device-to-Cloud Behaviour:**
+  * at some point a config retrieval for type `bar.conf` for `child1` arrives at C8Y config plugin
+  * C8Y config plugin: subscribes to `configs/bar.conf` and gets immediately the config file content from the retained message
+  * C8Y config plugin: sends the recived MQTT payload as config file to C8Y<br/><br/>
+    NOTE: The responsibility to assure that the latest config file content is on the MQTT bus is always on the process/external device.
+When there is no retain message the plugin sends an error to the cloud on an every incoming config retrieval request.
+
+**Cloud-to-Device Behaviour:**
+  * at some point a config sent from cloud for type `bar.conf` for `child1` arrives at C8Y config plugin
+  * C8Y config plugin: publishs the config file content as MQTT retain message to `configs/bar.conf` 
+  * external device `child1`: recognizes the MQTT message on `configs/bar.conf` and processes the new config file content
+
+**Proposal 2:**
+
+The `c8y_configuration_plugin` provides the field `protocol` for all records in the `c8y_configuration_plugin` configuration (reference to section 'Configuration' above). If `protocol` is set to "http" the `c8y_configuration_plugin` expects another process/external device to provide/consume the configuration file via HTTP protocol. Thereby the records field `path` is used with the prefix `http://<thin-edge device IP address>/tedge/configurations/` as URL. Example: `http://192.168.1.6/tedge/configurations/child1/bar.conf` where (192.168.1.6 is the IP address of the thin-edge device)
+
+The `c8y_configuration_plugin` expects the process/external device always putting the latest config file to the thin-edge device. Then the plugin consumes that file whenever a cloud request comes in.<br/> 
+
+Example Configuration:
 ```shell
 $ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
 files = [
     { path = '/etc/tedge/tedge.toml', type = 'tedge.toml' },
-    { path = 'mqtt://configs/child1/bar.conf', type = 'bar', childid = 'child1'  }
+    { path = '/child1/bar.conf', type = 'bar.conf', protocol = 'http', childid = 'child1'  }
   ]
 ```
 
-**Proposal 2:**<br/>
-   ...the configuration file's record field `path` can be prefixed with `mqtt://`. Then it's value is treated as MQTT topic structure, where another process/external device is expected to provide/consume the configuration file.
-  * The `c8y_configuration_plugin` expects the process/external device always putting the latest config file as retain message to the MQTT topic `{path}`. Then the plugin consumes that retain message whenever a cloud request comes in.<br/>
-  Example Flow:
-    * external device `child1`: starts
-    * external device `child1`: publishs all its config files to MQTT (with retain); example: `configs/bar.conf`
-    * at some point a config retrieval for `configs/bar.conf` for `child1` arrives at C8Y config plugin
-    * C8Y config plugin: subscribes to `configs/bar.conf` and gets immediately the config file content from the retained message
-    * C8Y config plugin: sends the MQTT payload as config file to C8Y
+Example Flow:
 
-The responsibility to assure that the latest config file content is on the MQTT bus is always on the process/external device. 
+**Start Behaviour:**
+  * external device `child1`: starts
+  * external device `child1`: sends all its config files with HTTP PUT method to the thin-edge device<br/>
+    Example: `http://192.168.1.6/tedge/configurations/child1/bar.conf`
+  * C8Y config plugin: stores all received files locally
+    
+**Device-to-Cloud Behaviour:**
+  * at some point a config retrieval for type `bar.conf` for `child1` arrives at C8Y config plugin
+  * C8Y config plugin: sends the locally stored config file to C8Y<br/>
+    NOTE: The responsibility to assure that the latest config file was PUT to the thin-edge device is always on the process/external device.
+When there is no coresponding config file on the thin-edge device the plugin sends an error to the cloud on an every incoming config retrieval request.
 
-TO BE DECIDED: Behaviour of the plugin when there is no retain message. Shall it send an error or an empty config file to the cloud?
+**Cloud-to-Device Behaviour:**
+  * at some point a config sent for type `bar.conf` for `child1` arrives at C8Y config plugin
+  * C8Y config plugin: stores the new config file and provides it via HTTP to the process/external device
+  * C8Y config plugin: notifies the process/external device about the new configuration via MQTT (reference to section Notifications above), where the notification MQTT message contains the HTTP download URL in the field `path`.<br/>
+    Example:
+      * Message topic: `tedge/configuration_change/bar.conf`
+      * Message payload: `{ "path": "http://192.168.1.6/tedge/configurations/child1/bar.conf" }` (where `192.168.1.6` is the IP address of the thin-edge device)
+  * external device `child1`: recognizes the MQTT notification message downloads the new configuration file with HTTP GET and the URL from the thin-edge device
+  * external device `child1`: processes the new configuration
 
-**Proposal 3:**<br/>
-TODO (idea: using HTTP instead of MQTT retain messages)
+
