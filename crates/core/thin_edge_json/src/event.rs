@@ -171,6 +171,20 @@ mod tests {
         };
         "event parsing with external source"
     )]
+    #[test_case(
+        "tedge/events/click_event/external_source",
+        json!({}),
+        ThinEdgeEvent {
+            name: "click_event".into(),
+            data: Some(ThinEdgeEventData {
+                text: None,
+                time: None,
+                extras: HashMap::new(),
+            }),
+            source: Some("external_source".into()),
+        };
+        "event parsing empty payload with external source"
+    )]
     fn parse_thin_edge_event_json(
         event_topic: &str,
         event_payload: Value,
