@@ -146,10 +146,10 @@ impl TryFrom<ThinEdgeEvent> for C8yCreateEvent {
                 text = event_data.text.unwrap_or_else(|| event_type.clone());
                 time = event_data.time.unwrap_or_else(OffsetDateTime::now_utc);
                 extras = event_data.extras;
-                if let Some(source) = event.source {
-                    update_the_external_source_event(&mut extras, &source)?;
-                }
             }
+        }
+        if let Some(source) = event.source {
+            update_the_external_source_event(&mut extras, &source)?;
         }
 
         Ok(Self {
