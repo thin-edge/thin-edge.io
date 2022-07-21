@@ -140,7 +140,7 @@ checksum = "93ae1ddd39efd67689deb1979d80bad3bf7f2b09c6e6117c8d1f2443b5e2f83e"
 dependencies = [
  "bstr",
  "doc-comment",
- "predicates 2.1.1",
+ "predicates",
  "predicates-core",
  "predicates-tree",
  "wait-timeout",
@@ -369,7 +369,7 @@ dependencies = [
  "csv",
  "download",
  "futures",
- "mockall 0.11.1",
+ "mockall",
  "mockito",
  "mqtt_channel",
  "reqwest",
@@ -398,7 +398,7 @@ dependencies = [
  "clap 3.2.12",
  "csv",
  "download",
- "mockall 0.11.1",
+ "mockall",
  "mockito",
  "mqtt_channel",
  "mqtt_tests",
@@ -429,7 +429,7 @@ dependencies = [
  "filetime",
  "glob",
  "inotify",
- "mockall 0.11.1",
+ "mockall",
  "mqtt_channel",
  "serde",
  "serde_json",
@@ -589,7 +589,7 @@ dependencies = [
 name = "clock"
 version = "0.7.3"
 dependencies = [
- "mockall 0.10.2",
+ "mockall",
  "time",
 ]
 
@@ -792,12 +792,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
 
 [[package]]
-name = "difference"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
-
-[[package]]
 name = "difflib"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -859,12 +853,6 @@ name = "doc-comment"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
-
-[[package]]
-name = "downcast"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bb454f0228b18c7f4c3b0ebbee346ed9c52e7443b0999cd543ff3571205701d"
 
 [[package]]
 name = "downcast"
@@ -979,15 +967,6 @@ checksum = "f82b0f4c27ad9f8bfd1f3208d882da2b09c301bc1c828fd3a00d0216d2fbbff6"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
-]
-
-[[package]]
-name = "float-cmp"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1267f4ac4f343772758f7b1bdcbe767c218bbab93bb432acbf5162bbf85a6c4"
-dependencies = [
- "num-traits",
 ]
 
 [[package]]
@@ -1608,44 +1587,17 @@ dependencies = [
 
 [[package]]
 name = "mockall"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ab571328afa78ae322493cacca3efac6a0f2e0a67305b4df31fd439ef129ac0"
-dependencies = [
- "cfg-if 1.0.0",
- "downcast 0.10.0",
- "fragile",
- "lazy_static",
- "mockall_derive 0.10.2",
- "predicates 1.0.8",
- "predicates-tree",
-]
-
-[[package]]
-name = "mockall"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5641e476bbaf592a3939a7485fa079f427b4db21407d5ebfd5bba4e07a1f6f4c"
 dependencies = [
  "cfg-if 1.0.0",
- "downcast 0.11.0",
+ "downcast",
  "fragile",
  "lazy_static",
- "mockall_derive 0.11.1",
- "predicates 2.1.1",
+ "mockall_derive",
+ "predicates",
  "predicates-tree",
-]
-
-[[package]]
-name = "mockall_derive"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7e25b214433f669161f414959594216d8e6ba83b6679d3db96899c0b4639033"
-dependencies = [
- "cfg-if 1.0.0",
- "proc-macro2 1.0.40",
- "quote 1.0.20",
- "syn 1.0.98",
 ]
 
 [[package]]
@@ -2102,25 +2054,12 @@ checksum = "eb9f9e6e233e5c4a35559a617bf40a4ec447db2e84c20b55a6f83167b7e57872"
 
 [[package]]
 name = "predicates"
-version = "1.0.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f49cfaf7fdaa3bfacc6fa3e7054e65148878354a5cfddcf661df4c851f8021df"
-dependencies = [
- "difference",
- "float-cmp 0.8.0",
- "normalize-line-endings",
- "predicates-core",
- "regex",
-]
-
-[[package]]
-name = "predicates"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5aab5be6e4732b473071984b3164dbbfb7a3674d30ea5ff44410b6bcd960c3c"
 dependencies = [
  "difflib",
- "float-cmp 0.9.0",
+ "float-cmp",
  "itertools",
  "normalize-line-endings",
  "predicates-core",
@@ -2888,7 +2827,7 @@ dependencies = [
  "mockito",
  "mqtt_tests",
  "pem",
- "predicates 2.1.1",
+ "predicates",
  "reqwest",
  "rpassword",
  "rumqttc",
@@ -2923,7 +2862,7 @@ dependencies = [
  "mqtt_tests",
  "once_cell",
  "plugin_sm",
- "predicates 2.1.1",
+ "predicates",
  "serde",
  "serde_json",
  "serial_test",
@@ -3009,7 +2948,7 @@ dependencies = [
  "futures",
  "inotify",
  "logged_command",
- "mockall 0.11.1",
+ "mockall",
  "mockito",
  "mqtt_channel",
  "mqtt_tests",
@@ -3158,7 +3097,7 @@ dependencies = [
  "clock",
  "criterion",
  "json-writer",
- "mockall 0.10.2",
+ "mockall",
  "proptest",
  "serde",
  "serde_json",
