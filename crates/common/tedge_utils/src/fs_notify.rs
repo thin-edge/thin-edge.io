@@ -179,7 +179,7 @@ fn normalising_watch_dir_and_file(
 pub(crate) fn pipe_masks_into_watch_mask(masks: &[FileEvent]) -> WatchMask {
     let mut watch_mask = WatchMask::empty();
     for mask in masks {
-        watch_mask |= mask.clone().into()
+        watch_mask |= (*mask).into()
     }
     watch_mask
 }
