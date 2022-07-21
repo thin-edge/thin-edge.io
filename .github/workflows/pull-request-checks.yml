@@ -38,6 +38,7 @@ jobs:
             docs:
               - 'docs/**'
             rust:
+              - 'Cargo.lock'
               - 'crates/**'
               - 'plugins/**'
 
