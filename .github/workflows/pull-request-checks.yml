@@ -14,7 +14,7 @@ jobs:
     runs-on: Ubuntu-20.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Block Fixup Commit Merge
         # https://github.com/13rac1/block-fixup-merge-action
@@ -64,7 +64,7 @@ jobs:
     if: ${{ needs.changes.outputs.docs == 'true' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup mdBook
         uses: peaceiris/actions-mdbook@v1
@@ -108,7 +108,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Cargo fmt --version
         uses: actions-rs/cargo@v1
@@ -132,7 +132,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: enable toolchain via github action
         uses: actions-rs/toolchain@v1
@@ -168,7 +168,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Cargo audit
         uses: actions-rs/cargo@v1
@@ -183,7 +183,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: enable toolchain via github action
         uses: actions-rs/toolchain@v1
@@ -222,7 +222,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: enable toolchain via github action
         uses: actions-rs/toolchain@v1
@@ -254,7 +254,7 @@ jobs:
 
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: enable toolchain via github action
         uses: actions-rs/toolchain@v1
@@ -282,7 +282,7 @@ jobs:
 
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: enable toolchain via github action
         # https://github.com/actions-rs/toolchain
@@ -311,7 +311,7 @@ jobs:
 #
 #    steps:
 #      - name: Checkout
-#        uses: actions/checkout@v2
+#        uses: actions/checkout@v3
 #
 #      - name: Install rust v1.58.1
 #        uses: actions-rs/toolchain@v1
