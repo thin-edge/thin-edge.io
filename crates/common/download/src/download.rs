@@ -103,7 +103,7 @@ impl Downloader {
                         backoff::Error::Permanent(err)
                     } else {
                         log::warn!("Failed to Download. {:?}\nRetrying.", &err);
-                        backoff::Error::Transient(err)
+                        backoff::Error::transient(err)
                     }
                 })?
                 .error_for_status()
@@ -114,7 +114,7 @@ impl Downloader {
                     Some(status_error) if status_error.is_client_error() => {
                         Err(backoff::Error::Permanent(err))
                     }
-                    _ => Err(backoff::Error::Transient(err)),
+                    _ => Err(backoff::Error::transient(err)),
                 },
             }
         })
