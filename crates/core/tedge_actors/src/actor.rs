@@ -30,7 +30,7 @@ pub trait Actor: 'static + Sized + Send + Sync {
     ) -> Result<(), RuntimeError>;
 
     /// React to an input message,
-    /// possibly generating output messages and returning a message source
+    /// possibly generating output messages and spawning tasks
     async fn react(
         &mut self,
         message: Self::Input,
@@ -91,7 +91,7 @@ struct VecSource<M: Message> {
 }
 
 #[async_trait]
-impl<M: Message> Task for VecSource<M> {
+impl<M: Message + Clone> Task for VecSource<M> {
     async fn run(mut self: Box<Self>) -> Result<(), RuntimeError> {
         for message in self.messages.into_iter() {
             self.output.send_message(message.clone()).await?;
@@ -101,7 +101,7 @@ impl<M: Message> Task for VecSource<M> {
 }
 
 #[async_trait]
-impl<M: Message> Actor for Vec<M> {
+impl<M: Message + Clone> Actor for Vec<M> {
     type Config = Vec<M>;
     type Input = NoMessage;
     type Output = M;

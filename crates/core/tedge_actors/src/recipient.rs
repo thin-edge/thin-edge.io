@@ -20,7 +20,8 @@ pub trait Sender<M>: 'static + Send + Sync {
         "anonymous recipient"
     }
 
-    /// Send a message returning an error if the recipient is no more expecting messages
+    /// Send a message to the recipient,
+    /// returning an error if the recipient is no more expecting messages
     async fn send_message(&mut self, message: M) -> Result<(), RuntimeError>;
 
     /// Clone this handle in order to send messages to the same recipient from another thread
@@ -40,7 +41,9 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for Address<M> {
     }
 
     fn clone(&self) -> Box<dyn Sender<N>> {
-        Box::new(Clone::clone(self))
+        Box::new(Address {
+            sender: self.sender.clone(),
+        })
     }
 }
 

@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 /// A message exchanged between two actors
-pub trait Message: 'static + Clone + Debug + Send + Sync {}
+pub trait Message: 'static + Debug + Send + Sync {}
 
 /// Strings can be used as Message
 impl Message for String {}
