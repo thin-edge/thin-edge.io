@@ -163,6 +163,7 @@ jobs:
         with:
           toolchain: 1.58.1
           command: clippy
+          args: --all-features
 
   cargo-audit:
     name: Run cargo audit
