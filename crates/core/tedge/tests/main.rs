@@ -1,5 +1,3 @@
-mod os_related;
-
 mod tests {
     use predicates::prelude::*;
     use test_case::test_case;

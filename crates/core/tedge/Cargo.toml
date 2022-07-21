@@ -45,7 +45,3 @@ tokio = { version = "1.12" }
 
 [features]
 integration-test = []
-mosquitto-available = []      # Enable tests requesting mosquitto installed
-root-access = []              # Enable tests requesting root access
-tedge-user = []               # Enable tests requesting a tedge user
-openrc = []                   # Enable usage of OpenRC
