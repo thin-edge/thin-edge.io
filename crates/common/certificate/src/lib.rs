@@ -312,7 +312,7 @@ mod tests {
         // just decode the key contents
         let b64_bytes =
             base64::decode(&cert_cont[header_len..cert_cont.len() - footer_len]).unwrap();
-        let expected_thumbprint = format!("{:x}", sha1::Sha1::digest(b64_bytes.as_ref()));
+        let expected_thumbprint = format!("{:x}", sha1::Sha1::digest(b64_bytes));
 
         // compare the two thumbprints
         assert_eq!(thumbprint, expected_thumbprint.to_uppercase());
