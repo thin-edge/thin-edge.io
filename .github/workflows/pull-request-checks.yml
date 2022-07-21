@@ -41,6 +41,7 @@ jobs:
             rust:
               - 'crates/**'
               - 'plugins/**'
+              - 'Cargo.*'
             workflows:
               - '.github/workflows/**'
 
