@@ -2311,7 +2311,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "rustls 0.20.6",
- "rustls-pemfile",
+ "rustls-pemfile 1.0.0",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -2381,23 +2381,24 @@ dependencies = [
 
 [[package]]
 name = "rumqttd"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a1b0c1bb4e345c681c0a13174ce78df48885b0855c06f6eadbad53efb8b5e3b"
+checksum = "916b8c94b0703befa41eb45cb0b684e7050755be1a70ebd38cfe77faa879a829"
 dependencies = [
  "argh",
  "bytes",
  "confy",
  "futures-util",
+ "jackiechan",
  "jemallocator",
  "log",
- "mqttbytes",
  "pretty_env_logger",
- "rumqttlog",
+ "rustls-pemfile 0.3.0",
+ "segments",
  "serde",
  "thiserror",
  "tokio",
- "tokio-rustls 0.22.0",
+ "tokio-rustls 0.23.4",
  "warp",
 ]
 
@@ -2457,6 +2458,15 @@ dependencies = [
  "ring",
  "sct 0.7.0",
  "webpki 0.22.0",
+]
+
+[[package]]
+name = "rustls-pemfile"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ee86d63972a7c661d1536fefe8c3c8407321c3df668891286de28abcd087360"
+dependencies = [
+ "base64",
 ]
 
 [[package]]
