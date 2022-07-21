@@ -306,7 +306,7 @@ jobs:
         with:
           use-cross: true
           command: test
-          args: --release --no-run --target=armv7-unknown-linux-gnueabihf
+          args: --release --no-run --target=armv7-unknown-linux-gnueabihf --features fs-notify
 
 ### Disable cargo-tarpaulin as some tests failed only in this step
 #  cargo-tarpaulin:
