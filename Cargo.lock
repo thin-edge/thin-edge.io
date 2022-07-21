@@ -516,7 +516,7 @@ dependencies = [
  "base64",
  "pem",
  "rcgen",
- "sha-1 0.9.8",
+ "sha-1 0.10.0",
  "thiserror",
  "time",
  "x509-parser",
