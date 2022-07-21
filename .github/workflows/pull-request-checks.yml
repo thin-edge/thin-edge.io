@@ -28,6 +28,7 @@ jobs:
     outputs:
       docs: ${{ steps.filter.outputs.docs }}
       rust: ${{ steps.filter.outputs.rust }}
+      workflows: ${{ steps.filter.outputs.workflows }}
     steps:
       # For pull requests it's not necessary to checkout the code
       - uses: dorny/paths-filter@v2
@@ -40,11 +41,14 @@ jobs:
             rust:
               - 'crates/**'
               - 'plugins/**'
+              - 'Cargo.*'
+            workflows:
+              - '.github/workflows/**'
 
   udeps:
     name: Check for unused dependencies
     runs-on: ubuntu-latest
-    if: ${{ needs.changes.outputs.rust == 'true' }}
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -61,7 +65,7 @@ jobs:
     name: Run mdbook build
     runs-on: ubuntu-20.04
     needs: changes
-    if: ${{ needs.changes.outputs.docs == 'true' }}
+    if: ${{ needs.changes.outputs.docs == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -104,7 +108,7 @@ jobs:
     name: Run cargo fmt
     runs-on: Ubuntu-20.04
     needs: changes
-    if: ${{ needs.changes.outputs.rust == 'true' }}
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
     steps:
       - name: Checkout
@@ -128,7 +132,7 @@ jobs:
     name: Run cargo clippy
     runs-on: Ubuntu-20.04
     needs: changes
-    if: ${{ needs.changes.outputs.rust == 'true' }}
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
     steps:
       - name: Checkout
@@ -164,7 +168,7 @@ jobs:
     name: Run cargo audit
     runs-on: Ubuntu-20.04
     needs: changes
-    if: ${{ needs.changes.outputs.rust == 'true' }}
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
     steps:
       - name: Checkout
