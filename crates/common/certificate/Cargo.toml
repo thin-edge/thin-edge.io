@@ -9,7 +9,7 @@ rust-version = "1.58.1"
 
 [dependencies]
 rcgen = { version = "0.9", features = ["pem", "zeroize"] }
-sha-1 = "0.9"
+sha-1 = "0.10"
 thiserror = "1.0"
 time = "0.3"
 x509-parser = "0.13"
