@@ -173,7 +173,7 @@ impl PluginConfig {
     fn to_smartrest_payload(&self) -> String {
         let mut config_types = self.get_all_file_types();
         // Sort because hashset doesn't guarantee the order
-        let () = config_types.sort();
+        config_types.sort();
         let supported_config_types = config_types.join(",");
         format!("119,{supported_config_types}")
     }

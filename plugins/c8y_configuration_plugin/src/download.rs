@@ -26,7 +26,7 @@ pub async fn handle_config_download_request(
     http_client: &mut impl C8YHttpProxy,
 ) -> Result<(), anyhow::Error> {
     let executing_message = DownloadConfigFileStatusMessage::executing()?;
-    let () = mqtt_client.published.send(executing_message).await?;
+    mqtt_client.published.send(executing_message).await?;
 
     let target_config_type = smartrest_request.config_type.clone();
     let mut target_file_entry = FileEntry::default();
@@ -53,18 +53,18 @@ pub async fn handle_config_download_request(
             info!("The configuration download for '{target_config_type}' is successful.");
 
             let successful_message = DownloadConfigFileStatusMessage::successful(None)?;
-            let () = mqtt_client.published.send(successful_message).await?;
+            mqtt_client.published.send(successful_message).await?;
 
             let notification_message =
                 get_file_change_notification_message(&target_file_entry.path, &target_config_type);
-            let () = mqtt_client.published.send(notification_message).await?;
+            mqtt_client.published.send(notification_message).await?;
             Ok(())
         }
         Err(err) => {
             error!("The configuration download for '{target_config_type}' failed.",);
 
             let failed_message = DownloadConfigFileStatusMessage::failed(err.to_string())?;
-            let () = mqtt_client.published.send(failed_message).await?;
+            mqtt_client.published.send(failed_message).await?;
             Err(err)
         }
     }
@@ -82,7 +82,7 @@ async fn download_config_file(
         ConfigDownloadRequest::try_new(download_url, file_path, tmp_dir, file_permissions)?;
 
     // Confirm that the file has write access before any http request attempt
-    let () = config_download_request.has_write_access()?;
+    config_download_request.has_write_access()?;
 
     // If the provided url is c8y, add auth
     if http_client.url_is_in_my_tenant_domain(config_download_request.download_info.url()) {
@@ -92,12 +92,12 @@ async fn download_config_file(
 
     // Download a file to tmp dir
     let downloader = config_download_request.create_downloader();
-    let () = downloader
+    downloader
         .download(&config_download_request.download_info)
         .await?;
 
     // Move the downloaded file to the final destination
-    let () = config_download_request.move_file()?;
+    config_download_request.move_file()?;
 
     Ok(())
 }
@@ -190,7 +190,7 @@ impl ConfigDownloadRequest {
             self.file_permissions.clone()
         };
 
-        let () = file_permissions.apply(&self.file_path)?;
+        file_permissions.apply(&self.file_path)?;
 
         Ok(())
     }
