@@ -41,10 +41,10 @@ impl Converter for AzureConverter {
     }
 
     async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
-        let () = self.size_threshold.validate(input)?;
+        self.size_threshold.validate(input)?;
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
         let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
-        let () = thin_edge_json::parser::parse_str(input.payload_str()?, &mut serializer)?;
+        thin_edge_json::parser::parse_str(input.payload_str()?, &mut serializer)?;
 
         let payload = serializer.into_string()?;
         Ok(vec![(Message::new(&self.mapper_config.out_topic, payload))])

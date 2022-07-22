@@ -99,7 +99,7 @@ where
         .try_into()
         .expect("topics that mapper should subscribe to");
 
-        let () = topic_filter.add_all(CumulocityMapper::subscriptions(&operations).unwrap());
+        topic_filter.add_all(CumulocityMapper::subscriptions(&operations).unwrap());
 
         let mapper_config = MapperConfig {
             in_topic_filter: topic_filter,
@@ -153,7 +153,7 @@ where
         .try_into()
         .expect("topics that mapper should subscribe to");
 
-        let () = topic_filter.add_all(CumulocityMapper::subscriptions(&operations).unwrap());
+        topic_filter.add_all(CumulocityMapper::subscriptions(&operations).unwrap());
 
         let mapper_config = MapperConfig {
             in_topic_filter: topic_filter,
@@ -348,7 +348,7 @@ where
     async fn try_convert(&mut self, message: &Message) -> Result<Vec<Message>, ConversionError> {
         match &message.topic {
             topic if topic.name.starts_with("tedge/measurements") => {
-                let () = self.size_threshold.validate(message)?;
+                self.size_threshold.validate(message)?;
                 self.try_convert_measurement(message)
             }
             topic
@@ -933,10 +933,10 @@ mod tests {
         let operation_logs = OperationLogs::try_new(log_dir.path().to_path_buf()).unwrap();
 
         let now = std::time::Instant::now();
-        let () = super::execute_operation("5", "sleep", "sleep_one", &operation_logs)
+        super::execute_operation("5", "sleep", "sleep_one", &operation_logs)
             .await
             .unwrap();
-        let () = super::execute_operation("5", "sleep", "sleep_two", &operation_logs)
+        super::execute_operation("5", "sleep", "sleep_two", &operation_logs)
             .await
             .unwrap();
 

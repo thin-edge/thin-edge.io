@@ -225,7 +225,7 @@ mod tests {
         });
 
         // publish `payload` to `pub_topic`
-        let () = broker.publish(pub_topic, payload).await?;
+        broker.publish(pub_topic, payload).await?;
 
         // check the `messages` returned contain `expected_msg`
         assert_received_all_expected(&mut messages, TEST_TIMEOUT_SECS, &[expected_msg]).await;
