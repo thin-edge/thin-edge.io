@@ -44,8 +44,8 @@ Underneath the leads are the teams or individuals, that each are allowed to  mak
 
 
 - Some decisions are global in the project, like the core/API
-    - Team members should try to make sure to explore possible options together before calling for a vote. This mostly includes uncontroversial changes that are low impact or have already been agreed upon
-    - If this is not possible, a vote needs to be held: TODO
+    - Team members should try to make sure to explore possible options together before calling for time-consuming solutions like a vote. This mostly includes uncontroversial changes that are low impact or have already been agreed upon
+    - If an exclusive choice has to be made (where it is not possible to entertain two conflicting approaches), and no clear side is more advantageous to pick, a vote should be held with the majority opinion being the final decision.
 
 - Some decisions are local, e.g. a plugin does not impact others with its behaviour, however it still needs to be a 'good citizen' in the project (CI, format, etc..)
     - These should be clearly scoped in their respective project part
@@ -69,7 +69,7 @@ The project has a hierarchy to solve these two problems:
     * The sub-projects are organized in a hierarchy
         * This makes it easier to decouple different parts of the project
         * This makes it easier to decide on technical questions
-    * Everyone has to agree on the core project bringing the foundations to all others.
+    * Everyone has to agree on the core project as it is the foundations to all others.
     * At the periphery, sub-projects might be related to specific eco-systems (e.g. Cumulocity or Moneo) and therefore have independent decision processes.
     *	At an intermediate level, one might have sub-projects related to specific use-cases like “JSON over MQTT”.
 * All the sub-projects share a common repository - to ease consistency across projects and over time.
@@ -100,6 +100,7 @@ core contributors = [SAG, IFM]
 
 ## Repository maintenance
 
+To assure a consistent level of quality and appearance, the project has some rules for maintainers to follow:
 
 - **Clear commits**
   Having clear, concise and well-written commit messages for all changes is not
