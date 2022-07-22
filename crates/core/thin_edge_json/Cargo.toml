@@ -24,7 +24,7 @@ proptest = "1.0"
 stats_alloc = "0.1"
 walkdir = "2"
 assert_matches = "1.5"
-test-case = "2.0"
+test-case = "2.2"
 time = { version = "0.3", features = ["macros"] }
 
 [[bench]]
