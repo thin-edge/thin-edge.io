@@ -92,6 +92,7 @@ where
             "tedge/alarms/+/+",
             "c8y-internal/alarms/+/+",
             "tedge/events/+",
+            "tedge/events/+/+",
         ]
         .try_into()
         .expect("topics that mapper should subscribe to");
@@ -143,6 +144,7 @@ where
             "tedge/alarms/+/+",
             "c8y-internal/alarms/+/+",
             "tedge/events/+",
+            "tedge/events/+/+",
         ]
         .try_into()
         .expect("topics that mapper should subscribe to");
@@ -185,7 +187,7 @@ where
     ) -> Result<Vec<Message>, ConversionError> {
         let mut vec: Vec<Message> = Vec::new();
 
-        let maybe_child_id = get_child_id_from_topic(&input.topic.name)?;
+        let maybe_child_id = get_child_id_from_measurement_topic(&input.topic.name)?;
         let c8y_json_payload = match maybe_child_id {
             Some(child_id) => {
                 // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
@@ -224,31 +226,41 @@ where
         &mut self,
         input: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        let tedge_event = ThinEdgeEvent::try_from(input.topic.name.as_str(), input.payload_str()?)?;
+        let mut messages = Vec::new();
+
+        let tedge_event = ThinEdgeEvent::try_from(&input.topic.name, input.payload_str()?)?;
+        let child_id = tedge_event.source.clone();
+
+        let need_registration = self.register_external_device(&tedge_event, &mut messages);
+
         let c8y_event = C8yCreateEvent::try_from(tedge_event)?;
 
         // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
         let message = if c8y_event.extras.is_empty() {
             let smartrest_event = Self::serialize_to_smartrest(&c8y_event)?;
             let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
-
             Message::new(&smartrest_topic, smartrest_event)
         } else {
             // If the message contains extra fields other than `text` and `time`, convert to Cumulocity JSON
             let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
             let json_mqtt_topic = Topic::new_unchecked(C8Y_JSON_MQTT_EVENTS_TOPIC);
-
             Message::new(&json_mqtt_topic, cumulocity_event_json)
         };
 
-        // If the MQTT message size is well within the Cumulocity MQTT size limit, use MQTT to send the mapped event as well
-        if input.payload_bytes().len() < self.size_threshold.0 {
-            Ok(vec![message])
-        } else {
-            // If the message size is larger than the MQTT size limit, use HTTP to send the mapped event
+        if self.can_send_over_mqtt(&message) {
+            // The message can be sent via MQTT
+            messages.push(message);
+        } else if !need_registration {
+            // The message must be sent over HTTP
             let _ = self.http_proxy.send_event(c8y_event).await?;
-            Ok(vec![])
+            return Ok(vec![]);
+        } else {
+            // The message should be sent over HTTP but this cannot be done
+            return Err(ConversionError::ChildDeviceNotRegistered {
+                id: child_id.unwrap_or_else(|| "".into()),
+            });
         }
+        Ok(messages)
     }
 
     fn serialize_to_smartrest(c8y_event: &C8yCreateEvent) -> Result<String, ConversionError> {
@@ -259,6 +271,29 @@ where
             c8y_event.text,
             c8y_event.time.format(&Rfc3339)?
         ))
+    }
+
+    fn register_external_device(
+        &mut self,
+        tedge_event: &ThinEdgeEvent,
+        messages: &mut Vec<Message>,
+    ) -> bool {
+        if let Some(c_id) = tedge_event.source.clone() {
+            // Create the external source if it does not exists
+            if !self.children.contains(&c_id) {
+                self.children.insert(c_id.clone());
+                messages.push(Message::new(
+                    &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
+                    format!("101,{c_id},{c_id},thin-edge.io-child"),
+                ));
+                return true;
+            }
+        }
+        false
+    }
+
+    fn can_send_over_mqtt(&self, message: &Message) -> bool {
+        message.payload_bytes().len() < self.size_threshold.0
     }
 }
 
@@ -825,7 +860,7 @@ fn get_inventory_fragments(file_path: &str) -> Result<serde_json::Value, Convers
     }
 }
 
-pub fn get_child_id_from_topic(topic: &str) -> Result<Option<String>, ConversionError> {
+pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>, ConversionError> {
     match topic.strip_prefix("tedge/measurements/").map(String::from) {
         Some(maybe_id) if maybe_id.is_empty() => {
             Err(ConversionError::InvalidChildId { id: maybe_id })
