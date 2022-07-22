@@ -101,7 +101,7 @@ core contributors = [SAG, IFM]
 ## Repository maintenance
 
 
-- clear commits
+- **Clear commits**
   Having clear, concise and well-written commit messages for all changes is not
   only a indicator for the seriousness of the project, but also a way to ensure
   sustainable development via repeatability of the sources of the project.
@@ -147,7 +147,7 @@ core contributors = [SAG, IFM]
   Commits using the `--fixup` or `--squash` feature of `git-commit` are allowed,
   but won't be merged (read more about this in the "merge strategies" section).
 
-- Ensuring the Signed-off-by-trailer
+- **Ensuring the Signed-off-by-trailer**
   Contributors need to sign the "Contributor License Agreement". They do so by
   signing off each individual commit with a so-called "Signed-off-by Trailer".
   Git offers the `--signoff`/`-s` flags when using `git-commit` to commit
@@ -159,10 +159,10 @@ core contributors = [SAG, IFM]
   request misses the `Signed-off-by` trailer.
 
   As a result, it is not possible to merge pull requests that miss the trailer.
-- coding styleguide
+- **Coding styleguide**
   Coding style is enforced via `rustfmt` in its default configuration.
   Compliance with the coding style is enforced via CI.
-- testing
+- **Testing**
   Testing is done via workflows in github actions using `cargo test --all-features` for all
   crates.
   The main objective with this is that a developer should be able to simply run
@@ -172,20 +172,20 @@ core contributors = [SAG, IFM]
   Rust and do not rely on external services.
   End-to-end system tests - that depend on external services - are run outside the CI pipeline,
   to avoid inconsistent test outcomes because of external issues.
-- benchmarks
-- documentation builds
+- **Benchmarks**
+- **Documentation builds**
   Source code documentation as well as other documentation is tested via github
   actions workflows as well, to ensure that a developer is able to build all
   relevant documentation on their local machine.
-- keeping spec up to date
-- evergreen master
+- **Keeping spec up to date**
+- **Evergreen master**
   The project pursues the "evergreen master" strategy. That means that at every
   point in time, the commit that `master`/`main` points to must successfully
   build and pass all tests successfully.
 
   Reaching that goal is possible because of the employed merge strategies (read
   below).
-- merge strategies
+- **Merge strategies**
   Merging is the way how the project accepts and implements changes.
 
   Because of the pursued "everygreen master", merging is implemented in a
@@ -226,7 +226,7 @@ core contributors = [SAG, IFM]
   Merging itself is implemented via a "merge bot": [bors-ng](https://bors.tech).
   bors-ng is used to prevent "merge skew" or "semantic merge conflicts"
   (read more [here](https://bors.tech/essay/2017/02/02/pitch/)).
-- Dependency updates
+- **Dependency updates**
   Dependencies should be kept in sync over all crates in the project. That means
   that different crates of the project should try to use dependencies in the
   same versions, but also that dependencies should be harmonized in a way that a
@@ -236,7 +236,7 @@ core contributors = [SAG, IFM]
   ([dependabot](https://github.com/dependabot)).
   To ensure harmonization of dependencies, a dedicated team (see "Team
   Structure") is responsible for keeping an eye on the list of dependencies.
-- License linting
+- **License linting**
   License linting describes the act of checking the licenses of dependencies and
   whether they meet a certain criteria.
   For example, it is not feasible to import an external library that is licensed
