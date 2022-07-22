@@ -74,7 +74,7 @@ impl LogPluginConfig {
     // 118,typeA,typeB,...
     fn to_smartrest_payload(&self) -> String {
         let mut config_types = self.get_all_file_types();
-        let () = config_types.sort();
+        config_types.sort();
         let supported_config_types = config_types.join(",");
         format!("118,{supported_config_types}")
     }
