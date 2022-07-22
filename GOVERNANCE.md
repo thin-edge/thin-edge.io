@@ -31,13 +31,14 @@ Changes to the vision need to be done in a plenum of stakeholders, this makes su
 
 The important bits:
 
-At the top, each invested party has their representative, who together with the others in their group have to come to conclusions together. These should be based on the following factors:
+At the 'top' are the maintainers, whose job is to define and realize the project vision of thin-edge.io.
+Maintainers should strive for agreement based on the following factors:
 
 - The vision of the whole project
 - Feasibility, accounting for future technical and cultural shifts
 - The health of the project going forward
 
-Overall, these 'project leads' should not be beholden to their respective companies, and instead to the health of the project and its community.
+Overall, the maintainers should not be beholden to their respective companies, and instead to the health of the project and its community.
 
 Underneath the leads are the teams or individuals, that each are allowed to  make similar decisions about the project *in the area they have been delegated*.
 
@@ -56,7 +57,7 @@ Underneath the leads are the teams or individuals, that each are allowed to  mak
 
 The project has a hierarchy to solve these two problems:
 
-1. How can participating organizations make sure that their voice and interests are represented in the project?
+1. How can users make sure that their voice and interests are represented in the project?
     - Each member party appoints one core team member
     - They form the group of people that have to, and are responsible for, signing off on the technical implementation of the project
 2. How to make the lives of these team members easier?
