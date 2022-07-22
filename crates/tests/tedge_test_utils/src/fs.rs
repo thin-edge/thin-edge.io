@@ -36,7 +36,7 @@ impl TempTedgeDir {
         let path = root.join(&self.current_file_path).join(directory_name);
 
         if !path.exists() {
-            let () = fs::create_dir(&path).unwrap();
+            fs::create_dir(&path).unwrap();
         };
 
         TempTedgeDir {
