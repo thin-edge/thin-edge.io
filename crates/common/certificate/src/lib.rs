@@ -49,12 +49,20 @@ impl PemCertificate {
 
     pub fn not_before(&self) -> Result<String, CertificateError> {
         let x509 = PemCertificate::extract_certificate(&self.pem)?;
-        Ok(x509.tbs_certificate.validity.not_before.to_rfc2822())
+        x509.tbs_certificate
+            .validity
+            .not_before
+            .to_rfc2822()
+            .map_err(CertificateError::X509Error)
     }
 
     pub fn not_after(&self) -> Result<String, CertificateError> {
         let x509 = PemCertificate::extract_certificate(&self.pem)?;
-        Ok(x509.tbs_certificate.validity.not_after.to_rfc2822())
+        x509.tbs_certificate
+            .validity
+            .not_after
+            .to_rfc2822()
+            .map_err(CertificateError::X509Error)
     }
 
     pub fn thumbprint(&self) -> Result<String, CertificateError> {
