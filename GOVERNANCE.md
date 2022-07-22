@@ -1,6 +1,6 @@
 # Governance thin-edge.io
 
-This documents servers as a guiding document to ease technical decision making in the project as a whole.
+This documents serves as a guiding document to ease technical decision-making in the project as a whole.
 
 Some of its goals are:
 
@@ -25,7 +25,7 @@ Changes to the vision need to be done in a plenum of stakeholders, this makes su
 
 * Teams are either single contributors or a group of them
 * They are responsible for a specific part of project, and as such are the maintainers of those parts
-    * This includes: Reviewing pull requests, triaging issues assigned to them, and general maintenance
+    * This includes: Reviewing pull requests, triaging issues in their assigned area, and general maintenance
 * Each team is assigned a single or multiple subtrees of the project, as defined by the project structure
 * The teams follow the project hierarchy for decisions, i.e. higher decisions take precedence
 
@@ -33,8 +33,8 @@ The important bits:
 
 At the top, each invested party has their representative, who together with the others in their group have to come to conclusions together. These should be based on the following factors:
 
-- The signed off vision of the whole project
-- Feasability, accounting for future technical and cultural shifts
+- The vision of the whole project
+- Feasibility, accounting for future technical and cultural shifts
 - The health of the project going forward
 
 Overall, these 'project leads' should not be beholden to their respective companies, and instead to the health of the project and its community.
@@ -43,7 +43,7 @@ Underneath the leads are the teams or individuals, that each are allowed to  mak
 
 
 - Some decisions are global in the project, like the core/API
-    - Team members should try and make sure to explore possible options together before calling for a vote. This mostly includes uncontroversial changes that are low impact or have already been agreed upon
+    - Team members should try to make sure to explore possible options together before calling for a vote. This mostly includes uncontroversial changes that are low impact or have already been agreed upon
     - If this is not possible, a vote needs to be held: TODO
 
 - Some decisions are local, e.g. a plugin does not impact others with its behaviour, however it still needs to be a 'good citizen' in the project (CI, format, etc..)
@@ -101,24 +101,24 @@ core contributors = [SAG, IFM]
 
 
 - clear commits
-  Having clear, consise and well-written commit messages for all changes is not
+  Having clear, concise and well-written commit messages for all changes is not
   only a indicator for the seriousness of the project, but also a way to ensure
-  sustainable development via replicability of the sources of the project.
+  sustainable development via repeatability of the sources of the project.
 
   Because of this, we try to ensure the highest possible quality for each
   individual commit message.
 
   Because such a thing cannot necessarily or in full be enforced via tooling, it
-  remains mainly the obligation of a reviewer of a changeset to ensure
+  remains mainly the obligation of a reviewer of a change-set to ensure
 
-  * Seclusiveness of the individual commits
-  * that one commit is one atomic change, and not an accummulation of several
-    individual and seperate changes
+  * Exclusiveness of the individual commits
+  * that one commit is one atomic change, and not an accumulation of several
+    individual and separate changes
   * that the commit message of the change expresses why the change was made
 
   Every reviewer of a pull request is asked to review not only the changes, but
   also the commit messages.
-  Reviewers are explicitely empowered and actually encouraged to block pull
+  Reviewers are explicitly empowered and actually encouraged to block pull
   requests that contain commit messages that do not meet a certain standard
   even and especially also if the proposed changes are acknowledged.
 
@@ -203,7 +203,7 @@ core contributors = [SAG, IFM]
     job is employed to block pull requests from being merged if such commits are
     in the PR branch. Rebase should be used to clean those up.
 
-  It is explicitely _not_ forbidden to have merge-commits in a pull request.
+  It is explicitly _not_ forbidden to have merge-commits in a pull request.
   Long-running pull requests that contain a large number of changes and are
   developed over a long period might contain merges. They might even merge
   `master`/`main` to get up-to-date with the latest developments. Though it is
