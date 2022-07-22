@@ -12,7 +12,7 @@ rcgen = { version = "0.9", features = ["pem", "zeroize"] }
 sha-1 = "0.10"
 thiserror = "1.0"
 time = "0.3"
-x509-parser = "0.13"
+x509-parser = "0.14"
 zeroize = "1.5"
 
 [dev-dependencies]
