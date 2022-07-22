@@ -110,7 +110,7 @@ impl KeyCertPair {
         id: &str,
         not_before: OffsetDateTime,
     ) -> Result<KeyCertPair, CertificateError> {
-        let () = KeyCertPair::check_identifier(id, config.max_cn_size)?;
+        KeyCertPair::check_identifier(id, config.max_cn_size)?;
         let mut distinguished_name = rcgen::DistinguishedName::new();
         distinguished_name.push(rcgen::DnType::CommonName, id);
         distinguished_name.push(rcgen::DnType::OrganizationName, &config.organization_name);
