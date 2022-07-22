@@ -67,7 +67,7 @@ impl ThinEdgeJsonSerializer {
 
         if !self.timestamp_present {
             if let Some(default_timestamp) = self.default_timestamp {
-                let () = self.visit_timestamp(default_timestamp)?;
+                self.visit_timestamp(default_timestamp)?;
             }
         }
 
