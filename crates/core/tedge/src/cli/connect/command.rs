@@ -13,6 +13,7 @@ use which::which;
 const WAIT_FOR_CHECK_SECONDS: u64 = 2;
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
+const AWS_CONFIG_FILENAME: &str = "aws-bridge.conf";
 pub(crate) const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const MQTT_TLS_PORT: u16 = 8883;
@@ -36,6 +37,7 @@ pub enum DeviceStatus {
 pub enum Cloud {
     Azure,
     C8y,
+    Aws,
 }
 
 impl Cloud {
@@ -43,6 +45,7 @@ impl Cloud {
         match self {
             Cloud::Azure => SystemService::TEdgeMapperAz,
             Cloud::C8y => SystemService::TEdgeMapperC8y,
+            Cloud::Aws => SystemService::TEdgeMapperAws,
         }
     }
 }
@@ -50,6 +53,7 @@ impl Cloud {
 impl Cloud {
     fn as_str(&self) -> &'static str {
         match self {
+            Self::Aws => "AWS",
             Self::Azure => "Azure",
             Self::C8y => "Cumulocity",
         }
@@ -96,6 +100,7 @@ impl Command for ConnectCommand {
         match self.cloud {
             Cloud::Azure => assign_default(&mut config, AzureRootCertPathSetting)?,
             Cloud::C8y => assign_default(&mut config, C8yRootCertPathSetting)?,
+            Cloud::Aws => assign_default(&mut config, AwsRootCertPathSetting)?,
         }
         let bridge_config = self.bridge_config(&config)?;
         let updated_mosquitto_config = self
@@ -205,6 +210,19 @@ impl ConnectCommand {
 
                 Ok(BridgeConfig::from(params))
             }
+            Cloud::Aws => {
+                let params = BridgeConfigAwsParams {
+                    connect_url: config.query(AwsUrlSetting)?,
+                    mqtt_tls_port: MQTT_TLS_PORT,
+                    config_file: AWS_CONFIG_FILENAME.into(),
+                    bridge_root_cert_path: config.query(AwsRootCertPathSetting)?,
+                    remote_clientid: config.query(DeviceIdSetting)?,
+                    bridge_certfile: config.query(DeviceCertPathSetting)?,
+                    bridge_keyfile: config.query(DeviceKeyPathSetting)?,
+                };
+
+                Ok(BridgeConfig::from(params))
+            }
         }
     }
 
@@ -219,6 +237,7 @@ impl ConnectCommand {
         match self.cloud {
             Cloud::Azure => check_device_status_azure(port, host),
             Cloud::C8y => check_device_status_c8y(config),
+            Cloud::Aws => check_device_status_aws(config),
         }
     }
 
@@ -349,6 +368,84 @@ fn check_device_status_azure(port: u16, host: String) -> Result<DeviceStatus, Co
             Ok(Event::Incoming(Packet::Publish(response))) => {
                 // We got a response
                 if response.topic.contains(REGISTRATION_OK) {
+                    println!("Received expected response message, connection check is successful.");
+                    return Ok(DeviceStatus::AlreadyExists);
+                } else {
+                    break;
+                }
+            }
+            Ok(Event::Outgoing(Outgoing::PingReq)) => {
+                // No messages have been received for a while
+                eprintln!("ERROR: Local MQTT publish has timed out.");
+                break;
+            }
+            Ok(Event::Incoming(Incoming::Disconnect)) => {
+                eprintln!("ERROR: Disconnected");
+                break;
+            }
+            Err(err) => {
+                eprintln!("ERROR: {:?}", err);
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    if acknowledged {
+        // The request has been sent but without a response
+        Ok(DeviceStatus::Unknown)
+    } else {
+        // The request has not even been sent
+        println!("Make sure mosquitto is running.");
+        Err(ConnectError::TimeoutElapsedError)
+    }
+}
+
+// Check the AWS connection status by using the AWS Device Shadow service.
+fn check_device_status_aws(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
+    const REGISTRATION_PAYLOAD: &[u8] = b"";
+    const CLIENT_ID: &str = "check_connection_aws";
+    let mut options = MqttOptions::new(
+        CLIENT_ID,
+        tedge_config.query(MqttBindAddressSetting)?.to_string(),
+        tedge_config.query(MqttPortSetting)?.into(),
+    );
+
+    let remote_id = tedge_config.query(DeviceIdSetting).unwrap();
+
+    let aws_topic_device_shadow_upstream = format!("aws/things/{}/shadow/get", &remote_id);
+    let aws_topic_device_shadow_downstream_accepted =
+        format!("aws/things/{}/shadow/get/accepted", &remote_id);
+    let aws_topic_device_shadow_downstream_rejected =
+        format!("aws/things/{}/shadow/get/rejected", &remote_id);
+
+    options.set_keep_alive(RESPONSE_TIMEOUT);
+
+    let (mut client, mut connection) = rumqttc::Client::new(options, 10);
+    let mut acknowledged = false;
+
+    client.subscribe(&aws_topic_device_shadow_downstream_accepted, AtLeastOnce)?;
+    client.subscribe(&aws_topic_device_shadow_downstream_rejected, AtLeastOnce)?;
+
+    for event in connection.iter() {
+        // it would be good to use log crate, to be able to debug things like creating the bridge
+        match event {
+            Ok(Event::Incoming(Packet::SubAck(s))) if s.pkid == 2 => {
+                // We are ready to get the response, hence send the request
+                client.publish(
+                    &aws_topic_device_shadow_upstream,
+                    AtLeastOnce,
+                    false,
+                    REGISTRATION_PAYLOAD,
+                )?;
+            }
+            Ok(Event::Incoming(Packet::PubAck(_))) => {
+                // The request has been sent
+                acknowledged = true;
+            }
+            Ok(Event::Incoming(Packet::Publish(response))) => {
+                // We got a response
+                if response.topic.ends_with("/accepted") {
                     println!("Received expected response message, connection check is successful.");
                     return Ok(DeviceStatus::AlreadyExists);
                 } else {

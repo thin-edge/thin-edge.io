@@ -18,6 +18,9 @@ pub(crate) struct TEdgeConfigDto {
     pub(crate) az: AzureConfigDto,
 
     #[serde(default)]
+    pub(crate) aws: AwsConfigDto,
+
+    #[serde(default)]
     pub(crate) mqtt: MqttConfigDto,
 
     #[serde(default)]
@@ -83,6 +86,22 @@ pub(crate) struct AzureConfigDto {
     pub(crate) connect: Option<String>,
     pub(crate) url: Option<ConnectUrl>,
     pub(crate) root_cert_path: Option<FilePath>,
+    pub(crate) mapper_timestamp: Option<bool>,
+}
+
+/// Represents the AWS specific configurations defined in the
+/// [aws] section of the thin edge configuration TOML file
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AwsConfigDto {
+    /// Preserves the current status of the connection
+    pub(crate) connect: Option<String>,
+    /// Endpoint URL of the AWS tenant
+    pub(crate) url: Option<ConnectUrl>,
+    /// The path where AWS root certificate(s) are stored.
+    /// The value can be a directory path as well as the path of the direct certificate file.
+    pub(crate) root_cert_path: Option<FilePath>,
+    /// Boolean whether AWS mapper adds timestamp or not.
     pub(crate) mapper_timestamp: Option<bool>,
 }
 

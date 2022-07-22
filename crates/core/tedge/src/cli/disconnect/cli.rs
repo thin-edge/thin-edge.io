@@ -4,6 +4,7 @@ use crate::system_services::service_manager;
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
+const AWS_CONFIG_FILENAME: &str = "aws-bridge.conf";
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeDisconnectBridgeCli {
@@ -11,6 +12,8 @@ pub enum TEdgeDisconnectBridgeCli {
     C8y,
     /// Remove bridge connection to Azure.
     Az,
+    /// Remove bridge connection to AWS.
+    Aws,
 }
 
 impl BuildCommand for TEdgeDisconnectBridgeCli {
@@ -29,6 +32,17 @@ impl BuildCommand for TEdgeDisconnectBridgeCli {
                 config_file: AZURE_CONFIG_FILENAME.into(),
                 cloud: Cloud::Azure,
                 use_mapper: true,
+                use_agent: false,
+                service_manager: service_manager(context.config_location.tedge_config_root_path)?,
+            },
+            // TODO: remove config duplication
+            // fields like `use_mapper` or `use_agent` are part of `BridgeConfig`. Instead of duplicating these fields
+            // here, we should have a way to query for the currently running bridge, and its full configuration.
+            TEdgeDisconnectBridgeCli::Aws => DisconnectBridgeCommand {
+                config_location: context.config_location.clone(),
+                config_file: AWS_CONFIG_FILENAME.into(),
+                cloud: Cloud::Aws,
+                use_mapper: false,
                 use_agent: false,
                 service_manager: service_manager(context.config_location.tedge_config_root_path)?,
             },

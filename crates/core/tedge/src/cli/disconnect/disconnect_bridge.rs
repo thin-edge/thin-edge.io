@@ -12,6 +12,7 @@ const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
 pub enum Cloud {
     C8y,
     Azure,
+    Aws,
 }
 
 impl Cloud {
@@ -19,6 +20,7 @@ impl Cloud {
         match self {
             Cloud::Azure => SystemService::TEdgeMapperAz,
             Cloud::C8y => SystemService::TEdgeMapperC8y,
+            Cloud::Aws => todo!(),
         }
     }
 }
@@ -28,6 +30,7 @@ impl fmt::Display for Cloud {
         match self {
             Cloud::C8y => write!(f, "Cumulocity"),
             Cloud::Azure => write!(f, "Azure"),
+            Cloud::Aws => write!(f, "AWS"),
         }
     }
 }

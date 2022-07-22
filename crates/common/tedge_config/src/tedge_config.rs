@@ -596,3 +596,50 @@ impl ConfigSettingAccessor<RunPathSetting> for TEdgeConfig {
         Ok(())
     }
 }
+
+impl ConfigSettingAccessor<AwsRootCertPathSetting> for TEdgeConfig {
+    fn query(&self, _setting: AwsRootCertPathSetting) -> ConfigSettingResult<FilePath> {
+        Ok(self
+            .data
+            .aws
+            .root_cert_path
+            .clone()
+            .unwrap_or_else(|| self.config_defaults.default_azure_root_cert_path.clone()))
+    }
+
+    fn update(
+        &mut self,
+        _setting: AwsRootCertPathSetting,
+        value: FilePath,
+    ) -> ConfigSettingResult<()> {
+        self.data.az.root_cert_path = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: AwsRootCertPathSetting) -> ConfigSettingResult<()> {
+        self.data.az.root_cert_path = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<AwsUrlSetting> for TEdgeConfig {
+    fn query(&self, _setting: AwsUrlSetting) -> ConfigSettingResult<ConnectUrl> {
+        self.data
+            .aws
+            .url
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: AzureUrlSetting::KEY,
+            })
+    }
+
+    fn update(&mut self, _setting: AwsUrlSetting, value: ConnectUrl) -> ConfigSettingResult<()> {
+        self.data.aws.url = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: AwsUrlSetting) -> ConfigSettingResult<()> {
+        self.data.aws.url = None;
+        Ok(())
+    }
+}

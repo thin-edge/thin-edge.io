@@ -345,3 +345,36 @@ impl ConfigSetting for RunPathSetting {
 
     type Value = FilePath;
 }
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct AwsRootCertPathSetting;
+
+impl ConfigSetting for AwsRootCertPathSetting {
+    const KEY: &'static str = "aws.root.cert.path";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Path where AWS IoT root certificate(s) are located. ",
+        "Example: /home/user/.tedge/aws-trusted-root-certificates.pem"
+    );
+
+    type Value = FilePath;
+}
+
+///
+/// Tenant endpoint URL of AWS IoT tenant.
+///
+/// Example: a2e6ahkpo54syc-ats.iot.eu-central-1.amazonaws.com
+///
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct AwsUrlSetting;
+
+impl ConfigSetting for AwsUrlSetting {
+    const KEY: &'static str = "aws.url";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Tenant endpoint URL of AWS IoT tenant. ",
+        "Example: a2e6ahkpo54syc-ats.iot.eu-central-1.amazonaws.com"
+    );
+
+    type Value = ConnectUrl;
+}

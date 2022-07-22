@@ -1,9 +1,10 @@
 pub use self::{
-    bridge_config::*, bridge_config_azure::*, bridge_config_c8y::*, cli::*, command::*,
-    common_mosquitto_config::*, error::*,
+    bridge_config::*, bridge_config_aws::*, bridge_config_azure::*, bridge_config_c8y::*, cli::*,
+    command::*, common_mosquitto_config::*, error::*,
 };
 
 mod bridge_config;
+mod bridge_config_aws;
 mod bridge_config_azure;
 mod bridge_config_c8y;
 mod c8y_direct_connection;
