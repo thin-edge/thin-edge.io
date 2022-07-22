@@ -18,7 +18,7 @@ assets = [
 
 [dependencies]
 anyhow = "1.0"
-clap = { version = "3.0", features = ["cargo", "derive"] }
+clap = { version = "3.2", features = ["cargo", "derive"] }
 futures = "0.3.21"
 mqtt_channel = { path = "../../common/mqtt_channel" }
 nanoid = "0.4.0"

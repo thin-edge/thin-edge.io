@@ -395,7 +395,7 @@ dependencies = [
  "assert_matches",
  "c8y_api",
  "c8y_smartrest",
- "clap 3.2.12",
+ "clap 3.2.14",
  "csv",
  "download",
  "mockall",
@@ -423,7 +423,7 @@ dependencies = [
  "assert_matches",
  "c8y_api",
  "c8y_smartrest",
- "clap 3.2.12",
+ "clap 3.2.14",
  "csv",
  "easy_reader",
  "filetime",
@@ -548,9 +548,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.2.12"
+version = "3.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab8b79fe3946ceb4a0b1c080b4018992b8d27e9ff363644c1c9b6387c854614d"
+checksum = "54635806b078b7925d6e36810b1755f2a4b5b4d57560432c1ecf60bcbe10602b"
 dependencies = [
  "atty",
  "bitflags",
@@ -2822,7 +2822,7 @@ dependencies = [
  "assert_matches",
  "base64",
  "certificate",
- "clap 3.2.12",
+ "clap 3.2.14",
  "hyper",
  "mockito",
  "mqtt_tests",
@@ -2855,7 +2855,7 @@ dependencies = [
  "assert-json-diff",
  "assert_cmd",
  "async-trait",
- "clap 3.2.12",
+ "clap 3.2.14",
  "flockfile",
  "futures",
  "mqtt_channel",
@@ -2881,7 +2881,7 @@ dependencies = [
 name = "tedge_apama_plugin"
 version = "0.7.3"
 dependencies = [
- "clap 3.2.12",
+ "clap 3.2.14",
  "roxmltree",
  "tedge_test_utils",
  "thiserror",
@@ -2893,7 +2893,7 @@ name = "tedge_apt_plugin"
 version = "0.7.3"
 dependencies = [
  "anyhow",
- "clap 3.2.12",
+ "clap 3.2.14",
  "csv",
  "hamcrest2",
  "reqwest",
@@ -2923,7 +2923,7 @@ dependencies = [
 name = "tedge_dummy_plugin"
 version = "0.7.3"
 dependencies = [
- "clap 3.2.12",
+ "clap 3.2.14",
  "thiserror",
 ]
 
@@ -2940,7 +2940,7 @@ dependencies = [
  "c8y_api",
  "c8y_smartrest",
  "c8y_translator",
- "clap 3.2.12",
+ "clap 3.2.14",
  "clock",
  "csv",
  "download",
@@ -3007,7 +3007,7 @@ name = "tedge_watchdog"
 version = "0.7.3"
 dependencies = [
  "anyhow",
- "clap 3.2.12",
+ "clap 3.2.14",
  "freedesktop_entry_parser",
  "futures",
  "mqtt_channel",
