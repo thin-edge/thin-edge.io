@@ -19,7 +19,7 @@ assets = [
 anyhow = "1.0"
 c8y_api = { path = "../../crates/core/c8y_api" }
 c8y_smartrest = { path = "../../crates/core/c8y_smartrest" }
-clap = { version = "3.0", features = ["cargo", "derive"] }
+clap = { version = "3.2", features = ["cargo", "derive"] }
 csv = "1.1"
 easy_reader = "0.5"
 glob = "0.3"

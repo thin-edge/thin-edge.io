@@ -25,7 +25,7 @@ stop-on-upgrade = false
 agent_interface = { path = "../agent_interface" }
 anyhow = "1.0"
 async-trait = "0.1"
-clap = { version = "3.0", features = ["cargo", "derive"] }
+clap = { version = "3.2", features = ["cargo", "derive"] }
 flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
 mqtt_channel = { path = "../../common/mqtt_channel" }
