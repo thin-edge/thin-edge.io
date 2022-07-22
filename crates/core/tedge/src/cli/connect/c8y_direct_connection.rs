@@ -29,7 +29,7 @@ pub fn create_device_with_direct_connection(
 
     let mut client_config = ClientConfig::new();
 
-    let () = load_root_certs(
+    load_root_certs(
         &mut client_config.root_store,
         bridge_config.bridge_root_cert_path.clone(),
     )?;

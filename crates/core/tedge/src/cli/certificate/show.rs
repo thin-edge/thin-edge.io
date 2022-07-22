@@ -16,7 +16,7 @@ impl Command for ShowCertCmd {
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        let () = self.show_certificate()?;
+        self.show_certificate()?;
         Ok(())
     }
 }

@@ -28,7 +28,7 @@ impl Command for CreateCertCmd {
 
     fn execute(&self) -> anyhow::Result<()> {
         let config = NewCertificateConfig::default();
-        let () = self.create_test_certificate(&config)?;
+        self.create_test_certificate(&config)?;
         Ok(())
     }
 }

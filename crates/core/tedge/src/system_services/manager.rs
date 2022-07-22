@@ -33,7 +33,7 @@ pub trait SystemServiceManager: Debug {
         service: SystemService,
     ) -> Result<bool, SystemServiceError> {
         if self.is_service_running(service)? {
-            let () = self.restart_service(service)?;
+            self.restart_service(service)?;
             Ok(true)
         } else {
             Ok(false)
