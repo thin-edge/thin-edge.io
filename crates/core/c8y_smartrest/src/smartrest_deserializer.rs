@@ -57,7 +57,7 @@ impl Default for SmartRestUpdateSoftware {
 impl SmartRestUpdateSoftware {
     pub fn from_smartrest(&self, smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
         let mut message_id = smartrest.to_string();
-        let () = message_id.truncate(3);
+        message_id.truncate(3);
 
         let mut rdr = ReaderBuilder::new()
             .has_headers(false)
@@ -461,7 +461,7 @@ mod tests {
                 url: Some("url1".into()),
                 file_path: None,
             }));
-        let () = expected_thin_edge_json.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
+        expected_thin_edge_json.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
             module_type: Some("".to_string()),
             name: "software2".to_string(),
             version: None,
