@@ -4,6 +4,8 @@ updates:
   directory: "/"
   schedule:
     interval: daily
+  # Disable the pull request limit for dependabot
+  open-pull-requests-limit: 0
 - package-ecosystem: github-actions
   directory: "/"
   schedule:
