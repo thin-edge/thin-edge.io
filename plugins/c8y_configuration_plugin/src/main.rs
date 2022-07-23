@@ -14,15 +14,14 @@ use c8y_smartrest::smartrest_deserializer::{
 use c8y_smartrest::topic::C8yTopic;
 use clap::Parser;
 use mqtt_channel::{Connection, Message, SinkExt, StreamExt, Topic};
-use serde_json::json;
 use std::path::{Path, PathBuf};
-use std::process;
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, MqttPortSetting, TEdgeConfig, TmpPathSetting,
     DEFAULT_TEDGE_CONFIG_PATH,
 };
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
-use time::OffsetDateTime;
+use thin_edge_json::health::{health_check_topics, send_health_status};
+
 use tracing::{debug, error, info};
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_PATH: &str = "/etc/tedge/c8y/c8y-configuration-plugin.toml";
@@ -70,7 +69,7 @@ async fn create_mqtt_client(mqtt_port: u16) -> Result<mqtt_channel::Connection, 
     let _ = topic_filter
         .add_unchecked(format!("{CONFIG_CHANGE_TOPIC}/{DEFAULT_PLUGIN_CONFIG_TYPE}").as_str());
     let _ = topic_filter.add_all(
-        health_check_topics()
+        health_check_topics("c8y-configuration-plugin")
             .try_into()
             .expect("Invalid topic filter"),
     );
@@ -89,13 +88,6 @@ pub async fn create_http_client(
     let mut http_proxy = JwtAuthHttpProxy::try_new(tedge_config).await?;
     let () = http_proxy.init().await?;
     Ok(http_proxy)
-}
-
-pub fn health_check_topics() -> Vec<&'static str> {
-    vec![
-        "tedge/health-check",
-        "tedge/health-check/c8y-configuration-plugin",
-    ]
 }
 
 #[tokio::main]
@@ -171,7 +163,6 @@ async fn process_mqtt_messages(
     http_client: &mut impl C8YHttpProxy,
     tmp_dir: PathBuf,
 ) -> Result<(), anyhow::Error> {
-    let response_topic_health = Topic::new_unchecked("tedge/health/c8y-configuration-plugin");
     while let Some(message) = mqtt_client.received.next().await {
         debug!("Received {:?}", message);
         if let Ok(payload) = message.payload_str() {
@@ -185,15 +176,8 @@ async fn process_mqtt_messages(
                     Ok(())
                 }
                 "tedge/health-check" | "tedge/health-check/c8y-configuration-plugin" => {
-                    let health_status = json!({
-                        "status": "up",
-                        "pid": process::id(),
-                        "time": OffsetDateTime::now_utc().unix_timestamp(),
-                    })
-                    .to_string();
-
-                    let health_message = Message::new(&response_topic_health, health_status);
-                    let _ = mqtt_client.published.send(health_message).await;
+                    send_health_status(&mut mqtt_client.published, "c8y-configuration-plugin")
+                        .await;
                     Ok(())
                 }
                 _ => {

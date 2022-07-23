@@ -6,11 +6,12 @@ pub mod topic;
 pub use download::*;
 pub use error::*;
 pub use messages::{
-    control_filter_topic, health_check_topics, software_filter_topic, Jsonify, OperationStatus,
-    RestartOperationRequest, RestartOperationResponse, SoftwareListRequest, SoftwareListResponse,
-    SoftwareRequestResponse, SoftwareUpdateRequest, SoftwareUpdateResponse,
+    control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
+    RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareRequestResponse,
+    SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
 pub use software::*;
+//use thin_edge_json::health::{health_check_topics, send_health_status};
 
 #[cfg(test)]
 mod tests {

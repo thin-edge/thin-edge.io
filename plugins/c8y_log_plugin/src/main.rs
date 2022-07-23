@@ -12,16 +12,14 @@ use clap::Parser;
 use config::LogPluginConfig;
 use inotify::{EventMask, EventStream};
 use inotify::{Inotify, WatchMask};
-use mqtt_channel::{Connection, Message, SinkExt, StreamExt, Topic, TopicFilter};
-use serde_json::json;
+use mqtt_channel::{Connection, Message, StreamExt, TopicFilter};
 use std::path::{Path, PathBuf};
-use std::process;
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, LogPathSetting, MqttPortSetting, TEdgeConfig,
     DEFAULT_TEDGE_CONFIG_PATH,
 };
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
-use time::OffsetDateTime;
+use thin_edge_json::health::{health_check_topics, send_health_status};
 use tracing::{error, info};
 
 use crate::logfile_request::{
@@ -62,7 +60,7 @@ async fn create_mqtt_client(
     tedge_config: &TEdgeConfig,
 ) -> Result<mqtt_channel::Connection, anyhow::Error> {
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
-    let mut topics: TopicFilter = health_check_topics()
+    let mut topics: TopicFilter = health_check_topics("c8y-log-plugin")
         .try_into()
         .expect("Invalid topic filter");
 
@@ -76,10 +74,6 @@ async fn create_mqtt_client(
 
     let mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
     Ok(mqtt_client)
-}
-
-pub fn health_check_topics() -> Vec<&'static str> {
-    vec!["tedge/health-check", "tedge/health-check/c8y-log-plugin"]
 }
 
 pub async fn create_http_client(
@@ -138,24 +132,14 @@ pub async fn process_mqtt_messages(
     http_client: &mut JwtAuthHttpProxy,
     config_file: &Path,
 ) -> Result<(), anyhow::Error> {
-    let response_topic_health = Topic::new_unchecked("tedge/health/c8y-log-plugin");
-
     if is_c8y_bridge_up(&message) {
         let plugin_config = read_log_config(config_file);
         let () = handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
     }
     match message.topic.name.as_str() {
         "tedge/health-check" | "tedge/health-check/c8y-log-plugin" => {
-            let health_status = json!({
-                "status": "up",
-                "pid": process::id(),
-                "time": OffsetDateTime::now_utc().unix_timestamp(),
-            })
-            .to_string();
-
-            let health_message = Message::new(&response_topic_health, health_status);
-            let _ = mqtt_client.published.send(health_message).await;
-            return Ok(());
+            send_health_status(&mut mqtt_client.published, "c8y-log-plugin").await;
+            Ok(())
         }
         _ => {
             if let Ok(payload) = message.payload_str() {
@@ -189,12 +173,9 @@ pub async fn process_mqtt_messages(
                     error!("{}", error_message);
                 }
             }
-            return Ok(());
+            Ok(())
         }
     }
-
-    // message is None and the connection has been closed
-    Ok(())
 }
 
 #[tokio::main]
