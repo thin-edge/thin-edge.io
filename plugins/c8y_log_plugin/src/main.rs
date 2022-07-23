@@ -102,12 +102,13 @@ async fn run(
 ) -> Result<(), anyhow::Error> {
     let mut plugin_config = LogPluginConfig::default();
     let mut inotify_stream = create_inofity_file_watch_stream(config_file)?;
+    let health_check_topics = health_check_topics("c8y-log-plugin");
 
     loop {
         tokio::select! {
                 message = mqtt_client.received.next() => {
                 if let Some(message) = message {
-                    process_mqtt_message(message, &plugin_config, mqtt_client, http_client, config_file).await?;
+                    process_mqtt_message(message, &plugin_config, mqtt_client, http_client, config_file, health_check_topics.clone()).await?;
                 } else {
                     // message is None and the connection has been closed
                     return Ok(())
@@ -129,11 +130,12 @@ pub async fn process_mqtt_message(
     mqtt_client: &mut Connection,
     http_client: &mut JwtAuthHttpProxy,
     config_file: &Path,
+    health_check_topics: TopicFilter,
 ) -> Result<(), anyhow::Error> {
     if is_c8y_bridge_up(&message) {
         let plugin_config = read_log_config(config_file);
         let () = handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
-    } else if health_check_topics("c8y-log-plugin").accept(&message) {
+    } else if health_check_topics.accept(&message) {
         send_health_status(&mut mqtt_client.published, "c8y-log-plugin").await;
     } else if let Ok(payload) = message.payload_str() {
         let result = match payload.split(',').next().unwrap_or_default() {

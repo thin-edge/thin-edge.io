@@ -159,9 +159,10 @@ async fn process_mqtt_message(
     http_client: &mut impl C8YHttpProxy,
     tmp_dir: PathBuf,
 ) -> Result<(), anyhow::Error> {
+    let health_check_topics = health_check_topics("c8y-configuration-plugin");
     while let Some(message) = mqtt_client.received.next().await {
         debug!("Received {:?}", message);
-        if health_check_topics("c8y-configuration-plugin").accept(&message) {
+        if health_check_topics.accept(&message) {
             send_health_status(&mut mqtt_client.published, "c8y-configuration-plugin").await;
         } else if let Ok(payload) = message.payload_str() {
             let result = match message.topic.name.as_str() {
