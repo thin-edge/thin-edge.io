@@ -114,7 +114,12 @@ async fn run(
     loop {
         tokio::select! {
                 message = mqtt_client.received.next() => {
-               process_mqtt_messages(message, &plugin_config, mqtt_client, http_client, config_file).await?;
+                if let Some(message) = message {
+                    process_mqtt_messages(message, &plugin_config, mqtt_client, http_client, config_file).await?;
+                } else {
+                    // message is None and the connection has been closed
+                    return Ok(())
+                }
             }
             Some(Ok(event)) = inotify_stream.next() => {
                 if event.mask == EventMask::CLOSE_WRITE {
@@ -127,67 +132,67 @@ async fn run(
 }
 
 pub async fn process_mqtt_messages(
-    message: Option<Message>,
+    message: Message,
     plugin_config: &LogPluginConfig,
     mqtt_client: &mut Connection,
     http_client: &mut JwtAuthHttpProxy,
     config_file: &Path,
 ) -> Result<(), anyhow::Error> {
     let response_topic_health = Topic::new_unchecked("tedge/health/c8y-log-plugin");
-    if let Some(message) = message {
-        if is_c8y_bridge_up(&message) {
-            let plugin_config = read_log_config(config_file);
-            let () = handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
-        }
-        match message.topic.name.as_str() {
-            "tedge/health-check" | "tedge/health-check/c8y-log-plugin" => {
-                let health_status = json!({
-                    "status": "up",
-                    "pid": process::id(),
-                    "time": OffsetDateTime::now_utc().unix_timestamp(),
-                })
-                .to_string();
 
-                let health_message = Message::new(&response_topic_health, health_status);
-                let _ = mqtt_client.published.send(health_message).await;
-                return Ok(());
-            }
-            _ => {
-                if let Ok(payload) = message.payload_str() {
-                    let result = match payload.split(',').next().unwrap_or_default() {
-                        "522" => {
-                            info!("Log request received: {payload}");
-                            // retrieve smartrest object from payload
-                            let maybe_smartrest_obj = SmartRestLogRequest::from_smartrest(payload);
-                            if let Ok(smartrest_obj) = maybe_smartrest_obj {
-                                handle_logfile_request_operation(
-                                    &smartrest_obj,
-                                    plugin_config,
-                                    mqtt_client,
-                                    http_client,
-                                )
-                                .await
-                            } else {
-                                error!("Incorrect SmartREST payload: {}", payload);
-                                Ok(())
-                            }
-                        }
-                        _ => {
-                            // Ignore operation messages not meant for this plugin
+    if is_c8y_bridge_up(&message) {
+        let plugin_config = read_log_config(config_file);
+        let () = handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
+    }
+    match message.topic.name.as_str() {
+        "tedge/health-check" | "tedge/health-check/c8y-log-plugin" => {
+            let health_status = json!({
+                "status": "up",
+                "pid": process::id(),
+                "time": OffsetDateTime::now_utc().unix_timestamp(),
+            })
+            .to_string();
+
+            let health_message = Message::new(&response_topic_health, health_status);
+            let _ = mqtt_client.published.send(health_message).await;
+            return Ok(());
+        }
+        _ => {
+            if let Ok(payload) = message.payload_str() {
+                let result = match payload.split(',').next().unwrap_or_default() {
+                    "522" => {
+                        info!("Log request received: {payload}");
+                        // retrieve smartrest object from payload
+                        let maybe_smartrest_obj = SmartRestLogRequest::from_smartrest(payload);
+                        if let Ok(smartrest_obj) = maybe_smartrest_obj {
+                            handle_logfile_request_operation(
+                                &smartrest_obj,
+                                plugin_config,
+                                mqtt_client,
+                                http_client,
+                            )
+                            .await
+                        } else {
+                            error!("Incorrect SmartREST payload: {}", payload);
                             Ok(())
                         }
-                    };
-
-                    if let Err(err) = result {
-                        let error_message =
-                            format!("Handling of operation: '{}' failed with {}", payload, err);
-                        error!("{}", error_message);
                     }
+                    _ => {
+                        // Ignore operation messages not meant for this plugin
+                        Ok(())
+                    }
+                };
+
+                if let Err(err) = result {
+                    let error_message =
+                        format!("Handling of operation: '{}' failed with {}", payload, err);
+                    error!("{}", error_message);
                 }
-                return Ok(());
             }
+            return Ok(());
         }
     }
+
     // message is None and the connection has been closed
     Ok(())
 }

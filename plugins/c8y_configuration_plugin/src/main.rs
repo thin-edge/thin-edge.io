@@ -150,7 +150,7 @@ async fn run(
     let () = mqtt_client.published.send(msg).await?;
 
     // Mqtt message loop
-    proocess_mqtt_messages(
+    process_mqtt_messages(
         &mut plugin_config,
         &mut mqtt_client,
         config_file_path,
@@ -164,7 +164,7 @@ async fn run(
     Ok(())
 }
 
-async fn proocess_mqtt_messages(
+async fn process_mqtt_messages(
     plugin_config: &mut PluginConfig,
     mqtt_client: &mut Connection,
     config_file_path: &Path,
