@@ -64,9 +64,7 @@ impl DeviceMonitor {
 
     #[instrument(skip(self), name = "monitor")]
     pub async fn run(&self) -> Result<(), DeviceMonitorError> {
-        let health_check_topics: TopicFilter = health_check_topics("tedge-mapper-collectd")
-            .try_into()
-            .expect("Valid health topics");
+        let health_check_topics: TopicFilter = health_check_topics("tedge-mapper-collectd");
 
         let mut input_topic = TopicFilter::new(self.device_monitor_config.mqtt_source_topic)?
             .with_qos(QoS::AtMostOnce);

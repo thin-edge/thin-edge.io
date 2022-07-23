@@ -1,14 +1,16 @@
 use std::process;
 
-use mqtt_channel::{Message, PubChannel, Topic};
+use mqtt_channel::{Message, PubChannel, Topic, TopicFilter};
 use serde_json::json;
 use time::OffsetDateTime;
 
-pub fn health_check_topics(daemon_name: &str) -> Vec<String> {
+pub fn health_check_topics(daemon_name: &str) -> TopicFilter {
     vec![
         "tedge/health-check".into(),
         format!("tedge/health-check/{daemon_name}"),
     ]
+    .try_into()
+    .expect("Invalid topic filter")
 }
 
 pub async fn send_health_status(responses: &mut impl PubChannel, daemon_name: &str) {

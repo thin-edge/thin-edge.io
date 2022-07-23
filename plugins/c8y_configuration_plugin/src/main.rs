@@ -68,11 +68,7 @@ async fn create_mqtt_client(mqtt_port: u16) -> Result<mqtt_channel::Connection, 
         mqtt_channel::TopicFilter::new_unchecked(C8yTopic::SmartRestRequest.as_str());
     let _ = topic_filter
         .add_unchecked(format!("{CONFIG_CHANGE_TOPIC}/{DEFAULT_PLUGIN_CONFIG_TYPE}").as_str());
-    let _ = topic_filter.add_all(
-        health_check_topics("c8y-configuration-plugin")
-            .try_into()
-            .expect("Invalid topic filter"),
-    );
+    let _ = topic_filter.add_all(health_check_topics("c8y-configuration-plugin"));
 
     let mqtt_config = mqtt_channel::Config::default()
         .with_port(mqtt_port)
@@ -142,7 +138,7 @@ async fn run(
     let () = mqtt_client.published.send(msg).await?;
 
     // Mqtt message loop
-    process_mqtt_messages(
+    process_mqtt_message(
         &mut plugin_config,
         &mut mqtt_client,
         config_file_path,
@@ -156,7 +152,7 @@ async fn run(
     Ok(())
 }
 
-async fn process_mqtt_messages(
+async fn process_mqtt_message(
     plugin_config: &mut PluginConfig,
     mqtt_client: &mut Connection,
     config_file_path: &Path,
@@ -165,7 +161,9 @@ async fn process_mqtt_messages(
 ) -> Result<(), anyhow::Error> {
     while let Some(message) = mqtt_client.received.next().await {
         debug!("Received {:?}", message);
-        if let Ok(payload) = message.payload_str() {
+        if health_check_topics("c8y-configuration-plugin").accept(&message) {
+            send_health_status(&mut mqtt_client.published, "c8y-configuration-plugin").await;
+        } else if let Ok(payload) = message.payload_str() {
             let result = match message.topic.name.as_str() {
                 "tedge/configuration_change/c8y-configuration-plugin" => {
                     // Reload the plugin config file
@@ -173,11 +171,6 @@ async fn process_mqtt_messages(
                     // Resend the supported config types
                     let msg = plugin_config.to_supported_config_types_message()?;
                     mqtt_client.published.send(msg).await?;
-                    Ok(())
-                }
-                "tedge/health-check" | "tedge/health-check/c8y-configuration-plugin" => {
-                    send_health_status(&mut mqtt_client.published, "c8y-configuration-plugin")
-                        .await;
                     Ok(())
                 }
                 _ => {

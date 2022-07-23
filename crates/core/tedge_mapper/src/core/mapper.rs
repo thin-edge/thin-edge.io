@@ -22,9 +22,7 @@ pub async fn create_mapper(
 ) -> Result<Mapper, anyhow::Error> {
     info!("{} starting", app_name);
 
-    let health_check_topics: TopicFilter = health_check_topics(app_name)
-        .try_into()
-        .expect("health check topics must be valid");
+    let health_check_topics: TopicFilter = health_check_topics(app_name);
 
     let mapper_config = converter.get_mapper_config();
     let mut topic_filter = mapper_config.in_topic_filter.clone();

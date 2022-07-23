@@ -11,7 +11,6 @@ pub use messages::{
     SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
 pub use software::*;
-//use thin_edge_json::health::{health_check_topics, send_health_status};
 
 #[cfg(test)]
 mod tests {

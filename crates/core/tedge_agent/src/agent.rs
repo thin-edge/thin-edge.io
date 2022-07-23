@@ -70,9 +70,8 @@ impl Default for SmAgentConfig {
             .try_into()
             .expect("Invalid topic filter");
 
-        let request_topics_health: TopicFilter = health_check_topics("tedge-agent")
-            .try_into()
-            .expect("Invalid topic filter");
+        let request_topics_health: TopicFilter = health_check_topics("tedge-agent");
+
         request_topics.add_all(request_topics_health.clone());
 
         let response_topic_health = Topic::new_unchecked("tedge/health/tedge-agent");
