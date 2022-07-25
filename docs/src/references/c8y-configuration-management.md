@@ -186,7 +186,12 @@ files = [
   ]
 ```
 
-Note that the `c8y_configuration_plugin` does not create any child-device twin in the cloud. Instead the clouds child-device twin must be created upfront. However the plugin takes care to set all capabilities (supported operations, config-types) on that child-device twin in the cloud in the same way as it does for the thin-edge device.
+Finally for each cloud's child-device twin two files must be added under `/etc/tedge/operations/c8y/` (equal as for the thin-edge device twin it-self, see section "Installation" above). For child-devices these files will be to put into a subfolder, where the name of the subfolder is the `child-id`.
+
+Example, for child-device with child-id `child1`:
+
+`/etc/tedge/operations/c8y/child1/c8y_UploadConfigFile`
+`/etc/tedge/operations/c8y/child1/c8y_DownloadConfigFile`
 
 
 **Details to Aspect 2: Consuming/providing configuration files via network**
