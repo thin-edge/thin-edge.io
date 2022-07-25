@@ -38,5 +38,5 @@ mockito = "0.31"
 mqtt_tests = { path = "../../crates/tests/mqtt_tests" }
 serial_test = "0.6"
 tedge_test_utils = { path = "../../crates/tests/tedge_test_utils" }
-test-case = "2.0"
+test-case = "2.2"
 toml = "0.5"

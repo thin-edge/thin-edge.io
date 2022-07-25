@@ -34,5 +34,5 @@ anyhow = "1.0"
 assert_matches = "1.5"
 mockito = "0.31"
 tempfile = "3.3"
-test-case = "2.0"
+test-case = "2.2"
 time = { version = "0.3", features = ["macros"] }
