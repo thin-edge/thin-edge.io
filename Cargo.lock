@@ -868,7 +868,7 @@ dependencies = [
  "backoff",
  "log",
  "mockito",
- "nix 0.23.1",
+ "nix",
  "regex",
  "reqwest",
  "serde",
@@ -983,7 +983,7 @@ name = "flockfile"
 version = "0.7.3"
 dependencies = [
  "assert_matches",
- "nix 0.23.1",
+ "nix",
  "tempfile",
  "thiserror",
  "tracing",
@@ -1693,19 +1693,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ffa00dec017b5b1a8b7cf5e2c008bfda1aa7e0697ac1508b491fdf2622fb4d8"
 dependencies = [
  "rand",
-]
-
-[[package]]
-name = "nix"
-version = "0.23.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f866317acbd3a240710c63f065ffb1e4fd466259045ccb504130b7f668f35c6"
-dependencies = [
- "bitflags",
- "cc",
- "cfg-if 1.0.0",
- "libc",
- "memoffset",
 ]
 
 [[package]]
@@ -2989,7 +2976,7 @@ dependencies = [
  "futures",
  "inotify",
  "maplit",
- "nix 0.24.2",
+ "nix",
  "strum_macros",
  "tedge_test_utils",
  "tempfile",

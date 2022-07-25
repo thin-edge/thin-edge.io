@@ -10,7 +10,7 @@ description = "download_manager"
 [dependencies]
 backoff = { version = "0.4", features = ["tokio"] }
 log = "0.4"
-nix = "0.23"
+nix = "0.24"
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
