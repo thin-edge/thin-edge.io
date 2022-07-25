@@ -79,6 +79,7 @@ Each configuration file is defined by a record with:
   When a configuration file is already present on the device, this plugin never changes file ownership,
   ignoring these parameters.
 * Optional `childid`. For details see section "Configuration files for child devices" below.
+* Optional `desired`. For details see section "Configuration files for child devices" below.
 * Optional `protocol`. Valid values are "http" or "filesystem". For details see section "Configuration files for child devices" below.
 
 ```shell
@@ -192,6 +193,10 @@ Note that the `c8y_configuration_plugin` does not create any child-device twin i
 
 For aspect (2) there are two proposals as below. Decision has to been taken which proposal to follow.
 
+TODO: Add some short summary what those proposal shall achieve / there scope.
+
+--------------------------------------------------------------------------------
+
 **Proposal 1:**
 
 The `c8y_configuration_plugin` configuration's record field `path` (reference to section 'Configuration' above) can be prefixed with "mqtt://". Then it's value is treated as MQTT topic structure, where another process/external device is expected to provide/consume the configuration file.
@@ -224,6 +229,8 @@ When there is no retain message the plugin sends an error to the cloud on an eve
   * at some point a config sent from cloud for type `bar.conf` for `child1` arrives at C8Y config plugin
   * C8Y config plugin: publishs the config file content as MQTT retain message to `configs/bar.conf` 
   * external device `child1`: recognizes the MQTT message on `configs/bar.conf` and processes the new config file content
+
+--------------------------------------------------------------------------------
 
 **Proposal 2:**
 
@@ -264,4 +271,75 @@ When there is no coresponding config file on the thin-edge device the plugin sen
   * external device `child1`: recognizes the MQTT notification message downloads the new configuration file with HTTP GET and the URL from the thin-edge device
   * external device `child1`: processes the new configuration
 
+--------------------------------------------------------------------------------
+
+**Proposal 3:**
+
+To provide/consume configuration files to/from external devices, the HTTP filetransfer feature of the `tedge_agent` is used.
+  
+The HTTP filetransfer feature of the `tedge_agent` provides the service to transfer files from external devices to the local filesystem of the thin-edge device's, and vice versa.
+
+  * `tedge_agent` serves PUT and GET requests on `http://<thin-edge IP address>/tedge/filetransfer/<path>`
+    * `path` is chosen by the external-device; it may contain folders (e.g. `foo/bar/config-file.conf`)
+    * on an incoming PUT request `tedge_agent` stores the contained file to `/http-root/<path>`
+    * on an incoming GET request `tedge_agent` sends the file `/http-root/<path>` to the requester (i.E. the external device)
+    * `tedge_agent` does not force any predefined folder structure within `/http-root/`. However for configuration management it is best practice to use folder structure as below:
+      * `/http-root/config/current/<child-id>/<config filename>`<br/>
+         for config-files provided by the external device to the thin-edge device (current state - or latest known state)<br/>
+      * `/http-root/config/desired/<child-id>/<config filename>`<br/>
+        for config-files to be consumed by the external device (desired state)
+  * `tedge_agent` notifies over MQTT any change of a file under `/http-root/` (e.g. when uploaded by a external-device or updated by a local process). The notification messages are published on the topic `tedge/filetransfer_change/{path}`.<br/>
+    TO-BE-DEFINED: Content of payload?
+      
+      Example:
+      * HTTP PUT URL: `http://<thin-edge IP address>/tedge/filetransfer/config/current/child1/bar.conf`
+      * relating MQTT notification topic: `/tedge/filetransfer_change/config/current/child1/bar.conf`
+
+  * `c8y_configuration_plugin` allows to handle two versions for each configuration file (_current_ and _desired_).
+    * The configuration file's record `path` is treated as path of the _current_ version of a configuration file (see to section 'Configuration' above).
+    * The configuration file's record `desired` can be used to define the path of the _desired_ version of a configuration file. If `desired` is not defined, then `path` is treated as _desired_ version also.
+    * On c8y read request for a configuration, `c8y_configuration_plugin` returns the `current` file content.
+    * On c8y write request for a configuration, `c8y_configuration_plugin` updates the `desired` file content and waits for the `current` content to be updated to return the operation status to cumulocity.  
+    * The current behavior of c8y_configuration_plugin can be simulated with desired = current = path when only a path is provided.
+
+Example Plugin Config:
+```shell
+$ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
+files = [
+    { type = 'bar.conf', child_id = 'child1', current = '/http-root/config/current/child1/bar.conf', desired = '/http-root/config/desired/child1/bar.conf' } }
+  ]
+```
+
+Example Flow:
+
+**Start Behaviour:**
+  * external device child1: starts
+  * external device child1: sends all its config files with HTTP PUT requests to the thin-edge device; 
+
+    Example: HTTP PUT to `http://<thin-edge IP address>/tedge/filetransfer/current/child1/bar.conf`
+
+**Device-to-Cloud Behaviour:**
+  * at some point a config retrieval for type `bar.conf` for `child1` arrives at C8Y config plugin
+  * C8Y config plugin: sends the file `/http-root/config/current/child1/bar.conf` to C8Y<br/><br/>
+    NOTE: The responsibility to assure that the latest config file content on the thin-edge device is always on the external device. When there is no file the plugin sends an error to the cloud on an every incoming config retrieval request.
+
+**Cloud-to-Device Behaviour:**
+  * at some point a config sent from cloud for type `bar.conf` for `child1` arrives at C8Y config plugin
+  * C8Y config plugin: stores the files received from C8Y to `/http-root/config/desired/child1/bar.conf`
+  * C8Y config plugin: notifies the external device about the new configuration via MQTT (reference to section Notifications above)
+  * external device child1: recognizes the MQTT notification and downloads the new config with an HTTP GET request
+  
+    Example: HTTP GET to `http://<thin-edge IP address>/tedge/filetransfer/config/desired/child1/bar.conf`
+  * external device child1: after processing, it updates the _current_ configuration on the thin-edge device with an HTTP PUT request.
+
+    Example: HTTP GET to `http://<thin-edge IP address>/tedge/filetransfer/config/current/child1/bar.conf`
+  * C8Y config plugin: recognizes the MQTT notification about the updated file in the `current` folder,<br/>
+    compares `/http-root/config/desired/child1/bar.conf` and `/http-root/config/current/child1/bar.conf`.
+    * if both files are equal, the plugin reports success to C8Y.
+    * if files are not equal, the plugin reports an error to C8Y.
+    * TO-BE-DEFINED:
+      * Which kind of error to report to C8Y in case of unequal files?
+      * Any timeout to wait for update in folder `current`?
+
+--------------------------------------------------------------------------------
 
