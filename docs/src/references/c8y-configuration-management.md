@@ -188,19 +188,6 @@ files = [
   ]
 ```
 
-**Declaration of capabilities in the cloud:**
-
-For each cloud's child-device twin two files must be added under `/etc/tedge/operations/c8y/` (equal as for the thin-edge device twin it-self, see section "Installation" above). For child-devices these files will be to put into a subfolder, where the name of the subfolder is the `child-id`.
-
-Example, for child-device with child-id `child1`:
-
-```
-/etc/tedge/operations/c8y/child1/c8y_UploadConfigFile
-/etc/tedge/operations/c8y/child1/c8y_DownloadConfigFile
-```
-
-Note that the `c8y_configuration_plugin` does **not** create any child-device twin in the cloud. Instead the clouds child-device twins must be created upfront.
-
 ## Details to Aspect 2: Filetransfer from/to external device
 
 For aspect (2) there are two proposals as below. Decision has to been taken which proposal to follow.
@@ -311,4 +298,33 @@ When there is no retain message the plugin sends an error to the cloud on an eve
   * external device `child1`: recognizes the MQTT message on `configs/bar.conf` and processes the new config file content
 
 --------------------------------------------------------------------------------
+
+## Declaration of Capabilities for Child-Devices
+
+The `c8y_configuration_plugin` takes care to define all necessary capabilities to each cloud's child-device twin. These are:
+  - declaring _supported operations_ for configuration management: `c8y_UploadConfigFile` and `c8y_DownloadConfigFile`
+  - declaring provided _configuration types_
+
+**Declaring 'supported operations'**
+
+For each `childid` contained in the plugin's configuration, the plugin sends one MQTT message to C8Y. If one `childid` occurs more than once just one message will be sent. The message is as below:
+  - topic: `c8y/s/us/<childid>`
+  - payload: `114,c8y_UploadConfigFile,c8y_DownloadConfigFile`
+
+
+**Declaring 'provided configuration types'**
+
+For each `childid` contained in the plugin's configuration, the plugin sends one MQTT message to C8Y. Thereby all `config types` assigned to that `childid` will be combined in that single message. The message is as below:
+  - topic: `c8y/s/us/<childid>`
+  - payload: `119,<config type 1>,<config type 2>,<config type 3>,...`
+
+
+**When to send capability messages**
+
+The `c8y_configuration_plugin` sends both MQTT message from above (for _supported operations_ and _provided configuration types_), always when the plugin's configuration is (re)processed. That means:
+  - on startup of the plugin
+  - always when the plugin recognizes a configuration change and processes it's configuration again
+
+
+Note that the `c8y_configuration_plugin` does **not** create any child-device twin in the cloud. Instead the clouds child-device twins must be created upfront.
 
