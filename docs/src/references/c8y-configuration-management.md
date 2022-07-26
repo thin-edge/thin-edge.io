@@ -193,12 +193,11 @@ Example, for child-device with child-id `child1`:
 `/etc/tedge/operations/c8y/child1/c8y_UploadConfigFile`
 `/etc/tedge/operations/c8y/child1/c8y_DownloadConfigFile`
 
+Note that the `c8y_configuration_plugin` does **not** create any child-device twin in the cloud. Instead the clouds child-device twins must be created upfront.
 
 **Details to Aspect 2: Consuming/providing configuration files via network**
 
 For aspect (2) there are two proposals as below. Decision has to been taken which proposal to follow.
-
-TODO: Add some short summary what those proposal shall achieve / there scope.
 
 --------------------------------------------------------------------------------
 
