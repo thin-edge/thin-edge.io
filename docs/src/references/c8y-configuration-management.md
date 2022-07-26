@@ -175,7 +175,7 @@ Allowing to associate a configuration file with a cloud's child-device twin
 2) **Filetransfer from/to external device**<br/>
 Allowing to consume/provide a configuration file from/to an external device via network
 
-**Details to Aspect 1: Associating with cloud's child-device twin**
+## Details to Aspect 1: Associating with cloud's child-device twin
 
 For aspect (1) the plugin provides the field `childid` for all records in the `c8y_configuration_plugin` configuration (reference to section 'Configuration' above). That field is interpreted as unique child-device id and the plugin associates the record's configuration file with corresponding cloud's child-device twin. If not provided the configuration file is associated with cloud's thin-edge device twin.
 
@@ -188,16 +188,20 @@ files = [
   ]
 ```
 
-Finally for each cloud's child-device twin two files must be added under `/etc/tedge/operations/c8y/` (equal as for the thin-edge device twin it-self, see section "Installation" above). For child-devices these files will be to put into a subfolder, where the name of the subfolder is the `child-id`.
+**Declaration of capabilities in the cloud:**
+
+For each cloud's child-device twin two files must be added under `/etc/tedge/operations/c8y/` (equal as for the thin-edge device twin it-self, see section "Installation" above). For child-devices these files will be to put into a subfolder, where the name of the subfolder is the `child-id`.
 
 Example, for child-device with child-id `child1`:
 
-`/etc/tedge/operations/c8y/child1/c8y_UploadConfigFile`
-`/etc/tedge/operations/c8y/child1/c8y_DownloadConfigFile`
+```
+/etc/tedge/operations/c8y/child1/c8y_UploadConfigFile
+/etc/tedge/operations/c8y/child1/c8y_DownloadConfigFile
+```
 
 Note that the `c8y_configuration_plugin` does **not** create any child-device twin in the cloud. Instead the clouds child-device twins must be created upfront.
 
-**Details to Aspect 2: **Filetransfer from/to external device**
+## Details to Aspect 2: Filetransfer from/to external device
 
 For aspect (2) there are two proposals as below. Decision has to been taken which proposal to follow.
 
