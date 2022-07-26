@@ -25,7 +25,7 @@ pub struct ThinEdgeAlarmData {
     pub text: Option<String>,
 
     #[serde(default)]
-    #[serde(with = "clock::serde::rfc3339::option")]
+    #[serde(with = "time::serde::rfc3339::option")]
     pub time: Option<Timestamp>,
 }
 
