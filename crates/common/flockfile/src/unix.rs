@@ -44,24 +44,22 @@ impl Flockfile {
     ///
     pub fn new_lock(path: impl AsRef<Path>) -> Result<Flockfile, FlockfileError> {
         let path = PathBuf::new().join(path);
-        let file = match OpenOptions::new()
+        let file = OpenOptions::new()
             .create(true)
             .read(true)
             .write(true)
             .open(&path)
-        {
-            Ok(file) => file,
-            Err(err) => {
-                return Err(FlockfileError::FromIo { path, source: err });
-            }
-        };
+            .map_err(|err| FlockfileError::FromIo {
+                path: path.clone(),
+                source: err,
+            })?;
 
-        match flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock) {
-            Ok(()) => (),
-            Err(err) => {
-                return Err(FlockfileError::FromNix { path, source: err });
+        flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock).map_err(|err| {
+            FlockfileError::FromNix {
+                path: path.clone(),
+                source: err,
             }
-        };
+        })?;
 
         info!(r#"Lockfile created {:?}"#, &path);
         Ok(Flockfile {
