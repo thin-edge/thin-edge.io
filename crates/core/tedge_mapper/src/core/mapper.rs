@@ -5,8 +5,9 @@ use mqtt_channel::{
     UnboundedSender,
 };
 use serde_json::json;
-use std::path::PathBuf;
+use std::path::Path;
 use std::{process, time::Duration};
+use tedge_utils::fs_notify::{fs_notify_stream, pin_mut, FileEvent};
 use time::OffsetDateTime;
 use tracing::{error, info, instrument, warn};
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
@@ -86,7 +87,7 @@ impl Mapper {
         }
     }
 
-    pub(crate) async fn run(&mut self, ops_dir: Option<PathBuf>) -> Result<(), MqttError> {
+    pub(crate) async fn run(&mut self, ops_dir: Option<&Path>) -> Result<(), MapperError> {
         info!("Running");
         self.process_messages(ops_dir).await?;
         Ok(())
@@ -102,7 +103,7 @@ impl Mapper {
     }
 
     #[instrument(skip(self), name = "messages")]
-    async fn process_messages(&mut self, ops_dir: Option<PathBuf>) -> Result<(), MqttError> {
+    async fn process_messages(&mut self, ops_dir: Option<&Path>) -> Result<(), MapperError> {
         let init_messages = self.converter.init_messages();
         for init_message in init_messages.into_iter() {
             let _ = self.output.send(init_message).await;
@@ -122,16 +123,7 @@ impl Mapper {
             self.process_message(message).await;
         }
 
-        match ops_dir {
-            // Create inotify steam for capturing the inotify events.
-            Some(dir) => {
-                process_inotify_and_mqtt_messages(self, dir).await?;
-            }
-            None => {
-                // If there is no operation directory to watch, then continue processing only the mqtt messages
-                let _ = process_mqtt_messages(self).await;
-            }
-        }
+        process_messages(self, ops_dir).await?;
         Ok(())
     }
 
@@ -155,28 +147,26 @@ impl Mapper {
     }
 }
 
-async fn process_inotify_and_mqtt_messages(
-    mapper: &mut Mapper,
-    dir: PathBuf,
-) -> Result<(), MqttError> {
-    match create_inofity_event_stream(dir.clone()) {
-        Ok(mut inotify_events) => loop {
+async fn process_messages(mapper: &mut Mapper, path: Option<&Path>) -> Result<(), MapperError> {
+    if let Some(path) = path {
+        let fs_notification_stream = fs_notify_stream(&[(
+            path,
+            None,
+            &[FileEvent::Created, FileEvent::Deleted, FileEvent::Modified],
+        )])?;
+        pin_mut!(fs_notification_stream); // needed for iteration
+
+        loop {
             tokio::select! {
-                msg =  mapper.input.next() => {
-                    match msg {
-                        Some(message) => {
-                            mapper.process_message(message).await;
-                        } None => {
-                            break Ok(());
-                        }
-                    }
+                Some(message) =  mapper.input.next() => {
+                    mapper.process_message(message).await;
                 }
-                Some(event_or_error) = inotify_events.next() => {
+                Some(event_or_error) = fs_notification_stream.next() => {
                     match event_or_error {
-                        Ok(event) =>  {
-                            match  process_inotify_events(dir.clone(), event) {
+                        Ok((path, mask)) =>  {
+                            match  process_inotify_events(&path, mask) {
                                 Ok(Some(discovered_ops)) => {
-                                    let _ = mapper.output.send(mapper.converter.process_operation_update_message(discovered_ops)).await;
+                                     let _ = mapper.output.send(mapper.converter.process_operation_update_message(discovered_ops)).await;
                                 }
                                 Ok(None) => {}
                                 Err(e) => {eprintln!("Processing inotify event failed due to {}", e);}
@@ -185,22 +175,16 @@ async fn process_inotify_and_mqtt_messages(
                         Err(error) => {
                             eprintln!("Failed to extract event {}", error);
                         }
-                    }
+                    } // On error continue to process only mqtt messages.
                 }
             }
-        }, // On error continue to process only mqtt messages.
-        Err(e) => {
-            eprintln!("Failed to create the inotify stream due to {:?}. So, dynamic operation discovery not supported, please restart the mapper on Add/Removal of an operation", e);
-            process_mqtt_messages(mapper).await
         }
+    } else {
+        while let Some(message) = mapper.input.next().await {
+            mapper.process_message(message).await;
+        }
+        Ok(())
     }
-}
-
-async fn process_mqtt_messages(mapper: &mut Mapper) -> Result<(), MqttError> {
-    while let Some(message) = mapper.input.next().await {
-        mapper.process_message(message).await;
-    }
-    Ok(())
 }
 
 #[cfg(test)]
