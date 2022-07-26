@@ -242,47 +242,6 @@ When there is no retain message the plugin sends an error to the cloud on an eve
 
 --------------------------------------------------------------------------------
 
-**Proposal 2:**
-
-The `c8y_configuration_plugin` provides the field `protocol` for all records in the `c8y_configuration_plugin` configuration (reference to section 'Configuration' above). If `protocol` is set to "http" the `c8y_configuration_plugin` expects another process/external device to provide/consume the configuration file via HTTP protocol. Thereby the records field `path` is used with the prefix `http://<thin-edge device IP address>/tedge/configurations/` as URL. Example: `http://192.168.1.6/tedge/configurations/child1/bar.conf` where (192.168.1.6 is the IP address of the thin-edge device)
-
-The `c8y_configuration_plugin` expects the process/external device always putting the latest config file to the thin-edge device. Then the plugin consumes that file whenever a cloud request comes in.<br/> 
-
-Example Configuration:
-```shell
-$ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
-files = [
-    { path = '/etc/tedge/tedge.toml', type = 'tedge.toml' },
-    { path = '/child1/bar.conf', type = 'bar.conf', protocol = 'http', childid = 'child1'  }
-  ]
-```
-
-Example Flow:
-
-**Start Behaviour:**
-  * external device `child1`: starts
-  * external device `child1`: sends all its config files with HTTP PUT method to the thin-edge device<br/>
-    Example: `http://192.168.1.6/tedge/configurations/child1/bar.conf`
-  * C8Y config plugin: stores all received files locally
-    
-**Device-to-Cloud Behaviour:**
-  * at some point a config retrieval for type `bar.conf` for `child1` arrives at C8Y config plugin
-  * C8Y config plugin: sends the locally stored config file to C8Y<br/>
-    NOTE: The responsibility to assure that the latest config file was PUT to the thin-edge device is always on the process/external device.
-When there is no coresponding config file on the thin-edge device the plugin sends an error to the cloud on an every incoming config retrieval request.
-
-**Cloud-to-Device Behaviour:**
-  * at some point a config sent for type `bar.conf` for `child1` arrives at C8Y config plugin
-  * C8Y config plugin: stores the new config file and provides it via HTTP to the process/external device
-  * C8Y config plugin: notifies the process/external device about the new configuration via MQTT (reference to section Notifications above), where the notification MQTT message contains the HTTP download URL in the field `path`.<br/>
-    Example:
-      * Message topic: `tedge/configuration_change/bar.conf`
-      * Message payload: `{ "path": "http://192.168.1.6/tedge/configurations/child1/bar.conf" }` (where `192.168.1.6` is the IP address of the thin-edge device)
-  * external device `child1`: recognizes the MQTT notification message downloads the new configuration file with HTTP GET and the URL from the thin-edge device
-  * external device `child1`: processes the new configuration
-
---------------------------------------------------------------------------------
-
 **Proposal 3:**
 
 To provide/consume configuration files to/from external devices, the HTTP filetransfer feature of the `tedge_agent` is used.
