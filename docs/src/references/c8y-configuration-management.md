@@ -170,10 +170,12 @@ Note that:
 ## Configuration files for child devices
 
 To manage configuration files for child-devices the `c8y_configuration_plugin` supports two aspects:
-1) Allowing to associate a configuration file with a cloud's child-device twin
-2) Allowing to consume/provide a configuration file from/to an external device via network
+1) **Associating with cloud's child-device twin**<br/>
+Allowing to associate a configuration file with a cloud's child-device twin
+2) **Filetransfer from/to external device**<br/>
+Allowing to consume/provide a configuration file from/to an external device via network
 
-**Details to Aspect 1: Associating to cloud's child-device twin**
+**Details to Aspect 1: Associating with cloud's child-device twin**
 
 For aspect (1) the plugin provides the field `childid` for all records in the `c8y_configuration_plugin` configuration (reference to section 'Configuration' above). That field is interpreted as unique child-device id and the plugin associates the record's configuration file with corresponding cloud's child-device twin. If not provided the configuration file is associated with cloud's thin-edge device twin.
 
@@ -195,7 +197,7 @@ Example, for child-device with child-id `child1`:
 
 Note that the `c8y_configuration_plugin` does **not** create any child-device twin in the cloud. Instead the clouds child-device twins must be created upfront.
 
-**Details to Aspect 2: Consuming/providing configuration files via network**
+**Details to Aspect 2: **Filetransfer from/to external device**
 
 For aspect (2) there are two proposals as below. Decision has to been taken which proposal to follow.
 
