@@ -6,36 +6,36 @@ on:
   # runs automatically on 00:00 UTC on 1st of every month
   schedule:
   - cron: "0 0 1 * *"
-     
+
 jobs:
     build-tedge-create-ref-docs:
       runs-on: Ubuntu-20.04
-      
+
       steps:
         - name: Checkout
           uses: actions/checkout@v3
         - run: |
            git config --global user.email "info@thin-edge.io"
            git config --global user.name "Versioneer"
-           
+
         - name: enable toolchain via github action
           # https://github.com/actions-rs/toolchain
           uses: actions-rs/toolchain@v1
           with:
-            toolchain: 1.58.1
+            toolchain: 1.62.1
             override: true
 
         - name: Enable cache
           # https://github.com/marketplace/actions/rust-cache
           uses: Swatinem/rust-cache@v1
-        
+
         - name: Build tedge
           uses: actions-rs/cargo@v1
           # https://github.com/marketplace/actions/rust-cargo
           with:
             command: build
             args: --release -p tedge
-     
+
         - name: run the update script
           run: ./docs/gen-ref-docs.sh
         - name: Create Pull Request
