@@ -11,4 +11,3 @@ time = "0.3.7"
 
 [features]
 default = []
-with-serde = ["time/serde-well-known"]
