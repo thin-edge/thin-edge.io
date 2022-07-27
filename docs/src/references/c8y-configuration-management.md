@@ -80,7 +80,6 @@ Each configuration file is defined by a record with:
   ignoring these parameters.
 * Optional `childid`. For details see section "Configuration files for child devices" below.
 * Optional `desired`. For details see section "Configuration files for child devices" below.
-* Optional `protocol`. Valid values are "http" or "filesystem". For details see section "Configuration files for child devices" below.
 
 ```shell
 $ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
