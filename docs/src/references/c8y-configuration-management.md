@@ -251,7 +251,7 @@ Example Flow:
     Example: HTTP GET to `http://<thin-edge IP address>/tedge/filetransfer/config/desired/child1/bar.conf`
   * external device child1: after processing, it updates the _current_ configuration on the thin-edge device with an HTTP PUT request.
 
-    Example: HTTP GET to `http://<thin-edge IP address>/tedge/filetransfer/config/current/child1/bar.conf`
+    Example: HTTP PUT to `http://<thin-edge IP address>/tedge/filetransfer/config/current/child1/bar.conf`
   * C8Y config plugin: recognizes the MQTT notification about the updated file in the `current` folder,<br/>
     compares `/http-root/config/desired/child1/bar.conf` and `/http-root/config/current/child1/bar.conf`.
     * if both files are equal, the plugin reports success to C8Y.
