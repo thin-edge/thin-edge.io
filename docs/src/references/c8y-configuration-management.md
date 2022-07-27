@@ -190,11 +190,9 @@ files = [
 
 ## Details to Aspect 2: Filetransfer from/to external device
 
-For aspect (2) there are two proposals as below. Decision has to been taken which proposal to follow.
+For aspect (2) there is a proposal, followed by another alternative proposal. Decision has to been taken which proposal to follow.
 
---------------------------------------------------------------------------------
-
-**Proposal:**
+### Proposal: Filetransfer provided by tedge_agent, based on HTTP
 
 To provide/consume configuration files to/from external devices, the HTTP filetransfer feature of the `tedge_agent` is used.
   
@@ -262,9 +260,8 @@ Example Flow:
       * Which kind of error to report to C8Y in case of unequal files?
       * Any timeout to wait for update in folder `current`?
 
---------------------------------------------------------------------------------
 
-**Alternative Proposal:**
+### Alternative Proposal: Filetransfer implemented in the plugin, based on MQTT
 
 The `c8y_configuration_plugin` configuration's record field `path` (reference to section 'Configuration' above) can be prefixed with "mqtt://". Then it's value is treated as MQTT topic structure, where another process/external device is expected to provide/consume the configuration file.
 
@@ -297,7 +294,6 @@ When there is no retain message the plugin sends an error to the cloud on an eve
   * C8Y config plugin: publishs the config file content as MQTT retain message to `configs/bar.conf` 
   * external device `child1`: recognizes the MQTT message on `configs/bar.conf` and processes the new config file content
 
---------------------------------------------------------------------------------
 
 ## Declaration of Capabilities for Child-Devices
 
