@@ -237,12 +237,16 @@ Example Flow:
     Example: HTTP PUT to `http://<thin-edge IP address>/tedge/filetransfer/current/child1/bar.conf`
 
 **Device-to-Cloud Behaviour:**
-  * at some point a config retrieval for type `bar.conf` for `child1` arrives at C8Y config plugin
+  * at some point a config retrieval for type `bar.conf` for `child1` arrives at C8Y config plugin<br/>
+    Format of C8Y SmartREST message for config retrieval operation: `526,<childid>,<config type>`. See [C8Y SmartREST doc](https://cumulocity.com/guides/reference/smartrest-two/#upload-configuration-file-with-type-526)<br/>
+    Example: `526,child1,bar.conf`
   * C8Y config plugin: sends the file `/http-root/config/current/child1/bar.conf` to C8Y<br/><br/>
     NOTE: The responsibility to assure that the latest config file content on the thin-edge device is always on the external device. When there is no file the plugin sends an error to the cloud on an every incoming config retrieval request.
 
 **Cloud-to-Device Behaviour:**
-  * at some point a config sent from cloud for type `bar.conf` for `child1` arrives at C8Y config plugin
+  * at some point a config sent from cloud for type `bar.conf` for `child1` arrives at C8Y config plugin<br/>
+    Format of C8Y SmartREST message for config send operation: `524,<childid>,<URL>,<config type>`. See [C8Y SmartREST doc](https://cumulocity.com/guides/reference/smartrest-two/#download-configuration-file-with-type-524)<br/>
+    Example: `524,child1,http://www.my.url,bar.conf`
   * C8Y config plugin: stores the files received from C8Y to `/http-root/config/desired/child1/bar.conf`
   * C8Y config plugin: notifies the external device about the new configuration via MQTT (reference to section Notifications above)
   * external device child1: recognizes the MQTT notification and downloads the new config with an HTTP GET request
