@@ -111,7 +111,7 @@ fn spawn_broker(port: u16) {
 }
 
 fn get_rumqttd_config(port: u16) -> Config {
-    let router_config = rumqttlog::Config {
+    let router_config = librumqttd::rumqttlog::Config {
         id: 0,
         dir: "/tmp/rumqttd".into(),
         max_segment_size: 10240,
