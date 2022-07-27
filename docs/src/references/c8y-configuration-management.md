@@ -327,3 +327,16 @@ The `c8y_configuration_plugin` sends both MQTT message from above (for _supporte
 
 Note that the `c8y_configuration_plugin` does **not** create any child-device twin in the cloud. Instead the clouds child-device twins must be created upfront.
 
+
+## Notfifications for Child-Devices
+
+Notifications for child-devices behave the same way as nofifications for the thin-edge device (as described in section _Notifications_ above), but are extended with the `childid`. That is since the `type` is unique for one device, but can again occur on another child-device or the thin-edge device.
+
+Therefore the topic child-device notifications are published to has the `childid` appended: `tedge/configuration_change/{type}/{childid}`,
+  where `{type}` is the type of the configuration file that has been updated,
+  for instance `configs/bar.conf`
+  
+  and `{childid}` is the child-device id of the configuration file that has been updated,
+  for instance `child1`
+  
+Everything else about child-device notifications behaves in the same way as for the thin-edge device.
