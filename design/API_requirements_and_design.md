@@ -7,9 +7,11 @@ One should be able to build a thin-edge executable from tedge plugins crates tha
 * Each tedge plugin crate can define its own types of messages. For instance, a
   tedge_telemetry plugin can defines measurements, events, alarms and setpoints
   messages.
-* To exchange typed messages, plugin crates need dependency relationship. For
-  instance, the tedge_json_over_mqtt plugin crate will have to depend on the
-  tedge_telemetry plugin crate and the tedge_mqtt crate.
+* To exchange typed messages, plugin crates don't need a direct dependency relationship.
+  Instead, they only need to be aware of the same type. If a plugin can send a
+  certain type of message and the other plugin can receive this exact same type,
+  these plugins may communicate. Whether the message type is defined within the
+  codebase of one of these plugins or some other crate doesn't matter.
 * The tedge_api crate defines only messages related to the runtime as Shutdown.
 * The implementation of the mechanisms defined by the tedge_api are provided by
   a tedge_runtime crate.
