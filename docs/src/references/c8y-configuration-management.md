@@ -288,7 +288,7 @@ Example Flow:
 **Device-to-Cloud Behaviour:**
   * at some point a config retrieval for type `bar.conf` for `child1` arrives at C8Y config plugin
   * C8Y config plugin: subscribes to `configs/bar.conf` and gets immediately the config file content from the retained message
-  * C8Y config plugin: sends the recived MQTT payload as config file to C8Y<br/><br/>
+  * C8Y config plugin: sends the config file to C8Y<br/><br/>
     NOTE: The responsibility to assure that the latest config file content is on the MQTT bus is always on the process/external device.
 When there is no retain message the plugin sends an error to the cloud on an every incoming config retrieval request.
 
