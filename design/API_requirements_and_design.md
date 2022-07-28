@@ -50,8 +50,8 @@ One should be able to build a thin-edge executable from tedge plugins crates tha
   - Same thing for a missing required peer for a given kind, or two peers when
     just one is expected.
 - Plugin/Application shutdown
-- Shutdown is signalled to all plugins, giving them a possibility to handle this
-  case
+    - Shutdown is signalled to all plugins, giving them a possibility to handle
+      this case
 - A plugin to handle SIGTERM? Or part of the core?
 - Plugins should be free to communicate with any other plugins, even in a
   circular fashion.
