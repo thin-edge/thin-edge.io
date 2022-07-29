@@ -120,19 +120,19 @@ USAGE:
 
 OPTIONS:
         --config-dir <CONFIG_DIR>      [default: /etc/tedge]
-        --config-file <CONFIG_FILE>    [default: $CONFIG_DIR/c8y/c8y-configuration-plugin.toml]
         --debug                        Turn-on the debug log level
     -h, --help                         Print help information
     -i, --init                         Create supported operation files
     -V, --version                      Print version information
 
     On start, `c8y_configuration_plugin` notifies the cloud tenant of the managed configuration files,
-    listed in the `CONFIG_FILE`, sending this list with a `119` on `c8y/s/us`.
+    listed in `CONFIG_DIR/c8y/c8y-configuration-plugin.toml`, sending this list with a `119` on `c8y/s/us`.
     `c8y_configuration_plugin` subscribes then to `c8y/s/ds` listening for configuration operation
     requests (messages `524` and `526`).
     notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
     
     The thin-edge `CONFIG_DIR` is used to find where:
+    * to store the configuration file: `c8y/c8y-configuration-plugin.toml`
     * to store temporary files on download: `tedge config get tmp.path`,
     * to connect the MQTT bus: `tedge config get mqtt.port`.
 ```
