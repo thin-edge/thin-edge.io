@@ -51,10 +51,7 @@ jobs:
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          override: true
+      - uses: dtolnay/rust-toolchain@nightly
       - name: Run cargo-udeps
         uses: aig787/cargo-udeps-action@v1
         with:
@@ -139,11 +136,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: enable toolchain via github action
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@1.58.1
         with:
-          toolchain: 1.58.1
           components: rustfmt, clippy
-          override: true
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -191,10 +186,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: enable toolchain via github action
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: 1.58.1
-          override: true
+        uses: dtolnay/rust-toolchain@1.58.1
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -230,10 +222,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: enable toolchain via github action
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: 1.58.1
-          override: true
+        uses: dtolnay/rust-toolchain@1.58.1
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -262,11 +251,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: enable toolchain via github action
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@1.58.1
         with:
-          toolchain: 1.58.1
-          target: armv7-unknown-linux-gnueabihf
-          override: true
+          targets: armv7-unknown-linux-gnueabihf
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -290,12 +277,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: enable toolchain via github action
-        # https://github.com/actions-rs/toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@1.58.1
         with:
-          toolchain: 1.58.1
           target: armv7-unknown-linux-gnueabihf
-          override: true
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -319,10 +303,7 @@ jobs:
 #        uses: actions/checkout@v3
 #
 #      - name: Install rust v1.58.1
-#        uses: actions-rs/toolchain@v1
-#        with:
-#          toolchain: 1.58.1
-#          override: true
+#        uses: dtolnay/rust-toolchain@1.58.1
 #
 #      - name: Enable cache
 #        # https://github.com/marketplace/actions/rust-cache
