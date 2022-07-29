@@ -168,6 +168,18 @@ impl From<Topic> for String {
     }
 }
 
+impl TryInto<TopicFilter> for Vec<String> {
+    type Error = MqttError;
+
+    fn try_into(self) -> Result<TopicFilter, Self::Error> {
+        let mut filter = TopicFilter::empty();
+        for pattern in self.into_iter() {
+            filter.add(pattern.as_str())?
+        }
+        Ok(filter)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

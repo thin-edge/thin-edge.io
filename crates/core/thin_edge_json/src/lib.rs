@@ -6,6 +6,7 @@ pub mod builder;
 pub mod data;
 pub mod event;
 pub mod group;
+pub mod health;
 pub mod measurement;
 pub mod parser;
 pub mod serialize;

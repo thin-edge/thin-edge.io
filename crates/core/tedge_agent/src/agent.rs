@@ -7,10 +7,9 @@ use crate::{
     },
 };
 use agent_interface::{
-    control_filter_topic, health_check_topics, software_filter_topic, Jsonify, OperationStatus,
-    RestartOperationRequest, RestartOperationResponse, SoftwareError, SoftwareListRequest,
-    SoftwareListResponse, SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest,
-    SoftwareUpdateResponse,
+    control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
+    RestartOperationResponse, SoftwareError, SoftwareListRequest, SoftwareListResponse,
+    SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
 use flockfile::{check_another_instance_is_not_running, Flockfile};
 use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic, TopicFilter};
@@ -18,8 +17,8 @@ use plugin_sm::{
     operation_logs::{LogKind, OperationLogs},
     plugin_manager::{ExternalPlugins, Plugins},
 };
-use serde_json::json;
-use std::process::{self, Command};
+
+use std::process::Command;
 use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, LogPathSetting,
@@ -27,7 +26,8 @@ use tedge_config::{
     TEdgeConfigLocation, TmpPathSetting, DEFAULT_LOG_PATH, DEFAULT_RUN_PATH,
 };
 use tedge_utils::file::create_directory_with_user_group;
-use time::OffsetDateTime;
+use thin_edge_json::health::{health_check_topics, send_health_status};
+
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -70,9 +70,8 @@ impl Default for SmAgentConfig {
             .try_into()
             .expect("Invalid topic filter");
 
-        let request_topics_health: TopicFilter = health_check_topics()
-            .try_into()
-            .expect("Invalid topic filter");
+        let request_topics_health: TopicFilter = health_check_topics("tedge-agent");
+
         request_topics.add_all(request_topics_health.clone());
 
         let response_topic_health = Topic::new_unchecked("tedge/health/tedge-agent");
@@ -295,15 +294,7 @@ impl SmAgent {
             debug!("Request {:?}", message);
             match &message.topic {
                 topic if self.config.request_topics_health.accept_topic(topic) => {
-                    let health_status = json!({
-                        "status": "up",
-                        "pid": process::id(),
-                        "time": OffsetDateTime::now_utc().unix_timestamp(),
-                    })
-                    .to_string();
-                    let health_message =
-                        Message::new(&self.config.response_topic_health, health_status);
-                    let _ = responses.publish(health_message).await;
+                    send_health_status(responses, "tedge-agent").await;
                 }
 
                 topic if topic == &self.config.request_topic_list => {
@@ -667,7 +658,7 @@ mod tests {
     use std::path::PathBuf;
 
     use assert_json_diff::assert_json_include;
-    use serde_json::Value;
+    use serde_json::{json, Value};
 
     use super::*;
 
