@@ -90,7 +90,9 @@ where
             "tedge/measurements",
             "tedge/measurements/+",
             "tedge/alarms/+/+",
+            "tedge/alarms/+/+/+",
             "c8y-internal/alarms/+/+",
+            "c8y-internal/alarms/+/+/+",
             "tedge/events/+",
             "tedge/events/+/+",
         ]
@@ -142,7 +144,9 @@ where
             "tedge/measurements",
             "tedge/measurements/+",
             "tedge/alarms/+/+",
+            "tedge/alarms/+/+/+",
             "c8y-internal/alarms/+/+",
+            "c8y-internal/alarms/+/+/+",
             "tedge/events/+",
             "tedge/events/+/+",
         ]
@@ -263,6 +267,37 @@ where
         Ok(messages)
     }
 
+    pub fn process_alarm_messages(
+        &mut self,
+        topic: &Topic,
+        message: &Message,
+    ) -> Result<Vec<Message>, ConversionError> {
+        if topic.name.starts_with("tedge/alarms") {
+            let mut mqtt_messages: Vec<Message> = Vec::new();
+            let topic_split: Vec<&str> = topic.name.split('/').collect();
+            if topic_split.len() == 5 {
+                let child_id = topic_split[4];
+                // Create a child device, if it does not exists already
+                if !child_id.is_empty() && !self.children.contains(child_id) {
+                    self.children.insert(child_id.to_string());
+                    mqtt_messages.push(Message::new(
+                        &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
+                        format!("101,{child_id},{child_id},thin-edge.io-child"),
+                    ));
+                }
+            }
+            self.size_threshold.validate(message)?;
+            let mut messages = self.alarm_converter.try_convert_alarm(message)?;
+            mqtt_messages.append(&mut messages);
+            Ok(mqtt_messages)
+        } else if topic.name.starts_with(INTERNAL_ALARMS_TOPIC) {
+            self.alarm_converter.process_internal_alarm(message);
+            Ok(vec![])
+        } else {
+            Err(ConversionError::UnsupportedTopic(topic.name.clone()))
+        }
+    }
+
     fn serialize_to_smartrest(c8y_event: &C8yCreateEvent) -> Result<String, ConversionError> {
         Ok(format!(
             "{},{},\"{}\",{}",
@@ -313,13 +348,11 @@ where
                 let () = self.size_threshold.validate(message)?;
                 self.try_convert_measurement(message)
             }
-            topic if topic.name.starts_with("tedge/alarms") => {
-                let () = self.size_threshold.validate(message)?;
-                self.alarm_converter.try_convert_alarm(message)
-            }
-            topic if topic.name.starts_with(INTERNAL_ALARMS_TOPIC) => {
-                self.alarm_converter.process_internal_alarm(message);
-                Ok(vec![])
+            topic
+                if topic.name.starts_with("tedge/alarms")
+                    | topic.name.starts_with(INTERNAL_ALARMS_TOPIC) =>
+            {
+                self.process_alarm_messages(topic, message)
             }
             topic if topic.name.starts_with(TEDGE_EVENTS_TOPIC) => {
                 self.try_convert_event(message).await
@@ -461,32 +494,39 @@ impl AlarmConverter {
         }
     }
 
-    fn try_convert_alarm(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
-        let mut vec: Vec<Message> = Vec::new();
-
+    fn try_convert_alarm(
+        &mut self,
+        input_message: &Message,
+    ) -> Result<Vec<Message>, ConversionError> {
+        let mut output_messages: Vec<Message> = Vec::new();
         match self {
             Self::Syncing {
                 pending_alarms_map,
                 old_alarms_map: _,
             } => {
-                let alarm_id = input
+                let alarm_id = input_message
                     .topic
                     .name
                     .strip_prefix(TEDGE_ALARMS_TOPIC)
                     .expect("Expected tedge/alarms prefix")
                     .to_string();
-                pending_alarms_map.insert(alarm_id, input.clone());
+                pending_alarms_map.insert(alarm_id, input_message.clone());
             }
             Self::Synced => {
                 //Regular conversion phase
-                let tedge_alarm =
-                    ThinEdgeAlarm::try_from(input.topic.name.as_str(), input.payload_str()?)?;
+                let tedge_alarm = ThinEdgeAlarm::try_from(
+                    input_message.topic.name.as_str(),
+                    input_message.payload_str()?,
+                )?;
                 let smartrest_alarm = alarm::serialize_alarm(tedge_alarm)?;
-                let c8y_alarm_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
-                vec.push(Message::new(&c8y_alarm_topic, smartrest_alarm));
+                let c8y_alarm_topic = Topic::new_unchecked(
+                    self.get_c8y_alarm_topic(input_message.topic.name.as_str())?
+                        .as_str(),
+                );
+                output_messages.push(Message::new(&c8y_alarm_topic, smartrest_alarm));
 
                 // Persist a copy of the alarm to an internal topic for reconciliation on next restart
-                let alarm_id = input
+                let alarm_id = input_message
                     .topic
                     .name
                     .strip_prefix(TEDGE_ALARMS_TOPIC)
@@ -495,12 +535,22 @@ impl AlarmConverter {
                 let topic =
                     Topic::new_unchecked(format!("{INTERNAL_ALARMS_TOPIC}{alarm_id}").as_str());
                 let alarm_copy =
-                    Message::new(&topic, input.payload_bytes().to_owned()).with_retain();
-                vec.push(alarm_copy);
+                    Message::new(&topic, input_message.payload_bytes().to_owned()).with_retain();
+                output_messages.push(alarm_copy);
             }
         }
+        Ok(output_messages)
+    }
 
-        Ok(vec)
+    fn get_c8y_alarm_topic(&self, topic: &str) -> Result<String, ConversionError> {
+        let topic_split: Vec<&str> = topic.split('/').collect();
+        if topic_split.len() == 4 {
+            Ok(SMARTREST_PUBLISH_TOPIC.to_string())
+        } else if topic_split.len() == 5 {
+            Ok(format!("{SMARTREST_PUBLISH_TOPIC}/{}", topic_split[4]))
+        } else {
+            Err(ConversionError::UnsupportedTopic(topic.to_string()))
+        }
     }
 
     fn process_internal_alarm(&mut self, input: &Message) {
@@ -577,10 +627,10 @@ impl AlarmConverter {
                 // Ignore
             }
         }
-
         sync_messages
     }
 }
+
 fn create_device_data_fragments(
     device_name: &str,
     device_type: &str,

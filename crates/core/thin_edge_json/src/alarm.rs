@@ -39,6 +39,9 @@ pub enum ThinEdgeJsonDeserializerError {
 
     #[error(transparent)]
     SerdeJsonError(#[from] serde_json::error::Error),
+
+    #[error("Unsupported external device ID in topic: {0}")]
+    UnsupportedExternalDeviceId(String),
 }
 
 impl TryFrom<&str> for AlarmSeverity {
@@ -63,15 +66,28 @@ impl ThinEdgeAlarm {
         mqtt_payload: &str,
     ) -> Result<Self, ThinEdgeJsonDeserializerError> {
         let topic_split: Vec<&str> = mqtt_topic.split('/').collect();
-        if topic_split.len() == 4 {
+        if topic_split.len() == 4 || topic_split.len() == 5 {
+            let alarm_severity = topic_split[2];
             let alarm_name = topic_split[3];
+
+            if alarm_severity.is_empty() {
+                return Err(ThinEdgeJsonDeserializerError::UnsupportedAlarmSeverity(
+                    mqtt_topic.into(),
+                ));
+            }
+
             if alarm_name.is_empty() {
                 return Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(
                     mqtt_topic.into(),
                 ));
             }
 
-            let alarm_severity = topic_split[2];
+            // Return error if child id in the topic is empty
+            if topic_split.len() == 5 && topic_split[4].is_empty() {
+                return Err(ThinEdgeJsonDeserializerError::UnsupportedExternalDeviceId(
+                    mqtt_topic.into(),
+                ));
+            }
 
             let alarm_data = if mqtt_payload.is_empty() {
                 None
@@ -159,6 +175,22 @@ mod tests {
         };
         "warning alarm parsing without text or timestamp"
     )]
+    #[test_case(
+        "tedge/alarms/critical/temperature_alarm/extern_sensor",
+        json!({
+            "text": "I raised it",
+            "time": "2021-04-23T19:00:00+05:00",
+        }),
+        ThinEdgeAlarm {
+            name: "temperature_alarm".into(),
+            severity: AlarmSeverity::Critical,
+            data: Some(ThinEdgeAlarmData {
+                text: Some("I raised it".into()),
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+            }),
+        };
+        "critical alarm parsing with childId"
+    )]
     fn parse_thin_edge_alarm_json(
         alarm_topic: &str,
         alarm_payload: Value,
@@ -196,7 +228,7 @@ mod tests {
 
         assert_matches!(
             result,
-            Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(_))
+            Err(ThinEdgeJsonDeserializerError::UnsupportedAlarmSeverity(_))
         );
     }
 
@@ -214,5 +246,46 @@ mod tests {
     fn alarm_translation_clear_alarm_with_empty_payload() {
         let result = ThinEdgeAlarm::try_from("tedge/alarms/critical/temperature_high_alarm", "");
         assert_matches!(result.unwrap().data, None);
+    }
+
+    #[test]
+    fn alarm_translation_invalid_topic_levels() {
+        let result = ThinEdgeAlarm::try_from("tedge/alarms/critical/temperature_alarm//", "{}");
+        assert_matches!(
+            result,
+            Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(_))
+        );
+    }
+
+    #[test]
+    fn child_alarm_translation_empty_external_device_name() {
+        let result = ThinEdgeAlarm::try_from("tedge/alarms/critical/temperature_alarm/", "{}");
+
+        assert_matches!(
+            result,
+            Err(ThinEdgeJsonDeserializerError::UnsupportedExternalDeviceId(
+                _
+            ))
+        );
+    }
+
+    #[test]
+    fn child_alarm_translation_empty_alarm_name() {
+        let result = ThinEdgeAlarm::try_from("tedge/alarms/critical//external_sensor", "{}");
+
+        assert_matches!(
+            result,
+            Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(_))
+        );
+    }
+
+    #[test]
+    fn child_alarm_translation_empty_severity() {
+        let result = ThinEdgeAlarm::try_from("tedge/alarms//some_alarm/external_sensor", "{}");
+
+        assert_matches!(
+            result,
+            Err(ThinEdgeJsonDeserializerError::UnsupportedAlarmSeverity(_))
+        );
     }
 }
