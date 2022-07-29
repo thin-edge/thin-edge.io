@@ -264,40 +264,6 @@ Example Flow:
       * Any timeout to wait for update in folder `current`?
 
 
-### Alternative Proposal: Filetransfer implemented in the plugin, based on MQTT
-
-The `c8y_configuration_plugin` configuration's record field `path` (reference to section 'Configuration' above) can be prefixed with "mqtt://". Then it's value is treated as MQTT topic structure, where another process/external device is expected to provide/consume the configuration file.
-
-The `c8y_configuration_plugin` expects the process/external device always putting the latest config file as retain message to the MQTT topic `{path}`. Then the plugin consumes that retain message whenever a cloud request comes in.
-
-Example Plugin Config:
-```shell
-$ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
-files = [
-    { path = '/etc/tedge/tedge.toml', type = 'tedge.toml' },
-    { path = 'mqtt://configs/bar.conf', type = 'bar.conf', childid = 'child1'  }
-  ]
-```
-
-Example Flow:
-
-**Start Behaviour:**
-  * external device `child1`: starts
-  * external device `child1`: publishs all its config files to MQTT (with retain); Example: Publish to topic `configs/bar.conf`
-
-**Device-to-Cloud Behaviour:**
-  * at some point a config retrieval for type `bar.conf` for `child1` arrives at C8Y config plugin
-  * C8Y config plugin: subscribes to `configs/bar.conf` and gets immediately the config file content from the retained message
-  * C8Y config plugin: sends the config file to C8Y<br/><br/>
-    NOTE: The responsibility to assure that the latest config file content is on the MQTT bus is always on the process/external device.
-When there is no retain message the plugin sends an error to the cloud on an every incoming config retrieval request.
-
-**Cloud-to-Device Behaviour:**
-  * at some point a config sent from cloud for type `bar.conf` for `child1` arrives at C8Y config plugin
-  * C8Y config plugin: publishs the config file content as MQTT retain message to `configs/bar.conf` 
-  * external device `child1`: recognizes the MQTT message on `configs/bar.conf` and processes the new config file content
-
-
 ## Declaration of Capabilities for Child-Devices
 
 The `c8y_configuration_plugin` takes care to define all necessary capabilities to each cloud's child-device twin. These are:
