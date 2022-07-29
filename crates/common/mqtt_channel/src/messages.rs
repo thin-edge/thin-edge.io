@@ -48,7 +48,7 @@ impl Message {
     pub fn payload_bytes(&self) -> &[u8] {
         self.payload
             .strip_suffix(&[0])
-            .unwrap_or_else(|| self.payload.as_slice())
+            .unwrap_or(self.payload.as_slice())
     }
 }
 
