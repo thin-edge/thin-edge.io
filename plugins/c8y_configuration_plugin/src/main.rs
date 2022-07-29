@@ -64,7 +64,7 @@ pub struct ConfigPluginOpt {
 async fn create_mqtt_client(mqtt_port: u16) -> Result<mqtt_channel::Connection, anyhow::Error> {
     let mut topic_filter =
         mqtt_channel::TopicFilter::new_unchecked(C8yTopic::SmartRestRequest.as_str());
-    let _ = topic_filter.add_all(health_check_topics("c8y-configuration-plugin"));
+    topic_filter.add_all(health_check_topics("c8y-configuration-plugin"));
 
     let mqtt_config = mqtt_channel::Config::default()
         .with_port(mqtt_port)
@@ -360,7 +360,7 @@ mod tests {
         .await;
 
         // Send a software upload request to the plugin
-        let _ = broker
+        broker
             .publish(
                 "c8y/s/ds",
                 format!("526,tedge-device,{test_config_type}").as_str(),
