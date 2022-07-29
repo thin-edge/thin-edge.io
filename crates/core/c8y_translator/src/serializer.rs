@@ -48,12 +48,12 @@ impl C8yJsonSerializer {
             // object referenced by "externalId", instead of root device object
             // referenced by MQTT client's Device ID.
             let _ = json.write_key("externalSource");
-            let _ = json.write_open_obj();
+            json.write_open_obj();
             let _ = json.write_key("externalId");
             let _ = json.write_str(child_id);
             let _ = json.write_key("type");
             let _ = json.write_str("c8y_Serial");
-            let _ = json.write_close_obj();
+            json.write_close_obj();
         }
 
         Self {
