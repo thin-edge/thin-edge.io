@@ -5,8 +5,6 @@ name: ci_pipeline
 #  are there four times and are almost identical. They only differ in a character
 #  a,b,c,d that we use to select a runner.
 #
-# TODO: Safely move cargo test on amd64 to bash script
-# TODO: Reduce complexity by moving functionality to bash scripts
 # TODO: Smoke testing on Azure is disabled, we should check if it works out
 #   with 4 runners in parallel or enable only one
 
@@ -67,33 +65,6 @@ jobs:
 
       - name: Run tedge help
         run: tedge --help
-
-#################################################################################
-
-  cargo-test-features-amd64:
-    name: Run cargo test features
-    runs-on: Ubuntu-20.04
-    needs: build-amd64
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Enable toolchain via github action
-        uses: dtolnay/rust-toolchain@1.58.1
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Compile test
-        run: ./ci/integration_test/cargo_test_for_amd64.sh
-
-        # If this command is ported to bash script, it runs tests that should be skipped.
-        # The tests could fail if GitHub blocks external connections.
-        # It seems like they rarely do.
-      - name: Cargo test features
-        run: cargo test --verbose --features integration-test,requires-sudo -- --skip sending_and_receiving_a_message
 
 ##################################################################################
 
