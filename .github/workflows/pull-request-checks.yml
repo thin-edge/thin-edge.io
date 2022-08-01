@@ -210,7 +210,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: test
-          args: --no-fail-fast --features fs-notify
+          args: --no-fail-fast --all-features
 
   cargo-build:
     name: Run cargo build
@@ -291,7 +291,7 @@ jobs:
         with:
           use-cross: true
           command: test
-          args: --release --no-run --target=armv7-unknown-linux-gnueabihf --features fs-notify
+          args: --release --no-run --target=armv7-unknown-linux-gnueabihf --all-features
 
 ### Disable cargo-tarpaulin as some tests failed only in this step
 #  cargo-tarpaulin:

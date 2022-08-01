@@ -27,7 +27,3 @@ reqwest = { version = "0.11", default-features = false, features = [ "blocking",
 serial_test = "0.8"
 tedge_utils = { path = "../../crates/common/tedge_utils" }
 test-case = "2.2"
-
-[features]
-requires-sudo = []
-integration-test = []
