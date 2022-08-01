@@ -78,7 +78,6 @@ Each configuration file is defined by a record with:
   These are only used when a configuration file pushed from the cloud doesn't exist on the device.
   When a configuration file is already present on the device, this plugin never changes file ownership,
   ignoring these parameters.
-* Optional `childid`. For details see section "Configuration files for child devices" below.
 * Optional `desired`. For details see section "Configuration files for child devices" below.
 
 ```shell
@@ -176,16 +175,21 @@ Allowing to consume/provide a configuration file from/to an external device via 
 
 ## Details to Aspect 1: Associating with cloud's child-device twin
 
-For aspect (1) the plugin provides the field `childid` for all records in the `c8y_configuration_plugin` configuration (reference to section 'Configuration' above). That field is interpreted as unique child-device id and the plugin associates the record's configuration file with corresponding cloud's child-device twin. If not provided the configuration file is associated with cloud's thin-edge device twin.
+For aspect (1) the plugin expects for each cloud's child-device twin an individually plugin configuration file (similar to whats described section [Configuration](#configuration) above). Thereby each child-device's configuration file is expected in a subfolder, where each subfolder name is treated as `childid`.
 
 Example:
-```shell
-$ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
-files = [
-    { path = '/etc/tedge/tedge.toml', type = 'tedge.toml' },              # appears in the cloud on the thin-edge device
-    { path = '/etc/child1/foo.conf', type = 'foo', childid = 'child1'  }  # appears in the cloud on the child-device 'child1'
-  ]
+
 ```
+$ tree /etc/tedge/c8y/
+/etc/tedge/c8y/
+├── c8y-configuration-plugin.toml
+├── child1
+│   └── c8y-configuration-plugin.toml
+└── child2
+    └── c8y-configuration-plugin.toml
+```
+
+Here the plugin serves configuration management for the thin-edge device it-self, for a child-device with childid `child1` and for a child-device with childid `child2`. The contents of all three configuration files follow the details described in section [Configuration](#configuration) above.
 
 ## Details to Aspect 2: Filetransfer from/to external device
 
