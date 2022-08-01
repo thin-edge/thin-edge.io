@@ -272,10 +272,20 @@ The `c8y_configuration_plugin` takes care to define all necessary capabilities t
 
 **Declaring 'supported operations'**
 
-For each `childid` contained in the plugin's configuration, the plugin sends one MQTT message to C8Y. If one `childid` occurs more than once just one message will be sent. The message is as below:
-  - topic: `c8y/s/us/<childid>`
-  - payload: `114,c8y_UploadConfigFile,c8y_DownloadConfigFile`
+To declare supported operations the `c8y_configuration_plugin` uses thin-edge's _Supported Operations API_. Therefore the `c8y_configuration_plugin` creates for each child-device two files under `/etc/tedge/operations/c8y/` (similar as for the thin-edge device twin it-self, see section [Installation](#installation) above). For child-devices these files will be to put into subfolders, where the name of each subfolder is the `childid`.
 
+Example, for child-device with childid `child1`:
+
+```
+/etc/tedge/operations/c8y/child1/c8y_UploadConfigFile
+/etc/tedge/operations/c8y/child1/c8y_DownloadConfigFile
+```
+
+The `c8y_configuration_plugin` assures these files exist always when the plugin's configuration is (re)processed. That means:
+  - on startup of the plugin
+  - always when the plugin recognizes a configuration change and processes it's configuration again
+
+As soon as those files are created, thin-edge's _Supported Operations API_ takes care to send according supported operation declarations to cloud's child-device twins (see [documentation Supported Operations](../tutorials/supported_operations.md#supported-operations-for-child-devices)).
 
 **Declaring 'provided configuration types'**
 
@@ -283,10 +293,7 @@ For each `childid` contained in the plugin's configuration, the plugin sends one
   - topic: `c8y/s/us/<childid>`
   - payload: `119,<config type 1>,<config type 2>,<config type 3>,...`
 
-
-**When to send capability messages**
-
-The `c8y_configuration_plugin` sends both MQTT message from above (for _supported operations_ and _provided configuration types_), always when the plugin's configuration is (re)processed. That means:
+The `c8y_configuration_plugin` sends these MQTT messages to declare provided configuration types always when the plugin's configuration is (re)processed. That means:
   - on startup of the plugin
   - always when the plugin recognizes a configuration change and processes it's configuration again
 
