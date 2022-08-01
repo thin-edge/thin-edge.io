@@ -20,6 +20,16 @@ The specification for the operation files is described in `thin-edge.io` specifi
 
 Supported operations are declared in the cloud specific subdirectory of `/etc/tedge/operations` directory.
 
+#### Supported Operations for Child-Devices
+The Supported Operations API allows to declare supported operations for Child-Devices. Each file placed in a subfolder of the cloud specific subdirectory of `/etc/tedge/operations`, is associated with a cloud's child-device twin. Thereby the name of the subfolder is treated as child-device id.
+
+Example:
+```
+/etc/tedge/operations/c8y/child1/c8y_UploadConfigFile
+/etc/tedge/operations/c8y/child1/c8y_DownloadConfigFile
+```
+Here thin-edge declares both operations `c8y_UploadConfigFile` and `c8y_DownloadConfigFile` as supported to the cloud's child-device twin `child1`.
+
 ## Custom Supported Operations
 
 `thin-edge.io` supports custom operations by using configuration files and plugin mechanism similar to what software management agent does.
