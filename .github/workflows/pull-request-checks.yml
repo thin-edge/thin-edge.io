@@ -6,7 +6,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -D warnings
 
 jobs:
   block-fixup:
@@ -129,6 +128,8 @@ jobs:
   cargo-clippy:
     name: Run cargo clippy
     runs-on: Ubuntu-20.04
+    env:
+      RUSTFLAGS: -D warnings
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
@@ -180,6 +181,8 @@ jobs:
   cargo-test:
     name: Run cargo test
     runs-on: Ubuntu-20.04
+    env:
+      RUSTFLAGS: -D warnings
     needs: [cargo-fmt, cargo-clippy]
 
     steps:
@@ -216,6 +219,8 @@ jobs:
   cargo-build:
     name: Run cargo build
     runs-on: Ubuntu-20.04
+    env:
+      RUSTFLAGS: -D warnings
     needs: [cargo-fmt, cargo-clippy]
 
     steps:
@@ -245,6 +250,8 @@ jobs:
   cargo_build_arm7_32bit:
     name: cargo build for armv7 32bit
     runs-on: Ubuntu-20.04
+    env:
+      RUSTFLAGS: -D warnings
     needs: [cargo-fmt, cargo-clippy]
 
     steps:
@@ -271,6 +278,8 @@ jobs:
   cargo_build_tests_arm7_32bit:
     name: cargo build tests for armv7 32bit
     runs-on: Ubuntu-20.04
+    env:
+      RUSTFLAGS: -D warnings
     needs: [cargo-fmt, cargo-clippy]
 
     steps:
