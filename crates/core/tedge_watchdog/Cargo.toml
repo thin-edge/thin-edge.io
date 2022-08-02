@@ -15,6 +15,7 @@ assets = [
     ["../../../configuration/init/systemd/tedge-watchdog.service", "/lib/systemd/system/tedge-watchdog.service", "644"],
     ["target/release/tedge_watchdog", "/usr/bin/tedge_watchdog", "755"],
 ]
+depends = "libsystemd0"
 
 [dependencies]
 anyhow = "1.0"
