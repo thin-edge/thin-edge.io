@@ -48,6 +48,7 @@ jobs:
   udeps:
     name: Check for unused dependencies
     runs-on: ubuntu-latest
+    needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
       - uses: actions/checkout@v3
