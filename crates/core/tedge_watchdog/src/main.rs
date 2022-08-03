@@ -3,7 +3,18 @@ use std::path::PathBuf;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 mod error;
+
+// on linux, we use systemd
+#[cfg(target_os = "linux")]
 mod systemd_watchdog;
+#[cfg(target_os = "linux")]
+use systemd_watchdog as watchdog;
+
+// on non-linux, we do nothing for now
+#[cfg(not(target_os = "linux"))]
+mod dummy_watchdog;
+#[cfg(not(target_os = "linux"))]
+use dummy_watchdog as watchdog;
 
 #[derive(Debug, clap::Parser)]
 #[clap(
@@ -31,5 +42,5 @@ async fn main() -> Result<(), anyhow::Error> {
     let watchdog_opt = WatchdogOpt::parse();
     tedge_utils::logging::initialise_tracing_subscriber(watchdog_opt.debug);
 
-    systemd_watchdog::start_watchdog(watchdog_opt.config_dir).await
+    watchdog::start_watchdog(watchdog_opt.config_dir).await
 }

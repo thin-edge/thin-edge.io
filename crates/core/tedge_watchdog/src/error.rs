@@ -4,6 +4,10 @@ use tedge_config::{ConfigSettingError, TEdgeConfigError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum WatchdogError {
+    #[cfg(not(target_os = "linux"))]
+    #[error("The watchdog is not available on this platform")]
+    WatchdogNotAvailable,
+
     #[error("Fail to run `{cmd}`: {from}")]
     CommandExecError { cmd: String, from: std::io::Error },
 
