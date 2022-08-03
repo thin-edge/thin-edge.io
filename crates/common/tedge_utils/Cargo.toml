@@ -14,7 +14,6 @@ logging = ["tracing", "tracing-subscriber"]
 fs-notify = ["inotify", "async-stream", "maplit", "strum_macros", "try-traits"]
 
 [dependencies]
-anyhow = "1.0"
 async-stream = { version = "0.3", optional = true }
 futures = "0.3"
 inotify = { version = "0.10", optional = true }
