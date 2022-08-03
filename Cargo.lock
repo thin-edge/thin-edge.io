@@ -1642,7 +1642,6 @@ dependencies = [
  "mqtt_tests",
  "rumqttc",
  "serial_test",
- "tedge_utils",
  "thiserror",
  "tokio",
 ]
