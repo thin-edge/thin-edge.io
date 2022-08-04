@@ -78,7 +78,6 @@ Each configuration file is defined by a record with:
   These are only used when a configuration file pushed from the cloud doesn't exist on the device.
   When a configuration file is already present on the device, this plugin never changes file ownership,
   ignoring these parameters.
-* Optional `desired`. For details see section "Configuration files for child devices" below.
 
 ```shell
 $ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
