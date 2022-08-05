@@ -174,29 +174,72 @@ Allowing to consume/provide a configuration file from/to an external device via 
 
 ## Details to Aspect 1: Associating with cloud's child-device twin
 
-For aspect (1) the plugin expects for each cloud's child-device twin an individually plugin configuration file (similar to whats described section [Configuration](#configuration) above). Thereby each child-device's configuration file is expected in a subfolder, where each subfolder name is treated as `childid`.
+For aspect (1) the external device sends an MQTT message to `tedge/meta/plugin/configuration/<childid>` to announce it's configuration management capability to thin-edge. That MQTT message contains all configurations the external device provides. Thereby each configuration appears with a `type` and with an optional field `path`. If path is specified, the `c8y_configuration_plugin` consumes/provides the configuration-file from/to the given local filesystem path. If the field `path` is not given, the `c8y_configuration_plugin` make use of the HTTP filetransfer feature of the `tedge_agent` to consume/provide the configuration-file (see [section below](#details-to-aspect-2-filetransfer-fromto-external-device) for more details about HTTP filetransfer). The first case is intended for local processes (running on the thin-edge device) that represent a child-device, and the latter case is intended for external devices.
+
+The MQTT message is as below:
+
+```json
+{
+   "configurations": [
+     {
+       "type": "<config type 1>",
+       "path": "</path/to/file/file 1>"
+     },
+     {
+       "type": "<config type 2>",
+       "path": "</path/to/file/file 2>"
+     },
+     ...
+   ]
+}
+```
 
 Example:
+```json
+{
+   "configurations": [
+     {
+       "type": "foo.conf",
+       "path": "/etc/child1/foo.conf"
+     },
+     {
+       "type": "bar.conf",
+       "path": "/etc/child1/bar.conf"
+     }
+   ]
+}
+```
+
+Each time the `c8y_configuration_plugin` receivces that message, it takes care to define all necessary capabilities to the coresponding cloud's child-device twin. These are:
+  - declaring _supported operations_ for configuration management: `c8y_UploadConfigFile` and `c8y_DownloadConfigFile`
+  - declaring provided _configuration types_
+
+**Declaring 'supported operations'**
+
+To declare supported operations the `c8y_configuration_plugin` uses thin-edge's _Supported Operations API_. Therefore the `c8y_configuration_plugin` creates for each child-device two files under `/etc/tedge/operations/c8y/<childid>`.
+
+Example, for child-device with childid `child1`:
 
 ```
-$ tree /etc/tedge/c8y/
-/etc/tedge/c8y/
-├── c8y-configuration-plugin.toml
-├── child1
-│   └── c8y-configuration-plugin.toml
-└── child2
-    └── c8y-configuration-plugin.toml
+/etc/tedge/operations/c8y/child1/c8y_UploadConfigFile
+/etc/tedge/operations/c8y/child1/c8y_DownloadConfigFile
 ```
 
-Here the plugin serves configuration management for the thin-edge device it-self, for a child-device with childid `child1` and for a child-device with childid `child2`. The contents of all three configuration files follow the details described in section [Configuration](#configuration) above.
+As soon as those files are created, thin-edge's _Supported Operations API_ takes care to send according supported operation declarations to cloud's child-device twins (see [documentation Supported Operations](../tutorials/supported_operations.md#supported-operations-for-child-devices)).
+
+**Declaring 'provided configuration types'**
+
+For all configuration `types` provided by the external device, the plugin sends an MQTT message to C8Y. Thereby all `types` will be combined in one single message as below:
+  - topic: `c8y/s/us/<childid>`
+  - payload: `119,<type 1>,<type 2>,<type 3>,...`<br/>
+    Example: `119,foo.conf,bar.conf`
+
+Note that the `c8y_configuration_plugin` does **not** create any child-device twin in the cloud. Instead the clouds child-device twins must be created upfront.
+
 
 ## Details to Aspect 2: Filetransfer from/to external device
 
-For aspect (2) there is a proposal, followed by another alternative proposal. Decision has to been taken which proposal to follow.
-
-### Proposal: Filetransfer provided by tedge_agent, based on HTTP
-
-To provide/consume configuration files to/from external devices, the HTTP filetransfer feature of the `tedge_agent` is used.
+To provide/consume configuration files to/from external devices, the `c8y_configuration_plugin` make use of the HTTP filetransfer feature of the `tedge_agent` is used.
   
 The HTTP filetransfer feature of the `tedge_agent` provides the service to transfer files from external devices to the local filesystem of the thin-edge device's, and vice versa.
 
@@ -305,43 +348,6 @@ Example Flow:
     
       * Decide which error paths to be considered.
       * Decide if any timeout to be considerd when waiting for upload notification from external device.
-
-
-## Declaration of Capabilities for Child-Devices
-
-The `c8y_configuration_plugin` takes care to define all necessary capabilities to each cloud's child-device twin. These are:
-  - declaring _supported operations_ for configuration management: `c8y_UploadConfigFile` and `c8y_DownloadConfigFile`
-  - declaring provided _configuration types_
-
-**Declaring 'supported operations'**
-
-To declare supported operations the `c8y_configuration_plugin` uses thin-edge's _Supported Operations API_. Therefore the `c8y_configuration_plugin` creates for each child-device two files under `/etc/tedge/operations/c8y/` (similar as for the thin-edge device twin it-self, see section [Installation](#installation) above). For child-devices these files will be to put into subfolders, where the name of each subfolder is the `childid`.
-
-Example, for child-device with childid `child1`:
-
-```
-/etc/tedge/operations/c8y/child1/c8y_UploadConfigFile
-/etc/tedge/operations/c8y/child1/c8y_DownloadConfigFile
-```
-
-The `c8y_configuration_plugin` assures these files exist always when the plugin's configuration is (re)processed. That means:
-  - on startup of the plugin
-  - always when the plugin recognizes a configuration change and processes it's configuration again
-
-As soon as those files are created, thin-edge's _Supported Operations API_ takes care to send according supported operation declarations to cloud's child-device twins (see [documentation Supported Operations](../tutorials/supported_operations.md#supported-operations-for-child-devices)).
-
-**Declaring 'provided configuration types'**
-
-For each `childid` contained in the plugin's configuration, the plugin sends one MQTT message to C8Y. Thereby all `config types` assigned to that `childid` will be combined in that single message. The message is as below:
-  - topic: `c8y/s/us/<childid>`
-  - payload: `119,<config type 1>,<config type 2>,<config type 3>,...`
-
-The `c8y_configuration_plugin` sends these MQTT messages to declare provided configuration types always when the plugin's configuration is (re)processed. That means:
-  - on startup of the plugin
-  - always when the plugin recognizes a configuration change and processes it's configuration again
-
-
-Note that the `c8y_configuration_plugin` does **not** create any child-device twin in the cloud. Instead the clouds child-device twins must be created upfront.
 
 
 ## Notfifications for Child-Devices
