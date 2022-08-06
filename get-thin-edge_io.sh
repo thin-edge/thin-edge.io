@@ -134,8 +134,8 @@ esac
 rm -R /tmp/tedge
 
 # Test if tedge command is there and working
-tedge help >/dev/null
-if [ $? -eq 0 ]; then
+if tedge help >/dev/null;
+then
     echo "\n${BLUE}thin-edge.io is now installed on your system!${COLORRESET}"
     echo ""
     echo "You can go to our documentation to find next steps:${BLUE} https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/003_registration.md ${COLORRESET}"
