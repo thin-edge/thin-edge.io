@@ -11,19 +11,19 @@ set -e
 
 echo "Configuring Bridge"
 
-URL=$(echo $C8YURL | cut -c 9- - )
+URL=$(echo "$C8YURL" | cut -c 9- - )
 
 sudo tedge cert remove
 
-sudo tedge cert create --device-id=$C8YDEVICE
+sudo tedge cert create --device-id="$C8YDEVICE"
 
 sudo tedge cert show
 
-sudo tedge config set c8y.url $URL
+sudo tedge config set c8y.url "$URL"
 
 sudo tedge config set c8y.root.cert.path /etc/ssl/certs
 
-sudo tedge config set az.url $IOTHUBNAME.azure-devices.net
+sudo tedge config set az.url "$IOTHUBNAME.azure-devices.net"
 
 sudo tedge config set az.root.cert.path /etc/ssl/certs/Baltimore_CyberTrust_Root.pem
 
@@ -31,7 +31,7 @@ sudo tedge config list
 
 # Note: This will always upload a new certificate. From time to time
 # we should delete the old ones in c8y
-sudo -E tedge cert upload c8y --user $C8YUSERNAME
+sudo -E tedge cert upload c8y --user "$C8YUSERNAME"
 
 cat /etc/mosquitto/mosquitto.conf
 
@@ -41,7 +41,7 @@ pip3 install c8y-api retry-decorator
 
 # Delete the device (ignore error)
 set +e
-python3 ./ci/delete_current_device_c8y.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL
+python3 ./ci/delete_current_device_c8y.py --tenant "$C8YTENANT" --user "$C8YUSERNAME" --device "$C8YDEVICE" --url "$C8YURL"
 set -e
 
 # Give Cumolocity time to process the cert deletion
@@ -56,9 +56,9 @@ sleep 2
 
 # Retrieve the Cumulocity device ID
 
-export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
+export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant "$C8YTENANT" --user "$C8YUSERNAME" --device "$C8YDEVICE" --url "$C8YURL")
 
-echo "The new device ID is: " $C8YDEVICEID
+echo "The new device ID is: " "$C8YDEVICEID"
 
 deactivate
 
