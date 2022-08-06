@@ -121,7 +121,7 @@ minimal) install_basic_components ;;
 full)
     install_basic_components
     install_tedge_agent
-    if apt -v &>/dev/null; then
+    if apt -v >/dev/null 2>&1; then
         install_tedge_plugins
     fi
     ;;
