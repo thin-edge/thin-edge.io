@@ -1507,6 +1507,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "maplit"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
+
+[[package]]
 name = "matches"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2941,6 +2947,7 @@ dependencies = [
  "async-stream",
  "futures",
  "inotify",
+ "maplit",
  "nix",
  "strum_macros",
  "tedge_test_utils",
