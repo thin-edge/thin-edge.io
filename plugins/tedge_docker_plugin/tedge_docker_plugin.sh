@@ -16,7 +16,7 @@ EOF
 
 unsupported_args_check() {
     if ! [ -z $1 ]; then
-        echo "Unsupported arguments: $@"
+        echo "Unsupported arguments: $*"
         exit 1
     fi
 }
