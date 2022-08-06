@@ -44,7 +44,7 @@ extract_image_tag_from_args() {
         esac
     fi
 
-    unsupported_args_check $@
+    unsupported_args_check "$@"
 
 }
 
@@ -59,16 +59,16 @@ shift   # Pop the command from args list
 
 case "$COMMAND" in
     prepare)
-        unsupported_args_check $@
+        unsupported_args_check "$@"
         # nothing to do here
         ;;
     list)
-        unsupported_args_check $@
+        unsupported_args_check "$@"
         docker image list --format '{{.Repository}}\t{{.Tag}}' || exit 2
         ;;
     install)
         # Extract the docker image tag into the IMAGE_TAG variable
-        extract_image_tag_from_args $@
+        extract_image_tag_from_args "$@"
 
         # Stop all containers using the provided image name
         containers=$(docker ps -a --format "{{.ID}} {{.Image}}" | grep $IMAGE_NAME | awk '{print $1}') || exit 2
