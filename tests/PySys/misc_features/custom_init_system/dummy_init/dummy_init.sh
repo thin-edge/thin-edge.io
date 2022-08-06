@@ -12,19 +12,19 @@ case "$COMMAND" in
         echo is_available >> /tmp/dummy_init/dummy_init.out
         ;;
     restart)
-        echo restart $2 >> /tmp/dummy_init/dummy_init.out
+        echo restart "$2" >> /tmp/dummy_init/dummy_init.out
         ;;
     stop)
-        echo stop $2 >> /tmp/dummy_init/dummy_init.out
+        echo stop "$2" >> /tmp/dummy_init/dummy_init.out
         ;;
     enable)
-        echo enable $2 >> /tmp/dummy_init/dummy_init.out
+        echo enable "$2" >> /tmp/dummy_init/dummy_init.out
         ;;
     disable)
-        echo disable $2 >> /tmp/dummy_init/dummy_init.out
+        echo disable "$2" >> /tmp/dummy_init/dummy_init.out
         ;;
     is-active)
-        echo is-active $2 >> /tmp/dummy_init/dummy_init.out
+        echo is-active "$2" >> /tmp/dummy_init/dummy_init.out
         ;;
     *)
         echo "Error: unsupported command: $COMMAND." >> /tmp/dummy_init/dummy_init.out
