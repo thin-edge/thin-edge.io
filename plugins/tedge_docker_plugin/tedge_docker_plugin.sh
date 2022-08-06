@@ -15,7 +15,7 @@ EOF
 }
 
 unsupported_args_check() {
-    if ! [ -z $1 ]; then
+    if [ -n $1 ]; then
         echo "Unsupported arguments: $*"
         exit 1
     fi
@@ -30,7 +30,7 @@ extract_image_tag_from_args() {
     shift   # Pop image name from args list
     IMAGE_TAG=$IMAGE_NAME
 
-    if ! [ -z $1 ]; then
+    if [ -n $1 ]; then
         case "$1" in
             --module-version)
                 IMAGE_VERSION="$2"
