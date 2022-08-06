@@ -303,6 +303,14 @@ jobs:
           command: test
           args: --release --no-run --target=armv7-unknown-linux-gnueabihf --all-features
 
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Run ShellCheck
+      uses: ludeeus/action-shellcheck@master
+
 ### Disable cargo-tarpaulin as some tests failed only in this step
 #  cargo-tarpaulin:
 #    name: Run cargo tarpaulin
