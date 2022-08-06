@@ -22,49 +22,49 @@
 appendtofile() {
     STRING=$1
     FILE=$2
-    if grep "$STRING" $FILE; then
+    if grep "$STRING" "$FILE"; then
         echo 'line already there'
     else
-        echo $STRING >>$FILE
+        echo "$STRING" >>"$FILE"
     fi
 }
 
-if [ -z $C8YDEVICE ]; then
+if [ -z "$C8YDEVICE" ]; then
     echo "Error: Please supply your device name as environment variable C8YDEVICE"
     exit 1
 else
     echo "Your device: HIDDEN"
 fi
 
-if [ -z $C8YUSERNAME ]; then
+if [ -z "$C8YUSERNAME" ]; then
     echo "Error: Please supply your user name  as environment variable C8YUSERNAME"
     exit 1
 else
     echo "Your user name: HIDDEN"
 fi
 
-if [ -z $C8YTENANT ]; then
+if [ -z "$C8YTENANT" ]; then
     echo "Error: Please supply your tenant ID as environment variable C8YTENANT"
     exit 1
 else
     echo "Your tenant ID: HIDDEN"
 fi
 
-if [ -z $C8YPASS ]; then
+if [ -z "$C8YPASS" ]; then
     echo "Error: Please supply your Cumulocity password environment variable C8YPASS"
     exit 1
 else
     echo "Your password: HIDDEN"
 fi
 
-if [ -z $EXAMPLEDIR ]; then
+if [ -z "$EXAMPLEDIR" ]; then
     echo "Error: Please supply the path to the sawtooth_publisher as EXAMPLEDIR"
     exit 1
 else
     echo "Your exampledir: $EXAMPLEDIR"
 fi
 
-if [ -z $TEBASEDIR ]; then
+if [ -z "$TEBASEDIR" ]; then
     echo "Error: Please supply the path to the sawtooth_publisher as TEBASEDIR"
     exit 1
 else
@@ -77,10 +77,10 @@ PATH=$PATH:/usr/sbin
 python3 -m venv ~/env-c8y-api
 source ~/env-c8y-api/bin/activate
 pip3 install c8y-api retry-decorator
-export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant $C8YTENANT --user $C8YUSERNAME --device $C8YDEVICE --url $C8YURL)
+export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant "$C8YTENANT" --user "$C8YUSERNAME" --device "$C8YDEVICE" --url "$C8YURL")
 
 # after calling the script, the ID should be a numeric value
-if [[ $C8YDEVICEID =~ ^[0-9]+$ ]]; then
+if [[ "$C8YDEVICEID" =~ ^[0-9]+$ ]]; then
     echo "Your device ID: $C8YDEVICEID"
 else
     echo "Error: Please supply your Cumulocity device ID name as environment variable C8YDEVICEID ($C8YDEVICEID)"
@@ -95,7 +95,7 @@ echo "Start smoke tests"
 
 # Publish some values
 for val in 20 30 20 30; do
-    tedge mqtt pub c8y/s/us 211,$val
+    tedge mqtt pub c8y/s/us "211,$val"
     sleep 0.1
 done
 
@@ -103,13 +103,13 @@ done
 sleep 12
 
 # Uses SmartREST for publishing
-./ci/roundtrip_local_to_c8y.py -m REST -pub $EXAMPLEDIR -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
+./ci/roundtrip_local_to_c8y.py -m REST -pub "$EXAMPLEDIR" -u "$C8YUSERNAME" -t "$C8YTENANT" -id "$C8YDEVICEID"
 
 # Wait some seconds until our 10 seconds window is empty again
 sleep 12
 
 # Uses thin-edge JSON for publishing
-./ci/roundtrip_local_to_c8y.py -m JSON -pub $EXAMPLEDIR -u $C8YUSERNAME -t $C8YTENANT -id $C8YDEVICEID
+./ci/roundtrip_local_to_c8y.py -m JSON -pub "$EXAMPLEDIR" -u "$C8YUSERNAME" -t "$C8YTENANT" -id "$C8YDEVICEID"
 
 echo "Disonnect again"
 sudo tedge disconnect c8y
