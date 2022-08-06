@@ -18,40 +18,40 @@ EOF
 }
 
 install_basic_components() {
-    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_${VERSION}_${ARCH}.deb -P /tmp/tedge
-    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_mapper_${VERSION}_${ARCH}.deb -P /tmp/tedge
+    wget "https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_${VERSION}_${ARCH}.deb" -P /tmp/tedge
+    wget "https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_mapper_${VERSION}_${ARCH}.deb" -P /tmp/tedge
 
-    dpkg -i /tmp/tedge/tedge_${VERSION}_${ARCH}.deb
-    dpkg -i /tmp/tedge/tedge_mapper_${VERSION}_${ARCH}.deb
+    dpkg -i "/tmp/tedge/tedge_${VERSION}_${ARCH}.deb"
+    dpkg -i "/tmp/tedge/tedge_mapper_${VERSION}_${ARCH}.deb"
 
 }
 
 install_tedge_agent() {
-    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_agent_${VERSION}_${ARCH}.deb -P /tmp/tedge
+    wget "https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_agent_${VERSION}_${ARCH}.deb" -P /tmp/tedge
 
-    dpkg -i /tmp/tedge/tedge_agent_${VERSION}_${ARCH}.deb
+    dpkg -i "/tmp/tedge/tedge_agent_${VERSION}_${ARCH}.deb"
 }
 
 install_tedge_plugins() {
     # Download and install apt plugin
-    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_apt_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
-    dpkg -i /tmp/tedge/tedge_apt_plugin_${VERSION}_${ARCH}.deb
+    wget "https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_apt_plugin_${VERSION}_${ARCH}.deb" -P /tmp/tedge
+    dpkg -i "/tmp/tedge/tedge_apt_plugin_${VERSION}_${ARCH}.deb"
 
     # Download and install apama plugin
-    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_apama_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
-    dpkg -i /tmp/tedge/tedge_apama_plugin_${VERSION}_${ARCH}.deb
-    
+    wget "https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_apama_plugin_${VERSION}_${ARCH}.deb" -P /tmp/tedge
+    dpkg -i "/tmp/tedge/tedge_apama_plugin_${VERSION}_${ARCH}.deb"
+
     # Download and install configuration plugin
-    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/c8y_configuration_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
-    dpkg -i /tmp/tedge/c8y_configuration_plugin_${VERSION}_${ARCH}.deb
+    wget "https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/c8y_configuration_plugin_${VERSION}_${ARCH}.deb" -P /tmp/tedge
+    dpkg -i "/tmp/tedge/c8y_configuration_plugin_${VERSION}_${ARCH}.deb"
 
     # Download and install c8y log plugin
-    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/c8y_log_plugin_${VERSION}_${ARCH}.deb -P /tmp/tedge
-    dpkg -i /tmp/tedge/c8y_log_plugin_${VERSION}_${ARCH}.deb
+    wget "https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/c8y_log_plugin_${VERSION}_${ARCH}.deb" -P /tmp/tedge
+    dpkg -i "/tmp/tedge/c8y_log_plugin_${VERSION}_${ARCH}.deb"
 
     # Download and install tedge_watchdog
-    wget https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_watchdog_${VERSION}_${ARCH}.deb -P /tmp/tedge
-    dpkg -i /tmp/tedge/tedge_watchdog_${VERSION}_${ARCH}.deb
+    wget "https://github.com/thin-edge/thin-edge.io/releases/download/${VERSION}/tedge_watchdog_${VERSION}_${ARCH}.deb" -P /tmp/tedge
+    dpkg -i "/tmp/tedge/tedge_watchdog_${VERSION}_${ARCH}.deb"
 }
 
 if [ $# -lt 3 ]; then
