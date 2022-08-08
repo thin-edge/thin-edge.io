@@ -305,7 +305,7 @@ Example Flow:
   * C8Y config plugin: removed the file form local filesystem
   
 
-**Cloud-to-Device Behaviour:**
+**Push configuration file update from cloud to child device**
   * at some point a config sent from cloud for type `bar.conf` for `child1` arrives at C8Y config plugin<br/>
     Format of C8Y SmartREST message for config send operation: `524,<childid>,<URL>,<config type>`. See [C8Y SmartREST doc](https://cumulocity.com/guides/reference/smartrest-two/#download-configuration-file-with-type-524)<br/>
     Example: `524,child1,http://www.my.url,bar.conf`
