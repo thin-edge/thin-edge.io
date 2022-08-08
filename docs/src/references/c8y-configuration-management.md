@@ -257,7 +257,7 @@ The HTTP filetransfer feature of the `tedge_agent` provides the service to trans
 
 Example Flow:
 
-**Device-to-Cloud Behaviour:**
+**Fetch configuration file from child device to cloud**
   * at some point a config retrieval for type `bar.conf` for `child1` arrives at C8Y config plugin<br/>
     Format of C8Y SmartREST message for config retrieval operation: `526,<childid>,<config type>`. See [C8Y SmartREST doc](https://cumulocity.com/guides/reference/smartrest-two/#upload-configuration-file-with-type-526)<br/>
     Example: `526,child1,bar.conf`
