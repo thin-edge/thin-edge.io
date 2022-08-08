@@ -1,18 +1,23 @@
-#!/bin/bash
+#!/bin/sh
 
-set -euo pipefail
+set -e
 
 usage() {
     cat <<EOF
 USAGE:
-    delete_thin_edge [remove/purge]
+    delete-thin-edge_io [COMMAND]
+    
+COMMANDS:
+    remove     Uninstall thin-edge.io with keeping configuration files
+    purge      Uninstall thin-edge.io and also remove configuration files  
+
 EOF
 }
 
 stop_a_service_if_running() {
     local status
     status=$(systemctl show -p ActiveState --value "$1")
-    if [ "$status" == "active" ]; then
+    if [ "$status" = "active" ]; then
         sudo systemctl stop "$1"
     fi
 }
@@ -20,19 +25,20 @@ stop_a_service_if_running() {
 stop_services() {
     stop_a_service_if_running "tedge-watchdog.service"
     stop_a_service_if_running "tedge-mapper-collectd.service"
-    stop_a_service_if_running "c8y_log_plugin"
-    stop_a_service_if_running "c8y_configuration_plugin"
-    stop_a_service_if_running "apama"
+    stop_a_service_if_running "c8y-log-plugin.service"
+    stop_a_service_if_running "c8y-configuration-plugin.service"   
 }
 
 remove_or_purge_package_if_exists() {
     local status
     status=$(dpkg -s "$2" | grep -w installed) && returncode=$? || returncode=$?
-    if [ "$status" == "Status: install ok installed" ]; then
+    if [ "$status" = "Status: install ok installed" ]; then
         sudo apt --assume-yes "$1" "$2"
     fi
 }
 
+# Here don't need to remove the tedge_mapper, tedge_agent, and tedge_watchdog packages explicitly,
+# as they will be removed by removing the tedge package.
 remove_packages() {
     remove_or_purge_package_if_exists "remove" "tedge"
     remove_or_purge_package_if_exists "remove" "tedge_apt_plugin"
@@ -53,32 +59,34 @@ disconnect_from_cloud() {
 }
 
 remove_thin_edge_io() {
-    echo "remove thin_edge_io"
+    echo "remove thin-edge_io"
     disconnect_from_cloud
     stop_services
     remove_packages
 }
 
+# Here don't need to purge the tedge_mapper, tedge_agent, and tedge_watchdog packages explicitly,
+# as they will be removed by removing the tedge package.
 purge_thin_edge_io() {
-    echo "purge thin-edge-io"
+    echo "purge thin-edge_io"
     remove_or_purge_package_if_exists "purge" "tedge"
     remove_or_purge_package_if_exists "purge" "tedge_apt_plugin"
     remove_or_purge_package_if_exists "purge" "tedge_apama_plugin"
     remove_or_purge_package_if_exists "purge" "c8y_log_plugin"
     remove_or_purge_package_if_exists "purge" "c8y_configuration_plugin"
-    sudo DEBIAN_FRONTEND=noninteractive apt --assume-yes purge mosquitto-clients mosquitto libmosquitto1 collectd-core collectd
 
     # if in case the configs are not removed then its better to remove.
     if [ -d "/etc/tedge" ]; then
         sudo rm -rf /etc/tedge
     fi
+
 }
 
 if [ $# -eq 1 ]; then
     DELETE_OR_PURGE=$1
-    if [ "$DELETE_OR_PURGE" == 'remove' ]; then
+    if [ "$DELETE_OR_PURGE" = 'remove' ]; then
         remove_thin_edge_io
-    elif [ "$DELETE_OR_PURGE" == 'purge' ]; then
+    elif [ "$DELETE_OR_PURGE" = 'purge' ]; then
         purge_thin_edge_io
     fi
 else
