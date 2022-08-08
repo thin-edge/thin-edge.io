@@ -309,7 +309,7 @@ Example Flow:
   * at some point a config sent from cloud for type `bar.conf` for `child1` arrives at C8Y config plugin<br/>
     Format of C8Y SmartREST message for config send operation: `524,<childid>,<URL>,<config type>`. See [C8Y SmartREST doc](https://cumulocity.com/guides/reference/smartrest-two/#download-configuration-file-with-type-524)<br/>
     Example: `524,child1,http://www.my.url,bar.conf`
-  * C8Y config plugin: downloads the file based on the URL received from C8Y, and stores it some plugin specific local filesystem path (e.g. `/tmp/c8y-cfg-plugin/<childid>_<cfg-type>`).
+  * C8Y config plugin: downloads the file based on the URL received from C8Y, to some temporary location
 
   * C8Y config plugin: uses the filetransfers local API to expose the file to the filetransfer feature. The filetransfer feature responses a _temporary URL_, that is later used to uniquely access that exposed file.
 
