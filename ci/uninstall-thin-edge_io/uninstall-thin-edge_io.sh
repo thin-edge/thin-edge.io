@@ -15,22 +15,20 @@ EOF
 }
 
 stop_a_service_if_running() {
-    local status
-    status=$(systemctl show -p ActiveState --value "$1")
+    status=$(sudo systemctl is-active "$1") && returncode=$? || returncode=$?
     if [ "$status" = "active" ]; then
         sudo systemctl stop "$1"
     fi
 }
 
-stop_services() {
+stop_extension_services() {
     stop_a_service_if_running "tedge-watchdog.service"
     stop_a_service_if_running "tedge-mapper-collectd.service"
     stop_a_service_if_running "c8y-log-plugin.service"
-    stop_a_service_if_running "c8y-configuration-plugin.service"   
+    stop_a_service_if_running "c8y-configuration-plugin.service"
 }
 
 remove_or_purge_package_if_exists() {
-    local status
     status=$(dpkg -s "$2" | grep -w installed) && returncode=$? || returncode=$?
     if [ "$status" = "Status: install ok installed" ]; then
         sudo apt --assume-yes "$1" "$2"
@@ -60,20 +58,26 @@ disconnect_from_cloud() {
 
 remove_thin_edge_io() {
     echo "remove thin-edge_io"
-    disconnect_from_cloud
-    stop_services
-    remove_packages
+    disconnect_from_cloud    
+    stop_extension_services  
+    remove_packages  
+}
+
+purge_packages() {
+    remove_or_purge_package_if_exists "purge" "tedge"
+    remove_or_purge_package_if_exists "purge" "tedge_apt_plugin"
+    remove_or_purge_package_if_exists "purge" "tedge_apama_plugin"
+    remove_or_purge_package_if_exists "purge" "c8y_log_plugin"
+    remove_or_purge_package_if_exists "purge" "c8y_configuration_plugin"
 }
 
 # Here don't need to purge the tedge_mapper, tedge_agent, and tedge_watchdog packages explicitly,
 # as they will be removed by removing the tedge package.
 purge_thin_edge_io() {
     echo "purge thin-edge_io"
-    remove_or_purge_package_if_exists "purge" "tedge"
-    remove_or_purge_package_if_exists "purge" "tedge_apt_plugin"
-    remove_or_purge_package_if_exists "purge" "tedge_apama_plugin"
-    remove_or_purge_package_if_exists "purge" "c8y_log_plugin"
-    remove_or_purge_package_if_exists "purge" "c8y_configuration_plugin"
+    disconnect_from_cloud
+    stop_extension_services
+    purge_packages
 
     # if in case the configs are not removed then its better to remove.
     if [ -d "/etc/tedge" ]; then
