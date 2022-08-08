@@ -46,20 +46,29 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
-fn initialize_tedge(cfg_dir: &Path) -> anyhow::Result<()> {
-    let config_dir = cfg_dir.display().to_string();
-    create_directory_with_user_group(&config_dir, "tedge", "tedge", 0o775)?;
+fn initialize_tedge(config_dir: &Path) -> anyhow::Result<()> {
+    create_directory_with_user_group(config_dir, "tedge", "tedge", 0o775)?;
     create_directory_with_user_group("/var/log/tedge", "tedge", "tedge", 0o775)?;
     create_directory_with_user_group(
-        &format!("{config_dir}/mosquitto-conf"),
+        format!("{}/mosquitto-conf", config_dir.display()),
         "tedge",
         "tedge",
         0o775,
     )?;
-    create_directory_with_user_group(&format!("{config_dir}/operations"), "tedge", "tedge", 0o775)?;
-    create_directory_with_user_group(&format!("{config_dir}/plugins"), "tedge", "tedge", 0o775)?;
     create_directory_with_user_group(
-        &format!("{config_dir}/device-certs"),
+        format!("{}/operations", config_dir.display()),
+        "tedge",
+        "tedge",
+        0o775,
+    )?;
+    create_directory_with_user_group(
+        format!("{}/plugins", config_dir.display()),
+        "tedge",
+        "tedge",
+        0o775,
+    )?;
+    create_directory_with_user_group(
+        format!("{}/device-certs", config_dir.display()),
         "mosquitto",
         "mosquitto",
         0o775,

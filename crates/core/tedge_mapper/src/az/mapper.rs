@@ -28,11 +28,10 @@ impl TEdgeComponent for AzureMapper {
         AZURE_MAPPER_NAME
     }
 
-    async fn init(&self, cfg_dir: &Path) -> Result<(), anyhow::Error> {
+    async fn init(&self, config_dir: &Path) -> Result<(), anyhow::Error> {
         info!("Initialize tedge mapper az");
-        let config_dir = cfg_dir.display().to_string();
         create_directory_with_user_group(
-            &format!("{config_dir}/operations/az"),
+            format!("{}/operations/az", config_dir.display()),
             "tedge",
             "tedge",
             0o775,

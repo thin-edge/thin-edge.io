@@ -227,8 +227,12 @@ impl SmAgent {
 
     #[instrument(skip(self), name = "sm-agent")]
     pub async fn init(&mut self, config_dir: PathBuf) -> Result<(), anyhow::Error> {
-        let cfg_dir = config_dir.as_path().display().to_string();
-        create_directory_with_user_group(&format!("{cfg_dir}/.agent"), "tedge", "tedge", 0o775)?;
+        create_directory_with_user_group(
+            format!("{}/.agent", config_dir.display()),
+            "tedge",
+            "tedge",
+            0o775,
+        )?;
         create_directory_with_user_group("/var/log/tedge/agent", "tedge", "tedge", 0o775)?;
         info!("Initializing the tedge agent session");
         mqtt_channel::init_session(&self.config.mqtt_config).await?;
