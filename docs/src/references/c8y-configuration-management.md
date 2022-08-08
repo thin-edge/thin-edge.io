@@ -166,15 +166,19 @@ Note that:
 
 ## Configuration files for child devices
 
-To manage configuration files for child-devices the `c8y_configuration_plugin` supports two aspects:
-1) **Associating with cloud's child-device twin**<br/>
-Allowing to associate a configuration file with a cloud's child-device twin
-2) **Filetransfer from/to external device**<br/>
-Allowing to consume/provide a configuration file from/to an external device via network
+To manage configuration files for child-devices the `c8y_configuration_plugin` aspects as below are relevant:
 
-## Details to Aspect 1: Associating with cloud's child-device twin
+* Associating with cloud's child-device twin, i.E. managing supported configuration list of child devices 
+  * an external child device declares it's supported config-types to thin-edge via MQTT
+  * thin-edge maintaines the supported config-types of each child-device a separate config-file
+  * the plugin is the one that associates the reported config-type list from the external to it's cloud device twin
+  * these config-list files per child-device is also managed by Configuration Management feature from C8Y
+* Consuming/Providing files from/to thin-edge via network
+  * any configuration file exchange to/from the external child device is handled by an HTTP based filetransfer service provided by thin-edge
 
-For aspect (1) the external device sends an MQTT message to `tedge/meta/plugin/configuration/<childid>` to announce it's configuration management capability to thin-edge. That MQTT message contains all configurations the external device provides. Thereby each configuration appears with a `type` and with an optional field `path`. If path is specified, the `c8y_configuration_plugin` consumes/provides the configuration-file from/to the given local filesystem path. If the field `path` is not given, the `c8y_configuration_plugin` make use of the HTTP filetransfer feature of the `tedge_agent` to consume/provide the configuration-file (see [section below](#details-to-aspect-2-filetransfer-fromto-external-device) for more details about HTTP filetransfer). The first case is intended for local processes (running on the thin-edge device) that represent a child-device, and the latter case is intended for external devices.
+## Managing Supported Configuration List of child devices 
+
+The external device sends an MQTT message to `tedge/meta/plugin/configuration/<childid>` to announce it's configuration management capability to thin-edge. That MQTT message contains all configurations the external device provides. Thereby each configuration appears with a `type` and with an optional field `path`.
 
 The MQTT message is as below:
 
@@ -210,6 +214,8 @@ Example:
 }
 ```
 
+If path is specified, the `c8y_configuration_plugin` consumes/provides the configuration-file from/to the given local filesystem path. If the field `path` is not given, the `c8y_configuration_plugin` make use of the HTTP filetransfer feature of the `tedge_agent` to consume/provide the configuration-file (see [section below](#details-to-aspect-2-filetransfer-fromto-external-device) for more details about HTTP filetransfer). The first case is intended for local processes (running on the thin-edge device) that represent a child-device, and the latter case is intended for external devices.
+
 Each time the `c8y_configuration_plugin` receivces that message, it takes care to define all necessary capabilities to the coresponding cloud's child-device twin. These are:
   - declaring _supported operations_ for configuration management: `c8y_UploadConfigFile` and `c8y_DownloadConfigFile`
   - declaring provided _configuration types_
@@ -237,9 +243,13 @@ For all configuration `types` provided by the external device, the plugin sends 
 Note that the `c8y_configuration_plugin` does **not** create any child-device twin in the cloud. Instead the clouds child-device twins must be created upfront.
 
 
-## Details to Aspect 2: Filetransfer from/to external device
+## Fetching/Pushing configuration file from/to the external device
 
-To provide/consume configuration files to/from external devices, the `c8y_configuration_plugin` make use of the HTTP filetransfer feature of the `tedge_agent` is used.
+To fetching/pushing configuration files to/from external devices, the `c8y_configuration_plugin` make use of the HTTP filetransfer feature of the `tedge_agent` is used (see section ....).
+
+
+
+To fetching/pushing configuration files to/from external devices, the `c8y_configuration_plugin` make use of the HTTP filetransfer feature of the `tedge_agent` is used.
   
 The HTTP filetransfer feature of the `tedge_agent` provides the service to transfer files from external devices to the local filesystem of the thin-edge device's, and vice versa.
 
@@ -255,9 +265,11 @@ The HTTP filetransfer feature of the `tedge_agent` provides the service to trans
       * local API must avoid that the file content is transfered/copied from one to another place, when the plugin _obtains_ the file. 
         Instead just the directory link may change (as it is the case for bash `mv` command).
 
-Example Flow:
 
-**Fetch configuration file from child device to cloud**
+## Fetching configuration file from child device to cloud
+
+  A configuration file snapshot is fetched from an external device as outlined below:
+
   * at some point a config retrieval for type `bar.conf` for `child1` arrives at C8Y config plugin<br/>
     Format of C8Y SmartREST message for config retrieval operation: `526,<childid>,<config type>`. See [C8Y SmartREST doc](https://cumulocity.com/guides/reference/smartrest-two/#upload-configuration-file-with-type-526)<br/>
     Example: `526,child1,bar.conf`
@@ -305,7 +317,10 @@ Example Flow:
   * C8Y config plugin: removed the file form local filesystem
   
 
-**Push configuration file update from cloud to child device**
+## Pushing configuration file update to child device from cloud
+
+  A configuration file snapshot is pushed to an external device as outlined below:
+
   * at some point a config sent from cloud for type `bar.conf` for `child1` arrives at C8Y config plugin<br/>
     Format of C8Y SmartREST message for config send operation: `524,<childid>,<URL>,<config type>`. See [C8Y SmartREST doc](https://cumulocity.com/guides/reference/smartrest-two/#download-configuration-file-with-type-524)<br/>
     Example: `524,child1,http://www.my.url,bar.conf`
