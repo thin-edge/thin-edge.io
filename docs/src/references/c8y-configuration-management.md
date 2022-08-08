@@ -163,6 +163,7 @@ Note that:
 * Since the type of configuration file is used as an MQTT topic name, the characters `#` and `+` cannot be used in a type name.
   If such a character is used in a type name (or in the path of a configuration file without explicit type),
   then the whole plugin configuration `/etc/tedge/c8y/c8y-configuration-plugin.toml` is considered ill-formed.
+* Notifications for child-devices and their external devices are handled differently, as configuration files are fetched/pushed from/to external devices via HTTP filetransfer. Thereby notifications are part of the filetransfer contract (details see section [Fetching/Pushing configuration file](#fetchingpushing-configuration-file-fromto-the-external-device) below).
 
 ## Configuration files for child devices
 
@@ -380,16 +381,3 @@ The HTTP filetransfer feature of the `tedge_agent` provides the service to trans
       * Decide which error paths to be considered.
       * Decide if any timeout to be considerd when waiting for upload notification from external device.
 
-
-## Notfifications for Child-Devices
-
-Notifications for child-devices behave the same way as nofifications for the thin-edge device (as described in section _Notifications_ above), but are extended with the `childid`. That is since the `type` is unique for one device, but can again occur on another child-device or the thin-edge device.
-
-Therefore the topic child-device notifications are published to has the `childid` appended: `tedge/configuration_change/{type}/{childid}`,
-  where `{type}` is the type of the configuration file that has been updated,
-  for instance `configs/bar.conf`
-  
-  and `{childid}` is the child-device id of the configuration file that has been updated,
-  for instance `child1`
-  
-Everything else about child-device notifications behaves in the same way as for the thin-edge device.
