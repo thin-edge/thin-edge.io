@@ -10,8 +10,8 @@ EOF
 }
 
 stop_a_service_if_running() {
-    status=$(systemctl show -p ActiveState --value "$1")
-    if [ "$status" == "active" ]; then
+    local_status=$(systemctl show -p ActiveState --value "$1")
+    if [ "$local_status" == "active" ]; then
         sudo systemctl stop "$1"
     fi
 }
@@ -25,8 +25,8 @@ stop_services() {
 }
 
 remove_or_purge_package_if_exists() {
-    status=$(dpkg -s "$2" | grep -w installed) && returncode=$? || returncode=$?
-    if [ "$status" == "Status: install ok installed" ]; then
+    local_status=$(dpkg -s "$2" | grep -w installed) && returncode=$? || returncode=$?
+    if [ "$local_status" == "Status: install ok installed" ]; then
         sudo apt --assume-yes "$1" "$2"
     fi
 }
