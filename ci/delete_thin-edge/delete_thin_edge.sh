@@ -10,9 +10,9 @@ EOF
 }
 
 stop_a_service_if_running() {
-    status=$(systemctl show -p ActiveState --value $1)
+    status=$(systemctl show -p ActiveState --value "$1")
     if [ "$status" == "active" ]; then
-        sudo systemctl stop $1
+        sudo systemctl stop "$1"
     fi
 }
 
@@ -25,9 +25,9 @@ stop_services() {
 }
 
 remove_or_purge_package_if_exists() {
-    status=$(dpkg -s $2 | grep -w installed) && returncode=$? || returncode=$?
+    status=$(dpkg -s "$2" | grep -w installed) && returncode=$? || returncode=$?
     if [ "$status" == "Status: install ok installed" ]; then
-        sudo apt --assume-yes $1 $2
+        sudo apt --assume-yes "$1" "$2"
     fi
 }
 
@@ -41,7 +41,7 @@ remove_packages() {
 
 disconnect_if_connected_to_cloud() {
     if [ -f "/etc/tedge/mosquitto-conf/$1-bridge.conf" ]; then
-        sudo tedge disconnect $1
+        sudo tedge disconnect "$1"
     fi
 }
 
@@ -74,9 +74,9 @@ purge_thin_edge_io() {
 
 if [ $# -eq 1 ]; then
     DELETE_OR_PURGE=$1
-    if [ $DELETE_OR_PURGE == 'remove' ]; then
+    if [ "$DELETE_OR_PURGE" == 'remove' ]; then
         remove_thin_edge_io
-    elif [ $DELETE_OR_PURGE == 'purge' ]; then
+    elif [ "$DELETE_OR_PURGE" == 'purge' ]; then
         purge_thin_edge_io
     fi
 else
