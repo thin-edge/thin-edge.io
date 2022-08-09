@@ -274,14 +274,6 @@ The HTTP filetransfer feature of the `tedge_agent` provides the service to trans
     * a temporary file can be uploaded with an HTTP PUT request to `http://<thin-edge IP address>/tedge/tmpfiles`,
       where the HTTP response contains a _temporary URL_.
     * a temporary file can be downloaded with an HTTP GET request to `http://<ip address of thin-edge device>/<temporary URL>`
-    * a local API allows the plugin to access (expose and obtains) a temporary file directly via the thin-edge device's local filesystem
-
-    * TODO: Investigate and decide about filetransfer's local API in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307), according to topics below:
- 
-      * local API must avoid that there are two copies of the same file at any point in time
-      * local API must avoid that the file content is transfered/copied from one to another place, when the plugin _obtains_ the file. 
-        Instead just the directory link may change (as it is the case for bash `mv` command).
-
 
 ## Fetching configuration file from child device to cloud
 
@@ -312,26 +304,14 @@ The HTTP filetransfer feature of the `tedge_agent` provides the service to trans
        
     TODO: Investigate and decide about topic structure and payload in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307). Unhappy paths also to be considered here.
   
-  * C8Y config plugin: recognizes the MQTT notification about the uploaded file and the temprary-URL, 
-                       and uses the filetransfers local API to obtain the file from the _temprary URL_ to some plugin specific local filesystem path (e.g. `/tmp/c8y-cfg-plugin/<childid>_<cfg-type>`.
+  * C8Y config plugin: recognizes the MQTT notification about the uploaded file and the _temprary URL_, 
+                       and downloads the file using HTTP the filetransfer with the _temprary URL_ to some temporary location.
+  
+    Example for HTTP GET request: `http://<ip address of thin-edge device>/<temporary URL>`
 
-    * TODO: Investigate and decide about filetransfer's local API in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307), according to topics below:
- 
-      * local API must avoid that there are two copies of the same file at any point in time
-      * local API must avoid that the file content is transfered/copied from one to another place, when the plugin _obtains_ the file. 
-        Instead just the directory link may change (as it is the case for bash `mv` command).
-      * file is removed from filetransfer's specific folder when the file was successfully obtained to the plugin's path.
-      
-      Reasons for requirements above: Saving disc-space and CPU resources for large files.
+  * C8Y config plugin: sends the downloaded file to C8Y
 
-    * TO-BE-DEFINED:
-    
-      * Decide which error paths to be considered.
-      * Decide if any timeout to be considerd when waiting for upload notification from external device.
-
-  * C8Y config plugin: sends the obtained file to C8Y
-
-  * C8Y config plugin: removed the file form local filesystem
+  * C8Y config plugin: removes the downloaded file from temporary location
   
 
 ## Pushing configuration file update to child device from cloud
@@ -343,18 +323,12 @@ The HTTP filetransfer feature of the `tedge_agent` provides the service to trans
     Example: `524,child1,http://www.my.url,bar.conf`
   * C8Y config plugin: downloads the file based on the URL received from C8Y, to some temporary location
 
-  * C8Y config plugin: uses the filetransfers local API to expose the file to the filetransfer feature. The filetransfer feature responses a _temporary URL_, that is later used to uniquely access that exposed file.
-
+  * C8Y config plugin: uploads the file to the thin-edge filetransfer feature, and removes it from the temporary location
+  
+    HTTP PUT request: `http://<ip address of thin-edge devicee>/tedge/tmpfiles`
+    
+    The response from the HTTP filetransfer feature contains a _temporary URL_, that is later used to uniquely access that uploaded file.<br/>
     Example for a _temporary URL_: `/tedge/tmpfiles/<random string>`
-
-    * TODO: Investigate and decide about filetransfer's local API in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307), according to topics below:
- 
-      * local API must avoid that there are two copies of the same file at any point in time
-      * local API must avoid that the file content is transfered/copied from one to another place, when the plugin _exposes_ the file. 
-        Instead just the directory link may change (as it is the case for bash `mv` command).
-      * file is removed from plugin's source folder, when the file was successfully exposed.
-      
-      Reasons for requirements above: Saving disc-space and CPU resources for large files.
 
   * C8Y config plugin: notifies the external device `child1` via MQTT to download the new configuration from the thin-edge device with the _temporary URL_.
 
