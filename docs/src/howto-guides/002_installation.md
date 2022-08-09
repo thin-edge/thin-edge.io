@@ -131,6 +131,43 @@ Eg:
 dpkg -i tedge_mapper_0.5.0_armhf.deb
 ```
 
+## Uninstall `thin-edge.io`
+The `thin-edge.io` can be uninstalled using a script, the script can be downloaded
+from below mentioned location. 
+
+```shell
+https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh
+```
+The uninstall script provides options as shown below.
+
+```shell
+USAGE:
+    delete-thin-edge_io [COMMAND]
+    
+COMMANDS:
+    remove     Uninstall thin-edge.io with keeping configuration files
+    purge      Uninstall thin-edge.io and also remove configuration files
+```
+
+> Note: The uninstall script removes/purges the core thin-edge.io packages like `tedge, tedge_mapper, and tedge_agent`.
+> It also removes/purges the thin-edge.io plugins like `tedge_apt_plugin, c8y_log_plugin, and c8y_configuration_plugin`.
+
+###  `Remove` thin-edge.io
+Use uninstall script as shown below just to `remove` the `thin-edge.io` packages.
+
+```shell
+uninstall-thin-edge.io.sh remove
+```
+> Note: Removes just the thin-edge.io packages and does not remove the `configuration` files.
+
+### `Purge` thin-edge.io
+Use uninstall script as shown below to remove the thin-edge.io as well as to remove the `configuration` files that are 
+associated with these thin-edge.io packages.
+
+```shell
+uninstall-thin-edge.io.sh purge
+```
+
 ## Next steps
 
 1. [Connect your device to Cumulocity IoT](../tutorials/connect-c8y.md)
