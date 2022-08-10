@@ -27,7 +27,7 @@ jobs:
 
         - name: Enable cache
           # https://github.com/marketplace/actions/rust-cache
-          uses: Swatinem/rust-cache@v1
+          uses: Swatinem/rust-cache@v2
 
         - name: Build tedge
           uses: actions-rs/cargo@v1

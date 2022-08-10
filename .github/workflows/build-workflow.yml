@@ -23,7 +23,7 @@ jobs:
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
 
       - name: Build packages for amd64
         run: ./ci/build_scripts/build_for_amd64.sh
@@ -61,7 +61,7 @@ jobs:
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
 
       - name: Build for ${{ matrix.target }}
         run: ./ci/build_scripts/build_for_arm.sh ${{ matrix.target }}
