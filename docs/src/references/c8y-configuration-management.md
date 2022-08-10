@@ -270,7 +270,7 @@ To fetching/pushing configuration files to/from external devices, the `c8y_confi
   
 The HTTP filetransfer feature of the `tedge_agent` provides the service to transfer files from external devices to the local filesystem of the thin-edge device's, and vice versa.
 
-  * `tedge_agent` serves PUT and GET requests for temporary file up/downloads
+  * `tedge_agent` serves PUT, GET and DELETE requests for temporary file upload, download and removal
     * a temporary file can be uploaded with an HTTP PUT request to `http://<thin-edge IP address>/tedge/tmpfiles`,
       where the HTTP response contains a _temporary URL_.
     * a temporary file can be downloaded with an HTTP GET request to `http://<ip address of thin-edge device>/<temporary URL>`
