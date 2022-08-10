@@ -132,11 +132,11 @@ dpkg -i tedge_mapper_0.5.0_armhf.deb
 ```
 
 ## Uninstall `thin-edge.io`
-The `thin-edge.io` can be uninstalled using a script, the script can be downloaded
+The `thin-edge.io` can be uninstalled using a script, that can be downloaded
 from below mentioned location. 
 
 ```shell
-https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh
+wget https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh
 ```
 The uninstall script provides options as shown below.
 
@@ -149,8 +149,9 @@ COMMANDS:
     purge      Uninstall thin-edge.io and also remove configuration files
 ```
 
-> Note: The uninstall script removes/purges the core thin-edge.io packages like `tedge, tedge_mapper, and tedge_agent`.
-> It also removes/purges the thin-edge.io plugins like `tedge_apt_plugin, c8y_log_plugin, and c8y_configuration_plugin`.
+> Note: The uninstall script removes/purges the core thin-edge.io packages like `tedge,
+ tedge_mapper, and tedge_agent` as well as thin-edge.io plugins like `tedge_apt_plugin,
+ c8y_log_plugin, c8y_configuration_plugin` etc.
 
 ###  `Remove` thin-edge.io
 Use uninstall script as shown below just to `remove` the `thin-edge.io` packages.
