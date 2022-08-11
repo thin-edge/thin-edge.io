@@ -56,7 +56,8 @@ sleep 2
 
 # Retrieve the Cumulocity device ID
 
-export C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant "$C8YTENANT" --user "$C8YUSERNAME" --device "$C8YDEVICE" --url "$C8YURL")
+C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant "$C8YTENANT" --user "$C8YUSERNAME" --device "$C8YDEVICE" --url "$C8YURL")
+export C8YDEVICEID
 
 echo "The new device ID is: " "$C8YDEVICEID"
 
