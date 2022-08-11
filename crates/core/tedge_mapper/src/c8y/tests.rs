@@ -375,60 +375,6 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
-async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
-    let broker = mqtt_tests::test_mqtt_broker();
-
-    let mut messages = broker
-        .messages_published_on("c8y/s/us/external_sensor")
-        .await;
-
-    // Start the C8Y Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
-
-    let _ = broker
-        .publish_with_opts(
-            "tedge/alarms/minor/temperature_high/external_sensor",
-            r#"{ "text": "Temperature high" }"#,
-            mqtt_channel::QoS::AtLeastOnce,
-            true,
-        )
-        .await
-        .unwrap();
-
-    let _ = broker
-        .publish_with_opts(
-            "tedge/alarms/minor/temperature_high/external_sensor",
-            r#"{ "text": "Temperature high" }"#,
-            mqtt_channel::QoS::AtLeastOnce,
-            true,
-        )
-        .await
-        .unwrap();
-
-    // Expect converted temperature alarm message
-    mqtt_tests::assert_received_all_expected(
-        &mut messages,
-        TEST_TIMEOUT_MS,
-        &["303,temperature_high"],
-    )
-    .await;
-
-    //Clear the previously published alarm
-    let _ = broker
-        .publish_with_opts(
-            "tedge/alarms/minor/temperature_high/external_sensor",
-            "",
-            mqtt_channel::QoS::AtLeastOnce,
-            true,
-        )
-        .await
-        .unwrap();
-
-    sm_mapper.abort();
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[serial]
 async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     let broker = mqtt_tests::test_mqtt_broker();
 
