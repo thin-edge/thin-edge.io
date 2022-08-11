@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 usage() {
     cat << EOF
@@ -49,7 +49,7 @@ extract_image_tag_from_args() {
 }
 
 if [ -z "$1" ]; then
-    echo "Provide at least one subcommand\n"
+    echo -e "Provide at least one subcommand\n"
     usage
     exit 1
 fi
