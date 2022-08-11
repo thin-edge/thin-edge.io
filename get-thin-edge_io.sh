@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 TYPE=${2:-full}
@@ -81,14 +81,14 @@ if [ -t 1 ]; then
     fi
 fi
 
-echo "${BLUE}Thank you for trying thin-edge.io! ${COLORRESET}\n"
+echo -e "${BLUE}Thank you for trying thin-edge.io! ${COLORRESET}\n"
 
 if [ -z "$VERSION" ]; then
     VERSION=0.7.3
 
-    echo "Version argument has not been provided, installing latest: ${BLUE}$VERSION${COLORRESET}"
+    echo -e "Version argument has not been provided, installing latest: ${BLUE}$VERSION${COLORRESET}"
     echo "To install a particular version use this script with the version as an argument."
-    echo "For example: ${BLUE}sudo ./get-thin-edge_io.sh $VERSION${COLORRESET}"
+    echo -e "For example: ${BLUE}sudo ./get-thin-edge_io.sh $VERSION${COLORRESET}"
 fi
 
 if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "armhf" ] || [ "$ARCH" = "amd64" ]; then
@@ -136,9 +136,9 @@ rm -R /tmp/tedge
 # Test if tedge command is there and working
 if tedge help >/dev/null;
 then
-    echo "\n${BLUE}thin-edge.io is now installed on your system!${COLORRESET}"
+    echo -e "\n${BLUE}thin-edge.io is now installed on your system!${COLORRESET}"
     echo ""
-    echo "You can go to our documentation to find next steps:${BLUE} https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/003_registration.md ${COLORRESET}"
+    echo -e "You can go to our documentation to find next steps:${BLUE} https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/003_registration.md ${COLORRESET}"
 else
-    echo "Something went wrong in the installation process please try the manual installation steps instead:\n https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/002_installation.md"
+    echo -e "Something went wrong in the installation process please try the manual installation steps instead:\n https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/002_installation.md"
 fi
