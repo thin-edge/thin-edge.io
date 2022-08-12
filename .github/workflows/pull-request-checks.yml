@@ -276,7 +276,6 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: build
-          args: --release
 
   cargo_build_arm7_32bit:
     name: cargo build for armv7 32bit
@@ -304,7 +303,7 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --release --target=armv7-unknown-linux-gnueabihf
+          args: --target=armv7-unknown-linux-gnueabihf
 
   cargo_build_tests_arm7_32bit:
     name: cargo build tests for armv7 32bit
