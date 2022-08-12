@@ -231,12 +231,6 @@ jobs:
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Cargo version
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: version
-
       - name: Cargo test
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
@@ -265,12 +259,6 @@ jobs:
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v2
-
-      - name: Cargo version
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: version
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
