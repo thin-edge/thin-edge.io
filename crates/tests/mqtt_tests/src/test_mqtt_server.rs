@@ -6,16 +6,7 @@ use std::{
 
 use futures::channel::mpsc::UnboundedReceiver;
 use librumqttd::{Broker, Config, ConnectionSettings, ConsoleSettings, ServerSettings};
-use once_cell::sync::Lazy;
 use rumqttc::QoS;
-
-const MQTT_TEST_PORT: u16 = 55555;
-
-static SERVER: Lazy<MqttProcessHandler> = Lazy::new(|| MqttProcessHandler::new(MQTT_TEST_PORT));
-
-pub fn test_mqtt_broker() -> &'static MqttProcessHandler {
-    Lazy::force(&SERVER)
-}
 
 pub struct MqttProcessHandler {
     pub port: u16,

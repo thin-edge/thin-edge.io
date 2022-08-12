@@ -185,10 +185,9 @@ mod tests {
     use tokio::time::sleep;
 
     #[tokio::test]
-    #[serial_test::serial]
     async fn a_valid_input_leads_to_a_translated_output() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
-        let broker = mqtt_tests::test_mqtt_broker();
+        let broker = mqtt_tests::test_mqtt_server::MqttProcessHandler::new(55800);
 
         // Given a mapper
         let name = "mapper_under_test";
@@ -231,10 +230,9 @@ mod tests {
     #[cfg(test)]
     use serde_json::json;
     #[tokio::test]
-    #[serial_test::serial]
     async fn health_check() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
-        let broker = mqtt_tests::test_mqtt_broker();
+        let broker = mqtt_tests::test_mqtt_server::MqttProcessHandler::new(55801);
 
         // Given a mapper
         let name = "mapper_under_test";

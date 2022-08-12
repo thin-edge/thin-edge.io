@@ -319,12 +319,11 @@ mod tests {
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    #[serial_test::serial]
     async fn test_message_dispatch() -> anyhow::Result<()> {
         let test_config_path = "/some/test/config";
         let test_config_type = "c8y-configuration-plugin";
 
-        let broker = mqtt_tests::test_mqtt_broker();
+        let broker = mqtt_tests::test_mqtt_server::MqttProcessHandler::new(55570);
 
         let mut messages = broker.messages_published_on("c8y/s/us").await;
 

@@ -29,7 +29,7 @@ mod tests {
     #[test_case(None)]
     #[tokio::test]
     async fn test_cli_pub_basic(qos: Option<&str>) -> Result<(), anyhow::Error> {
-        let broker = mqtt_tests::test_mqtt_broker();
+        let broker = mqtt_tests::test_mqtt_server::MqttProcessHandler::new(55590);
         let tmpfile = make_config(broker.port)?;
 
         let mut messages = broker.messages_published_on("topic").await;

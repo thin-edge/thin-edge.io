@@ -32,7 +32,7 @@ const MQTT_HOST: &str = "127.0.0.1";
 #[serial]
 async fn mapper_publishes_a_software_list_request() {
     // The test assures the mapper publishes request for software list on `tedge/commands/req/software/list`.
-    let broker = mqtt_tests::test_mqtt_broker();
+    let broker = MqttProcessHandler::new(55600);
 
     let mut messages = broker
         .messages_published_on("tedge/commands/req/software/list")
@@ -51,7 +51,7 @@ async fn mapper_publishes_a_software_list_request() {
 #[serial]
 async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8y_topic() {
     // The test assures the mapper publishes smartrest messages 114 and 500 on `c8y/s/us` which shall be send over to the cloud if bridge connection exists.
-    let broker = mqtt_tests::test_mqtt_broker();
+    let broker = MqttProcessHandler::new(55601);
     let mut messages = broker.messages_published_on("c8y/s/us").await;
 
     // Start SM Mapper
@@ -68,7 +68,7 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
 async fn mapper_publishes_software_update_request() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
     // and converts it to thin-edge json message published on `tedge/commands/req/software/update`.
-    let broker = mqtt_tests::test_mqtt_broker();
+    let broker = MqttProcessHandler::new(55602);
     let mut messages = broker
         .messages_published_on("tedge/commands/req/software/update")
         .await;
@@ -77,7 +77,7 @@ async fn mapper_publishes_software_update_request() {
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
     let _ = broker.publish("c8y/s/ds", smartrest).await.unwrap();
-    let _ = publish_a_fake_jwt_token(broker).await;
+    let _ = publish_a_fake_jwt_token(&broker).await;
 
     let expected_update_list = r#"
          "updateList": [
@@ -108,13 +108,13 @@ async fn mapper_publishes_software_update_request() {
 async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     // The test assures SM Mapper correctly receives software update response message on `tedge/commands/res/software/update`
     // and publishes status of the operation `501` on `c8y/s/us`
-    let broker = mqtt_tests::test_mqtt_broker();
+    let broker = MqttProcessHandler::new(55603);
 
     let mut messages = broker.messages_published_on("c8y/s/us").await;
 
     // Start SM Mapper
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
-    let _ = publish_a_fake_jwt_token(broker).await;
+    let _ = publish_a_fake_jwt_token(&broker).await;
 
     // Prepare and publish a software update status response message `executing` on `tedge/commands/res/software/update`.
     let json_response = r#"{
@@ -164,12 +164,12 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
-    let broker = mqtt_tests::test_mqtt_broker();
+    let broker = MqttProcessHandler::new(55604);
     let mut messages = broker.messages_published_on("c8y/s/us").await;
 
     // Start SM Mapper
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
-    let _ = publish_a_fake_jwt_token(broker).await;
+    let _ = publish_a_fake_jwt_token(&broker).await;
 
     // The agent publish an error
     let json_response = r#"
@@ -213,7 +213,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
 async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result<(), anyhow::Error>
 {
     // The test assures recovery and processing of messages by the SM-Mapper when it fails in the middle of the operation.
-    let broker = mqtt_tests::test_mqtt_broker();
+    let broker = MqttProcessHandler::new(55605);
 
     // When a software update request message is received on `c8y/s/ds` by the sm mapper,
     // converts it to thin-edge json message, publishes a request message on `tedge/commands/req/software/update`.
@@ -236,7 +236,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
     let _ = broker.publish("c8y/s/ds", smartrest).await.unwrap();
-    let _ = publish_a_fake_jwt_token(broker).await;
+    let _ = publish_a_fake_jwt_token(&broker).await;
 
     let expected_update_list = r#"
          "updateList": [
@@ -311,7 +311,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     // Then SM Mapper publishes an operation status message as failed `502,c8y_SoftwareUpdate,Action remove is not recognized. It must be install or delete.` on `c8/s/us`.
     // Then the subscriber that subscribed for messages on `c8/s/us` receives these messages and verifies them.
 
-    let broker = mqtt_tests::test_mqtt_broker();
+    let broker = MqttProcessHandler::new(55606);
 
     // Create a subscriber to receive messages on `c8y/s/us` topic.
     let mut messages = broker.messages_published_on("c8y/s/us").await;
@@ -334,7 +334,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn c8y_mapper_alarm_mapping_to_smartrest() {
-    let broker = mqtt_tests::test_mqtt_broker();
+    let broker = MqttProcessHandler::new(55607);
 
     let mut messages = broker.messages_published_on("c8y/s/us").await;
 
@@ -376,7 +376,7 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
-    let broker = mqtt_tests::test_mqtt_broker();
+    let broker = MqttProcessHandler::new(55608);
 
     let mut messages = broker
         .messages_published_on("c8y/s/us/external_sensor")
@@ -430,7 +430,7 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn c8y_mapper_syncs_pending_alarms_on_startup() {
-    let broker = mqtt_tests::test_mqtt_broker();
+    let broker = MqttProcessHandler::new(55609);
 
     let mut messages = broker.messages_published_on("c8y/s/us").await;
 
@@ -520,7 +520,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn c8y_mapper_syncs_pending_child_alarms_on_startup() {
-    let broker = mqtt_tests::test_mqtt_broker();
+    let broker = MqttProcessHandler::new(55610);
 
     let mut messages = broker
         .messages_published_on("c8y/s/us/external_sensor")

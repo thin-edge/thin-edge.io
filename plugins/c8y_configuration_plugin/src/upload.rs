@@ -166,11 +166,10 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    #[serial_test::serial]
     async fn test_handle_config_upload_request() -> anyhow::Result<()> {
         let config_path = Path::new("/some/test/config");
 
-        let broker = mqtt_tests::test_mqtt_broker();
+        let broker = mqtt_tests::test_mqtt_server::MqttProcessHandler::new(55700);
         let mqtt_config = mqtt_channel::Config::default()
             .with_port(broker.port)
             .with_subscriptions(mqtt_channel::TopicFilter::new_unchecked(

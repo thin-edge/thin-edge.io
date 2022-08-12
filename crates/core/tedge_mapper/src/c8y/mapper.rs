@@ -128,7 +128,7 @@ mod tests {
     use c8y_api::http_proxy::MockC8yJwtTokenRetriever;
     use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
     use mockito::mock;
-    use mqtt_tests::{assert_received_all_expected, test_mqtt_broker};
+    use mqtt_tests::assert_received_all_expected;
     use serde_json::json;
     use std::time::Duration;
     use tedge_test_utils::fs::TempTedgeDir;
@@ -202,7 +202,7 @@ mod tests {
             .unwrap(),
         );
 
-        let broker = test_mqtt_broker();
+        let broker = mqtt_tests::test_mqtt_server::MqttProcessHandler::new(55580);
 
         let mut mapper = create_mapper(
             CUMULOCITY_MAPPER_NAME_TEST,
