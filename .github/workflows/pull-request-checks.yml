@@ -223,6 +223,9 @@ jobs:
       - name: enable toolchain via github action
         uses: dtolnay/rust-toolchain@1.63.0
 
+      - name: Install mold linker
+        uses: rui314/setup-mold@v1
+
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v2
@@ -260,6 +263,9 @@ jobs:
 
       - name: enable toolchain via github action
         uses: dtolnay/rust-toolchain@1.63.0
+
+      - name: Install mold linker
+        uses: rui314/setup-mold@v1
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
