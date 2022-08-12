@@ -187,7 +187,7 @@ mod tests {
     #[tokio::test]
     async fn a_valid_input_leads_to_a_translated_output() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
-        let broker = mqtt_tests::test_mqtt_server::MqttProcessHandler::new(55800);
+        let broker = mqtt_tests::test_mqtt_server::MqttProcessHandler::new(55800, 3800);
 
         // Given a mapper
         let name = "mapper_under_test";
@@ -232,7 +232,7 @@ mod tests {
     #[tokio::test]
     async fn health_check() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
-        let broker = mqtt_tests::test_mqtt_server::MqttProcessHandler::new(55801);
+        let broker = mqtt_tests::test_mqtt_server::MqttProcessHandler::new(55801, 3801);
 
         // Given a mapper
         let name = "mapper_under_test";

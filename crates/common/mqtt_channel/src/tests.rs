@@ -11,7 +11,7 @@ mod tests {
     #[tokio::test]
     async fn subscribing_to_messages() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
-        let broker = MqttProcessHandler::new(55551);
+        let broker = MqttProcessHandler::new(55551, 3551);
         let mqtt_config = Config::default().with_port(broker.port);
 
         // A client subscribes to a topic on connect
@@ -67,7 +67,7 @@ mod tests {
     #[tokio::test]
     async fn subscribing_to_many_topics() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
-        let broker = MqttProcessHandler::new(55552);
+        let broker = MqttProcessHandler::new(55552, 3552);
         let mqtt_config = Config::default().with_port(broker.port);
 
         // A client can subscribe to many topics
@@ -121,7 +121,7 @@ mod tests {
     #[tokio::test]
     async fn publishing_messages() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
-        let broker = MqttProcessHandler::new(55553);
+        let broker = MqttProcessHandler::new(55553, 3553);
         let mqtt_config = Config::default().with_port(broker.port);
 
         let mut all_messages = broker.messages_published_on("#").await;
@@ -155,7 +155,7 @@ mod tests {
     #[tokio::test]
     async fn implementing_a_message_mapper() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
-        let broker = MqttProcessHandler::new(55554);
+        let broker = MqttProcessHandler::new(55554, 3554);
         let mqtt_config = Config::default().with_port(broker.port);
 
         // and an MQTT connection with input and output topics
@@ -201,7 +201,7 @@ mod tests {
     #[tokio::test]
     async fn receiving_messages_while_not_connected() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
-        let broker = MqttProcessHandler::new(55555);
+        let broker = MqttProcessHandler::new(55555, 3555);
         let mqtt_config = Config::default().with_port(broker.port);
 
         // A client that connects with a well-known session name, subscribing to some topic.
@@ -275,7 +275,7 @@ mod tests {
         assert_eq!(expected, output.collect().await);
 
         // This very same client can be tested with an MQTT broker
-        let broker = MqttProcessHandler::new(55556);
+        let broker = MqttProcessHandler::new(55556, 3556);
         let mqtt_config = Config::default().with_port(broker.port);
         let mut out_messages = broker.messages_published_on("out/topic").await;
 
@@ -303,7 +303,7 @@ mod tests {
     #[tokio::test]
     async fn creating_a_session() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
-        let broker = MqttProcessHandler::new(55557);
+        let broker = MqttProcessHandler::new(55557, 3557);
         let mqtt_config = Config::default().with_port(broker.port);
 
         // Given an MQTT config with a well-known session name
@@ -348,7 +348,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_session_must_have_a_name() {
-        let broker = MqttProcessHandler::new(55558);
+        let broker = MqttProcessHandler::new(55558, 3558);
         let mqtt_config = Config::default().with_port(broker.port);
 
         let result = init_session(&mqtt_config).await;
@@ -358,7 +358,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_named_session_must_not_set_clean_session() {
-        let broker = MqttProcessHandler::new(55559);
+        let broker = MqttProcessHandler::new(55559, 3559);
         let mqtt_config = Config::default()
             .with_port(broker.port)
             .with_session_name("useless name")
@@ -372,7 +372,7 @@ mod tests {
     #[tokio::test]
     async fn cleaning_a_session() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
-        let broker = MqttProcessHandler::new(55560);
+        let broker = MqttProcessHandler::new(55560, 3560);
         let mqtt_config = Config::default().with_port(broker.port);
 
         // Given an MQTT config with a well-known session name
@@ -418,7 +418,7 @@ mod tests {
 
     #[tokio::test]
     async fn to_be_cleared_a_session_must_have_a_name() {
-        let broker = MqttProcessHandler::new(55561);
+        let broker = MqttProcessHandler::new(55561, 3561);
         let mqtt_config = Config::default().with_port(broker.port);
 
         let result = clear_session(&mqtt_config).await;
@@ -428,7 +428,7 @@ mod tests {
 
     #[tokio::test]
     async fn subscription_failures() {
-        let broker = MqttProcessHandler::new(55562);
+        let broker = MqttProcessHandler::new(55562, 3562);
         let mqtt_config = Config::default().with_port(broker.port);
 
         let topic = TopicFilter::new_unchecked("test/topic");
@@ -443,7 +443,7 @@ mod tests {
 
     #[tokio::test]
     async fn ensure_that_all_messages_are_sent_before_disconnect() -> Result<(), anyhow::Error> {
-        let broker = MqttProcessHandler::new(55563);
+        let broker = MqttProcessHandler::new(55563, 3563);
         let topic = "data/topic";
         let mut messages = broker.messages_published_on(topic).await;
 

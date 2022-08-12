@@ -323,7 +323,7 @@ mod tests {
         let test_config_path = "/some/test/config";
         let test_config_type = "c8y-configuration-plugin";
 
-        let broker = mqtt_tests::test_mqtt_server::MqttProcessHandler::new(55570);
+        let broker = mqtt_tests::test_mqtt_server::MqttProcessHandler::new(55570, 3570);
 
         let mut messages = broker.messages_published_on("c8y/s/us").await;
 

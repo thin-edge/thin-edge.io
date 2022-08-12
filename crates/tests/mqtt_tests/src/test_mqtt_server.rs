@@ -13,8 +13,8 @@ pub struct MqttProcessHandler {
 }
 
 impl MqttProcessHandler {
-    pub fn new(port: u16) -> MqttProcessHandler {
-        spawn_broker(port);
+    pub fn new(port: u16, console_port: u16) -> MqttProcessHandler {
+        spawn_broker(port, console_port);
         MqttProcessHandler { port }
     }
 
@@ -61,8 +61,8 @@ impl MqttProcessHandler {
     }
 }
 
-fn spawn_broker(port: u16) {
-    let config = get_rumqttd_config(port);
+fn spawn_broker(port: u16, console_port: u16) {
+    let config = get_rumqttd_config(port, console_port);
     let mut broker = Broker::new(config);
     let mut tx = broker.link("localclient").unwrap();
 
@@ -101,7 +101,7 @@ fn spawn_broker(port: u16) {
     });
 }
 
-fn get_rumqttd_config(port: u16) -> Config {
+fn get_rumqttd_config(port: u16, console_port: u16) -> Config {
     let router_config = librumqttd::rumqttlog::Config {
         id: 0,
         dir: "/tmp/rumqttd".into(),
@@ -131,7 +131,7 @@ fn get_rumqttd_config(port: u16) -> Config {
     servers.insert("1".to_string(), server_config);
 
     let console_settings = ConsoleSettings {
-        listen: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 3030)),
+        listen: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), console_port)),
     };
 
     librumqttd::Config {

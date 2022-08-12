@@ -202,7 +202,7 @@ mod tests {
             .unwrap(),
         );
 
-        let broker = mqtt_tests::test_mqtt_server::MqttProcessHandler::new(55580);
+        let broker = mqtt_tests::test_mqtt_server::MqttProcessHandler::new(55580, 3580);
 
         let mut mapper = create_mapper(
             CUMULOCITY_MAPPER_NAME_TEST,
