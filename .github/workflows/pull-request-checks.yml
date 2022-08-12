@@ -214,7 +214,8 @@ jobs:
     runs-on: Ubuntu-20.04
     env:
       RUSTFLAGS: -D warnings
-    needs: [cargo-fmt, cargo-clippy]
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
     steps:
       - name: Checkout
@@ -255,7 +256,8 @@ jobs:
     runs-on: Ubuntu-20.04
     env:
       RUSTFLAGS: -D warnings
-    needs: [cargo-fmt, cargo-clippy]
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
     steps:
       - name: Checkout
@@ -288,7 +290,8 @@ jobs:
     runs-on: Ubuntu-20.04
     env:
       RUSTFLAGS: -D warnings
-    needs: [cargo-fmt, cargo-clippy]
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
     steps:
       - name: checkout
@@ -316,7 +319,8 @@ jobs:
     runs-on: Ubuntu-20.04
     env:
       RUSTFLAGS: -D warnings
-    needs: [cargo-fmt, cargo-clippy]
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
     steps:
       - name: checkout
