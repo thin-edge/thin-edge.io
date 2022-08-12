@@ -265,6 +265,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: build
+          args: --all-features
 
   cargo_build_arm7_32bit:
     name: cargo build for armv7 32bit
