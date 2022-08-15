@@ -177,10 +177,11 @@ To manage configuration files for child-devices the `c8y_configuration_plugin` a
 * Consuming/Providing files from/to thin-edge via network
   * any configuration file exchange to/from the external child device is handled by an HTTP based filetransfer service provided by thin-edge
 
-## Managing Supported Configuration List of child devices 
+## Managing Supported Configuration List of child devices
 
-The child device (external or logical) sends an MQTT message to `tedge/meta/plugin/configuration/<childid>` to announce it's configuration management capability to thin-edge.
-That MQTT message contains all configurations the external device provides.
+To announce a child-devices configuration management capability child-device provisioning as described in [child-device reference documentation](child-devices.md#1-child-device-provisioning) is used.
+
+The `capability specific JSON object` for `c8y_configuration_plugin` contains all configurations the external device provides.
 Thereby each configuration appears with a `type` and with an optional field `path`.
 
 The MQTT message is as below:
@@ -189,12 +190,10 @@ The MQTT message is as below:
 {
    "configurations": [
      {
-       "type": "<config type 1>",
-       "path": "</path/to/file/file 1>"
+       "type": "<config type 1>"
      },
      {
-       "type": "<config type 2>",
-       "path": "</path/to/file/file 2>"
+       "type": "<config type 2>"
      },
      ...
    ]
@@ -206,18 +205,16 @@ Example:
 {
    "configurations": [
      {
-       "type": "foo.conf",
-       "path": "/etc/child1/foo.conf"
+       "type": "foo.conf"
      },
      {
-       "type": "bar.conf",
-       "path": "/etc/child1/bar.conf"
+       "type": "bar.conf"
      }
    ]
 }
 ```
 
-If path is specified, the `c8y_configuration_plugin` consumes/provides the configuration-file from/to the given local filesystem path. If the field `path` is not given, the `c8y_configuration_plugin` make use of the HTTP filetransfer feature of the `tedge_agent` to consume/provide the configuration-file (see [section below](#details-to-aspect-2-filetransfer-fromto-external-device) for more details about HTTP filetransfer). The first case is intended for local processes (running on the thin-edge device) that represent a child-device, and the latter case is intended for external devices.
+The `c8y_configuration_plugin` make use of the HTTP filetransfer feature of the `tedge_agent` to consume/provide the configuration-file (see [section below](#details-to-aspect-2-filetransfer-fromto-external-device) for more details about HTTP filetransfer). 
 
 Whenever the `c8y_configuration_plugin` receivces that MQTT message it stores all contained information to a child-specific TOML file in `/etc/tedge/c8y/<childid>/c8y-configuration-plugin.toml`. When the file already exists it will be replaced with the new content. The format of that TOML file is according to section [Configuration](#configuration) above. Each individual child's TOML file is stored in a subfolder, where the subfolder name is the `childid`.
 

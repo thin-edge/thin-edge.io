@@ -7,6 +7,10 @@ Child-Device support allows to connect devices (e.g. sensors, actors, PLCs, any 
   the physical device thin-edge is running on
 - **external-device**:
   some kind of physical device that is connected to the _thin-edge device_ (e.g. a PLC, a fieldbus device, a sensor or any other kind of device)
+- **logical child-device**:
+  a process running on the _thin-edge device_ that makes use of thin-edge's child-device API to be represented as individual device in the cloud
+- **child-device**:
+  a _logical child-device_ or an _external-device_ that makes use of thin-edge's child-device API to be represented as individual device in the cloud
 - **child-device twin**:
   the entity in the cloud, that represents the child-device; in case of C8Y that is a managed object
 - **child-id**:
@@ -16,22 +20,76 @@ Child-Device support allows to connect devices (e.g. sensors, actors, PLCs, any 
 
 ## Principles
 
-Child-device support basically focuses on two aspects:
-   1) enable external-devices to access thin-edge APIs via network
-   2) equip thin-edge APIs to associate consumed/provided data with a child-device twin in the cloud
+Child-device support basically focuses on three aspects:
+   1) provision the child-device, i.e. making thin-edge and the cloud aware of the child-device (external or logical) 
+   2) thin-egde APIs provided on network, to enable external APIs to access them
+   3) associate consumed/provided data of a child-device (external or logical) to it's child-device twin in the cloud
 
-Each thin-edge API that supports child-devices applies to both aspects. As of now APIs as below have child-device support:
+### (1) Child-Device Provisioning
+
+A newly attached child-device (external or logical) must be once provisioned. The provisioning phase of a child-device includes:
+  1) creating cloud's child-device twin
+  2) declaring all supported capabilities of the child-device to its child device twin
+     (i.E. declaring all _supported operations_ and all _types_ per supported operation, as _config types_, _log types_, ...)
+     (i.e. declaring all operations supported by the device like configuration management, software management etc and further metadata per supported operation, like _config types_, _log types_, _software list_ etc)
+
+There are two option to create the cloud's child-device twin and declaring all supported capabilities. 
+
+On the one hand a cloud's _child-device twin_ can be created upfront (e.g. with some customer-specific cloud-site backend), and also all capabilities can be declared that way to the new twin. Then the child-device on the device site (external or logical) relies on that existing twin.
+
+On the other hand a child-device (external or logical) can announce it's capabilities to thin-edge to provoke thin-edge creating the cloud's child-device twin and declaring all capabilities on that child-device twin. 
+
+##### Announcing child-device capabilities by the child-device it-self
+
+To announce it's capabilities the child device (external or logical) sends an MQTT message to `tedge/meta/<childid>`. The MQTT message is as below:
+
+```json
+{
+   "device-name": "<optional name of that child-device>",
+   "device-type": "<optional type of that child-device>",
+   "<capability 1>": <capability specific JSON object>,
+   "<capability 2>": <capability specific JSON object>,
+   // [...]
+}
+```
+
+Thereby the fields are as below:
+   * `device-name` is an optional human readble device-name, visible in the cloud. If the field is not contained in the JSON message the `childid` of the topic structure is used as device-name.
+   * `device-type` is an optional device-type string assigned to the cloud's child-device twin. If the field is not contained in the JSON message the value `thin-edge.io-child` is used as device-type string.
+   * each field `<capability i>` represents a capability (e.g. `configurations` for _Configuration management_). The format of each `capability specific JSON object` is specific to the coresponding capability. For details see the documentation for coresponding capabilitie's API (e.g. [Configuration files for child devices](../references/c8y-configuration-management.md#configuration-files-for-child-devices)). 
+     Section [thin-egde APIs provided on network](#2-thin-egde-apis-provided-on-network-and-3-associate-consumedprovided-to-child-device-twins) below lists all APIs provided by thin-edge for child-device support.
+
+Example:
+```json
+{
+   "device-name": "My Child-Device",
+   "device-type": "type1",
+   "configurations": [ // capabilities for feature Configuration Management 
+     {
+       "type": "foo.conf"
+     },
+     {
+       "type": "bar.conf"
+     }
+   ]
+}
+```
+
+Whenever that MQTT message is sent to the thin-edge device:
+  1) thin-edge assures the child-device twin exists, and creates it if it does not exist.
+  2) each software component that provides an included capability (e.g. the C8Y Configuration Plugin for `configurations`) takes care to define all necessary capabilities to the coresponding cloud's child-device twin (i.E. _supported operations_, and list of provided types as e.g. _configuration types_).
+
+As result of the child-device creation thin-edge publishs an empty to MQTT topic `tedge/meta/success/<childid>` on successs, or a message to `tedge/meta/failed/<childid>`. The message on `tedge/meta/failed/<childid>` can optional contain a fail reaon as plain text.
+
+### (2) thin-egde APIs provided on network<br/> and (3) associate consumed/provided to child-device twins
+
+Each thin-edge API that supports child-devices covers both aspects. As of now, the following APIs have child-device support:
    * Measurements, see [Sending a measurements to a child-devices](../tutorials/send-thin-edge-data.md#sending-measurements-to-child-devices)
    * Events, see [Sending an event to a child-device](../tutorials/send-events.md#sending-an-event-for-a-childexternal-device-to-the-cloud)
    * Configuration Management, see [Configuration files for child devices](../references/c8y-configuration-management.md#configuration-files-for-child-devices)
 
-## Child-Device Provisioning
 
-The provisioning phase of a child-device includes:
-  1) creating the child-device twin in the cloud
-  2) declaring all supported capabilities on the child-device twin in the cloud
-     
-     (i.E. declaring all _supported operations_ and all _types_ per supported operation, as _config types_, _log types_, ...) 
+## User Journeys
 
 The user journeys below outline the behaviour of external-devices, thin-edge and the cloud for the provisioning phase.
 
@@ -42,7 +100,7 @@ The user journeys below outline the behaviour of external-devices, thin-edge and
   - device-operator: connects new external-device to the thin-edge device by cable
   - device-operator: powers up the external-device
     - the external-device announces it-self to thin-edge with it's _child-id_ and capabilities (e.g. provided _configuration types_, _log types_, ...)
-      Details, see: [_configuration types_](https://github.com/thin-edge/thin-edge.io/blob/cdab5683de9f9e0f34fa42a094ac399f6dbdc1e3/docs/src/references/c8y-configuration-management.md#managing-supported-configuration-list-of-child-devices)
+      Details, see: [Child-Device provisioning](#1-child-device-provisioning) above
     - thin-edge creates the child-device twin in the cloud, based on the _child-id_ reported by the external-evice
 
       NOTE: Cloud's operation to create the child-device twin is idempotent, so trying to create a child-device twin again that already exist does not harm.

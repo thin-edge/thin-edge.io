@@ -54,6 +54,7 @@
     - [Architecture FAQ](architecture/faq.md)
     - [Platform support](supported-platforms.md)
     - [Init System configuration](references/init-system-config.md)
+    - [Child Device Support](references/child-devices.md)
 
   - [Write my own software management plugin](./tutorials/write-my-software-management-plugin.md)
   - [Device Configuration Management using Cumulocity](./references/c8y-configuration-management.md)
