@@ -303,7 +303,7 @@ mod tests {
     #[tokio::test]
     async fn creating_a_session() -> Result<(), anyhow::Error> {
         // Given an MQTT broker
-        let broker = MqttProcessHandler::new(55557, 3557);
+        let broker = MqttProcessHandler::new(55564, 3564);
         let mqtt_config = Config::default().with_port(broker.port);
 
         // Given an MQTT config with a well-known session name
