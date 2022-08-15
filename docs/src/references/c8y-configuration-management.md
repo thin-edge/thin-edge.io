@@ -179,7 +179,9 @@ To manage configuration files for child-devices the `c8y_configuration_plugin` a
 
 ## Managing Supported Configuration List of child devices 
 
-The external device sends an MQTT message to `tedge/meta/plugin/configuration/<childid>` to announce it's configuration management capability to thin-edge. That MQTT message contains all configurations the external device provides. Thereby each configuration appears with a `type` and with an optional field `path`.
+The child device (external or logical) sends an MQTT message to `tedge/meta/plugin/configuration/<childid>` to announce it's configuration management capability to thin-edge.
+That MQTT message contains all configurations the external device provides.
+Thereby each configuration appears with a `type` and with an optional field `path`.
 
 The MQTT message is as below:
 
