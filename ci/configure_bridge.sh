@@ -15,6 +15,7 @@ URL=$(echo "$C8YURL" | cut -c 9- - )
 
 sudo tedge cert remove
 
+# shellcheck disable=SC2153
 sudo tedge cert create --device-id="$C8YDEVICE"
 
 sudo tedge cert show
