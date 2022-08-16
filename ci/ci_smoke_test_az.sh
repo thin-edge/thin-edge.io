@@ -23,6 +23,7 @@ echo "DEVICE Thumbprint is $THUMB"
 
 
 python3 -m venv ~/env-eventhub
+# shellcheck disable=SC1090
 source ~/env-eventhub/bin/activate
 pip install azure-eventhub
 

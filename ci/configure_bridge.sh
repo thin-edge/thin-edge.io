@@ -36,6 +36,7 @@ sudo -E tedge cert upload c8y --user "$C8YUSERNAME"
 cat /etc/mosquitto/mosquitto.conf
 
 python3 -m venv ~/env-c8y-api
+# shellcheck disable=SC1090
 source ~/env-c8y-api/bin/activate
 pip3 install c8y-api retry-decorator
 

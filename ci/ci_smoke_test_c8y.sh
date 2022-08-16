@@ -75,6 +75,7 @@ fi
 PATH=$PATH:/usr/sbin
 
 python3 -m venv ~/env-c8y-api
+# shellcheck disable=SC1090
 source ~/env-c8y-api/bin/activate
 pip3 install c8y-api retry-decorator
 C8YDEVICEID=$(python3 ./ci/find_device_id.py --tenant "$C8YTENANT" --user "$C8YUSERNAME" --device "$C8YDEVICE" --url "$C8YURL")
