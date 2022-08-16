@@ -280,7 +280,7 @@ A configuration file snapshot is fetched from an external device as illustrated 
 
 ```mermaid
 sequenceDiagram
-    participant External Device
+    participant Child Device
     participant Tedge Agent
     participant C8Y Cfg Plugin
     participant C8Y Cloud
