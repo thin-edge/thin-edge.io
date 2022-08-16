@@ -76,8 +76,8 @@ async fn mapper_publishes_software_update_request() {
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
-    let _ = broker.publish("c8y/s/ds", smartrest).await.unwrap();
-    let _ = publish_a_fake_jwt_token(broker).await;
+    broker.publish("c8y/s/ds", smartrest).await.unwrap();
+    publish_a_fake_jwt_token(broker).await;
 
     let expected_update_list = r#"
          "updateList": [
@@ -114,7 +114,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
 
     // Start SM Mapper
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
-    let _ = publish_a_fake_jwt_token(broker).await;
+    publish_a_fake_jwt_token(broker).await;
 
     // Prepare and publish a software update status response message `executing` on `tedge/commands/res/software/update`.
     let json_response = r#"{
@@ -122,7 +122,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
             "status": "executing"
         }"#;
 
-    let _ = broker
+    broker
         .publish("tedge/commands/res/software/update", json_response)
         .await
         .unwrap();
@@ -145,7 +145,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
                 ]}
             ]}"#;
 
-    let _ = broker
+    broker
         .publish("tedge/commands/res/software/update", json_response)
         .await
         .unwrap();
@@ -169,7 +169,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
 
     // Start SM Mapper
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
-    let _ = publish_a_fake_jwt_token(broker).await;
+    publish_a_fake_jwt_token(broker).await;
 
     // The agent publish an error
     let json_response = r#"
@@ -191,7 +191,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
             "failures":[]
         }"#;
 
-    let _ = broker
+    broker
         .publish("tedge/commands/res/software/update", json_response)
         .await
         .unwrap();
@@ -235,8 +235,8 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
 
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
-    let _ = broker.publish("c8y/s/ds", smartrest).await.unwrap();
-    let _ = publish_a_fake_jwt_token(broker).await;
+    broker.publish("c8y/s/ds", smartrest).await.unwrap();
+    publish_a_fake_jwt_token(broker).await;
 
     let expected_update_list = r#"
          "updateList": [
@@ -278,7 +278,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
                 ]
             }
         ]}"#;
-    let _ = broker
+    broker
         .publish(
             "tedge/commands/res/software/update",
             &remove_whitespace(json_response),
@@ -319,7 +319,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     let (_tmp_dir, _sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
     // Prepare and publish a c8y_SoftwareUpdate smartrest request on `c8y/s/ds` that contains a wrong action `remove`, that is not known by c8y.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,remove"#;
-    let _ = broker.publish("c8y/s/ds", smartrest).await.unwrap();
+    broker.publish("c8y/s/ds", smartrest).await.unwrap();
 
     // Expect a 501 (executing) followed by a 502 (failed)
     mqtt_tests::assert_received_all_expected(
@@ -341,7 +341,7 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
     // Start the C8Y Mapper
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
 
-    let _ = broker
+    broker
         .publish_with_opts(
             "tedge/alarms/major/temperature_alarm",
             r#"{ "text": "Temperature high" }"#,
@@ -360,7 +360,7 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
     .await;
 
     //Clear the previously published alarm
-    let _ = broker
+    broker
         .publish_with_opts(
             "tedge/alarms/major/temperature_alarm",
             "",
@@ -385,7 +385,7 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     // Start the C8Y Mapper
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
 
-    let _ = broker
+    broker
         .publish_with_opts(
             "tedge/alarms/minor/temperature_high/external_sensor",
             r#"{ "text": "Temperature high" }"#,
@@ -395,7 +395,7 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
         .await
         .unwrap();
 
-    let _ = broker
+    broker
         .publish_with_opts(
             "tedge/alarms/minor/temperature_high/external_sensor",
             r#"{ "text": "Temperature high" }"#,
@@ -414,7 +414,7 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     .await;
 
     //Clear the previously published alarm
-    let _ = broker
+    broker
         .publish_with_opts(
             "tedge/alarms/minor/temperature_high/external_sensor",
             "",
@@ -441,7 +441,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
         .messages_published_on("c8y-internal/alarms/critical/temperature_alarm")
         .await;
 
-    let _ = broker
+    broker
         .publish_with_opts(
             "tedge/alarms/critical/temperature_alarm",
             r#"{ "text": "Temperature very high" }"#,
@@ -471,7 +471,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     sm_mapper.abort();
 
     //Publish a new alarm while the mapper is down
-    let _ = broker
+    broker
         .publish_with_opts(
             "tedge/alarms/critical/pressure_alarm",
             r#"{ "text": "Pressure very high" }"#,
@@ -483,8 +483,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
 
     // Ignored until the rumqttd broker bug that doesn't handle empty retained messages
     //Clear the existing alarm while the mapper is down
-    // let _ = broker
-    //     .publish_with_opts(
+    // broker.publish_with_opts(
     //         "tedge/alarms/critical/temperature_alarm",
     //         "",
     //         mqtt_channel::QoS::AtLeastOnce,
@@ -533,7 +532,7 @@ async fn c8y_mapper_syncs_pending_child_alarms_on_startup() {
         .messages_published_on("c8y-internal/alarms/critical/temperature_alarm/external_sensor")
         .await;
 
-    let _ = broker
+    broker
         .publish_with_opts(
             "tedge/alarms/critical/temperature_alarm/external_sensor",
             r#"{ "text": "Temperature very high" }"#,
@@ -563,7 +562,7 @@ async fn c8y_mapper_syncs_pending_child_alarms_on_startup() {
     sm_mapper.abort();
 
     //Publish a new alarm while the mapper is down
-    let _ = broker
+    broker
         .publish_with_opts(
             "tedge/alarms/critical/pressure_alarm/external_sensor",
             r#"{ "text": "Pressure very high" }"#,
@@ -573,7 +572,7 @@ async fn c8y_mapper_syncs_pending_child_alarms_on_startup() {
         .await
         .unwrap();
 
-    let _ = broker
+    broker
         .publish_with_opts(
             "tedge/alarms/critical/pressure_alarm/external_sensor",
             r#"{ "text": "Pressure very high" }"#,
@@ -585,8 +584,7 @@ async fn c8y_mapper_syncs_pending_child_alarms_on_startup() {
 
     // Ignored until the rumqttd broker bug that doesn't handle empty retained messages
     //Clear the existing alarm while the mapper is down
-    // let _ = broker
-    //     .publish_with_opts(
+    // broker.publish_with_opts(
     //         "tedge/alarms/critical/temperature_alarm/external_sensor",
     //         "",
     //         mqtt_channel::QoS::AtLeastOnce,
@@ -1169,5 +1167,5 @@ fn remove_whitespace(s: &str) -> String {
 }
 
 async fn publish_a_fake_jwt_token(broker: &MqttProcessHandler) {
-    let _ = broker.publish("c8y/s/dat", "71,1111").await.unwrap();
+    broker.publish("c8y/s/dat", "71,1111").await.unwrap();
 }
