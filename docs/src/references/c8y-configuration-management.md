@@ -285,7 +285,7 @@ sequenceDiagram
         C8Y Cfg Plugin->>External Device: 2: MQTT notification for "child1": Requst to upload config type "bar1"
 
         External Device->>Tedge Agent: 3: HTTP PUT /tedge/tmpfiles (content of config-file "bar1")
-        Tedge Agent->>External Device: 4: HTTP Response, contains tmp-URL, used to access uploaded file
+        Tedge Agent-->>External Device: 4: HTTP Response, contains tmp-URL, used to access uploaded file
 
         External Device->>C8Y Cfg Plugin: 5: MQTT Notification: file uploaded to <tmp-URL>
         
@@ -319,7 +319,7 @@ sequenceDiagram
   Example: `tedge/configuration/res/retrieve/bar.conf/child1`<br/>
   Payload: ` <temporary URL> `
        
-    TODO: Investigate and decide about topic structure and payload in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307). Unhappy paths also to be considered here.
+  TODO: Investigate and decide about topic structure and payload in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307). Unhappy paths also to be considered here.
   
   6) C8Y config plugin: recognizes the MQTT notification about the uploaded file and the _temprary URL_, 
                        and downloads the file using HTTP file transfer with the _temporary URL_ to some temporary location.
@@ -347,7 +347,7 @@ sequenceDiagram
 
         C8Y Cfg Plugin->>C8Y Cloud: 2: Download new config-file (url)
         C8Y Cfg Plugin->>Tedge Agent: 3: HTTP PUT /tedge/tmpfiles (content of new config-file)
-        Tedge Agent->>C8Y Cfg Plugin: 4: HTTP Response, contains tmp-URL, used to access uploaded file
+        Tedge Agent-->>C8Y Cfg Plugin: 4: HTTP Response, contains tmp-URL, used to access uploaded file
 
         C8Y Cfg Plugin->>External Device: 5: MQTT notification for "child1": Requst to download config type "bar1" on <tmp-url>
 
