@@ -181,8 +181,7 @@ To manage configuration files for child-devices the `c8y_configuration_plugin` a
 
 To announce a child-devices configuration management capability child-device provisioning as described in [child-device reference documentation](child-devices.md#1-child-device-provisioning) is used.
 
-The `capability specific JSON object` for `c8y_configuration_plugin` contains all configurations the external device provides.
-Thereby each configuration appears with a `type` and with an optional field `path`.
+The `capability specific JSON object` for `c8y_configuration_plugin` contains all configurations the external device provides. Thereby each configuration appears with a `type`.
 
 The MQTT message is as below:
 
