@@ -179,9 +179,31 @@ To manage configuration files for child-devices the `c8y_configuration_plugin` a
 
 ## Managing Supported Configuration List of child devices
 
-To announce a child-devices configuration management capability child-device provisioning as described in [child-device reference documentation](child-devices.md#1-child-device-provisioning) is used.
+* The `c8y_configuration_plugin` stores and reads the list of supported configuration files for each child-device from a TOML file; similar to whats described in section [Configuration](#configuration) above. Thereby for each child-device an individual TOML file is used.
+* A child-device can also announce its supported configuration files itself to the `c8y_configuration_plugin` via MQTT. The `c8y_configuration_plugin` uses the information received via MQTT to store it into the child-devices individual TOML file.
 
-The `capability specific JSON object` for `c8y_configuration_plugin` contains all configurations the external device provides. Thereby each configuration appears with a `type`.
+Each child-devices configuration TOML file is expected in a subfolder, where the subfolder name is treated as `childid`.
+
+Example:
+
+```
+$ tree /etc/tedge/c8y/
+/etc/tedge/c8y/
+├── c8y-configuration-plugin.toml
+├── child1
+│   └── c8y-configuration-plugin.toml
+└── child2
+    └── c8y-configuration-plugin.toml
+```
+
+Here the plugin serves configuration management for the thin-edge device it-self, for a child-device with childid `child1` and for a child-device with childid `child2`. The contents of all three configuration files follow the details described in section [Configuration](#configuration) above, with one difference: The field `path` is optional. If `path` is not defined the `c8y_configuration_plugin` make use of the HTTP file transfer feature of the `tedge_agent` to consume/provide the configuration-file (see [section below](#details-to-aspect-2-filetransfer-fromto-external-device) for more details about HTTP file transfer).
+
+The `c8y_configuration_plugin` adds per child-device the file `/etc/tedge/c8y/<childid>/c8y-configuration-plugin.toml` implicitely to the child-devices configuration file list. So the list can always be configured from the cloud. The `type` for this self configuration file is `c8y-configuration-plugin`.
+
+### Announcing list of supported configuration files by the child-device itself
+A child-device can use the child-device provisioning API to announce its supported configuration files itself via MQTT to the `c8y_configuration_plugin`. For details about the child-device provisioning API see the [child-device reference documentation](child-devices.md#1-child-device-provisioning).
+
+The provisioning APIs `capability specific JSON object` for `c8y_configuration_plugin` contains all configurations the child-device provides. Thereby each configuration appears with a `type`.
 
 The MQTT message is as below:
 
@@ -213,23 +235,7 @@ Example:
 }
 ```
 
-The `c8y_configuration_plugin` make use of the HTTP file transfer feature of the `tedge_agent` to consume/provide the configuration-file (see [section below](#details-to-aspect-2-filetransfer-fromto-external-device) for more details about HTTP file transfer). 
-
-Whenever the `c8y_configuration_plugin` receivces that MQTT message it stores all contained information to a child-specific TOML file in `/etc/tedge/c8y/<childid>/c8y-configuration-plugin.toml`. When the file already exists it will be replaced with the new content. The format of that TOML file is according to section [Configuration](#configuration) above. Each individual child's TOML file is stored in a subfolder, where the subfolder name is the `childid`.
-
-Example:
-
-```bash
-    $ tree /etc/tedge/c8y/
-    /etc/tedge/c8y/
-    ├── c8y-configuration-plugin.toml
-    ├── child1
-    │   └── c8y-configuration-plugin.toml
-    └── child2
-        └── c8y-configuration-plugin.toml    
-```
-
-The `c8y_configuration_plugin` adds per child-device the file `/etc/tedge/c8y/<childid>/c8y-configuration-plugin.toml` implicitely to the child-device's config listed. So the list can always be configured from the cloud. The `type` for this self configuration file is `c8y-configuration-plugin`.
+Whenever the `c8y_configuration_plugin` receivces that MQTT message it stores all contained information to the child-devices individual TOML file in `/etc/tedge/c8y/<childid>/c8y-configuration-plugin.toml`. When the file already exists it will be replaced with the new content.
 
 Each time a child-device's TOML is modified (e.g. due to an incoming MQTT message, an incoming new configuration snapshot from the cloud, or a modification by a local process) the `c8y_configuration_plugin` takes care to define all necessary capabilities to the coresponding cloud's child-device twin. These are:
   - declaring _supported operations_ for configuration management: `c8y_UploadConfigFile` and `c8y_DownloadConfigFile`
@@ -250,7 +256,7 @@ As soon as those files are created, thin-edge's _Supported Operations API_ takes
 
 **Declaring 'provided configuration types'**
 
-For all configuration `types` provided by the external device, the plugin sends an MQTT message to C8Y. Thereby all `types` will be combined in one single message as below:
+For all configuration `types` provided by the child-device, the plugin sends an MQTT message to C8Y. Thereby all `types` will be combined in one single message as below:
   - topic: `c8y/s/us/<childid>`
   - payload: `119,<type 1>,<type 2>,<type 3>,...`<br/>
     Example: `119,foo.conf,bar.conf`
