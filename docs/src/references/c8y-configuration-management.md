@@ -261,10 +261,6 @@ Note that the `c8y_configuration_plugin` does **not** create any child-device tw
 
 ## Fetching/Pushing configuration file from/to the external device
 
-To fetching/pushing configuration files to/from external devices, the `c8y_configuration_plugin` make use of the HTTP filetransfer feature of the `tedge_agent` is used (see section ....).
-
-
-
 To fetch/push configuration files to/from external devices, the `c8y_configuration_plugin` makes use of file-transfer HTTP APIs of the `tedge_agent`.
   
 The HTTP filetransfer feature of the `tedge_agent` provides the service to transfer files from external devices to the local filesystem of the thin-edge device's, and vice versa.
