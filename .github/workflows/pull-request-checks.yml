@@ -44,6 +44,36 @@ jobs:
             workflows:
               - '.github/workflows/**'
 
+  #
+  # Checking that Cargo.lock is up to date
+  #
+  check-lockfile-uptodate:
+    name: Check whether Cargo.lock is up to date
+    runs-on: ubuntu-20.04
+    outputs:
+      locks: ${{ steps.filter.outputs.locks }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@1.58.1
+        with:
+          targets: armv7-unknown-linux-gnueabihf
+
+      - uses: Swatinem/rust-cache@v1
+
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            locks:
+              - '**/Cargo.toml'
+
+      - name: Check whether lockfile is up to date
+        if: steps.filter.outputs.locks == 'true'
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --locked
+
   udeps:
     name: Check for unused dependencies
     runs-on: ubuntu-latest
