@@ -302,29 +302,29 @@ sequenceDiagram
 
   2) C8Y config plugin: notifies the external device `child1` via MQTT to upload its current configuration to the thin-edge device
 
-    Topic: `tedge/configuration/req/retrieve/{config type}/{childid}`<br/>
-    Example: `tedge/configuration/req/retrieve/bar.conf/child1`<br/>  
-    TODO: Investigate and decide about topic structure and payload in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307) 
+  Topic: `tedge/configuration/req/retrieve/{config type}/{childid}`<br/>
+  Example: `tedge/configuration/req/retrieve/bar.conf/child1`<br/>  
+  TODO: Investigate and decide about topic structure and payload in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307) 
          
   3) external device child1: Uploads configuration file to the thin-edge device with the HTTP file transfer feature.
   
-    HTTP PUT request: `http://<ip address of thin-edge devicee>/tedge/tmpfiles`
+  HTTP PUT request: `http://<ip address of thin-edge devicee>/tedge/tmpfiles`
     
   4) The response from the HTTP file transfer feature contains a _temporary URL_, that is later used to uniquely access that uploaded file.<br/>
      Example for a _temporary URL_: `/tedge/tmpfiles/<random string>`
 
   5) external device child1: notifies the the plugin via MQTT about succeeded upload and the _temporary URL_.
  
-    Topic: `tedge/configuration/res/retrieve/{config type}/{childid}`<br/>
-    Example: `tedge/configuration/res/retrieve/bar.conf/child1`<br/>
-    Payload: ` <temporary URL> `
+  Topic: `tedge/configuration/res/retrieve/{config type}/{childid}`<br/>
+  Example: `tedge/configuration/res/retrieve/bar.conf/child1`<br/>
+  Payload: ` <temporary URL> `
        
     TODO: Investigate and decide about topic structure and payload in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307). Unhappy paths also to be considered here.
   
   6) C8Y config plugin: recognizes the MQTT notification about the uploaded file and the _temprary URL_, 
                        and downloads the file using HTTP file transfer with the _temporary URL_ to some temporary location.
   
-    Example for HTTP GET request: `http://<ip address of thin-edge device>/<temporary URL>`
+  Example for HTTP GET request: `http://<ip address of thin-edge device>/<temporary URL>`
 
   7) C8Y config plugin: sends the downloaded file to C8Y
 
@@ -363,33 +363,33 @@ sequenceDiagram
 
   3) C8Y config plugin: uploads the file to the thin-edge file transfer feature, and removes it from the temporary location
   
-    HTTP PUT request: `http://<ip address of thin-edge devicee>/tedge/tmpfiles`
+  HTTP PUT request: `http://<ip address of thin-edge devicee>/tedge/tmpfiles`
     
   4) The response from the HTTP file transfer feature contains a _temporary URL_, that is later used to uniquely access that uploaded file.<br/>
     Example for a _temporary URL_: `/tedge/tmpfiles/<random string>`
 
   5) C8Y config plugin: notifies the external device `child1` via MQTT to download the new configuration from the thin-edge device with the _temporary URL_.
 
-    Topic: `tedge/configuration/req/send/{config type}/{childid}`<br/>
-    Example: `tedge/configuration/req/send/bar.conf/child1`<br/>  
-    Payload: ` <temporary URL> `<br/>
-    TODO: Investigate and decide about topic structure and payload in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307) 
+  Topic: `tedge/configuration/req/send/{config type}/{childid}`<br/>
+  Example: `tedge/configuration/req/send/bar.conf/child1`<br/>  
+  Payload: ` <temporary URL> `<br/>
+  TODO: Investigate and decide about topic structure and payload in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307) 
 
   6) external device child1: Downloads configuration file from the thin-edge device with the HTTP file transfer feature and the _temporary URL_, and file transfer removes the file from its local filesystem folder.
   
-    Example for HTTP GET request: `http://<ip address of thin-edge device>/<temporary URL>`
+  Example for HTTP GET request: `http://<ip address of thin-edge device>/<temporary URL>`
     
   7) external device child1: applies the new configuration and notifies the the plugin via MQTT about success.
  
-    Topic: `tedge/configuration/res/send/{config type}/{childid}`<br/>
-    Example: `tedge/configuration/res/send/bar.conf/child1`<br/>
+  Topic: `tedge/configuration/res/send/{config type}/{childid}`<br/>
+  Example: `tedge/configuration/res/send/bar.conf/child1`<br/>
        
-    TODO: Investigate and decide about topic structure and payload in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307). Unhappy paths also to be considered here.
+  TODO: Investigate and decide about topic structure and payload in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307). Unhappy paths also to be considered here.
 
   8) C8Y config plugin: recognizes the MQTT notification and sends the result to C8Y.
 
-    TO-BE-DEFINED:
+  TO-BE-DEFINED:
     
-      * Decide which error paths to be considered.
-      * Decide if any timeout to be considerd when waiting for upload notification from external device.
+   * Decide which error paths to be considered.
+   * Decide if any timeout to be considerd when waiting for upload notification from external device.
 
