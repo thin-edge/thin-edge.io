@@ -341,12 +341,11 @@ sequenceDiagram
     participant Tedge Agent
     participant C8Y Cfg Plugin
     participant C8Y Cloud
-    participant WebSpace
     
 
         C8Y Cloud->>C8Y Cfg Plugin: 1: ConfigDownloadRequest (type="bar1", childid="child1", url="some.url")
 
-        C8Y Cfg Plugin->>WebSpace: 2: Download new config-file (url)
+        C8Y Cfg Plugin->>C8Y Cloud: 2: Download new config-file (url)
         C8Y Cfg Plugin->>Tedge Agent: 3: HTTP PUT /tedge/tmpfiles (content of new config-file)
         Tedge Agent->>C8Y Cfg Plugin: 4: HTTP Response, contains tmp-URL, used to access uploaded file
 
