@@ -109,12 +109,15 @@ The user journeys below outline the behaviour of external-devices, thin-edge and
 
 #### User Journey 2: Connecting an external-device as new child-device, provisioning managed by a cloud-site backend
   - device-operator: creates the child-device twin in the cloud using some customer-specific backend; as _child-id_ the device-operator uses some UID that is known by the external-device (e.g. the external device's serial number or network address)
+  - device-operator: declares all capabilities to the child-device twin (i.E. all _supported operations_ and corresponding types per operations, as _config-types_, _log-types_, ...)
   - device-operator: connects new external-device to the thin-edge device by cable
   - device-operator: powers up the external-device
-    - the external-device announces it-self to thin-edge with it's _child-id_ and capabilities (e.g. provided _configuration types_, _log types_, ...)
-    - thin-edge tries to created the child-device twin in the cloud, even though that twin was already created upfront.
+    - the external-device announces it-self to thin-edge with it's _child-id_
+    - thin-edge tries to created the child-device twin in the cloud, even though that twin was already created upfront
 
       NOTE: Cloud's operation to create the child-device twin is idempotent, so trying to create a child-device twin that already exist does not harm.
-    - thin-edge declares all capabilities reported by the external-device to the child-device twin (i.E. all _supported operations_ and corresponding types per operations, as _config-types_, _log-types_, ...)
+
+    - thin-edge retrieves all declared capabilities from the child-device twin (e.g. provided _configuration types_, _log types_, ...) and send as response to the external-device
+
   - from that point the new external-device is ready in operation
 
