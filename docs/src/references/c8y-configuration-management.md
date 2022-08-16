@@ -169,11 +169,11 @@ Note that:
 
 To manage configuration files for child-devices the `c8y_configuration_plugin` aspects as below are relevant:
 
-* Associating with cloud's child-device twin, i.E. managing supported configuration list of child devices 
-  * an external child device declares its supported config-types to thin-edge via MQTT
-  * thin-edge maintaines the supported config-types of each child-device a separate config-file
-  * the plugin associates the reported config-type list from the external to its cloud device twin
-  * these config-list files per child-device is also managed by Configuration Management feature from C8Y
+* Associating configurations with cloud's child-device twin
+  * an external device declares its supported config-types to the plugin via MQTT, containing a child-id as reference to the child-device twin
+  * the plugin associates the reported config-type list from the external device to its cloud device twin matching the child-id
+  * the plugin stores the supported config-types of each child-device in a separate config-file
+  * the config-list files of each child-device is also managed by Configuration Management feature from C8Y
 * Consuming/Providing files from/to thin-edge via network
   * any configuration file exchange to/from the external child device is handled by an HTTP based filetransfer service provided by thin-edge
 
