@@ -5,6 +5,7 @@ set -euo pipefail
 PKG_DIR=$1
 
 # Load the package list as $EXTERNAL_ARM_PACKAGES, $RELEASE_PACKAGES
+# shellcheck disable=SC1091
 source ./ci/package_list.sh
 
 # Install pre-required packages

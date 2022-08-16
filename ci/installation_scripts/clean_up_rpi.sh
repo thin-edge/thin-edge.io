@@ -7,6 +7,7 @@ sudo tedge disconnect az
 sudo systemctl stop apama
 
 # Load the release package list as $RELEASE_PACKAGES
+# shellcheck disable=SC1091
 source ./ci/package_list.sh
 
 # Purge packages
