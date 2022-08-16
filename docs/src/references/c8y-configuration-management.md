@@ -163,7 +163,7 @@ Note that:
 * Since the type of configuration file is used as an MQTT topic name, the characters `#` and `+` cannot be used in a type name.
   If such a character is used in a type name (or in the path of a configuration file without explicit type),
   then the whole plugin configuration `/etc/tedge/c8y/c8y-configuration-plugin.toml` is considered ill-formed.
-* Notifications for child-devices and their external devices are handled differently, as configuration files are fetched/pushed from/to external devices via HTTP file transfer. Thereby notifications are part of the file transfer contract (details see section [Fetching/Pushing configuration file](#fetchingpushing-configuration-file-fromto-the-external-device) below).
+* Notifications for external child-devices are handled differently, as configuration files are fetched/pushed from/to external devices via HTTP file transfer. Thereby notifications are part of the file transfer contract (details see section [Fetching/Pushing configuration file](#fetchingpushing-configuration-file-fromto-the-external-device) below).
 
 ## Configuration files for child devices
 
