@@ -26,7 +26,7 @@ struct InnerJson {
     #[serde(rename = "externalSource")]
     external_source: Option<ExternalSource>,
 
-    value: Option<f64>,
+    value: Option<C8yJsonValue>,
 
     #[serde(with = "time::serde::rfc3339::option")]
     time: Option<OffsetDateTime>,
@@ -36,6 +36,11 @@ struct InnerJson {
 
     #[serde(flatten)]
     values: HashMap<String, f64>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct C8yJsonValue {
+    value: f64,
 }
 
 #[derive(Debug, serde::Serialize)]
