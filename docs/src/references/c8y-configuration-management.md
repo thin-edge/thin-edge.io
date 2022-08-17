@@ -287,53 +287,58 @@ sequenceDiagram
     participant C8Y Cloud
 
         C8Y Cloud->>C8Y Cfg Plugin: 1: ConfigUploadRequest (type="bar1", childid="child1")
-        C8Y Cfg Plugin->>External Device: 2: MQTT notification for "child1": Requst to upload config type "bar1"
+        C8Y Cfg Plugin->>C8Y Cfg Plugin: 2: Generate random "file-id"
+        C8Y Cfg Plugin->>External Device: 3: MQTT notification for "child1": Requst to upload config type "bar1", url "<file-id>" 
 
-        External Device->>Tedge Agent: 3: HTTP PUT /tedge/tmpfiles (content of config-file "bar1")
-        Tedge Agent-->>External Device: 4: HTTP Response, contains tmp-URL, used to access uploaded file
+        External Device->>C8Y Cfg Plugin: 4: MQTT notification: Operation Status upload config "Executing" 
 
-        External Device->>C8Y Cfg Plugin: 5: MQTT Notification: file uploaded to <tmp-URL>
+        External Device->>Tedge Agent: 5: HTTP PUT /tedge/tmpfiles/<file-id> (content of config-file "bar1")
+
+        External Device->>C8Y Cfg Plugin: 6: MQTT Notification: file uploaded
         
-        C8Y Cfg Plugin->>Tedge Agent: 6: HTTP GET <tmp-URL>
-        Tedge Agent->>Tedge Agent: 6.1: Remove tmp-file from local filesystem
-        C8Y Cfg Plugin->>C8Y Cloud: 7: Send downloaded config-file (device="child1", type="bar1") 
+        C8Y Cfg Plugin->>Tedge Agent: 7: HTTP GET /tedge/tmpfiles/<file-id>
+        C8Y Cfg Plugin->>Tedge Agent: 8: HTTP DELETE /tedge/tmpfiles/<file-id>
+        C8Y Cfg Plugin->>C8Y Cloud: 9: Send downloaded config-file (device="child1", type="bar1") 
 
-        C8Y Cfg Plugin->>C8Y Cfg Plugin: 8: Remove downloaded file from local filesystem
+        C8Y Cfg Plugin->>C8Y Cfg Plugin: 10: Remove downloaded file from local filesystem
 ```
 
   1) At some point C8Y cloud sends a ConfigUploadRequest for type `bar.conf` for `child1` arrives at C8Y config plugin.
     The format of C8Y SmartREST message for config retrieval operation is: `526,<childid>,<config type>`. See [C8Y SmartREST doc](https://cumulocity.com/guides/reference/smartrest-two/#upload-configuration-file-with-type-526)<br/>
     Example: `526,child1,bar.conf`
+  2) C8Y config plugin: generates a random file-id (prefixed with "configuration/") to be used as unique file-handle for HTTP file transfer.
 
-  2) C8Y config plugin: notifies the external device `child1` via MQTT to upload its current configuration to the thin-edge device
+  3) C8Y config plugin: notifies the external device `child1` via MQTT to upload its current configuration to the thin-edge device
 
   Topic: `tedge/configuration/req/retrieve/{config type}/{childid}`<br/>
   Example: `tedge/configuration/req/retrieve/bar.conf/child1`<br/>  
   TODO: Investigate and decide about topic structure and payload in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307) 
-         
-  3) external device child1: Uploads configuration file to the thin-edge device with the HTTP file transfer feature.
-  
-  HTTP PUT request: `http://<ip address of thin-edge devicee>/tedge/tmpfiles`
-    
-  4) The response from the HTTP file transfer feature contains a _temporary URL_, that is later used to uniquely access that uploaded file.<br/>
-     Example for a _temporary URL_: `/tedge/tmpfiles/<random string>`
 
-  5) external device child1: notifies the the plugin via MQTT about succeeded upload and the _temporary URL_.
+  4) external device child1: notifies the plugin about the "execution" status of the upload operations.
+
+  5) external device child1: Uploads configuration file to the thin-edge device with the HTTP file transfer feature.
+  
+  HTTP PUT request: `http://<ip address of thin-edge devicee>/tedge/tmpfiles/<file-id>`
+    
+  6) external device child1: notifies the the plugin via MQTT about succeeded upload.
  
   Topic: `tedge/configuration/res/retrieve/{config type}/{childid}`<br/>
   Example: `tedge/configuration/res/retrieve/bar.conf/child1`<br/>
-  Payload: ` <temporary URL> `
        
   TODO: Investigate and decide about topic structure and payload in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307). Unhappy paths also to be considered here.
   
-  6) C8Y config plugin: recognizes the MQTT notification about the uploaded file and the _temprary URL_, 
-                       and downloads the file using HTTP file transfer with the _temporary URL_ to some temporary location.
+  7) C8Y config plugin: recognizes the MQTT notification about the uploaded file, 
+                       and downloads the file using HTTP file transfer with the "file.id" to some temporary location.
   
-  Example for HTTP GET request: `http://<ip address of thin-edge device>/<temporary URL>`
+  Example for HTTP GET request: `http://<ip address of thin-edge device>/tmpfiles/<file-id>`
 
-  7) C8Y config plugin: sends the downloaded file to C8Y
+  8) C8Y config plugin: sends a delete request HTTP file transfer with the "file.id"
+  
+  Example for HTTP DELETE request: `http://<ip address of thin-edge device>/tmpfiles/<file-id>`
 
-  8) C8Y config plugin: removes the downloaded file from temporary location
+  9) C8Y config plugin: sends the downloaded file to C8Y
+
+  10) C8Y config plugin: removes the downloaded file from temporary location
   
 
 ## Pushing configuration file update to child device from cloud
@@ -349,16 +354,19 @@ sequenceDiagram
     
 
         C8Y Cloud->>C8Y Cfg Plugin: 1: ConfigDownloadRequest (type="bar1", childid="child1", url="some.url")
-
         C8Y Cfg Plugin->>C8Y Cloud: 2: Download new config-file (url)
-        C8Y Cfg Plugin->>Tedge Agent: 3: HTTP PUT /tedge/tmpfiles (content of new config-file)
-        Tedge Agent-->>C8Y Cfg Plugin: 4: HTTP Response, contains tmp-URL, used to access uploaded file
 
-        C8Y Cfg Plugin->>External Device: 5: MQTT notification for "child1": Requst to download config type "bar1" on <tmp-url>
+        C8Y Cfg Plugin->>C8Y Cfg Plugin: 3: Generate random "file-id"     
+        C8Y Cfg Plugin->>Tedge Agent: 4: HTTP PUT /tedge/tmpfiles/<file-id> (content of new config-file)
 
-        External Device->>Tedge Agent: 6: HTTP GET <tmp-url>
-        External Device->>External Device: 7: Apply downloaded file as config type "bar1"
-        External Device->>C8Y Cfg Plugin: 8: MQTT Notification: config type "bar1" applied successully
+        C8Y Cfg Plugin->>External Device: 5: MQTT notification for "child1": Requst to download config type "bar1" on url "file-id"
+
+        External Device->>C8Y Cfg Plugin: 6: MQTT notification: Operation Status upload config "Executing" 
+
+        External Device->>Tedge Agent: 7: HTTP GET /tedge/tmpfiles/<file-id>
+        External Device->>External Device: 8: Apply downloaded file as config type "bar1"
+        External Device->>C8Y Cfg Plugin: 9: MQTT Notification: config type "bar1" applied successully
+        C8Y Cfg Plugin->>Tedge Agent: 10: HTTP DELETE /tedge/tmpfiles/<file-id>
 ```
 
   1) At some point a ConfigDownloadRequest sent from cloud for type `bar.conf` for `child1` arrives at C8Y config plugin.
@@ -366,32 +374,37 @@ sequenceDiagram
     Example: `524,child1,http://www.my.url,bar.conf`
   2) C8Y config plugin: downloads the file based on the URL received from C8Y, to some temporary location
 
-  3) C8Y config plugin: uploads the file to the thin-edge file transfer feature, and removes it from the temporary location
-  
-  HTTP PUT request: `http://<ip address of thin-edge devicee>/tedge/tmpfiles`
-    
-  4) The response from the HTTP file transfer feature contains a _temporary URL_, that is later used to uniquely access that uploaded file.<br/>
-    Example for a _temporary URL_: `/tedge/tmpfiles/<random string>`
+  3) C8Y config plugin: generates a random file-id (prefixed with "configuration/") to be used as unique file-handle for HTTP file transfer.
 
-  5) C8Y config plugin: notifies the external device `child1` via MQTT to download the new configuration from the thin-edge device with the _temporary URL_.
+  4) C8Y config plugin: uploads the file to the thin-edge file transfer feature, and removes it from the temporary location
+  
+  HTTP PUT request: `http://<ip address of thin-edge device>/tedge/tmpfiles/<file-id>`
+    
+  5) C8Y config plugin: notifies the external device `child1` via MQTT to download the new configuration from the thin-edge device with url "file-id".
 
   Topic: `tedge/configuration/req/send/{config type}/{childid}`<br/>
   Example: `tedge/configuration/req/send/bar.conf/child1`<br/>  
-  Payload: ` <temporary URL> `<br/>
+  Payload: ` <file-id> `<br/>
   TODO: Investigate and decide about topic structure and payload in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307) 
 
-  6) external device child1: Downloads configuration file from the thin-edge device with the HTTP file transfer feature and the _temporary URL_, and file transfer removes the file from its local filesystem folder.
+  6) external device child1: notifies the plugin about the "execution" status of the upload operations.
+
+  7) external device child1: Downloads configuration file from the thin-edge device with the HTTP file transfer feature and the "file-id".
   
-  Example for HTTP GET request: `http://<ip address of thin-edge device>/<temporary URL>`
+  Example for HTTP GET request: `http://<ip address of thin-edge device>/tedge/tmpfiles/<file-id>`
     
-  7) external device child1: applies the new configuration and notifies the the plugin via MQTT about success.
+  8) external device child1: applies the new configuration.
  
+  9) external device child1: notifies the plugin via MQTT about success.
+
   Topic: `tedge/configuration/res/send/{config type}/{childid}`<br/>
   Example: `tedge/configuration/res/send/bar.conf/child1`<br/>
        
   TODO: Investigate and decide about topic structure and payload in scheduled prototype (https://github.com/thin-edge/thin-edge.io/issues/1307). Unhappy paths also to be considered here.
 
-  8) C8Y config plugin: recognizes the MQTT notification and sends the result to C8Y.
+  10) C8Y config plugin: sends a delete request HTTP file transfer with the "file.id"
+  
+  Example for HTTP DELETE request: `http://<ip address of thin-edge device>/tmpfiles/<file-id>`
 
   TO-BE-DEFINED:
     
