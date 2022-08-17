@@ -142,7 +142,7 @@ The uninstall script provides options as shown below.
 
 ```shell
 USAGE:
-    delete-thin-edge_io [COMMAND]
+   uninstall-thin-edge_io [COMMAND]
     
 COMMANDS:
     remove     Uninstall thin-edge.io with keeping configuration files
