@@ -19,16 +19,7 @@ The Supported Operations utilises the file system to add and remove operations. 
 The specification for the operation files is described in `thin-edge.io` specifications repository[src/supported-operations/README.md](https://github.com/thin-edge/thin-edge.io-specs/blob/main/src/supported-operations/README.md)
 
 Supported operations are declared in the cloud specific subdirectory of `/etc/tedge/operations` directory.
-
-#### Supported Operations for Child-Devices
-The Supported Operations API allows to declare supported operations for Child-Devices. Each file placed in a subfolder of the cloud specific subdirectory of `/etc/tedge/operations`, is associated with a cloud's child-device twin. Thereby the name of the subfolder is treated as child-device id.
-
-Example:
-```
-/etc/tedge/operations/c8y/child1/c8y_UploadConfigFile
-/etc/tedge/operations/c8y/child1/c8y_DownloadConfigFile
-```
-Here thin-edge declares both operations `c8y_UploadConfigFile` and `c8y_DownloadConfigFile` as supported to the cloud's child-device twin `child1`.
+Thereby the operations are organized with two levels of sub-directories, one per cloud and one per child device. More Details for child-devices see section [Supported Operations for child-devices](#supported-operations-for-child-devices) below.
 
 ## Custom Supported Operations
 
@@ -118,6 +109,17 @@ sudo rm /etc/tedge/operations/c8y/c8y_Restart
 ```
 
 Now the operation will be automatically removed from the list and the list will be sent to the cloud.
+
+### Supported Operations for Child-Devices
+
+The Supported Operations API allows to declare supported operations for Child-Devices. Each file placed in a subfolder of the cloud specific subdirectory of `/etc/tedge/operations`, is associated with a cloud's child-device twin. Thereby the name of the subfolder is treated as child-device id.
+
+Example:
+```
+/etc/tedge/operations/c8y/child1/c8y_UploadConfigFile
+/etc/tedge/operations/c8y/child1/c8y_DownloadConfigFile
+```
+In that example thin-edge declares both operations `c8y_UploadConfigFile` and `c8y_DownloadConfigFile` as supported to the cloud's child-device twin `child1`.
 
 ## Working with custom operations
 
