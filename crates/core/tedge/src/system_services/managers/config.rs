@@ -5,12 +5,12 @@ use std::path::PathBuf;
 
 pub const SERVICE_CONFIG_FILE: &str = "system.toml";
 
-#[derive(Deserialize, Debug, Default, PartialEq)]
+#[derive(Deserialize, Debug, Default, Eq, PartialEq)]
 pub struct SystemConfig {
     pub(crate) init: InitConfig,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct InitConfig {
     pub name: String,
