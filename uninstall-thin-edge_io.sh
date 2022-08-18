@@ -13,7 +13,7 @@ clouds=("c8y" "az")
 usage() {
     cat <<EOF
 USAGE:
-    delete-thin-edge_io [COMMAND]
+    uninstall-thin-edge_io.sh [COMMAND]
     
 COMMANDS:
     remove     Uninstall thin-edge.io with keeping configuration files
