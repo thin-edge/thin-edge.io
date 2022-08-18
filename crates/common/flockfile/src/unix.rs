@@ -116,15 +116,13 @@ pub fn check_another_instance_is_not_running(
             .as_path(),
     ) {
         Ok(file) => Ok(file),
-        Err(err) => {
-            return match &err {
-                FlockfileError::FromIo { path, .. } | FlockfileError::FromNix { path, .. } => {
-                    error!("Another instance of {} is running.", app_name);
-                    error!("Lock file path: {}", path.as_path().to_str().unwrap());
-                    Err(err)
-                }
+        Err(err) => match &err {
+            FlockfileError::FromIo { path, .. } | FlockfileError::FromNix { path, .. } => {
+                error!("Another instance of {} is running.", app_name);
+                error!("Lock file path: {}", path.as_path().to_str().unwrap());
+                Err(err)
             }
-        }
+        },
     }
 }
 
