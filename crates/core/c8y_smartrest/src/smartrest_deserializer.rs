@@ -176,9 +176,7 @@ where
     let date_string_end = &date_string.split('+').last();
     date_string = match date_string_end {
         Some(string) if !string.contains(':') => {
-            date_string[0..str_size - 2].to_string()
-                + ":"
-                + &date_string[str_size - 2..str_size].to_string()
+            date_string[0..str_size - 2].to_string() + ":" + &date_string[str_size - 2..str_size]
         }
         _ => date_string,
     };
