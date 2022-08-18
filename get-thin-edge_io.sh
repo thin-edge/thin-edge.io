@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 TYPE=${2:-full}
@@ -72,23 +72,15 @@ fi
 VERSION=$1
 ARCH=$(dpkg --print-architecture)
 
-BLUE=''
-COLORRESET=''
-if [ -t 1 ]; then
-    if [ "$(tput colors)" -ge 8 ]; then
-        BLUE='\033[1;34m'
-        COLORRESET='\033[0m'
-    fi
-fi
-
-echo -e "${BLUE}Thank you for trying thin-edge.io! ${COLORRESET}\n"
+echo "Thank you for trying thin-edge.io!"
+echo
 
 if [ -z "$VERSION" ]; then
     VERSION=0.7.3
 
-    echo -e "Version argument has not been provided, installing latest: ${BLUE}$VERSION${COLORRESET}"
+    echo "Version argument has not been provided, installing latest: $VERSION"
     echo "To install a particular version use this script with the version as an argument."
-    echo -e "For example: ${BLUE}sudo ./get-thin-edge_io.sh $VERSION${COLORRESET}"
+    echo "For example: sudo ./get-thin-edge_io.sh $VERSION"
 fi
 
 if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "armhf" ] || [ "$ARCH" = "amd64" ]; then
@@ -103,7 +95,7 @@ if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "armhf" ] || 
         exit 1
     fi
 
-    echo "${BLUE}Installing for architecture $ARCH ${COLORRESET}"
+    echo "Installing for architecture $ARCH"
 else
     echo "$ARCH is currently not supported. Currently supported are aarch64/arm64, armhf and amd64."
     exit 0
@@ -113,7 +105,7 @@ if [ -d "/tmp/tedge" ]; then
     rm -R /tmp/tedge
 fi
 
-echo "${BLUE}Installing mosquitto as prerequirement for thin-edge.io${COLORRESET}"
+echo "Installing mosquitto as prerequirement for thin-edge.io"
 apt install mosquitto -y
 
 case $TYPE in
@@ -136,9 +128,11 @@ rm -R /tmp/tedge
 # Test if tedge command is there and working
 if tedge help >/dev/null;
 then
-    echo -e "\n${BLUE}thin-edge.io is now installed on your system!${COLORRESET}"
+    echo
+    echo "thin-edge.io is now installed on your system!"
     echo ""
-    echo -e "You can go to our documentation to find next steps:${BLUE} https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/003_registration.md ${COLORRESET}"
+    echo "You can go to our documentation to find next steps: https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/003_registration.md"
 else
-    echo -e "Something went wrong in the installation process please try the manual installation steps instead:\n https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/002_installation.md"
+    echo "Something went wrong in the installation process please try the manual installation steps instead:"
+    echo "https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/002_installation.md"
 fi
