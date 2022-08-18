@@ -29,14 +29,14 @@ impl TryFrom<String> for CumulocitySoftwareUpdateActions {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestUpdateSoftware {
     pub message_id: String,
     pub external_id: String,
     pub update_list: Vec<SmartRestUpdateSoftwareModule>,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestUpdateSoftwareModule {
     pub software: String,
     pub version: Option<String>,
@@ -211,7 +211,7 @@ pub enum SmartRestVariant {
     SmartRestLogRequest,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestLogRequest {
     pub message_id: String,
     pub device: String,
@@ -226,7 +226,7 @@ pub struct SmartRestLogRequest {
 
 impl SmartRestRequestGeneric for SmartRestLogRequest {}
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestRestartRequest {
     pub message_id: String,
     pub device: String,
@@ -234,7 +234,7 @@ pub struct SmartRestRestartRequest {
 
 impl SmartRestRequestGeneric for SmartRestRestartRequest {}
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestConfigUploadRequest {
     pub message_id: String,
     pub device: String,
@@ -243,7 +243,7 @@ pub struct SmartRestConfigUploadRequest {
 
 impl SmartRestRequestGeneric for SmartRestConfigUploadRequest {}
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 pub struct SmartRestConfigDownloadRequest {
     pub message_id: String,
     pub device: String,
@@ -255,7 +255,7 @@ impl SmartRestRequestGeneric for SmartRestConfigDownloadRequest {}
 
 type JwtToken = String;
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, Eq, PartialEq)]
 pub struct SmartRestJwtResponse {
     id: u16,
     token: JwtToken,
