@@ -102,7 +102,7 @@ async fn download_config_file(
     Ok(())
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ConfigDownloadRequest {
     pub download_info: DownloadInfo,
     pub file_path: PathBuf,
