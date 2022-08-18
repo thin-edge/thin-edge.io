@@ -72,6 +72,12 @@ An already raised alarm can be cleared by sending an empty message with retained
 
 If alarms of different severities exist for a given alarm type, they must all be cleared separately as they're all treated as independent alarms.
 
+### Raising alarms from child devices
+
+Alarms for child devices can be raised by publishing the alarm payload to `tedge/alarms/<severity>/<alarm-type>/<child-device-id>` topic,
+where the `child-device-id` is the unique device id of the child device.
+The alarm payload structure is the same, as described in the previous section.
+
 ## Cloud data mapping
 
 If the device is connected to some supported IoT cloud platform, any alarms raised locally on thin-edge.io will be forwarded to the connected cloud platform as well.
@@ -91,6 +97,8 @@ For example the `temperature_high` alarm with `critical` severity described in t
 ```
 
 ... and is published to `c8y/s/us` topic which will get forwarded to the connected Cumulocity cloud instance.
+
+If the alarm is raised from a child device, the payload is published to `c8y/s/us/<child-device-id>` topic instead.
 
 Find more information about SmartREST representations for alarms in Cumulocity [here](https://cumulocity.com/guides/10.11.0/reference/smartrest-two/#alarm-templates)
 
