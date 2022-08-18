@@ -269,7 +269,7 @@ For all configuration `types` provided by the child-device, the plugin sends an 
   - payload: `119,c8y-config-plugin,<type 1>,<type 2>,<type 3>,...`<br/>
     Example: `119,c8y-config-plugin,foo.conf,bar.conf`
 
-Note that the `c8y_configuration_plugin` does **not** create any child-device twin in the cloud. Instead the clouds child-device twins must be created upfront.
+Note that the `c8y_configuration_plugin` does **not** create any child-device twin in the cloud. Instead, the cloud child-device twins must be created upfront.
 
 
 ## Fetching/Pushing configuration file from/to the external device
