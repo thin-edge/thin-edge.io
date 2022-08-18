@@ -4,14 +4,14 @@ use clock::Timestamp;
 use serde::Deserialize;
 
 /// In-memory representation of ThinEdge JSON alarm.
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, Eq, PartialEq)]
 pub struct ThinEdgeAlarm {
     pub name: String,
     pub severity: AlarmSeverity,
     pub data: Option<ThinEdgeAlarmData>,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, Eq, PartialEq)]
 pub enum AlarmSeverity {
     Critical,
     Major,
@@ -20,7 +20,7 @@ pub enum AlarmSeverity {
 }
 
 /// In-memory representation of ThinEdge JSON alarm payload
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, Eq, PartialEq)]
 pub struct ThinEdgeAlarmData {
     pub text: Option<String>,
 

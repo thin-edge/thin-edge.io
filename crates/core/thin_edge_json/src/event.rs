@@ -7,7 +7,7 @@ use serde_json::Value;
 use self::error::ThinEdgeJsonDeserializerError;
 
 /// In-memory representation of ThinEdge JSON event.
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ThinEdgeEvent {
     #[serde(rename = "type")]
     pub name: String,
@@ -17,7 +17,7 @@ pub struct ThinEdgeEvent {
 }
 
 /// In-memory representation of ThinEdge JSON event payload
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ThinEdgeEventData {
     pub text: Option<String>,
 
