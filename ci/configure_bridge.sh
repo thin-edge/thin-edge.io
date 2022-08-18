@@ -1,5 +1,14 @@
 #!/bin/bash
 
+for variable in C8YURL C8YUSERNAME C8YPASSWORD C8YDEVICE C8YTENANT C8YDEVICEID;
+do
+    declare -n var_ref=$variable
+    if [ -z "${var_ref}" ]; then
+        echo "$variable not set"
+        exit 1
+    fi
+done
+
 echo "Disconnect old bridge"
 
 # Disconnect - may fail if not there
