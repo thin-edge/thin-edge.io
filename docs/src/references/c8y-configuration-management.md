@@ -264,10 +264,10 @@ As soon as those files are created, thin-edge's _Supported Operations API_ takes
 
 **Declaring 'provided configuration types'**
 
-For all configuration `types` provided by the child-device, the plugin sends an MQTT message to C8Y. Thereby all `types` will be combined in one single message as below:
+For all configuration `types` provided by the child-device, the plugin sends an MQTT message to C8Y. Thereby all `types` of the child device's `c8y-config-plugin.toml` with the added type `c8y-config-plugin` to represent the config list TOML file itself will be combined in one single message:
   - topic: `c8y/s/us/<childid>`
-  - payload: `119,<type 1>,<type 2>,<type 3>,...`<br/>
-    Example: `119,foo.conf,bar.conf`
+  - payload: `119,c8y-config-plugin,<type 1>,<type 2>,<type 3>,...`<br/>
+    Example: `119,c8y-config-plugin,foo.conf,bar.conf`
 
 Note that the `c8y_configuration_plugin` does **not** create any child-device twin in the cloud. Instead the clouds child-device twins must be created upfront.
 
