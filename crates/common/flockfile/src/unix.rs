@@ -110,20 +110,15 @@ pub fn check_another_instance_is_not_running(
     app_name: &str,
     run_dir: &Path,
 ) -> Result<Flockfile, FlockfileError> {
-    match Flockfile::new_lock(
-        run_dir
-            .join(format!("{}{}.lock", LOCK_CHILD_DIRECTORY, app_name))
-            .as_path(),
-    ) {
-        Ok(file) => Ok(file),
-        Err(err) => match &err {
-            FlockfileError::FromIo { path, .. } | FlockfileError::FromNix { path, .. } => {
-                error!("Another instance of {} is running.", app_name);
-                error!("Lock file path: {}", path.as_path().to_str().unwrap());
-                Err(err)
-            }
-        },
-    }
+    let lock_path = run_dir.join(format!("{}{}.lock", LOCK_CHILD_DIRECTORY, app_name));
+
+    Flockfile::new_lock(lock_path.as_path()).map_err(|err| match &err {
+        FlockfileError::FromIo { path, .. } | FlockfileError::FromNix { path, .. } => {
+            error!("Another instance of {} is running.", app_name);
+            error!("Lock file path: {}", path.as_path().to_str().unwrap());
+            err
+        }
+    })
 }
 
 #[cfg(test)]
