@@ -41,14 +41,14 @@ pub async fn atomically_write_file_async(
         .await?;
 
     if let Err(err) = file.write_all(content).await {
-        let () = tokio_fs::remove_file(tempfile).await?;
+        tokio_fs::remove_file(tempfile).await?;
         return Err(err);
     }
 
     file.flush().await?;
 
     if let Err(err) = tokio_fs::rename(tempfile.as_ref(), dest).await {
-        let () = tokio_fs::remove_file(tempfile).await?;
+        tokio_fs::remove_file(tempfile).await?;
         return Err(err);
     }
 
@@ -69,7 +69,7 @@ mod tests {
 
         let content = "test_data";
 
-        let () = atomically_write_file_async(&temp_path, &destination_path, content.as_bytes())
+        atomically_write_file_async(&temp_path, &destination_path, content.as_bytes())
             .await
             .unwrap();
 

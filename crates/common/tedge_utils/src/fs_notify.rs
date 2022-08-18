@@ -536,8 +536,8 @@ mod tests {
             ttd_clone.file("file_b").with_raw_content("content");
         });
 
-        let () = fs_notify_handler.await.unwrap();
-        let () = file_handler.await.unwrap();
+        fs_notify_handler.await.unwrap();
+        file_handler.await.unwrap();
     }
 
     #[tokio::test]
@@ -568,7 +568,7 @@ mod tests {
             ttd_clone.file("file_c").delete(); // should match CREATE, DELETE
         });
 
-        let () = fs_notify_handler.await.unwrap();
-        let () = file_handler.await.unwrap();
+        fs_notify_handler.await.unwrap();
+        file_handler.await.unwrap();
     }
 }

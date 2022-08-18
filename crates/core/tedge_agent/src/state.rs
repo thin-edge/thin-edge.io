@@ -41,7 +41,7 @@ impl StateRepository for AgentStateRepository {
 
         // Create in path given through `config-dir` or `/etc/tedge` directory in case it does not exist yet
         if !self.state_repo_root.exists() {
-            let () = fs::create_dir(&self.state_repo_root).await?;
+            fs::create_dir(&self.state_repo_root).await?;
         }
 
         let mut temppath = self.state_repo_path.clone();
@@ -58,7 +58,7 @@ impl StateRepository for AgentStateRepository {
             operation_id: None,
             operation: None,
         };
-        let () = self.store(&state).await?;
+        self.store(&state).await?;
 
         Ok(state)
     }

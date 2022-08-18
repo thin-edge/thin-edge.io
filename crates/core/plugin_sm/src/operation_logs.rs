@@ -108,10 +108,10 @@ impl OperationLogs {
         for (key, value) in log_tracker.iter_mut() {
             if key.starts_with("software-list") {
                 // only allow one update list file in logs
-                let () = remove_old_logs(value, &self.log_dir, 1)?;
+                remove_old_logs(value, &self.log_dir, 1)?;
             } else {
                 // allow most recent five
-                let () = remove_old_logs(value, &self.log_dir, 5)?;
+                remove_old_logs(value, &self.log_dir, 5)?;
             }
         }
 

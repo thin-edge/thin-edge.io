@@ -12,7 +12,7 @@ pub mod restart_operation {
     ///
     /// # Example
     /// ```
-    /// let () = RestartOperationHelper::create_slash_run_file()?;
+    /// RestartOperationHelper::create_slash_run_file()?;
     /// ```
     pub fn create_slash_run_file(run_dir: &Path) -> Result<(), AgentError> {
         let path = &run_dir.join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART);

@@ -410,7 +410,7 @@ mod tests {
     fn get_dummy_plugin_tmp_path() -> PathBuf {
         let path = PathBuf::from_str("/tmp/.tedge_dummy_plugin").unwrap();
         if !&path.exists() {
-            let () = fs::create_dir(&path).unwrap();
+            fs::create_dir(&path).unwrap();
         }
         path
     }

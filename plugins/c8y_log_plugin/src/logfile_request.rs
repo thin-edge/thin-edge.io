@@ -217,7 +217,7 @@ async fn execute_logfile_request_operation(
     http_client: &mut JwtAuthHttpProxy,
 ) -> Result<(), anyhow::Error> {
     let executing = LogfileRequest::executing()?;
-    let () = mqtt_client.published.send(executing).await?;
+    mqtt_client.published.send(executing).await?;
 
     let log_content = new_read_logs(smartrest_request, plugin_config)?;
 
@@ -226,7 +226,7 @@ async fn execute_logfile_request_operation(
         .await?;
 
     let successful = LogfileRequest::successful(Some(upload_event_url))?;
-    let () = mqtt_client.published.send(successful).await?;
+    mqtt_client.published.send(successful).await?;
 
     info!("Log request processed.");
     Ok(())
@@ -249,7 +249,7 @@ pub async fn handle_logfile_request_operation(
         Err(error) => {
             let error_message = format!("Handling of operation failed with {}", error);
             let failed_msg = LogfileRequest::failed(error_message)?;
-            let () = mqtt_client.published.send(failed_msg).await?;
+            mqtt_client.published.send(failed_msg).await?;
             Err(error)
         }
     }
@@ -438,7 +438,7 @@ mod tests {
 
         let data = "this is the first line.\nthis is the second line.\nthis is the third line.\nthis is the forth line.\nthis is the fifth line.";
 
-        let () = log_file.write_all(data.as_bytes()).unwrap();
+        log_file.write_all(data.as_bytes()).unwrap();
 
         let line_counter = 0;
         let max_lines = 4;
@@ -491,7 +491,7 @@ mod tests {
 
             let data = &format!("this is the first line of {file_name}.\nthis is the second line of {file_name}.\nthis is the third line of {file_name}.\nthis is the forth line of {file_name}.\nthis is the fifth line of {file_name}.");
 
-            let () = log_file.write_all(data.as_bytes()).unwrap();
+            log_file.write_all(data.as_bytes()).unwrap();
 
             let new_mtime = FileTime::from_unix_time(m_time, 0);
             set_file_mtime(file_path, new_mtime).unwrap();

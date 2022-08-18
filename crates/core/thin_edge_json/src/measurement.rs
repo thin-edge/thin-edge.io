@@ -88,9 +88,9 @@ pub trait MeasurementVisitor {
         name: &str,
         value: f64,
     ) -> Result<(), Self::Error> {
-        let () = self.visit_start_group(group)?;
-        let () = self.visit_measurement(name, value)?;
-        let () = self.visit_end_group()?;
+        self.visit_start_group(group)?;
+        self.visit_measurement(name, value)?;
+        self.visit_end_group()?;
         Ok(())
     }
 }

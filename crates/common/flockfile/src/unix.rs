@@ -56,7 +56,7 @@ impl Flockfile {
             }
         };
 
-        let () = match flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock) {
+        match flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock) {
             Ok(()) => (),
             Err(err) => {
                 return Err(FlockfileError::FromNix { path, source: err });

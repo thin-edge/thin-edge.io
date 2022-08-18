@@ -219,7 +219,7 @@ mod tests {
         let url = DownloadInfo::new(&target_url);
 
         let downloader = Downloader::new(&name, &version, target_dir_path.path());
-        let () = downloader.download(&url).await?;
+        downloader.download(&url).await?;
 
         let log_content = std::fs::read(downloader.filename())?;
 

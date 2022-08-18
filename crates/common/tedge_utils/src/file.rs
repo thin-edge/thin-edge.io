@@ -74,19 +74,19 @@ impl PermissionEntry {
     pub fn apply(&self, path: &Path) -> Result<(), FileError> {
         match (&self.user, &self.group) {
             (Some(user), Some(group)) => {
-                let () = change_user_and_group(path, user, group)?;
+                change_user_and_group(path, user, group)?;
             }
             (Some(user), None) => {
-                let () = change_user(path, user)?;
+                change_user(path, user)?;
             }
             (None, Some(group)) => {
-                let () = change_group(path, group)?;
+                change_group(path, group)?;
             }
             (None, None) => {}
         }
 
         if let Some(mode) = &self.mode {
-            let () = change_mode(path, *mode)?;
+            change_mode(path, *mode)?;
         }
 
         Ok(())
@@ -95,7 +95,7 @@ impl PermissionEntry {
     fn create_directory(&self, dir: &Path) -> Result<(), FileError> {
         match fs::create_dir(dir) {
             Ok(_) => {
-                let () = self.apply(dir)?;
+                self.apply(dir)?;
                 Ok(())
             }
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
@@ -119,7 +119,7 @@ impl PermissionEntry {
             .open(file)
         {
             Ok(mut f) => {
-                let () = self.apply(file)?;
+                self.apply(file)?;
                 if let Some(default_content) = default_content {
                     f.write(default_content.as_bytes()).map_err(|e| {
                         FileError::WriteContentFailed {
@@ -342,7 +342,7 @@ mod tests {
         assert!(format!("{:o}", perm.mode()).contains("644"));
 
         let permission_set = PermissionEntry::new(None, None, Some(0o444));
-        let () = permission_set.apply(Path::new(file_path.as_str())).unwrap();
+        permission_set.apply(Path::new(file_path.as_str())).unwrap();
 
         let meta = fs::metadata(file_path.as_str()).unwrap();
         let perm = meta.permissions();

@@ -18,7 +18,7 @@ impl Command for RemoveCertCmd {
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        let () = self.remove_certificate()?;
+        self.remove_certificate()?;
         Ok(())
     }
 }

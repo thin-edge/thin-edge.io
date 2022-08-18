@@ -242,7 +242,7 @@ where
     TEdgeConfig: ConfigSettingAccessor<T>,
 {
     let value = config.query(setting)?;
-    let () = config.update(setting, value)?;
+    config.update(setting, value)?;
     Ok(())
 }
 
@@ -402,17 +402,14 @@ fn new_bridge(
     }
 
     println!("Checking if configuration for requested bridge already exists.\n");
-    let () = bridge_config_exists(config_location, bridge_config)?;
+    bridge_config_exists(config_location, bridge_config)?;
 
     println!("Validating the bridge certificates.\n");
-    let () = bridge_config.validate()?;
+    bridge_config.validate()?;
 
     if bridge_config.cloud_name.eq("c8y") {
         println!("Creating the device in Cumulocity cloud.\n");
-        let () = c8y_direct_connection::create_device_with_direct_connection(
-            bridge_config,
-            device_type,
-        )?;
+        c8y_direct_connection::create_device_with_direct_connection(bridge_config, device_type)?;
     }
 
     println!("Saving configuration for requested bridge.\n");
@@ -522,12 +519,12 @@ fn write_bridge_config_to_file(
         get_common_mosquitto_config_file_path(config_location, common_mosquitto_config);
     let mut common_draft = DraftFile::new(&common_config_path)?;
     common_mosquitto_config.serialize(&mut common_draft)?;
-    let () = common_draft.persist()?;
+    common_draft.persist()?;
 
     let config_path = get_bridge_config_file_path(config_location, bridge_config);
     let mut config_draft = DraftFile::new(config_path)?;
     bridge_config.serialize(&mut config_draft)?;
-    let () = config_draft.persist()?;
+    config_draft.persist()?;
 
     Ok(())
 }
