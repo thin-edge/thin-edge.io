@@ -274,20 +274,23 @@ where
     ) -> Result<Vec<Message>, ConversionError> {
         if topic.name.starts_with("tedge/alarms") {
             let mut mqtt_messages: Vec<Message> = Vec::new();
-            let topic_split: Vec<&str> = topic.name.split('/').collect();
-            if topic_split.len() == 5 {
-                let child_id = topic_split[4];
-                // Create a child device, if it does not exists already
-                if !child_id.is_empty() && !self.children.contains(child_id) {
-                    self.children.insert(child_id.to_string());
-                    mqtt_messages.push(Message::new(
-                        &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
-                        format!("101,{child_id},{child_id},thin-edge.io-child"),
-                    ));
-                }
-            }
             self.size_threshold.validate(message)?;
             let mut messages = self.alarm_converter.try_convert_alarm(message)?;
+            if !messages.is_empty() {
+                // When there is some messages to be sent on behalf of a child device,
+                // this child device must be declared first, if not done yet
+                let topic_split: Vec<&str> = topic.name.split('/').collect();
+                if topic_split.len() == 5 {
+                    let child_id = topic_split[4];
+                    if !child_id.is_empty() && !self.children.contains(child_id) {
+                        self.children.insert(child_id.to_string());
+                        mqtt_messages.push(Message::new(
+                            &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
+                            format!("101,{child_id},{child_id},thin-edge.io-child"),
+                        ));
+                    }
+                }
+            }
             mqtt_messages.append(&mut messages);
             Ok(mqtt_messages)
         } else if topic.name.starts_with(INTERNAL_ALARMS_TOPIC) {
