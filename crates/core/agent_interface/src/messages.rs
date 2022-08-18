@@ -34,7 +34,7 @@ pub const fn control_filter_topic() -> &'static str {
 }
 
 /// Message payload definition for SoftwareList request.
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct SoftwareListRequest {
@@ -61,7 +61,7 @@ impl SoftwareListRequest {
 }
 
 /// Message payload definition for SoftwareUpdate request.
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct SoftwareUpdateRequest {
@@ -168,7 +168,7 @@ impl SoftwareUpdateRequest {
 }
 
 /// Sub list of modules grouped by plugin type.
-#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct SoftwareRequestResponseSoftwareList {
@@ -178,7 +178,7 @@ pub struct SoftwareRequestResponseSoftwareList {
 }
 
 /// Possible statuses for result of Software operation.
-#[derive(Debug, Deserialize, Serialize, PartialEq, Copy, Clone)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Copy, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub enum OperationStatus {
     Successful,
@@ -187,7 +187,7 @@ pub enum OperationStatus {
 }
 
 /// Message payload definition for SoftwareList response.
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SoftwareListResponse {
     #[serde(flatten)]
     response: SoftwareRequestResponse,
@@ -239,7 +239,7 @@ impl SoftwareListResponse {
 }
 
 /// Message payload definition for SoftwareUpdate response.
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SoftwareUpdateResponse {
     #[serde(flatten)]
     response: SoftwareRequestResponse,
@@ -301,7 +301,7 @@ impl SoftwareUpdateResponse {
 }
 
 /// Variants represent Software Operations Supported actions.
-#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SoftwareModuleAction {
     Install,
@@ -309,7 +309,7 @@ pub enum SoftwareModuleAction {
 }
 
 /// Software module payload definition.
-#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct SoftwareModuleItem {
@@ -330,7 +330,7 @@ pub struct SoftwareModuleItem {
 }
 
 /// Software Operation Response payload format.
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SoftwareRequestResponse {
     pub id: String,
@@ -462,14 +462,14 @@ impl From<SoftwareError> for Option<SoftwareModuleItem> {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub enum RestartOperation {
     Request(RestartOperationRequest),
     Response(RestartOperationResponse),
 }
 
 /// Message payload definition for restart operation request.
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct RestartOperationRequest {
@@ -495,7 +495,7 @@ impl RestartOperationRequest {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct RestartOperationResponse {
     pub id: String,
     pub status: OperationStatus,
