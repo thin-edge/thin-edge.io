@@ -31,7 +31,7 @@ pub struct C8yCreateEvent {
     pub extras: HashMap<String, Value>,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 /// used to retrieve the id of a log event
 pub struct C8yEventResponse {
@@ -57,7 +57,7 @@ impl InternalIdResponse {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct C8ySoftwareModuleItem {
     pub name: String,
     pub version: Option<String>,
@@ -87,7 +87,7 @@ impl From<SoftwareModule> for C8ySoftwareModuleItem {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yUpdateSoftwareListResponse {
     #[serde(rename = "c8y_SoftwareList")]
