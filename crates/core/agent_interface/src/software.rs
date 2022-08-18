@@ -9,7 +9,7 @@ pub type SoftwareVersion = String;
 
 pub const DEFAULT: &str = "default";
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SoftwareModule {
     #[serde(default)]
     pub module_type: Option<SoftwareType>,
@@ -61,7 +61,7 @@ impl SoftwareModule {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
 pub enum SoftwareModuleUpdate {
     Install { module: SoftwareModule },
     Remove { module: SoftwareModule },

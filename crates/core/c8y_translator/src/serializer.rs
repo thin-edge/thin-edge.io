@@ -18,7 +18,7 @@ pub enum C8yJsonSerializationError {
     JsonWriterError(#[from] JsonWriterError),
 }
 
-#[derive(thiserror::Error, Debug, PartialEq)]
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum MeasurementStreamError {
     #[error("Unexpected time stamp within a group")]
     UnexpectedTimestamp,

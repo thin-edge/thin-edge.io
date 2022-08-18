@@ -69,8 +69,9 @@ impl LoggedCommand {
     }
 
     pub fn arg(&mut self, arg: impl AsRef<OsStr>) -> &mut LoggedCommand {
+        use std::fmt::Write;
         // The arguments are displayed as debug, to be properly quoted and distinguished from each other.
-        self.command_line.push_str(&format!(" {:?}", arg.as_ref()));
+        let _ = write!(self.command_line, " {:?}", arg.as_ref());
         self.command.arg(arg);
         self
     }

@@ -73,7 +73,7 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             // apt output    = openssl/focal-security,now 1.1.1f-1ubuntu2.3 amd64 [installed]
             // awk -F '[/ ]' =   $1   ^       $2         ^   $3            ^   $4
             // awk print     =   name ^                  ^   version       ^
-            let status = Command::new("awk")
+            Command::new("awk")
                 .args(vec![
                     "-F",
                     "[/ ]",
@@ -81,9 +81,7 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
                 ])
                 .stdin(apt.stdout.unwrap()) // Cannot panic: apt.stdout has been set
                 .status()
-                .map_err(|err| InternalError::exec_error("awk", err))?;
-
-            status
+                .map_err(|err| InternalError::exec_error("awk", err))?
         }
 
         PluginOp::Install {

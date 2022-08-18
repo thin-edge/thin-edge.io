@@ -12,7 +12,7 @@ use std::{
     time::Duration,
 };
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct DownloadInfo {
@@ -47,7 +47,7 @@ impl DownloadInfo {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub enum Auth {

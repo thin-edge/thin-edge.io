@@ -9,6 +9,7 @@ use mqtt_channel::{
 };
 use std::convert::TryFrom;
 use std::env;
+use std::fmt::Write as _;
 use std::io::Write;
 use std::process;
 use std::time::{Duration, Instant};
@@ -163,7 +164,8 @@ async fn publish_multi_topic(
         for value in 0..height {
             let mut series: String = String::new();
             for s in 0..series_count {
-                series += &format!(
+                let _ = write!(
+                    series,
                     "\"saw_{}\": {} ,",
                     s,
                     (value + s * height / series_count) % height

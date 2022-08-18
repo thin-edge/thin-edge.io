@@ -3,7 +3,7 @@ use agent_interface::TopicError;
 use mqtt_channel::MqttError;
 use mqtt_channel::Topic;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum C8yTopic {
     SmartRestRequest,
     SmartRestResponse,
@@ -59,7 +59,7 @@ impl TryFrom<Topic> for C8yTopic {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum MapperSubscribeTopic {
     C8yTopic(C8yTopic),
     ResponseTopic(ResponseTopic),

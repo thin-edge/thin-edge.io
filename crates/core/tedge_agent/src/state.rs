@@ -88,7 +88,7 @@ impl AgentStateRepository {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(untagged)]
 pub enum StateStatus {
     Software(SoftwareOperationVariants),
@@ -96,20 +96,20 @@ pub enum StateStatus {
     UnknownOperation,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SoftwareOperationVariants {
     List,
     Update,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RestartOperationStatus {
     Pending,
     Restarting,
 }
 
-#[derive(Debug, Default, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct State {
     pub operation_id: Option<String>,

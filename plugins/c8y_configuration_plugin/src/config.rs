@@ -16,7 +16,7 @@ struct RawPluginConfig {
     pub files: Vec<RawFileEntry>,
 }
 
-#[derive(Deserialize, Debug, Default, PartialEq)]
+#[derive(Deserialize, Debug, Default, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct RawFileEntry {
     pub path: String,

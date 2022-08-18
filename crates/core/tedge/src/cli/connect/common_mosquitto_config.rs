@@ -1,6 +1,6 @@
 const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ListenerConfig {
     pub port: Option<u16>,
     pub bind_address: Option<String>,
@@ -67,7 +67,7 @@ impl ListenerConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommonMosquittoConfig {
     pub config_file: String,
     pub internal_listener: ListenerConfig,
