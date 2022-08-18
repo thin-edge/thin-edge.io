@@ -211,10 +211,11 @@ fn validate_version(module_name: &str, module_version: &str) -> Result<(), Inter
         // Value at index 0 is the package name
         {
             if installed_version != module_version {
-                return Err(InternalError::VersionMismatch {
+                return Err(InternalError::MetaDataMismatch {
                     package: module_name.into(),
-                    installed: installed_version.into(),
-                    expected: module_version.into(),
+                    expected_key: "Version".into(),
+                    expected_value: installed_version.into(),
+                    provided_value: module_version.into(),
                 });
             }
         }

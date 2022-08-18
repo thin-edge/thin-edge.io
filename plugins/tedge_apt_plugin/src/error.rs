@@ -15,13 +15,6 @@ pub enum InternalError {
     #[error("Parsing Debian package failed for `{file}`, Error: {error}")]
     ParsingError { file: String, error: String },
 
-    #[error("Validation of {package} failed with version mismatch. Installed version: {installed}, Expected version: {expected}")]
-    VersionMismatch {
-        package: String,
-        installed: String,
-        expected: String,
-    },
-
     #[error("Validation of {package} metadata failed, expected value for the {expected_key} is {expected_value}, but provided {provided_value}")]
     MetaDataMismatch {
         package: String,
