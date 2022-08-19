@@ -69,7 +69,7 @@ The combination of those challenges often leads a series of custom developed emb
 **Example applications scenarios:** 
 Edge/embedded devices are critical components of any connected asset/smart equipment or operator use case. Within the different use-cases and application scenarios, the edge can take over different roles to address different IoT challenges: 
 
--   Edge devices as machine gateway:
+- Edge devices as a machine gateway:
 	- A typical problem for the target personas is the integration of  various asset specific OT interfaces to establish connection to fieldbus or industry protocols. 
 - Supporting IoT and other Northbound connectivity 
 	- Vendor agnostic connectivtiy of the data plane and control plane, analytics and service/app orchestration from various IoT platforms is required for all future IoT use-cases, as hyperscaler platforms and end-customer vendor preferences might vary. 
