@@ -19,14 +19,15 @@ set -e
 
 # Read device thumbprint from command line
 THUMB=$(sudo tedge cert show | grep Thumb | cut -c13-)
-echo "DEVICE Thumbprint is " $THUMB
+echo "DEVICE Thumbprint is $THUMB"
 
 
 python3 -m venv ~/env-eventhub
+# shellcheck disable=SC1090
 source ~/env-eventhub/bin/activate
 pip install azure-eventhub
 
-./ci/az_upload_device_cert.py -d $C8YDEVICE -t $THUMB -u $IOTHUBNAME -s iothubowner
+./ci/az_upload_device_cert.py -d "$C8YDEVICE" -t "$THUMB" -u "$IOTHUBNAME" -s iothubowner
 
 sudo tedge connect az
 

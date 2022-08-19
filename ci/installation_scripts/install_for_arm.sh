@@ -5,10 +5,11 @@ set -euo pipefail
 PKG_DIR=$1
 
 # Load the package list as $EXTERNAL_ARM_PACKAGES, $RELEASE_PACKAGES
+# shellcheck disable=SC1091
 source ./ci/package_list.sh
 
 # Install pre-required packages
-sudo apt-get --assume-yes install $(echo "${EXTERNAL_ARM_PACKAGES[*]}")
+sudo apt-get --assume-yes install "${EXTERNAL_ARM_PACKAGES[*]}"
 
 # Install thin-edge packages
 for PACKAGE in "${RELEASE_PACKAGES[@]}"
