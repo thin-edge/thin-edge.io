@@ -38,9 +38,10 @@ Maintainers should strive for agreement based on the following factors:
 - Feasibility, accounting for future technical and cultural shifts
 - The health of the project going forward
 
-Overall, the maintainers should not be beholden to their respective companies, and instead to the health of the project and its community.
+The maintainers ensure that all changes in the project align with the agreed vision
+and support the health of the project and its community without being unduly influenced from their employers.
 
-Underneath the leads are the teams or individuals, that each are allowed to  make similar decisions about the project *in the area they have been delegated*.
+Underneath the maintainers are the teams or individuals, that each are allowed to  make similar decisions about the project *in the area they have been delegated*.
 
 
 - Some decisions are global in the project, like the core/API
@@ -100,12 +101,12 @@ core contributors = [SAG, IFM]
 
 ## Repository maintenance
 
-To assure a consistent level of quality and appearance, the project has some rules for maintainers to follow:
+To assure a consistent level of quality and appearance, the project has some rules for contributors to follow:
 
 - **Clear commits**
   Having clear, concise and well-written commit messages for all changes is not
   only a indicator for the seriousness of the project, but also a way to ensure
-  sustainable development via repeatability of the sources of the project.
+  sustainable development via replicability of the sources of the project.
 
   Because of this, we try to ensure the highest possible quality for each
   individual commit message.
@@ -113,7 +114,7 @@ To assure a consistent level of quality and appearance, the project has some rul
   Because such a thing cannot necessarily or in full be enforced via tooling, it
   remains mainly the obligation of a reviewer of a change-set to ensure
 
-  * Exclusiveness of the individual commits
+  * Atomicity of the individual commits
   * that one commit is one atomic change, and not an accumulation of several
     individual and separate changes
   * that the commit message of the change expresses why the change was made
@@ -182,7 +183,7 @@ To assure a consistent level of quality and appearance, the project has some rul
 - **Evergreen master**
   The project pursues the "evergreen master" strategy. That means that at every
   point in time, the commit that `master`/`main` points to must successfully
-  build and pass all tests successfully.
+  build and pass all tests.
 
   Reaching that goal is possible because of the employed merge strategies (read
   below).
@@ -197,13 +198,14 @@ To assure a consistent level of quality and appearance, the project has some rul
 
   The following actions are **not** allowed:
 
-  * Committing to `master`/`main` directly
+  * Committing to `master`/`main` directly.
+    The GitHub repository is configured to block pushing to `master`/`main`.
   * Squash-Merging of pull requests (which is equivalent to committing to
     `master`/`main` directly).
     The github repository is configured to not allow squash merges.
-  * Merging of "!fixup" or "!squash" commits. A github actions
+  * Merging of "fixup!" or "squash!" commits. A github actions
     job is employed to block pull requests from being merged if such commits are
-    in the PR branch. Rebase should be used to clean those up.
+    in the branch of the pull request. Rebase should be used to clean those up.
 
   It is explicitly _not_ forbidden to have merge-commits in a pull request.
   Long-running pull requests that contain a large number of changes and are
@@ -221,7 +223,7 @@ To assure a consistent level of quality and appearance, the project has some rul
       * builds, tests, lints are green (ensured via github action)
       * Commit linting (ensured via github action)
       * No missing `Signed-off-by` lines (ensured via github action)
-      * No "!fixup"/"!squash" commits in the pull request (ensured via github
+      * No "fixup!"/"squash!" commits in the pull request (ensured via github
         action)
 
   Merging itself is implemented via a "merge bot": [bors-ng](https://bors.tech).
@@ -245,7 +247,7 @@ To assure a consistent level of quality and appearance, the project has some rul
   Because of this, a github action is installed to lint the licenses of
   dependencies. This action runs as a normal lint (see "evergreen master") and
   blocks pull requests if dependencies get imported that do not meet a set of
-  rules agreed upon by the project.
+  rules agreed upon by the project maintainers.
 
 ## Release workflow
 
