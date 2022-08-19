@@ -40,7 +40,7 @@ Within the different target segments, we are addressing the following personas w
 	- primarily only tasked to connect one or many devices/types to overall IoT solution
 - Challenges and needs reagarding device enablement:
 	- enable new services and connectivity on the device while keeping stability and robustness (while having limited computing resources)
-	- dealing with certificates, queuing and persisting messages to handle instable connections, 
+	- dealing with certificates, queuing and persisting messages to handle unstable connections
 	- allowing the device to be managed centrally, to keep it secure and up-to-date (while important to him not always #1 prio to overall initiative/project)
 
 - Special case : embedded dev with OT focus
