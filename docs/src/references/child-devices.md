@@ -30,7 +30,7 @@ Child-device support basically focuses on three aspects:
 A newly attached child-device (external or logical) must be once provisioned. The provisioning phase of a child-device includes:
   1) creating cloud's child-device twin
   2) declaring all supported capabilities of the child-device to its child-device twin
-     (i.E. declaring all _supported operations_ and all _types_ per supported operation, as _config types_, _log types_, ...)
+     (i.e. declaring all _supported operations_ and all _types_ per supported operation, as _config types_, _log types_, ...)
      (i.e. declaring all operations supported by the device like configuration management, software management etc and further metadata per supported operation, like _config types_, _log types_, _software list_ etc)
 
 There are two option to create the cloud's child-device twin and declaring all supported capabilities. 
