@@ -1,6 +1,6 @@
 
 
- ## What is our vision?
+## What is our vision?
 
 The aim of creating thin-edge.io is to provide a IoT edge device framework for IoT project teams which makes it easy to enable resource constrained devices for IoT. Unlike other solutions, we are not just another single-purpose agent but a flexible platform with re-usable components without any vendor lock-in, focused on adressing the needs of both IT and OT users. 
 
