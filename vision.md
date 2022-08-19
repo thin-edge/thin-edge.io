@@ -97,7 +97,7 @@ Based on the challenge to capture both, the OT and IT persona needs, thin-edge.i
 - effortless and secure edge software management for different software artifact types
 - support effortless and secure edge analytics execution/management for different analytics artifact types and runtimes
 
-**Why are we uniquely positioned to “win” this?**
+**Why are we uniquely positioned to be competitive?**
 
 thin-edge.io offers a unique approach to unify the needs of both the IT and OT world by offering a platform design focused on efficiency robustness and security while offering highest level of extensibility and wider range of hardware.
 
