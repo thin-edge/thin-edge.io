@@ -91,7 +91,7 @@ Each thin-edge API that supports child-devices covers both aspects. As of now, t
 
 ## User Journeys
 
-The user journeys below outline the behaviour of external-devices, thin-edge and the cloud for the provisioning phase.
+The user journeys below outline the behaviour of external-devices, thin-edge and the cloud during the provisioning phase.
 
 #### Personas used in user journeys
 * **device-operator**: the one who maintains/operates the device in the field in the shopfloor
