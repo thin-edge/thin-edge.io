@@ -16,7 +16,7 @@ Child-Device support allows to connect devices (e.g. sensors, actors, PLCs, any 
 - **child-id**:
   a unique string referencing the _external-device_ or _logical child-device_ to the corresponding _child-device twin_
 - **child-device agent**:
-  that piece of software that makes the glue between the _external-device_ and thin-edge APIs; could be located on the _external-device_ or running as process on the _thin-edge device_
+  that piece of software that makes the glue between the _external-device_ and thin-edge APIs; could be located on the _external-device_ or running as a process on the _thin-edge device_ itself
 
 ## Principles
 
