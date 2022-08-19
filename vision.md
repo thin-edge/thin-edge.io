@@ -33,7 +33,7 @@ Within the different target segments, we are addressing the following personas w
 	- No interest/time to dive into “hygiene factors” as device management and security
 	- Expect ready to use or configuration based solution, with pre-defined design principles and framework, offering easy extensibility with known tools/languages 
 
-**Device developer / Embedded engineer** with background in Linux, C/C++, C#, embedded systems (IT focused)
+**Device developer / Embedded engineer**: background consisting of Linux, C/C++, C#, embedded systems (IT focused)
 
 - Responsible for
 	- device logic including firmware and software
