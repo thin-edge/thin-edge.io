@@ -52,7 +52,7 @@ Within the different target segments, we are addressing the following personas w
 
 The persona types adressed by thin-edge.io often have conflicting requirements and views, this itself is addressed by the project technology vision and design principles, allowing thin-edge.io acting as a brindge between the OT and IT world. 
 
-## What persona needs and problems do we address?
+## Persona needs and solutions
 
 **Key problems for users:**
 
