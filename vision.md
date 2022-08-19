@@ -56,7 +56,7 @@ The persona types adressed by thin-edge.io often have conflicting requirements a
 
 **Key problems for users:**
 
-Until now, when developing device software, IoT proejct teams and device builders had to spend a lot of time solving generic challenges such as connecting to a cloud or IoT, dealing with certificates, queuing and persisting messages to handle instable connections or allowing the device to be managed centrally, to keep it secure and up-to-date.
+Until now, when developing device software, IoT project teams and device builders were spending a lot of time solving generic challenges such as connecting to a cloud or IoT, dealing with certificates, queuing and persisting messages to handle unstable connections or allowing the device to be managed centrally, to keep it secure and up-to-date.
 
 Today, to overcome those challenges customers can either implement all those components themselves, which typical results in complex embedded code, which usually has less Individual, device-specific, custom code which needs to be maintained over the complete device lifecycle
 
