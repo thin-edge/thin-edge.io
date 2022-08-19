@@ -105,11 +105,11 @@ thin-edge.io offers a unique approach to unify the needs of both the IT and OT w
 
 - We combine robust and lightweight components with extensibility (plug-in mechanisms, mapper concept for cloud/platform support)
 
-- we offer out of the box modules to be used in combination with device management platforms
+- We offer out-of-the-box modules to be used in combination with device management platforms
 
-- we offer hardware and infrastructure agnostic deployment of all edge capabilities
+- We offer hardware and infrastructure agnostic deployment of all edge capabilities
 
-## Additional Questions:
+## Additional Questions
 
 What business goals do we try to achieve ?
 - This is an open source project licenced under Apache 2.0 , it is focused on enterprise and company (B2B) use, hence why we encourage further partners to join our mission and community to create an industry standard for IoT device enablement and vendor agnostic connectivity and device management. 
