@@ -10,7 +10,7 @@ We believe that IoT (edge/device management, middleware, data analytics) are the
 
 Thats why we created thin-edge.io, to provide an easy and flexible way for IoT project teams and device manufactures to make their devices “IoT-ready” without having to "re-invent the wheel" with costly and time-consuming (embedded) development projects.
 
-## What are our target segments?
+## Our target segments
 
 **B2B (IoT) Service providers:**  IoT services providers are companies that are building and offering products and services based on IoT technology. For them it is crucial to deliver business outcomes and return on investment fast, as they are dealing with a lot of end-customers who themselves in the past often failed “homegrown” IoT initiatives. There is no willingness from the end customer to spend large amount of money and time on device connectivity. Therefore thin-edge.io for them is a critical foundation to solve the connectivity challenge and to focus on the business applications rather then the connectivity and device management aspects, which are in a lot of cases considered “hygiene factors”.
 
