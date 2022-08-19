@@ -6,7 +6,7 @@ The aim of creating thin-edge.io is to provide a IoT edge device framework for I
 
 ## Our motivation
 
-While, we believe that IoT (edge/device management, middleware, data analytics) are the driving forces of the fourth industrial revolution, where companies are forced to leverage IoT solutions to stay competitive, we are observing that a large amount of companies are suffering from failed IoT projects and initiatives, where a lot of time and money is spent on device enablement (e.g. connectivity, security, device management).
+We believe that IoT (edge/device management, middleware, data analytics) are the driving forces of the fourth industrial revolution: companies are forced to leverage IoT solutions to stay competitive. In the past a large amount of companies have suffered from failed IoT projects and initiatives, where a lot of time and money was spent on device enablement: connectivity, security, device management, etc...
 
 Thats why we created thin-edge.io, to provide an easy and flexible way for IoT project teams and device manufactures to make their devices “IoT-ready” without having to "re-invent the wheel" with costly and time-consuming (embedded) development projects.
 
