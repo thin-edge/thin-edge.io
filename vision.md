@@ -22,7 +22,7 @@ Thats why we created thin-edge.io. It provides an easy and flexible way for IoT 
 
 Within the different target segments, we are addressing the following personas with thin-edge.io:
 
-**(IoT) Solution Developer/ Solution Architect** (with background such as Python, Java, JS, Angular, Kubernetes, Cloud
+**(IoT) Solution Developer/ Solution Architect**: Background consisting of Python, Java, JS, Angular, Kubernetes, Cloud Platforms
 - Responsible for :
 	- Implementing and maintaining the end-to-end IoT solution
 	- Often juggling multiple initiatives covering a broad range of technology stacks in addition to implement and maintaining solutions.
