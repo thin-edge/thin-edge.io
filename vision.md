@@ -67,7 +67,7 @@ Of course, any generic solution would have to walk the very tight path of keepin
 The combination of those challenges often leads a series of custom developed embedded software that is expensive to maintain and extend. Also, most of the development used to be specific to one cloud or IoT platform. At the same time for more and more use-cases moving logic and analytics to the embedded edge device becomes a must for reasons such latency, security or cost. However, moving, and orchestrating workloads on the Edge used to be very challenging as it also requires a lot of custom logic to be developed on the device, to be able to integrate and support various device management platforms.
 
 **Example applications scenarios:** 
-Edge/embedded devices are critical compontent of any connected asset/smart equipment or operator use case. Within the different use-cases and application scenarios, edge can take over different roles to address different IoT challnges: 
+Edge/embedded devices are critical components of any connected asset/smart equipment or operator use case. Within the different use-cases and application scenarios, the edge can take over different roles to address different IoT challenges: 
 
 -   Edge devices as machine gateway:
 	- A typical problem for the target personas is the integration of  various asset specific OT interfaces to establish connection to fieldbus or industry protocols. 
