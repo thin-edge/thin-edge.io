@@ -4,6 +4,6 @@ set -e
 
 
 ### Initialize the sm mapper
-runuser -u tedge -- tedge_mapper --init c8y
-runuser -u tedge -- tedge_mapper --init az
+sudo -u tedge -- tedge_mapper --init c8y
+sudo -u tedge -- tedge_mapper --init az
 #DEBHELPER#
