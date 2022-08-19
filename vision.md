@@ -99,7 +99,7 @@ Based on the challenge to capture both, the OT and IT persona needs, thin-edge.i
 
 **Why are we uniquely positioned to be competitive?**
 
-thin-edge.io offers a unique approach to unify the needs of both the IT and OT world by offering a platform design focused on efficiency robustness and security while offering highest level of extensibility and wider range of hardware.
+thin-edge.io offers a unique approach to unify the needs of both the IT and OT world by offering a platform design focused on efficiency robustness and security while offering the highest level of extensibility and wide range of hardware.
 
 - Compared to other frameworks we are not restricting users towards one specific software artefact type, package manager, programming language or message payload to be used on the device
 
