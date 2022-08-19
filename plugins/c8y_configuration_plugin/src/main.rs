@@ -67,6 +67,7 @@ async fn create_mqtt_client(mqtt_port: u16) -> Result<mqtt_channel::Connection, 
     topic_filter.add_all(health_check_topics("c8y-configuration-plugin"));
 
     let mqtt_config = mqtt_channel::Config::default()
+        .with_session_name("c8y-configuration-plugin")
         .with_port(mqtt_port)
         .with_subscriptions(topic_filter);
 

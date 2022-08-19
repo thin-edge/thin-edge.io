@@ -68,6 +68,7 @@ async fn create_mqtt_client(
     topics.add(C8Y_BRIDGE_HEALTH_TOPIC)?;
 
     let mqtt_config = mqtt_channel::Config::default()
+        .with_session_name("c8y-log-plugin")
         .with_port(mqtt_port)
         .with_subscriptions(topics);
 
