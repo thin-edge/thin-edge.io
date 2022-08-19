@@ -94,7 +94,7 @@ Based on the challenge to capture both, the OT and IT persona needs, thin-edge.i
 
 - providing ready-to-use components available on wide-range of hardware, embedded linux varaints (thin edge layer)
 - allowing control and orchestration from IoT (device management)  platforms
-- effortless and secure edge software management for different software artefact types
+- effortless and secure edge software management for different software artifact types
 - support effortless and secure edge analytics execution/ management for different analytics artefact types and runtimes
 
 **Why are we uniquely positioned to “win” this?**
