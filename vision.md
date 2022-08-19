@@ -18,7 +18,7 @@ Thats why we created thin-edge.io. It provides an easy and flexible way for IoT 
 
 **Smart equipment operators:** Rather than dealing with single equipment, smart operators are looking to enhance or optimize whole manufacturing processes with the help of IIoT. Operating complex manufacturing systems requires not only to handle various industry protocols and assets but also requires to connect and manage a heterogeneous set of industrial devices and hardware such as PLCs, protocol converters or industrial gateways. Here thin-edge.io helps to unify the complex device landscape by offering lightweight software modules which can run on resource constrained, brownfield hardware.
 
-## Who are our target users/personas?
+## Our target users/personas
 
 Within the different target segments, we are addressing the following personas with thin-edge.io:
 
