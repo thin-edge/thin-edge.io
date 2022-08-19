@@ -74,7 +74,7 @@ Edge/embedded devices are critical components of any connected asset/smart equip
 - Supporting IoT and other Northbound connectivity 
 	- Vendor agnostic connectivtiy of the data plane and control plane, analytics and service/app orchestration from various IoT platforms is required for all future IoT use-cases, as hyperscaler platforms and end-customer vendor preferences might vary. 
 - Edge devices as deployment option for IoT services and applications 
-	- There is increasing need for device specifc applications close to the device e.g. device configuration, control logic, local monitoring, here a flexible software management framework is needed which is independent from the preferred sw artefact type due to different hardware, OS variants and package managers. 
+	- There is an increasing need for device specific applications close to the device e.g. device configuration, control logic, local monitoring, here a flexible software management framework is needed which is independent from the preferred software artifact type due to different hardware, OS variants and package managers. 
 -   There is an emerging needs for Edge analytics such as data filtering, pre-aggregation, ML model execution. 
 -   Edge devices as configuration/management interface for asset - local/remote UI for asset configuration/management including software and firmware management of underlying systems to keep them secure and up-to date
 
