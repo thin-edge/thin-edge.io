@@ -37,7 +37,7 @@ Within the different target segments, we are addressing the following personas w
 
 - Responsible for
 	- device logic including firmware and software
-	- primary only tasked to connect one or many devices/types to overall IoT solution
+	- primarily only tasked to connect one or many devices/types to overall IoT solution
 - Challenges and needs reagarding device enablement:
 	- enable new services and connectivity on the device while keeping stability and robustness (while having limited computing resources)
 	- dealing with certificates, queuing and persisting messages to handle instable connections, 
