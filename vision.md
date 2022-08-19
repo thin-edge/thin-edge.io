@@ -26,7 +26,7 @@ Within the different target segments, we are addressing the following personas w
 - Responsible for :
 	- Implementing and maintaining the end-to-end IoT solution
 	- Often juggling multiple initiatives covering a broad range of technology stacks in addition to implement and maintaining solutions.
-- Challenges and needs reagarding device enablement:
+- Challenges and needs regarding device enablement:
 	- Lack of expertise and knowledge in embedded space
 	- Dealing with fragmented hardware / linux variants
 	- Lack of time to focus on device enablement as building IoT applications on cloud side is main responsibility
