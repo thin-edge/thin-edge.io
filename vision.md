@@ -30,7 +30,7 @@ Within the different target segments, we are addressing the following personas w
 	- Lack of expertise and knowledge in embedded space
 	- Dealing with fragmented hardware / linux variants
 	- Lack of time to focus on device enablement as building IoT applications on cloud side is main responsibility
-	- No interest/time to dive into “hygiene” factors as device management and security
+	- No interest/time to dive into “hygiene factors” as device management and security
 	- Expect ready to use or configuration based solution, with pre-defined design principles and framework, offering easy extensibility  with known tools/languages 
 
 **Device developer / Embedded engineer** with background in Linux, C/C++, C#, embedded systems (IT focused)
