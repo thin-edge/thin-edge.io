@@ -60,7 +60,9 @@ Until now, when developing device software, IoT project teams and device builder
 
 To overcome these challenges today, customers can either implement all those components themselves, which typical results in complex embedded as well as individual, device-specific code which needs to be maintained over the complete device lifecycle.
 
-Implementing all those functionalities on has very high complexity.  Furthermore, more and more companies require devices to be more flexible and host additional software which might be needed to offer new digital services to customers., while taking into account non-functional requirements such as low resource footprint, security and robustness.
+Implementing these functionalities oneself has not only a very high complexity but also an opportunity cost, as those resources could have been used for more specific business needs. On top of that, companies wish to be more and more flexible so as to stay relevant in an ever-changing digital landscape.
+
+Of course, any generic solution would have to walk the very tight path of keeping a low resource footprint, strong security and robustness.
 
 The combination of those challenges often leads a series of custom developed embedded software that is expensive to maintain and extend. Also, most of the development used to be specific to one cloud or IoT platform. At the same time for more and more use-cases moving logic and analytics to the embedded edge device becomes a must for reasons such latency, security or cost. However, moving, and orchestrating workloads on the Edge used to be very challenging as it also requires a lot of custom logic to be developed on the device, to be able to integrate and support various device management platforms.
 
