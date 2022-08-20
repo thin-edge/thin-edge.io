@@ -1,4 +1,4 @@
-use crate::c8y::{dynamic_discovery::*};
+use crate::c8y::dynamic_discovery::*;
 use crate::core::{converter::*, error::*, size_threshold::SizeThreshold};
 use agent_interface::{
     topic::{RequestTopic, ResponseTopic},
@@ -98,7 +98,7 @@ where
         .try_into()
         .expect("topics that mapper should subscribe to");
 
-        let () = topic_filter.add_all(CumulocityMapper::subscriptions(&operations).unwrap());
+        topic_filter.add_all(CumulocityMapper::subscriptions(&operations).unwrap());
 
         let mapper_config = MapperConfig {
             in_topic_filter: topic_filter,
