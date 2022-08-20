@@ -1,3 +1,4 @@
+pub mod alarm_converter;
 pub mod converter;
 pub mod dynamic_discovery;
 pub mod error;
