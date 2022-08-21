@@ -1,3 +1,4 @@
+use certificate::translate_rustls_error;
 use reqwest::StatusCode;
 use std::error::Error;
 use tedge_config::FilePath;
@@ -71,9 +72,6 @@ pub enum CertError {
     #[error(transparent)]
     UrlParseError(#[from] url::ParseError),
 
-    #[error("HTTP Connection Problem: {msg} \nHint: {hint}")]
-    CertificateValidationFailure { hint: String, msg: String },
-
     #[error(transparent)]
     TedgeConfigError(#[from] TEdgeConfigError),
 
@@ -122,8 +120,8 @@ impl CertError {
 // )
 // At the last layer we have the InvalidCertificateData error which is a Box<&dyn Error> derived from WebpkiError not included anymore, just as a String
 // This chain may break if underlying crates change.
-pub(crate) fn get_webpki_error_from_reqwest(err: reqwest::Error) -> CertError {
-    if let Some(rustls::Error::InvalidCertificateData(inner)) = err
+pub fn get_webpki_error_from_reqwest(err: reqwest::Error) -> CertError {
+    if let Some(tls_error) = err
         // get `hyper::Error::Connect`
         .source()
         .and_then(|err| err.source())
@@ -134,40 +132,9 @@ pub(crate) fn get_webpki_error_from_reqwest(err: reqwest::Error) -> CertError {
         // This is our second `Custom`.
         .and_then(|custom_error2| custom_error2.downcast_ref::<std::io::Error>())
         .and_then(|custom_error2| custom_error2.get_ref())
-        // Get final error type from `rustls::Error`.
-        .and_then(|rustls_error| rustls_error.downcast_ref::<rustls::Error>())
+        .and_then(|err| translate_rustls_error(err))
     {
-        match inner {
-            msg if msg.contains("CaUsedAsEndEntity") => CertError::CertificateValidationFailure {
-                hint: "A CA certificate is used as an end-entity server certificate. Make sure that the certificate used is an end-entity certificate signed by CA certificate.".into(),
-                msg: msg.to_string(),
-            },
-
-            msg if msg.contains("CertExpired") => CertError::CertificateValidationFailure {
-                hint: "The server certificate has expired, the time it is being validated for is later than the certificate's `notAfter` time.".into(),
-                msg: msg.to_string(),
-            },
-
-            msg if msg.contains("CertNotValidYet") => CertError::CertificateValidationFailure {
-                hint: "The server certificate is not valid yet, the time it is being validated for is earlier than the certificate's `notBefore` time.".into(),
-                msg: msg.to_string(),
-            },
-
-            msg if msg.contains("EndEntityUsedAsCa") => CertError::CertificateValidationFailure {
-                hint: "An end-entity certificate is used as a server CA certificate. Make sure that the certificate used is signed by a correct CA certificate.".into(),
-                msg: msg.to_string(),
-            },
-
-            msg if msg.contains("InvalidCertValidity") => CertError::CertificateValidationFailure {
-                hint: "The server certificate validity period (`notBefore`, `notAfter`) is invalid, maybe the `notAfter` time is earlier than the `notBefore` time.".into(),
-                msg: msg.to_string(),
-            },
-
-            _ => CertError::CertificateValidationFailure {
-                hint: "Server certificate validation error.".into(),
-                msg: inner.to_string(),
-            },
-        }
+        CertError::CertificateError(tls_error)
     } else {
         CertError::ReqwestError(err) // any other Error type than `hyper::Error`
     }
