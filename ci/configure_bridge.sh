@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for variable in C8YURL C8YUSERNAME C8YPASSWORD C8YDEVICE C8YTENANT C8YDEVICEID;
+for variable in C8YURL C8YUSERNAME C8YPASS C8YDEVICE C8YTENANT IOTHUBNAME;
 do
     declare -n var_ref=$variable
     if [ -z "${var_ref}" ]; then
