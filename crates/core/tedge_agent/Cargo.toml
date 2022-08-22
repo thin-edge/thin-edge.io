@@ -34,6 +34,7 @@ hyper = { version = "0.14", features = ["full"] }
 lazy_static = "1.4"
 futures = "0.3"
 mqtt_channel = { path = "../../common/mqtt_channel" }
+path-clean = "0.1"
 plugin_sm = { path = "../plugin_sm" }
 routerify = "3.0"
 serde = { version = "1.0", features = ["derive"] }

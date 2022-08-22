@@ -1,5 +1,6 @@
 use crate::{
     error::AgentError,
+    http_rest,
     restart_operation_handler::restart_operation,
     state::{
         AgentStateRepository, RestartOperationStatus, SoftwareOperationVariants, State,
@@ -12,6 +13,7 @@ use agent_interface::{
     SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
 use flockfile::{check_another_instance_is_not_running, Flockfile};
+
 use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic, TopicFilter};
 use plugin_sm::{
     operation_logs::{LogKind, OperationLogs},
@@ -27,10 +29,10 @@ use tedge_config::{
 };
 use tedge_utils::file::create_directory_with_user_group;
 use thin_edge_json::health::{health_check_topics, send_health_status};
-
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, warn};
 
+pub const FILE_TRANSFER_ROOT_PATH: &str = "/var/tedge/file-transfer/tedge";
 const SM_PLUGINS: &str = "sm-plugins";
 const AGENT_LOG_PATH: &str = "tedge/agent";
 
@@ -40,7 +42,7 @@ const INIT_COMMAND: &str = "init";
 #[cfg(test)]
 const INIT_COMMAND: &str = "echo";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SmAgentConfig {
     pub errors_topic: Topic,
     pub mqtt_config: mqtt_channel::Config,
@@ -58,6 +60,7 @@ pub struct SmAgentConfig {
     pub run_dir: PathBuf,
     config_location: TEdgeConfigLocation,
     pub download_dir: PathBuf,
+    pub bind_address: String,
 }
 
 impl Default for SmAgentConfig {
@@ -104,6 +107,8 @@ impl Default for SmAgentConfig {
 
         let download_dir = PathBuf::from("/tmp");
 
+        let bind_address = "127.0.0.1:3000";
+
         Self {
             errors_topic,
             mqtt_config,
@@ -121,6 +126,7 @@ impl Default for SmAgentConfig {
             run_dir,
             config_location,
             download_dir,
+            bind_address: bind_address.to_string(),
         }
     }
 }
@@ -147,13 +153,19 @@ impl SmAgentConfig {
         let tedge_log_dir = PathBuf::from(&format!("{tedge_log_dir}/{AGENT_LOG_PATH}"));
         let tedge_run_dir = tedge_config.query_string(RunPathSetting)?.into();
 
+        let bind_address = &format!(
+            "{}:3000",
+            tedge_config.query_string(MqttBindAddressSetting)?
+        );
+
         Ok(SmAgentConfig::default()
             .with_sm_home(tedge_config_path)
             .with_mqtt_config(mqtt_config)
             .with_config_location(tedge_config_location)
             .with_download_directory(tedge_download_dir)
             .with_log_directory(tedge_log_dir)
-            .with_run_directory(tedge_run_dir))
+            .with_run_directory(tedge_run_dir)
+            .with_bind_address(bind_address))
     }
 
     pub fn with_sm_home(self, sm_home: PathBuf) -> Self {
@@ -194,6 +206,13 @@ impl SmAgentConfig {
             ..self
         }
     }
+
+    pub fn with_bind_address(self, bind_address: &str) -> Self {
+        Self {
+            bind_address: bind_address.into(),
+            ..self
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -231,6 +250,8 @@ impl SmAgent {
         let config_dir = config_dir.display();
         create_directory_with_user_group(&format!("{config_dir}/.agent"), "tedge", "tedge", 0o775)?;
         create_directory_with_user_group(self.config.log_dir.clone(), "tedge", "tedge", 0o775)?;
+        create_directory_with_user_group("/var/tedge", "tedge", "tedge", 0o775)?;
+        create_directory_with_user_group("/var/tedge/file-transfer", "tedge", "tedge", 0o777)?;
         info!("Initializing the tedge agent session");
         mqtt_channel::init_session(&self.config.mqtt_config).await?;
 
@@ -250,6 +271,11 @@ impl SmAgent {
 
         let mut mqtt = Connection::new(&self.config.mqtt_config).await?;
         let sm_plugins_path = self.config.sm_home.join(SM_PLUGINS);
+
+        let server = http_rest::http_file_transfer_server(
+            &self.config.bind_address,
+            FILE_TRANSFER_ROOT_PATH,
+        )?;
 
         let plugins = Arc::new(Mutex::new(ExternalPlugins::open(
             &sm_plugins_path,
@@ -275,13 +301,19 @@ impl SmAgent {
 
         self.process_pending_operation(&mut mqtt.published).await?;
 
+        // spawning file transfer server
+        tokio::spawn(async move {
+            if let Err(err) = server.await {
+                error!("{}", err);
+            }
+        });
+
         while let Err(error) = self
             .process_subscribed_messages(&mut mqtt.received, &mut mqtt.published, &plugins)
             .await
         {
             error!("{}", error);
         }
-
         Ok(())
     }
 
