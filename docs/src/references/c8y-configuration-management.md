@@ -193,7 +193,7 @@ $ tree /etc/tedge/c8y/
     └── c8y-configuration-plugin.toml
 ```
 
-In that example the plugin serves configuration management for the thin-edge device it-self, for a child-device with childid `child1` and for a child-device with childid `child2`. 
+In that example, the plugin serves configuration management for the thin-edge device itself as well as for child-devices with child-id `child1` and `child2`. 
 
 Similar to section [Configuration](#configuration) above, each child-device configuration file is defined by a record with:
 
@@ -203,9 +203,13 @@ Similar to section [Configuration](#configuration) above, each child-device conf
 
 The `c8y_configuration_plugin` make use of the HTTP file transfer feature of the `tedge_agent` to consume/provide the configuration-file from/to the child-device's remote filesystem `path` (see [section below](#details-to-aspect-2-filetransfer-fromto-external-device) for more details about HTTP file transfer).
 
-The `c8y_configuration_plugin` adds per child-device the file `/etc/tedge/c8y/<childid>/c8y-configuration-plugin.toml` implicitely to the child-devices configuration file list. So the list can always be configured from the cloud. The `type` for this self configuration file is `c8y-configuration-plugin`.
+The `c8y_configuration_plugin` implicitly creates and maintains a separate `/etc/tedge/c8y/<childid>/c8y-configuration-plugin.toml` file for each connected child device, with its supported configuration list.
+This file is also listed as a supported configuration file of the child device in the cloud,
+so that the supported configuration list for the child device can always be configured from the cloud.
+The implicit `type` for this file is `c8y-configuration-plugin`.
 
-### Announcing list of supported configuration files by the child-device itself
+### Child device declaring its supported configuration list to thin-edge
+
 A child-device can use the child-device provisioning API to announce its supported configuration files itself via MQTT to the `c8y_configuration_plugin`. For details about the child-device provisioning API see the [child-device reference documentation](child-devices.md#1-child-device-provisioning).
 
 The provisioning API's `capability specific JSON object` for `c8y_configuration_plugin` contains all configuration files the child-device provides. Each configuration file is defined by a `path` and an optional `type`, that will be both assigned to the fields `path` and `type` of the child-devices TOML file (see section above). 
@@ -243,7 +247,8 @@ Example:
 }
 ```
 
-Whenever the `c8y_configuration_plugin` receivces that MQTT message it stores all contained information to the child-devices individual TOML file in `/etc/tedge/c8y/<childid>/c8y-configuration-plugin.toml`. When the file already exists it will be replaced with the new content.
+When the `c8y_configuration_plugin` receives these MQTT messages, the contents of that `configurations` key are parsed and persisted into the child-device specific TOML file at `/etc/tedge/c8y/<childid>/c8y-configuration-plugin.toml`.
+If the file already exists, it will be replaced with the new content.
 
 Each time a child-device's TOML is modified (e.g. due to an incoming MQTT message, an incoming new configuration snapshot from the cloud, or a modification by a local process) the `c8y_configuration_plugin` takes care to define all necessary capabilities to the coresponding cloud's child-device twin. These are:
   - declaring _supported operations_ for configuration management: `c8y_UploadConfigFile` and `c8y_DownloadConfigFile`
@@ -251,7 +256,8 @@ Each time a child-device's TOML is modified (e.g. due to an incoming MQTT messag
 
 **Declaring 'supported operations'**
 
-To declare supported operations the `c8y_configuration_plugin` uses thin-edge's _Supported Operations API_. Therefore the `c8y_configuration_plugin` creates for each child-device two files under `/etc/tedge/operations/c8y/<childid>`.
+To declare supported operations for the child device, the `c8y_configuration_plugin` uses thin-edge's _Supported Operations API_.
+To declare configuration management as a supported operation, the `c8y_configuration_plugin` creates two empty files named `c8y_UploadConfigFile` and `c8y_DownloadConfigFile` under `/etc/tedge/operations/c8y/<childid>` for each child-device:
 
 Example, for child-device with childid `child1`:
 
@@ -260,11 +266,12 @@ Example, for child-device with childid `child1`:
 /etc/tedge/operations/c8y/child1/c8y_DownloadConfigFile
 ```
 
-As soon as those files are created, thin-edge's _Supported Operations API_ takes care to send according supported operation declarations to cloud's child-device twins (see [documentation Supported Operations](../tutorials/supported_operations.md#supported-operations-for-child-devices)).
+As soon as those files are created, thin-edge's _Supported Operations API_ takes care of sending the supported operation declarations to the child-device cloud twins (see [documentation Supported Operations](../tutorials/supported_operations.md#supported-operations-for-child-devices)).
 
 **Declaring 'provided configuration types'**
 
-For all configuration `types` provided by the child-device, the plugin sends an MQTT message to C8Y. Thereby all `types` of the child device's `c8y-config-plugin.toml` with the added type `c8y-config-plugin` to represent the config list TOML file itself will be combined in one single message:
+For all configuration `types` specified in the child-device's `c8y-config-plugin.toml`, the plugin sends the [supported configurations SmartREST message](https://cumulocity.com/guides/10.11.0/reference/smartrest-two/#set-supported-configurations-119) to Cumulocity.
+In addition to the `types` specified in the child device's `c8y-config-plugin.toml`, the special `c8y-configuration-plugin` type which represents the TOML file itself is also included in that message:
   - topic: `c8y/s/us/<childid>`
   - payload: `119,c8y-config-plugin,<type 1>,<type 2>,<type 3>,...`<br/>
     Example: `119,c8y-config-plugin,foo.conf,bar.conf`
@@ -276,7 +283,7 @@ Note that the `c8y_configuration_plugin` does **not** create any child-device tw
 
 To fetch/push configuration files to/from external devices, the `c8y_configuration_plugin` makes use of file transfer HTTP APIs of the `tedge_agent`.
   
-The HTTP file transfer feature of the `tedge_agent` provides the service to transfer files from external devices to the local filesystem of the thin-edge device's, and vice versa.
+The HTTP file transfer feature of the `tedge_agent` provides the service to transfer files from external devices to the local filesystem of the thin-edge device, and vice versa.
 
   * `tedge_agent` serves PUT, GET and DELETE requests for temporary file upload, download and removal
     * a temporary file can be uploaded with an HTTP PUT request to `http://<thin-edge IP address>/tedge/tmpfiles`,
