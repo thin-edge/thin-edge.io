@@ -6,6 +6,8 @@ edition = "2021"
 rust-version = "1.58.1"
 license = "Apache-2.0"
 description = "tedge_agent interacts with a Cloud Mapper and one or more Software Plugins"
+homepage = "https://thin-edge.io"
+repository = "https://github.com/thin-edge/thin-edge.io"
 
 [package.metadata.deb]
 pre-depends = "tedge_mapper"

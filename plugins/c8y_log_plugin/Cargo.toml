@@ -6,6 +6,8 @@ edition = "2021"
 rust-version = "1.58.1"
 license = "Apache-2.0"
 description = "Thin-edge device log file retriever for Cumulocity"
+homepage = "https://thin-edge.io"
+repository = "https://github.com/thin-edge/thin-edge.io"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [package.metadata.deb]
