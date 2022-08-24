@@ -389,7 +389,7 @@ devices with the following capabilities:
     - This also includes all message types that the framework knows about
     - Users with custom thin-edge.io deployments must be able to generate such a documentation themselves
 
-**Why are we uniquely positioned to be competitive?**
+## Closing words
 
 thin-edge.io offers a unique approach to unify the needs of both the IT and OT
 world by offering a platform design focused on efficiency robustness and
