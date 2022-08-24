@@ -67,28 +67,50 @@ also by attaching custom functionality with minimum effort.
 
 ## Users and Personas
 
-Within the different target segments, we are addressing the following personas
-with thin-edge.io:
+We define the following personas:
 
-**(IoT) Solution Developer/ Solution Architect**: Background consisting of
-Python, Java, JS, Angular, Kubernetes, Cloud Platforms
-- Responsible for :
-    - Implementing and maintaining the end-to-end IoT solution
-    - Often juggling multiple initiatives covering a broad range of technology
-      stacks in addition to implement and maintaining solutions.
+- "End User"
+    - Person using a binary that has been built with the thin-edge.io framework
+      as well as a finished and working configuration
+
+- "System Integrator"
+    - Person using a binary that has been built with the thin-edge.io framework
+      and crafts a configuration suited to solve their problems
+
+- "Interface Developer"
+    - Person using the foreign interfaces of a thin-edge.io framework binary to
+      complement and extend its functionality.
+
+- "Plugin Developer"
+    - Person using the provided Rust crates to extend or improve binary plugins
+      written for the thin-edge.io framework
+
+- "Core Developer"
+    - Person writing on the provided Rust crates as hosted on github.com
+
+An example for a "System Integrator" or an "Interface Developer" is a **(IoT)
+Solution Developer/ Solution Architect**: Background consisting of Python, Java,
+JS, Angular, Kubernetes, Cloud Platforms:
+
+- Responsible for implementing and maintaining the end-to-end IoT
+  solution
+- Often juggling multiple initiatives covering a broad range of
+  technology stacks in addition to implement and maintaining
+  solutions.
 - Challenges and needs regarding device enablement:
     - Lack of expertise and knowledge in embedded space
     - Dealing with fragmented hardware / linux variants
-    - Lack of time to focus on device enablement as building IoT applications on
-      cloud side is main responsibility
-    - No interest/time to dive into "hygiene factors" as device management and
-      security
-    - Expect ready to use or configuration based solution, with pre-defined
-      design principles and framework, offering easy extensibility with known
-      tools/languages
+    - Lack of time to focus on device enablement as building IoT
+      applications on cloud side is main responsibility
+    - No interest/time to dive into "hygiene factors" as device
+      management and security
+    - Expect ready to use or configuration based solution, with
+      pre-defined design principles and framework, offering easy
+      extensibility with known tools/languages
 
-**Device developer / Embedded engineer**: background consisting of Linux, C/C++,
-C#, embedded systems (IT focused)
+An example for an "Interface Developer" or a "Plugin Developer" is a **Device
+developer / Embedded engineer** whos background consisting of Linux, C/C++, C#,
+embedded systems (IT focused):
 
 - Responsible for
     - device logic including firmware and software
@@ -103,16 +125,17 @@ C#, embedded systems (IT focused)
       up-to-date (while important to him not always #1 prio to overall
       initiative/project)
 
-- Special case : embedded dev with OT focus
-    - familiar with PLCs, SCADA systems,
-    - dealing with emerging need for connectivtiy and IIoT
-    - key concern is security, robusteness and resource efficiency which is
-      usually overruling any "typical" IT solution on the device and implies
-      some kind of custom logic. (e.g. rather closed OS, no dependencies can be
-      installed, very strict certification and QA process , no CI/CD possible,
-      long prodcut lifecycle 10-20 years)
+An "Embedded Developer" with OT focus is an example of a "Plugin Developer":
 
-**Summary:** The persona types adressed by thin-edge.io often have conflicting
+- familiar with PLCs, SCADA systems,
+- dealing with emerging need for connectivity and IIoT
+- key concern is security, robusteness and resource efficiency which is
+  usually overruling any "typical" IT solution on the device and implies
+  some kind of custom logic. (e.g. rather closed OS, no dependencies can be
+  installed, very strict certification and QA process, no CI/CD possible,
+  long prodcut lifecycle 10-20 years)
+
+The persona types adressed by thin-edge.io often have conflicting
 requirements and views, this itself is addressed by the project technology
 vision and design principles, allowing thin-edge.io acting as a bridge between
 the OT and IT world.
