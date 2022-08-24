@@ -76,7 +76,7 @@ Edge/embedded devices are critical components of any connected asset/smart equip
 - There is an emerging needs for Edge analytics such as data filtering, pre-aggregation, ML model execution.
 - Edge devices as configuration/management interface for asset - local/remote UI for asset configuration/management including software and firmware management of underlying systems to keep them secure and up-to date
 
-## What is it and why thin-edge.io is a game changer?
+## thin-edge.io as a game changer
 
 To address the problems above, we created thin-edge.io as a framework for lightweight IoT gateways, PLC’s, routers and other embedded devices which require integration and interoperability with IoT platforms.
 
