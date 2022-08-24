@@ -92,7 +92,7 @@ In combination with IoT platforms, thin-edge.io is a foundation for enabling dev
 
 Based on the challenge to capture both, the OT and IT persona needs, thin-edge.io is focused on following design principles:
 
-- providing ready-to-use components available on wide-range of hardware, embedded linux varaints (thin edge layer)
+- providing ready-to-use components available on wide-range of hardware, embedded linux variants (thin edge layer)
 - allowing control and orchestration from IoT (device management)  platforms
 - effortless and secure edge software management for different software artifact types
 - support effortless and secure edge analytics execution/management for different analytics artifact types and runtimes
