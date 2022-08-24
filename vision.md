@@ -141,7 +141,7 @@ the different use-cases and application scenarios, the edge can take over
 different roles to address different IoT challenges:
 
 - Edge devices as a machine gateway:
-    - A typical problem for the target personas is the integration of  various
+    - A typical problem for the target personas is the integration of various
       asset specific OT interfaces to establish connection to fieldbus or
       industry protocols.
 - Supporting IoT and other Northbound connectivity
