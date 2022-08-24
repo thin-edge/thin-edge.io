@@ -36,9 +36,9 @@ factors".
 **(Smart) Equipment makers/Hardware manufacturers/OEMs:** Equipment
 Manufacturers are moving away from focusing primarily on selling their equipment
 towards selling their equipment as a service (EaaS). An IIoT platform allowing
-to connect & manage assets as well as to use the visualize, analyze, and
+to connect and manage assets as well as to use the visualize, analyze, and
 integrate equipment data is often the foundation to enable service-based
-business models & services. Here thin-edge.io is used as a foundation to bring
+business models and services. Here thin-edge.io is used as a foundation to bring
 "intelligence" around the equipment. Combined with any IoT platform, single
 purpose gateways or devices which sit on the equipment can be transformed into
 edge deployment options for services and applications that support the overall
