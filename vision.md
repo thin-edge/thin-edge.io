@@ -206,26 +206,188 @@ The framework includes modules for cloud connectivity, data mapping, device
 management, intra-edge communication, and certificate management, all aspects
 and challenges our target personas need to address.
 
+We therefore define the following requirements.
+
+### Non-functional requirements
+
+<!--
+The following list of non-functional requirements should be considered
+non-final. It might be extended in the future.
+-->
+
+1. Multi-paradigm edge framework
+    - Several kinds of users are be able to consume thin-edge.io at different
+      stages (e.g. using the Rust code as a framework to develop their own
+      solutions, using (networking)interfaces like for example MQTT to attach
+      their own infrastructure to thin-edge.io, or using the final
+      deployment-ready binary to solve their problems).
+1. Introspective functionality to enable quality assurance as well as support of
+   deployments
+    - Knowing what happens inside a system is crucial to be able to quickly
+      identify misbehaving components. Users are be able to access an overview
+      of the communication of the different components
+1. Ability to attach data sources and data sinks to thin-edge.io via different
+   mechanisms, either by implementing connectors directly in the framework using
+   rust code, attaching them via some networking mechanism (e.g. MQTT) or other
+   mechanisms the framework provides
+    1. The framework ships with connectivity functionality for the most common
+       connectivity requirements
+    1. Configuration of connectivity functionality is exposed to the user
+    1. Connectivity over the same mechanism but with different configuration
+       settings is easily doable for the user (e.g. using MQTT to connect to
+       different brokers with completely different settings)
+1. Easy deployment and little friction when using thin-edge.io as a framework to
+   develop their own solutions based on it
+1. Trust in the user to do the right thing with the tools provided, respect
+   their decisions and guide them towards a maintainable solution by design
+    - Users are assumed to be experts in their domain and should be given the
+      tools they need to solve the problems they have. Unnecessarily burdening
+      them with abstractions only causes frustration
+1. High configurability and tweakability with high trust in custom changes
+   without having to redefine the world on small changes
+1. Allow precise configuration inside common solutions shipped by the framework
+    - Users are be able to change a small detail of their deployment without
+      having to then define unrelated elements
+    - As an example: Users wanting to set an SSL certificate should not need to
+      worry about also defining their DNS setup.
+1. Reproducability of a configuration
+1. Security
+    1. Operational Security
+        1. Components of the framework are encapsulated and do not influence
+           each others execution
+        1. The system can recover from bad states in a safe way
+        1. Untrusted input is handled in a way that does not influence execution
+           in a bad way (e.g. crashes the system)
+    1. Information Security
+        1. Data access is reglemented
+        1. Data origin is verified and potentially encrypted
+    1. Code Audit(ability)
+        1. Functionality can be audited easily because it is encapsulated (see
+           above)
+1. Generic solutions over specific solutions
+    - Problems are solved in a way that users can define the details as best
+      suited
+1. Easy configurability and high discoverability of configuration options
+    - Configuring the system is not done across dozens of configuration files at
+      different locations, and instead be centralized and easy to write
+    - Configuration options are easily discoverable and documented, for example,
+      in a highly secured environment, the user is not required to access some
+      online documentation ressource, but is able to access all configuration
+      documentation via the binary shipped or derived from the thin-edge.io
+      framework
+    - Configurations are representable in multiple ways, e.g. as text or in a
+      more visual format (graph, image overview)
+1. The user os able to enable and disable functionality of the framework
+    - Not all functionalities of the framework are required in every use-case,
+      users are able to disable or even remove those parts from deployed
+      binaries
+    - For example: if only approved and audited components are allowed to be
+      used
+1. Deriving specialized implementations/binaries from the framework is possible
+    - The thin-edge.io ships a potentially large all-in-one binary with as much
+      functionality as the project provides, but
+    - Tailoring down the binary and removing unused functionality is easily
+      doable with minimal effort by a System Integrator
+    - Building a specialized binary with additional custom functionality is
+      easily doable by an Plugin Developer
+1. As little overhead as possible
+    1. in CPU time: The Framework ensures that the absolute minimum of CPU time
+       is consumed to deliver the desired functionality the user configured the
+       framework to do
+    1. in Memory usage: The Framework ensures that as little as possible memory
+       is in use, at every point in execution time, as possible
+1. Compatibility
+    - Configuration and components are written in such a way that they may be
+      changed in the future with no or minimal impact on their intended purpose
+
+### Functional requirements
+
+<!--
+The following list of functional requirements should be considered
+non-final. It might be extended in the future.
+-->
+
+1. The framework provides MQTT connectivity through a component
+1. All errors must be handled in a non-crashing way
+    - Unrecoverable errors may still cause the binary to shutdown eventually,
+      but not unexpectedly.
+1. The core implementation is written in Rust
+    - Plugins that connect to a thin-edge.io binary, may be written in another
+      programming language
+1. A deployment of thin-edge.io consists of a single binary with a single
+   configuration entry-point
+    - The final configuration may consists of more than one resource (file,
+      network resource, etc), and potentially be even loaded over the network,
+      this is left open
+1. The configuration is the single point of truth w.r.t. the initial state of
+   the components mentioned within
+    1. The default state of a plugin must be documented
+    1. A component may use a (documented) default value for a missing
+       configuration entry
+1. The configuration is the single point of truth for the communication between
+   components inside a single thin-edge.io binary deployment
+1. The communication between the components is verified to be compatible in
+   advance
+1. The out- and in-bound connectivity is mediated through a framework specific
+   format
+    - JSON is the lingua franca, but other forms may be acceptable if they stay
+      within the capabilites of JSON
+    - json-schema is used to document the (JSON) format in a machine-readable
+      way
+1. The principal way of extending thin-edge.io is over well-defined Rust interfaces (traits and other types)
+    - This does not preclude other forms of extensions in other languages (i.e.
+      a bridge over MQTT to python)
+1. Starting a thin-edge.io binary for development use or production use is not
+   interactive
+    - Starting a thin-edge.io binary for setup or similar purposes may be
+      interactive
+1. Components can persist data using the framework
+    - to persist data between restarts of the deployment
+    - to cache data during network outages
+    - to provide operation checkpoints during sensitive operations
+1. User-configurable logging is provided via the framework
+    - A user is able to configure logging per-component as well as globally for
+      the framework
+
+### Capabilities
+
+<!--
+The following list of capabilities should be considered non-final. It might be
+extended in the future.
+-->
+
 In combination with IoT platforms, thin-edge.io is a foundation for enabling
 devices with the following capabilities:
 
-- support for effortless and secure edge device lifecycle management for single
-  and device fleets
-- support for low-touch provisioning of thin edge devices
-- support for local and remote configuration
-- support for local and remote maintenance including remote access
-  (monitoring/troubleshooting),
-- decommissioning of thin devices (e.g. for security compromised or end of life
-  devices). Based on the challenge to capture both, the OT and IT persona needs,
-  thin-edge.io is focused on following design principles:
-
-- providing ready-to-use components available on wide-range of hardware and
-  embedded linux variants (thin edge layer)
-- allowing control and orchestration from IoT (device management)  platforms
-- effortless and secure edge software management for different software artifact
-  types
-- support effortless and secure edge analytics execution/management for
-  different analytics artifact types and runtimes
+1. Connectivity to the major cloud providers in the IIOT space
+    - for effortless and secure edge device lifecycle management for single
+      and device fleets
+    - for low-touch provisioning of thin edge devices
+    - for local and remote configuration
+    - for local and remote maintenance including remote access
+      (monitoring/troubleshooting)
+    - decommissioning of thin devices (e.g. for security compromised or end of
+      life devices)
+1. "South bound" connectivity to devices via the major protocols in the IIOT industry
+1. On-device data preprocessing
+    1. Analytical (timeseries analysis, ML, etc...)
+    2. Mathematical operations (avg, sum, etc...)
+    3. Logical operations
+1. On-device data generation (e.g. generating of events)
+1. Device management functionality
+    1. OS updates
+    1. Package updates
+    1. Configuration updates (Of both the thin-edge.io deployment as well as other software)
+    1. Firmware updates for "south bound"/child devices
+1. Device interaction
+    1. File upload/download
+    1. Filesystem listings
+    1. General system informations
+1. Persist data as given by components in different databases (e.g. PostgreSQL, Sqlite, MongoDB, Redis, Memcached, ...)
+1. Documentation of each component and their configuration
+    - This includes information on how to configure each configurable aspect of the component and its valid states
+    - This also includes all message types that the framework knows about
+    - Users with custom thin-edge.io deployments must be able to generate such a documentation themselves
 
 **Why are we uniquely positioned to be competitive?**
 
