@@ -405,11 +405,3 @@ security while offering the highest level of extensibility.
 - We offer hardware and infrastructure agnostic deployment of all edge
   capabilities
 
-## Additional Questions
-
-What business goals do we try to achieve ?
-- This is an open source project licenced under Apache 2.0, it is focused on
-  enterprise and company (B2B) use, hence why we encourage further partners to
-  join our mission and community to create an industry standard for IoT device
-  enablement and vendor agnostic connectivity and device management.
-
