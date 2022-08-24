@@ -299,21 +299,21 @@ A configuration file snapshot is fetched from an external device as illustrated 
 
 ```mermaid
 sequenceDiagram
-    participant External Device
+    participant Child Device
     participant Tedge Agent
     participant C8Y Cfg Plugin
     participant C8Y Cloud
 
         C8Y Cloud->>C8Y Cfg Plugin: 1: ConfigUploadRequest (type="foo.conf", childid="child1")
         C8Y Cfg Plugin->>C8Y Cfg Plugin: 2: Generate random "file-id"
-        C8Y Cfg Plugin->>External Device: 3: MQTT notification for "child1": Request to upload config file "/path/to/file/foo.conf", to url "<file-id>" 
+        C8Y Cfg Plugin->>Child Device: 3: MQTT notification for "child1": Request to upload config file "/path/to/file/foo.conf", to url "<file-id>" 
 
-        External Device->>C8Y Cfg Plugin: 4: MQTT notification: Operation Status upload config "Executing" 
+        Child Device->>C8Y Cfg Plugin: 4: MQTT notification: Operation Status upload config "Executing" 
         C8Y Cfg Plugin->>C8Y Cloud: Forward executing status to cloud device twin
 
-        External Device->>Tedge Agent: 5: HTTP PUT /tedge/config_snapshot/<file-id> (content of config file "/path/to/file/foo.conf")
+        Child Device->>Tedge Agent: 5: HTTP PUT /tedge/config_snapshot/<file-id> (content of config file "/path/to/file/foo.conf")
 
-        External Device->>C8Y Cfg Plugin: 6: MQTT Notification: file uploaded
+        Child Device->>C8Y Cfg Plugin: 6: MQTT Notification: file uploaded
         
         C8Y Cfg Plugin->>Tedge Agent: 7: HTTP GET /tedge/config_snapshot/<file-id>
         C8Y Cfg Plugin->>Tedge Agent: 8: HTTP DELETE /tedge/config_snapshot/<file-id>
@@ -362,7 +362,7 @@ A configuration file snapshot is pushed to an external device as illustrated bel
 
 ```mermaid
 sequenceDiagram
-    participant External Device
+    participant Child Device
     participant Tedge Agent
     participant C8Y Cfg Plugin
     participant C8Y Cloud
@@ -374,14 +374,14 @@ sequenceDiagram
         C8Y Cfg Plugin->>C8Y Cfg Plugin: 3: Generate random "file-id"     
         C8Y Cfg Plugin->>Tedge Agent: 4: HTTP PUT /tedge/config_snapshot/<file-id> (content of new config-file)
 
-        C8Y Cfg Plugin->>External Device: 5: MQTT notification for "child1": Requst to download config file "/path/to/file/foo.conf" on url "file-id"
+        C8Y Cfg Plugin->>Child Device: 5: MQTT notification for "child1": Requst to download config file "/path/to/file/foo.conf" on url "file-id"
 
-        External Device->>C8Y Cfg Plugin: 6: MQTT notification: Operation Status upload config "Executing" 
+        Child Device->>C8Y Cfg Plugin: 6: MQTT notification: Operation Status upload config "Executing" 
         C8Y Cfg Plugin->>C8Y Cloud: Forward executing status to cloud device twin
 
-        External Device->>Tedge Agent: 7: HTTP GET /tedge/config_snapshot/<file-id>
-        External Device->>External Device: 8: Apply downloaded file as config file "/path/to/file/foo.conf"
-        External Device->>C8Y Cfg Plugin: 9: MQTT Notification: config file "/path/to/file/foo.conf" applied successully
+        Child Device->>Tedge Agent: 7: HTTP GET /tedge/config_snapshot/<file-id>
+        Child Device->>Child Device: 8: Apply downloaded file as config file "/path/to/file/foo.conf"
+        Child Device->>C8Y Cfg Plugin: 9: MQTT Notification: config file "/path/to/file/foo.conf" applied successully
         C8Y Cfg Plugin->>Tedge Agent: 10: HTTP DELETE /tedge/config_snapshot/<file-id>
 ```
 
