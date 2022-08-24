@@ -201,7 +201,7 @@ Similar to section [Configuration](#configuration) above, each child-device conf
 * An optional configuration `type`. If not provided, the `path` is used as `type`.
 * The fields `user`, `group` and octal `mode` (as introduced in section [Configuration](#configuration) above) are not supported for child-devices.  
 
-The `c8y_configuration_plugin` make use of the HTTP file transfer feature of the `tedge_agent` to consume/provide the configuration-file from/to the child-device's remote filesystem `path` (see [section below](#details-to-aspect-2-filetransfer-fromto-external-device) for more details about HTTP file transfer).
+The `c8y_configuration_plugin` make use of the HTTP file transfer feature of the `tedge_agent` to consume/provide the configuration-file from/to the child-device (see [section below](#details-to-aspect-2-filetransfer-fromto-external-device) for more details about HTTP file transfer) with the mentioned `path` as reference information for the child-device.
 
 The `c8y_configuration_plugin` implicitly creates and maintains a separate `/etc/tedge/c8y/<childid>/c8y-configuration-plugin.toml` file for each connected child device, with its supported configuration list.
 This file is also listed as a supported configuration file of the child device in the cloud,
