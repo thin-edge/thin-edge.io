@@ -198,9 +198,9 @@ thin-edge.io offers a unique approach to unify the needs of both the IT and OT
 world by offering a platform design focused on efficiency robustness and
 security while offering the highest level of extensibility.
 
-- Compared to other frameworks we are not restricting users towards one specific
-  software artifact type, package manager, programming language or message
-  payload to be used on the device
+- We are not restricting users towards one specific software artifact type,
+  package manager, programming language or message payload to be used on the
+  device
 - We combine robust and lightweight components with extensibility (plug-in
   mechanisms, mapper concept for cloud/platform support)
 - We offer out-of-the-box modules to be used in combination with device
