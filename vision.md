@@ -22,29 +22,29 @@ Within the different target segments, we are addressing the following personas w
 
 **(IoT) Solution Developer/ Solution Architect**: Background consisting of Python, Java, JS, Angular, Kubernetes, Cloud Platforms
 - Responsible for :
-	- Implementing and maintaining the end-to-end IoT solution
-	- Often juggling multiple initiatives covering a broad range of technology stacks in addition to implement and maintaining solutions.
+    - Implementing and maintaining the end-to-end IoT solution
+    - Often juggling multiple initiatives covering a broad range of technology stacks in addition to implement and maintaining solutions.
 - Challenges and needs regarding device enablement:
-	- Lack of expertise and knowledge in embedded space
-	- Dealing with fragmented hardware / linux variants
-	- Lack of time to focus on device enablement as building IoT applications on cloud side is main responsibility
-	- No interest/time to dive into “hygiene factors” as device management and security
-	- Expect ready to use or configuration based solution, with pre-defined design principles and framework, offering easy extensibility with known tools/languages
+    - Lack of expertise and knowledge in embedded space
+    - Dealing with fragmented hardware / linux variants
+    - Lack of time to focus on device enablement as building IoT applications on cloud side is main responsibility
+    - No interest/time to dive into “hygiene factors” as device management and security
+    - Expect ready to use or configuration based solution, with pre-defined design principles and framework, offering easy extensibility with known tools/languages
 
 **Device developer / Embedded engineer**: background consisting of Linux, C/C++, C#, embedded systems (IT focused)
 
 - Responsible for
-	- device logic including firmware and software
-	- primarily only tasked to connect one or many devices/types to overall IoT solution
+    - device logic including firmware and software
+    - primarily only tasked to connect one or many devices/types to overall IoT solution
 - Challenges and needs reagarding device enablement:
-	- enable new services and connectivity on the device while keeping stability and robustness (while having limited computing resources)
-	- dealing with certificates, queuing and persisting messages to handle unstable connections
-	- allowing the device to be managed centrally, to keep it secure and up-to-date (while important to him not always #1 prio to overall initiative/project)
+    - enable new services and connectivity on the device while keeping stability and robustness (while having limited computing resources)
+    - dealing with certificates, queuing and persisting messages to handle unstable connections
+    - allowing the device to be managed centrally, to keep it secure and up-to-date (while important to him not always #1 prio to overall initiative/project)
 
 - Special case : embedded dev with OT focus
-	- familiar with PLCs, SCADA systems,
-	- dealing with emerging need for connectivtiy and IIoT
-	- key concern is security, robusteness and resource efficiency which is usually overruling any “typical” IT solution on the device and implies some kind of custom logic. (e.g. rather closed OS, no dependencies can be installed, very strict certification and QA process , no CI/CD possible, long prodcut lifecycle 10-20 years)
+    - familiar with PLCs, SCADA systems,
+    - dealing with emerging need for connectivtiy and IIoT
+    - key concern is security, robusteness and resource efficiency which is usually overruling any “typical” IT solution on the device and implies some kind of custom logic. (e.g. rather closed OS, no dependencies can be installed, very strict certification and QA process , no CI/CD possible, long prodcut lifecycle 10-20 years)
 
 **Summary:**
 
@@ -68,11 +68,11 @@ The combination of those challenges often leads a series of custom developed emb
 Edge/embedded devices are critical components of any connected asset/smart equipment or operator use case. Within the different use-cases and application scenarios, the edge can take over different roles to address different IoT challenges:
 
 - Edge devices as a machine gateway:
-	- A typical problem for the target personas is the integration of  various asset specific OT interfaces to establish connection to fieldbus or industry protocols.
+    - A typical problem for the target personas is the integration of  various asset specific OT interfaces to establish connection to fieldbus or industry protocols.
 - Supporting IoT and other Northbound connectivity
-	- Vendor agnostic connectivtiy of the data plane and control plane, analytics and service/app orchestration from various IoT platforms is required for all future IoT use-cases, as hyperscaler platforms and end-customer vendor preferences might vary.
+    - Vendor agnostic connectivtiy of the data plane and control plane, analytics and service/app orchestration from various IoT platforms is required for all future IoT use-cases, as hyperscaler platforms and end-customer vendor preferences might vary.
 - Edge devices as deployment option for IoT services and applications
-	- There is an increasing need for device specific applications close to the device e.g. device configuration, control logic, local monitoring, here a flexible software management framework is needed which is independent from the preferred software artifact type due to different hardware, OS variants and package managers.
+    - There is an increasing need for device specific applications close to the device e.g. device configuration, control logic, local monitoring, here a flexible software management framework is needed which is independent from the preferred software artifact type due to different hardware, OS variants and package managers.
 - There is an emerging needs for Edge analytics such as data filtering, pre-aggregation, ML model execution.
 - Edge devices as configuration/management interface for asset - local/remote UI for asset configuration/management including software and firmware management of underlying systems to keep them secure and up-to date
 
