@@ -295,7 +295,7 @@ The HTTP file transfer feature of the `tedge_agent` provides the service to tran
 
 ## Fetching configuration file from child device to cloud
 
-A configuration file snapshot is fetched from an external device as illustrated below.
+A configuration file snapshot is fetched from a child-device as illustrated below.
 
 ```mermaid
 sequenceDiagram
@@ -327,18 +327,18 @@ sequenceDiagram
     Example: `526,child1,foo.conf`
   2) C8Y config plugin: generates a random `file-id` to be used as unique file-handle for HTTP file transfer.
 
-  3) C8Y config plugin: notifies the external device `child1` via MQTT to upload its current configuration to the thin-edge device
+  3) C8Y config plugin: notifies the child-device `child1` via MQTT to upload its current configuration to the thin-edge device
      * Topic:   `tedge/<childid>/commands/req/config_snapshot/<config file path>`
      * Example: `tedge/child1/commands/req/config_snapshot/path/to/file/foo.conf`
      * Payload: `<file-id>`
      * See also [filetransfer specification](https://github.com/thin-edge/thin-edge.io_spikes/blob/baf5c4f7082ae9cc64b9cd41e9366fac1ae3e2c6/file-transfer-service/SUMMARY.md#configuration-management-mqtt-apis) 
 
-  4) external device child1: notifies the plugin about the "execution" status of the upload operations.
+  4) child-device child1: notifies the plugin about the "execution" status of the upload operations.
 
-  5) external device child1: Uploads configuration file to the thin-edge device with the HTTP file transfer feature.
+  5) child-device child1: Uploads configuration file to the thin-edge device with the HTTP file transfer feature.
      * HTTP PUT request: `http://<ip address of thin-edge devicee>/tedge/config_snapshot/<file-id>`
     
-  6) external device child1: notifies the plugin via MQTT about succeeded upload.
+  6) child-device child1: notifies the plugin via MQTT about succeeded upload.
      * Topic:   `tedge/<childid>/commands/res/successful/config_snapshot/<config file path>`
      * Example: `tedge/child1/commands/res/successful/config_snapshot/path/to/file/foo.conf`
      * Payload: `<EMPTY>`
@@ -358,7 +358,7 @@ sequenceDiagram
 
 ## Pushing configuration file update to child device from cloud
 
-A configuration file snapshot is pushed to an external device as illustrated below.
+A configuration file snapshot is pushed to a child-device as illustrated below.
 
 ```mermaid
 sequenceDiagram
@@ -395,20 +395,20 @@ sequenceDiagram
   4) C8Y config plugin: uploads the file to the thin-edge file transfer feature, and removes it from the temporary location
      * HTTP PUT request: `http://<ip address of thin-edge device>/tedge/config_snapshot/<file-id>`
     
-  5) C8Y config plugin: notifies the external device `child1` via MQTT to download the new configuration from the thin-edge device with url `file-id`.
+  5) C8Y config plugin: notifies the child-device `child1` via MQTT to download the new configuration from the thin-edge device with url `file-id`.
      * Topic:   `tedge/<childid>/commands/req/config_update/<config file path>`
      * Example: `tedge/child1/commands/req/config_update/path/to/file/foo.conf`
      * Payload: `<file-id>`
      * See also [filetransfer specification](https://github.com/thin-edge/thin-edge.io_spikes/blob/baf5c4f7082ae9cc64b9cd41e9366fac1ae3e2c6/file-transfer-service/SUMMARY.md#configuration-management-mqtt-apis) 
 
-  6) external device child1: notifies the plugin about the "execution" status of the upload operations.
+  6) child-device child1: notifies the plugin about the "execution" status of the upload operations.
 
-  7) external device child1: Downloads configuration file from the thin-edge device with the HTTP file transfer feature and the `file-id`.
+  7) child-device child1: Downloads configuration file from the thin-edge device with the HTTP file transfer feature and the `file-id`.
      * Example for HTTP GET request: `http://<ip address of thin-edge device>/tedge/config_snapshot/<file-id>`
     
-  8) external device child1: applies the new configuration.
+  8) child-device child1: applies the new configuration.
  
-  9) external device child1: notifies the plugin via MQTT about success.
+  9) child-device child1: notifies the plugin via MQTT about success.
      * Topic:   `tedge/<childid>/commands/res/successful/config_update/<config file path>`
      * Example: `tedge/child1/commands/res/successful/config_update/path/to/file/foo.conf`
      * Payload: `<EMPTY>`
