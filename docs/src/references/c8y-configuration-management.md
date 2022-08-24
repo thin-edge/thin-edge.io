@@ -251,7 +251,8 @@ When the `c8y_configuration_plugin` receives these MQTT messages, the contents o
 If the file already exists, it will be replaced with the new content.
 
 Each time a child-device's TOML is modified (e.g. due to an incoming MQTT message, an incoming new configuration snapshot from the cloud, or a modification by a local process) the `c8y_configuration_plugin` takes care to define all necessary capabilities to the coresponding cloud's child-device twin. These are:
-  - declaring _supported operations_ for configuration management: `c8y_UploadConfigFile` and `c8y_DownloadConfigFile`
+  - ensuring _supported operations_ for configuration management are declared (`c8y_UploadConfigFile` and `c8y_DownloadConfigFile`);
+    and declaring if not
   - declaring provided _configuration types_
 
 **Declaring 'supported operations'**
