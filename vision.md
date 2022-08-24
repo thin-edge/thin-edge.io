@@ -1,6 +1,6 @@
 # What is our vision?
 
-The aim of creating thin-edge.io is to provide a IoT edge device framework for IoT project teams which makes it easy to enable resource constrained devices for IoT. Unlike other solutions, we are not just another single-purpose agent but a flexible platform with re-usable components without any vendor lock-in, focused on adressing the needs of both IT and OT users. 
+The aim of creating thin-edge.io is to provide a IoT edge device framework for IoT project teams which makes it easy to enable resource constrained devices for IoT. Unlike other solutions, we are not just another single-purpose agent but a flexible platform with re-usable components without any vendor lock-in, focused on adressing the needs of both IT and OT users.
 
 ## Our motivation
 
@@ -29,7 +29,7 @@ Within the different target segments, we are addressing the following personas w
 	- Dealing with fragmented hardware / linux variants
 	- Lack of time to focus on device enablement as building IoT applications on cloud side is main responsibility
 	- No interest/time to dive into “hygiene factors” as device management and security
-	- Expect ready to use or configuration based solution, with pre-defined design principles and framework, offering easy extensibility with known tools/languages 
+	- Expect ready to use or configuration based solution, with pre-defined design principles and framework, offering easy extensibility with known tools/languages
 
 **Device developer / Embedded engineer**: background consisting of Linux, C/C++, C#, embedded systems (IT focused)
 
@@ -43,12 +43,12 @@ Within the different target segments, we are addressing the following personas w
 
 - Special case : embedded dev with OT focus
 	- familiar with PLCs, SCADA systems,
-	- dealing with emerging need for connectivtiy and IIoT 
+	- dealing with emerging need for connectivtiy and IIoT
 	- key concern is security, robusteness and resource efficiency which is usually overruling any “typical” IT solution on the device and implies some kind of custom logic. (e.g. rather closed OS, no dependencies can be installed, very strict certification and QA process , no CI/CD possible, long prodcut lifecycle 10-20 years)
 
 **Summary:**
 
-The persona types adressed by thin-edge.io often have conflicting requirements and views, this itself is addressed by the project technology vision and design principles, allowing thin-edge.io acting as a brindge between the OT and IT world. 
+The persona types adressed by thin-edge.io often have conflicting requirements and views, this itself is addressed by the project technology vision and design principles, allowing thin-edge.io acting as a brindge between the OT and IT world.
 
 ## Persona needs and solutions
 
@@ -64,16 +64,16 @@ Of course, any generic solution would have to walk the very tight path of keepin
 
 The combination of those challenges often leads a series of custom developed embedded software that is expensive to maintain and extend. Also, most of the development used to be specific to one cloud or IoT platform. At the same time for more and more use-cases moving logic and analytics to the embedded edge device becomes a must for reasons such latency, security or cost. However, moving, and orchestrating workloads on the Edge used to be very challenging as it also requires a lot of custom logic to be developed on the device, to be able to integrate and support various device management platforms.
 
-**Example applications scenarios:** 
-Edge/embedded devices are critical components of any connected asset/smart equipment or operator use case. Within the different use-cases and application scenarios, the edge can take over different roles to address different IoT challenges: 
+**Example applications scenarios:**
+Edge/embedded devices are critical components of any connected asset/smart equipment or operator use case. Within the different use-cases and application scenarios, the edge can take over different roles to address different IoT challenges:
 
 - Edge devices as a machine gateway:
-	- A typical problem for the target personas is the integration of  various asset specific OT interfaces to establish connection to fieldbus or industry protocols. 
-- Supporting IoT and other Northbound connectivity 
-	- Vendor agnostic connectivtiy of the data plane and control plane, analytics and service/app orchestration from various IoT platforms is required for all future IoT use-cases, as hyperscaler platforms and end-customer vendor preferences might vary. 
-- Edge devices as deployment option for IoT services and applications 
-	- There is an increasing need for device specific applications close to the device e.g. device configuration, control logic, local monitoring, here a flexible software management framework is needed which is independent from the preferred software artifact type due to different hardware, OS variants and package managers. 
-- There is an emerging needs for Edge analytics such as data filtering, pre-aggregation, ML model execution. 
+	- A typical problem for the target personas is the integration of  various asset specific OT interfaces to establish connection to fieldbus or industry protocols.
+- Supporting IoT and other Northbound connectivity
+	- Vendor agnostic connectivtiy of the data plane and control plane, analytics and service/app orchestration from various IoT platforms is required for all future IoT use-cases, as hyperscaler platforms and end-customer vendor preferences might vary.
+- Edge devices as deployment option for IoT services and applications
+	- There is an increasing need for device specific applications close to the device e.g. device configuration, control logic, local monitoring, here a flexible software management framework is needed which is independent from the preferred software artifact type due to different hardware, OS variants and package managers.
+- There is an emerging needs for Edge analytics such as data filtering, pre-aggregation, ML model execution.
 - Edge devices as configuration/management interface for asset - local/remote UI for asset configuration/management including software and firmware management of underlying systems to keep them secure and up-to date
 
 ## What is it and why thin-edge.io is a game changer?
@@ -112,4 +112,4 @@ thin-edge.io offers a unique approach to unify the needs of both the IT and OT w
 ## Additional Questions
 
 What business goals do we try to achieve ?
-- This is an open source project licenced under Apache 2.0 , it is focused on enterprise and company (B2B) use, hence why we encourage further partners to join our mission and community to create an industry standard for IoT device enablement and vendor agnostic connectivity and device management. 
+- This is an open source project licenced under Apache 2.0 , it is focused on enterprise and company (B2B) use, hence why we encourage further partners to join our mission and community to create an industry standard for IoT device enablement and vendor agnostic connectivity and device management.
