@@ -26,12 +26,12 @@ potentially embedded, development projects.
 building and offering products and services based on IoT technology. For them it
 is crucial to deliver business outcomes and return on investment fast, as they
 are dealing with a lot of end-customers who themselves in the past often failed
-“homegrown” IoT initiatives. There is no willingness from the end customer to
+"homegrown" IoT initiatives. There is no willingness from the end customer to
 spend a large amount of money and time on device connectivity. Therefore
 thin-edge.io for them is a critical foundation to solve the connectivity
 challenge and to focus on the business applications rather then connectivity and
-device management aspects, which are in a lot of cases considered “hygiene
-factors”.
+device management aspects, which are in a lot of cases considered "hygiene
+factors".
 
 **(Smart) Equipment makers/Hardware manufacturers/OEMs:** Equipment
 Manufacturers are moving away from focusing primarily on selling their equipment
@@ -39,7 +39,7 @@ towards selling their equipment as a service (EaaS). An IIoT platform allowing
 to connect & manage assets as well as to use the visualize, analyze, and
 integrate equipment data is often the foundation to enable service-based
 business models & services. Here thin-edge.io is used as a foundation to bring
-“intelligence” around the equipment. Combined with any IoT platform, single
+"intelligence" around the equipment. Combined with any IoT platform, single
 purpose gateways or devices which sit on the equipment can be transformed into
 edge deployment options for services and applications that support the overall
 EaaS business model by leveraging thin-egdge.io framework.
@@ -69,7 +69,7 @@ Python, Java, JS, Angular, Kubernetes, Cloud Platforms
     - Dealing with fragmented hardware / linux variants
     - Lack of time to focus on device enablement as building IoT applications on
       cloud side is main responsibility
-    - No interest/time to dive into “hygiene factors” as device management and
+    - No interest/time to dive into "hygiene factors" as device management and
       security
     - Expect ready to use or configuration based solution, with pre-defined
       design principles and framework, offering easy extensibility with known
@@ -95,7 +95,7 @@ C#, embedded systems (IT focused)
     - familiar with PLCs, SCADA systems,
     - dealing with emerging need for connectivtiy and IIoT
     - key concern is security, robusteness and resource efficiency which is
-      usually overruling any “typical” IT solution on the device and implies
+      usually overruling any "typical" IT solution on the device and implies
       some kind of custom logic. (e.g. rather closed OS, no dependencies can be
       installed, very strict certification and QA process , no CI/CD possible,
       long prodcut lifecycle 10-20 years)
