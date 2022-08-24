@@ -308,6 +308,7 @@ sequenceDiagram
         C8Y Cfg Plugin->>External Device: 3: MQTT notification for "child1": Request to upload config file "/path/to/file/foo.conf", to url "<file-id>" 
 
         External Device->>C8Y Cfg Plugin: 4: MQTT notification: Operation Status upload config "Executing" 
+        C8Y Cfg Plugin->>C8Y Cloud: Forward executing status to cloud device twin
 
         External Device->>Tedge Agent: 5: HTTP PUT /tedge/config_snapshot/<file-id> (content of config file "/path/to/file/foo.conf")
 
@@ -375,6 +376,7 @@ sequenceDiagram
         C8Y Cfg Plugin->>External Device: 5: MQTT notification for "child1": Requst to download config file "/path/to/file/foo.conf" on url "file-id"
 
         External Device->>C8Y Cfg Plugin: 6: MQTT notification: Operation Status upload config "Executing" 
+        C8Y Cfg Plugin->>C8Y Cloud: Forward executing status to cloud device twin
 
         External Device->>Tedge Agent: 7: HTTP GET /tedge/config_snapshot/<file-id>
         External Device->>External Device: 8: Apply downloaded file as config file "/path/to/file/foo.conf"
