@@ -82,7 +82,7 @@ To address the problems above, we created thin-edge.io as a framework for lightw
 
 The framework includes modules for cloud connectivity, data mapping, device management, intra-edge communication, and certificate management, all aspects and challenges our target personas need to address.
 
-In combination with IoT platforms, thin-edge.io is a foundation for enabling the devices with the following capabilities:
+In combination with IoT platforms, thin-edge.io is a foundation for enabling devices with the following capabilities:
 
 - support for effortless and secure edge device lifecycle management for single and device fleets
 - support for low-touch provisioning of thin edge devices
