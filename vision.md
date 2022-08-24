@@ -102,7 +102,7 @@ C#, embedded systems (IT focused)
 
 **Summary:** The persona types adressed by thin-edge.io often have conflicting
 requirements and views, this itself is addressed by the project technology
-vision and design principles, allowing thin-edge.io acting as a brindge between
+vision and design principles, allowing thin-edge.io acting as a bridge between
 the OT and IT world.
 
 ## Persona needs and solutions
