@@ -155,7 +155,7 @@ different roles to address different IoT challenges:
       flexible software management framework is needed which is independent from
       the preferred software artifact type due to different hardware, OS
       variants and package managers.
-- There is an emerging needs for Edge analytics such as data filtering,
+- There is an emerging need for Edge analytics such as data filtering,
   pre-aggregation, ML model execution.
 - Edge devices as configuration/management interface for asset - local/remote UI
   for asset configuration/management including software and firmware management
