@@ -65,7 +65,7 @@ The framework does so by providing a frictionless user experience to enable
 customers to develop their own solutions based on the included functionality but
 also by attaching custom functionality with minimum effort.
 
-## Our target users/personas
+## Users and Personas
 
 Within the different target segments, we are addressing the following personas
 with thin-edge.io:
