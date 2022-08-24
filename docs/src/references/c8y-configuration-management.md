@@ -322,8 +322,8 @@ sequenceDiagram
         C8Y Cfg Plugin->>C8Y Cfg Plugin: 10: Remove downloaded file from local filesystem
 ```
 
-  1) At some point C8Y cloud sends a ConfigUploadRequest for type `foo.conf` for `child1` arrives at C8Y config plugin.
-    The format of C8Y SmartREST message for config retrieval operation is: `526,<childid>,<config type>`. See [C8Y SmartREST doc](https://cumulocity.com/guides/reference/smartrest-two/#upload-configuration-file-with-type-526)<br/>
+  1) At some point Cumulocity cloud sends a ConfigUploadRequest for type `foo.conf` for `child1` arrives at C8Y config plugin.
+    The format of Cumulocity SmartREST message for config retrieval operation is: `526,<childid>,<config type>`. See [C8Y SmartREST doc](https://cumulocity.com/guides/reference/smartrest-two/#upload-configuration-file-with-type-526)<br/>
     Example: `526,child1,foo.conf`
   2) C8Y config plugin: generates a random `file-id` to be used as unique file-handle for HTTP file transfer.
 
@@ -351,7 +351,7 @@ sequenceDiagram
   8) C8Y config plugin: sends a delete request to the HTTP file transfer with the `file-id`
      * Example for HTTP DELETE request: `http://<ip address of thin-edge device>/config_snapshot/<file-id>`
 
-  9) C8Y config plugin: sends the downloaded file to C8Y
+  9) C8Y config plugin: sends the downloaded file to Cumulocity cloud
 
   10) C8Y config plugin: removes the downloaded file from temporary location
   
@@ -386,9 +386,9 @@ sequenceDiagram
 ```
 
   1) At some point a ConfigDownloadRequest sent from cloud for type `foo.conf` for `child1` arrives at C8Y config plugin.
-     The format of C8Y SmartREST message for config send operation is: `524,<childid>,<URL>,<config type>`. See [C8Y SmartREST doc](https://cumulocity.com/guides/reference/smartrest-two/#download-configuration-file-with-type-524)<br/>
+     The format of Cumulocity SmartREST message for config send operation is: `524,<childid>,<URL>,<config type>`. See [C8Y SmartREST doc](https://cumulocity.com/guides/reference/smartrest-two/#download-configuration-file-with-type-524)<br/>
     Example: `524,child1,http://some.url,foo.conf`
-  2) C8Y config plugin: downloads the file based on the URL received from C8Y, to some temporary location
+  2) C8Y config plugin: downloads the file based on the URL received from Cumulocity cloud, to some temporary location
 
   3) C8Y config plugin: generates a random `file-id` to be used as unique file-handle for HTTP file transfer.
 
