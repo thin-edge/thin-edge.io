@@ -163,7 +163,7 @@ different roles to address different IoT challenges:
 
 ## thin-edge.io as a game changer
 
-To address the problems above, we created thin-edge.io as a framework for
+To address the problems above, we create thin-edge.io as a framework for
 lightweight IoT gateways, PLC’s, routers and other embedded devices which
 require integration and interoperability with IoT platforms.
 
