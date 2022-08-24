@@ -197,7 +197,7 @@ In that example, the plugin serves configuration management for the thin-edge de
 
 Similar to section [Configuration](#configuration) above, each child-device configuration file is defined by a record with:
 
-* The full `path` to the file. That path is treated as path pointing into the remote filesystem of the child-device.
+* The full `path` to the file. That path is a reference information for the child-device. Could be a full path or a handle for an external child-device, or a local filesystem path for a logical child-device.
 * An optional configuration `type`. If not provided, the `path` is used as `type`.
 * The fields `user`, `group` and octal `mode` (as introduced in section [Configuration](#configuration) above) are not supported for child-devices.  
 
