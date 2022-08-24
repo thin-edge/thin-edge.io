@@ -196,8 +196,7 @@ devices with the following capabilities:
 
 thin-edge.io offers a unique approach to unify the needs of both the IT and OT
 world by offering a platform design focused on efficiency robustness and
-security while offering the highest level of extensibility and wide range of
-hardware.
+security while offering the highest level of extensibility.
 
 - Compared to other frameworks we are not restricting users towards one specific
   software artifact type, package manager, programming language or message
