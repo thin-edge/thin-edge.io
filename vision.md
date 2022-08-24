@@ -50,6 +50,8 @@ business models and services. Here thin-edge.io is used as a foundation to bring
 purpose gateways or devices which sit on the equipment can be transformed into
 edge deployment options for services and applications that support the overall
 EaaS business model by leveraging thin-egdge.io framework.
+As equipment may be deployed remotely and not always physically accessible,
+thin-edge.io ensures a high level of robustness and security.
 
 **Smart equipment operators:** Rather than dealing with single equipment, smart
 operators are looking to enhance or optimize whole manufacturing processes with
