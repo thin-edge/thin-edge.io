@@ -88,7 +88,7 @@ In combination with IoT platforms, thin-edge.io is a foundation for enabling dev
 - support for low-touch provisioning of thin edge devices
 - support for local and remote configuration
 - support for local and remote maintenance including remote access (monitoring/troubleshooting),
-- decommissioning of thin devices (e.g. for security compromosed or end of life devices)
+- decommissioning of thin devices (e.g. for security compromised or end of life devices)
 
 Based on the challenge to capture both, the OT and IT persona needs, thin-edge.io is focused on following design principles:
 
