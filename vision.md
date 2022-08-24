@@ -35,6 +35,10 @@ device management aspects, which are in a lot of cases considered "hygiene
 factors".
 thin-edge.io enables them to connect industial sensors and automation to a cloud
 service.
+High assurances in quality and scalability of thin-edge.io, not only itself but
+also in combination with custom-developed components, let the Service Provider
+go from a POC implementation with thin-edge.io in their ecosystem to a rollout
+in production with little friction.
 
 **(Smart) Equipment makers/Hardware manufacturers/OEMs:** Equipment
 Manufacturers are moving away from focusing primarily on selling their equipment
