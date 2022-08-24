@@ -61,6 +61,9 @@ manage a heterogeneous set of industrial devices and hardware such as PLCs,
 protocol converters or industrial gateways. Here thin-edge.io helps to unify the
 complex device landscape by offering lightweight software modules which can run
 on resource constrained, brownfield hardware.
+The framework does so by providing a frictionless user experience to enable
+customers to develop their own solutions based on the included functionality but
+also by attaching custom functionality with minimum effort.
 
 ## Our target users/personas
 
