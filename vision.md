@@ -18,7 +18,8 @@ management, etc...
 Thats why we are creating thin-edge.io. It provides an easy and flexible way for
 IoT project teams and device manufactures to make their devices IoT-ready
 without having to re-invent the wheel with costly and time-consuming,
-potentially embedded, development projects.
+potentially embedded, development projects and without having to reevaluate
+existing projects or applications to enable them with thin-edge.io.
 
 ## Our target segments
 
