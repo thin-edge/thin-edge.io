@@ -33,6 +33,8 @@ thin-edge.io for them is a critical foundation to solve the connectivity
 challenge and to focus on the business applications rather then connectivity and
 device management aspects, which are in a lot of cases considered "hygiene
 factors".
+thin-edge.io enables them to connect industial sensors and automation to a cloud
+service.
 
 **(Smart) Equipment makers/Hardware manufacturers/OEMs:** Equipment
 Manufacturers are moving away from focusing primarily on selling their equipment
