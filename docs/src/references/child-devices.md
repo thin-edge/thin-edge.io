@@ -79,7 +79,7 @@ Whenever that MQTT message is sent to the thin-edge device:
   1) thin-edge assures the child-device twin exists, and creates it if it does not exist.
   2) each software component that provides an included capability (e.g. the C8Y Configuration Plugin for `configurations`) takes care to define all necessary capabilities to the coresponding cloud's child-device twin (i.E. _supported operations_, and list of provided types as e.g. _configuration types_).
 
-As result of the child-device creation thin-edge publishs an empty to MQTT topic `tedge/meta/success/<childid>` on successs, or a message to `tedge/meta/failed/<childid>`. The message on `tedge/meta/failed/<childid>` can optional contain a fail reaon as plain text.
+In response to the child-device provisioning request, thin-edge publishes an empty resposne to MQTT topic `tedge/meta/success/<child-id>` on success, or a failure message to `tedge/meta/failed/<child-id>` in case of a failure. The failure message on `tedge/meta/failed/<childid>` can be optional.
 
 ### (2) thin-egde APIs provided on network<br/> and (3) associate consumed/provided to child-device twins
 
