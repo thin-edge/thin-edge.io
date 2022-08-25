@@ -33,9 +33,9 @@ A newly attached child-device (external or logical) must be once provisioned. Th
      (i.e. declaring all _supported operations_ and all _types_ per supported operation, as _config types_, _log types_, ...)
      (i.e. declaring all operations supported by the device like configuration management, software management etc and further metadata per supported operation, like _config types_, _log types_, _software list_ etc)
 
-There are two option to create the cloud's child-device twin and declaring all supported capabilities. 
+There are two options to create the cloud's child-device twin and declaring all supported capabilities:
 
-On the one hand a cloud's _child-device twin_ can be created upfront (e.g. with some customer-specific cloud-site backend), and also all capabilities can be declared that way to the new twin. Then the child-device on the device site (external or logical) relies on that existing twin.
+1. The cloud's _child-device twin_ is created upfront (e.g. with some customer-specific cloud-site backend), and also all capabilities are declared that way to the new twin. Then the child-device on the device site (external or logical) relies on that existing twin.
 
 2. The child-device initiates the device twin creation by announcing its identity and capabilities to thin-edge and then thin-edge gets that child device twin created in the cloud using a cloud mapper.
 
