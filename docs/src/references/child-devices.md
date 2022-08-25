@@ -37,7 +37,7 @@ There are two option to create the cloud's child-device twin and declaring all s
 
 On the one hand a cloud's _child-device twin_ can be created upfront (e.g. with some customer-specific cloud-site backend), and also all capabilities can be declared that way to the new twin. Then the child-device on the device site (external or logical) relies on that existing twin.
 
-On the other hand a child-device (external or logical) can announce it's capabilities to thin-edge to provoke thin-edge creating the cloud's child-device twin and declaring all capabilities on that child-device twin. 
+2. The child-device initiates the device twin creation by announcing its identity and capabilities to thin-edge and then thin-edge gets that child device twin created in the cloud using a cloud mapper.
 
 ##### Announcing child-device capabilities by the child-device it-self
 
