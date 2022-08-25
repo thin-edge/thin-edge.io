@@ -81,7 +81,7 @@ Whenever that MQTT message is sent to the thin-edge device:
 
 In response to the child-device provisioning request, thin-edge publishes an empty resposne to MQTT topic `tedge/meta/success/<child-id>` on success, or a failure message to `tedge/meta/failed/<child-id>` in case of a failure. The failure message on `tedge/meta/failed/<childid>` can be optional.
 
-### (2) thin-egde APIs provided on network<br/> and (3) associate consumed/provided to child-device twins
+### (2) thin-edge APIs provided over the network<br/> and (3) associate consumed/provided data to child-device twins
 
 Each thin-edge API that supports child-devices covers both aspects. As of now, the following APIs have child-device support:
    * Measurements, see [Sending a measurements to a child-devices](../tutorials/send-thin-edge-data.md#sending-measurements-to-child-devices)
