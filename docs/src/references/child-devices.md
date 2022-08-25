@@ -86,6 +86,7 @@ In response to the child-device provisioning request, thin-edge publishes an emp
 Each thin-edge API that supports child-devices covers both aspects. As of now, the following APIs have child-device support:
    * Measurements, see [Sending a measurements to a child-devices](../tutorials/send-thin-edge-data.md#sending-measurements-to-child-devices)
    * Events, see [Sending an event to a child-device](../tutorials/send-events.md#sending-an-event-for-a-childexternal-device-to-the-cloud)
+   * Alarms, see [Raising an alarm to a child-device](../tutorials/raise-alarm.md#raising-alarms-from-child-devices)
    * Configuration Management, see [Configuration files for child-devices](../references/c8y-configuration-management.md#configuration-files-for-child-devices)
 
 
