@@ -118,6 +118,13 @@ fn create_directories(config_dir: &Path) -> Result<(), anyhow::Error> {
         0o644,
         None,
     )?;
+    // Create directory for device custom fragments
+    create_directory_with_user_group(
+        format!("{}/device", config_dir.display()),
+        "tedge",
+        "tedge",
+        0o775,
+    )?;
     Ok(())
 }
 
