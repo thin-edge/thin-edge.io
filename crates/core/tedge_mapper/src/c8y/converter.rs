@@ -47,8 +47,8 @@ use super::{
 };
 
 const C8Y_CLOUD: &str = "c8y";
-const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "/etc/tedge/device/inventory.json";
-const SUPPORTED_OPERATIONS_DIRECTORY: &str = "/etc/tedge/operations";
+const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
+const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
 const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "c8y/inventory/managedObjects/update";
 const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
@@ -72,6 +72,7 @@ where
     pub operations: Operations,
     operation_logs: OperationLogs,
     http_proxy: Proxy,
+    cfg_dir: PathBuf,
 }
 
 impl<Proxy> CumulocityConverter<Proxy>
@@ -84,6 +85,7 @@ where
         device_type: String,
         operations: Operations,
         http_proxy: Proxy,
+        cfg_dir: &Path,
     ) -> Result<Self, CumulocityMapperError> {
         let mut topic_filter: TopicFilter = vec![
             "tedge/measurements",
@@ -127,6 +129,7 @@ where
             operations,
             operation_logs,
             http_proxy,
+            cfg_dir: cfg_dir.to_path_buf(),
         })
     }
 
@@ -181,6 +184,7 @@ where
             operations,
             operation_logs,
             http_proxy,
+            cfg_dir: Path::new("cfg_dir").to_path_buf(),
         })
     }
 
@@ -395,10 +399,12 @@ where
     }
 
     fn try_init_messages(&self) -> Result<Vec<Message>, ConversionError> {
-        let inventory_fragments_message =
-            self.wrap_error(create_inventory_fragments_message(&self.device_name));
+        let inventory_fragments_message = self.wrap_error(create_inventory_fragments_message(
+            &self.device_name,
+            &self.cfg_dir,
+        ));
         let supported_operations_message =
-            self.wrap_error(create_supported_operations_fragments_message());
+            self.wrap_error(create_supported_operations_fragments_message(&self.cfg_dir));
         let device_data_message = self.wrap_error(create_device_data_fragments(
             &self.device_name,
             &self.device_type,
@@ -437,7 +443,9 @@ where
                 self.operations.remove_operation(&message.operation_name);
             }
         }
-        Ok(Some(create_supported_operations_fragments_message()?))
+        Ok(Some(create_supported_operations_fragments_message(
+            &self.cfg_dir,
+        )?))
     }
 }
 
@@ -504,8 +512,11 @@ fn create_get_pending_operations_message() -> Result<Message, ConversionError> {
     Ok(Message::new(&topic, payload))
 }
 
-fn create_supported_operations_fragments_message() -> Result<Message, ConversionError> {
-    let ops = Operations::try_new(SUPPORTED_OPERATIONS_DIRECTORY, C8Y_CLOUD)?;
+fn create_supported_operations_fragments_message(
+    cfg_dir: &Path,
+) -> Result<Message, ConversionError> {
+    let ops_dir = format!("{}/{SUPPORTED_OPERATIONS_DIRECTORY}", cfg_dir.display());
+    let ops = Operations::try_new(ops_dir, C8Y_CLOUD)?;
     let ops = ops.get_operations_list();
     let ops = ops.iter().map(|op| op as &str).collect::<Vec<&str>>();
 
@@ -514,10 +525,14 @@ fn create_supported_operations_fragments_message() -> Result<Message, Conversion
     Ok(Message::new(&topic, ops_msg.to_smartrest()?))
 }
 
-fn create_inventory_fragments_message(device_name: &str) -> Result<Message, ConversionError> {
-    let ops_msg = get_inventory_fragments(INVENTORY_FRAGMENTS_FILE_LOCATION)?;
+fn create_inventory_fragments_message(
+    device_name: &str,
+    cfg_dir: &Path,
+) -> Result<Message, ConversionError> {
+    let inventory_file_path = format!("{}/{INVENTORY_FRAGMENTS_FILE_LOCATION}", cfg_dir.display());
+    let ops_msg = get_inventory_fragments(&inventory_file_path)?;
 
-    let topic = Topic::new_unchecked(&format!("{INVENTORY_MANAGED_OBJECTS_TOPIC}/{device_name}"));
+    let topic = Topic::new_unchecked(&format!("{inventory_file_path}/{device_name}"));
     Ok(Message::new(&topic, ops_msg.to_string()))
 }
 
@@ -734,11 +749,13 @@ fn read_json_from_file(file_path: &str) -> Result<serde_json::Value, ConversionE
 }
 
 /// gets a serde_json::Value of inventory
-fn get_inventory_fragments(file_path: &str) -> Result<serde_json::Value, ConversionError> {
+fn get_inventory_fragments(
+    inventory_file_path: &str,
+) -> Result<serde_json::Value, ConversionError> {
     let agent_fragment = C8yAgentFragment::new()?;
     let json_fragment = agent_fragment.to_json()?;
 
-    match read_json_from_file(file_path) {
+    match read_json_from_file(inventory_file_path) {
         Ok(mut json) => {
             json.as_object_mut()
                 .ok_or(ConversionError::FromOptionError)?
@@ -752,7 +769,7 @@ fn get_inventory_fragments(file_path: &str) -> Result<serde_json::Value, Convers
             Ok(json)
         }
         Err(_) => {
-            info!("Inventory fragments file not found at {INVENTORY_FRAGMENTS_FILE_LOCATION}");
+            info!("Inventory fragments file not found at {inventory_file_path}");
             Ok(json_fragment)
         }
     }

@@ -76,6 +76,7 @@ impl TEdgeComponent for CumulocityMapper {
             device_type,
             operations,
             http_proxy,
+            cfg_dir,
         )?);
 
         let mut mapper = create_mapper(
