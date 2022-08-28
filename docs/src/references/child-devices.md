@@ -38,49 +38,6 @@ There are two options to create the cloud's child-device twin and declaring all 
 1. The cloud's _child-device twin_ is created upfront (e.g. with some customer-specific cloud-site backend), and also all capabilities are declared that way to the new twin. Then the child-device on the device site (external or logical) relies on that existing twin.
 
 2. The child-device initiates the device twin creation by announcing its identity and capabilities to thin-edge and then thin-edge gets that child device twin created in the cloud using a cloud mapper.
-
-##### Announcing child-device capabilities by the child-device it-self
-
-To announce it's capabilities the child-device (external or logical) sends an MQTT message to `tedge/meta/<childid>`. The MQTT message is as below:
-
-```json
-{
-   "device-name": "<optional name of that child-device>",
-   "device-type": "<optional type of that child-device>",
-   "<capability 1>": <capability specific JSON object>,
-   "<capability 2>": <capability specific JSON object>,
-   // [...]
-}
-```
-
-Thereby the fields are as below:
-   * `device-name` is an optional human readble device-name, visible in the cloud. If the field is not contained in the JSON message the `childid` of the topic structure is used as device-name.
-   * `device-type` is an optional device-type string assigned to the cloud's child-device twin. If the field is not contained in the JSON message the value `thin-edge.io-child` is used as device-type string.
-   * each field `<capability i>` represents a capability (e.g. `configurations` for _Configuration management_). The format of each `capability specific JSON object` is specific to the coresponding capability. For details see the documentation for coresponding capabilitie's API (e.g. [Configuration files for child-devices](../references/c8y-configuration-management.md#configuration-files-for-child-devices)). 
-     Section [thin-egde APIs provided on network](#2-thin-egde-apis-provided-on-network-and-3-associate-consumedprovided-to-child-device-twins) below lists all APIs provided by thin-edge for child-device support.
-
-Example:
-```json
-{
-   "device-name": "My Child-Device",
-   "device-type": "type1",
-   "configurations": [ // capabilities for feature Configuration Management 
-     {
-       "type": "foo.conf"
-     },
-     {
-       "type": "bar.conf"
-     }
-   ]
-}
-```
-
-Whenever that MQTT message is sent to the thin-edge device:
-  1) thin-edge assures the child-device twin exists, and creates it if it does not exist.
-  2) each software component that provides an included capability (e.g. the C8Y Configuration Plugin for `configurations`) takes care to define all necessary capabilities to the coresponding cloud's child-device twin (i.E. _supported operations_, and list of provided types as e.g. _configuration types_).
-
-In response to the child-device provisioning request, thin-edge publishes an empty resposne to MQTT topic `tedge/meta/success/<child-id>` on success, or a failure message to `tedge/meta/failed/<child-id>` in case of a failure. The failure message on `tedge/meta/failed/<childid>` can be optional.
-
 ### (2) thin-edge APIs provided over the network<br/> and (3) associate consumed/provided data to child-device twins
 
 Each thin-edge API that supports child-devices covers both aspects. As of now, the following APIs have child-device support:
