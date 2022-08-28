@@ -1,0 +1,102 @@
+
+# thin-edge data-model
+
+The **thin-edge data-model** is used to represent all device-related information.
+It covers the thin-edge device itself, as well as other _external devices_ connected to thin-edge.
+Each device is represented with a data **object**. 
+Each data **object** can have different **fields**. 
+The following JSON code shows a small example of a device data **object**:
+         
+          {
+              "name": "thin-edge device",
+              "type": "thin-edge.io"
+          }
+
+**thin-edge** manages an **inventory** to store and provide all those objects. 
+
+The figure below illustrats the **data-model** objects and the **inventory**:
+
+![thin-edge Inventory](images/inventory.svg)
+
+* The **thin-edge Device** object represents the device it-self, that runs **thin-edge** and manages that **inventory**.
+  That objects has the fields `name` and `type` that contains the device-name and device-type visible in the cloud.
+
+* A **Child-Device** object could be exist more than once in the inventory. 
+  Each **Child-Device** object represents an _external device_ (e.g. sensor, actuator, PLC, any other kind of device) that is connected to the thin-edge device.
+  * Each **child-device** object is assocoiated with a separate individual device in the cloud. 
+  * Similar to the **thin-edge Device** object, each **child-device** object has the fields `name` and `type`.
+    In addition, each **child-device** object has a field `childid`, that contains a unique ID to address that child-device. 
+  * NOTE: Not just _external devices_, but also processes running on the thin-edge device itself, can be represented with a **child-device** object in the **inventory** - to treat them as __logical child-devices__.
+
+* Each **Capability** object represents a functionality a device is capable.
+  * Each **Capability** object is of one the of supported **Capanbilities Types** (e.g. `tedge_config`, `tedge_logging`, `tedge_software`). More details see section below [Capability Types](#capability-types).
+
+  * A device **object** can contain several **capability** objects.
+
+## Capability Types
+
+**Capability types** are the contract between a device and **thin-edge** or a plugin.
+* A **capability type** has a unique name and a set of fields that are expected in the coresponding capability object.
+* Each **capability** object in the inventory is of one of a supported **capability type**.
+
+The following JSON code shows a small example of an object of **capability type** `tedge_config` in a device object:
+         
+          {
+              "name": "child-device 1",
+              "type": "thin-edge.io-child",
+              "capabilities": {
+                  // find below a capability object of type 'tedge_config'
+                  "tedge_config": {
+                      files: [ "foo.conf", "bar.conf" ]
+                  }
+              }
+          }
+
+**thin-edge** as well as installed plugins use those **capability** objects in the **inventory** to provide the right **capabilities** to the right devices.
+Furthermore all needed information for the certain **capability** are contained in the **capability** object.
+
+Example:
+
+* The configuration management plugin provides the capability `tedge_config`. 
+* The configuration management plugin gets aware of all device objects that contain that **capability** object, and processes configuration management for those devices.
+* Each capability object `tedge_config` contains the field `files`, that tells the plugin the list of config-file the corresponding device provides.
+
+**thin-edge** has a set of pre-defined **capability types**. 
+Each plugin can define plugin-specific capability types, or use one of the pre-defined capability type.
+For details about all [Pre-defined Capability Types](#pre-defined-capability-types) see section below.
+
+### Pre-defined Capability Types
+
+That section lists the pre-defined **capabilities types**.
+
+* Capability Type: **Configration Management**
+
+  |                      |                     | 
+  |:---------------------|:--------------------|
+  | **Unique name**      | `tedge_config` |
+  | **Field:**`files`    | List of config-file the device provides |
+  | **Behavoiur**        | On cloud request provided configuration files are requested from the device and sent to cloud; or downloaded from cloud and sent to the device. For details see [Configuration Managenement documentation](../references/c8y-configuration-management.md#configuration-files-for-child-devices)
+
+* Capability Type: **Logging Management**
+
+  |                      |              | 
+  |:---------------------|:-------------|
+  | **Unique name**      | `tedge_log`  |
+  | **Field:** `files`   | List of log-files the device provides |
+  | **Behavoiur**        | One cloud request provided log-files are requested from the device and sent to cloud. Details see TODO: add link to log plugin documentation, section for child-devices.
+
+The following JSON code shows a small example of an **capability** objects in a device object:
+         
+          {
+              "name": "child-device 1",
+              "type": "thin-edge.io-child",
+              "capabilities": {
+                  "tedge_config": {
+                      files: [ "foo.conf", "bar.conf" ]
+                  },
+                  "tedge_log": {
+                      // ...
+                  },
+              }
+          }
+
