@@ -35,7 +35,10 @@ The figure below illustrats the **data-model** objects and the **inventory**:
 
 ## Capability Types
 
-**Capability types** are the contract between a device and **thin-edge** or a plugin.
+**Capability types** define the contract between a device and a plugin. That contract must be implemented by both parties (device and plugin). **thin-edge** does not interpret the content of any **capability** object, but forwards it to the coresponding plugin, and stores it in the device object in the inventory.<br/>
+NOTE: Some **Capabilities Types** are implemented by built-in thin-edge components (e.g. Software Management). In that case there is no plugin, but the built-in thin-edge component gets the **capability** object fordwarded, and implements that contract.
+
+The structure of **Capability Types** is as below:
 * A **capability type** has a unique name and a set of fields that are expected in the coresponding capability object.
 * Each **capability** object in the inventory is of one of a supported **capability type**.
 
