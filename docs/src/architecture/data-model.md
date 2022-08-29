@@ -105,3 +105,36 @@ The following JSON code shows a small example of an **capability** objects in a 
               }
           }
 
+## Registration of a new device
+
+The sequence diagram below illustrates call involved components and messages-exchanges happending, when a new external child-device registers it-self to thin-edge.
+
+```mermaid
+sequenceDiagram
+    participant external child device
+    participant tedge agent
+    participant C8Y cfg plugin
+    participant C8Y log plugin
+    participant mapper
+    participant tedge supported operations API
+    participant C8Y cloud
+        external child device->>tedge agent: (1) register(childid, cfg_capability, log_capability)
+        tedge agent->>mapper: (2) create child-device twin(childid)
+        mapper->>C8Y cloud: (3) create child-device twin(childid)
+        tedge agent->>tedge agent: (4) create child-device twin in the inventory
+        tedge agent->>C8Y cfg plugin: (5) register(childid, cfg_capability)
+        C8Y cfg plugin->>tedge supported operations API: (6) declare(childid, c8y_upload_cfg, c8y_download_cfg)
+        tedge supported operations API->>C8Y cloud: (7) declare supported operations(childid, c8y_upload_cfg, c8y_download_cfg, ...)
+        C8Y cfg plugin->>C8Y cloud: (8) declare cfg types(childid, cfg_capability.types)
+        C8Y cfg plugin-->>tedge agent: (9) result
+        tedge agent->>tedge agent: (10) add cfg_capability to the child-device object in the inventory
+        
+        mapper->>C8Y cloud: (11) create device twin(childid)
+        tedge agent->>C8Y log plugin: (12) register(childid, log_capability)
+        Note right of C8Y log plugin: From here sequence<br>is similar to<br>C8Y cfg plugin
+        C8Y log plugin-->>tedge agent: (13) result      
+        tedge agent->>tedge agent: (14) add log_capability to the child-device object in the inventory
+        
+        tedge agent-->>external child device: (15) result    
+```
+
