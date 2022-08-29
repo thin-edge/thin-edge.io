@@ -107,7 +107,7 @@ The following JSON code shows a small example of an **capability** objects in a 
 
 ## Registration of a new device
 
-The sequence diagram below illustrates call involved components and messages-exchanges happending, when a new external child-device registers it-self to thin-edge.
+The sequence diagram below illustrates the data/message flow and all components involved, when a new external child-device registers it-self to thin-edge.
 
 ```mermaid
 sequenceDiagram
