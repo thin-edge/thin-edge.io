@@ -1,6 +1,8 @@
 # Child-Device Support
 
-Child-Device support allows to connect devices (e.g. sensors, actors, PLCs, any other kind of device) to the thin-edge device, to represent those devices in the cloud. Furthermore processes running on the thin-edge device can make use of child-device support to appear as a kind of a logical device in the cloud.
+Child-Device support allows users to connect other devices (e.g. sensors, actuators, PLCs, any other kind of device) to the thin-edge device, to view and manage them from the cloud as separate individual devices.
+These devices are represented in the cloud with their own identity which is independent from the thin-edge device itself.
+Not just physical devices, but even logical processes running on the thin-edge device itself, can represent themselves as device in the cloud.
 
 ## Terminology
 - **thin-edge device**:
