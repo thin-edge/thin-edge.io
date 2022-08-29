@@ -52,13 +52,18 @@ The following JSON code shows a small example of an object of **capability type*
               }
           }
 
-**thin-edge** as well as installed plugins use those **capability** objects in the **inventory** to provide the right **capabilities** to the right devices.
+**thin-edge** as well as installed plugins use those **capability** objects to provide the right **capabilities** to the right devices.
 Furthermore all needed information for the certain **capability** are contained in the **capability** object.
 
 Example:
 
 * The configuration management plugin provides the capability `tedge_config`. 
-* The configuration management plugin gets aware of all device objects that contain that **capability** object, and processes configuration management for those devices.
+* The configuration management plugin recognizes (or gets a request for) a **capability** object for the corresponding device, and processes configuration management for that devices.
+  
+  **Open Topic:** To be decided how the **capability** object comes to the plugin. 
+  * Shall the plugin listen (subscribe) to the inventory, and by itself process any incoming/changed **capability** object?
+  * Better to have an explicit request/response from some inventory owner (e.g. the tegde_agent) to the plugin, 
+    to register a new **capability** object for a certain device?
 * Each capability object `tedge_config` contains the field `files`, that tells the plugin the list of config-file the corresponding device provides.
 
 **thin-edge** has a set of pre-defined **capability types**. 
