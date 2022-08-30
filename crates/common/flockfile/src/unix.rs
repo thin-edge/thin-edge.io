@@ -26,6 +26,15 @@ pub enum FlockfileError {
     },
 }
 
+impl FlockfileError {
+    fn path(&self) -> &Path {
+        match self {
+            FlockfileError::FromIo { path, .. } => path,
+            FlockfileError::FromNix { path, .. } => path,
+        }
+    }
+}
+
 /// flockfile creates a lockfile in the filesystem under `/run/lock` and then creates a filelock using system fcntl with flock.
 /// flockfile will automatically remove lockfile on application exit and the OS should cleanup the filelock afterwards.
 /// If application exits unexpectedly the filelock will be dropped, but the lockfile will not be removed unless handled in signal handler.
@@ -44,24 +53,22 @@ impl Flockfile {
     ///
     pub fn new_lock(path: impl AsRef<Path>) -> Result<Flockfile, FlockfileError> {
         let path = PathBuf::new().join(path);
-        let file = match OpenOptions::new()
+        let file = OpenOptions::new()
             .create(true)
             .read(true)
             .write(true)
             .open(&path)
-        {
-            Ok(file) => file,
-            Err(err) => {
-                return Err(FlockfileError::FromIo { path, source: err });
-            }
-        };
+            .map_err(|err| FlockfileError::FromIo {
+                path: path.clone(),
+                source: err,
+            })?;
 
-        match flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock) {
-            Ok(()) => (),
-            Err(err) => {
-                return Err(FlockfileError::FromNix { path, source: err });
+        flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock).map_err(|err| {
+            FlockfileError::FromNix {
+                path: path.clone(),
+                source: err,
             }
-        };
+        })?;
 
         info!(r#"Lockfile created {:?}"#, &path);
         Ok(Flockfile {
@@ -112,12 +119,10 @@ pub fn check_another_instance_is_not_running(
 ) -> Result<Flockfile, FlockfileError> {
     let lock_path = run_dir.join(format!("{}{}.lock", LOCK_CHILD_DIRECTORY, app_name));
 
-    Flockfile::new_lock(lock_path.as_path()).map_err(|err| match &err {
-        FlockfileError::FromIo { path, .. } | FlockfileError::FromNix { path, .. } => {
-            error!("Another instance of {} is running.", app_name);
-            error!("Lock file path: {}", path.as_path().to_str().unwrap());
-            err
-        }
+    Flockfile::new_lock(lock_path.as_path()).map_err(|err| {
+        error!("Another instance of {} is running.", app_name);
+        error!("Lock file path: {}", err.path().to_str().unwrap());
+        err
     })
 }
 
