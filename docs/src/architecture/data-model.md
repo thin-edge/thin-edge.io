@@ -50,7 +50,7 @@ The following JSON code shows a small example of an object of **capability type*
               "capabilities": {
                   // find below a capability object of type 'tedge_config'
                   "tedge_config": {
-                      files: [ "foo.conf", "bar.conf" ]
+                      "files": [ "foo.conf", "bar.conf" ]
                   }
               }
           }
@@ -100,7 +100,7 @@ The following JSON code shows a small example of an **capability** objects in a 
               "type": "thin-edge.io-child",
               "capabilities": {
                   "tedge_config": {
-                      files: [ "foo.conf", "bar.conf" ]
+                      "files": [ "foo.conf", "bar.conf" ]
                   },
                   "tedge_log": {
                       // ...
@@ -140,4 +140,107 @@ sequenceDiagram
         
         tedge agent-->>external child device: (15) result    
 ```
+
+* Step 1: The external child-device registers to the tedge_agent
+     * Topic:   `tedge/<childid>/commands/req/inventory/register-device`<br/>
+       Payload: `<child-device object>`
+     * Example: 
+     
+       Topic: `tedge/child1/commands/req/inventory/register-device`<br/>
+       Payload: 
+       ```json
+       {
+          "name": "child-device 1",
+          "type": "thin-edge.io-child",
+          "capabilities": {
+              "tedge_config": {
+                  "files": [ "foo.conf", "bar.conf" ]
+              },
+              "tedge_logging": {
+                  "files": [ "foo.log", "bar.log" ]
+              }
+          }
+       }
+       ```
+
+ * Step 5: the tedge_agent notifies the plugin that provides the `tedge_config` capability (i.E. C8Y Config Plugin) about the new child-device
+     * Topic:   `tedge/<childid>/commands/req/plugin/<capability type>/new-device`<br/>
+       Payload: `<capability object>`
+       
+     * Example: 
+     
+       Topic: `tedge/child1/commands/req/plugin/tedge_config/new-device`<br/>
+       Payload: 
+       ```json
+       {
+          "files": [ "foo.conf", "bar.conf" ]
+       }
+       ```
+       
+ * Step 9: config plugin reports result the tedge_agent
+       
+     * Topic: `tedge/child1/commands/res/plugin/tedge_config/new-device`<br/>
+       Payload: `<"success" or "failed">`
+       
+ * Step 12: the tedge_agent notifies the plugin that provides the `tedge_logging` capability (i.E. C8Y Log Plugin) about the new child-device
+     * Example: 
+     
+       Topic: `tedge/child1/commands/req/plugin/tedge_logging/new-device`<br/>
+       Payload: 
+       ```json
+       {
+          "files": [ "foo.log", "bar.log" ]
+       }
+       ```
+       
+ * Step 13: log plugin reports result the tedge_agent
+       
+     * Topic: `tedge/child1/commands/res/plugin/tedge_logging/new-device`<br/>
+       Payload: `<"success" or "failed">`
+
+ * Step 15: tedge_agent reports result to External Child-Device
+     * Topic:   `tedge/<childid>/commands/res/inventory/register-device`<br/>
+       Payload: 
+       ```json
+       {
+          "device-status": "<success> or <failed>", 
+             "capabilities": {
+                "name of 1st capability": "<success> or <failed>",
+                "name of 2nd capability": "<success> or <failed>",
+                "name of ... capability": "<success> or <failed>"
+             }
+       }
+       ```
+     * Example: 
+     
+       Topic: `tedge/child1/commands/res/inventory/register-device`<br/>
+       Payload: 
+       ```json
+       {
+          "device-status": "success",
+          "capabilities": {
+              "tedge_config": "success",
+              "tedge_logging": "success"
+          }
+       }
+       ```
+       
+### Summary of MQTT topics and payload
+
+From external child-device to tedge_agent:
+```
+tedge/<childid>/commands/req/inventory/register-device  <= <device object>
+tedge/<childid>/commands/req/inventory/register-device  <= { "device-status": <"success" or "failed">, 
+                                                             "capabilities": {
+                                                                <for each capability:
+                                                                   <capability name>: <"success" or "failed">,
+                                                             }
+                                                           }
+```
+
+From tedge_agent to plugins:
+```
+tedge/<childid>/commands/req/plugin/<capability name>/new-device  <= <capability object>  
+tedge/<childid>/commands/res/plugin/<capability name>/new-device  <= { "status": <"executing" or "success" or "failed"> } 
+```         
 
