@@ -82,7 +82,7 @@ That section lists the pre-defined **capabilities types**.
   |                      |                     | 
   |:---------------------|:--------------------|
   | **Unique name**      | `tedge_config` |
-  | **Field:**`files`    | List of config-file the device provides |
+  | **Field:**`files`    | List of config-files the device provides. Per config file there are the fields as below:<br/>-  `path`, full path to the file in the filesystem. If that field is not set, tedge_agent's HTTP-filetransfer is used to read/write the file.<br/>- `type`, an optional configuration type. If not provided, the path is used as type.<br/>- optional unix file ownership: `user`, `group` and octal `mode`. These are only used when `path` is set, and a configuration file pushed from the cloud doesn't exist on the device|
   | **Behavoiur**        | On cloud request provided configuration files are requested from the device and sent to cloud; or downloaded from cloud and sent to the device. For details see [Configuration Managenement documentation](../references/c8y-configuration-management.md#configuration-files-for-child-devices)
 
 * Capability Type: **Logging Management**
