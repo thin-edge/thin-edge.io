@@ -9,7 +9,7 @@ PKG_DIR=$1
 source ./ci/package_list.sh
 
 # Install pre-required packages
-sudo apt-get --assume-yes install "${EXTERNAL_AMD64_PACKAGES[*]}"
+sudo apt-get --assume-yes install "${EXTERNAL_AMD64_PACKAGES[@]}"
 
 # Install thin-edge packages
 for PACKAGE in "${RELEASE_PACKAGES[@]}"
