@@ -149,4 +149,3 @@ See [setting your commit email address in Git](https://docs.github.com/en/github
 4. Add the email address to your account on GitHub, so that your commits are
    attributed to you and appear in your contributions graph.
 
-Release date: 2021-03-29
