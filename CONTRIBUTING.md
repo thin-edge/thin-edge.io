@@ -149,3 +149,154 @@ See [setting your commit email address in Git](https://docs.github.com/en/github
 4. Add the email address to your account on GitHub, so that your commits are
    attributed to you and appear in your contributions graph.
 
+## Repository maintenance
+
+To assure a consistent level of quality and appearance, the project has some
+rules for contributors to follow:
+
+- **Clear commits**
+  Having clear, concise and well-written commit messages for all changes is not
+  only a indicator for the seriousness of the project, but also a way to ensure
+  sustainable development via replicability of the sources of the project.
+
+  Because of this, we try to ensure the highest possible quality for each
+  individual commit message.
+
+  Because such a thing cannot necessarily or in full be enforced via tooling, it
+  remains mainly the obligation of a reviewer of a change-set to ensure
+
+  * Atomicity of the individual commits
+  * that one commit is one atomic change, and not an accumulation of several
+    individual and separate changes
+  * that the commit message of the change expresses why the change was made
+
+  Every reviewer of a pull request is asked to review not only the changes, but
+  also the commit messages.
+  Reviewers are explicitly empowered and actually encouraged to block pull
+  requests that contain commit messages that do not meet a certain standard
+  even and especially also if the proposed changes are acknowledged.
+
+  The contributor should document why they implemented a change properly. A good
+  rule of thumb is that if a change is larger than 60 lines, a commit message
+  without a body won't suffice anymore.
+  The more lines are touched by an individual commit, the more lines should be
+  used to explain the change.
+
+  The project implements lints using github actions to meet such criteria.
+
+  Also, some hard criteria is checked via github action lints:
+
+  * The `Signed-off-by` trailer lint must be present in all commits (also see
+    section "Ensuring the Signed-off-by-trailer")
+  * The commit body must meet the default formatting of a commit message, that
+    is
+    * Subject line not longer than 50 characters
+    * Subject capitalized
+    * No period at the end of the subject
+    * Imperative mood in the subject
+    * Second line empty
+    * Body lines not longer than 72 characters
+
+  Commits using the `--fixup` or `--squash` feature of `git-commit` are allowed,
+  but won't be merged (read more about this in the "merge strategies" section).
+
+- **Ensuring the Signed-off-by-trailer**
+  Contributors need to sign the "Contributor License Agreement". They do so by
+  signing off each individual commit with a so-called "Signed-off-by Trailer".
+  Git offers the `--signoff`/`-s` flags when using `git-commit` to commit
+  changes.
+
+  To ensure that all commits have the trailer present in the commit message, a
+  CI lint is installed in the github actions workflows of the project. This lint
+  blocks pull requests to be merged if one or more of the commits of the pull
+  request misses the `Signed-off-by` trailer.
+
+  As a result, it is not possible to merge pull requests that miss the trailer.
+- **Coding styleguide**
+  Coding style is enforced via `rustfmt` in its default configuration.
+  Compliance with the coding style is enforced via CI.
+- **Testing**
+  Testing is done via workflows in github actions using `cargo test --all-features` for all
+  crates.
+  The main objective with this is that a developer should be able to simply run
+  `cargo test` on their local machine to be able to see whether CI would succeed
+  for changes they submit in a pull request.
+  Thus, all CI tests (unit tests, but also integration tests) are implemented in
+  Rust and do not rely on external services.
+  End-to-end system tests - that depend on external services - are run outside the CI pipeline,
+  to avoid inconsistent test outcomes because of external issues.
+- **Benchmarks**
+- **Documentation builds**
+  Source code documentation as well as other documentation is tested via github
+  actions workflows as well, to ensure that a developer is able to build all
+  relevant documentation on their local machine.
+- **Keeping spec up to date**
+- **Evergreen master**
+  The project pursues the "evergreen master" strategy. That means that at every
+  point in time, the commit that `master`/`main` points to must successfully
+  build and pass all tests.
+
+  Reaching that goal is possible because of the employed merge strategies (read
+  below).
+- **Merge strategies**
+  Merging is the way how the project accepts and implements changes.
+
+  Because of the pursued "everygreen master", merging is implemented in a
+  certain way that forbids several bad practices which could lead to a breaking
+  build on the `master`/`main` branch, and a special workflow is implemented to
+  ensure not only the "evergreen master" but also to streamline the workflow for
+  integrating pull requests.
+
+  The following actions are **not** allowed:
+
+  * Committing to `master`/`main` directly.
+    The GitHub repository is configured to block pushing to `master`/`main`.
+  * Squash-Merging of pull requests (which is equivalent to committing to
+    `master`/`main` directly).
+    The github repository is configured to not allow squash merges.
+  * Merging of "fixup!" or "squash!" commits. A github actions
+    job is employed to block pull requests from being merged if such commits are
+    in the branch of the pull request. Rebase should be used to clean those up.
+
+  It is explicitly _not_ forbidden to have merge-commits in a pull request.
+  Long-running pull requests that contain a large number of changes and are
+  developed over a long period might contain merges. They might even merge
+  `master`/`main` to get up-to-date with the latest developments. Though it is
+  not encouraged to have such long-running pull requests and discouraged to
+  merge `master`/`main` into a PR branch, the project acknowledges that
+  sometimes it is not avoidable.
+
+  To summarize, the following requirements have to be met before a pull request
+  can be merged:
+
+  * Reviews of the relevant persons (ensured via github setting)
+  * Status checks (CI, lints, etc) (ensured via github setting)
+      * builds, tests, lints are green (ensured via github action)
+      * Commit linting (ensured via github action)
+      * No missing `Signed-off-by` lines (ensured via github action)
+      * No "fixup!"/"squash!" commits in the pull request (ensured via github
+        action)
+
+  Merging itself is implemented via a "merge bot": [bors-ng](https://bors.tech).
+  bors-ng is used to prevent "merge skew" or "semantic merge conflicts"
+  (read more [here](https://bors.tech/essay/2017/02/02/pitch/)).
+- **Dependency updates**
+  Dependencies should be kept in sync over all crates in the project. That means
+  that different crates of the project should try to use dependencies in the
+  same versions, but also that dependencies should be harmonized in a way that a
+  specific problem should not be solved with more than one external library at a
+  time.
+  Updates of dependencies is automated via a github bot
+  ([dependabot](https://github.com/dependabot)).
+  To ensure harmonization of dependencies, a dedicated team (see "Team
+  Structure") is responsible for keeping an eye on the list of dependencies.
+- **License linting**
+  License linting describes the act of checking the licenses of dependencies and
+  whether they meet a certain criteria.
+  For example, it is not feasible to import an external library that is licensed
+  as GPL-3.0 in an Apache-2.0 licensed codebase.
+  Because of this, a github action is installed to lint the licenses of
+  dependencies. This action runs as a normal lint (see "evergreen master") and
+  blocks pull requests if dependencies get imported that do not meet a set of
+  rules agreed upon by the project maintainers.
+
