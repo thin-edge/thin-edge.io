@@ -1,6 +1,9 @@
-use crate::{error::ConfigManagementError, DEFAULT_PLUGIN_CONFIG_TYPE};
+use crate::{
+    child_device::ChildDeviceResponsePayload, error::ConfigManagementError,
+    DEFAULT_PLUGIN_CONFIG_TYPE,
+};
 use c8y_smartrest::topic::C8yTopic;
-use mqtt_channel::Message;
+use mqtt_channel::{Message, Topic};
 use serde::Deserialize;
 use std::borrow::Borrow;
 use std::collections::HashSet;
@@ -35,7 +38,7 @@ pub struct PluginConfig {
 #[derive(Debug, Eq, Default, Clone)]
 pub struct FileEntry {
     pub path: String,
-    config_type: String,
+    pub config_type: String,
     pub file_permissions: PermissionEntry,
 }
 
@@ -70,6 +73,12 @@ impl FileEntry {
             config_type,
             file_permissions: PermissionEntry { user, group, mode },
         }
+    }
+}
+
+impl From<ChildDeviceResponsePayload> for FileEntry {
+    fn from(payload: ChildDeviceResponsePayload) -> Self {
+        Self::new(payload.path, payload.config_type, None, None, None)
     }
 }
 
@@ -145,6 +154,15 @@ impl PluginConfig {
 
     pub fn to_supported_config_types_message(&self) -> Result<Message, anyhow::Error> {
         let topic = C8yTopic::SmartRestResponse.to_topic()?;
+        Ok(Message::new(&topic, self.to_smartrest_payload()))
+    }
+
+    pub fn to_supported_config_types_message_for_child(
+        &self,
+        child_id: &str,
+    ) -> Result<Message, anyhow::Error> {
+        let topic_str = &format!("c8y/s/us/{child_id}");
+        let topic = Topic::new(topic_str)?;
         Ok(Message::new(&topic, self.to_smartrest_payload()))
     }
 

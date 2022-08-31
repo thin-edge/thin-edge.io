@@ -44,12 +44,14 @@ pub trait C8YHttpProxy: Send + Sync {
         &mut self,
         log_type: &str,
         log_content: &str,
+        child_device_id: Option<String>,
     ) -> Result<String, SMCumulocityMapperError>;
 
     async fn upload_config_file(
         &mut self,
         config_path: &Path,
         config_type: &str,
+        child_device_id: Option<String>,
     ) -> Result<String, SMCumulocityMapperError>;
 }
 
@@ -89,10 +91,10 @@ impl C8yEndPoint {
         url_update_swlist
     }
 
-    fn get_url_for_get_id(&self) -> String {
+    fn get_url_for_get_id(&self, device_id: Option<&str>) -> String {
         let mut url_get_id = self.get_base_url();
         url_get_id.push_str("/identity/externalIds/c8y_Serial/");
-        url_get_id.push_str(&self.device_id);
+        url_get_id.push_str(device_id.unwrap_or(&self.device_id));
 
         url_get_id
     }
@@ -187,6 +189,7 @@ pub struct JwtAuthHttpProxy {
     jwt_token_retriver: Box<dyn C8yJwtTokenRetriever>,
     http_con: reqwest::Client,
     end_point: C8yEndPoint,
+    child_devices: HashMap<String, String>,
 }
 
 impl JwtAuthHttpProxy {
@@ -204,6 +207,7 @@ impl JwtAuthHttpProxy {
                 device_id: device_id.into(),
                 c8y_internal_id: "".into(),
             },
+            child_devices: HashMap::new(),
         }
     }
 
@@ -249,13 +253,30 @@ impl JwtAuthHttpProxy {
     }
 
     async fn try_get_and_set_internal_id(&mut self) -> Result<(), SMCumulocityMapperError> {
-        self.end_point.c8y_internal_id = self.try_get_internal_id().await?;
+        self.end_point.c8y_internal_id = self.try_get_internal_id(None).await?;
         Ok(())
     }
 
-    async fn try_get_internal_id(&mut self) -> Result<String, SMCumulocityMapperError> {
+    async fn get_c8y_internal_child_id(
+        &mut self,
+        child_device_id: String,
+    ) -> Result<String, SMCumulocityMapperError> {
+        if let Some(c8y_internal_id) = self.child_devices.get(&child_device_id) {
+            Ok(c8y_internal_id.clone())
+        } else {
+            let c8y_internal_id = self.try_get_internal_id(Some(&child_device_id)).await?;
+            self.child_devices
+                .insert(child_device_id, c8y_internal_id.clone());
+            Ok(c8y_internal_id)
+        }
+    }
+
+    async fn try_get_internal_id(
+        &mut self,
+        device_id: Option<&str>,
+    ) -> Result<String, SMCumulocityMapperError> {
         let token = self.get_jwt_token().await?;
-        let url_get_id = self.end_point.get_url_for_get_id();
+        let url_get_id = self.end_point.get_url_for_get_id(device_id);
 
         let internal_id = self
             .http_con
@@ -269,23 +290,30 @@ impl JwtAuthHttpProxy {
         Ok(internal_id)
     }
 
-    fn create_event(
-        &self,
+    async fn create_event(
+        &mut self,
         event_type: String,
         event_text: Option<String>,
         event_time: Option<OffsetDateTime>,
-    ) -> C8yCreateEvent {
-        let c8y_managed_object = C8yManagedObject {
-            id: self.end_point.c8y_internal_id.clone(),
+        child_device_id: Option<String>,
+    ) -> Result<C8yCreateEvent, SMCumulocityMapperError> {
+        let device_internal_id = if let Some(device_id) = child_device_id {
+            self.get_c8y_internal_child_id(device_id).await?
+        } else {
+            self.end_point.c8y_internal_id.clone()
         };
 
-        C8yCreateEvent::new(
+        let c8y_managed_object = C8yManagedObject {
+            id: device_internal_id,
+        };
+
+        Ok(C8yCreateEvent::new(
             Some(c8y_managed_object),
             event_type.clone(),
             event_time.unwrap_or_else(OffsetDateTime::now_utc),
             event_text.unwrap_or(event_type),
             HashMap::new(),
-        )
+        ))
     }
 
     async fn send_event_internal(
@@ -376,10 +404,13 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         &mut self,
         log_type: &str,
         log_content: &str,
+        child_device_id: Option<String>,
     ) -> Result<String, SMCumulocityMapperError> {
         let token = self.get_jwt_token().await?;
 
-        let log_event = self.create_event(log_type.to_string(), None, None);
+        let log_event = self
+            .create_event(log_type.to_string(), None, None, child_device_id)
+            .await?;
         let event_response_id = self.send_event_internal(log_event).await?;
         let binary_upload_event_url = self
             .end_point
@@ -403,13 +434,16 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         &mut self,
         config_path: &Path,
         config_type: &str,
+        child_device_id: Option<String>,
     ) -> Result<String, SMCumulocityMapperError> {
         let token = self.get_jwt_token().await?;
 
         // read the config file contents
         let config_content = std::fs::read_to_string(config_path)?;
 
-        let config_file_event = self.create_event(config_type.to_string(), None, None);
+        let config_file_event = self
+            .create_event(config_type.to_string(), None, None, child_device_id)
+            .await?;
         let event_response_id = self.send_event_internal(config_file_event).await?;
         let binary_upload_event_url = self
             .end_point
@@ -444,7 +478,7 @@ mod tests {
     #[test]
     fn get_url_for_get_id_returns_correct_address() {
         let c8y = C8yEndPoint::new("test_host", "test_device", "internal-id");
-        let res = c8y.get_url_for_get_id();
+        let res = c8y.get_url_for_get_id(None);
 
         assert_eq!(
             res,
@@ -511,7 +545,10 @@ mod tests {
             device_id,
         );
 
-        assert_eq!(http_proxy.try_get_internal_id().await?, internal_device_id);
+        assert_eq!(
+            http_proxy.try_get_internal_id(None).await?,
+            internal_device_id
+        );
 
         Ok(())
     }
@@ -617,7 +654,7 @@ mod tests {
         // Upload the config file and assert its binary URL
         assert_eq!(
             http_proxy
-                .upload_config_file(config_file.path(), config_type)
+                .upload_config_file(config_file.path(), config_type, None)
                 .await?,
             mockito::server_url() + config_binary_url_path.as_str()
         );

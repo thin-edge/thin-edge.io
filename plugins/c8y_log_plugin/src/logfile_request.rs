@@ -222,7 +222,7 @@ async fn execute_logfile_request_operation(
     let log_content = new_read_logs(smartrest_request, plugin_config)?;
 
     let upload_event_url = http_client
-        .upload_log_binary(&smartrest_request.log_type, &log_content)
+        .upload_log_binary(&smartrest_request.log_type, &log_content, None)
         .await?;
 
     let successful = LogfileRequest::successful(Some(upload_event_url))?;

@@ -1100,6 +1100,7 @@ impl C8YHttpProxy for FakeC8YHttpProxy {
         &mut self,
         _log_type: &str,
         _log_content: &str,
+        _child_device_id: Option<String>,
     ) -> Result<String, SMCumulocityMapperError> {
         Ok("fake/upload/url".into())
     }
@@ -1115,6 +1116,7 @@ impl C8YHttpProxy for FakeC8YHttpProxy {
         &mut self,
         _config_path: &Path,
         _config_type: &str,
+        _child_device_id: Option<String>,
     ) -> Result<String, SMCumulocityMapperError> {
         Ok("fake/upload/url".into())
     }
