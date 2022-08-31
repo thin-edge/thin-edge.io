@@ -118,7 +118,7 @@ Rust and do not rely on external services.
 End-to-end system tests - that depend on external services - are run outside the CI pipeline,
 to avoid inconsistent test outcomes because of external issues.
 
-## Reviewing, addressing feedback, and merging
+## Reviewing, addressing feedback
 
 Generally, pull requests need at least an approval from one maintainer to be
 merged.
@@ -131,19 +131,50 @@ used. These fixup commits should then be squashed (usually `git rebase -i
 --autosquash main`) by the author of the PR after it passed review and before it
 is merged.
 
-Once a PR has the necessary approvals, it can be merged. Here’s how the merge should be handled:
+## Pull request merging and evergreen-master
 
-- If the PR is a single logical commit, the merger should use the “Rebase and
-  merge” option. This keeps the git commit history very clean and simple and
-  eliminates noise from "merge commits."
-- If the PR is more than one logical commit, the merger should use the “Create a
-  merge commit” option.
-- If the PR consists of more than one commit because the author added commits to
-  address feedback, the commits should be squashed into a single commit (or more
-  than one logical commit, if it is a big feature that needs more commits). This
-  can be achieved by the “Squash and merge” option. If they do this, the merger
-  is responsible for cleaning up the commit message according to the previously
-  stated commit message guidance.
+The project pursues the "evergreen master" strategy. That means that at every
+point in time, the commit that `master`/`main` points to must successfully
+build and pass all tests.
+
+Because of that, merging is implemented in a certain way that forbids several
+bad practices which could lead to a breaking build on the `master`/`main`
+branch, and a special workflow is implemented to ensure not only the "evergreen
+master" but also to streamline the workflow for integrating pull requests.
+
+The following actions are **not** allowed:
+
+* Committing to `master`/`main` directly.
+  The GitHub repository is configured to block pushing to `master`/`main`.
+* Squash-Merging of pull requests (which is equivalent to committing to
+  `master`/`main` directly).
+  The github repository is configured to not allow squash merges.
+* Merging of "fixup!" or "squash!" commits. A github actions
+  job is employed to block pull requests from being merged if such commits are
+  in the branch of the pull request. Rebase should be used to clean those up.
+
+It is explicitly _not_ forbidden to have merge-commits in a pull request.
+Long-running pull requests that contain a large number of changes and are
+developed over a long period might contain merges. They might even merge
+`master`/`main` to get up-to-date with the latest developments. Though it is
+not encouraged to have such long-running pull requests and discouraged to
+merge `master`/`main` into a PR branch, the project acknowledges that
+sometimes it is not avoidable.
+
+To summarize, the following requirements have to be met before a pull request
+can be merged:
+
+* Reviews of the relevant people (ensured via github setting)
+* Status checks (CI, lints, etc) (ensured via github setting)
+  * builds, tests, lints are green (ensured via github action)
+  * Commit linting (ensured via github action)
+  * No missing `Signed-off-by` lines (ensured via github action)
+  * No "fixup!"/"squash!" commits in the pull request (ensured via github
+    action)
+
+Merging itself is implemented via a "merge bot": [bors-ng](https://bors.tech).
+bors-ng is used to prevent "merge skew" or "semantic merge conflicts"
+(read more [here](https://bors.tech/essay/2017/02/02/pitch/)).
 
 # Contributor License Agreement
 
@@ -225,55 +256,6 @@ See [setting your commit email address in Git](https://docs.github.com/en/github
 
 - **Benchmarks**
 - **Keeping spec up to date**
-- **Evergreen master**
-  The project pursues the "evergreen master" strategy. That means that at every
-  point in time, the commit that `master`/`main` points to must successfully
-  build and pass all tests.
-
-  Reaching that goal is possible because of the employed merge strategies (read
-  below).
-- **Merge strategies**
-  Merging is the way how the project accepts and implements changes.
-
-  Because of the pursued "everygreen master", merging is implemented in a
-  certain way that forbids several bad practices which could lead to a breaking
-  build on the `master`/`main` branch, and a special workflow is implemented to
-  ensure not only the "evergreen master" but also to streamline the workflow for
-  integrating pull requests.
-
-  The following actions are **not** allowed:
-
-  * Committing to `master`/`main` directly.
-    The GitHub repository is configured to block pushing to `master`/`main`.
-  * Squash-Merging of pull requests (which is equivalent to committing to
-    `master`/`main` directly).
-    The github repository is configured to not allow squash merges.
-  * Merging of "fixup!" or "squash!" commits. A github actions
-    job is employed to block pull requests from being merged if such commits are
-    in the branch of the pull request. Rebase should be used to clean those up.
-
-  It is explicitly _not_ forbidden to have merge-commits in a pull request.
-  Long-running pull requests that contain a large number of changes and are
-  developed over a long period might contain merges. They might even merge
-  `master`/`main` to get up-to-date with the latest developments. Though it is
-  not encouraged to have such long-running pull requests and discouraged to
-  merge `master`/`main` into a PR branch, the project acknowledges that
-  sometimes it is not avoidable.
-
-  To summarize, the following requirements have to be met before a pull request
-  can be merged:
-
-  * Reviews of the relevant persons (ensured via github setting)
-  * Status checks (CI, lints, etc) (ensured via github setting)
-      * builds, tests, lints are green (ensured via github action)
-      * Commit linting (ensured via github action)
-      * No missing `Signed-off-by` lines (ensured via github action)
-      * No "fixup!"/"squash!" commits in the pull request (ensured via github
-        action)
-
-  Merging itself is implemented via a "merge bot": [bors-ng](https://bors.tech).
-  bors-ng is used to prevent "merge skew" or "semantic merge conflicts"
-  (read more [here](https://bors.tech/essay/2017/02/02/pitch/)).
 - **Dependency updates**
   Dependencies should be kept in sync over all crates in the project. That means
   that different crates of the project should try to use dependencies in the
