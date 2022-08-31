@@ -176,6 +176,18 @@ Merging itself is implemented via a "merge bot": [bors-ng](https://bors.tech).
 bors-ng is used to prevent "merge skew" or "semantic merge conflicts"
 (read more [here](https://bors.tech/essay/2017/02/02/pitch/)).
 
+## Dependency updates
+
+Dependencies should be kept in sync over all crates in the project. That means
+that different crates of the project should try to use dependencies in the
+same versions, but also that dependencies should be harmonized in a way that a
+specific problem should not be solved with more than one external library at a
+time.
+Updates of dependencies is automated via a github bot
+([dependabot](https://github.com/dependabot)).
+To ensure harmonization of dependencies, a dedicated team (see "Team
+Structure") is responsible for keeping an eye on the list of dependencies.
+
 # Contributor License Agreement
 
 We do not want to bother you with too much legalese, but there are two pages you
@@ -256,16 +268,6 @@ See [setting your commit email address in Git](https://docs.github.com/en/github
 
 - **Benchmarks**
 - **Keeping spec up to date**
-- **Dependency updates**
-  Dependencies should be kept in sync over all crates in the project. That means
-  that different crates of the project should try to use dependencies in the
-  same versions, but also that dependencies should be harmonized in a way that a
-  specific problem should not be solved with more than one external library at a
-  time.
-  Updates of dependencies is automated via a github bot
-  ([dependabot](https://github.com/dependabot)).
-  To ensure harmonization of dependencies, a dedicated team (see "Team
-  Structure") is responsible for keeping an eye on the list of dependencies.
 - **License linting**
   License linting describes the act of checking the licenses of dependencies and
   whether they meet a certain criteria.
