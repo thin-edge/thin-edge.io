@@ -23,6 +23,9 @@ If you are interested in contributing documentation, please note the following:
 
 # Pull request and git commit guidance
 
+To assure a consistent level of quality and appearance, the project has some
+rules for contributors to follow.
+
 ## Opening PRs and organizing commits
 
 PRs should generally address only 1 issue at a time. If you need to fix two
@@ -144,9 +147,6 @@ See [setting your commit email address in Git](https://docs.github.com/en/github
    attributed to you and appear in your contributions graph.
 
 ## Repository maintenance
-
-To assure a consistent level of quality and appearance, the project has some
-rules for contributors to follow:
 
 - **Clear commits**
   Having clear, concise and well-written commit messages for all changes is not
