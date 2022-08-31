@@ -29,69 +29,67 @@ The figure below illustrats the **data-model** objects and the **inventory**:
   * NOTE: Not just _external devices_, but also processes running on the thin-edge device itself, can be represented with a **child-device** object in the **inventory** - to treat them as __logical child-devices__.
 
 * Each **Capability** object represents a functionality a device is capable.
-  * Each **Capability** object is of one the of supported **Capanbilities Types** (e.g. `tedge_config`, `tedge_logging`, `tedge_software`). More details see section below [Capability Types](#capability-types).
-
-  * A device **object** can contain several **capability** objects.
+  * A capability could be by example _Configuration Management_, _Log file Management_ or _Software Management_, or any custom specific capability provided by a custom specific plugin.
+  * The **Capability Object** contains all information that the software component implementing the given capability needs to know, to process and provide that given capability to the corresponding device.
+    * Each capability has a very specific set of information to be known. Thus the content and structure of each **capability object** is specific to the capability it represents.
+    * A scheme that defines the content and structure per capability is namely the **Capability Type**. 
+    * The **Capability Type** is nothing implemented in code, but the way to document and standardize the content and structure of **Capability Objects** for a certain capability.
+    * There are **Capability Types** defined for _Configuration Management_, _Log file Management_ or _Software Management_. More details see section below [Capability Types](#capability-types).
+  * A device object can contain several **capability** objects.
 
 ## Capability Types
 
-**Capability types** define the contract between a device and a plugin. That contract must be implemented by both parties (device and plugin). **thin-edge** does not interpret the content of any **capability** object, but forwards it to the coresponding plugin, and stores it in the device object in the inventory.<br/>
-NOTE: Some **Capabilities Types** are implemented by built-in thin-edge components (e.g. Software Management). In that case there is no plugin, but the built-in thin-edge component gets the **capability** object fordwarded, and implements that contract.
+**Capability Types** are schemas that describe the content and structure all **capability objects** in the inventory. 
+  * The **Capability Type** is nothing implemented in code, but the way to document and standardize the content and structure of **capability objects** for a certain capability.
 
-The structure of **Capability Types** is as below:
-* A **capability type** has a unique name and a set of fields that are expected in the coresponding capability object.
-* Each **capability** object in the inventory is of one of a supported **capability type**.
+  * For each capability the needed content and structure of it's **capability object** is very specific. So each capability (e.g. _Configuration Management_, _Log file Management_ or _Software Management_, or any custom specific capability provided by a custom specific plugin) has it's own **capability type** 
 
-The following JSON code shows a small example of an object of **capability type** `tedge_config` in a device object:
-         
-          {
-              "name": "child-device 1",
-              "type": "thin-edge.io-child",
-              "capabilities": {
-                  // find below a capability object of type 'tedge_config'
-                  "tedge_config": {
-                      "files": [ "foo.conf", "bar.conf" ]
-                  }
-              }
-          }
+  * The structure of **Capability Types** is as below:
+    * A **capability type** has a unique name, e.g. `tedge_config`, `tedge_log` or `tedge_software`.
+    * A **capability type** defines a set of fields that are expected to be contained in the inventorie's **capability** object.
+  * **thin-edge** has a set of defined **capability types**.
+  * Each plugin can define plugin-specific capability types, or can use one of the defined capability type.
+  * For details about all capabilities defined by thin-edge see [Defined Capability Types](#defined-capability-types) see section below.
 
-**thin-edge** as well as installed plugins use those **capability** objects to provide the right **capabilities** to the right devices.
-Furthermore all needed information for the certain **capability** are contained in the **capability** object.
+### Defined Capability Types
 
-Example:
-
-* The configuration management plugin provides the capability `tedge_config`. 
-* The configuration management plugin recognizes (or gets a request for) a **capability** object for the corresponding device, and processes configuration management for that devices.
-  
-  **Open Topic:** To be decided how the **capability** object comes to the plugin. 
-  * Shall the plugin listen (subscribe) to the inventory, and by itself process any incoming/changed **capability** object?
-  * Better to have an explicit request/response from some inventory owner (e.g. the tegde_agent) to the plugin, 
-    to register a new **capability** object for a certain device?
-* Each capability object `tedge_config` contains the field `files`, that tells the plugin the list of config-file the corresponding device provides.
-
-**thin-edge** has a set of pre-defined **capability types**. 
-Each plugin can define plugin-specific capability types, or use one of the pre-defined capability type.
-For details about all [Pre-defined Capability Types](#pre-defined-capability-types) see section below.
-
-### Pre-defined Capability Types
-
-That section lists the pre-defined **capabilities types**.
+That section lists the defined **capabilities types**.
 
 * Capability Type: **Configration Management**
 
   |                      |                     | 
   |:---------------------|:--------------------|
   | **Unique name**      | `tedge_config` |
-  | **Field:**`files`    | List of config-files the device provides. Per config file there are the fields as below:<br/>-  `path`, full path to the file in the filesystem. If that field is not set, tedge_agent's HTTP-filetransfer is used to read/write the file.<br/>- `type`, an optional configuration type. If not provided, the path is used as type.<br/>- optional unix file ownership: `user`, `group` and octal `mode`. These are only used when `path` is set, and a configuration file pushed from the cloud doesn't exist on the device|
-  | **Behavoiur**        | On cloud request provided configuration files are requested from the device and sent to cloud; or downloaded from cloud and sent to the device. For details see [Configuration Managenement documentation](../references/c8y-configuration-management.md#configuration-files-for-child-devices)
+  | **Field:**`files`    | List of config-files the device provides. Per config file there are the fields as below:<br/><br/>-  `path`, full path to the file in the filesystem. If that field is not set, tedge_agent's HTTP-filetransfer is used to read/write the file.<br/>- `type`, an optional configuration type. If not provided, the path is used as type. If path is not set then `type` is mandatory.<br/>- optional unix file ownership: `user`, `group` and octal `mode`. These are only used when `path` is set, and a configuration file pushed from the cloud doesn't exist on the device|
+  | **Behavoiur**        | On cloud request<br/>-  provided configuration files are requested from the device and sent to the cloud<br/>- or downloaded from the cloud and sent to the device.<br/><br/> For details see [Configuration Managenement documentation](../references/c8y-configuration-management.md#configuration-files-for-child-devices)
+
+Examples:
+```json
+"tedge_config": {
+    "files": [
+        { "path": "/etc/tedge/tedge.toml", "type": "tedge.toml" },
+        { "path": "/etc/tedge/mosquitto-conf/c8y-bridge.conf" },
+        { "path": "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf" },
+        { "path": "/etc/mosquitto/mosquitto.conf", "type": "mosquitto", "user": "mosquitto", "group": "mosquitto", "mode": "0o644" }
+    ]
+}
+```
+```json
+"tedge_config": {
+    "files": [
+        { "type": "foo.conf" },
+        { "type": "bar.conf" },
+    ]
+}
+```
 
 * Capability Type: **Logging Management**
 
   |                      |              | 
   |:---------------------|:-------------|
   | **Unique name**      | `tedge_log`  |
-  | **Field:** `files`   | List of log-files the device provides |
-  | **Behavoiur**        | One cloud request provided log-files are requested from the device and sent to cloud. Details see TODO: add link to log plugin documentation, section for child-devices.
+  | **Field:** `files`   | TODO |
+  | **Behavoiur**        | TODO |
 
 The following JSON code shows a small example of an **capability** objects in a device object:
          
