@@ -1,4 +1,4 @@
-# Thin Edge Binary Repository
+# Thin Edge File Transfer Service
 
 The `tedge-agent` hosts a binary repository for child devices and other plugins/extensions to exchange binary files between them.
 This repository is meant to be used as a temporary storage for exchanging files, and not for storing items permanently,
