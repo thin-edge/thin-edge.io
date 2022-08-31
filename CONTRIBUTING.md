@@ -99,6 +99,25 @@ request misses the `Signed-off-by` trailer.
 
 As a result, it is not possible to merge pull requests that miss the trailer.
 
+## Coding style, Documentation, Testing
+
+Coding style is enforced via `rustfmt` in its default configuration.
+Compliance with the coding style is enforced via CI.
+
+Source code documentation as well as other documentation is tested via github
+actions workflows as well, to ensure that a developer is able to build all
+relevant documentation on their local machine.
+
+Testing is done via workflows in github actions using `cargo test --all-features` for all
+crates.
+The main objective with this is that a developer should be able to simply run
+`cargo test` on their local machine to be able to see whether CI would succeed
+for changes they submit in a pull request.
+Thus, all CI tests (unit tests, but also integration tests) are implemented in
+Rust and do not rely on external services.
+End-to-end system tests - that depend on external services - are run outside the CI pipeline,
+to avoid inconsistent test outcomes because of external issues.
+
 ## Reviewing, addressing feedback, and merging
 
 Generally, pull requests need at least an approval from one maintainer to be
@@ -204,24 +223,7 @@ See [setting your commit email address in Git](https://docs.github.com/en/github
 
 ## Repository maintenance
 
-- **Coding styleguide**
-  Coding style is enforced via `rustfmt` in its default configuration.
-  Compliance with the coding style is enforced via CI.
-- **Testing**
-  Testing is done via workflows in github actions using `cargo test --all-features` for all
-  crates.
-  The main objective with this is that a developer should be able to simply run
-  `cargo test` on their local machine to be able to see whether CI would succeed
-  for changes they submit in a pull request.
-  Thus, all CI tests (unit tests, but also integration tests) are implemented in
-  Rust and do not rely on external services.
-  End-to-end system tests - that depend on external services - are run outside the CI pipeline,
-  to avoid inconsistent test outcomes because of external issues.
 - **Benchmarks**
-- **Documentation builds**
-  Source code documentation as well as other documentation is tested via github
-  actions workflows as well, to ensure that a developer is able to build all
-  relevant documentation on their local machine.
 - **Keeping spec up to date**
 - **Evergreen master**
   The project pursues the "evergreen master" strategy. That means that at every
