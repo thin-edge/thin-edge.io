@@ -33,12 +33,6 @@ When possible, fill out as much detail in the pull request template as is
 reasonable. Most important is to reference the GitHub issue that you are
 addressing with the PR.
 
-**NOTE:** GitHub has [a feature](https://docs.github.com/en/github/managing-your-work-on-github/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword)
-that will automatically close issues referenced with a keyword (such as "Fixes")
-by a PR or commit once the PR/commit is merged. Don't use these keywords. We
-don't want issues to be automatically closed. We want our testers to
-independently verify and close them.
-
 ## Writing good commit messages
 
 Git commit messages should explain the how and why of your change and be
