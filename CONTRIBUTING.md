@@ -38,10 +38,53 @@ addressing with the PR.
 
 ## Writing good commit messages
 
-Git commit messages should explain the how and why of your change and be
-separated into a brief subject line followed by a more detailed body. When in
-doubt, follow this guide for good commit messages and you can’t go wrong:
-[https://chris.beams.io/posts/git-commit/](https://chris.beams.io/posts/git-commit/).
+Having clear, concise and well-written commit messages for all changes is not
+only an indicator for the seriousness of the project, but also a way to ensure
+sustainable development via replicability of the sources of the project.
+
+Because of this, we try to ensure the highest possible quality for each
+individual commit message.
+
+Because such a thing cannot necessarily or in full be enforced via tooling, it
+remains mainly the obligation of a reviewer of a change-set to ensure
+
+* Atomicity of the individual commits
+* that one commit is one atomic change, and not an accumulation of several
+individual and separate changes
+* that the commit message of the change expresses why the change was made
+
+Every reviewer of a pull request is asked to review not only the changes, but
+also the commit messages.
+Reviewers are explicitly empowered and actually encouraged to block pull
+requests that contain commit messages that do not meet a certain standard
+even and especially also if the proposed changes are acknowledged.
+
+The contributor should document why they implemented a change. A good
+rule of thumb is that if a change is larger than 60 lines, a commit message
+without a body won't suffice anymore.
+The more lines are touched by an individual commit, the more lines should be
+used to explain the change.
+
+
+Also, some hard criteria are checked via github action lints:
+
+* The `Signed-off-by` trailer lint must be present in all commits (also see
+section "Ensuring the Signed-off-by-trailer")
+* The commit body must meet the default formatting of a commit message, that
+is
+    * Subject line not longer than 50 characters
+    * Subject capitalized
+    * No period at the end of the subject
+    * Imperative mood in the subject
+    * Second line empty
+    * Body lines not longer than 72 characters
+
+You can also read about commit messages in
+[this excellent guide](https://cbea.ms/git-commit/).
+
+Commits using the `--fixup` or `--squash` feature of `git-commit` are allowed,
+but will have to be squashed by the pull request author before being merged.
+
 
 ## Reviewing, addressing feedback, and merging
 
@@ -147,52 +190,6 @@ See [setting your commit email address in Git](https://docs.github.com/en/github
    attributed to you and appear in your contributions graph.
 
 ## Repository maintenance
-
-- **Clear commits**
-  Having clear, concise and well-written commit messages for all changes is not
-  only a indicator for the seriousness of the project, but also a way to ensure
-  sustainable development via replicability of the sources of the project.
-
-  Because of this, we try to ensure the highest possible quality for each
-  individual commit message.
-
-  Because such a thing cannot necessarily or in full be enforced via tooling, it
-  remains mainly the obligation of a reviewer of a change-set to ensure
-
-  * Atomicity of the individual commits
-  * that one commit is one atomic change, and not an accumulation of several
-    individual and separate changes
-  * that the commit message of the change expresses why the change was made
-
-  Every reviewer of a pull request is asked to review not only the changes, but
-  also the commit messages.
-  Reviewers are explicitly empowered and actually encouraged to block pull
-  requests that contain commit messages that do not meet a certain standard
-  even and especially also if the proposed changes are acknowledged.
-
-  The contributor should document why they implemented a change properly. A good
-  rule of thumb is that if a change is larger than 60 lines, a commit message
-  without a body won't suffice anymore.
-  The more lines are touched by an individual commit, the more lines should be
-  used to explain the change.
-
-  The project implements lints using github actions to meet such criteria.
-
-  Also, some hard criteria is checked via github action lints:
-
-  * The `Signed-off-by` trailer lint must be present in all commits (also see
-    section "Ensuring the Signed-off-by-trailer")
-  * The commit body must meet the default formatting of a commit message, that
-    is
-    * Subject line not longer than 50 characters
-    * Subject capitalized
-    * No period at the end of the subject
-    * Imperative mood in the subject
-    * Second line empty
-    * Body lines not longer than 72 characters
-
-  Commits using the `--fixup` or `--squash` feature of `git-commit` are allowed,
-  but won't be merged (read more about this in the "merge strategies" section).
 
 - **Ensuring the Signed-off-by-trailer**
   Contributors need to sign the "Contributor License Agreement". They do so by
