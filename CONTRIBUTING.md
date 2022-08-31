@@ -85,6 +85,19 @@ You can also read about commit messages in
 Commits using the `--fixup` or `--squash` feature of `git-commit` are allowed,
 but will have to be squashed by the pull request author before being merged.
 
+### Ensuring the Signed-off-by-trailer
+
+Contributors need to sign the "Contributor License Agreement". They do so by
+signing off each individual commit with a so-called "Signed-off-by Trailer".
+Git offers the `--signoff`/`-s` flags when using `git-commit` to commit
+changes.
+
+To ensure that all commits have the trailer present in the commit message, a
+CI lint is installed in the github actions workflows of the project. This lint
+blocks pull requests from being merged if one or more of the commits of the pull
+request misses the `Signed-off-by` trailer.
+
+As a result, it is not possible to merge pull requests that miss the trailer.
 
 ## Reviewing, addressing feedback, and merging
 
@@ -191,18 +204,6 @@ See [setting your commit email address in Git](https://docs.github.com/en/github
 
 ## Repository maintenance
 
-- **Ensuring the Signed-off-by-trailer**
-  Contributors need to sign the "Contributor License Agreement". They do so by
-  signing off each individual commit with a so-called "Signed-off-by Trailer".
-  Git offers the `--signoff`/`-s` flags when using `git-commit` to commit
-  changes.
-
-  To ensure that all commits have the trailer present in the commit message, a
-  CI lint is installed in the github actions workflows of the project. This lint
-  blocks pull requests to be merged if one or more of the commits of the pull
-  request misses the `Signed-off-by` trailer.
-
-  As a result, it is not possible to merge pull requests that miss the trailer.
 - **Coding styleguide**
   Coding style is enforced via `rustfmt` in its default configuration.
   Compliance with the coding style is enforced via CI.
