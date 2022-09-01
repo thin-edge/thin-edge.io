@@ -229,15 +229,8 @@ impl SmAgent {
     pub async fn init(&mut self, config_dir: PathBuf) -> Result<(), anyhow::Error> {
         // `config_dir` by default is `/etc/tedge` (or whatever the user sets with --config-dir)
         let config_dir = config_dir.display();
-        let log_path = self.config.log_dir.display();
         create_directory_with_user_group(&format!("{config_dir}/.agent"), "tedge", "tedge", 0o775)?;
-        create_directory_with_user_group(&format!("{log_path}/tedge"), "tedge", "tedge", 0o775)?;
-        create_directory_with_user_group(
-            &format!("{log_path}/tedge/agent"),
-            "tedge",
-            "tedge",
-            0o775,
-        )?;
+        create_directory_with_user_group(self.config.log_dir.clone(), "tedge", "tedge", 0o775)?;
         info!("Initializing the tedge agent session");
         mqtt_channel::init_session(&self.config.mqtt_config).await?;
 
