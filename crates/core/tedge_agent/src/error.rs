@@ -52,6 +52,15 @@ pub enum AgentError {
 
     #[error(transparent)]
     FromOperationsLogs(#[from] plugin_sm::operation_logs::OperationLogsError),
+
+    #[error(transparent)]
+    FromInfallible(#[from] std::convert::Infallible),
+
+    #[error(transparent)]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
+
+    #[error(transparent)]
+    FromHyperError(#[from] hyper::Error),
 }
 
 #[derive(Debug, thiserror::Error)]
