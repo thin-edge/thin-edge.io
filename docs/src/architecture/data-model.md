@@ -32,32 +32,28 @@ The figure below illustrats the **data-model** objects and the **inventory**:
 
 * Each **Capability** object represents a functionality a device is capable.
   * A capability could be by example _Configuration Management_, _Log file Management_ or _Software Management_, or any custom specific capability provided by a custom specific plugin.
-  * The **Capability Object** contains all information that the software component implementing the given capability needs to know, to process and provide that given capability to the corresponding device.
-    * Each capability has a very specific set of information to be known. Thus the content and structure of each **capability object** is specific to the capability it represents.
-    * A scheme that defines the content and structure per capability is namely the **Capability Type**. 
-    * The **Capability Type** is nothing implemented in code, but the way to document and standardize the content and structure of **Capability Objects** for a certain capability.
-    * There are **Capability Types** defined for _Configuration Management_, _Log file Management_ or _Software Management_. More details see section below [Capability Types](#capability-types).
+  * The content and structure of each **capability** object is very specific to the capability it represents. E.g. a **capability** object for _Configuration Management_ contains a list of configuration files the device supports, whereas a **capability** object for _Software Management_ contains details about installable package-types the device supports.
+  * A schema that describes the content and structure of **capability** objects for a certain capability is called **Capability Schema**. More details see section below [Capability Schemas](#capability-schemas).
   * A device object can contain several **capability** objects.
 
-## Capability Types
+## Capability Schemas
 
-**Capability Types** are schemas that describe the content and structure all **capability objects** in the inventory. 
-  * The **Capability Type** is nothing implemented in code, but the way to document and standardize the content and structure of **capability objects** for a certain capability.
+The content and structure of each **capability** object in the inventory is very specific to the capability it represents. To document and standardize the content and structure of those objects for certain capabilities the **Capability Schemas** are used. That way each **external child-device** can use each **plugin**, as long as both use the same **capability schema**.
 
-  * For each capability the needed content and structure of it's **capability object** is very specific. So each capability (e.g. _Configuration Management_, _Log file Management_ or _Software Management_, or any custom specific capability provided by a custom specific plugin) has it's own **capability type** 
+* A **capability schema** has a unique name, e.g. `tedge_config`, `tedge_log` or `tedge_software`
 
-  * The structure of **Capability Types** is as below:
-    * A **capability type** has a unique name, e.g. `tedge_config`, `tedge_log` or `tedge_software`.
-    * A **capability type** defines a set of fields that are expected to be contained in the inventorie's **capability** object.
-  * **thin-edge** has a set of defined **capability types**.
-  * Each plugin can define plugin-specific capability types, or can use one of the defined capability type.
-  * For details about all capabilities defined by thin-edge see [Defined Capability Types](#defined-capability-types) see section below.
+* A **capability schema** defines the set of fields that must contained in a corresponding inventorie's **capability object**.
+  * All those fields together contain all information a plugin needs to process and provide that certain capability to the corresponding device.
+ 
+* thin-edge has a set of pre-defined **capability schemas**, see [Pre-Defined Capability Schemas](#pre-defined-capability-schemas)
 
-### Defined Capability Types
+* Each plugin can define plugin-specific **capability schemas**, or can use pre-define ones.
 
-That section lists the defined **capabilities types**.
+### Pre-Defined Capability Schemas
 
-* Capability Type: **Configration Management**
+That section lists the pre-defined **capability schemas**.
+
+* Capability Schema: **Configration Management**
 
   |                      |                     | 
   |:---------------------|:--------------------|
@@ -65,7 +61,7 @@ That section lists the defined **capabilities types**.
   | **Field:**`files`    | List of config-files the device provides. Per config file there are the fields as below:<br/><br/>-  `path`, full path to the file in the filesystem. If that field is not set, tedge_agent's HTTP-filetransfer is used to read/write the file.<br/>- `type`, an optional configuration type. If not provided, the path is used as type. If path is not set then `type` is mandatory.<br/>- optional unix file ownership: `user`, `group` and octal `mode`. These are only used when `path` is set, and a configuration file pushed from the cloud doesn't exist on the device|
   | **Behavoiur**        | On cloud request<br/>-  provided configuration files are requested from the device and sent to the cloud<br/>- or downloaded from the cloud and sent to the device.<br/><br/> For details see [Configuration Managenement documentation](../references/c8y-configuration-management.md#configuration-files-for-child-devices)
 
-Examples:
+Examples **capability** objects for schema `tedge_config`:
 ```json
 "tedge_config": {
     "files": [
@@ -85,7 +81,7 @@ Examples:
 }
 ```
 
-* Capability Type: **Logging Management**
+* Capability Schema: **Logging Management**
 
   |                      |              | 
   |:---------------------|:-------------|
