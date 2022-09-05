@@ -6,8 +6,8 @@ use sha1::{Digest, Sha1};
 use std::path::Path;
 use time::{Duration, OffsetDateTime};
 use zeroize::Zeroizing;
-
 pub mod device_id;
+pub mod parse_root_certificate;
 pub struct PemCertificate {
     pem: x509_parser::pem::Pem,
 }
@@ -146,6 +146,45 @@ impl KeyCertPair {
     }
 }
 
+pub fn translate_rustls_error(err: &(dyn std::error::Error + 'static)) -> Option<CertificateError> {
+    if let Some(rustls::Error::InvalidCertificateData(inner)) = err.downcast_ref::<rustls::Error>()
+    {
+        match inner {
+            msg if msg.contains("CaUsedAsEndEntity") => Some(CertificateError::CertificateValidationFailure {
+                hint: "A CA certificate is used as an end-entity server certificate. Make sure that the certificate used is an end-entity certificate signed by CA certificate.".into(),
+                msg: msg.to_string(),
+            }),
+
+            msg if msg.contains("CertExpired") => Some(CertificateError::CertificateValidationFailure {
+                hint: "The server certificate has expired, the time it is being validated for is later than the certificate's `notAfter` time.".into(),
+                msg: msg.to_string(),
+            }),
+
+            msg if msg.contains("CertNotValidYet") => Some(CertificateError::CertificateValidationFailure {
+                hint: "The server certificate is not valid yet, the time it is being validated for is earlier than the certificate's `notBefore` time.".into(),
+                msg: msg.to_string(),
+            }),
+
+            msg if msg.contains("EndEntityUsedAsCa") => Some(CertificateError::CertificateValidationFailure {
+                hint: "An end-entity certificate is used as a server CA certificate. Make sure that the certificate used is signed by a correct CA certificate.".into(),
+                msg: msg.to_string(),
+            }),
+
+            msg if msg.contains("InvalidCertValidity") => Some(CertificateError::CertificateValidationFailure {
+                hint: "The server certificate validity period (`notBefore`, `notAfter`) is invalid, maybe the `notAfter` time is earlier than the `notBefore` time.".into(),
+                msg: msg.to_string(),
+            }),
+
+            _ => Some(CertificateError::CertificateValidationFailure {
+                hint: "Server certificate validation error.".into(),
+                msg: inner.to_string(),
+            }),
+        }
+    } else {
+        None
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum CertificateError {
     #[error(transparent)]
@@ -162,6 +201,18 @@ pub enum CertificateError {
 
     #[error("DeviceID Error")]
     InvalidDeviceID(#[from] DeviceIdError),
+
+    #[error("Fail to parse the private key")]
+    UnknownPrivateKeyFormat,
+
+    #[error("Could not parse certificate")]
+    CertificateParseFailed,
+
+    #[error("HTTP Connection Problem: {msg} \nHint: {hint}")]
+    CertificateValidationFailure { hint: String, msg: String },
+
+    #[error(transparent)]
+    CertParse(#[from] rustls_0_19::TLSError),
 }
 
 pub struct NewCertificateConfig {
