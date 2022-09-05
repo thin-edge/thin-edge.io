@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - run: |
           git config --global user.email "info@thin-edge.io"
           git config --global user.name "Versioneer"
@@ -20,7 +20,7 @@ jobs:
       - name: enable toolchain via github action
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.58.1
+          toolchain: 1.63.0
           components: cargo
           override: true
 
@@ -40,7 +40,7 @@ jobs:
           args: patch --no-publish --no-push --no-tag -vv --no-dev-version --no-confirm --execute
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v3
+        uses: peter-evans/create-pull-request@v4
         with:
           commit-message: Patch version bump
           delete-branch: true

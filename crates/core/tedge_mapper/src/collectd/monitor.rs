@@ -1,12 +1,8 @@
-use std::process;
-
+use super::{batcher::MessageBatch, collectd::CollectdMessage, error::DeviceMonitorError};
 use batcher::{BatchConfigBuilder, BatchDriver, BatchDriverInput, BatchDriverOutput, Batcher};
 use mqtt_channel::{Connection, Message, QoS, SinkExt, StreamExt, Topic, TopicFilter};
-use serde_json::json;
-use time::OffsetDateTime;
+use thin_edge_json::health::{health_check_topics, send_health_status};
 use tracing::{error, info, instrument};
-
-use super::{batcher::MessageBatch, collectd::CollectdMessage, error::DeviceMonitorError};
 
 const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;
@@ -16,9 +12,6 @@ const DEFAULT_MAXIMUM_MESSAGE_DELAY: u32 = 400; // Heuristic delay that should w
 const DEFAULT_MESSAGE_LEAP_LIMIT: u32 = 0;
 const DEFAULT_MQTT_SOURCE_TOPIC: &str = "collectd/#";
 const DEFAULT_MQTT_TARGET_TOPIC: &str = "tedge/measurements";
-const COMMON_HEALTH_CHECK_TOPIC: &str = "tedge/health-check";
-const HEALTH_CHECK_TOPIC: &str = "tedge/health-check/tedge-mapper-collectd";
-const HEALTH_STATUS_TOPIC: &str = "tedge/health/tedge-mapper-collectd";
 
 #[derive(Debug)]
 pub struct DeviceMonitorConfig {
@@ -71,10 +64,7 @@ impl DeviceMonitor {
 
     #[instrument(skip(self), name = "monitor")]
     pub async fn run(&self) -> Result<(), DeviceMonitorError> {
-        let health_check_topics: TopicFilter = vec![COMMON_HEALTH_CHECK_TOPIC, HEALTH_CHECK_TOPIC]
-            .try_into()
-            .expect("Valid health topics");
-        let health_status_topic = Topic::new_unchecked(HEALTH_STATUS_TOPIC);
+        let health_check_topics: TopicFilter = health_check_topics("tedge-mapper-collectd");
 
         let mut input_topic = TopicFilter::new(self.device_monitor_config.mqtt_source_topic)?
             .with_qos(QoS::AtMostOnce);
@@ -108,14 +98,7 @@ impl DeviceMonitor {
         let input_join_handle = tokio::task::spawn(async move {
             while let Some(message) = collectd_messages.next().await {
                 if health_check_topics.accept(&message) {
-                    let health_status = json!({
-                        "status": "up",
-                        "pid": process::id(),
-                        "time": OffsetDateTime::now_utc().unix_timestamp(),
-                    })
-                    .to_string();
-                    let health_message = Message::new(&health_status_topic, health_status);
-                    let _ = output_messages.send(health_message).await;
+                    send_health_status(&mut output_messages, "tedge-mapper-collectd").await;
                 } else {
                     match CollectdMessage::parse_from(&message) {
                         Ok(collectd_message) => {

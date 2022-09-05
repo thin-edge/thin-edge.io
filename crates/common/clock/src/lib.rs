@@ -1,9 +1,6 @@
 use mockall::automock;
 use time::OffsetDateTime;
 
-#[cfg(feature = "with-serde")]
-pub mod serde;
-
 pub type Timestamp = OffsetDateTime;
 
 #[automock]

@@ -1,7 +1,7 @@
 use crate::cli::connect::BridgeConfig;
 use tedge_config::{ConnectUrl, FilePath, TemplatesSet};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfigC8yParams {
     pub connect_url: ConnectUrl,
     pub mqtt_tls_port: u16,

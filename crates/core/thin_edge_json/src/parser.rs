@@ -21,7 +21,7 @@ pub fn parse_str<T: MeasurementVisitor>(
 
     let parser = ThinEdgeJsonParser { visitor };
 
-    let () = deserializer
+    deserializer
         .deserialize_map(parser)
         .map_err(|error| map_error(error, input))?;
     Ok(())
@@ -105,8 +105,7 @@ where
                     )
                     .map_err(|err| de::Error::custom(invalid_timestamp(timestamp_str, err)))?;
 
-                    let () = self
-                        .visitor
+                    self.visitor
                         .visit_timestamp(timestamp)
                         .map_err(de::Error::custom)?;
                 }
@@ -117,7 +116,7 @@ where
                         visitor: self.visitor,
                     };
 
-                    let () = map.next_value_seed(parser)?;
+                    map.next_value_seed(parser)?;
                     measurements_count += 1;
                 }
             }
@@ -156,8 +155,7 @@ where
             return Err(de::Error::custom("Expect single-value measurement"));
         }
 
-        let () = self
-            .visitor
+        self.visitor
             .visit_start_group(self.key.as_ref())
             .map_err(de::Error::custom)?;
 
@@ -170,7 +168,7 @@ where
                 visitor: self.visitor,
             };
 
-            let () = map.next_value_seed(parser)?;
+            map.next_value_seed(parser)?;
             measurements_count += 1;
         }
 
@@ -178,7 +176,7 @@ where
             return Err(de::Error::custom(invalid_empty_measurement(&self.key)));
         }
 
-        let () = self.visitor.visit_end_group().map_err(de::Error::custom)?;
+        self.visitor.visit_end_group().map_err(de::Error::custom)?;
 
         Ok(())
     }
@@ -204,8 +202,7 @@ where
             return Err(de::Error::custom(invalid_json_number(&self.key)));
         }
 
-        let () = self
-            .visitor
+        self.visitor
             .visit_measurement(self.key.as_ref(), value)
             .map_err(de::Error::custom)?;
 
@@ -319,7 +316,7 @@ mod tests {
 
         let mut builder = ThinEdgeJsonBuilder::default();
 
-        let () = parse_str(input, &mut builder)?;
+        parse_str(input, &mut builder)?;
 
         let output = builder.done()?;
 

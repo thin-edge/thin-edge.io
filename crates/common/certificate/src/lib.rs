@@ -49,12 +49,20 @@ impl PemCertificate {
 
     pub fn not_before(&self) -> Result<String, CertificateError> {
         let x509 = PemCertificate::extract_certificate(&self.pem)?;
-        Ok(x509.tbs_certificate.validity.not_before.to_rfc2822())
+        x509.tbs_certificate
+            .validity
+            .not_before
+            .to_rfc2822()
+            .map_err(CertificateError::X509Error)
     }
 
     pub fn not_after(&self) -> Result<String, CertificateError> {
         let x509 = PemCertificate::extract_certificate(&self.pem)?;
-        Ok(x509.tbs_certificate.validity.not_after.to_rfc2822())
+        x509.tbs_certificate
+            .validity
+            .not_after
+            .to_rfc2822()
+            .map_err(CertificateError::X509Error)
     }
 
     pub fn thumbprint(&self) -> Result<String, CertificateError> {
@@ -102,7 +110,7 @@ impl KeyCertPair {
         id: &str,
         not_before: OffsetDateTime,
     ) -> Result<KeyCertPair, CertificateError> {
-        let () = KeyCertPair::check_identifier(id, config.max_cn_size)?;
+        KeyCertPair::check_identifier(id, config.max_cn_size)?;
         let mut distinguished_name = rcgen::DistinguishedName::new();
         distinguished_name.push(rcgen::DnType::CommonName, id);
         distinguished_name.push(rcgen::DnType::OrganizationName, &config.organization_name);
@@ -312,7 +320,7 @@ mod tests {
         // just decode the key contents
         let b64_bytes =
             base64::decode(&cert_cont[header_len..cert_cont.len() - footer_len]).unwrap();
-        let expected_thumbprint = format!("{:x}", sha1::Sha1::digest(b64_bytes.as_ref()));
+        let expected_thumbprint = format!("{:x}", sha1::Sha1::digest(b64_bytes));
 
         // compare the two thumbprints
         assert_eq!(thumbprint, expected_thumbprint.to_uppercase());

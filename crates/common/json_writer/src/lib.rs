@@ -41,7 +41,7 @@ impl JsonWriter {
 
     pub fn write_key(&mut self, key: &str) -> Result<(), JsonWriterError> {
         self.maybe_separate();
-        let () = serde_json::to_writer(&mut self.buffer, key)?;
+        serde_json::to_writer(&mut self.buffer, key)?;
         self.buffer.push(b':');
         self.needs_separator = false;
         Ok(())
@@ -49,7 +49,7 @@ impl JsonWriter {
 
     pub fn write_str(&mut self, s: &str) -> Result<(), JsonWriterError> {
         self.maybe_separate();
-        let () = serde_json::to_writer(&mut self.buffer, s)?;
+        serde_json::to_writer(&mut self.buffer, s)?;
         self.needs_separator = true;
         Ok(())
     }
@@ -58,7 +58,7 @@ impl JsonWriter {
         self.maybe_separate();
         match value.classify() {
             FpCategory::Normal | FpCategory::Zero | FpCategory::Subnormal => {
-                let () = serde_json::to_writer(&mut self.buffer, &value)?;
+                serde_json::to_writer(&mut self.buffer, &value)?;
                 self.needs_separator = true;
                 Ok(())
             }

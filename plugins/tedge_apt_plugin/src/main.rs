@@ -73,7 +73,7 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             // apt output    = openssl/focal-security,now 1.1.1f-1ubuntu2.3 amd64 [installed]
             // awk -F '[/ ]' =   $1   ^       $2         ^   $3            ^   $4
             // awk print     =   name ^                  ^   version       ^
-            let status = Command::new("awk")
+            Command::new("awk")
                 .args(vec![
                     "-F",
                     "[/ ]",
@@ -81,9 +81,7 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
                 ])
                 .stdin(apt.stdout.unwrap()) // Cannot panic: apt.stdout has been set
                 .status()
-                .map_err(|err| InternalError::exec_error("awk", err))?;
-
-            status
+                .map_err(|err| InternalError::exec_error("awk", err))?
         }
 
         PluginOp::Install {
@@ -173,15 +171,13 @@ fn get_installer(
 
         (None, Some(file_path)) => {
             let mut package = PackageMetadata::try_new(file_path)?;
-            let () =
-                package.validate_package(&[&format!("Package: {}", &module), "Debian package"])?;
-
+            package.validate_package(&[&format!("Package: {}", &module), "Debian package"])?;
             Ok((format!("{}", package.file_path().display()), Some(package)))
         }
 
         (Some(version), Some(file_path)) => {
             let mut package = PackageMetadata::try_new(file_path)?;
-            let () = package.validate_package(&[
+            package.validate_package(&[
                 &format!("Version: {}", &version),
                 &format!("Package: {}", &module),
                 "Debian package",
@@ -211,10 +207,11 @@ fn validate_version(module_name: &str, module_version: &str) -> Result<(), Inter
         // Value at index 0 is the package name
         {
             if installed_version != module_version {
-                return Err(InternalError::VersionMismatch {
+                return Err(InternalError::MetaDataMismatch {
                     package: module_name.into(),
-                    installed: installed_version.into(),
-                    expected: module_version.into(),
+                    expected_key: "Version".into(),
+                    expected_value: installed_version.into(),
+                    provided_value: module_version.into(),
                 });
             }
         }

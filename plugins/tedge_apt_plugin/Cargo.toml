@@ -1,11 +1,13 @@
 [package]
 name = "tedge_apt_plugin"
-version = "0.7.2"
+version = "0.7.4"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
 license = "Apache-2.0"
 description = "Thin.edge.io plugin for software management using apt"
+homepage = "https://thin-edge.io"
+repository = "https://github.com/thin-edge/thin-edge.io"
 
 [package.metadata.deb]
 assets = [
@@ -24,10 +26,6 @@ serde = { version = "1", features = ["derive"] }
 anyhow = "1.0"
 hamcrest2 = "0.3"
 reqwest = { version = "0.11", default-features = false, features = [ "blocking", "rustls-tls" ] }
-serial_test = "0.6"
+serial_test = "0.8"
 tedge_utils = { path = "../../crates/common/tedge_utils" }
-test-case = "2.0"
-
-[features]
-requires-sudo = []
-integration-test = []
+test-case = "2.2"

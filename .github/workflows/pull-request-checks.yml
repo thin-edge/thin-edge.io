@@ -6,7 +6,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -D warnings
 
 jobs:
   block-fixup:
@@ -14,7 +13,7 @@ jobs:
     runs-on: Ubuntu-20.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Block Fixup Commit Merge
         # https://github.com/13rac1/block-fixup-merge-action
@@ -28,6 +27,7 @@ jobs:
     outputs:
       docs: ${{ steps.filter.outputs.docs }}
       rust: ${{ steps.filter.outputs.rust }}
+      workflows: ${{ steps.filter.outputs.workflows }}
     steps:
       # For pull requests it's not necessary to checkout the code
       - uses: dorny/paths-filter@v2
@@ -40,15 +40,62 @@ jobs:
             rust:
               - 'crates/**'
               - 'plugins/**'
+              - 'Cargo.*'
+            workflows:
+              - '.github/workflows/**'
+
+  #
+  # Checking that Cargo.lock is up to date
+  #
+  check-lockfile-uptodate:
+    name: Check whether Cargo.lock is up to date
+    runs-on: ubuntu-20.04
+    outputs:
+      locks: ${{ steps.filter.outputs.locks }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@1.58.1
+        with:
+          targets: armv7-unknown-linux-gnueabihf
+
+      - uses: Swatinem/rust-cache@v1
+
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            locks:
+              - '**/Cargo.toml'
+
+      - name: Check whether lockfile is up to date
+        if: steps.filter.outputs.locks == 'true'
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --locked
+
+  udeps:
+    name: Check for unused dependencies
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Run cargo-udeps
+        uses: aig787/cargo-udeps-action@v1
+        with:
+          version: 'latest'
+          args: '--all-features'
 
   mdbook-build-check:
     name: Run mdbook build
     runs-on: ubuntu-20.04
     needs: changes
-    if: ${{ needs.changes.outputs.docs == 'true' }}
+    if: ${{ needs.changes.outputs.docs == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup mdBook
         uses: peaceiris/actions-mdbook@v1
@@ -88,11 +135,11 @@ jobs:
     name: Run cargo fmt
     runs-on: Ubuntu-20.04
     needs: changes
-    if: ${{ needs.changes.outputs.rust == 'true' }}
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Cargo fmt --version
         uses: actions-rs/cargo@v1
@@ -111,19 +158,19 @@ jobs:
   cargo-clippy:
     name: Run cargo clippy
     runs-on: Ubuntu-20.04
+    env:
+      RUSTFLAGS: -D warnings
     needs: changes
-    if: ${{ needs.changes.outputs.rust == 'true' }}
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: enable toolchain via github action
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@1.63.0
         with:
-          toolchain: 1.58.1
           components: rustfmt, clippy
-          override: true
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -133,7 +180,7 @@ jobs:
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
-          toolchain: 1.58.1
+          toolchain: 1.63.0
           command: clippy
           args: --version
 
@@ -141,18 +188,19 @@ jobs:
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
-          toolchain: 1.58.1
+          toolchain: 1.63.0
           command: clippy
+          args: --all-features
 
   cargo-audit:
     name: Run cargo audit
     runs-on: Ubuntu-20.04
     needs: changes
-    if: ${{ needs.changes.outputs.rust == 'true' }}
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Cargo audit
         uses: actions-rs/cargo@v1
@@ -160,47 +208,19 @@ jobs:
         with:
           command: audit
 
-  cargo-outdated:
-    name: Run cargo outdated
-    runs-on: Ubuntu-20.04
-    needs: changes
-    if: ${{ needs.changes.outputs.rust == 'true' }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Cargo outdated --version
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: outdated
-          args: --version
-
-      - name: Cargo outdated
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: outdated
-
   cargo-test:
     name: Run cargo test
     runs-on: Ubuntu-20.04
+    env:
+      RUSTFLAGS: -D warnings
     needs: [cargo-fmt, cargo-clippy]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: enable toolchain via github action
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: 1.58.1
-          override: true
+        uses: dtolnay/rust-toolchain@1.63.0
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -224,22 +244,21 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: test
-          args: --no-fail-fast
+          args: --no-fail-fast --all-features
 
   cargo-build:
     name: Run cargo build
     runs-on: Ubuntu-20.04
+    env:
+      RUSTFLAGS: -D warnings
     needs: [cargo-fmt, cargo-clippy]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: enable toolchain via github action
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: 1.58.1
-          override: true
+        uses: dtolnay/rust-toolchain@1.63.0
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -261,18 +280,18 @@ jobs:
   cargo_build_arm7_32bit:
     name: cargo build for armv7 32bit
     runs-on: Ubuntu-20.04
+    env:
+      RUSTFLAGS: -D warnings
     needs: [cargo-fmt, cargo-clippy]
 
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: enable toolchain via github action
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@1.63.0
         with:
-          toolchain: 1.58.1
-          target: armv7-unknown-linux-gnueabihf
-          override: true
+          targets: armv7-unknown-linux-gnueabihf
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -289,19 +308,18 @@ jobs:
   cargo_build_tests_arm7_32bit:
     name: cargo build tests for armv7 32bit
     runs-on: Ubuntu-20.04
+    env:
+      RUSTFLAGS: -D warnings
     needs: [cargo-fmt, cargo-clippy]
 
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: enable toolchain via github action
-        # https://github.com/actions-rs/toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@1.63.0
         with:
-          toolchain: 1.58.1
           target: armv7-unknown-linux-gnueabihf
-          override: true
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -313,7 +331,15 @@ jobs:
         with:
           use-cross: true
           command: test
-          args: --release --no-run --target=armv7-unknown-linux-gnueabihf
+          args: --release --no-run --target=armv7-unknown-linux-gnueabihf --all-features
+
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Run ShellCheck
+      uses: ludeeus/action-shellcheck@master
 
 ### Disable cargo-tarpaulin as some tests failed only in this step
 #  cargo-tarpaulin:
@@ -322,13 +348,10 @@ jobs:
 #
 #    steps:
 #      - name: Checkout
-#        uses: actions/checkout@v2
+#        uses: actions/checkout@v3
 #
-#      - name: Install rust v1.58.1
-#        uses: actions-rs/toolchain@v1
-#        with:
-#          toolchain: 1.58.1
-#          override: true
+#      - name: Install rust v1.63.0
+#        uses: dtolnay/rust-toolchain@1.63.0
 #
 #      - name: Enable cache
 #        # https://github.com/marketplace/actions/rust-cache

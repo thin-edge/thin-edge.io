@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_config::*;
-use tedge_users::UserManager;
 use tedge_utils::paths::{create_directories, ok_if_not_found, DraftFile};
 use which::which;
 
@@ -26,7 +25,6 @@ pub struct ConnectCommand {
     pub common_mosquitto_config: CommonMosquittoConfig,
     pub is_test_connection: bool,
     pub service_manager: Arc<dyn SystemServiceManager>,
-    pub user_manager: UserManager,
 }
 
 pub enum DeviceStatus {
@@ -135,7 +133,6 @@ impl Command for ConnectCommand {
             &bridge_config,
             &updated_mosquitto_config,
             self.service_manager.as_ref(),
-            self.user_manager.clone(),
             &self.config_location,
             &device_type,
         )?;
@@ -245,7 +242,7 @@ where
     TEdgeConfig: ConfigSettingAccessor<T>,
 {
     let value = config.query(setting)?;
-    let () = config.update(setting, value)?;
+    config.update(setting, value)?;
     Ok(())
 }
 
@@ -389,7 +386,6 @@ fn new_bridge(
     bridge_config: &BridgeConfig,
     common_mosquitto_config: &CommonMosquittoConfig,
     service_manager: &dyn SystemServiceManager,
-    user_manager: UserManager,
     config_location: &TEdgeConfigLocation,
     device_type: &str,
 ) -> Result<(), ConnectError> {
@@ -406,18 +402,14 @@ fn new_bridge(
     }
 
     println!("Checking if configuration for requested bridge already exists.\n");
-    let () = bridge_config_exists(config_location, bridge_config)?;
+    bridge_config_exists(config_location, bridge_config)?;
 
     println!("Validating the bridge certificates.\n");
-    let () = bridge_config.validate()?;
+    bridge_config.validate()?;
 
     if bridge_config.cloud_name.eq("c8y") {
         println!("Creating the device in Cumulocity cloud.\n");
-        let () = c8y_direct_connection::create_device_with_direct_connection(
-            user_manager,
-            bridge_config,
-            device_type,
-        )?;
+        c8y_direct_connection::create_device_with_direct_connection(bridge_config, device_type)?;
     }
 
     println!("Saving configuration for requested bridge.\n");
@@ -494,7 +486,7 @@ fn clean_up(
     bridge_config: &BridgeConfig,
 ) -> Result<(), ConnectError> {
     let path = get_bridge_config_file_path(config_location, bridge_config);
-    let _ = std::fs::remove_file(&path).or_else(ok_if_not_found)?;
+    std::fs::remove_file(&path).or_else(ok_if_not_found)?;
     Ok(())
 }
 
@@ -521,18 +513,18 @@ fn write_bridge_config_to_file(
         .join(TEDGE_BRIDGE_CONF_DIR_PATH);
 
     // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
-    let _ = create_directories(&dir_path)?;
+    create_directories(&dir_path)?;
 
     let common_config_path =
         get_common_mosquitto_config_file_path(config_location, common_mosquitto_config);
     let mut common_draft = DraftFile::new(&common_config_path)?;
     common_mosquitto_config.serialize(&mut common_draft)?;
-    let () = common_draft.persist()?;
+    common_draft.persist()?;
 
     let config_path = get_bridge_config_file_path(config_location, bridge_config);
     let mut config_draft = DraftFile::new(config_path)?;
     bridge_config.serialize(&mut config_draft)?;
-    let () = config_draft.persist()?;
+    config_draft.persist()?;
 
     Ok(())
 }

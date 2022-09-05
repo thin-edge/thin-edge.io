@@ -7,21 +7,22 @@ use serde_json::Value;
 use self::error::ThinEdgeJsonDeserializerError;
 
 /// In-memory representation of ThinEdge JSON event.
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ThinEdgeEvent {
     #[serde(rename = "type")]
     pub name: String,
     #[serde(flatten)]
     pub data: Option<ThinEdgeEventData>,
+    pub source: Option<String>,
 }
 
 /// In-memory representation of ThinEdge JSON event payload
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ThinEdgeEventData {
     pub text: Option<String>,
 
     #[serde(default)]
-    #[serde(with = "clock::serde::rfc3339::option")]
+    #[serde(with = "time::serde::rfc3339::option")]
     pub time: Option<Timestamp>,
 
     #[serde(flatten)]
@@ -29,6 +30,7 @@ pub struct ThinEdgeEventData {
 }
 
 pub mod error {
+
     #[derive(thiserror::Error, Debug)]
     pub enum ThinEdgeJsonDeserializerError {
         #[error("Unsupported topic: {0}")]
@@ -48,7 +50,7 @@ impl ThinEdgeEvent {
         mqtt_payload: &str,
     ) -> Result<Self, ThinEdgeJsonDeserializerError> {
         let topic_split: Vec<&str> = mqtt_topic.split('/').collect();
-        if topic_split.len() == 3 {
+        if topic_split.len() == 3 || topic_split.len() == 4 {
             let event_name = topic_split[2];
             if event_name.is_empty() {
                 return Err(ThinEdgeJsonDeserializerError::EmptyEventName);
@@ -60,9 +62,17 @@ impl ThinEdgeEvent {
                 Some(serde_json::from_str(mqtt_payload)?)
             };
 
+            // The 4th part of the topic name is the event source - if any
+            let external_source = if topic_split.len() == 4 {
+                Some(topic_split[3].to_string())
+            } else {
+                None
+            };
+
             Ok(Self {
                 name: event_name.into(),
                 data: event_data,
+                source: external_source,
             })
         } else {
             Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(
@@ -94,6 +104,7 @@ mod tests {
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 extras: HashMap::new(),
             }),
+            source: None,
         };
         "event parsing"
     )]
@@ -109,6 +120,7 @@ mod tests {
                 time: None,
                 extras: HashMap::new(),
             }),
+            source: None,
         };
         "event parsing without timestamp"
     )]
@@ -124,6 +136,7 @@ mod tests {
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 extras: HashMap::new(),
             }),
+            source: None,
         };
         "event parsing without text"
     )]
@@ -137,8 +150,40 @@ mod tests {
                 time: None,
                 extras: HashMap::new(),
             }),
+            source: None,
         };
         "event parsing without text or timestamp"
+    )]
+    #[test_case(
+        "tedge/events/click_event/external_source",
+        json!({
+            "text": "Someone clicked",
+            "time": "2021-04-23T19:00:00+05:00",
+        }),
+        ThinEdgeEvent {
+            name: "click_event".into(),
+            data: Some(ThinEdgeEventData {
+                text: Some("Someone clicked".into()),
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                extras: HashMap::new(),
+            }),
+            source: Some("external_source".into()),
+        };
+        "event parsing with external source"
+    )]
+    #[test_case(
+        "tedge/events/click_event/external_source",
+        json!({}),
+        ThinEdgeEvent {
+            name: "click_event".into(),
+            data: Some(ThinEdgeEventData {
+                text: None,
+                time: None,
+                extras: HashMap::new(),
+            }),
+            source: Some("external_source".into()),
+        };
+        "event parsing empty payload with external source"
     )]
     fn parse_thin_edge_event_json(
         event_topic: &str,
@@ -159,8 +204,8 @@ mod tests {
     }
 
     #[test]
-    fn event_translation_more_than_three_topic_levels() {
-        let result = ThinEdgeEvent::try_from("tedge/events/page/click", "{}");
+    fn event_translation_more_than_four_topic_levels() {
+        let result = ThinEdgeEvent::try_from("tedge/events/page/click/click", "{}");
 
         assert_matches!(
             result,

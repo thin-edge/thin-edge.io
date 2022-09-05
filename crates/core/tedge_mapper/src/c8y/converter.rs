@@ -12,7 +12,6 @@ use c8y_api::{
 };
 use c8y_smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_smartrest::{
-    alarm,
     error::SmartRestDeserializerError,
     operations::{get_operation, Operations},
     smartrest_deserializer::{SmartRestRestartRequest, SmartRestUpdateSoftware},
@@ -28,17 +27,18 @@ use logged_command::LoggedCommand;
 use mqtt_channel::{Message, Topic, TopicFilter};
 use plugin_sm::operation_logs::OperationLogs;
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::HashSet,
     fs::File,
     io::Read,
     path::{Path, PathBuf},
 };
 use tedge_config::{get_tedge_config, ConfigSettingAccessor, LogPathSetting};
-use thin_edge_json::{alarm::ThinEdgeAlarm, event::ThinEdgeEvent};
+use thin_edge_json::event::ThinEdgeEvent;
 use time::format_description::well_known::Rfc3339;
 
 use tracing::{debug, info, log::error};
 
+use super::alarm_converter::AlarmConverter;
 use super::{
     error::CumulocityMapperError,
     fragments::{C8yAgentFragment, C8yDeviceDataFragment},
@@ -51,7 +51,6 @@ const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "/etc/tedge/device/inventory.jso
 const SUPPORTED_OPERATIONS_DIRECTORY: &str = "/etc/tedge/operations";
 const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "c8y/inventory/managedObjects/update";
 const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
-const TEDGE_ALARMS_TOPIC: &str = "tedge/alarms/";
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const TEDGE_EVENTS_TOPIC: &str = "tedge/events/";
 const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "c8y/event/events/create";
@@ -90,13 +89,16 @@ where
             "tedge/measurements",
             "tedge/measurements/+",
             "tedge/alarms/+/+",
+            "tedge/alarms/+/+/+",
             "c8y-internal/alarms/+/+",
+            "c8y-internal/alarms/+/+/+",
             "tedge/events/+",
+            "tedge/events/+/+",
         ]
         .try_into()
         .expect("topics that mapper should subscribe to");
 
-        let () = topic_filter.add_all(CumulocityMapper::subscriptions(&operations).unwrap());
+        topic_filter.add_all(CumulocityMapper::subscriptions(&operations).unwrap());
 
         let mapper_config = MapperConfig {
             in_topic_filter: topic_filter,
@@ -141,13 +143,16 @@ where
             "tedge/measurements",
             "tedge/measurements/+",
             "tedge/alarms/+/+",
+            "tedge/alarms/+/+/+",
             "c8y-internal/alarms/+/+",
+            "c8y-internal/alarms/+/+/+",
             "tedge/events/+",
+            "tedge/events/+/+",
         ]
         .try_into()
         .expect("topics that mapper should subscribe to");
 
-        let () = topic_filter.add_all(CumulocityMapper::subscriptions(&operations).unwrap());
+        topic_filter.add_all(CumulocityMapper::subscriptions(&operations).unwrap());
 
         let mapper_config = MapperConfig {
             in_topic_filter: topic_filter,
@@ -185,7 +190,7 @@ where
     ) -> Result<Vec<Message>, ConversionError> {
         let mut vec: Vec<Message> = Vec::new();
 
-        let maybe_child_id = get_child_id_from_topic(&input.topic.name)?;
+        let maybe_child_id = get_child_id_from_measurement_topic(&input.topic.name)?;
         let c8y_json_payload = match maybe_child_id {
             Some(child_id) => {
                 // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
@@ -224,30 +229,74 @@ where
         &mut self,
         input: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        let tedge_event = ThinEdgeEvent::try_from(input.topic.name.as_str(), input.payload_str()?)?;
+        let mut messages = Vec::new();
+
+        let tedge_event = ThinEdgeEvent::try_from(&input.topic.name, input.payload_str()?)?;
+        let child_id = tedge_event.source.clone();
+
+        let need_registration = self.register_external_device(&tedge_event, &mut messages);
+
         let c8y_event = C8yCreateEvent::try_from(tedge_event)?;
 
         // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
         let message = if c8y_event.extras.is_empty() {
             let smartrest_event = Self::serialize_to_smartrest(&c8y_event)?;
             let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
-
             Message::new(&smartrest_topic, smartrest_event)
         } else {
             // If the message contains extra fields other than `text` and `time`, convert to Cumulocity JSON
             let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
             let json_mqtt_topic = Topic::new_unchecked(C8Y_JSON_MQTT_EVENTS_TOPIC);
-
             Message::new(&json_mqtt_topic, cumulocity_event_json)
         };
 
-        // If the MQTT message size is well within the Cumulocity MQTT size limit, use MQTT to send the mapped event as well
-        if input.payload_bytes().len() < self.size_threshold.0 {
-            Ok(vec![message])
-        } else {
-            // If the message size is larger than the MQTT size limit, use HTTP to send the mapped event
+        if self.can_send_over_mqtt(&message) {
+            // The message can be sent via MQTT
+            messages.push(message);
+        } else if !need_registration {
+            // The message must be sent over HTTP
             let _ = self.http_proxy.send_event(c8y_event).await?;
+            return Ok(vec![]);
+        } else {
+            // The message should be sent over HTTP but this cannot be done
+            return Err(ConversionError::ChildDeviceNotRegistered {
+                id: child_id.unwrap_or_else(|| "".into()),
+            });
+        }
+        Ok(messages)
+    }
+
+    pub fn process_alarm_messages(
+        &mut self,
+        topic: &Topic,
+        message: &Message,
+    ) -> Result<Vec<Message>, ConversionError> {
+        if topic.name.starts_with("tedge/alarms") {
+            let mut mqtt_messages: Vec<Message> = Vec::new();
+            self.size_threshold.validate(message)?;
+            let mut messages = self.alarm_converter.try_convert_alarm(message)?;
+            if !messages.is_empty() {
+                // When there is some messages to be sent on behalf of a child device,
+                // this child device must be declared first, if not done yet
+                let topic_split: Vec<&str> = topic.name.split('/').collect();
+                if topic_split.len() == 5 {
+                    let child_id = topic_split[4];
+                    if !child_id.is_empty() && !self.children.contains(child_id) {
+                        self.children.insert(child_id.to_string());
+                        mqtt_messages.push(Message::new(
+                            &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
+                            format!("101,{child_id},{child_id},thin-edge.io-child"),
+                        ));
+                    }
+                }
+            }
+            mqtt_messages.append(&mut messages);
+            Ok(mqtt_messages)
+        } else if topic.name.starts_with(INTERNAL_ALARMS_TOPIC) {
+            self.alarm_converter.process_internal_alarm(message);
             Ok(vec![])
+        } else {
+            Err(ConversionError::UnsupportedTopic(topic.name.clone()))
         }
     }
 
@@ -259,6 +308,29 @@ where
             c8y_event.text,
             c8y_event.time.format(&Rfc3339)?
         ))
+    }
+
+    fn register_external_device(
+        &mut self,
+        tedge_event: &ThinEdgeEvent,
+        messages: &mut Vec<Message>,
+    ) -> bool {
+        if let Some(c_id) = tedge_event.source.clone() {
+            // Create the external source if it does not exists
+            if !self.children.contains(&c_id) {
+                self.children.insert(c_id.clone());
+                messages.push(Message::new(
+                    &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
+                    format!("101,{c_id},{c_id},thin-edge.io-child"),
+                ));
+                return true;
+            }
+        }
+        false
+    }
+
+    fn can_send_over_mqtt(&self, message: &Message) -> bool {
+        message.payload_bytes().len() < self.size_threshold.0
     }
 }
 
@@ -275,16 +347,14 @@ where
     async fn try_convert(&mut self, message: &Message) -> Result<Vec<Message>, ConversionError> {
         match &message.topic {
             topic if topic.name.starts_with("tedge/measurements") => {
-                let () = self.size_threshold.validate(message)?;
+                self.size_threshold.validate(message)?;
                 self.try_convert_measurement(message)
             }
-            topic if topic.name.starts_with("tedge/alarms") => {
-                let () = self.size_threshold.validate(message)?;
-                self.alarm_converter.try_convert_alarm(message)
-            }
-            topic if topic.name.starts_with(INTERNAL_ALARMS_TOPIC) => {
-                self.alarm_converter.process_internal_alarm(message);
-                Ok(vec![])
+            topic
+                if topic.name.starts_with("tedge/alarms")
+                    | topic.name.starts_with(INTERNAL_ALARMS_TOPIC) =>
+            {
+                self.process_alarm_messages(topic, message)
             }
             topic if topic.name.starts_with(TEDGE_EVENTS_TOPIC) => {
                 self.try_convert_event(message).await
@@ -409,143 +479,6 @@ async fn parse_c8y_topics(
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum AlarmConverter {
-    Syncing {
-        pending_alarms_map: HashMap<String, Message>,
-        old_alarms_map: HashMap<String, Message>,
-    },
-    Synced,
-}
-
-impl AlarmConverter {
-    fn new() -> Self {
-        AlarmConverter::Syncing {
-            old_alarms_map: HashMap::new(),
-            pending_alarms_map: HashMap::new(),
-        }
-    }
-
-    fn try_convert_alarm(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
-        let mut vec: Vec<Message> = Vec::new();
-
-        match self {
-            Self::Syncing {
-                pending_alarms_map,
-                old_alarms_map: _,
-            } => {
-                let alarm_id = input
-                    .topic
-                    .name
-                    .strip_prefix(TEDGE_ALARMS_TOPIC)
-                    .expect("Expected tedge/alarms prefix")
-                    .to_string();
-                pending_alarms_map.insert(alarm_id, input.clone());
-            }
-            Self::Synced => {
-                //Regular conversion phase
-                let tedge_alarm =
-                    ThinEdgeAlarm::try_from(input.topic.name.as_str(), input.payload_str()?)?;
-                let smartrest_alarm = alarm::serialize_alarm(tedge_alarm)?;
-                let c8y_alarm_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
-                vec.push(Message::new(&c8y_alarm_topic, smartrest_alarm));
-
-                // Persist a copy of the alarm to an internal topic for reconciliation on next restart
-                let alarm_id = input
-                    .topic
-                    .name
-                    .strip_prefix(TEDGE_ALARMS_TOPIC)
-                    .expect("Expected tedge/alarms prefix")
-                    .to_string();
-                let topic =
-                    Topic::new_unchecked(format!("{INTERNAL_ALARMS_TOPIC}{alarm_id}").as_str());
-                let alarm_copy =
-                    Message::new(&topic, input.payload_bytes().to_owned()).with_retain();
-                vec.push(alarm_copy);
-            }
-        }
-
-        Ok(vec)
-    }
-
-    fn process_internal_alarm(&mut self, input: &Message) {
-        match self {
-            Self::Syncing {
-                pending_alarms_map: _,
-                old_alarms_map,
-            } => {
-                let alarm_id = input
-                    .topic
-                    .name
-                    .strip_prefix(INTERNAL_ALARMS_TOPIC)
-                    .expect("Expected c8y-internal/alarms prefix")
-                    .to_string();
-                old_alarms_map.insert(alarm_id, input.clone());
-            }
-            Self::Synced => {
-                // Ignore
-            }
-        }
-    }
-
-    /// Detect and sync any alarms that were raised/cleared while this mapper process was not running.
-    /// For this syncing logic, converter maintains an internal journal of all the alarms processed by this mapper,
-    /// which is compared against all the live alarms seen by the mapper on every startup.
-    ///
-    /// All the live alarms are received from tedge/alarms topic on startup.
-    /// Similarly, all the previously processed alarms are received from c8y-internal/alarms topic.
-    /// Sync detects the difference between these two sets, which are the missed messages.
-    ///
-    /// An alarm that is present in c8y-internal/alarms, but not in tedge/alarms topic
-    /// is assumed to have been cleared while the mapper process was down.
-    /// Similarly, an alarm that is present in tedge/alarms, but not in c8y-internal/alarms topic
-    /// is one that was raised while the mapper process was down.
-    /// An alarm present in both, if their payload is the same, is one that was already processed before the restart
-    /// and hence can be ignored during sync.
-    fn sync(&mut self) -> Vec<Message> {
-        let mut sync_messages: Vec<Message> = Vec::new();
-
-        match self {
-            Self::Syncing {
-                pending_alarms_map,
-                old_alarms_map,
-            } => {
-                // Compare the differences between alarms in tedge/alarms topic to the ones in c8y-internal/alarms topic
-                old_alarms_map.drain().for_each(|(alarm_id, old_message)| {
-                    match pending_alarms_map.entry(alarm_id.clone()) {
-                        // If an alarm that is present in c8y-internal/alarms topic is not present in tedge/alarms topic,
-                        // it is assumed to have been cleared while the mapper process was down
-                        Entry::Vacant(_) => {
-                            let topic = Topic::new_unchecked(
-                                format!("{TEDGE_ALARMS_TOPIC}{alarm_id}").as_str(),
-                            );
-                            let message = Message::new(&topic, vec![]).with_retain();
-                            // Recreate the clear alarm message and add it to the pending alarms list to be processed later
-                            sync_messages.push(message);
-                        }
-
-                        // If the payload of a message received from tedge/alarms is same as one received from c8y-internal/alarms,
-                        // it is assumed to be one that was already processed earlier and hence removed from the pending alarms list.
-                        Entry::Occupied(entry) => {
-                            if entry.get().payload_bytes() == old_message.payload_bytes() {
-                                entry.remove();
-                            }
-                        }
-                    }
-                });
-
-                pending_alarms_map
-                    .drain()
-                    .for_each(|(_key, message)| sync_messages.push(message));
-            }
-            Self::Synced => {
-                // Ignore
-            }
-        }
-
-        sync_messages
-    }
-}
 fn create_device_data_fragments(
     device_name: &str,
     device_type: &str,
@@ -825,7 +758,7 @@ fn get_inventory_fragments(file_path: &str) -> Result<serde_json::Value, Convers
     }
 }
 
-pub fn get_child_id_from_topic(topic: &str) -> Result<Option<String>, ConversionError> {
+pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>, ConversionError> {
     match topic.strip_prefix("tedge/measurements/").map(String::from) {
         Some(maybe_id) if maybe_id.is_empty() => {
             Err(ConversionError::InvalidChildId { id: maybe_id })
@@ -845,10 +778,10 @@ mod tests {
         let operation_logs = OperationLogs::try_new(log_dir.path().to_path_buf()).unwrap();
 
         let now = std::time::Instant::now();
-        let () = super::execute_operation("5", "sleep", "sleep_one", &operation_logs)
+        super::execute_operation("5", "sleep", "sleep_one", &operation_logs)
             .await
             .unwrap();
-        let () = super::execute_operation("5", "sleep", "sleep_two", &operation_logs)
+        super::execute_operation("5", "sleep", "sleep_two", &operation_logs)
             .await
             .unwrap();
 

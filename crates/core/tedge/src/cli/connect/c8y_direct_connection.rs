@@ -13,11 +13,8 @@ use std::path::PathBuf;
 use std::{fs::File, io::BufReader};
 use tedge_config::FilePath;
 
-use tedge_users::UserManager;
-
 // Connect directly to the c8y cloud over mqtt and publish device create message.
 pub fn create_device_with_direct_connection(
-    user_manager: UserManager,
     bridge_config: &BridgeConfig,
     device_type: &str,
 ) -> Result<(), ConnectError> {
@@ -32,12 +29,12 @@ pub fn create_device_with_direct_connection(
 
     let mut client_config = ClientConfig::new();
 
-    let () = load_root_certs(
+    load_root_certs(
         &mut client_config.root_store,
         bridge_config.bridge_root_cert_path.clone(),
     )?;
 
-    let pvt_key = read_pvt_key(user_manager, bridge_config.bridge_keyfile.clone())?;
+    let pvt_key = read_pvt_key(bridge_config.bridge_keyfile.clone())?;
     let cert_chain = read_cert_chain(bridge_config.bridge_certfile.clone())?;
 
     let _ = client_config.set_single_client_cert(cert_chain, pvt_key);
@@ -139,12 +136,7 @@ fn add_root_cert(
     Ok(())
 }
 
-fn read_pvt_key(
-    user_manager: UserManager,
-    key_file: tedge_config::FilePath,
-) -> Result<rustls_0_19::PrivateKey, ConnectError> {
-    // Become BROKER_USER to read the private key
-    let _user_guard = user_manager.become_user(tedge_users::BROKER_USER)?;
+fn read_pvt_key(key_file: tedge_config::FilePath) -> Result<rustls_0_19::PrivateKey, ConnectError> {
     parse_pkcs8_key(key_file.clone()).or_else(|_| parse_rsa_key(key_file))
 }
 
@@ -213,7 +205,6 @@ mod tests {
 
     #[test]
     fn parse_supported_key() {
-        let user_manager = UserManager::new();
         let key = concat!(
             "-----BEGIN RSA PRIVATE KEY-----\n",
             "MC4CAQ\n",
@@ -221,14 +212,13 @@ mod tests {
         );
         let mut temp_file = NamedTempFile::new().unwrap();
         temp_file.write_all(key.as_bytes()).unwrap();
-        let parsed_key = read_pvt_key(user_manager, temp_file.path().into()).unwrap();
+        let parsed_key = read_pvt_key(temp_file.path().into()).unwrap();
         let expected_pvt_key = rustls_0_19::PrivateKey(vec![48, 46, 2, 1]);
         assert_eq!(parsed_key, expected_pvt_key);
     }
 
     #[test]
     fn parse_unsupported_key() {
-        let user_manager = UserManager::new();
         let key = concat!(
             "-----BEGIN DSA PRIVATE KEY-----\n",
             "MC4CAQ\n",
@@ -236,7 +226,7 @@ mod tests {
         );
         let mut temp_file = NamedTempFile::new().unwrap();
         temp_file.write_all(key.as_bytes()).unwrap();
-        let err = read_pvt_key(user_manager, temp_file.path().into()).unwrap_err();
+        let err = read_pvt_key(temp_file.path().into()).unwrap_err();
         assert!(matches!(err, ConnectError::UnknownPrivateKeyFormat));
     }
 }

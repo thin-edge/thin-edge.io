@@ -14,6 +14,7 @@ sudo apt update
 sudo apt-get --assume-yes install binutils-arm-linux-gnueabihf binutils-aarch64-linux-gnu
 
 # Load the release package list as $RELEASE_PACKAGES and $TEST_PACKAGES
+# shellcheck disable=SC1091
 source ./ci/package_list.sh
 
 # Cross build release for target

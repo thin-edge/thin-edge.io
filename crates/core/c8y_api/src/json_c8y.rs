@@ -31,7 +31,7 @@ pub struct C8yCreateEvent {
     pub extras: HashMap<String, Value>,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 /// used to retrieve the id of a log event
 pub struct C8yEventResponse {
@@ -57,7 +57,7 @@ impl InternalIdResponse {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct C8ySoftwareModuleItem {
     pub name: String,
     pub version: Option<String>,
@@ -87,7 +87,7 @@ impl From<SoftwareModule> for C8ySoftwareModuleItem {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yUpdateSoftwareListResponse {
     #[serde(rename = "c8y_SoftwareList")]
@@ -135,7 +135,7 @@ impl TryFrom<ThinEdgeEvent> for C8yCreateEvent {
         let event_type = event.name;
         let text;
         let time;
-        let extras;
+        let mut extras;
         match event.data {
             None => {
                 text = event_type.clone();
@@ -147,6 +147,9 @@ impl TryFrom<ThinEdgeEvent> for C8yCreateEvent {
                 time = event_data.time.unwrap_or_else(OffsetDateTime::now_utc);
                 extras = event_data.extras;
             }
+        }
+        if let Some(source) = event.source {
+            update_the_external_source_event(&mut extras, &source)?;
         }
 
         Ok(Self {
@@ -190,6 +193,17 @@ fn combine_version_and_type(
             None => EMPTY_STRING.into(),
         },
     }
+}
+fn update_the_external_source_event(
+    extras: &mut HashMap<String, Value>,
+    source: &str,
+) -> Result<(), SMCumulocityMapperError> {
+    let mut value = serde_json::Map::new();
+    value.insert("externalId".to_string(), source.into());
+    value.insert("type".to_string(), "c8y_Serial".into());
+    extras.insert("externalSource".into(), value.into());
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -353,6 +367,7 @@ mod tests {
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 extras: HashMap::new(),
             }),
+            source: None,
         },
         C8yCreateEvent {
             source: None,
@@ -371,6 +386,7 @@ mod tests {
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 extras: HashMap::new(),
             }),
+            source: None,
         },
         C8yCreateEvent {
             source: None,
@@ -389,6 +405,7 @@ mod tests {
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 extras: HashMap::new(),
             }),
+            source: None,
         },
         C8yCreateEvent {
             source: None,
@@ -419,6 +436,7 @@ mod tests {
                 time: None,
                 extras: HashMap::new(),
             }),
+            source: None,
         };
 
         let actual_c8y_event = C8yCreateEvent::try_from(tedge_event)?;
@@ -437,6 +455,7 @@ mod tests {
         let tedge_event = ThinEdgeEvent {
             name: "empty_event".into(),
             data: None,
+            source: None,
         };
 
         let actual_c8y_event = C8yCreateEvent::try_from(tedge_event)?;

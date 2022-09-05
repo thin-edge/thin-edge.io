@@ -217,7 +217,7 @@ async fn execute_logfile_request_operation(
     http_client: &mut JwtAuthHttpProxy,
 ) -> Result<(), anyhow::Error> {
     let executing = LogfileRequest::executing()?;
-    let () = mqtt_client.published.send(executing).await?;
+    mqtt_client.published.send(executing).await?;
 
     let log_content = new_read_logs(smartrest_request, plugin_config)?;
 
@@ -226,7 +226,7 @@ async fn execute_logfile_request_operation(
         .await?;
 
     let successful = LogfileRequest::successful(Some(upload_event_url))?;
-    let () = mqtt_client.published.send(successful).await?;
+    mqtt_client.published.send(successful).await?;
 
     info!("Log request processed.");
     Ok(())
@@ -249,22 +249,24 @@ pub async fn handle_logfile_request_operation(
         Err(error) => {
             let error_message = format!("Handling of operation failed with {}", error);
             let failed_msg = LogfileRequest::failed(error_message)?;
-            let () = mqtt_client.published.send(failed_msg).await?;
+            mqtt_client.published.send(failed_msg).await?;
             Err(error)
         }
     }
 }
 
+pub(crate) fn read_log_config(config_dir: &Path) -> LogPluginConfig {
+    LogPluginConfig::new(config_dir)
+}
+
 /// updates the log types on Cumulocity
 /// sends 118,typeA,typeB,... on mqtt
 pub async fn handle_dynamic_log_type_update(
+    plugin_config: &LogPluginConfig,
     mqtt_client: &mut Connection,
-    config_dir: &Path,
-) -> Result<LogPluginConfig, anyhow::Error> {
-    let plugin_config = LogPluginConfig::new(config_dir);
+) -> Result<(), anyhow::Error> {
     let msg = plugin_config.to_supported_config_types_message()?;
-    let () = mqtt_client.published.send(msg).await?;
-    Ok(plugin_config)
+    Ok(mqtt_client.published.send(msg).await?)
 }
 
 #[cfg(test)]
@@ -436,7 +438,7 @@ mod tests {
 
         let data = "this is the first line.\nthis is the second line.\nthis is the third line.\nthis is the forth line.\nthis is the fifth line.";
 
-        let () = log_file.write_all(data.as_bytes()).unwrap();
+        log_file.write_all(data.as_bytes()).unwrap();
 
         let line_counter = 0;
         let max_lines = 4;
@@ -489,7 +491,7 @@ mod tests {
 
             let data = &format!("this is the first line of {file_name}.\nthis is the second line of {file_name}.\nthis is the third line of {file_name}.\nthis is the forth line of {file_name}.\nthis is the fifth line of {file_name}.");
 
-            let () = log_file.write_all(data.as_bytes()).unwrap();
+            log_file.write_all(data.as_bytes()).unwrap();
 
             let new_mtime = FileTime::from_unix_time(m_time, 0);
             set_file_mtime(file_path, new_mtime).unwrap();

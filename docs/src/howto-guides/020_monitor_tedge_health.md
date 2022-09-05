@@ -29,6 +29,8 @@ The following endpoints are currently supported by various tedge daemons:
 * `tedge/health/tedge-mapper-c8y`
 * `tedge/health/tedge-mapper-az`
 * `tedge/health/tedge-mapper-collectd`
+* `tedge/health/c8y-log-plugin`
+* `tedge/health/c8y-configuration-plugin`
 
 All future tedge daemons will also follow the same topic naming scheme convention.
 

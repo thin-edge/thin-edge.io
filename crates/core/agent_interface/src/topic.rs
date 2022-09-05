@@ -1,6 +1,6 @@
 use crate::error::TopicError;
 use std::convert::TryFrom;
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ResponseTopic {
     SoftwareListResponse,
     SoftwareUpdateResponse,
@@ -40,7 +40,7 @@ impl TryFrom<&str> for ResponseTopic {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum RequestTopic {
     SoftwareListRequest,
     SoftwareUpdateRequest,

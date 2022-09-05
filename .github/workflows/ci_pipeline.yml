@@ -5,8 +5,6 @@ name: ci_pipeline
 #  are there four times and are almost identical. They only differ in a character
 #  a,b,c,d that we use to select a runner.
 #
-# TODO: Safely move cargo test on amd64 to bash script
-# TODO: Reduce complexity by moving functionality to bash scripts
 # TODO: Smoke testing on Azure is disabled, we should check if it works out
 #   with 4 runners in parallel or enable only one
 
@@ -25,14 +23,10 @@ jobs:
     runs-on: Ubuntu-20.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Enable toolchain via github action
-        # https://github.com/actions-rs/toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: 1.58.1
-          override: true
+        uses: dtolnay/rust-toolchain@1.63.0
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -43,7 +37,7 @@ jobs:
 
       - name: Upload artifacts as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: debian-packages-amd64
           path: target/debian/*.deb
@@ -57,7 +51,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Download release artifacts
         uses: actions/download-artifact@v3
@@ -71,41 +65,6 @@ jobs:
 
       - name: Run tedge help
         run: tedge --help
-
-#################################################################################
-
-  cargo-test-features-amd64:
-    name: Run cargo test features
-    runs-on: Ubuntu-20.04
-    needs: build-amd64
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Enable toolchain via github action
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: 1.58.1
-          override: true
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
-
-      - name: Compile test
-        run: ./ci/integration_test/cargo_test_for_amd64.sh
-
-        # If this command is ported to bash script, it runs tests that should be skipped.
-        # The tests could fail if GitHub blocks external connections.
-        # It seems like they rarely do.
-      - name: Cargo test features
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: test
-          args: --verbose --features integration-test,requires-sudo -- \
-            --skip sending_and_receiving_a_message
 
 ##################################################################################
 
@@ -126,15 +85,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Enable toolchain via github action
-        # https://github.com/actions-rs/toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@1.63.0
         with:
-          toolchain: 1.58.1
-          target: ${{ matrix.target }}
-          override: true
+          targets: ${{ matrix.target }}
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -145,21 +101,21 @@ jobs:
 
       - name: Upload debian packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: debian-packages-${{ matrix.target }}
           path: target/${{ matrix.target }}/debian/*.deb
 
       - name: Upload sawtooth publisher as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: sawtooth_publisher_${{ matrix.target }}
           path: target/${{ matrix.target }}/release/sawtooth_publisher
 
       - name: Upload dummy-plugin as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: tedge_dummy_plugin_${{ matrix.target }}
           path: target/${{ matrix.target }}/release/tedge_dummy_plugin
@@ -179,7 +135,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Clean up ${{ matrix.rpi }}
         run: ./ci/installation_scripts/clean_up_rpi.sh
@@ -200,7 +156,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Download release artifacts
         uses: actions/download-artifact@v3
@@ -261,166 +217,3 @@ jobs:
 #          AZUREENDPOINT: ${{ secrets.AZUREENDPOINT }}
 #          AZUREEVENTHUB: ${{ secrets.AZUREEVENTHUB }}
 #          IOTHUBNAME: ${{ secrets.IOTHUBNAME }}
-
-#################################################################################
-
-  system-test-offsite-matrix:
-    strategy:
-      matrix:
-        rpi: [ m32sd10a, m32sd10b, m32sd10c, m32sd10d ]
-    runs-on:
-      - self-hosted
-      - Linux
-      - ARM
-      - offsite_${{ matrix.rpi }}
-    needs: install-and-use-rpi-matrix
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Run all Tests
-        run:  bash ./ci/ci_run_all_tests.sh
-        continue-on-error: true
-        if: true
-        env:
-          C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-          C8YDEVICE: ${{ matrix.rpi }}
-          C8YTENANT: ${{ secrets.SECRET_C8YTENANT }}
-          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-          TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-          EXAMPLEDIR: /home/pi/examples
-
-      - name: Run all plugin tests
-        run:  bash ./ci/ci_run_all_plugin_tests.sh
-        continue-on-error: true
-        if: true
-        env:
-          C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-          C8YDEVICE: ${{ matrix.rpi }}
-          C8YTENANT: ${{ secrets.SECRET_C8YTENANT }}
-          TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-          EXAMPLEDIR: /home/pi/examples
-          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-      - name: Run all sm tests
-        run:  bash ./ci/ci_run_all_sm_tests.sh
-        continue-on-error: true
-        if: true
-        env:
-          C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-          C8YDEVICE: ${{ matrix.rpi }}
-          C8YTENANT: ${{ secrets.SECRET_C8YTENANT }}
-          TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-          EXAMPLEDIR: /home/pi/examples
-          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-
-      - name: Run all statistics tests
-        run:  bash ./ci/ci_run_statistics.sh
-        continue-on-error: true
-        if: true
-        env:
-          C8YPASS: ${{ secrets.SECRET_C8YPASS }}
-          C8YUSERNAME: ${{ secrets.SECRET_C8YUSERNAME }}
-          C8YDEVICE: ${{ matrix.rpi }}
-          C8YTENANT: ${{ secrets.SECRET_C8YTENANT }}
-          C8YURL: https://thin-edge-io.eu-latest.cumulocity.com
-          TEBASEDIR: /home/pi/actions-runner/_work/thin-edge.io/thin-edge.io/
-          EXAMPLEDIR: /home/pi/examples
-
-      - name: Upload results as zip
-        # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: results_pysys_offsite_${{ matrix.rpi }}
-          path: tests/
-
-#############################################################################
-
-  system-test-postprocessing:
-    runs-on: Ubuntu-20.04
-    needs: system-test-offsite-matrix
-
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-
-    # Trigger repo dispatch here.
-    # This is here a limitation of the amount of workflows
-    # that trigger each other (GitHub Bug).
-    # It would be nicer to use the postprocess trigger instead
-
-# Disabled until analytics VM is available
-#
-#    - name: Repository Dispatch
-#      uses: peter-evans/repository-dispatch@v1
-#      with:
-#          token: ${{ secrets.SECRET_THEGHTOKEN  }}
-#          event-type: postprocess
-#          repository: abelikt/thin-edge.io_analytics
-
-    - name: Download result a
-      uses: actions/download-artifact@v3
-      # https://github.com/marketplace/actions/download-a-build-artifact
-      with:
-        name: results_pysys_offsite_m32sd10a
-        path: results/results_pysys_offsite_m32sd10a
-
-    - name: Download result b
-      uses: actions/download-artifact@v3
-      # https://github.com/marketplace/actions/download-a-build-artifact
-      with:
-        name: results_pysys_offsite_m32sd10b
-        path: results/results_pysys_offsite_m32sd10b
-
-    - name: Download result c
-      uses: actions/download-artifact@v3
-      # https://github.com/marketplace/actions/download-a-build-artifact
-      with:
-        name: results_pysys_offsite_m32sd10c
-        path: results/results_pysys_offsite_m32sd10c
-
-    - name: Download result d
-      uses: actions/download-artifact@v3
-      # https://github.com/marketplace/actions/download-a-build-artifact
-      with:
-        name: results_pysys_offsite_m32sd10d
-        path: results/results_pysys_offsite_m32sd10d
-
-    - name: Build report
-      run: ./ci/report/build.sh
-
-    - name: Upload report as zip
-      # https://github.com/marketplace/actions/upload-a-build-artifact
-      uses: actions/upload-artifact@v2
-      with:
-        name: report_matrix_${{ github.run_number }}
-        path: results/report.zip
-
-    - name: Upload report as html
-      # https://github.com/marketplace/actions/upload-a-build-artifact
-      uses: actions/upload-artifact@v2
-      with:
-        name: system-test-report-matrix_${{ github.run_number }}
-        path: results/report-matrix.htm
-
-    - name: Run ls on analysis folder
-      run: |
-        ls -l ./results
-
-    - name: Deploy to GitHub Pages
-      # peaceiris/actions-gh-pages@v3
-      uses: peaceiris/actions-gh-pages@v3
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./results
-        destination_dir: results
-        commit_message: Results for ci pipeline run ${{ github.run_number }}
-
-    - name: Final Result
-      # This will fail if there are errors in the reports
-      run: |
-        python3 ./ci/report/final_result.py ./results/all_reports.xml

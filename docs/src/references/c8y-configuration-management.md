@@ -120,19 +120,19 @@ USAGE:
 
 OPTIONS:
         --config-dir <CONFIG_DIR>      [default: /etc/tedge]
-        --config-file <CONFIG_FILE>    [default: $CONFIG_DIR/c8y/c8y-configuration-plugin.toml]
         --debug                        Turn-on the debug log level
     -h, --help                         Print help information
     -i, --init                         Create supported operation files
     -V, --version                      Print version information
 
     On start, `c8y_configuration_plugin` notifies the cloud tenant of the managed configuration files,
-    listed in the `CONFIG_FILE`, sending this list with a `119` on `c8y/s/us`.
+    listed in `CONFIG_DIR/c8y/c8y-configuration-plugin.toml`, sending this list with a `119` on `c8y/s/us`.
     `c8y_configuration_plugin` subscribes then to `c8y/s/ds` listening for configuration operation
     requests (messages `524` and `526`).
     notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
     
     The thin-edge `CONFIG_DIR` is used to find where:
+    * to store the configuration file: `c8y/c8y-configuration-plugin.toml`
     * to store temporary files on download: `tedge config get tmp.path`,
     * to connect the MQTT bus: `tedge config get mqtt.port`.
 ```
@@ -163,6 +163,7 @@ Note that:
 * Since the type of configuration file is used as an MQTT topic name, the characters `#` and `+` cannot be used in a type name.
   If such a character is used in a type name (or in the path of a configuration file without explicit type),
   then the whole plugin configuration `/etc/tedge/c8y/c8y-configuration-plugin.toml` is considered ill-formed.
+  
 * Notifications for external child-devices are handled differently, as configuration files are fetched/pushed from/to external devices via HTTP file transfer. Thereby notifications are part of the file transfer contract (details see section [Fetching/Pushing configuration file](#fetchingpushing-configuration-file-fromto-the-external-device) below).
 
 ## Configuration files for child devices

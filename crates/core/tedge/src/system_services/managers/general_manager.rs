@@ -5,20 +5,15 @@ use crate::system_services::{
 use std::fmt;
 use std::path::PathBuf;
 use std::process::ExitStatus;
-use tedge_users::{UserManager, ROOT_USER};
 
 #[derive(Debug)]
 pub struct GeneralServiceManager {
-    user_manager: UserManager,
     init_config: InitConfig,
     config_path: String,
 }
 
 impl GeneralServiceManager {
-    pub fn try_new(
-        user_manager: UserManager,
-        config_root: PathBuf,
-    ) -> Result<Self, SystemServiceError> {
+    pub fn try_new(config_root: PathBuf) -> Result<Self, SystemServiceError> {
         let init_config = SystemConfig::try_new(config_root.clone())?.init;
         let config_path = config_root
             .join(SERVICE_CONFIG_FILE)
@@ -26,7 +21,6 @@ impl GeneralServiceManager {
             .unwrap_or(SERVICE_CONFIG_FILE)
             .to_string();
         Ok(Self {
-            user_manager,
             init_config,
             config_path,
         })
@@ -238,8 +232,6 @@ impl GeneralServiceManager {
         exec_command: ExecCommand,
         config_path: &str,
     ) -> Result<ServiceCommandExitStatus, SystemServiceError> {
-        let _root_guard = self.user_manager.become_user(ROOT_USER);
-
         exec_command
             .to_command()
             .status()

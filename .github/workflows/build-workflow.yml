@@ -16,14 +16,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Enable toolchain via github action
-        # https://github.com/actions-rs/toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: 1.58.1
-          override: true
+        uses: dtolnay/rust-toolchain@1.63.0
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -34,7 +30,7 @@ jobs:
 
       - name: Upload artifacts as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: debian-packages-amd64
           path: target/debian/*.deb
@@ -56,15 +52,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Enable toolchain via github action
-        # https://github.com/actions-rs/toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@1.63.0
         with:
-          toolchain: 1.58.1
-          target: ${{ matrix.target }}
-          override: true
+          targets: ${{ matrix.target }}
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -75,21 +68,21 @@ jobs:
 
       - name: Upload debian packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: debian-packages-${{ matrix.target }}
           path: target/${{ matrix.target }}/debian/*.deb
 
       - name: Upload sawtooth publisher as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: sawtooth_publisher_${{ matrix.target }}
           path: target/${{ matrix.target }}/release/sawtooth_publisher
 
       - name: Upload dummy-plugin as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: tedge_dummy_plugin_${{ matrix.target }}
           path: target/${{ matrix.target }}/release/tedge_dummy_plugin

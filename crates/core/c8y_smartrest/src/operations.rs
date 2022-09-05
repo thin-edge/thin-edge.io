@@ -11,7 +11,7 @@ use serde::Deserialize;
 /// Each operation is a file name in one of the subdirectories
 /// The file name is the operation name
 
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub struct OnMessageExec {
     command: Option<String>,
@@ -20,7 +20,7 @@ pub struct OnMessageExec {
     user: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub struct Operation {
     #[serde(skip)]
@@ -46,6 +46,16 @@ impl Operation {
 pub struct Operations {
     operations: Vec<Operation>,
     operations_by_trigger: HashMap<String, usize>,
+}
+
+/// depending on which editor you use, temporary files could be created that contain the name of
+/// the file.
+/// this `operation_name_is_valid` fn will ensure that only files that do not contain
+/// any special characters are allowed.
+pub fn is_valid_operation_name(operation: &str) -> bool {
+    operation
+        .chars()
+        .all(|c| c.is_ascii_alphabetic() || c.is_numeric() || c.eq(&'_'))
 }
 
 impl Operations {
@@ -106,23 +116,28 @@ fn get_operations(dir: impl AsRef<Path>, cloud_name: &str) -> Result<Operations,
         .collect::<Vec<PathBuf>>();
 
     for path in dir_entries {
-        let mut details = match fs::read(&path) {
-            Ok(bytes) => toml::from_slice::<Operation>(bytes.as_slice())
-                .map_err(|e| OperationsError::TomlError(path.to_path_buf(), e))?,
+        if let Some(file_name) = path.file_name().and_then(|file_name| file_name.to_str()) {
+            if !is_valid_operation_name(file_name) {
+                continue;
+            }
 
-            Err(err) => return Err(OperationsError::FromIo(err)),
-        };
+            let mut details = match fs::read(&path) {
+                Ok(bytes) => toml::from_slice::<Operation>(bytes.as_slice())
+                    .map_err(|e| OperationsError::TomlError(path.to_path_buf(), e))?,
 
-        details.name = path
-            .file_name()
-            .and_then(|filename| filename.to_str())
-            .ok_or_else(|| OperationsError::InvalidOperationName(path.to_owned()))?
-            .to_owned();
-        operations.add_operation(details);
+                Err(err) => return Err(OperationsError::FromIo(err)),
+            };
+
+            details.name = path
+                .file_name()
+                .and_then(|filename| filename.to_str())
+                .ok_or_else(|| OperationsError::InvalidOperationName(path.to_owned()))?
+                .to_owned();
+            operations.add_operation(details);
+        }
     }
     Ok(operations)
 }
-
 pub fn get_operation(path: PathBuf) -> Result<Operation, OperationsError> {
     let mut details = match fs::read(&path) {
         Ok(bytes) => toml::from_slice::<Operation>(bytes.as_slice())
@@ -230,5 +245,17 @@ mod tests {
         dbg!(&operations);
 
         assert_eq!(operations.operations.len(), ops_count);
+    }
+
+    #[test_case("file_a?", false)]
+    #[test_case("~file_b", false)]
+    #[test_case("c8y_Command", true)]
+    #[test_case("c8y_CommandA~", false)]
+    #[test_case(".c8y_CommandB", false)]
+    #[test_case("c8y_CommandD?", false)]
+    #[test_case("c8y_CommandE?!£$%^&*(", false)]
+    #[test_case("?!£$%^&*(c8y_CommandF?!£$%^&*(", false)]
+    fn operation_name_should_contain_only_alphabetic_chars(operation: &str, expected_result: bool) {
+        assert_eq!(is_valid_operation_name(operation), expected_result)
     }
 }

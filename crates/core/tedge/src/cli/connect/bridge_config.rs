@@ -3,7 +3,7 @@ use crate::cli::connect::ConnectError;
 use tedge_config::FilePath;
 use url::Url;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfig {
     pub cloud_name: String,
     pub config_file: String,

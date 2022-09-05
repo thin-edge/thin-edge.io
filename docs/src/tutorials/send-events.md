@@ -47,6 +47,12 @@ When the `time` field is not provided, thin-edge.io will use the current system 
 When you want to skip both fields, use an empty payload to indicate the same.
 There are no such restrictions on the `<event-type>` value.
 
+### Sending events from child devices
+
+Events for child devices can be sent by publishing the event payload to `tedge/events/<event-type>/<child-device-id>` topic,
+where the `child-device-id` is the unique device id of the child device.
+The event payload structure is the same, as described in the previous section.
+
 ## Cloud data mapping
 
 If the device is connected to some supported IoT cloud platform, an event that is triggered locally on thin-edge.io will be forwarded to the connected cloud platform as well.
@@ -76,12 +82,76 @@ The Cumulocity JSON mapping of the same event would be as follows:
     "type":"login_event",
     "text":"A user just logged in",
     "time":"2021-01-01T05:30:45+00:00",
-    "source": {
-        "id":"<c8y-device-id>"
-    }
+    "externalSource":{
+        "externalId":"<child-device-id>",
+        "type":"c8y_Serial"
+  }
 }
 ```
 
 > Note: Mapped events will be sent to Cumulocity via MQTT if the incoming Thin Edge JSON event payload size is less than 16K bytes. If higher, HTTP will be used.
 
 Find more information about events data model in Cumulocity [here](https://cumulocity.com/guides/concepts/domain-model/#events).
+
+## Sending an event for a child/external device to the cloud
+
+An event for a child/external device can be triggered on thin-edge.io by sending an MQTT message in Thin Edge JSON format to certain MQTT topics.
+
+The scheme of the topic to publish the event data is as follows:
+
+`tedge/events/<event-type>/<child-device-id>`
+
+The payload format must be as follows:
+
+```json
+{
+    "type":"<event type>",
+    "text": "<event text>",
+    "time": "<Timestamp in ISO-8601 format>"
+}
+```
+
+Here is a sample event triggered for a `login_event` event type for the `external_sensor` child device:
+
+Command to send the event from a external device as below:
+
+```shell
+$ sudo tedge mqtt pub tedge/events/login_event/external_sensor '{
+    "type":"login_event",
+    "text":"A user just logged in",
+    "time":"2021-01-01T05:30:45+00:00"
+}'
+```
+
+Payload:
+
+```json
+{
+    "type": "login_event",
+    "text": "A user just logged in",
+    "time": "2021-01-01T05:30:45+00:00"
+}
+```
+### Mapping of events to cloud-specific data format
+
+If the child/external device is connected to some supported IoT cloud platform, an event that is triggered locally on thin-edge.io will be forwarded to the connected cloud platform as well.
+The mapping of thin-edge events data to its respective cloud-native representation will be done by the corresponding cloud mapper process.
+
+#### Cumulocity cloud data mapping
+
+The Cumulocity mapper will convert Thin Edge JSON events into its Cumulocity JSON equivalent and sends them to the Cumulocity cloud.
+
+The translated payload will be in the below format.
+
+```json
+{
+    "type": "login_event",
+    "text": "A user just logged in",
+    "time": "2021-01-01T05:30:45+00:00",
+    "externalSource":{
+        "externalId": "external_sensor",
+        "type": "c8y_Serial"
+  }
+}
+```
+Here the `externalId` will be derived from the `child-device-id` of the `child device event topic`.

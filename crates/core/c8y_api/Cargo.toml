@@ -1,6 +1,6 @@
 [package]
 name = "c8y_api"
-version = "0.7.2"
+version = "0.7.4"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
@@ -34,5 +34,5 @@ anyhow = "1.0"
 assert_matches = "1.5"
 mockito = "0.31"
 tempfile = "3.3"
-test-case = "2.0"
+test-case = "2.2"
 time = { version = "0.3", features = ["macros"] }

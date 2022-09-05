@@ -23,7 +23,7 @@ use tedge_test_utils::fs::TempTedgeDir;
 use test_case::test_case;
 use tokio::task::JoinHandle;
 
-use super::converter::{get_child_id_from_topic, CumulocityConverter};
+use super::converter::{get_child_id_from_measurement_topic, CumulocityConverter};
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 const MQTT_HOST: &str = "127.0.0.1";
@@ -76,8 +76,8 @@ async fn mapper_publishes_software_update_request() {
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
-    let _ = broker.publish("c8y/s/ds", smartrest).await.unwrap();
-    let _ = publish_a_fake_jwt_token(broker).await;
+    broker.publish("c8y/s/ds", smartrest).await.unwrap();
+    publish_a_fake_jwt_token(broker).await;
 
     let expected_update_list = r#"
          "updateList": [
@@ -114,7 +114,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
 
     // Start SM Mapper
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
-    let _ = publish_a_fake_jwt_token(broker).await;
+    publish_a_fake_jwt_token(broker).await;
 
     // Prepare and publish a software update status response message `executing` on `tedge/commands/res/software/update`.
     let json_response = r#"{
@@ -122,7 +122,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
             "status": "executing"
         }"#;
 
-    let _ = broker
+    broker
         .publish("tedge/commands/res/software/update", json_response)
         .await
         .unwrap();
@@ -145,7 +145,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
                 ]}
             ]}"#;
 
-    let _ = broker
+    broker
         .publish("tedge/commands/res/software/update", json_response)
         .await
         .unwrap();
@@ -169,7 +169,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
 
     // Start SM Mapper
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
-    let _ = publish_a_fake_jwt_token(broker).await;
+    publish_a_fake_jwt_token(broker).await;
 
     // The agent publish an error
     let json_response = r#"
@@ -191,7 +191,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
             "failures":[]
         }"#;
 
-    let _ = broker
+    broker
         .publish("tedge/commands/res/software/update", json_response)
         .await
         .unwrap();
@@ -235,8 +235,8 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
 
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
-    let _ = broker.publish("c8y/s/ds", smartrest).await.unwrap();
-    let _ = publish_a_fake_jwt_token(broker).await;
+    broker.publish("c8y/s/ds", smartrest).await.unwrap();
+    publish_a_fake_jwt_token(broker).await;
 
     let expected_update_list = r#"
          "updateList": [
@@ -278,7 +278,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
                 ]
             }
         ]}"#;
-    let _ = broker
+    broker
         .publish(
             "tedge/commands/res/software/update",
             &remove_whitespace(json_response),
@@ -319,7 +319,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     let (_tmp_dir, _sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
     // Prepare and publish a c8y_SoftwareUpdate smartrest request on `c8y/s/ds` that contains a wrong action `remove`, that is not known by c8y.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,remove"#;
-    let _ = broker.publish("c8y/s/ds", smartrest).await.unwrap();
+    broker.publish("c8y/s/ds", smartrest).await.unwrap();
 
     // Expect a 501 (executing) followed by a 502 (failed)
     mqtt_tests::assert_received_all_expected(
@@ -341,7 +341,7 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
     // Start the C8Y Mapper
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
 
-    let _ = broker
+    broker
         .publish_with_opts(
             "tedge/alarms/major/temperature_alarm",
             r#"{ "text": "Temperature high" }"#,
@@ -360,7 +360,7 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
     .await;
 
     //Clear the previously published alarm
-    let _ = broker
+    broker
         .publish_with_opts(
             "tedge/alarms/major/temperature_alarm",
             "",
@@ -372,6 +372,61 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
 
     sm_mapper.abort();
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
+    let broker = mqtt_tests::test_mqtt_broker();
+
+    let mut messages = broker
+        .messages_published_on("c8y/s/us/external_sensor")
+        .await;
+
+    // Start the C8Y Mapper
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+
+    broker
+        .publish_with_opts(
+            "tedge/alarms/minor/temperature_high/external_sensor",
+            r#"{ "text": "Temperature high" }"#,
+            mqtt_channel::QoS::AtLeastOnce,
+            true,
+        )
+        .await
+        .unwrap();
+
+    broker
+        .publish_with_opts(
+            "tedge/alarms/minor/temperature_high/external_sensor",
+            r#"{ "text": "Temperature high" }"#,
+            mqtt_channel::QoS::AtLeastOnce,
+            true,
+        )
+        .await
+        .unwrap();
+
+    // Expect converted temperature alarm message
+    mqtt_tests::assert_received_all_expected(
+        &mut messages,
+        TEST_TIMEOUT_MS,
+        &["303,temperature_high"],
+    )
+    .await;
+
+    //Clear the previously published alarm
+    broker
+        .publish_with_opts(
+            "tedge/alarms/minor/temperature_high/external_sensor",
+            "",
+            mqtt_channel::QoS::AtLeastOnce,
+            true,
+        )
+        .await
+        .unwrap();
+
+    sm_mapper.abort();
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn c8y_mapper_syncs_pending_alarms_on_startup() {
@@ -386,7 +441,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
         .messages_published_on("c8y-internal/alarms/critical/temperature_alarm")
         .await;
 
-    let _ = broker
+    broker
         .publish_with_opts(
             "tedge/alarms/critical/temperature_alarm",
             r#"{ "text": "Temperature very high" }"#,
@@ -416,7 +471,7 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     sm_mapper.abort();
 
     //Publish a new alarm while the mapper is down
-    let _ = broker
+    broker
         .publish_with_opts(
             "tedge/alarms/critical/pressure_alarm",
             r#"{ "text": "Pressure very high" }"#,
@@ -428,9 +483,109 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
 
     // Ignored until the rumqttd broker bug that doesn't handle empty retained messages
     //Clear the existing alarm while the mapper is down
-    // let _ = broker
-    //     .publish_with_opts(
+    // broker.publish_with_opts(
     //         "tedge/alarms/critical/temperature_alarm",
+    //         "",
+    //         mqtt_channel::QoS::AtLeastOnce,
+    //         true,
+    //     )
+    //     .await
+    //     .unwrap();
+
+    // Restart the C8Y Mapper
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+
+    // Ignored until the rumqttd broker bug that doesn't handle empty retained messages
+    // Expect the previously missed clear temperature alarm message
+    // let msg = messages
+    //     .next()
+    //     .with_timeout(ALARM_SYNC_TIMEOUT_MS)
+    //     .await
+    //     .expect_or("No message received after a second.");
+    // dbg!(&msg);
+    // assert!(&msg.contains("306,temperature_alarm"));
+
+    // Expect the new pressure alarm message
+    mqtt_tests::assert_received_all_expected(
+        &mut messages,
+        TEST_TIMEOUT_MS,
+        &["301,pressure_alarm"],
+    )
+    .await;
+
+    sm_mapper.abort();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn c8y_mapper_syncs_pending_child_alarms_on_startup() {
+    let broker = mqtt_tests::test_mqtt_broker();
+
+    let mut messages = broker
+        .messages_published_on("c8y/s/us/external_sensor")
+        .await;
+
+    // Start the C8Y Mapper
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+
+    let mut internal_messages = broker
+        .messages_published_on("c8y-internal/alarms/critical/temperature_alarm/external_sensor")
+        .await;
+
+    broker
+        .publish_with_opts(
+            "tedge/alarms/critical/temperature_alarm/external_sensor",
+            r#"{ "text": "Temperature very high" }"#,
+            mqtt_channel::QoS::AtLeastOnce,
+            true,
+        )
+        .await
+        .unwrap();
+
+    // Expect converted temperature alarm message
+    mqtt_tests::assert_received_all_expected(
+        &mut messages,
+        TEST_TIMEOUT_MS,
+        &["301,temperature_alarm"],
+    )
+    .await;
+
+    // Wait till the message get synced to internal topic
+    mqtt_tests::assert_received_all_expected(
+        &mut internal_messages,
+        TEST_TIMEOUT_MS,
+        &["Temperature very high"],
+    )
+    .await;
+
+    // stop the mapper
+    sm_mapper.abort();
+
+    //Publish a new alarm while the mapper is down
+    broker
+        .publish_with_opts(
+            "tedge/alarms/critical/pressure_alarm/external_sensor",
+            r#"{ "text": "Pressure very high" }"#,
+            mqtt_channel::QoS::AtLeastOnce,
+            true,
+        )
+        .await
+        .unwrap();
+
+    broker
+        .publish_with_opts(
+            "tedge/alarms/critical/pressure_alarm/external_sensor",
+            r#"{ "text": "Pressure very high" }"#,
+            mqtt_channel::QoS::AtLeastOnce,
+            true,
+        )
+        .await
+        .unwrap();
+
+    // Ignored until the rumqttd broker bug that doesn't handle empty retained messages
+    //Clear the existing alarm while the mapper is down
+    // broker.publish_with_opts(
+    //         "tedge/alarms/critical/temperature_alarm/external_sensor",
     //         "",
     //         mqtt_channel::QoS::AtLeastOnce,
     //         true,
@@ -500,6 +655,60 @@ async fn test_sync_alarms() {
     assert_eq!(
         alarm_message.topic.name,
         "tedge/alarms/major/pressure_alarm"
+    );
+    assert_eq!(alarm_message.payload_bytes().len(), 0); //Clear messages are empty messages
+
+    // The second message will be the temperature_alarm
+    let alarm_message = sync_messages.get(1).unwrap();
+    assert_eq!(alarm_message.topic.name, alarm_topic);
+    assert_eq!(alarm_message.payload_str().unwrap(), alarm_payload);
+
+    // After the sync phase, the conversion of both non-alarms as well as alarms are done immediately
+    assert!(!converter.convert(alarm_message).await.is_empty());
+    assert!(!converter.convert(&non_alarm_message).await.is_empty());
+
+    // But, even after the sync phase, internal alarms are not converted and just ignored, as they are purely internal
+    assert!(converter.convert(&internal_alarm_message).await.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn test_sync_child_alarms() {
+    let (_temp_dir, mut converter) = create_c8y_converter();
+
+    let alarm_topic = "tedge/alarms/critical/temperature_alarm/external_sensor";
+    let alarm_payload = r#"{ "text": "Temperature very high" }"#;
+    let alarm_message = Message::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
+
+    // During the sync phase, alarms are not converted immediately, but only cached to be synced later
+    assert!(converter.convert(&alarm_message).await.is_empty());
+
+    let non_alarm_topic = "tedge/measurements/external_sensor";
+    let non_alarm_payload = r#"{"temp": 1}"#;
+    let non_alarm_message = Message::new(&Topic::new_unchecked(non_alarm_topic), non_alarm_payload);
+
+    // But non-alarms are converted immediately, even during the sync phase
+    assert!(!converter.convert(&non_alarm_message).await.is_empty());
+
+    let internal_alarm_topic = "c8y-internal/alarms/major/pressure_alarm/external_sensor";
+    let internal_alarm_payload = r#"{ "text": "Temperature very high" }"#;
+    let internal_alarm_message = Message::new(
+        &Topic::new_unchecked(internal_alarm_topic),
+        internal_alarm_payload,
+    );
+
+    // During the sync phase, internal alarms are not converted, but only cached to be synced later
+    assert!(converter.convert(&internal_alarm_message).await.is_empty());
+
+    // When sync phase is complete, all pending alarms are returned
+    let sync_messages = converter.sync_messages();
+    assert_eq!(sync_messages.len(), 2);
+
+    // The first message will be clear alarm message for pressure_alarm
+    let alarm_message = sync_messages.get(0).unwrap();
+    assert_eq!(
+        alarm_message.topic.name,
+        "tedge/alarms/major/pressure_alarm/external_sensor"
     );
     assert_eq!(alarm_message.payload_bytes().len(), 0); //Clear messages are empty messages
 
@@ -640,7 +849,7 @@ async fn convert_two_thin_edge_json_messages_given_different_child_id() {
 #[test_case("tedge/measurements", None; "invalid child id (parent topic)")]
 #[test_case("foo/bar", None; "invalid child id (invalid topic)")]
 fn extract_child_id(in_topic: &str, expected_child_id: Option<String>) {
-    match get_child_id_from_topic(in_topic) {
+    match get_child_id_from_measurement_topic(in_topic) {
         Ok(maybe_id) => assert_eq!(maybe_id, expected_child_id),
         Err(crate::core::error::ConversionError::InvalidChildId { id }) => {
             assert_eq!(id, "".to_string())
@@ -958,5 +1167,5 @@ fn remove_whitespace(s: &str) -> String {
 }
 
 async fn publish_a_fake_jwt_token(broker: &MqttProcessHandler) {
-    let _ = broker.publish("c8y/s/dat", "71,1111").await.unwrap();
+    broker.publish("c8y/s/dat", "71,1111").await.unwrap();
 }

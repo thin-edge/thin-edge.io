@@ -1,20 +1,18 @@
 [package]
 name = "logged_command"
-version = "0.7.2"
+version = "0.7.4"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
 
 [dependencies]
-async-trait = "0.1"
 log = "0.4"
-thiserror = "1.0"
 tokio = { version = "1.8", features = [ "fs", "io-util", "macros", "process", "rt" ] }
 
 
 [dev-dependencies]
 anyhow = "1.0"
 assert_matches = "1.5"
-serial_test = "0.6"
+serial_test = "0.8"
 tedge_test_utils = { path = "../../tests/tedge_test_utils" }
-test-case = "2.0"
+test-case = "2.2"

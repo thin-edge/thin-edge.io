@@ -29,14 +29,14 @@ impl TryFrom<String> for CumulocitySoftwareUpdateActions {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestUpdateSoftware {
     pub message_id: String,
     pub external_id: String,
     pub update_list: Vec<SmartRestUpdateSoftwareModule>,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestUpdateSoftwareModule {
     pub software: String,
     pub version: Option<String>,
@@ -57,7 +57,7 @@ impl Default for SmartRestUpdateSoftware {
 impl SmartRestUpdateSoftware {
     pub fn from_smartrest(&self, smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
         let mut message_id = smartrest.to_string();
-        let () = message_id.truncate(3);
+        message_id.truncate(3);
 
         let mut rdr = ReaderBuilder::new()
             .has_headers(false)
@@ -176,9 +176,7 @@ where
     let date_string_end = &date_string.split('+').last();
     date_string = match date_string_end {
         Some(string) if !string.contains(':') => {
-            date_string[0..str_size - 2].to_string()
-                + ":"
-                + &date_string[str_size - 2..str_size].to_string()
+            date_string[0..str_size - 2].to_string() + ":" + &date_string[str_size - 2..str_size]
         }
         _ => date_string,
     };
@@ -211,7 +209,7 @@ pub enum SmartRestVariant {
     SmartRestLogRequest,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestLogRequest {
     pub message_id: String,
     pub device: String,
@@ -226,7 +224,7 @@ pub struct SmartRestLogRequest {
 
 impl SmartRestRequestGeneric for SmartRestLogRequest {}
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestRestartRequest {
     pub message_id: String,
     pub device: String,
@@ -234,7 +232,7 @@ pub struct SmartRestRestartRequest {
 
 impl SmartRestRequestGeneric for SmartRestRestartRequest {}
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestConfigUploadRequest {
     pub message_id: String,
     pub device: String,
@@ -243,7 +241,7 @@ pub struct SmartRestConfigUploadRequest {
 
 impl SmartRestRequestGeneric for SmartRestConfigUploadRequest {}
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 pub struct SmartRestConfigDownloadRequest {
     pub message_id: String,
     pub device: String,
@@ -255,7 +253,7 @@ impl SmartRestRequestGeneric for SmartRestConfigDownloadRequest {}
 
 type JwtToken = String;
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, Eq, PartialEq)]
 pub struct SmartRestJwtResponse {
     id: u16,
     token: JwtToken,
@@ -461,7 +459,7 @@ mod tests {
                 url: Some("url1".into()),
                 file_path: None,
             }));
-        let () = expected_thin_edge_json.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
+        expected_thin_edge_json.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
             module_type: Some("".to_string()),
             name: "software2".to_string(),
             version: None,

@@ -1,13 +1,15 @@
 use crate::c8y::dynamic_discovery::*;
 use crate::core::{converter::*, error::*};
 use mqtt_channel::{
-    Connection, Message, MqttError, SinkExt, StreamExt, Topic, TopicFilter, UnboundedReceiver,
+    Connection, Message, MqttError, SinkExt, StreamExt, TopicFilter, UnboundedReceiver,
     UnboundedSender,
 };
-use serde_json::json;
-use std::path::PathBuf;
-use std::{process, time::Duration};
-use time::OffsetDateTime;
+
+use std::path::Path;
+use std::time::Duration;
+use tedge_utils::fs_notify::{fs_notify_stream, pin_mut, FileEvent};
+use thin_edge_json::health::{health_check_topics, send_health_status};
+
 use tracing::{error, info, instrument, warn};
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 use std::result::Result::Ok;
@@ -20,14 +22,7 @@ pub async fn create_mapper(
 ) -> Result<Mapper, anyhow::Error> {
     info!("{} starting", app_name);
 
-    let health_check_topics: TopicFilter = vec![
-        "tedge/health-check",
-        format!("tedge/health-check/{}", app_name).as_str(),
-    ]
-    .try_into()
-    .expect("health check topics must be valid");
-
-    let health_status_topic = Topic::new_unchecked(format!("tedge/health/{}", app_name).as_str());
+    let health_check_topics: TopicFilter = health_check_topics(app_name);
 
     let mapper_config = converter.get_mapper_config();
     let mut topic_filter = mapper_config.in_topic_filter.clone();
@@ -39,11 +34,11 @@ pub async fn create_mapper(
     Mapper::subscribe_errors(mqtt_client.errors);
 
     Ok(Mapper::new(
+        app_name.to_string(),
         mqtt_client.received,
         mqtt_client.published,
         converter,
         health_check_topics,
-        health_status_topic,
     ))
 }
 
@@ -62,31 +57,31 @@ pub fn mqtt_config(
 }
 
 pub struct Mapper {
+    mapper_name: String,
     input: UnboundedReceiver<Message>,
     output: UnboundedSender<Message>,
     converter: Box<dyn Converter<Error = ConversionError>>,
     health_check_topics: TopicFilter,
-    health_status_topic: Topic,
 }
 
 impl Mapper {
     pub fn new(
+        mapper_name: String,
         input: UnboundedReceiver<Message>,
         output: UnboundedSender<Message>,
         converter: Box<dyn Converter<Error = ConversionError>>,
         health_check_topics: TopicFilter,
-        health_status_topic: Topic,
     ) -> Self {
         Self {
+            mapper_name,
             input,
             output,
             converter,
             health_check_topics,
-            health_status_topic,
         }
     }
 
-    pub(crate) async fn run(&mut self, ops_dir: Option<PathBuf>) -> Result<(), MqttError> {
+    pub(crate) async fn run(&mut self, ops_dir: Option<&Path>) -> Result<(), MapperError> {
         info!("Running");
         self.process_messages(ops_dir).await?;
         Ok(())
@@ -102,7 +97,7 @@ impl Mapper {
     }
 
     #[instrument(skip(self), name = "messages")]
-    async fn process_messages(&mut self, ops_dir: Option<PathBuf>) -> Result<(), MqttError> {
+    async fn process_messages(&mut self, ops_dir: Option<&Path>) -> Result<(), MapperError> {
         let init_messages = self.converter.init_messages();
         for init_message in init_messages.into_iter() {
             let _ = self.output.send(init_message).await;
@@ -122,29 +117,13 @@ impl Mapper {
             self.process_message(message).await;
         }
 
-        match ops_dir {
-            // Create inotify steam for capturing the inotify events.
-            Some(dir) => {
-                process_inotify_and_mqtt_messages(self, dir).await?;
-            }
-            None => {
-                // If there is no operation directory to watch, then continue processing only the mqtt messages
-                let _ = process_mqtt_messages(self).await;
-            }
-        }
+        process_messages(self, ops_dir).await?;
         Ok(())
     }
 
     async fn process_message(&mut self, message: Message) {
         if self.health_check_topics.accept(&message) {
-            let health_status = json!({
-                "status": "up",
-                "pid": process::id(),
-                "time": OffsetDateTime::now_utc().unix_timestamp(),
-            })
-            .to_string();
-            let health_message = Message::new(&self.health_status_topic, health_status);
-            let _ = self.output.send(health_message).await;
+            send_health_status(&mut self.output, &self.mapper_name).await;
         } else {
             let converted_messages = self.converter.convert(&message).await;
 
@@ -155,28 +134,26 @@ impl Mapper {
     }
 }
 
-async fn process_inotify_and_mqtt_messages(
-    mapper: &mut Mapper,
-    dir: PathBuf,
-) -> Result<(), MqttError> {
-    match create_inofity_event_stream(dir.clone()) {
-        Ok(mut inotify_events) => loop {
+async fn process_messages(mapper: &mut Mapper, path: Option<&Path>) -> Result<(), MapperError> {
+    if let Some(path) = path {
+        let fs_notification_stream = fs_notify_stream(&[(
+            path,
+            None,
+            &[FileEvent::Created, FileEvent::Deleted, FileEvent::Modified],
+        )])?;
+        pin_mut!(fs_notification_stream); // needed for iteration
+
+        loop {
             tokio::select! {
-                msg =  mapper.input.next() => {
-                    match msg {
-                        Some(message) => {
-                            mapper.process_message(message).await;
-                        } None => {
-                            break Ok(());
-                        }
-                    }
+                Some(message) =  mapper.input.next() => {
+                    mapper.process_message(message).await;
                 }
-                Some(event_or_error) = inotify_events.next() => {
+                Some(event_or_error) = fs_notification_stream.next() => {
                     match event_or_error {
-                        Ok(event) =>  {
-                            match  process_inotify_events(dir.clone(), event) {
+                        Ok((path, mask)) =>  {
+                            match  process_inotify_events(&path, mask) {
                                 Ok(Some(discovered_ops)) => {
-                                    let _ = mapper.output.send(mapper.converter.process_operation_update_message(discovered_ops)).await;
+                                     let _ = mapper.output.send(mapper.converter.process_operation_update_message(discovered_ops)).await;
                                 }
                                 Ok(None) => {}
                                 Err(e) => {eprintln!("Processing inotify event failed due to {}", e);}
@@ -185,22 +162,16 @@ async fn process_inotify_and_mqtt_messages(
                         Err(error) => {
                             eprintln!("Failed to extract event {}", error);
                         }
-                    }
+                    } // On error continue to process only mqtt messages.
                 }
             }
-        }, // On error continue to process only mqtt messages.
-        Err(e) => {
-            eprintln!("Failed to create the inotify stream due to {:?}. So, dynamic operation discovery not supported, please restart the mapper on Add/Removal of an operation", e);
-            process_mqtt_messages(mapper).await
         }
+    } else {
+        while let Some(message) = mapper.input.next().await {
+            mapper.process_message(message).await;
+        }
+        Ok(())
     }
-}
-
-async fn process_mqtt_messages(mapper: &mut Mapper) -> Result<(), MqttError> {
-    while let Some(message) = mapper.input.next().await {
-        mapper.process_message(message).await;
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -257,6 +228,8 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(test)]
+    use serde_json::json;
     #[tokio::test]
     #[serial_test::serial]
     async fn health_check() -> Result<(), anyhow::Error> {

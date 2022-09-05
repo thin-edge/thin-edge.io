@@ -2,7 +2,6 @@ use reqwest::StatusCode;
 use std::error::Error;
 use tedge_config::FilePath;
 use tedge_config::{ConfigSettingError, TEdgeConfigError};
-use tedge_users::UserSwitchError;
 use tedge_utils::paths::PathsError;
 
 #[derive(thiserror::Error, Debug)]
@@ -71,9 +70,6 @@ pub enum CertError {
 
     #[error(transparent)]
     UrlParseError(#[from] url::ParseError),
-
-    #[error(transparent)]
-    UserSwitchError(#[from] UserSwitchError),
 
     #[error("HTTP Connection Problem: {msg} \nHint: {hint}")]
     CertificateValidationFailure { hint: String, msg: String },

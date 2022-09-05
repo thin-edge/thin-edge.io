@@ -1,5 +1,3 @@
-use tedge_users::UserManager;
-
 /// A trait to be implemented by all tedge sub-commands.
 ///
 /// A command encapsulates all the required parameters and provides an `execute()` method
@@ -150,5 +148,4 @@ pub trait BuildCommand {
 pub struct BuildContext {
     pub config_repository: tedge_config::TEdgeConfigRepository,
     pub config_location: tedge_config::TEdgeConfigLocation,
-    pub user_manager: UserManager,
 }

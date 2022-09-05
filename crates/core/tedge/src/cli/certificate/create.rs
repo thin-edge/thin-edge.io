@@ -7,7 +7,6 @@ use std::{
     path::Path,
 };
 use tedge_config::*;
-use tedge_users::UserManager;
 use tedge_utils::paths::{set_permission, validate_parent_dir_exists};
 
 /// Create a self-signed device certificate
@@ -20,9 +19,6 @@ pub struct CreateCertCmd {
 
     /// The path where the device private key will be stored
     pub key_path: FilePath,
-
-    /// The UserManager required to change effective user id
-    pub user_manager: UserManager,
 }
 
 impl Command for CreateCertCmd {
@@ -32,24 +28,23 @@ impl Command for CreateCertCmd {
 
     fn execute(&self) -> anyhow::Result<()> {
         let config = NewCertificateConfig::default();
-        let () = self.create_test_certificate(&config)?;
+        self.create_test_certificate(&config)?;
         Ok(())
     }
 }
 
 impl CreateCertCmd {
     fn create_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
-        let _user_guard = self.user_manager.become_user(tedge_users::BROKER_USER)?;
-
         validate_parent_dir_exists(&self.cert_path).map_err(CertError::CertPathError)?;
         validate_parent_dir_exists(&self.key_path).map_err(CertError::KeyPathError)?;
 
         let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id)?;
 
-        // Creating files with permission 644
-        let mut cert_file = create_new_file(&self.cert_path)
-            .map_err(|err| err.cert_context(self.cert_path.clone()))?;
-        let mut key_file = create_new_file(&self.key_path)
+        // Creating files with permission 644 owned by the MQTT broker
+        let mut cert_file =
+            create_new_file(&self.cert_path, crate::BROKER_USER, crate::BROKER_GROUP)
+                .map_err(|err| err.cert_context(self.cert_path.clone()))?;
+        let mut key_file = create_new_file(&self.key_path, crate::BROKER_USER, crate::BROKER_GROUP)
             .map_err(|err| err.key_context(self.key_path.clone()))?;
 
         let cert_pem = cert.certificate_pem_string()?;
@@ -76,8 +71,18 @@ impl CreateCertCmd {
     }
 }
 
-fn create_new_file(path: impl AsRef<Path>) -> Result<File, CertError> {
-    Ok(OpenOptions::new().write(true).create_new(true).open(path)?)
+fn create_new_file(path: impl AsRef<Path>, user: &str, group: &str) -> Result<File, CertError> {
+    let file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path.as_ref())?;
+
+    // Ignore errors - This was the behavior with the now deprecated user manager.
+    // - When `tedge cert create` is not run as root, a certificate is created but owned by the user running the command.
+    // - A better approach could be to remove this `chown` and run the command as mosquitto.
+    let _ = tedge_utils::file::change_user_and_group(path.as_ref(), user, group);
+
+    Ok(file)
 }
 
 #[cfg(test)]
@@ -85,7 +90,6 @@ mod tests {
     use super::*;
     use assert_matches::assert_matches;
     use std::fs;
-    use tedge_users::UserManager;
     use tempfile::*;
 
     #[test]
@@ -99,7 +103,6 @@ mod tests {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
-            user_manager: UserManager::new(),
         };
 
         assert_matches!(
@@ -127,7 +130,6 @@ mod tests {
             id: "my-device-id".into(),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
-            user_manager: UserManager::new(),
         };
 
         assert!(cmd
@@ -149,7 +151,6 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
-            user_manager: UserManager::new(),
         };
 
         let cert_error = cmd
@@ -168,7 +169,6 @@ mod tests {
             id: "my-device-id".into(),
             cert_path,
             key_path,
-            user_manager: UserManager::new(),
         };
 
         let cert_error = cmd

@@ -9,17 +9,18 @@ pub enum InternalError {
     #[error(transparent)]
     FromUtf8(#[from] std::string::FromUtf8Error),
 
-    #[error("Parsing Debian package failed for `{file}`")]
-    ParsingError { file: String },
-
     #[error(transparent)]
     FromCsv(#[from] csv::Error),
 
-    #[error("Validation of {package} failed with version mismatch. Installed version: {installed}, Expected version: {expected}")]
-    VersionMismatch {
+    #[error("Parsing Debian package failed for `{file}`, Error: {error}")]
+    ParsingError { file: String, error: String },
+
+    #[error("Validation of {package} metadata failed, expected value for the {expected_key} is {expected_value}, but provided {provided_value}")]
+    MetaDataMismatch {
         package: String,
-        installed: String,
-        expected: String,
+        expected_key: String,
+        expected_value: String,
+        provided_value: String,
     },
 }
 

@@ -37,7 +37,7 @@ where
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestSetSupportedLogType {
     pub message_id: &'static str,
     pub supported_operations: Vec<String>,
@@ -54,7 +54,7 @@ impl From<Vec<String>> for SmartRestSetSupportedLogType {
 
 impl<'a> SmartRestSerializer<'a> for SmartRestSetSupportedLogType {}
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestSetSupportedOperations<'a> {
     pub message_id: &'static str,
     pub supported_operations: Vec<&'a str>,
@@ -75,14 +75,14 @@ impl<'a> SmartRestSetSupportedOperations<'a> {
 
 impl<'a> SmartRestSerializer<'a> for SmartRestSetSupportedOperations<'a> {}
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestSoftwareModuleItem {
     pub software: String,
     pub version: Option<String>,
     pub url: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestGetPendingOperations {
     pub id: &'static str,
 }
@@ -95,7 +95,7 @@ impl Default for SmartRestGetPendingOperations {
 
 impl<'a> SmartRestSerializer<'a> for SmartRestGetPendingOperations {}
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestSetOperationToExecuting {
     pub message_id: &'static str,
     pub operation: &'static str,
@@ -123,7 +123,7 @@ impl SmartRestSetOperationToExecuting {
 
 impl<'a> SmartRestSerializer<'a> for SmartRestSetOperationToExecuting {}
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestSetOperationToSuccessful {
     pub message_id: &'static str,
     pub operation: &'static str,
@@ -160,7 +160,7 @@ impl SmartRestSetOperationToSuccessful {
 
 impl<'a> SmartRestSerializer<'a> for SmartRestSetOperationToSuccessful {}
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SmartRestSetOperationToFailed {
     pub message_id: &'static str,
     pub operation: &'static str,

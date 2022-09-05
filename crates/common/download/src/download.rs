@@ -12,7 +12,7 @@ use std::{
     time::Duration,
 };
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct DownloadInfo {
@@ -47,7 +47,7 @@ impl DownloadInfo {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub enum Auth {
@@ -103,7 +103,7 @@ impl Downloader {
                         backoff::Error::Permanent(err)
                     } else {
                         log::warn!("Failed to Download. {:?}\nRetrying.", &err);
-                        backoff::Error::Transient(err)
+                        backoff::Error::transient(err)
                     }
                 })?
                 .error_for_status()
@@ -114,7 +114,7 @@ impl Downloader {
                     Some(status_error) if status_error.is_client_error() => {
                         Err(backoff::Error::Permanent(err))
                     }
-                    _ => Err(backoff::Error::Transient(err)),
+                    _ => Err(backoff::Error::transient(err)),
                 },
             }
         })
@@ -219,7 +219,7 @@ mod tests {
         let url = DownloadInfo::new(&target_url);
 
         let downloader = Downloader::new(&name, &version, target_dir_path.path());
-        let () = downloader.download(&url).await?;
+        downloader.download(&url).await?;
 
         let log_content = std::fs::read(downloader.filename())?;
 

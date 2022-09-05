@@ -22,10 +22,7 @@ impl BuildCommand for TEdgeDisconnectBridgeCli {
                 cloud: Cloud::C8y,
                 use_mapper: true,
                 use_agent: true,
-                service_manager: service_manager(
-                    context.user_manager.clone(),
-                    context.config_location.tedge_config_root_path,
-                )?,
+                service_manager: service_manager(context.config_location.tedge_config_root_path)?,
             },
             TEdgeDisconnectBridgeCli::Az => DisconnectBridgeCommand {
                 config_location: context.config_location.clone(),
@@ -33,10 +30,7 @@ impl BuildCommand for TEdgeDisconnectBridgeCli {
                 cloud: Cloud::Azure,
                 use_mapper: true,
                 use_agent: false,
-                service_manager: service_manager(
-                    context.user_manager.clone(),
-                    context.config_location.tedge_config_root_path,
-                )?,
+                service_manager: service_manager(context.config_location.tedge_config_root_path)?,
             },
         };
         Ok(cmd.into_boxed())

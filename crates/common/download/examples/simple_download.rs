@@ -14,10 +14,10 @@ async fn main() -> Result<()> {
     let downloader = Downloader::new("test_download", &None, "/tmp");
 
     // Call `download` method to get data from url.
-    let () = downloader.download(&url_data).await?;
+    downloader.download(&url_data).await?;
 
     // Call cleanup method to remove downloaded file if no longer necessary.
-    let () = downloader.cleanup().await?;
+    downloader.cleanup().await?;
 
     Ok(())
 }

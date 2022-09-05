@@ -1,11 +1,13 @@
 [package]
 name = "tedge_apama_plugin"
-version = "0.7.2"
+version = "0.7.4"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
 license = "Apache-2.0"
 description = "thin.edge.io plugin for installing apama projects"
+homepage = "https://thin-edge.io"
+repository = "https://github.com/thin-edge/thin-edge.io"
 
 [package.metadata.deb]
 assets = [
@@ -15,7 +17,7 @@ assets = [
 [dependencies]
 clap = { version = "3", features = ["derive"] }
 thiserror = "1.0"
-zip = { version = "0.5", default-features = false, features = ["deflate"] }
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
 roxmltree = "0.14"
 
 [dev-dependencies]

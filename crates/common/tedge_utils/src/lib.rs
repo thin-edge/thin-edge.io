@@ -5,3 +5,6 @@ pub mod signals;
 
 #[cfg(feature = "logging")]
 pub mod logging;
+
+#[cfg(feature = "fs-notify")]
+pub mod fs_notify;
