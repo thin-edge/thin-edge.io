@@ -158,7 +158,7 @@ sequenceDiagram
         Note right of C8Y log plugin: From here sequence<br>is similar to<br>C8Y cfg plugin        
 ```
 
-* Step 1: The external child-device registers to the tedge_agent
+* Step 1: the external child-device registers to the tedge_agent
      * Topic:   `tedge/<childid>/commands/req/inventory/register-device`<br/>
        Payload: **child-device** object with **capability** objects
      * Example: 
@@ -180,7 +180,7 @@ sequenceDiagram
        }
        ```
  
- * Step 2: the tedge_agent creates the **child-device** object and **capability** objects in the inventory on the MQTT bus.
+ * Step 2: the tedge_agent creates the **child-device** object and **capability** objects in the inventory on the MQTT bus
      * Creating **child-device** object
        * Topic: `tedge/inventory/<childid>`
        * Payload: `<child-device object>`
@@ -213,8 +213,45 @@ sequenceDiagram
        }
        ```
  
- * Step 4: mapper has subscribed to `tedge/inventory/+`, and receives the new **child-device** object.
+ * Step 3: the tedge_agent reports to the external child-device the result of creating inventory-objects
+     * Topic:   `tedge/<childid>/commands/res/inventory/register-device`<br/>
+       Payload: `{ "status": <"failed" or "success">, "reason": <human readable fail reason> }`
 
- * Step 6: CY8 cfg plugin has subscribed to `tedge/inventory/+/tedge_config` and receives the new **capability** object for type `tedge_config`.
+     * If status is "success", then field "reason" does not appear.
 
- * Step 10: CY8 log plugin has subscribed to `tedge/inventory/+/tedge_logging` and receives the new **capability** object for type `tedge_logging`.
+     * Example:
+
+       Topic: `tedge/child1/commands/res/inventory/register-device`<br/>
+       Payload:
+       ```json
+       {
+          "status": "success"
+       }
+       ```
+       or
+
+       Payload:
+       ```json
+       {
+          "status": "failed",
+          "reason": "invalid message format"
+       }
+       ```
+
+ * Step 4: the mapper has subscribed to `tedge/inventory/+`, and receives the new **child-device** object
+
+ * Step 5: the mapper creates the child-device twin in the cloud
+
+ * Step 6: the CY8 cfg plugin has subscribed to `tedge/inventory/+/tedge_config` and receives the new **capability** object for type `tedge_config`
+
+ * Step 7: the CY8 cfg plugin requests the mapper to declare _supported operations_ `c8y_upload_cfg`, `c8y_download_cfg` to the child-device twin
+
+ * Step 8: the mapper declares the requested _supported operations_ to the child-device twin in the cloud
+
+ * Step 9: the CY8 cfg plugin declares those configuration types to the cloud child-device twin, that were reported in the `register()` message by the external child-device
+
+ * Step 10: the C8Y log plugin has subscribed to `tedge/inventory/+/tedge_logging` and receives the new **capability** object for type `tedge_logging`
+
+ * Next steps: From here the sequence for the C8Y log plugin is similar to the C8Y cfg plugin's flow.
+
+
