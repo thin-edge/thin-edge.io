@@ -156,7 +156,7 @@ mod tests {
         "tedge/measurements",
         r#"{"temperature": 12, "time": "2021-06-15T17:01:15.806181503+02:00"}"#,
         r#"{"temperature": 12, "time": "2021-06-15T17:01:15.806181503+02:00"}"#
-    )] // successs case
+    )] // success case
     #[tokio::test]
     async fn test_tedge_mapper_with_mqtt_pub(
         pub_topic: &str,

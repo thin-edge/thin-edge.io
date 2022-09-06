@@ -200,7 +200,7 @@ impl SmAgentConfig {
 pub struct SmAgent {
     config: SmAgentConfig,
     operation_logs: OperationLogs,
-    persistance_store: AgentStateRepository,
+    persistence_store: AgentStateRepository,
     _flock: Flockfile,
 }
 
@@ -209,7 +209,7 @@ impl SmAgent {
         let flock = check_another_instance_is_not_running(name, &config.run_dir)?;
         info!("{} starting", &name);
 
-        let persistance_store = AgentStateRepository::new(config.sm_home.clone());
+        let persistence_store = AgentStateRepository::new(config.sm_home.clone());
         let operation_logs = OperationLogs::try_new(config.log_dir.clone())?;
 
         config.mqtt_config = config
@@ -220,7 +220,7 @@ impl SmAgent {
         Ok(Self {
             config,
             operation_logs,
-            persistance_store,
+            persistence_store,
             _flock: flock,
         })
     }
@@ -342,7 +342,7 @@ impl SmAgent {
                     {
                         error!("{}", error);
 
-                        self.persistance_store.clear().await?;
+                        self.persistence_store.clear().await?;
                         let status = OperationStatus::Failed;
                         let response = RestartOperationResponse::new(&request).with_status(status);
                         responses
@@ -370,7 +370,7 @@ impl SmAgent {
     ) -> Result<(), AgentError> {
         let request = match SoftwareListRequest::from_slice(message.payload_bytes()) {
             Ok(request) => {
-                self.persistance_store
+                self.persistence_store
                     .store(&State {
                         operation_id: Some(request.id.clone()),
                         operation: Some(StateStatus::Software(SoftwareOperationVariants::List)),
@@ -421,7 +421,7 @@ impl SmAgent {
             .publish(Message::new(response_topic, response.to_bytes()?))
             .await?;
 
-        let _state: State = self.persistance_store.clear().await?;
+        let _state: State = self.persistence_store.clear().await?;
 
         Ok(())
     }
@@ -436,7 +436,7 @@ impl SmAgent {
         let request = match SoftwareUpdateRequest::from_slice(message.payload_bytes()) {
             Ok(request) => {
                 let _ = self
-                    .persistance_store
+                    .persistence_store
                     .store(&State {
                         operation_id: Some(request.id.clone()),
                         operation: Some(StateStatus::Software(SoftwareOperationVariants::Update)),
@@ -490,7 +490,7 @@ impl SmAgent {
             .publish(Message::new(response_topic, response.to_bytes()?))
             .await?;
 
-        let _state = self.persistance_store.clear().await?;
+        let _state = self.persistence_store.clear().await?;
 
         Ok(())
     }
@@ -502,7 +502,7 @@ impl SmAgent {
     ) -> Result<RestartOperationRequest, AgentError> {
         let request = match RestartOperationRequest::from_slice(message.payload_bytes()) {
             Ok(request) => {
-                self.persistance_store
+                self.persistence_store
                     .store(&State {
                         operation_id: Some(request.id.clone()),
                         operation: Some(StateStatus::Restart(RestartOperationStatus::Restarting)),
@@ -534,7 +534,7 @@ impl SmAgent {
         responses: &mut impl PubChannel,
         topic: &Topic,
     ) -> Result<(), AgentError> {
-        self.persistance_store
+        self.persistence_store
             .update(&StateStatus::Restart(RestartOperationStatus::Restarting))
             .await?;
 
@@ -566,7 +566,7 @@ impl SmAgent {
         &self,
         responses: &mut impl PubChannel,
     ) -> Result<(), AgentError> {
-        let state: Result<State, _> = self.persistance_store.load().await;
+        let state: Result<State, _> = self.persistence_store.load().await;
         let mut status = OperationStatus::Failed;
 
         if let State {
@@ -593,7 +593,7 @@ impl SmAgent {
                 }
 
                 StateStatus::Restart(RestartOperationStatus::Restarting) => {
-                    let _state = self.persistance_store.clear().await?;
+                    let _state = self.persistence_store.clear().await?;
                     if restart_operation::has_rebooted(&self.config.run_dir)? {
                         info!("Device restart successful.");
                         status = OperationStatus::Successful;

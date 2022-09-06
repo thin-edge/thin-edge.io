@@ -1,7 +1,7 @@
 //! Common interface to the system-provided _service management facility_ to start, stop, enable,
 //! disable or query the status of system services.
 //!
-//! Supported service manangement facilities include:
+//! Supported service management facilities include:
 //!
 //! * systemd
 //! * OpenRC

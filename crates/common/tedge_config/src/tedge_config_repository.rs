@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use tedge_utils::fs::atomically_write_file_sync;
 
-/// TEdgeConfigRepository is resposible for loading and storing TEdgeConfig entities.
+/// TEdgeConfigRepository is responsible for loading and storing TEdgeConfig entities.
 ///
 #[derive(Debug)]
 pub struct TEdgeConfigRepository {
