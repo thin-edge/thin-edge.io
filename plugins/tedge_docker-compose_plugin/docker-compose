@@ -65,7 +65,7 @@ case "$COMMAND" in
 
         if [ -f "$TMP_PATH" ]; then
             echo "Starting docker-compose file $TMP_PATH"
-            # Copy docker-compose file to plugin folder to store it ther until removal
+            # Copy docker-compose file to plugin folder to store it there until removal
             sudo cp $TMP_PATH $DOCKER_COMPOSE_PLUGIN_PATH
             #COMPOSE_NAME="$(echo $TMP_PATH | cut -d/ -f3 | cut -d. -f1)"
             INSTALL_PATH="$DOCKER_COMPOSE_PLUGIN_PATH$COMPOSE_NAME"

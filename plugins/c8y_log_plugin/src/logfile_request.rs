@@ -108,7 +108,7 @@ fn read_log_content(
     }
 }
 
-/// read any log file comming from `smartrest_obj.log_type`
+/// read any log file coming from `smartrest_obj.log_type`
 pub fn new_read_logs(
     smartrest_obj: &SmartRestLogRequest,
     plugin_config: &LogPluginConfig,
@@ -417,7 +417,7 @@ mod tests {
     /// ]
     ///
     /// Requesting back only 4. Note that because we read the logs in reverse order, the first line
-    /// should be ommited. The result sould be:
+    /// should be omitted. The result should be:
     /// [
     ///     this is the second line.
     ///     this is the third line.
