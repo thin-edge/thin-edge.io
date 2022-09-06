@@ -55,7 +55,7 @@ class AptPluginPrepInstallWithVersionFinalize(AptPlugin):
 
     def validate(self):
         self.assert_isinstalled(self.package, True)
-        # This is evaluated as regex therefore we need to excape the plus sign
+        # This is evaluated as regex therefore we need to escape the plus sign
         # E.g. Expression (1|3) matches either 1 or 3 for debian buster or bullseye
         # On some systems there is an optional plus sign and b instead of build
         self.assertGrep(

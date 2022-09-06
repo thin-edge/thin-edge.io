@@ -92,7 +92,7 @@ class PySysTest(SoftwareManagement):
 
         action = self.get_packages_with_action("install")
         self.trigger_action_json(action)
-        self.wait_until_succcess()
+        self.wait_until_success()
 
         self.assertThat("True == value", value=self.check_is_installed("apple"))
         self.assertThat("True == value", value=self.check_is_installed("banana"))
@@ -102,7 +102,7 @@ class PySysTest(SoftwareManagement):
 
         action = self.get_packages_with_action("delete")
         self.trigger_action_json(action)
-        self.wait_until_succcess()
+        self.wait_until_success()
 
     def validate(self):
 

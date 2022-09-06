@@ -25,7 +25,7 @@ class RestartBridge(EnvironmentC8y):
 
     def execute(self):
         super().execute()
-        self.log.info("Execute (empty in this case as we test the c8y enviroment)")
+        self.log.info("Execute (empty in this case as we test the c8y environment)")
 
     def validate(self):
         super().validate()

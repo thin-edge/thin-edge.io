@@ -18,7 +18,7 @@ monitor TedgeTestMonitor {
                 log "Subscribed to demo/number" at INFO;
 
                 on all Number() as n {
-                        log "Message recieved, doubling the number and sending to tedge/measurements" at INFO;
+                        log "Message received, doubling the number and sending to tedge/measurements" at INFO;
                         send Number(n.number * 2) to "mqtt:tedge/measurements";
                 }
         }

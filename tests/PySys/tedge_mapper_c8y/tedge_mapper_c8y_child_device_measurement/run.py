@@ -17,7 +17,7 @@ class TedgeMapperC8yChildDevice(EnvironmentC8y):
     def setup(self):
         super().setup()
 
-        # Append some random string to avoid having childs with the same name
+        # Append some random string to avoid having children with the same name
         self.child_name = "te-child-" + secrets.token_hex(4)
         self.other_child_name = "other-te-child-" + secrets.token_hex(4)
 

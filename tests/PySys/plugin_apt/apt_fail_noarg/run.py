@@ -4,7 +4,7 @@ sys.path.append("apt_plugin")
 from environment_apt_plugin import AptPlugin
 
 """
-Validate apt plugin calls fail without/wrong paramters
+Validate apt plugin calls fail without/wrong parameters
 
 When we install/remove without a package
 Then we expect an error code from the plugin

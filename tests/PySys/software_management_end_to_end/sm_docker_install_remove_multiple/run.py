@@ -52,7 +52,7 @@ class SMDockerInstallRemove(SoftwareManagement):
         ]
 
         self.trigger_action_json(setup_action)
-        self.wait_until_succcess()
+        self.wait_until_success()
         # Wait for the operation result to appear on c8y cloud
         self.wait_until_installed()
 
@@ -88,7 +88,7 @@ class SMDockerInstallRemove(SoftwareManagement):
         ]
 
         self.trigger_action_json(execute_action)
-        self.wait_until_succcess()
+        self.wait_until_success()
         # Wait for the operation result to appear on c8y cloud
         self.wait_until_installed()
 
@@ -129,7 +129,7 @@ class SMDockerInstallRemove(SoftwareManagement):
         ]
 
         self.trigger_action_json(cleanup_action)
-        self.wait_until_succcess()
+        self.wait_until_success()
         # Wait for the operation result to appear on c8y cloud
         self.wait_until_installed()
 
