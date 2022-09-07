@@ -20,38 +20,58 @@ All the stakeholders must agree on the vision upon joining.
 Changes to the vision need to be done in a plenum of stakeholders, this makes sure that everyone is aware and agrees to the evolution of the project.
 
 
+## Maintainership
 
-## Team Structure
+In this project repository, some contributors have special rights to decide the
+way forward of the project: the maintainers.
 
-* Teams are either single contributors or a group of them
-* They are responsible for a specific part of project, and as such are the maintainers of those parts
-    * This includes: Reviewing pull requests, triaging issues in their assigned area, and general maintenance
-* Each team is assigned a single or multiple subtrees of the project, as defined by the project structure
-* The teams follow the project hierarchy for decisions, i.e. higher decisions take precedence
+These special rights are:
 
-The important bits:
+- Merging new code
+- Deciding on additions/changes
 
-At the 'top' are the maintainers, whose job is to define and realize the project vision of thin-edge.io.
+Translated into actions, this would be things like approving and merging PRs,
+reviewing issues as well as discussions.
+
+To become a maintainer, the current group of maintainers would simply choose to
+promote them. No clear process is currently defined, but in general should a
+motivated and trustworthy contributor be given precedence.
+
 Maintainers should strive for agreement based on the following factors:
 
 - The vision of the whole project
 - Feasibility, accounting for future technical and cultural shifts
 - The health of the project going forward
+- The community being active and motivated
 
-The maintainers ensure that all changes in the project align with the agreed vision
-and support the health of the project and its community without being unduly influenced from their employers.
+The maintainers ensure that all changes in the project align with the agreed
+vision and support the health of the project and its community without being
+unduly influenced from their employers.
 
-Underneath the maintainers are the teams or individuals, that each are allowed to  make similar decisions about the project *in the area they have been delegated*.
+## Team Structure
 
+Underneath the maintainers are the teams or individuals, that each are allowed
+to  make similar decisions about the project *in the area they have been
+delegated*. Team members should be chosen depending on their merit and
+trustworthiness.
 
-- Some decisions are global in the project, like the core/API
-    - Team members should try to make sure to explore possible options together before calling for time-consuming solutions like a vote. This mostly includes uncontroversial changes that are low impact or have already been agreed upon
-    - If an exclusive choice has to be made (where it is not possible to entertain two conflicting approaches), and no clear side is more advantageous to pick, a vote should be held with the majority opinion being the final decision.
+Teams are composed of either a single or multiple contributors. 
+Each team is assigned a single or multiple subtrees of the project, as defined
+by the project structure. 
+The extent of which depends on the area and expected workload.
 
-- Some decisions are local, e.g. a plugin does not impact others with its behaviour, however it still needs to be a 'good citizen' in the project (CI, format, etc..)
-    - These should be clearly scoped in their respective project part
-    - However, if needed a 'higher up' decision can be requested if no consensus is achieved
+They are responsible for only that specific part of the project, and as
+such are tasked with maintaining it.
+This means they should do the same tasks as the maintainers: Periodically
+reviewing pull requests, triaging issues for their area, and general
+maintenance of their codebase.
+The teams follow the project hierarchy for decisions, i.e. higher decisions take precedence.
 
+Decisions impacting multiple teams or the whole project need to be handled with special care.
+They need to be discussed with all relevant teams and a consesus needs to be reached.
+Some decisions are local, e.g. a component maintained by a company, but even in
+this case the team still needs to be a 'good citizen' in the project and follow
+agreed upon conventions (CI, format, etc..)
 
 
 ## Project Structure
