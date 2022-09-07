@@ -42,6 +42,7 @@ Maintainers should strive for agreement based on the following factors:
 - The vision of the whole project
 - Feasibility, accounting for future technical and cultural shifts
 - The health of the project going forward
+- The community being active and motivated
 
 The maintainers ensure that all changes in the project align with the agreed
 vision and support the health of the project and its community without being
