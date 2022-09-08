@@ -279,3 +279,35 @@ Note that:
 * Since the type of configuration file is used as an MQTT topic name, the characters `#` and `+` cannot be used in a type name.
   If such a character is used in a type name (or in the path of a configuration file without explicit type),
   then the whole plugin configuration `/etc/tedge/c8y/c8y-configuration-plugin.toml` is considered ill-formed.
+
+## Configuration protocol between thin-edge and the child-devices
+
+The configuration plugin `c8y_configuration_plugin` can act as a proxy between the cloud and a child-device.
+However, for that to work, a client must be installed on the child device
+to perform the actual configuration updates pushed by thin-edge on behalf of the cloud.
+While the configuration plugin tells what need to be updated and when,
+only the child device specific client can control where and how these updates can be applied.
+
+* The responsibility of the configuration plugin is to
+  * interact with the cloud, receiving the configuration update and configuration snapshot requests,
+  * exchange configuration files with the child device via an HTTP-based file transfer service over the local network,
+  * notify the child devices via MQTT when configuration files are to be updated or requested from the cloud,
+  * listen to child devices' configuration operation status via MQTT messages and mirror those to the cloud.
+* The child-device configuration software is an MQTT+HTTP client that
+  * interact with the child-device system, accessing the actual configuration files
+  * connect the main thin-edge device over the local MQTT bus,
+  * listen over MQTT for configuration updates and requests,
+  * download and upload the configuration files on demand,
+  * notify the progress of the configuration operations to the main device via MQTT.
+
+For each kind of child device such a specific client has to be implemented and installed,
+most often on the child-device hardware but not necessarily as one can imagine a process running
+thin-edge and acting as a proxy for a child device which software cannot be altered.
+
+Here is the protocol that has to be implemented by the child-device configuration client.
+This protocol covers 4 interactions, the child devices:
+1. Connecting to thin-edge
+1. Downloading configuration file updates from thin-edge
+1. Uploading current configuration files to thin-edge
+1. Notifying the list of configuration files to thin-edge
+
