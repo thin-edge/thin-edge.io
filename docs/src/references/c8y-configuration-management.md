@@ -101,6 +101,9 @@ This [TOML](https://toml.io/en/) file defines the list of files to be managed fr
 Each configuration file is defined by a record with:
 * The full `path` to the file.
 * An optional configuration `type`. If not provided, the `path` is used as `type`.
+  This `type` is used to declare the configuration file to Cumulocity and then to trigger operations on that file.
+  All the configuration `type`s for the main device are declared to the cloud on start
+  and on change of the `c8y/c8y-configuration-plugin.toml` file.
 * Optional unix file ownership: `user`, `group` and octal `mode`.  
   These are only used when a configuration file pushed from the cloud doesn't exist on the device.
   When a configuration file is already present on the device, this plugin never changes file ownership,
@@ -116,6 +119,53 @@ files = [
   ]
 ```
 
+Along this `c8y_configuration_plugin` configuration for the main device,
+the configuration plugin expects a configuration file per child device
+that needs to be configured from the cloud.
+* The configuration for a child-device `$CHILD_DEVICE_ID`
+  is stored by default under `/etc/tedge/c8y/$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`
+* These TOML files have the same schema as for the main device,
+  listing the configuration `files` and giving for each a `path` and possibly a `type`.
+* Note that the `path` doesn't need to be a file path.
+  It can be a key path in some registry of the child device or any name that makes sense for the child device.
+* As for the main device, the `type` is used to name the configuration file on the cloud.
+  All the configuration `type`s for a child devices are declared to the cloud on start
+  and on change of the `c8y/$CHILD_DEVICE_ID/c8y-configuration-plugin.toml` file.
+* The `user`, `group` and `mode` can be provided for a child-device configuration file,
+  notably when used by the child device,
+  but will not be used by the main device if provided.  
+
+```shell
+$ ls /etc/tedge/c8y/*/c8y-configuration-plugin.toml
+/etc/tedge/c8y/child-1/c8y-configuration-plugin.toml 
+/etc/tedge/c8y/child-2/c8y-configuration-plugin.toml
+
+$ cat /etc/tedge/c8y/child-1/c8y-configuration-plugin.toml
+files = [
+    { path = '/var/camera.conf', type = 'camera' },
+    { path = '/var/sounds.conf', type = 'sounds' },
+  ]
+
+$ cat /etc/tedge/c8y/child-2/c8y-configuration-plugin.toml
+files = [
+    { path = '/var/ai/model' },
+  ]
+```
+
+On start and when one of these files is updated, the configuration plugin sends
+one [`119 SmartRest2 message`](https://cumulocity.com/guides/10.14.0/reference/smartrest-two/#119) per device
+to Cumulocity with the set of `type`s listed by the configuration
+(adding implicitly the `c8y-configuration-plugin` themselves).
+These messages can be observed over the MQTT bus of the thin-edge device.
+In the case of the example, 3 messages are sent - one for the main device and 2 for the child devices:
+
+```shell
+$ tedge mqtt sub 'c8y/s/us/#'
+[c8y/s/us] 119,c8y-configuration-plugin,tedge.toml,/etc/tedge/mosquitto-conf/c8y-bridge.conf,/etc/tedge/mosquitto-conf/tedge-mosquitto.conf,mosquitto
+[c8y/s/us/child-1] 119,c8y-configuration-plugin,camera,sounds
+[c8y/s/us/child-2] 119,c8y-configuration-plugin,/var/ai/model
+```
+
 Note that:
 * The file `/etc/tedge/c8y/c8y-configuration-plugin.toml` itself doesn't need to be listed.
   This is implied, so the list can *always* be configured from the cloud.
@@ -123,9 +173,15 @@ Note that:
 * If the file `/etc/tedge/c8y/c8y-configuration-plugin.toml`
   is not found, empty, ill-formed or not-readable
   then only `c8y-configuration-plugin.toml` is managed from the cloud.
+* Similarly, when there is a directory `/etc/tedge/c8y/$CHILD_DEVICE_ID/`
+  but the file `/etc/tedge/c8y/$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`
+  is not found , empty, ill-formed or not-readable
+  then only `$CHILD_DEVICE_ID/c8y-configuration-plugin.toml` is managed from the cloud.
 * If the file `/etc/tedge/c8y/c8y-configuration-plugin.toml` is ill-formed
   or cannot be read then an error is logged, but the operation proceed
   as if the file were empty.
+  Similarly, for any file `/etc/tedge/c8y/$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`.
+  So, the issue can be fixed from the cloud.
   
 The behavior of the `c8y_configuration_plugin` is also controlled
 by the configuration of thin-edge:
