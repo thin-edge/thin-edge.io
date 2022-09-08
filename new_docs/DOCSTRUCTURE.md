@@ -36,6 +36,7 @@ Chapter 2 Getting started with thin-edge.io (a full walkthrough from first actio
  
  Chapter 4 Tutorials
  (Tutorials are a step-by-step approach with an end-to-end example)
+ 
     4.1 Use thin-edge.io on RevPi
   
  Chapter 5 Reference guide 
