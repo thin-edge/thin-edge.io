@@ -78,6 +78,8 @@ impl Connection {
         let (mqtt_client, event_loop) =
             Connection::open(config, received_sender.clone(), error_sender.clone()).await?;
         tokio::spawn(Connection::receiver_loop(
+            mqtt_client.clone(),
+            config.clone(),
             event_loop,
             received_sender,
             error_sender.clone(),
@@ -117,10 +119,13 @@ impl Connection {
                         return Err(err);
                     };
                     let subscriptions = config.subscriptions.filters();
+
+                    // Need check here otherwise it will hang waiting for a SubAck, and none will come when there is no subscription.
                     if subscriptions.is_empty() {
                         break;
                     }
-                    mqtt_client.subscribe_many(subscriptions).await?;
+
+                    Connection::subscribe_to_topics(&mqtt_client, subscriptions).await?
                 }
 
                 Ok(Event::Incoming(Packet::SubAck(ack))) => {
@@ -154,16 +159,34 @@ impl Connection {
     }
 
     async fn receiver_loop(
+        mqtt_client: AsyncClient,
+        config: Config,
         mut event_loop: EventLoop,
         mut message_sender: mpsc::UnboundedSender<Message>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
-    ) {
+    ) -> Result<(), MqttError> {
         loop {
             match event_loop.poll().await {
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
                     // Errors on send are ignored: it just means the client has closed the receiving channel.
                     // One has to continue the loop though, because rumqttc relies on this polling.
                     let _ = message_sender.send(msg.into()).await;
+                }
+
+                Ok(Event::Incoming(Packet::ConnAck(ack))) => {
+                    if let Some(err) = MqttError::maybe_connection_error(&ack) {
+                        eprintln!("ERROR: Connection Error {}", err);
+                    }
+                    // Workaround for  https://github.com/bytebeamio/rumqtt/issues/250
+                    // If session_name is not provided, then re-subscribe
+                    else if config.session_name.is_none() {
+                        let subscriptions = config.subscriptions.filters();
+                        // Need check here otherwise it will hang waiting for a SubAck, and none will come when there is no subscription.
+                        if subscriptions.is_empty() {
+                            break;
+                        }
+                        Connection::subscribe_to_topics(&mqtt_client, subscriptions).await?;
+                    }
                 }
 
                 Ok(Event::Incoming(Incoming::Disconnect))
@@ -188,6 +211,7 @@ impl Connection {
         // No more messages will be forwarded to the client
         let _ = message_sender.close().await;
         let _ = error_sender.close().await;
+        Ok(())
     }
 
     async fn sender_loop(
@@ -234,5 +258,15 @@ impl Connection {
 
     pub(crate) async fn do_pause() {
         sleep(Duration::from_secs(1)).await;
+    }
+
+    pub(crate) async fn subscribe_to_topics(
+        mqtt_client: &AsyncClient,
+        subscriptions: Vec<rumqttc::SubscribeFilter>,
+    ) -> Result<(), MqttError> {
+        mqtt_client
+            .subscribe_many(subscriptions)
+            .await
+            .map_err(MqttError::ClientError)
     }
 }
