@@ -91,7 +91,40 @@ $ ls -l /etc/tedge/operations/c8y/c8y_DownloadConfigFile
 -rw-r--r-- 1 tedge tedge 97 Mar 22 14:24 /etc/tedge/operations/c8y/c8y_DownloadConfigFile
 ```
 
+The configuration plugin can also act as configuration proxy for child-devices.
+For that to work for a child device named `$CHILD_DEVICE_ID`,
+two files must be added under `/etc/tedge/operations/c8y/$CHILD_DEVICE_ID`
+in order to declare the associated capabilities to Cumulocity.
+These files are just empty files owned by the `tedge` user.
+
+These two files can be created using the `c8y_configuration_plugin --init` option and providing child names:
+
+```shell
+$ sudo c8y_configuration_plugin --init child-1 child-2
+
+$ ls -l /etc/tedge/operations/c8y/child-1
+-rw-r--r-- 1 tedge tedge 97 Mar 22 14:24 /etc/tedge/operations/c8y/child-1/c8y_DownloadConfigFile
+-rw-r--r-- 1 tedge tedge 95 Mar 22 14:24 /etc/tedge/operations/c8y/child-1/c8y_UploadConfigFile
+  
+$ ls -l /etc/tedge/operations/c8y/child-2
+-rw-r--r-- 1 tedge tedge 97 Mar 22 14:24 /etc/tedge/operations/c8y/child-2/c8y_DownloadConfigFile
+-rw-r--r-- 1 tedge tedge 95 Mar 22 14:24 /etc/tedge/operations/c8y/child-2/c8y_UploadConfigFile
+```
+
 The `c8y_configuration_plugin` has to be run as a daemon on the device, the latter being connected to Cumulocity.
+
+On start of `tegde_mapper c8y` and on `/etc/tedge/operations/c8y` directory updates,
+one can observe on the MQTT bus of the thin-edge device
+the messages sent to Cumulocity to declare the capabilities of the main and child devices.
+Here, the capabilities to upload and download configuration files
+(possibly with other capabilities added independently):
+
+```shell
+$ tedge mqtt sub 'c8y/s/us/#'
+[c8y/s/us] 114,c8y_Restart,c8y_SoftwareList,c8y_UploadConfigFile,c8y_DownloadConfigFile
+[c8y/s/us/child-1] 114,c8y_UploadConfigFile,c8y_DownloadConfigFile
+[c8y/s/us/child-2] 114,c8y_UploadConfigFile,c8y_DownloadConfigFile
+```
 
 ## Configuration
 
@@ -205,7 +238,7 @@ OPTIONS:
         --config-dir <CONFIG_DIR>      [default: /etc/tedge]
         --debug                        Turn-on the debug log level
     -h, --help                         Print help information
-    -i, --init                         Create supported operation files
+    -i, --init [CHILD_DEVICE_ID]       Create supported operation files, possibly for several child devices
     -V, --version                      Print version information
 
     On start, `c8y_configuration_plugin` notifies the cloud tenant of the managed configuration files,
