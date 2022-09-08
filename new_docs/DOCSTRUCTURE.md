@@ -1,9 +1,4 @@
 # doc-structure
-this is a repository for the new documentation structure
-
-
------------------------------------------------------------------------------
-
 
 Chapter 1 Concepts of thin-edge.io 
 
