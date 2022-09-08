@@ -24,17 +24,44 @@ Thin-edge provides an operation plugin to
 * Once a snapshot has been downloaded from Cumulocity to the device,
   __the plugin publishes a notification message on the local thin-edge MQTT bus__.
   The device software has to subscribe to these messages if any action is required,
-  say to check the content of file, to preprocess it or to restart a daemon. 
+  say to check the content of file, to preprocess it or to restart a daemon.
+* The configuration plugin also manage configuration files for child-devices connected to the main thin-edge device.
+  From the cloud point of view, these child-devices are configured exactly using the same user interface,
+  with the ability to focus on a device, to upload the current configuration files,
+  to push configuration updates and to configure the list of configuration files.
+  Behind the scene, the behavior is a bit more complex,
+  the configuration plugin acting as a proxy between the cloud and the child-devices.
+  The configuration updates are downloaded from the cloud on the thin-edge device
+  then made available to the child-devices over HTTP,
+  MQTT being used to notify the availability of these configuration updates.
+  The child-device software has to subscribe to these messages, download the corresponding updates,
+  and notify the main thin-edge configuration plugin of the update status.
+  A similar combination of MQTT and HTTP is used to let the main device
+  request a child device for a configuration file actually in use.
 * In other words, the responsibilities of the plugin are:
   * to define the list of files under configuration management
   * to notify the cloud when this list is updated,
   * to upload these files to the cloud on demand,  
   * to download the files pushed from the cloud,
   * to make sure that the target files are updated atomically after successful download,
-  * to notify the device software when the configuration is updated.
+  * to notify the device software when the configuration is updated,
+  * to act as proxy for the child-devices that need configuration management,
+  * to publish over a local HTTP server the configuration files and make them available to the child-devices,
+  * to notify the child-devices when configuration updates are available,
+  * to notify the child-devices when current configuration files are requested from the cloud,
+  * to consume over a local HTTP server the configuration files pushed by the child-devices.
 * By contrast, the plugin is not responsible for:
   * checking the uploaded files are well-formed,
-  * restarting the configured processes.
+  * restarting the configured processes,
+  * installing the configuration files on the child-devices.
+* For each child-device, a device-specific software component is required
+  to listen for configuration related MQTT notification
+  and behave accordingly along the protocol defined by this configuration plugin.
+  * Being specific to each type of child devices, this software has to be implemented specifically.
+  * This software can be installed on the child device.
+  * This software can also be installed on the main device,
+    when the target device cannot be altered
+    or connected to the main device over MQTT and HTTP.
 * A user-specific component, installed on the device,
   can implement more sophisticated configuration use-cases by:
   * listening for configuration updates on the local thin-edge MQTT bus,
