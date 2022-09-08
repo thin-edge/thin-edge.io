@@ -1,2 +1,6 @@
 [default.extend-words]
 mosquitto = "mosquitto"
+
+[files]
+extend-exclude = [ "**certificate.txt" ]
+
