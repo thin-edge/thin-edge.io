@@ -379,18 +379,7 @@ mod tests {
 
     #[test]
     fn check_thumbprint_static_certificate() {
-        let cert_content = r#"-----BEGIN CERTIFICATE-----
-MIIBlzCCAT2gAwIBAgIBKjAKBggqhkjOPQQDAjA7MQ8wDQYDVQQDDAZteS10YnIx
-EjAQBgNVBAoMCVRoaW4gRWRnZTEUMBIGA1UECwwLVGVzdCBEZXZpY2UwHhcNMjEw
-MzA5MTQxMDMwWhcNMjIwMzEwMTQxMDMwWjA7MQ8wDQYDVQQDDAZteS10YnIxEjAQ
-BgNVBAoMCVRoaW4gRWRnZTEUMBIGA1UECwwLVGVzdCBEZXZpY2UwWTATBgcqhkjO
-PQIBBggqhkjOPQMBBwNCAAR6DVDOQ9ey3TX4tD2V0zCYe8GtmUHekNZZX6P+lUXx
-886P/Kkyra0xCYKam2me2VzdLMc4X5cpRkybVa0XH/WCozIwMDAdBgNVHQ4EFgQU
-Iz8LzGgzHjqsvB+ppPsVa+xf2bYwDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQD
-AgNIADBFAiEAhMAATBcZqE3Li1TZCzDoweBxRw1WD6gaSAcrsIWuW94CIHuR5ZG7
-ozYxD+f5npF5kWWKcLIIo0wqvXg0GOLNfxTh
------END CERTIFICATE-----
-"#;
+        let cert_content = include_str!("./test_certificate.txt");
         let expected_thumbprint = "860218AD0A996004449521E2713C28F67B5EA580";
 
         let pem = PemCertificate::from_pem_string(cert_content).expect("Reading PEM failed");
