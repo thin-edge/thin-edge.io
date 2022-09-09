@@ -60,5 +60,6 @@ TODO: add a mapping of thin-edge data representation to PLC entities, etc. E.g.:
 
 
 No yet covered:
-* "capabilities", "fragments"
+* "capabilities", "fragments", "child-devices"
 * details about signals or setpoints in the Process Image
+* where is thin-edge deployed?
