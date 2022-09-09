@@ -337,3 +337,60 @@ and all the connections to thin-edge are established by the child devices.
 * Currently, all these connections are done without TLS support.
   * Hence, the main device must be configured so these MQTT and HTTP ports
     are only open on a local trusted network.
+
+### The child device downloads configuration updates on notification
+
+When a configuration file for a child device
+is received from the cloud by the `c8y_configuration_plugin` daemon,
+the configuration plugin manages the transfer of this file to the child device
+and notifies the cloud on the progress of this configuration update operation.
+
+1. On reception of a configuration update for a child device named `$CHILD_DEVICE_ID`
+   of a file `{ path = $PATH, type = $TYPE }` defined in `$CHILD_DEVICE_ID/c8y-configuration-plugin.toml` 
+   the `c8y_configuration_plugin` downloads the new configuration content to the temporary directory defined by `tedge config get tmp.path`,
+   and, on success, moves this content under the thin-edge file transfer HTTP root.
+   * The file is moved to `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_update/$TYPE`
+     making this file available under `http://$TEDGE_HTTP/tedge/$CHILD_DEVICE_ID/config_update/$TYPE`.
+   * Note that the `$TYPE` is by default the `$PATH` if not provided by the configuration.  
+1. Once the updated configuration is available over the local HTTP file transfer service,
+   the `c8y_configuration_plugin` notifies the child device by publishing an MQTT message.
+   * The topic is `tedge/$CHILD_DEVICE_ID/commands/req/config_update`
+   * The payload is a JSON record with 3 fields
+     * `"url": "http://$TEDGE_HTTP/tedge/$CHILD_DEVICE_ID/config_update/$TYPE"`
+     * `"path": "$PATH"`
+     * `"type": "$TYPE"`
+1. On reception of a configuration update on the topic `tedge/$CHILD_DEVICE_ID/commands/req/config_update`,
+   The child-device specific software for configuration management:
+   1. Downloads the content from the `url` specified by the notification message.
+   1. Uses the `path` and `type` information to apply the new configuration content.
+      Note that these pieces of information are provided by the child-device specific software itself,
+      and make sense only in the specific context of the device operating system and software.
+1. While the configuration update is applied,
+   the child-device specific software for configuration management,
+   notifies thin-edge over MQTT about the progress of this operation.
+   1. These messages are published on the topic
+      `tedge/$CHILD_DEVICE_ID/commands/res/config_update`
+   1. There is three different payloads to notify the configuration operation started,
+      succeed or failed for some reason.
+   1. All these payloads are JSON records with 3 required fields:
+      * `"status": "$STATUS"` where the status is either "executing", "successful" or "failed"
+      * `"path": "$PATH"`
+      * `"type": "$TYPE"`
+      * `"reason": "$ERROR_MSG"` telling the cause of the error if any.
+   1. The child-device configuration software must send at least a success or an error message,
+      depending on the success of the `GET` and configuration operations.
+      It should also send an executing message before starting to process the request.
+1. On reception an operation status message,
+   the `c8y_configuration_plugin` notifies the cloud accordingly.
+   1. When a success or error message is finally received,
+      then the configuration plugin cleans up all the temporary resources,
+      notably removing the file under `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_update/$TYPE`.
+   1. If no responses are received from the child devices after 60s,
+      then a timeout error is sent to the cloud, and the resources cleaned.
+   1. If a notification message is received while none is expected (this might notably arrive after a timeout),
+      i.e with a configuration file `type` that doesn't exist under `TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_update/`,
+      then this notification message is ignored.
+
+### The child device uploads current configurations on request
+
+### The child device uploads its configuration file list on start and on change
