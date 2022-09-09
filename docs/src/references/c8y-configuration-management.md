@@ -361,7 +361,7 @@ and notifies the cloud on the progress of this configuration update operation.
      * `"type": "$TYPE"`
 1. On reception of a configuration update on the topic `tedge/$CHILD_DEVICE_ID/commands/req/config_update`,
    The child-device specific software for configuration management:
-   1. Downloads the content from the `url` specified by the notification message.
+   1. `GET`s the content from the `url` specified by the notification message.
    1. Uses the `path` and `type` information to apply the new configuration content.
       Note that these pieces of information are provided by the child-device specific software itself,
       and make sense only in the specific context of the device operating system and software.
@@ -391,6 +391,59 @@ and notifies the cloud on the progress of this configuration update operation.
       i.e with a configuration file `type` that doesn't exist under `TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_update/`,
       then this notification message is ignored.
 
-### The child device uploads current configurations on request
+### The child device uploads current configuration snapshot on request
 
+The configuration files actually used by a child device can be requested from the cloud.
+As for configuration updates, the `c8y_configuration_plugin` daemon drive these requests
+using a combination of MQTT to notify the child device of the request
+and of HTTP to let the child device `PUT` the requested file.
+
+1. On reception of a configuration request for a child device named `$CHILD_DEVICE_ID`
+   for a file `{ path = $PATH, type = $TYPE }` defined in `$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`
+   the `c8y_configuration_plugin` forwards this request to the child device by publishing an MQTT message
+   telling which configuration is expected and where to upload it.
+    * The topic is `tedge/$CHILD_DEVICE_ID/commands/req/config_snapshot`
+    * The payload is a JSON record with 3 fields
+        * `"url": "http://$TEDGE_HTTP/tedge/$CHILD_DEVICE_ID/config_snapshot/$TYPE"`
+        * `"path": "$PATH"`
+        * `"type": "$TYPE"` (if no `type` has been specified, then this field is omitted) 
+    * The `url` conveys the fact the `c8y_configuration_plugin` expects that, on transfer success,
+      the file will be stored `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_snapshot/$TYPE`.
+      Note that when the `$TYPE` is not explicitly defined in `$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`,
+      then the `$PATH` is used as the configuration type.
+1. On reception of a configuration request on the topic `tedge/$CHILD_DEVICE_ID/commands/req/config_snapshot`,
+   The child-device specific software for configuration management:
+   1. Uses the `path` and `type` information to retrieve the requested configuration content.
+   Note that these pieces of information are provided by the child-device specific software itself,
+   and make sense only in the specific context of the device operating system and software.
+   1. `PUT`s the content to the `url` specified by the request message.
+1. The child-device specific software for configuration management,
+   notifies thin-edge over MQTT about the progress of the configuration snapshot request.
+    1. These messages are published on the topic
+       `tedge/$CHILD_DEVICE_ID/commands/res/config_snapshot`
+    1. There is three different payloads to notify the configuration operation started,
+       succeed or failed for some reason.
+    1. All these payloads are JSON records with 3 required fields:
+        * `"status": "$STATUS"` where the status is either "executing", "successful" or "failed"
+        * `"path": "$PATH"`
+        * `"type": "$TYPE"`
+        * `"reason": "$ERROR_MSG"` telling the cause of the error if any.
+    1. The child-device configuration software must send at least a success or an error message,
+       depending on the success of the `PUT` operation.
+       It should also send an executing message before starting to process the request.
+1. On reception of an operation status message,
+   the `c8y_configuration_plugin` notifies the cloud accordingly.
+    1. When a success message is received,
+       then the configuration plugin transfers to the cloud the content `PUT` by the child-device
+       under `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_snapshop/$TYPE` and
+       finally removes this file when acknowledged by the cloud.
+    1. If no responses are received from the child devices after 60s,
+       then a timeout error is sent to the cloud,
+       and the `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_snapshop/$TYPE` file removed
+       (if any has been uploaded but in an unknown state).
+    1. If a notification message is received while none is expected for this type of configuration
+       (this might notably arrive after a timeout), then this notification message is ignored.
+       
 ### The child device uploads its configuration file list on start and on change
+
+### The child device uploads current configurations on request
