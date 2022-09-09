@@ -311,3 +311,29 @@ This protocol covers 4 interactions, the child devices:
 1. Uploading current configuration files to thin-edge
 1. Notifying the list of configuration files to thin-edge
 
+### The child device connects to the thin-edge parent device
+
+From a TCP point of view, the child devices act as clients
+and all the connections to thin-edge are established by the child devices.
+* Thin-edge opens two ports for MQTT and HTTP over the local network.
+  These ports are controlled on the main device `tedge config`:
+  * `mqtt.external.bind_address`
+  * `mqtt.external.port`
+  * `http.external.port`
+* The child devices must know the main device IP address.
+  * This is the address set for `mqtt.external.bind_address` on the main device.
+  * For the very specific case, where the software for the child device run on the main device,
+    this connection address can be the `localhost`.
+* On start, the child-device specific software for configuration management,
+  must connect over MQTT to thin-edge device.
+  * It must use a session name that is unique on the thin-edge bus.
+    `"$CHILD_DEVICE_ID/configuration"` is the recommendation.
+  * It must subscribe to `tedge/$CHILD_DEVICE_ID/commands/req/#` to receive requests.
+  * It has to publish responses under `tedge/$CHILD_DEVICE_ID/commands/res/#`.
+* On demand, the child-device software has to send HTTP requests to thin-edge.
+  * These requests are REST requests (GET/PUT/DELETE) to exchange files.
+  * The urls are forged by thin-edge telling the child devices
+    where to get and put configuration files.
+* Currently, all these connections are done without TLS support.
+  * Hence, the main device must be configured so these MQTT and HTTP ports
+    are only open on a local trusted network.
