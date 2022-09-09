@@ -446,4 +446,64 @@ and of HTTP to let the child device `PUT` the requested file.
        
 ### The child device uploads its configuration file list on start and on change
 
-### The child device uploads current configurations on request
+The configuration files for a child device `$CHILD_DEVICE_ID` are defined by
+the file `$TEDGE_CONFIG_DIR/c8y/$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`.
+The content of this file is provided by the child-device configuration software
+but must be known by the `c8y_configuration_plugin`
+that needs to store an up-to-date version of each `$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`.
+
+Acting as a proxy between the cloud and the child devices,
+the `c8y_configuration_plugin` can simply take a copy of these files
+when transferred between the cloud and the child devices.
+* For these copies on the fly nothing is expected for the child-device configuration software.
+* A first special case is added to have the `c8y_configuration_plugin` requesting itself
+  a snapshot of the configuration for a child device if missing
+  (i.e. there is no `c8y-configuration-plugin.toml` for that device)
+* A second special case is also required to let the child device be able to send update
+  of its `$CHILD_DEVICE_ID/c8y-configuration-plugin.toml` on creation and updates.
+
+1. On reception of a `successful` status message
+   related to the `"type": "c8y-configuration-plugin"`,
+   received either for download on `tedge/$CHILD_DEVICE_ID/commands/req/config_update`
+   or for upload on `tedge/$CHILD_DEVICE_ID/commands/req/config_snapshot`.
+   1. The `c8y_configuration_plugin` takes a copy of the transferred file
+      that is under `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_update/c8y-configuration-plugin`
+      or `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_snapshop/c8y-configuration-plugin`
+      (depending on the file has been pushed by the cloud or the child device).
+   1. The `c8y_configuration_plugin` puts this copy under
+      `$TEDGE_CONFIG_DIR/c8y/$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`,
+      and uses it for an updated list of configuration files
+      (to which this file `$TEDGE_CONFIG_DIR/c8y/$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`
+      is implicitly added with type `c8y-configuration-plugin`).
+   1. If the request were triggered by the cloud,
+      the `c8y_configuration_plugin` proceeds on processing the `successful` status message,
+      notifying the cloud and removing the file `$TEDGE_CONFIG_DIR/c8y/$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`.
+      Note that the request might have been triggered by the main device on start,
+      or by the child device itself (see below),
+      in that case the cloud must not be notified. 
+1. On start, the `c8y_configuration_plugin` check for each child device `$CHILD_DEVICE_ID`,
+   listed in the directory `$TEDGE_CONFIG_DIR/c8y/`,
+   if there is a known `$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`.
+   1. If the configuration is missing for some `$CHILD_DEVICE_ID`
+      (i.e. if the directory `$TEDGE_CONFIG_DIR/c8y/$CHILD_DEVICE_ID` exists
+      but not the file `$TEDGE_CONFIG_DIR/c8y/$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`).
+   1. Then the `c8y_configuration_plugin` request this file from the child device
+      by sending an MQTT message on the topic `tedge/$CHILD_DEVICE_ID/commands/req/config_snapshot`.
+   1. The payload of this message is a JSON record with 2 required fields:
+       * `"url": "http://$TEDGE_HTTP/tedge/$CHILD_DEVICE_ID/config_snapshot/c8y-configuration-plugin"`
+       * `"type": "c8y-configuration-plugin"`    
+1. The child-device configuration software has nothing specific to do on requests
+   that are related to the `"type": "c8y-configuration-plugin"`.
+   However, on start and on local changes of the list of configuration files,
+   The child-device configuration software should push to the thin-edge device
+   this new or updated content. This is done as a regular snapshot request.
+      1. `PUT`s the content of updated `$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`
+         to the `http://$TEDGE_HTTP/tedge/$CHILD_DEVICE_ID/config_snapshot/c8y-configuration-plugin`.
+      1. On success of the upload, the child-device configuration software
+         notifies the `c8y_configuration_plugin` with an MQTT message published on the topic
+         `tedge/$CHILD_DEVICE_ID/commands/res/config_snapshot`
+      1. The payload is a JSON record with 2 required fields:
+        * `"status": "successful"`
+        * `"type": "c8y-configuration-plugin"`
+      1. Note that there is no need to send error or executing notification messages here,
+         since this is a spontaneous operation.
