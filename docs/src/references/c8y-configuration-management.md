@@ -300,9 +300,10 @@ only the child device specific client can control where and how these updates ca
   * download and upload the configuration files on demand,
   * notify the progress of the configuration operations to the main device via MQTT.
 
-For each kind of child device such a specific client has to be implemented and installed,
-most often on the child-device hardware but not necessarily as one can imagine a process running
-thin-edge and acting as a proxy for a child device which software cannot be altered.
+For each kind of child device such a specific client has to be implemented
+and installed on the child-device hardware (To be precise, most often on the child device,
+but not necessarily as, for a child device which software cannot be altered,
+one might have to install a protocol adaptor on the main device).
 
 Here is the protocol that has to be implemented by the child-device configuration client.
 This protocol covers 4 interactions, the child devices:
@@ -358,7 +359,7 @@ and notifies the cloud on the progress of this configuration update operation.
    * The payload is a JSON record with 3 fields
      * `"url": "http://$TEDGE_HTTP/tedge/$CHILD_DEVICE_ID/config_update/$TYPE"`
      * `"path": "$PATH"`
-     * `"type": "$TYPE"`
+     * `"type": "$TYPE"` (if no `type` has been specified, then this field is omitted)
 1. On reception of a configuration update on the topic `tedge/$CHILD_DEVICE_ID/commands/req/config_update`,
    The child-device specific software for configuration management:
    1. `GET`s the content from the `url` specified by the notification message.
