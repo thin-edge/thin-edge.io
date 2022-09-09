@@ -33,7 +33,7 @@ thin-edge.io for them is a critical foundation to solve the connectivity
 challenge and to focus on the business applications rather then connectivity and
 device management aspects, which are in a lot of cases considered "hygiene
 factors".
-thin-edge.io enables them to connect industial sensors and automation to a cloud
+thin-edge.io enables them to connect industrial sensors and automation to a cloud
 service.
 High assurances in quality and scalability of thin-edge.io, not only itself but
 also in combination with custom-developed components, let the Service Provider
