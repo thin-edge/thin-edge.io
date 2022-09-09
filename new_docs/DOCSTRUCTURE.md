@@ -47,3 +47,4 @@ Chapter 2 Getting started with thin-edge.io (a full walkthrough from first actio
 
  Chapter 7 Additional Information / Links
  How to get started with Cumulocity IoT, Azure IoT, AWS IoT and other clouds referring to their documentation and getting started guides.
+
