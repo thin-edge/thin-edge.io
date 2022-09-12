@@ -12,10 +12,7 @@ ${HOST}
 ${USERNAME}       pi
 ${PASSWORD}       crypt:LO3wCxZPltyviM8gEyBkRylToqtWm+hvq9mMVEPxtn0BXB65v/5wxUu7EqicpOgGhgNZVgFjY0o=
 
-
-
 *** Tasks ***
-
 Stop tedge-agent
     ${rc}=    Execute Command    sudo systemctl stop tedge-agent.service    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
@@ -50,12 +47,7 @@ Remove entry from service file
     ${rc}=    Execute Command    sudo sed -i '11d' /lib/systemd/system/tedge-agent.service    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 
- 
-
-
-
-
-*** Keywords ***
+ *** Keywords ***
 Open Connection And Log In
    Open Connection     ${HOST}
    Login               ${USERNAME}        ${PASSWORD}

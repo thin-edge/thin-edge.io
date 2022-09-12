@@ -61,16 +61,6 @@ Navigate to Cumulocity Device Management
     Should Contain    ${text}    tedge.toml
     Should Contain    ${text}    example
 
-# stoping the Configuration plugin process
-#     Execute Command    sudo systemctl stop c8y-configuration-plugin.service 
-# revert configuration file changes
-#     Execute Command    sudo rm /etc/tedge/c8y/c8y-configuration-plugin.toml
-#     Execute Command    sudo printf "" > c8y-configuration-plugin.toml
-#     Execute Command    sudo mv c8y-configuration-plugin.toml /etc/tedge/c8y/
-
-
-
-
 *** Keywords ***
 Open Connection And Log In
    Open Connection     ${HOST}

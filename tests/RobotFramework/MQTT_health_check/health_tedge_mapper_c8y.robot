@@ -50,13 +50,7 @@ Remove entry from service file
     ${rc}=    Execute Command    sudo sed -i '10d' /lib/systemd/system/tedge-mapper-c8y.service    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 
- 
-
-
-
-
-*** Keywords ***
+ *** Keywords ***
 Open Connection And Log In
    Open Connection     ${HOST}
    Login               ${USERNAME}        ${PASSWORD}
-

@@ -12,10 +12,7 @@ ${HOST}
 ${USERNAME}       pi
 ${PASSWORD}       crypt:LO3wCxZPltyviM8gEyBkRylToqtWm+hvq9mMVEPxtn0BXB65v/5wxUu7EqicpOgGhgNZVgFjY0o=
 
-
-
 *** Tasks ***
-
 Stop tedge-mapper-collectd
     ${rc}=    Execute Command    sudo systemctl stop tedge-mapper-collectd.service    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
@@ -55,4 +52,3 @@ Remove entry from service file
 Open Connection And Log In
    Open Connection     ${HOST}
    Login               ${USERNAME}        ${PASSWORD}
-

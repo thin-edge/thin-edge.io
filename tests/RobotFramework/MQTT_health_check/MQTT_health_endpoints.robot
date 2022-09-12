@@ -11,8 +11,8 @@ ${HOST}
 ${USERNAME}       pi
 ${PASSWORD}       crypt:LO3wCxZPltyviM8gEyBkRylToqtWm+hvq9mMVEPxtn0BXB65v/5wxUu7EqicpOgGhgNZVgFjY0o=
 ${pid}
-*** Tasks ***
 
+*** Tasks ***
 Connect to Cumulocity
     ${rc}=    Execute Command    sudo tedge connect c8y
     Log    ${rc}=

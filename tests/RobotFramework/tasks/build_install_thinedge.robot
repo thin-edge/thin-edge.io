@@ -45,14 +45,6 @@ Set File Name    #Setting the file name for download
     Run Keyword If    '${ARCH}'=='aarch64'    aarch64
     ...  ELSE    armv7   
 
-# Check if installation exists on Device    #Checking if thinedge is already installed on device 
-#      ${dir}=    SSHLibrary.Execute Command    ls /usr/bin | grep tedge_agent
-#     Log    ${dir}
-#     Set Suite Variable    ${dir} 
-
-#     Run Keyword If    '${dir}'=='tedge_agent'    uninstall tedge script
-#     ...  ELSE    install tedge
-
 Uninstall tedge with purge
     Execute Command    wget https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh
     Execute Command    chmod a+x uninstall-thin-edge_io.sh
@@ -151,10 +143,7 @@ Connect to c8y
     ${output}=    Execute Command    sudo tedge connect c8y    #You can then check the content of that certificate.
     Sleep    3s
     Should Contain    ${output}    tedge-agent service successfully started and enabled!
-
     Execute Command    rm *.deb | rm *.zip | rm *.sh*
-
-
 
 *** Keywords ***
 Open Connection And Log In
@@ -171,7 +160,3 @@ armv7
     Log    ${FILENAME}
     Set Global Variable    ${FILENAME}
     
-
-
-
-

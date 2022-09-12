@@ -52,4 +52,3 @@ Remove entry from service file
 Open Connection And Log In
    Open Connection     ${HOST}
    Login               ${USERNAME}        ${PASSWORD}
-
