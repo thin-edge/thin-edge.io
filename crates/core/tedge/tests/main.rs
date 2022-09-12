@@ -185,7 +185,7 @@ mod tests {
         Ok(())
     }
 
-    // #[test_case(config key, config vaule, expected unset value)]
+    // #[test_case(config key, config value, expected unset value)]
     #[test_case(
         "c8y.url",
         "mytenant.cumulocity.com",

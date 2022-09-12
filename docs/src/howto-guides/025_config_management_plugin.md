@@ -44,7 +44,7 @@ For more details, refer to our guide [Extracting from debian package](./015_inst
 
 ### Building from sources
 
-Follow our guide [Buiding thin-edge.io](./../BUILDING.md) and [Building from source](./015_installation_without_deb_support.md#if-building-from-source).
+Follow our guide [Building thin-edge.io](./../BUILDING.md) and [Building from source](./015_installation_without_deb_support.md#if-building-from-source).
 
 ```shell
 cargo build --release -p c8y_configuration_plugin
@@ -120,7 +120,7 @@ The `c8y-configuration-plugin.toml` file can also be updated from the cloud in a
 
 Then, go back to the **Configuration** tab of your desired device in Cumulocity.
 
-![Cumulocity Configuration Management Donwload](./images/c8y-config-plugin-download.png)
+![Cumulocity Configuration Management Download](./images/c8y-config-plugin-download.png)
 
 Click on the config file entry from the **DEVICE SUPPORTED CONFIGURATIONS** files list.
 You can choose the file that you uploaded from the **AVAILABLE SUPPORTED CONFIGURATIONS** section, and then apply that file to your device by clicking on the **Send configuration to device** button.

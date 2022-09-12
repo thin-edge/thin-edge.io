@@ -110,7 +110,7 @@ impl PermissionEntry {
     /// If the file already exists, then it will not be re-created and it will not overwrite/append the contents of the file.
     /// This method returns
     ///     Ok() when file is created and the content is written successfully into the file.
-    ///     Ok() when the file aleady exists
+    ///     Ok() when the file already exists
     ///     Err(_) When it can not create the file with the appropriate owner and access permissions.
     fn create_file(&self, file: &Path, default_content: Option<&str>) -> Result<(), FileError> {
         match fs::OpenOptions::new()

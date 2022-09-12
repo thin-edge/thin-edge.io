@@ -86,7 +86,7 @@ class PySysTest(SoftwareManagement):
 
         self.trigger_action_json(action)
 
-        self.wait_until_succcess()
+        self.wait_until_success()
 
         self.assertThat("True == value", value=self.check_is_installed("asciijump"))
         self.assertThat(
@@ -100,7 +100,7 @@ class PySysTest(SoftwareManagement):
 
         self.trigger_action_json(action)
 
-        self.wait_until_succcess()
+        self.wait_until_success()
 
     def validate(self):
 

@@ -2,7 +2,7 @@
 
 # Smoke test for Azure IoT
 # The bridge should be already configured (done by configure_bridge.sh)
-# lets avoid to create a new certifiate in this script as it is shared with C8y.
+# lets avoid to create a new certificate in this script as it is shared with C8y.
 
 # This script is intended to be executed by a GitHub self-hosted runner
 # on a Raspberry Pi.
@@ -14,7 +14,7 @@ sudo tedge disconnect c8y
 set -e
 
 # The bridge should be already configured
-# lets avoid to create a new certifiate here ()
+# lets avoid to create a new certificate here ()
 # ./ci/configure_bridge.sh
 
 # Read device thumbprint from command line

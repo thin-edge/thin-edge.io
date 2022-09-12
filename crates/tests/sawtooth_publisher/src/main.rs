@@ -20,7 +20,7 @@ This is a small and flexible publisher for deterministic test data.
 
 - TODO: Improve code quality
 - TODO: Add different data types for JSON publishing
-- TODO: Command line switch to swith betwen REST and JSON
+- TODO: Command line switch to switch between REST and JSON
 - TODO: Currently REST sending is disabled and JSON publishing is enabled
 - TODO: Add QoS selection
 */

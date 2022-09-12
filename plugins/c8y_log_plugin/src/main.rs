@@ -32,7 +32,7 @@ const AFTER_HELP_TEXT: &str = r#"On start, `c8y_log_plugin` notifies the cloud t
 `c8y_log_plugin` subscribes then to `c8y/s/ds` listening for logfile operation requests (`522`) notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
 
 The thin-edge `CONFIG_DIR` is used to store:
-  * c8y-log-plugin.toml - the configuration file that specifies which logs to be retrived"#;
+  * c8y-log-plugin.toml - the configuration file that specifies which logs to be retrieved"#;
 
 #[derive(Debug, clap::Parser, Clone)]
 #[clap(

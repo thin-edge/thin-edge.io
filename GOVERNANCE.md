@@ -130,7 +130,7 @@ The following chapters do not talk about major releases (increasing "x" in a
 ### Preface
 
 The following chapter describes the release process of the thin-edge.io project
-and the corrosponding crates.
+and the corresponding crates.
 
 The goal of the workflow described in this chapter is to have _as little impact
 as possible_ on the general development of the project.
@@ -152,7 +152,7 @@ with the [exceptions implied by the cargo implementation of the standard](https:
 
 Parts of the API that are covered by semver are explicitly marked. Our public
 API is extensively tested in integration tests. If changes to the public API of
-thin-egde.io are necessary, these changes are documented in the `CHANGELOG.md`
+thin-edge.io are necessary, these changes are documented in the `CHANGELOG.md`
 file of the project, with reasoning why the change was necessary and how users
 can upgrade to the new interface(s).
 
@@ -202,7 +202,7 @@ The responsibilities of the release maintainers are:
 * Submit pull requests to the `main` branch to update all version numbers for
   the next release cycle
 
-It is explicitely allowed for everyone to open bugfix-backport pull requests to
+It is explicitly allowed for everyone to open bugfix-backport pull requests to
 a release branch, but the release maintainer(s) decide when and how to apply
 them to the release branch.
 

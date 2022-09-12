@@ -36,7 +36,7 @@ class PySysTest(SoftwareManagement):
             "rolldice", self.get_pkgid("rolldice"), "::apt", "", "install"
         )
 
-        self.wait_until_succcess()
+        self.wait_until_success()
 
         self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
@@ -44,7 +44,7 @@ class PySysTest(SoftwareManagement):
             "rolldice", self.get_pkgid("rolldice"), "::apt", "", "delete"
         )
 
-        self.wait_until_succcess()
+        self.wait_until_success()
 
     def validate(self):
 

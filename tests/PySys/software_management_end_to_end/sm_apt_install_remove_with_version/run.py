@@ -38,7 +38,7 @@ class PySysTest(SoftwareManagement):
             "install",
         )
 
-        self.wait_until_succcess()
+        self.wait_until_success()
 
         self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
@@ -59,7 +59,7 @@ class PySysTest(SoftwareManagement):
             "delete",
         )
 
-        self.wait_until_succcess()
+        self.wait_until_success()
 
     def validate(self):
 

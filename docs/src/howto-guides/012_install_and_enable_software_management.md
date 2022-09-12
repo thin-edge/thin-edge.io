@@ -49,7 +49,7 @@ The `tedge connect c8y` will automatically start and enable the software managem
 Find more about [how to connect thin-edge device to cloud](../howto-guides/004_connect.md)
 
 Once the thin-edge device is successfully connected to Cumulocity cloud, the **Software** option will be enabled and
-the list of softwares that are installed on the device will be visible as shown in the figure below.
+the list of software that are installed on the device will be visible as shown in the figure below.
 
 ![Add new software](./images/start-software-management.png)
 

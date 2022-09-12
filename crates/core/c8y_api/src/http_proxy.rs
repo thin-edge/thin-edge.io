@@ -324,7 +324,7 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         while self.end_point.c8y_internal_id.is_empty() {
             if let Err(error) = self.try_get_and_set_internal_id().await {
                 error!(
-                    "An error ocurred while retrieving internal Id, operation will retry in {} seconds and mapper will reinitialise.\n Error: {:?}",
+                    "An error occurred while retrieving internal Id, operation will retry in {} seconds and mapper will reinitialise.\n Error: {:?}",
                     RETRY_TIMEOUT_SECS, error
                 );
 

@@ -5,7 +5,7 @@ from pysys.basetest import BaseTest
 
 class DockerPlugin(BaseTest):
 
-    # Static class member that can be overriden by a command line argument
+    # Static class member that can be overridden by a command line argument
     # E.g.:
     # pysys.py run 'apt_*' -XmyPlatform='container'
     myPlatform = None

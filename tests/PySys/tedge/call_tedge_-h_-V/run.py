@@ -12,7 +12,7 @@ Then we find the version string as well in the output
 Then we find the string USAGE: in the output
 
 Note: This is a candidate for deletion or transference to Rust.
-In the past, there was a async issue with -h and -V this is wy whe created
+In the past, there was a async issue with -h and -V this is why we created
 some tests that do very similar things. They are probably not needed anymore.
 """
 

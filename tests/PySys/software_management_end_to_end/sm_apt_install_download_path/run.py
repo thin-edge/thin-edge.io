@@ -82,7 +82,7 @@ class AptInstallWithDownloadPath(SoftwareManagement, TedgeEnvironment):
         # download path validation
         assert_install_in_download_path(install_directory=self.DOWNLOAD_DIR)
 
-        self.wait_until_succcess()
+        self.wait_until_success()
 
         self.assertThat("True == value", value=self.check_is_installed("rolldice"))
 
@@ -94,7 +94,7 @@ class AptInstallWithDownloadPath(SoftwareManagement, TedgeEnvironment):
             action="delete",
         )
 
-        self.wait_until_succcess()
+        self.wait_until_success()
 
     def validate(self):
         self.assertThat("False == value", value=self.check_is_installed("rolldice"))

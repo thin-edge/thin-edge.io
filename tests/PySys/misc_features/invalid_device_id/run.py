@@ -18,7 +18,7 @@ class InvalidDeviceId(BaseTest):
         self.tedge = "/usr/bin/tedge"
         self.sudo = "/usr/bin/sudo"
 
-        # create a custom certiticate directory for testing purpose
+        # create a custom certificate directory for testing purpose
         create_cert_dir = self.startProcess(
             command=self.sudo,
             arguments=["mkdir", "/tmp/test-device-certs"],
