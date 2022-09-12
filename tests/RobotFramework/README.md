@@ -38,7 +38,9 @@
 
 To run an robot file ssh to 192.168.1.4 and use the following command structure:
 
-`robot -d \results --timestampoutputs --log build_install_rpi.html --report NONE --variable BUILD:844 --variable HOST:192.168.1.130 QA/System-tests/tasks/build_install_rpi.robot`
+**PLEASE NOTE: This is example command**
+
+`robot -d \results --timestampoutputs --log build_install_rpi.html --report NONE --variable BUILD:844 --variable HOST:192.168.1.130 /thin-edge.io-fork/tests/RobotFramework/tasks/build_install_rpi.robot`
 
 
 ## 4. List of Robot files

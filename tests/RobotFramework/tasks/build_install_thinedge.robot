@@ -1,4 +1,4 @@
-#Command to execute:    robot -d \results --timestampoutputs --log build_install_rpi.html --report NONE --variable BUILD:840 --variable HOST:192.168.1.130 /tests/RobotFramework/tasks/build_install_thinedge.robot
+#Command to execute:    robot -d \results --timestampoutputs --log build_install_rpi.html --report NONE --variable BUILD:840 --variable HOST:192.168.1.130 /thin-edge.io/tests/RobotFramework/tasks/build_install_thinedge.robot
 *** Settings ***
 Library    Browser
 Library    OperatingSystem
@@ -20,7 +20,6 @@ ${url_dow}    https://github.com/thin-edge/thin-edge.io/actions
 ${user_git}    crypt:3Uk76kNdyyYOXxus2GFoLf8eRlt/W77eEkcSiswwh04HNfwt0NlJwI7ATKPABmxKk8K1a8NsI5QH0w8EmT8GWeqrFwX2    
 ${pass_git}    crypt:IcTs6FyNl16ThjeG6lql0zNTsjCAwg5s6PhjRrcEwQ9DVHHRB4TjrGcpblR6R1v7j9oUlL3RzwxGpfBfsijVnQ==    
 ${FILENAME}
-${DIRECTORY}    /home/pi/
 ${url}    https://thin-edge-io.eu-latest.cumulocity.com/
 ${url_tedge}    thin-edge-io.eu-latest.cumulocity.com
 ${user}    systest_preparation
@@ -77,7 +76,7 @@ Download the Build Package
     Click    //*[contains(@aria-label, '${BUILD}')]
     Sleep    5s
     Wait For Elements State     //a[normalize-space()='${FILENAME}']    visible
-    ${dl_promise}          Promise To Wait For Download    ${DIRECTORY}${FILENAME}.zip
+    ${dl_promise}          Promise To Wait For Download    ${download_dir}${FILENAME}.zip
     Click    //a[normalize-space()='${FILENAME}']
     ${file_obj}=    Wait For  ${dl_promise}
     Sleep    5s
