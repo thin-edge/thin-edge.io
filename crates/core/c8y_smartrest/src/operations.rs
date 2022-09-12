@@ -242,7 +242,6 @@ mod tests {
         let test_operations = TestOperations::builder().with_operations(ops_count).build();
 
         let operations = get_operations(test_operations.temp_dir(), "").unwrap();
-        dbg!(&operations);
 
         assert_eq!(operations.operations.len(), ops_count);
     }
