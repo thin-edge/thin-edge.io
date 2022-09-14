@@ -4,7 +4,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::error::OperationsError;
+use crate::{
+    error::OperationsError,
+    smartrest_serializer::{SmartRestSerializer, SmartRestSetSupportedOperations},
+};
 use serde::Deserialize;
 
 /// Operations are derived by reading files subdirectories per cloud /etc/tedge/operations directory
@@ -76,8 +79,32 @@ impl Operations {
         self.operations.retain(|x| x.name.ne(&op_name));
     }
 
-    pub fn try_new(dir: impl AsRef<Path>, cloud_name: &str) -> Result<Self, OperationsError> {
-        get_operations(dir.as_ref(), cloud_name)
+    pub fn try_new(dir: impl AsRef<Path>) -> Result<Self, OperationsError> {
+        get_operations(dir.as_ref())
+    }
+
+    pub fn get_child_ops(
+        ops_dir: impl AsRef<Path>,
+    ) -> Result<HashMap<String, Self>, OperationsError> {
+        let mut child_ops: HashMap<String, Operations> = HashMap::new();
+        let child_entries = fs::read_dir(&ops_dir)
+            .map_err(|_| OperationsError::ReadDirError {
+                dir: ops_dir.as_ref().into(),
+            })?
+            .map(|entry| entry.map(|e| e.path()))
+            .collect::<Result<Vec<PathBuf>, _>>()?
+            .into_iter()
+            .filter(|path| path.is_dir())
+            .collect::<Vec<PathBuf>>();
+        for cdir in child_entries {
+            let ops = Operations::try_new(&cdir)?;
+            if let Some(id) = cdir.file_name() {
+                if let Some(id_str) = id.to_str() {
+                    child_ops.insert(id_str.to_string(), ops);
+                }
+            }
+        }
+        Ok(child_ops)
     }
 
     pub fn get_operations_list(&self) -> Vec<String> {
@@ -99,15 +126,19 @@ impl Operations {
             .filter_map(|operation| operation.topic())
             .collect::<HashSet<String>>()
     }
+
+    pub fn create_smartrest_ops_message(&self) -> Result<String, OperationsError> {
+        let ops = self.get_operations_list();
+        let ops = ops.iter().map(|op| op as &str).collect::<Vec<&str>>();
+        Ok(SmartRestSetSupportedOperations::new(&ops).to_smartrest()?)
+    }
 }
 
-fn get_operations(dir: impl AsRef<Path>, cloud_name: &str) -> Result<Operations, OperationsError> {
+fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsError> {
     let mut operations = Operations::default();
-
-    let path = dir.as_ref().join(&cloud_name);
-    let dir_entries = fs::read_dir(&path)
+    let dir_entries = fs::read_dir(&dir)
         .map_err(|_| OperationsError::ReadDirError {
-            dir: PathBuf::from(&path),
+            dir: dir.as_ref().to_path_buf(),
         })?
         .map(|entry| entry.map(|e| e.path()))
         .collect::<Result<Vec<PathBuf>, _>>()?
@@ -138,6 +169,7 @@ fn get_operations(dir: impl AsRef<Path>, cloud_name: &str) -> Result<Operations,
     }
     Ok(operations)
 }
+
 pub fn get_operation(path: PathBuf) -> Result<Operation, OperationsError> {
     let mut details = match fs::read(&path) {
         Ok(bytes) => toml::from_slice::<Operation>(bytes.as_slice())
@@ -241,7 +273,7 @@ mod tests {
     fn get_operations_all(ops_count: usize) {
         let test_operations = TestOperations::builder().with_operations(ops_count).build();
 
-        let operations = get_operations(test_operations.temp_dir(), "").unwrap();
+        let operations = get_operations(test_operations.temp_dir()).unwrap();
 
         assert_eq!(operations.operations.len(), ops_count);
     }

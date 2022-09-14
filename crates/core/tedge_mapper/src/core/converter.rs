@@ -41,13 +41,13 @@ pub trait Converter: Send + Sync {
         Message::new(&self.get_mapper_config().errors_topic, error.to_string())
     }
 
-    fn try_init_messages(&self) -> Result<Vec<Message>, Self::Error> {
+    fn try_init_messages(&mut self) -> Result<Vec<Message>, Self::Error> {
         Ok(vec![])
     }
 
     /// This function will be the first method that's called on the converter after it's instantiated.
     /// Return any initialization messages that must be processed before the converter starts converting regular messages.
-    fn init_messages(&self) -> Vec<Message> {
+    fn init_messages(&mut self) -> Vec<Message> {
         match self.try_init_messages() {
             Ok(messages) => messages,
             Err(error) => {

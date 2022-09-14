@@ -5,7 +5,8 @@ use mqtt_channel::{
     UnboundedSender,
 };
 
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tedge_utils::fs_notify::{fs_notify_stream, pin_mut, FileEvent};
 use thin_edge_json::health::{health_check_topics, send_health_status};
@@ -134,13 +135,40 @@ impl Mapper {
     }
 }
 
-async fn process_messages(mapper: &mut Mapper, path: Option<&Path>) -> Result<(), MapperError> {
-    if let Some(path) = path {
-        let fs_notification_stream = fs_notify_stream(&[(
+async fn process_messages(mapper: &mut Mapper, ops_dir: Option<&Path>) -> Result<(), MapperError> {
+    let mut dir_to_watch: Vec<(&Path, Option<String>, &[FileEvent])> = Vec::new();
+    if let Some(path) = ops_dir {
+        dir_to_watch.push((
             path,
             None,
             &[FileEvent::Created, FileEvent::Deleted, FileEvent::Modified],
-        )])?;
+        ));
+
+        let ch_pathbuf = fs::read_dir(&path)
+            .map_err(|_| MapperError::ReadDirError {
+                dir: PathBuf::from(&path),
+            })?
+            .map(|entry| entry.map(|e| e.path()))
+            .collect::<Result<Vec<PathBuf>, _>>()?
+            .into_iter()
+            .filter(|path| path.is_dir())
+            .collect::<Vec<PathBuf>>();
+
+        let ch_paths: Vec<&Path> = ch_pathbuf
+            .iter()
+            .map(|p| p.as_path())
+            .collect::<Vec<&Path>>();
+
+        for cdir in ch_paths {
+            let watch: (&Path, Option<String>, &[FileEvent]) = (
+                cdir,
+                None,
+                &[FileEvent::Created, FileEvent::Deleted, FileEvent::Modified],
+            );
+            dir_to_watch.push(watch);
+        }
+
+        let fs_notification_stream = fs_notify_stream(&dir_to_watch)?;
         pin_mut!(fs_notification_stream); // needed for iteration
 
         loop {

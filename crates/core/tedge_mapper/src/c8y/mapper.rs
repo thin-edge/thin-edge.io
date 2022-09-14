@@ -52,7 +52,7 @@ impl TEdgeComponent for CumulocityMapper {
     async fn init(&self, cfg_dir: &Path) -> Result<(), anyhow::Error> {
         info!("Initialize tedge mapper c8y");
         create_directories(cfg_dir)?;
-        let operations = Operations::try_new(format!("{}/operations", cfg_dir.display()), "c8y")?;
+        let operations = Operations::try_new(format!("{}/operations/c8y", cfg_dir.display()))?;
         self.init_session(CumulocityMapper::subscriptions(&operations)?)
             .await?;
         Ok(())
@@ -62,7 +62,8 @@ impl TEdgeComponent for CumulocityMapper {
         let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
         let config_dir = cfg_dir.display().to_string();
 
-        let operations = Operations::try_new(format!("{config_dir}/operations"), "c8y")?;
+        let operations = Operations::try_new(format!("{config_dir}/operations/c8y"))?;
+        let child_ops = Operations::get_child_ops(format!("{config_dir}/operations/c8y"))?;
         let mut http_proxy = JwtAuthHttpProxy::try_new(&tedge_config).await?;
         http_proxy.init().await?;
         let device_name = tedge_config.query(DeviceIdSetting)?;
@@ -77,6 +78,7 @@ impl TEdgeComponent for CumulocityMapper {
             operations,
             http_proxy,
             cfg_dir,
+            child_ops,
         )?);
 
         let mut mapper = create_mapper(

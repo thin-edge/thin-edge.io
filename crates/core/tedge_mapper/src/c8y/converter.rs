@@ -18,7 +18,7 @@ use c8y_smartrest::{
     smartrest_serializer::{
         CumulocitySupportedOperations, SmartRestGetPendingOperations, SmartRestSerializer,
         SmartRestSetOperationToExecuting, SmartRestSetOperationToFailed,
-        SmartRestSetOperationToSuccessful, SmartRestSetSupportedOperations,
+        SmartRestSetOperationToSuccessful,
     },
 };
 use c8y_translator::json;
@@ -26,8 +26,9 @@ use c8y_translator::json;
 use logged_command::LoggedCommand;
 use mqtt_channel::{Message, Topic, TopicFilter};
 use plugin_sm::operation_logs::OperationLogs;
+use std::collections::HashMap;
+use std::fs;
 use std::{
-    collections::HashSet,
     fs::File,
     io::Read,
     path::{Path, PathBuf},
@@ -64,7 +65,6 @@ where
     Proxy: C8YHttpProxy,
 {
     pub(crate) size_threshold: SizeThreshold,
-    children: HashSet<String>,
     pub(crate) mapper_config: MapperConfig,
     device_name: String,
     device_type: String,
@@ -73,6 +73,7 @@ where
     operation_logs: OperationLogs,
     http_proxy: Proxy,
     cfg_dir: PathBuf,
+    pub children: HashMap<String, Operations>,
 }
 
 impl<Proxy> CumulocityConverter<Proxy>
@@ -86,6 +87,7 @@ where
         operations: Operations,
         http_proxy: Proxy,
         cfg_dir: &Path,
+        children: HashMap<String, Operations>,
     ) -> Result<Self, CumulocityMapperError> {
         let mut topic_filter: TopicFilter = vec![
             "tedge/measurements",
@@ -110,8 +112,6 @@ where
 
         let alarm_converter = AlarmConverter::new();
 
-        let children: HashSet<String> = HashSet::new();
-
         let tedge_config = get_tedge_config()?;
         let logs_path = tedge_config.query(LogPathSetting)?;
 
@@ -121,7 +121,6 @@ where
 
         Ok(CumulocityConverter {
             size_threshold,
-            children,
             mapper_config,
             device_name,
             device_type,
@@ -130,6 +129,7 @@ where
             operation_logs,
             http_proxy,
             cfg_dir: cfg_dir.to_path_buf(),
+            children,
         })
     }
 
@@ -165,18 +165,16 @@ where
 
         let alarm_converter = AlarmConverter::new();
 
-        let children: HashSet<String> = HashSet::new();
-
         let log_dir = PathBuf::from(&format!(
             "{}/{TEDGE_AGENT_LOG_DIR}",
             logs_path.to_str().unwrap()
         ));
 
         let operation_logs = OperationLogs::try_new(log_dir)?;
+        let children: HashMap<String, Operations> = HashMap::new();
 
         Ok(CumulocityConverter {
             size_threshold,
-            children,
             mapper_config,
             device_name,
             device_type,
@@ -185,6 +183,7 @@ where
             operation_logs,
             http_proxy,
             cfg_dir: Path::new("cfg_dir").to_path_buf(),
+            children,
         })
     }
 
@@ -192,7 +191,7 @@ where
         &mut self,
         input: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        let mut vec: Vec<Message> = Vec::new();
+        let mut mqtt_messages: Vec<Message> = Vec::new();
 
         let maybe_child_id = get_child_id_from_measurement_topic(&input.topic.name)?;
         let c8y_json_payload = match maybe_child_id {
@@ -200,21 +199,18 @@ where
                 // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
                 let c8y_json_child_payload =
                     json::from_thin_edge_json_with_child(input.payload_str()?, child_id.as_str())?;
-
-                if !self.children.contains(child_id.as_str()) {
-                    self.children.insert(child_id.clone());
-                    vec.push(Message::new(
-                        &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
-                        format!("101,{child_id},{child_id},thin-edge.io-child"),
-                    ));
-                }
+                add_external_device_registration_message(
+                    child_id,
+                    &mut self.children,
+                    &mut mqtt_messages,
+                );
                 c8y_json_child_payload
             }
             None => json::from_thin_edge_json(input.payload_str()?)?,
         };
 
         if c8y_json_payload.len() < self.size_threshold.0 {
-            vec.push(Message::new(
+            mqtt_messages.push(Message::new(
                 &self.mapper_config.out_topic,
                 c8y_json_payload,
             ));
@@ -226,7 +222,7 @@ where
                 threshold: self.size_threshold.0,
             });
         }
-        Ok(vec)
+        Ok(mqtt_messages)
     }
 
     async fn try_convert_event(
@@ -237,8 +233,11 @@ where
 
         let tedge_event = ThinEdgeEvent::try_from(&input.topic.name, input.payload_str()?)?;
         let child_id = tedge_event.source.clone();
-
-        let need_registration = self.register_external_device(&tedge_event, &mut messages);
+        let need_registration = if let Some(child_id) = child_id.clone() {
+            add_external_device_registration_message(child_id, &mut self.children, &mut messages)
+        } else {
+            false
+        };
 
         let c8y_event = C8yCreateEvent::try_from(tedge_event)?;
 
@@ -285,13 +284,11 @@ where
                 let topic_split: Vec<&str> = topic.name.split('/').collect();
                 if topic_split.len() == 5 {
                     let child_id = topic_split[4];
-                    if !child_id.is_empty() && !self.children.contains(child_id) {
-                        self.children.insert(child_id.to_string());
-                        mqtt_messages.push(Message::new(
-                            &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
-                            format!("101,{child_id},{child_id},thin-edge.io-child"),
-                        ));
-                    }
+                    add_external_device_registration_message(
+                        child_id.to_string(),
+                        &mut self.children,
+                        &mut mqtt_messages,
+                    );
                 }
             }
             mqtt_messages.append(&mut messages);
@@ -312,25 +309,6 @@ where
             c8y_event.text,
             c8y_event.time.format(&Rfc3339)?
         ))
-    }
-
-    fn register_external_device(
-        &mut self,
-        tedge_event: &ThinEdgeEvent,
-        messages: &mut Vec<Message>,
-    ) -> bool {
-        if let Some(c_id) = tedge_event.source.clone() {
-            // Create the external source if it does not exists
-            if !self.children.contains(&c_id) {
-                self.children.insert(c_id.clone());
-                messages.push(Message::new(
-                    &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
-                    format!("101,{c_id},{c_id},thin-edge.io-child"),
-                ));
-                return true;
-            }
-        }
-        false
     }
 
     fn can_send_over_mqtt(&self, message: &Message) -> bool {
@@ -398,13 +376,17 @@ where
         }
     }
 
-    fn try_init_messages(&self) -> Result<Vec<Message>, ConversionError> {
+    fn try_init_messages(&mut self) -> Result<Vec<Message>, ConversionError> {
         let inventory_fragments_message = self.wrap_error(create_inventory_fragments_message(
             &self.device_name,
             &self.cfg_dir,
         ));
         let supported_operations_message =
             self.wrap_error(create_supported_operations_fragments_message(&self.cfg_dir));
+        let sops =
+            create_child_supported_operations_fragments_message(&mut self.children, &self.cfg_dir);
+        let mut supported_child_operations_message = self.wrap_errors(sops);
+
         let device_data_message = self.wrap_error(create_device_data_fragments(
             &self.device_name,
             &self.device_type,
@@ -412,14 +394,15 @@ where
 
         let pending_operations_message = self.wrap_error(create_get_pending_operations_message());
         let software_list_message = self.wrap_error(create_get_software_list_message());
-
-        Ok(vec![
+        let mut msg = vec![
             inventory_fragments_message,
             supported_operations_message,
             device_data_message,
             pending_operations_message,
             software_list_message,
-        ])
+        ];
+        msg.append(&mut supported_child_operations_message);
+        Ok(msg)
     }
 
     fn sync_messages(&mut self) -> Vec<Message> {
@@ -432,21 +415,51 @@ where
         &mut self,
         message: &DiscoverOp,
     ) -> Result<Option<Message>, ConversionError> {
-        match message.event_type {
-            EventType::Add => {
-                let ops_dir = message.ops_dir.clone();
-                let op_name = message.operation_name.clone();
-                let op = get_operation(ops_dir.join(op_name))?;
-                self.operations.add_operation(op);
-            }
-            EventType::Remove => {
-                self.operations.remove_operation(&message.operation_name);
-            }
+        if message.ops_dir.as_path().iter().count() == 6 {
+            let child_op = self
+                .children
+                .entry(get_child_id(&message.ops_dir)?)
+                .or_insert_with(Operations::default);
+
+            add_or_remove_operation(message, child_op)?;
+            Ok(Some(create_supported_operations_fragments_message(
+                &message.ops_dir,
+            )?))
+        } else {
+            add_or_remove_operation(message, &mut self.operations)?;
+            Ok(Some(create_supported_operations_fragments_message(
+                &self.cfg_dir,
+            )?))
         }
-        Ok(Some(create_supported_operations_fragments_message(
-            &self.cfg_dir,
-        )?))
     }
+}
+
+fn get_child_id(dir_path: &PathBuf) -> Result<String, ConversionError> {
+    let dir_ele: Vec<&std::ffi::OsStr> = dir_path.as_path().iter().collect();
+    match dir_ele[5].to_os_string().into_string() {
+        Ok(id) => Ok(id),
+        Err(_fname) => Err(ConversionError::DirPathComponentError {
+            dir: dir_path.to_owned(),
+        }),
+    }
+}
+fn add_or_remove_operation(
+    message: &DiscoverOp,
+    ops: &mut Operations,
+) -> Result<(), ConversionError> {
+    match message.event_type {
+        EventType::Add => {
+            let ops_dir = message.ops_dir.clone();
+            let op_name = message.operation_name.clone();
+            let op = get_operation(ops_dir.join(op_name))?;
+
+            ops.add_operation(op);
+        }
+        EventType::Remove => {
+            ops.remove_operation(&message.operation_name);
+        }
+    }
+    Ok(())
 }
 
 async fn parse_c8y_topics(
@@ -515,14 +528,89 @@ fn create_get_pending_operations_message() -> Result<Message, ConversionError> {
 fn create_supported_operations_fragments_message(
     cfg_dir: &Path,
 ) -> Result<Message, ConversionError> {
-    let ops_dir = format!("{}/{SUPPORTED_OPERATIONS_DIRECTORY}", cfg_dir.display());
-    let ops = Operations::try_new(ops_dir, C8Y_CLOUD)?;
-    let ops = ops.get_operations_list();
-    let ops = ops.iter().map(|op| op as &str).collect::<Vec<&str>>();
+    if cfg_dir.iter().count() == 6 {
+        let stopic = format!(
+            "{SMARTREST_PUBLISH_TOPIC}/{}",
+            get_child_id(&cfg_dir.to_path_buf())?
+        );
 
-    let ops_msg = SmartRestSetSupportedOperations::new(&ops);
-    let topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
-    Ok(Message::new(&topic, ops_msg.to_smartrest()?))
+        Ok(Message::new(
+            &Topic::new_unchecked(&stopic),
+            Operations::try_new(cfg_dir)?.create_smartrest_ops_message()?,
+        ))
+    } else {
+        let ops_dir = format!(
+            "{}/{SUPPORTED_OPERATIONS_DIRECTORY}/{C8Y_CLOUD}",
+            cfg_dir.display()
+        );
+        Ok(Message::new(
+            &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
+            Operations::try_new(ops_dir)?.create_smartrest_ops_message()?,
+        ))
+    }
+}
+
+fn create_child_supported_operations_fragments_message(
+    children: &mut HashMap<String, Operations>,
+    cfg_dir: &Path,
+) -> Result<Vec<Message>, ConversionError> {
+    let mut mqtt_messages = Vec::new();
+    let ops_dir = format!("{}/{SUPPORTED_OPERATIONS_DIRECTORY}", cfg_dir.display());
+    let path: PathBuf = ops_dir.into();
+    let child_entries = fs::read_dir(&path.join(C8Y_CLOUD))
+        .map_err(|_| ConversionError::ReadDirError {
+            dir: PathBuf::from(&path),
+        })?
+        .map(|entry| entry.map(|e| e.path()))
+        .collect::<Result<Vec<PathBuf>, _>>()?
+        .into_iter()
+        .filter(|path| path.is_dir())
+        .collect::<Vec<PathBuf>>();
+
+    for cdir in child_entries {
+        supported_ops_and_register_device_message_for_child_device(
+            cdir,
+            children,
+            &mut mqtt_messages,
+        )?;
+    }
+    Ok(mqtt_messages)
+}
+
+// Check if the child is already created or not
+// If not create the child creation message and then the operations message.
+fn supported_ops_and_register_device_message_for_child_device(
+    cdir: PathBuf,
+    children: &mut HashMap<String, Operations>,
+    mqtt_messages: &mut Vec<Message>,
+) -> Result<(), ConversionError> {
+    let ops = Operations::try_new(cdir.clone())?;
+    let ops_msg = ops.create_smartrest_ops_message()?;
+    if let Some(id) = cdir.file_name() {
+        if let Some(child_id) = id.to_str() {
+            add_external_device_registration_message(child_id.to_string(), children, mqtt_messages);
+            let topic_str = format!("{SMARTREST_PUBLISH_TOPIC}/{}", child_id);
+            let topic = Topic::new_unchecked(&topic_str);
+            mqtt_messages.push(Message::new(&topic, ops_msg));
+        }
+    }
+    Ok(())
+}
+
+fn add_external_device_registration_message(
+    child_id: String,
+    children: &mut HashMap<String, Operations>,
+    mqtt_messages: &mut Vec<Message>,
+) -> bool {
+    if !children.contains_key(&child_id) {
+        children.insert(child_id.to_string(), Operations::default());
+        mqtt_messages.push(Message::new(
+            &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
+            format!("101,{child_id},{child_id},thin-edge.io-child"),
+        ));
+        return true;
+    }
+    false
 }
 
 fn create_inventory_fragments_message(

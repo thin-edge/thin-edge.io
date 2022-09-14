@@ -45,6 +45,7 @@ pub enum SmartRestDeserializerError {
     EmptyRequest,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, thiserror::Error)]
 pub enum OperationsError {
     #[error("Failed to read directory: {dir}")]
@@ -58,6 +59,9 @@ pub enum OperationsError {
 
     #[error("Error while parsing operation file: '{0}': {1}.")]
     TomlError(PathBuf, #[source] toml::de::Error),
+
+    #[error(transparent)]
+    FromSmartRestSerializerError(#[from] SmartRestSerializerError),
 }
 
 #[derive(thiserror::Error, Debug)]
