@@ -39,9 +39,18 @@ As the figure below illustrates, those **devices** can by **PLCs**, or any kind 
 * **Microcontroller**-based Embedded System:
   * TODO
 
+## thin-edge device concept
+
+**thin-edge** facilitates IoT functionality to the device it is running on, as well as to devices that are connected to that device.
+All devices are categorized as below:
+  * the **main-device** is the device thin-edge is running on
+  * all devices connected to the **main-device** are referred as **external child-devices**
+  * each device has a unique **device-id**
+
 ## thin-edge data concepts
 
-**thin-edge** provides different devices in a standardized representation to the cloud. Therefore **thin-edge** provides different kinds of data concepts:
+**thin-edge** provides different devices in a standardized representation to the cloud. Therefore **thin-edge** provides different kinds of data concepts.
+
   * **Measurements**:
     * contain numeric data produced by sensors (like temperature readings) or calculated data based on information from the **control application**.
     * a **measurements** consists of one or more numeric **data points** and optionally meta information as names or units
@@ -54,21 +63,43 @@ As the figure below illustrates, those **devices** can by **PLCs**, or any kind 
   * **Alarms**:
     * similar to Events, but the user or operator of the system has to take action to resolve the alarm
     * an **alarm** is triggered by a **data point** (e.g. when it changes to a specific value as `0` or `1`), and contains an optional alarm text.
-  * **Operations**:
-    * relate to data that is sent to the devices for execution or processing,
-      such as switching a relay in a power meter,
-      or requesting the device to provide or update ressources (e.g. configuration files or software modules).
 
-## thin-edge device concepts
+## thin-edge plugins and capabilities
 
-**thin-edge** facilitates IoT functionality to the device it is running on, as well as to devices that are connected to that device.
-Therefore **thin-edge** provides the **device concept** as below:
-  * all devices are categorized as below:
-    * the **main-device** is the device thin-edge is running on
-    * **external child-devices** are the devices connected to the **main-device**
-  * each device has a unique **device-id**
-  * each device has a set of **capabilities**
-    * a **capability** reflects a **measurement**, **variable**, **event**, **alarm** or **operation** the device supports
+**thin-edge** realizes high level cloud functionality (e.g. _configuration management_ or _log management_) with **plugins**.
+  * a **plugin** accesses _ressources_ and _services_ of the device, as e.g.
+      * the _package manager_ for _software managemennt_
+      * _configuration files_ for _configuration management_
+  * a **plugin** can be an (external) executable (e.g. as the `c8y_configuration_plugin` for _configuration management_)
+    or a thin-edge built-in software component (e.g. as for _software management_)
+  * usually a **plugin** runs on the **main-device**; thus it can access the _resources_ of the **main-device** directly
+  * to access _ressources_ of an **external child-device** a **plugin** needs another component, referred as **child-device agent**
+    * a **child-device agent** is the counterpart of a **plugin**, that takes the responsibility to access to the **external child-device's** _resources_
+    * a **child-device agent** can be installed and executed on the **external child-device**, or on the **main-device**
+      * if it runs in the **external child-device** it can access the _resources_ directly
+      * if it runs on the **main-device** it can use any (low-level) interfaces the **external child-device** provides to access those resources
+        * One main reason to install the **child-device agent** on the **main-device** is, when the **external child-device** cannot or shall not be altered.
+    * a **child-device agent** must interact with the **plugin**, based on the **protocol** defined by the **plugin**;
+      that could be e.g.:
+      * to listen and react to requests of the **plugin**, e.g. on MQTT
+      * to provide/consume files to/from the **plugin** on purpose, e.g. via HTTP
+
+A **plugin** can be described with a **capability**.
+   * a **capability** has a unique name, that references the **plugin** it describes (e.g. `tedge_config`)
+   * a **capability** implicitely claims the **protocol** the **plugin** defines
+   * whenever a **plugin** provides the same **capability** as a **child-device agent** supports, both are compatible and can interact with each other
+   * whenever one **plugin** provides the same **capability** as another one, it can replace the latter
+     * e.g. when a `c8y_configuration_plugin` and an `azure_configuration_plugin` provide the same **capability**, each can be replaced with the other one
+   * there is a set of _pre-defined_ **capabilities** by thin-edge (e.g. for _configuration management_ or _log management_),
+     as well as each custom plugin can define its own custom-specific capabilities
+
+Figure below illustrates the concept of **plugins**, **external child-devices** and **child-device agents**, as described above.
+
+![Child-Device Agent](images/child-device-agent.svg)
+
+TODO: Capabilities shall also enable to describe a device's supported **measurements**, **variables**, **events** and  **alarms**
+
+TODO: add the inventory to the domain model?
 
 ## Main Challenges
 
