@@ -68,8 +68,8 @@ All devices are categorized as below:
 
 **thin-edge** realizes high level cloud functionality (e.g. _configuration management_ or _log management_) with **plugins**.
   * a **plugin** accesses _ressources_ and _services_ of the device, as e.g.
-      * the _package manager_ for _software managemennt_
-      * _configuration files_ for _configuration management_
+      * the _package manager_ is accessed by _software managemennt_
+      * _configuration files_ are accessed by _configuration management_
   * a **plugin** can be an (external) executable (e.g. as the `c8y_configuration_plugin` for _configuration management_)
     or a thin-edge built-in software component (e.g. as for _software management_)
   * usually a **plugin** runs on the **main-device**; thus it can access the _resources_ of the **main-device** directly
