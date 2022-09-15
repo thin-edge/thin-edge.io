@@ -90,6 +90,7 @@ A **plugin** can be described with a **capability**.
    * whenever a **plugin** provides the same **capability** as a **child-device agent** supports, both are compatible and can interact with each other
    * whenever one **plugin** provides the same **capability** as another one, it can replace the latter
      * e.g. when a `c8y_configuration_plugin` and an `azure_configuration_plugin` provide the same **capability**, each can be replaced with the other one
+   * **capabilities** are especially used for provisioning of **external child-devices**, to align and connect all **child-device agent(s)** and the coresponding **plugins**
    * there is a set of _pre-defined_ **capabilities** by thin-edge (e.g. for _configuration management_ or _log management_),
      as well as each custom plugin can define its own custom-specific capabilities
 
