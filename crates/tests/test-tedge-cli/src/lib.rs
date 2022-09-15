@@ -4,7 +4,7 @@ mod test_env;
 mod tests {
     use crate::*;
     use assert_matches::*;
-    use rexpect::errors::*;
+    use rexpect::error::*;
     use rexpect::process::signal::Signal;
     use rexpect::process::wait::WaitStatus;
     use rexpect::*;
@@ -20,7 +20,7 @@ mod tests {
     const TIMEOUT_MS: Option<u64> = Some(5_000);
 
     #[test]
-    fn it_works() -> Result<()> {
+    fn it_works() -> Result<(), Error> {
         let mut sub = spawn("tedge mqtt sub test/topic", TIMEOUT_MS)?;
 
         execute(r#"tedge mqtt pub test/topic "hello thin-edge""#)?;
@@ -35,7 +35,7 @@ mod tests {
     }
 
     #[test]
-    fn tedge_cert_upload_request_a_password() -> Result<()> {
+    fn tedge_cert_upload_request_a_password() -> Result<(), Error> {
         // Create a certificate
         execute("tedge config set device.cert.path /tmp/test-device.cert")?;
         execute("tedge config set device.key.path /tmp/test-device.key")?;
@@ -64,7 +64,7 @@ mod tests {
     }
 
     #[test]
-    fn tedge_cert_upload_c8y() -> Result<()> {
+    fn tedge_cert_upload_c8y() -> Result<(), Error> {
         let c8y = test_env::C8YTestEnv::default();
         let url = c8y.url;
         let user = c8y.user;
@@ -89,7 +89,7 @@ mod tests {
         Ok(())
     }
 
-    fn execute(cmd: &str) -> Result<()> {
+    fn execute(cmd: &str) -> Result<(), Error> {
         spawn(cmd, TIMEOUT_MS)?.process.wait()?;
         Ok(())
     }

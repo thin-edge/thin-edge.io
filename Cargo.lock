@@ -943,16 +943,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "error-chain"
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d2f06b9cac1506ece98fe3231e3cc9c4410ec3d5b1f24ae1c8946f0742cdefc"
-dependencies = [
- "backtrace",
- "version_check",
-]
-
-[[package]]
 name = "event-listener"
 version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2353,13 +2343,13 @@ dependencies = [
 [[package]]
 name = "rexpect"
 version = "0.4.0"
-source = "git+https://github.com/didier-wenzek/rexpect?branch=fix/tokenization#95bbc553c77b55ddf8af9c4c3b9cb38277073272"
+source = "git+https://github.com/philippkeller/rexpect#11f81dfca1e6a5d5e4257bea58b2c2d339599cde"
 dependencies = [
  "comma",
- "error-chain",
  "nix 0.14.1",
  "regex",
  "tempfile",
+ "thiserror",
 ]
 
 [[package]]
