@@ -141,6 +141,20 @@ impl Downloader {
         self.target_filename.as_path()
     }
 
+    pub async fn rename(&self, to: impl AsRef<Path>) -> Result<(), DownloadError> {
+        let path_to = to.as_ref();
+        if !path_to.exists() {
+            if let Some(dir_to) = path_to.parent() {
+                tokio::fs::create_dir_all(dir_to).await?;
+            } else {
+                return Err(DownloadError::FromIo {
+                    reason: format!("No parent dir for {:?}", path_to),
+                });
+            }
+        }
+        Ok(tokio::fs::rename(self.filename(), path_to).await?)
+    }
+
     pub async fn cleanup(&self) -> Result<(), DownloadError> {
         let _res = tokio::fs::remove_file(&self.target_filename).await;
         Ok(())
