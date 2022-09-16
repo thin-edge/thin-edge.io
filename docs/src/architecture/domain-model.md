@@ -64,37 +64,39 @@ All devices are categorized as below:
     * similar to Events, but the user or operator of the system has to take action to resolve the alarm
     * an **alarm** is triggered by a **data point** (e.g. when it changes to a specific value as `0` or `1`), and contains an optional alarm text.
 
-## thin-edge plugins and capabilities
+## thin-edge plugin concept
+
+### Plugin
 
 **thin-edge** realizes high level cloud functionality (e.g. _configuration management_ or _log management_) with **plugins**.
   * a **plugin** accesses _ressources_ and _services_ of the device, as e.g.
-      * the _package manager_ is accessed by _software managemennt_
-      * _configuration files_ are accessed by _configuration management_
+      * the device's _package manager_ is accessed by _software management_
+      * device's _configuration files_ are accessed by _configuration management_
   * a **plugin** can be an (external) executable (e.g. as the `c8y_configuration_plugin` for _configuration management_)
     or a thin-edge built-in software component (e.g. as for _software management_)
   * usually a **plugin** runs on the **main-device**; thus it can access the _resources_ of the **main-device** directly
   * to access _ressources_ of an **external child-device** a **plugin** needs another component, referred as **child-device agent**
-    * a **child-device agent** is the counterpart of a **plugin**, that takes the responsibility to access to the **external child-device's** _resources_
-    * a **child-device agent** can be installed and executed on the **external child-device**, or on the **main-device**
-      * if it runs in the **external child-device** it can access the _resources_ directly
-      * if it runs on the **main-device** it can use any (low-level) interfaces the **external child-device** provides to access those resources
-        * One main reason to install the **child-device agent** on the **main-device** is, when the **external child-device** cannot or shall not be altered.
-    * a **child-device agent** must interact with the **plugin**, based on the **protocol** defined by the **plugin**;
-      that could be e.g.:
-      * to listen and react to requests of the **plugin**, e.g. on MQTT
-      * to provide/consume files to/from the **plugin** on purpose, e.g. via HTTP
 
-A **plugin** can be described with a **capability**.
-   * a **capability** has a unique name, that references the **plugin** it describes (e.g. `tedge_config`)
-   * a **capability** implicitely claims the **protocol** the **plugin** defines
-   * whenever a **plugin** provides the same **capability** as a **child-device agent** supports, both are compatible and can interact with each other
-   * whenever one **plugin** provides the same **capability** as another one, it can replace the latter
-     * e.g. when a `c8y_configuration_plugin` and an `azure_configuration_plugin` provide the same **capability**, each can be replaced with the other one
-   * **capabilities** are especially used for provisioning of **external child-devices**, to align and connect all **child-device agent(s)** and the coresponding **plugins**
-   * there is a set of _pre-defined_ **capabilities** by thin-edge (e.g. for _configuration management_ or _log management_),
-     as well as each custom plugin can define its own custom-specific capabilities
+### Child-Device Agent
+  * a **child-device agent** is the counterpart of a **plugin**, that takes the responsibility to access to the **external child-device's** _resources_
+  * a **child-device agent** can serve one or more **plugins**
+  * a **child-device agent** can be installed and executed on the **external child-device**, or on the **main-device**
+    * if it runs in the **external child-device** it can access the _resources_ directly
+    * if it runs on the **main-device** it can use any (low-level) interfaces the **external child-device** provides to access those resources
+      * One main reason to install the **child-device agent** on the **main-device** is, when the **external child-device** cannot or shall not be altered.
 
-Figure below illustrates the concept of **plugins**, **external child-devices** and **child-device agents**, as described above.
+### Plugin-Contract
+
+a **plugin** defines and implements a specific **contract** for all interactions with a **child-device agent**
+  * part of the **contract** could be e.g.:
+      * the **child-device agent** must listen and react to certain requests of the **plugin**, e.g. on MQTT
+      * the **child-device agent** must provide/consume files to/from the **plugin** on purpose, e.g. via HTTP
+      * ...and more...
+  * a **plugin's** **contract** can be denoted with a unique name (e.g. `tedge_config`)
+    * based on that unique name a **child-device agent** can report and find **plugins** the child-device intends to contact (e.g. during providioning phase)
+    * those information can be provided to the cloud and other applications on the device site
+
+Figure below illustrates the concept of **plugins**, their **contracts** and **external child-devices agents**, as described above.
 
 ![Child-Device Agent](images/child-device-agent.svg)
 
@@ -112,8 +114,8 @@ TODO: add the inventory to the domain model?
 
 
 ---------------------------------------------
-No yet covered:
+Open Topics:
 * "fragments"
 * to be align with vision.md
-
-
+* better word for plugin
+* better word for child-device agent (maybe child-device proxy)
