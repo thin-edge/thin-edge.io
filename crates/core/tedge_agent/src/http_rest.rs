@@ -1,5 +1,6 @@
 use futures::StreamExt;
 use hyper::{server::conn::AddrIncoming, Body, Request, Response, Server};
+use path_clean::PathClean;
 use routerify::{Router, RouterService};
 use std::path::Path;
 use std::{net::IpAddr, net::SocketAddr, path::PathBuf};
@@ -20,8 +21,8 @@ impl Default for HttpConfig {
     fn default() -> Self {
         HttpConfig {
             bind_address: ([127, 0, 0, 1], 3000).into(),
-            file_transfer_uri: "/tedge".into(),
-            file_transfer_dir: "/var/tedge".into(),
+            file_transfer_uri: "/tedge/".into(),
+            file_transfer_dir: "/var/tedge/".into(),
         }
     }
 }
@@ -43,7 +44,7 @@ impl HttpConfig {
     }
 
     pub fn file_transfer_end_point(&self) -> String {
-        format!("{}/*", self.file_transfer_uri)
+        format!("{}*", self.file_transfer_uri)
     }
 
     pub fn file_transfer_dir_as_string(&self) -> String {
@@ -52,14 +53,40 @@ impl HttpConfig {
             .expect("Non UTF8 http root path")
             .into()
     }
+
+    /// Return the path of the file associated to the given `uri`
+    ///
+    /// Check that:
+    /// * the `uri` is related to the file-transfer i.e a sub-uri of `self.file_transfer_uri`
+    /// * the `path`, once normalized, is actually under `self.file_transfer_dir`
+    pub fn local_path_for_uri(&self, uri: String) -> Result<PathBuf, FileTransferError> {
+        let ref_uri = uri.clone();
+
+        // The file transfer prefix has to be removed from the uri to get the target path
+        let path = uri
+            .strip_prefix(&self.file_transfer_uri)
+            .ok_or(FileTransferError::InvalidURI { value: ref_uri })?;
+
+        // This path is relative to the file transfer dir
+        let full_path = self.file_transfer_dir.join(path);
+
+        // One must check that once normalized (i.e. any `..` removed)
+        // the path is still under the file transfer dir
+        let clean_path = full_path.clean();
+        if clean_path.starts_with(&self.file_transfer_dir) {
+            Ok(clean_path)
+        } else {
+            Err(FileTransferError::InvalidURI {
+                value: clean_path.to_string_lossy().to_string(),
+            })
+        }
+    }
 }
 
 mod uri_utils {
     // below are a set of utility function used for working with
     // URI coming from GET, PUT and DELETE requests to the thin-edge
     // device.
-    use crate::error::FileTransferError;
-    use path_clean::PathClean;
     use std::path::PathBuf;
 
     pub fn separate_path_and_file_name(input: PathBuf) -> Option<(PathBuf, String)> {
@@ -69,42 +96,18 @@ mod uri_utils {
         let relative_path = PathBuf::from(relative_path);
         Some((relative_path, file_name.into()))
     }
-
-    pub fn remove_prefix_from_uri(uri: String) -> Option<String> {
-        Some(uri.strip_prefix("/tedge")?.to_string())
-    }
-
-    // checks if canonicalised URI path starts_with `FILE_TRANSFER_ROOT_PATH`
-    pub fn verify_uri(path: &PathBuf, root_path: &str) -> Result<PathBuf, FileTransferError> {
-        let http_transfer_root_path = PathBuf::from(root_path);
-        let path = path.clean();
-        if path.starts_with(http_transfer_root_path) {
-            Ok(path)
-        } else {
-            Err(FileTransferError::InvalidURI {
-                value: path.to_string_lossy().to_string(),
-            })
-        }
-    }
 }
 
 async fn put(
     mut request: Request<Body>,
-    root_path: &str,
+    file_transfer: &HttpConfig,
 ) -> Result<Response<Body>, FileTransferError> {
-    let uri = uri_utils::remove_prefix_from_uri(request.uri().to_string()).ok_or(
-        FileTransferError::InvalidURI {
-            value: request.uri().to_string(),
-        },
-    )?;
-
-    let mut full_path = PathBuf::from(format!("{}{}", root_path, uri));
-    full_path = uri_utils::verify_uri(&full_path, root_path)?;
+    let full_path = file_transfer.local_path_for_uri(request.uri().to_string())?;
 
     let mut response = Response::new(Body::empty());
 
     if let Some((relative_path, file_name)) = uri_utils::separate_path_and_file_name(full_path) {
-        let root_path = PathBuf::from(root_path);
+        let root_path = file_transfer.file_transfer_dir.clone();
         let directories_path = root_path.join(relative_path);
 
         if let Err(_err) = create_directories(&directories_path) {
@@ -127,18 +130,11 @@ async fn put(
     Ok(response)
 }
 
-async fn get(request: Request<Body>, root_path: &str) -> Result<Response<Body>, FileTransferError> {
-    dbg!("get request", &request.uri());
-    let uri = uri_utils::remove_prefix_from_uri(request.uri().to_string()).ok_or(
-        FileTransferError::InvalidURI {
-            value: request.uri().to_string(),
-        },
-    )?;
-
-    let mut full_path = PathBuf::from(format!("{}{}", root_path, uri));
-    dbg!(&full_path);
-    full_path = uri_utils::verify_uri(&full_path, root_path)?;
-    dbg!(&full_path);
+async fn get(
+    request: Request<Body>,
+    file_transfer: &HttpConfig,
+) -> Result<Response<Body>, FileTransferError> {
+    let full_path = file_transfer.local_path_for_uri(request.uri().to_string())?;
 
     if !full_path.exists() || full_path.is_dir() {
         let mut response = Response::new(Body::empty());
@@ -158,15 +154,9 @@ async fn get(request: Request<Body>, root_path: &str) -> Result<Response<Body>, 
 
 async fn delete(
     request: Request<Body>,
-    root_path: &str,
+    file_transfer: &HttpConfig,
 ) -> Result<Response<Body>, FileTransferError> {
-    let uri = uri_utils::remove_prefix_from_uri(request.uri().to_string()).ok_or(
-        FileTransferError::InvalidURI {
-            value: request.uri().to_string(),
-        },
-    )?;
-    let mut full_path = PathBuf::from(format!("{}{}", root_path, uri));
-    full_path = uri_utils::verify_uri(&full_path, root_path)?;
+    let full_path = file_transfer.local_path_for_uri(request.uri().to_string())?;
 
     let mut response = Response::new(Body::empty());
 
@@ -204,22 +194,22 @@ pub fn http_file_transfer_server(
 ) -> Result<Server<AddrIncoming, RouterService<hyper::Body, FileTransferError>>, FileTransferError>
 {
     let file_transfer_end_point = config.file_transfer_end_point();
-    let get_root_path = config.file_transfer_dir_as_string();
-    let put_root_path = config.file_transfer_dir_as_string();
-    let del_root_path = config.file_transfer_dir_as_string();
+    let get_config = config.clone();
+    let put_config = config.clone();
+    let del_config = config.clone();
 
     let router = Router::builder()
         .get(&file_transfer_end_point, move |req| {
-            let root_path = get_root_path.clone();
-            async move { get(req, &root_path).await }
+            let config = get_config.clone();
+            async move { get(req, &config).await }
         })
         .put(&file_transfer_end_point, move |req| {
-            let root_path = put_root_path.clone();
-            async move { put(req, &root_path).await }
+            let config = put_config.clone();
+            async move { put(req, &config).await }
         })
         .delete(&file_transfer_end_point, move |req| {
-            let root_path = del_root_path.clone();
-            async move { delete(req, &root_path).await }
+            let config = del_config.clone();
+            async move { delete(req, &config).await }
         })
         .build()?;
     let router_service = RouterService::new(router)?;
@@ -232,10 +222,7 @@ mod test {
 
     use std::path::PathBuf;
 
-    use super::{
-        http_file_transfer_server,
-        uri_utils::{remove_prefix_from_uri, separate_path_and_file_name, verify_uri},
-    };
+    use super::{http_file_transfer_server, uri_utils::separate_path_and_file_name};
     use crate::error::FileTransferError;
     use crate::http_rest::HttpConfig;
     use hyper::{server::conn::AddrIncoming, Body, Method, Request, Server};
@@ -243,10 +230,14 @@ mod test {
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
 
-    #[test_case("/tedge/some/dir/file", Some(String::from("/some/dir/file")))]
+    #[test_case(
+        "/tedge/some/dir/file",
+        Some(PathBuf::from("/var/tedge/some/dir/file"))
+    )]
     #[test_case("/wrong/some/dir/file", None)]
-    fn test_remove_prefix_from_uri(input: &str, output: Option<String>) {
-        let actual_output = remove_prefix_from_uri(input.to_string());
+    fn test_remove_prefix_from_uri(input: &str, output: Option<PathBuf>) {
+        let file_transfer = HttpConfig::default();
+        let actual_output = file_transfer.local_path_for_uri(input.to_string()).ok();
         assert_eq!(actual_output, output);
     }
 
@@ -359,18 +350,15 @@ mod test {
         });
         handle
     }
+
+    #[test_case(String::from("/tedge/file-transfer/../../../bin/sh"), false)]
     #[test_case(
-        PathBuf::from("/var/tedge/file-transfer/../../../bin/sh"),
-        "/var/tedge/file-transfer",
-        false
-    )]
-    #[test_case(
-        PathBuf::from("/var/tedge/file-transfer/../file-transfer/new/dir/file"),
-        "/var/tedge/file-transfer",
+        String::from("/tedge/file-transfer/../file-transfer/new/dir/file"),
         true
     )]
-    fn test_verify_uri(path: PathBuf, root_path: &str, is_ok: bool) {
-        let res = verify_uri(&path, root_path);
+    fn test_verify_uri(uri: String, is_ok: bool) {
+        let file_transfer = HttpConfig::default();
+        let res = file_transfer.local_path_for_uri(uri);
         match is_ok {
             true => {
                 assert!(res.is_ok());
