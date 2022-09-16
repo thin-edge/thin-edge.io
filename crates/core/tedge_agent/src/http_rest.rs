@@ -2,14 +2,57 @@ use futures::StreamExt;
 use hyper::{server::conn::AddrIncoming, Body, Request, Response, Server};
 use routerify::{Router, RouterService};
 use std::path::Path;
-use std::{net::SocketAddr, path::PathBuf};
+use std::{net::IpAddr, net::SocketAddr, path::PathBuf};
 
 use tedge_utils::paths::create_directories;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::error::FileTransferError;
 
-const FILE_TRANSFER_HTTP_ENDPOINT: &str = "/tedge/*";
+#[derive(Debug, Clone)]
+pub struct HttpConfig {
+    pub bind_address: SocketAddr,
+    pub file_transfer_uri: String,
+    pub file_transfer_dir: PathBuf,
+}
+
+impl Default for HttpConfig {
+    fn default() -> Self {
+        HttpConfig {
+            bind_address: ([127, 0, 0, 1], 3000).into(),
+            file_transfer_uri: "/tedge".into(),
+            file_transfer_dir: "/var/tedge".into(),
+        }
+    }
+}
+
+impl HttpConfig {
+    pub fn with_ip_address(self, ip_address: IpAddr) -> HttpConfig {
+        Self {
+            bind_address: SocketAddr::new(ip_address, self.bind_address.port()),
+            ..self
+        }
+    }
+
+    #[cfg(test)]
+    pub fn with_file_transfer_dir(self, file_transfer_dir: PathBuf) -> HttpConfig {
+        Self {
+            file_transfer_dir,
+            ..self
+        }
+    }
+
+    pub fn file_transfer_end_point(&self) -> String {
+        format!("{}/*", self.file_transfer_uri)
+    }
+
+    pub fn file_transfer_dir_as_string(&self) -> String {
+        self.file_transfer_dir
+            .to_str()
+            .expect("Non UTF8 http root path")
+            .into()
+    }
+}
 
 mod uri_utils {
     // below are a set of utility function used for working with
@@ -157,21 +200,31 @@ async fn stream_request_body_to_path(
 }
 
 pub fn http_file_transfer_server(
-    bind_address: &str,
-    root_path: &'static str,
+    config: &HttpConfig,
 ) -> Result<Server<AddrIncoming, RouterService<hyper::Body, FileTransferError>>, FileTransferError>
 {
+    let file_transfer_end_point = config.file_transfer_end_point();
+    let get_root_path = config.file_transfer_dir_as_string();
+    let put_root_path = config.file_transfer_dir_as_string();
+    let del_root_path = config.file_transfer_dir_as_string();
+
     let router = Router::builder()
-        .get(FILE_TRANSFER_HTTP_ENDPOINT, |req| get(req, root_path))
-        .put(FILE_TRANSFER_HTTP_ENDPOINT, |req| put(req, root_path))
-        .delete(FILE_TRANSFER_HTTP_ENDPOINT, |req| delete(req, root_path))
+        .get(&file_transfer_end_point, move |req| {
+            let root_path = get_root_path.clone();
+            async move { get(req, &root_path).await }
+        })
+        .put(&file_transfer_end_point, move |req| {
+            let root_path = put_root_path.clone();
+            async move { put(req, &root_path).await }
+        })
+        .delete(&file_transfer_end_point, move |req| {
+            let root_path = del_root_path.clone();
+            async move { delete(req, &root_path).await }
+        })
         .build()?;
     let router_service = RouterService::new(router)?;
 
-    let mut addr: SocketAddr = bind_address.parse()?;
-    addr.set_port(3000);
-
-    Ok(Server::bind(&addr).serve(router_service))
+    Ok(Server::bind(&config.bind_address).serve(router_service))
 }
 
 #[cfg(test)]
@@ -184,6 +237,7 @@ mod test {
         uri_utils::{remove_prefix_from_uri, separate_path_and_file_name, verify_uri},
     };
     use crate::error::FileTransferError;
+    use crate::http_rest::HttpConfig;
     use hyper::{server::conn::AddrIncoming, Body, Method, Request, Server};
     use routerify::RouterService;
     use tedge_test_utils::fs::TempTedgeDir;
@@ -282,9 +336,9 @@ mod test {
         Server<AddrIncoming, RouterService<Body, FileTransferError>>,
     ) {
         let ttd = TempTedgeDir::new();
-        let tempdir_path = String::from(ttd.path().to_str().unwrap());
-        let leaked: &'static str = Box::leak(tempdir_path.into_boxed_str());
-        let server = http_file_transfer_server("127.0.0.1:3000", &leaked).unwrap();
+        let tempdir_path = ttd.path().to_owned();
+        let http_config = HttpConfig::default().with_file_transfer_dir(tempdir_path);
+        let server = http_file_transfer_server(&http_config).unwrap();
         (ttd, server)
     }
 

@@ -20,6 +20,7 @@ use plugin_sm::{
     plugin_manager::{ExternalPlugins, Plugins},
 };
 
+use crate::http_rest::HttpConfig;
 use std::process::Command;
 use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
 use tedge_config::{
@@ -32,7 +33,6 @@ use thin_edge_json::health::{health_check_topics, send_health_status};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, warn};
 
-pub const FILE_TRANSFER_ROOT_PATH: &str = "/var/tedge/file-transfer/tedge";
 const SM_PLUGINS: &str = "sm-plugins";
 const AGENT_LOG_PATH: &str = "tedge/agent";
 
@@ -60,7 +60,7 @@ pub struct SmAgentConfig {
     pub run_dir: PathBuf,
     config_location: TEdgeConfigLocation,
     pub download_dir: PathBuf,
-    pub bind_address: String,
+    pub http_config: HttpConfig,
 }
 
 impl Default for SmAgentConfig {
@@ -107,8 +107,6 @@ impl Default for SmAgentConfig {
 
         let download_dir = PathBuf::from("/tmp");
 
-        let bind_address = "127.0.0.1:3000";
-
         Self {
             errors_topic,
             mqtt_config,
@@ -126,7 +124,7 @@ impl Default for SmAgentConfig {
             run_dir,
             config_location,
             download_dir,
-            bind_address: bind_address.to_string(),
+            http_config: HttpConfig::default(),
         }
     }
 }
@@ -153,10 +151,8 @@ impl SmAgentConfig {
         let tedge_log_dir = PathBuf::from(&format!("{tedge_log_dir}/{AGENT_LOG_PATH}"));
         let tedge_run_dir = tedge_config.query_string(RunPathSetting)?.into();
 
-        let bind_address = &format!(
-            "{}:3000",
-            tedge_config.query_string(MqttBindAddressSetting)?
-        );
+        let bind_address = tedge_config.query(MqttBindAddressSetting)?;
+        let http_config = HttpConfig::default().with_ip_address(bind_address.into());
 
         Ok(SmAgentConfig::default()
             .with_sm_home(tedge_config_path)
@@ -165,7 +161,7 @@ impl SmAgentConfig {
             .with_download_directory(tedge_download_dir)
             .with_log_directory(tedge_log_dir)
             .with_run_directory(tedge_run_dir)
-            .with_bind_address(bind_address))
+            .with_http_config(http_config))
     }
 
     pub fn with_sm_home(self, sm_home: PathBuf) -> Self {
@@ -207,9 +203,9 @@ impl SmAgentConfig {
         }
     }
 
-    pub fn with_bind_address(self, bind_address: &str) -> Self {
+    pub fn with_http_config(self, http_config: HttpConfig) -> Self {
         Self {
-            bind_address: bind_address.into(),
+            http_config,
             ..self
         }
     }
@@ -250,8 +246,12 @@ impl SmAgent {
         let config_dir = config_dir.display();
         create_directory_with_user_group(&format!("{config_dir}/.agent"), "tedge", "tedge", 0o775)?;
         create_directory_with_user_group(self.config.log_dir.clone(), "tedge", "tedge", 0o775)?;
-        create_directory_with_user_group("/var/tedge", "tedge", "tedge", 0o775)?;
-        create_directory_with_user_group("/var/tedge/file-transfer", "tedge", "tedge", 0o777)?;
+        create_directory_with_user_group(
+            &self.config.http_config.file_transfer_dir_as_string(),
+            "tedge",
+            "tedge",
+            0o775,
+        )?;
         info!("Initializing the tedge agent session");
         mqtt_channel::init_session(&self.config.mqtt_config).await?;
 
@@ -272,10 +272,7 @@ impl SmAgent {
         let mut mqtt = Connection::new(&self.config.mqtt_config).await?;
         let sm_plugins_path = self.config.sm_home.join(SM_PLUGINS);
 
-        let server = http_rest::http_file_transfer_server(
-            &self.config.bind_address,
-            FILE_TRANSFER_ROOT_PATH,
-        )?;
+        let server = http_rest::http_file_transfer_server(&self.config.http_config)?;
 
         let plugins = Arc::new(Mutex::new(ExternalPlugins::open(
             &sm_plugins_path,
