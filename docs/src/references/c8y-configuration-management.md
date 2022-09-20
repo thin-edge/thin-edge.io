@@ -54,8 +54,8 @@ Thin-edge provides an operation plugin to
   * checking the uploaded files are well-formed,
   * restarting the configured processes,
   * installing the configuration files on the child-devices.
-* For each child-device, a device-specific software component is required
-  to listen for configuration related MQTT notification
+* For each child-device, a device-specific software component, referred to as a child-device agent, 
+  is required to listen for configuration related MQTT notification
   and behave accordingly along the protocol defined by this configuration plugin.
   * Being specific to each type of child devices, this software has to be implemented specifically.
   * This software can be installed on the child device.
@@ -293,7 +293,7 @@ only the child device specific client can control where and how these updates ca
   * exchange configuration files with the child device via an HTTP-based file transfer service over the local network,
   * notify the child devices via MQTT when configuration files are to be updated or requested from the cloud,
   * listen to child devices' configuration operation status via MQTT messages and mirror those to the cloud.
-* The child-device configuration software is an MQTT+HTTP client that
+* The child-device agent is an MQTT+HTTP client that
   * interact with the child-device system, accessing the actual configuration files
   * connect the main thin-edge device over the local MQTT bus,
   * listen over MQTT for configuration updates and requests,
@@ -302,7 +302,7 @@ only the child device specific client can control where and how these updates ca
 
 For each kind of child device such a specific client has to be implemented
 and installed on the child-device hardware (To be precise, most often on the child device,
-but not necessarily as, for a child device which software cannot be altered,
+but not necessarily as, for a child device with closed software that cannot be altered,
 one might have to install a protocol adaptor on the main device).
 
 Here is the protocol that has to be implemented by the child-device configuration client.
@@ -323,15 +323,15 @@ and all the connections to thin-edge are established by the child devices.
   * `http.external.port`
 * The child devices must know the main device IP address.
   * This is the address set for `mqtt.external.bind_address` on the main device.
-  * For the very specific case, where the software for the child device run on the main device,
+  * For the very specific case, where the child-device agent runs on the main device,
     this connection address can be the `localhost`.
-* On start, the child-device specific software for configuration management,
+* On start, the child-device agent for configuration management,
   must connect over MQTT to thin-edge device.
   * It must use a session name that is unique on the thin-edge bus.
     `"$CHILD_DEVICE_ID/configuration"` is the recommendation.
   * It must subscribe to `tedge/$CHILD_DEVICE_ID/commands/req/#` to receive requests.
   * It has to publish responses under `tedge/$CHILD_DEVICE_ID/commands/res/#`.
-* On demand, the child-device software has to send HTTP requests to thin-edge.
+* On demand, the child-device agent has to send HTTP requests to thin-edge.
   * These requests are REST requests (GET/PUT/DELETE) to exchange files.
   * The urls are forged by thin-edge telling the child devices
     where to get and put configuration files.
@@ -361,13 +361,13 @@ and notifies the cloud on the progress of this configuration update operation.
      * `"path": "$PATH"`
      * `"type": "$TYPE"` (if no `type` has been specified, then this field is omitted)
 1. On reception of a configuration update on the topic `tedge/$CHILD_DEVICE_ID/commands/req/config_update`,
-   The child-device specific software for configuration management:
+   The child-device agent for configuration management:
    1. `GET`s the content from the `url` specified by the notification message.
    1. Uses the `path` and `type` information to apply the new configuration content.
-      Note that these pieces of information are provided by the child-device specific software itself,
+      Note that these pieces of information are provided by the child-device agent itself,
       and make sense only in the specific context of the device operating system and software.
 1. While the configuration update is applied,
-   the child-device specific software for configuration management,
+   the child-device agent for configuration management,
    notifies thin-edge over MQTT about the progress of this operation.
    1. These messages are published on the topic
       `tedge/$CHILD_DEVICE_ID/commands/res/config_update`
@@ -378,7 +378,7 @@ and notifies the cloud on the progress of this configuration update operation.
       * `"path": "$PATH"`
       * `"type": "$TYPE"`
       * `"reason": "$ERROR_MSG"` telling the cause of the error if any.
-   1. The child-device configuration software must send at least a success or an error message,
+   1. The child-device agent must send at least a success or an error message,
       depending on the success of the `GET` and configuration operations.
       It should also send an executing message before starting to process the request.
 1. On reception an operation status message,
@@ -413,12 +413,12 @@ and of HTTP to let the child device `PUT` the requested file.
       Note that when the `$TYPE` is not explicitly defined in `$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`,
       then the `$PATH` is used as the configuration type.
 1. On reception of a configuration request on the topic `tedge/$CHILD_DEVICE_ID/commands/req/config_snapshot`,
-   The child-device specific software for configuration management:
+   The child-device agent for configuration management:
    1. Uses the `path` and `type` information to retrieve the requested configuration content.
-   Note that these pieces of information are provided by the child-device specific software itself,
+   Note that these pieces of information are provided by the child-device agent itself,
    and make sense only in the specific context of the device operating system and software.
    1. `PUT`s the content to the `url` specified by the request message.
-1. The child-device specific software for configuration management,
+1. The child-device agent for configuration management,
    notifies thin-edge over MQTT about the progress of the configuration snapshot request.
     1. These messages are published on the topic
        `tedge/$CHILD_DEVICE_ID/commands/res/config_snapshot`
@@ -429,7 +429,7 @@ and of HTTP to let the child device `PUT` the requested file.
         * `"path": "$PATH"`
         * `"type": "$TYPE"`
         * `"reason": "$ERROR_MSG"` telling the cause of the error if any.
-    1. The child-device configuration software must send at least a success or an error message,
+    1. The child-device agent must send at least a success or an error message,
        depending on the success of the `PUT` operation.
        It should also send an executing message before starting to process the request.
 1. On reception of an operation status message,
@@ -459,7 +459,7 @@ as if it received a config snapshot request for `c8y-configuration-plugin` type 
    as if it received a config snapshot request for `c8y-configuration-plugin` type:
       1. Generate a `c8y-configuration-plugin.toml` with the supported config list in the presribed format.
       2. Uploads this file to `http://$TEDGE_HTTP/tedge/$CHILD_DEVICE_ID/config_snapshot/c8y-configuration-plugin` with a `PUT` call.
-      3. On success of the upload, the child-device configuration software
+      3. On success of the upload, the child-device agent
          notifies the `c8y_configuration_plugin` with an MQTT message published on the topic
          `tedge/$CHILD_DEVICE_ID/commands/res/config_snapshot`
          with the payload containing a JSON record with 2 required fields:
