@@ -308,9 +308,9 @@ one might have to install a protocol adaptor on the main device).
 Here is the protocol that has to be implemented by the child-device configuration client.
 This protocol covers 4 interactions, the child devices:
 1. Connecting to thin-edge
-1. Downloading configuration file updates from thin-edge
-1. Uploading current configuration files to thin-edge
-1. Notifying the list of configuration files to thin-edge
+2. Downloading configuration file updates from thin-edge
+3. Uploading current configuration files to thin-edge
+4. Notifying the list of configuration files to thin-edge
 
 ### The child device connects to the thin-edge parent device
 
