@@ -39,7 +39,6 @@ csv = "1.1"
 download = { path = "../../common/download" }
 flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
-inotify = "0.10.0"
 logged_command = { path = "../../common/logged_command" }
 mockall = "0.11"
 mqtt_channel = { path = "../../common/mqtt_channel" }

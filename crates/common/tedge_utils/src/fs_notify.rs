@@ -7,6 +7,7 @@ use std::{
 use async_stream::try_stream;
 pub use futures::{pin_mut, Stream, StreamExt};
 use inotify::{EventMask, Inotify, WatchMask};
+use nix::libc::c_int;
 use std::collections::BTreeSet;
 use strum_macros::Display;
 use try_traits::default::TryDefault;
@@ -68,6 +69,7 @@ pub enum NotifyStreamError {
 #[derive(Debug, Default, Clone)]
 struct WatchDescriptor {
     description: HashMap<PathBuf, HashMap<Option<String>, Vec<FileEvent>>>,
+    watch_discriptor_id: HashMap<c_int, String>,
 }
 
 impl WatchDescriptor {
@@ -201,7 +203,7 @@ impl NotifyStream {
     /// use std::path::Path;
     ///
     /// let dir_path_a = Path::new("/tmp");
-    /// let dir_path_b = Path::new("/etc/tedge/c8y");
+    /// let dir_path_b = Path::new("/etc");
     ///
     /// let mut fs_notification_stream = NotifyStream::try_default().unwrap();
     /// fs_notification_stream.add_watcher(dir_path_a, None, &[FileEvent::Created]).unwrap();
@@ -240,86 +242,103 @@ impl NotifyStream {
     ) -> Result<(), NotifyStreamError> {
         let (dir_path, file) = normalising_watch_dir_and_file(dir_path, file)?;
         let dir_path = dir_path.as_path();
+        let full_path = match file {
+            Some(ref f) => {
+                format!("{}/{f}", dir_path.to_str().unwrap())
+            }
+            None => dir_path.to_str().unwrap().to_string(),
+        };
 
         if self.watchers.description.is_empty() {
             let watch_mask = pipe_masks_into_watch_mask(masks);
-            let _ = self.inotify.add_watch(dir_path, watch_mask);
-            let mut wd = WatchDescriptor::default();
-            wd.insert(dir_path.to_path_buf(), file, masks.to_vec());
-            self.watchers = wd;
+            let wd = self.inotify.watches().add(dir_path, watch_mask)?;
+            let mut wdescriptors = WatchDescriptor::default();
+            wdescriptors.insert(dir_path.to_path_buf(), file, masks.to_vec());
+            self.watchers = wdescriptors;
+            self.watchers
+                .watch_discriptor_id
+                .insert(wd.get_watch_descriptor_id(), full_path);
         } else {
             self.watchers
                 .insert(dir_path.to_path_buf(), file, masks.to_vec());
             let masks = self.watchers.get_mask_set_for_directory(dir_path);
-
             let watch_mask = pipe_masks_into_watch_mask(&masks);
-            let _ = self.inotify.add_watch(dir_path, watch_mask);
+            let wd = self.inotify.watches().add(dir_path, watch_mask)?;
+            self.watchers
+                .watch_discriptor_id
+                .insert(wd.get_watch_descriptor_id(), full_path);
         }
         Ok(())
     }
 
     //// create an fs notification event stream
-    pub fn stream(mut self) -> impl Stream<Item = Result<(PathBuf, FileEvent), NotifyStreamError>> {
+    pub fn stream(self) -> impl Stream<Item = Result<(PathBuf, FileEvent), NotifyStreamError>> {
         try_stream! {
-            let mut notify_service = self.inotify.event_stream(self.buffer)?;
-            while let Some(event_or_error) = notify_service.next().await {
-                match event_or_error {
-                    Ok(event) => {
-                        let event_mask: FileEvent = event.mask.try_into()?;
-                        // because watching a file or watching a directory is implemented as
-                        // watching a directory, we can ignore the case where &event.name is None
-                        if let Some(event_name) = &event.name {
-                            let notify_file_name = event_name.to_str().ok_or_else(|| NotifyStreamError::FailedToCreateStream)?;
-                            // inotify triggered for a file named `notify_file_name`. Next we need
-                            // to see if we have a matching entry WITH a matching flag/mask in `self.watchers`
-                            for (dir_path, key) in &self.watchers.description {
-                                for (maybe_file_name, flags) in key {
-                                    for flag in flags {
-                                        // There are two cases:
-                                        // 1. we added a file watch
-                                        // 2. we added a directory watch
-                                        //
-                                        // for case 1. our input could have been something like:
-                                        // ...
+        let mut notify_service = self.inotify.into_event_stream(self.buffer)?;
+        while let Some(event_or_error) = notify_service.next().await {
+            match event_or_error {
+                Ok(event) => {
+                    let event_mask: FileEvent = event.mask.try_into()?;
+                    // because watching a file or watching a directory is implemented as
+                    // watching a directory, we can ignore the case where &event.name is None
+                    if let Some(event_name) = &event.name {
+                        let notify_file_name = event_name.to_str().ok_or_else(|| NotifyStreamError::FailedToCreateStream)?;
+                        // inotify triggered for a file named `notify_file_name`. Next we need
+                        // to see if we have a matching entry WITH a matching flag/mask in `self.watchers`
+                        for (dir_path, key) in &self.watchers.description {
+                            for (maybe_file_name, flags) in key {
+                                for flag in flags {
+                                    // There are two cases:
+                                    // 1. we added a file watch
+                                    // 2. we added a directory watch
+                                    //
+                                    // for case 1. our input could have been something like:
+                                    // ...
+                                    // notify_service.add_watcher(
+                                    //          "/path/to/some/place",
+                                    //          Some("file_name"),    <------ note file name is given
+                                    //          &[Masks::Created]
+                                    //  )
+                                    // here the file we are watching is *given* - so we can yield events with the
+                                    // corresponding `event_name` and mask.
+                                    if let Some(file_name) = maybe_file_name {
+                                        if file_name.eq(notify_file_name) && event_mask.eq(flag) {
+                                            let full_path = dir_path.join(file_name);
+                                            yield (full_path, event_mask)
+                                        }
+                                    }
+                                    else {
+                                        // for case 2. our input could have been something like:
                                         // notify_service.add_watcher(
                                         //          "/path/to/some/place",
-                                        //          Some("file_name"),    <------ note file name is given
+                                        //          None,            <------ note the file name is not given
                                         //          &[Masks::Created]
                                         //  )
-                                        // here the file we are watching is *given* - so we can yield events with the
-                                        // corresponding `event_name` and mask.
-                                        if let Some(file_name) = maybe_file_name {
-                                            if file_name.eq(notify_file_name) && event_mask.eq(flag) {
-                                                let full_path = dir_path.join(file_name);
-                                                yield (full_path, event_mask)
-                                            }
-                                        }
-                                        else {
-                                            // for case 2. our input could have been something like:
-                                            // notify_service.add_watcher(
-                                            //          "/path/to/some/place",
-                                            //          None,            <------ note the file name is not given
-                                            //          &[Masks::Created]
-                                            //  )
-                                            // here the file we are watching is not known to us, so we match only on event mask
-                                            if event_mask.eq(flag) {
-                                                let full_path = dir_path.join(notify_file_name);
-                                                yield (full_path, event_mask)
+                                        // here the file we are watching is not known to us, so we match only on event mask
+                                        if event_mask.eq(flag) {
+                                            match self.watchers.watch_discriptor_id.get(&event.wd.get_watch_descriptor_id()) {
+                                                Some(path) => {
+                                                    let full_path = PathBuf::from(path).join(notify_file_name);
+                                                    yield (full_path, event_mask)
+                                                }
+                                                None => {
+                                                }
                                             }
                                         }
                                     }
                                 }
 
                             }
-                        }
-                        // there should never be an "if let None = &event.name" because add_watcher
-                        // will always add a watcher as a directory
-                    },
-                    Err(error) => {
-                        // any error coming out of `notify_service.next()` will be
-                        // an std::Io error: https://docs.rs/inotify/latest/src/inotify/stream.rs.html#48
-                        yield Err(NotifyStreamError::FromIOError(error))?;
+                       }
+                       // there should never be an "if let None = &event.name" because add_watcher
+                       // will always add a watcher as a directory
                     }
+                }
+                    Err(error) => {
+                    // any error coming out of `notify_service.next()` will be
+                    // an std::Io error: https://docs.rs/inotify/latest/src/inotify/stream.rs.html#48
+                    yield Err(NotifyStreamError::FromIOError(error))?;
+                   }
                 }
             }
         }
@@ -488,16 +507,19 @@ mod tests {
         pin_mut!(stream);
         while let Some(Ok((path, flag))) = stream.next().await {
             let file_name = String::from(path.file_name().unwrap().to_str().unwrap());
-            let mut values = inputs.get_mut(&file_name).unwrap().to_vec();
-            let index = values.iter().position(|x| *x == flag).unwrap();
-            values.remove(index);
-
+            let mut values = match inputs.get_mut(&file_name) {
+                Some(v) => v.to_vec(),
+                None => continue,
+            };
+            match values.iter().position(|x| *x == flag) {
+                Some(i) => values.remove(i),
+                None => continue,
+            };
             if values.is_empty() {
                 inputs.remove(&file_name);
             } else {
                 inputs.insert(file_name, values);
             }
-
             if inputs.is_empty() {
                 break;
             }
@@ -566,6 +588,55 @@ mod tests {
             ttd_clone.file("file_a"); // should match CREATE
             ttd_clone.file("file_b").with_raw_content("content"); // should match MODIFY
             ttd_clone.file("file_c").delete(); // should match CREATE, DELETE
+        });
+
+        fs_notify_handler.await.unwrap();
+        file_handler.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_multiple_directories_watched() {
+        let ttd_a = Arc::new(TempTedgeDir::new());
+        let ttd_b = Arc::new(TempTedgeDir::new());
+        let ttd_c = Arc::new(TempTedgeDir::new());
+        let ttd_d = Arc::new(TempTedgeDir::new());
+
+        let ttd_a_clone = ttd_a.clone();
+        let ttd_b_clone = ttd_b.clone();
+        let ttd_c_clone = ttd_c.clone();
+        let ttd_d_clone = ttd_d.clone();
+
+        let expected_events = hashmap! {
+            String::from("file_a") => vec![FileEvent::Created],
+            String::from("file_b") => vec![FileEvent::Created, FileEvent::Modified],
+            String::from("file_c") => vec![FileEvent::Created, FileEvent::Deleted],
+            String::from("dir_d") => vec![FileEvent::Created],
+        };
+
+        let stream = fs_notify_stream(&[
+            (ttd_a.path(), None, &[FileEvent::Created]),
+            (
+                ttd_b.path(),
+                None,
+                &[FileEvent::Created, FileEvent::Modified],
+            ),
+            (
+                ttd_c.path(),
+                None,
+                &[FileEvent::Created, FileEvent::Deleted],
+            ),
+            (ttd_d.path(), None, &[FileEvent::Created]),
+        ]);
+
+        let fs_notify_handler = tokio::task::spawn(async move {
+            assert_stream(expected_events, stream).await;
+        });
+
+        let file_handler = tokio::task::spawn(async move {
+            ttd_a_clone.file("file_a"); // should match CREATE
+            ttd_b_clone.file("file_b").with_raw_content("content"); // should match MODIFY;
+            ttd_c_clone.file("file_c").delete(); // should match CREATE, DELETE file;
+            ttd_d_clone.dir("dir_d"); // should match CREATE directory;
         });
 
         fs_notify_handler.await.unwrap();

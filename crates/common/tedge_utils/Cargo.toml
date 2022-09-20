@@ -16,7 +16,7 @@ fs-notify = ["inotify", "async-stream", "strum_macros", "try-traits"]
 [dependencies]
 async-stream = { version = "0.3", optional = true }
 futures = "0.3"
-inotify = { version = "0.10", optional = true }
+inotify =  { git = "https://github.com/hannobraun/inotify-rs", branch = "master", optional = true }
 nix = "0.24"
 strum_macros = { version = "0.24", optional = true }
 tempfile = "3.2"
