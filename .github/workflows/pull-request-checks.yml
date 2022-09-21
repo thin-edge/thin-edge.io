@@ -54,7 +54,7 @@ jobs:
       locks: ${{ steps.filter.outputs.locks }}
     steps:
       - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@1.58.1
+      - uses: dtolnay/rust-toolchain@1.63.0
         with:
           targets: armv7-unknown-linux-gnueabihf
 
