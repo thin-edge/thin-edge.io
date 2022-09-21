@@ -12,7 +12,7 @@ pub struct TempTedgeDir {
 }
 
 pub struct TempTedgeFile {
-    file_path: PathBuf,
+    pub file_path: PathBuf,
 }
 
 impl Default for TempTedgeDir {
