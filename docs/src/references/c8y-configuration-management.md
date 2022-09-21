@@ -452,10 +452,10 @@ the file `$TEDGE_CONFIG_DIR/c8y/$CHILD_DEVICE_ID/c8y-configuration-plugin.toml` 
 But, the content of this file must be provided by the child-device agent
 by uploading a `c8y-configuration-plugin.toml` with `"type": "c8y-configuration-plugin"` in its prescribed format.
 
-The child-device can upload this file on its startup,
+The child-device must upload this file on its startup as well as when updated,
 as if it received a config snapshot request for `c8y-configuration-plugin` type as follows:
 
-1. The child-device can upload this file on its startup,
+1. On start-up, the child-device uploads this file (as well as on update of this file list),
    as if it received a config snapshot request for `c8y-configuration-plugin` type:
       1. Generate a `c8y-configuration-plugin.toml` with the supported config list in the presribed format.
       2. Uploads this file to `http://$TEDGE_HTTP/tedge/$CHILD_DEVICE_ID/config_snapshot/c8y-configuration-plugin` with a `PUT` call.
