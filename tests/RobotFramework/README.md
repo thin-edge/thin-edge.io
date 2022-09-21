@@ -32,6 +32,7 @@
 2. Raspberry Pi 4 - 192.168.1.110 (user:pi pass:thinedge)
 2. Raspberry Pi 3 - 192.168.1.120 (user:pi pass:thinedge)
 3. Raspberry Pi 4 - 192.168.1.130 (user:pi pass:thinedge)
+4. Raspberry Zero - 192.168.1.140 (user:zero pass:thinedge)
 
 ## 3. Run an .robot file
 
@@ -62,9 +63,9 @@ To run an robot file ssh to 192.168.1.4 and use the following command structure:
 		6. Install Tedge agent
 		7. Install Tedge apama plugin
 		8. Install tedge apt plugin
-		9. Install Tedge logfile request plugin
-		10. Install C8y plugin
-		11. Install Watchdog
+		9. Install Install c8y log plugin
+		10. Install c8y configuration plugin
+		11. Install Tedge watchdog
 		12. Create self-signed certificate
 		13. Set c8y URL
 		14. Upload certificate 
@@ -75,26 +76,32 @@ To run an robot file ssh to 192.168.1.4 and use the following command structure:
 	Example command to run the task: 
 	robot -d \results --timestampoutputs --log health_tedge_mapper.html --report NONE --variable HOST:192.168.1.110 health_tedge_mapper.robot
 
-### 4.2. Test Cases
-* child_alarms
-	* `c8y_child_alarms_rpi.robot`
-* config_mgmt
-	* `conf_mgmt.robot`
-* customizing
-	* `log_path_config.robot`
-* health check
-	* `health_c8y-configuration-plugin.robot`
-	* `health_c8y-log-plugin.robot`
-	* `health_tedge_mapper.robot`
-	* `health_tedge-agent.robot`
-	* `health-mapper-az.robot`
-	* `health_tedge-mapper-collectd.robot`
-* plugin_apt
-	* `improve_tedge_apt_plugin_error_messages.robot`
+## 5. Needed installation if own device is used
+Following installation is needed in order to run the robot files on own device:
 
+1. Python with PiP
+	1. 	[https://www.python.org/downloads/](https://www.python.org/downloads/) 
+2. Robot Framework
+	3. `pip install robotframework`
+4. Browser Library
+	5. Install node.js 
+		6. `sudo su`
+		6. `curl -fsSL https://deb.nodesource.com/setup_17.x | bash -`
+		7. `sudo apt-get install -y nodejs`
+	6. Update pip `pip install -U pip` to ensure latest version is used
+	7. Install robotframework-browser from the commandline: `pip install robotframework-browser`
+	8. Install the node dependencies: run `rfbrowser init` in your shell
+		9. if rfbrowser is not found, try `python -m Browser.entry init` or `python3 -m Browser.entry init`
+10. SSHLibrary
+	11. `pip install --upgrade robotframework-sshlibrary`
+12. CryptoLibrary
+	13. pip install --upgrade robotframework-crypto
+14. MQTTLibrary
+	15. `pip install robotframework-mqttlibrary`
+16. Metrics
+	17. `pip install robotframework-metrics==3.3.3`
 
-
-## 5. Command line options for test execution
+## 6. Command line options for test execution
 
 
 `-N, --name <name>`Sets the name of the top-level test suite.

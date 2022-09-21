@@ -1,4 +1,4 @@
-#Command to execute:    robot -d \results --timestampoutputs --log build_install_rpi.html --report NONE --variable BUILD:840 --variable HOST:192.168.1.130 /thin-edge.io/tests/RobotFramework/tasks/build_install_thinedge.robot
+#Command to execute:    robot -d \results --timestampoutputs --log build_install_rpi.html --report NONE --variable BUILD:840 --variable HOST:192.168.1.130 thin-edge.io-fork/tests/RobotFramework/tasks/build_install_thinedge.robot
 *** Settings ***
 Library    Browser
 Library    OperatingSystem
@@ -76,8 +76,7 @@ Download the Build Package
 Copy File to Device
     Put File    ${download_dir}${FILENAME}.zip
 
-Unpack the File
-    ${rc}=    Execute Command    unzip ${FILENAME}.zip    return_stdout=False    return_rc=True
+Unpack the File25
     Should Be Equal    ${rc}    ${0}
 
 Install Mosquitto
@@ -140,6 +139,7 @@ Upload certificate
     Sleep    3s
 
 Connect to c8y
+    Sleep    10s
     ${output}=    Execute Command    sudo tedge connect c8y    #You can then check the content of that certificate.
     Sleep    3s
     Should Contain    ${output}    tedge-agent service successfully started and enabled!
@@ -159,4 +159,3 @@ armv7
     ${FILENAME}    Set Variable    debian-packages-armv7-unknown-linux-gnueabihf
     Log    ${FILENAME}
     Set Global Variable    ${FILENAME}
-    

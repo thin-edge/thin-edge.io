@@ -13,7 +13,7 @@ Suite Teardown         SSHLibrary.Close All Connections
 ${HOST}           
 ${USERNAME}       pi
 ${PASSWORD}       crypt:LO3wCxZPltyviM8gEyBkRylToqtWm+hvq9mMVEPxtn0BXB65v/5wxUu7EqicpOgGhgNZVgFjY0o=  
-${VERSION}        0.7.4
+${VERSION}        0.*
 
 *** Tasks ***
 Uninstall tedge with purge
@@ -62,4 +62,3 @@ armv7
     ${FILENAME}    Set Variable    debian-packages-armv7-unknown-linux-gnueabihf
     Log    ${FILENAME}
     Set Global Variable    ${FILENAME}
-    

@@ -179,7 +179,7 @@ Reconciliation when the alarm that is cleared
     Click    //a[@title='${dev_name}']
     Sleep    3s
 
-#Check existance of alarms
+#Check existence of alarms
     Click    //span[normalize-space()='Child devices']
     Wait For Elements State    //a[@title='${child_device_name}']    visible
     Reload
