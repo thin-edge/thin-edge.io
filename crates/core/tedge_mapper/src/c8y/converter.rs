@@ -665,8 +665,8 @@ async fn process_smartrest(
     http_proxy: &mut impl C8YHttpProxy,
     operation_logs: &OperationLogs,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
-    let message_id: &str = &payload[..3];
-    match message_id {
+    let message_id = get_smartrest_template_id(payload);
+    match message_id.as_str() {
         "528" => forward_software_request(payload, http_proxy).await,
         "510" => forward_restart_request(payload),
         template => forward_operation_request(payload, template, operations, operation_logs).await,
@@ -708,6 +708,11 @@ async fn forward_software_request(
     )])
 }
 
+fn get_smartrest_template_id(payload: &str) -> String {
+    //  unwrap is safe here as the first element of the split will be the whole payload if there is no comma.
+    payload.split(',').next().unwrap().to_string()
+}
+
 fn forward_restart_request(smartrest: &str) -> Result<Vec<Message>, CumulocityMapperError> {
     let topic = Topic::new(RequestTopic::RestartRequest.as_str())?;
     let _ = SmartRestRestartRequest::from_smartrest(smartrest)?;
@@ -728,6 +733,7 @@ async fn forward_operation_request(
                 execute_operation(payload, command.as_str(), &operation.name, operation_logs)
                     .await?;
             }
+
             Ok(vec![])
         }
         None => Ok(vec![]),
@@ -788,6 +794,7 @@ pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>
 mod tests {
     use plugin_sm::operation_logs::OperationLogs;
     use tedge_test_utils::fs::TempTedgeDir;
+    use test_case::test_case;
 
     #[tokio::test]
     async fn test_execute_operation_is_not_blocked() {
@@ -805,5 +812,20 @@ mod tests {
         // a result between now and elapsed that is not 0 probably means that the operations are
         // blocking and that you probably removed a tokio::spawn handle (;
         assert_eq!(now.elapsed().as_secs(), 0);
+    }
+
+    #[test_case("cds50223434,uninstall-test"; "valid template")]
+    #[test_case("5000000000000000000000000000000000000000000000000,uninstall-test"; "long valid template")]
+    #[test_case(""; "empty payload")]
+    fn extract_smartrest_tempate(payload: &str) {
+        match super::get_smartrest_template_id(payload) {
+            id if id.contains("cds50223434")
+                || id.contains("5000000000000000000000000000000000000000000000000")
+                || id.contains("") =>
+            {
+                assert!(true)
+            }
+            _ => assert!(false),
+        }
     }
 }
