@@ -127,6 +127,28 @@ impl ConfigSettingAccessor<AzureUrlSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<AwsUrlSetting> for TEdgeConfig {
+    fn query(&self, _setting: AwsUrlSetting) -> ConfigSettingResult<ConnectUrl> {
+        self.data
+            .aws
+            .url
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: AwsUrlSetting::KEY,
+            })
+    }
+
+    fn update(&mut self, _setting: AwsUrlSetting, value: ConnectUrl) -> ConfigSettingResult<()> {
+        self.data.aws.url = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: AwsUrlSetting) -> ConfigSettingResult<()> {
+        self.data.aws.url = None;
+        Ok(())
+    }
+}
+
 impl ConfigSettingAccessor<C8yUrlSetting> for TEdgeConfig {
     fn query(&self, _setting: C8yUrlSetting) -> ConfigSettingResult<ConnectUrl> {
         self.data
@@ -249,6 +271,31 @@ impl ConfigSettingAccessor<AzureRootCertPathSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<AwsRootCertPathSetting> for TEdgeConfig {
+    fn query(&self, _setting: AwsRootCertPathSetting) -> ConfigSettingResult<FilePath> {
+        Ok(self
+            .data
+            .aws
+            .root_cert_path
+            .clone()
+            .unwrap_or_else(|| self.config_defaults.default_aws_root_cert_path.clone()))
+    }
+
+    fn update(
+        &mut self,
+        _setting: AwsRootCertPathSetting,
+        value: FilePath,
+    ) -> ConfigSettingResult<()> {
+        self.data.aws.root_cert_path = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: AwsRootCertPathSetting) -> ConfigSettingResult<()> {
+        self.data.aws.root_cert_path = None;
+        Ok(())
+    }
+}
+
 impl ConfigSettingAccessor<AzureMapperTimestamp> for TEdgeConfig {
     fn query(&self, _setting: AzureMapperTimestamp) -> ConfigSettingResult<Flag> {
         Ok(self
@@ -266,6 +313,27 @@ impl ConfigSettingAccessor<AzureMapperTimestamp> for TEdgeConfig {
 
     fn unset(&mut self, _setting: AzureMapperTimestamp) -> ConfigSettingResult<()> {
         self.data.az.mapper_timestamp = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<AwsMapperTimestamp> for TEdgeConfig {
+    fn query(&self, _setting: AwsMapperTimestamp) -> ConfigSettingResult<Flag> {
+        Ok(self
+            .data
+            .aws
+            .mapper_timestamp
+            .map(Flag)
+            .unwrap_or_else(|| self.config_defaults.default_mapper_timestamp.clone()))
+    }
+
+    fn update(&mut self, _setting: AwsMapperTimestamp, value: Flag) -> ConfigSettingResult<()> {
+        self.data.aws.mapper_timestamp = Some(value.into());
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: AwsMapperTimestamp) -> ConfigSettingResult<()> {
+        self.data.aws.mapper_timestamp = None;
         Ok(())
     }
 }
