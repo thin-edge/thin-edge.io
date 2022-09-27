@@ -26,13 +26,14 @@ the easiest way is to use the same script as the installation. Follow the steps 
 there is no need to remove old version.
 
 > Note: To successfully upgrade `thin-edge.io` all thin-edge.io components **must be stopped**. The components are:
-> `tedge-mapper-c8y`, `tedge-mapper-az`, `tedge-mapper-collectd`, `tedge-agent`, `c8y-log-plugin`, `c8y-configuration-plugin`.
+> `tedge-mapper-c8y`, `tedge-mapper-az`, `tedge-mapper-aws`, `tedge-mapper-collectd`, `tedge-agent`, `c8y-log-plugin`, `c8y-configuration-plugin`.
 >
-> To stop `tedge-mapper-c8y`, `tedge-agent`, `tedge-mapper-az`, you can simply run the commands below.
+> To stop `tedge-mapper-c8y`, `tedge-agent`, `tedge-mapper-az`, `tedge-mapper-aws`, you can simply run the commands below.
 > 
 > ```shell
 > sudo tedge disconnect c8y
 > sudo tedge disconnect az
+> sudo tedge disconnect aws
 > ```
 > 
 > To stop each component one by one, this is an example how to stop them with `systemctl`:
@@ -174,3 +175,4 @@ associated with these thin-edge.io packages.
 
 1. [Connect your device to Cumulocity IoT](../tutorials/connect-c8y.md)
 2. [Connect your device to Azure IoT](../tutorials/connect-azure.md)
+3. [Connect your device to AWS IoT](../tutorials/connect-aws.md)

@@ -18,7 +18,7 @@ is_active = ["/bin/systemctl", "is-active", "{}"]
 
 ## Placeholder
 
-`{}` will be replaced by a service name (`mosquitto`, `tedge-mapper-c8y`, `tedge-mapper-az`, etc.).
+`{}` will be replaced by a service name (`mosquitto`, `tedge-mapper-c8y`, `tedge-mapper-az`, `tedge-mapper-aws`, etc.).
 For example,
 
 ```toml

@@ -52,10 +52,14 @@ tedge connect c8y
 #or
 
 tedge connect az
+
+#or
+
+tedge connect aws
 ```
 
 This will configure all the services (mosquitto, tedge-mapper-c8y.service, tedge-mapper-az.service,
-  tedge-agent.service) to use the newly set port and the bind address.
+  tedge-mapper-aws.service, tedge-agent.service) to use the newly set port and the bind address.
   
 Note: The step 1 and 2 can be followed in any order.
 

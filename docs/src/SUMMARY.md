@@ -10,6 +10,7 @@
 
     - [Connect my device to Cumulocity IoT](./tutorials/connect-c8y.md)
     - [Connect my device to Azure IoT](./tutorials/connect-azure.md)
+    - [Connect my device to AWS IoT](./tutorials/connect-aws.md)
     - [Send Thin Edge Json data](./tutorials/send-thin-edge-data.md)
     - [Raise alarms](./tutorials/raise-alarm.md)
     - [Send events](./tutorials/send-events.md)

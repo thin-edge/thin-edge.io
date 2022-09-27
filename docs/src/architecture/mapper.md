@@ -156,6 +156,13 @@ After changing the configuration, you need to restart the mapper service by
 sudo systemctl restart tedge-mapper-az.service
 ```
 
+## AWS mapper
+
+The AWS mapper takes messages formatted in the [Thin Edge JSON](thin-edge-json.md) as input.
+It validates if the incoming message is correctly formatted Thin Edge JSON, then outputs the message.
+The validated messages are published on the topic `aws/messages/` from where they are forwarded to AWS.
+This mapper is launched by the `tedge connect aws` command, and stopped by the `tedge disconnect aws` command.
+
 ## Error cases
 
 When some error occurs in a mapper process, the mapper publishes a corresponded error message

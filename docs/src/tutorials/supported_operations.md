@@ -51,10 +51,11 @@ This directory will contain a set subdirectories based on cloud providers curren
 $ ls -l /etc/tedge/operations
 
 drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 az
+drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 aws
 drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 c8y
 ```
 
-From the above you can see that there are two cloud providers supported by `thin-edge.io`.
+From the above you can see that there are three cloud providers supported by `thin-edge.io`.
 The directories should be readable by `thin-edge.io` user - `tedge` - and should have permissions `755`.
 
 To list all currently supported operations for a cloud provider, run:
@@ -72,9 +73,13 @@ The operations files should have permissions `644` and the owner `tedge`.
 $ sudo ls -lR /etc/tedge/operations
 /etc/tedge/operations:
 drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 az
+drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 aws
 drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 c8y
 
 /etc/tedge/operations/az:
+-rw-r--r-- 1 tedge tedge 0 Jan 01 00:00 Restart
+
+/etc/tedge/operations/aws:
 -rw-r--r-- 1 tedge tedge 0 Jan 01 00:00 Restart
 
 /etc/tedge/operations/c8y:
