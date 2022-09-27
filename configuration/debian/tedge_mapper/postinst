@@ -6,4 +6,5 @@ set -e
 ### Initialize the sm mapper
 sudo -u tedge -- tedge_mapper --init c8y
 sudo -u tedge -- tedge_mapper --init az
+sudo -u tedge -- tedge_mapper --init aws
 #DEBHELPER#

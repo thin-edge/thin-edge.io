@@ -5,6 +5,8 @@ pub enum SystemService {
     Mosquitto,
     /// Azure TEdge mapper
     TEdgeMapperAz,
+    /// AWS TEdge mapper
+    TEdgeMapperAws,
     /// Cumulocity TEdge mapper
     TEdgeMapperC8y,
     /// TEdge SM agent
@@ -16,6 +18,7 @@ impl std::fmt::Display for SystemService {
         let s = match self {
             Self::Mosquitto => "mosquitto",
             Self::TEdgeMapperAz => "tedge-mapper-az",
+            Self::TEdgeMapperAws => "tedge-mapper-aws",
             Self::TEdgeMapperC8y => "tedge-mapper-c8y",
             Self::TEdgeSMAgent => "tedge-agent",
         };
@@ -28,6 +31,7 @@ impl SystemService {
         match service {
             SystemService::Mosquitto => "mosquitto",
             SystemService::TEdgeMapperAz => "tedge-mapper-az",
+            SystemService::TEdgeMapperAws => "tedge-mapper-aws",
             SystemService::TEdgeMapperC8y => "tedge-mapper-c8y",
             SystemService::TEdgeSMAgent => "tedge-agent",
         }

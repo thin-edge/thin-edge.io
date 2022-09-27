@@ -177,6 +177,41 @@ impl ConfigSetting for AzureMapperTimestamp {
     type Value = Flag;
 }
 
+///
+/// Endpoint URL of AWS instance.
+///
+/// Example: your-tenant.cumulocity.com
+///
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct AwsUrlSetting;
+
+impl ConfigSetting for AwsUrlSetting {
+    const KEY: &'static str = "aws.url";
+
+    const DESCRIPTION: &'static str =
+        "Endpoint URL of AWS instance. Example: your-endpoint.amazonaws.com";
+    type Value = ConnectUrl;
+}
+
+///
+/// Path where AWS IoT root certificate(s) are located.
+///
+/// Example: /home/user/.tedge/aws-trusted-root-certificates.pem
+///
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct AwsRootCertPathSetting;
+
+impl ConfigSetting for AwsRootCertPathSetting {
+    const KEY: &'static str = "aws.root.cert.path";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Path where AWS IoT root certificate(s) are located. ",
+        "Example: /home/user/.tedge/aws-trusted-root-certificates.pem"
+    );
+
+    type Value = FilePath;
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct MqttPortSetting;
 

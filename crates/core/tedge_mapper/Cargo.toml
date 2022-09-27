@@ -14,6 +14,7 @@ pre-depends = "tedge"
 maintainer-scripts = "../../../configuration/debian/tedge_mapper"
 assets = [
     ["../../../configuration/init/systemd/tedge-mapper-az.service", "/lib/systemd/system/tedge-mapper-az.service", "644"],
+    ["../../../configuration/init/systemd/tedge-mapper-aws.service", "/lib/systemd/system/tedge-mapper-aws.service", "644"],
     ["../../../configuration/init/systemd/tedge-mapper-c8y.service", "/lib/systemd/system/tedge-mapper-c8y.service", "644"],
     ["../../../configuration/init/systemd/tedge-mapper-collectd.service", "/lib/systemd/system/tedge-mapper-collectd.service", "644"],
     ["../../../configuration/contrib/collectd/collectd.conf", "/etc/tedge/contrib/collectd/", "644"],

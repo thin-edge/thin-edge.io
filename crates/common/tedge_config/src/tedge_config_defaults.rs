@@ -34,6 +34,9 @@ pub struct TEdgeConfigDefaults {
     /// Default path for azure root certificates
     pub default_azure_root_cert_path: FilePath,
 
+    /// Default path for AWS root certificates
+    pub default_aws_root_cert_path: FilePath,
+
     /// Default path for c8y root certificates
     pub default_c8y_root_cert_path: FilePath,
 
@@ -80,6 +83,7 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
                 .join("tedge-private-key.pem")
                 .into(),
             default_azure_root_cert_path: system_cert_path.clone().into(),
+            default_aws_root_cert_path: system_cert_path.clone().into(),
             default_c8y_root_cert_path: system_cert_path.into(),
             default_mapper_timestamp: Flag(true),
             default_mqtt_port: Port(DEFAULT_PORT),
@@ -108,6 +112,7 @@ fn test_from_tedge_config_location() {
                 "/opt/etc/_tedge/device-certs/tedge-private-key.pem"
             ),
             default_azure_root_cert_path: FilePath::from("/etc/ssl/certs"),
+            default_aws_root_cert_path: FilePath::from("/etc/ssl/certs"),
             default_c8y_root_cert_path: FilePath::from("/etc/ssl/certs"),
             default_mapper_timestamp: Flag(true),
             default_mqtt_port: Port(DEFAULT_PORT),

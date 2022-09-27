@@ -32,6 +32,10 @@ if [ -f "/run/lock/tedge-mapper-az.lock" ]; then
     sudo chown tedge:tedge /run/lock/tedge-mapper-az.lock
 fi
 
+if [ -f "/run/lock/tedge-mapper-aws.lock" ]; then
+    sudo chown tedge:tedge /run/lock/tedge-mapper-aws.lock
+fi
+
 if [ -f "/run/lock/tedge-mapper-collectd.lock" ]; then
     sudo chown tedge:tedge /run/lock/tedge-mapper-collectd.lock
 fi

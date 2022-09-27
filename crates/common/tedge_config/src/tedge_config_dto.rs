@@ -17,6 +17,9 @@ pub(crate) struct TEdgeConfigDto {
     #[serde(default, alias = "azure")] // for version 0.1.0 compatibility
     pub(crate) az: AzureConfigDto,
 
+    #[serde(default, alias = "aws")] // for version 0.1.0 compatibility
+    pub(crate) aws: AwsConfigDto,
+
     #[serde(default)]
     pub(crate) mqtt: MqttConfigDto,
 
@@ -80,6 +83,15 @@ pub(crate) struct CumulocityConfigDto {
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct AzureConfigDto {
+    pub(crate) connect: Option<String>,
+    pub(crate) url: Option<ConnectUrl>,
+    pub(crate) root_cert_path: Option<FilePath>,
+    pub(crate) mapper_timestamp: Option<bool>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AwsConfigDto {
     pub(crate) connect: Option<String>,
     pub(crate) url: Option<ConnectUrl>,
     pub(crate) root_cert_path: Option<FilePath>,

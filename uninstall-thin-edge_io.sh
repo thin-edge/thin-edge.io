@@ -8,7 +8,7 @@ packages=("tedge" "tedge_apt_plugin" "tedge_apama_plugin" "c8y_log_plugin" "c8y_
 
 extension_services=("tedge-watchdog.service" "tedge-mapper-collectd.service" "c8y-log-plugin.service" "c8y-configuration-plugin.service")
 
-clouds=("c8y" "az")
+clouds=("c8y" "az" "aws")
 
 usage() {
     cat <<EOF
