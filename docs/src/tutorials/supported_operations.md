@@ -20,7 +20,6 @@ The specification for the operation files is described in `thin-edge.io` specifi
 
 Supported operations are declared in the cloud specific subdirectory of `/etc/tedge/operations` directory.
 
-
 ## Custom Supported Operations
 
 `thin-edge.io` supports custom operations by using configuration files and plugin mechanism similar to what software management agent does.
@@ -29,7 +28,6 @@ The main difference between custom operations and native operations is that cust
 As per specification the configuration file needs to be a `toml` file which describes the operation.
 
 `thin-edge.io` stores the operations configuration files in the `/etc/tedge/operations/<cloud-provider>/` directory.
-
 
 ## Supported Operations for Child Devices
 
@@ -63,7 +61,7 @@ drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 az
 drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 c8y
 ```
 
-From the above you can see that there are two cloud providers supported by `thin-edge.io`.
+From the above you can see that there are three cloud providers supported by `thin-edge.io`.
 The directories should be readable by `thin-edge.io` user - `tedge` - and should have permissions `755`.
 
 To list all currently supported operations for a cloud provider, run:
@@ -84,6 +82,7 @@ sudo ls -lR /etc/tedge/operations
 ```
 /etc/tedge/operations:
 drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 az
+drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 aws
 drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 c8y
 
 /etc/tedge/operations/az:
@@ -92,6 +91,7 @@ drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 c8y
 /etc/tedge/operations/c8y:
 -rw-r--r-- 1 tedge tedge 0 Jan 01 00:00 c8y_Restart
 ```
+
 One can list all the currently supported operations for a child device as below
 
 ```shell
@@ -127,7 +127,6 @@ sudo -u tedge touch /etc/tedge/operations/c8y/<child-device>/c8y_Restart
 ```
 
 Now the new operation will be automatically added to the list of child supported operations and will be sent to the cloud.
-
 
 ### Removing supported operations
 
@@ -203,7 +202,6 @@ If it exits with the status code `0`, a successful message with the stdout conte
 If it exits with a non-zero code, a failure message with the stderr content will be sent out.
 
 > Note: The command will be executed with tedge-mapper permission level so most of the system level commands will not work.
-
 
 ### List of currently supported operations parameters
 

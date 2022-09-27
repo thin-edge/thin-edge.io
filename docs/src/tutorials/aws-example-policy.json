@@ -1,0 +1,50 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "iot:Connect",
+      "Resource": "arn:aws:iot:<region>:<account-id>:client/${iot:ClientId}"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iot:Publish",
+      "Resource": "arn:aws:iot:<region>:<account-id>:topic/thinedge/devices/${iot:ClientId}/messages/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iot:Subscribe",
+      "Resource": "arn:aws:iot:<region>:<account-id>:topicfilter/thinedge/devices/${iot:ClientId}/messages/devicebound/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iot:Receive",
+      "Resource": "arn:aws:iot:<region>:<account-id>:topic/thinedge/devices/${iot:ClientId}/messages/devicebound/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iot:RetainPublish",
+      "Resource": "arn:aws:iot:<region>:<account-id>:topic/tedge/health/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iot:Publish",
+      "Resource": "arn:aws:iot:<region>:<account-id>:topic/tedge/health/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iot:Publish",
+      "Resource": "arn:aws:iot:<region>:<account-id>:topic/thinedge/devices/${iot:ClientId}/test-connection"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iot:Receive",
+      "Resource": "arn:aws:iot:<region>:<account-id>:topic/thinedge/devices/${iot:ClientId}/test-connection"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iot:Subscribe",
+      "Resource": "arn:aws:iot:<region>:<account-id>:topicfilter/thinedge/devices/${iot:ClientId}/test-connection"
+    }
+  ]
+}

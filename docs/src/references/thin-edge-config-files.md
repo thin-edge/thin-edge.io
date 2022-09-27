@@ -5,7 +5,7 @@ the base directory and other directories inside the base directory with appropri
 The `tedge-mapper --init c8y/az` and `tedge-agent --init` will create the
 directories/files inside the base directory that are required for their operation.
 
-By default, the config files are created in `/etc/tedge` directory. To create the config files in 
+By default, the config files are created in `/etc/tedge` directory. To create the config files in
 a custom base directory one has to use `--config-dir <Path to base directory>` option.
 
 ## Creating `thin-edge` config files
@@ -36,7 +36,6 @@ sudo tedge --config-dir /global/path/to/config/dir --init
 
 Now all the config directories will be created inside the `/global/path/to/config/dir` directory.
 
-
 The directories and files that are required by the `tedge-mapper` are created as below.
 
 ```shell
@@ -49,6 +48,7 @@ total 0
 -rw-r--r-- 1 tedge tedge 0 Jun 14 14:37 c8y_Restart
 -rw-r--r-- 1 tedge tedge 0 Jun 14 14:37 c8y_SoftwareUpdate
 ```
+
 To create these directories in a custom directory, use `--config-dir` option as below.
 
 ```shell
@@ -65,6 +65,7 @@ sudo tedge-agent --init
 ls -l /etc/tedge/.agent
 -rw-r--r-- 1 tedge tedge 0 Jun 15 11:51 /etc/tedge/.agent/current-operation
 ```
+
 To create these directories and files in a custom directory, use the `--config-dir` option as below as below.
 
 ```shell
@@ -80,6 +81,7 @@ For example, the config parameter can be set as below.
 ```shell
 sudo tedge config set c8y.url your.cumulocity.io
 ```
+
 Now the configuration will be added into `/etc/tedge/tedge.toml`
 
 Use the below command to set/unset/list configuration parameters in a config file that is present
@@ -122,29 +124,28 @@ total 8
 
 ## Connecting to the cloud
 
-Use the` tedge connect c8y/az` command to connect to the cloud using the default configuration files
+Use the`tedge connect c8y/az/aws` command to connect to the cloud using the default configuration files
 that are present in `/etc/tedge`.
 
 To connect to the cloud with config files that are present in a custom location use
-the `tedge connect --config-dir <Path to custom dir> c8y/az` option.
+the `tedge connect --config-dir <Path to custom dir> c8y/az/aws` option.
 
 This is a two step process.
 
 ### Step 1: Update the `mosquitto.conf`
 
-Since the bridge configuration files for Cumulocity IoT or Azure IoT Hub will be created in a directory given through `--config-dir`,
-the path to the bridge configuration files (tedge-mosquitto.conf, c8y/az-bridge.conf) must be found by `mosquitto`.
+Since the bridge configuration files for Cumulocity IoT, Azure IoT Hub or AWS IoT will be created in a directory given through `--config-dir`,
+the path to the bridge configuration files (tedge-mosquitto.conf, c8y/az/aws-bridge.conf) must be found by `mosquitto`.
 So, the below line has to be added to your `mosquitto.conf` file manually.
 
 ```include_dir /global/path/to/config/dir/tedge/mosquitto-conf```
 
-### Step 2: `tedge connect <cloud[c8y/az]>` using the `--config-dir` option
+### Step 2: `tedge connect <cloud[c8y/az/aws]>` using the `--config-dir` option
 
-Use the below command to connect to `Cumulocity IoT or Azure IoT Hub` cloud using `--config-dir`
+Use the below command to connect to `Cumulocity IoT, Azure IoT Hub or AWS IoT` cloud using `--config-dir`
 
 ```shell
-sudo tedge --config-dir /global/path/to/config/dir connect c8y/az
+sudo tedge --config-dir /global/path/to/config/dir connect c8y/az/aws
 ```
 
 Here the `path/to/config/dir` is the directory where the configuration files are present.
-

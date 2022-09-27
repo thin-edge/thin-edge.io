@@ -200,7 +200,7 @@ impl ConfigSetting for AwsMapperTimestamp {
 ///
 /// Endpoint URL of AWS instance.
 ///
-/// Example: your-tenant.cumulocity.com
+/// Example: your-endpoint.amazonaws.com
 ///
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct AwsUrlSetting;
