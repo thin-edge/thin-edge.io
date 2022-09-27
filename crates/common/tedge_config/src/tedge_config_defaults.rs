@@ -31,6 +31,9 @@ pub struct TEdgeConfigDefaults {
     /// Default device key path
     pub default_device_key_path: FilePath,
 
+    /// Default certificate signing request key path
+    pub default_device_csr_path: FilePath,
+
     /// Default path for azure root certificates
     pub default_azure_root_cert_path: FilePath,
 
@@ -82,6 +85,11 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
                 .join("device-certs")
                 .join("tedge-private-key.pem")
                 .into(),
+            default_device_csr_path: config_location
+                .tedge_config_root_path()
+                .join("device-certs")
+                .join("tedge.csr")
+                .into(),
             default_azure_root_cert_path: system_cert_path.clone().into(),
             default_aws_root_cert_path: system_cert_path.clone().into(),
             default_c8y_root_cert_path: system_cert_path.into(),
@@ -111,6 +119,7 @@ fn test_from_tedge_config_location() {
             default_device_key_path: FilePath::from(
                 "/opt/etc/_tedge/device-certs/tedge-private-key.pem"
             ),
+            default_device_csr_path: FilePath::from("/opt/etc/_tedge/device-certs/tedge.csr"),
             default_azure_root_cert_path: FilePath::from("/etc/ssl/certs"),
             default_aws_root_cert_path: FilePath::from("/etc/ssl/certs"),
             default_c8y_root_cert_path: FilePath::from("/etc/ssl/certs"),

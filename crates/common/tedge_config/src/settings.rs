@@ -67,6 +67,23 @@ impl ConfigSetting for DeviceCertPathSetting {
 }
 
 ///
+/// Path to the certificate signing request file.
+///
+/// Example: /home/user/.tedge/tedge.csr
+///
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct DeviceCsrPathSetting;
+
+impl ConfigSetting for DeviceCsrPathSetting {
+    const KEY: &'static str = "device.csr.path";
+
+    const DESCRIPTION: &'static str =
+        "Path to the certificate signing request file. Example: /home/user/.tedge/tedge.csr";
+
+    type Value = FilePath;
+}
+
+///
 /// Tenant endpoint URL of Cumulocity tenant.
 ///
 /// Example: your-tenant.cumulocity.com

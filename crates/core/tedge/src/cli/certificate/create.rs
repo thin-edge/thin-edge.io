@@ -19,6 +19,9 @@ pub struct CreateCertCmd {
 
     /// The path where the device private key will be stored
     pub key_path: FilePath,
+
+    /// The path where the certificate signing request will be stored
+    pub csr_path: FilePath,
 }
 
 impl Command for CreateCertCmd {
@@ -37,6 +40,7 @@ impl CreateCertCmd {
     fn create_test_certificate(&self, config: &NewCertificateConfig) -> Result<(), CertError> {
         validate_parent_dir_exists(&self.cert_path).map_err(CertError::CertPathError)?;
         validate_parent_dir_exists(&self.key_path).map_err(CertError::KeyPathError)?;
+        validate_parent_dir_exists(&self.csr_path).map_err(CertError::CSRPathError)?;
 
         let cert = KeyCertPair::new_selfsigned_certificate(config, &self.id)?;
 
@@ -46,6 +50,8 @@ impl CreateCertCmd {
                 .map_err(|err| err.cert_context(self.cert_path.clone()))?;
         let mut key_file = create_new_file(&self.key_path, crate::BROKER_USER, crate::BROKER_GROUP)
             .map_err(|err| err.key_context(self.key_path.clone()))?;
+        let mut csr_file = create_new_file(&self.csr_path, crate::BROKER_USER, crate::BROKER_GROUP)
+            .map_err(|err| err.csr_context(self.csr_path.clone()))?;
 
         let cert_pem = cert.certificate_pem_string()?;
         cert_file.write_all(cert_pem.as_bytes())?;
@@ -66,6 +72,13 @@ impl CreateCertCmd {
             // Prevent the key to be overwritten
             set_permission(&key_file, 0o400)?;
         }
+
+        let csr_pem = cert.csr_string()?;
+        csr_file.write_all(csr_pem.as_bytes())?;
+        csr_file.sync_all()?;
+
+        // Prevent the certificate signing request to be overwritten
+        set_permission(&csr_file, 0o444)?;
 
         Ok(())
     }
@@ -97,12 +110,14 @@ mod tests {
         let dir = tempdir().unwrap();
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
         let key_path = temp_file_path(&dir, "my-device-key.pem");
+        let csr_path = temp_file_path(&dir, "my-csr.csr");
         let id = "my-device-id";
 
         let cmd = CreateCertCmd {
             id: String::from(id),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
+            csr_path: csr_path.clone(),
         };
 
         assert_matches!(
@@ -119,6 +134,7 @@ mod tests {
 
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
         let key_path = temp_file_path(&dir, "my-device-key.pem");
+        let csr_path = temp_file_path(&dir, "my-csr.csr");
 
         let cert_content = "some cert content";
         let key_content = "some key content";
@@ -130,6 +146,7 @@ mod tests {
             id: "my-device-id".into(),
             cert_path: cert_path.clone(),
             key_path: key_path.clone(),
+            csr_path: csr_path.clone(),
         };
 
         assert!(cmd
@@ -146,11 +163,13 @@ mod tests {
         let dir = tempdir().unwrap();
         let key_path = temp_file_path(&dir, "my-device-key.pem");
         let cert_path = FilePath::from("/non/existent/cert/path");
+        let csr_path = temp_file_path(&dir, "my-csr.csr");
 
         let cmd = CreateCertCmd {
             id: "my-device-id".into(),
             cert_path,
             key_path,
+            csr_path,
         };
 
         let cert_error = cmd
@@ -164,11 +183,13 @@ mod tests {
         let dir = tempdir().unwrap();
         let cert_path = temp_file_path(&dir, "my-device-cert.pem");
         let key_path = FilePath::from("/non/existent/key/path");
+        let csr_path = temp_file_path(&dir, "my-csr.csr");
 
         let cmd = CreateCertCmd {
             id: "my-device-id".into(),
             cert_path,
             key_path,
+            csr_path,
         };
 
         let cert_error = cmd

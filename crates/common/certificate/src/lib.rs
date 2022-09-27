@@ -141,6 +141,10 @@ impl KeyCertPair {
         Ok(Zeroizing::new(self.certificate.serialize_private_key_pem()))
     }
 
+    pub fn csr_string(&self) -> Result<String, CertificateError> {
+        Ok(self.certificate.serialize_request_pem()?)
+    }
+
     fn check_identifier(id: &str, max_cn_size: usize) -> Result<(), CertificateError> {
         Ok(device_id::is_valid_device_id(id, max_cn_size)?)
     }

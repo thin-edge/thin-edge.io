@@ -235,6 +235,31 @@ impl ConfigSettingAccessor<DeviceKeyPathSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<DeviceCsrPathSetting> for TEdgeConfig {
+    fn query(&self, _setting: DeviceCsrPathSetting) -> ConfigSettingResult<FilePath> {
+        Ok(self
+            .data
+            .device
+            .csr_path
+            .clone()
+            .unwrap_or_else(|| self.config_defaults.default_device_csr_path.clone()))
+    }
+
+    fn update(
+        &mut self,
+        _setting: DeviceCsrPathSetting,
+        value: FilePath,
+    ) -> ConfigSettingResult<()> {
+        self.data.device.csr_path = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: DeviceCsrPathSetting) -> ConfigSettingResult<()> {
+        self.data.device.csr_path = None;
+        Ok(())
+    }
+}
+
 impl ConfigSettingAccessor<AzureRootCertPathSetting> for TEdgeConfig {
     fn query(&self, _setting: AzureRootCertPathSetting) -> ConfigSettingResult<FilePath> {
         Ok(self
