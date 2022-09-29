@@ -1,6 +1,15 @@
 # thin-edge Domain Model
 
-The following section describes the relevant aspects and entities of the **thin-edge** domain.
+The following section introduces the **thin-edge** domain model.
+
+The **thin-edge** domain model explains details of target domains **thin-edge** is primarily designed for.
+It identifies _entities_ and _aspects_ of those target domains, that are touch points for **thin-edge**.
+Additionally it introduces new _entities_ or _aspects_ to seamlessly fit **thin-edge** into those target domains.
+
+Finally the **thin-edge** domain model:
+  * gives _domain experts_ clear ideas how to position **thin-edge** in their target domain
+  * gives _domain experts_ **and** _thin-edge developers_ a common understanding and unique vocabulary for **thin-edge** and it's environment
+
 
 **thin-edge** is designed to facilitate IoT functionality to resource constrained **devices**.
 The focus is on industrial OT **devices** or any other kind of embedded **device**.
