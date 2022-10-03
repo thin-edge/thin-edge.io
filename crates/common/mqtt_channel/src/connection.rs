@@ -251,7 +251,6 @@ impl Connection {
                 true
             }
             rumqttc::ConnectionError::MqttState(_) => true,
-            rumqttc::ConnectionError::Mqtt4Bytes(_) => true,
             _ => false,
         }
     }
