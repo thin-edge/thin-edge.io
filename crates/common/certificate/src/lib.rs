@@ -212,7 +212,7 @@ pub enum CertificateError {
     CertificateValidationFailure { hint: String, msg: String },
 
     #[error(transparent)]
-    CertParse(#[from] rustls_0_19::TLSError),
+    CertParse(#[from] rustls::Error),
 }
 
 pub struct NewCertificateConfig {

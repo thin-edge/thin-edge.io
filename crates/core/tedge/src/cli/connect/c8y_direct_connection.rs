@@ -1,5 +1,5 @@
 use super::{BridgeConfig, ConnectError};
-use certificate::parse_root_certificate::*;
+use certificate::parse_root_certificate::create_tls_config;
 use rumqttc::{self, Client, Event, Incoming, MqttOptions, Outgoing, Packet, QoS, Transport};
 
 // Connect directly to the c8y cloud over mqtt and publish device create message.
@@ -16,17 +16,11 @@ pub fn create_device_with_direct_connection(
     let mut mqtt_options = MqttOptions::new(bridge_config.remote_clientid.clone(), host[0], 8883);
     mqtt_options.set_keep_alive(std::time::Duration::from_secs(5));
 
-    let mut tls_config = create_tls_config();
-
-    load_root_certs(
-        &mut tls_config.root_store,
+    let tls_config = create_tls_config(
         bridge_config.bridge_root_cert_path.clone().into(),
+        bridge_config.bridge_keyfile.clone().into(),
+        bridge_config.bridge_certfile.clone().into(),
     )?;
-
-    let pvt_key = read_pvt_key(bridge_config.bridge_keyfile.clone().into())?;
-    let cert_chain = read_cert_chain(bridge_config.bridge_certfile.clone().into())?;
-
-    let _ = tls_config.set_single_client_cert(cert_chain, pvt_key);
     mqtt_options.set_transport(Transport::tls_with_config(tls_config.into()));
 
     let (mut client, mut connection) = Client::new(mqtt_options, 10);
