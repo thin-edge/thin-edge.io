@@ -10,6 +10,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::error::FileTransferError;
 
+const HTTP_FILE_TRANSFER_PORT: u16 = 80;
+
 #[derive(Debug, Clone)]
 pub struct HttpConfig {
     pub bind_address: SocketAddr,
@@ -20,7 +22,7 @@ pub struct HttpConfig {
 impl Default for HttpConfig {
     fn default() -> Self {
         HttpConfig {
-            bind_address: ([127, 0, 0, 1], 3000).into(),
+            bind_address: ([127, 0, 0, 1], HTTP_FILE_TRANSFER_PORT).into(),
             file_transfer_uri: "/tedge/".into(),
             file_transfer_dir: "/var/tedge/".into(),
         }
@@ -39,6 +41,16 @@ impl HttpConfig {
     pub fn with_file_transfer_dir(self, file_transfer_dir: PathBuf) -> HttpConfig {
         Self {
             file_transfer_dir,
+            ..self
+        }
+    }
+
+    #[cfg(test)]
+    pub fn with_port(self, port: u16) -> HttpConfig {
+        let mut bind_address = self.bind_address;
+        bind_address.set_port(port);
+        Self {
+            bind_address,
             ..self
         }
     }
@@ -322,7 +334,9 @@ mod test {
     ) {
         let ttd = TempTedgeDir::new();
         let tempdir_path = ttd.path().to_owned();
-        let http_config = HttpConfig::default().with_file_transfer_dir(tempdir_path);
+        let http_config = HttpConfig::default()
+            .with_file_transfer_dir(tempdir_path)
+            .with_port(3000);
         let server = http_file_transfer_server(&http_config).unwrap();
         (ttd, server)
     }
