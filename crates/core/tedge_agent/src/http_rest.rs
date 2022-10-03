@@ -44,7 +44,7 @@ impl HttpConfig {
     }
 
     pub fn file_transfer_end_point(&self) -> String {
-        format!("{}*", self.file_transfer_uri)
+        format!("{}file-transfer/*", self.file_transfer_uri)
     }
 
     pub fn file_transfer_dir_as_string(&self) -> String {
@@ -83,19 +83,12 @@ impl HttpConfig {
     }
 }
 
-mod uri_utils {
-    // below are a set of utility function used for working with
-    // URI coming from GET, PUT and DELETE requests to the thin-edge
-    // device.
-    use std::path::PathBuf;
+fn separate_path_and_file_name(input: PathBuf) -> Option<(PathBuf, String)> {
+    let input_as_str = input.to_str()?;
+    let (relative_path, file_name) = input_as_str.rsplit_once('/')?;
 
-    pub fn separate_path_and_file_name(input: PathBuf) -> Option<(PathBuf, String)> {
-        let input_as_str = input.to_str()?;
-        let (relative_path, file_name) = input_as_str.rsplit_once('/')?;
-
-        let relative_path = PathBuf::from(relative_path);
-        Some((relative_path, file_name.into()))
-    }
+    let relative_path = PathBuf::from(relative_path);
+    Some((relative_path, file_name.into()))
 }
 
 async fn put(
@@ -106,7 +99,7 @@ async fn put(
 
     let mut response = Response::new(Body::empty());
 
-    if let Some((relative_path, file_name)) = uri_utils::separate_path_and_file_name(full_path) {
+    if let Some((relative_path, file_name)) = separate_path_and_file_name(full_path) {
         let root_path = file_transfer.file_transfer_dir.clone();
         let directories_path = root_path.join(relative_path);
 
@@ -222,7 +215,7 @@ mod test {
 
     use std::path::PathBuf;
 
-    use super::{http_file_transfer_server, uri_utils::separate_path_and_file_name};
+    use super::{http_file_transfer_server, separate_path_and_file_name};
     use crate::error::FileTransferError;
     use crate::http_rest::HttpConfig;
     use hyper::{server::conn::AddrIncoming, Body, Method, Request, Server};
@@ -253,7 +246,8 @@ mod test {
         assert_eq!(actual_file_name, expected_file_name);
     }
 
-    const VALID_TEST_URI: &'static str = "http://127.0.0.1:3000/tedge/another/dir/test-file";
+    const VALID_TEST_URI: &'static str =
+        "http://127.0.0.1:3000/tedge/file-transfer/another/dir/test-file";
     const INVALID_TEST_URI: &'static str = "http://127.0.0.1:3000/wrong/place/test-file";
 
     #[test_case(hyper::Method::GET, VALID_TEST_URI, hyper::StatusCode::OK)]
@@ -291,7 +285,7 @@ mod test {
     }
 
     #[test_case(VALID_TEST_URI, hyper::StatusCode::CREATED)]
-    #[test_case(INVALID_TEST_URI, hyper::StatusCode::NOT_FOUND)] // TODO what about 403
+    #[test_case(INVALID_TEST_URI, hyper::StatusCode::NOT_FOUND)]
     #[serial_test::serial]
     #[tokio::test]
     async fn test_file_transfer_put(uri: &'static str, status_code: hyper::StatusCode) {
