@@ -154,7 +154,7 @@ async fn delete(
     let mut response = Response::new(Body::empty());
 
     if !full_path.exists() {
-        *response.status_mut() = hyper::StatusCode::INTERNAL_SERVER_ERROR;
+        *response.status_mut() = hyper::StatusCode::ACCEPTED;
         Ok(response)
     } else {
         match tokio::fs::remove_file(&full_path).await {
@@ -163,7 +163,7 @@ async fn delete(
                 Ok(response)
             }
             Err(_err) => {
-                *response.status_mut() = hyper::StatusCode::INTERNAL_SERVER_ERROR;
+                *response.status_mut() = hyper::StatusCode::FORBIDDEN;
                 Ok(response)
             }
         }
