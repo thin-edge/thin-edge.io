@@ -12,9 +12,9 @@ Suite Teardown         SSHLibrary.Close All Connections
 
 
 *** Variables ***
-${HOST}           192.168.99.110    #Insert the IP address if the default should not be used
-${USERNAME}       pi    #Insert the username if the default should not be used
-${PASSWORD}       thinedge    #Insert the password if the default should not be used
+${HOST}           
+${USERNAME}       pi    
+${PASSWORD}       crypt:LO3wCxZPltyviM8gEyBkRylToqtWm+hvq9mMVEPxtn0BXB65v/5wxUu7EqicpOgGhgNZVgFjY0o=
 
 *** Tasks ***
 tedge_connect_test_positive

@@ -1,15 +1,18 @@
+#Command to execute:    robot -d \results --timestampoutputs --log inotify_crate.html --report NONE --variable HOST:192.168.1.130 /thin-edge.io/tests/RobotFramework/MQTT_health_check/MQTT_health_endpoints.robot
+
+
 *** Settings ***
 Library    SSHLibrary
 Suite Setup            Open Connection And Log In
 Suite Teardown         SSHLibrary.Close All Connections
 
 *** Variables ***
-${HOST}           192.168.100.110
+${HOST}           
 ${USERNAME}       pi
-${PASSWORD}       thinedge
+${PASSWORD}       crypt:LO3wCxZPltyviM8gEyBkRylToqtWm+hvq9mMVEPxtn0BXB65v/5wxUu7EqicpOgGhgNZVgFjY0o=
 ${pid}
-*** Tasks ***
 
+*** Tasks ***
 Connect to Cumulocity
     ${rc}=    Execute Command    sudo tedge connect c8y
     Log    ${rc}=
