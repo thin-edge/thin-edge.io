@@ -1,33 +1,49 @@
-# Thin-edge Core Vision
+# Thin-edge Design Principles
 
+__Thin-edge makes it easy the integration of cloud services, edge computing and operational technologies,
+with the foundations to develop business-specific IIoT gateways
+from a catalog of generic and use-case specific components assembled
+on top of a framework that enables connectivity and interoperability.__
+
+With IIoT, there is a fantastic opportunity for innovative use-cases and business models
+that are more reactive, flexible, and efficient.
+However, the challenges are many and each require a different expertise.
 A typical IoT application has to address:
 
-* __sophisticated business-cases__, with applications involving several vendors, actors and users;
-* __very diverse integration needs__ over operating systems, protocols, data sources, processing tools, actuators, cloud end-points;
-* __constraint environments__ with low-resources devices, high exposure to security risks, prohibitive manual operations;
-* __particular non-functional requirements__ safety of devices operating machines in hazardous contexts,
-  scalability over large fleet of devices, long-term supports of scattered devices.
+* __sophisticated business-cases__, with applications involving several vendors, actors and users
+  and combining connectivity, device management, telemetry, monitoring, analytics;
+* __very diverse integration needs__ over operating systems, protocols, data sources, processing tools,
+  actuators, cloud end-points, legacy systems;
+* __constraint environments__ with low-resources devices, high exposure to security risks,
+  prohibitive manual operations, restricted upgrades;
+* __business-critical or even safety-critical requirements__ with large fleet of devices
+  operating in hazardous contexts and requesting long-term support.
   
-The forces behind these requirements are pushing in opposite directions.
+Furthermore, the forces behind these requirements are pushing in opposite directions.
 
-* On one side, to address the diversity of use-cases and integration requirements, one needs a large open set of features that can be easily extended and combined.
+* On one side, to address the diversity of use-cases and integration requirements,
+  one needs a large open set of features that can be easily extended and combined.
   [NodeRed](https://nodered.org/) is the archetype of such tools facilitating connections of components.
-* On the other side, to meet resource and security constraints, one needs a minimal system specifically built for a task with cherry-picked components.
-  On the extreme side, this leads to the idea of [unikernel](https://en.wikipedia.org/wiki/Unikernel) with sealed, single-purpose software images.
+* On the other side, to meet resource and security constraints,
+  one needs a minimal system specifically built for a task with cherry-picked components.
+  Taken to the extreme, this leads to the idea of [unikernel](https://en.wikipedia.org/wiki/Unikernel)
+  with sealed, single-purpose software images.
   
-What makes thin-edge unique is its approach to reconcile these two poles with two levels of building blocks.
-* To maximize flexibility and interoperability, thin-edge provides the tools to build an agent from independent executables that interact over MQTT using JSON messages.
-* To minimize resources and vulnerabilities, thin-edge features fine-grain Rust components as well as the rules to combine them into purpose-specific agents.
-* To make feasible the assemblage of fine-grain and MQTT-based components into IIoT agents,
-  thin-edge comes with an extensible data model for IIoT - cloud connectivity, telemetry data, device management, child devices, ... -
-  and defines the rules to exchange related messages over MQTT as well as between fine-grain components and at the boundary between the internal and MQTT worlds.
-
-With this approach, thin-edge eases the development of IoT applications on edge devices with a smooth transition between:
-* prototyping use-cases - when the need is to easily onboard devices for IIoT with batteries-included tools,
-* production use-cases - when the need is to deploy a hardened specific software on a large fleet of devices,  
-* IIoT agent development - when the aim is to implement an application-specific agent that integrates tools and services provided by independent vendors.
-* Hardware specific software - when a manufacturer assembles his tools on the devices while letting open to his customers the option to add their own modules. 
-
+What makes thin-edge unique is its approach to reconcile these two poles
+with two levels of building blocks that combine along an IIoT specific API.
+* To maximize flexibility and interoperability,
+  thin-edge provides the tools to build an agent from independent executables
+  that interact over MQTT and HTTP using JSON messages.
+* To minimize resources and vulnerabilities,
+  thin-edge features fine-grain Rust components
+  as well as the rules to combine them into hardened executables.
+* To ease incremental developments,
+  thin-edge give the developers the freedom to combine both MQTT and Rust-based components
+  into purpose-specific gateways.
+* To make feasible the interoperability of components provided by different tiers,
+  thin-edge comes with an extensible data model for IIoT -
+  cloud connectivity, telemetry data, device management, child devices, ...
+  
 ## Design Principles
 
 To achieve this goal, the foundations of thin-edge address the hardened case first.
