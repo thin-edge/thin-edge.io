@@ -6,59 +6,43 @@ The **thin-edge** domain model explains details of target domains **thin-edge** 
 It identifies _entities_ and _aspects_ of those target domains, that are touch points for **thin-edge**.
 Additionally it introduces new _entities_ or _aspects_ to seamlessly fit **thin-edge** into those target domains.
 
-Finally the **thin-edge** domain model:
-  * gives _domain experts_ clear ideas how to position **thin-edge** in their target domain
-  * gives _domain experts_ **and** _thin-edge developers_ a common understanding and unique vocabulary for **thin-edge** and it's environment
+Finally the **thin-edge** domain model gives..
+  * _target domain experts_ a clear idea how to position **thin-edge** in their target domain
+  * _target domain experts_ **and** _thin-edge developers_ a common understanding and unique vocabulary for **thin-edge** and it's environment
 
+## thin-edge target domains
 
 **thin-edge** is designed to facilitate IoT functionality to resource constrained **devices**.
-The focus is on industrial OT **devices** or any other kind of embedded **device**.
-It is not reduced to **devices** that are capable to install and run thin-edge, but includes also **devices** that need another _(gateway) device_ aside, that executes thin-edge.
+The focus is on industrial OT **devices** or any other kind of embedded **devices**. It is not reduced to **devices** that are capable to install and run thin-edge, but includes also **devices** that need another _(gateway) device_ aside, that executes **thin-edge**.
 
-As the figure below illustrates, those **devices** can by **PLCs**, or any kind of **SoC-based** or **Microcontroller-based** Embedded Systems.
+Usual **devices** are **PLCs** (**P**rogrammable **L**ogic **C**ontrollers), **IPCs** (**I**ndustrial **PC**s) or any kind of **SoC-based** or **Microcontroller-based** Embedded System. The figure below shows a simplified conceptual model of such a device.
 
+![Simple Device Model](images/simple-device-model.svg)
 
-![Device Class](images/device-class.svg)
-
-* **PLC** (**P**rogrammable **L**ogic **C**ontroller):
-  A PLC is specialized hardware that has been designed to control manufacturing processes.
-  Its hardware has been ruggedized to operate in harsh electrical, thermic and mechanical industrial environments. 
-  * The **Control Application** is a program, usually written by an **Automation Engineer** in a domain specific graphical programming language (e.g. "Ladder Diagram" or "Function block diagram"). 
-    * It is developed with a specific Development Software on a PC (e.g. __STEP 7__ or __CODESYS__), and downloaded to the PLC.
-  * The **RTS** (**R**un **T**ime **S**ystem) is the basic software component on a PLC, that
-    * receives and accepts the **Control Application** from the Development Software on a PC
-    * manages and observes the cyclic execution of the **Control Application**
-  * **Sensors** and **Actuators** enable the PLC to observe and control physical behaviours on the shopfloor.
-    * can built-in in the PLC device, 
-      or connected to the PLC via some **Fieldbus** (e.g. Modbus, CANopen, PROFINET, EtherCAT, ...)
-    * can be simple inputs/outputs (as digital signals from a light barrier, or analouge values like temperature or pressure);
-      or complex equipments as robotic arms or other PLCs
-  * The **Process Image** is a block in the memory, that reflects inputs and outputs of all connected **Sensors** and **Actuators**
-    * it contains an _input area_ and an _output area_, where both areas are arrays of **data points**
-    * each **data point** carries a value of an input or output
-    * it is managed by the RTS during the cyclic execution of the **Control Application**, as steps below:
-      * Step 1: RTS reads all inputs from Sensor's and Actuator's, and stores all read input values to the **Process Image's** _input area_ 
-      * Step 2: RTS executes once the control application, that operates on the **Process Image's** _input_ and _output area_
-      * Step 3: RTS reads all output values from the **Process Image's** _output area_, and writes all read values to Sensor's and Actuator's
-      * then, next cycle starts with Step 1
-
-* **SoC**-based (**S**ystem **o**n **C**hip) Embedded System:
-  * TODO
-
-* **Microcontroller**-based Embedded System:
-  * TODO
-
-## thin-edge device concept
-
-**thin-edge** facilitates IoT functionality to the device it is running on, as well as to devices that are connected to that device.
-All devices are categorized as below:
-  * the **main-device** is the device thin-edge is running on
-  * all devices connected to the **main-device** are referred as **external child-devices**
-  * each device has a unique **device-id**
+<!--
+* TODO: add somehow "Such a **device** is most often a specialized hardware that has been ruggedized to operate in harsh electrical, thermic and mechanical industrial environments."
+-->
+* The **Domain Application** is a program, usually developed by a **Domain Expert**
+  * e.g. on a **PLC** it's a _control application_, created by an _automation engineer_ in a domain specific graphical programming language (like "Ladder Diagram" or "Function block diagram")
+  * or on a **SoC-based** or **Microcontroller-based** system it's an _application program_, created by an _embedded software engineer_ usually in C/C++
+* The **OS / Libs / Runtime** provide basic functionality to the **Domain Application**
+  <!-- TODO: add somehow "used to abtracts the hardware. But: on a microcontroler usually less abtraction, more hw dep on the domain app, and even no OS" -->
+* **Sensors** and **Actuators** enable the **device** to observe and control physical behaviour on the shopfloor or device's environment.
+  * can be integrated in the **device's** hardware,
+    or connected to the **device** via some **Fieldbus** (e.g. Modbus, CANopen, PROFINET, EtherCAT, ...) or
+    some **Local Interface** as USB, UART, SPI, I2C, ...
+  * can be simple peripherals as a light barrier, or a sensor for temperature or pressure;
+    or complex equipments as robotic arms or even other **devices**
+* **Inputs / Outputs** are the communication channels between the **Domain Application** and **Sensors** and **Actuators**
+  * drivers (as part of the **OS / Libs / Runtime** and/or the **Domain Application**) do expose all data from
+    **Sensors** and **Actuators** to the **device** as inputs or outputs
+  * also the **Domain Application** can expose data as input or output (e.g. own _signals_ or _states_)
 
 ## thin-edge data concepts
 
-**thin-edge** provides different devices in a standardized representation to the cloud. Therefore **thin-edge** provides different kinds of data concepts.
+**thin-edge** provides different devices in a standardized representation to the cloud. Therefore **thin-edge** provides specialized data concepts.
+
+The data concepts below belong to **inputs** and **outputs** available on a device. Thereby each **input** and **output** is refered as a **data point**.
 
   * **Measurements**:
     * contain numeric data produced by sensors (like temperature readings) or calculated data based on information from the **control application**.
@@ -73,18 +57,33 @@ All devices are categorized as below:
     * similar to Events, but the user or operator of the system has to take action to resolve the alarm
     * an **alarm** is triggered by a **data point** (e.g. when it changes to a specific value as `0` or `1`), and contains an optional alarm text.
 
+## thin-edge device concept
+
+**thin-edge** facilitates IoT functionality to the device it is running on, as well as to devices that are connected to that device.
+All devices are categorized as below:
+  * the **main-device** is the device thin-edge is running on
+  * all devices connected to the **main-device** are referred as **external child-devices**
+  * each device has a unique **device-id**
+
+The figure below illustrates the device concept.
+
+![Device Concept](images/device-concept.svg)
+
 ## thin-edge plugin concept
 
-### Plugin
-
-**thin-edge** realizes high level cloud functionality (e.g. _configuration management_ or _log management_) with **plugins**.
-  * a **plugin** accesses _ressources_ and _services_ of the device, as e.g.
-      * the device's _package manager_ is accessed by _software management_
-      * device's _configuration files_ are accessed by _configuration management_
-  * a **plugin** can be an (external) executable (e.g. as the `c8y_configuration_plugin` for _configuration management_)
-    or a thin-edge built-in software component (e.g. as for _software management_)
+**thin-edge** realizes full-fledged cloud functionality (e.g. _configuration management_ or _log management_) with **plugins**.
+  * a **plugin** encapsulates and manages accesses to _ressources_ and _services_ of the device, as e.g.
+      * _software management_ accesses the device's _package manager_
+      * _configuration management_ accesses device's _configuration files_
+  * a **plugin** can be
+      * an (external) executable (e.g. as the `c8y_configuration_plugin` for _configuration management_)
+      * or a thin-edge built-in software component (e.g. as for _software management_)
   * usually a **plugin** runs on the **main-device**; thus it can access the _resources_ of the **main-device** directly
   * to access _ressources_ of an **external child-device** a **plugin** needs another component, referred as **child-device agent**
+
+The figure below illustrates the concept of **plugins** and **child-devices agents**.
+
+![Plugin Concept](images/plugin-concept.svg)
 
 ### Child-Device Agent
   * a **child-device agent** is the counterpart of a **plugin**, that takes the responsibility to access to the **external child-device's** _resources_
@@ -96,22 +95,14 @@ All devices are categorized as below:
 
 ### Plugin-Contract
 
-a **plugin** defines and implements a specific **contract** for all interactions with a **child-device agent**
+A **plugin** defines and implements a specific **contract** for all interactions with a **child-device agent**
   * part of the **contract** could be e.g.:
       * the **child-device agent** must listen and react to certain requests of the **plugin**, e.g. on MQTT
       * the **child-device agent** must provide/consume files to/from the **plugin** on purpose, e.g. via HTTP
       * ...and more...
   * a **plugin's** **contract** can be denoted with a unique name (e.g. `tedge_config`)
     * based on that unique name a **child-device agent** can report and find **plugins** the child-device intends to contact (e.g. during providioning phase)
-    * those information can be provided to the cloud and other applications on the device site
-
-Figure below illustrates the concept of **plugins**, their **contracts** and **external child-devices agents**, as described above.
-
-![Child-Device Agent](images/child-device-agent.svg)
-
-TODO: Capabilities shall also enable to describe a device's supported **measurements**, **variables**, **events** and  **alarms**
-
-TODO: add the inventory to the domain model?
+    * those information can be also provided to the cloud and other applications on the device site, on purpose
 
 ## Main Challenges
 
