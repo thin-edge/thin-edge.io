@@ -60,10 +60,14 @@ The data concepts below belong to **inputs** and **outputs** available on a devi
 ## thin-edge device concept
 
 **thin-edge** facilitates IoT functionality to the device it is running on, as well as to devices that are connected to that device.
-All devices are categorized as below:
-  * the **main-device** is the device thin-edge is running on
+
+  * the device thin-edge is running on is referred as the **main-device**
+    * thin-edge on the **main-device** establishes and manages all communication to the cloud
   * all devices connected to the **main-device** are referred as **external child-devices**
-  * each device has a unique **device-id**
+  * each device is represented in the cloud with an individual **device twin**
+  * a unique **child-id** makes the association between each **external child-device** and it's **device twin**
+  * all telemetry data (i.E. Measurements, Variables, Events, Alarms) of a device (i.E. **main-device** or **external child-devices**) appear
+    in the cloud in context of its corresponding **device twin**
 
 The figure below illustrates the device concept.
 
@@ -71,8 +75,8 @@ The figure below illustrates the device concept.
 
 ## thin-edge plugin concept
 
-**thin-edge** realizes full-fledged cloud functionality (e.g. _configuration management_ or _log management_) with **plugins**.
-  * a **plugin** encapsulates and manages accesses to _ressources_ and _services_ of the device, as e.g.
+**thin-edge** realizes full-fledged cloud functionality (e.g. _configuration management_ or _log management_) based on **plugins**.
+  * a **plugin** encapsulates and manages access to _ressources_ and _services_ of the device, as e.g.
       * _software management_ accesses the device's _package manager_
       * _configuration management_ accesses device's _configuration files_
   * a **plugin** can be
