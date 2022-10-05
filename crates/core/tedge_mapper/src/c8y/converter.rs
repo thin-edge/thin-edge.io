@@ -733,14 +733,9 @@ async fn forward_operation_request(
                 execute_operation(payload, command.as_str(), &operation.name, operation_logs)
                     .await?;
             }
-            let msg1 = Message::new(
-                &Topic::new_unchecked("c8y/s/us"),
-                format!("501,{}", operation.name),
-            );
-            let msg2 = Message::new(
-                &Topic::new_unchecked("c8y/s/us"),
-                format!("503,{}", operation.name),
-            );
+            let topic = C8yTopic::SmartRestResponse.to_topic()?;
+            let msg1 = Message::new(&topic, format!("501,{}", operation.name));
+            let msg2 = Message::new(&topic, format!("503,{}", operation.name));
 
             Ok(vec![msg1, msg2])
         }
