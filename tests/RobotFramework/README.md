@@ -82,24 +82,24 @@ Following installation is needed in order to run the robot files on own device:
 1. Python with PiP
 	1. 	[https://www.python.org/downloads/](https://www.python.org/downloads/) 
 2. Robot Framework
-	3. `pip install robotframework`
-4. Browser Library
-	5. Install node.js 
-		6. `sudo su`
-		6. `curl -fsSL https://deb.nodesource.com/setup_17.x | bash -`
-		7. `sudo apt-get install -y nodejs`
-	6. Update pip `pip install -U pip` to ensure latest version is used
-	7. Install robotframework-browser from the commandline: `pip install robotframework-browser`
-	8. Install the node dependencies: run `rfbrowser init` in your shell
-		9. if rfbrowser is not found, try `python -m Browser.entry init` or `python3 -m Browser.entry init`
-10. SSHLibrary
-	11. `pip install --upgrade robotframework-sshlibrary`
-12. CryptoLibrary
-	13. pip install --upgrade robotframework-crypto
-14. MQTTLibrary
-	15. `pip install robotframework-mqttlibrary`
-16. Metrics
-	17. `pip install robotframework-metrics==3.3.3`
+	1. `pip install robotframework`
+3. Browser Library
+	1. Install node.js 
+		1. `sudo su`
+		2. `curl -fsSL https://deb.nodesource.com/setup_17.x | bash -`
+		3. `sudo apt-get install -y nodejs`
+	2. Update pip `pip install -U pip` to ensure latest version is used
+	3. Install robotframework-browser from the commandline: `pip install robotframework-browser`
+	4. Install the node dependencies: run `rfbrowser init` in your shell
+		1. if rfbrowser is not found, try `python -m Browser.entry init` or `python3 -m Browser.entry init`
+4. SSHLibrary
+	1. `pip install --upgrade robotframework-sshlibrary`
+5. CryptoLibrary
+	1. pip install --upgrade robotframework-crypto
+6. MQTTLibrary
+	1. `pip install robotframework-mqttlibrary`
+7. Metrics
+	1. `pip install robotframework-metrics==3.3.3`
 
 ## 6. Command line options for test execution
 
