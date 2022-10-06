@@ -200,7 +200,7 @@ impl SmAgentConfig {
 pub struct SmAgent {
     config: SmAgentConfig,
     operation_logs: OperationLogs,
-    persistance_store: AgentStateRepository,
+    persistence_store: AgentStateRepository,
     _flock: Flockfile,
 }
 
@@ -209,7 +209,7 @@ impl SmAgent {
         let flock = check_another_instance_is_not_running(name, &config.run_dir)?;
         info!("{} starting", &name);
 
-        let persistance_store = AgentStateRepository::new(config.sm_home.clone());
+        let persistence_store = AgentStateRepository::new(config.sm_home.clone());
         let operation_logs = OperationLogs::try_new(config.log_dir.clone())?;
 
         config.mqtt_config = config
@@ -220,20 +220,17 @@ impl SmAgent {
         Ok(Self {
             config,
             operation_logs,
-            persistance_store,
+            persistence_store,
             _flock: flock,
         })
     }
 
     #[instrument(skip(self), name = "sm-agent")]
     pub async fn init(&mut self, config_dir: PathBuf) -> Result<(), anyhow::Error> {
-        create_directory_with_user_group(
-            format!("{}/.agent", config_dir.display()),
-            "tedge",
-            "tedge",
-            0o775,
-        )?;
-        create_directory_with_user_group("/var/log/tedge/agent", "tedge", "tedge", 0o775)?;
+        // `config_dir` by default is `/etc/tedge` (or whatever the user sets with --config-dir)
+        let config_dir = config_dir.display();
+        create_directory_with_user_group(&format!("{config_dir}/.agent"), "tedge", "tedge", 0o775)?;
+        create_directory_with_user_group(self.config.log_dir.clone(), "tedge", "tedge", 0o775)?;
         info!("Initializing the tedge agent session");
         mqtt_channel::init_session(&self.config.mqtt_config).await?;
 
@@ -276,7 +273,7 @@ impl SmAgent {
             }
         });
 
-        let () = self.process_pending_operation(&mut mqtt.published).await?;
+        self.process_pending_operation(&mut mqtt.published).await?;
 
         while let Err(error) = self
             .process_subscribed_messages(&mut mqtt.received, &mut mqtt.published, &plugins)
@@ -316,8 +313,8 @@ impl SmAgent {
                 }
 
                 topic if topic == &self.config.request_topic_update => {
-                    let () = plugins.lock().await.load()?;
-                    let () = plugins
+                    plugins.lock().await.load()?;
+                    plugins
                         .lock()
                         .await
                         .update_default(&get_default_plugin(&self.config.config_location)?)?;
@@ -345,10 +342,10 @@ impl SmAgent {
                     {
                         error!("{}", error);
 
-                        self.persistance_store.clear().await?;
+                        self.persistence_store.clear().await?;
                         let status = OperationStatus::Failed;
                         let response = RestartOperationResponse::new(&request).with_status(status);
-                        let () = responses
+                        responses
                             .publish(Message::new(
                                 &self.config.response_topic_restart,
                                 response.to_bytes()?,
@@ -373,8 +370,7 @@ impl SmAgent {
     ) -> Result<(), AgentError> {
         let request = match SoftwareListRequest::from_slice(message.payload_bytes()) {
             Ok(request) => {
-                let () = self
-                    .persistance_store
+                self.persistence_store
                     .store(&State {
                         operation_id: Some(request.id.clone()),
                         operation: Some(StateStatus::Software(SoftwareOperationVariants::List)),
@@ -386,7 +382,7 @@ impl SmAgent {
 
             Err(error) => {
                 debug!("Parsing error: {}", error);
-                let () = responses
+                responses
                     .publish(Message::new(
                         &self.config.errors_topic,
                         format!("{}", error),
@@ -401,7 +397,7 @@ impl SmAgent {
         };
         let mut executing_response = SoftwareListResponse::new(&request);
 
-        let () = responses
+        responses
             .publish(Message::new(
                 &self.config.response_topic_list,
                 executing_response.to_bytes()?,
@@ -421,11 +417,11 @@ impl SmAgent {
             }
         };
 
-        let () = responses
+        responses
             .publish(Message::new(response_topic, response.to_bytes()?))
             .await?;
 
-        let _state: State = self.persistance_store.clear().await?;
+        let _state: State = self.persistence_store.clear().await?;
 
         Ok(())
     }
@@ -440,7 +436,7 @@ impl SmAgent {
         let request = match SoftwareUpdateRequest::from_slice(message.payload_bytes()) {
             Ok(request) => {
                 let _ = self
-                    .persistance_store
+                    .persistence_store
                     .store(&State {
                         operation_id: Some(request.id.clone()),
                         operation: Some(StateStatus::Software(SoftwareOperationVariants::Update)),
@@ -452,7 +448,7 @@ impl SmAgent {
 
             Err(error) => {
                 error!("Parsing error: {}", error);
-                let () = responses
+                responses
                     .publish(Message::new(
                         &self.config.errors_topic,
                         format!("{}", error),
@@ -467,7 +463,7 @@ impl SmAgent {
         };
 
         let mut executing_response = SoftwareUpdateResponse::new(&request);
-        let () = responses
+        responses
             .publish(Message::new(response_topic, executing_response.to_bytes()?))
             .await?;
 
@@ -490,11 +486,11 @@ impl SmAgent {
             }
         };
 
-        let () = responses
+        responses
             .publish(Message::new(response_topic, response.to_bytes()?))
             .await?;
 
-        let _state = self.persistance_store.clear().await?;
+        let _state = self.persistence_store.clear().await?;
 
         Ok(())
     }
@@ -506,8 +502,7 @@ impl SmAgent {
     ) -> Result<RestartOperationRequest, AgentError> {
         let request = match RestartOperationRequest::from_slice(message.payload_bytes()) {
             Ok(request) => {
-                let () = self
-                    .persistance_store
+                self.persistence_store
                     .store(&State {
                         operation_id: Some(request.id.clone()),
                         operation: Some(StateStatus::Restart(RestartOperationStatus::Restarting)),
@@ -518,7 +513,7 @@ impl SmAgent {
 
             Err(error) => {
                 error!("Parsing error: {}", error);
-                let () = responses
+                responses
                     .publish(Message::new(
                         &self.config.errors_topic,
                         format!("{}", error),
@@ -539,16 +534,16 @@ impl SmAgent {
         responses: &mut impl PubChannel,
         topic: &Topic,
     ) -> Result<(), AgentError> {
-        self.persistance_store
+        self.persistence_store
             .update(&StateStatus::Restart(RestartOperationStatus::Restarting))
             .await?;
 
         // update status to executing.
         let executing_response = RestartOperationResponse::new(&RestartOperationRequest::default());
-        let () = responses
+        responses
             .publish(Message::new(topic, executing_response.to_bytes()?))
             .await?;
-        let () = restart_operation::create_slash_run_file(&self.config.run_dir)?;
+        restart_operation::create_slash_run_file(&self.config.run_dir)?;
 
         let command_vec = get_restart_operation_commands();
         for mut command in command_vec {
@@ -571,7 +566,7 @@ impl SmAgent {
         &self,
         responses: &mut impl PubChannel,
     ) -> Result<(), AgentError> {
-        let state: Result<State, _> = self.persistance_store.load().await;
+        let state: Result<State, _> = self.persistence_store.load().await;
         let mut status = OperationStatus::Failed;
 
         if let State {
@@ -598,7 +593,7 @@ impl SmAgent {
                 }
 
                 StateStatus::Restart(RestartOperationStatus::Restarting) => {
-                    let _state = self.persistance_store.clear().await?;
+                    let _state = self.persistence_store.clear().await?;
                     if restart_operation::has_rebooted(&self.config.run_dir)? {
                         info!("Device restart successful.");
                         status = OperationStatus::Successful;
@@ -614,7 +609,7 @@ impl SmAgent {
 
             let response = SoftwareRequestResponse::new(&id, status);
 
-            let () = responses
+            responses
                 .publish(Message::new(topic, response.to_bytes()?))
                 .await?;
         }
@@ -685,7 +680,7 @@ mod tests {
         let (_output, mut output_stream) = mqtt_tests::output_stream();
         let response_topic_restart =
             Topic::new(RestartOperationResponse::topic_name()).expect("Invalid topic");
-        let () = agent
+        agent
             .handle_restart_operation(&mut output_stream, &response_topic_restart)
             .await?;
         assert!(std::path::Path::new(
@@ -761,7 +756,7 @@ mod tests {
                 )
                 .unwrap(),
             ));
-            let () = agent
+            agent
                 .handle_software_list_request(
                     &mut output_sink,
                     plugins,
@@ -805,7 +800,7 @@ mod tests {
                 )
                 .unwrap(),
             ));
-            let () = agent
+            agent
                 .process_subscribed_messages(&mut requests, &mut response_sink, &plugins)
                 .await
                 .unwrap();

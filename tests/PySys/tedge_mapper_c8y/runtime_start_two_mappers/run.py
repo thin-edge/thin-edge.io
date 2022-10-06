@@ -6,7 +6,7 @@ Validate tedge_mapper can't be started twice.
 
 Given unconnected system
 
-When we start first tedge_mapper it runs uninterupted
+When we start first tedge_mapper it runs uninterrupted
 When we start second tedge_mapper it doesn't connect to broker and exits with code 1 and logs error message
 
 Then we validate output appropriate error message

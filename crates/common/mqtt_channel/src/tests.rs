@@ -99,7 +99,7 @@ mod tests {
         ]
         .into_iter()
         {
-            let () = broker.publish(topic, payload).await?;
+            broker.publish(topic, payload).await?;
             assert_eq!(
                 MaybeMessage::Next(message(topic, payload)),
                 next_message(&mut messages).await
@@ -113,7 +113,7 @@ mod tests {
         ]
         .into_iter()
         {
-            let () = broker.publish(topic, payload).await?;
+            broker.publish(topic, payload).await?;
             assert_eq!(MaybeMessage::Timeout, next_message(&mut messages).await);
         }
 

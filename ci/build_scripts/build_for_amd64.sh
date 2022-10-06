@@ -6,6 +6,7 @@ set -euo pipefail
 cargo install cargo-deb --version 1.38.1
 
 # Load the package list as $RELEASE_PACKAGES and $TEST_PACKAGES
+# shellcheck disable=SC1091
 source ./ci/package_list.sh
 
 # Build release debian packages

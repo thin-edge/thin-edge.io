@@ -102,7 +102,7 @@ impl ConfigSetting for C8yRootCertPathSetting {
 }
 
 ///
-/// Smartrest templates to subsribe to.
+/// Smartrest templates to subscribe to.
 ///
 /// Example: template1,template2
 ///

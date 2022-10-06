@@ -46,7 +46,7 @@ class PySysTest(SoftwareManagement):
             "watermelon", self.get_pkgid("watermelon"), "::fruits", "", "install"
         )
 
-        self.wait_until_succcess()
+        self.wait_until_success()
 
         # vanilla is always there
         self.assertThat("True == value", value=self.check_is_installed("vanilla"))
@@ -55,7 +55,7 @@ class PySysTest(SoftwareManagement):
             "watermelon", self.get_pkgid("watermelon"), "::fruits", "", "delete"
         )
 
-        self.wait_until_succcess()
+        self.wait_until_success()
 
     def validate(self):
         # This is always false

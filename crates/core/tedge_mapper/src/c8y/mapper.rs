@@ -76,6 +76,7 @@ impl TEdgeComponent for CumulocityMapper {
             device_type,
             operations,
             http_proxy,
+            cfg_dir,
         )?);
 
         let mut mapper = create_mapper(
@@ -118,6 +119,13 @@ fn create_directories(config_dir: &Path) -> Result<(), anyhow::Error> {
         0o644,
         None,
     )?;
+    // Create directory for device custom fragments
+    create_directory_with_user_group(
+        format!("{}/device", config_dir.display()),
+        "tedge",
+        "tedge",
+        0o775,
+    )?;
     Ok(())
 }
 
@@ -156,7 +164,7 @@ mod tests {
         "tedge/measurements",
         r#"{"temperature": 12, "time": "2021-06-15T17:01:15.806181503+02:00"}"#,
         r#"{"temperature": 12, "time": "2021-06-15T17:01:15.806181503+02:00"}"#
-    )] // successs case
+    )] // success case
     #[tokio::test]
     async fn test_tedge_mapper_with_mqtt_pub(
         pub_topic: &str,
@@ -225,7 +233,7 @@ mod tests {
         });
 
         // publish `payload` to `pub_topic`
-        let () = broker.publish(pub_topic, payload).await?;
+        broker.publish(pub_topic, payload).await?;
 
         // check the `messages` returned contain `expected_msg`
         assert_received_all_expected(&mut messages, TEST_TIMEOUT_SECS, &[expected_msg]).await;

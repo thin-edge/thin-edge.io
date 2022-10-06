@@ -266,7 +266,7 @@ impl NotifyStream {
                 match event_or_error {
                     Ok(event) => {
                         let event_mask: FileEvent = event.mask.try_into()?;
-                        // because watching a file or watching a direcotry is implemented as
+                        // because watching a file or watching a directory is implemented as
                         // watching a directory, we can ignore the case where &event.name is None
                         if let Some(event_name) = &event.name {
                             let notify_file_name = event_name.to_str().ok_or_else(|| NotifyStreamError::FailedToCreateStream)?;
@@ -316,7 +316,7 @@ impl NotifyStream {
                         // will always add a watcher as a directory
                     },
                     Err(error) => {
-                        // any error comming out of `notify_service.next()` will be
+                        // any error coming out of `notify_service.next()` will be
                         // an std::Io error: https://docs.rs/inotify/latest/src/inotify/stream.rs.html#48
                         yield Err(NotifyStreamError::FromIOError(error))?;
                     }
@@ -536,8 +536,8 @@ mod tests {
             ttd_clone.file("file_b").with_raw_content("content");
         });
 
-        let () = fs_notify_handler.await.unwrap();
-        let () = file_handler.await.unwrap();
+        fs_notify_handler.await.unwrap();
+        file_handler.await.unwrap();
     }
 
     #[tokio::test]
@@ -568,7 +568,7 @@ mod tests {
             ttd_clone.file("file_c").delete(); // should match CREATE, DELETE
         });
 
-        let () = fs_notify_handler.await.unwrap();
-        let () = file_handler.await.unwrap();
+        fs_notify_handler.await.unwrap();
+        file_handler.await.unwrap();
     }
 }

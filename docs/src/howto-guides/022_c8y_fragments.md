@@ -19,7 +19,9 @@ sudo tedge config set device.type VALUE
 
 ## Custom fragments
 
-If you wish to add more fragments to Cumulocity, you can do so by populating `/etc/tedge/device/inventory.json`
+If you wish to add more fragments to Cumulocity, you can do so by populating `{base_config_dir}/device/inventory.json`.
+The default `base_config_dir` is `/etc/tedge`.
+See the link for more information about setting a custom [base_config_dir.](../references/thin-edge-config-files.md)
 
 An example `inventory.json` looks something like this:
 

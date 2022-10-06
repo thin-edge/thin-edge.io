@@ -157,8 +157,7 @@ impl C8yMqttJwtTokenRetriever {
 #[async_trait]
 impl C8yJwtTokenRetriever for C8yMqttJwtTokenRetriever {
     async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
-        let () = self
-            .mqtt_con
+        self.mqtt_con
             .published
             .publish(mqtt_channel::Message::new(
                 &Topic::new_unchecked("c8y/s/uat"),
@@ -237,7 +236,7 @@ impl JwtAuthHttpProxy {
         let mut mqtt_con = Connection::new(&mqtt_config).await?;
 
         // Ignore errors on this connection
-        let () = mqtt_con.errors.close();
+        mqtt_con.errors.close();
 
         let jwt_token_retriver = Box::new(C8yMqttJwtTokenRetriever::new(mqtt_con));
 
@@ -325,7 +324,7 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         while self.end_point.c8y_internal_id.is_empty() {
             if let Err(error) = self.try_get_and_set_internal_id().await {
                 error!(
-                    "An error ocurred while retrieving internal Id, operation will retry in {} seconds and mapper will reinitialise.\n Error: {:?}",
+                    "An error occurred while retrieving internal Id, operation will retry in {} seconds and mapper will reinitialise.\n Error: {:?}",
                     RETRY_TIMEOUT_SECS, error
                 );
 

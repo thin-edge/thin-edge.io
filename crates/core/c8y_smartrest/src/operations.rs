@@ -11,7 +11,7 @@ use serde::Deserialize;
 /// Each operation is a file name in one of the subdirectories
 /// The file name is the operation name
 
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub struct OnMessageExec {
     command: Option<String>,
@@ -20,7 +20,7 @@ pub struct OnMessageExec {
     user: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub struct Operation {
     #[serde(skip)]
@@ -242,7 +242,6 @@ mod tests {
         let test_operations = TestOperations::builder().with_operations(ops_count).build();
 
         let operations = get_operations(test_operations.temp_dir(), "").unwrap();
-        dbg!(&operations);
 
         assert_eq!(operations.operations.len(), ops_count);
     }

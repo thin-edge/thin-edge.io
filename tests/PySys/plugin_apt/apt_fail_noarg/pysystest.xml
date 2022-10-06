@@ -2,7 +2,7 @@
 <pysystest type="auto">
 
     <description>
-        <title>Validate apt plugin fetures(prepare, list, install, remove finalize) without arguments</title>
+        <title>Validate apt plugin features(prepare, list, install, remove finalize) without arguments</title>
         <purpose><![CDATA[
 ]]>
         </purpose>

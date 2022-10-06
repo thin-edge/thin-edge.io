@@ -137,12 +137,13 @@ from below mentioned location.
 
 ```shell
 wget https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh
+chmod a+x uninstall-thin-edge_io.sh
 ```
 The uninstall script provides options as shown below.
 
 ```shell
-USAGE:
-   uninstall-thin-edge_io [COMMAND]
+USAGE: 
+   ./uninstall-thin-edge.io.sh [COMMAND]
     
 COMMANDS:
     remove     Uninstall thin-edge.io with keeping configuration files
@@ -157,7 +158,7 @@ COMMANDS:
 Use uninstall script as shown below just to `remove` the `thin-edge.io` packages.
 
 ```shell
-uninstall-thin-edge.io.sh remove
+./uninstall-thin-edge.io.sh remove
 ```
 > Note: Removes just the thin-edge.io packages and does not remove the `configuration` files.
 
@@ -166,7 +167,7 @@ Use uninstall script as shown below to remove the thin-edge.io as well as to rem
 associated with these thin-edge.io packages.
 
 ```shell
-uninstall-thin-edge.io.sh purge
+./uninstall-thin-edge.io.sh purge
 ```
 
 ## Next steps

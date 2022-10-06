@@ -1,17 +1,6 @@
 use super::{BridgeConfig, ConnectError};
-
-use rumqttc::{
-    self, certs, pkcs8_private_keys, rsa_private_keys, Client, Event, Incoming, MqttOptions,
-    Outgoing, Packet, QoS, Transport,
-};
-
-use rustls_0_19::ClientConfig;
-
-use std::fs;
-use std::io::{Error, ErrorKind};
-use std::path::PathBuf;
-use std::{fs::File, io::BufReader};
-use tedge_config::FilePath;
+use certificate::parse_root_certificate::create_tls_config;
+use rumqttc::{self, Client, Event, Incoming, MqttOptions, Outgoing, Packet, QoS, Transport};
 
 // Connect directly to the c8y cloud over mqtt and publish device create message.
 pub fn create_device_with_direct_connection(
@@ -27,18 +16,12 @@ pub fn create_device_with_direct_connection(
     let mut mqtt_options = MqttOptions::new(bridge_config.remote_clientid.clone(), host[0], 8883);
     mqtt_options.set_keep_alive(std::time::Duration::from_secs(5));
 
-    let mut client_config = ClientConfig::new();
-
-    let () = load_root_certs(
-        &mut client_config.root_store,
-        bridge_config.bridge_root_cert_path.clone(),
+    let tls_config = create_tls_config(
+        bridge_config.bridge_root_cert_path.clone().into(),
+        bridge_config.bridge_keyfile.clone().into(),
+        bridge_config.bridge_certfile.clone().into(),
     )?;
-
-    let pvt_key = read_pvt_key(bridge_config.bridge_keyfile.clone())?;
-    let cert_chain = read_cert_chain(bridge_config.bridge_certfile.clone())?;
-
-    let _ = client_config.set_single_client_cert(cert_chain, pvt_key);
-    mqtt_options.set_transport(Transport::tls_with_config(client_config.into()));
+    mqtt_options.set_transport(Transport::tls_with_config(tls_config.into()));
 
     let (mut client, mut connection) = Client::new(mqtt_options, 10);
 
@@ -105,128 +88,4 @@ fn publish_device_create_message(
         format!("100,{},{}", device_id, device_type).as_bytes(),
     )?;
     Ok(())
-}
-
-fn load_root_certs(
-    root_store: &mut rustls_0_19::RootCertStore,
-    cert_path: FilePath,
-) -> Result<(), ConnectError> {
-    if fs::metadata(&cert_path)?.is_dir() {
-        for file_entry in fs::read_dir(cert_path)? {
-            add_root_cert(root_store, file_entry?.path())?;
-        }
-    } else {
-        add_root_cert(root_store, cert_path.into())?;
-    }
-    Ok(())
-}
-
-fn add_root_cert(
-    root_store: &mut rustls_0_19::RootCertStore,
-    cert_path: PathBuf,
-) -> Result<(), ConnectError> {
-    let f = File::open(cert_path)?;
-    let mut rd = BufReader::new(f);
-    let _ = root_store.add_pem_file(&mut rd).map(|_| ()).map_err(|()| {
-        Error::new(
-            ErrorKind::InvalidData,
-            "could not load PEM file".to_string(),
-        )
-    });
-    Ok(())
-}
-
-fn read_pvt_key(key_file: tedge_config::FilePath) -> Result<rustls_0_19::PrivateKey, ConnectError> {
-    parse_pkcs8_key(key_file.clone()).or_else(|_| parse_rsa_key(key_file))
-}
-
-fn parse_pkcs8_key(
-    key_file: tedge_config::FilePath,
-) -> Result<rustls_0_19::PrivateKey, ConnectError> {
-    let f = File::open(&key_file)?;
-    let mut key_reader = BufReader::new(f);
-    match pkcs8_private_keys(&mut key_reader) {
-        Ok(key) if !key.is_empty() => Ok(key[0].clone()),
-        _ => Err(ConnectError::UnknownPrivateKeyFormat),
-    }
-}
-
-fn parse_rsa_key(
-    key_file: tedge_config::FilePath,
-) -> Result<rustls_0_19::PrivateKey, ConnectError> {
-    let f = File::open(&key_file)?;
-    let mut key_reader = BufReader::new(f);
-    match rsa_private_keys(&mut key_reader) {
-        Ok(key) if !key.is_empty() => Ok(key[0].clone()),
-        _ => Err(ConnectError::UnknownPrivateKeyFormat),
-    }
-}
-
-fn read_cert_chain(
-    cert_file: tedge_config::FilePath,
-) -> Result<Vec<rustls_0_19::Certificate>, ConnectError> {
-    let f = File::open(cert_file)?;
-    let mut cert_reader = BufReader::new(f);
-    certs(&mut cert_reader).map_err(|_| ConnectError::RumqttcCertificate)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Write;
-    use tempfile::NamedTempFile;
-
-    #[test]
-    fn parse_private_rsa_key() {
-        let key = concat!(
-            "-----BEGIN RSA PRIVATE KEY-----\n",
-            "MC4CAQ\n",
-            "-----END RSA PRIVATE KEY-----"
-        );
-        let mut temp_file = NamedTempFile::new().unwrap();
-        temp_file.write_all(key.as_bytes()).unwrap();
-        let result = parse_rsa_key(temp_file.path().into()).unwrap();
-        let pvt_key = rustls_0_19::PrivateKey(vec![48, 46, 2, 1]);
-        assert_eq!(result, pvt_key);
-    }
-
-    #[test]
-    fn parse_private_pkcs8_key() {
-        let key = concat! {
-        "-----BEGIN PRIVATE KEY-----\n",
-        "MC4CAQ\n",
-        "-----END PRIVATE KEY-----"};
-        let mut temp_file = NamedTempFile::new().unwrap();
-        temp_file.write_all(key.as_bytes()).unwrap();
-        let result = parse_pkcs8_key(temp_file.path().into()).unwrap();
-        let pvt_key = rustls_0_19::PrivateKey(vec![48, 46, 2, 1]);
-        assert_eq!(result, pvt_key);
-    }
-
-    #[test]
-    fn parse_supported_key() {
-        let key = concat!(
-            "-----BEGIN RSA PRIVATE KEY-----\n",
-            "MC4CAQ\n",
-            "-----END RSA PRIVATE KEY-----"
-        );
-        let mut temp_file = NamedTempFile::new().unwrap();
-        temp_file.write_all(key.as_bytes()).unwrap();
-        let parsed_key = read_pvt_key(temp_file.path().into()).unwrap();
-        let expected_pvt_key = rustls_0_19::PrivateKey(vec![48, 46, 2, 1]);
-        assert_eq!(parsed_key, expected_pvt_key);
-    }
-
-    #[test]
-    fn parse_unsupported_key() {
-        let key = concat!(
-            "-----BEGIN DSA PRIVATE KEY-----\n",
-            "MC4CAQ\n",
-            "-----END DSA PRIVATE KEY-----"
-        );
-        let mut temp_file = NamedTempFile::new().unwrap();
-        temp_file.write_all(key.as_bytes()).unwrap();
-        let err = read_pvt_key(temp_file.path().into()).unwrap_err();
-        assert!(matches!(err, ConnectError::UnknownPrivateKeyFormat));
-    }
 }

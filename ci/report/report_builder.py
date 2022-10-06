@@ -101,7 +101,7 @@ def unpack_reports(runner):
 
 def postprocess_runner(runner):
     """Postprocess results from a runner.
-    Fails if a test foler is missing that is mentioned in the runner
+    Fails if a test folder is missing that is mentioned in the runner
     configuration.
     """
 

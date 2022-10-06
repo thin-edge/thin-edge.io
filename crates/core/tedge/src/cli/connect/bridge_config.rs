@@ -6,7 +6,7 @@ use url::Url;
 /// Mosquitto bridge configuration options that are specicific to the cloud.
 ///
 /// The fields are documented in the [`mosquitto.conf` manual](https://mosquitto.org/man/mosquitto-conf-5.html).
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfig {
     pub cloud_name: String,
     pub config_file: String,

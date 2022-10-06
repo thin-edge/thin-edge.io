@@ -60,7 +60,7 @@ In the end, we decided to use MQTT for the following reasons:
 * MQTT is message oriented and bi-directional, which matches well with the event oriented programming model of industrial IoT.
 * MQTT is available on many platforms, including Linux and Windows.
 * MQTT client libraries are available for 25+ programming languages (see [MQTT.org](https://mqtt.org/software/)]) 
-* MQTT overhead is relatively small in terms of client libary size and network overhead.
+* MQTT overhead is relatively small in terms of client library size and network overhead.
 * MQTT is message payload agnostic which enables sending not only JSON messages, but also text, CSV or binary data.  
 
 Alternatives considered where: DBus, gRPC and REST over HTTP. 

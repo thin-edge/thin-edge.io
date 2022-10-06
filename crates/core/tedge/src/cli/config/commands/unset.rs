@@ -17,7 +17,7 @@ impl Command for UnsetConfigCommand {
 
     fn execute(&self) -> anyhow::Result<()> {
         let mut config = self.config_repository.load()?;
-        let () = (self.config_key.unset)(&mut config)?;
+        (self.config_key.unset)(&mut config)?;
         self.config_repository.store(&config)?;
         Ok(())
     }

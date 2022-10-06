@@ -12,7 +12,7 @@ See also:
 
 - Folder: analytics : Tests that generate analytics
 - Folder: cloud\_c8y : Related to Cumulocity
-- Folder: environments : Used to keep our PySys BaseTest extesions
+- Folder: environments : Used to keep our PySys BaseTest extensions
 - Folder: misc\_features : Test for miscellaneous features
 - Folder: monitoring : Related to collect monitoring
 - Folder: mqtt\_port : Related to MQTT port switching

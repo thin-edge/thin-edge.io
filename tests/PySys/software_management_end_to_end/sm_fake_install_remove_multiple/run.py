@@ -76,7 +76,7 @@ class PySysTest(SoftwareManagement):
 
         action = self.get_packages_with_action("install")
         self.trigger_action_json(action)
-        self.wait_until_succcess()
+        self.wait_until_success()
 
         # note: in the plugin response they are always there
         self.assertThat("True == value", value=self.check_is_installed("apple"))
@@ -85,7 +85,7 @@ class PySysTest(SoftwareManagement):
 
         action = self.get_packages_with_action("delete")
         self.trigger_action_json(action)
-        self.wait_until_succcess()
+        self.wait_until_success()
 
     def validate(self):
 

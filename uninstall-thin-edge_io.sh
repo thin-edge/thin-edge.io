@@ -13,7 +13,7 @@ clouds=("c8y" "az")
 usage() {
     cat <<EOF
 USAGE:
-    delete-thin-edge_io [COMMAND]
+    uninstall-thin-edge_io.sh [COMMAND]
     
 COMMANDS:
     remove     Uninstall thin-edge.io with keeping configuration files
@@ -32,7 +32,7 @@ disconnect_from_cloud() {
 
 stop_extension_services() {
     for service in "${extension_services[@]}"; do
-        status=$(sudo systemctl is-active "$service") && returncode=$? || returncode=$?
+        status=$(sudo systemctl is-active "$service") || true
         if [ "$status" = "active" ]; then
             sudo systemctl stop "$service"
         fi
@@ -43,7 +43,7 @@ remove_or_purge_package_if_exists() {
     disconnect_from_cloud
     stop_extension_services
     for package in "${packages[@]}"; do
-        status=$(dpkg -s "$package" | grep -w installed) && returncode=$? || returncode=$?
+        status=$(dpkg -s "$package" | grep -w installed) || true
         if [ "$status" = "Status: install ok installed" ]; then
             sudo apt --assume-yes "$1" "$package"
         fi

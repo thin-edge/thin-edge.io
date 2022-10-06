@@ -681,7 +681,7 @@ async fn test_sync_child_alarms() {
     let alarm_message = Message::new(&Topic::new_unchecked(alarm_topic), alarm_payload);
 
     // During the sync phase, alarms are not converted immediately, but only cached to be synced later
-    assert_eq!(converter.convert(&alarm_message).await.len(), 1);
+    assert!(converter.convert(&alarm_message).await.is_empty());
 
     let non_alarm_topic = "tedge/measurements/external_sensor";
     let non_alarm_payload = r#"{"temp": 1}"#;

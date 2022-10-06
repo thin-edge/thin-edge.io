@@ -32,7 +32,7 @@ const AFTER_HELP_TEXT: &str = r#"On start, `c8y_log_plugin` notifies the cloud t
 `c8y_log_plugin` subscribes then to `c8y/s/ds` listening for logfile operation requests (`522`) notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
 
 The thin-edge `CONFIG_DIR` is used to store:
-  * c8y-log-plugin.toml - the configuration file that specifies which logs to be retrived"#;
+  * c8y-log-plugin.toml - the configuration file that specifies which logs to be retrieved"#;
 
 #[derive(Debug, clap::Parser, Clone)]
 #[clap(
@@ -68,6 +68,7 @@ async fn create_mqtt_client(
     topics.add(C8Y_BRIDGE_HEALTH_TOPIC)?;
 
     let mqtt_config = mqtt_channel::Config::default()
+        .with_session_name("c8y-log-plugin")
         .with_port(mqtt_port)
         .with_subscriptions(topics);
 
@@ -79,7 +80,7 @@ pub async fn create_http_client(
     tedge_config: &TEdgeConfig,
 ) -> Result<JwtAuthHttpProxy, anyhow::Error> {
     let mut http_proxy = JwtAuthHttpProxy::try_new(tedge_config).await?;
-    let () = http_proxy.init().await?;
+    http_proxy.init().await?;
     Ok(http_proxy)
 }
 
@@ -93,7 +94,7 @@ async fn run(
 
     let health_check_topics = health_check_topics("c8y-log-plugin");
     let config_file_path = config_dir.join(config_file_name);
-    let () = handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
+    handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
 
     let fs_notification_stream = fs_notify_stream(&[(
         config_dir,
@@ -116,7 +117,7 @@ async fn run(
                 match mask {
                     FileEvent::Created | FileEvent::Deleted | FileEvent::Modified => {
                         plugin_config = read_log_config(&config_file_path);
-                        let () = handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
+                        handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
                     }
                 }
             }
@@ -134,7 +135,7 @@ pub async fn process_mqtt_message(
 ) -> Result<(), anyhow::Error> {
     if is_c8y_bridge_up(&message) {
         let plugin_config = read_log_config(config_file);
-        let () = handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
+        handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
     } else if health_check_topics.accept(&message) {
         send_health_status(&mut mqtt_client.published, "c8y-log-plugin").await;
     } else if let Ok(payload) = message.payload_str() {
@@ -192,7 +193,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let logs_dir = PathBuf::from(logs_dir.to_string());
 
     if config_plugin_opt.init {
-        let () = init(&config_plugin_opt.config_dir, &logs_dir)?;
+        init(&config_plugin_opt.config_dir, &logs_dir)?;
         return Ok(());
     }
 
@@ -200,7 +201,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut mqtt_client = create_mqtt_client(&tedge_config).await?;
     let mut http_client = create_http_client(&tedge_config).await?;
 
-    let () = run(
+    run(
         &config_dir,
         DEFAULT_PLUGIN_CONFIG_FILE,
         &mut mqtt_client,
@@ -212,7 +213,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
 fn init(config_dir: &Path, logs_dir: &Path) -> Result<(), anyhow::Error> {
     info!("Creating supported operation files");
-    let () = create_init_logs_directories_and_files(config_dir, logs_dir)?;
+    create_init_logs_directories_and_files(config_dir, logs_dir)?;
     Ok(())
 }
 

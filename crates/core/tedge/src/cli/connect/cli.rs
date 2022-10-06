@@ -2,7 +2,7 @@ use crate::cli::connect::*;
 use crate::command::{BuildCommand, BuildContext, Command};
 use crate::system_services::service_manager;
 
-#[derive(clap::Subcommand, Debug, PartialEq)]
+#[derive(clap::Subcommand, Debug, Eq, PartialEq)]
 pub enum TEdgeConnectOpt {
     /// Create connection to Cumulocity
     ///

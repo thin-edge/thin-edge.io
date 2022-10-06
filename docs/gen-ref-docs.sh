@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 SRC=docs/src/references
 PATH=$PATH:target/debug:target/release
 

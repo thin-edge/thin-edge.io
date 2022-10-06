@@ -1,6 +1,6 @@
 [package]
 name = "mqtt_channel"
-version = "0.7.3"
+version = "0.7.5"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
@@ -11,7 +11,7 @@ rust-version = "1.58.1"
 async-trait = "0.1"
 futures = "0.3"
 fastrand = "1.8"
-rumqttc = "0.10"
+rumqttc = "0.17"
 thiserror = "1.0"
 tokio = { version = "1.12", features = ["rt", "time"] }
 

@@ -9,7 +9,7 @@ Given unconnected system
 
 When we start tedge_agent to initialize session and exit
 When we start publish the software list request
-When we start a subsciber to get the response for the request
+When we start a subscriber to get the response for the request
 When we start the tedge_agent, it gets the previous response and responds
 Then stop the agent and the subscriber
 Then validate the output of the subscriber for response

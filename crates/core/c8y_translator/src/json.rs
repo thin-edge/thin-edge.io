@@ -50,7 +50,7 @@ fn from_thin_edge_json_with_timestamp(
     maybe_child_id: Option<&str>,
 ) -> Result<String, CumulocityJsonError> {
     let mut serializer = serializer::C8yJsonSerializer::new(timestamp, maybe_child_id);
-    let () = parse_str(input, &mut serializer)?;
+    parse_str(input, &mut serializer)?;
     Ok(serializer.into_string()?)
 }
 

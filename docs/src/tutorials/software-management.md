@@ -1,4 +1,4 @@
-# Manage the softwares on your devices from Cumulocity cloud
+# Manage the software on your devices from Cumulocity cloud
 
 This document describes how to manage the software modules that are installed on a thin-edge device from the
 cloud using the **software management** feature of thin-edge.io.

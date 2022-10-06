@@ -75,14 +75,14 @@ class SoftwareManagement(EnvironmentC8y):
 
     myPlatform = None
 
-    # Static class member that can be overriden by a command line argument
+    # Static class member that can be overridden by a command line argument
     # E.g.:
     # pysys.py run 'sm-fake*' -Xfakeplugin='fakeplugin'
     # Use it only when you have set up the dummy_plugin to install fruits
 
     fakeplugin = None
 
-    # Static class member that can be overriden by a command line argument
+    # Static class member that can be overridden by a command line argument
     # E.g.:
     # pysys.py run 'sm-docker*' -Xdockerplugin='dockerplugin'
     # Use it only when you have set up the docker_plugin
@@ -266,7 +266,7 @@ class SoftwareManagement(EnvironmentC8y):
         # Observed states: PENDING, SUCCESSFUL, EXECUTING, FAILED
         self.log.info("State of current operation: %s", operation.get("status"))
 
-        # In this case we just jump everything to see what is goin on
+        # In this case we just jump everything to see what is going on
         if operation.get("status") in ["FAILED", "PENDING"]:
             self.log.debug("Final URL of the request: %s", req.url)
             self.log.debug(
@@ -314,12 +314,12 @@ class SoftwareManagement(EnvironmentC8y):
         return operation.get("status")
 
     def check_status_of_operation(self, status):
-        """Check if the last operation is successfull"""
+        """Check if the last operation is successful"""
         current_status = self.get_status_of_operation()
         self.log.info("Expected status: %s, got status %s" % (status, current_status))
         return current_status == status
 
-    def wait_until_succcess(self):
+    def wait_until_success(self):
         """Wait until c8y reports a success"""
         self.wait_until_status("SUCCESSFUL")
 
@@ -396,7 +396,7 @@ class SoftwareManagement(EnvironmentC8y):
         package_list = jresponse.get("c8y_SoftwareList")
 
         if package_list == None:
-            raise SystemError("The Sofware list is empty !!!")
+            raise SystemError("The Software list is empty !!!")
 
         for package in package_list:
             if package.get("name") == package_name:

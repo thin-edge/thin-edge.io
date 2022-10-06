@@ -221,7 +221,7 @@ Contract:
   * 4th argument: Is the software module's path. That argument is optional and can be empty (then empty string "" is used). For operation `remove` that argument does not exist.
 * Behaviour of operations `install` and `remove` is same as for original commands `install` and `remove` as specified above.
   * For details about operations' arguments "name", "version" and "path", see specification of original command `install` or `remove`.
-  * For details about `exitstatus` see accoring specification of original command `install` or `remove`.
+  * For details about `exitstatus` see according specification of original command `install` or `remove`.
 * An overall error must be reported (via process's exit status) when at least one software module operation has failed.
 
 Example how to invoke that plugin command `update-list`. Note that each argument is tab separated:

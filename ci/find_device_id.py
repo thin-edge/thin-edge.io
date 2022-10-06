@@ -23,12 +23,12 @@ from retry_decorator import retry
 
 @retry(Exception, tries=5, timeout_secs=2)
 def get_device_id(c8y, name):
-    """retrive the current device ID"""
+    """retrieve the current device ID"""
 
     devices = c8y.device_inventory.get_all(name=name)
     if len(devices) == 1:
         return devices[0].id
-    raise SystemError("Failed to retrive ID")
+    raise SystemError("Failed to retrieve ID")
 
 
 def main():

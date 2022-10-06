@@ -67,6 +67,7 @@ async fn create_mqtt_client(mqtt_port: u16) -> Result<mqtt_channel::Connection, 
     topic_filter.add_all(health_check_topics("c8y-configuration-plugin"));
 
     let mqtt_config = mqtt_channel::Config::default()
+        .with_session_name("c8y-configuration-plugin")
         .with_port(mqtt_port)
         .with_subscriptions(topic_filter);
 
@@ -78,7 +79,7 @@ pub async fn create_http_client(
     tedge_config: &TEdgeConfig,
 ) -> Result<JwtAuthHttpProxy, anyhow::Error> {
     let mut http_proxy = JwtAuthHttpProxy::try_new(tedge_config).await?;
-    let () = http_proxy.init().await?;
+    http_proxy.init().await?;
     Ok(http_proxy)
 }
 
@@ -127,14 +128,14 @@ async fn run(
     // Publish supported configuration types
     let msg = plugin_config.to_supported_config_types_message()?;
     debug!("Plugin init message: {:?}", msg);
-    let () = mqtt_client.published.send(msg).await?;
+    mqtt_client.published.send(msg).await?;
 
     // Get pending operations
     let msg = Message::new(
         &Topic::new_unchecked(C8yTopic::SmartRestResponse.as_str()),
         "500",
     );
-    let () = mqtt_client.published.send(msg).await?;
+    mqtt_client.published.send(msg).await?;
 
     let fs_notification_stream = fs_notify_stream(&[(
         config_dir,
@@ -250,7 +251,7 @@ async fn process_mqtt_message(
 
 fn init(cfg_dir: PathBuf) -> Result<(), anyhow::Error> {
     info!("Creating supported operation files");
-    let () = create_operation_files(&cfg_dir)?;
+    create_operation_files(&cfg_dir)?;
     Ok(())
 }
 

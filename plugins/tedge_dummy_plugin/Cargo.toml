@@ -1,11 +1,13 @@
 [package]
 name = "tedge_dummy_plugin"
-version = "0.7.3"
+version = "0.7.5"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
 license = "Apache-2.0"
 description = "thin.edge.io dummy plugin for testing"
+homepage = "https://thin-edge.io"
+repository = "https://github.com/thin-edge/thin-edge.io"
 
 [dependencies]
 clap = { version = "3", features = ["derive"] }

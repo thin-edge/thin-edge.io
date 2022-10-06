@@ -9,6 +9,7 @@ use mqtt_channel::{
 };
 use std::convert::TryFrom;
 use std::env;
+use std::fmt::Write as _;
 use std::io::Write;
 use std::process;
 use std::time::{Duration, Instant};
@@ -19,7 +20,7 @@ This is a small and flexible publisher for deterministic test data.
 
 - TODO: Improve code quality
 - TODO: Add different data types for JSON publishing
-- TODO: Command line switch to swith betwen REST and JSON
+- TODO: Command line switch to switch between REST and JSON
 - TODO: Currently REST sending is disabled and JSON publishing is enabled
 - TODO: Add QoS selection
 */
@@ -163,7 +164,8 @@ async fn publish_multi_topic(
         for value in 0..height {
             let mut series: String = String::new();
             for s in 0..series_count {
-                series += &format!(
+                let _ = write!(
+                    series,
                     "\"saw_{}\": {} ,",
                     s,
                     (value + s * height / series_count) % height
