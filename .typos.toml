@@ -3,5 +3,5 @@ mosquitto = "mosquitto"
 hda = "hda"
 
 [files]
-extend-exclude = [ "**certificate.txt" ]
+extend-exclude = [ "**certificate.txt", "**test_root_cert*.txt" ]
 
