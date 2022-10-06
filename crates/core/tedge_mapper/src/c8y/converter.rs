@@ -7,12 +7,8 @@ use agent_interface::{
     RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
 };
 use async_trait::async_trait;
-use c8y_api::{
-    http_proxy::C8YHttpProxy,
-    json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
-};
-use c8y_smartrest::smartrest_deserializer::SmartRestRequestGeneric;
-use c8y_smartrest::{
+use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
+use c8y_api::smartrest::{
     error::SmartRestDeserializerError,
     operations::{get_operation, Operations},
     smartrest_deserializer::{SmartRestRestartRequest, SmartRestUpdateSoftware},
@@ -22,7 +18,10 @@ use c8y_smartrest::{
         SmartRestSetOperationToSuccessful,
     },
 };
-
+use c8y_api::{
+    http_proxy::C8YHttpProxy,
+    json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
+};
 use logged_command::LoggedCommand;
 use mqtt_channel::{Message, Topic, TopicFilter};
 use plugin_sm::operation_logs::OperationLogs;

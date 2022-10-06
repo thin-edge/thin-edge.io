@@ -1,4 +1,4 @@
-use c8y_smartrest::error::{
+use c8y_api::smartrest::error::{
     SMCumulocityMapperError, SmartRestDeserializerError, SmartRestSerializerError,
 };
 use plugin_sm::operation_logs::OperationLogsError;

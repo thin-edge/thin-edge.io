@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{
+use crate::smartrest::{
     error::OperationsError,
     smartrest_serializer::{SmartRestSerializer, SmartRestSetSupportedOperations},
 };

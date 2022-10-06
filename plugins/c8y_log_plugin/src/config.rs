@@ -1,4 +1,4 @@
-use c8y_smartrest::topic::C8yTopic;
+use c8y_api::smartrest::topic::C8yTopic;
 use mqtt_channel::Message;
 use serde::Deserialize;
 use std::{borrow::Borrow, path::Path};

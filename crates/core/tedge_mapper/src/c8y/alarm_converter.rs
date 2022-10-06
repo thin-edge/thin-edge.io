@@ -1,6 +1,6 @@
 use std::collections::{hash_map::Entry, HashMap};
 
-use c8y_smartrest::alarm;
+use c8y_api::smartrest::alarm;
 use mqtt_channel::{Message, Topic};
 use thin_edge_json::alarm::ThinEdgeAlarm;
 

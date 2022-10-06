@@ -4,9 +4,9 @@ mod logfile_request;
 
 use anyhow::Result;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
+use c8y_api::smartrest::smartrest_deserializer::{SmartRestLogRequest, SmartRestRequestGeneric};
+use c8y_api::smartrest::topic::C8yTopic;
 use c8y_api::utils::bridge::{is_c8y_bridge_up, C8Y_BRIDGE_HEALTH_TOPIC};
-use c8y_smartrest::smartrest_deserializer::{SmartRestLogRequest, SmartRestRequestGeneric};
-use c8y_smartrest::topic::C8yTopic;
 use clap::Parser;
 
 use mqtt_channel::{Connection, Message, StreamExt, TopicFilter};

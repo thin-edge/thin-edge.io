@@ -14,10 +14,10 @@ use crate::{config::PluginConfig, upload::handle_child_device_config_snapshot_re
 
 use anyhow::Result;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
-use c8y_smartrest::smartrest_deserializer::{
+use c8y_api::smartrest::smartrest_deserializer::{
     SmartRestConfigDownloadRequest, SmartRestConfigUploadRequest, SmartRestRequestGeneric,
 };
-use c8y_smartrest::topic::C8yTopic;
+use c8y_api::smartrest::topic::C8yTopic;
 use clap::Parser;
 use mqtt_channel::{Connection, Message, PubChannel, SinkExt, StreamExt, Topic, TopicFilter};
 

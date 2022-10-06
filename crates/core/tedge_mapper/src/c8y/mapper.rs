@@ -8,7 +8,7 @@ use crate::{
 use agent_interface::topic::ResponseTopic;
 use async_trait::async_trait;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
-use c8y_smartrest::operations::Operations;
+use c8y_api::smartrest::operations::Operations;
 use mqtt_channel::TopicFilter;
 use tedge_config::{
     ConfigSettingAccessor, DeviceIdSetting, DeviceTypeSetting, MqttBindAddressSetting,
@@ -136,7 +136,7 @@ mod tests {
     use super::*;
 
     use c8y_api::http_proxy::MockC8yJwtTokenRetriever;
-    use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
+    use c8y_api::smartrest::smartrest_deserializer::SmartRestJwtResponse;
     use mockito::mock;
     use mqtt_tests::{assert_received_all_expected, test_mqtt_broker};
     use serde_json::json;

@@ -1,4 +1,4 @@
-use crate::error::SmartRestDeserializerError;
+use crate::smartrest::error::SmartRestDeserializerError;
 use agent_interface::{SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use csv::ReaderBuilder;
 use download::DownloadInfo;

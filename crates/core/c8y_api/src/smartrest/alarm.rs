@@ -1,7 +1,7 @@
 use thin_edge_json::alarm::{AlarmSeverity, ThinEdgeAlarm};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
-use crate::error::SmartRestSerializerError;
+use crate::smartrest::error::SmartRestSerializerError;
 
 /// Converts from thin-edge alarm to C8Y alarm SmartREST message
 pub fn serialize_alarm(alarm: ThinEdgeAlarm) -> Result<String, SmartRestSerializerError> {

@@ -1,5 +1,5 @@
-use crate::error::SmartRestSerializerError;
-use crate::topic::C8yTopic;
+use crate::smartrest::error::SmartRestSerializerError;
+use crate::smartrest::topic::C8yTopic;
 use agent_interface::{OperationStatus, SoftwareUpdateResponse};
 use csv::{QuoteStyle, WriterBuilder};
 use mqtt_channel::Message;

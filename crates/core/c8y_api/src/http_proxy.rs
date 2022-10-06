@@ -3,8 +3,10 @@ use crate::json_c8y::{
     InternalIdResponse,
 };
 
+use crate::smartrest::{
+    error::SMCumulocityMapperError, smartrest_deserializer::SmartRestJwtResponse,
+};
 use async_trait::async_trait;
-use c8y_smartrest::{error::SMCumulocityMapperError, smartrest_deserializer::SmartRestJwtResponse};
 use mockall::automock;
 use mqtt_channel::{Connection, PubChannel, StreamExt, Topic, TopicFilter};
 use reqwest::Url;

@@ -6,9 +6,9 @@ use crate::{
 use crate::{error, PluginConfig, CONFIG_CHANGE_TOPIC};
 use agent_interface::OperationStatus;
 use c8y_api::http_proxy::C8YHttpProxy;
-use c8y_smartrest::error::SmartRestSerializerError;
-use c8y_smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
-use c8y_smartrest::smartrest_serializer::{
+use c8y_api::smartrest::error::SmartRestSerializerError;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
+use c8y_api::smartrest::smartrest_serializer::{
     CumulocitySupportedOperations, SmartRest, SmartRestSerializer,
     SmartRestSetOperationToExecuting, SmartRestSetOperationToFailed,
     SmartRestSetOperationToSuccessful, TryIntoOperationStatusMessage,
