@@ -13,6 +13,6 @@ if command -v systemctl >/dev/null; then
 fi
 
 # Initialize the agent
-sudo -u tedge -- tedge_agent --init
+sudo -- tedge_agent --init
 
 #DEBHELPER#
