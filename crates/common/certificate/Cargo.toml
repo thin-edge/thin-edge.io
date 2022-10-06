@@ -9,8 +9,8 @@ rust-version = "1.58.1"
 
 [dependencies]
 rcgen = { version = "0.9", features = ["pem", "zeroize"] }
-rustls_0_19 = {package = "rustls", version = "0.19.0" }
 rustls = "0.20.6"
+rustls-pemfile = "1.0.1"
 sha-1 = "0.10"
 thiserror = "1.0"
 time = "0.3"
