@@ -68,7 +68,7 @@ More info on AWS IoT Core policies can be found [here](https://docs.aws.amazon.c
 An example policy for connecting a device running thin-edge can be found [here](./aws-example-policy.json).
 To create a new policy, head over to the AWS IoT Core and navigate to "Security"->"Policies" then click "Create policy".
 Give the policy a name, then under "Policy document" click "JSON", paste in the entire contents of the example policy and click "Create".
-The final step is to attach the policy to the certificate. Navigate to "Security"->"Certficates" and click on the certifcate that was uploaded previously.
+The final step is to attach the policy to the certificate. Navigate to "Security"->"Certificates" and click on the certificate that was uploaded previously.
 Click on "Attach policies" then select the policy that you created and click "Attach policies".
 
 ## Configure the device
