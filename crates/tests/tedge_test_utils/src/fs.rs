@@ -5,12 +5,13 @@ use std::{
     sync::Arc,
 };
 use tempfile::TempDir;
-
+#[derive(Debug, Clone)]
 pub struct TempTedgeDir {
     pub temp_dir: Arc<TempDir>,
     current_file_path: PathBuf,
 }
 
+#[derive(Debug, Clone)]
 pub struct TempTedgeFile {
     pub file_path: PathBuf,
 }

@@ -139,6 +139,7 @@ where
         operations: Operations,
         http_proxy: Proxy,
         logs_path: PathBuf,
+        cfg_dir: PathBuf,
     ) -> Result<Self, CumulocityMapperError> {
         let mut topic_filter: TopicFilter = vec![
             "tedge/measurements",
@@ -180,7 +181,7 @@ where
             operations,
             operation_logs,
             http_proxy,
-            cfg_dir: Path::new("cfg_dir").to_path_buf(),
+            cfg_dir,
             children,
         })
     }
@@ -379,6 +380,7 @@ where
             &self.device_name,
             &self.cfg_dir,
         ));
+
         let supported_operations_message =
             self.wrap_error(create_supported_operations_fragments_message(&self.cfg_dir));
         let sops =

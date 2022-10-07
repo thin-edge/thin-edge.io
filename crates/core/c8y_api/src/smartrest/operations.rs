@@ -128,7 +128,8 @@ impl Operations {
     }
 
     pub fn create_smartrest_ops_message(&self) -> Result<String, OperationsError> {
-        let ops = self.get_operations_list();
+        let mut ops = self.get_operations_list();
+        ops.sort();
         let ops = ops.iter().map(|op| op as &str).collect::<Vec<&str>>();
         Ok(SmartRestSetSupportedOperations::new(&ops).to_smartrest()?)
     }
