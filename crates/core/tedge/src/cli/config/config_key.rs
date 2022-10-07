@@ -51,6 +51,7 @@ impl ConfigKey {
             config_key!(AzureRootCertPathSetting),
             config_key!(AwsUrlSetting),
             config_key!(AwsRootCertPathSetting),
+            config_key!(AwsMapperTimestamp),
             config_key!(AzureMapperTimestamp),
             config_key!(MqttBindAddressSetting),
             config_key!(MqttPortSetting),

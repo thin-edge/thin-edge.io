@@ -331,6 +331,27 @@ impl ConfigSettingAccessor<AzureMapperTimestamp> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<AwsMapperTimestamp> for TEdgeConfig {
+    fn query(&self, _setting: AwsMapperTimestamp) -> ConfigSettingResult<Flag> {
+        Ok(self
+            .data
+            .aws
+            .mapper_timestamp
+            .map(Flag)
+            .unwrap_or_else(|| self.config_defaults.default_mapper_timestamp.clone()))
+    }
+
+    fn update(&mut self, _setting: AwsMapperTimestamp, value: Flag) -> ConfigSettingResult<()> {
+        self.data.aws.mapper_timestamp = Some(value.into());
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: AwsMapperTimestamp) -> ConfigSettingResult<()> {
+        self.data.aws.mapper_timestamp = None;
+        Ok(())
+    }
+}
+
 impl ConfigSettingAccessor<C8yRootCertPathSetting> for TEdgeConfig {
     fn query(&self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<FilePath> {
         Ok(self

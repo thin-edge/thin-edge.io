@@ -7,7 +7,7 @@ use crate::{
 
 use async_trait::async_trait;
 use clock::WallClock;
-use tedge_config::{AzureMapperTimestamp, MqttBindAddressSetting, TEdgeConfig};
+use tedge_config::{AwsMapperTimestamp, MqttBindAddressSetting, TEdgeConfig};
 use tedge_config::{ConfigSettingAccessor, MqttPortSetting};
 use tedge_utils::file::create_directory_with_user_group;
 use tracing::{info, info_span, Instrument};
@@ -46,7 +46,7 @@ impl TEdgeComponent for AwsMapper {
         tedge_config: TEdgeConfig,
         _config_dir: &Path,
     ) -> Result<(), anyhow::Error> {
-        let add_timestamp = tedge_config.query(AzureMapperTimestamp)?.is_set();
+        let add_timestamp = tedge_config.query(AwsMapperTimestamp)?.is_set();
         let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
         let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
         let clock = Box::new(WallClock);

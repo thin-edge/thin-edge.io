@@ -195,6 +195,25 @@ impl ConfigSetting for AzureMapperTimestamp {
 }
 
 ///
+/// Boolean whether AWS mapper should add timestamp if timestamp is not added in the incoming payload.
+///
+/// Example: true
+///
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct AwsMapperTimestamp;
+
+impl ConfigSetting for AwsMapperTimestamp {
+    const KEY: &'static str = "aws.mapper.timestamp";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Boolean whether AWS mapper should add timestamp or not. ",
+        "Example: true"
+    );
+
+    type Value = Flag;
+}
+
+///
 /// Endpoint URL of AWS instance.
 ///
 /// Example: your-endpoint.amazonaws.com
