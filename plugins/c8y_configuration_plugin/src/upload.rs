@@ -419,7 +419,7 @@ mod tests {
         let mqtt_config = mqtt_channel::Config::default()
             .with_port(broker.port)
             .with_subscriptions(mqtt_channel::TopicFilter::new_unchecked(
-                C8yTopic::SmartRestRequest.as_str(),
+                &C8yTopic::SmartRestRequest.to_string(),
             ));
         let mut mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
 

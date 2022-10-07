@@ -19,7 +19,7 @@ use c8y_api::smartrest::smartrest_deserializer::{
 };
 use c8y_api::smartrest::topic::C8yTopic;
 use clap::Parser;
-use mqtt_channel::{Connection, Message, PubChannel, SinkExt, StreamExt, Topic, TopicFilter};
+use mqtt_channel::{Connection, Message, PubChannel, SinkExt, StreamExt, TopicFilter};
 
 use std::path::{Path, PathBuf};
 use tedge_config::{
@@ -72,7 +72,7 @@ pub struct ConfigPluginOpt {
 
 async fn create_mqtt_client(mqtt_port: u16) -> Result<mqtt_channel::Connection, anyhow::Error> {
     let mut topic_filter =
-        mqtt_channel::TopicFilter::new_unchecked(C8yTopic::SmartRestRequest.as_str());
+        mqtt_channel::TopicFilter::new_unchecked(&C8yTopic::SmartRestRequest.to_string());
     topic_filter.add_all(health_check_topics("c8y-configuration-plugin"));
 
     topic_filter.add_all(ConfigOperationResponseTopic::SnapshotResponse.into());
@@ -159,10 +159,7 @@ async fn run(
     mqtt_client.published.send(msg).await?;
 
     // Get pending operations
-    let msg = Message::new(
-        &Topic::new_unchecked(C8yTopic::SmartRestResponse.as_str()),
-        "500",
-    );
+    let msg = Message::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
     mqtt_client.published.send(msg).await?;
 
     let fs_notification_stream = fs_notify_stream(&[(

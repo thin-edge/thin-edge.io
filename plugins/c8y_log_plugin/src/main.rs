@@ -63,7 +63,7 @@ async fn create_mqtt_client(
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
     let mut topics: TopicFilter = health_check_topics("c8y-log-plugin");
 
-    topics.add_unchecked(C8yTopic::SmartRestRequest.as_str());
+    topics.add_unchecked(&C8yTopic::SmartRestRequest.to_string());
     // subscribing also to c8y bridge health topic to know when the bridge is up
     topics.add(C8Y_BRIDGE_HEALTH_TOPIC)?;
 
