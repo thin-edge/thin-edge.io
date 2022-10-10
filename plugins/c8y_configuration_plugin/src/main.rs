@@ -322,7 +322,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[serial_test::serial]
     async fn test_message_dispatch() -> anyhow::Result<()> {
-        let test_config_path = "/some/test/config";
+        let test_config_path = "/tmp"; //Pass some existing path
         let test_config_type = "c8y-configuration-plugin";
 
         let broker = mqtt_tests::test_mqtt_broker();
