@@ -817,7 +817,7 @@ mod tests {
     #[test_case("cds50223434,uninstall-test"; "valid template")]
     #[test_case("5000000000000000000000000000000000000000000000000,uninstall-test"; "long valid template")]
     #[test_case(""; "empty payload")]
-    fn extract_smartrest_tempate(payload: &str) {
+    fn extract_smartrest_template(payload: &str) {
         match super::get_smartrest_template_id(payload) {
             id if id.contains("cds50223434")
                 || id.contains("5000000000000000000000000000000000000000000000000")
