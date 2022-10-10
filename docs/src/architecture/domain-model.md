@@ -10,9 +10,18 @@ Finally the **thin-edge** domain model gives..
   * _target domain experts_ a clear idea how to position **thin-edge** in their target domain
   * _target domain experts_ **and** _thin-edge developers_ a common understanding and unique vocabulary for **thin-edge** and it's environment
 
-## thin-edge target domains
+### Target Domains
 
 **thin-edge** is designed to facilitate IoT functionality to resource constrained **devices**.
+Therefor it interfaces **devices** with **clouds**, and focuses on both target domains as below:
+  1. Device Domain
+  2. IoT Cloud Domain
+
+Both domains are explained in next sections.
+
+
+## Device Domain
+
 The focus is on industrial OT **devices** or any other kind of embedded **devices**. It is not reduced to **devices** that are capable to install and run thin-edge, but includes also **devices** that need another _(gateway) device_ aside, that executes **thin-edge**.
 
 Usual **devices** are **PLCs** (**P**rogrammable **L**ogic **C**ontrollers), **IPCs** (**I**ndustrial **PC**s) or any kind of **SoC-based** or **Microcontroller-based** Embedded System. The figure below shows a simplified conceptual model of such a device.
@@ -38,26 +47,79 @@ Usual **devices** are **PLCs** (**P**rogrammable **L**ogic **C**ontrollers), **I
     **Sensors** and **Actuators** to the **device** as inputs or outputs
   * also the **Domain Application** can expose data as input or output (e.g. own _signals_ or _states_)
 
+## IoT Cloud Domain
+
+**thin-edge** is designed to be cloud agnostic, i.E. it does not stick to some specific IoT cloud.
+Potentialy clouds are [Cumulocity](https://www.softwareag.cloud/site/product/cumulocity-iot.html), [Azure](https://azure.microsoft.com) or [AWS](https://aws.amazon.com). A flexible _Mapper Concept_ allows to adapt thin-edge to other clouds as well.
+
+TODO: Maybe avoid cloud-names above, but focus on _mapper-concept_, since Azure and AWS are far less supported.
+
+* Each **device** is represented in the IoT cloud by an individual **device twin**
+* All information / data or functionality the device provides to the cloud appears in context of it's **device twin**
+* The focus of **thin-edge** is on two IoT Cloud aspects:
+  - 1) **Telemetry Data Handling**
+  - 2) **Device Management**
+
+### Telemetry Data Handling
+
+**Telemetry Data Handling** provides to manage data coming from device's sensors, or process data or signals coming from device's domain application.
+Those information are categorized as below:
+
+  * **Measurement**, is a single value or set of values
+    * could be be a mix of values produced by one or more sensors and values calculated by the device's domain application
+    * values could be a mix of numbers, strings or booleans
+    * has one timestamp given by the producer, or implicitly set as the current time of receiving at **thin-edge**
+    * releates to one **Metric**
+  * **Metric**, is a time-series of measurements
+    * contains a _source device_
+    * contains a _type name_
+    * optionally contains _units_ for the **measurements**
+  * TODO: Example for metric and it's measurements
+  * **Command**, is a single value or set of values
+    * is send from the cloud to one device, e.g. to
+      - stimulate an actuator (e.g. switching a relay)
+      - send a signal to the domain application
+      - set one or more set-points (e.g. upper/lower limits or threshold of a climate control)
+    * values could be a mix of numbers, strings or booleans
+  * **Event**, is a notification that something happened on the device's environment or software system
+    * it's source could be
+      - a sensor that detected a door has beed closed
+      - a signal from the device's domain application
+      - a device's system notification that a user has started an ssh session
+    * has one timestamp given by the producer, or implicitly set as the current time of receiving at **thin-edge**
+  * **Alarm**, is similar to an event, but the _End User_ (an operator of the system) has to take action to resolve the alarm.
+
+### Device Management
+
+**Device Management** provides to manage and monitor devices in the field from the cloud. That includes:
+  * **Software Management**, provides to manage the installed software packages on the device
+    * view list and versions of installed packages
+    * install new or update existing software packages
+    * remove installed software packages
+  * **Configuration Management**, provides to view and change configurations on the device
+    * lists available configuration files
+    * retrieve content of individual configuration files
+    * send new content for individual configuration files
+  * **Log Management**, provides to view log files from the device
+    * lists available log files
+    * retrieve content of individual log files
+  * **Device Monitoring**, collects metrics from the device and forward these to the IoT cloud
+    * allows monitors the health of devices
+    * helps to troubleshoot when problems with the device are reported
+
 ## thin-edge data concepts
 
 **thin-edge** provides different devices in a standardized representation to the cloud. Therefore **thin-edge** provides specialized data concepts.
 
 The data concepts below belong to **inputs** and **outputs** available on a device. Thereby each **input** and **output** is refered as a **data point**.
 
-  * **Measurements**:
-    * contain numeric data produced by sensors (like temperature readings) or calculated data based on information from the **control application**.
-    * a **measurements** consists of one or more numeric **data points** and optionally meta information as names or units
-  * **Variables**:
-    * contain numeric data provided and used by the device, and can be sent to the device (as e.g. "set points")
-    * a **variable** consists of one or more numeric **data points** and optionally meta information as names or units
-  * **Events**:
-    * contain other real-time information from the sensor network, such as the triggering of a door sensor
-    * an **event** is triggered by a **data point** (e.g. when it changes to a specific value as `0` or `1`), and contains an optional message text.
-  * **Alarms**:
-    * similar to Events, but the user or operator of the system has to take action to resolve the alarm
-    * an **alarm** is triggered by a **data point** (e.g. when it changes to a specific value as `0` or `1`), and contains an optional alarm text.
+TODO: describe here how thin-edge glues OT Device's data points with Cloud's Telemetry Data
+
+TODO: consider child-devices and containers here? Or do that in the cloud section?
 
 ## thin-edge device concept
+
+TODO: incorporate references and content from new section "IoT Cloud Domain"
 
 **thin-edge** facilitates IoT functionality to the device it is running on, as well as to devices that are connected to that device.
 
@@ -107,6 +169,8 @@ A **plugin** defines and implements a specific **contract** for all interactions
   * a **plugin's** **contract** can be denoted with a unique name (e.g. `tedge_config`)
     * based on that unique name a **child-device agent** can report and find **plugins** the child-device intends to contact (e.g. during providioning phase)
     * those information can be also provided to the cloud and other applications on the device site, on purpose
+
+TODO: consider containers here?
 
 ## Main Challenges
 
