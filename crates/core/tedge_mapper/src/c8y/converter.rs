@@ -1,4 +1,5 @@
 use crate::c8y::dynamic_discovery::*;
+use crate::c8y::json;
 use crate::core::{converter::*, error::*, size_threshold::SizeThreshold};
 use agent_interface::{
     topic::{RequestTopic, ResponseTopic},
@@ -21,7 +22,6 @@ use c8y_smartrest::{
         SmartRestSetOperationToSuccessful, SmartRestSetSupportedOperations,
     },
 };
-use c8y_translator::json;
 
 use logged_command::LoggedCommand;
 use mqtt_channel::{Message, Topic, TopicFilter};

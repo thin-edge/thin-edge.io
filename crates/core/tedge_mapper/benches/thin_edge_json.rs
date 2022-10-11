@@ -1,5 +1,5 @@
-use c8y_translator::json;
 use criterion::{criterion_group, criterion_main, Criterion};
+use tedge_mapper::c8y::json;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     translate_ref_measurement(c);

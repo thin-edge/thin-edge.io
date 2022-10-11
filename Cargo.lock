@@ -455,25 +455,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "c8y_translator"
-version = "0.7.5"
-dependencies = [
- "anyhow",
- "assert-json-diff",
- "assert_matches",
- "clock",
- "criterion",
- "json-writer",
- "pretty_assertions",
- "proptest",
- "serde_json",
- "test-case",
- "thin_edge_json",
- "thiserror",
- "time",
-]
-
-[[package]]
 name = "cache-padded"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -785,12 +766,6 @@ dependencies = [
  "num-traits",
  "rusticata-macros",
 ]
-
-[[package]]
-name = "diff"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
 
 [[package]]
 name = "difflib"
@@ -1861,15 +1836,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ff7415e9ae3fff1225851df9e0d9e4e5479f947619774677a63572e55e80eff"
 
 [[package]]
-name = "output_vt100"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "628223faebab4e3e40667ee0b2336d34a5b960ff60ea743ddfdbcf7770bcfb66"
-dependencies = [
- "winapi",
-]
-
-[[package]]
 name = "parking_lot"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2036,18 +2002,6 @@ checksum = "4d86de6de25020a36c6d3643a86d9a6a9f552107c0559c60ea03551b5e16c032"
 dependencies = [
  "predicates-core",
  "termtree",
-]
-
-[[package]]
-name = "pretty_assertions"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a25e9bcb20aa780fd0bb16b72403a9064d6b3f22f026946029acb941a50af755"
-dependencies = [
- "ctor",
- "diff",
- "output_vt100",
- "yansi",
 ]
 
 [[package]]
@@ -2950,19 +2904,21 @@ dependencies = [
  "batcher",
  "c8y_api",
  "c8y_smartrest",
- "c8y_translator",
  "clap 3.2.22",
  "clock",
+ "criterion",
  "csv",
  "download",
  "flockfile",
  "futures",
+ "json-writer",
  "logged_command",
  "mockall",
  "mockito",
  "mqtt_channel",
  "mqtt_tests",
  "plugin_sm",
+ "proptest",
  "reqwest",
  "serde",
  "serde_json",
@@ -3797,12 +3753,6 @@ name = "xmlparser"
 version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "114ba2b24d2167ef6d67d7d04c8cc86522b87f490025f39f0303b7db5bf5e3d8"
-
-[[package]]
-name = "yansi"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09041cd90cf85f7f8b2df60c646f853b7f535ce68f85244eb6731cf89fa498ec"
 
 [[package]]
 name = "yasna"
