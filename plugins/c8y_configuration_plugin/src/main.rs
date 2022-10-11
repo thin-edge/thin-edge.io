@@ -1,11 +1,17 @@
+mod child_device;
 mod config;
 mod download;
 mod error;
+mod topic;
 mod upload;
 
-use crate::config::PluginConfig;
-use crate::download::handle_config_download_request;
 use crate::upload::handle_config_upload_request;
+use crate::{
+    child_device::ConfigOperationResponse,
+    download::{handle_child_device_config_update_response, handle_config_download_request},
+};
+use crate::{config::PluginConfig, upload::handle_child_device_config_snapshot_response};
+
 use anyhow::Result;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use c8y_smartrest::smartrest_deserializer::{
@@ -13,14 +19,17 @@ use c8y_smartrest::smartrest_deserializer::{
 };
 use c8y_smartrest::topic::C8yTopic;
 use clap::Parser;
-use mqtt_channel::{Connection, Message, SinkExt, StreamExt, Topic};
+use mqtt_channel::{Connection, Message, PubChannel, SinkExt, StreamExt, Topic, TopicFilter};
+
 use std::path::{Path, PathBuf};
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, MqttPortSetting, TEdgeConfig, TmpPathSetting,
+    ConfigRepository, ConfigSettingAccessor, DeviceIdSetting, IpAddress, MqttBindAddressSetting,
+    MqttExternalBindAddressSetting, MqttPortSetting, TEdgeConfig, TmpPathSetting,
     DEFAULT_TEDGE_CONFIG_PATH,
 };
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
 use thin_edge_json::health::{health_check_topics, send_health_status};
+use topic::ConfigOperationResponseTopic;
 
 use tedge_utils::fs_notify::{fs_notify_stream, pin_mut, FileEvent};
 use tracing::{debug, error, info};
@@ -66,6 +75,9 @@ async fn create_mqtt_client(mqtt_port: u16) -> Result<mqtt_channel::Connection, 
         mqtt_channel::TopicFilter::new_unchecked(C8yTopic::SmartRestRequest.as_str());
     topic_filter.add_all(health_check_topics("c8y-configuration-plugin"));
 
+    topic_filter.add_all(ConfigOperationResponseTopic::SnapshotResponse.into());
+    topic_filter.add_all(ConfigOperationResponseTopic::UpdateResponse.into());
+
     let mqtt_config = mqtt_channel::Config::default()
         .with_session_name("c8y-configuration-plugin")
         .with_port(mqtt_port)
@@ -99,13 +111,28 @@ async fn main() -> Result<(), anyhow::Error> {
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
     let tedge_config = config_repository.load()?;
 
+    let tedge_device_id = tedge_config.query(DeviceIdSetting)?;
+
+    // match to external bind address if there is one,
+    // otherwise match to internal bind address
+    let internal_bind_address: IpAddress = tedge_config.query(MqttBindAddressSetting)?;
+    let external_bind_address_or_err = tedge_config.query(MqttExternalBindAddressSetting);
+    let bind_address = match external_bind_address_or_err {
+        Ok(external_bind_address) => external_bind_address,
+        Err(_) => internal_bind_address,
+    };
+
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
     let mut http_client = create_http_client(&tedge_config).await?;
     let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
 
+    let local_http_host = format!("{}:80", bind_address.to_string().as_str());
+
     run(
+        tedge_device_id,
         mqtt_port,
         &mut http_client,
+        &local_http_host,
         tmp_dir,
         &config_plugin_opt.config_dir,
         DEFAULT_PLUGIN_CONFIG_FILE,
@@ -114,15 +141,16 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 
 async fn run(
+    tedge_device_id: String,
     mqtt_port: u16,
     http_client: &mut impl C8YHttpProxy,
+    local_http_host: &str,
     tmp_dir: PathBuf,
     config_dir: &Path,
     config_file: &str,
 ) -> Result<(), anyhow::Error> {
     let config_file_path = config_dir.join(config_file);
     let mut plugin_config = PluginConfig::new(&config_file_path);
-
     let mut mqtt_client = create_mqtt_client(mqtt_port).await?;
 
     // Publish supported configuration types
@@ -150,11 +178,12 @@ async fn run(
             if let Some(message) = message {
                 process_mqtt_message(
                     message,
-                    &mut plugin_config,
                     &mut mqtt_client,
-                    &config_file_path,
                     http_client,
+                    local_http_host,
                     tmp_dir.clone(),
+                    tedge_device_id.as_str(),
+                    config_dir
                 )
                 .await?;
             } else {
@@ -176,21 +205,48 @@ async fn run(
 
 async fn process_mqtt_message(
     message: Message,
-    plugin_config: &mut PluginConfig,
     mqtt_client: &mut Connection,
-    config_file_path: &Path,
     http_client: &mut impl C8YHttpProxy,
+    local_http_host: &str,
     tmp_dir: PathBuf,
+    tedge_device_id: &str,
+    config_dir: &Path,
 ) -> Result<(), anyhow::Error> {
     let health_check_topics = health_check_topics("c8y-configuration-plugin");
-    debug!("Received {:?}", message);
+    let config_snapshot_response: TopicFilter =
+        ConfigOperationResponseTopic::SnapshotResponse.into();
+    let config_update_response: TopicFilter = ConfigOperationResponseTopic::UpdateResponse.into();
+
     if health_check_topics.accept(&message) {
         send_health_status(&mut mqtt_client.published, "c8y-configuration-plugin").await;
+        return Ok(());
+    }
+    if config_snapshot_response.accept(&message) {
+        info!("config snapshot response");
+        let outgoing_message = handle_child_device_config_snapshot_response(
+            &message,
+            &tmp_dir,
+            http_client,
+            local_http_host,
+            config_dir,
+        )
+        .await?;
+        mqtt_client.published.publish(outgoing_message).await?;
+        return Ok(());
+    }
+    if config_update_response.accept(&message) {
+        info!("config update response");
+        let child_config_management = ConfigOperationResponse::try_from(&message)?;
+        let outgoing_message =
+            handle_child_device_config_update_response(&message, &child_config_management)?;
+        mqtt_client.published.publish(outgoing_message).await?;
+        return Ok(());
     } else if let Ok(payload) = message.payload_str() {
         let result = match message.topic.name.as_str() {
             "tedge/configuration_change/c8y-configuration-plugin" => {
                 // Reload the plugin config file
-                let plugin_config = PluginConfig::new(config_file_path);
+                let config_file_path = config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE);
+                let plugin_config = PluginConfig::new(&config_file_path);
                 // Resend the supported config types
                 let msg = plugin_config.to_supported_config_types_message()?;
                 mqtt_client.published.send(msg).await?;
@@ -203,11 +259,13 @@ async fn process_mqtt_message(
                             SmartRestConfigDownloadRequest::from_smartrest(payload);
                         if let Ok(config_download_request) = maybe_config_download_request {
                             handle_config_download_request(
-                                plugin_config,
                                 config_download_request,
                                 tmp_dir.clone(),
                                 mqtt_client,
                                 http_client,
+                                local_http_host,
+                                tedge_device_id,
+                                config_dir,
                             )
                             .await
                         } else {
@@ -223,10 +281,12 @@ async fn process_mqtt_message(
                         if let Ok(config_upload_request) = maybe_config_upload_request {
                             // handle the config file upload request
                             handle_config_upload_request(
-                                plugin_config,
                                 config_upload_request,
                                 mqtt_client,
                                 http_client,
+                                local_http_host,
+                                tedge_device_id,
+                                config_dir,
                             )
                             .await
                         } else {
@@ -311,19 +371,25 @@ files = [
 
 #[cfg(test)]
 mod tests {
+    use crate::child_device::{ChildDeviceRequestPayload, ChildDeviceResponsePayload};
+
     use super::*;
+    use agent_interface::OperationStatus;
     use c8y_api::http_proxy::MockC8YHttpProxy;
     use mockall::predicate;
-    use std::{path::Path, time::Duration};
+    use std::time::Duration;
     use tedge_test_utils::fs::TempTedgeDir;
 
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[serial_test::serial]
-    async fn test_message_dispatch() -> anyhow::Result<()> {
-        let test_config_path = "/tmp"; //Pass some existing path
+    async fn test_handle_config_upload_request_tedge_device() -> anyhow::Result<()> {
+        let tedge_device_id = "tedge-device";
+        let test_config_path = "/some/test/config";
         let test_config_type = "c8y-configuration-plugin";
+        let ttd = TempTedgeDir::new();
+        ttd.dir("c8y").file("c8y-configuration-plugin.toml");
 
         let broker = mqtt_tests::test_mqtt_broker();
 
@@ -333,20 +399,23 @@ mod tests {
         http_client
             .expect_upload_config_file()
             .with(
-                predicate::eq(Path::new(test_config_path)),
+                predicate::always(),
                 predicate::eq(test_config_type),
+                predicate::eq(None),
             )
-            .return_once(|_path, _type| Ok("http://server/some/test/config/url".to_string()));
-
-        let tmp_dir = TempTedgeDir::new();
+            .return_once(|_path, _type, _child_id| {
+                Ok("http://server/some/test/config/url".to_string())
+            });
 
         // Run the plugin's runtime logic in an async task
         tokio::spawn(async move {
             let _ = run(
+                tedge_device_id.into(),
                 broker.port,
                 &mut http_client,
-                tmp_dir.path().to_path_buf(),
-                tmp_dir.path(),
+                "localhost",
+                ttd.path().to_path_buf(),
+                ttd.path(),
                 test_config_path,
             )
             .await;
@@ -360,11 +429,11 @@ mod tests {
         )
         .await;
 
-        // Send a software upload request to the plugin
+        // Send a config upload request to the plugin
         broker
             .publish(
                 "c8y/s/ds",
-                format!("526,tedge-device,{test_config_type}").as_str(),
+                format!("526,{tedge_device_id},{test_config_type}").as_str(),
             )
             .await?;
 
@@ -376,6 +445,427 @@ mod tests {
                 "501,c8y_UploadConfigFile",
                 "503,c8y_UploadConfigFile,http://server/some/test/config/url",
             ],
+        )
+        .await;
+
+        Ok(())
+    }
+
+    // Test c8y_UploadConfigFile SmartREST request mapping to tedge config_snapshot command
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[serial_test::serial]
+    async fn test_handle_config_upload_request_child_device() -> anyhow::Result<()> {
+        let tedge_device_id = "tedge-device";
+        let child_device_id = "child-aa";
+        let config_type = "file_a";
+        let test_config_path = "/some/test/config";
+        let tmp_dir = TempTedgeDir::new();
+        tmp_dir
+            .dir("c8y")
+            .dir(child_device_id)
+            .file("c8y-configuration-plugin.toml")
+            .with_toml_content(toml::toml! {
+                files = [
+                    { path = test_config_path, type = "file_a" }
+                ]
+            });
+
+        let server_address = mockito::server_address().to_string();
+
+        let request = ChildDeviceRequestPayload {
+            url: format!(
+                "http://{server_address}/tedge/file-transfer/{child_device_id}/config_snapshot/file_a"
+            ),
+            path: test_config_path.into(),
+            config_type: Some(config_type.into()),
+        };
+        let expected_request = serde_json::to_string(&request)?;
+
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mut c8y_http_client = MockC8YHttpProxy::new();
+
+        // Run the plugin's runtime logic in an async task
+        tokio::spawn(async move {
+            let _ = run(
+                tedge_device_id.into(),
+                broker.port,
+                &mut c8y_http_client,
+                &server_address,
+                tmp_dir.path().to_path_buf(),
+                tmp_dir.path(),
+                test_config_path,
+            )
+            .await;
+        });
+
+        let mut tedge_command_messages = broker
+            .messages_published_on(&format!(
+                "tedge/{child_device_id}/commands/req/config_snapshot"
+            ))
+            .await;
+
+        // Send a c8y_UploadConfigFile request to the plugin
+        broker
+            .publish(
+                "c8y/s/ds",
+                format!("526,{child_device_id},{config_type}").as_str(),
+            )
+            .await?;
+
+        // Assert the mapping from c8y_UploadConfigFile request to tedge command
+        mqtt_tests::assert_received_all_expected(
+            &mut tedge_command_messages,
+            TEST_TIMEOUT_MS,
+            &[expected_request],
+        )
+        .await;
+
+        Ok(())
+    }
+
+    // Test tedge config_snapshot command executing response mapping to SmartREST
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[serial_test::serial]
+    async fn test_handle_config_upload_executing_response_child_device() -> anyhow::Result<()> {
+        let tedge_device_id = "tedge-device";
+        let child_device_id = "child-device";
+        let config_type = "config_type";
+        let test_config_path = "/some/test/config";
+        let tmp_dir = TempTedgeDir::new();
+
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mut c8y_http_client = MockC8YHttpProxy::new();
+
+        // Run the plugin's runtime logic in an async task
+        tokio::spawn(async move {
+            let _ = run(
+                tedge_device_id.into(),
+                broker.port,
+                &mut c8y_http_client,
+                &mockito::server_url(),
+                tmp_dir.path().to_path_buf(),
+                tmp_dir.path(),
+                test_config_path,
+            )
+            .await;
+        });
+
+        let mut smartrest_messages = broker
+            .messages_published_on(format!("c8y/s/us/{child_device_id}").as_str())
+            .await;
+
+        // Fake config_snapshot executing status response from child device
+        //
+        broker
+            .publish(
+                &format!("tedge/{child_device_id}/commands/res/config_snapshot"),
+                &serde_json::to_string(&ChildDeviceResponsePayload {
+                    status: Some(OperationStatus::Executing),
+                    path: test_config_path.into(),
+                    config_type: config_type.into(),
+                    reason: None,
+                })
+                .unwrap(),
+            )
+            .await?;
+
+        // Assert the c8y_UploadConfigFile operation status mapping to EXECUTING(501)
+        mqtt_tests::assert_received_all_expected(
+            &mut smartrest_messages,
+            TEST_TIMEOUT_MS,
+            &["501,c8y_UploadConfigFile"],
+        )
+        .await;
+
+        Ok(())
+    }
+
+    // Test tedge config_snapshot command failed response mapping to SmartREST
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[serial_test::serial]
+    async fn test_handle_config_upload_failed_response_child_device() -> anyhow::Result<()> {
+        let tedge_device_id = "tedge-device";
+        let child_device_id = "child-device";
+        let config_type = "config_type";
+        let test_config_path = "/some/test/config";
+        let tmp_dir = TempTedgeDir::new();
+
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mut c8y_http_client = MockC8YHttpProxy::new();
+
+        // Run the plugin's runtime logic in an async task
+        tokio::spawn(async move {
+            let _ = run(
+                tedge_device_id.into(),
+                broker.port,
+                &mut c8y_http_client,
+                &mockito::server_url(),
+                tmp_dir.path().to_path_buf(),
+                tmp_dir.path(),
+                test_config_path,
+            )
+            .await;
+        });
+
+        let mut smartrest_messages = broker
+            .messages_published_on(format!("c8y/s/us/{child_device_id}").as_str())
+            .await;
+
+        // Fake config_snapshot executing status response from child device
+        broker
+            .publish(
+                &format!("tedge/{child_device_id}/commands/res/config_snapshot"),
+                &serde_json::to_string(&ChildDeviceResponsePayload {
+                    status: Some(OperationStatus::Failed),
+                    path: test_config_path.into(),
+                    config_type: config_type.into(),
+                    reason: Some("upload failed".into()),
+                })
+                .unwrap(),
+            )
+            .await?;
+
+        // Assert the c8y_UploadConfigFile operation status mapping to FAILED(502)
+        mqtt_tests::assert_received_all_expected(
+            &mut smartrest_messages,
+            TEST_TIMEOUT_MS,
+            &[r#"502,c8y_UploadConfigFile,"upload failed""#],
+        )
+        .await;
+
+        Ok(())
+    }
+
+    // Test tedge config_snapshot command successful response mapping to SmartREST
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[serial_test::serial]
+    async fn test_handle_config_upload_successful_response_child_device() -> anyhow::Result<()> {
+        let tedge_device_id = "tedge-device";
+        let child_device_id = "child-device";
+        let config_type = "config_type";
+        let test_config_path = "/some/test/config";
+        let tmp_dir = TempTedgeDir::new();
+
+        let broker = mqtt_tests::test_mqtt_broker();
+
+        let local_http_host = mockito::server_address().to_string();
+
+        //Mock the config file upload to Cumulocity
+        let mut c8y_http_client = MockC8YHttpProxy::new();
+        c8y_http_client
+            .expect_upload_config_file()
+            .with(
+                predicate::always(),
+                predicate::eq(config_type),
+                predicate::eq(Some(child_device_id.to_string())),
+            )
+            .return_once(|_path, _type, _child_id| Ok("http://server/config/file/url".to_string()));
+
+        // Run the plugin's runtime logic in an async task
+        tokio::spawn(async move {
+            let _ = run(
+                tedge_device_id.into(),
+                broker.port,
+                &mut c8y_http_client,
+                &local_http_host,
+                tmp_dir.path().to_path_buf(),
+                tmp_dir.path(),
+                test_config_path,
+            )
+            .await;
+        });
+
+        let mut smartrest_messages = broker
+            .messages_published_on(format!("c8y/s/us/{child_device_id}").as_str())
+            .await;
+
+        // Mock the config file url, to be downloaded by this plugin, from the file transfer service as if child device uploaded the file
+        let config_url_path =
+            format!("/tedge/file-transfer/{child_device_id}/config_snapshot/{config_type}");
+        let _config_snapshot_url_mock = mockito::mock("GET", config_url_path.as_str())
+            .with_body("v1")
+            .with_status(200)
+            .create();
+
+        // Fake child device sending config_snapshot successful status TODO
+        broker
+            .publish(
+                &format!("tedge/{child_device_id}/commands/res/config_snapshot"),
+                &serde_json::to_string(&ChildDeviceResponsePayload {
+                    status: Some(OperationStatus::Successful),
+                    path: test_config_path.into(),
+                    config_type: config_type.into(),
+                    reason: None,
+                })
+                .unwrap(),
+            )
+            .await?;
+
+        // Assert the c8y_UploadConfigFile operation status mapping to SUCCESSFUL(503)
+        mqtt_tests::assert_received_all_expected(
+            &mut smartrest_messages,
+            TEST_TIMEOUT_MS,
+            &["503,c8y_UploadConfigFile,http://server/config/file/url"],
+        )
+        .await;
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[serial_test::serial]
+    async fn test_handle_config_update_request_child_device() -> anyhow::Result<()> {
+        let tedge_device_id = "tedge-device";
+        let child_device_id = "child-device";
+        let config_type = "file_a";
+        let test_config_path = "/some/test/config";
+        let tmp_dir = TempTedgeDir::new();
+        tmp_dir
+            .dir("c8y")
+            .dir(child_device_id)
+            .file("c8y-configuration-plugin.toml")
+            .with_toml_content(toml::toml! {
+                files = [
+                    { path = test_config_path, type = "file_a" }
+                ]
+            });
+
+        let broker = mqtt_tests::test_mqtt_broker();
+        let local_http_host = mockito::server_address().to_string();
+        let mut c8y_http_client = MockC8YHttpProxy::new();
+        c8y_http_client
+            .expect_url_is_in_my_tenant_domain()
+            .with(predicate::always())
+            .return_once(|_path| false);
+
+        // Run the plugin's runtime logic in an async task
+        tokio::spawn(async move {
+            let _ = run(
+                tedge_device_id.into(),
+                broker.port,
+                &mut c8y_http_client,
+                local_http_host.as_str(),
+                tmp_dir.path().to_path_buf(),
+                tmp_dir.path(),
+                test_config_path,
+            )
+            .await;
+        });
+
+        let mut tedge_command_messages = broker
+            .messages_published_on(&format!(
+                "tedge/{child_device_id}/commands/req/config_update"
+            ))
+            .await;
+
+        // Mock download endpoint for the plugin to download config file update from the cloud
+        let config_update_download_url_path = "/tede/file-transfer/config_update/file_a";
+        let _download_config_url_mock = mockito::mock("GET", config_update_download_url_path)
+            .with_body_from_fn(|w| w.write_all(b"v2"))
+            .with_status(200)
+            .create();
+        let local_http_host = mockito::server_url();
+        let config_update_download_url =
+            format!("{local_http_host}{config_update_download_url_path}");
+        dbg!(&config_update_download_url);
+        dbg!(&config_type);
+
+        // Mock upload endpoint for the plugin to upload the config file update to the file transfer service
+        let config_update_upload_url_path =
+            format!("/tedge/file-transfer/{child_device_id}/config_update/{config_type}");
+        //let config_update_upload_url_path =
+        //    format!("/tedge/file-transfer/{config_update_download_url_path}");
+        dbg!(&config_update_upload_url_path);
+        let _upload_config_url_mock = mockito::mock("PUT", config_update_upload_url_path.as_str())
+            .with_status(201)
+            .create();
+
+        // Send a c8y_DownloadConfigFile request to the plugin
+        broker
+            .publish(
+                "c8y/s/ds",
+                format!("524,{child_device_id},{config_update_download_url},{config_type}")
+                    .as_str(),
+            )
+            .await?;
+
+        let request = ChildDeviceRequestPayload {
+            url: format!(
+                "{local_http_host}/tedge/file-transfer/{child_device_id}/config_update/{config_type}"
+            ),
+            path: test_config_path.into(),
+            config_type: Some(config_type.into()),
+        };
+        let expected_request = serde_json::to_string(&request)?;
+
+        // Assert the mapping from c8y_DownloadConfigFile request to tedge command
+        mqtt_tests::assert_received_all_expected(
+            &mut tedge_command_messages,
+            TEST_TIMEOUT_MS,
+            &[expected_request],
+        )
+        .await;
+
+        Ok(())
+    }
+
+    // Test tedge config_update command successful response mapping to SmartREST
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[serial_test::serial]
+    async fn test_handle_config_update_successful_response_child_device() -> anyhow::Result<()> {
+        let tedge_device_id = "tedge-device";
+        let child_device_id = "child-device";
+        let config_type = "config_type";
+        let test_config_path = "/some/test/config";
+        let tmp_dir = TempTedgeDir::new();
+
+        let broker = mqtt_tests::test_mqtt_broker();
+        let local_http_host = mockito::server_address().to_string();
+        let mut c8y_http_client = MockC8YHttpProxy::new();
+
+        // Run the plugin's runtime logic in an async task
+        tokio::spawn(async move {
+            let _ = run(
+                tedge_device_id.into(),
+                broker.port,
+                &mut c8y_http_client,
+                &local_http_host,
+                tmp_dir.path().to_path_buf(),
+                tmp_dir.path(),
+                test_config_path,
+            )
+            .await;
+        });
+
+        // Mock the config file url, to be deleted by this plugin from the file transfer service
+        let config_url_path = format!("/tedge/{child_device_id}/config_update/{config_type}");
+        let _config_snapshot_url_mock = mockito::mock("DELETE", config_url_path.as_str())
+            .with_status(200)
+            .create();
+
+        let mut smartrest_messages = broker
+            .messages_published_on(format!("c8y/s/us/{child_device_id}").as_str())
+            .await;
+
+        // Fake child device sending config_update successful status
+        broker
+            .publish(
+                &format!("tedge/{child_device_id}/commands/res/config_update"),
+                &serde_json::to_string(&ChildDeviceResponsePayload {
+                    status: Some(OperationStatus::Successful),
+                    path: test_config_path.into(),
+                    config_type: config_type.into(),
+                    reason: None,
+                })
+                .unwrap(),
+            )
+            .await?;
+
+        // Assert the c8y_DownloadConfigFile operation status mapping to SUCCESSFUL(503)
+        mqtt_tests::assert_received_all_expected(
+            &mut smartrest_messages,
+            TEST_TIMEOUT_MS,
+            &["503,c8y_DownloadConfigFile"],
         )
         .await;
 
