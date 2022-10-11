@@ -172,15 +172,6 @@ A **plugin** defines and implements a specific **contract** for all interactions
 
 TODO: consider containers here?
 
-## Main Challenges
-
-* Industrial automation area is very heterogen.
-  * Even there are standards like IEC 61131-3 (that standardizes programming lanuages and behaviour) and common Fieldbus protocols, interoperability to industrial controllers and the diversity of peripheral devices from different manufucaters is hard to manage.
-* Ressources constraint device hardware
-* _Knowledge-Gap_ between OT and IT. Industrial application engineers (the PLC guys) are most often no software developers but experts for the manufacturing process. Instead software developers (e.g. the cloud guys) have less awareness for needs of industrial application engineers and the shopfloor.
-* Many PLC sites have restrictected network access (especially in a manufaturing hall).
-
-
 ---------------------------------------------
 Open Topics:
 * "fragments"
