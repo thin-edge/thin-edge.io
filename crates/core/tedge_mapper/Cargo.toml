@@ -59,7 +59,6 @@ tracing = { version = "0.1", features = ["attributes", "log"] }
 [dev-dependencies]
 assert_matches = "1.5"
 assert-json-diff = "2.0"
-criterion = "0.3"
 serde = "1.0"
 mockito = "0.31"
 mqtt_tests = { path = "../../tests/mqtt_tests" }
@@ -73,7 +72,3 @@ tokio-test = "0.4"
 
 [features]
 integration-test = []
-
-[[bench]]
-name = "thin_edge_json"
-harness = false

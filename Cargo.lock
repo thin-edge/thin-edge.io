@@ -2906,7 +2906,6 @@ dependencies = [
  "c8y_smartrest",
  "clap 3.2.22",
  "clock",
- "criterion",
  "csv",
  "download",
  "flockfile",
