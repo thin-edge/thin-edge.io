@@ -242,68 +242,73 @@ async fn process_mqtt_message(
         mqtt_client.published.publish(outgoing_message).await?;
         return Ok(());
     } else if let Ok(payload) = message.payload_str() {
-        let result = match message.topic.name.as_str() {
-            "tedge/configuration_change/c8y-configuration-plugin" => {
-                // Reload the plugin config file
-                let config_file_path = config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE);
-                let plugin_config = PluginConfig::new(&config_file_path);
-                // Resend the supported config types
-                let msg = plugin_config.to_supported_config_types_message()?;
-                mqtt_client.published.send(msg).await?;
-                Ok(())
-            }
-            _ => {
-                match payload.split(',').next().unwrap_or_default() {
-                    "524" => {
-                        let maybe_config_download_request =
-                            SmartRestConfigDownloadRequest::from_smartrest(payload);
-                        if let Ok(config_download_request) = maybe_config_download_request {
-                            handle_config_download_request(
-                                config_download_request,
-                                tmp_dir.clone(),
-                                mqtt_client,
-                                http_client,
-                                local_http_host,
-                                tedge_device_id,
-                                config_dir,
-                            )
-                            .await
-                        } else {
-                            error!("Incorrect Download SmartREST payload: {}", payload);
-                            Ok(())
+        for smartrest_message in payload.split('\n') {
+            let result = match message.topic.name.as_str() {
+                "tedge/configuration_change/c8y-configuration-plugin" => {
+                    // Reload the plugin config file
+                    let config_file_path = config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE);
+                    let plugin_config = PluginConfig::new(&config_file_path);
+                    // Resend the supported config types
+                    let msg = plugin_config.to_supported_config_types_message()?;
+                    mqtt_client.published.send(msg).await?;
+                    Ok(())
+                }
+                _ => {
+                    match smartrest_message.split(',').next().unwrap_or_default() {
+                        "524" => {
+                            let maybe_config_download_request =
+                                SmartRestConfigDownloadRequest::from_smartrest(smartrest_message);
+                            if let Ok(config_download_request) = maybe_config_download_request {
+                                handle_config_download_request(
+                                    config_download_request,
+                                    tmp_dir.clone(),
+                                    mqtt_client,
+                                    http_client,
+                                    local_http_host,
+                                    tedge_device_id,
+                                    config_dir,
+                                )
+                                .await
+                            } else {
+                                error!(
+                                    "Incorrect Download SmartREST payload: {}",
+                                    smartrest_message
+                                );
+                                Ok(())
+                            }
                         }
-                    }
-                    "526" => {
-                        // retrieve config file upload smartrest request from payload
-                        let maybe_config_upload_request =
-                            SmartRestConfigUploadRequest::from_smartrest(payload);
+                        "526" => {
+                            // retrieve config file upload smartrest request from payload
+                            let maybe_config_upload_request =
+                                SmartRestConfigUploadRequest::from_smartrest(smartrest_message);
 
-                        if let Ok(config_upload_request) = maybe_config_upload_request {
-                            // handle the config file upload request
-                            handle_config_upload_request(
-                                config_upload_request,
-                                mqtt_client,
-                                http_client,
-                                local_http_host,
-                                tedge_device_id,
-                                config_dir,
-                            )
-                            .await
-                        } else {
-                            error!("Incorrect Upload SmartREST payload: {}", payload);
+                            if let Ok(config_upload_request) = maybe_config_upload_request {
+                                // handle the config file upload request
+                                handle_config_upload_request(
+                                    config_upload_request,
+                                    mqtt_client,
+                                    http_client,
+                                    local_http_host,
+                                    tedge_device_id,
+                                    config_dir,
+                                )
+                                .await
+                            } else {
+                                error!("Incorrect Upload SmartREST payload: {}", smartrest_message);
+                                Ok(())
+                            }
+                        }
+                        _ => {
+                            // Ignore operation messages not meant for this plugin
                             Ok(())
                         }
-                    }
-                    _ => {
-                        // Ignore operation messages not meant for this plugin
-                        Ok(())
                     }
                 }
-            }
-        };
+            };
 
-        if let Err(err) = result {
-            error!("Handling of operation: '{payload}' failed with {err}");
+            if let Err(err) = result {
+                error!("Handling of operation: '{smartrest_message}' failed with {err}");
+            }
         }
     }
     Ok(())
