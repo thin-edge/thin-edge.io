@@ -43,34 +43,48 @@ with two levels of building blocks that combine along an IIoT specific API.
 * To make feasible the interoperability of components provided by different tiers,
   thin-edge comes with an extensible data model for IIoT -
   cloud connectivity, telemetry data, device management, child devices, ...
-  
+
 ## Design Principles
 
-To achieve this goal, the foundations of thin-edge address the hardened case first.
-* The core of thin-edge and its components are written using the *Rust* programming languages.
-* The set of components used by an application is defined at *build time*.
-* These components cooperate using a streaming, asynchronous message passing, *internal* API.
-* Connections to the outside are delegated to specific bridge components
-  that abstract the actual protocol (MQTT, HTTP, Modbus, OPC UA)
-  while making these external channels accessible to the other components.
-* The *internal* messages exchanged by the components are *predefined* and cover the domain of telemetry and IoT
-  (measurements, events, alarms, operation requests, operation outcomes ...). 
-  Messages sent to the outside are freely defined by the respective bridge components.
-* The core of thin-edge provides the tools to configure the components as well as the internal message routes.
-* An executable for an IoT application is statically defined by an assemblage of components and their configuration.
-  
-To open this static core, thin-edge provides bridge components opening channels to external end-points and message buses.
-* Notably, thin-edge provides an MQTT component to connect external processes
-  that are not necessarily part of the core, can be written using any programming languages
-  and can run on other devices. 
-* This MQTT bus works as an extension of the channels used internally by the core components.
-  For that purpose, the internal thin-edge messages are serialized over MQTT using the thin-edge JSON schema.
-* On top of this MQTT bus, thin-edge provides plugins to connect specific application,
-  *e.g.* `collectd` or Apama.
-* Most of the extensions of thin-edge will be provided by such bridge components:
-  * to handle specific south-bound protocols as Modbus or OPC UA,
-  * to trigger operations on the devices through a command line interface,
-  * and, last but not least, to connect to specific cloud end-point with mapper components.
+* Thin-edge provides the tools to develop an IIoT gateway by assembling components
+  that have been implemented independently,
+  possibly by different vendors and using different programming languages.
+* There are two levels of components:
+  * MQTT-based components that are processes running on the device and the local network
+    and interacting over MQTT and HTTP using JSON messages.
+  * Rust-based components that are actors running inside a process
+    and interacting over in-memory channels using statically typed messages.
+* These two levels of components serve different purposes and users:
+  * The Rust-based components and their assemblage are designed for robustness.
+    They follow strict combination rules enforced at compile time,
+    notably with compatibility checks between message consumers and producers.
+    These components provide the building blocks:
+    * connections to IoT cloud end-points,
+    * connections to various protocols (MQTT, HTTP, Modbus, OPC UA, ...),
+    * interactions with the operating systems (files, commands, software updates, ...),
+    * making sense of telemetry data (measurements, events, alarms, set points).
+  * The MQTT-based components bring the flexibility to interact
+    with external systems running on a different device or inside a container
+    and without enforcing a programming language or an operating system.
+    These components also provide the flexibility to experiment
+    and to add missing features without having to implement a full-fledged Rust component. 
+* To enable interactions between the MQTT-components, thin-edge provides an MQTT bus made of:
+    * a local MQTT server,
+    * an MQTT bridge that relays messages between the gateway and the cloud end-points,
+    * an MQTT API that defines topics and message payloads
+      * to exchange telemetry data,
+      * to monitor components health,
+      * to trigger operations and monitor progress,
+    * a local HTTP server for operations where a REST API is more adapted than a Pub/Sub protocol.
+* In practice, the software for an IIoT agent is build using a combination of MQTT and Rust components.
+  * Thin-edge itself is released as an MQTT-based component built from Rust-based components.
+  * A batteries included thin-edge executable is available to let the users experiment
+    with all the available building-blocks.
+  * An application-specific thin-edge can be built by cherry-picking building blocks
+    and adding custom blocks for the business logic.
+  * Along the main thin-edge executable, are deployed MQTT-based components over the local network,
+    on external devices, controllers, PLCs, containers ... or even on the gateway
+    connecting all the data sources, actuators, and data processors that make the application on the edge.
   
 ## Building an application with thin-edge
 
