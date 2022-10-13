@@ -1,0 +1,29 @@
+# Thin Edge File Transfer Service
+
+The `tedge-agent` hosts a binary repository for child devices and other plugins/extensions to exchange binary files between them.
+This repository is meant to be used as a temporary storage for exchanging files, and not for storing items permanently,
+as the storage on thin-edge devices are typically very limited.
+
+Files can be uploaded, downloaded and deleted from this repository via the following HTTP endpoints:
+
+* Upload: PUT http://{tedge-ip}/tedge/file-transfer/{path}/{to}/{resource}
+* Download: GET http://{tedge-ip}/tedge/file-transfer/{path}/{to}/{resource}
+* Delete: DELETE http://{tedge-ip}/tedge/file-transfer/{path}/{to}/{resource}
+
+The `tedge-ip` is derived from the following tedge configurations:
+
+* mqtt.bind_address
+* mqtt.external.bind_address
+* mqtt.external.bind_interface
+
+The files uploaded to this repository are stored at `/var/tedge/file-transfer` directory.
+The `{path}/{to}/{resource}` specified in the URL is replicated under this directory.
+For example, a file uploaded to `http://{tedge-ip}/tedge/file-transfer/config_update/mosquitto/mosquitto.conf`
+is stored at `/var/tedge/file-transfer/config_update/mosquitto/mosquitto.conf`.
+
+An existing file at a given path is replaced on subsequent uploads using the same URL path.
+Unique paths must be used in the URL path to avoid such overwrites.
+
+All uploaded files are preserved until they are explicitly deleted with the DELETE API.
+To avoid exhaustion of storage space on the thin-edge device,
+users must be diligent to delete any stored files as soon as their purpose is served.
