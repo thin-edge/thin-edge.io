@@ -7,7 +7,7 @@ Library    SSHLibrary
 Library    DateTime
 Library    CryptoLibrary    variable_decryption=True
 Suite Setup            Open Connection And Log In
-Suite Teardown         SSHLibrary.Close All Connections
+Suite Teardown         Close All Connections
 
 *** Variables ***
 ${HOST}           
@@ -137,11 +137,11 @@ Create directory
 
 Get Put Delete   
     Child Connection
-    Execute Command    curl -X PUT -d "test of put" http://192.168.1.130:80/tedge/file-transfer/file_a
-    ${get}=    Execute Command    curl http://192.168.1.130:80/tedge/file-transfer/file_a
+    Execute Command    curl -X PUT -d "test of put" http://${HOST}:80/tedge/file-transfer/file_a
+    ${get}=    Execute Command    curl http://${HOST}:80/tedge/file-transfer/file_a
     Should Be Equal    ${get}    test of put
-    Execute Command    curl -X DELETE http://192.168.1.130:80/tedge/file-transfer/file_a
-    #Close Connection
+    Execute Command    curl -X DELETE http://${HOST}:80/tedge/file-transfer/file_a
+
 
 Delete created directory
     Execute Command    sudo rm -rf /var/tedge/file-transfer
