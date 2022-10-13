@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::c8y::error::CumulocityMapperError;
 
 use c8y_smartrest::error::OperationsError;
@@ -28,6 +30,12 @@ pub enum MapperError {
 
     #[error(transparent)]
     FromNotifyFs(#[from] tedge_utils::fs_notify::NotifyStreamError),
+
+    #[error(transparent)]
+    FromStdIo(#[from] std::io::Error),
+
+    #[error("Failed to read directory: {dir}")]
+    ReadDirError { dir: PathBuf },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -110,4 +118,10 @@ pub enum ConversionError {
 
     #[error("The given Child ID '{id}' is not registered with Cumulocity. To send the events to the child device, it has to be registered first.")]
     ChildDeviceNotRegistered { id: String },
+
+    #[error("Failed to read the child device operations in directory: {dir}")]
+    ReadDirError { dir: PathBuf },
+
+    #[error("Failed to extract the child device name from file path : {dir}")]
+    DirPathComponentError { dir: PathBuf },
 }
