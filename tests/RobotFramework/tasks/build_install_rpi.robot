@@ -1,4 +1,4 @@
-#Command to execute:    robot -d \results --timestampoutputs --log http_file_transfer_api.html --report NONE -v BUILD:840 -v HOST:192.168.1.130 thin-edge.io/tests/RobotFramework/tedge/http_file_transfer_api.robot
+#Command to execute:    robot -d \results --timestampoutputs --log build_install_rpi.html --report NONE --variable BUILD:840 --variable HOST:192.168.1.130 QA/System-tests/tasks/build_install_rpi.robot
 *** Settings ***
 Library    Browser
 Library    OperatingSystem
@@ -7,7 +7,7 @@ Library    SSHLibrary
 Library    DateTime
 Library    CryptoLibrary    variable_decryption=True
 Suite Setup            Open Connection And Log In
-Suite Teardown         Close All Connections
+Suite Teardown         SSHLibrary.Close All Connections
 
 *** Variables ***
 ${HOST}           
@@ -29,7 +29,7 @@ ${BUILD}
 ${ARCH}
 ${dir}
 
-*** Test Cases ***
+*** Tasks ***
 Create Timestamp    #Creating timestamp to be used for Device ID
         ${timestamp}=    get current date    result_format=%d%m%Y%H%M%S
         log    ${timestamp}
@@ -45,6 +45,15 @@ Check Architecture    #Checking the architecture in order to download the right 
 Set File Name    #Setting the file name for download
     Run Keyword If    '${ARCH}'=='aarch64'    aarch64
     ...  ELSE    armv7   
+
+# Check if installation exists on Device    #Checking if thinedge is already installed on device 
+#      ${dir}=    SSHLibrary.Execute Command    ls /usr/bin | grep tedge_agent
+#     Log    ${dir}
+#     Set Suite Variable    ${dir} 
+
+#     Run Keyword If    '${dir}'=='tedge_agent'    uninstall tedge script
+#     ...  ELSE    install tedge
+
 Uninstall tedge with purge
     Execute Command    wget https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh
     Execute Command    chmod a+x uninstall-thin-edge_io.sh
@@ -124,36 +133,33 @@ Install Watchdog
     ${rc}=    Execute Command    sudo dpkg -i ./tedge_watchdog_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 
-Set external MQTT bind address
-    Execute Command    sudo tedge config set mqtt.external.bind_address ${HOST}
-    
+Executing Create self-signed certificate
+    ${rc}=    Execute Command    sudo tedge cert create --device-id ${DeviceID}    return_stdout=False    return_rc=True
+    Should Be Equal    ${rc}    ${0}
+    ${output}=    Execute Command    sudo tedge cert show    #You can then check the content of that certificate.
+    Should Contain    ${output}    Device certificate: /etc/tedge/device-certs/tedge-certificate.pem
 
-Check MGTT bind address
-    ${bind}    Execute Command    tedge config get mqtt.external.bind_address
-    Should Be Equal    ${bind}    ${HOST}
+Set c8y URL
+    ${rc}=    Execute Command    sudo tedge config set c8y.url ${url_tedge}    return_stdout=False    return_rc=True    #Set the URL of your Cumulocity IoT tenant
+    Should Be Equal    ${rc}    ${0}
 
-Create directory
-    Execute Command    sudo mkdir /var/tedge/file-transfer
+Upload certificate    
+    Write   sudo tedge cert upload c8y --user ${user}
+    Write    ${pass}
+    Sleep    60s
 
-Get Put Delete   
-    Child Connection
-    Execute Command    curl -X PUT -d "test of put" http://${HOST}:80/tedge/file-transfer/file_a
-    ${get}=    Execute Command    curl http://${HOST}:80/tedge/file-transfer/file_a
-    Should Be Equal    ${get}    test of put
-    Execute Command    curl -X DELETE http://${HOST}:80/tedge/file-transfer/file_a
+Connect to c8y
+    ${output}=    Execute Command    sudo tedge connect c8y    #You can then check the content of that certificate.
+    Sleep    3s
+    Should Contain    ${output}    tedge-agent service successfully started and enabled!
 
+    Execute Command    rm *.deb | rm *.zip | rm *.sh*
 
-Delete created directory
-    Execute Command    sudo rm -rf /var/tedge/file-transfer
 
 
 *** Keywords ***
 Open Connection And Log In
    Open Connection     ${HOST}
-   Login               ${USERNAME}        ${PASSWORD}
-
-Child Connection
-   Open Connection     192.168.1.110
    Login               ${USERNAME}        ${PASSWORD}
 aarch64
     [Documentation]    Setting file name according architecture
@@ -165,3 +171,8 @@ armv7
     ${FILENAME}    Set Variable    debian-packages-armv7-unknown-linux-gnueabihf
     Log    ${FILENAME}
     Set Global Variable    ${FILENAME}
+    
+
+
+
+

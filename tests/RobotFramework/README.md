@@ -33,6 +33,7 @@
 2. Raspberry Pi 3 - 192.168.1.120 (user:pi pass:thinedge)
 3. Raspberry Pi 4 - 192.168.1.130 (user:pi pass:thinedge)
 4. Raspberry Zero - 192.168.1.140 (user:zero pass:thinedge)
+5. Raspberry PI 4 - 192.168.1.200 (user:pi pass:thinedge) - for NonFunctional tests
 
 ## 3. Run an .robot file
 
