@@ -1052,6 +1052,78 @@ async fn test_convert_small_measurement_for_child_device() {
         ));
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn mapper_handles_multiline_sm_requests() {
+    // The test assures if Mapper can handle multiline smartrest messages arrived on `c8y/s/ds`
+    let broker = mqtt_tests::test_mqtt_broker();
+    let mut messages = broker.messages_published_on("c8y/s/us").await;
+    let (_tmp_dir, c8y_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+
+    // Prepare and publish multiline software update smartrest requests on `c8y/s/ds`.
+    let smartrest = format!("528,external_id,nodered,1.0.0::debian,,install\n528,external_id,nodered,1.0.0::debian,,install");
+    broker.publish("c8y/s/ds", &smartrest).await.unwrap();
+    publish_a_fake_jwt_token(broker).await;
+
+    // Checking the content of SoftwareList is out of scope, therefore, empty
+    let json_response_executing = r#"{
+         "id":"123",
+         "status":"executing",
+         "currentSoftwareList":[
+        ]}"#;
+
+    let json_response_successful = r#"{
+         "id":"123",
+         "status":"successful",
+         "currentSoftwareList":[
+        ]}"#;
+
+    // Publish each message twice as there are two requests
+    broker
+        .publish(
+            "tedge/commands/res/software/update",
+            &remove_whitespace(json_response_executing),
+        )
+        .await
+        .unwrap();
+    broker
+        .publish(
+            "tedge/commands/res/software/update",
+            &remove_whitespace(json_response_successful),
+        )
+        .await
+        .unwrap();
+    broker
+        .publish(
+            "tedge/commands/res/software/update",
+            &remove_whitespace(json_response_executing),
+        )
+        .await
+        .unwrap();
+    broker
+        .publish(
+            "tedge/commands/res/software/update",
+            &remove_whitespace(json_response_successful),
+        )
+        .await
+        .unwrap();
+
+    // Expect two sets of 501 and 503 are received
+    mqtt_tests::assert_received_all_expected(
+        &mut messages,
+        TEST_TIMEOUT_MS,
+        &[
+            "501,c8y_SoftwareUpdate",
+            "503,c8y_SoftwareUpdate",
+            "501,c8y_SoftwareUpdate",
+            "503,c8y_SoftwareUpdate",
+        ],
+    )
+    .await;
+
+    c8y_mapper.abort();
+}
+
 fn create_packet(size: usize) -> String {
     let data: String = "Some data!".into();
     let loops = size / data.len();
