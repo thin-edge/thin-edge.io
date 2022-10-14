@@ -97,11 +97,9 @@ two files must be added under `/etc/tedge/operations/c8y/$CHILD_DEVICE_ID`
 in order to declare the associated capabilities to Cumulocity.
 These files are just empty files owned by the `tedge` user.
 
-These two files can be created using the `c8y_configuration_plugin --init` option and providing child names:
+These two files are created by the plugin when the child-device agent uploads its supported configuration list to thin-edge.
 
 ```shell
-$ sudo c8y_configuration_plugin --init child-1 child-2
-
 $ ls -l /etc/tedge/operations/c8y/child-1
 -rw-r--r-- 1 tedge tedge 97 Mar 22 14:24 /etc/tedge/operations/c8y/child-1/c8y_DownloadConfigFile
 -rw-r--r-- 1 tedge tedge 95 Mar 22 14:24 /etc/tedge/operations/c8y/child-1/c8y_UploadConfigFile
@@ -238,7 +236,6 @@ OPTIONS:
         --config-dir <CONFIG_DIR>      [default: /etc/tedge]
         --debug                        Turn-on the debug log level
     -h, --help                         Print help information
-    -i, --init [CHILD_DEVICE_ID]       Create supported operation files, possibly for several child devices
     -V, --version                      Print version information
 
     On start, `c8y_configuration_plugin` notifies the cloud tenant of the managed configuration files,
@@ -283,34 +280,36 @@ Note that:
 ## Configuration protocol between thin-edge and the child-devices
 
 The configuration plugin `c8y_configuration_plugin` can act as a proxy between the cloud and a child-device.
-However, for that to work, a client must be installed on the child device
+However, for that to work, a client, referred to as child-device-agent, must be installed on the child device
 to perform the actual configuration updates pushed by thin-edge on behalf of the cloud.
 While the configuration plugin tells what need to be updated and when,
 only the child device specific client can control where and how these updates can be applied.
 
 * The responsibility of the configuration plugin is to
   * interact with the cloud, receiving the configuration update and configuration snapshot requests,
+  * download/upload configuration files from/to the cloud to be exchanged with the child device
   * exchange configuration files with the child device via an HTTP-based file transfer service over the local network,
   * notify the child devices via MQTT when configuration files are to be updated or requested from the cloud,
   * listen to child devices' configuration operation status via MQTT messages and mirror those to the cloud.
 * The child-device agent is an MQTT+HTTP client that
   * interact with the child-device system, accessing the actual configuration files
   * connect the main thin-edge device over the local MQTT bus,
-  * listen over MQTT for configuration updates and requests,
+  * listen over MQTT for configuration snapshot and update requests,
   * download and upload the configuration files on demand,
   * notify the progress of the configuration operations to the main device via MQTT.
 
-For each kind of child device such a specific client has to be implemented
-and installed on the child-device hardware (To be precise, most often on the child device,
-but not necessarily as, for a child device with closed software that cannot be altered,
-one might have to install a protocol adaptor on the main device).
+For each kind of child device such an agent has to be implemented
+and installed on the child-device hardware.
+For a child device with closed software that cannot be altered,
+one might have to install that agent with protocol adaptor on the main device.
 
 Here is the protocol that has to be implemented by the child-device configuration client.
 This protocol covers 4 interactions, the child devices:
 1. Connecting to thin-edge
-2. Downloading configuration file updates from thin-edge
-3. Uploading current configuration files to thin-edge
-4. Notifying the list of configuration files to thin-edge
+2. Uploading its supported configuration list to thin-edge
+3. Downloading configuration file updates from thin-edge
+4. Uploading current configuration files to thin-edge
+5. Notifying thin-edge of configuration operation status updates
 
 ### The child device connects to the thin-edge parent device
 
@@ -386,9 +385,7 @@ and notifies the cloud on the progress of this configuration update operation.
    1. When a success or error message is finally received,
       then the configuration plugin cleans up all the temporary resources,
       notably removing the file under `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_update/$TYPE`.
-   1. If no responses are received from the child devices after 60s,
-      then a timeout error is sent to the cloud, and the resources cleaned.
-   1. If a notification message is received while none is expected (this might notably arrive after a timeout),
+   1. If a notification message is received while none is expected,
       i.e with a configuration file `type` that doesn't exist under `TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_update/`,
       then this notification message is ignored.
 
@@ -438,12 +435,8 @@ and of HTTP to let the child device `PUT` the requested file.
        then the configuration plugin transfers to the cloud the content `PUT` by the child-device
        under `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_snapshop/$TYPE` and
        finally removes this file when acknowledged by the cloud.
-    1. If no responses are received from the child devices after 60s,
-       then a timeout error is sent to the cloud,
-       and the `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_snapshop/$TYPE` file removed
-       (if any has been uploaded but in an unknown state).
-    1. If a notification message is received while none is expected for this type of configuration
-       (this might notably arrive after a timeout), then this notification message is ignored.
+    1. If a notification message is received while none is expected for this type of configuration,
+       then this notification message is ignored.
        
 ### The child device uploads its configuration file list on start and on change
 
@@ -462,15 +455,12 @@ as if it received a config snapshot request for `c8y-configuration-plugin` type 
       3. On success of the upload, the child-device agent
          notifies the `c8y_configuration_plugin` with an MQTT message published on the topic
          `tedge/$CHILD_DEVICE_ID/commands/res/config_snapshot`
-         with the payload containing a JSON record with 2 required fields:
-        * `"status": "successful"`
-        * `"type": "c8y-configuration-plugin"`
+         with the payload containing a JSON record with `"type": "c8y-configuration-plugin"` but without the `status` field.
       4. Note that there is no need to send executing notification messages here,
          since this is a spontaneous operation and not triggered by an explicit config snapshot request.
 
-2. The plugin does the following on recept of the `successful` status message
-   related to the `"type": "c8y-configuration-plugin"`,
-   received for the upload on `tedge/$CHILD_DEVICE_ID/commands/req/config_snapshot`.
+2. The plugin does the following on receipt of the response with `"type": "c8y-configuration-plugin"`,
+   received for the upload on `tedge/$CHILD_DEVICE_ID/commands/res/config_snapshot` topic.
    1. Take a copy of the transferred file under `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_snapshop/c8y-configuration-plugin`
       and puts this copy under `$TEDGE_CONFIG_DIR/c8y/$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`
    2. Create two empty files `c8y_DownloadConfigFile` and `c8y_UploadConfigFile` under `/etc/tedge/operations/c8y/$CHILD_DEVICE_ID`
