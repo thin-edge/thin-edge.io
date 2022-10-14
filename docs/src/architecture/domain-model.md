@@ -189,6 +189,9 @@ The figure below illustrates the concept of **plugins** and **child-devices agen
 
 ### Child-Device Agent
   * a **child-device agent** is the counterpart of a **plugin**, that takes the responsibility to access to the **external child-device's** _resources_
+  * a **child-device agent** can also be used on the **main-device**, without appearing in the cloud as child-device, e.g. in order to
+    * provide container resources (e.g. config files) to a **plugin** running in another container; by running the **child-device agent** inside the resource's container
+    * allow to access _resources_ of the **main-device** somehow differently as the plugin's implementation does
   * a **child-device agent** can serve one or more **plugins**
   * a **child-device agent** can be installed and executed on the **external child-device**, or on the **main-device**
     * if it runs in the **external child-device** it can access the _resources_ directly
