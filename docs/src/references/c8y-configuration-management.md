@@ -345,6 +345,31 @@ is received from the cloud by the `c8y_configuration_plugin` daemon,
 the configuration plugin manages the transfer of this file to the child device
 and notifies the cloud on the progress of this configuration update operation.
 
+The following diagram captures the required interactions between all relevant parties:
+
+```mermaid
+sequenceDiagram
+    participant C8Y Cloud
+    participant C8Y Config Plugin
+    participant Tedge Agent
+    participant Child Device Agent
+    
+
+        C8Y Cloud->>C8Y Config Plugin: MQTT: c8y_DownloadConfigFile request with `child-id`, `type` and `c8y.url` for the updated config file
+        C8Y Config Plugin->>C8Y Cloud: Download the config-file from `c8y.url`
+        C8Y Config Plugin->>Tedge Agent: Move the downloaded config file to file-transfer repository and generate a `tedge.url` for it
+        C8Y Config Plugin->>Child Device Agent: MQTT: config_update request to `child-id` with `type` and `tedge.url`
+
+        Child Device Agent ->> C8Y Config Plugin: MQTT: config_update response with operation status: "executing" 
+        C8Y Config Plugin ->> C8Y Cloud: MQTT: Update c8y_DownloadConfigFile operation status to "EXECUTING"
+        Child Device Agent->>Tedge Agent: HTTP: Download the config file update from `tedge.url`
+        Child Device Agent->>Child Device Agent: Apply downloaded file as new config for `type`
+        Child Device Agent ->> C8Y Config Plugin: MQTT: config_update response with operation status: "successful" 
+
+        C8Y Config Plugin ->> C8Y Cloud: MQTT: Update c8y_DownloadConfigFile operation status to "SUCCESSFUL"
+        C8Y Config Plugin ->> C8Y Config Plugin: Remove local copy of config file update from local filesystem
+```
+
 1. On reception of a configuration update for a child device named `$CHILD_DEVICE_ID`
    of a file `{ path = $PATH, type = $TYPE }` defined in `$CHILD_DEVICE_ID/c8y-configuration-plugin.toml` 
    the `c8y_configuration_plugin` downloads the new configuration content to the temporary directory defined by `tedge config get tmp.path`,
@@ -395,6 +420,30 @@ The configuration files actually used by a child device can be requested from th
 As for configuration updates, the `c8y_configuration_plugin` daemon drive these requests
 using a combination of MQTT to notify the child device of the request
 and of HTTP to let the child device `PUT` the requested file.
+
+The following diagram captures the required interactions between all relevant parties:
+
+```mermaid
+sequenceDiagram
+    participant C8Y Cloud
+    participant C8Y Config Plugin
+    participant Tedge Agent
+    participant Child Device Agent
+
+        C8Y Cloud ->> C8Y Config Plugin: MQTT: c8y_UploadConfigFile request with `child-id` and `type`
+        C8Y Config Plugin ->> C8Y Config Plugin: Generate file-transfer repository `tedge.url` for child device using `child-id` and `type`
+        C8Y Config Plugin ->> Child Device Agent: MQTT: config_snapshot request to `child-id` with `type` and `tedge.url`
+
+        Child Device Agent ->> C8Y Config Plugin: MQTT: config_snapshot response with operation status: "executing" 
+        C8Y Config Plugin ->> C8Y Cloud: MQTT: Update c8y_UploadConfigFile operation status to "EXECUTING"
+        Child Device Agent ->> Tedge Agent: HTTP: Upload config file content for `type` to `tedge.url`
+        Child Device Agent ->> C8Y Config Plugin: MQTT: config_snapshot response with operation status: "successful" 
+
+        C8Y Config Plugin ->> Tedge Agent: Retrieve the config file uploaded by the child device from file-transfer repository
+        C8Y Config Plugin ->> C8Y Cloud: HTTP: Upload the config file to cloud
+        C8Y Config Plugin ->> C8Y Cloud: MQTT: Update c8y_UploadConfigFile operation status to "SUCCESSFUL"
+        C8Y Config Plugin ->> C8Y Config Plugin: Remove local copy of config file snapshot from local filesystem
+```
 
 1. On reception of a configuration request for a child device named `$CHILD_DEVICE_ID`
    for a file `{ path = $PATH, type = $TYPE }` defined in `$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`
