@@ -139,33 +139,39 @@ pub async fn process_mqtt_message(
     } else if health_check_topics.accept(&message) {
         send_health_status(&mut mqtt_client.published, "c8y-log-plugin").await;
     } else if let Ok(payload) = message.payload_str() {
-        let result = match payload.split(',').next().unwrap_or_default() {
-            "522" => {
-                info!("Log request received: {payload}");
-                // retrieve smartrest object from payload
-                let maybe_smartrest_obj = SmartRestLogRequest::from_smartrest(payload);
-                if let Ok(smartrest_obj) = maybe_smartrest_obj {
-                    handle_logfile_request_operation(
-                        &smartrest_obj,
-                        plugin_config,
-                        mqtt_client,
-                        http_client,
-                    )
-                    .await
-                } else {
-                    error!("Incorrect SmartREST payload: {}", payload);
+        for smartrest_message in payload.split('\n') {
+            let result = match smartrest_message.split(',').next().unwrap_or_default() {
+                "522" => {
+                    info!("Log request received: {payload}");
+                    // retrieve smartrest object from payload
+                    let maybe_smartrest_obj =
+                        SmartRestLogRequest::from_smartrest(smartrest_message);
+                    if let Ok(smartrest_obj) = maybe_smartrest_obj {
+                        handle_logfile_request_operation(
+                            &smartrest_obj,
+                            plugin_config,
+                            mqtt_client,
+                            http_client,
+                        )
+                        .await
+                    } else {
+                        error!("Incorrect SmartREST payload: {}", smartrest_message);
+                        Ok(())
+                    }
+                }
+                _ => {
+                    // Ignore operation messages not meant for this plugin
                     Ok(())
                 }
-            }
-            _ => {
-                // Ignore operation messages not meant for this plugin
-                Ok(())
-            }
-        };
+            };
 
-        if let Err(err) = result {
-            let error_message = format!("Handling of operation: '{}' failed with {}", payload, err);
-            error!("{}", error_message);
+            if let Err(err) = result {
+                let error_message = format!(
+                    "Handling of operation: '{}' failed with {}",
+                    smartrest_message, err
+                );
+                error!("{}", error_message);
+            }
         }
     }
     Ok(())

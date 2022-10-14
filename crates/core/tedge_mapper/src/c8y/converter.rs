@@ -468,36 +468,33 @@ async fn parse_c8y_topics(
     http_proxy: &mut impl C8YHttpProxy,
     operation_logs: &OperationLogs,
 ) -> Result<Vec<Message>, ConversionError> {
-    match process_smartrest(
-        message.payload_str()?,
-        operations,
-        http_proxy,
-        operation_logs,
-    )
-    .await
-    {
-        Err(
-            ref err @ CumulocityMapperError::FromSmartRestDeserializer(
-                SmartRestDeserializerError::InvalidParameter { ref operation, .. },
-            )
-            | ref err @ CumulocityMapperError::ExecuteFailed {
-                operation_name: ref operation,
-                ..
-            },
-        ) => {
-            let topic = C8yTopic::SmartRestResponse.to_topic()?;
-            let msg1 = Message::new(&topic, format!("501,{operation}"));
-            let msg2 = Message::new(&topic, format!("502,{operation},\"{}\"", &err.to_string()));
-            error!("{err}");
-            Ok(vec![msg1, msg2])
-        }
-        Err(err) => {
-            error!("{err}");
-            Ok(vec![])
-        }
+    let mut output: Vec<Message> = Vec::new();
+    for smartrest_message in message.payload_str()?.split('\n') {
+        match process_smartrest(smartrest_message, operations, http_proxy, operation_logs).await {
+            Err(
+                ref err @ CumulocityMapperError::FromSmartRestDeserializer(
+                    SmartRestDeserializerError::InvalidParameter { ref operation, .. },
+                )
+                | ref err @ CumulocityMapperError::ExecuteFailed {
+                    operation_name: ref operation,
+                    ..
+                },
+            ) => {
+                let topic = C8yTopic::SmartRestResponse.to_topic()?;
+                let msg1 = Message::new(&topic, format!("501,{operation}"));
+                let msg2 =
+                    Message::new(&topic, format!("502,{operation},\"{}\"", &err.to_string()));
+                error!("{err}");
+                output.extend_from_slice(&[msg1, msg2]);
+            }
+            Err(err) => {
+                error!("{err}");
+            }
 
-        Ok(msgs) => Ok(msgs),
+            Ok(msgs) => output.extend_from_slice(&msgs),
+        }
     }
+    Ok(output)
 }
 
 fn create_device_data_fragments(
