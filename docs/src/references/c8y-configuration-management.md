@@ -375,13 +375,13 @@ sequenceDiagram
    the `c8y_configuration_plugin` downloads the new configuration content to the temporary directory defined by `tedge config get tmp.path`,
    and, on success, moves this content under the thin-edge file transfer HTTP root.
    * The file is moved to `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_update/$TYPE`
-     making this file available under `http://$TEDGE_HTTP/tedge/$CHILD_DEVICE_ID/config_update/$TYPE`.
+     making this file available under `http://$TEDGE_HTTP/tedge/file-transfer/$CHILD_DEVICE_ID/config_update/$TYPE`.
    * Note that the `$TYPE` is by default the `$PATH` if not provided by the configuration.  
 1. Once the updated configuration is available over the local HTTP file transfer service,
    the `c8y_configuration_plugin` notifies the child device by publishing an MQTT message.
    * The topic is `tedge/$CHILD_DEVICE_ID/commands/req/config_update`
    * The payload is a JSON record with 3 fields
-     * `"url": "http://$TEDGE_HTTP/tedge/$CHILD_DEVICE_ID/config_update/$TYPE"`
+     * `"url": "http://$TEDGE_HTTP/tedge/file-transfer/$CHILD_DEVICE_ID/config_update/$TYPE"`
      * `"path": "$PATH"`
      * `"type": "$TYPE"` (if no `type` has been specified, then this field is omitted)
 1. On reception of a configuration update on the topic `tedge/$CHILD_DEVICE_ID/commands/req/config_update`,
@@ -451,7 +451,7 @@ sequenceDiagram
    telling which configuration is expected and where to upload it.
     * The topic is `tedge/$CHILD_DEVICE_ID/commands/req/config_snapshot`
     * The payload is a JSON record with 3 fields
-        * `"url": "http://$TEDGE_HTTP/tedge/$CHILD_DEVICE_ID/config_snapshot/$TYPE"`
+        * `"url": "http://$TEDGE_HTTP/tedge/file-transfer/$CHILD_DEVICE_ID/config_snapshot/$TYPE"`
         * `"path": "$PATH"`
         * `"type": "$TYPE"` (if no `type` has been specified, then this field is omitted) 
     * The `url` conveys the fact the `c8y_configuration_plugin` expects that, on transfer success,
@@ -500,7 +500,7 @@ as if it received a config snapshot request for `c8y-configuration-plugin` type 
 1. On start-up, the child-device uploads this file (as well as on update of this file list),
    as if it received a config snapshot request for `c8y-configuration-plugin` type:
       1. Generate a `c8y-configuration-plugin.toml` with the supported config list in the presribed format.
-      2. Uploads this file to `http://$TEDGE_HTTP/tedge/$CHILD_DEVICE_ID/config_snapshot/c8y-configuration-plugin` with a `PUT` call.
+      2. Uploads this file to `http://$TEDGE_HTTP/tedge/file-transfer/$CHILD_DEVICE_ID/config_snapshot/c8y-configuration-plugin` with a `PUT` call.
       3. On success of the upload, the child-device agent
          notifies the `c8y_configuration_plugin` with an MQTT message published on the topic
          `tedge/$CHILD_DEVICE_ID/commands/res/config_snapshot`
