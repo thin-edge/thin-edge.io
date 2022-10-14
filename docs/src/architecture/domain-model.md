@@ -68,7 +68,7 @@ Those information are categorized as below:
   * **Measurement**, is a single value or set of values
     * could be be a mix of values produced by one or more sensors and values calculated by the device's domain application
     * values could be a mix of numbers, strings or booleans
-    * has one timestamp given by the producer, or implicitly set as the current time of receiving at **thin-edge**
+    * has one timestamp
     * releates to one **Metric**
   * **Metric**, is a time-series of measurements
     * contains a _source device_
@@ -107,19 +107,7 @@ Those information are categorized as below:
     * allows monitors the health of devices
     * helps to troubleshoot when problems with the device are reported
 
-## thin-edge data concepts
-
-**thin-edge** provides different devices in a standardized representation to the cloud. Therefore **thin-edge** provides specialized data concepts.
-
-The data concepts below belong to **inputs** and **outputs** available on a device. Thereby each **input** and **output** is refered as a **data point**.
-
-TODO: describe here how thin-edge glues OT Device's data points with Cloud's Telemetry Data
-
-TODO: consider child-devices and containers here? Or do that in the cloud section?
-
 ## thin-edge device concept
-
-TODO: incorporate references and content from new section "IoT Cloud Domain"
 
 **thin-edge** facilitates IoT functionality to the device it is running on, as well as to devices that are connected to that device.
 
@@ -135,9 +123,57 @@ The figure below illustrates the device concept.
 
 ![Device Concept](images/device-concept.svg)
 
-## thin-edge plugin concept
+## thin-edge data concept
 
-**thin-edge** realizes full-fledged cloud functionality (e.g. _configuration management_ or _log management_) based on **plugins**.
+**thin-edge** provides APIs to easily connect device's **data points** to cloud's **telemetry data handling**.
+Usually there are two kinds of SW components that use those **thin-edge** APIs:
+  * the **domain application**, to provide **data points** from it's processing flow and potentially inputs/outputs from _sensors/actuators_ to **thin-edge**
+  * **protocol drivers**, to
+    * provide purely inputs/outputs from _sensors/actuators_, e.g. from protocols as OPC UA, Profinet, CANopen, ...
+    * access the **domain application** (e.g. when the **domain application** cannot or shall not access **thin-edge** APIs directly) to provide **domain application's** **data points** to **thin-edge**
+
+Per **telemetry data** the interpretation of **data points** differs:
+
+  * **Measurements**:
+    * a **measurement** is represented with one or more **data points**
+      and a reference to the corresponding **metric**
+    * the values of the **data points** reflect the measurement values
+    * **thin-edge** puts the measurement into the context of the corresponding metric and sends it to the cloud
+  * **Command**:
+    * a **command** is represented with one or more values received from the **cloud**
+    * **thin-edge** provides those values to the **domain application** and **protocol drivers** as **data point** values
+  * **Events**:
+    * for events **thin-edge** does not get in touch with **data points** at all;<br/>
+      instead any event related **data point** and it's value is evaluated by the event producer internally (i.E. the **domain application** or **protocol drivers**)
+    * the event producer sends a coresponding notification to **thin-edge** whenever an event shall be raised
+  * **Alarms**:
+    * similar to **events**; but in addition, the alarm producer can send a notification to **thin-edge** to clear an **alarm** 
+    * **thin-edge** raises or clears the alarm in the cloud
+
+## thin-edge device management concept
+
+**thin-edge** maps cloud's different **Device Management** functionalities to different resources of the device:
+  * **Software Management**:
+    * software packages are installable units on the device
+    * those units could be
+      * the **domain application**
+      * parts from **OS / Libs / Runtime**, or the whole thing as one
+    * examples for software packages are
+      * packages for a Linux Packages Managers (e.g. for Debian, ...)
+      * container images (e.g. for Docker)
+      * simple ZIP files
+      * custom specific files/packages
+  * **Configuration Management**:
+    * a configuration is a text file or a binary file
+    * those configurations could be
+      * configuration file(s) of the **domain application**
+      * one or more configurations file of **OS / Libs / Runtime**
+  * **Log Management**:
+    * a Log is a log file, could be
+      * log file(s) of the **domain application**
+      * one or more log files of **OS / Libs / Runtime**
+
+**thin-edge** realizes cloud's **Device Management** based on **plugins**.
   * a **plugin** encapsulates and manages access to _ressources_ and _services_ of the device, as e.g.
       * _software management_ accesses the device's _package manager_
       * _configuration management_ accesses device's _configuration files_
@@ -175,6 +211,5 @@ TODO: consider containers here?
 ---------------------------------------------
 Open Topics:
 * "fragments"
-* to be align with vision.md
 * better word for plugin
 * better word for child-device agent (maybe child-device proxy)
