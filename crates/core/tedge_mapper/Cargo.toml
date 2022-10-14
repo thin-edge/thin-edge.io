@@ -33,12 +33,12 @@ async-trait = "0.1"
 batcher = { path = "../../common/batcher" }
 c8y_api = { path = "../c8y_api" }
 c8y_smartrest = { path = "../c8y_smartrest" }
-c8y_translator = { path = "../c8y_translator" }
 clock = { path = "../../common/clock" }
 csv = "1.1"
 download = { path = "../../common/download" }
 flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
+json-writer = { path = "../../common/json_writer" }
 logged_command = { path = "../../common/logged_command" }
 mockall = "0.11"
 mqtt_channel = { path = "../../common/mqtt_channel" }
@@ -62,6 +62,7 @@ assert-json-diff = "2.0"
 serde = "1.0"
 mockito = "0.31"
 mqtt_tests = { path = "../../tests/mqtt_tests" }
+proptest = "1.0"
 serde_json = "1.0"
 serial_test = "0.8"
 tedge_test_utils = { path = "../../tests/tedge_test_utils" }

@@ -44,7 +44,7 @@ pub enum ConversionError {
     FromMapper(#[from] MapperError),
 
     #[error(transparent)]
-    FromCumulocityJsonError(#[from] c8y_translator::json::CumulocityJsonError),
+    FromCumulocityJsonError(#[from] crate::c8y::json::CumulocityJsonError),
 
     #[error(transparent)]
     FromCumulocityMapperError(#[from] CumulocityMapperError),

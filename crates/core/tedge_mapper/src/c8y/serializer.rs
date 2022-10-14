@@ -18,6 +18,7 @@ pub enum C8yJsonSerializationError {
     JsonWriterError(#[from] JsonWriterError),
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum MeasurementStreamError {
     #[error("Unexpected time stamp within a group")]
@@ -87,7 +88,7 @@ impl C8yJsonSerializer {
         Ok(())
     }
 
-    pub fn into_string(&mut self) -> Result<String, C8yJsonSerializationError> {
+    pub fn into_string(mut self) -> Result<String, C8yJsonSerializationError> {
         self.end()?;
         Ok(self.json.clone().into_string()?)
     }
@@ -239,7 +240,7 @@ mod tests {
     fn serialize_empty_message() -> anyhow::Result<()> {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
-        let mut serializer = C8yJsonSerializer::new(timestamp, None);
+        let serializer = C8yJsonSerializer::new(timestamp, None);
 
         let expected_output =
             json!({"type": "ThinEdgeMeasurement", "time": "2021-06-22T17:03:14.123456789+05:00"});
