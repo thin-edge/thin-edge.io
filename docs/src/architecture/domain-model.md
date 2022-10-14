@@ -49,8 +49,7 @@ Usual **devices** are **PLCs** (**P**rogrammable **L**ogic **C**ontrollers), **I
 
 ## IoT Cloud Domain
 
-**thin-edge** is designed to be cloud agnostic, i.E. it does not stick to some specific IoT cloud.
-Potentialy clouds are [Cumulocity](https://www.softwareag.cloud/site/product/cumulocity-iot.html), [Azure](https://azure.microsoft.com) or [AWS](https://aws.amazon.com). A flexible _Mapper Concept_ allows to adapt thin-edge to other clouds as well.
+Potentialy clouds are [Cumulocity](https://www.softwareag.cloud/site/product/cumulocity-iot.html), [Azure](https://azure.microsoft.com) or [AWS](https://aws.amazon.com).
 
 TODO: Maybe avoid cloud-names above, but focus on _mapper-concept_, since Azure and AWS are far less supported.
 
