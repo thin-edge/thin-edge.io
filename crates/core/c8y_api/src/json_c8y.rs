@@ -4,7 +4,7 @@ use agent_interface::{
     Jsonify, SoftwareListResponse, SoftwareModule, SoftwareType, SoftwareVersion,
 };
 
-use c8y_smartrest::error::SMCumulocityMapperError;
+use crate::smartrest::error::SMCumulocityMapperError;
 use download::DownloadInfo;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

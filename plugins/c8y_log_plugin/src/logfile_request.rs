@@ -10,7 +10,7 @@ use tracing::info;
 
 use crate::{config::LogPluginConfig, error::LogRetrievalError};
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
-use c8y_smartrest::{
+use c8y_api::smartrest::{
     smartrest_deserializer::SmartRestLogRequest,
     smartrest_serializer::{
         CumulocitySupportedOperations, SmartRestSerializer, SmartRestSetOperationToExecuting,
@@ -27,8 +27,8 @@ impl TryIntoOperationStatusMessage for LogfileRequest {
     ///
     /// example message: '501,c8y_LogfileRequest'
     fn status_executing() -> Result<
-        c8y_smartrest::smartrest_serializer::SmartRest,
-        c8y_smartrest::error::SmartRestSerializerError,
+        c8y_api::smartrest::smartrest_serializer::SmartRest,
+        c8y_api::smartrest::error::SmartRestSerializerError,
     > {
         SmartRestSetOperationToExecuting::new(CumulocitySupportedOperations::C8yLogFileRequest)
             .to_smartrest()
@@ -37,8 +37,8 @@ impl TryIntoOperationStatusMessage for LogfileRequest {
     fn status_successful(
         parameter: Option<String>,
     ) -> Result<
-        c8y_smartrest::smartrest_serializer::SmartRest,
-        c8y_smartrest::error::SmartRestSerializerError,
+        c8y_api::smartrest::smartrest_serializer::SmartRest,
+        c8y_api::smartrest::error::SmartRestSerializerError,
     > {
         SmartRestSetOperationToSuccessful::new(CumulocitySupportedOperations::C8yLogFileRequest)
             .with_response_parameter(&parameter.unwrap())
@@ -48,8 +48,8 @@ impl TryIntoOperationStatusMessage for LogfileRequest {
     fn status_failed(
         failure_reason: String,
     ) -> Result<
-        c8y_smartrest::smartrest_serializer::SmartRest,
-        c8y_smartrest::error::SmartRestSerializerError,
+        c8y_api::smartrest::smartrest_serializer::SmartRest,
+        c8y_api::smartrest::error::SmartRestSerializerError,
     > {
         SmartRestSetOperationToFailed::new(
             CumulocitySupportedOperations::C8yLogFileRequest,
@@ -276,7 +276,7 @@ mod tests {
         path::{Path, PathBuf},
     };
 
-    use c8y_smartrest::smartrest_deserializer::SmartRestLogRequest;
+    use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
     use filetime::{set_file_mtime, FileTime};
     use tempfile::TempDir;
     use time::macros::datetime;

@@ -6,7 +6,6 @@ mod fragments;
 pub mod json;
 pub mod mapper;
 mod serializer;
-pub mod topic;
 
 #[cfg(test)]
 mod tests;

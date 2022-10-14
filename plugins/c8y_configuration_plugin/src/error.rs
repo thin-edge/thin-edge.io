@@ -44,5 +44,5 @@ pub enum ChildDeviceConfigManagementError {
     FromSerdeJsonError(#[from] serde_json::Error),
 
     #[error(transparent)]
-    FromSmartRestSerializerError(#[from] c8y_smartrest::error::SmartRestSerializerError),
+    FromSmartRestSerializerError(#[from] c8y_api::smartrest::error::SmartRestSerializerError),
 }

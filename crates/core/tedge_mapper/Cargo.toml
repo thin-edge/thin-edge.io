@@ -32,7 +32,6 @@ anyhow = "1.0"
 async-trait = "0.1"
 batcher = { path = "../../common/batcher" }
 c8y_api = { path = "../c8y_api" }
-c8y_smartrest = { path = "../c8y_smartrest" }
 clock = { path = "../../common/clock" }
 csv = "1.1"
 download = { path = "../../common/download" }

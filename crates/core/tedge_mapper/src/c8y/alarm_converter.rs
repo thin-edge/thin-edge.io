@@ -1,6 +1,7 @@
+use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use std::collections::{hash_map::Entry, HashMap};
 
-use c8y_smartrest::alarm;
+use c8y_api::smartrest::alarm;
 use mqtt_channel::{Message, Topic};
 use thin_edge_json::alarm::ThinEdgeAlarm;
 
@@ -8,7 +9,6 @@ use crate::core::error::ConversionError;
 
 const TEDGE_ALARMS_TOPIC: &str = "tedge/alarms/";
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
-const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AlarmConverter {

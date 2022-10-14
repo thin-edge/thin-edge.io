@@ -8,7 +8,7 @@ use crate::{
 use agent_interface::topic::ResponseTopic;
 use async_trait::async_trait;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
-use c8y_smartrest::operations::Operations;
+use c8y_api::smartrest::{operations::Operations, topic::C8yTopic};
 use mqtt_channel::TopicFilter;
 use tedge_config::{
     ConfigSettingAccessor, DeviceIdSetting, DeviceTypeSetting, MqttBindAddressSetting,
@@ -16,8 +16,6 @@ use tedge_config::{
 };
 use tedge_utils::file::*;
 use tracing::{info, info_span, Instrument};
-
-use super::topic::C8yTopic;
 
 const CUMULOCITY_MAPPER_NAME: &str = "tedge-mapper-c8y";
 const MQTT_MESSAGE_SIZE_THRESHOLD: usize = 16184;
@@ -32,7 +30,7 @@ impl CumulocityMapper {
     pub fn subscriptions(operations: &Operations) -> Result<TopicFilter, anyhow::Error> {
         let mut topic_filter = TopicFilter::new(ResponseTopic::SoftwareListResponse.as_str())?;
         topic_filter.add(ResponseTopic::SoftwareUpdateResponse.as_str())?;
-        topic_filter.add(C8yTopic::SmartRestRequest.as_str())?;
+        topic_filter.add(C8yTopic::SmartRestRequest.to_string().as_str())?;
         topic_filter.add(ResponseTopic::RestartResponse.as_str())?;
 
         for topic in operations.topics_for_operations() {
@@ -136,7 +134,7 @@ mod tests {
     use super::*;
 
     use c8y_api::http_proxy::MockC8yJwtTokenRetriever;
-    use c8y_smartrest::smartrest_deserializer::SmartRestJwtResponse;
+    use c8y_api::smartrest::smartrest_deserializer::SmartRestJwtResponse;
     use mockito::mock;
     use mqtt_tests::{assert_received_all_expected, test_mqtt_broker};
     use serde_json::json;

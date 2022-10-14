@@ -3,24 +3,33 @@ use agent_interface::TopicError;
 use mqtt_channel::MqttError;
 use mqtt_channel::Topic;
 
+pub const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
+pub const SMARTREST_SUBSCRIBE_TOPIC: &str = "c8y/s/ds";
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum C8yTopic {
     SmartRestRequest,
     SmartRestResponse,
+    ChildSmartRestResponse(String),
     OperationTopic(String),
 }
 
 impl C8yTopic {
-    pub fn as_str(&self) -> &str {
-        match self {
-            Self::SmartRestRequest => r#"c8y/s/ds"#,
-            Self::SmartRestResponse => r#"c8y/s/us"#,
-            Self::OperationTopic(name) => name.as_str(),
-        }
-    }
-
     pub fn to_topic(&self) -> Result<Topic, MqttError> {
-        Topic::new(self.as_str())
+        Topic::new(self.to_string().as_str())
+    }
+}
+
+impl ToString for C8yTopic {
+    fn to_string(&self) -> String {
+        match self {
+            Self::SmartRestRequest => SMARTREST_SUBSCRIBE_TOPIC.into(),
+            Self::SmartRestResponse => SMARTREST_PUBLISH_TOPIC.into(),
+            Self::ChildSmartRestResponse(child_id) => {
+                format!("{}/{}", SMARTREST_PUBLISH_TOPIC, child_id)
+            }
+            Self::OperationTopic(name) => name.into(),
+        }
     }
 }
 
@@ -29,10 +38,15 @@ impl TryFrom<String> for C8yTopic {
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         match value.as_str() {
-            r#"c8y/s/ds"# => Ok(C8yTopic::SmartRestRequest),
-            r#"c8y/s/us"# => Ok(C8yTopic::SmartRestResponse),
+            SMARTREST_SUBSCRIBE_TOPIC => Ok(C8yTopic::SmartRestRequest),
+            SMARTREST_PUBLISH_TOPIC => Ok(C8yTopic::SmartRestResponse),
             topic_name => {
-                if topic_name[..3].contains("c8y") {
+                let prefix = format!("{}/", SMARTREST_PUBLISH_TOPIC);
+                if topic_name.starts_with(&prefix) {
+                    Ok(C8yTopic::ChildSmartRestResponse(
+                        topic_name.strip_prefix(&prefix).unwrap().into(),
+                    ))
+                } else if topic_name[..3].contains("c8y") {
                     Ok(C8yTopic::OperationTopic(topic_name.to_string()))
                 } else {
                     Err(TopicError::UnknownTopic {
@@ -101,8 +115,12 @@ mod tests {
 
     #[test]
     fn convert_c8y_topic_to_str() {
-        assert_eq!(C8yTopic::SmartRestRequest.as_str(), "c8y/s/ds");
-        assert_eq!(C8yTopic::SmartRestResponse.as_str(), "c8y/s/us");
+        assert_eq!(&C8yTopic::SmartRestRequest.to_string(), "c8y/s/ds");
+        assert_eq!(&C8yTopic::SmartRestResponse.to_string(), "c8y/s/us");
+        assert_eq!(
+            &C8yTopic::ChildSmartRestResponse("child-id".into()).to_string(),
+            "c8y/s/us/child-id"
+        );
     }
 
     #[test]
@@ -111,6 +129,11 @@ mod tests {
         assert_eq!(c8y_req, C8yTopic::SmartRestRequest);
         let c8y_resp: C8yTopic = "c8y/s/us".try_into().unwrap();
         assert_eq!(c8y_resp, C8yTopic::SmartRestResponse);
+        let c8y_resp: C8yTopic = "c8y/s/us/child-id".try_into().unwrap();
+        assert_eq!(
+            c8y_resp,
+            C8yTopic::ChildSmartRestResponse("child-id".into())
+        );
         let error: Result<C8yTopic, TopicError> = "test".try_into();
         assert!(error.is_err());
     }
@@ -122,6 +145,13 @@ mod tests {
 
         let c8y_resp: C8yTopic = Topic::new("c8y/s/us").unwrap().try_into().unwrap();
         assert_eq!(c8y_resp, C8yTopic::SmartRestResponse);
+
+        let c8y_resp: C8yTopic = Topic::new("c8y/s/us/child-id").unwrap().try_into().unwrap();
+        assert_eq!(
+            c8y_resp,
+            C8yTopic::ChildSmartRestResponse("child-id".into())
+        );
+
         let error: Result<C8yTopic, TopicError> = Topic::new("test").unwrap().try_into();
         assert!(error.is_err());
     }

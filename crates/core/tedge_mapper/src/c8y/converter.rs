@@ -7,12 +7,8 @@ use agent_interface::{
     RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
 };
 use async_trait::async_trait;
-use c8y_api::{
-    http_proxy::C8YHttpProxy,
-    json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
-};
-use c8y_smartrest::smartrest_deserializer::SmartRestRequestGeneric;
-use c8y_smartrest::{
+use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
+use c8y_api::smartrest::{
     error::SmartRestDeserializerError,
     operations::{get_operation, Operations},
     smartrest_deserializer::{SmartRestRestartRequest, SmartRestUpdateSoftware},
@@ -22,7 +18,10 @@ use c8y_smartrest::{
         SmartRestSetOperationToSuccessful,
     },
 };
-
+use c8y_api::{
+    http_proxy::C8YHttpProxy,
+    json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
+};
 use logged_command::LoggedCommand;
 use mqtt_channel::{Message, Topic, TopicFilter};
 use plugin_sm::operation_logs::OperationLogs;
@@ -44,14 +43,13 @@ use super::{
     error::CumulocityMapperError,
     fragments::{C8yAgentFragment, C8yDeviceDataFragment},
     mapper::CumulocityMapper,
-    topic::{C8yTopic, MapperSubscribeTopic},
 };
+use c8y_api::smartrest::topic::{C8yTopic, MapperSubscribeTopic, SMARTREST_PUBLISH_TOPIC};
 
 const C8Y_CLOUD: &str = "c8y";
 const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
 const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
 const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "c8y/inventory/managedObjects/update";
-const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const TEDGE_EVENTS_TOPIC: &str = "tedge/events/";
 const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "c8y/event/events/create";

@@ -1,8 +1,8 @@
 use agent_interface::OperationStatus;
+use c8y_api::smartrest::topic::C8yTopic;
 use mqtt_channel::{Message, Topic};
 
 use crate::{config::FileEntry, error::ChildDeviceConfigManagementError};
-const C8Y_STATIC_TEMPLATE_PUBLISH_TOPIC: &str = "c8y/s/us";
 
 /// A child device can receive the following operation requests:
 ///
@@ -52,9 +52,11 @@ impl ConfigOperationResponse {
 
     pub fn get_child_topic(&self) -> String {
         match self {
-            ConfigOperationResponse::Update { child_id, .. } => get_smartrest_child_topic(child_id),
+            ConfigOperationResponse::Update { child_id, .. } => {
+                C8yTopic::ChildSmartRestResponse(child_id.to_owned()).to_string()
+            }
             ConfigOperationResponse::Snapshot { child_id, .. } => {
-                get_smartrest_child_topic(child_id)
+                C8yTopic::ChildSmartRestResponse(child_id.to_owned()).to_string()
             }
         }
     }
@@ -137,10 +139,6 @@ impl TryFrom<&Message> for ConfigOperationResponse {
             },
         )
     }
-}
-
-pub fn get_smartrest_child_topic(child_id: &str) -> String {
-    format!("{}/{}", C8Y_STATIC_TEMPLATE_PUBLISH_TOPIC, child_id)
 }
 
 impl ConfigOperationRequest {

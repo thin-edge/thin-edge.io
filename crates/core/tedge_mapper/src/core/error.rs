@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::c8y::error::CumulocityMapperError;
 
-use c8y_smartrest::error::OperationsError;
+use c8y_api::smartrest::error::OperationsError;
 use mqtt_channel::MqttError;
 use tedge_config::TEdgeConfigError;
 use thin_edge_json::serialize::ThinEdgeJsonSerializationError;
@@ -50,7 +50,7 @@ pub enum ConversionError {
     FromCumulocityMapperError(#[from] CumulocityMapperError),
 
     #[error(transparent)]
-    FromCumulocitySmartRestMapperError(#[from] c8y_smartrest::error::SMCumulocityMapperError),
+    FromCumulocitySmartRestMapperError(#[from] c8y_api::smartrest::error::SMCumulocityMapperError),
 
     #[error(transparent)]
     FromThinEdgeJsonSerialization(#[from] ThinEdgeJsonSerializationError),
@@ -85,7 +85,7 @@ pub enum ConversionError {
     FromOperationsError(#[from] OperationsError),
 
     #[error(transparent)]
-    FromSmartRestSerializerError(#[from] c8y_smartrest::error::SmartRestSerializerError),
+    FromSmartRestSerializerError(#[from] c8y_api::smartrest::error::SmartRestSerializerError),
 
     #[error("Unsupported topic: {0}")]
     UnsupportedTopic(String),

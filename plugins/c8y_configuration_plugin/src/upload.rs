@@ -5,9 +5,9 @@ use crate::{
 use agent_interface::{DownloadInfo, Downloader, OperationStatus};
 use anyhow::Result;
 use c8y_api::http_proxy::C8YHttpProxy;
-use c8y_smartrest::error::SmartRestSerializerError;
-use c8y_smartrest::smartrest_serializer::{SmartRest, TryIntoOperationStatusMessage};
-use c8y_smartrest::{
+use c8y_api::smartrest::error::SmartRestSerializerError;
+use c8y_api::smartrest::smartrest_serializer::{SmartRest, TryIntoOperationStatusMessage};
+use c8y_api::smartrest::{
     smartrest_deserializer::SmartRestConfigUploadRequest,
     smartrest_serializer::{
         CumulocitySupportedOperations, SmartRestSerializer, SmartRestSetOperationToExecuting,
@@ -341,7 +341,7 @@ mod tests {
 
     use super::*;
     use c8y_api::http_proxy::MockC8YHttpProxy;
-    use c8y_smartrest::topic::C8yTopic;
+    use c8y_api::smartrest::topic::C8yTopic;
     use mockall::predicate;
     use mqtt_channel::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
@@ -419,7 +419,7 @@ mod tests {
         let mqtt_config = mqtt_channel::Config::default()
             .with_port(broker.port)
             .with_subscriptions(mqtt_channel::TopicFilter::new_unchecked(
-                C8yTopic::SmartRestRequest.as_str(),
+                &C8yTopic::SmartRestRequest.to_string(),
             ));
         let mut mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
 

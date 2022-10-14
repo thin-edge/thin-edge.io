@@ -5,13 +5,13 @@ use crate::core::{
 use anyhow::Result;
 use assert_json_diff::assert_json_include;
 use assert_matches::assert_matches;
+use c8y_api::smartrest::{
+    error::SMCumulocityMapperError, operations::Operations,
+    smartrest_deserializer::SmartRestJwtResponse,
+};
 use c8y_api::{
     http_proxy::C8YHttpProxy,
     json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
-};
-use c8y_smartrest::{
-    error::SMCumulocityMapperError, operations::Operations,
-    smartrest_deserializer::SmartRestJwtResponse,
 };
 
 use mqtt_channel::{Message, Topic};

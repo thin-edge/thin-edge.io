@@ -4,9 +4,9 @@ mod logfile_request;
 
 use anyhow::Result;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
+use c8y_api::smartrest::smartrest_deserializer::{SmartRestLogRequest, SmartRestRequestGeneric};
+use c8y_api::smartrest::topic::C8yTopic;
 use c8y_api::utils::bridge::{is_c8y_bridge_up, C8Y_BRIDGE_HEALTH_TOPIC};
-use c8y_smartrest::smartrest_deserializer::{SmartRestLogRequest, SmartRestRequestGeneric};
-use c8y_smartrest::topic::C8yTopic;
 use clap::Parser;
 
 use mqtt_channel::{Connection, Message, StreamExt, TopicFilter};
@@ -63,7 +63,7 @@ async fn create_mqtt_client(
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
     let mut topics: TopicFilter = health_check_topics("c8y-log-plugin");
 
-    topics.add_unchecked(C8yTopic::SmartRestRequest.as_str());
+    topics.add_unchecked(&C8yTopic::SmartRestRequest.to_string());
     // subscribing also to c8y bridge health topic to know when the bridge is up
     topics.add(C8Y_BRIDGE_HEALTH_TOPIC)?;
 
