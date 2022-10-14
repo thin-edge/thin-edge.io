@@ -88,31 +88,31 @@ with two levels of building blocks that combine along an IIoT specific API.
   
 ## Building an application with thin-edge
 
-A thin-edge IoT application is built using two kinds of building blocks:
-* At the system level, an application is built as *a dynamic assemblage of unix processes* that exchange JSON messages over an MQTT bus.
-* Internally, a thin-edge executable is built as *a static assemblage of rust plugins* that exchange Rust-typed messages over in-memory channels. 
-
-Thin-edge is shipped with general purpose executables, mappers and agent, aimed to ease on-boarding
-with support for Cumulocity, Azure, collectd, external software-management plugins, thin-edge json, etc.
-By using these main executables, an IoT-application developer can easily connect his device to the cloud
-and other local tools like `apt`, `collectd` or `apama`.
-
+Thin-edge is shipped with a batteries-included executable, the `tedge` command, that eases on-boarding
+with support for various IoT clouds, monitoring tools, software-management plugins, OT protocols ...
+On top of `tedge`, an IoT-application developer can easily build a purpose-specific IoT gateway
+to connect his devices to the cloud and local resources. 
+This IoT gateway is made of independent processes that interact over MQTT using JSON messages,
+and that are deployed over the devices on the edge as well as the OT network.
+The IoT-application developer can implement and deploy his own components,
+using his programming language of choice,
+and leveraging the thin-edge MQTT API to interact with the components of the gateway.
 
 ```
                         #
 ┌────────────────┐      #      ┌─────────────────┐     ┌─────────────────┐
 │                │      #      │                 │     │                 │
-│  C8Y           │      #      │  Mapper         │     │  Agent          │
+│  C8Y           │      #      │  tedge          ├────►│  apt            │
 │                │      #      │                 │     │                 │
 │                │      #      │                 │     │                 │
 │                │      #      │                 │     │                 │
 │                │      #      │                 │     │                 │
 │                │      #      │                 │     │                 │
-└───────┬─▲──────┘      #      └──────┬─▲────────┘     └──────▲─┬────────┘
-        │ │             #             │ │                     │ │
-        │ │  SmartRest  #             │ │ JSON,CSV,SmartRest  │ │ JSON
-        │ │             #             │ │                     │ │
-┌───────▼─┴─────────────#─────────────▼─┴─────────────────────┴─▼────────────────┐
+└───────┬─▲──────┘      #      └──────┬─▲────────┘     └─────────────────┘
+        │ │             #             │ │ 
+        │ │  SmartRest  #             │ │ JSON,CSV,SmartRest
+        │ │             #             │ │ 
+┌───────▼─┴─────────────#─────────────▼─┴────────────────────────────────────────┐
 │  MQTT                 #                                                        │
 │                       #                                                        │
 └───────────────────────#─────────────▲───────────────────────▲──────────────────┘
@@ -121,10 +121,10 @@ and other local tools like `apt`, `collectd` or `apama`.
                         #             │                       │
                         #      ┌──────┴──────────┐      ┌─────┴──────────┐
                         #      │                 │      │                │
-                        #      │ Collectd        │      │ Third-party    │
-                        #      │                 │      │                │
-                        #      │                 │      │                │
-                        #      │                 │      │                │
+                        #      │ Collectd        │      │ OT device      │
+                        #      │                 │      │ - IPC          │
+                        #      │                 │      │ - PLC          │
+                        #      │                 │      │ - μ controller │
                         #      │                 │      │                │
                         #      │                 │      │                │
                         #      └─────────────────┘      └────────────────┘
@@ -132,20 +132,46 @@ and other local tools like `apt`, `collectd` or `apama`.
                         #
 ```
 
-If we zoom into a built-in thin-edge executable, then we have a different kind of components, Rust actors,
-that exchange typed messages over in-memory channels.
+This design provides the flexibility to interact with various sub-systems on the edge,
+to experiment easily and to address application specific needs. 
+However, this also lead to a system that is too heavy and more fragile than expected for most use cases,
+with unused features embarked by the batteries-included `tedge`,
+and numerous independent components to operate consistently.
 
-For instance, the generic mapper provides support for Cumulocity, Azure, collectd
-and telemetry data (measurements, events, alarms) collected over MQTT using the thin-edge JSON format.
+Hence, the need for fine-grain components. These are provided as rust components.
+Internally, a thin-edge executable is built as *a static assemblage of rust actors*
+that exchange statically-typed messages over in-memory channels.
+
+Each actor provides a very specific feature that most of the time doesn't make sense in isolation,
+but only in combination with the other actors. For instance,
+* The `collectd` actor role is to translate messages received from `collectd`
+  into `Measurement` Rust values that can be then consumed by any other actor
+  that accepts this type of data, as the `c8y` actor does.
+* Similarly, the `c8y` actor acts as a translator between Cumulocity IoT and the other actors.
+  It consumes `Measurement` Rust values and translates them into `MQTTMessage` for Cumulocity IoT.
+  In the reverse direction, the `c8y` actor consumes `MQTTMessage` from Cumulocity IoT,
+  and produces `Operations` encoded as Rust values and ready to be consumed by other actors.
+* The `az` actor has a similar role, except that the translations are done for Azure IoT.  
+* Neither the `collectd` actor nor the `c8y` actor have to handle an MQTT connection.
+  They simply produce and consume, in-memory representations for `MQTTMessage`
+  that are sent over the wire by the `MQTT` actor, accordingly to the MQTT protocol.
+* Connected to each others in a batteries-included `tedge` executable,
+  these actors provide support for Cumulocity, Azure, collectd
+  and telemetry data (measurements, events, alarms).
+* Among all the actor, one play a key role. This is the `thin-edge JSON` actor.
+  This actor materializes the thin-edge MQTT API,
+  defining topics and message payloads that are exchanged by the MQTT-bases components,
+  and translating these messages into Rust-values ready to be consumed by the other actors.
+  The `thin-edge JSON` actor is the interface between the two levels of thin-edge components.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                                                          │
-│ Generic Mapper                                           │
+│ batteries-included `tedge`                               │
 │                                                          │
 │                                                          │
 │  ┌─────────────────┐                                     │
-│  │ c8y plugin      ├────► operations ──────┐             │
+│  │ c8y actor       ├────► operations ──────┐             │
 │  │                 │                       │             │
 │  │                 │                       │             │
 │  │                 ◄──┬─── telemetry ◄───┐ │             │
@@ -153,15 +179,15 @@ and telemetry data (measurements, events, alarms) collected over MQTT using the 
 │    │ │                │     │            │ │             │
 │    │ │                │     │            │ │             │
 │    │ │  ┌─────────────▼───┐ │    ┌───────┴─▼───────┐     │
-│    │ │  │ az plugin       │ │    │ thin-edge JSON  │     │
-│    │ │  │                 │ │    │                 │     │
+│    │ │  │ az actor        │ │    │ thin-edge JSON  │     │
+│    │ │  │                 │ │    │     actor       │     │
 │    │ │  │                 │ │    │                 │     │
 │    │ │  │                 │ │    │                 │     │
 │    │ │  └──▲─┬────────────┘ │    └───────▲─┬───────┘     │
 │    │ │     │ │              │            │ │             │
 │    │ │     │ │              │            │ │             │
 │    │ │     │ │     ┌────────┴────────┐   │ │             │
-│    │ │     │ │     │ collectd plugin │   │ │             │
+│    │ │     │ │     │ collectd actor  │   │ │             │
 │    │ │     │ │     │                 │   │ │             │
 │    │ │     │ │     │                 │   │ │             │
 │    │ │     │ │     │                 │   │ │             │
@@ -169,7 +195,7 @@ and telemetry data (measurements, events, alarms) collected over MQTT using the 
 │    │ │     │ │              │            │ │             │
 │    │ │     │ │              │            │ │             │
 │  ┌─┴─▼─────┴─▼──────────────┴────────────┴─▼─────────┐   │
-│  │  MQTT Connection plugin                           │   │
+│  │  MQTT Connection actor                            │   │
 │  │                                                   │   │
 │  │                                                   │   │
 │  └───────────────────────────────────────────────────┘   │
@@ -180,18 +206,18 @@ and telemetry data (measurements, events, alarms) collected over MQTT using the 
 The main motivation for this internal design is the ability to build specific executables that are smaller,
 tuned for a specific use-case, consuming less memory and offering a reduced attack surface.
 
-For instance, note that the generic mapper provides support for several clouds, even if the device will connect to only one.
-Note also that MQTT is used to send operations to the agent via JSON over MQTT.
-An application developer can easily reassemble cherry-picked thin-edge plugins into a highly tuned executable.
+An application developer can easily reassemble cherry-picked thin-edge actors into a highly tuned executable,
+keeping only the feature actually required on the IIoT gateways,
+and possibly adding Rust actors that have been implemented specification for his application.
 
 ```
 ┌───────────────────────────────────────────────────────────────┐
 │                                                               │
-│  tuned mapper + agent                                         │
+│  tuned `tedge`                                                │
 │                                                               │
 │    ┌────────────────┐                ┌─────────────────┐      │
 │    │                │                │                 │      │
-│    │ c8y plugin     ├─► operations───►  apt plugin     │      │
+│    │ c8y actor      ├─► operations───►  apt actor      │      │
 │    │                │                │                 │      │
 │    │                │                │                 │      │
 │    │                │                │                 │      │
@@ -200,7 +226,7 @@ An application developer can easily reassemble cherry-picked thin-edge plugins i
 │         │ │   │                      ┌─────────────────┐      │
 │         │ │   │                      │                 │      │
 │         │ │   └────────telemetry ◄───┤ thin-edge JSON  │      │
-│         │ │                          │                 │      │
+│         │ │                          │    actor        │      │
 │         │ │                          │                 │      │
 │         │ │                          │                 │      │
 │         │ │                          └───────▲─────────┘      │
@@ -209,7 +235,7 @@ An application developer can easily reassemble cherry-picked thin-edge plugins i
 │         │ │                                  │                │
 │   ┌─────┴─▼──────────────────────────────────┴────────────┐   │
 │   │                                                       │   │
-│   │  MQTT Connection plugin                               │   │
+│   │  MQTT Connection actor                                │   │
 │   │                                                       │   │
 │   │                                                       │   │
 │   │                                                       │   │
@@ -227,7 +253,8 @@ An application developer can easily reassemble cherry-picked thin-edge plugins i
 ```
 
 The key points to be highlighted are that:
-* To connect to thin-edge via MQTT, a component is not required to follow this design, not even to be written in Rust.
-* The mapper and the agent provided by thin-edge out of the box can be used without any modifications.
-* Building a tuned mapper or agent requires a Rust compiler but not a deep expertise in Rust.
-  What has to be done is mostly to list the plugins to be included and to connect message producers and consumers.
+* An MQTT-bases component is not required to follow this design, not even to be written in Rust.
+* The executables provided by thin-edge out of the box are MQTT-based components,
+  built as an assemblage of Rust actors. They can be used without any modifications.
+* Building a tuned thin-edge executable requires a Rust compiler but not a deep expertise in Rust.
+  What has to be done is mostly to list the actors to be included and to connect message producers and consumers.
