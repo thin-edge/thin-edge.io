@@ -16,7 +16,7 @@ For Apama projects:
 2. The version must be suffixed with `::Apama` as in `1.0::Apama` or just `::Apama` if no  version number is necessary.
 3. The uploaded binary must be a `zip` file that contains the `project` directory. If a directory named `project` is not found by the plugin at the root level in the zip, it is considered invalid.
 
-![Add new Apama project in Software Repository](./images/Apama-plugin/Apama-project-c8y-software-repository.png)
+![Add new apama project in Software Repository](./images/apama-plugin/apama-project-c8y-software-repository.png)
 
 Once the software modules have been added to the software repository, these can be installed on the device just like any other software from the `Software` tab of the device in the Cumulocity device UI.
 
@@ -24,7 +24,7 @@ Once the software modules have been added to the software repository, these can 
 
 Here is an Apama project that you can use to test this plugin.
 
-[project zip](https://github.com/thin-edge/thin-edge.io/raw/main/tests/PySys/plugin_Apama/Input/quickstart.zip)
+[project zip](https://github.com/thin-edge/thin-edge.io/raw/main/tests/PySys/plugin_apama/Input/quickstart.zip)
 
 Add these binaries as software packages in the Cumulocity software repository by following the instructions in the previous section.
 Once added, this Apama project can be installed on any target device.
