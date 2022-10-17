@@ -31,7 +31,7 @@ Once added, this Apama project can be installed on any target device.
 You can test if the project was successfully installed by running the following Apama command:
 
 ```shell
-/opt/softwareag/Apama/bin/Apama_env engine_inspect -m
+/opt/softwareag/Apama/bin/apama_env engine_inspect -m
 ```
 
 You can expect an output like this:
