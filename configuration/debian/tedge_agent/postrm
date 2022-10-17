@@ -13,10 +13,17 @@ purge_agent_lock() {
    fi
 }
 
+purge_var_data_directory() {
+    if [ -d "/var/tedge" ]; then
+        rm -rf /var/tedge
+    fi
+}
+
 case "$1" in
     purge)
        purge_agent_directory
        purge_agent_lock
+       purge_var_data_directory
     ;;
 
     remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)

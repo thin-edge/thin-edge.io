@@ -126,7 +126,8 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut http_client = create_http_client(&tedge_config).await?;
     let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
 
-    let local_http_host = format!("{}:80", bind_address.to_string().as_str());
+    //TODO: Port number to be read from HttpPortSetting
+    let local_http_host = format!("{}:8000", bind_address.to_string().as_str());
 
     run(
         tedge_device_id,
