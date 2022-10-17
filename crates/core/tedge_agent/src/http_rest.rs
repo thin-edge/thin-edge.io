@@ -10,7 +10,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::error::FileTransferError;
 
-const HTTP_FILE_TRANSFER_PORT: u16 = 80;
+const HTTP_FILE_TRANSFER_PORT: u16 = 8000;
 
 #[derive(Debug, Clone)]
 pub struct HttpConfig {
