@@ -62,7 +62,6 @@ TODO: Maybe avoid cloud-names above, but focus on _mapper-concept_, since Azure 
 ### Telemetry Data Handling
 
 **Telemetry data** are the measurements, events and alarms collected or raised by sensors, actuators or domain applications.
-Those information are categorized as below:
 
   * **Measurement**, is a single value or set of values
     * could be be a mix of values produced by one or more sensors and values calculated by the device's domain application
