@@ -1,6 +1,6 @@
 [package]
 name = "sawtooth_publisher"
-version = "0.7.5"
+version = "0.7.6"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2018"
 
