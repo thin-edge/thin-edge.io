@@ -23,10 +23,105 @@ The figure below illustrats the **data-model** objects and the **inventory**:
 * The **thin-edge Device** object represents the device it-self, that runs **thin-edge** and manages that **inventory**.
   That objects has the fields `name` and `type` that contains the device-name and device-type visible in the cloud.
 
+* The **Telemetry Descriptor** object is part of the **thin-edge Device** object 
+  and contains a description of all **metrics**, **commands**, **events** and **alarms** the device provides.
+  * For all of those telemetry data the **Telemetry Descriptor** object contains individual descriptions:
+    ```json
+       "telemetry_descriptor": {
+          "metrics":  { /* ... specific description to metrics ...   */ },
+          "commands": { /* ... specific description to commands ...  */ },
+          "events":   { /* ... specific description to events ...    */ },
+          "alarms":   { /* ... specific description to alarms ...    */ },
+       } 
+    ```
+  * **Metrics**: Contains all information about metrics and measurements<br/>
+    Example:
+    ```json
+       "metrics": {
+            "weather_station": {
+                "num_values": 2,
+                "units": ["%", "celsius"] // humidity and temperature
+            },
+            "power_meter": {
+                "num_values": 3,
+                "units": ["V", "V", "V"] // voltage of phase 1, 2, 3
+            },
+
+            /* general structure for a metric: */
+            "<type_name>": {
+                "num_values": <number of values>,
+                "units": ["<unit of 1st value>", "<unit of 2nd value>", ...]
+            }
+
+        }
+     ```
+      * Where
+        * `type_name`, is a reference string, unique in scope of the given device object
+        * `num-values`, number of values the metric's measurement carries
+        * `units`, optional, list of units strings per values of the metric's measurements
+        * TODO: field that describes values missing (that what is as comment in example above) 
+
+  * **Commands**: Contains all information about commands<br/>
+    Example:
+    ```json
+       "commands": {
+            "temperature_limits": {
+                "num_values": 2 // set-points for a lower limit and a higher limit
+            },
+            "relay_array": {
+                "num_values": 8 // 8 relays in series
+            },
+
+            /* general structure for a command: */
+            "<type_name>": {
+                "num_values": <number of values>
+            }
+        }
+     ```
+      * Where
+        * `type_name`, is a reference string, unique in scope of the given device object
+        * `num-values`, number of values the command carries
+        * TODO: field that describes values missing (that what is as comment in example above) 
+ 
+  * **Events**: Contains all information about events<br/>
+    Example:
+    ```json
+       "events": {
+            "relay_array": {
+                /* no more information for events available */
+            },
+
+            /* general structure for an event: */
+            "<type_name>": {
+                /* beyond the type-name no more information available for events */
+            }
+        }
+     ```
+      * Where
+        * `type_name`, is a reference string, unique in scope of the given device object
+
+  * **Alarms** Contains all information about alarms<br/>
+    Example:
+    ```json
+       "alarms": {
+            "temperature_high": { // when higher temperature limit exceeded 
+                /* no more information for alarms available */
+            },
+
+            /* general structure for an alarm: */
+            "<type_name>": {
+                /* beyond the type-name no more information available for alarms */
+            }
+        }
+     ```
+      * Where
+        * `type_name`, is a reference string, unique in scope of the given device object
+
+
 * A **Child-Device** object could be exist more than once in the inventory. 
   Each **Child-Device** object represents an _external device_ (e.g. sensor, actuator, PLC, any other kind of device) that is connected to the thin-edge device.
   * Each **child-device** object is assocoiated with a separate individual device in the cloud. 
-  * Similar to the **thin-edge Device** object, each **child-device** object has the fields `name` and `type`.
+  * Similar to the **thin-edge Device** object, each **child-device** object has the fields `name` and `type`, and a **Telemetry Descriptor** object.
     In addition, each **child-device** object has a field `childid`, that contains a unique ID to address that child-device.
   * NOTE: Not just _external devices_, but also processes running on the thin-edge device itself, can be represented with a **child-device** object in the **inventory** - to treat them as __logical child-devices__.
 
@@ -59,7 +154,7 @@ That section lists the pre-defined **capability schemas**.
   |:---------------------|:--------------------|
   | **Unique name**      | `tedge_config` |
   | **Field:**`files`    | List of config-files the device provides. Per config file there are the fields as below:<br/><br/>-  `path`, full path to the file in the filesystem. If that field is not set, tedge_agent's HTTP-filetransfer is used to read/write the file.<br/>- `type`, an optional configuration type. If not provided, the path is used as type. If path is not set then `type` is mandatory.<br/>- optional unix file ownership: `user`, `group` and octal `mode`. These are only used when `path` is set, and a configuration file pushed from the cloud doesn't exist on the device|
-  | **Behavoiur**        | On cloud request<br/>-  provided configuration files are requested from the device and sent to the cloud<br/>- or downloaded from the cloud and sent to the device.<br/><br/> For details see [Configuration Managenement documentation](../references/c8y-configuration-management.md#configuration-files-for-child-devices)
+  | **Behavoiur**        | On cloud request<br/>-  provided configuration files are requested from the device and sent to the cloud<br/>- or downloaded from the cloud and sent to the device.<br/><br/> For details see TODO \[Configuration Managenement documentation](../references/c8y-configuration-management.md#configuration-files-for-child-devices)
 
 Examples **capability** objects for schema `tedge_config`:
 ```json
