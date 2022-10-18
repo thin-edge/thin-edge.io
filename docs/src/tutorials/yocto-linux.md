@@ -85,7 +85,7 @@ INIT_MANAGER="systemd"
 Build `tedge` by running following command :
 
 ```bash
-$ bitbake tedge-image
+$ bitbake tedge-full-image
 ```
 
 ### Run the build
@@ -96,8 +96,55 @@ When the build it complete, run it with qemu:
 $ runqemu nographic
 ```
 
+
 ## Further recommendations
 
 After building the reference distribution and image, you can explore creating your own layer and image, and then
-integrating `tedge-*` recipes for it. To make Yocto run on your hardware, check other layers in the [OpenEmbedded Layer
-Index](https://layers.openembedded.org/layerindex/branch/master/layers/).
+integrating `tedge-*` recipes for it. 
+
+### Configure and run the layer on Raspberry Pi device
+
+> Note: following installation process will base on tutorial from the previous chapter
+
+After successful run in qemu, we can run it on raspberry pi by adjusting our build to a proper architecture.
+
+To do that, we will use `meta-raspberrypi` layer that we need to fetch and `meta-openembedded` that we fetched previously:
+
+```bash
+git clone -b kirkstone https://github.com/agherzan/meta-raspberrypi.git
+```
+
+According to the `meta-raspberrypi/README.md`, we have all the dependencies added to the layer except `meta-multimedia` that we need to add with `add-layer` subcommand. After that, we can add `meta-raspberrypi` itself:
+
+```bash
+bitbake-layers add-layer ~/yocto-thinedge/meta-openembedded/meta-networking
+bitbake-layers add-layer ~/yocto-thinedge/meta-raspberrypi
+```
+
+Next, we open up `conf/local.conf` and find this line:
+
+```bash
+MACHINE ??= "qemux86-64"
+```
+
+It denotes which platform we are targeting. Select the one that fits that platform you'd like to build an image for. All available platforms can be found in `meta-raspberrypi/machine/` directory. In our case, we target Raspberry Pi 3 in 64-bit mode:
+
+```bash
+MACHINE = "raspberrypi3-64"
+```
+
+We can also change the specific configuration of the Raspberry Pi machine. In `meta-raspberrypi/docs/extra-build-config.md` we can find a variety of `local.conf` definitions that you can use to enable/disable/modify functionality of a device, e.g to access a shell via the UART, add following line to `local.conf` file:
+
+```bash
+ENABLE_UART = "1"
+```
+
+After we finish the configuration, we can build an image using `tedge-full-image`:
+
+```bash
+$ bitbake tedge-full-image
+```
+
+Once the build is complete, the image will be located in `/tmp/deploy/images/$MACHINE/` directory where `$MACHINE` denotes your target platform. Copy the image to the SD card and run your device. 
+
+To make Yocto run on another hardware, check other layers in the [OpenEmbedded Layer Index](https://layers.openembedded.org/layerindex/branch/master/layers/).
