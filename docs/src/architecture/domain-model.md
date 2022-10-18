@@ -122,16 +122,13 @@ The figure below illustrates the device concept.
 ## thin-edge data concept
 
 **thin-edge** provides APIs to easily connect device's **data points** to cloud's **telemetry data handling**.
-Usually there are two kinds of SW components that use those **thin-edge** APIs:
-  * the **domain application**, to provide **data points** from it's processing flow and potentially inputs/outputs from _sensors/actuators_ to **thin-edge**
-  * **protocol drivers**, to
-    * provide purely inputs/outputs from _sensors/actuators_, e.g. from protocols as OPC UA, Profinet, CANopen, ...
-    * access the **domain application** (e.g. when the **domain application** cannot or shall not access **thin-edge** APIs directly) to provide **domain application's** **data points** to **thin-edge**
+**thin-edge** never accesses device's **data points** directly.
+In any case there is one or more _custom specific sw component_ that interface **data points** and **thin-edge** APIs (e.g. the **domain application** and some kinds of **protocol drivers**).
 
-Per **telemetry data** the interpretation of **data points** differs:
+Those _custom specific sw components_ provide **data point** values to the **thin-edge** APIs as **measurements**, **commands**, **events** or **alarms**.
 
   * **Measurements**:
-    * a **measurement** is represented with one or more **data points**
+    * a **measurement** is represented with one or more **data point** values
       and a reference to the corresponding **metric**
     * the values of the **data points** reflect the measurement values
     * **thin-edge** puts the measurement into the context of the corresponding metric and sends it to the cloud
@@ -139,11 +136,11 @@ Per **telemetry data** the interpretation of **data points** differs:
     * a **command** is represented with one or more values received from the **cloud**
     * **thin-edge** provides those values to the **domain application** and **protocol drivers** as **data point** values
   * **Events**:
-    * for events **thin-edge** does not get in touch with **data points** at all;<br/>
-      instead any event related **data point** and it's value is evaluated by the event producer internally (i.E. the **domain application** or **protocol drivers**)
-    * the event producer sends a coresponding notification to **thin-edge** whenever an event shall be raised
+    * an event is represented by a **data point**
+    * the meaning of an event related **data point** value is very customer specific (could be change from 0 to 1, a bit in a flag word, ...)
+    * a _custom specific sw component_ must know the meaning, and sends an event notification to the **thin-edge** API whenever the value signals a raised event
   * **Alarms**:
-    * similar to **events**; but in addition, the alarm producer can send a notification to **thin-edge** to clear an **alarm** 
+    * similar to **events**; but in addition, the _custom specific sw component_ can send a notification to **thin-edge** to clear an **alarm** 
     * **thin-edge** raises or clears the alarm in the cloud
 
 ## thin-edge device management concept
