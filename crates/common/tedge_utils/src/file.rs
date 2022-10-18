@@ -4,6 +4,7 @@ use std::os::linux::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
+use tracing::debug;
 use users::{get_group_by_name, get_user_by_name};
 
 #[derive(thiserror::Error, Debug)]
@@ -93,12 +94,24 @@ impl PermissionEntry {
     }
 
     fn create_directory(&self, dir: &Path) -> Result<(), FileError> {
+        debug!("Creating the directory {:?}", dir);
         match fs::create_dir(dir) {
             Ok(_) => {
+                debug!(
+                    "Applying desired user and group for newly created dir: {:?}",
+                    dir
+                );
                 self.apply(dir)?;
                 Ok(())
             }
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                debug!(
+                    "Applying desired user and group for already existing dir: {:?}",
+                    dir
+                );
+                self.apply(dir)?;
+                Ok(())
+            }
             Err(e) => Err(FileError::DirectoryCreateFailed {
                 dir: dir.display().to_string(),
                 from: e,
@@ -141,6 +154,10 @@ impl PermissionEntry {
 }
 
 pub fn change_user_and_group(file: &Path, user: &str, group: &str) -> Result<(), FileError> {
+    debug!(
+        "Changing ownership of file: {:?} with user: {} and group: {}",
+        file, user, group
+    );
     let ud = get_user_by_name(user)
         .map(|u| u.uid())
         .ok_or_else(|| FileError::UserNotFound { user: user.into() })?;
