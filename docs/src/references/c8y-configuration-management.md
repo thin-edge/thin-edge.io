@@ -130,15 +130,25 @@ The `c8y_configuration_plugin` configuration is stored by default under `/etc/te
 
 This [TOML](https://toml.io/en/) file defines the list of files to be managed from the cloud tenant.
 Each configuration file is defined by a record with:
-* The full `path` to the file.
-* An optional configuration `type`. If not provided, the `path` is used as `type`.
-  This `type` is used to declare the configuration file to Cumulocity and then to trigger operations on that file.
-  All the configuration `type`s for the main device are declared to the cloud on start
-  and on change of the `c8y/c8y-configuration-plugin.toml` file.
-* Optional unix file ownership: `user`, `group` and octal `mode`.  
+* The full `path` to a configuration file, OR
+* a `type` which is a unique id for a configuration type supported by the device when the configuration is not a file.
+* Either a `type` or a `path` is mandatory for each record.
+* The `type` or `path` is mapped to a `c8y-config-type` to declare the supported configuration file list to the cloud.
+  The reported `c8y-config-type` is what's visible in the cloud, to trigger operations on each configuration file.
+  All the `c8y-config-type`s for the main device are declared to the cloud on start
+  and on changes of the `c8y/c8y-configuration-plugin.toml` file.
+* If a `type` is specified, it's mapped directly to `c8y-config-type`, else the `path` is used.
+* When a `path` is specified, additional optional unix file ownership paramaters: `user`, `group` and octal `mode` are supported.
   These are only used when a configuration file pushed from the cloud doesn't exist on the device.
   When a configuration file is already present on the device, this plugin never changes file ownership,
   ignoring these parameters.
+* If only the `type` is specified without a `path`, the plugin can not read/update a file on its own.
+  In that case, the `c8y_UploadConfigFile` request from the cloud is be mapped to a tedge `config_snapshot` request
+  by publishing that request to `tedge/commands/req/config_snapshot` topic with the `type` in the payload.
+  Some third-party application on the device is expected to handle this request,
+  upload the configuration file to the tedge file-transfer-service
+  and then respond to `tedge/commands/res/config_snapshot` with the operation `status`.
+  Similarly, a `c8y_DownloadConfigFile` is mapped to a `tedge/commands/req/config_update` request.
 
 ```shell
 $ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
@@ -156,9 +166,8 @@ that needs to be configured from the cloud.
 * The configuration for a child-device `$CHILD_DEVICE_ID`
   is stored by default under `/etc/tedge/c8y/$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`
 * These TOML files have the same schema as for the main device,
-  listing the configuration `files` and giving for each a `path` and possibly a `type`.
-* Note that the `path` doesn't need to be a file path.
-  It can be a key path in some registry of the child device or any name that makes sense for the child device.
+  listing the configuration `files` and giving for each a `path` or a `type`.
+* The `type` can be a key path in some registry of the child device or any name that makes sense for the child device.
 * As for the main device, the `type` is used to name the configuration file on the cloud.
   All the configuration `type`s for a child devices are declared to the cloud on start
   and on change of the `c8y/$CHILD_DEVICE_ID/c8y-configuration-plugin.toml` file.
@@ -400,7 +409,7 @@ sequenceDiagram
    1. All these payloads are JSON records with 3 required fields:
       * `"status": "$STATUS"` where the status is either "executing", "successful" or "failed"
       * `"path": "$PATH"`
-      * `"type": "$TYPE"`
+      * `"type": "$TYPE"` (if no `type` has been specified, then this field is omitted) 
       * `"reason": "$ERROR_MSG"` telling the cause of the error if any.
    1. The child-device agent must send at least a success or an error message,
       depending on the success of the `GET` and configuration operations.
