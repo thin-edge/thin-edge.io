@@ -49,9 +49,7 @@ Usual **devices** are **PLCs** (**P**rogrammable **L**ogic **C**ontrollers), **I
 
 ## IoT Cloud Domain
 
-Potentialy clouds are [Cumulocity](https://www.softwareag.cloud/site/product/cumulocity-iot.html), [Azure](https://azure.microsoft.com) or [AWS](https://aws.amazon.com).
-
-TODO: Maybe avoid cloud-names above, but focus on _mapper-concept_, since Azure and AWS are far less supported.
+Cloud end-points could be IoT Cloud Platforms, as e.g. [Cumulocity](https://www.softwareag.cloud/site/product/cumulocity-iot.html), [Azure](https://azure.microsoft.com) or [AWS](https://aws.amazon.com); or end-points for specific IoT tasks, as e.g. a time-series database to collect measurements.
 
 * Each **device** is represented in the IoT cloud by an individual **device twin**
 * All information / data or functionality the device provides to the cloud appears in context of it's **device twin**
