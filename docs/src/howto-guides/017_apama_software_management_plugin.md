@@ -26,7 +26,7 @@ Here is an Apama project that you can use to test this plugin.
 
 [project zip](https://github.com/thin-edge/thin-edge.io/raw/main/tests/PySys/plugin_apama/Input/quickstart.zip)
 
-Add these binaries as software packages in the Cumulocity software repository by following the instructions in the previous section.
+Add this project as a software package in the Cumulocity software repository by following the instructions in the previous section.
 Once added, this Apama project can be installed on any target device.
 You can test if the project was successfully installed by running the following Apama command:
 
