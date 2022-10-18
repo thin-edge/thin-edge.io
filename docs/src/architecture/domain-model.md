@@ -31,9 +31,9 @@ Usual **devices** are **PLCs** (**P**rogrammable **L**ogic **C**ontrollers), **I
 <!--
 * TODO: add somehow "Such a **device** is most often a specialized hardware that has been ruggedized to operate in harsh electrical, thermic and mechanical industrial environments."
 -->
-* The **Domain Application** is a program, usually developed by a **Domain Expert**
-  * e.g. on a **PLC** it's a _control application_, created by an _automation engineer_ in a domain specific graphical programming language (like "Ladder Diagram" or "Function block diagram")
-  * or on a **SoC-based** or **Microcontroller-based** system it's an _application program_, created by an _embedded software engineer_ usually in C/C++
+* The **Domain Application** is a program, that contains the domain specific process logic.
+  * On a **PLC** it's a _control application_, created by an _automation engineer_ in a domain specific graphical programming language (like "Ladder Diagram" or "Function block diagram")
+  * Or on a **SoC-based** or **Microcontroller-based** system it's an _application program_, created by an _embedded software engineer_ usually in C/C++
 * The **OS / Libs / Runtime** provide basic functionality to the **Domain Application**
   <!-- TODO: add somehow "used to abtracts the hardware. But: on a microcontroler usually less abtraction, more hw dep on the domain app, and even no OS" -->
 * **Sensors** and **Actuators** enable the **device** to observe and control physical behaviour on the shopfloor or device's environment.
