@@ -112,7 +112,7 @@ Cloud end-points could be IoT Cloud Platforms, as e.g. [Cumulocity](https://www.
   * all devices connected to the **main-device** are referred as **external child-devices**
   * each device is represented in the cloud with an individual **device twin**
   * a unique **child-id** makes the association between each **external child-device** and it's **device twin**
-  * all telemetry data (i.E. Measurements, Variables, Events, Alarms) of a device (i.E. **main-device** or **external child-devices**) appear
+  * all telemetry data (i.E. Measurements, Commands, Events, Alarms) of a device (i.E. **main-device** or **external child-devices**) appear
     in the cloud in context of its corresponding **device twin**
 
 The figure below illustrates the device concept.
