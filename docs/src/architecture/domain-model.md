@@ -94,11 +94,10 @@ Cloud end-points could be IoT Cloud Platforms, as e.g. [Cumulocity](https://www.
     * remove installed software packages
   * **Configuration Management**, provides to view and change configurations on the device
     * lists available configuration files
-    * retrieve content of individual configuration files
-    * send new content for individual configuration files
+    * transfer individual configuration files from device to cloud, and vice versa
   * **Log Management**, provides to view log files from the device
     * lists available log files
-    * retrieve content of individual log files
+    * transfer individual log files from device to cloud
   * **Device Monitoring**, collects metrics from the device and forward these to the IoT cloud
     * allows monitors the health of devices
     * helps to troubleshoot when problems with the device are reported
