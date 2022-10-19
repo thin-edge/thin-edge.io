@@ -89,7 +89,7 @@ Cloud end-points could be IoT Cloud Platforms, as e.g. [Cumulocity](https://www.
 
 **Device Management** provides to manage and monitor devices in the field from the cloud. That includes:
   * **Software Management**, provides to manage the installed software packages on the device
-    * view list and versions of installed packages
+    * retrieve list and versions of installed packages
     * install new or update existing software packages
     * remove installed software packages
   * **Configuration Management**, provides to view and change configurations on the device
