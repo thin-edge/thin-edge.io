@@ -206,6 +206,7 @@ mod tests {
                 operations,
                 proxy,
                 tmp_dir.path().to_path_buf(),
+                tmp_dir.path().to_path_buf(),
             )
             .unwrap(),
         );

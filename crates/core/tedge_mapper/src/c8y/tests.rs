@@ -14,8 +14,10 @@ use c8y_api::{
     json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
 };
 
+use futures::StreamExt;
 use mqtt_channel::{Message, Topic};
 use mqtt_tests::test_mqtt_server::MqttProcessHandler;
+use mqtt_tests::with_timeout::WithTimeout;
 use serde_json::json;
 use serial_test::serial;
 use std::{path::Path, time::Duration};
@@ -39,7 +41,8 @@ async fn mapper_publishes_a_software_list_request() {
         .await;
 
     // Start the SM Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+    let cfg_dir = TempTedgeDir::new();
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     // Expect on `tedge/commands/req/software/list` a software list request.
     mqtt_tests::assert_received_all_expected(&mut messages, TEST_TIMEOUT_MS, &[r#"{"id":"#]).await;
@@ -55,7 +58,8 @@ async fn mapper_publishes_a_supported_operation_and_a_pending_operations_onto_c8
     let mut messages = broker.messages_published_on("c8y/s/us").await;
 
     // Start SM Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+    let cfg_dir = TempTedgeDir::new();
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     // Expect 500 messages has been received on `c8y/s/us`, if no msg received for the timeout the test fails.
     mqtt_tests::assert_received_all_expected(&mut messages, TEST_TIMEOUT_MS, &["500\n"]).await;
@@ -72,8 +76,8 @@ async fn mapper_publishes_software_update_request() {
     let mut messages = broker
         .messages_published_on("tedge/commands/req/software/update")
         .await;
-
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+    let cfg_dir = TempTedgeDir::new();
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
     broker.publish("c8y/s/ds", smartrest).await.unwrap();
@@ -113,7 +117,8 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     let mut messages = broker.messages_published_on("c8y/s/us").await;
 
     // Start SM Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+    let cfg_dir = TempTedgeDir::new();
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
     publish_a_fake_jwt_token(broker).await;
 
     // Prepare and publish a software update status response message `executing` on `tedge/commands/res/software/update`.
@@ -168,7 +173,8 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     let mut messages = broker.messages_published_on("c8y/s/us").await;
 
     // Start SM Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+    let cfg_dir = TempTedgeDir::new();
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
     publish_a_fake_jwt_token(broker).await;
 
     // The agent publish an error
@@ -230,8 +236,9 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     // Create a subscriber to receive messages on `"c8y/s/us` topic.
     let mut responses = broker.messages_published_on("c8y/s/us").await;
 
+    let cfg_dir = TempTedgeDir::new();
     // Start SM Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
@@ -285,9 +292,9 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
         )
         .await
         .unwrap();
-
+    let cfg_dir = TempTedgeDir::new();
     // Restart SM Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     // Validate that the mapper process the response and forward it on 'c8y/s/us'
     // Expect init messages followed by a 503 (success)
@@ -315,8 +322,8 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
 
     // Create a subscriber to receive messages on `c8y/s/us` topic.
     let mut messages = broker.messages_published_on("c8y/s/us").await;
-
-    let (_tmp_dir, _sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+    let cfg_dir = TempTedgeDir::new();
+    let (_tmp_dir, _sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
     // Prepare and publish a c8y_SoftwareUpdate smartrest request on `c8y/s/ds` that contains a wrong action `remove`, that is not known by c8y.
     let smartrest = r#"528,external_id,nodered,1.0.0::debian,,remove"#;
     broker.publish("c8y/s/ds", smartrest).await.unwrap();
@@ -337,9 +344,9 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
     let broker = mqtt_tests::test_mqtt_broker();
 
     let mut messages = broker.messages_published_on("c8y/s/us").await;
-
+    let cfg_dir = TempTedgeDir::new();
     // Start the C8Y Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     broker
         .publish_with_opts(
@@ -381,9 +388,9 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     let mut messages = broker
         .messages_published_on("c8y/s/us/external_sensor")
         .await;
-
+    let cfg_dir = TempTedgeDir::new();
     // Start the C8Y Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     broker
         .publish_with_opts(
@@ -433,9 +440,9 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     let broker = mqtt_tests::test_mqtt_broker();
 
     let mut messages = broker.messages_published_on("c8y/s/us").await;
-
+    let cfg_dir = TempTedgeDir::new();
     // Start the C8Y Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     let mut internal_messages = broker
         .messages_published_on("c8y-internal/alarms/critical/temperature_alarm")
@@ -493,7 +500,8 @@ async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     //     .unwrap();
 
     // Restart the C8Y Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+    let cfg_dir = TempTedgeDir::new();
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     // Ignored until the rumqttd broker bug that doesn't handle empty retained messages
     // Expect the previously missed clear temperature alarm message
@@ -526,7 +534,8 @@ async fn c8y_mapper_syncs_pending_child_alarms_on_startup() {
         .await;
 
     // Start the C8Y Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+    let cfg_dir = TempTedgeDir::new();
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     let mut internal_messages = broker
         .messages_published_on("c8y-internal/alarms/critical/temperature_alarm/external_sensor")
@@ -594,7 +603,8 @@ async fn c8y_mapper_syncs_pending_child_alarms_on_startup() {
     //     .unwrap();
 
     // Restart the C8Y Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+    let cfg_dir = TempTedgeDir::new();
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     // Ignored until the rumqttd broker bug that doesn't handle empty retained messages
     // Expect the previously missed clear temperature alarm message
@@ -620,7 +630,8 @@ async fn c8y_mapper_syncs_pending_child_alarms_on_startup() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn test_sync_alarms() {
-    let (_temp_dir, mut converter) = create_c8y_converter();
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
 
     let alarm_topic = "tedge/alarms/critical/temperature_alarm";
     let alarm_payload = r#"{ "text": "Temperature very high" }"#;
@@ -674,7 +685,8 @@ async fn test_sync_alarms() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn test_sync_child_alarms() {
-    let (_temp_dir, mut converter) = create_c8y_converter();
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
 
     let alarm_topic = "tedge/alarms/critical/temperature_alarm/external_sensor";
     let alarm_payload = r#"{ "text": "Temperature very high" }"#;
@@ -728,7 +740,8 @@ async fn test_sync_child_alarms() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn convert_thin_edge_json_with_child_id() {
-    let (_temp_dir, mut converter) = create_c8y_converter();
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
 
     let in_topic = "tedge/measurements/child1";
     let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
@@ -761,7 +774,8 @@ async fn convert_thin_edge_json_with_child_id() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn convert_first_thin_edge_json_invalid_then_valid_with_child_id() {
-    let (_temp_dir, mut converter) = create_c8y_converter();
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
 
     let in_topic = "tedge/measurements/child1";
     let in_invalid_payload = r#"{"temp": invalid}"#;
@@ -796,7 +810,8 @@ async fn convert_first_thin_edge_json_invalid_then_valid_with_child_id() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn convert_two_thin_edge_json_messages_given_different_child_id() {
-    let (_temp_dir, mut converter) = create_c8y_converter();
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
     let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
 
     // First message from "child1"
@@ -862,7 +877,8 @@ fn extract_child_id(in_topic: &str, expected_child_id: Option<String>) {
 
 #[tokio::test]
 async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
-    let (_temp_dir, mut converter) = create_c8y_converter();
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
 
     let alarm_topic = "tedge/alarms/critical/temperature_alarm";
     let big_alarm_text = create_packet(1024 * 20);
@@ -882,7 +898,8 @@ async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn convert_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
-    let (_temp_dir, mut converter) = create_c8y_converter();
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
     let event_topic = "tedge/events/click_event";
     let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
     let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -891,7 +908,7 @@ async fn convert_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
     assert_eq!(converted_events.len(), 1);
     let converted_event = converted_events.get(0).unwrap();
     assert_eq!(converted_event.topic.name, "c8y/s/us");
-    dbg!(converted_event.payload_str()?);
+
     assert_eq!(
         converted_event.payload_str()?,
         r#"400,click_event,"Someone clicked",2020-02-02T01:02:03+05:30"#
@@ -902,7 +919,8 @@ async fn convert_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn convert_event_with_extra_fields_to_c8y_json() -> Result<()> {
-    let (_temp_dir, mut converter) = create_c8y_converter();
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
     let event_topic = "tedge/events/click_event";
     let event_payload = r#"{ "text": "tick", "foo": "bar" }"#;
     let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -927,7 +945,8 @@ async fn convert_event_with_extra_fields_to_c8y_json() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_convert_big_event() {
-    let (_temp_dir, mut converter) = create_c8y_converter();
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
 
     let event_topic = "tedge/events/click_event";
     let big_event_text = create_packet((16 + 1) * 1024); // Event payload > size_threshold
@@ -939,7 +958,8 @@ async fn test_convert_big_event() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_convert_big_measurement() {
-    let (_temp_dir, mut converter) = create_c8y_converter();
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
     let measurement_topic = "tedge/measurements";
     let big_measurement_payload = create_thin_edge_measurement(10 * 1024); // Measurement payload > size_threshold after converting to c8y json
 
@@ -968,7 +988,8 @@ async fn test_convert_big_measurement() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_convert_small_measurement() {
-    let (_temp_dir, mut converter) = create_c8y_converter();
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
     let measurement_topic = "tedge/measurements";
     let big_measurement_payload = create_thin_edge_measurement(20); // Measurement payload size is 20 bytes
 
@@ -992,7 +1013,8 @@ async fn test_convert_small_measurement() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_convert_big_measurement_for_child_device() {
-    let (_temp_dir, mut converter) = create_c8y_converter();
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
     let measurement_topic = "tedge/measurements/child1";
     let big_measurement_payload = create_thin_edge_measurement(10 * 1024); // Measurement payload > size_threshold after converting to c8y json
 
@@ -1029,7 +1051,8 @@ async fn test_convert_small_measurement_for_child_device() {
         &Topic::new_unchecked(measurement_topic),
         big_measurement_payload,
     );
-    let (_temp_dir, mut converter) = create_c8y_converter();
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
     let result = converter.convert(&big_measurement_message).await;
 
     assert!(result
@@ -1057,8 +1080,9 @@ async fn test_convert_small_measurement_for_child_device() {
 async fn mapper_handles_multiline_sm_requests() {
     // The test assures if Mapper can handle multiline smartrest messages arrived on `c8y/s/ds`
     let broker = mqtt_tests::test_mqtt_broker();
+    let cfg_dir = TempTedgeDir::new();
     let mut messages = broker.messages_published_on("c8y/s/us").await;
-    let (_tmp_dir, c8y_mapper) = start_c8y_mapper(broker.port).await.unwrap();
+    let (_tmp_dir, c8y_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     // Prepare and publish multiline software update smartrest requests on `c8y/s/ds`.
     let smartrest = format!("528,external_id,nodered,1.0.0::debian,,install\n528,external_id,nodered,1.0.0::debian,,install");
@@ -1122,6 +1146,157 @@ async fn mapper_handles_multiline_sm_requests() {
     .await;
 
     c8y_mapper.abort();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn mapper_publishes_supported_operations() {
+    // The test assures tede-mapper reads/parses the operations from operations directory and
+    // correctly publishes the supported operations message on `c8y/s/us`
+    // and verifies the supported operations that are published by the tedge_mapper.
+    let broker = mqtt_tests::test_mqtt_broker();
+    let cfg_dir = TempTedgeDir::new();
+    create_thin_edge_operations(&cfg_dir);
+    let mut messages = broker.messages_published_on("c8y/s/us").await;
+
+    let (_temp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
+
+    publish_a_fake_jwt_token(broker).await;
+
+    // Expect smartrest message on `c8y/s/us` with expected payload "114,c8y_TestOp1,c8y_TestOp2"
+    mqtt_tests::assert_received_all_expected(
+        &mut messages,
+        TEST_TIMEOUT_MS,
+        &["114,c8y_TestOp1,c8y_TestOp2\n"],
+    )
+    .await;
+    sm_mapper.abort();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn mapper_publishes_child_device_create_message() {
+    // The test assures tedge-mapper checks if there is a directory for operations for child devices, then it reads and
+    // correctly publishes the child device create message on to `c8y/s/us`
+    // and verifies the device create message.
+    let broker = mqtt_tests::test_mqtt_broker();
+    let cfg_dir = TempTedgeDir::new();
+    create_thin_edge_child_operations(&cfg_dir);
+    let mut messages = broker.messages_published_on("c8y/s/us").await;
+
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
+
+    publish_a_fake_jwt_token(broker).await;
+
+    // Expect smartrest message on `c8y/s/us` with expected payload "101,child1,child1,thin-edge.io-child".
+    mqtt_tests::assert_received_all_expected(
+        &mut messages,
+        TEST_TIMEOUT_MS,
+        &["101,child1,child1,thin-edge.io-child"],
+    )
+    .await;
+    sm_mapper.abort();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn mapper_publishes_supported_operations_for_child_device() {
+    // The test assures tedge-mapper checks if there is a directory for operations for child devices, then it reads and
+    // correctly publishes supported operations message for that child on to `c8y/s/us/child1`
+    // and verifies that message.
+    let broker = mqtt_tests::test_mqtt_broker();
+    let cfg_dir = TempTedgeDir::new();
+    create_thin_edge_child_operations(&cfg_dir);
+    let mut messages = broker.messages_published_on("c8y/s/us/child1").await;
+
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
+
+    publish_a_fake_jwt_token(broker).await;
+
+    // Expect smartrest message on `c8y/s/us/child1` with expected payload "114,c8y_ChildTestOp1,c8y_ChildTestOp2.
+    mqtt_tests::assert_received_all_expected(
+        &mut messages,
+        TEST_TIMEOUT_MS,
+        &["114,c8y_ChildTestOp1,c8y_ChildTestOp2\n"],
+    )
+    .await;
+    sm_mapper.abort();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
+    // The test assures tedge-mapper checks if there are operations, then it reads and
+    // correctly publishes them on to `c8y/s/us`.
+    // When mapper is running test adds a new operation into the operations directory, then the mapper discovers the new
+    // operation and publishes list of supported operation including the new operation, and verifies the device create message.
+    let broker = mqtt_tests::test_mqtt_broker();
+    let cfg_dir = TempTedgeDir::new();
+    let mut health_message = broker
+        .messages_published_on("tedge/health/c8y-mapper-test")
+        .await;
+    let mut messages = broker.messages_published_on("c8y/s/us").await;
+
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
+
+    publish_a_fake_jwt_token(broker).await;
+    // Wait for the mapper to start properly and start the wacher for the directories
+    while let Ok(Some(msg)) = health_message.next().with_timeout(TEST_TIMEOUT_MS).await {
+        if msg.contains(r#"status":"up"#) {
+            break;
+        }
+    }
+
+    // Add an operation dynamically
+    cfg_dir.dir("operations").dir("c8y").file("c8y_TestOp3");
+    // Expect smartrest message on `c8y/s/us` with expected payload "114,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3".
+    mqtt_tests::assert_received_all_expected(
+        &mut messages,
+        TEST_TIMEOUT_MS,
+        &["114,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3\n"],
+    )
+    .await;
+    sm_mapper.abort();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn mapper_dynamically_updates_supported_operations_for_child_device() {
+    // The test assures tedge-mapper reads the operations for the child devices from the operations directory, and then it publishes them on to `c8y/s/us/child1`.
+    // When mapper is running test adds a new operation for a child into the operations directory, then the mapper discovers the new
+    // operation and publishes list of supported operation for the child device including the new operation, and verifies the device create message.
+    let broker = mqtt_tests::test_mqtt_broker();
+    let cfg_dir = TempTedgeDir::new();
+    create_thin_edge_child_operations(&cfg_dir);
+    let mut health_message = broker
+        .messages_published_on("tedge/health/c8y-mapper-test")
+        .await;
+    let mut messages = broker.messages_published_on("c8y/s/us/child1").await;
+
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
+
+    publish_a_fake_jwt_token(broker).await;
+
+    // Wait for the mapper to start properly and start the wacher for the directories
+    while let Ok(Some(msg)) = health_message.next().with_timeout(TEST_TIMEOUT_MS).await {
+        if msg.contains(r#"status":"up"#) {
+            break;
+        }
+    }
+    // Add a new operation for the child device
+    cfg_dir
+        .dir("operations")
+        .dir("c8y")
+        .dir("child1")
+        .file("c8y_ChildTestOp3");
+    // Expect smartrest message on `c8y/s/us/child1` with expected payload "114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3".
+    mqtt_tests::assert_received_all_expected(
+        &mut messages,
+        TEST_TIMEOUT_MS,
+        &["114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3\n"],
+    )
+    .await;
+    sm_mapper.abort();
 }
 
 fn create_packet(size: usize) -> String {
@@ -1194,8 +1369,11 @@ impl C8YHttpProxy for FakeC8YHttpProxy {
     }
 }
 
-async fn start_c8y_mapper(mqtt_port: u16) -> Result<(TempTedgeDir, JoinHandle<()>), anyhow::Error> {
-    let (_temp_dir, converter) = create_c8y_converter();
+async fn start_c8y_mapper(
+    mqtt_port: u16,
+    ops_dir: &TempTedgeDir,
+) -> Result<(TempTedgeDir, JoinHandle<()>), anyhow::Error> {
+    let (temp_dir, converter) = create_c8y_converter(ops_dir);
     let mut mapper = create_mapper(
         "c8y-mapper-test",
         MQTT_HOST.to_string(),
@@ -1203,14 +1381,17 @@ async fn start_c8y_mapper(mqtt_port: u16) -> Result<(TempTedgeDir, JoinHandle<()
         Box::new(converter),
     )
     .await?;
-
+    let ops_path = ops_dir.path().to_path_buf().join("operations").join("c8y");
+    dbg!(&ops_path);
     let mapper_task = tokio::spawn(async move {
-        let _ = mapper.run(None).await;
+        let _ = mapper.run(Some(&ops_path)).await;
     });
-    Ok((_temp_dir, mapper_task))
+    Ok((temp_dir, mapper_task))
 }
 
-fn create_c8y_converter() -> (TempTedgeDir, CumulocityConverter<FakeC8YHttpProxy>) {
+fn create_c8y_converter(
+    ops_dir: &TempTedgeDir,
+) -> (TempTedgeDir, CumulocityConverter<FakeC8YHttpProxy>) {
     let size_threshold = SizeThreshold(16 * 1024);
     let device_name = "test-device".into();
     let device_type = "test-device-type".into();
@@ -1218,10 +1399,8 @@ fn create_c8y_converter() -> (TempTedgeDir, CumulocityConverter<FakeC8YHttpProxy
     let http_proxy = FakeC8YHttpProxy {};
 
     let tmp_dir = TempTedgeDir::new();
-    tmp_dir
-        .dir("tedge")
-        .dir("agent")
-        .file("software-list-2011-11-11T11:11:11Z.log");
+
+    create_thin_edge_operations(&ops_dir);
     let converter = CumulocityConverter::from_logs_path(
         size_threshold,
         device_name,
@@ -1229,9 +1408,26 @@ fn create_c8y_converter() -> (TempTedgeDir, CumulocityConverter<FakeC8YHttpProxy
         operations,
         http_proxy,
         tmp_dir.path().to_path_buf(),
+        ops_dir.path().to_path_buf(),
     )
     .unwrap();
     (tmp_dir, converter)
+}
+
+fn create_thin_edge_operations(cfg_dir: &TempTedgeDir) {
+    let p1 = cfg_dir.dir("operations");
+    let tedge_ops_dir = p1.dir("c8y");
+    tedge_ops_dir.file("c8y_TestOp1");
+    tedge_ops_dir.file("c8y_TestOp2");
+}
+
+fn create_thin_edge_child_operations(cfg_dir: &TempTedgeDir) {
+    let p1 = cfg_dir.dir("operations");
+    let tedge_ops_dir = p1.dir("c8y");
+
+    let child_ops_dir = tedge_ops_dir.dir("child1");
+    child_ops_dir.file("c8y_ChildTestOp1");
+    child_ops_dir.file("c8y_ChildTestOp2");
 }
 
 fn remove_whitespace(s: &str) -> String {

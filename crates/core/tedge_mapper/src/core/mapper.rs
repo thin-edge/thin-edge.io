@@ -171,6 +171,9 @@ async fn process_messages(mapper: &mut Mapper, ops_dir: Option<&Path>) -> Result
         let fs_notification_stream = fs_notify_stream(&dir_to_watch)?;
         pin_mut!(fs_notification_stream); // needed for iteration
 
+        // Send health status to confirm the mapper initialization is completed
+        send_health_status(&mut mapper.output, &mapper.mapper_name).await;
+
         loop {
             tokio::select! {
                 Some(message) =  mapper.input.next() => {
