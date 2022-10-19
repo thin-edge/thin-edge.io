@@ -253,5 +253,3 @@ sudo systemctl enable c8y-log-plugin
 ```
 If you add the ```c8y-log-plugin.toml``` into the ```c8y-configuration-plugin.toml``` you can to the administration from there.
 However, keep in mind that the daemon has to be restarted every time the ```/etc/tedge/c8y/c8y-log-plugin.toml``` is touched via the command line.
-
-
