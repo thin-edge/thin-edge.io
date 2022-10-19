@@ -615,7 +615,7 @@ fn create_inventory_fragments_message(
     let inventory_file_path = format!("{}/{INVENTORY_FRAGMENTS_FILE_LOCATION}", cfg_dir.display());
     let ops_msg = get_inventory_fragments(&inventory_file_path)?;
 
-    let topic = Topic::new_unchecked(&format!("{inventory_file_path}/{device_name}"));
+    let topic = Topic::new_unchecked(&format!("{INVENTORY_MANAGED_OBJECTS_TOPIC}/{device_name}"));
     Ok(Message::new(&topic, ops_msg.to_string()))
 }
 
