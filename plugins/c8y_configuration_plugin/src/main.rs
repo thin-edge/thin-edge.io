@@ -19,7 +19,7 @@ use c8y_api::smartrest::smartrest_deserializer::{
 };
 use c8y_api::smartrest::topic::C8yTopic;
 use clap::Parser;
-use mqtt_channel::{Connection, Message, PubChannel, SinkExt, StreamExt, TopicFilter};
+use mqtt_channel::{Connection, Message, MqttError, PubChannel, SinkExt, StreamExt, TopicFilter};
 
 use std::path::{Path, PathBuf};
 use tedge_config::{
@@ -36,7 +36,7 @@ use thin_edge_json::health::{health_check_topics, send_health_status};
 use topic::ConfigOperationResponseTopic;
 
 use tedge_utils::notify::FileEvent;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-configuration-plugin.toml";
 pub const DEFAULT_OPERATION_DIR_NAME: &str = "c8y/";
@@ -160,9 +160,7 @@ async fn run(
     let mut mqtt_client = create_mqtt_client(mqtt_port).await?;
 
     // Publish supported configuration types
-    let msg = plugin_config.to_supported_config_types_message()?;
-    debug!("Plugin init message: {:?}", msg);
-    mqtt_client.published.send(msg).await?;
+    publish_supported_config_types(&mut mqtt_client, &plugin_config).await?;
 
     // Get pending operations
     let msg = Message::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
@@ -179,7 +177,8 @@ async fn run(
         tokio::select! {
             message = mqtt_client.received.next() => {
             if let Some(message) = message {
-                process_mqtt_message(
+                let topic = message.topic.name.clone();
+                if let Err(err) = process_mqtt_message(
                     message,
                     &mut mqtt_client,
                     http_client,
@@ -188,7 +187,9 @@ async fn run(
                     tedge_device_id.as_str(),
                     config_dir
                 )
-                .await?;
+                .await {
+                    error!("Processing the message received on {topic} failed with {err}");
+                }
             } else {
                 // message is None and the connection has been closed
                 return Ok(())
@@ -271,8 +272,7 @@ async fn process_mqtt_message(
                     let config_file_path = config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
                     let plugin_config = PluginConfig::new(&config_file_path);
                     // Resend the supported config types
-                    let msg = plugin_config.to_supported_config_types_message()?;
-                    mqtt_client.published.send(msg).await?;
+                    publish_supported_config_types(mqtt_client, &plugin_config).await?;
                     Ok(())
                 }
                 _ => {
@@ -339,6 +339,15 @@ async fn process_mqtt_message(
 fn init(cfg_dir: PathBuf) -> Result<(), anyhow::Error> {
     info!("Creating supported operation files");
     create_operation_files(&cfg_dir)?;
+    Ok(())
+}
+
+async fn publish_supported_config_types(
+    mqtt_client: &mut Connection,
+    plugin_config: &PluginConfig,
+) -> Result<(), MqttError> {
+    let message = plugin_config.to_supported_config_types_message()?;
+    mqtt_client.published.send(message).await?;
     Ok(())
 }
 
