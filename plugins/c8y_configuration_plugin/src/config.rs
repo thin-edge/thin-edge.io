@@ -3,7 +3,7 @@ use crate::{
     DEFAULT_PLUGIN_CONFIG_TYPE,
 };
 use c8y_api::smartrest::topic::C8yTopic;
-use mqtt_channel::{Message, Topic};
+use mqtt_channel::{Message, MqttError, Topic};
 use serde::Deserialize;
 use std::borrow::Borrow;
 use std::collections::HashSet;
@@ -152,7 +152,7 @@ impl PluginConfig {
         self
     }
 
-    pub fn to_supported_config_types_message(&self) -> Result<Message, anyhow::Error> {
+    pub fn to_supported_config_types_message(&self) -> Result<Message, MqttError> {
         let topic = C8yTopic::SmartRestResponse.to_topic()?;
         Ok(Message::new(&topic, self.to_smartrest_payload()))
     }
@@ -160,7 +160,7 @@ impl PluginConfig {
     pub fn to_supported_config_types_message_for_child(
         &self,
         child_id: &str,
-    ) -> Result<Message, anyhow::Error> {
+    ) -> Result<Message, MqttError> {
         let topic_str = &format!("c8y/s/us/{child_id}");
         let topic = Topic::new(topic_str)?;
         Ok(Message::new(&topic, self.to_smartrest_payload()))
