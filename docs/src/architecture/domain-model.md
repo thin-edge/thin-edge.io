@@ -1,63 +1,15 @@
-# thin-edge Domain Model
+# thin-edge Domain Model (no device)
 
 The following section introduces the **thin-edge** domain model.
 
-The **thin-edge** domain model explains details of target domains **thin-edge** is primarily designed for.
-It identifies _entities_ and _aspects_ of those target domains, that are touch points for **thin-edge**.
-Additionally it introduces new _entities_ or _aspects_ to seamlessly fit **thin-edge** into those target domains.
+**thin-edge** is the glue between the **cloud** and **devices**. I.e. it interfaces on the one hand **devices** (especially resource constrained industrial **devices**), and connects on the other hand the **cloud**.
+The **cloud** could be some IoT Cloud Platform, as e.g. [Cumulocity](https://www.softwareag.cloud/site/product/cumulocity-iot.html), [Azure](https://azure.microsoft.com) or [AWS](https://aws.amazon.com); or an on-premise "IoT system".
 
-Finally the **thin-edge** domain model gives..
-  * _target domain experts_ a clear idea how to position **thin-edge** in their target domain
-  * _target domain experts_ **and** _thin-edge developers_ a common understanding and unique vocabulary for **thin-edge** and it's environment
+**thin-edge** has been designed with the assumption that the **device** is represented in the **IoT cloud** as **device twin**.
+The **device twin** in the IoT cloud is a logical representation of the **device**. As such, it stores the _state_ of the **device**.
+Here _state_ refers to e.g. **Telemetry Data** or **Device Management** details as _installed software versions_ or _configurations_.
 
-### Target Domains
-
-**thin-edge** is designed to facilitate IoT functionality to resource constrained **devices**.
-Therefor it interfaces **devices** with **clouds**, and focuses on both target domains as below:
-  1. Device Domain
-  2. IoT Cloud Domain
-
-Both domains are explained in next sections.
-
-
-## Device Domain
-
-The focus is on industrial OT **devices** or any other kind of embedded **devices**. It is not reduced to **devices** that are capable to install and run thin-edge, but includes also **devices** that need another _(gateway) device_ aside, that executes **thin-edge**.
-
-Usual **devices** are **PLCs** (**P**rogrammable **L**ogic **C**ontrollers), **IPCs** (**I**ndustrial **PC**s) or any kind of **SoC-based** or **Microcontroller-based** Embedded System. The figure below shows a simplified conceptual model of such a device.
-
-![Simple Device Model](images/simple-device-model.svg)
-
-<!--
-* TODO: add somehow "Such a **device** is most often a specialized hardware that has been ruggedized to operate in harsh electrical, thermic and mechanical industrial environments."
--->
-* The **Domain Application** is a program, that contains the domain specific process logic.
-  * On a **PLC** it's a _control application_, created by an _automation engineer_ in a domain specific graphical programming language (like "Ladder Diagram" or "Function block diagram")
-  * Or on a **SoC-based** or **Microcontroller-based** system it's an _application program_, created by an _embedded software engineer_ usually in C/C++
-* The **OS / Libs / Runtime** provide basic functionality to the **Domain Application**
-  <!-- TODO: add somehow "used to abtracts the hardware. But: on a microcontroler usually less abtraction, more hw dep on the domain app, and even no OS" -->
-* **Sensors** and **Actuators** enable the **device** to observe and control physical behaviour on the shopfloor or device's environment.
-  * can be integrated in the **device's** hardware,
-    or connected to the **device** via some **Fieldbus** (e.g. Modbus, CANopen, PROFINET, EtherCAT, ...) or
-    some **Local Interface** as USB, UART, SPI, I2C, ...
-  * can be simple peripherals as a light barrier, or a sensor for temperature or pressure;
-    or complex equipments as robotic arms or even other **devices**
-* **Inputs / Outputs** are the communication channels between the **Domain Application** and **Sensors** and **Actuators**
-  * drivers (as part of the **OS / Libs / Runtime** and/or the **Domain Application**) do expose all data from
-    **Sensors** and **Actuators** to the **device** as inputs or outputs
-  * also the **Domain Application** can expose data as input or output (e.g. own _signals_ or _states_)
-
-## IoT Cloud Domain
-
-Cloud end-points could be IoT Cloud Platforms, as e.g. [Cumulocity](https://www.softwareag.cloud/site/product/cumulocity-iot.html), [Azure](https://azure.microsoft.com) or [AWS](https://aws.amazon.com); or end-points for specific IoT tasks, as e.g. a time-series database to collect measurements.
-
-* Each **device** is represented in the IoT cloud by an individual **device twin**
-* All information / data or functionality the device provides to the cloud appears in context of it's **device twin**
-* The focus of **thin-edge** is on two IoT Cloud aspects:
-  - 1) **Telemetry Data Handling**
-  - 2) **Device Management**
-
-### Telemetry Data Handling
+### Telemetry Data
 
 **Telemetry data** are the measurements, events and alarms collected or raised by sensors, actuators or domain applications.
 
@@ -202,6 +154,41 @@ A **plugin** defines and implements a specific **contract** for all interactions
     * those information can be also provided to the cloud and other applications on the device site, on purpose
 
 TODO: consider containers here?
+
+
+# Appendix
+
+## Device Domain
+
+TODO: **thin-edge** is designed to facilitate IoT functionality to resource constrained **devices**. 
+      ... that section is to ...
+
+The focus is on industrial OT **devices** or any other kind of embedded **devices**. It is not reduced to **devices** that are capable to install and run thin-edge, but includes also **devices** that need another _(gateway) device_ aside, that executes **thin-edge**.
+
+Usual **devices** are **PLCs** (**P**rogrammable **L**ogic **C**ontrollers), **IPCs** (**I**ndustrial **PC**s) or any kind of **SoC-based** or **Microcontroller-based** Embedded System. The figure below shows a simplified conceptual model of such a device.
+
+![Simple Device Model](images/simple-device-model.svg)
+
+<!--
+* TODO: add somehow "Such a **device** is most often a specialized hardware that has been ruggedized to operate in harsh electrical, thermic and mechanical industrial environments."
+-->
+* The **Domain Application** is a program, that contains the domain specific process logic.
+  * On a **PLC** it's a _control application_, created by an _automation engineer_ in a domain specific graphical programming language (like "Ladder Diagram" or "Function block diagram")
+  * Or on a **SoC-based** or **Microcontroller-based** system it's an _application program_, created by an _embedded software engineer_ usually in C/C++
+* The **OS / Libs / Runtime** provide basic functionality to the **Domain Application**
+  <!-- TODO: add somehow "used to abtracts the hardware. But: on a microcontroler usually less abtraction, more hw dep on the domain app, and even no OS" -->
+* **Sensors** and **Actuators** enable the **device** to observe and control physical behaviour on the shopfloor or device's environment.
+  * can be integrated in the **device's** hardware,
+    or connected to the **device** via some **Fieldbus** (e.g. Modbus, CANopen, PROFINET, EtherCAT, ...) or
+    some **Local Interface** as USB, UART, SPI, I2C, ...
+  * can be simple peripherals as a light barrier, or a sensor for temperature or pressure;
+    or complex equipments as robotic arms or even other **devices**
+* **Inputs / Outputs** are the communication channels between the **Domain Application** and **Sensors** and **Actuators**
+  * drivers (as part of the **OS / Libs / Runtime** and/or the **Domain Application**) do expose all data from
+    **Sensors** and **Actuators** to the **device** as inputs or outputs
+  * also the **Domain Application** can expose data as input or output (e.g. own _signals_ or _states_)
+
+
 
 ---------------------------------------------
 Open Topics:
