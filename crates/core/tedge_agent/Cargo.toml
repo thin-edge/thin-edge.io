@@ -17,11 +17,9 @@ assets = [
     ["target/release/tedge_agent", "/usr/bin/tedge_agent", "755"],
 ]
 
-[package.metadata.deb.systemd-units]
-unit-scripts = "../../../configuration/init/systemd"
-enable = false
-start = false
-stop-on-upgrade = false
+# Contrary to the other daemons,
+# The `agent` does not use `systemd-units` of `cargo-deb`:
+# for OTA self-update one needs a fine-control over the deb options
 
 [dependencies]
 agent_interface = { path = "../agent_interface" }

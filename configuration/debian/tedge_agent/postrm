@@ -1,4 +1,5 @@
 #!/bin/sh
+
 set -e
 
 purge_agent_directory() {
@@ -42,4 +43,21 @@ case "$1" in
     ;;
 esac
 
-#DEBHELPER#
+if [ -d /run/systemd/system ]; then
+        systemctl --system daemon-reload >/dev/null || true
+fi
+
+if [ "$1" = "remove" ]; then
+        if [ -x "/usr/bin/deb-systemd-helper" ]; then
+                deb-systemd-helper mask tedge-agent.service >/dev/null || true
+        fi
+fi
+
+if [ "$1" = "purge" ]; then
+        if [ -x "/usr/bin/deb-systemd-helper" ]; then
+                deb-systemd-helper purge tedge-agent.service >/dev/null || true
+                deb-systemd-helper unmask tedge-agent.service >/dev/null || true
+        fi
+fi
+
+# Do not use DEBHELPER: for OTA self-update one needs a fine-control over the deb options
