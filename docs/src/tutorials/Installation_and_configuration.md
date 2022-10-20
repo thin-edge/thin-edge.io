@@ -20,7 +20,17 @@ $ sudo apt-get update && sudo apt-get upgrade
 
 Steps which needs to be taken
 
-[Step 1 Install thin-edge.io](#Step 1 Install thin-edge.io)
+[Step 1 Install thin-edge.io](#Step-1-Install-thin-edge.io)
+
+
+# Same-file anchors for Github
+
+Making an anchor to another heading in the same file as the anchor is straightforward.
+
+`[The header of this page](#same-file-anchors-for-github)`
+
+Will show as [The header of this page](#same-file-anchors-for-github).
+
 
 ## Step 1 Install thin-edge.io
 
