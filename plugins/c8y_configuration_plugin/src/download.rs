@@ -1,4 +1,6 @@
-use crate::{child_device::ConfigOperationRequest, config::FileEntry, DEFAULT_PLUGIN_CONFIG_FILE};
+use crate::{
+    child_device::ConfigOperationRequest, config::FileEntry, DEFAULT_PLUGIN_CONFIG_FILE_NAME,
+};
 use crate::{
     child_device::{ChildDeviceResponsePayload, ConfigOperationResponse},
     error::{ChildDeviceConfigManagementError, ConfigManagementError},
@@ -73,7 +75,7 @@ pub async fn handle_config_download_request_tedge_device(
     let target_config_type = smartrest_request.config_type.clone();
     let mut target_file_entry = FileEntry::default();
 
-    let config_file_path = config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE);
+    let config_file_path = config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
     let plugin_config = PluginConfig::new(&config_file_path);
     let download_result = {
         match plugin_config.get_file_entry_from_type(&target_config_type) {
