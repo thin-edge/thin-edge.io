@@ -1,8 +1,8 @@
 # Getting started with thin-edge.io on a Raspberry Pi 
 
-## Introduction
+In this tutorial the installation of thin-edge.io on a Raspberry Pi is described as well as the configuration of plugins for monitoring and managing things like configuration files, log files etc..
 
-In this tutorial the installation for thin-edge.io on a Raspberry Pi is described.
+## Introduction
 
 thin-edge.io is an open-source project initiated by Software AG and partners to provide a cloud-agnostic edge framework. It is much more generic than the device management agent, so it can connect to multiple IoT Platforms, and it allows flexible logic executed on the device. It is optimized for a very small footprint and high performance.
 
@@ -17,6 +17,10 @@ To follow this guide, you only need the following:
 ```
 $ sudo apt-get update && sudo apt-get upgrade
 ```
+
+Steps which needs to be taken
+
+[Step 1 Install thin-edge.io](#Step 1 Install thin-edge.io)
 
 ## Step 1 Install thin-edge.io
 
