@@ -17,8 +17,8 @@ use tedge_config::{
 };
 use tedge_utils::{
     file::{create_directory_with_user_group, create_file_with_user_group},
-    fs_notify::FileEvent,
-    notify::fs_notify_rx_stream,
+    notify::{fs_notify_stream, FileEvent},
+    paths::PathsError,
 };
 use thin_edge_json::health::{health_check_topics, send_health_status};
 use tracing::{error, info};
@@ -97,12 +97,11 @@ async fn run(
     let config_file_path = config_dir.join(config_file_name);
     handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
 
-    let fs_notification_stream = fs_notify_stream(&[(
+    let mut fs_notification_stream = fs_notify_stream(&[(
         config_dir,
         Some(config_file_name.to_string()),
         &[FileEvent::Modified, FileEvent::Deleted, FileEvent::Created],
     )])?;
-    pin_mut!(fs_notification_stream);
 
     loop {
         tokio::select! {
@@ -114,11 +113,13 @@ async fn run(
                     return Ok(())
                 }
             }
-            Some(Ok((_path, mask))) = fs_notification_stream.next() => {
+            Some((path, mask)) = fs_notification_stream.rx.recv() => {
                 match mask {
                     FileEvent::Created | FileEvent::Deleted | FileEvent::Modified => {
-                        plugin_config = read_log_config(&config_file_path);
-                        handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
+                        if path.file_name().ok_or_else(|| PathsError::ParentDirNotFound {path: path.as_os_str().into()})?.eq("c8y-log-plugin.toml") {
+                            plugin_config = read_log_config(&path);
+                            handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
+                        }
                     }
                 }
             }
