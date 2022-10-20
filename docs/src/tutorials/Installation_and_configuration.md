@@ -18,18 +18,15 @@ To follow this guide, you only need the following:
 $ sudo apt-get update && sudo apt-get upgrade
 ```
 
-Steps which needs to be taken
+Steps which needs to be taken:
 
 [Step 1 Install thin-edge.io](#Step-1-Install-thin-edge.io)
+[Step 2 Configure and Connect to IoT Cloud](#Step-2-Configure-and-Connect-to-IoT-Cloud)
+[Step 3 Sending Device Data](#Step-3-Sending-Device-Data)
+[Step 4 Monitor your device](#Step-4-Monitor-your-device)
+[Step 5 Manage configuration files](#Step-5-Manage-configuration-files)
+[Step 6 Manage Log-Files](#Step-6-Manage-Log-Files)
 
-
-# Same-file anchors for Github
-
-Making an anchor to another heading in the same file as the anchor is straightforward.
-
-`[The header of this page](#same-file-anchors-for-github)`
-
-Will show as [The header of this page](#same-file-anchors-for-github).
 
 
 ## Step 1 Install thin-edge.io
@@ -54,8 +51,6 @@ After a successful installation you can now use thin-edge.io via the CLI and use
 ### Tedge CLI
 
 In the previous step, the CLI tool is installed, which is a very powerful
-
-
 
 The usage is via:
 ```
