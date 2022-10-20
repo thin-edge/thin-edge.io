@@ -1,11 +1,11 @@
 # Getting started with thin-edge.io on a Raspberry Pi 
 
-After following this tutorial you will have an overview about the installation and configuration of thin-edge.io. As an example a Raspberrly Pi is used. This tutorial explains with small steps to reach the goal of sending data to a IoT cloud platform (in this case, Cumulocity IoT) and perform some additional device management tasks.
+After following this tutorial you will have an overview on the installation and configuration of thin-edge.io. As an example a Raspberry Pi is used. This tutorial explains with small steps to reach the goal of sending data to a IoT cloud platform (in this case, Cumulocity IoT) and perform some additional device management tasks.
 
 
 ## Introduction
 
-thin-edge.io is an open-source project initiated by Software AG and partners to provide a cloud-agnostic edge framework. It is much more generic than the device management agent, so it can connect to multiple IoT Platforms, and it allows flexible logic executed on the device. It is optimized for a very small footprint and high performance.
+thin-edge.io is an open-source project initiated by Software AG and partners to provide a cloud-agnostic edge framework. It is much more generic than the device management agent, so it can connect to multiple IoT cloud platforms, and it allows flexible logic executed on the device. It is optimized for a very small footprint and high performance.
 
 The Raspberry PI is a relativly simple and cheap device but powerfull. Therefore it is ideal for testing and try-outs and some production usecases.
 
@@ -67,6 +67,7 @@ The usage is via:
 tedge [OPTIONS] [SUBCOMMAND]
 ```
 and ```-h``` can be used to see the help for the latest subcommand.
+Here you can find an overview of the commands for the CLI tool.
 
 The CLI will be used to configure the thin-edge.io installation on the device in the next steps.
 
