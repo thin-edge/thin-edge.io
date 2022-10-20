@@ -1,6 +1,7 @@
 # Getting started with thin-edge.io on a Raspberry Pi 
 
-In this tutorial the installation of thin-edge.io on a Raspberry Pi is described as well as the configuration of plugins for monitoring and managing things like configuration files, log files etc..
+After following this tutorial you will have an overview about the installation and configuration of thin-edge.io. As an example a Raspberrly Pi is used. This tutorial explains with small steps to reach the goal of sending data to a IoT cloud platform (in this case, Cumulocity IoT) and perform some additional device management tasks.
+
 
 ## Introduction
 
@@ -9,6 +10,7 @@ thin-edge.io is an open-source project initiated by Software AG and partners to 
 The Raspberry PI is a relativly simple and cheap device but powerfull. Therefore it is ideal for testing and try-outs and some production usecases.
 
 ##  Prerequisite
+
 To follow this guide, you only need the following:
 - A Cumulocity Trial tenant, you can create one here. If you want to connect to another IoT Cloud platform, look here
 
@@ -18,7 +20,9 @@ To follow this guide, you only need the following:
 $ sudo apt-get update && sudo apt-get upgrade
 ```
 
-Steps which needs to be taken:
+## Steps
+
+This tutorial is devided in small steps. The first three steps are needed to install and connect to a IoT cloud platform. The last three are optional, but needed to get a good overview of the capabilities of thin-edge.io. 
 
 [Step 1 Install thin-edge.io](#Step-1-Install-thin-edge.io)
 
