@@ -10,20 +10,21 @@ description = "tedge_utils provide utilities for thin-edge.io components"
 [features]
 # No features on by default
 default = []
-logging = []
-fs-notify = ["inotify", "async-stream", "strum_macros", "try-traits"]
+logging = ["tracing", "tracing-subscriber"]
+fs-notify = ["inotify", "async-stream", "strum_macros", "try-traits", "notify"]
 
 [dependencies]
 async-stream = { version = "0.3", optional = true }
 futures = "0.3"
 inotify =  { git = "https://github.com/hannobraun/inotify-rs", branch = "master", optional = true }
+notify =  { version = "5.0", optional = true, default-features = false }
 nix = "0.24"
 strum_macros = { version = "0.24", optional = true }
 tempfile = "3.2"
 thiserror = "1.0"
-tokio = { version = "1.12", default_features = false, features = [ "fs", "io-util", "macros", "signal"] }
-tracing = { version = "0.1", features = [] }
-tracing-subscriber = { version = "0.3", features = [ "time" ] }
+tokio = { version = "1.12", default_features = false, features = [ "fs", "io-util", "macros", "signal", "sync", "time" ] }
+tracing = { version = "0.1", features = [], optional = true }
+tracing-subscriber = { version = "0.3", optional = true, features = [ "time" ] }
 try-traits = { version = "0.1", optional = true }
 users = "0.11.0"
 
