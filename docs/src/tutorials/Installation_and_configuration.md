@@ -105,7 +105,7 @@ We now are ready to connect RevPi with Cumulocity. This can be achieved via:
 sudo tedge connect c8y
 ```
 
-T
+When running this command you should see something similar like the following:
 
 
 ```shell
