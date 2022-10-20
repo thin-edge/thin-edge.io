@@ -1,0 +1,12 @@
+#!/bin/sh
+
+set -e
+
+# Stop the service only if systemctl is available
+if command -v systemctl >/dev/null; then
+    if systemctl is-active --quiet tedge-watchdog.service; then
+         systemctl stop tedge-watchdog.service
+    fi
+fi
+
+#DEBHELPER#
