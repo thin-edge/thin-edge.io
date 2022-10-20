@@ -104,7 +104,57 @@ We now are ready to connect RevPi with Cumulocity. This can be achieved via:
 ```
 sudo tedge connect c8y
 ```
-After the connect the device will be created on the platform side and can be found within the device list in the device management.
+
+T
+
+
+```shell
+$ sudo tedge connect c8y
+
+The system config file '/etc/tedge/system.toml' doesn't exist. Use '/bin/systemctl' as a service manager.
+
+Checking if systemd is available.
+
+Checking if configuration for requested bridge already exists.
+
+Validating the bridge certificates.
+
+Creating the device in Cumulocity cloud.
+
+Saving configuration for requested bridge.
+
+Restarting mosquitto service.
+
+Awaiting mosquitto to start. This may take up to 5 seconds.
+
+Enabling mosquitto service on reboots.
+
+Successfully created bridge connection!
+
+Sending packets to check connection. This may take up to 2 seconds.
+
+Connection check is successful.
+
+Checking if tedge-mapper is installed.
+
+Starting tedge-mapper-c8y service.
+
+Persisting tedge-mapper-c8y on reboot.
+
+tedge-mapper-c8y service successfully started and enabled!
+
+Enabling software management.
+
+Checking if tedge-agent is installed.
+
+Starting tedge-agent service.
+
+Persisting tedge-agent on reboot.
+
+tedge-agent service successfully started and enabled!
+```
+
+When the connection is established, the device will be created on the platform side and can be found within the device list in the device management.
 
 
 ## Step 3 Sending Device Data
