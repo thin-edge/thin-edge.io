@@ -21,11 +21,17 @@ $ sudo apt-get update && sudo apt-get upgrade
 Steps which needs to be taken:
 
 [Step 1 Install thin-edge.io](#Step-1-Install-thin-edge.io)
+
 [Step 2 Configure and Connect to IoT Cloud](#Step-2-Configure-and-Connect-to-IoT-Cloud)
+
 [Step 3 Sending Device Data](#Step-3-Sending-Device-Data)
+
 [Step 4 Monitor your device](#Step-4-Monitor-your-device)
+
 [Step 5 Manage configuration files](#Step-5-Manage-configuration-files)
+
 [Step 6 Manage Log-Files](#Step-6-Manage-Log-Files)
+
 
 
 
