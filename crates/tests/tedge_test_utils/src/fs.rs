@@ -51,7 +51,8 @@ impl TempTedgeDir {
         let path = root.join(&self.current_file_path).join(file_name);
 
         if !path.exists() {
-            let _file = fs::File::create(&path).unwrap();
+            let file = fs::File::create(&path).unwrap();
+            file.sync_all().unwrap();
         };
         TempTedgeFile { file_path: path }
     }
@@ -73,6 +74,7 @@ impl TempTedgeFile {
             .open(self.file_path)
             .unwrap();
         file.write_all(content.as_bytes()).unwrap();
+        file.sync_all().unwrap();
     }
 
     pub fn with_toml_content(self, content: toml::Value) {
@@ -83,6 +85,7 @@ impl TempTedgeFile {
             .unwrap();
         let file_content = content.to_string();
         file.write_all(file_content.as_bytes()).unwrap();
+        file.sync_all().unwrap();
     }
 
     pub fn delete(self) {
