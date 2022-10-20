@@ -16,6 +16,9 @@ assets = [
     ["target/release/c8y_configuration_plugin", "/usr/bin/c8y_configuration_plugin", "755"],
 ]
 
+# Required for DEBHELPER
+[package.metadata.deb.systemd-units]
+
 [dependencies]
 agent_interface = { path = "../../crates/core/agent_interface" }
 anyhow = "1.0"
