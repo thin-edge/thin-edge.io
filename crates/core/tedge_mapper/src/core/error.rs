@@ -29,7 +29,7 @@ pub enum MapperError {
     FromFlockfile(#[from] flockfile::FlockfileError),
 
     #[error(transparent)]
-    FromNotifyFs(#[from] tedge_utils::fs_notify::NotifyStreamError),
+    FromNotifyFs(#[from] tedge_utils::notify::NotifyStreamError),
 
     #[error(transparent)]
     FromStdIo(#[from] std::io::Error),

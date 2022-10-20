@@ -8,10 +8,7 @@ use mqtt_channel::{
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use tedge_utils::{
-    fs_notify::{FileEvent},
-    notify::fs_notify_rx_stream,
-};
+use tedge_utils::notify::{fs_notify_stream, FileEvent};
 use thin_edge_json::health::{health_check_topics, send_health_status};
 
 use tracing::{error, info, instrument, warn};
@@ -171,8 +168,7 @@ async fn process_messages(mapper: &mut Mapper, ops_dir: Option<&Path>) -> Result
             dir_to_watch.push(watch);
         }
 
-        let fs_notification_stream = fs_notify_stream(&dir_to_watch)?;
-        pin_mut!(fs_notification_stream); // needed for iteration
+        let mut fs_notification_stream = fs_notify_stream(&dir_to_watch)?;
 
         // Send health status to confirm the mapper initialization is completed
         send_health_status(&mut mapper.output, &mapper.mapper_name).await;
@@ -182,21 +178,14 @@ async fn process_messages(mapper: &mut Mapper, ops_dir: Option<&Path>) -> Result
                 Some(message) =  mapper.input.next() => {
                     mapper.process_message(message).await;
                 }
-                Some(event_or_error) = fs_notification_stream.next() => {
-                    match event_or_error {
-                        Ok((path, mask)) =>  {
-                            match  process_inotify_events(&path, mask) {
-                                Ok(Some(discovered_ops)) => {
-                                     let _ = mapper.output.send(mapper.converter.process_operation_update_message(discovered_ops)).await;
-                                }
-                                Ok(None) => {}
-                                Err(e) => {eprintln!("Processing inotify event failed due to {}", e);}
-                            }
+                Some((path, file_event)) = fs_notification_stream.rx.recv() => {
+                    match  process_inotify_events(&path, file_event) {
+                        Ok(Some(discovered_ops)) => {
+                             let _ = mapper.output.send(mapper.converter.process_operation_update_message(discovered_ops)).await;
                         }
-                        Err(error) => {
-                            eprintln!("Failed to extract event {}", error);
-                        }
-                    } // On error continue to process only mqtt messages.
+                        Ok(None) => {}
+                        Err(e) => {eprintln!("Processing inotify event failed due to {}", e);}
+                    }
                 }
             }
         }
