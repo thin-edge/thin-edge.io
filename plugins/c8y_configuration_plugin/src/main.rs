@@ -770,6 +770,77 @@ mod tests {
         Ok(())
     }
 
+    // If the child device sends successful response without uploading the file,
+    // the c8y_UploadConfigFile operation should fail
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[serial_test::serial]
+    async fn test_handle_config_upload_successful_response_ignored_without_file_upload(
+    ) -> anyhow::Result<()> {
+        let tedge_device_id = "tedge-device";
+        let child_device_id = "child-device";
+        let config_type = "config_type";
+        let test_config_path = "/some/test/config";
+        let tmp_dir = TempTedgeDir::new();
+
+        let broker = mqtt_tests::test_mqtt_broker();
+
+        let local_http_host = mockito::server_address().to_string();
+
+        //Mock the config file upload to Cumulocity
+        let mut c8y_http_client = MockC8YHttpProxy::new();
+
+        // Run the plugin's runtime logic in an async task
+        tokio::spawn(async move {
+            let _ = run(
+                tedge_device_id.into(),
+                broker.port,
+                &mut c8y_http_client,
+                &local_http_host,
+                tmp_dir.path().to_path_buf(),
+                tmp_dir.path(),
+                test_config_path,
+            )
+            .await;
+        });
+
+        let mut smartrest_messages = broker
+            .messages_published_on(format!("c8y/s/us/{child_device_id}").as_str())
+            .await;
+
+        // Mock the config file url, to be downloaded by this plugin, from the file transfer service
+        // as if the child device did not upload the file
+        let config_url_path =
+            format!("/tedge/file-transfer/{child_device_id}/config_snapshot/{config_type}");
+        let _config_snapshot_url_mock = mockito::mock("GET", config_url_path.as_str())
+            .with_body("File not found")
+            .with_status(404)
+            .create();
+
+        // Fake child device sending config_snapshot successful status TODO
+        broker
+            .publish(
+                &format!("tedge/{child_device_id}/commands/res/config_snapshot"),
+                &serde_json::to_string(&ChildDeviceResponsePayload {
+                    status: Some(OperationStatus::Successful),
+                    path: test_config_path.into(),
+                    config_type: config_type.into(),
+                    reason: None,
+                })
+                .unwrap(),
+            )
+            .await?;
+
+        // Assert the c8y_UploadConfigFile operation status mapping to SUCCESSFUL(503)
+        mqtt_tests::assert_received_all_expected(
+            &mut smartrest_messages,
+            TEST_TIMEOUT_MS,
+            &["502,c8y_UploadConfigFile"],
+        )
+        .await;
+
+        Ok(())
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     #[serial_test::serial]
     async fn test_handle_config_update_request_child_device() -> anyhow::Result<()> {
@@ -816,26 +887,13 @@ mod tests {
             .await;
 
         // Mock download endpoint for the plugin to download config file update from the cloud
-        let config_update_download_url_path = "/tede/file-transfer/config_update/file_a";
-        let _download_config_url_mock = mockito::mock("GET", config_update_download_url_path)
+        let config_update_cloud_url_path = "/some/cloud/url";
+        let _download_config_url_mock = mockito::mock("GET", config_update_cloud_url_path)
             .with_body_from_fn(|w| w.write_all(b"v2"))
             .with_status(200)
             .create();
         let local_http_host = mockito::server_url();
-        let config_update_download_url =
-            format!("{local_http_host}{config_update_download_url_path}");
-        dbg!(&config_update_download_url);
-        dbg!(&config_type);
-
-        // Mock upload endpoint for the plugin to upload the config file update to the file transfer service
-        let config_update_upload_url_path =
-            format!("/tedge/file-transfer/{child_device_id}/config_update/{config_type}");
-        //let config_update_upload_url_path =
-        //    format!("/tedge/file-transfer/{config_update_download_url_path}");
-        dbg!(&config_update_upload_url_path);
-        let _upload_config_url_mock = mockito::mock("PUT", config_update_upload_url_path.as_str())
-            .with_status(201)
-            .create();
+        let config_update_download_url = format!("{local_http_host}{config_update_cloud_url_path}");
 
         // Send a c8y_DownloadConfigFile request to the plugin
         broker
@@ -846,20 +904,95 @@ mod tests {
             )
             .await?;
 
-        let request = ChildDeviceRequestPayload {
+        let expected_request = ChildDeviceRequestPayload {
             url: format!(
                 "{local_http_host}/tedge/file-transfer/{child_device_id}/config_update/{config_type}"
             ),
             path: test_config_path.into(),
             config_type: Some(config_type.into()),
         };
-        let expected_request = serde_json::to_string(&request)?;
+        let expected_request = serde_json::to_string(&expected_request)?;
 
         // Assert the mapping from c8y_DownloadConfigFile request to tedge command
         mqtt_tests::assert_received_all_expected(
             &mut tedge_command_messages,
             TEST_TIMEOUT_MS,
             &[expected_request],
+        )
+        .await;
+
+        Ok(())
+    }
+
+    // Validate c8y_DownloadConfigFile operation in cloud failing if the config URL is broken
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[serial_test::serial]
+    async fn test_c8y_config_download_child_device_fail_on_broken_url() -> anyhow::Result<()> {
+        let tedge_device_id = "tedge-device";
+        let child_device_id = "child-device";
+        let config_type = "file_a";
+        let test_config_path = "/some/test/config";
+        let tmp_dir = TempTedgeDir::new();
+        tmp_dir
+            .dir("c8y")
+            .dir(child_device_id)
+            .file("c8y-configuration-plugin.toml")
+            .with_toml_content(toml::toml! {
+                files = [
+                    { path = test_config_path, type = "file_a" }
+                ]
+            });
+
+        let broker = mqtt_tests::test_mqtt_broker();
+        let local_http_host = mockito::server_address().to_string();
+        let mut c8y_http_client = MockC8YHttpProxy::new();
+        c8y_http_client
+            .expect_url_is_in_my_tenant_domain()
+            .with(predicate::always())
+            .return_once(|_path| false);
+
+        // Run the plugin's runtime logic in an async task
+        tokio::spawn(async move {
+            let _ = run(
+                tedge_device_id.into(),
+                broker.port,
+                &mut c8y_http_client,
+                local_http_host.as_str(),
+                tmp_dir.path().to_path_buf(),
+                tmp_dir.path(),
+                test_config_path,
+            )
+            .await;
+        });
+
+        let mut smartrest_messages = broker
+            .messages_published_on(format!("c8y/s/us/{child_device_id}").as_str())
+            .await;
+
+        // Mock download endpoint for the plugin which returns bad response
+        let config_update_download_url_path = "/some/cloud/url";
+        let _download_config_url_mock = mockito::mock("GET", config_update_download_url_path)
+            .with_status(404)
+            .with_body("Broken URL")
+            .create();
+        let local_http_host = mockito::server_url();
+        let config_update_download_url =
+            format!("{local_http_host}{config_update_download_url_path}");
+
+        // Send a c8y_DownloadConfigFile request to the plugin with broken URL
+        broker
+            .publish(
+                "c8y/s/ds",
+                format!("524,{child_device_id},{config_update_download_url},{config_type}")
+                    .as_str(),
+            )
+            .await?;
+
+        // Assert that the c8y_DownloadConfigFile operation is marked failed (SR 502)
+        mqtt_tests::assert_received_all_expected(
+            &mut smartrest_messages,
+            TEST_TIMEOUT_MS,
+            &["501,c8y_DownloadConfigFile", "502,c8y_DownloadConfigFile"],
         )
         .await;
 
@@ -900,12 +1033,6 @@ mod tests {
             )
             .await;
         });
-
-        // Mock the config file url, to be deleted by this plugin from the file transfer service
-        let config_url_path = format!("/tedge/{child_device_id}/config_update/{config_type}");
-        let _config_snapshot_url_mock = mockito::mock("DELETE", config_url_path.as_str())
-            .with_status(200)
-            .create();
 
         let mut smartrest_messages = broker
             .messages_published_on(format!("c8y/s/us/{child_device_id}").as_str())

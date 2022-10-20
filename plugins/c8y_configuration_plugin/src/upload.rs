@@ -189,13 +189,21 @@ pub async fn handle_child_device_config_snapshot_response(
     if let Some(operation_status) = payload.status {
         match operation_status {
             OperationStatus::Successful => {
-                Ok(handle_child_device_successful_config_snapshot_response(
+                match handle_child_device_successful_config_snapshot_response(
                     &config_response,
                     tmp_dir,
                     http_client,
                     local_http_host,
                 )
-                .await?)
+                .await
+                {
+                    Ok(message) => Ok(message),
+                    Err(err) => {
+                        let failed_status_payload =
+                            UploadConfigFileStatusMessage::status_failed(err.to_string())?;
+                        Ok(Message::new(&c8y_child_topic, failed_status_payload))
+                    }
+                }
             }
             OperationStatus::Failed => {
                 if let Some(error_message) = &payload.reason {

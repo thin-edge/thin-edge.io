@@ -15,6 +15,7 @@ use c8y_api::smartrest::smartrest_serializer::{
     SmartRestSetOperationToExecuting, SmartRestSetOperationToFailed,
     SmartRestSetOperationToSuccessful, TryIntoOperationStatusMessage,
 };
+use c8y_api::smartrest::topic::C8yTopic;
 use download::{Auth, DownloadInfo, Downloader};
 use mqtt_channel::{Connection, Message, SinkExt, Topic};
 
@@ -57,6 +58,7 @@ pub async fn handle_config_download_request(
             http_client,
             local_http_host,
             config_dir,
+            tmp_dir,
         )
         .await
     }
@@ -128,6 +130,7 @@ pub async fn handle_config_download_request_child_device(
     http_client: &mut impl C8YHttpProxy,
     local_http_host: &str,
     config_dir: &Path,
+    tmp_dir: PathBuf,
 ) -> Result<(), anyhow::Error> {
     let child_id = smartrest_request.device;
     let config_type = smartrest_request.config_type;
@@ -144,30 +147,48 @@ pub async fn handle_config_download_request_child_device(
         file_entry,
     };
 
-    let mut download_info = DownloadInfo::new(&smartrest_request.url);
-    // If the provided url is a c8y url, add auth
-    if http_client.url_is_in_my_tenant_domain(&smartrest_request.url) {
-        let token = http_client.get_jwt_token().await?;
-        download_info.auth = Some(Auth::new_bearer(&token.token()));
-    }
-
-    info!("Downloading config file update from Cumulocity url: {download_info:?}");
-    let config_file_name = config_type.as_str();
-
     let path_to = PathBuf::from(format!(
         "{FILE_TRANSFER_ROOT_PATH}/{}",
         config_management.http_file_repository_relative_path()
     ));
-    let temp_download_file_name = &format!(".tmp_{}", config_file_name);
-    let downloader = Downloader::new(temp_download_file_name, &None, FILE_TRANSFER_ROOT_PATH);
-    downloader.download(&download_info).await?;
-    downloader.rename(&path_to).await?;
 
-    let msg = Message::new(
-        &config_management.operation_request_topic(),
-        config_management.operation_request_payload(local_http_host)?,
-    );
-    mqtt_client.published.send(msg).await?;
+    if let Err(err) = download_config_file(
+        smartrest_request.url.as_str(),
+        path_to,
+        tmp_dir,
+        PermissionEntry::new(None, None, None), //no need to change ownership of downloaded file
+        http_client,
+    )
+    .await
+    {
+        // Fail the operation in the cloud if the file download itself fails
+        // by sending EXECUTING and FAILED responses back to back
+
+        let c8y_child_topic =
+            Topic::new_unchecked(&C8yTopic::ChildSmartRestResponse(child_id).to_string());
+
+        let executing_msg = Message::new(
+            &c8y_child_topic,
+            DownloadConfigFileStatusMessage::status_executing()?,
+        );
+        mqtt_client.published.send(executing_msg).await?;
+
+        let failure_reason = format!(
+            "Downloading the config file update from {} failed with {}",
+            smartrest_request.url, err
+        );
+        let failed_msg = Message::new(
+            &c8y_child_topic,
+            DownloadConfigFileStatusMessage::status_failed(failure_reason)?,
+        );
+        mqtt_client.published.send(failed_msg).await?;
+    } else {
+        let config_update_req_msg = Message::new(
+            &config_management.operation_request_topic(),
+            config_management.operation_request_payload(local_http_host)?,
+        );
+        mqtt_client.published.send(config_update_req_msg).await?;
+    }
 
     Ok(())
 }
@@ -184,11 +205,15 @@ pub fn handle_child_device_config_update_response(
     if let Some(operation_status) = child_device_payload.status {
         match operation_status {
             OperationStatus::Successful => {
+                // Cleanup the downloaded file after the operation completes
+                cleanup_downloaded_config_file(config_response);
                 let successful_status_payload =
                     DownloadConfigFileStatusMessage::status_successful(None)?;
                 Ok(Message::new(&c8y_child_topic, successful_status_payload))
             }
             OperationStatus::Failed => {
+                // Cleanup the downloaded file after the operation completes
+                cleanup_downloaded_config_file(config_response);
                 if let Some(error_message) = child_device_payload.reason {
                     let failed_status_payload =
                         DownloadConfigFileStatusMessage::status_failed(error_message)?;
@@ -213,6 +238,19 @@ pub fn handle_child_device_config_update_response(
     }
 }
 
+fn cleanup_downloaded_config_file(config_response: &ConfigOperationResponse) {
+    let config_file_path = format!(
+        "{FILE_TRANSFER_ROOT_PATH}/{}",
+        config_response.http_file_repository_relative_path()
+    );
+    if let Err(err) = fs::remove_file(&config_file_path) {
+        error!(
+            "Failed to remove config file file copy at {} with {}",
+            config_file_path, err
+        );
+    }
+}
+
 async fn download_config_file(
     download_url: &str,
     file_path: PathBuf,
@@ -222,10 +260,16 @@ async fn download_config_file(
 ) -> Result<(), anyhow::Error> {
     // Convert smartrest request to config download request struct
     let mut config_download_request =
-        ConfigDownloadRequest::try_new(download_url, file_path, tmp_dir, file_permissions)?;
+        ConfigDownloadRequest::try_new(download_url, file_path.clone(), tmp_dir, file_permissions)?;
 
-    // Confirm that the file has write access before any http request attempt
-    config_download_request.has_write_access()?;
+    if file_path.exists() {
+        // Confirm that the file has write access before any http request attempt
+        config_download_request.has_write_access()?;
+    } else if let Some(file_parent) = file_path.parent() {
+        if !file_parent.exists() {
+            fs::create_dir_all(file_parent)?;
+        }
+    }
 
     // If the provided url is c8y, add auth
     if http_client.url_is_in_my_tenant_domain(config_download_request.download_info.url()) {
@@ -310,6 +354,12 @@ impl ConfigDownloadRequest {
     fn move_file(&self) -> Result<(), ConfigManagementError> {
         let src = &self.tmp_dir.join(&self.file_name);
         let dest = &self.file_path;
+
+        if let Some(dest_dir) = dest.parent() {
+            if !dest_dir.exists() {
+                fs::create_dir_all(dest_dir)?;
+            }
+        }
 
         let original_permission_mode = match self.file_path.is_file() {
             true => {
