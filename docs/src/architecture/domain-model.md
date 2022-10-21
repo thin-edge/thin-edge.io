@@ -1,4 +1,4 @@
-# thin-edge Domain Model (no device)
+# thin-edge Domain Model
 
 The following section introduces the **thin-edge** domain model.
 
@@ -13,29 +13,39 @@ Here _state_ refers to e.g. **Telemetry Data** or **Device Management** details 
 
 **Telemetry data** are the measurements, events and alarms collected or raised by sensors, actuators or domain applications.
 
-  * **Measurement**, is a single value or set of values
-    * could be be a mix of values produced by one or more sensors and values calculated by the device's domain application
-    * values could be a mix of numbers, strings or booleans
+ * **Measurement**:
+    * is a single value or set of values, all taken at a single point in
+      * could be a mix of values coming from physical **Sensors**[^1] and the device's **Domain Application**[^1]
+      * could be a mix of numbers, strings or booleans
     * has one timestamp
-    * releates to one **Metric**
+    * releates to one **metric**
+    * **thin-edge** puts the measurement into the context of the corresponding **metric** and sends it to the cloud
   * **Metric**, is a time-series of measurements
-    * contains a _source device_
-    * contains a _type name_
-    * optionally contains _units_ for the **measurements**
+    * relates to a _source device_<br/>
+      TODO: could the source also be a _process_? (See [comment](https://github.com/thin-edge/thin-edge.io/pull/1195#discussion_r992207078))
+    * has a _type name_
+    * optionally holds _units_ for the **measurements**
   * TODO: Example for metric and it's measurements
   * **Command**, is a single value or set of values
     * is send from the cloud to one device, e.g. to
-      - stimulate an actuator (e.g. switching a relay)
-      - send a signal to the domain application
-      - set one or more set-points (e.g. upper/lower limits or threshold of a climate control)
+      - stimulate an actuator[^1] (e.g. switching a relay)
+      - send a signal to the domain application[^1]
+      - set one or more set-points[^1] (e.g. upper/lower limits or threshold of a climate control)
     * values could be a mix of numbers, strings or booleans
+    * **thin-edge** provides those values to the **domain application**[^1] and **protocol drivers**[^1]
   * **Event**, is a notification that something happened on the device's environment or software system
     * it's source could be
-      - a sensor that detected a door has beed closed
-      - a signal from the device's domain application
+      - a _sensor's[^1] value_ that detected a door has beed closed
+      - a signal from the device's domain application[^1]
       - a device's system notification that a user has started an ssh session
-    * has one timestamp given by the producer, or implicitly set as the current time of receiving at **thin-edge**
-  * **Alarm**, is similar to an event, but the _End User_ (an operator of the system) has to take action to resolve the alarm.
+    * has one timestamp
+    * the meaning of an event related _sensor[^1] value_ or _domain application's[^1] signal_ is very customer specific (could be a change from 0 to 1, a bit in a flag word, ...)
+    * a _custom specific sw component_ must know the meaning, and sends an event notification to the **thin-edge** whenever the value signals a raised event
+* **Alarm**, similar to **events**; but in addition: 
+    * the _End User_ (an operator of the system) has to take action to resolve the **alarm**
+    * also the _custom specific sw component_ can send a notification to **thin-edge** to clear an **alarm**  
+
+[^1]: more details see appendix [Device Domain](#device-domain)
 
 ### Device Management
 
@@ -69,30 +79,6 @@ Here _state_ refers to e.g. **Telemetry Data** or **Device Management** details 
 The figure below illustrates the device concept.
 
 ![Device Concept](images/device-concept.svg)
-
-## thin-edge data concept
-
-**thin-edge** provides APIs to easily connect device's **data points** to cloud's **telemetry data handling**.
-**thin-edge** never accesses device's **data points** directly.
-In any case there is one or more _custom specific sw component_ that interface **data points** and **thin-edge** APIs (e.g. the **domain application** and some kinds of **protocol drivers**).
-
-Those _custom specific sw components_ provide **data point** values to the **thin-edge** APIs as **measurements**, **commands**, **events** or **alarms**.
-
-  * **Measurements**:
-    * a **measurement** is represented with one or more **data point** values
-      and a reference to the corresponding **metric**
-    * the values of the **data points** reflect the measurement values
-    * **thin-edge** puts the measurement into the context of the corresponding metric and sends it to the cloud
-  * **Command**:
-    * a **command** is represented with one or more values received from the **cloud**
-    * **thin-edge** provides those values to the **domain application** and **protocol drivers** as **data point** values
-  * **Events**:
-    * an event is represented by a **data point**
-    * the meaning of an event related **data point** value is very customer specific (could be change from 0 to 1, a bit in a flag word, ...)
-    * a _custom specific sw component_ must know the meaning, and sends an event notification to the **thin-edge** API whenever the value signals a raised event
-  * **Alarms**:
-    * similar to **events**; but in addition, the _custom specific sw component_ can send a notification to **thin-edge** to clear an **alarm** 
-    * **thin-edge** raises or clears the alarm in the cloud
 
 ## thin-edge device management concept
 
@@ -160,8 +146,7 @@ TODO: consider containers here?
 
 ## Device Domain
 
-TODO: **thin-edge** is designed to facilitate IoT functionality to resource constrained **devices**. 
-      ... that section is to ...
+TODO: **thin-edge** is designed to facilitate IoT functionality to resource constrained **devices**.     ... that section is to ...
 
 The focus is on industrial OT **devices** or any other kind of embedded **devices**. It is not reduced to **devices** that are capable to install and run thin-edge, but includes also **devices** that need another _(gateway) device_ aside, that executes **thin-edge**.
 
@@ -187,6 +172,19 @@ Usual **devices** are **PLCs** (**P**rogrammable **L**ogic **C**ontrollers), **I
   * drivers (as part of the **OS / Libs / Runtime** and/or the **Domain Application**) do expose all data from
     **Sensors** and **Actuators** to the **device** as inputs or outputs
   * also the **Domain Application** can expose data as input or output (e.g. own _signals_ or _states_)
+
+TODO: add description of term "set points" to "device" section
+
+TODO: add description of term "protocol drivers" to "device" section
+
+TODO: following old snippet from form section 'thin-edge data concept' to be incorporated into device section, or somewhere else?
+
+      ----- SNIP -----
+      **thin-edge** never accesses device's **data points** directly.
+      In any case there is one or more _custom specific sw component_ that interface **data points** and **thin-edge** APIs (e.g. the **domain application** and some kinds of **protocol drivers**).
+      Those _custom specific sw components_ provide **data point** values to the **thin-edge** APIs as **measurements**, **commands**, **events** or **alarms**.
+      ----- SNIP -----
+
 
 
 
