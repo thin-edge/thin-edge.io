@@ -13,9 +13,9 @@ The Raspberry PI is a relatively simple and cheap device but powerful. Therefore
 ##  Prerequisite
 
 To follow this guide, you only need the following:
-- A Cumulocity Trial tenant, you can create one here. If you want to connect to another IoT Cloud platform, look here
+- A [Cumulocity]([https://www.arduino.cc/en/software](https://www.softwareag.cloud/site/product/cumulocity-iot.html#/)) Trial tenant. 
 
-- A Raspberry Pi (3 or 4) with Raspian installed, for other boards and OS'es have a look here
+- A Raspberry Pi (3 or 4) with Raspian installed, for other boards and OS'es have a look [here](https://link_to_overview_supported_devices)
 - Updated device:
 ```
 $ sudo apt-get update && sudo apt-get upgrade
@@ -33,9 +33,11 @@ This tutorial is divided into small steps. The first three steps are needed to i
 
 [Step 4 Monitor your device](#Step-4-Monitor-your-device)
 
-[Step 5 Manage configuration files](#Step-5-Manage-configuration-files)
+[Step 5 Add software management](#Step-5-Add-software-management)
 
-[Step 6 Manage Log-Files](#Step-6-Manage-Log-Files)
+[Step 6 Manage configuration files](#Step-5-Manage-configuration-files)
+
+[Step 7 Manage Log-Files](#Step-6-Manage-Log-Files)
 
 
 
@@ -55,9 +57,10 @@ This script will install the latest version of thin-edge.io with the following c
 - Command line Interface (CLI) tool
 - Tedge mapper
 
-If you want to manually install thin-edge.io or install another version, or upgrade the current version, please have a look here for more information.
+If you want to manually install thin-edge.io or install another version, or upgrade the current version, please have a look [here](link to manual installation tutorial for more information.
 
 After a successful installation, you can now use thin-edge.io via the CLI and use the tedge commands.
+
 
 ### Tedge CLI
 
@@ -68,7 +71,7 @@ The usage is as follows:
 tedge [OPTIONS] [SUBCOMMAND]
 ```
 and ```-h``` can be used to see the help for the latest subcommand.
-Here you can find an overview of the commands for the CLI tool.
+Here you can find an [overview of the commands for the CLI tool](https://thin-edge.github.io/thin-edge.io/html/references/references.html).
 
 The CLI will be used to configure the thin-edge.io installation on the device in the next steps.
 
@@ -98,6 +101,7 @@ The certificate is uploaded to the Cumulocity Tenant via:
 sudo tedge cert upload c8y --user {{YOUR_USERNAME}}
 ```
 If the password prompt appears, enter your password.
+
 
 ### Connect
 
@@ -160,7 +164,7 @@ When the connection is established, the device will be created on the platform s
 
 ## Step 3 Sending Device Data
 
-Once your device is configured and connected to an IoT cloud platform, you can start sending measurements, events or alarms. In the standard configuration, you can not connect externally to the mosquito broker and thus the messages have to be sent directly from the device itself. If you want to change that, you need to configure it according to here.
+Once your device is configured and connected to an IoT cloud platform, you can start sending measurements, events or alarms. In the standard configuration, you can not connect externally to the mosquito broker and thus the messages have to be sent directly from the device itself. If you want to change that, you need to configure it according to [here](link to configure MQTT).
 
 The tedge CLI allows you to send payloads via MQTT the following way:
 ```
@@ -254,7 +258,7 @@ tedge mqtt sub 'c8y/#'
 ```
 The monitoring data will appear in Cumulocity IoT on the device in the measurement section.
 
-## Step 4 Add software management
+## Step 5 Add software management
 
 Software management takes care of allowing installation and management of any type of software from the IoT cloud platform. Since the type is generic, any type of software can be managed. In thin-edge.io this can be extended with plugins. For every software type, a particular plugin is needed.
 
@@ -276,9 +280,9 @@ sudo tedge connect c8y
 ```
 
 
-How to develop your own plugins is described here.
+How to [develop your own plugins](https://thin-edge.github.io/thin-edge.io/html/tutorials/write-my-software-management-plugin.html) is described here.
 
-## Step 5 Manage configuration files
+## Step 6 Manage configuration files
 
 With thin-edge.io you can manage config files on a device by using the Cumulocity configuration management feature as a part of Device Management.
 
@@ -299,7 +303,7 @@ sudo systemctl enable c8y-configuration-plugin
 However, keep in mind that the daemon has to be restarted every time the ```/etc/tedge/c8y/c8y-configuration-plugin.toml``` is touched via the command line. If initially started however the ```c8y-configuration-plugin.toml``` can be managed from the UI directly.
 
 
-## Step 6 Manage Log-Files
+## Step 7 Manage Log-Files
 
 With thin-edge.io you can request log files from a device by using the Cumulocity log request feature as a part of Device Management.
 
