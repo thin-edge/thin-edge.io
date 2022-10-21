@@ -1,13 +1,14 @@
 # Getting started with thin-edge.io on a Raspberry Pi 
 
-After following this tutorial you will have an overview on the installation and configuration of thin-edge.io. As an example a Raspberry Pi is used. This tutorial explains with small steps to reach the goal of sending data to a IoT cloud platform (in this case, Cumulocity IoT) and perform some additional device management tasks.
+After following this tutorial you will have an overview of the installation and configuration of thin-edge.io. As an example, a Raspberry Pi is used. This tutorial explains in small steps to reach the goal of sending data to an IoT cloud platform (in this case, Cumulocity IoT) and performing some additional device management tasks.
 
 
 ## Introduction
 
 thin-edge.io is an open-source project initiated by Software AG and partners to provide a cloud-agnostic edge framework. It is much more generic than the device management agent, so it can connect to multiple IoT cloud platforms, and it allows flexible logic executed on the device. It is optimized for a very small footprint and high performance.
 
-The Raspberry PI is a relativly simple and cheap device but powerfull. Therefore it is ideal for testing and try-outs and some production usecases.
+The Raspberry PI is a relatively simple and cheap device but powerful. Therefore it is ideal for testing and try-outs and some production use cases.
+
 
 ##  Prerequisite
 
@@ -22,7 +23,7 @@ $ sudo apt-get update && sudo apt-get upgrade
 
 ## Steps
 
-This tutorial is devided in small steps. The first three steps are needed to install and connect to a IoT cloud platform. The last three are optional, but needed to get a good overview of the capabilities of thin-edge.io. 
+This tutorial is divided into small steps. The first three steps are needed to install and connect to an IoT cloud platform. The last three are optional but needed to get a good overview of the capabilities of thin-edge.io. 
 
 [Step 1 Install thin-edge.io](#Step-1-Install-thin-edge.io)
 
@@ -56,13 +57,13 @@ This script will install the latest version of thin-edge.io with the following c
 
 If you want to manually install thin-edge.io or install another version, or upgrade the current version, please have a look here for more information.
 
-After a successful installation you can now use thin-edge.io via the CLI and use the tedge commands.
+After a successful installation, you can now use thin-edge.io via the CLI and use the tedge commands.
 
 ### Tedge CLI
 
 In the previous step, the CLI tool is installed, which is a very powerful
 
-The usage is via:
+The usage is as follows:
 ```
 tedge [OPTIONS] [SUBCOMMAND]
 ```
@@ -73,24 +74,24 @@ The CLI will be used to configure the thin-edge.io installation on the device in
 
 ## Step 2 Configure and Connect to IoT Cloud
 
-In order to connect the device to the Cumulocity IoT Cloud it needs to be configured.
+To connect the device to the Cumulocity IoT Cloud it needs to be configured.
 The following configuration parameters are mandatory
 
    ``` C8Y URL```
 
-This url is needed in order to allow the upload of the certificate to the specific tenant and the registration of the device. In can be configured via:
+This URL is needed in order to allow the upload of the certificate to the specific tenant and the registration of the device. It can be configured via:
 ```
 sudo tedge config set c8y.url {{YOUR_C8Y_URL}}
 ```
 ### Certificate
 
-thin-edge.io connects via MQTT protocol using a X.509 certificate for authentication. To do so, a certificate must be trusted by Cumulocity. A certificate is trusted when it is added to the trusted certificates and is in activated state.
+thin-edge.io connects via MQTT protocol using a X.509 certificate for authentication. To do so, a certificate must be trusted by Cumulocity. A certificate is trusted when it is added to the trusted certificates and is in an activated state.
 
-First we need to create the device certificate locally (If you already have a device certificate uploaded directly via ui to Cumulocity you can skip that step).
+First, we need to create the device certificate locally (If you already have a device certificate uploaded directly via the UI to Cumulocity you can skip that step).
 ```
 sudo tedge cert create --device-id {{YOUR_UNIQUE_DEVICE_ID}}
 ```
-- The device id is a unique identifier e.g. MAC address that identifies a physical device clearly.
+- The device id is a unique identifier e.g. MAC address that identifies a physical device.
 
 The certificate is uploaded to the Cumulocity Tenant via:
 ```
@@ -159,9 +160,9 @@ When the connection is established, the device will be created on the platform s
 
 ## Step 3 Sending Device Data
 
-Once your device is configured and connected to an IoT cloud platform, you can start sending measurements, events or alarms. In the standard configuration you can not connect externally to the mosquito broker and thus the messages have to be send directly from the device itself. If you want to change that you need to configure according to here.
+Once your device is configured and connected to an IoT cloud platform, you can start sending measurements, events or alarms. In the standard configuration, you can not connect externally to the mosquito broker and thus the messages have to be sent directly from the device itself. If you want to change that, you need to configure it according to here.
 
-The tedge cli allows you to send payloads via mqtt the following way:
+The tedge CLI allows you to send payloads via MQTT the following way:
 ```
 tedge mqtt pub {{TOPIC}} {{PAYLOAD}}
 ```
@@ -171,7 +172,7 @@ thin-edge.io comes with a tedge-mapper daemon. This process collects the data fr
 
 Measurements within Cumulocity represent regularly acquired readings and statistics from sensors.
 
-A simple single-valued measurement like a temperature measurement, can be represented in Thin Edge JSON as follows:
+A simple single-valued measurement like a temperature measurement can be represented in Thin Edge JSON as follows:
 ```
 { "temperature": 25 }
 ```
@@ -208,7 +209,7 @@ tedge mqtt pub tedge/events/door '{"text": "A door was closed","time": "2022-06-
 
 With thin-edge.io device monitoring, you can collect metrics from the device and forward these device metrics to Cumulocity IoT.
 
-thin-edge.io uses the open source component ```collectd``` to collect the metrics from the device. thin-edge.io translates the ```collected``` metrics from their native format to the thin-edge.io JSON format and then into the cloud-vendor specific format.
+thin-edge.io uses the open source component ```collectd``` to collect the metrics from the device. thin-edge.io translates the ```collected``` metrics from their native format to the thin-edge.io JSON format and then into the cloud-vendor-specific format.
 
 Enabling monitoring on your device is a 3-steps process:
 
@@ -218,7 +219,7 @@ Enabling monitoring on your device is a 3-steps process:
 
 ### Install collectd
 
-Because thin-edge.io uses the MQTT plugin of collectd, installation of the Mosquitto client library (either libmosquitto1 or mosquitto-clients) is requierd.
+Because thin-edge.io uses the MQTT plugin of collectd, installation of the Mosquitto client library (either libmosquitto1 or mosquitto-clients) is required.
 ```
 sudo apt-get install libmosquitto1
 ```
@@ -228,7 +229,7 @@ sudo apt-get install collectd-core
 ```
 ### Configure collectd
 
-thin-edge.io provides a basic collectd configuration that can be used to collect cpu, memory and disk metrics.
+thin-edge.io provides a basic collectd configuration that can be used to collect CPU, memory and disk metrics.
 
 Simply copy the file to the main collectd configuration file and restart the daemon.
 ```
@@ -259,16 +260,16 @@ Software management takes care of allowing installation and management of any ty
 
 The following plugins do exist:
 
-- docker
-- apt
-- docker-compose
-- snap
+- Docker
+- APT
+- Docker-compose
+- Snap
 
 In order to use those plugins they need to be copied to:
 
 ```/etc/tedge/sm-plugins```
 
-The apt plugin is installed automatically. You can find the other plugins in the repository . Make sure to disconnect/reconnect the device after adding plugins via
+The APT plugin is installed automatically. You can find the other plugins in the repository. Make sure to disconnect/reconnect the device after adding plugins via:
 ```
 sudo tedge disconnect c8y
 sudo tedge connect c8y
@@ -295,7 +296,7 @@ The daemon is started/enabled via:
 sudo systemctl start c8y-configuration-plugin
 sudo systemctl enable c8y-configuration-plugin
 ```
-However, keep in mind that the daemon has to be restarted every time the ```/etc/tedge/c8y/c8y-configuration-plugin.toml``` is touched via the command line. If initially started however the ```c8y-configuration-plugin.toml``` can be managed from the ui directly.
+However, keep in mind that the daemon has to be restarted every time the ```/etc/tedge/c8y/c8y-configuration-plugin.toml``` is touched via the command line. If initially started however the ```c8y-configuration-plugin.toml``` can be managed from the UI directly.
 
 
 ## Step 6 Manage Log-Files
