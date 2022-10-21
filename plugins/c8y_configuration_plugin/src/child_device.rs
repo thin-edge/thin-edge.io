@@ -1,8 +1,17 @@
+use std::fs;
+
 use agent_interface::OperationStatus;
 use c8y_api::smartrest::topic::C8yTopic;
 use mqtt_channel::{Message, Topic};
+use tracing::error;
 
 use crate::{config::FileEntry, error::ChildDeviceConfigManagementError};
+
+// FIXME move this to tedge config
+#[cfg(test)]
+pub const FILE_TRANSFER_ROOT_PATH: &str = "/tmp";
+#[cfg(not(test))]
+pub const FILE_TRANSFER_ROOT_PATH: &str = "/var/tedge/file-transfer";
 
 /// A child device can receive the following operation requests:
 ///
@@ -82,6 +91,28 @@ impl ConfigOperationResponse {
             }
         }
     }
+
+    pub fn file_transfer_repository_full_path(&self) -> String {
+        format!(
+            "{FILE_TRANSFER_ROOT_PATH}/{}",
+            self.http_file_repository_relative_path()
+        )
+    }
+}
+
+pub fn try_cleanup_config_file_from_file_transfer_repositoy(
+    config_response: &ConfigOperationResponse,
+) {
+    let config_file_path = format!(
+        "{FILE_TRANSFER_ROOT_PATH}/{}",
+        config_response.http_file_repository_relative_path()
+    );
+    if let Err(err) = fs::remove_file(&config_file_path) {
+        error!(
+            "Failed to remove config file file copy at {} with {}",
+            config_file_path, err
+        );
+    }
 }
 
 /// Return child id from topic.
@@ -159,6 +190,13 @@ impl ConfigOperationRequest {
                 format!("{}/config_snapshot/{}", child_id, file_entry.config_type)
             }
         }
+    }
+
+    pub fn file_transfer_repository_full_path(&self) -> String {
+        format!(
+            "{FILE_TRANSFER_ROOT_PATH}/{}",
+            self.http_file_repository_relative_path()
+        )
     }
 
     /// The configuration management topic for a child device.

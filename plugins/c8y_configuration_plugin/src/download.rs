@@ -1,3 +1,4 @@
+use crate::child_device::try_cleanup_config_file_from_file_transfer_repositoy;
 use crate::{
     child_device::ConfigOperationRequest, config::FileEntry, DEFAULT_PLUGIN_CONFIG_FILE_NAME,
 };
@@ -25,12 +26,6 @@ use std::path::PathBuf;
 use std::{fs, path::Path};
 use tedge_utils::file::{get_filename, get_metadata, PermissionEntry};
 use tracing::{info, warn};
-
-// FIXME move this to tedge config
-#[cfg(test)]
-const FILE_TRANSFER_ROOT_PATH: &str = "/tmp";
-#[cfg(not(test))]
-const FILE_TRANSFER_ROOT_PATH: &str = "/var/tedge/file-transfer";
 
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_config_download_request(
@@ -147,14 +142,11 @@ pub async fn handle_config_download_request_child_device(
         file_entry,
     };
 
-    let path_to = PathBuf::from(format!(
-        "{FILE_TRANSFER_ROOT_PATH}/{}",
-        config_management.http_file_repository_relative_path()
-    ));
-
     if let Err(err) = download_config_file(
         smartrest_request.url.as_str(),
-        path_to,
+        config_management
+            .file_transfer_repository_full_path()
+            .into(),
         tmp_dir,
         PermissionEntry::new(None, None, None), //no need to change ownership of downloaded file
         http_client,
@@ -206,14 +198,14 @@ pub fn handle_child_device_config_update_response(
         match operation_status {
             OperationStatus::Successful => {
                 // Cleanup the downloaded file after the operation completes
-                cleanup_downloaded_config_file(config_response);
+                try_cleanup_config_file_from_file_transfer_repositoy(config_response);
                 let successful_status_payload =
                     DownloadConfigFileStatusMessage::status_successful(None)?;
                 Ok(Message::new(&c8y_child_topic, successful_status_payload))
             }
             OperationStatus::Failed => {
                 // Cleanup the downloaded file after the operation completes
-                cleanup_downloaded_config_file(config_response);
+                try_cleanup_config_file_from_file_transfer_repositoy(config_response);
                 if let Some(error_message) = child_device_payload.reason {
                     let failed_status_payload =
                         DownloadConfigFileStatusMessage::status_failed(error_message)?;
@@ -235,19 +227,6 @@ pub fn handle_child_device_config_update_response(
         Err(ChildDeviceConfigManagementError::EmptyOperationStatus(
             c8y_child_topic,
         ))
-    }
-}
-
-fn cleanup_downloaded_config_file(config_response: &ConfigOperationResponse) {
-    let config_file_path = format!(
-        "{FILE_TRANSFER_ROOT_PATH}/{}",
-        config_response.http_file_repository_relative_path()
-    );
-    if let Err(err) = fs::remove_file(&config_file_path) {
-        error!(
-            "Failed to remove config file file copy at {} with {}",
-            config_file_path, err
-        );
     }
 }
 

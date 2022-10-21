@@ -1,8 +1,11 @@
 use crate::{
-    child_device::{ConfigOperationRequest, ConfigOperationResponse},
+    child_device::{
+        try_cleanup_config_file_from_file_transfer_repositoy, ConfigOperationRequest,
+        ConfigOperationResponse,
+    },
     PluginConfig, DEFAULT_PLUGIN_CONFIG_FILE_NAME,
 };
-use agent_interface::{DownloadInfo, Downloader, OperationStatus};
+use agent_interface::OperationStatus;
 use anyhow::Result;
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::smartrest::error::SmartRestSerializerError;
@@ -16,11 +19,10 @@ use c8y_api::smartrest::{
 };
 
 use mqtt_channel::{Connection, Message, SinkExt, Topic};
-use reqwest::Client;
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
 
 use std::path::Path;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 pub struct UploadConfigFileStatusMessage {}
 
@@ -177,9 +179,7 @@ pub async fn handle_config_upload_request_child_device(
 
 pub async fn handle_child_device_config_snapshot_response(
     message: &Message,
-    tmp_dir: &Path,
     http_client: &mut impl C8YHttpProxy,
-    local_http_host: &str,
     config_dir: &Path,
 ) -> Result<Message, anyhow::Error> {
     let config_response = ConfigOperationResponse::try_from(message)?;
@@ -191,9 +191,7 @@ pub async fn handle_child_device_config_snapshot_response(
             OperationStatus::Successful => {
                 match handle_child_device_successful_config_snapshot_response(
                     &config_response,
-                    tmp_dir,
                     http_client,
-                    local_http_host,
                 )
                 .await
                 {
@@ -299,47 +297,28 @@ pub async fn handle_child_device_config_snapshot_response(
 
 pub async fn handle_child_device_successful_config_snapshot_response(
     config_response: &ConfigOperationResponse,
-    tmp_dir: &Path,
     http_client: &mut impl C8YHttpProxy,
-    local_http_host: &str,
 ) -> Result<Message, anyhow::Error> {
     let c8y_child_topic = Topic::new_unchecked(&config_response.get_child_topic());
 
-    let config_file_url = format!(
-        "http://{}/tedge/file-transfer/{}",
-        local_http_host,
-        config_response.http_file_repository_relative_path()
-    );
+    let uploaded_config_file_path = config_response.file_transfer_repository_full_path();
 
-    let url_data = DownloadInfo::new(config_file_url.as_str());
-    let downloader = Downloader::new(&config_response.get_config_type(), &None, tmp_dir);
-    info!("Downloading the config file snapshot uploaded by the child device from url: {config_file_url}");
-    downloader.download(&url_data).await?;
-
-    info!(
-        "Uploading the downloaded config file snapshot at {:?} to Cumulocity",
-        downloader.filename()
-    );
     let c8y_upload_event_url = http_client
         .upload_config_file(
-            downloader.filename(),
+            Path::new(&uploaded_config_file_path),
             &config_response.get_config_type(),
             Some(config_response.get_child_id()),
         )
         .await?;
 
-    info!("Marking the c8y_UploadConfigFile operation as successful with the Cumulocity URL for the uploaded file: {config_file_url}");
+    // Cleanup the child uploaded file after uploading it to cloud
+    try_cleanup_config_file_from_file_transfer_repositoy(config_response);
+
+    info!("Marking the c8y_UploadConfigFile operation as successful with the Cumulocity URL for the uploaded file: {c8y_upload_event_url}");
     let successful_status_payload =
         UploadConfigFileStatusMessage::status_successful(Some(c8y_upload_event_url))?;
     let message = Message::new(&c8y_child_topic, successful_status_payload);
 
-    debug!("Deleting the config file snapshot of the child device from file transfer service");
-    let _response = Client::new().delete(&config_file_url).send().await?;
-
-    debug!(
-        "Deleting the config file snapshot temporary copy downloaded from file transfer service"
-    );
-    downloader.cleanup().await?;
     Ok(message)
 }
 

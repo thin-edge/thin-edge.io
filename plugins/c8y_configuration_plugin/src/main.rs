@@ -246,14 +246,8 @@ async fn process_mqtt_message(
     }
     if config_snapshot_response.accept(&message) {
         info!("config snapshot response");
-        let outgoing_message = handle_child_device_config_snapshot_response(
-            &message,
-            &tmp_dir,
-            http_client,
-            local_http_host,
-            config_dir,
-        )
-        .await?;
+        let outgoing_message =
+            handle_child_device_config_snapshot_response(&message, http_client, config_dir).await?;
         mqtt_client.published.publish(outgoing_message).await?;
         return Ok(());
     }
@@ -411,7 +405,7 @@ mod tests {
 
     use super::*;
     use agent_interface::OperationStatus;
-    use c8y_api::http_proxy::MockC8YHttpProxy;
+    use c8y_api::{http_proxy::MockC8YHttpProxy, smartrest::error::SMCumulocityMapperError};
     use mockall::predicate;
     use std::time::Duration;
     use tedge_test_utils::fs::TempTedgeDir;
@@ -506,16 +500,6 @@ mod tests {
             });
 
         let server_address = mockito::server_address().to_string();
-
-        let request = ChildDeviceRequestPayload {
-            url: format!(
-                "http://{server_address}/tedge/file-transfer/{child_device_id}/config_snapshot/file_a"
-            ),
-            path: test_config_path.into(),
-            config_type: Some(config_type.into()),
-        };
-        let expected_request = serde_json::to_string(&request)?;
-
         let broker = mqtt_tests::test_mqtt_broker();
         let mut c8y_http_client = MockC8YHttpProxy::new();
 
@@ -525,7 +509,7 @@ mod tests {
                 tedge_device_id.into(),
                 broker.port,
                 &mut c8y_http_client,
-                &server_address,
+                &mockito::server_address().to_string(),
                 tmp_dir.path().to_path_buf(),
                 tmp_dir.path(),
             )
@@ -546,7 +530,16 @@ mod tests {
             )
             .await?;
 
-        // Assert the mapping from c8y_UploadConfigFile request to tedge command
+        let expected_request = ChildDeviceRequestPayload {
+            url: format!(
+                "http://{server_address}/tedge/file-transfer/{child_device_id}/config_snapshot/file_a"
+            ),
+            path: test_config_path.into(),
+            config_type: Some(config_type.into()),
+        };
+        let expected_request = serde_json::to_string(&expected_request)?;
+
+        // Assert the mapping from c8y_UploadConfigFile request to tedge config_snapshot command
         mqtt_tests::assert_received_all_expected(
             &mut tedge_command_messages,
             TEST_TIMEOUT_MS,
@@ -737,14 +730,6 @@ mod tests {
             .messages_published_on(format!("c8y/s/us/{child_device_id}").as_str())
             .await;
 
-        // Mock the config file url, to be downloaded by this plugin, from the file transfer service as if child device uploaded the file
-        let config_url_path =
-            format!("/tedge/file-transfer/{child_device_id}/config_snapshot/{config_type}");
-        let _config_snapshot_url_mock = mockito::mock("GET", config_url_path.as_str())
-            .with_body("v1")
-            .with_status(200)
-            .create();
-
         // Fake child device sending config_snapshot successful status TODO
         broker
             .publish(
@@ -774,7 +759,7 @@ mod tests {
     // the c8y_UploadConfigFile operation should fail
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     #[serial_test::serial]
-    async fn test_handle_config_upload_successful_response_ignored_without_file_upload(
+    async fn test_child_config_upload_successful_response_mapped_to_failed_without_uploaded_file(
     ) -> anyhow::Result<()> {
         let tedge_device_id = "tedge-device";
         let child_device_id = "child-device";
@@ -786,8 +771,20 @@ mod tests {
 
         let local_http_host = mockito::server_address().to_string();
 
-        //Mock the config file upload to Cumulocity
+        // Mock the config file upload to Cumulocity to fail with file not found
         let mut c8y_http_client = MockC8YHttpProxy::new();
+        c8y_http_client
+            .expect_upload_config_file()
+            .with(
+                predicate::always(),
+                predicate::eq(config_type),
+                predicate::eq(Some(child_device_id.to_string())),
+            )
+            .return_once(|_path, _type, _child_id| {
+                Err(SMCumulocityMapperError::ExecuteFailed(
+                    "File not found".to_string(),
+                ))
+            });
 
         // Run the plugin's runtime logic in an async task
         tokio::spawn(async move {
@@ -806,15 +803,6 @@ mod tests {
         let mut smartrest_messages = broker
             .messages_published_on(format!("c8y/s/us/{child_device_id}").as_str())
             .await;
-
-        // Mock the config file url, to be downloaded by this plugin, from the file transfer service
-        // as if the child device did not upload the file
-        let config_url_path =
-            format!("/tedge/file-transfer/{child_device_id}/config_snapshot/{config_type}");
-        let _config_snapshot_url_mock = mockito::mock("GET", config_url_path.as_str())
-            .with_body("File not found")
-            .with_status(404)
-            .create();
 
         // Fake child device sending config_snapshot successful status TODO
         broker
