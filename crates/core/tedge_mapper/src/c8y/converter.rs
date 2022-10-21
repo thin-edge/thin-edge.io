@@ -44,6 +44,7 @@ use super::{
     fragments::{C8yAgentFragment, C8yDeviceDataFragment},
     mapper::CumulocityMapper,
 };
+use c8y_api::smartrest::message_utils::get_smartrest_device_id;
 use c8y_api::smartrest::topic::{C8yTopic, MapperSubscribeTopic, SMARTREST_PUBLISH_TOPIC};
 
 const C8Y_CLOUD: &str = "c8y";
@@ -365,6 +366,7 @@ where
                         &self.operations,
                         &mut self.http_proxy,
                         &self.operation_logs,
+                        &self.device_name,
                     )
                     .await
                 }
@@ -467,10 +469,19 @@ async fn parse_c8y_topics(
     operations: &Operations,
     http_proxy: &mut impl C8YHttpProxy,
     operation_logs: &OperationLogs,
+    device_name: &str,
 ) -> Result<Vec<Message>, ConversionError> {
     let mut output: Vec<Message> = Vec::new();
     for smartrest_message in message.payload_str()?.split('\n') {
-        match process_smartrest(smartrest_message, operations, http_proxy, operation_logs).await {
+        match process_smartrest(
+            smartrest_message,
+            operations,
+            http_proxy,
+            operation_logs,
+            device_name,
+        )
+        .await
+        {
             Err(
                 ref err @ CumulocityMapperError::FromSmartRestDeserializer(
                     SmartRestDeserializerError::InvalidParameter { ref operation, .. },
@@ -749,12 +760,20 @@ async fn process_smartrest(
     operations: &Operations,
     http_proxy: &mut impl C8YHttpProxy,
     operation_logs: &OperationLogs,
+    device_name: &str,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
-    let message_id = get_smartrest_template_id(payload);
-    match message_id.as_str() {
-        "528" => forward_software_request(payload, http_proxy).await,
-        "510" => forward_restart_request(payload),
-        template => forward_operation_request(payload, template, operations, operation_logs).await,
+    match get_smartrest_device_id(payload) {
+        Some(device_id) if device_id == device_name => {
+            match get_smartrest_template_id(payload).as_str() {
+                "528" => forward_software_request(payload, http_proxy).await,
+                "510" => forward_restart_request(payload),
+                template => {
+                    forward_operation_request(payload, template, operations, operation_logs).await
+                }
+            }
+        }
+        // Ignore all operations for child devices as not yet supported
+        _ => Ok(vec![]),
     }
 }
 
