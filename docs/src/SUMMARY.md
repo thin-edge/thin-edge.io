@@ -17,6 +17,7 @@
     - [Manage my device software](./tutorials/software-management.md)
     - [Write my software management plugin](./tutorials/write-my-software-management-plugin.md)
     - [Supported Operations Management for Cumulocity IoT](./tutorials/supported_operations.md)
+    - [Build Thin Edge for a Yocto Linux distribution](tutorials/yocto-linux.md)
 
   - [How-to Guides](howto-guides/howto-guides.md)
     - [Installation](howto-guides/002_installation.md)
