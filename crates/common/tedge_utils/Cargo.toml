@@ -10,7 +10,7 @@ description = "tedge_utils provide utilities for thin-edge.io components"
 [features]
 # No features on by default
 default = []
-logging = ["tracing", "tracing-subscriber"]
+logging = []
 fs-notify = ["inotify", "async-stream", "strum_macros", "try-traits"]
 
 [dependencies]
@@ -22,8 +22,8 @@ strum_macros = { version = "0.24", optional = true }
 tempfile = "3.2"
 thiserror = "1.0"
 tokio = { version = "1.12", default_features = false, features = [ "fs", "io-util", "macros", "signal"] }
-tracing = { version = "0.1", features = [], optional = true }
-tracing-subscriber = { version = "0.3", optional = true, features = [ "time" ] }
+tracing = { version = "0.1", features = [] }
+tracing-subscriber = { version = "0.3", features = [ "time" ] }
 try-traits = { version = "0.1", optional = true }
 users = "0.11.0"
 
