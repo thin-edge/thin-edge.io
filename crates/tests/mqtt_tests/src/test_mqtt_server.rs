@@ -97,7 +97,7 @@ fn spawn_broker(port: u16) {
                         bytes.push(byte);
                     }
                     let payload = match std::str::from_utf8(bytes.as_ref()) {
-                        Ok(payload) => format!("{:.60}", payload),
+                        Ok(payload) => format!("{:.110}", payload),
                         Err(_) => format!("Non uft8 ({} bytes)", bytes.len()),
                     };
                     eprintln!(
