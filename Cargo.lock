@@ -1299,18 +1299,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "inotify"
-version = "0.10.0"
-source = "git+https://github.com/hannobraun/inotify-rs?branch=master#9ec50c55bb2b0db444f4602e1bd8c358b6df2615"
-dependencies = [
- "bitflags",
- "futures-core",
- "inotify-sys",
- "libc",
- "tokio",
-]
-
-[[package]]
 name = "inotify-sys"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1689,7 +1677,7 @@ checksum = "ed2c66da08abae1c024c01d635253e402341b4060a12e99b31c7594063bf490a"
 dependencies = [
  "bitflags",
  "filetime",
- "inotify 0.9.6",
+ "inotify",
  "kqueue",
  "libc",
  "mio",
@@ -2976,9 +2964,7 @@ name = "tedge_utils"
 version = "0.7.7"
 dependencies = [
  "assert_matches",
- "async-stream",
  "futures",
- "inotify 0.10.0",
  "maplit",
  "nix",
  "notify",

@@ -17,7 +17,8 @@ use tedge_config::{
 };
 use tedge_utils::{
     file::{create_directory_with_user_group, create_file_with_user_group},
-    fs_notify::{fs_notify_stream, pin_mut, FileEvent},
+    fs_notify::FileEvent,
+    notify::fs_notify_rx_stream,
 };
 use thin_edge_json::health::{health_check_topics, send_health_status};
 use tracing::{error, info};

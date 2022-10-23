@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    hash::Hash,
     path::{Path, PathBuf},
 };
 
@@ -160,7 +161,7 @@ mod notify_tests {
     use tedge_test_utils::fs::TempTedgeDir;
     use try_traits::default::TryDefault;
 
-    use crate::fs_notify::{FileEvent, NotifyStreamError};
+    use crate::notify::FileEvent;
 
     use super::{fs_notify_stream, NotifyStream};
 

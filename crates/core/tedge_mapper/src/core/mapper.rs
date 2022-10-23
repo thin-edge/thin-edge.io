@@ -8,7 +8,10 @@ use mqtt_channel::{
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use tedge_utils::fs_notify::{fs_notify_stream, pin_mut, FileEvent};
+use tedge_utils::{
+    fs_notify::{FileEvent},
+    notify::fs_notify_rx_stream,
+};
 use thin_edge_json::health::{health_check_topics, send_health_status};
 
 use tracing::{error, info, instrument, warn};
