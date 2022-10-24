@@ -9,7 +9,7 @@ use c8y_api::smartrest::topic::C8yTopic;
 use c8y_api::utils::bridge::{is_c8y_bridge_up, C8Y_BRIDGE_HEALTH_TOPIC};
 use clap::Parser;
 
-use c8y_api::smartrest::message_utils::get_smartrest_device_id;
+use c8y_api::smartrest::message::get_smartrest_device_id;
 use mqtt_channel::{Connection, Message, StreamExt, TopicFilter};
 use std::path::{Path, PathBuf};
 use tedge_config::{
@@ -109,7 +109,7 @@ async fn run(
         tokio::select! {
                 message = mqtt_client.received.next() => {
                 if let Some(message) = message {
-                    process_mqtt_message(message, &plugin_config, mqtt_client, http_client, &config_file_path, health_check_topics.clone(), &device_name).await?;
+                    process_mqtt_message(message, &plugin_config, mqtt_client, http_client, &config_file_path, health_check_topics.clone(), device_name).await?;
                 } else {
                     // message is None and the connection has been closed
                     return Ok(())
