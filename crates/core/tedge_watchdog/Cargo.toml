@@ -13,10 +13,14 @@ repository = "https://github.com/thin-edge/thin-edge.io"
 
 [package.metadata.deb]
 pre-depends = "tedge"
+maintainer-scripts = "../../../configuration/debian/tedge_watchdog"
 assets = [
     ["../../../configuration/init/systemd/tedge-watchdog.service", "/lib/systemd/system/tedge-watchdog.service", "644"],
     ["target/release/tedge_watchdog", "/usr/bin/tedge_watchdog", "755"],
 ]
+
+# Required for DEBHELPER
+[package.metadata.deb.systemd-units]
 
 [dependencies]
 anyhow = "1.0"

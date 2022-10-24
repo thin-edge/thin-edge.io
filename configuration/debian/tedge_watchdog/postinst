@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+#DEBHELPER#
+
+# Enable the service only if systemctl is available
+if command -v systemctl >/dev/null; then
+    systemctl start tedge-watchdog.service
+    systemctl enable tedge-watchdog.service
+fi
