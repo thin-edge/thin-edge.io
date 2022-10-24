@@ -894,6 +894,7 @@ pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>
 
 #[cfg(test)]
 mod tests {
+    use crate::c8y::tests::FakeC8YHttpProxy;
     use plugin_sm::operation_logs::OperationLogs;
     use tedge_test_utils::fs::TempTedgeDir;
 
@@ -913,5 +914,21 @@ mod tests {
         // a result between now and elapsed that is not 0 probably means that the operations are
         // blocking and that you probably removed a tokio::spawn handle (;
         assert_eq!(now.elapsed().as_secs(), 0);
+    }
+
+    #[tokio::test]
+    async fn ignore_operations_for_child_device() {
+        let output = super::process_smartrest(
+            "528,childId,software_a,version_a,url_a,install",
+            &Default::default(),
+            &mut FakeC8YHttpProxy {},
+            &OperationLogs {
+                log_dir: Default::default(),
+            },
+            "testDevice",
+        )
+        .await
+        .unwrap();
+        assert_eq!(output, vec![]);
     }
 }
