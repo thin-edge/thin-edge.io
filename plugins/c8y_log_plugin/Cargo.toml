@@ -17,6 +17,9 @@ assets = [
     ["target/release/c8y_log_plugin", "/usr/bin/c8y_log_plugin", "755"],
 ]
 
+# Required for DEBHELPER
+[package.metadata.deb.systemd-units]
+
 [dependencies]
 anyhow = "1.0"
 c8y_api = { path = "../../crates/core/c8y_api" }
