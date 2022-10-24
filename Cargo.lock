@@ -2879,6 +2879,7 @@ dependencies = [
  "agent_interface",
  "anyhow",
  "assert-json-diff",
+ "assert_cmd",
  "assert_matches",
  "async-trait",
  "batcher",

@@ -1314,12 +1314,17 @@ async fn mapper_updating_the_default_inventory_fragments() {
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     publish_a_fake_jwt_token(broker).await;
-    let expected_fragment_content = r#"{
-        "c8y_Agent": {
+
+    let version = env!("CARGO_PKG_VERSION");
+
+    let expected_fragment_content = &format!(
+        r#"{{
+        "c8y_Agent": {{
             "name": "thin-edge.io",
             "url": "https://thin-edge.io",
-            "version": "0.0.0"
-        }"#;
+            "version": "{version}"
+        }}"#
+    );
 
     mqtt_tests::assert_received_all_expected(
         &mut inventory_message,
@@ -1338,18 +1343,23 @@ async fn mapper_updating_the_inventory_fragments_from_file() {
     // Verify the fragment message that is published
     let broker = mqtt_tests::test_mqtt_broker();
     let cfg_dir = TempTedgeDir::new();
-    let content = r#"{
-        "c8y_Agent": {
+
+    let version = env!("CARGO_PKG_VERSION");
+
+    let content = &format!(
+        r#"{{
+        "c8y_Agent": {{
             "name": "thin-edge.io",
             "url": "https://thin-edge.io",
-            "version": "0.0.0"
-        },
-        "c8y_Firmware": {
+            "version": "{version}"
+        }},
+        "c8y_Firmware": {{
             "name": "raspberrypi-bootloader",
             "url": "31aab9856861b1a587e2094690c2f6e272712cb1",
             "version": "1.20140107-1"
-        }
-    }"#;
+        }}
+    }}"#
+    );
     create_inventroy_json_file_with_content(&cfg_dir, content);
     let mut inventory_message = broker
         .messages_published_on("c8y/inventory/managedObjects/update/test-device")
