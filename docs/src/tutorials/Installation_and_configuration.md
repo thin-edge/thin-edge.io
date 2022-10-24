@@ -1,11 +1,11 @@
-# Getting started with thin-edge.io on a Raspberry Pi 
+# Getting started with thin-edge.io on a Raspberry Pi
 
 After following this tutorial you will have an overview of the installation and configuration of thin-edge.io. As an example, a Raspberry Pi is used. This tutorial explains in small steps to reach the goal of sending data to an IoT cloud platform (in this case, Cumulocity IoT) and performing some additional device management tasks.
 
 
 ## Introduction
 
-thin-edge.io is an open-source project initiated by Software AG and partners to provide a cloud-agnostic edge framework. It is much more generic than the device management agent, so it can connect to multiple IoT cloud platforms, and it allows flexible logic executed on the device. It is optimized for a very small footprint and high performance.
+thin-edge.io is an open-source project to provide a cloud-agnostic edge framework. It is much more generic than the device management agent, so it can connect to multiple IoT cloud platforms, and it allows flexible logic executed on the device. It is optimized for a very small footprint and high performance.
 
 The Raspberry PI is a relatively simple and cheap device but powerful. Therefore it is ideal for testing and try-outs and some production use cases.
 
@@ -13,9 +13,9 @@ The Raspberry PI is a relatively simple and cheap device but powerful. Therefore
 ##  Prerequisite
 
 To follow this guide, you only need the following:
-- A [Cumulocity]([https://www.arduino.cc/en/software](https://www.softwareag.cloud/site/product/cumulocity-iot.html#/)) Trial tenant. 
+- A [Cumulocity](https://www.softwareag.cloud/site/product/cumulocity-iot.html) Trial tenant.
 
-- A Raspberry Pi (3 or 4) with Raspian installed, for other boards and OS'es have a look [here](https://link_to_overview_supported_devices)
+- A Raspberry Pi (3 or 4) with Raspian installed, for other boards and OS'es have a look [here](https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/supported-platforms.md)
 - Updated device:
 ```
 $ sudo apt-get update && sudo apt-get upgrade
@@ -23,7 +23,7 @@ $ sudo apt-get update && sudo apt-get upgrade
 
 ## Steps
 
-This tutorial is divided into small steps. The first three steps are needed to install and connect to an IoT cloud platform. The last three are optional but needed to get a good overview of the capabilities of thin-edge.io. 
+This tutorial is divided into small steps. The first three steps are needed to install and connect to an IoT cloud platform. The last three are optional but needed to get a good overview of the capabilities of thin-edge.io.
 
 [Step 1 Install thin-edge.io](#Step-1-Install-thin-edge.io)
 
@@ -57,7 +57,7 @@ This script will install the latest version of thin-edge.io with the following c
 - Command line Interface (CLI) tool
 - Tedge mapper
 
-If you want to manually install thin-edge.io or install another version, or upgrade the current version, please have a look [here](link to manual installation tutorial for more information.
+If you want to manually install thin-edge.io or install another version, or upgrade the current version, please have a look [here](https://thin-edge.github.io/thin-edge.io/html/howto-guides/002_installation.html#thin-edgeio-manual-installation) for more information.
 
 After a successful installation, you can now use thin-edge.io via the CLI and use the tedge commands.
 
@@ -71,6 +71,35 @@ The usage is as follows:
 tedge [OPTIONS] [SUBCOMMAND]
 ```
 and ```-h``` can be used to see the help for the latest subcommand.
+
+When running this command you should see something similar like the following:
+
+
+```shell
+$ sudo tedge -h
+
+tedge             
+tedge 0.7.7
+tedge is the cli tool for thin-edge.io
+
+USAGE:
+    tedge [OPTIONS] [SUBCOMMAND]
+
+OPTIONS:
+        --config-dir <CONFIG_DIR>    [default: /etc/tedge]
+    -h, --help                       Print help information
+        --init                       Initialize the tedge
+    -V, --version                    Print version information
+
+SUBCOMMANDS:
+    cert          Create and manage device certificate
+    config        Configure Thin Edge
+    connect       Connect to connector provider
+    disconnect    Remove bridge connection for a provider
+    help          Print this message or the help of the given subcommand(s)
+    mqtt          Publish a message on a topic and subscribe a topic
+```
+
 Here you can find an [overview of the commands for the CLI tool](https://thin-edge.github.io/thin-edge.io/html/references/references.html).
 
 The CLI will be used to configure the thin-edge.io installation on the device in the next steps.
@@ -108,55 +137,6 @@ If the password prompt appears, enter your password.
 We now are ready to connect RevPi with Cumulocity. This can be achieved via:
 ```
 sudo tedge connect c8y
-```
-
-When running this command you should see something similar like the following:
-
-
-```shell
-$ sudo tedge connect c8y
-
-The system config file '/etc/tedge/system.toml' doesn't exist. Use '/bin/systemctl' as a service manager.
-
-Checking if systemd is available.
-
-Checking if configuration for requested bridge already exists.
-
-Validating the bridge certificates.
-
-Creating the device in Cumulocity cloud.
-
-Saving configuration for requested bridge.
-
-Restarting mosquitto service.
-
-Awaiting mosquitto to start. This may take up to 5 seconds.
-
-Enabling mosquitto service on reboots.
-
-Successfully created bridge connection!
-
-Sending packets to check connection. This may take up to 2 seconds.
-
-Connection check is successful.
-
-Checking if tedge-mapper is installed.
-
-Starting tedge-mapper-c8y service.
-
-Persisting tedge-mapper-c8y on reboot.
-
-tedge-mapper-c8y service successfully started and enabled!
-
-Enabling software management.
-
-Checking if tedge-agent is installed.
-
-Starting tedge-agent service.
-
-Persisting tedge-agent on reboot.
-
-tedge-agent service successfully started and enabled!
 ```
 
 When the connection is established, the device will be created on the platform side and can be found within the device list in the device management.
@@ -300,8 +280,6 @@ The daemon is started/enabled via:
 sudo systemctl start c8y-configuration-plugin
 sudo systemctl enable c8y-configuration-plugin
 ```
-However, keep in mind that the daemon has to be restarted every time the ```/etc/tedge/c8y/c8y-configuration-plugin.toml``` is touched via the command line. If initially started however the ```c8y-configuration-plugin.toml``` can be managed from the UI directly.
-
 
 ## Step 7 Manage Log-Files
 
