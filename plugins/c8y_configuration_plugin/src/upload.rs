@@ -1,6 +1,6 @@
 use crate::{
     child_device::{ConfigOperationRequest, ConfigOperationResponse},
-    PluginConfig, DEFAULT_PLUGIN_CONFIG_FILE,
+    PluginConfig, DEFAULT_PLUGIN_CONFIG_FILE_NAME,
 };
 use agent_interface::{DownloadInfo, Downloader, OperationStatus};
 use anyhow::Result;
@@ -88,7 +88,7 @@ pub async fn handle_config_upload_request_tedge_device(
     let msg = UploadConfigFileStatusMessage::executing()?;
     mqtt_client.published.send(msg).await?;
 
-    let config_file_path = config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE);
+    let config_file_path = config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
     let plugin_config = PluginConfig::new(&config_file_path);
 
     let upload_result = {
@@ -448,7 +448,7 @@ mod tests {
                 &mut http_client,
                 "".into(),
                 tedge_device_id,
-                ttd.path(),
+                &ttd.path().join("c8y"),
             )
             .await;
         });

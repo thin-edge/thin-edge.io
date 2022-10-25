@@ -27,14 +27,19 @@ use tedge_config::{
     MqttExternalBindAddressSetting, MqttPortSetting, TEdgeConfig, TmpPathSetting,
     DEFAULT_TEDGE_CONFIG_PATH,
 };
-use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
+use tedge_utils::{
+    file::{create_directory_with_user_group, create_file_with_user_group},
+    notify::fs_notify_stream,
+    paths::PathsError,
+};
 use thin_edge_json::health::{health_check_topics, send_health_status};
 use topic::ConfigOperationResponseTopic;
 
-use tedge_utils::fs_notify::{fs_notify_stream, pin_mut, FileEvent};
+use tedge_utils::notify::FileEvent;
 use tracing::{debug, error, info};
 
-pub const DEFAULT_PLUGIN_CONFIG_FILE: &str = "c8y/c8y-configuration-plugin.toml";
+pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-configuration-plugin.toml";
+pub const DEFAULT_OPERATION_DIR_NAME: &str = "c8y/";
 pub const DEFAULT_PLUGIN_CONFIG_TYPE: &str = "c8y-configuration-plugin";
 pub const CONFIG_CHANGE_TOPIC: &str = "tedge/configuration_change";
 
@@ -136,7 +141,6 @@ async fn main() -> Result<(), anyhow::Error> {
         &local_http_host,
         tmp_dir,
         &config_plugin_opt.config_dir,
-        DEFAULT_PLUGIN_CONFIG_FILE,
     )
     .await
 }
@@ -148,10 +152,11 @@ async fn run(
     local_http_host: &str,
     tmp_dir: PathBuf,
     config_dir: &Path,
-    config_file: &str,
 ) -> Result<(), anyhow::Error> {
-    let config_file_path = config_dir.join(config_file);
-    let mut plugin_config = PluginConfig::new(&config_file_path);
+    // `config_file_path` expands to: /etc/tedge/c8y or `config-dir`/c8y
+    let config_file_path = config_dir.join(DEFAULT_OPERATION_DIR_NAME);
+    let mut plugin_config =
+        PluginConfig::new(&config_file_path.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME));
     let mut mqtt_client = create_mqtt_client(mqtt_port).await?;
 
     // Publish supported configuration types
@@ -163,12 +168,12 @@ async fn run(
     let msg = Message::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
     mqtt_client.published.send(msg).await?;
 
-    let fs_notification_stream = fs_notify_stream(&[(
-        config_dir,
-        Some(config_file.to_string()),
+    // we watch `config_file_path` for any change to a file named `DEFAULT_PLUGIN_CONFIG_FILE_NAME`
+    let mut fs_notification_stream = fs_notify_stream(&[(
+        &config_file_path,
+        Some(DEFAULT_PLUGIN_CONFIG_FILE_NAME.to_string()),
         &[FileEvent::Modified, FileEvent::Deleted, FileEvent::Created],
     )])?;
-    pin_mut!(fs_notification_stream);
 
     loop {
         tokio::select! {
@@ -189,12 +194,31 @@ async fn run(
                 return Ok(())
             }
         }
-        Some(Ok((path, mask))) = fs_notification_stream.next() => {
+        Some((path, mask)) = fs_notification_stream.rx.recv() => {
             match mask {
                 FileEvent::Modified | FileEvent::Deleted | FileEvent::Created => {
-                    plugin_config = PluginConfig::new(&path);
-                    let message = plugin_config.to_supported_config_types_message()?;
-                    mqtt_client.published.send(message).await?;
+                    match path.file_name() {
+                        Some(file_name) => {
+                            // this if check is done to avoid matching on temporary files created by editors
+                            if file_name.eq(DEFAULT_PLUGIN_CONFIG_FILE_NAME) {
+                                let parent_dir_name = path.parent().and_then(|dir| dir.file_name()).ok_or(PathsError::ParentDirNotFound {path: path.as_os_str().into()})?;
+
+                                if parent_dir_name.eq("c8y") {
+                                    plugin_config = PluginConfig::new(&path);
+                                    let message = plugin_config.to_supported_config_types_message()?;
+                                    mqtt_client.published.send(message).await?;
+                                } else {
+                                    // this is a child device
+                                    plugin_config = PluginConfig::new(&path);
+                                    let message = plugin_config.to_supported_config_types_message_for_child(&parent_dir_name.to_string_lossy())?;
+                                    mqtt_client.published.send(message).await?;
+
+                                }
+                            }
+
+                        },
+                        None => {}
+                    }
                 },
             }
         }}
@@ -244,7 +268,7 @@ async fn process_mqtt_message(
             let result = match message.topic.name.as_str() {
                 "tedge/configuration_change/c8y-configuration-plugin" => {
                     // Reload the plugin config file
-                    let config_file_path = config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE);
+                    let config_file_path = config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
                     let plugin_config = PluginConfig::new(&config_file_path);
                     // Resend the supported config types
                     let msg = plugin_config.to_supported_config_types_message()?;
@@ -389,7 +413,6 @@ mod tests {
     #[serial_test::serial]
     async fn test_handle_config_upload_request_tedge_device() -> anyhow::Result<()> {
         let tedge_device_id = "tedge-device";
-        let test_config_path = "/some/test/config";
         let test_config_type = "c8y-configuration-plugin";
         let ttd = TempTedgeDir::new();
         ttd.dir("c8y").file("c8y-configuration-plugin.toml");
@@ -419,7 +442,6 @@ mod tests {
                 "localhost",
                 ttd.path().to_path_buf(),
                 ttd.path(),
-                test_config_path,
             )
             .await;
         });
@@ -462,6 +484,7 @@ mod tests {
         let child_device_id = "child-aa";
         let config_type = "file_a";
         let test_config_path = "/some/test/config";
+
         let tmp_dir = TempTedgeDir::new();
         tmp_dir
             .dir("c8y")
@@ -496,7 +519,6 @@ mod tests {
                 &server_address,
                 tmp_dir.path().to_path_buf(),
                 tmp_dir.path(),
-                test_config_path,
             )
             .await;
         });
@@ -534,7 +556,16 @@ mod tests {
         let child_device_id = "child-device";
         let config_type = "config_type";
         let test_config_path = "/some/test/config";
-        let tmp_dir = TempTedgeDir::new();
+
+        let ttd = TempTedgeDir::new();
+        ttd.dir("c8y")
+            .dir(child_device_id)
+            .file("c8y-configuration-plugin.toml")
+            .with_toml_content(toml::toml! {
+                files = [
+                    { path = test_config_path, type = config_type }
+                ]
+            });
 
         let broker = mqtt_tests::test_mqtt_broker();
         let mut c8y_http_client = MockC8YHttpProxy::new();
@@ -546,9 +577,8 @@ mod tests {
                 broker.port,
                 &mut c8y_http_client,
                 &mockito::server_url(),
-                tmp_dir.path().to_path_buf(),
-                tmp_dir.path(),
-                test_config_path,
+                ttd.path().to_path_buf(),
+                ttd.path(),
             )
             .await;
         });
@@ -591,7 +621,16 @@ mod tests {
         let child_device_id = "child-device";
         let config_type = "config_type";
         let test_config_path = "/some/test/config";
-        let tmp_dir = TempTedgeDir::new();
+
+        let ttd = TempTedgeDir::new();
+        ttd.dir("c8y")
+            .dir(child_device_id)
+            .file("c8y-configuration-plugin.toml")
+            .with_toml_content(toml::toml! {
+                files = [
+                    { path = test_config_path, type = config_type }
+                ]
+            });
 
         let broker = mqtt_tests::test_mqtt_broker();
         let mut c8y_http_client = MockC8YHttpProxy::new();
@@ -603,9 +642,8 @@ mod tests {
                 broker.port,
                 &mut c8y_http_client,
                 &mockito::server_url(),
-                tmp_dir.path().to_path_buf(),
-                tmp_dir.path(),
-                test_config_path,
+                ttd.path().to_path_buf(),
+                ttd.path(),
             )
             .await;
         });
@@ -647,7 +685,16 @@ mod tests {
         let child_device_id = "child-device";
         let config_type = "config_type";
         let test_config_path = "/some/test/config";
-        let tmp_dir = TempTedgeDir::new();
+
+        let ttd = TempTedgeDir::new();
+        ttd.dir("c8y")
+            .dir(child_device_id)
+            .file("c8y-configuration-plugin.toml")
+            .with_toml_content(toml::toml! {
+                files = [
+                    { path = test_config_path, type = config_type }
+                ]
+            });
 
         let broker = mqtt_tests::test_mqtt_broker();
 
@@ -671,9 +718,8 @@ mod tests {
                 broker.port,
                 &mut c8y_http_client,
                 &local_http_host,
-                tmp_dir.path().to_path_buf(),
-                tmp_dir.path(),
-                test_config_path,
+                ttd.path().to_path_buf(),
+                ttd.path(),
             )
             .await;
         });
@@ -750,7 +796,6 @@ mod tests {
                 local_http_host.as_str(),
                 tmp_dir.path().to_path_buf(),
                 tmp_dir.path(),
-                test_config_path,
             )
             .await;
         });
@@ -820,7 +865,15 @@ mod tests {
         let child_device_id = "child-device";
         let config_type = "config_type";
         let test_config_path = "/some/test/config";
-        let tmp_dir = TempTedgeDir::new();
+
+        let ttd = TempTedgeDir::new();
+        ttd.dir("c8y")
+            .file("c8y-configuration-plugin.toml")
+            .with_toml_content(toml::toml! {
+                files = [
+                    { path = test_config_path, type = config_type }
+                ]
+            });
 
         let broker = mqtt_tests::test_mqtt_broker();
         let local_http_host = mockito::server_address().to_string();
@@ -833,9 +886,8 @@ mod tests {
                 broker.port,
                 &mut c8y_http_client,
                 &local_http_host,
-                tmp_dir.path().to_path_buf(),
-                tmp_dir.path(),
-                test_config_path,
+                ttd.path().to_path_buf(),
+                ttd.path(),
             )
             .await;
         });
@@ -879,7 +931,6 @@ mod tests {
     #[serial_test::serial]
     async fn test_handle_multiline_config_upload_requests() -> anyhow::Result<()> {
         let tedge_device_id = "tedge-device";
-        let test_config_path = "/some/test/config";
         let test_config_type = "c8y-configuration-plugin";
         let ttd = TempTedgeDir::new();
         ttd.dir("c8y").file("c8y-configuration-plugin.toml");
@@ -909,7 +960,6 @@ mod tests {
                 "localhost",
                 ttd.path().to_path_buf(),
                 ttd.path(),
-                test_config_path,
             )
             .await;
         });

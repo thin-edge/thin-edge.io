@@ -7,4 +7,4 @@ pub mod signals;
 pub mod logging;
 
 #[cfg(feature = "fs-notify")]
-pub mod fs_notify;
+pub mod notify;

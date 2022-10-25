@@ -32,6 +32,9 @@ pub enum FileError {
 
     #[error("Writing the content to the file failed: {file:?}.")]
     WriteContentFailed { file: String, from: std::io::Error },
+
+    #[error("Could not save the file {file:?} to disk. Received error: {from:?}.")]
+    FailedToSync { file: PathBuf, from: std::io::Error },
 }
 
 pub fn create_directory_with_user_group(
@@ -133,6 +136,10 @@ impl PermissionEntry {
         {
             Ok(mut f) => {
                 self.apply(file)?;
+                f.sync_all().map_err(|from| FileError::FailedToSync {
+                    file: file.to_path_buf(),
+                    from,
+                })?;
                 if let Some(default_content) = default_content {
                     f.write(default_content.as_bytes()).map_err(|e| {
                         FileError::WriteContentFailed {

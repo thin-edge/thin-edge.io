@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use c8y_api::smartrest::operations::is_valid_operation_name;
 use serde::{Deserialize, Serialize};
-use tedge_utils::fs_notify::FileEvent;
+use tedge_utils::notify::FileEvent;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum EventType {
