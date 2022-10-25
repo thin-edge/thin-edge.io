@@ -9,12 +9,12 @@ The **cloud** could be some IoT Cloud Platform, as e.g. [Cumulocity](https://www
 The **device twin** in the IoT cloud is a logical representation of the **device**. As such, it stores the _state_ of the **device**.
 Here _state_ refers to e.g. **Telemetry Data** or **Device Management** details as _installed software versions_ or _configurations_.
 
-### Telemetry Data
+## Telemetry Data
 
-**Telemetry data** are the measurements, events and alarms collected or raised by sensors, actuators or domain applications.
+**Telemetry data** are _measurements_, _events_ and _alarms_ collected or raised by sensors[^1], actuators[^1] or domain applications[^1].
 
  * **Measurement**:
-    * is a single value or set of values, all taken at a single point in
+    * is a single value or set of values, all taken at a single point in time
       * could be a mix of values coming from physical **Sensors**[^1] and the device's **Domain Application**[^1]
       * could be a mix of numbers, strings or booleans
     * has one timestamp
@@ -25,7 +25,6 @@ Here _state_ refers to e.g. **Telemetry Data** or **Device Management** details 
       TODO: could the source also be a _process_? (See [comment](https://github.com/thin-edge/thin-edge.io/pull/1195#discussion_r992207078))
     * has a _type name_
     * optionally holds _units_ for the **measurements**
-  * TODO: Example for metric and it's measurements
   * **Command**, is a single value or set of values
     * is send from the cloud to one device, e.g. to
       - stimulate an actuator[^1] (e.g. switching a relay)
@@ -45,24 +44,46 @@ Here _state_ refers to e.g. **Telemetry Data** or **Device Management** details 
     * the _End User_ (an operator of the system) has to take action to resolve the **alarm**
     * also the _custom specific sw component_ can send a notification to **thin-edge** to clear an **alarm**  
 
-[^1]: more details see appendix [Device Domain](#device-domain)
+## Device Management
 
-### Device Management
-
-**Device Management** provides to manage and monitor devices in the field from the cloud. That includes:
-  * **Software Management**, provides to manage the installed software packages on the device
-    * retrieve list and versions of installed packages
-    * install new or update existing software packages
-    * remove installed software packages
-  * **Configuration Management**, provides to view and change configurations on the device
-    * lists available configuration files
-    * transfer individual configuration files from device to cloud, and vice versa
-  * **Log Management**, provides to view log files from the device
-    * lists available log files
-    * transfer individual log files from device to cloud
-  * **Device Monitoring**, collects metrics from the device and forward these to the IoT cloud
+**Device Management** provides to manage and monitor devices in the field from the cloud.
+That includes:
+  * **Software Management**:
+    * provides to manage the installed software packages on the device, as
+      * retrieve list and versions of installed packages
+      * install new or update existing software packages
+      * remove installed software packages
+    * software packages are installable units on the device, as e.g.
+      * packages for a Linux Packages Managers (e.g. for Debian, ...)
+      * container images (e.g. for Docker)
+      * simple ZIP files
+      * custom specific files/packages
+    * software packages can carry:
+      * the **domain application**[^1]
+      * parts from **OS / Libs / Runtime**[^1], or the whole thing as one
+      * **thin-edge** it-self
+* **Configuration Management**:
+    * provides to view and change configurations on the device, as
+      * list available configurations
+      * transfer individual configurations from device to cloud, and vice versa
+    * a configuration is a text file or a binary file, as e.g.:
+      * configuration file(s) of the **domain application**[^1]
+      * configuration file(s) of **OS / Libs / Runtime**[^1]
+      * configuration file(s) of **thin-edge** it-self
+* **Log Management**:
+    * provides to view logs from the device
+      * lists available logs
+      * transfer individual logs from device to cloud
+    * a log is a text file, as e.g.:
+      * log file(s) of the **domain application**[^1]
+      * log file(s) of **OS / Libs / Runtime**[^1]
+      * log file(s) of **thin-edge** it-self
+* **Device Monitoring**:
+    * collects metrics (e.g. cpu, memory and disk metrics) from the device and forward these to the IoT cloud
     * allows monitors the health of devices
     * helps to troubleshoot when problems with the device are reported
+
+[^1]: more details see appendix [Device Domain](#device-domain)
 
 ## thin-edge device concept
 
@@ -81,27 +102,6 @@ The figure below illustrates the device concept.
 ![Device Concept](images/device-concept.svg)
 
 ## thin-edge device management concept
-
-**thin-edge** maps cloud's different **Device Management** functionalities to different resources of the device:
-  * **Software Management**:
-    * software packages are installable units on the device
-    * those units could be
-      * the **domain application**
-      * parts from **OS / Libs / Runtime**, or the whole thing as one
-    * examples for software packages are
-      * packages for a Linux Packages Managers (e.g. for Debian, ...)
-      * container images (e.g. for Docker)
-      * simple ZIP files
-      * custom specific files/packages
-  * **Configuration Management**:
-    * a configuration is a text file or a binary file
-    * those configurations could be
-      * configuration file(s) of the **domain application**
-      * one or more configurations file of **OS / Libs / Runtime**
-  * **Log Management**:
-    * a Log is a log file, could be
-      * log file(s) of the **domain application**
-      * one or more log files of **OS / Libs / Runtime**
 
 **thin-edge** realizes cloud's **Device Management** based on **plugins**.
   * a **plugin** encapsulates and manages access to _ressources_ and _services_ of the device, as e.g.
