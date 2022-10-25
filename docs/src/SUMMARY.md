@@ -7,7 +7,7 @@
 - [User Documentation](user_doc.md)
 
   - [Tutorials](tutorials/tutorials.md)
-
+    - [Getting started with thin-edge.io](./tutorials/getting-started.md)
     - [Connect my device to Cumulocity IoT](./tutorials/connect-c8y.md)
     - [Connect my device to Azure IoT](./tutorials/connect-azure.md)
     - [Send Thin Edge Json data](./tutorials/send-thin-edge-data.md)
