@@ -79,7 +79,7 @@ async fn mapper_publishes_software_update_request() {
     let cfg_dir = TempTedgeDir::new();
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
-    let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
+    let smartrest = r#"528,test-device,nodered,1.0.0::debian,,install"#;
     broker.publish("c8y/s/ds", smartrest).await.unwrap();
     publish_a_fake_jwt_token(broker).await;
 
@@ -241,7 +241,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
-    let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
+    let smartrest = r#"528,test-device,nodered,1.0.0::debian,,install"#;
     broker.publish("c8y/s/ds", smartrest).await.unwrap();
     publish_a_fake_jwt_token(broker).await;
 
@@ -325,7 +325,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     let cfg_dir = TempTedgeDir::new();
     let (_tmp_dir, _sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
     // Prepare and publish a c8y_SoftwareUpdate smartrest request on `c8y/s/ds` that contains a wrong action `remove`, that is not known by c8y.
-    let smartrest = r#"528,external_id,nodered,1.0.0::debian,,remove"#;
+    let smartrest = r#"528,test-device,nodered,1.0.0::debian,,remove"#;
     broker.publish("c8y/s/ds", smartrest).await.unwrap();
 
     // Expect a 501 (executing) followed by a 502 (failed)

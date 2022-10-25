@@ -9,11 +9,12 @@ use c8y_api::smartrest::topic::C8yTopic;
 use c8y_api::utils::bridge::{is_c8y_bridge_up, C8Y_BRIDGE_HEALTH_TOPIC};
 use clap::Parser;
 
+use c8y_api::smartrest::message::get_smartrest_device_id;
 use mqtt_channel::{Connection, Message, StreamExt, TopicFilter};
 use std::path::{Path, PathBuf};
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, LogPathSetting, MqttPortSetting, TEdgeConfig,
-    DEFAULT_TEDGE_CONFIG_PATH,
+    ConfigRepository, ConfigSettingAccessor, DeviceIdSetting, LogPathSetting, MqttPortSetting,
+    TEdgeConfig, DEFAULT_TEDGE_CONFIG_PATH,
 };
 use tedge_utils::{
     file::{create_directory_with_user_group, create_file_with_user_group},
@@ -88,6 +89,7 @@ pub async fn create_http_client(
 async fn run(
     config_dir: &Path,
     config_file_name: &str,
+    device_name: &str,
     mqtt_client: &mut Connection,
     http_client: &mut JwtAuthHttpProxy,
 ) -> Result<(), anyhow::Error> {
@@ -107,7 +109,7 @@ async fn run(
         tokio::select! {
                 message = mqtt_client.received.next() => {
                 if let Some(message) = message {
-                    process_mqtt_message(message, &plugin_config, mqtt_client, http_client, &config_file_path, health_check_topics.clone()).await?;
+                    process_mqtt_message(message, &plugin_config, mqtt_client, http_client, &config_file_path, health_check_topics.clone(), device_name).await?;
                 } else {
                     // message is None and the connection has been closed
                     return Ok(())
@@ -134,6 +136,7 @@ pub async fn process_mqtt_message(
     http_client: &mut JwtAuthHttpProxy,
     config_file: &Path,
     health_check_topics: TopicFilter,
+    device_name: &str,
 ) -> Result<(), anyhow::Error> {
     if is_c8y_bridge_up(&message) {
         let plugin_config = read_log_config(config_file);
@@ -145,20 +148,26 @@ pub async fn process_mqtt_message(
             let result = match smartrest_message.split(',').next().unwrap_or_default() {
                 "522" => {
                     info!("Log request received: {payload}");
-                    // retrieve smartrest object from payload
-                    let maybe_smartrest_obj =
-                        SmartRestLogRequest::from_smartrest(smartrest_message);
-                    if let Ok(smartrest_obj) = maybe_smartrest_obj {
-                        handle_logfile_request_operation(
-                            &smartrest_obj,
-                            plugin_config,
-                            mqtt_client,
-                            http_client,
-                        )
-                        .await
-                    } else {
-                        error!("Incorrect SmartREST payload: {}", smartrest_message);
-                        Ok(())
+                    match get_smartrest_device_id(payload) {
+                        Some(device_id) if device_id == device_name => {
+                            // retrieve smartrest object from payload
+                            let maybe_smartrest_obj =
+                                SmartRestLogRequest::from_smartrest(smartrest_message);
+                            if let Ok(smartrest_obj) = maybe_smartrest_obj {
+                                handle_logfile_request_operation(
+                                    &smartrest_obj,
+                                    plugin_config,
+                                    mqtt_client,
+                                    http_client,
+                                )
+                                .await
+                            } else {
+                                error!("Incorrect SmartREST payload: {}", smartrest_message);
+                                Ok(())
+                            }
+                        }
+                        // Ignore operation messages created for child devices
+                        _ => Ok(()),
                     }
                 }
                 _ => {
@@ -205,6 +214,8 @@ async fn main() -> Result<(), anyhow::Error> {
         return Ok(());
     }
 
+    let device_name = tedge_config.query(DeviceIdSetting)?;
+
     // Create required clients
     let mut mqtt_client = create_mqtt_client(&tedge_config).await?;
     let mut http_client = create_http_client(&tedge_config).await?;
@@ -212,6 +223,7 @@ async fn main() -> Result<(), anyhow::Error> {
     run(
         &config_dir,
         DEFAULT_PLUGIN_CONFIG_FILE,
+        &device_name,
         &mut mqtt_client,
         &mut http_client,
     )

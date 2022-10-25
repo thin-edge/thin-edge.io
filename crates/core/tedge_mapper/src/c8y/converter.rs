@@ -44,6 +44,7 @@ use super::{
     fragments::{C8yAgentFragment, C8yDeviceDataFragment},
     mapper::CumulocityMapper,
 };
+use c8y_api::smartrest::message::{get_smartrest_device_id, get_smartrest_template_id};
 use c8y_api::smartrest::topic::{C8yTopic, MapperSubscribeTopic, SMARTREST_PUBLISH_TOPIC};
 
 const C8Y_CLOUD: &str = "c8y";
@@ -365,6 +366,7 @@ where
                         &self.operations,
                         &mut self.http_proxy,
                         &self.operation_logs,
+                        &self.device_name,
                     )
                     .await
                 }
@@ -475,10 +477,19 @@ async fn parse_c8y_topics(
     operations: &Operations,
     http_proxy: &mut impl C8YHttpProxy,
     operation_logs: &OperationLogs,
+    device_name: &str,
 ) -> Result<Vec<Message>, ConversionError> {
     let mut output: Vec<Message> = Vec::new();
     for smartrest_message in message.payload_str()?.split('\n') {
-        match process_smartrest(smartrest_message, operations, http_proxy, operation_logs).await {
+        match process_smartrest(
+            smartrest_message,
+            operations,
+            http_proxy,
+            operation_logs,
+            device_name,
+        )
+        .await
+        {
             Err(
                 ref err @ CumulocityMapperError::FromSmartRestDeserializer(
                     SmartRestDeserializerError::InvalidParameter { ref operation, .. },
@@ -765,12 +776,20 @@ async fn process_smartrest(
     operations: &Operations,
     http_proxy: &mut impl C8YHttpProxy,
     operation_logs: &OperationLogs,
+    device_name: &str,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
-    let message_id = get_smartrest_template_id(payload);
-    match message_id.as_str() {
-        "528" => forward_software_request(payload, http_proxy).await,
-        "510" => forward_restart_request(payload),
-        template => forward_operation_request(payload, template, operations, operation_logs).await,
+    match get_smartrest_device_id(payload) {
+        Some(device_id) if device_id == device_name => {
+            match get_smartrest_template_id(payload).as_str() {
+                "528" => forward_software_request(payload, http_proxy).await,
+                "510" => forward_restart_request(payload),
+                template => {
+                    forward_operation_request(payload, template, operations, operation_logs).await
+                }
+            }
+        }
+        // Ignore all operations for child devices as not yet supported
+        _ => Ok(vec![]),
     }
 }
 
@@ -807,11 +826,6 @@ async fn forward_software_request(
         &topic,
         software_update_request.to_json().unwrap(),
     )])
-}
-
-fn get_smartrest_template_id(payload: &str) -> String {
-    //  unwrap is safe here as the first element of the split will be the whole payload if there is no comma.
-    payload.split(',').next().unwrap().to_string()
 }
 
 fn forward_restart_request(smartrest: &str) -> Result<Vec<Message>, CumulocityMapperError> {
@@ -896,9 +910,9 @@ pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>
 
 #[cfg(test)]
 mod tests {
+    use crate::c8y::tests::FakeC8YHttpProxy;
     use plugin_sm::operation_logs::OperationLogs;
     use tedge_test_utils::fs::TempTedgeDir;
-    use test_case::test_case;
 
     #[tokio::test]
     async fn test_execute_operation_is_not_blocked() {
@@ -918,18 +932,19 @@ mod tests {
         assert_eq!(now.elapsed().as_secs(), 0);
     }
 
-    #[test_case("cds50223434,uninstall-test"; "valid template")]
-    #[test_case("5000000000000000000000000000000000000000000000000,uninstall-test"; "long valid template")]
-    #[test_case(""; "empty payload")]
-    fn extract_smartrest_template(payload: &str) {
-        match super::get_smartrest_template_id(payload) {
-            id if id.contains("cds50223434")
-                || id.contains("5000000000000000000000000000000000000000000000000")
-                || id.contains("") =>
-            {
-                assert!(true)
-            }
-            _ => assert!(false),
-        }
+    #[tokio::test]
+    async fn ignore_operations_for_child_device() {
+        let output = super::process_smartrest(
+            "528,childId,software_a,version_a,url_a,install",
+            &Default::default(),
+            &mut FakeC8YHttpProxy {},
+            &OperationLogs {
+                log_dir: Default::default(),
+            },
+            "testDevice",
+        )
+        .await
+        .unwrap();
+        assert_eq!(output, vec![]);
     }
 }
