@@ -1,5 +1,5 @@
 use mqtt_channel::Topic;
-use std::path::PathBuf;
+use std::{io, path::PathBuf};
 use tedge_utils::file::FileError;
 
 #[derive(thiserror::Error, Debug)]
@@ -26,6 +26,9 @@ pub enum ConfigManagementError {
 
     #[error(transparent)]
     FromFile(#[from] FileError),
+
+    #[error(transparent)]
+    FromIoError(#[from] io::Error),
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -40,9 +43,15 @@ pub enum ChildDeviceConfigManagementError {
     #[error(transparent)]
     FromMqttError(#[from] mqtt_channel::MqttError),
 
-    #[error(transparent)]
+    #[error("Failed to parse response from child device with: {0}")]
     FromSerdeJsonError(#[from] serde_json::Error),
 
     #[error(transparent)]
     FromSmartRestSerializerError(#[from] c8y_api::smartrest::error::SmartRestSerializerError),
+
+    #[error(transparent)]
+    FromIoError(#[from] io::Error),
+
+    #[error(transparent)]
+    FromFile(#[from] FileError),
 }
