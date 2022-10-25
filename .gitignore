@@ -31,3 +31,4 @@ tests/PySys/**/Output/
 
 # Other files
 Makefile.toml
+.vimspector.json
