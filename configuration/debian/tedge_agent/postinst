@@ -2,17 +2,40 @@
 
 set -e
 
-# Reenable the services only if systemctl is available
+# Initialize the agent __only__ if not when agent is running
+# Indeed, during an OTA self-update, the previous version of the  `agent` is kept running
+# to monitor the installation of the new version up to completion.
 if command -v systemctl >/dev/null; then
-    ### Enable the sm services if the device is connected to c8y cloud
-    if [ -f "/etc/tedge/mosquitto-conf/c8y-bridge.conf" ]; then
-        # start and enable tedge-agent
+    if ! systemctl is-active --quiet tedge-agent; then
+         sudo -u tedge -- tedge_agent --init
+    fi
+fi
+
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+        if deb-systemd-helper debian-installed tedge-agent.service; then
+                # This will only remove masks created by d-s-h on package removal.
+                deb-systemd-helper unmask tedge-agent.service >/dev/null || true
+
+                if deb-systemd-helper --quiet was-enabled tedge-agent.service; then
+                        # Create new symlinks, if any.
+                        deb-systemd-helper enable tedge-agent.service >/dev/null || true
+                fi
+        fi
+
+        # Update the statefile to add new symlinks (if any), which need to be cleaned
+        # up on purge. Also remove old symlinks.
+        deb-systemd-helper update-state tedge-agent.service >/dev/null || true
+fi
+
+# Enable the services only if systemctl is available
+if command -v systemctl >/dev/null; then
+    # Start the agent __only__ if not already running.
+    # Indeed, during an OTA self-update, the previous version of the  `agent` is kept running
+    # to monitor the installation of the new version up to completion.
+    if [ -f "/etc/tedge/mosquitto-conf/c8y-bridge.conf" ] && ! systemctl is-active --quiet tedge-agent ; then
         systemctl start tedge-agent.service
         systemctl enable tedge-agent.service
     fi
 fi
 
-# Initialize the agent
-sudo -- tedge_agent --init
-
-#DEBHELPER#
+# Do not use DEBHELPER: for OTA self-update one needs a fine-control over the deb options
