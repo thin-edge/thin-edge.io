@@ -13,6 +13,17 @@ pub const FILE_TRANSFER_ROOT_PATH: &str = "/tmp";
 #[cfg(not(test))]
 pub const FILE_TRANSFER_ROOT_PATH: &str = "/var/tedge/file-transfer";
 
+pub trait ConfigOperationMessage {
+    fn http_file_repository_relative_path(&self) -> String;
+
+    fn file_transfer_repository_full_path(&self) -> String {
+        format!(
+            "{FILE_TRANSFER_ROOT_PATH}/{}",
+            self.http_file_repository_relative_path()
+        )
+    }
+}
+
 /// A child device can receive the following operation requests:
 ///
 /// - Update:
@@ -76,8 +87,10 @@ impl ConfigOperationResponse {
             ConfigOperationResponse::Snapshot { payload, .. } => payload,
         }
     }
+}
 
-    pub fn http_file_repository_relative_path(&self) -> String {
+impl ConfigOperationMessage for ConfigOperationResponse {
+    fn http_file_repository_relative_path(&self) -> String {
         match self {
             ConfigOperationResponse::Update {
                 child_id, payload, ..
@@ -91,22 +104,12 @@ impl ConfigOperationResponse {
             }
         }
     }
-
-    pub fn file_transfer_repository_full_path(&self) -> String {
-        format!(
-            "{FILE_TRANSFER_ROOT_PATH}/{}",
-            self.http_file_repository_relative_path()
-        )
-    }
 }
 
 pub fn try_cleanup_config_file_from_file_transfer_repositoy(
     config_response: &ConfigOperationResponse,
 ) {
-    let config_file_path = format!(
-        "{FILE_TRANSFER_ROOT_PATH}/{}",
-        config_response.http_file_repository_relative_path()
-    );
+    let config_file_path = config_response.file_transfer_repository_full_path();
     if let Err(err) = fs::remove_file(&config_file_path) {
         error!(
             "Failed to remove config file file copy at {} with {}",
@@ -130,7 +133,7 @@ pub fn get_child_id_from_child_topic(
 }
 
 /// Return operation name from topic.
-fn get_operation_name_from_child_topic(
+pub fn get_operation_name_from_child_topic(
     topic: &str,
 ) -> Result<String, ChildDeviceConfigManagementError> {
     let topic_split = topic.split('/');
@@ -173,32 +176,6 @@ impl TryFrom<&Message> for ConfigOperationResponse {
 }
 
 impl ConfigOperationRequest {
-    pub fn http_file_repository_relative_path(&self) -> String {
-        match self {
-            ConfigOperationRequest::Update {
-                child_id,
-                file_entry,
-                ..
-            } => {
-                format!("{}/config_update/{}", child_id, file_entry.config_type)
-            }
-            ConfigOperationRequest::Snapshot {
-                child_id,
-                file_entry,
-                ..
-            } => {
-                format!("{}/config_snapshot/{}", child_id, file_entry.config_type)
-            }
-        }
-    }
-
-    pub fn file_transfer_repository_full_path(&self) -> String {
-        format!(
-            "{FILE_TRANSFER_ROOT_PATH}/{}",
-            self.http_file_repository_relative_path()
-        )
-    }
-
     /// The configuration management topic for a child device.
     ///
     /// # Example:
@@ -249,6 +226,27 @@ impl ConfigOperationRequest {
                     config_type: Some(file_entry.config_type.clone()),
                 };
                 Ok(serde_json::to_string(&request)?)
+            }
+        }
+    }
+}
+
+impl ConfigOperationMessage for ConfigOperationRequest {
+    fn http_file_repository_relative_path(&self) -> String {
+        match self {
+            ConfigOperationRequest::Update {
+                child_id,
+                file_entry,
+                ..
+            } => {
+                format!("{}/config_update/{}", child_id, file_entry.config_type)
+            }
+            ConfigOperationRequest::Snapshot {
+                child_id,
+                file_entry,
+                ..
+            } => {
+                format!("{}/config_snapshot/{}", child_id, file_entry.config_type)
             }
         }
     }

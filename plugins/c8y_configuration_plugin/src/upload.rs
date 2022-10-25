@@ -1,8 +1,9 @@
 use crate::{
     child_device::{
-        try_cleanup_config_file_from_file_transfer_repositoy, ConfigOperationRequest,
-        ConfigOperationResponse,
+        try_cleanup_config_file_from_file_transfer_repositoy, ConfigOperationMessage,
+        ConfigOperationRequest, ConfigOperationResponse,
     },
+    error::{ChildDeviceConfigManagementError, ConfigManagementError},
     PluginConfig, DEFAULT_PLUGIN_CONFIG_FILE_NAME,
 };
 use agent_interface::OperationStatus;
@@ -22,7 +23,7 @@ use mqtt_channel::{Connection, Message, SinkExt, Topic};
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
 
 use std::path::Path;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 pub struct UploadConfigFileStatusMessage {}
 
@@ -160,29 +161,34 @@ pub async fn handle_config_upload_request_child_device(
         config_dir.display()
     )));
 
-    let file_entry = plugin_config.get_file_entry_from_type(&config_type)?;
+    match plugin_config.get_file_entry_from_type(&config_type) {
+        Ok(file_entry) => {
+            let config_management = ConfigOperationRequest::Snapshot {
+                child_id,
+                file_entry,
+            };
 
-    let config_management = ConfigOperationRequest::Snapshot {
-        child_id,
-        file_entry,
-    };
-
-    info!("Sending config snapshot request to child device");
-    let msg = Message::new(
-        &config_management.operation_request_topic(),
-        config_management.operation_request_payload(local_http_host)?,
-    );
-    mqtt_client.published.send(msg).await?;
+            info!("Sending config snapshot request to child device");
+            let msg = Message::new(
+                &config_management.operation_request_topic(),
+                config_management.operation_request_payload(local_http_host)?,
+            );
+            mqtt_client.published.send(msg).await?;
+        }
+        Err(ConfigManagementError::InvalidRequestedConfigType { config_type }) => {
+            warn!("Ignoring the config management request for unknown config type: {config_type}");
+        }
+        Err(err) => return Err(err)?,
+    }
 
     Ok(())
 }
 
 pub async fn handle_child_device_config_snapshot_response(
-    message: &Message,
+    config_response: &ConfigOperationResponse,
     http_client: &mut impl C8YHttpProxy,
     config_dir: &Path,
-) -> Result<Message, anyhow::Error> {
-    let config_response = ConfigOperationResponse::try_from(message)?;
+) -> Result<Message, ChildDeviceConfigManagementError> {
     let payload = config_response.get_payload();
     let c8y_child_topic = Topic::new_unchecked(&config_response.get_child_topic());
 
@@ -190,7 +196,7 @@ pub async fn handle_child_device_config_snapshot_response(
         match operation_status {
             OperationStatus::Successful => {
                 match handle_child_device_successful_config_snapshot_response(
-                    &config_response,
+                    config_response,
                     http_client,
                 )
                 .await

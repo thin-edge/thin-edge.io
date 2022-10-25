@@ -1,9 +1,11 @@
-use crate::child_device::try_cleanup_config_file_from_file_transfer_repositoy;
+use crate::child_device::{
+    try_cleanup_config_file_from_file_transfer_repositoy, ConfigOperationMessage,
+};
 use crate::{
     child_device::ConfigOperationRequest, config::FileEntry, DEFAULT_PLUGIN_CONFIG_FILE_NAME,
 };
 use crate::{
-    child_device::{ChildDeviceResponsePayload, ConfigOperationResponse},
+    child_device::ConfigOperationResponse,
     error::{ChildDeviceConfigManagementError, ConfigManagementError},
 };
 use crate::{error, PluginConfig, CONFIG_CHANGE_TOPIC};
@@ -135,64 +137,68 @@ pub async fn handle_config_download_request_child_device(
         config_dir.display()
     )));
 
-    let file_entry = plugin_config.get_file_entry_from_type(&config_type)?;
+    match plugin_config.get_file_entry_from_type(&config_type) {
+        Ok(file_entry) => {
+            let config_management = ConfigOperationRequest::Update {
+                child_id: child_id.clone(),
+                file_entry,
+            };
 
-    let config_management = ConfigOperationRequest::Update {
-        child_id: child_id.clone(),
-        file_entry,
-    };
+            if let Err(err) = download_config_file(
+                smartrest_request.url.as_str(),
+                config_management
+                    .file_transfer_repository_full_path()
+                    .into(),
+                tmp_dir,
+                PermissionEntry::new(None, None, None), //no need to change ownership of downloaded file
+                http_client,
+            )
+            .await
+            {
+                // Fail the operation in the cloud if the file download itself fails
+                // by sending EXECUTING and FAILED responses back to back
 
-    if let Err(err) = download_config_file(
-        smartrest_request.url.as_str(),
-        config_management
-            .file_transfer_repository_full_path()
-            .into(),
-        tmp_dir,
-        PermissionEntry::new(None, None, None), //no need to change ownership of downloaded file
-        http_client,
-    )
-    .await
-    {
-        // Fail the operation in the cloud if the file download itself fails
-        // by sending EXECUTING and FAILED responses back to back
+                let c8y_child_topic =
+                    Topic::new_unchecked(&C8yTopic::ChildSmartRestResponse(child_id).to_string());
 
-        let c8y_child_topic =
-            Topic::new_unchecked(&C8yTopic::ChildSmartRestResponse(child_id).to_string());
+                let executing_msg = Message::new(
+                    &c8y_child_topic,
+                    DownloadConfigFileStatusMessage::status_executing()?,
+                );
+                mqtt_client.published.send(executing_msg).await?;
 
-        let executing_msg = Message::new(
-            &c8y_child_topic,
-            DownloadConfigFileStatusMessage::status_executing()?,
-        );
-        mqtt_client.published.send(executing_msg).await?;
-
-        let failure_reason = format!(
-            "Downloading the config file update from {} failed with {}",
-            smartrest_request.url, err
-        );
-        let failed_msg = Message::new(
-            &c8y_child_topic,
-            DownloadConfigFileStatusMessage::status_failed(failure_reason)?,
-        );
-        mqtt_client.published.send(failed_msg).await?;
-    } else {
-        let config_update_req_msg = Message::new(
-            &config_management.operation_request_topic(),
-            config_management.operation_request_payload(local_http_host)?,
-        );
-        mqtt_client.published.send(config_update_req_msg).await?;
+                let failure_reason = format!(
+                    "Downloading the config file update from {} failed with {}",
+                    smartrest_request.url, err
+                );
+                let failed_msg = Message::new(
+                    &c8y_child_topic,
+                    DownloadConfigFileStatusMessage::status_failed(failure_reason)?,
+                );
+                mqtt_client.published.send(failed_msg).await?;
+            } else {
+                let config_update_req_msg = Message::new(
+                    &config_management.operation_request_topic(),
+                    config_management.operation_request_payload(local_http_host)?,
+                );
+                mqtt_client.published.send(config_update_req_msg).await?;
+            }
+        }
+        Err(ConfigManagementError::InvalidRequestedConfigType { config_type }) => {
+            warn!("Ignoring the config operation request for unknown config type: {config_type}");
+        }
+        Err(err) => return Err(err)?,
     }
 
     Ok(())
 }
 
 pub fn handle_child_device_config_update_response(
-    message: &Message,
     config_response: &ConfigOperationResponse,
 ) -> Result<Message, ChildDeviceConfigManagementError> {
     let c8y_child_topic = Topic::new_unchecked(&config_response.get_child_topic());
 
-    let child_device_payload: ChildDeviceResponsePayload =
-        serde_json::from_str(message.payload_str()?)?;
+    let child_device_payload = config_response.get_payload();
 
     if let Some(operation_status) = child_device_payload.status {
         match operation_status {
@@ -206,9 +212,9 @@ pub fn handle_child_device_config_update_response(
             OperationStatus::Failed => {
                 // Cleanup the downloaded file after the operation completes
                 try_cleanup_config_file_from_file_transfer_repositoy(config_response);
-                if let Some(error_message) = child_device_payload.reason {
+                if let Some(error_message) = &child_device_payload.reason {
                     let failed_status_payload =
-                        DownloadConfigFileStatusMessage::status_failed(error_message)?;
+                        DownloadConfigFileStatusMessage::status_failed(error_message.clone())?;
                     Ok(Message::new(&c8y_child_topic, failed_status_payload))
                 } else {
                     let default_error_message =

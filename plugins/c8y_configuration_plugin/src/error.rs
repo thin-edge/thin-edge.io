@@ -43,7 +43,7 @@ pub enum ChildDeviceConfigManagementError {
     #[error(transparent)]
     FromMqttError(#[from] mqtt_channel::MqttError),
 
-    #[error(transparent)]
+    #[error("Failed to parse response from child device with: {0}")]
     FromSerdeJsonError(#[from] serde_json::Error),
 
     #[error(transparent)]
@@ -51,4 +51,7 @@ pub enum ChildDeviceConfigManagementError {
 
     #[error(transparent)]
     FromIoError(#[from] io::Error),
+
+    #[error(transparent)]
+    FromFile(#[from] FileError),
 }

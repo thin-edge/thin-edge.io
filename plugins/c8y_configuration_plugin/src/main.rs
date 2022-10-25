@@ -2,13 +2,17 @@ mod child_device;
 mod config;
 mod download;
 mod error;
+mod operation;
 mod topic;
 mod upload;
 
 use crate::upload::handle_config_upload_request;
 use crate::{
     child_device::ConfigOperationResponse,
-    download::{handle_child_device_config_update_response, handle_config_download_request},
+    download::{
+        handle_child_device_config_update_response, handle_config_download_request,
+        DownloadConfigFileStatusMessage,
+    },
 };
 use crate::{config::PluginConfig, upload::handle_child_device_config_snapshot_response};
 
@@ -17,9 +21,13 @@ use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use c8y_api::smartrest::smartrest_deserializer::{
     SmartRestConfigDownloadRequest, SmartRestConfigUploadRequest, SmartRestRequestGeneric,
 };
+use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
+use child_device::get_child_id_from_child_topic;
 use clap::Parser;
-use mqtt_channel::{Connection, Message, MqttError, PubChannel, SinkExt, StreamExt, TopicFilter};
+use mqtt_channel::{Connection, Message, MqttError, SinkExt, StreamExt, Topic, TopicFilter};
+use operation::ConfigOperation;
+use upload::UploadConfigFileStatusMessage;
 
 use std::path::{Path, PathBuf};
 use tedge_config::{
@@ -246,18 +254,23 @@ async fn process_mqtt_message(
     }
     if config_snapshot_response.accept(&message) {
         info!("config snapshot response");
-        let outgoing_message =
-            handle_child_device_config_snapshot_response(&message, http_client, config_dir).await?;
-        mqtt_client.published.publish(outgoing_message).await?;
-        return Ok(());
+        handle_child_device_config_operation_response(
+            &message,
+            mqtt_client,
+            http_client,
+            config_dir,
+        )
+        .await?;
     }
     if config_update_response.accept(&message) {
         info!("config update response");
-        let child_config_management = ConfigOperationResponse::try_from(&message)?;
-        let outgoing_message =
-            handle_child_device_config_update_response(&message, &child_config_management)?;
-        mqtt_client.published.publish(outgoing_message).await?;
-        return Ok(());
+        handle_child_device_config_operation_response(
+            &message,
+            mqtt_client,
+            http_client,
+            config_dir,
+        )
+        .await?;
     } else if let Ok(payload) = message.payload_str() {
         for smartrest_message in payload.split('\n') {
             let result = match message.topic.name.as_str() {
@@ -327,6 +340,79 @@ async fn process_mqtt_message(
             }
         }
     }
+    Ok(())
+}
+
+pub async fn handle_child_device_config_operation_response(
+    message: &Message,
+    mqtt_client: &mut Connection,
+    http_client: &mut impl C8YHttpProxy,
+    config_dir: &Path,
+) -> Result<(), anyhow::Error> {
+    match ConfigOperationResponse::try_from(message) {
+        Ok(config_response) => {
+            let smartrest_response = match &config_response {
+                ConfigOperationResponse::Update { .. } => {
+                    handle_child_device_config_update_response(&config_response)?
+                }
+                ConfigOperationResponse::Snapshot { .. } => {
+                    handle_child_device_config_snapshot_response(
+                        &config_response,
+                        http_client,
+                        config_dir,
+                    )
+                    .await?
+                }
+            };
+
+            mqtt_client.published.send(smartrest_response).await?;
+            Ok(())
+        }
+        Err(err) => {
+            fail_pending_config_operation_in_c8y(message, err.to_string(), mqtt_client).await
+        }
+    }
+}
+
+pub async fn fail_pending_config_operation_in_c8y(
+    message: &Message,
+    failure_reason: String,
+    mqtt_client: &mut Connection,
+) -> Result<(), anyhow::Error> {
+    // Fail the operation in the cloud by sending EXECUTING and FAILED responses back to back
+    let config_operation = message.try_into()?;
+    let child_id = get_child_id_from_child_topic(&message.topic.name)?;
+
+    let c8y_child_topic =
+        Topic::new_unchecked(&C8yTopic::ChildSmartRestResponse(child_id).to_string());
+
+    let (executing_msg, failed_msg) = match config_operation {
+        ConfigOperation::Snapshot => {
+            let executing_msg = Message::new(
+                &c8y_child_topic,
+                UploadConfigFileStatusMessage::status_executing()?,
+            );
+            let failed_msg = Message::new(
+                &c8y_child_topic,
+                UploadConfigFileStatusMessage::status_failed(failure_reason)?,
+            );
+            (executing_msg, failed_msg)
+        }
+        ConfigOperation::Update => {
+            let executing_msg = Message::new(
+                &c8y_child_topic,
+                DownloadConfigFileStatusMessage::status_executing()?,
+            );
+            let failed_msg = Message::new(
+                &c8y_child_topic,
+                DownloadConfigFileStatusMessage::status_failed(failure_reason)?,
+            );
+            (executing_msg, failed_msg)
+        }
+    };
+    mqtt_client.published.send(executing_msg).await?;
+    mqtt_client.published.send(failed_msg).await?;
+
     Ok(())
 }
 
@@ -679,6 +765,55 @@ mod tests {
         Ok(())
     }
 
+    // Test invalid config_snapshot response from child is mapped to
+    // back-to-back EXECUTING and FAILED messages for c8y_UploadConfigFile operation
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[serial_test::serial]
+    async fn test_invalid_config_upload_response_child_device() -> anyhow::Result<()> {
+        let tedge_device_id = "tedge-device";
+        let child_device_id = "child-device";
+        let tmp_dir = TempTedgeDir::new();
+        tmp_dir.dir("c8y").file("c8y-configuration-plugin.toml");
+
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mut c8y_http_client = MockC8YHttpProxy::new();
+
+        // Run the plugin's runtime logic in an async task
+        tokio::spawn(async move {
+            let _ = run(
+                tedge_device_id.into(),
+                broker.port,
+                &mut c8y_http_client,
+                &mockito::server_url(),
+                tmp_dir.path().to_path_buf(),
+                tmp_dir.path(),
+            )
+            .await;
+        });
+
+        let mut smartrest_messages = broker
+            .messages_published_on(format!("c8y/s/us/{child_device_id}").as_str())
+            .await;
+
+        // Invalid config_snapshot response from child device
+        broker
+            .publish(
+                &format!("tedge/{child_device_id}/commands/res/config_snapshot"),
+                "invalid json",
+            )
+            .await?;
+
+        // Assert the c8y_UploadConfigFile operation status mapping to FAILED(502)
+        mqtt_tests::assert_received_all_expected(
+            &mut smartrest_messages,
+            TEST_TIMEOUT_MS,
+            &["501,c8y_UploadConfigFile", "502,c8y_UploadConfigFile"],
+        )
+        .await;
+
+        Ok(())
+    }
+
     // Test tedge config_snapshot command successful response mapping to SmartREST
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     #[serial_test::serial]
@@ -766,6 +901,7 @@ mod tests {
         let config_type = "config_type";
         let test_config_path = "/some/test/config";
         let tmp_dir = TempTedgeDir::new();
+        tmp_dir.dir("c8y").file("c8y-configuration-plugin.toml");
 
         let broker = mqtt_tests::test_mqtt_broker();
 
@@ -795,7 +931,6 @@ mod tests {
                 &local_http_host,
                 tmp_dir.path().to_path_buf(),
                 tmp_dir.path(),
-                test_config_path,
             )
             .await;
         });
@@ -948,7 +1083,6 @@ mod tests {
                 local_http_host.as_str(),
                 tmp_dir.path().to_path_buf(),
                 tmp_dir.path(),
-                test_config_path,
             )
             .await;
         });
@@ -1045,6 +1179,55 @@ mod tests {
             &mut smartrest_messages,
             TEST_TIMEOUT_MS,
             &["503,c8y_DownloadConfigFile"],
+        )
+        .await;
+
+        Ok(())
+    }
+
+    // Test invalid config_update response from child is mapped to
+    // back-to-back EXECUTING and FAILED messages for c8y_DownloadConfigFile operation
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[serial_test::serial]
+    async fn test_invalid_config_update_response_child_device() -> anyhow::Result<()> {
+        let tedge_device_id = "tedge-device";
+        let child_device_id = "child-device";
+        let tmp_dir = TempTedgeDir::new();
+        tmp_dir.dir("c8y").file("c8y-configuration-plugin.toml");
+
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mut c8y_http_client = MockC8YHttpProxy::new();
+
+        // Run the plugin's runtime logic in an async task
+        tokio::spawn(async move {
+            let _ = run(
+                tedge_device_id.into(),
+                broker.port,
+                &mut c8y_http_client,
+                &mockito::server_url(),
+                tmp_dir.path().to_path_buf(),
+                tmp_dir.path(),
+            )
+            .await;
+        });
+
+        let mut smartrest_messages = broker
+            .messages_published_on(format!("c8y/s/us/{child_device_id}").as_str())
+            .await;
+
+        // Invalid config_snapshot response from child device
+        broker
+            .publish(
+                &format!("tedge/{child_device_id}/commands/res/config_update"),
+                "invalid json",
+            )
+            .await?;
+
+        // Assert the c8y_UploadConfigFile operation status mapping to FAILED(502)
+        mqtt_tests::assert_received_all_expected(
+            &mut smartrest_messages,
+            TEST_TIMEOUT_MS,
+            &["501,c8y_DownloadConfigFile", "502,c8y_DownloadConfigFile"],
         )
         .await;
 
