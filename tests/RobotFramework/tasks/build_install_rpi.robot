@@ -69,8 +69,7 @@ Download the Build Package
     Fill Text    //input[@id='login_field']    ${user_git}
     Fill Text    //input[@id='password']    ${pass_git}
     Click    //input[@name='commit']
-    # Pause Execution
-    Fill Text    //input[@placeholder='Filter workflow runs']    workflow:build-workflow is:success 
+    Fill Text    //input[@data-hotkey='Control+/,Meta+/']    workflow:build-workflow is:success 
     Keyboard Key    press    Enter   
     Sleep    5s
     Wait For Elements State    //*[contains(@aria-label, '${BUILD}')]    visible
