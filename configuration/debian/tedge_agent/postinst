@@ -7,7 +7,7 @@ set -e
 # to monitor the installation of the new version up to completion.
 if command -v systemctl >/dev/null; then
     if ! systemctl is-active --quiet tedge-agent; then
-         sudo -u tedge -- tedge_agent --init
+         sudo -- tedge_agent --init
     fi
 fi
 
