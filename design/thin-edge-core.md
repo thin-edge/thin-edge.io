@@ -258,3 +258,21 @@ The key points to be highlighted are that:
   built as an assemblage of Rust actors. They can be used without any modifications.
 * Building a tuned thin-edge executable requires a Rust compiler but not a deep expertise in Rust.
   What has to be done is mostly to list the actors to be included and to connect message producers and consumers.
+
+## What kind of component for my use case?
+
+What are the pros & cons of Rust-based and MQTT-based components?
+When use one or the other?
+
+| MQTT-based thin-edge executable                                                | Rust-based thin-edge actor                                              |
+|--------------------------------------------------------------------------------|-------------------------------------------------------------------------|
+| Coarse grain component used to build IIoT agents                               | Fine grain component used to build MQTT-based thin-edge executables     |
+| Process running on the local network                                           | Actor running inside a process                                          |
+| Interact over MQTT and HTTP using JSON messages                                | Interact over in-memory channels using statically typed messages        |
+| Can be written in any language                                                 | Must be written in Rust                                                 |
+| Deployed over hosts and containers on the edge local network                   | Integrated into an executable in combination with other actors          |
+| Required to enable interactions over several devices and cloud end-points      | Leverage a thin-edge-json actor to interact with MQTT-based executables |                        
+| Facilitate prototyping and interactivity                                       | Build for robustness and frugality                                      |
+| Might lead to a resource greedy agent with too many daemon processes           | Help to optimize resource utilisation within a single process           |
+| Might lead to deployment and dependency issues with loosely-coupled components | Dependencies and compatibilities are checked at compile-time            |
+| The `tedge` command is an MQTT-based executable                                | The `tedge` command is an assemblage of Rust-based thin-edge actors     | 
