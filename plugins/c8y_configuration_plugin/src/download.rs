@@ -8,7 +8,7 @@ use crate::{
     child_device::ConfigOperationResponse,
     error::{ChildDeviceConfigManagementError, ConfigManagementError},
 };
-use crate::{error, PluginConfig, CONFIG_CHANGE_TOPIC};
+use crate::{error, PluginConfig, CONFIG_CHANGE_TOPIC, DEFAULT_OPERATION_DIR_NAME};
 use agent_interface::OperationStatus;
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::smartrest::error::SmartRestSerializerError;
@@ -74,7 +74,9 @@ pub async fn handle_config_download_request_tedge_device(
     let target_config_type = smartrest_request.config_type.clone();
     let mut target_file_entry = FileEntry::default();
 
-    let config_file_path = config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
+    let config_file_path = config_dir
+        .join(DEFAULT_OPERATION_DIR_NAME)
+        .join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
     let plugin_config = PluginConfig::new(&config_file_path);
     let download_result = {
         match plugin_config.get_file_entry_from_type(&target_config_type) {
