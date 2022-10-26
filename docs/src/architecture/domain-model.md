@@ -66,7 +66,7 @@ That includes:
     * provides to view and change configurations on the device, as
       * list available configurations
       * transfer individual configurations from device to cloud, and vice versa
-    * a configuration is a text file or a binary file, as e.g.:
+    * a configuration is a text file or a binary file, as e.g.
       * configuration file(s) of the **domain application**[^1]
       * configuration file(s) of **OS / Libs / Runtime**[^1]
       * configuration file(s) of **thin-edge** it-self
@@ -74,7 +74,7 @@ That includes:
     * provides to view logs from the device
       * lists available logs
       * transfer individual logs from device to cloud
-    * a log is a text file, as e.g.:
+    * a log is a text file, as e.g.
       * log file(s) of the **domain application**[^1]
       * log file(s) of **OS / Libs / Runtime**[^1]
       * log file(s) of **thin-edge** it-self
@@ -85,23 +85,24 @@ That includes:
 
 [^1]: more details see appendix [Device Domain](#device-domain)
 
-## thin-edge device concept
+## Child-Devices
 
 **thin-edge** facilitates IoT functionality to the device it is running on, as well as to devices that are connected to that device.
+  * the device **thin-edge** is running on is referred as the **main-device**
+    * **thin-edge** on the **main-device** establishes and manages all communication to the cloud
+  * all devices connected to the **main-device** are referred as **external child-devices** 
+  * each **external child-device** can be represented in the cloud with it's individual **device twin**
+    * a unique **child-id** makes the association between each **external child-device** and it's **device twin**
+  * all **telemetry data** and **device managament** functionality can appear in the context of the 
+    **external child-device's** individual **device twin**, or the **main-device's** **device twin**
+  * also _containers_ or _processes_ running on the **main-devices** can be handled like **external child-device**;
+    those are referered then as **logical child-devices**
 
-  * the device thin-edge is running on is referred as the **main-device**
-    * thin-edge on the **main-device** establishes and manages all communication to the cloud
-  * all devices connected to the **main-device** are referred as **external child-devices**
-  * each device is represented in the cloud with an individual **device twin**
-  * a unique **child-id** makes the association between each **external child-device** and it's **device twin**
-  * all telemetry data (i.E. Measurements, Commands, Events, Alarms) of a device (i.E. **main-device** or **external child-devices**) appear
-    in the cloud in context of its corresponding **device twin**
-
-The figure below illustrates the device concept.
+The figure below illustrates the child-device concept.
 
 ![Device Concept](images/device-concept.svg)
 
-## thin-edge device management concept
+## thin-edge device management concept (old)
 
 **thin-edge** realizes cloud's **Device Management** based on **plugins**.
   * a **plugin** encapsulates and manages access to _ressources_ and _services_ of the device, as e.g.
