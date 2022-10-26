@@ -4,7 +4,7 @@ use crate::{
         ConfigOperationRequest, ConfigOperationResponse,
     },
     error::{ChildDeviceConfigManagementError, ConfigManagementError},
-    PluginConfig, DEFAULT_PLUGIN_CONFIG_FILE_NAME,
+    PluginConfig, DEFAULT_OPERATION_DIR_NAME, DEFAULT_PLUGIN_CONFIG_FILE_NAME,
 };
 use agent_interface::OperationStatus;
 use anyhow::Result;
@@ -91,7 +91,9 @@ pub async fn handle_config_upload_request_tedge_device(
     let msg = UploadConfigFileStatusMessage::executing()?;
     mqtt_client.published.send(msg).await?;
 
-    let config_file_path = config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
+    let config_file_path = config_dir
+        .join(DEFAULT_OPERATION_DIR_NAME)
+        .join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
     let plugin_config = PluginConfig::new(&config_file_path);
 
     let upload_result = {
@@ -330,16 +332,10 @@ pub async fn handle_child_device_successful_config_snapshot_response(
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use super::*;
     use c8y_api::http_proxy::MockC8YHttpProxy;
-    use c8y_api::smartrest::topic::C8yTopic;
     use mockall::predicate;
     use mqtt_channel::Topic;
-    use tedge_test_utils::fs::TempTedgeDir;
-
-    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
     #[test]
     fn get_smartrest_executing() {
@@ -390,72 +386,6 @@ mod tests {
             upload_config_file(config_path, config_type, &mut http_client).await?,
             "http://server/config/file/url"
         );
-
-        Ok(())
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    #[serial_test::serial]
-    async fn test_handle_config_upload_request() -> anyhow::Result<()> {
-        let tedge_device_id = "tedge-device";
-        let config_path = Path::new("/some/test/config");
-        let ttd = TempTedgeDir::new();
-        ttd.dir("c8y")
-            .file("c8y-configuration-plugin.toml")
-            .with_toml_content(toml::toml! {
-                files = [
-                    { path = "/some/test/config", type = "config_type" }
-                ]
-            });
-
-        let broker = mqtt_tests::test_mqtt_broker();
-        let mqtt_config = mqtt_channel::Config::default()
-            .with_port(broker.port)
-            .with_subscriptions(mqtt_channel::TopicFilter::new_unchecked(
-                &C8yTopic::SmartRestRequest.to_string(),
-            ));
-        let mut mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
-
-        let mut messages = broker.messages_published_on("c8y/s/us").await;
-
-        let mut http_client = MockC8YHttpProxy::new();
-        http_client
-            .expect_upload_config_file()
-            .with(
-                predicate::eq(config_path),
-                predicate::eq("config_type"),
-                predicate::eq(None),
-            )
-            .return_once(|_path, _type, _child_id| Ok("http://server/config/file/url".to_string()));
-
-        let config_upload_request = SmartRestConfigUploadRequest {
-            message_id: "526".to_string(),
-            device: tedge_device_id.to_string(),
-            config_type: "config_type".to_string(),
-        };
-
-        tokio::spawn(async move {
-            let _ = handle_config_upload_request(
-                config_upload_request,
-                &mut mqtt_client,
-                &mut http_client,
-                "".into(),
-                tedge_device_id,
-                &ttd.path().join("c8y"),
-            )
-            .await;
-        });
-
-        // Assert the c8y_UploadConfigFile operation transitioning from EXECUTING(501) to SUCCESSFUL(503) with the uploaded config URL
-        mqtt_tests::assert_received_all_expected(
-            &mut messages,
-            TEST_TIMEOUT_MS,
-            &[
-                "501,c8y_UploadConfigFile",
-                "503,c8y_UploadConfigFile,http://server/config/file/url",
-            ],
-        )
-        .await;
 
         Ok(())
     }

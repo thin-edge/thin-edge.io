@@ -161,10 +161,10 @@ async fn run(
     tmp_dir: PathBuf,
     config_dir: &Path,
 ) -> Result<(), anyhow::Error> {
-    // `config_file_path` expands to: /etc/tedge/c8y or `config-dir`/c8y
-    let config_file_path = config_dir.join(DEFAULT_OPERATION_DIR_NAME);
+    // `config_file_dir` expands to: /etc/tedge/c8y or `config-dir`/c8y
+    let config_file_dir = config_dir.join(DEFAULT_OPERATION_DIR_NAME);
     let mut plugin_config =
-        PluginConfig::new(&config_file_path.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME));
+        PluginConfig::new(&config_file_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME));
     let mut mqtt_client = create_mqtt_client(mqtt_port).await?;
 
     // Publish supported configuration types
@@ -176,7 +176,7 @@ async fn run(
 
     // we watch `config_file_path` for any change to a file named `DEFAULT_PLUGIN_CONFIG_FILE_NAME`
     let mut fs_notification_stream = fs_notify_stream(&[(
-        &config_file_path,
+        &config_file_dir,
         Some(DEFAULT_PLUGIN_CONFIG_FILE_NAME.to_string()),
         &[FileEvent::Modified, FileEvent::Deleted, FileEvent::Created],
     )])?;
@@ -502,9 +502,17 @@ mod tests {
     #[serial_test::serial]
     async fn test_handle_config_upload_request_tedge_device() -> anyhow::Result<()> {
         let tedge_device_id = "tedge-device";
-        let test_config_type = "c8y-configuration-plugin";
+        let test_config_type = "test-config";
+        let test_config_path = "/some/test/config";
+        let c8y_config_plugin_type = "c8y-configuration-plugin";
         let ttd = TempTedgeDir::new();
-        ttd.dir("c8y").file("c8y-configuration-plugin.toml");
+        ttd.dir("c8y")
+            .file("c8y-configuration-plugin.toml")
+            .with_toml_content(toml::toml! {
+                files = [
+                    { path = test_config_path, type = test_config_type }
+                ]
+            });
 
         let broker = mqtt_tests::test_mqtt_broker();
 
@@ -520,6 +528,16 @@ mod tests {
             )
             .return_once(|_path, _type, _child_id| {
                 Ok("http://server/some/test/config/url".to_string())
+            });
+        http_client
+            .expect_upload_config_file()
+            .with(
+                predicate::always(),
+                predicate::eq(c8y_config_plugin_type),
+                predicate::eq(None),
+            )
+            .return_once(|_path, _type, _child_id| {
+                Ok("http://server/c8y/config/plugin/url".to_string())
             });
 
         // Run the plugin's runtime logic in an async task
@@ -539,7 +557,7 @@ mod tests {
         mqtt_tests::assert_received_all_expected(
             &mut messages,
             TEST_TIMEOUT_MS,
-            &[format!("119,{test_config_type}")],
+            &[format!("119,{c8y_config_plugin_type},{test_config_type}")],
         )
         .await;
 
@@ -558,6 +576,25 @@ mod tests {
             &[
                 "501,c8y_UploadConfigFile",
                 "503,c8y_UploadConfigFile,http://server/some/test/config/url",
+            ],
+        )
+        .await;
+
+        // Send a config upload request for `c8y-configuration-plugin` type to the plugin
+        broker
+            .publish(
+                "c8y/s/ds",
+                format!("526,{tedge_device_id},{c8y_config_plugin_type}").as_str(),
+            )
+            .await?;
+
+        // Assert the c8y_UploadConfigFile operation transitioning from EXECUTING(501) to SUCCESSFUL(503) with the uploaded config URL
+        mqtt_tests::assert_received_all_expected(
+            &mut messages,
+            TEST_TIMEOUT_MS,
+            &[
+                "501,c8y_UploadConfigFile",
+                "503,c8y_UploadConfigFile,http://server/c8y/config/plugin/url",
             ],
         )
         .await;
@@ -958,6 +995,96 @@ mod tests {
             &mut smartrest_messages,
             TEST_TIMEOUT_MS,
             &["502,c8y_UploadConfigFile"],
+        )
+        .await;
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[serial_test::serial]
+    async fn test_handle_config_update_request_tedge_device() -> anyhow::Result<()> {
+        let tedge_device_id = "tedge-device";
+        let test_config_type = "test-config";
+        let c8y_config_plugin_type = "c8y-configuration-plugin";
+        let tmp_dir = TempTedgeDir::new();
+
+        let test_config_file = tmp_dir.file(test_config_type);
+        let test_config_path = test_config_file.path().to_str().unwrap();
+
+        tmp_dir
+            .dir("c8y")
+            .file("c8y-configuration-plugin.toml")
+            .with_toml_content(toml::toml! {
+                files = [
+                    { path = test_config_path, type = test_config_type }
+                ]
+            });
+
+        let broker = mqtt_tests::test_mqtt_broker();
+        let mut c8y_http_client = MockC8YHttpProxy::new();
+        c8y_http_client
+            .expect_url_is_in_my_tenant_domain()
+            .with(predicate::always())
+            .returning(|_path| false);
+
+        // Mock download endpoint for the plugin to download config file update from the cloud
+        let config_update_cloud_url_path = "/some/cloud/url";
+        let _download_config_url_mock = mockito::mock("GET", config_update_cloud_url_path)
+            .with_body_from_fn(|w| w.write_all(b"v2"))
+            .with_status(200)
+            .create();
+        let local_http_host = mockito::server_url();
+        let config_update_download_url = format!("{local_http_host}{config_update_cloud_url_path}");
+
+        // Run the plugin's runtime logic in an async task
+        tokio::spawn(async move {
+            let _ = run(
+                tedge_device_id.into(),
+                broker.port,
+                &mut c8y_http_client,
+                local_http_host.as_str(),
+                tmp_dir.path().to_path_buf(),
+                tmp_dir.path(),
+            )
+            .await;
+        });
+
+        let mut messages = broker.messages_published_on("c8y/s/us").await;
+
+        // Send a c8y_DownloadConfigFile request to the plugin
+        broker
+            .publish(
+                "c8y/s/ds",
+                format!("524,{tedge_device_id},{config_update_download_url},{test_config_type}")
+                    .as_str(),
+            )
+            .await?;
+
+        // Assert the c8y_UploadConfigFile operation transitioning from EXECUTING(501) to SUCCESSFUL(503) with the uploaded config URL
+        mqtt_tests::assert_received_all_expected(
+            &mut messages,
+            TEST_TIMEOUT_MS,
+            &["501,c8y_DownloadConfigFile", "503,c8y_DownloadConfigFile"],
+        )
+        .await;
+
+        // Send a c8y_DownloadConfigFile request for `c8y-configuration-plugin` type to the plugin
+        broker
+            .publish(
+                "c8y/s/ds",
+                format!(
+                    "524,{tedge_device_id},{config_update_download_url},{c8y_config_plugin_type}"
+                )
+                .as_str(),
+            )
+            .await?;
+
+        // Assert the c8y_DownloadConfigFile operation transitioning from EXECUTING(501) to SUCCESSFUL(503) with the uploaded config URL
+        mqtt_tests::assert_received_all_expected(
+            &mut messages,
+            TEST_TIMEOUT_MS,
+            &["501,c8y_DownloadConfigFile", "503,c8y_DownloadConfigFile"],
         )
         .await;
 
