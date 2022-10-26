@@ -432,7 +432,12 @@ where
                         .or_insert_with(Operations::default);
 
                     add_or_remove_operation(message, child_op)?;
-                    Ok(Some(create_supported_operations(&message.ops_dir)?))
+                    let path = message.ops_dir.to_path_buf().join(&message.operation_name);
+                    if path.is_dir() {
+                        Ok(Some(create_supported_operations(&path)?))
+                    } else {
+                        Ok(Some(create_supported_operations(&message.ops_dir)?))
+                    }
                 }
             }
             None => Ok(None),
@@ -462,7 +467,6 @@ fn add_or_remove_operation(
             let ops_dir = message.ops_dir.clone();
             let op_name = message.operation_name.clone();
             let op = get_operation(ops_dir.join(op_name))?;
-
             ops.add_operation(op);
         }
         EventType::Remove => {

@@ -172,20 +172,30 @@ fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsError> 
 }
 
 pub fn get_operation(path: PathBuf) -> Result<Operation, OperationsError> {
-    let mut details = match fs::read(&path) {
-        Ok(bytes) => toml::from_slice::<Operation>(bytes.as_slice())
-            .map_err(|e| OperationsError::TomlError(path.to_path_buf(), e))?,
-
-        Err(err) => return Err(OperationsError::FromIo(err)),
-    };
-
-    details.name = path
+    let op_name = path
         .file_name()
         .and_then(|filename| filename.to_str())
         .ok_or_else(|| OperationsError::InvalidOperationName(path.to_owned()))?
         .to_owned();
 
-    Ok(details)
+    if !path.is_dir() {
+        // If path is not directory then read the content.
+        let mut details = match fs::read(&path) {
+            Ok(bytes) => toml::from_slice::<Operation>(bytes.as_slice())
+                .map_err(|e| OperationsError::TomlError(path.to_path_buf(), e))?,
+
+            Err(err) => {
+                return Err(OperationsError::FromIo(err));
+            }
+        };
+        details.name = op_name;
+        Ok(details)
+    } else {
+        Ok(Operation {
+            name: op_name,
+            exec: None,
+        })
+    }
 }
 
 #[cfg(test)]
