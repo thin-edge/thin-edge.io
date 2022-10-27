@@ -3,7 +3,7 @@ use mqtt_channel::Message;
 use serde::Deserialize;
 use std::{borrow::Borrow, path::Path};
 use std::{collections::HashSet, fs};
-use tracing::warn;
+use tracing::{info, warn};
 
 #[derive(Deserialize, Debug, Eq, PartialEq, Default)]
 #[serde(deny_unknown_fields)]
@@ -38,6 +38,7 @@ impl LogPluginConfig {
 
     pub fn read_config(path: &Path) -> Self {
         let path_str = path.display().to_string();
+        info!("Reading the config file from {}", path_str);
         match fs::read_to_string(path) {
             Ok(contents) => match toml::from_str(contents.as_str()) {
                 Ok(config) => config,

@@ -93,10 +93,10 @@ async fn run(
     mqtt_client: &mut Connection,
     http_client: &mut JwtAuthHttpProxy,
 ) -> Result<(), anyhow::Error> {
-    let mut plugin_config = LogPluginConfig::default();
+    let config_file_path = config_dir.join(config_file_name);
+    let mut plugin_config = read_log_config(&config_file_path);
 
     let health_check_topics = health_check_topics("c8y-log-plugin");
-    let config_file_path = config_dir.join(config_file_name);
     handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
 
     let mut fs_notification_stream = fs_notify_stream(&[(
@@ -109,7 +109,7 @@ async fn run(
         tokio::select! {
                 message = mqtt_client.received.next() => {
                 if let Some(message) = message {
-                    process_mqtt_message(message, &plugin_config, mqtt_client, http_client, &config_file_path, health_check_topics.clone(), device_name).await?;
+                    process_mqtt_message(message, &plugin_config, mqtt_client, http_client, health_check_topics.clone(), device_name).await?;
                 } else {
                     // message is None and the connection has been closed
                     return Ok(())
@@ -134,13 +134,11 @@ pub async fn process_mqtt_message(
     plugin_config: &LogPluginConfig,
     mqtt_client: &mut Connection,
     http_client: &mut JwtAuthHttpProxy,
-    config_file: &Path,
     health_check_topics: TopicFilter,
     device_name: &str,
 ) -> Result<(), anyhow::Error> {
     if is_c8y_bridge_up(&message) {
-        let plugin_config = read_log_config(config_file);
-        handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
+        handle_dynamic_log_type_update(plugin_config, mqtt_client).await?;
     } else if health_check_topics.accept(&message) {
         send_health_status(&mut mqtt_client.published, "c8y-log-plugin").await;
     } else if let Ok(payload) = message.payload_str() {
