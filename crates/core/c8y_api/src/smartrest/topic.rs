@@ -2,6 +2,7 @@ use agent_interface::topic::ResponseTopic;
 use agent_interface::TopicError;
 use mqtt_channel::MqttError;
 use mqtt_channel::Topic;
+use mqtt_channel::TopicFilter;
 
 pub const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
 pub const SMARTREST_SUBSCRIBE_TOPIC: &str = "c8y/s/ds";
@@ -70,6 +71,12 @@ impl TryFrom<Topic> for C8yTopic {
 
     fn try_from(value: Topic) -> Result<Self, Self::Error> {
         value.name.try_into()
+    }
+}
+
+impl From<C8yTopic> for TopicFilter {
+    fn from(val: C8yTopic) -> Self {
+        val.to_string().as_str().try_into().expect("infallible")
     }
 }
 
