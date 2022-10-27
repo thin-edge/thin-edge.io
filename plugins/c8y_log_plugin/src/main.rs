@@ -18,7 +18,7 @@ use tedge_config::{
 };
 use tedge_utils::{
     file::{create_directory_with_user_group, create_file_with_user_group},
-    notify::{fs_notify_stream, FileEvent},
+    notify::{fs_notify_stream, FsEvent},
     paths::PathsError,
 };
 use thin_edge_json::health::{health_check_topics, send_health_status};
@@ -102,7 +102,11 @@ async fn run(
     let mut fs_notification_stream = fs_notify_stream(&[(
         config_dir,
         Some(config_file_name.to_string()),
-        &[FileEvent::Modified, FileEvent::Deleted, FileEvent::Created],
+        &[
+            FsEvent::Modified,
+            FsEvent::FileDeleted,
+            FsEvent::FileCreated,
+        ],
     )])?;
 
     loop {
@@ -117,11 +121,14 @@ async fn run(
             }
             Some((path, mask)) = fs_notification_stream.rx.recv() => {
                 match mask {
-                    FileEvent::Created | FileEvent::Deleted | FileEvent::Modified => {
+                    FsEvent::FileCreated | FsEvent::FileDeleted | FsEvent::Modified => {
                         if path.file_name().ok_or_else(|| PathsError::ParentDirNotFound {path: path.as_os_str().into()})?.eq("c8y-log-plugin.toml") {
                             plugin_config = read_log_config(&path);
                             handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
                         }
+                    },
+                    _ => {
+                        // ignore other events (FsEvent::DirCreated, FsEvent::DirDeleted)
                     }
                 }
             }
