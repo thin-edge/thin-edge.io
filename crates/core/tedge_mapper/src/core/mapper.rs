@@ -8,7 +8,7 @@ use mqtt_channel::{
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use tedge_utils::notify::{fs_notify_stream, FileEvent};
+use tedge_utils::notify::{fs_notify_stream, FsEvent};
 use thin_edge_json::health::{health_check_topics, send_health_status};
 
 use tracing::{error, info, instrument, warn};
@@ -136,12 +136,17 @@ impl Mapper {
 }
 
 async fn process_messages(mapper: &mut Mapper, ops_dir: Option<&Path>) -> Result<(), MapperError> {
-    let mut dir_to_watch: Vec<(&Path, Option<String>, &[FileEvent])> = Vec::new();
+    let mut dir_to_watch: Vec<(&Path, Option<String>, &[FsEvent])> = Vec::new();
     if let Some(path) = ops_dir {
         dir_to_watch.push((
             path,
             None,
-            &[FileEvent::Created, FileEvent::Deleted, FileEvent::Modified],
+            &[
+                FsEvent::DirectoryCreated,  // Needed?
+                FsEvent::FileCreated,
+                FsEvent::FileDeleted,
+                FsEvent::Modified,
+            ],
         ));
 
         let ch_pathbuf = fs::read_dir(&path)
@@ -160,10 +165,15 @@ async fn process_messages(mapper: &mut Mapper, ops_dir: Option<&Path>) -> Result
             .collect::<Vec<&Path>>();
 
         for cdir in ch_paths {
-            let watch: (&Path, Option<String>, &[FileEvent]) = (
+            let watch: (&Path, Option<String>, &[FsEvent]) = (
                 cdir,
                 None,
-                &[FileEvent::Created, FileEvent::Deleted, FileEvent::Modified],
+                &[
+                    FsEvent::DirectoryCreated, // Needed?
+                    FsEvent::FileCreated,
+                    FsEvent::FileDeleted,
+                    FsEvent::Modified,
+                ],
             );
             dir_to_watch.push(watch);
         }
