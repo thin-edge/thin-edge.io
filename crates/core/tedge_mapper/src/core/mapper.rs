@@ -1,14 +1,14 @@
 use crate::c8y::dynamic_discovery::*;
 use crate::core::{converter::*, error::*};
+use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use mqtt_channel::{
-    Connection, Message, MqttError, SinkExt, StreamExt, TopicFilter, UnboundedReceiver,
+    Connection, Message, MqttError, SinkExt, StreamExt, Topic, TopicFilter, UnboundedReceiver,
     UnboundedSender,
 };
 
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
-use tedge_utils::notify::{fs_notify_stream, FileEvent};
+use tedge_utils::notify::{fs_notify_stream, FsEvent};
 use thin_edge_json::health::{health_check_topics, send_health_status};
 
 use tracing::{error, info, instrument, warn};
@@ -136,39 +136,17 @@ impl Mapper {
 }
 
 async fn process_messages(mapper: &mut Mapper, ops_dir: Option<&Path>) -> Result<(), MapperError> {
-    let mut dir_to_watch: Vec<(&Path, Option<String>, &[FileEvent])> = Vec::new();
     if let Some(path) = ops_dir {
-        dir_to_watch.push((
+        let mut fs_notification_stream = fs_notify_stream(&[(
             path,
             None,
-            &[FileEvent::Created, FileEvent::Deleted, FileEvent::Modified],
-        ));
-
-        let ch_pathbuf = fs::read_dir(&path)
-            .map_err(|_| MapperError::ReadDirError {
-                dir: PathBuf::from(&path),
-            })?
-            .map(|entry| entry.map(|e| e.path()))
-            .collect::<Result<Vec<PathBuf>, _>>()?
-            .into_iter()
-            .filter(|path| path.is_dir())
-            .collect::<Vec<PathBuf>>();
-
-        let ch_paths: Vec<&Path> = ch_pathbuf
-            .iter()
-            .map(|p| p.as_path())
-            .collect::<Vec<&Path>>();
-
-        for cdir in ch_paths {
-            let watch: (&Path, Option<String>, &[FileEvent]) = (
-                cdir,
-                None,
-                &[FileEvent::Created, FileEvent::Deleted, FileEvent::Modified],
-            );
-            dir_to_watch.push(watch);
-        }
-
-        let mut fs_notification_stream = fs_notify_stream(&dir_to_watch)?;
+            &[
+                FsEvent::DirectoryCreated,
+                FsEvent::FileCreated,
+                FsEvent::FileDeleted,
+                FsEvent::Modified,
+            ],
+        )])?;
 
         // Send health status to confirm the mapper initialization is completed
         send_health_status(&mut mapper.output, &mapper.mapper_name).await;
@@ -179,13 +157,29 @@ async fn process_messages(mapper: &mut Mapper, ops_dir: Option<&Path>) -> Result
                     mapper.process_message(message).await;
                 }
                 Some((path, file_event)) = fs_notification_stream.rx.recv() => {
-                    match  process_inotify_events(&path, file_event) {
-                        Ok(Some(discovered_ops)) => {
-                             let _ = mapper.output.send(mapper.converter.process_operation_update_message(discovered_ops)).await;
+
+                    match file_event {
+                        FsEvent::DirectoryCreated => {
+                            if let Some(directory_name) =path.file_name() {
+                                let child_id = directory_name.to_string_lossy().to_string();
+                                let message = Message::new(
+                                    &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
+                                    format!("101,{child_id},{child_id},thin-edge.io-child"),
+                                );
+                                let _ = mapper.output.send(message).await;
+                            }
+                        },
+                        _ => {
+                            match  process_inotify_events(&path, file_event) {
+                                Ok(Some(discovered_ops)) => {
+                                     let _ = mapper.output.send(mapper.converter.process_operation_update_message(discovered_ops)).await;
+                                }
+                                Ok(None) => {}
+                                Err(e) => {eprintln!("Processing inotify event failed due to {}", e);}
+                            }
                         }
-                        Ok(None) => {}
-                        Err(e) => {eprintln!("Processing inotify event failed due to {}", e);}
                     }
+
                 }
             }
         }

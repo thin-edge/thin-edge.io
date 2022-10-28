@@ -14,10 +14,12 @@ use try_traits::default::TryDefault;
 use strum_macros::Display;
 
 #[derive(Debug, Display, PartialEq, Eq, Clone, Hash, PartialOrd, Ord, Copy)]
-pub enum FileEvent {
+pub enum FsEvent {
     Modified,
-    Deleted,
-    Created,
+    FileDeleted,
+    FileCreated,
+    DirectoryDeleted,
+    DirectoryCreated,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -38,16 +40,16 @@ pub enum NotifyStreamError {
     WrongParentDirectory { expected: PathBuf, actual: PathBuf },
 
     #[error("Watcher: {mask} is duplicated for file: {path:?}")]
-    DuplicateWatcher { mask: FileEvent, path: PathBuf },
+    DuplicateWatcher { mask: FsEvent, path: PathBuf },
 }
 
 type DirPath = PathBuf;
 type MaybeFileName = Option<String>;
-type Metadata = HashMap<DirPath, HashMap<MaybeFileName, HashSet<FileEvent>>>;
+type Metadata = HashMap<DirPath, HashMap<MaybeFileName, HashSet<FsEvent>>>;
 
 pub struct NotifyStream {
     watcher: INotifyWatcher,
-    pub rx: Receiver<(PathBuf, FileEvent)>,
+    pub rx: Receiver<(PathBuf, FsEvent)>,
     metadata: Metadata,
 }
 
@@ -66,33 +68,33 @@ impl TryDefault for NotifyStream {
                         match notify_event.kind {
                             EventKind::Modify(ModifyKind::Data(DataChange::Any)) => {
                                 for path in notify_event.paths {
-                                    let _ = tx.send((path, FileEvent::Modified)).await;
+                                    let _ = tx.send((path, FsEvent::Modified)).await;
                                 }
                             }
 
                             EventKind::Access(AccessKind::Close(AccessMode::Write)) => {
                                 for path in notify_event.paths {
-                                    let _ = tx.send((path, FileEvent::Modified)).await;
+                                    let _ = tx.send((path, FsEvent::Modified)).await;
                                 }
                             }
                             EventKind::Create(CreateKind::File) => {
                                 for path in notify_event.paths {
-                                    let _ = tx.send((path, FileEvent::Created)).await;
+                                    let _ = tx.send((path, FsEvent::FileCreated)).await;
                                 }
                             }
                             EventKind::Create(CreateKind::Folder) => {
                                 for path in notify_event.paths {
-                                    let _ = tx.send((path, FileEvent::Created)).await;
+                                    let _ = tx.send((path, FsEvent::DirectoryCreated)).await;
                                 }
                             }
                             EventKind::Remove(RemoveKind::File) => {
                                 for path in notify_event.paths {
-                                    let _ = tx.send((path, FileEvent::Deleted)).await;
+                                    let _ = tx.send((path, FsEvent::FileDeleted)).await;
                                 }
                             }
                             EventKind::Remove(RemoveKind::Folder) => {
                                 for path in notify_event.paths {
-                                    let _ = tx.send((path, FileEvent::Deleted)).await;
+                                    let _ = tx.send((path, FsEvent::DirectoryDeleted)).await;
                                 }
                             }
                             _other => {}
@@ -123,7 +125,7 @@ impl NotifyStream {
         &mut self,
         dir_path: &Path,
         file: Option<String>,
-        events: &[FileEvent],
+        events: &[FsEvent],
     ) -> Result<(), NotifyStreamError> {
         self.watcher.watch(dir_path, RecursiveMode::Recursive)?;
 
@@ -144,7 +146,7 @@ impl NotifyStream {
 }
 
 pub fn fs_notify_stream(
-    input: &[(&Path, Option<String>, &[FileEvent])],
+    input: &[(&Path, Option<String>, &[FsEvent])],
 ) -> Result<NotifyStream, NotifyStreamError> {
     let mut fs_notify = NotifyStream::try_default()?;
     for (dir_path, watch, flags) in input {
@@ -161,7 +163,7 @@ mod notify_tests {
     use tedge_test_utils::fs::TempTedgeDir;
     use try_traits::default::TryDefault;
 
-    use crate::notify::FileEvent;
+    use crate::notify::FsEvent;
 
     use super::{fs_notify_stream, NotifyStream};
 
@@ -177,13 +179,13 @@ mod notify_tests {
         let maybe_file_name = Some("file_a".to_string());
 
         notify
-            .add_watcher(ttd.path(), maybe_file_name.clone(), &[FileEvent::Created])
+            .add_watcher(ttd.path(), maybe_file_name.clone(), &[FsEvent::FileCreated])
             .unwrap();
         notify
-            .add_watcher(ttd.path(), maybe_file_name.clone(), &[FileEvent::Created])
+            .add_watcher(ttd.path(), maybe_file_name.clone(), &[FsEvent::FileCreated])
             .unwrap();
         notify
-            .add_watcher(ttd.path(), maybe_file_name.clone(), &[FileEvent::Deleted])
+            .add_watcher(ttd.path(), maybe_file_name.clone(), &[FsEvent::FileDeleted])
             .unwrap();
 
         let event_hashset = notify
@@ -196,12 +198,12 @@ mod notify_tests {
         // assert no duplicate entry was created for the second insert and new event was added
         // in total 2 events are expected: FileEvent::Created, FileEvent::Deleted
         assert_eq!(event_hashset.len(), 2);
-        assert!(event_hashset.contains(&FileEvent::Created));
-        assert!(event_hashset.contains(&FileEvent::Deleted));
+        assert!(event_hashset.contains(&FsEvent::FileCreated));
+        assert!(event_hashset.contains(&FsEvent::FileDeleted));
     }
 
     async fn assert_rx_stream(
-        mut inputs: HashMap<String, Vec<FileEvent>>,
+        mut inputs: HashMap<String, Vec<FsEvent>>,
         mut fs_notify: NotifyStream,
     ) {
         while let Some((path, flag)) = fs_notify.rx.recv().await {
@@ -236,20 +238,20 @@ mod notify_tests {
         let ttd_clone = ttd.clone();
 
         let expected_events = hashmap! {
-            String::from("file_a") => vec![FileEvent::Created],
-            String::from("file_b") => vec![FileEvent::Created, FileEvent::Modified]
+            String::from("file_a") => vec![FsEvent::FileCreated],
+            String::from("file_b") => vec![FsEvent::FileCreated, FsEvent::Modified]
         };
 
         let stream = fs_notify_stream(&[
             (
                 ttd.path(),
                 Some(String::from("file_a")),
-                &[FileEvent::Created],
+                &[FsEvent::FileCreated],
             ),
             (
                 ttd.path(),
                 Some(String::from("file_b")),
-                &[FileEvent::Created, FileEvent::Modified],
+                &[FsEvent::FileCreated, FsEvent::Modified],
             ),
         ])
         .unwrap();
@@ -273,13 +275,13 @@ mod notify_tests {
         let ttd_clone = ttd.clone();
         let mut fs_notify = NotifyStream::try_default().unwrap();
         fs_notify
-            .add_watcher(ttd.path(), None, &[FileEvent::Created, FileEvent::Modified])
+            .add_watcher(ttd.path(), None, &[FsEvent::FileCreated, FsEvent::Modified])
             .unwrap();
 
         let expected_events = hashmap! {
-            String::from("file_a") => vec![FileEvent::Created],
-            String::from("file_b") => vec![FileEvent::Created, FileEvent::Modified],
-            String::from("file_c") => vec![FileEvent::Created, FileEvent::Deleted],
+            String::from("file_a") => vec![FsEvent::FileCreated],
+            String::from("file_b") => vec![FsEvent::FileCreated, FsEvent::Modified],
+            String::from("file_c") => vec![FsEvent::FileCreated, FsEvent::FileDeleted],
         };
 
         let file_system_handler = tokio::spawn(async move {
@@ -304,15 +306,19 @@ mod notify_tests {
         let ttd_clone = ttd.clone();
 
         let expected_events = hashmap! {
-            String::from("file_a") => vec![FileEvent::Created],
-            String::from("file_b") => vec![FileEvent::Modified],
-            String::from("file_c") => vec![FileEvent::Created, FileEvent::Deleted]
+            String::from("file_a") => vec![FsEvent::FileCreated],
+            String::from("file_b") => vec![FsEvent::Modified],
+            String::from("file_c") => vec![FsEvent::FileCreated, FsEvent::FileDeleted]
         };
 
         let stream = fs_notify_stream(&[(
             ttd.path(),
             None,
-            &[FileEvent::Created, FileEvent::Modified, FileEvent::Deleted],
+            &[
+                FsEvent::FileCreated,
+                FsEvent::Modified,
+                FsEvent::FileDeleted,
+            ],
         )])
         .unwrap();
 
@@ -343,25 +349,25 @@ mod notify_tests {
         let ttd_d_clone = ttd_d.clone();
 
         let expected_events = hashmap! {
-            String::from("file_a") => vec![FileEvent::Created],
-            String::from("file_b") => vec![FileEvent::Created, FileEvent::Modified],
-            String::from("file_c") => vec![FileEvent::Created, FileEvent::Deleted],
-            String::from("dir_d") => vec![FileEvent::Created],
+            String::from("file_a") => vec![FsEvent::FileCreated],
+            String::from("file_b") => vec![FsEvent::FileCreated, FsEvent::Modified],
+            String::from("file_c") => vec![FsEvent::FileCreated, FsEvent::FileDeleted],
+            String::from("dir_d") => vec![FsEvent::DirectoryCreated],
         };
 
         let stream = fs_notify_stream(&[
-            (ttd_a.path(), None, &[FileEvent::Created]),
+            (ttd_a.path(), None, &[FsEvent::FileCreated]),
             (
                 ttd_b.path(),
                 None,
-                &[FileEvent::Created, FileEvent::Modified],
+                &[FsEvent::FileCreated, FsEvent::Modified],
             ),
             (
                 ttd_c.path(),
                 None,
-                &[FileEvent::Created, FileEvent::Deleted],
+                &[FsEvent::FileCreated, FsEvent::FileDeleted],
             ),
-            (ttd_d.path(), None, &[FileEvent::Created]),
+            (ttd_d.path(), None, &[FsEvent::FileCreated]),
         ])
         .unwrap();
 

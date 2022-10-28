@@ -33,9 +33,6 @@ pub enum MapperError {
 
     #[error(transparent)]
     FromStdIo(#[from] std::io::Error),
-
-    #[error("Failed to read directory: {dir}")]
-    ReadDirError { dir: PathBuf },
 }
 
 #[derive(Debug, thiserror::Error)]

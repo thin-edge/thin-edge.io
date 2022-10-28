@@ -46,7 +46,7 @@ use tedge_utils::{
 use thin_edge_json::health::{health_check_topics, send_health_status};
 use topic::ConfigOperationResponseTopic;
 
-use tedge_utils::notify::FileEvent;
+use tedge_utils::notify::FsEvent;
 use tracing::{error, info};
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-configuration-plugin.toml";
@@ -181,7 +181,11 @@ async fn run(
     let mut fs_notification_stream = fs_notify_stream(&[(
         &config_file_dir,
         Some(DEFAULT_PLUGIN_CONFIG_FILE_NAME.to_string()),
-        &[FileEvent::Modified, FileEvent::Deleted, FileEvent::Created],
+        &[
+            FsEvent::Modified,
+            FsEvent::FileDeleted,
+            FsEvent::FileCreated,
+        ],
     )])?;
 
     loop {
@@ -208,7 +212,7 @@ async fn run(
         }
         Some((path, mask)) = fs_notification_stream.rx.recv() => {
             match mask {
-                FileEvent::Modified | FileEvent::Deleted | FileEvent::Created => {
+                FsEvent::Modified | FsEvent::FileDeleted | FsEvent::FileCreated => {
                     match path.file_name() {
                         Some(file_name) => {
                             // this if check is done to avoid matching on temporary files created by editors
@@ -232,6 +236,9 @@ async fn run(
                         None => {}
                     }
                 },
+                _ => {
+                    // ignore other FsEvent(s)
+                }
             }
         }}
     }
