@@ -16,9 +16,10 @@ On `thin-edge.io` the support for one such operation can be added using the `thi
 ### `thin-edge.io` Supported Operations API
 
 The Supported Operations utilises the file system to add and remove operations. A special file placed in `/etc/tedge/operations` directory will indicate that an operation is supported.
-The specification for the operation files is described in `thin-edge.io` specifications repository[src/supported-operations/README.md](https://github.com/thin-edge/thin-edge.io-specs/blob/main/src/supported-operations/README.md)
+The specification for the operation files is described in `thin-edge.io` specifications repository [src/supported-operations/README.md](https://github.com/thin-edge/thin-edge.io-specs/blob/main/src/supported-operations/README.md)
 
 Supported operations are declared in the cloud specific subdirectory of `/etc/tedge/operations` directory.
+
 
 ## Custom Supported Operations
 
@@ -28,6 +29,14 @@ The main difference between custom operations and native operations is that cust
 As per specification the configuration file needs to be a `toml` file which describes the operation.
 
 `thin-edge.io` stores the operations configuration files in the `/etc/tedge/operations/<cloud-provider>/` directory.
+
+
+## Supported Operations for Child Devices
+
+When a new child device is bootstrapped, it needs to create `/etc/tedge/operations/<cloud-provider>/<child-
+device>` directory to store the supported operations of that child device.
+Every file placed in the `/etc/tedge/operations/<cloud-provider>/<child-device>` directory represents an operation supported by that child device.
+The operation files can be dynamically added and removed.
 
 ## `thin-edge.io` List of Supported Operations
 
@@ -80,6 +89,12 @@ drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 c8y
 /etc/tedge/operations/c8y:
 -rw-r--r-- 1 tedge tedge 0 Jan 01 00:00 c8y_Restart
 ```
+One can list all the currently supported operations for a child device as below
+
+```shell
+$ sudo ls -lR /etc/tedge/operations/c8y/<child-device>
+-rw-r--r-- 1 tedge tedge 0 Oct 26 11:24 c8y_LogfileRequest
+```
 
 ### Adding new operations
 
@@ -99,12 +114,28 @@ sudo -u tedge touch /etc/tedge/operations/c8y/c8y_Restart
 
 Now the new operation will be automatically added to the list and the list will be sent to the cloud.
 
+To add a new operation to a child device, create a new file in `/etc/tedge/operations/c8y/<child-device>` directory as below.
+
+```shell
+sudo -u tedge touch /etc/tedge/operations/c8y/<child-device>/c8y_Restart
+```
+
+Now the new operation will be automatically added to the list of child supported operations and will be sent to the cloud.
+
+
 ### Removing supported operations
 
-To remove supported operation we can remove the file from `/etc/tedge/operations/c8y` directory. eg:
+To remove a supported operation for a thin-edge device, the corresponding operation file must be removed from the `/etc/tedge/operations/c8y` directory. eg:
 
 ```shell
 sudo rm /etc/tedge/operations/c8y/c8y_Restart
+```
+
+Similarly, the supported operation for a child device can be removed by removing the corresponding operation file from the child device operations directory
+at `/etc/tedge/operations/c8y/<child-device>`. Eg:
+
+```shell
+sudo rm /etc/tedge/operations/c8y/<child-device>/c8y_Restart
 ```
 
 Now the operation will be automatically removed from the list and the list will be sent to the cloud.
