@@ -37,7 +37,7 @@ You can upload root certificate via [Cumulocity UI](https://cumulocity.com/guide
 > After issuing this command you are going to be prompted for a password. Users usernames and passwords are not stored in configuration due to security.
 
 ```shell
-$ sudo tedge cert upload c8y –-user <username>
+$ sudo tedge cert upload c8y --user <username>
 Password:
 ```
 
