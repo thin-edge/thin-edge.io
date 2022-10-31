@@ -105,15 +105,15 @@ The figure below illustrates the child-device concept.
 
 ## Plugins
 
-**thin-edge** realizes cloud's **Device Management** based on **plugins**.
+**thin-edge** realizes **Device Management** based on **plugins**.
   * a **plugin** can be an (external) executable (e.g. as the `c8y_configuration_plugin` for _configuration management_)
     or a thin-edge built-in software component (e.g. as for _software management_)
-  * to realize it's **Device Management** functionality, a **plugin** uses _ressources_ and _services_ of the device, as e.g.
+  * to realize **Device Management** functionality, a **plugin** accesses _ressources_ and _services_ of the device, as e.g.
       * _software management_ uses the device's _package manager_
       * _configuration management_ reads/writes device's _configuration files_
   * a **plugin** can facilitate **Device Management** functionality for the **main-device** and **external child-device**, but runs usually only on the **main-device**
-    * _resources_ and _services_ of the **main-device** can be directly accessed by the **plugin** running on the **main-device**
-    * all _resources_ and _services_ (e.g. file system, package manager, ...) of an **external child-device** are only remotely accessible for the **main-device**
+    * _resources_ and _services_ (e.g. file system, package manager, ...) of the **main-device** can be directly accessed by the **plugin**, as it runs on the **main-device**
+    * all _resources_ and _services_ of an **external child-device** are only remotely accessible for the **main-device**
       * the **plugin** running on the **main-device** needs another software component that establish the remote access for those _resources_ and _services_
       * that software component is referred as **child-device agent**
 
