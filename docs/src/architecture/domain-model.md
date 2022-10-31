@@ -102,17 +102,20 @@ The figure below illustrates the child-device concept.
 
 ![Device Concept](images/device-concept.svg)
 
-## thin-edge device management concept (old)
+
+## Plugins
 
 **thin-edge** realizes cloud's **Device Management** based on **plugins**.
-  * a **plugin** encapsulates and manages access to _ressources_ and _services_ of the device, as e.g.
-      * _software management_ accesses the device's _package manager_
-      * _configuration management_ accesses device's _configuration files_
-  * a **plugin** can be
-      * an (external) executable (e.g. as the `c8y_configuration_plugin` for _configuration management_)
-      * or a thin-edge built-in software component (e.g. as for _software management_)
-  * usually a **plugin** runs on the **main-device**; thus it can access the _resources_ of the **main-device** directly
-  * to access _ressources_ of an **external child-device** a **plugin** needs another component, referred as **child-device agent**
+  * a **plugin** can be an (external) executable (e.g. as the `c8y_configuration_plugin` for _configuration management_)
+    or a thin-edge built-in software component (e.g. as for _software management_)
+  * to realize it's **Device Management** functionality, a **plugin** uses _ressources_ and _services_ of the device, as e.g.
+      * _software management_ uses the device's _package manager_
+      * _configuration management_ reads/writes device's _configuration files_
+  * a **plugin** can facilitate **Device Management** functionality for the **main-device** and **external child-device**, but runs usually only on the **main-device**
+    * _resources_ and _services_ of the **main-device** can be directly accessed by the **plugin** running on the **main-device**
+    * all _resources_ and _services_ (e.g. file system, package manager, ...) of an **external child-device** are only remotely accessible for the **main-device**
+      * the **plugin** running on the **main-device** needs another software component that establish the remote access for those _resources_ and _services_
+      * that software component is referred as **child-device agent**
 
 The figure below illustrates the concept of **plugins** and **child-devices agents**.
 
@@ -120,14 +123,13 @@ The figure below illustrates the concept of **plugins** and **child-devices agen
 
 ### Child-Device Agent
   * a **child-device agent** is the counterpart of a **plugin**, that takes the responsibility to access to the **external child-device's** _resources_
-  * a **child-device agent** can also be used on the **main-device**, without appearing in the cloud as child-device, e.g. in order to
-    * provide container resources (e.g. config files) to a **plugin** running in another container; by running the **child-device agent** inside the resource's container
-    * allow to access _resources_ of the **main-device** somehow differently as the plugin's implementation does
   * a **child-device agent** can serve one or more **plugins**
   * a **child-device agent** can be installed and executed on the **external child-device**, or on the **main-device**
     * if it runs in the **external child-device** it can access the _resources_ directly
     * if it runs on the **main-device** it can use any (low-level) interfaces the **external child-device** provides to access those resources
       * One main reason to install the **child-device agent** on the **main-device** is, when the **external child-device** cannot or shall not be altered.
+  * TODO: **child-device agent** can also be used on the **main-device**, without appearing in the cloud as child-device, e.g. in order to
+    * provide container resources (e.g. config files) to a **plugin** running in another container; by running the **child-device agent** inside the resource's container
 
 ### Plugin-Contract
 
@@ -136,8 +138,8 @@ A **plugin** defines and implements a specific **contract** for all interactions
       * the **child-device agent** must listen and react to certain requests of the **plugin**, e.g. on MQTT
       * the **child-device agent** must provide/consume files to/from the **plugin** on purpose, e.g. via HTTP
       * ...and more...
-  * a **plugin's** **contract** can be denoted with a unique name (e.g. `tedge_config`)
-    * based on that unique name a **child-device agent** can report and find **plugins** the child-device intends to contact (e.g. during providioning phase)
+  * a **plugin's** **contract** can be flagged with a unique name (e.g. `tedge_config`)
+    * based on that unique name a **child-device agent** can report and find **plugins** the child-device intends to contact (e.g. during provisioning phase)
     * those information can be also provided to the cloud and other applications on the device site, on purpose
 
 TODO: consider containers here?
