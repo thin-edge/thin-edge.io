@@ -95,3 +95,141 @@ To name just a few:
 * However, we also expect the system to be extended by independent vendors,
   and thin-edge should not pre-defined all the messages that can be exchanged by actors.
   * A contributor should be able to define its own set of messages usable by others.  
+
+## From actors to software components
+
+TODO
+
+## Requirements
+
+TODO
+
+## Proposal
+
+* TODO Why not `actix`?
+
+### Messages
+
+Messages must flow freely between actors with no constraints on ownership and thread.
+As they are used to improved observability, they must be `Display`.
+
+```rust
+/// A message exchanged between two actors
+pub trait Message: Clone + Display + Send + Sync + 'static {}
+
+/// There is no need to tag messages as such
+impl<T: Clone + Display + Send + Sync + 'static> Message for T {}
+```
+
+Typical examples of thin-edge messages are telemetry data, operation requests and outcomes,
+but also low level messages as MQTT messages, HTTP requests and responses,
+and even system specific messages as file-system events and update requests.
+
+To be discussed:
+* Do the messages need to be `Clone`?
+  This has to be considered along the idea of using `oneshot` channel for the response to a request.
+  It might be better to be explicit
+  and use `Message + Clone` in contexts where messages are broadcast.
+
+### Channels
+
+Multi-producer single-consumer (`mpsc`) channels are used to exchange messages between actors.
+
+* A channel is created for each actor instance.
+* The receiver of this channel is given to the recipient actor.
+* Clones of the channel sender are given to any actor that needs to send messages to this instance.
+* With this setup, each actor instance owns
+  - an `mpsc::Receiver` end
+  - and a bunch of `mpsc::Sender`s, one per peer. 
+* The actors process then in turn the received messages,
+  updating their internal state and sending messages to their peers. 
+
+Having a single receiver per actor improves modularity, observability and testability,
+since all the inputs for an actor are going through this receiver.
+Similarly, having the peers of an actor materialized by channel senders
+helps to understand and test the actors in isolation.
+
+However, for this to work, several points need to be addressed, regarding:
+
+* Message types
+* Channel types
+* Channel creation and ownership
+* Actor with no inputs
+* Addressing responses
+* Out-of-band runtime messages
+* Size of the channel buffers
+
+#### Message types
+
+All the messages sent to an actor must have the same rust type - defined by the actor.
+So, they can be queued into the actor receiver and then processed in turn.
+
+```rust
+pub trait Actor {
+    /// Type of input messages this actor consumes
+    type Input: Message;
+    
+    // ...
+}
+```
+
+However, in practice, an actor has to handle different message kinds.
+For instance, a `c8y_mapper` actor handle concurrently:
+* telemetry data received from sensors and child devices,
+* operation requests coming from the cloud,
+* operation outcomes returned by the operating system and child devices.
+
+These different kinds of message have to be encapsulated into a single type, an `enum`.
+However, an actor sending messages *must not* depend on this global enum. 
+* In the `c8y_mapper` example case:
+  It's critical for an actor that just sends telemetry data
+  to not depend on the other kinds of messages, as those related to operations.
+  Otherwise, we would lose the ability to implement these two actors independently.
+* For an actor to send messages to another one,
+  one must only ensure that the messages sent
+  can be converted *into* those expected by the recipient.
+
+The `fan_in_message_type!` macro helps to define such an `enum` type
+grouping subtypes of message that can be sent by independent actors.
+The expression `fan_in_message_type!(Msg[Msg1,Msg2]);` expends to:
+
+```rust
+#[derive(Clone, Debug)]
+enum Msg { 
+    Msg1(Msg1),
+    Msg2(Msg2),
+}
+
+impl From<Msg1> for Msg {
+    fn from(m: Msg1) -> Msg {
+        Msg::Msg1(m)
+    }
+}
+
+impl From<Msg2> for Msg {
+    fn from(m: Msg2) -> Msg {
+        Msg::Msg2(m)
+    }
+}
+```
+
+#### Channel types
+
+#### Channel creation and ownership
+
+#### Actor with no inputs
+
+#### Out-of-band runtime messages
+
+#### Size of the channel buffers
+
+### Behavior
+
+### Instantiation
+
+### Discovery
+
+### Runtime
+
+### Runtime messages
+
