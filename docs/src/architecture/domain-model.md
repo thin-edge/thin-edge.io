@@ -61,7 +61,7 @@ That includes:
     * software packages can carry:
       * the **domain application**[^1]
       * parts from **OS / Libs / Runtime**[^1], or the whole thing as one
-      * **thin-edge** it-self
+      * **thin-edge** itself
 * **Configuration Management**:
     * provides to view and change configurations on the device, as
       * list available configurations
