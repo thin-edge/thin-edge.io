@@ -170,9 +170,3 @@ Usual **devices** are **PLCs** (**P**rogrammable **L**ogic **C**ontrollers), **I
   * drivers (as part of the **OS / Libs / Runtime** and/or the **Domain Application**) do expose all data from
     **Sensors** and **Actuators** to the **device** as inputs or outputs
   * also the **Domain Application** can expose data as input or output (e.g. own _signals_ or _states_)
-
-
----------------------------------------------
-Open Topics:
-* "fragments"
-* better word for plugin
