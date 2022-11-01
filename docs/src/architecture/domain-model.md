@@ -26,7 +26,7 @@ Here _state_ refers to e.g. **Device Management** details as _installed software
     * has a _type name_
     * optionally holds _units_ for the **measurements**
   * **Command**, is a single value or set of values
-    * is send from the cloud to one device, e.g. to
+    * is sent from the cloud to one device, e.g. to
       - stimulate an actuator[^1] (e.g. switching a relay)
       - send a signal to the domain application[^1]
       - set one or more set-points[^1] (e.g. upper/lower limits or threshold of a climate control)
