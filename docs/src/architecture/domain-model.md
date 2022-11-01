@@ -91,7 +91,7 @@ That includes:
   * the device **thin-edge** is running on is referred as the **main-device**
     * **thin-edge** on the **main-device** establishes and manages all communication to the cloud
   * all devices connected to the **main-device** are referred as **external child-devices** 
-  * each **external child-device** can be represented in the cloud with it's individual **device twin**
+  * each **external child-device** can be represented in the cloud with its individual **device twin**
     * a unique **child-id** makes the association between each **external child-device** and it's **device twin**
   * all **telemetry data** and **device managament** functionality can appear in the context of the 
     **external child-device's** individual **device twin**, or the **main-device's** **device twin**
