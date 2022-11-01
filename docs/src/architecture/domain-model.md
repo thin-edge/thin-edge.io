@@ -116,6 +116,8 @@ The figure below illustrates the child-device concept.
     * all _resources_ and _services_ of an **external child-device** are only remotely accessible for the **main-device**
       * the **plugin** running on the **main-device** needs another software component that establish the remote access for those _resources_ and _services_
       * that software component is referred as **child-device agent**
+  * a **plugin** can also facilitate **Device Management** functionality for containers running on the **main-device**
+    * similar to **external child-devices**, all _resources_ and _services_ of a container are accessed by a **plugin** via a **child-device agent** that runs inside the corresponding container 
 
 The figure below illustrates the concept of **plugins** and **child-devices agents**.
 
@@ -128,8 +130,6 @@ The figure below illustrates the concept of **plugins** and **child-devices agen
     * if it runs in the **external child-device** it can access the _resources_ directly
     * if it runs on the **main-device** it can use any (low-level) interfaces the **external child-device** provides to access those resources
       * One main reason to install the **child-device agent** on the **main-device** is, when the **external child-device** cannot or shall not be altered.
-  * TODO: **child-device agent** can also be used on the **main-device**, without appearing in the cloud as child-device, e.g. in order to
-    * provide container resources (e.g. config files) to a **plugin** running in another container; by running the **child-device agent** inside the resource's container
 
 ### Plugin-Contract
 
@@ -141,9 +141,6 @@ A **plugin** defines and implements a specific **contract** for all interactions
   * a **plugin's** **contract** can be flagged with a unique name (e.g. `tedge_config`)
     * based on that unique name a **child-device agent** can report and find **plugins** the child-device intends to contact (e.g. during provisioning phase)
     * those information can be also provided to the cloud and other applications on the device site, on purpose
-
-TODO: consider containers here?
-
 
 # Appendix
 
