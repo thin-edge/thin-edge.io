@@ -6,8 +6,8 @@ The following section introduces the **thin-edge** domain model.
 The **cloud** could be some IoT Cloud Platform, as e.g. [Cumulocity](https://www.softwareag.cloud/site/product/cumulocity-iot.html), [Azure](https://azure.microsoft.com) or [AWS](https://aws.amazon.com); or an on-premise "IoT system".
 
 **thin-edge** has been designed with the assumption that the **device** is represented in the **IoT cloud** as **device twin**.
-The **device twin** in the IoT cloud is a logical representation of the **device**. As such, it stores the _state_ of the **device**.
-Here _state_ refers to e.g. **Telemetry Data** or **Device Management** details as _installed software versions_ or _configurations_.
+The **device twin** in the IoT cloud is a logical representation of the **device**. As such, it carries or references **Telemetry Data**, and stores the _state_ of the **device**.
+Here _state_ refers to e.g. **Device Management** details as _installed software versions_ or _configurations_.
 
 ## Telemetry Data
 
