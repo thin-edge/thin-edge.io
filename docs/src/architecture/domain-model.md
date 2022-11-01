@@ -144,11 +144,9 @@ A **plugin** defines and implements a specific **contract** for all interactions
 
 # Appendix
 
-## Device Domain
+## Device Overview
 
-TODO: **thin-edge** is designed to facilitate IoT functionality to resource constrained **devices**.     ... that section is to ...
-
-The focus is on industrial OT **devices** or any other kind of embedded **devices**. It is not reduced to **devices** that are capable to install and run thin-edge, but includes also **devices** that need another _(gateway) device_ aside, that executes **thin-edge**.
+**thin-edge** is designed to facilitate IoT functionality to resource constrained **devices**. The focus is on industrial OT **devices** or any other kind of embedded **devices**. It is not reduced to **devices** that are capable to install and run thin-edge, but includes also **devices** that need another _(gateway) device_ aside, that executes **thin-edge**.
 
 Usual **devices** are **PLCs** (**P**rogrammable **L**ogic **C**ontrollers), **IPCs** (**I**ndustrial **PC**s) or any kind of **SoC-based** or **Microcontroller-based** Embedded System. The figure below shows a simplified conceptual model of such a device.
 
