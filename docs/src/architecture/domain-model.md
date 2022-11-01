@@ -3,7 +3,7 @@
 The following section introduces the **thin-edge** domain model.
 
 **thin-edge** is the glue between the **cloud** and **devices**. I.e. it interfaces on the one hand **devices** (especially resource constrained industrial **devices**), and connects on the other hand the **cloud**.
-The **cloud** could be some IoT Cloud Platform, as e.g. [Cumulocity](https://www.softwareag.cloud/site/product/cumulocity-iot.html), [Azure](https://azure.microsoft.com) or [AWS](https://aws.amazon.com); or an on-premise "IoT system".
+The **cloud** could be some IoT Cloud Platform, such as [Cumulocity](https://www.softwareag.cloud/site/product/cumulocity-iot.html), [Azure](https://azure.microsoft.com) or [AWS](https://aws.amazon.com); or an on-premise "IoT system".
 
 **thin-edge** has been designed with the assumption that the **device** is represented in the **IoT cloud** as **device twin**.
 The **device twin** in the IoT cloud is a logical representation of the **device**. As such, it carries or references **Telemetry Data**, and stores the _state_ of the **device**.
