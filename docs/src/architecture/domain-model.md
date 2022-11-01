@@ -171,23 +171,8 @@ Usual **devices** are **PLCs** (**P**rogrammable **L**ogic **C**ontrollers), **I
     **Sensors** and **Actuators** to the **device** as inputs or outputs
   * also the **Domain Application** can expose data as input or output (e.g. own _signals_ or _states_)
 
-TODO: add description of term "set points" to "device" section
-
-TODO: add description of term "protocol drivers" to "device" section
-
-TODO: following old snippet from form section 'thin-edge data concept' to be incorporated into device section, or somewhere else?
-
-      ----- SNIP -----
-      **thin-edge** never accesses device's **data points** directly.
-      In any case there is one or more _custom specific sw component_ that interface **data points** and **thin-edge** APIs (e.g. the **domain application** and some kinds of **protocol drivers**).
-      Those _custom specific sw components_ provide **data point** values to the **thin-edge** APIs as **measurements**, **commands**, **events** or **alarms**.
-      ----- SNIP -----
-
-
-
 
 ---------------------------------------------
 Open Topics:
 * "fragments"
 * better word for plugin
-* better word for child-device agent (maybe child-device proxy)
