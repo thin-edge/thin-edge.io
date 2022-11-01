@@ -33,7 +33,7 @@ Here _state_ refers to e.g. **Device Management** details as _installed software
     * values could be a mix of numbers, strings or booleans
     * **thin-edge** provides those values to the **domain application**[^1] and **protocol drivers**[^1]
   * **Event**, is a notification that something happened on the device's environment or software system
-    * it's source could be
+    * its source could be
       - a _sensor's[^1] value_ that detected a door has beed closed
       - a signal from the device's domain application[^1]
       - a device's system notification that a user has started an ssh session
