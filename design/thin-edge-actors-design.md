@@ -1,19 +1,13 @@
 # Thin-edge actor-based components
 
-A design goal of thin-edge is to be able to build batteries-included executables,
-with support for numerous and diverse IoT features
-that can be enabled, configured and combined by agent developers,
-to build application specific agents.
+The aim of thin-edge is to empower IoT software developers,
+with a large set of pre-build components
+that can be enabled, configured, extended and combined
+into IoT specific agents.
 
 For that purpose, thin-edge leverages the actor model
 and provides the tools to combine these actors into independent extensions
 and then into full-fledged executables the users can adapt to their use-cases.
-
-* Elementary features are provided by __actors__: units of computation that interact with asynchronous messages.
-* Actors are packaged into __extensions__: rust libraries that provide implementations along interfaces,
-  input and output messages as well as instantiation services. 
-* A thin-edge __executable__ makes available a collection of extensions ready to be enabled on-demand.
-* A user provided __configuration__ enables and configures sherry-picked extensions making an agent.
 
 This document trace the core decisions toward this design.
 
@@ -98,11 +92,107 @@ To name just a few:
 
 ## From actors to software components
 
-TODO
+Using actors is key but not sufficient.
+Yes, the actor model helps thin-edge rust developers to implement components in isolation.
+However, thin-edge also aims to provide flexibility to the agent developers with ready-to-use executables,
+that can be tuned on-site for a specific use-case,
+by activating only specific features among all those available.
+
+The design must address not only the API for *actors* but also the packaging of these actors into *extensions*,
+their integration into *executables* and their *configuration* by agent developers and end-users. 
+
+* Elementary features are provided by __actors__: units of computation that interact with asynchronous messages.
+* Actors are packaged into __extensions__: rust libraries that provide implementations along interfaces,
+  input and output messages as well as instantiation services.
+* A thin-edge __executable__ makes available a collection of extensions ready to be enabled on-demand.
+* A user provided __configuration__ enables and configures sherry-picked extensions making an agent.
+
+This document is focused on the implementation of the actor model in the context of thin-edge.
+We will address later how a user could sherry-pick extensions from a batteries-included software.
 
 ## Requirements
 
-TODO
+One should be able to build a thin-edge executable from extensions that have been implemented independently.
+
+* The thin-edge API must define how to create, connect and run actor instances.
+* Actors should be loosely coupled, only depending on message types defined by peer actors
+  and not strongly dependent on specific peer actor implementations.
+* The compatibility between two actors, one sending messages the other consuming them,
+  must be checked at compile time leveraging rust types for messages and channels.
+* If an actor expect to be connected to specific peers, this must be enforced at compile time,
+  these peers being solely defined by the types of the exchanged messages. 
+* Two actors must not need a direct dependency relationships to be able to exchange messages, requests or responses.
+  In practice, one might have crates with sole purpose to define message types.
+  So a consumer of messages, don't need to know any sources of such messages.
+  And vice-versa, the producers don't have to depend (at the code level) on any consumers.
+  Both consumers and producers only need a dependency on the message definitions.
+* The thin-edge API should give a large flexibility to connect actors:
+  * exchanging stream of messages as for measurements,
+  * sending requests which responses are awaited by the requester,
+  * sending asynchronous requests which responses will be processed concurrently with the other messages,
+  * broadcasting messages,
+  * gathering messages from various sources,
+  * sending messages to one specific instance of an actor.
+* Actors should support being synchronous, with the ability to pause awaiting the response of another actor.
+* The final executable is build as an assemblage of extensions, defining actor instances and their connections.
+* Using Rust actors must not be the unique way to create MQTT-based thin-edge executables - aka *plugins*.
+  An agent developer must be free to choose his preferred programming language
+  to implement a feature that interacts with other thin-edge executables using JSON over MQTT.
+
+One should be able to build executables with IIoT specific features.
+
+* The `tedge_actors` crate defines only messages related to the runtime as `Spawn`, `Shutdown` or `Timeout`.
+* IIoT related messages are defined in specific extensions as `tedge_telemetry` or `tedge_software_management`.
+* An extension must be provided for MQTT as well as another one for HTTP.
+* An extension must be provided to encapsulate the thin-edge MQTT API,
+  with the definition of all the MQTT topics and message payloads.
+
+Robustness is key.
+* One actor panicking should not impact other actors or the runtime.
+* All errors must be handled in a non-crashing way.
+* Unrecoverable errors may cause the binary to shutdown eventually, but not unexpectedly.
+* The framework must handle SIGTERM and signal a shutdown to all active actors.
+* Shutdown is signalled to all extensions, giving them a possibility to handle such case gracefully.
+  However, the robustness of the solution should not always rely on graceful shutdowns
+  and should be designed to cope with unexpected crashes or SIGKILLs.
+
+Observability and testability:
+* An actor should be testable in isolation, with
+  - a configurable initial state,
+  - simulated inputs,
+  - checked outputs,
+  - possibly simulated peers.
+* Every actor must have a unique id built after the actor type as known by the users.
+* A user must be able to configure logging per-component as well as globally,
+  tracing the messages processed by each actor
+  as well as those forwarded to peers.
+
+The runtime itself should behave as an actor, with messages that can be traced.
+* Runtime messages should be used for all runtime actions:
+  - to activate and deactivate extensions at runtime
+  - to start and stop actors,
+  - to set and trigger timeout,
+  - to shutdown the system.
+* Runtime messages sent to an actor must be processed with a higher priority.
+* An actor should be able to send messages to the runtime:
+  - to trigger an action as spawning a task
+  - to notify errors.
+* Runtime messages must be traceable as regular messages,
+  so a user should be able to observe all runtime actions.
+
+Nice to have ideas that are out-of-scope of the first implementation of the actor model for thin-edge:
+* It would be a plus, to have actors storing data using the framework:
+  - to persist data between restarts of the deployment
+  - to cache data during network outages
+  - to provide operation checkpoints during sensitive operations.
+* It would be handy to build batteries-included executables
+  that contains numerous extensions and alternative implementations for a large diversity of use-cases.
+  - An extension can be included in an executable without being enabled, but only registered and ready to be used.
+  - Registered extensions can be enabled and configured at runtime. 
+  - Having extensions included but not instantiated should not impact other extensions nor consume runtime resources.
+  - Such an executable with enabled and non-enabled extensions must provide a command line option, say `--list-extensions`,
+    to provide the whole list of available extensions and their purpose;
+    as well as command line options for detailed help on how to enable and configure those.
 
 ## Proposal
 
