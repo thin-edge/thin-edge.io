@@ -141,6 +141,17 @@ A **plugin** defines and implements a specific **contract** for all interactions
     * based on that unique name a **child-device agent** can report and find **plugins** the child-device intends to contact (e.g. during provisioning phase)
     * those information can be also provided to the cloud and other applications on the device site, on purpose
 
+## Inventory
+
+**thin-edge** holds and manages an **inventory** on the **main-device**, that stores and provides information about the **main-device** and known **child-devices**
+  * information stored per **device** are
+    * supported kinds of **Device Management** functionality
+    * supported kinds of **Telemetry Data**
+    * optionally any custom-specific meta-information per **device**
+  * the **inventory** is the communication backbone for **plugins**, **external child-devices**, the **domain application**[^1] and **thin-edge** it-self
+      * one can add information to announce capabilities a **device** supports
+      * another one can retrieve those information to identify capabililties a **device** supports
+
 # Appendix
 
 ## Device Overview
