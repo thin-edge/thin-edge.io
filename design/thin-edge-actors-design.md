@@ -196,7 +196,50 @@ Nice to have ideas that are out-of-scope of the first implementation of the acto
 
 ## Proposal
 
-* TODO Why not `actix`?
+[There are a *lot* of actor frameworks for Rust](https://www.reddit.com/r/rust/comments/n2cmvd/there_are_a_lot_of_actor_framework_projects_on/),
+so why thin-edge should come with its own implementation?
+
+As [well described by Alice Ryhl](https://ryhl.io/blog/actors-with-tokio/),
+actors can be implemented with Tokio directly, without using any actor libraries.
+Indeed, [tokio](https://docs.rs/tokio/latest/tokio/index.html) provides the key building blocks for actors:
+[asynchronous tasks](https://docs.rs/tokio/latest/tokio/task/index.html)
+and [in-memory channels](https://docs.rs/tokio/latest/tokio/sync/index.html).
+Alice highlights that the issues are
+*not* on the implementation of the actor processing loop,
+*but* on how the actors are built, interconnected and spawn. 
+
+But if you look at the existing Rust actor frameworks,
+[actix](https://docs.rs/actix/latest/actix/) being the most notable one,
+the focus is on abstracting the [actor life cycle](https://docs.rs/actix/latest/actix/trait.Actor.html#actor-lifecycle),
+with specific methods to tell what to do at each stage
+and [how to handle each specific message type](https://docs.rs/actix/latest/actix/trait.Handler.html).
+Beyond the fact that this gives little help compared to pattern-matching on the received messages,
+this adds strong constraints on how message reception and emission are interleaved,
+this life cycle being controlled by the framework.
+The `Handler` trait is perfect to define how to react to some input,
+but how to send spontaneous messages or to arbitrarily defer a reaction?
+
+To address the main issue - i.e. to build a mesh of connected actors,
+Actix distinguishes the [`Actor`](https://docs.rs/actix/latest/actix/prelude/trait.Actor.html) from its 
+[`Context`](https://docs.rs/actix/latest/actix/struct.Context.html) but tightly couples one the other.
+An actix actor is unusable without an actix context and runtime.
+And even assuming such a dependency, one has to define an approach on top of actix
+on how to create the actor contexts, the instances and their interconnections.
+
+Furthermore, Actix has a bias towards a request / response model of communication.
+- [A response type is attached to any message](https://docs.rs/actix/latest/actix/prelude/trait.Message.html).
+- [Responses are not regular messages and are sent over specific channels](https://docs.rs/actix/latest/actix/dev/trait.MessageResponse.html).
+- A message handler is given a context to send arbitrary messages,
+  but [this must be done before returning a response](https://docs.rs/actix/latest/actix/prelude/trait.Handler.html#tymethod.handle).
+
+To conclude, we decided to design thin-edge actors on top of tokio without using actix.
+- Tokio provides the key building blocks: asynchronous tasks and in-memory channels.
+- By comparison with actor life-cycles defined and controlled by a framework, 
+  we prefer the simplicity and generality of actors which behaviors are freely defined as `async fn run(&mut self)` methods.
+- We need the flexibility to connect actors along various communication patterns,
+  with no restrictions on the type nor the number of messages sent as a reaction to a former message,
+  not even on the targets and the reaction time window.
+- Our effort is to be focussed on providing a flexible but systematic approach to instantiate and connect actors.
 
 ### Messages
 
