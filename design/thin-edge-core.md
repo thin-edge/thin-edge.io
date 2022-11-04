@@ -1,7 +1,7 @@
 # Thin-edge Design Principles
 
 __Thin-edge makes it easy the integration of cloud services, edge computing and operational technologies,
-with the foundations to develop business-specific IIoT gateways
+with the foundations to develop business-specific IIoT agents
 from a catalog of generic and use-case specific components assembled
 on top of a framework that enables connectivity and interoperability.__
 
@@ -39,14 +39,14 @@ with two levels of building blocks that combine along an IIoT specific API.
   as well as the rules to combine them into hardened executables.
 * To ease incremental developments,
   thin-edge give the developers the freedom to combine both MQTT and Rust-based components
-  into purpose-specific gateways.
+  into purpose-specific agents.
 * To make feasible the interoperability of components provided by different tiers,
   thin-edge comes with an extensible data model for IIoT -
   cloud connectivity, telemetry data, device management, child devices, ...
 
 ## Design Principles
 
-* Thin-edge provides the tools to develop an IIoT gateway by assembling components
+* Thin-edge provides the tools to develop an IIoT agent by assembling components
   that have been implemented independently,
   possibly by different vendors and using different programming languages.
 * There are two levels of components:
@@ -70,7 +70,7 @@ with two levels of building blocks that combine along an IIoT specific API.
     and to add missing features without having to implement a full-fledged Rust component. 
 * To enable interactions between the MQTT-components, thin-edge provides an MQTT bus made of:
     * a local MQTT server,
-    * an MQTT bridge that relays messages between the gateway and the cloud end-points,
+    * an MQTT bridge that relays messages between the agent and the cloud end-points,
     * an MQTT API that defines topics and message payloads
       * to exchange telemetry data,
       * to monitor components health,
@@ -90,13 +90,13 @@ with two levels of building blocks that combine along an IIoT specific API.
 
 Thin-edge is shipped with a batteries-included executable, the `tedge` command, that eases on-boarding
 with support for various IoT clouds, monitoring tools, software-management plugins, OT protocols ...
-On top of `tedge`, an IoT-application developer can easily build a purpose-specific IoT gateway
+On top of `tedge`, an IoT-application developer can easily build a purpose-specific IIoT agent
 to connect his devices to the cloud and local resources. 
-This IoT gateway is made of independent processes that interact over MQTT using JSON messages,
+This IIoT agent is made of independent processes that interact over MQTT using JSON messages,
 and that are deployed over the devices on the edge as well as the OT network.
 The IoT-application developer can implement and deploy his own components,
 using his programming language of choice,
-and leveraging the thin-edge MQTT API to interact with the components of the gateway.
+and leveraging the thin-edge MQTT API to interact with the components of the agent.
 
 ```
                         #
@@ -207,7 +207,7 @@ The main motivation for this internal design is the ability to build specific ex
 tuned for a specific use-case, consuming less memory and offering a reduced attack surface.
 
 An application developer can easily reassemble cherry-picked thin-edge actors into a highly tuned executable,
-keeping only the feature actually required on the IIoT gateways,
+keeping only the feature actually required on the IIoT agents,
 and possibly adding Rust actors that have been implemented specification for his application.
 
 ```
