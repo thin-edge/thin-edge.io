@@ -21,8 +21,7 @@ Here _state_ refers to e.g. **Device Management** details as _installed software
     * releates to one **metric**
     * **thin-edge** puts the measurement into the context of the corresponding **metric** and sends it to the cloud
   * **Metric**, is a time-series of measurements
-    * relates to a _source device_<br/>
-      TODO: could the source also be a _process_? (See [comment](https://github.com/thin-edge/thin-edge.io/pull/1195#discussion_r992207078))
+    * relates to a source, i.e. a device or a process
     * has a _type name_
     * optionally holds _units_ for the **measurements**
   * **Command**, is a single value or set of values
