@@ -58,7 +58,7 @@ jobs:
         with:
           targets: armv7-unknown-linux-gnueabihf
 
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
 
       - uses: dorny/paths-filter@v2
         id: filter
@@ -174,7 +174,7 @@ jobs:
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
 
       - name: Cargo clippy --version
         uses: actions-rs/cargo@v1
@@ -224,7 +224,7 @@ jobs:
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
 
       - name: Cargo version
         uses: actions-rs/cargo@v1
@@ -262,7 +262,7 @@ jobs:
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
 
       - name: Cargo version
         uses: actions-rs/cargo@v1
@@ -295,7 +295,7 @@ jobs:
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
 
       - name: build cross release for target
         uses: actions-rs/cargo@v1
@@ -323,7 +323,7 @@ jobs:
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
 
       - name: Build tests cross release for target
         uses: actions-rs/cargo@v1
@@ -364,7 +364,7 @@ jobs:
 #
 #      - name: Enable cache
 #        # https://github.com/marketplace/actions/rust-cache
-#        uses: Swatinem/rust-cache@v1
+#        uses: Swatinem/rust-cache@v2
 #
 #      - name: install libssl
 #        run: sudo apt install libssl-dev
