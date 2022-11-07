@@ -111,7 +111,7 @@ $ ls -l /etc/tedge/operations/c8y/child-2
 
 The `c8y_configuration_plugin` has to be run as a daemon on the device, the latter being connected to Cumulocity.
 
-On start of `tegde_mapper c8y` and on `/etc/tedge/operations/c8y` directory updates,
+On start of `tedge_mapper c8y` and on `/etc/tedge/operations/c8y` directory updates,
 one can observe on the MQTT bus of the thin-edge device
 the messages sent to Cumulocity to declare the capabilities of the main and child devices.
 Here, the capabilities to upload and download configuration files
