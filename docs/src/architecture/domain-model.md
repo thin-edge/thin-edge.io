@@ -13,17 +13,18 @@ Here _state_ refers to e.g. **Device Management** details as _installed software
 
 **Telemetry data** are _measurements_, _events_ and _alarms_.
 
- * **Measurement**:
-    * is a single value or set of values, all taken at a single point in time
-      * could be a mix of values coming from physical **Sensors**[^1] and the device's **Domain Application**[^1]
-      * could be a mix of numbers, strings or booleans
-    * has one timestamp
-    * releates to one **metric**
-    * **thin-edge** puts the measurement into the context of the corresponding **metric** and sends it to the cloud
-  * **Metric**, is a time-series of measurements
-    * relates to a source, i.e. a device or a process
-    * has a _type name_
-    * optionally holds _units_ for the **measurements**
+  * **Measurement**:
+     * has a _type name_
+     * carries a _series_ of **samples**
+       * a **sample** is a single value or set of values, all taken at a single point in time
+         * could be a mix of values coming from physical **Sensors**[^1] and the device's **Domain Application**[^1];
+           e.g. _voltage_ and _current_ of an electricity meter, and current state of the manufacturing control process
+         * all **sample's** values could be a mix of numbers, strings or booleans
+         * a **sample** has _one_ timestamp
+       * a _series_ of **samples** is a set of **samples** over a period of time;
+         e.g. _voltage_ and _current_ captured in a fixed interval
+     * a measurement optionally holds individual _units_ for the values of the **samples**
+     * a measurement relates to a source, i.e. a device or a process
   * **Command**, is a single value or set of values
     * is sent from the cloud to one device, e.g. to
       - stimulate an actuator[^1] (e.g. switching a relay)
