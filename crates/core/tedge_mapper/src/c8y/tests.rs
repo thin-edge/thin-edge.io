@@ -1156,7 +1156,7 @@ async fn mapper_publishes_supported_operations() {
     // and verifies the supported operations that are published by the tedge_mapper.
     let broker = mqtt_tests::test_mqtt_broker();
     let cfg_dir = TempTedgeDir::new();
-    create_thin_edge_operations(&cfg_dir, vec!["c8y_TestOp2", "c8y_TestOp2"]);
+    create_thin_edge_operations(&cfg_dir, vec!["c8y_TestOp1", "c8y_TestOp2"]);
     let mut messages = broker.messages_published_on("c8y/s/us").await;
 
     let (_temp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
