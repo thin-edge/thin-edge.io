@@ -366,3 +366,19 @@ impl From<Msg2> for Msg {
 
 ### Runtime messages
 
+An actor should also be able to handle requests sent by the runtime, typically a shutdown request.
+
+* For observability purposes, all these requests are materialized by messages sent to the actor.
+* These requests can be handled by specific methods of the `Actor` trait, as a `shutdown()` method.
+  However, it might be simpler to let the actor implementations processes these messages as any other messages.
+* These runtime messages must be handled with a higher priority as regular ones.
+  A shutdown request should not wait for all pending messages to be processed first.
+* This priority mechanism must be encapsulated by the actor mailbox,
+  to be able to improve prioritization of message delivery.
+* A simple option to do that is to use two `mpsc` channels for a mailbox,
+  one for high-priority messages, the other for regular messages.
+* Using a [`biased tokio::select!`](https://docs.rs/tokio/latest/tokio/macro.select.html#fairness)
+  ensures that high-priority messages will be delivered first to the actor.
+* Sending high-priority messages could be open to regular actor peers.
+  However, it must then be clear that there is a risk for regular messages to be stalled.
+
