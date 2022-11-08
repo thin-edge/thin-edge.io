@@ -1232,6 +1232,7 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     // operation and publishes list of supported operation including the new operation, and verifies the device create message.
     let broker = mqtt_tests::test_mqtt_broker();
     let cfg_dir = TempTedgeDir::new();
+    create_thin_edge_operations(&cfg_dir, vec!["c8y_TestOp1", "c8y_TestOp2"]);
     let mut health_message = broker
         .messages_published_on("tedge/health/c8y-mapper-test")
         .await;
@@ -1484,7 +1485,6 @@ fn create_c8y_converter(
 
     let tmp_dir = TempTedgeDir::new();
 
-    create_thin_edge_operations(&ops_dir, vec!["c8y_TestOp1", "c8y_TestOp2"]);
     let converter = CumulocityConverter::from_logs_path(
         size_threshold,
         device_name,
