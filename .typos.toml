@@ -2,6 +2,7 @@
 mosquitto = "mosquitto"
 hda = "hda"
 tegde = "tedge"
+OT = "OT"
 
 [files]
 extend-exclude = [ "**certificate.txt", "**test_root_cert*.txt" ]
