@@ -120,7 +120,7 @@ fn get_rumqttd_config(port: u16) -> Config {
     };
 
     let connections_settings = ConnectionSettings {
-        connection_timeout_ms: 1,
+        connection_timeout_ms: 10,
         max_client_id_len: 256,
         throttle_delay_ms: 0,
         max_payload_size: 268435455,
