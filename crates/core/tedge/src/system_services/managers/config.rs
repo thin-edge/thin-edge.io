@@ -4,10 +4,13 @@ use std::fs;
 use std::path::PathBuf;
 
 pub const SERVICE_CONFIG_FILE: &str = "system.toml";
+const REBOOT_COMMAND: &[&str] = &["init", "6"];
 
 #[derive(Deserialize, Debug, Default, Eq, PartialEq)]
 pub struct SystemConfig {
+    #[serde(default)]
     pub(crate) init: InitConfig,
+    pub system: SystemSpecificCommands,
 }
 
 #[derive(Deserialize, Debug, Eq, PartialEq)]
@@ -20,6 +23,23 @@ pub struct InitConfig {
     pub enable: Vec<String>,
     pub disable: Vec<String>,
     pub is_active: Vec<String>,
+}
+
+#[derive(Deserialize, Debug, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct SystemSpecificCommands {
+    pub reboot: Vec<String>,
+}
+
+impl Default for SystemSpecificCommands {
+    fn default() -> Self {
+        Self {
+            reboot: REBOOT_COMMAND
+                .iter()
+                .map(|value| String::from(*value))
+                .collect::<Vec<String>>(),
+        }
+    }
 }
 
 impl Default for InitConfig {
@@ -77,6 +97,9 @@ mod tests {
             enable =  ["/bin/systemctl", "enable", "{}"]
             disable =  ["/bin/systemctl", "disable", "{}"]
             is_active = ["/bin/systemctl", "is-active", "{}"]
+
+            [system]
+            reboot = ["init", "6"]
         "#,
         )
         .unwrap();
@@ -94,19 +117,14 @@ mod tests {
             config.init.is_active,
             vec!["/bin/systemctl", "is-active", "{}"]
         );
+        assert_eq!(config.system.reboot, "init 6");
     }
 
     #[test]
     fn read_system_config_file() -> anyhow::Result<()> {
         let toml_conf = r#"
-            [init]
-            name = "systemd"
-            is_available = ["/bin/systemctl", "--version"]
-            restart = ["/bin/systemctl", "restart", "{}"]
-            stop =  ["/bin/systemctl", "stop", "{}"]
-            enable =  ["/bin/systemctl", "enable", "{}"]
-            disable =  ["/bin/systemctl", "disable", "{}"]
-            is_active = ["/bin/systemctl", "is-active", "{}"]
+            [system]
+            reboot = ["init", "6"]
         "#;
         let expected_config: SystemConfig = toml::from_str(toml_conf)?;
 

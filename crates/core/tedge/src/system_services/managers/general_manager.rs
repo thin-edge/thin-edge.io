@@ -15,11 +15,13 @@ pub struct GeneralServiceManager {
 impl GeneralServiceManager {
     pub fn try_new(config_root: PathBuf) -> Result<Self, SystemServiceError> {
         let init_config = SystemConfig::try_new(config_root.clone())?.init;
+
         let config_path = config_root
             .join(SERVICE_CONFIG_FILE)
             .to_str()
             .unwrap_or(SERVICE_CONFIG_FILE)
             .to_string();
+
         Ok(Self {
             init_config,
             config_path,
