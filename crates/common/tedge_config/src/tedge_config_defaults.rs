@@ -6,7 +6,7 @@ use std::path::Path;
 
 const DEFAULT_ETC_PATH: &str = "/etc";
 const DEFAULT_PORT: u16 = 1883;
-const DEFAULT_TMP_PATH: &str = "/tmp";
+pub const DEFAULT_TMP_PATH: &str = "/tmp";
 pub const DEFAULT_LOG_PATH: &str = "/var/log";
 pub const DEFAULT_RUN_PATH: &str = "/run";
 const DEFAULT_DEVICE_TYPE: &str = "thin-edge.io";

@@ -4,18 +4,18 @@ pub mod restart_operation {
     use std::{fs::File, fs::OpenOptions, io::Read, io::Write, path::Path};
     use time::OffsetDateTime;
 
-    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "tedge_agent/tedge_agent_restart";
+    const TEDGE_AGENT_RESTART: &str = "tedge_agent_restart";
     const SLASH_PROC_UPTIME: &str = "/proc/uptime";
 
-    /// creates an empty file in /run
-    /// the file name defined by `SLASH_RUN_PATH_TEDGE_AGENT_RESTART`
+    /// creates an empty file in /tmp
+    /// the file name defined by `TEDGE_AGENT_RESTART`
     ///
     /// # Example
     /// ```
-    /// RestartOperationHelper::create_slash_run_file()?;
+    /// RestartOperationHelper::create_tmp_restart_file()?;
     /// ```
-    pub fn create_slash_run_file(run_dir: &Path) -> Result<(), AgentError> {
-        let path = &run_dir.join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART);
+    pub fn create_tmp_restart_file(tmp_dir: &Path) -> Result<(), AgentError> {
+        let path = &tmp_dir.join(TEDGE_AGENT_RESTART);
         let path = Path::new(path);
 
         let mut file = match OpenOptions::new()
@@ -34,14 +34,14 @@ pub mod restart_operation {
         Ok(())
     }
 
-    pub fn slash_run_file_exists(run_dir: &Path) -> bool {
-        let path = &run_dir.join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART);
-        std::path::Path::new(path).exists()
+    pub fn tmp_restart_file_exists(run_dir: &Path) -> bool {
+        let path = &run_dir.join(TEDGE_AGENT_RESTART);
+        Path::new(path).exists()
     }
 
     /// returns the datetime of `SLASH_RUN_PATH_TEDGE_AGENT_RESTART` "modified at".
     fn get_restart_file_datetime(run_dir: &Path) -> Result<time::OffsetDateTime, AgentError> {
-        let mut file = File::open(&run_dir.join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART))?;
+        let mut file = File::open(&run_dir.join(TEDGE_AGENT_RESTART))?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
 
@@ -97,7 +97,7 @@ pub mod restart_operation {
     pub fn has_rebooted(run_dir: &Path) -> Result<bool, AgentError> {
         // there is no slash run file after the reboot, so we assume success.
         // this is true for most of the cases as "/run/" is normally cleared after a reboot.
-        if !slash_run_file_exists(run_dir) {
+        if !tmp_restart_file_exists(run_dir) {
             return Ok(true);
         }
 
