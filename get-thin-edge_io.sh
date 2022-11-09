@@ -76,7 +76,7 @@ echo "Thank you for trying thin-edge.io!"
 echo
 
 if [ -z "$VERSION" ]; then
-    VERSION=0.7.5
+    VERSION=0.8.0
 
     echo "Version argument has not been provided, installing latest: $VERSION"
     echo "To install a particular version use this script with the version as an argument."

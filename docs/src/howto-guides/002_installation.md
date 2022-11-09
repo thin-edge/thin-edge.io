@@ -23,10 +23,12 @@ please go on with the [manual installation steps](#manual-installation-steps).
 
 If you already have `thin-edge.io` on your device, to upgrade `thin-edge.io`,
 the easiest way is to use the same script as the installation. Follow the steps below.
-there is no need to remove old version.
+There is no need to remove old version.
 
-> Note: To successfully upgrade `thin-edge.io` all thin-edge.io components **must be stopped**. The components are:
-> `tedge-mapper-c8y`, `tedge-mapper-az`, `tedge-mapper-collectd`, `tedge-agent`, `c8y-log-plugin`, `c8y-configuration-plugin`.
+> Note for only **0.7.7 or lower version**: To upgrade `thin-edge.io` from these version,
+> all thin-edge.io components **must be stopped** before upgrading.
+> The components are:
+> `tedge-mapper-c8y`, `tedge-mapper-az`, `tedge-mapper-collectd`, `tedge-agent`, `tedge-watchdog`, `c8y-log-plugin`, `c8y-configuration-plugin`.
 >
 > To stop `tedge-mapper-c8y`, `tedge-agent`, `tedge-mapper-az`, you can simply run the commands below.
 > 
@@ -43,7 +45,7 @@ there is no need to remove old version.
 > systemctl stop c8y-log-plugin
 > ```
 
-Then, run `get-thin-edge_io.sh` script as below to upgrade to the latest version.
+Run `get-thin-edge_io.sh` script as below to upgrade to the latest version.
 
 ```shell
 curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s

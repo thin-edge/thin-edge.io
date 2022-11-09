@@ -97,7 +97,7 @@ fn spawn_broker(port: u16) {
                         bytes.push(byte);
                     }
                     let payload = match std::str::from_utf8(bytes.as_ref()) {
-                        Ok(payload) => format!("{:.60}", payload),
+                        Ok(payload) => format!("{:.110}", payload),
                         Err(_) => format!("Non uft8 ({} bytes)", bytes.len()),
                     };
                     eprintln!(
@@ -120,7 +120,7 @@ fn get_rumqttd_config(port: u16) -> Config {
     };
 
     let connections_settings = ConnectionSettings {
-        connection_timeout_ms: 1,
+        connection_timeout_ms: 10,
         max_client_id_len: 256,
         throttle_delay_ms: 0,
         max_payload_size: 268435455,

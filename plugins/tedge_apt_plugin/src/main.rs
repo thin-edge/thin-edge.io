@@ -90,7 +90,10 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             file_path,
         } => {
             let (installer, _metadata) = get_installer(module, version, file_path)?;
-            run_cmd("apt-get", &format!("install --quiet --yes {}", installer))?
+            run_cmd(
+                "apt-get",
+                &format!("install --quiet --yes --allow-downgrades {}", installer),
+            )?
         }
 
         PluginOp::Remove { module, version } => {

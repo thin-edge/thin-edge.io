@@ -1,8 +1,12 @@
 use crate::{
-    child_device::{ConfigOperationRequest, ConfigOperationResponse},
-    PluginConfig, DEFAULT_PLUGIN_CONFIG_FILE,
+    child_device::{
+        try_cleanup_config_file_from_file_transfer_repositoy, ConfigOperationMessage,
+        ConfigOperationRequest, ConfigOperationResponse,
+    },
+    error::{ChildDeviceConfigManagementError, ConfigManagementError},
+    PluginConfig, DEFAULT_OPERATION_DIR_NAME, DEFAULT_PLUGIN_CONFIG_FILE_NAME,
 };
-use agent_interface::{DownloadInfo, Downloader, OperationStatus};
+use agent_interface::OperationStatus;
 use anyhow::Result;
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::smartrest::error::SmartRestSerializerError;
@@ -16,11 +20,10 @@ use c8y_api::smartrest::{
 };
 
 use mqtt_channel::{Connection, Message, SinkExt, Topic};
-use reqwest::Client;
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
 
 use std::path::Path;
-use tracing::{debug, error, info};
+use tracing::{error, info, warn};
 
 pub struct UploadConfigFileStatusMessage {}
 
@@ -88,7 +91,9 @@ pub async fn handle_config_upload_request_tedge_device(
     let msg = UploadConfigFileStatusMessage::executing()?;
     mqtt_client.published.send(msg).await?;
 
-    let config_file_path = config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE);
+    let config_file_path = config_dir
+        .join(DEFAULT_OPERATION_DIR_NAME)
+        .join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
     let plugin_config = PluginConfig::new(&config_file_path);
 
     let upload_result = {
@@ -158,44 +163,53 @@ pub async fn handle_config_upload_request_child_device(
         config_dir.display()
     )));
 
-    let file_entry = plugin_config.get_file_entry_from_type(&config_type)?;
+    match plugin_config.get_file_entry_from_type(&config_type) {
+        Ok(file_entry) => {
+            let config_management = ConfigOperationRequest::Snapshot {
+                child_id,
+                file_entry,
+            };
 
-    let config_management = ConfigOperationRequest::Snapshot {
-        child_id,
-        file_entry,
-    };
-
-    info!("Sending config snapshot request to child device");
-    let msg = Message::new(
-        &config_management.operation_request_topic(),
-        config_management.operation_request_payload(local_http_host)?,
-    );
-    mqtt_client.published.send(msg).await?;
+            info!("Sending config snapshot request to child device");
+            let msg = Message::new(
+                &config_management.operation_request_topic(),
+                config_management.operation_request_payload(local_http_host)?,
+            );
+            mqtt_client.published.send(msg).await?;
+        }
+        Err(ConfigManagementError::InvalidRequestedConfigType { config_type }) => {
+            warn!("Ignoring the config management request for unknown config type: {config_type}");
+        }
+        Err(err) => return Err(err)?,
+    }
 
     Ok(())
 }
 
 pub async fn handle_child_device_config_snapshot_response(
-    message: &Message,
-    tmp_dir: &Path,
+    config_response: &ConfigOperationResponse,
     http_client: &mut impl C8YHttpProxy,
-    local_http_host: &str,
     config_dir: &Path,
-) -> Result<Message, anyhow::Error> {
-    let config_response = ConfigOperationResponse::try_from(message)?;
+) -> Result<Message, ChildDeviceConfigManagementError> {
     let payload = config_response.get_payload();
     let c8y_child_topic = Topic::new_unchecked(&config_response.get_child_topic());
 
     if let Some(operation_status) = payload.status {
         match operation_status {
             OperationStatus::Successful => {
-                Ok(handle_child_device_successful_config_snapshot_response(
-                    &config_response,
-                    tmp_dir,
+                match handle_child_device_successful_config_snapshot_response(
+                    config_response,
                     http_client,
-                    local_http_host,
                 )
-                .await?)
+                .await
+                {
+                    Ok(message) => Ok(message),
+                    Err(err) => {
+                        let failed_status_payload =
+                            UploadConfigFileStatusMessage::status_failed(err.to_string())?;
+                        Ok(Message::new(&c8y_child_topic, failed_status_payload))
+                    }
+                }
             }
             OperationStatus::Failed => {
                 if let Some(error_message) = &payload.reason {
@@ -291,62 +305,37 @@ pub async fn handle_child_device_config_snapshot_response(
 
 pub async fn handle_child_device_successful_config_snapshot_response(
     config_response: &ConfigOperationResponse,
-    tmp_dir: &Path,
     http_client: &mut impl C8YHttpProxy,
-    local_http_host: &str,
 ) -> Result<Message, anyhow::Error> {
     let c8y_child_topic = Topic::new_unchecked(&config_response.get_child_topic());
 
-    let config_file_url = format!(
-        "http://{}/tedge/file-transfer/{}",
-        local_http_host,
-        config_response.http_file_repository_relative_path()
-    );
+    let uploaded_config_file_path = config_response.file_transfer_repository_full_path();
 
-    let url_data = DownloadInfo::new(config_file_url.as_str());
-    let downloader = Downloader::new(&config_response.get_config_type(), &None, tmp_dir);
-    info!("Downloading the config file snapshot uploaded by the child device from url: {config_file_url}");
-    downloader.download(&url_data).await?;
-
-    info!(
-        "Uploading the downloaded config file snapshot at {:?} to Cumulocity",
-        downloader.filename()
-    );
     let c8y_upload_event_url = http_client
         .upload_config_file(
-            downloader.filename(),
+            Path::new(&uploaded_config_file_path),
             &config_response.get_config_type(),
             Some(config_response.get_child_id()),
         )
         .await?;
 
-    info!("Marking the c8y_UploadConfigFile operation as successful with the Cumulocity URL for the uploaded file: {config_file_url}");
+    // Cleanup the child uploaded file after uploading it to cloud
+    try_cleanup_config_file_from_file_transfer_repositoy(config_response);
+
+    info!("Marking the c8y_UploadConfigFile operation as successful with the Cumulocity URL for the uploaded file: {c8y_upload_event_url}");
     let successful_status_payload =
         UploadConfigFileStatusMessage::status_successful(Some(c8y_upload_event_url))?;
     let message = Message::new(&c8y_child_topic, successful_status_payload);
 
-    debug!("Deleting the config file snapshot of the child device from file transfer service");
-    let _response = Client::new().delete(&config_file_url).send().await?;
-
-    debug!(
-        "Deleting the config file snapshot temporary copy downloaded from file transfer service"
-    );
-    downloader.cleanup().await?;
     Ok(message)
 }
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use super::*;
     use c8y_api::http_proxy::MockC8YHttpProxy;
-    use c8y_api::smartrest::topic::C8yTopic;
     use mockall::predicate;
     use mqtt_channel::Topic;
-    use tedge_test_utils::fs::TempTedgeDir;
-
-    const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
     #[test]
     fn get_smartrest_executing() {
@@ -397,72 +386,6 @@ mod tests {
             upload_config_file(config_path, config_type, &mut http_client).await?,
             "http://server/config/file/url"
         );
-
-        Ok(())
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    #[serial_test::serial]
-    async fn test_handle_config_upload_request() -> anyhow::Result<()> {
-        let tedge_device_id = "tedge-device";
-        let config_path = Path::new("/some/test/config");
-        let ttd = TempTedgeDir::new();
-        ttd.dir("c8y")
-            .file("c8y-configuration-plugin.toml")
-            .with_toml_content(toml::toml! {
-                files = [
-                    { path = "/some/test/config", type = "config_type" }
-                ]
-            });
-
-        let broker = mqtt_tests::test_mqtt_broker();
-        let mqtt_config = mqtt_channel::Config::default()
-            .with_port(broker.port)
-            .with_subscriptions(mqtt_channel::TopicFilter::new_unchecked(
-                &C8yTopic::SmartRestRequest.to_string(),
-            ));
-        let mut mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
-
-        let mut messages = broker.messages_published_on("c8y/s/us").await;
-
-        let mut http_client = MockC8YHttpProxy::new();
-        http_client
-            .expect_upload_config_file()
-            .with(
-                predicate::eq(config_path),
-                predicate::eq("config_type"),
-                predicate::eq(None),
-            )
-            .return_once(|_path, _type, _child_id| Ok("http://server/config/file/url".to_string()));
-
-        let config_upload_request = SmartRestConfigUploadRequest {
-            message_id: "526".to_string(),
-            device: tedge_device_id.to_string(),
-            config_type: "config_type".to_string(),
-        };
-
-        tokio::spawn(async move {
-            let _ = handle_config_upload_request(
-                config_upload_request,
-                &mut mqtt_client,
-                &mut http_client,
-                "".into(),
-                tedge_device_id,
-                ttd.path(),
-            )
-            .await;
-        });
-
-        // Assert the c8y_UploadConfigFile operation transitioning from EXECUTING(501) to SUCCESSFUL(503) with the uploaded config URL
-        mqtt_tests::assert_received_all_expected(
-            &mut messages,
-            TEST_TIMEOUT_MS,
-            &[
-                "501,c8y_UploadConfigFile",
-                "503,c8y_UploadConfigFile,http://server/config/file/url",
-            ],
-        )
-        .await;
 
         Ok(())
     }

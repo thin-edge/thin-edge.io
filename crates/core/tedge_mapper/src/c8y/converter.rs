@@ -44,6 +44,7 @@ use super::{
     fragments::{C8yAgentFragment, C8yDeviceDataFragment},
     mapper::CumulocityMapper,
 };
+use c8y_api::smartrest::message::{get_smartrest_device_id, get_smartrest_template_id};
 use c8y_api::smartrest::topic::{C8yTopic, MapperSubscribeTopic, SMARTREST_PUBLISH_TOPIC};
 
 const C8Y_CLOUD: &str = "c8y";
@@ -365,6 +366,7 @@ where
                         &self.operations,
                         &mut self.http_proxy,
                         &self.operation_logs,
+                        &self.device_name,
                     )
                     .await
                 }
@@ -381,8 +383,9 @@ where
             &self.cfg_dir,
         ));
 
-        let supported_operations_message =
-            self.wrap_error(create_supported_operations_fragments_message(&self.cfg_dir));
+        let supported_operations_message = self.wrap_error(create_supported_operations(
+            &self.cfg_dir.join("operations").join("c8y"),
+        ));
         let sops =
             create_child_supported_operations_fragments_message(&mut self.children, &self.cfg_dir);
         let mut supported_child_operations_message = self.wrap_errors(sops);
@@ -415,30 +418,37 @@ where
         &mut self,
         message: &DiscoverOp,
     ) -> Result<Option<Message>, ConversionError> {
-        if message.ops_dir.as_path().iter().count() == 6 {
-            let child_op = self
-                .children
-                .entry(get_child_id(&message.ops_dir)?)
-                .or_insert_with(Operations::default);
+        match message.ops_dir.parent() {
+            Some(parent_dir) => {
+                if parent_dir.eq(&self.cfg_dir.join("operations").join("c8y")) {
+                    // operation for parent
+                    add_or_remove_operation(message, &mut self.operations)?;
+                    Ok(Some(create_supported_operations(&message.ops_dir)?))
+                } else {
+                    // operation for child
+                    let child_op = self
+                        .children
+                        .entry(get_child_id(&message.ops_dir)?)
+                        .or_insert_with(Operations::default);
 
-            add_or_remove_operation(message, child_op)?;
-            Ok(Some(create_supported_operations_fragments_message(
-                &message.ops_dir,
-            )?))
-        } else {
-            add_or_remove_operation(message, &mut self.operations)?;
-            Ok(Some(create_supported_operations_fragments_message(
-                &self.cfg_dir,
-            )?))
+                    add_or_remove_operation(message, child_op)?;
+                    Ok(Some(create_supported_operations(&message.ops_dir)?))
+                }
+            }
+            None => Ok(None),
         }
     }
 }
 
 fn get_child_id(dir_path: &PathBuf) -> Result<String, ConversionError> {
     let dir_ele: Vec<&std::ffi::OsStr> = dir_path.as_path().iter().collect();
-    match dir_ele[5].to_os_string().into_string() {
-        Ok(id) => Ok(id),
-        Err(_fname) => Err(ConversionError::DirPathComponentError {
+
+    match dir_ele.last() {
+        Some(child_id) => {
+            let child_id = child_id.to_string_lossy().to_string();
+            Ok(child_id)
+        }
+        None => Err(ConversionError::DirPathComponentError {
             dir: dir_path.to_owned(),
         }),
     }
@@ -467,10 +477,19 @@ async fn parse_c8y_topics(
     operations: &Operations,
     http_proxy: &mut impl C8YHttpProxy,
     operation_logs: &OperationLogs,
+    device_name: &str,
 ) -> Result<Vec<Message>, ConversionError> {
     let mut output: Vec<Message> = Vec::new();
     for smartrest_message in message.payload_str()?.split('\n') {
-        match process_smartrest(smartrest_message, operations, http_proxy, operation_logs).await {
+        match process_smartrest(
+            smartrest_message,
+            operations,
+            http_proxy,
+            operation_logs,
+            device_name,
+        )
+        .await
+        {
             Err(
                 ref err @ CumulocityMapperError::FromSmartRestDeserializer(
                     SmartRestDeserializerError::InvalidParameter { ref operation, .. },
@@ -522,27 +541,35 @@ fn create_get_pending_operations_message() -> Result<Message, ConversionError> {
     Ok(Message::new(&topic, payload))
 }
 
-fn create_supported_operations_fragments_message(
-    cfg_dir: &Path,
-) -> Result<Message, ConversionError> {
-    if cfg_dir.iter().count() == 6 {
-        let stopic = format!(
-            "{SMARTREST_PUBLISH_TOPIC}/{}",
-            get_child_id(&cfg_dir.to_path_buf())?
-        );
+fn is_child_operation_path(path: &Path) -> bool {
+    // a `path` can contains operations for the parent or for the child
+    // example paths:
+    //  {cfg_dir}/operations/c8y/child_name/
+    //  {cfg_dir}/operations/c8y/
+    //
+    // the difference between an operation for the child or for the parent
+    // is the existence of a directory after `operations/c8y` or not.
+    match path.file_name() {
+        Some(file_name) => !file_name.eq("c8y"),
+        None => false,
+    }
+}
+
+fn create_supported_operations(path: &Path) -> Result<Message, ConversionError> {
+    if is_child_operation_path(path) {
+        // operations for child
+        let child_id = get_child_id(&path.to_path_buf())?;
+        let stopic = format!("{SMARTREST_PUBLISH_TOPIC}/{}", child_id);
 
         Ok(Message::new(
             &Topic::new_unchecked(&stopic),
-            Operations::try_new(cfg_dir)?.create_smartrest_ops_message()?,
+            Operations::try_new(path)?.create_smartrest_ops_message()?,
         ))
     } else {
-        let ops_dir = format!(
-            "{}/{SUPPORTED_OPERATIONS_DIRECTORY}/{C8Y_CLOUD}",
-            cfg_dir.display()
-        );
+        // operations for parent
         Ok(Message::new(
             &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
-            Operations::try_new(ops_dir)?.create_smartrest_ops_message()?,
+            Operations::try_new(path)?.create_smartrest_ops_message()?,
         ))
     }
 }
@@ -749,12 +776,20 @@ async fn process_smartrest(
     operations: &Operations,
     http_proxy: &mut impl C8YHttpProxy,
     operation_logs: &OperationLogs,
+    device_name: &str,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
-    let message_id = get_smartrest_template_id(payload);
-    match message_id.as_str() {
-        "528" => forward_software_request(payload, http_proxy).await,
-        "510" => forward_restart_request(payload),
-        template => forward_operation_request(payload, template, operations, operation_logs).await,
+    match get_smartrest_device_id(payload) {
+        Some(device_id) if device_id == device_name => {
+            match get_smartrest_template_id(payload).as_str() {
+                "528" => forward_software_request(payload, http_proxy).await,
+                "510" => forward_restart_request(payload),
+                template => {
+                    forward_operation_request(payload, template, operations, operation_logs).await
+                }
+            }
+        }
+        // Ignore all operations for child devices as not yet supported
+        _ => Ok(vec![]),
     }
 }
 
@@ -791,11 +826,6 @@ async fn forward_software_request(
         &topic,
         software_update_request.to_json().unwrap(),
     )])
-}
-
-fn get_smartrest_template_id(payload: &str) -> String {
-    //  unwrap is safe here as the first element of the split will be the whole payload if there is no comma.
-    payload.split(',').next().unwrap().to_string()
 }
 
 fn forward_restart_request(smartrest: &str) -> Result<Vec<Message>, CumulocityMapperError> {
@@ -880,9 +910,9 @@ pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>
 
 #[cfg(test)]
 mod tests {
+    use crate::c8y::tests::FakeC8YHttpProxy;
     use plugin_sm::operation_logs::OperationLogs;
     use tedge_test_utils::fs::TempTedgeDir;
-    use test_case::test_case;
 
     #[tokio::test]
     async fn test_execute_operation_is_not_blocked() {
@@ -902,18 +932,19 @@ mod tests {
         assert_eq!(now.elapsed().as_secs(), 0);
     }
 
-    #[test_case("cds50223434,uninstall-test"; "valid template")]
-    #[test_case("5000000000000000000000000000000000000000000000000,uninstall-test"; "long valid template")]
-    #[test_case(""; "empty payload")]
-    fn extract_smartrest_template(payload: &str) {
-        match super::get_smartrest_template_id(payload) {
-            id if id.contains("cds50223434")
-                || id.contains("5000000000000000000000000000000000000000000000000")
-                || id.contains("") =>
-            {
-                assert!(true)
-            }
-            _ => assert!(false),
-        }
+    #[tokio::test]
+    async fn ignore_operations_for_child_device() {
+        let output = super::process_smartrest(
+            "528,childId,software_a,version_a,url_a,install",
+            &Default::default(),
+            &mut FakeC8YHttpProxy {},
+            &OperationLogs {
+                log_dir: Default::default(),
+            },
+            "testDevice",
+        )
+        .await
+        .unwrap();
+        assert_eq!(output, vec![]);
     }
 }

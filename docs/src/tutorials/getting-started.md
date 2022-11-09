@@ -1,5 +1,6 @@
 # Getting started with thin-edge.io on a Raspberry Pi
 
+
 After following this tutorial you will have an overview of the installation and configuration of thin-edge.io. As an example, a Raspberry Pi is used. This tutorial explains in small steps to reach the goal of sending data to Cumulocity IoT and performing some additional device management tasks.
 
 
@@ -13,7 +14,9 @@ The Raspberry PI is a relatively simple and cheap device but powerful. Therefore
 ##  Prerequisite
 
 To follow this guide, you only need the following:
+
 - A [Cumulocity IoT](https://www.softwareag.cloud/site/product/cumulocity-iot.html) Trial tenant.
+
 
 - A Raspberry Pi (3 or 4) with Raspian installed, for other boards and OS'es have a look [here](https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/supported-platforms.md)
 - Updated device:
@@ -22,6 +25,7 @@ $ sudo apt-get update && sudo apt-get upgrade
 ```
 
 ## Steps
+
 
 This tutorial is divided into small steps. The first three steps are needed to install and connect to Cumulocity IoT. The last three are optional but needed to get a good overview of the capabilities of thin-edge.io.
 
@@ -42,6 +46,7 @@ This tutorial is divided into small steps. The first three steps are needed to i
 
 
 
+
 ## Step 1 Install thin-edge.io
 
 There are two ways to install thin-edge.io:
@@ -57,9 +62,11 @@ This script will install the latest version of thin-edge.io with the following c
 - Command line Interface (CLI) tool
 - Tedge mapper
 
+
 It is possible to do the installation of thin-edge.io manually or install another version, or upgrade the current version. For more information on that, please have a look [here](https://thin-edge.github.io/thin-edge.io/html/howto-guides/002_installation.html#thin-edgeio-manual-installation) for more information.
 
 After a successful installation, it is possible to use thin-edge.io via the CLI and use the tedge commands.
+
 
 
 ### Tedge CLI
@@ -72,13 +79,17 @@ tedge [OPTIONS] [SUBCOMMAND]
 ```
 and ```-h``` can be used to see the help for the latest subcommand.
 
+
 When running this command something similar like the following will be displayed:
+
 
 
 ```shell
 $ sudo tedge -h
 
+
 tedge 0.8.0
+
 tedge is the cli tool for thin-edge.io
 
 USAGE:
@@ -99,6 +110,7 @@ SUBCOMMANDS:
     mqtt          Publish a message on a topic and subscribe a topic
 ```
 
+
 Here is an [overview of the commands for the CLI tool](https://thin-edge.github.io/thin-edge.io/html/references/references.html).
 
 The CLI will be used to configure the thin-edge.io installation on the device in the next steps.
@@ -118,6 +130,7 @@ sudo tedge config set c8y.url {{YOUR_C8Y_URL}}
 ```
 ### Certificate
 
+
 thin-edge.io connects via MQTT protocol using a X.509 certificate for authentication. To do so, a certificate must be trusted by Cumulocity IoT. A certificate is trusted when it is added to the trusted certificates and is in an activated state.
 
 First, we need to create the device certificate locally (If already a device certificate is uploaded, directly via the UI to Cumulocity IoT this step can be skipped).
@@ -127,19 +140,24 @@ sudo tedge cert create --device-id {{YOUR_UNIQUE_DEVICE_ID}}
 The device id is a unique identifier e.g. MAC address that identifies a physical device.
 
 The certificate is uploaded to the Cumulocity IoT Tenant via:
+
+
 ```
 sudo tedge cert upload c8y --user {{YOUR_USERNAME}}
 ```
 If the password prompt appears, enter your password.
+
 
 ``NOTE``: In a production environment it is not recommended to use the above self-signed certificate, which is for demo purposes. If you plan to use this tutorial as a basis for production, please have a look here: [Registering devices using certificates](https://cumulocity.com/guides/10.7.0/device-sdk/mqtt/#device-certificates).
 
 ### Connect
 
 We now are ready to connect the device to Cumulocity IoT. This can be achieved via:
+
 ```
 sudo tedge connect c8y
 ```
+
 
 When the connection is established, the device will be created in Cumulocity IoT. When you go to Device Management -> Devices -> All devices, the device is visible in the listed.
 
@@ -149,15 +167,18 @@ When the connection is established, the device will be created in Cumulocity IoT
 
 Once your device is configured and connected to Cumulocity IoT, you can start sending measurements, events or alarms. In the standard configuration, you can not connect externally to the mosquito broker and thus the messages have to be sent directly from the device itself. If you want to change that, you need to configure it according to [here](link to configure MQTT).
 
+
 The tedge CLI allows you to send payloads via MQTT the following way:
 ```
 tedge mqtt pub {{TOPIC}} {{PAYLOAD}}
 ```
+
 thin-edge.io comes with a tedge-mapper daemon. This process collects the data from the ```tedge/#``` topics and translates them to the tedge payloads on the ```c8y/#``` topics which is mapped directly to Cumulocity IoT. The mapper translates simple JSON to the desired target payload for Cumulocity IoT.
 
 ### Sending measurements
 
 Measurements within Cumulocity IoT represent regularly acquired readings and statistics from sensors.
+
 
 A simple single-valued measurement like a temperature measurement can be represented in Thin Edge JSON as follows:
 ```
@@ -174,7 +195,9 @@ tedge mqtt pub tedge/measurements '{ "temperature": 25 }'
 
 ### Sending events
 
+
 Events are used to pass real-time information, which are not just plain sensor values, through Cumulocity IoT.
+
 
 A simple event can be represented in Thin Edge JSON as follows:
 ```
@@ -192,11 +215,13 @@ So the door open event described above can be sent as follows:
 tedge mqtt pub tedge/events/door '{"text": "A door was closed","time": "2022-06-10T05:30:45+00:00"}'
 ```
 
+
 When you go to events (```Device management -> your device -> events ```), you should see this:
 
 ![Sending Events](./images/SendingEvents.png)
 
 ## Step 4 Monitor the device
+
 
 With thin-edge.io device monitoring, you can collect metrics from the device and forward these device metrics to Cumulocity IoT.
 
@@ -229,6 +254,7 @@ sudo systemctl restart collectd
 ```
 What you should see by now is that data arrives on the ```collectd/#``` topics. You can check that via:
 ```
+
 tedge mqtt sub collectd/#
 ```
  The output will be similar like:
@@ -239,6 +265,7 @@ INFO: Connected
 [collectd/raspberrypi/df-root/percent_bytes-used] 1667205183.407:11.7998857498169
 [collectd/raspberrypi/memory/percent-used] 1667205183.408:4.87045198079293
 [collectd/raspberrypi/cpu/percent-active] 1667205184.398:1.52284263959391
+
 
 ```
 
@@ -252,6 +279,7 @@ sudo systemctl enable tedge-mapper-collectd
 You can inspect the collected and translated metrics, by subscribing to these topics:
 ```
 tedge mqtt sub 'c8y/#'
+
 
 ```
 The output will be similar like:
@@ -280,6 +308,7 @@ To change the monitored data, it is needed to change the collectd.conf. This can
 
 Software management takes care of allowing installation and management of any type of software from Cumulocity IoT. Since the type is generic, any type of software can be managed. In thin-edge.io this can be extended with plugins. For every software type, a particular plugin is needed.
 
+
 The following plugins do exist:
 
 - Docker
@@ -297,6 +326,7 @@ The APT plugin is installed automatically. You can find the other plugins in the
 sudo tedge disconnect c8y
 sudo tedge connect c8y
 ```
+
 
 ## Adding new software into the software repository in Cumulocity IoT
 
@@ -333,13 +363,16 @@ When a different version of the already installed software needs to be installed
 
 Find more information about [how to manage the software](https://cumulocity.com/guides/users-guide/device-management/#managing-software-on-a-device) on a device.
 
+
 How to [develop your own plugins](https://thin-edge.github.io/thin-edge.io/html/tutorials/write-my-software-management-plugin.html) is described here.
 
 ## Step 6 Manage configuration files
 
+
 With thin-edge.io it is possible to manage config files on a device by using the Cumulocity IoT configuration management feature as a part of Device Management.
 
 This functionality is directly installed with the initial script. However, it is needed to configure the ```/etc/tedge/c8y/c8y-configuration-plugin.toml``` and add the entries for the configuration files which need to be managed. Just copy the following content to that file:
+
 ```
 files = [
     { path = '/etc/tedge/tedge.toml' },
@@ -348,6 +381,7 @@ files = [
     { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto.conf' }
 ]
 ```
+
 where:
 * path is the full path to the configuration file.
 * type is a unique alias for each file entry which will be used to represent that file in Cumulocity UI.
@@ -409,6 +443,7 @@ To change the collectd metrics of the device, which are displayed in Cumulocity 
 With thin-edge.io it is possible to request log files from a device by using the Cumulocity IoT log request feature as a part of Device Management.
 
 This functionality is also directly installed with the initial script, but some configuration is needed for the ```/etc/tedge/c8y/c8y-log-plugin.toml``` and add the entries for the log files that can be requested. Just copy the following content to that file:
+
 ```
 files = [
   { type = "software-management", path = "/var/log/tedge/agent/software-*" },
@@ -427,6 +462,7 @@ The daemon is started/enabled via:
 sudo systemctl start c8y-log-plugin
 sudo systemctl enable c8y-log-plugin
 ```
+
 To see the content of the log files in Cumulocity IoT, take the following steps:
 
 1. Go to device management, select the right device.
@@ -449,3 +485,4 @@ With this getting started tutorial you gained some insights on how to install an
 If you didn't try the optional steps in this tutorial, it might be a nice idea to work on these as you then get a better insight in the device management capabilities of thin-edge.io. Other things you can work on are capabilities like working with child devices, building your own plugin etc. Tutorials for that can be found ![here](https://thin-edge.github.io/thin-edge.io/html/)
 
 ``NOTE``:We are in the middle of restructuring our documentation, including the tutorials and how-to's. So keep in mind that some of the documentation needs to be updated.
+

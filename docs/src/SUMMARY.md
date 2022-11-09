@@ -17,6 +17,7 @@
     - [Manage my device software](./tutorials/software-management.md)
     - [Write my software management plugin](./tutorials/write-my-software-management-plugin.md)
     - [Supported Operations Management for Cumulocity IoT](./tutorials/supported_operations.md)
+    - [Build Thin Edge for a Yocto Linux distribution](tutorials/yocto-linux.md)
 
   - [How-to Guides](howto-guides/howto-guides.md)
     - [Installation](howto-guides/002_installation.md)
@@ -42,7 +43,8 @@
     - [How to retrieve logs with the log plugin](./howto-guides/023_c8y_log_plugin.md)
     - [How to use Cumulocity Custom SmartREST 2.0 Templates with `thin-edge.io`](./howto-guides/024_smartrest_templates.md)
     - [How to manage configuration files with Cumulocity](./howto-guides/025_config_management_plugin.md)
-    - [How to install thin-edge manually with openrc](./howto-guides/026_how_to_install_thin_edge_manually.md)
+    - [How to install thin-edge manually with OpenRC](./howto-guides/026_how_to_install_thin_edge_manually.md)
+    - [How to enable configuration management on child devices](./howto-guides/child_device_config_management_agent.md)
 
 - [Developer Documentation](dev_doc.md)
 

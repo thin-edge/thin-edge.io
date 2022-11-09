@@ -1,16 +1,8 @@
 #!/bin/sh
-
 set -e
 
-print_hint() {
-    echo "$1 is running. Stop $1 before installation, to stop it use: systemctl stop $1"
-}
-
-if command -v systemctl >/dev/null; then
-    if systemctl is-active --quiet tedge-agent; then
-        print_hint "tedge-agent"
-        exit 1
-    fi
+if [ -d /run/systemd/system ] && [ "$1" = remove ]; then
+        deb-systemd-invoke stop tedge-agent.service >/dev/null || true
 fi
 
-#DEBHELPER#
+# Do not use DEBHELPER: for OTA self-update one needs a fine-control over the deb options

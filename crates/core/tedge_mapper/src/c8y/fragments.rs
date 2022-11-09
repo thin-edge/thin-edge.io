@@ -35,8 +35,16 @@ impl C8yAgentFragment {
         Ok(jsond)
     }
 }
+
 pub fn get_tedge_version() -> Result<String, ConversionError> {
-    let process = Command::new("tedge").arg("--version").output();
+    let process = if cfg!(test) {
+        assert_cmd::Command::cargo_bin("tedge")
+            .unwrap()
+            .arg("--version")
+            .output()
+    } else {
+        Command::new("tedge").arg("--version").output()
+    };
 
     match process {
         Ok(process) => {
@@ -50,7 +58,7 @@ pub fn get_tedge_version() -> Result<String, ConversionError> {
         }
         Err(err) => {
             warn!("{}\ntedge version not found.", err);
-            Ok("0.0.0".to_string())
+            Ok("unknown".to_string())
         }
     }
 }

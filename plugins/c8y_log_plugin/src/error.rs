@@ -20,6 +20,6 @@ pub enum LogRetrievalError {
     #[error("Log file has maximum number of lines.")]
     MaxLines,
 
-    #[error("No logs available for log type: {log_type}. Hint: is your `path` key correct?")]
+    #[error("No such file or directory for log type: {log_type}")]
     NoLogsAvailableForType { log_type: String },
 }

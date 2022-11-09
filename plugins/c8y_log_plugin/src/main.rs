@@ -9,15 +9,17 @@ use c8y_api::smartrest::topic::C8yTopic;
 use c8y_api::utils::bridge::{is_c8y_bridge_up, C8Y_BRIDGE_HEALTH_TOPIC};
 use clap::Parser;
 
+use c8y_api::smartrest::message::get_smartrest_device_id;
 use mqtt_channel::{Connection, Message, StreamExt, TopicFilter};
 use std::path::{Path, PathBuf};
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, LogPathSetting, MqttPortSetting, TEdgeConfig,
-    DEFAULT_TEDGE_CONFIG_PATH,
+    ConfigRepository, ConfigSettingAccessor, DeviceIdSetting, LogPathSetting, MqttPortSetting,
+    TEdgeConfig, DEFAULT_TEDGE_CONFIG_PATH,
 };
 use tedge_utils::{
     file::{create_directory_with_user_group, create_file_with_user_group},
-    fs_notify::{fs_notify_stream, pin_mut, FileEvent},
+    notify::{fs_notify_stream, FsEvent},
+    paths::PathsError,
 };
 use thin_edge_json::health::{health_check_topics, send_health_status};
 use tracing::{error, info};
@@ -87,37 +89,46 @@ pub async fn create_http_client(
 async fn run(
     config_dir: &Path,
     config_file_name: &str,
+    device_name: &str,
     mqtt_client: &mut Connection,
     http_client: &mut JwtAuthHttpProxy,
 ) -> Result<(), anyhow::Error> {
-    let mut plugin_config = LogPluginConfig::default();
+    let config_file_path = config_dir.join(config_file_name);
+    let mut plugin_config = read_log_config(&config_file_path);
 
     let health_check_topics = health_check_topics("c8y-log-plugin");
-    let config_file_path = config_dir.join(config_file_name);
     handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
 
-    let fs_notification_stream = fs_notify_stream(&[(
+    let mut fs_notification_stream = fs_notify_stream(&[(
         config_dir,
         Some(config_file_name.to_string()),
-        &[FileEvent::Modified, FileEvent::Deleted, FileEvent::Created],
+        &[
+            FsEvent::Modified,
+            FsEvent::FileDeleted,
+            FsEvent::FileCreated,
+        ],
     )])?;
-    pin_mut!(fs_notification_stream);
 
     loop {
         tokio::select! {
                 message = mqtt_client.received.next() => {
                 if let Some(message) = message {
-                    process_mqtt_message(message, &plugin_config, mqtt_client, http_client, &config_file_path, health_check_topics.clone()).await?;
+                    process_mqtt_message(message, &plugin_config, mqtt_client, http_client, health_check_topics.clone(), device_name).await?;
                 } else {
                     // message is None and the connection has been closed
                     return Ok(())
                 }
             }
-            Some(Ok((_path, mask))) = fs_notification_stream.next() => {
+            Some((path, mask)) = fs_notification_stream.rx.recv() => {
                 match mask {
-                    FileEvent::Created | FileEvent::Deleted | FileEvent::Modified => {
-                        plugin_config = read_log_config(&config_file_path);
-                        handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
+                    FsEvent::FileCreated | FsEvent::FileDeleted | FsEvent::Modified => {
+                        if path.file_name().ok_or_else(|| PathsError::ParentDirNotFound {path: path.as_os_str().into()})?.eq("c8y-log-plugin.toml") {
+                            plugin_config = read_log_config(&path);
+                            handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
+                        }
+                    },
+                    _ => {
+                        // ignore other events (FsEvent::DirCreated, FsEvent::DirDeleted)
                     }
                 }
             }
@@ -130,12 +141,11 @@ pub async fn process_mqtt_message(
     plugin_config: &LogPluginConfig,
     mqtt_client: &mut Connection,
     http_client: &mut JwtAuthHttpProxy,
-    config_file: &Path,
     health_check_topics: TopicFilter,
+    device_name: &str,
 ) -> Result<(), anyhow::Error> {
     if is_c8y_bridge_up(&message) {
-        let plugin_config = read_log_config(config_file);
-        handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
+        handle_dynamic_log_type_update(plugin_config, mqtt_client).await?;
     } else if health_check_topics.accept(&message) {
         send_health_status(&mut mqtt_client.published, "c8y-log-plugin").await;
     } else if let Ok(payload) = message.payload_str() {
@@ -143,20 +153,26 @@ pub async fn process_mqtt_message(
             let result = match smartrest_message.split(',').next().unwrap_or_default() {
                 "522" => {
                     info!("Log request received: {payload}");
-                    // retrieve smartrest object from payload
-                    let maybe_smartrest_obj =
-                        SmartRestLogRequest::from_smartrest(smartrest_message);
-                    if let Ok(smartrest_obj) = maybe_smartrest_obj {
-                        handle_logfile_request_operation(
-                            &smartrest_obj,
-                            plugin_config,
-                            mqtt_client,
-                            http_client,
-                        )
-                        .await
-                    } else {
-                        error!("Incorrect SmartREST payload: {}", smartrest_message);
-                        Ok(())
+                    match get_smartrest_device_id(payload) {
+                        Some(device_id) if device_id == device_name => {
+                            // retrieve smartrest object from payload
+                            let maybe_smartrest_obj =
+                                SmartRestLogRequest::from_smartrest(smartrest_message);
+                            if let Ok(smartrest_obj) = maybe_smartrest_obj {
+                                handle_logfile_request_operation(
+                                    &smartrest_obj,
+                                    plugin_config,
+                                    mqtt_client,
+                                    http_client,
+                                )
+                                .await
+                            } else {
+                                error!("Incorrect SmartREST payload: {}", smartrest_message);
+                                Ok(())
+                            }
+                        }
+                        // Ignore operation messages created for child devices
+                        _ => Ok(()),
                     }
                 }
                 _ => {
@@ -203,6 +219,8 @@ async fn main() -> Result<(), anyhow::Error> {
         return Ok(());
     }
 
+    let device_name = tedge_config.query(DeviceIdSetting)?;
+
     // Create required clients
     let mut mqtt_client = create_mqtt_client(&tedge_config).await?;
     let mut http_client = create_http_client(&tedge_config).await?;
@@ -210,6 +228,7 @@ async fn main() -> Result<(), anyhow::Error> {
     run(
         &config_dir,
         DEFAULT_PLUGIN_CONFIG_FILE,
+        &device_name,
         &mut mqtt_client,
         &mut http_client,
     )

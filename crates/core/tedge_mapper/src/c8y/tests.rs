@@ -79,7 +79,7 @@ async fn mapper_publishes_software_update_request() {
     let cfg_dir = TempTedgeDir::new();
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
-    let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
+    let smartrest = r#"528,test-device,nodered,1.0.0::debian,,install"#;
     broker.publish("c8y/s/ds", smartrest).await.unwrap();
     publish_a_fake_jwt_token(broker).await;
 
@@ -241,7 +241,7 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     // Prepare and publish a software update smartrest request on `c8y/s/ds`.
-    let smartrest = r#"528,external_id,nodered,1.0.0::debian,,install"#;
+    let smartrest = r#"528,test-device,nodered,1.0.0::debian,,install"#;
     broker.publish("c8y/s/ds", smartrest).await.unwrap();
     publish_a_fake_jwt_token(broker).await;
 
@@ -325,7 +325,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     let cfg_dir = TempTedgeDir::new();
     let (_tmp_dir, _sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
     // Prepare and publish a c8y_SoftwareUpdate smartrest request on `c8y/s/ds` that contains a wrong action `remove`, that is not known by c8y.
-    let smartrest = r#"528,external_id,nodered,1.0.0::debian,,remove"#;
+    let smartrest = r#"528,test-device,nodered,1.0.0::debian,,remove"#;
     broker.publish("c8y/s/ds", smartrest).await.unwrap();
 
     // Expect a 501 (executing) followed by a 502 (failed)
@@ -1156,7 +1156,7 @@ async fn mapper_publishes_supported_operations() {
     // and verifies the supported operations that are published by the tedge_mapper.
     let broker = mqtt_tests::test_mqtt_broker();
     let cfg_dir = TempTedgeDir::new();
-    create_thin_edge_operations(&cfg_dir);
+    create_thin_edge_operations(&cfg_dir, vec!["c8y_TestOp1", "c8y_TestOp2"]);
     let mut messages = broker.messages_published_on("c8y/s/us").await;
 
     let (_temp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
@@ -1181,7 +1181,7 @@ async fn mapper_publishes_child_device_create_message() {
     // and verifies the device create message.
     let broker = mqtt_tests::test_mqtt_broker();
     let cfg_dir = TempTedgeDir::new();
-    create_thin_edge_child_operations(&cfg_dir);
+    create_thin_edge_child_operations(&cfg_dir, vec!["c8y_ChildTestOp1", "c8y_ChildTestOp2"]);
     let mut messages = broker.messages_published_on("c8y/s/us").await;
 
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
@@ -1206,7 +1206,7 @@ async fn mapper_publishes_supported_operations_for_child_device() {
     // and verifies that message.
     let broker = mqtt_tests::test_mqtt_broker();
     let cfg_dir = TempTedgeDir::new();
-    create_thin_edge_child_operations(&cfg_dir);
+    create_thin_edge_child_operations(&cfg_dir, vec!["c8y_ChildTestOp1", "c8y_ChildTestOp2"]);
     let mut messages = broker.messages_published_on("c8y/s/us/child1").await;
 
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
@@ -1232,6 +1232,7 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     // operation and publishes list of supported operation including the new operation, and verifies the device create message.
     let broker = mqtt_tests::test_mqtt_broker();
     let cfg_dir = TempTedgeDir::new();
+    create_thin_edge_operations(&cfg_dir, vec!["c8y_TestOp1", "c8y_TestOp2"]);
     let mut health_message = broker
         .messages_published_on("tedge/health/c8y-mapper-test")
         .await;
@@ -1267,7 +1268,7 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     // operation and publishes list of supported operation for the child device including the new operation, and verifies the device create message.
     let broker = mqtt_tests::test_mqtt_broker();
     let cfg_dir = TempTedgeDir::new();
-    create_thin_edge_child_operations(&cfg_dir);
+    create_thin_edge_child_operations(&cfg_dir, vec!["c8y_ChildTestOp1", "c8y_ChildTestOp2"]);
     let mut health_message = broker
         .messages_published_on("tedge/health/c8y-mapper-test")
         .await;
@@ -1297,6 +1298,91 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     )
     .await;
     sm_mapper.abort();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn mapper_updating_the_default_inventory_fragments() {
+    // The test assures the tedge-mapper publishes the device fragment information on c8y/inventory/managedObjects/update/test-device
+    // and verifies the same published device fragment message
+    let broker = mqtt_tests::test_mqtt_broker();
+    let cfg_dir = TempTedgeDir::new();
+
+    let mut inventory_message = broker
+        .messages_published_on("c8y/inventory/managedObjects/update/test-device")
+        .await;
+
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
+
+    publish_a_fake_jwt_token(broker).await;
+
+    let version = env!("CARGO_PKG_VERSION");
+
+    let expected_fragment_content = &format!(
+        r#"{{
+        "c8y_Agent": {{
+            "name": "thin-edge.io",
+            "url": "https://thin-edge.io",
+            "version": "{version}"
+        }}"#
+    );
+
+    mqtt_tests::assert_received_all_expected(
+        &mut inventory_message,
+        TEST_TIMEOUT_MS,
+        &[remove_whitespace(expected_fragment_content)],
+    )
+    .await;
+    sm_mapper.abort();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn mapper_updating_the_inventory_fragments_from_file() {
+    // The test Creates an inventory file in (Temp_base_Dir)/device/inventory.json
+    // The tedge-mapper parses the inventory fragment file and publishes on c8y/inventory/managedObjects/update/test-device
+    // Verify the fragment message that is published
+    let broker = mqtt_tests::test_mqtt_broker();
+    let cfg_dir = TempTedgeDir::new();
+
+    let version = env!("CARGO_PKG_VERSION");
+
+    let content = &format!(
+        r#"{{
+        "c8y_Agent": {{
+            "name": "thin-edge.io",
+            "url": "https://thin-edge.io",
+            "version": "{version}"
+        }},
+        "c8y_Firmware": {{
+            "name": "raspberrypi-bootloader",
+            "url": "31aab9856861b1a587e2094690c2f6e272712cb1",
+            "version": "1.20140107-1"
+        }}
+    }}"#
+    );
+    create_inventroy_json_file_with_content(&cfg_dir, content);
+    let mut inventory_message = broker
+        .messages_published_on("c8y/inventory/managedObjects/update/test-device")
+        .await;
+
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
+
+    publish_a_fake_jwt_token(broker).await;
+
+    // Expect smartrest message on `c8y/s/us/child1` with expected payload "114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3".
+    mqtt_tests::assert_received_all_expected(
+        &mut inventory_message,
+        TEST_TIMEOUT_MS,
+        &[remove_whitespace(content)],
+    )
+    .await;
+    sm_mapper.abort();
+}
+
+fn create_inventroy_json_file_with_content(cfg_dir: &TempTedgeDir, content: &str) {
+    let file = cfg_dir.dir("device").file("inventory.json");
+    file.with_raw_content(content);
 }
 
 fn create_packet(size: usize) -> String {
@@ -1382,7 +1468,6 @@ async fn start_c8y_mapper(
     )
     .await?;
     let ops_path = ops_dir.path().to_path_buf().join("operations").join("c8y");
-    dbg!(&ops_path);
     let mapper_task = tokio::spawn(async move {
         let _ = mapper.run(Some(&ops_path)).await;
     });
@@ -1400,7 +1485,6 @@ fn create_c8y_converter(
 
     let tmp_dir = TempTedgeDir::new();
 
-    create_thin_edge_operations(&ops_dir);
     let converter = CumulocityConverter::from_logs_path(
         size_threshold,
         device_name,
@@ -1414,20 +1498,21 @@ fn create_c8y_converter(
     (tmp_dir, converter)
 }
 
-fn create_thin_edge_operations(cfg_dir: &TempTedgeDir) {
+fn create_thin_edge_operations(cfg_dir: &TempTedgeDir, ops: Vec<&str>) {
     let p1 = cfg_dir.dir("operations");
     let tedge_ops_dir = p1.dir("c8y");
-    tedge_ops_dir.file("c8y_TestOp1");
-    tedge_ops_dir.file("c8y_TestOp2");
+    for op in ops {
+        tedge_ops_dir.file(op);
+    }
 }
 
-fn create_thin_edge_child_operations(cfg_dir: &TempTedgeDir) {
+fn create_thin_edge_child_operations(cfg_dir: &TempTedgeDir, ops: Vec<&str>) {
     let p1 = cfg_dir.dir("operations");
     let tedge_ops_dir = p1.dir("c8y");
-
     let child_ops_dir = tedge_ops_dir.dir("child1");
-    child_ops_dir.file("c8y_ChildTestOp1");
-    child_ops_dir.file("c8y_ChildTestOp2");
+    for op in ops {
+        child_ops_dir.file(op);
+    }
 }
 
 fn remove_whitespace(s: &str) -> String {
