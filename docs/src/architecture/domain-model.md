@@ -25,13 +25,14 @@ Here _state_ refers to e.g. **Device Management** details as _installed software
          e.g. _voltage_ and _current_ captured in a fixed interval
      * a measurement optionally holds individual _units_ for the values of the **samples**
      * a measurement relates to a source, i.e. a device or a process
-  * **Command**, is a single value or set of values
-    * is sent from the cloud to one device, e.g. to
-      - stimulate an actuator[^1] (e.g. switching a relay)
-      - send a signal to the domain application[^1]
-      - set one or more set-points[^1] (e.g. upper/lower limits or threshold of a climate control)
+  * **Setpoint**, is a single value or set of values
+    * values are visible in the cloud, similar to measurements (e.g. a "temperature upper limit")
+    * values are used on the device-site, e.g. the **Domain Application**[^1]
+    * values can be manipulated from cloud-site or the device-site, e.g. to
+      - set one or more process variables[^1] (e.g. upper/lower limits or threshold of a climate control)
+    * a manipulation leads not to an synchronous action (like an operation),
+      instead new values are used by the **Domain Application**[^1] asynchronously from next control-cycle on
     * values could be a mix of numbers, strings or booleans
-    * **thin-edge** provides those values to the **domain application**[^1] and **protocol drivers**[^1]
   * **Event**, is a notification that something happened on the device's environment or software system
     * its source could be
       - a _sensor's[^1] value_ that detected a door has beed closed
