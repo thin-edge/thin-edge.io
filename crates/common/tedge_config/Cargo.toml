@@ -16,4 +16,6 @@ url = "2.2"
 
 [dev-dependencies]
 assert_matches = "1.5"
+anyhow = "1.0"
 tedge_test_utils = { path = "../../tests/tedge_test_utils" }
+test-case = "2.2"

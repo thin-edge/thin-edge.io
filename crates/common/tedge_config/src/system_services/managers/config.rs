@@ -117,7 +117,10 @@ mod tests {
             config.init.is_active,
             vec!["/bin/systemctl", "is-active", "{}"]
         );
-        assert_eq!(config.system.reboot, "init 6");
+        assert_eq!(
+            config.system.reboot,
+            Vec::from([String::from("init"), String::from("6")])
+        );
     }
 
     #[test]

@@ -750,6 +750,12 @@ mod tests {
         ttd.dir("logs");
         ttd.dir("run").dir("tedge_agent");
         ttd.dir("run").dir("lock");
+        let system_toml_content = toml::toml! {
+            [system]
+            reboot = ["echo", "6"]
+        };
+        ttd.file("system.toml")
+            .with_toml_content(system_toml_content);
         let toml_conf = &format!(
             r#"
             [tmp]
