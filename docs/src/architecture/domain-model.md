@@ -94,7 +94,7 @@ That includes:
   * all devices connected to the **main-device** are referred as **external child-devices** 
   * each **external child-device** can be represented in the cloud with its individual **device twin**
     * a unique **child-id** makes the association between each **external child-device** and it's **device twin**
-  * all **telemetry data** and **device managament** functionality can appear in the context of the 
+  * all **telemetry data** and **device management** functionality can appear in the context of the 
     **external child-device's** individual **device twin**, or the **main-device's** **device twin**
   * also _containers_ or _processes_ running on the **main-devices** can be handled like **external child-device**;
     those are referered then as **logical child-devices**
@@ -109,7 +109,7 @@ The figure below illustrates the child-device concept.
 **thin-edge** realizes **Device Management** based on **plugins**.
   * a **plugin** can be an (external) executable (e.g. as the `c8y_configuration_plugin` for _configuration management_)
     or a thin-edge built-in software component (e.g. as for _software management_)
-  * to realize **Device Management** functionality, a **plugin** accesses _ressources_ and _services_ of the device, as e.g.
+  * to realize **Device Management** functionality, a **plugin** accesses _resources_ and _services_ of the device, as e.g.
       * _software management_ uses the device's _package manager_
       * _configuration management_ reads/writes device's _configuration files_
   * a **plugin** can facilitate **Device Management** functionality for the **main-device** and **external child-device**, but runs usually only on the **main-device**
@@ -171,13 +171,13 @@ Usual **devices** are **PLCs** (**P**rogrammable **L**ogic **C**ontrollers), **I
   * On a **PLC** it's a _control application_, created by an _automation engineer_ in a domain specific graphical programming language (like "Ladder Diagram" or "Function block diagram")
   * Or on a **SoC-based** or **Microcontroller-based** system it's an _application program_, created by an _embedded software engineer_ usually in C/C++
 * The **OS / Libs / Runtime** provide basic functionality to the **Domain Application**
-  <!-- TODO: add somehow "used to abtracts the hardware. But: on a microcontroler usually less abtraction, more hw dep on the domain app, and even no OS" -->
+  <!-- TODO: add somehow "used to abstract the hardware. But: on a microcontroller usually less abstraction, more hw dep on the domain app, and even no OS" -->
 * **Sensors** and **Actuators** enable the **device** to observe and control physical behaviour on the shopfloor or device's environment.
   * can be integrated in the **device's** hardware,
     or connected to the **device** via some **Fieldbus** (e.g. Modbus, CANopen, PROFINET, EtherCAT, ...) or
     some **Local Interface** as USB, UART, SPI, I2C, ...
   * can be simple peripherals as a light barrier, or a sensor for temperature or pressure;
-    or complex equipments as robotic arms or even other **devices**
+    or complex equipment as robotic arms or even other **devices**
 * **Inputs / Outputs** are the communication channels between the **Domain Application** and **Sensors** and **Actuators**
   * drivers (as part of the **OS / Libs / Runtime** and/or the **Domain Application**) do expose all data from
     **Sensors** and **Actuators** to the **device** as inputs or outputs
