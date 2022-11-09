@@ -34,14 +34,19 @@ use thin_edge_json::health::{health_check_topics, send_health_status};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, warn};
 
+use std::path::Path;
+
+use tedge_config::system_services::SystemConfig;
+
+const SYNC: &str = "sync";
 const SM_PLUGINS: &str = "sm-plugins";
 const AGENT_LOG_PATH: &str = "tedge/agent";
 
 #[cfg(not(test))]
-const INIT_COMMAND: &str = "init";
+const SUDO: &str = "sudo";
 
 #[cfg(test)]
-const INIT_COMMAND: &str = "echo";
+const SUDO: &str = "echo";
 
 #[derive(Debug, Clone)]
 pub struct SmAgentConfig {
@@ -60,7 +65,7 @@ pub struct SmAgentConfig {
     pub log_dir: PathBuf,
     pub run_dir: PathBuf,
     pub tmp_dir: PathBuf,
-    config_location: TEdgeConfigLocation,
+    pub config_location: TEdgeConfigLocation,
     pub download_dir: PathBuf,
     pub http_config: HttpConfig,
 }
@@ -291,7 +296,7 @@ impl SmAgent {
         let plugins = Arc::new(Mutex::new(ExternalPlugins::open(
             &sm_plugins_path,
             get_default_plugin(&self.config.config_location)?,
-            Some("sudo".into()),
+            Some(SUDO.into()),
         )?));
 
         if plugins.lock().await.empty() {
@@ -588,7 +593,8 @@ impl SmAgent {
             .await?;
         restart_operation::create_tmp_restart_file(&self.config.tmp_dir)?;
 
-        let command_vec = get_restart_operation_commands();
+        let command_vec =
+            get_restart_operation_commands(&self.config.config_location.tedge_config_root_path)?;
         for mut command in command_vec {
             match command.status() {
                 Ok(status) => {
@@ -661,28 +667,20 @@ impl SmAgent {
     }
 }
 
-#[cfg(test)]
-fn get_restart_operation_commands() -> Vec<Command> {
-    let mut vec = vec![];
-    // running `echo 6` with no sudo
-    let mut command = std::process::Command::new(INIT_COMMAND);
-    command.arg("6");
-    vec.push(command);
-    vec
-}
-
-#[cfg(not(test))]
-fn get_restart_operation_commands() -> Vec<Command> {
+fn get_restart_operation_commands(system_config_path: &Path) -> Result<Vec<Command>, AgentError> {
     let mut vec = vec![];
     // sync first
-    let mut sync_command = std::process::Command::new("sudo");
-    sync_command.arg("sync");
+    let mut sync_command = std::process::Command::new(SUDO);
+    sync_command.arg(SYNC);
     vec.push(sync_command);
-    // running `sudo init 6`
-    let mut command = std::process::Command::new("sudo");
-    command.arg(INIT_COMMAND).arg("6");
+
+    // reading `system_config_path` to get the restart command or defaulting to `["init", "6"]'
+    let system_config = SystemConfig::try_new(system_config_path.to_path_buf())?;
+
+    let mut command = std::process::Command::new(SUDO);
+    command.args(system_config.system.reboot);
     vec.push(command);
-    vec
+    Ok(vec)
 }
 
 fn get_default_plugin(
@@ -710,8 +708,6 @@ mod tests {
 
     #[tokio::test]
     async fn check_agent_restart_file_is_created() -> Result<(), AgentError> {
-        assert_eq!(INIT_COMMAND, "echo");
-
         let (dir, tedge_config_location) = create_temp_tedge_config().unwrap();
         let agent = SmAgent::try_new(
             "tedge_agent_test",
@@ -804,7 +800,7 @@ mod tests {
                 ExternalPlugins::open(
                     PathBuf::from(&dir.temp_dir.path()).join("sm-plugins"),
                     get_default_plugin(&agent.config.config_location).unwrap(),
-                    Some("sudo".into()),
+                    Some(SUDO.into()),
                 )
                 .unwrap(),
             ));
@@ -848,7 +844,7 @@ mod tests {
                 ExternalPlugins::open(
                     PathBuf::from(&dir.temp_dir.path()).join("sm-plugins"),
                     get_default_plugin(&agent.config.config_location).unwrap(),
-                    Some("sudo".into()),
+                    Some(SUDO.into()),
                 )
                 .unwrap(),
             ));
