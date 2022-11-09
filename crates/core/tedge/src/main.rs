@@ -8,7 +8,6 @@ use clap::Parser;
 mod cli;
 mod command;
 mod error;
-mod system_services;
 use tedge_utils::file::create_directory_with_user_group;
 
 type ConfigError = crate::error::TEdgeError;
