@@ -27,7 +27,7 @@ use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, LogPathSetting,
     MqttBindAddressSetting, MqttExternalBindAddressSetting, MqttPortSetting, RunPathSetting,
     SoftwarePluginDefaultSetting, TEdgeConfigLocation, TmpPathSetting, DEFAULT_LOG_PATH,
-    DEFAULT_RUN_PATH,
+    DEFAULT_RUN_PATH, DEFAULT_TMP_PATH,
 };
 use tedge_utils::file::create_directory_with_user_group;
 use thin_edge_json::health::{health_check_topics, send_health_status};
@@ -59,6 +59,7 @@ pub struct SmAgentConfig {
     pub sm_home: PathBuf,
     pub log_dir: PathBuf,
     pub run_dir: PathBuf,
+    pub tmp_dir: PathBuf,
     config_location: TEdgeConfigLocation,
     pub download_dir: PathBuf,
     pub http_config: HttpConfig,
@@ -104,9 +105,11 @@ impl Default for SmAgentConfig {
 
         let run_dir = PathBuf::from(DEFAULT_RUN_PATH);
 
+        let tmp_dir = PathBuf::from(DEFAULT_TMP_PATH);
+
         let config_location = TEdgeConfigLocation::default();
 
-        let download_dir = PathBuf::from("/tmp");
+        let download_dir = PathBuf::from(DEFAULT_TMP_PATH);
 
         Self {
             errors_topic,
@@ -123,6 +126,7 @@ impl Default for SmAgentConfig {
             sm_home,
             log_dir,
             run_dir,
+            tmp_dir,
             config_location,
             download_dir,
             http_config: HttpConfig::default(),
@@ -151,6 +155,7 @@ impl SmAgentConfig {
         let tedge_log_dir: String = tedge_config.query_string(LogPathSetting)?;
         let tedge_log_dir = PathBuf::from(&format!("{tedge_log_dir}/{AGENT_LOG_PATH}"));
         let tedge_run_dir = tedge_config.query_string(RunPathSetting)?.into();
+        let tedge_tmp_dir = tedge_config.query_string(TmpPathSetting)?.into();
 
         let bind_address = tedge_config.query(MqttBindAddressSetting)?;
         let external_bind_address_or_err = tedge_config.query(MqttExternalBindAddressSetting);
@@ -171,6 +176,7 @@ impl SmAgentConfig {
             .with_download_directory(tedge_download_dir)
             .with_log_directory(tedge_log_dir)
             .with_run_directory(tedge_run_dir)
+            .with_tmp_directory(tedge_tmp_dir)
             .with_http_config(http_config))
     }
 
@@ -199,18 +205,16 @@ impl SmAgentConfig {
         }
     }
 
-    pub fn with_log_directory(self, tmp_dir: PathBuf) -> Self {
-        Self {
-            log_dir: tmp_dir,
-            ..self
-        }
+    pub fn with_log_directory(self, log_dir: PathBuf) -> Self {
+        Self { log_dir, ..self }
     }
 
-    pub fn with_run_directory(self, tmp_dir: PathBuf) -> Self {
-        Self {
-            run_dir: tmp_dir,
-            ..self
-        }
+    pub fn with_run_directory(self, run_dir: PathBuf) -> Self {
+        Self { run_dir, ..self }
+    }
+
+    pub fn with_tmp_directory(self, tmp_dir: PathBuf) -> Self {
+        Self { tmp_dir, ..self }
     }
 
     pub fn with_http_config(self, http_config: HttpConfig) -> Self {
@@ -582,7 +586,7 @@ impl SmAgent {
         responses
             .publish(Message::new(topic, executing_response.to_bytes()?))
             .await?;
-        restart_operation::create_slash_run_file(&self.config.run_dir)?;
+        restart_operation::create_tmp_restart_file(&self.config.tmp_dir)?;
 
         let command_vec = get_restart_operation_commands();
         for mut command in command_vec {
@@ -633,7 +637,7 @@ impl SmAgent {
 
                 StateStatus::Restart(RestartOperationStatus::Restarting) => {
                     let _state = self.persistence_store.clear().await?;
-                    if restart_operation::has_rebooted(&self.config.run_dir)? {
+                    if restart_operation::has_rebooted(&self.config.tmp_dir)? {
                         info!("Device restart successful.");
                         status = OperationStatus::Successful;
                     }
@@ -702,7 +706,7 @@ mod tests {
 
     use tedge_test_utils::fs::TempTedgeDir;
 
-    const SLASH_RUN_PATH_TEDGE_AGENT_RESTART: &str = "tedge_agent/tedge_agent_restart";
+    const TEDGE_AGENT_RESTART: &str = "tedge_agent_restart";
 
     #[tokio::test]
     async fn check_agent_restart_file_is_created() -> Result<(), AgentError> {
@@ -715,20 +719,19 @@ mod tests {
         )
         .unwrap();
 
-        // calling handle_restart_operation should create a file in /run/tedge_agent_restart
+        // calling handle_restart_operation should create a file in /tmp/tedge_agent_restart
         let (_output, mut output_stream) = mqtt_tests::output_stream();
         let response_topic_restart =
             Topic::new(RestartOperationResponse::topic_name()).expect("Invalid topic");
+
         agent
             .handle_restart_operation(&mut output_stream, &response_topic_restart)
             .await?;
-        assert!(std::path::Path::new(
-            &dir.temp_dir
-                .path()
-                .join("run/")
-                .join(SLASH_RUN_PATH_TEDGE_AGENT_RESTART)
-        )
-        .exists());
+
+        assert!(
+            std::path::Path::new(&dir.temp_dir.path().join("tmp").join(TEDGE_AGENT_RESTART))
+                .exists()
+        );
 
         Ok(())
     }
@@ -743,15 +746,19 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir(".agent").file("current-operation");
         ttd.dir("sm-plugins");
+        ttd.dir("tmp");
         ttd.dir("logs");
         ttd.dir("run").dir("tedge_agent");
         ttd.dir("run").dir("lock");
         let toml_conf = &format!(
             r#"
+            [tmp]
+            path = '{}'
             [logs]
             path = '{}'
             [run]
             path = '{}'"#,
+            &ttd.temp_dir.path().join("tmp").to_str().unwrap(),
             &ttd.temp_dir.path().join("logs").to_str().unwrap(),
             &ttd.temp_dir.path().join("run").to_str().unwrap()
         );
