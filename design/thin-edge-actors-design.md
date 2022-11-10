@@ -241,6 +241,238 @@ To conclude, we decided to design thin-edge actors on top of tokio without using
   not even on the targets and the reaction time window.
 - Our effort is to be focussed on providing a flexible but systematic approach to instantiate and connect actors.
 
+### Approach overview
+
+Before moving to an actor model, let's start with regular rust objects.
+This will help us to stress the differences and similarities.
+
+To implement some state-full feature interacting with peers, the typical rust recipe is to:
+* wrap the state into a `struct` along peer handles,
+* expose a set of methods to update this state given a `mut` reference - ensuring exclusive update access, 
+* handle each object instance and peer using an `Arc::<Mutex<T>>` - allowing multiple references to an instance.
+
+```rust
+struct A { state: u64, peer: Arc::<Mutex<B>> }
+
+impl A { 
+  pub async fn do_this(&mut self, arg: ThisArg) {
+    // update self.state
+    self.state += 1;
+    
+    // interact with self.peer, acquiring the mutex first
+    let mut peer = self.peer.lock().unwrap();
+    peer.say("this").await;
+  }
+  
+  pub async fn do_that(&mut self, arg: ThatArg) {
+    // update self.state
+    self.state += 1;
+
+    // interact with self.peer, acquiring the mutex first
+    let mut peer = self.peer.lock().unwrap();
+    peer.say("that").await;
+  }
+}
+
+struct B { state: u64 }
+
+impl B {
+  pub async fn say(&mut self, arg: &str) {
+    self.state += 1;
+    println!("{}: {}", self.state, arg);
+  }
+}
+```
+
+Moving to an actor model introduces two ideas:
+* materialize method invocations with *messages* that can be freely cloned and serialized,
+* use *channels* to *asynchronously* exchange messages between peers,
+  * the actor owns the channel receiver and processes received messages,
+  * the peers clone the channel sender and send messages for processing.
+
+```rust
+struct ActorA { state: u64, messages: Receiver<AMessage>, peer: Sender<BMessage> }
+
+#[derive(Clone, Debug)]
+enum AMessage {
+  DoThis(ThisArg),
+  DoThat(ThatArg),
+}
+
+impl A {
+  pub async fn run(mut self) {
+    while let Some(message) = self.messages.recv().await {
+      match message {
+        DoThis(arg) => {
+          // update self.state
+          self.state += 1;
+          
+          // send messages to self.peer, triggering asynchronous operations
+          let _ = self.peer.send(BMessage::Say("this".to_string())).await;
+        }
+        DoThat(arg) => {
+          // update self.state
+          self.state += 1;
+
+          // send messages to self.peer, triggering asynchronous operations
+          let _ = self.peer.send(BMessage::Say("that".to_string())).await;
+        }
+      }
+    }
+  }
+}
+
+struct ActorB { state: u64, messages: Receiver<BMessage> }
+
+#[derive(Clone, Debug)]
+enum BMessage {
+  Say(String),
+}
+
+impl B {
+  pub async fn run(mut self) {
+    while let Some(message) = self.messages.recv().await {
+      match message {
+        Say(arg) => {
+          self.state += 1;
+          println!("{}: {}", self.state, &arg);
+        }
+      }
+    }
+  }
+}
+```
+
+In practice, constructing and deconstructing messages leads to boilerplate code.
+To avoid that, we can wrap the message-based interface behind regular method invocations.
+
+```rust
+struct ActorHandlerA {
+  sender: Sender<AMessage>
+}
+
+impl ActorHandlerA {
+  pub async fn do_this(&mut self, arg: ThisArg) {
+    let _ = self.sender.send(arg).await;
+  }
+
+  pub async fn do_that(&mut self, arg: ThatArg) {
+    let _ = self.sender.send(arg).await;
+  }
+}
+
+struct ActorA { state: AState, messages: Receiver<AMessage>, peer: ActorHandlerB }
+
+#[derive(Clone, Debug)]
+enum AMessage {
+  DoThis(ThisArg),
+  DoThat(ThatArg),
+}
+
+impl A {
+  pub async fn run(mut self) {
+    while let Some(message) = self.messages.recv().await {
+      match message {
+        DoThis(arg) => self.do_this(arg),
+        DoThat(arg) => self.do_that(arg),
+      }
+    }
+  }
+
+  async fn do_this(&mut self, arg: ThisArg) {
+    // update self.state
+    self.state += 1;
+
+    // interact with self.peer, without waiting for completion
+    self.peer.say("this").await;
+  }
+
+  async fn do_that(&mut self, arg: ThatArg) {
+    // update self.state
+    self.state += 1;
+
+    // interact with self.peer, without waiting for completion
+    self.peer.say("that").await;
+  }
+}
+
+struct ActorHandlerB {
+  sender: Sender<BMessage>
+}
+
+impl ActorHandlerB {
+  pub async fn say(&mut self, arg: &str) {
+    let _ = self.sender.send(BMessage::Say(arg.to_string())).await;
+  }
+}
+
+struct ActorB { state: u64, messages: Receiver<BMessage> }
+
+#[derive(Clone, Debug)]
+enum BMessage {
+  Say(String),
+}
+
+impl B {
+  pub async fn run(mut self) {
+    while let Some(message) = self.messages.recv().await {
+      match message {
+        Say(arg) => self.say(arg),
+      }
+    }
+  }
+
+  async fn say(&mut self, arg: String) {
+    self.state += 1;
+    println!("{}: {}", self.state, &arg);
+  }
+}
+```
+
+These three variants of the same example highlight several points.
+
+* The state is managed the same way in the three cases.
+* What differs is the interaction with peers.
+  * The more salient difference is related to the messages.
+  * However, the main difference is the concurrency model.
+    * With `Arc::<Mutex<T>>`, the caller awaits the peer to finalize the request;
+      while, with messages, the requests are processed concurrently by the peer without blocking the caller.
+    * In the former case, the peer can return a value to the caller,
+      while, in the later case, a value cannot be easily returned
+      and must be wrapped into a message sent back to the caller.
+    * In the context of thin-edge, concurrent processing and asynchronous messages are preferred.
+      However, we need to find a way to let the caller wait for a response when appropriate.
+* The message passing approach leads to boilerplate code.
+  However, the heart of the code is free of any message construction and deconstruction
+  (see the methods `do_this()` and `do_that()` of the third variant).
+  Furthermore, it seems feasible to generate this boilerplate code using macros
+  (the `run()` method, the handler `ActorAHandler` struct and implementation, the `AMessage` enum).
+* The handler type is a great place to improve both code readability and code flexibility
+  (A wrapping similar to what has been done for the third variant can be done for the first to hide lock acquisition).
+  We will use such handlers and adapters to encapsulate messages related features
+  as sending high priority messages or sending a request for which a response is awaited.
+* Similarly, the channel receiver can be encapsulated to add features
+  like reading high priority messages first or awaiting a response.
+* Key points are not addressed by this example.
+  * Who creates the actor channels and instances?
+  * How actors and peers are connected to each others?
+  * Who spawns the actor `run()` method?
+  * How to get the response returned by a peer?
+
+Even if details are missing, this gives us a sketch of the pieces making an actor.
+
+* Along its private state, an actor manipulates
+  * a queue of input messages (often named the actor mailbox),
+  * and handlers to actor peers to which output messages are sent to.
+* The code of an actor is a loop processing input messages in turn,
+  interpreting these messages as method invocations,
+  updating the actor state and sending messages to peers.
+* Actors are running asynchronously in background tasks and can be accessed only indirectly using handlers.
+* Actor handlers and mailboxes are more than just the sending and receiving ends of message channels.
+  * This is where are implemented priority and cancellation mechanisms.
+  * This is a place to adapt sent messages to the type actually expected by the receiver.
+  * They can also act as facades that build and send messages on regular method invocations.
+
 ### Messages
 
 Messages must flow freely between actors with no constraints on ownership and thread.
