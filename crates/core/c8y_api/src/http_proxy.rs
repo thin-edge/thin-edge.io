@@ -9,7 +9,7 @@ use crate::smartrest::{
 use async_trait::async_trait;
 use mockall::automock;
 use mqtt_channel::{Connection, PubChannel, StreamExt, Topic, TopicFilter};
-use reqwest::Url;
+use reqwest::{RequestBuilder, Response, StatusCode, Url};
 use std::path::Path;
 use std::{collections::HashMap, time::Duration};
 use tedge_config::{
@@ -277,15 +277,10 @@ impl JwtAuthHttpProxy {
         &mut self,
         device_id: Option<&str>,
     ) -> Result<String, SMCumulocityMapperError> {
-        let token = self.get_jwt_token().await?;
         let url_get_id = self.end_point.get_url_for_get_id(device_id);
 
-        let internal_id = self
-            .http_con
-            .get(url_get_id)
-            .bearer_auth(token.token())
-            .send()
-            .await?;
+        let request_internal_id = self.http_con.get(url_get_id);
+        let internal_id = self.execute(request_internal_id).await?;
         let internal_id_response = internal_id.json::<InternalIdResponse>().await?;
 
         let internal_id = internal_id_response.id();
@@ -322,23 +317,51 @@ impl JwtAuthHttpProxy {
         &mut self,
         c8y_event: C8yCreateEvent,
     ) -> Result<String, SMCumulocityMapperError> {
-        let token = self.get_jwt_token().await?;
         let create_event_url = self.end_point.get_url_for_create_event();
 
         let request = self
             .http_con
             .post(create_event_url)
             .json(&c8y_event)
-            .bearer_auth(token.token())
-            .header("Accept", "application/json")
-            .timeout(Duration::from_millis(10000))
-            .build()?;
+            .header("Accept", "application/json");
 
-        let response = self.http_con.execute(request).await?;
+        let response = self.execute(request).await?;
         let _ = response.error_for_status_ref()?;
         let event_response_body = response.json::<C8yEventResponse>().await?;
 
         Ok(event_response_body.id)
+    }
+
+    async fn execute(
+        &mut self,
+        request_builder: RequestBuilder,
+    ) -> Result<Response, SMCumulocityMapperError> {
+        // Due to builder constraints, the second attempt builder must be created first just in case.
+        let mut second_attempt_builder = request_builder.try_clone();
+
+        // Get a JWT token to authenticate the device
+        let token = self.get_jwt_token().await?;
+        let request = request_builder
+            .bearer_auth(token.token())
+            .timeout(Duration::from_millis(10000))
+            .build()?;
+        let first_response = self.http_con.execute(request).await;
+
+        // The first attempt might be unauthorized, if the token has concurrently expired
+        if let Ok(ref response) = first_response {
+            if response.status() == StatusCode::UNAUTHORIZED {
+                // Let's retry with a fresh JWT token
+                if let Some(request_builder) = second_attempt_builder.take() {
+                    let token = self.get_jwt_token().await?;
+                    let request = request_builder
+                        .bearer_auth(token.token())
+                        .timeout(Duration::from_millis(10000))
+                        .build()?;
+                    return Ok(self.http_con.execute(request).await?);
+                }
+            }
+        }
+        Ok(first_response?)
     }
 }
 
@@ -387,17 +410,10 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         c8y_software_list: &C8yUpdateSoftwareListResponse,
     ) -> Result<(), SMCumulocityMapperError> {
         let url = self.end_point.get_url_for_sw_list();
-        let token = self.get_jwt_token().await?;
 
-        let request = self
-            .http_con
-            .put(url)
-            .json(c8y_software_list)
-            .bearer_auth(&token.token())
-            .timeout(Duration::from_millis(10000))
-            .build()?;
+        let request = self.http_con.put(url).json(c8y_software_list);
 
-        let _response = self.http_con.execute(request).await?;
+        let _response = self.execute(request).await?;
 
         Ok(())
     }
@@ -408,8 +424,6 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         log_content: &str,
         child_device_id: Option<String>,
     ) -> Result<String, SMCumulocityMapperError> {
-        let token = self.get_jwt_token().await?;
-
         let log_event = self
             .create_event(log_type.to_string(), None, None, child_device_id)
             .await?;
@@ -423,12 +437,9 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
             .post(&binary_upload_event_url)
             .header("Accept", "application/json")
             .header("Content-Type", "text/plain")
-            .body(log_content.to_string())
-            .bearer_auth(token.token())
-            .timeout(Duration::from_millis(10000))
-            .build()?;
+            .body(log_content.to_string());
 
-        let _response = self.http_con.execute(request).await?;
+        let _response = self.execute(request).await?;
         Ok(binary_upload_event_url)
     }
 
@@ -438,8 +449,6 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         config_type: &str,
         child_device_id: Option<String>,
     ) -> Result<String, SMCumulocityMapperError> {
-        let token = self.get_jwt_token().await?;
-
         // read the config file contents
         let config_content = std::fs::read_to_string(config_path)?;
 
@@ -456,12 +465,9 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
             .post(&binary_upload_event_url)
             .header("Accept", "application/json")
             .header("Content-Type", "text/plain")
-            .body(config_content.to_string())
-            .bearer_auth(token.token())
-            .timeout(Duration::from_millis(10000))
-            .build()?;
+            .body(config_content.to_string());
 
-        let _response = self.http_con.execute(request).await?;
+        let _response = self.execute(request).await?;
         Ok(binary_upload_event_url)
     }
 }
@@ -621,6 +627,18 @@ mod tests {
         let config_file = create_test_config_file_with_content(config_content)?;
 
         // Mock endpoint for config upload event creation
+        // Fake an expired JWT token by rejecting the first config upload request
+        let _config_file_event_mock = mock("POST", "/event/events/")
+            .match_body(Matcher::PartialJson(
+                json!({ "type": config_type, "text": config_type }),
+            ))
+            .expect(1)
+            .with_status(401)
+            .with_body(json!({ "id": event_id }).to_string())
+            .create();
+
+        // Mock endpoint for config upload event creation
+        // Accept subsequent requests
         let _config_file_event_mock = mock("POST", "/event/events/")
             .match_body(Matcher::PartialJson(
                 json!({ "type": config_type, "text": config_type }),
