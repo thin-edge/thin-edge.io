@@ -18,7 +18,7 @@ ${USERNAME}              pi
 ${PASSWORD}              crypt:LO3wCxZPltyviM8gEyBkRylToqtWm+hvq9mMVEPxtn0BXB65v/5wxUu7EqicpOgGhgNZVgFjY0o=
 ${url_tedge}             qaenvironment.eu-latest.cumulocity.com
 ${user}                  systest_preparation
-${pass}                  crypt:34mpoxueRYy/gDerrLeBThQ2wp9F+2cw50XaNyjiGUpK488+1fgEfE6drOEcR+qZQ6dcjIWETukbqLU=
+${pass}                  crypt:OBusFTXwz00ge67sjHgP8kkH0jLrso7rp6Bp4sHKhwULvkr/nd8WHGezY37/fmMBeNvn+Xxk558glujxb5Pj
 ${config}                "files = [\n\t { path = '/home/pi/config1', type = 'config1' },\n ]\n"
 
 ${DeviceID}              CH_DEV_CONF_MGMT
