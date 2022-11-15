@@ -153,8 +153,21 @@ pub struct C8yMqttJwtTokenRetriever {
 }
 
 impl C8yMqttJwtTokenRetriever {
-    pub fn new(mqtt_con: mqtt_channel::Connection) -> Self {
-        C8yMqttJwtTokenRetriever { mqtt_con }
+    pub async fn try_new(tedge_config: &TEdgeConfig) -> Result<Self, SMCumulocityMapperError> {
+        let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
+        let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
+        let topic = TopicFilter::new("c8y/s/dat")?;
+        let mqtt_config = mqtt_channel::Config::default()
+            .with_port(mqtt_port)
+            .with_clean_session(true)
+            .with_host(mqtt_host)
+            .with_subscriptions(topic);
+        let mut mqtt_con = Connection::new(&mqtt_config).await?;
+
+        // Ignore errors on this connection
+        mqtt_con.errors.close();
+
+        Ok(C8yMqttJwtTokenRetriever { mqtt_con })
     }
 }
 
@@ -230,21 +243,7 @@ impl JwtAuthHttpProxy {
             false => client_builder.build()?,
         };
 
-        let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
-        let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
-        let topic = TopicFilter::new("c8y/s/dat")?;
-        let mqtt_config = mqtt_channel::Config::default()
-            .with_port(mqtt_port)
-            .with_clean_session(true)
-            .with_host(mqtt_host)
-            .with_subscriptions(topic);
-
-        let mut mqtt_con = Connection::new(&mqtt_config).await?;
-
-        // Ignore errors on this connection
-        mqtt_con.errors.close();
-
-        let jwt_token_retriever = Box::new(C8yMqttJwtTokenRetriever::new(mqtt_con));
+        let jwt_token_retriever = Box::new(C8yMqttJwtTokenRetriever::try_new(tedge_config).await?);
 
         Ok(JwtAuthHttpProxy::new(
             jwt_token_retriever,
