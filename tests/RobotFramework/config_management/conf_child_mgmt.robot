@@ -53,10 +53,10 @@ Child device bootstrapping
     Startup child device                            #Setting up/Bootstraping of a child device
 Snapshot from device
     Request snapshot from child device              #Using the cloud command Get snapshot from device
-    Child device response on snapshot request       #Child device is sending 'executing' and 'sussess' MQTT responses
+    Child device response on snapshot request       #Child device is sending 'executing' and 'successful' MQTT responses
 Child device config update
     Send configuration to device                    #Using the cloud command Send configuration to device
-    Child device get configuration file             #Child device is sending 'executing' and 'sussess' MQTT responses
+    Child device get configuration file             #Child device is sending 'executing' and 'successful' MQTT responses
 
 
 *** Keywords ***
@@ -67,10 +67,10 @@ Child Connection
     Open Connection     ${CHILD_IP}
     Login               ${USERNAME}    ${PASSWORD}
 Set external MQTT bind address
-    ${rc}=    Execute Command    sudo tedge config set mqtt.external.bind_address ${PARENT_IP}    return_stdout=False    return_rc=True    #Set the URL of your Cumulocity IoT tenant
+    ${rc}=    Execute Command    sudo tedge config set mqtt.external.bind_address ${PARENT_IP}    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 Set external MQTT port
-    ${rc}=    Execute Command    sudo tedge config set mqtt.external.port 1883    return_stdout=False    return_rc=True    #Set the URL of your Cumulocity IoT tenant
+    ${rc}=    Execute Command    sudo tedge config set mqtt.external.port 1883    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 
 Delete child related content
