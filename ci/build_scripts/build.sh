@@ -138,7 +138,6 @@ source ./ci/package_list.sh
 
 # Work out which strip command
 # Figure out what strip tool to use if any
-# Figure out what strip tool to use if any
 STRIP=
 if [ -n "$ARCH" ]; then
     STRIP="strip"
