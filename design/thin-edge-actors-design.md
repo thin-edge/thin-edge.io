@@ -582,7 +582,33 @@ impl From<Msg2> for Msg {
 
 #### Channel creation and ownership
 
-#### Actor with no inputs
+#### Actor with no inputs or outputs
+
+An actor can have no input messages and only acts as a source of output messages.
+Similarly, an actor can have not output messages and be a sink of input messages.
+Notable examples are respectively a source of measurements and a message logger.
+
+This can be represented using an `enum` with no constructors and hence with no values.
+
+```rust
+/// An actor can have no input or no output messages
+#[derive(Clone, Debug)]
+pub enum NoMessage {}
+
+impl Actor for Collectd {
+  type Input = NoMessage;
+  type Output = Measurement;
+  
+  // ...
+}
+
+impl Actor for Logger {
+  type Input = LogEntry;
+  type Output = NoMessage;
+  
+  // ...
+} 
+```
 
 #### Out-of-band runtime messages
 
