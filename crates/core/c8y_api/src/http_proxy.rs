@@ -149,7 +149,7 @@ pub trait C8yJwtTokenRetriever: Send + Sync {
 }
 
 pub struct C8yMqttJwtTokenRetriever {
-    mqtt_con: mqtt_channel::Connection,
+    mqtt_config: mqtt_channel::Config,
 }
 
 impl C8yMqttJwtTokenRetriever {
@@ -162,35 +162,33 @@ impl C8yMqttJwtTokenRetriever {
             .with_clean_session(true)
             .with_host(mqtt_host)
             .with_subscriptions(topic);
-        let mut mqtt_con = Connection::new(&mqtt_config).await?;
 
-        // Ignore errors on this connection
-        mqtt_con.errors.close();
-
-        Ok(C8yMqttJwtTokenRetriever { mqtt_con })
+        Ok(C8yMqttJwtTokenRetriever { mqtt_config })
     }
 }
 
 #[async_trait]
 impl C8yJwtTokenRetriever for C8yMqttJwtTokenRetriever {
     async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
-        self.mqtt_con
+        let mut mqtt_con = Connection::new(&self.mqtt_config).await?;
+
+        // Ignore errors on this connection
+        mqtt_con.errors.close();
+
+        mqtt_con
             .published
             .publish(mqtt_channel::Message::new(
                 &Topic::new_unchecked("c8y/s/uat"),
                 "".to_string(),
             ))
             .await?;
-        let token_smartrest = match tokio::time::timeout(
-            Duration::from_secs(10),
-            self.mqtt_con.received.next(),
-        )
-        .await
-        {
-            Ok(Some(msg)) => msg.payload_str()?.to_string(),
-            Ok(None) => return Err(SMCumulocityMapperError::InvalidMqttMessage),
-            Err(_elapsed) => return Err(SMCumulocityMapperError::RequestTimeout),
-        };
+
+        let token_smartrest =
+            match tokio::time::timeout(Duration::from_secs(10), mqtt_con.received.next()).await {
+                Ok(Some(msg)) => msg.payload_str()?.to_string(),
+                Ok(None) => return Err(SMCumulocityMapperError::InvalidMqttMessage),
+                Err(_elapsed) => return Err(SMCumulocityMapperError::RequestTimeout),
+            };
 
         Ok(SmartRestJwtResponse::try_new(&token_smartrest)?)
     }
