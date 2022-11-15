@@ -14,6 +14,7 @@ const WAIT_FOR_CHECK_SECONDS: u64 = 2;
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
 pub(crate) const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const CONNECTION_TIMEOUT: Duration = Duration::from_secs(60);
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
 const MQTT_TLS_PORT: u16 = 8883;
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
@@ -260,6 +261,7 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
     );
 
     options.set_keep_alive(RESPONSE_TIMEOUT);
+    options.set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
 
     let (mut client, mut connection) = rumqttc::Client::new(options, 10);
     let mut acknowledged = false;
