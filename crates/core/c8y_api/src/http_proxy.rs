@@ -188,7 +188,7 @@ impl C8yJwtTokenRetriever for C8yMqttJwtTokenRetriever {
 /// - Keep the connection info to c8y and the internal Id of the device
 /// - Handle JWT requests
 pub struct JwtAuthHttpProxy {
-    jwt_token_retriver: Box<dyn C8yJwtTokenRetriever>,
+    jwt_token_retriever: Box<dyn C8yJwtTokenRetriever>,
     http_con: reqwest::Client,
     end_point: C8yEndPoint,
     child_devices: HashMap<String, String>,
@@ -196,13 +196,13 @@ pub struct JwtAuthHttpProxy {
 
 impl JwtAuthHttpProxy {
     pub fn new(
-        jwt_token_retriver: Box<dyn C8yJwtTokenRetriever>,
+        jwt_token_retriever: Box<dyn C8yJwtTokenRetriever>,
         http_con: reqwest::Client,
         c8y_host: &str,
         device_id: &str,
     ) -> JwtAuthHttpProxy {
         JwtAuthHttpProxy {
-            jwt_token_retriver,
+            jwt_token_retriever,
             http_con,
             end_point: C8yEndPoint {
                 c8y_host: c8y_host.into(),
@@ -244,10 +244,10 @@ impl JwtAuthHttpProxy {
         // Ignore errors on this connection
         mqtt_con.errors.close();
 
-        let jwt_token_retriver = Box::new(C8yMqttJwtTokenRetriever::new(mqtt_con));
+        let jwt_token_retriever = Box::new(C8yMqttJwtTokenRetriever::new(mqtt_con));
 
         Ok(JwtAuthHttpProxy::new(
-            jwt_token_retriver,
+            jwt_token_retriever,
             http_con,
             &c8y_host,
             &device_id,
@@ -390,7 +390,7 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
     }
 
     async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
-        self.jwt_token_retriver.get_jwt_token().await
+        self.jwt_token_retriever.get_jwt_token().await
     }
 
     async fn send_event(
@@ -540,14 +540,14 @@ mod tests {
             .create();
 
         // An JwtAuthHttpProxy ...
-        let mut jwt_token_retriver = Box::new(MockC8yJwtTokenRetriever::new());
-        jwt_token_retriver
+        let mut jwt_token_retriever = Box::new(MockC8yJwtTokenRetriever::new());
+        jwt_token_retriever
             .expect_get_jwt_token()
             .returning(|| Ok(SmartRestJwtResponse::default()));
 
         let http_client = reqwest::ClientBuilder::new().build().unwrap();
         let mut http_proxy = JwtAuthHttpProxy::new(
-            jwt_token_retriver,
+            jwt_token_retriever,
             http_client,
             mockito::server_url().as_str(),
             device_id,
@@ -583,14 +583,14 @@ mod tests {
             .create();
 
         // An JwtAuthHttpProxy ...
-        let mut jwt_token_retriver = Box::new(MockC8yJwtTokenRetriever::new());
-        jwt_token_retriver
+        let mut jwt_token_retriever = Box::new(MockC8yJwtTokenRetriever::new());
+        jwt_token_retriever
             .expect_get_jwt_token()
             .returning(|| Ok(SmartRestJwtResponse::default()));
 
         let http_client = reqwest::ClientBuilder::new().build().unwrap();
         let mut http_proxy = JwtAuthHttpProxy::new(
-            jwt_token_retriver,
+            jwt_token_retriever,
             http_client,
             mockito::server_url().as_str(),
             device_id,
@@ -657,15 +657,15 @@ mod tests {
             .create();
 
         // An JwtAuthHttpProxy ...
-        let mut jwt_token_retriver = Box::new(MockC8yJwtTokenRetriever::new());
-        jwt_token_retriver
+        let mut jwt_token_retriever = Box::new(MockC8yJwtTokenRetriever::new());
+        jwt_token_retriever
             .expect_get_jwt_token()
             .returning(|| Ok(SmartRestJwtResponse::default()));
 
         let http_client = reqwest::ClientBuilder::new().build().unwrap();
 
         let mut http_proxy = JwtAuthHttpProxy::new(
-            jwt_token_retriver,
+            jwt_token_retriever,
             http_client,
             mockito::server_url().as_str(),
             device_id,
