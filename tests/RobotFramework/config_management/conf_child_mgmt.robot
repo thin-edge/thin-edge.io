@@ -48,14 +48,14 @@ Prerequisite Cloud
     GET Parent name                                 #Get the Parent name from the cloud
     GET Child ID                                    #Get the Child ID from the cloud
     GET Child name                                  #Get the Child name from the cloud
-    # Validate child Name                             #This is to check the existance of the bug: https://github.com/thin-edge/thin-edge.io/issues/1569
+    # Validate child Name                             #This is to check the existence of the bug: https://github.com/thin-edge/thin-edge.io/issues/1569
 Child device bootstrapping
     Startup child device                            #Setting up/Bootstraping of a child device
 Snapshot from device
     Request snapshot from child device              #Using the cloud command Get snapshot from device
     Child device response on snapshot request       #Child device is sending 'executing' and 'sussess' MQTT responses
 Child device config update
-    Send configuration to device                    #Using the cloud command Send configuation to device
+    Send configuration to device                    #Using the cloud command Send configuration to device
     Child device get configuration file             #Child device is sending 'executing' and 'sussess' MQTT responses
 
 
