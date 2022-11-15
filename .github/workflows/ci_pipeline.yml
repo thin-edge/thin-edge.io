@@ -33,7 +33,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build packages for amd64
-        run: ./ci/build_scripts/build.sh
+        run: bash -x ./ci/build_scripts/build.sh
 
       - name: Upload artifacts as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
@@ -97,7 +97,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build for ${{ matrix.target }}
-        run: ./ci/build_scripts/build.sh ${{ matrix.target }}
+        run: bash -x ./ci/build_scripts/build.sh ${{ matrix.target }}
 
       - name: Upload debian packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
