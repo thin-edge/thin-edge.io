@@ -1,8 +1,27 @@
 # Apama Software Management Plugin
 
-The Apama plugin can be used to install Apama projects using the Cumulocity software management feature.
+The Apama plugin, part of the Apama thin-edge support package, can be used to install Apama projects using the Cumulocity software management feature.
 
-> Note: This plugin expects an Apama installation on the device.
+## Add the Apama thin-edge support package to the tenant software repository and deploy it to thin-edge
+
+1. In the **Device Management** app and go to the **Management** menu option and select the **Software repository**.
+2. Click **Add software** at the right of the top menu bar.
+3. In the **ADD SOFTWARE** dialog enter the following details:
+    - **Software**: apama-thin-edge-support
+    - **Description**: apama-thin-edge-support (or something else if you choose)
+    - **Device Filter Type**: (leave empty)
+    - **Software Type**: apt
+    - **Version**: 10.15.1.0-1::apt
+    - **SOFTWARE FILE**: select the **Provide a file path** option and give an **empty space** (' ').
+4. Click the **Add Software** button.
+5. Now return to the **Devices** menu option and then select **All devices**.
+6. In the list of devices, select the thin-edge device installed previously.
+7. In the sub-menu for the device, select the **Software** option.
+8. Click the **Install software** button in the bottom left; the apama-thin-edge-support should be listed.
+9. Click the drop-down arrow on the right and check the 10.15.1.0-1::apama radio button, then click **Install**.
+10. Finally, click the **Apply changes** button in the lower right of the panel.
+
+After installation of the support for Apama onto the thin-edge device, the correlator will attempt to start, but will fail initially because there is not yet an Apama project installed. Instructions are given below for installing an Apama project on the device.
 
 ## Install Apama artifacts from Cumulocity
 
