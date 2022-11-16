@@ -607,7 +607,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn upload_config_file() -> anyhow::Result<()> {
+    async fn upload_config_file_authorized() -> anyhow::Result<()> {
+        let token_expired = false;
+        upload_config_file(token_expired).await
+    }
+
+    #[tokio::test]
+    async fn upload_config_file_unauthorized() -> anyhow::Result<()> {
+        let token_expired = true;
+        upload_config_file(token_expired).await
+    }
+
+    async fn upload_config_file(token_expired: bool) -> anyhow::Result<()> {
         let device_id = "test-device";
         let event_id = "456";
 
@@ -624,15 +635,17 @@ mod tests {
         let config_file = create_test_config_file_with_content(config_content)?;
 
         // Mock endpoint for config upload event creation
-        // Fake an expired JWT token by rejecting the first config upload request
-        let _config_file_event_mock = mock("POST", "/event/events/")
-            .match_body(Matcher::PartialJson(
-                json!({ "type": config_type, "text": config_type }),
-            ))
-            .expect(1)
-            .with_status(401)
-            .with_body(json!({ "id": event_id }).to_string())
-            .create();
+        if token_expired {
+            // Fake an expired JWT token by rejecting the first config upload request
+            let _config_file_event_mock = mock("POST", "/event/events/")
+                .match_body(Matcher::PartialJson(
+                    json!({ "type": config_type, "text": config_type }),
+                ))
+                .expect(1)
+                .with_status(401)
+                .with_body(json!({ "id": event_id }).to_string())
+                .create();
+        }
 
         // Mock endpoint for config upload event creation
         // Accept subsequent requests
