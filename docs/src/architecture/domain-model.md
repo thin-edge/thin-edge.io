@@ -34,13 +34,14 @@ Here _state_ refers to e.g. **Device Management** details as _installed software
       instead new values are used by the **Domain Application**[^1] asynchronously from next control-cycle on
     * values could be a mix of numbers, strings or booleans
   * **Event**, is a notification that something happened on the device's environment or software system
-    * its source could be
-      - a _sensor's[^1] value_ that detected a door has beed closed
-      - a signal from the device's domain application[^1]
-      - a device's system notification that a user has started an ssh session
-    * has one timestamp
-    * the meaning of an event related _sensor[^1] value_ or _domain application's[^1] signal_ is very customer specific (could be a change from 0 to 1, a bit in a flag word, ...)
-    * a _custom specific sw component_ must know the meaning, and sends an event notification to the **thin-edge** whenever the value signals a raised event
+   * has one timestamp
+   * common triggers for an **event** can be
+      - a _sensor's[^1] value_ that detects something like a door has been closed
+      - a signal from the device's _domain application_[^1]
+      - a device's _system notification_ that e.g. a user has started an ssh session
+   * the interpretation of a _sensor's value_, a _domain application's_ signal or a _system's notification_
+     that shall represent an **event** trigger falls to some custom specific software piece
+     * whenever that software piece interprets an **event** trigger it uses the **thin-edge** API to send an event notification to **thin-edge**
 * **Alarm**, similar to **events**; but in addition: 
     * the _End User_ (an operator of the system) has to take action to resolve the **alarm**
     * also the _custom specific sw component_ can send a notification to **thin-edge** to clear an **alarm**  
