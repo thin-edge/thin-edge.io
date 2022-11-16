@@ -147,7 +147,7 @@ A **plugin** defines and implements a specific **contract** for all interactions
 
 **thin-edge** holds and manages an **inventory** on the **main-device**, that stores and provides information about the **main-device** and known **child-devices**
   * information stored per **device** are
-    * supported kinds of **Device Management** functionality
+    * supported kinds of **Device Management** capabilities/operations
     * supported kinds of **Telemetry Data**
     * optionally any custom-specific meta-information per **device**
   * the **inventory** is the communication backbone for **plugins**, **external child-devices**, the **domain application**[^1] and **thin-edge** it-self
