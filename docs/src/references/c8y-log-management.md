@@ -4,13 +4,13 @@ Thin-edge provides an operation plugin to [fetch log files from the device on to
 
 * Log file management from Cumulocity is provided with a `c8y_log_plugin` which runs as a daemon on thin-edge.
 * The device owner can define the list of log files that can be retrieved from Cumulocity,
-  in the plugin's configuration file named `c8y_log_plugin.toml`.
-* Each entry in the the `c8y_log_plugin.toml` file contains a log `type` and a `path` pattern,
+  in the plugin's configuration file named `c8y-log-plugin.toml`.
+* Each entry in the the `c8y-log-plugin.toml` file contains a log `type` and a `path` pattern,
   where the `type` is used to represent the logical group of log files matching the `path` pattern.
 * On receipt of a log file request for a given `type`, 
-  the log files for that type are retrieved using the `path` pattern defined in this `c8y_log_plugin.toml`,
+  the log files for that type are retrieved using the `path` pattern defined in this `c8y-log-plugin.toml`,
   matched against the requested time range, search text and maximum line count.
-* The list of managed log files in `c8y_log_plugin.toml` can be updated both locally as well as from Cumulocity cloud,
+* The list of managed log files in `c8y-log-plugin.toml` can be updated both locally as well as from Cumulocity cloud,
   using the configuration management feature of Cumulocity, combined with the `c8y_configuration_plugin` of thin-edge.
 
 ## Installation
@@ -20,11 +20,11 @@ As part of this plugin installation:
 * On systemd enabled devices, the service definition file for this `c8y_log_plugin` daemon is also installed as part of this plugin installation.
 
 Once installed, the `c8y_log_plugin` is run as a daemon on the device listening to log requests from Cumulocity on `c8y/s/us` MQTT topic.
-On startup, it reports all the log file types that it manages, defined in the `c8y_log_plugin.toml`
+On startup, it reports all the log file types that it manages, defined in the `c8y-log-plugin.toml`
 
 ## Configuration
 
-The `c8y_log_plugin` configuration is stored by default under `/etc/tedge/c8y/c8y_log_plugin.toml`.
+The `c8y_log_plugin` configuration is stored by default under `/etc/tedge/c8y/c8y-log-plugin.toml`.
 
 This [TOML](https://toml.io/en/) file defines the list of log files that can be retrieved from the cloud tenant.
 The paths to these files can be represented using [glob](https://en.wikipedia.org/wiki/Glob_(programming)) patterns.
@@ -32,9 +32,8 @@ The `type` given to these paths are used as the log type when they are reported 
 
 ```toml
 files = [
-    { type = "mosquitto", path = '/var/log/mosquitto.log' },
-    { type = "software-management", path = '/var/log/tedge/agent/software-management/software-*' },
-    { type = "c8y_LogRequest", path = '/var/log/tedge/agent/c8y_LogRequest/*' },
+    { type = "mosquitto", path = '/var/log/mosquitto/mosquitto.log' },
+    { type = "software-management", path = '/var/log/tedge/agent/software-*' },
     { type = "c8y_CustomOperation", path = '/var/log/tedge/agent/c8y_CustomOperation/*' }
 ]
 ```
@@ -49,7 +48,7 @@ and sends the supported log types message(SmartREST `118`) to Cumulocity on `c8y
 The plugin continuously watches this configuration file for any changes and resends the `118` message with the `type`s in this file,
 whenever it is updated.
 
-Note: If the file `/etc/tedge/c8y/c8y_log_plugin.toml` is ill-formed or cannot be read,
+Note: If the file `/etc/tedge/c8y/c8y-log-plugin.toml` is ill-formed or cannot be read,
       then an empty `118` message is sent, indicating no log files are tracked.
 
 ## Handling log requests from Cumulocity
@@ -60,7 +59,7 @@ This plugin subscribes to `c8y/s/ds` topic, listening for `c8y_LogfileRequest` m
 522,<device-id>,mosquitto,2013-06-22T17:03:14.000+02:00,2013-06-22T18:03:14.000+02:00,ERROR,1000
 ```
 
-The plugin then checks the `c8y_log_plugin.toml` file for the log type in the incoming message (`mosquitto`),
+The plugin then checks the `c8y-log-plugin.toml` file for the log type in the incoming message (`mosquitto`),
 retrieves the log files using the `target` glob pattern provided in the plugin config file,
 including only the ones modified within the date range(`2013-06-22T17:03:14.000+02:00` to `2013-06-22T18:03:14.000+02:00`),
 with the content filtered by the search text(`ERROR`) and the maximum line count(`1000`).
@@ -71,10 +70,10 @@ with SmartREST messages `501`(executing), `502`(failed) or `503`(successful) on 
 
 ## Updating supported log files from Cumulocity
 
-The supported log files list defined in the `c8y_log_plugin.toml` can be updated both locally as well as from Cumulocity cloud.
-Updates from Cumulocity can be achieved simply by listing this log plugin's config file(`c8y_log_plugin.toml`) 
+The supported log files list defined in the `c8y-log-plugin.toml` can be updated both locally as well as from Cumulocity cloud.
+Updates from Cumulocity can be achieved simply by listing this log plugin's config file(`c8y-log-plugin.toml`) 
 in the configuration file of the `c8y_configuration_plugin`.
-This will enable the `c8y_log_plugin.toml` to be tracked and managed by the `c8y_configuration_plugin`.
+This will enable the `c8y-log-plugin.toml` to be tracked and managed by the `c8y_configuration_plugin`.
 
 ## Usage
 
@@ -90,7 +89,7 @@ OPTIONS:
     -h, --help                         Print help information
     -V, --version                      Print version information
 
-    On start, `c8y_log_plugin` notifies the cloud tenant of the managed log types, defined in `c8y_log_plugin.toml`.
+    On start, `c8y_log_plugin` notifies the cloud tenant of the managed log types, defined in `c8y-log-plugin.toml`.
     On receipt of log requests from the cloud, the log files are fetched using the glob path patterns listed in this config file.
     The cloud tenant is also notified of the progress of the log request operation until success/failure.
 ```
@@ -103,13 +102,13 @@ The `c8y_log_plugin` reports progress and errors to the OS journal which can be 
 
 To support retrieval of logs that are not available as physical files on the file system,
 but can retrieved using other tools like `journalctl`, `docker logs` etc,
-the log entries in `c8y_log_plugin.toml` can be enhanced to support retrieval of logs using any `command` execution.
+the log entries in `c8y-log-plugin.toml` can be enhanced to support retrieval of logs using any `command` execution.
 
 Here is how the config for such logs retrieved using commands would look like:
 
 ```toml
 files = [
-    { type = "mosquitto", path = '/var/log/mosquitto.log' },
+    { type = "mosquitto", path = '/var/log/mosquitto/mosquitto.log' },
     { type = "tedge-agent", command = '/usr/bin/journalctl --unit=tedge-agent --since=$FROM --until=$TO | grep $FILTER_TEXT' },
     { type = "<container id>", command = '/docker/log/script --target=$TARGET --from=$FROM --to=$TO --filter-text=$TEXT --line-count=$COUNT' }
 ]

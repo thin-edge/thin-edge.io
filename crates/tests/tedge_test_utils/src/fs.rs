@@ -162,14 +162,14 @@ mod tests {
         let tedge_dir = TempTedgeDir::new();
         tedge_dir
             .dir("c8y")
-            .file("c8y_log_plugin.toml")
+            .file("c8y-log-plugin.toml")
             .with_toml_content(toml::toml! {
                 files = [
                     { type = "apt", path = "/var/log/apt/history.log"}
                 ]
             });
         let file_path = &format!(
-            "{}/c8y/c8y_log_plugin.toml",
+            "{}/c8y/c8y-log-plugin.toml",
             &tedge_dir.temp_dir.path().to_str().unwrap()
         );
         assert!(Path::new(&file_path).exists());
