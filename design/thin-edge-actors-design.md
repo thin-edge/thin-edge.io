@@ -580,6 +580,124 @@ impl From<Msg2> for Msg {
 
 #### Channel types
 
+We don't want to expose that the messages are sent over `mpsc` channels. 
+Abstracting both the senders and receivers, we can implement specific mechanisms
+to manage message priority, timeout, cancellation and more.
+
+The receiver part is abstracted by a concrete type: a mailbox for a specific type of messages.
+A key design point is that *all* the interactions with an actor must go through such a mailbox,
+including runtime errors, cancellations and timeouts.
+Doing so simplifies the actor event loops to `while let Some(message) = self.mailbox.next().await { ... }`
+and gives the flexibility to improve the system with new message delivery mechanisms.
+
+```rust
+/// A mailbox that gather *all* the messages sent to an actor, including runtime messages.
+impl<M : From<RuntimeMessage>> Mailbox<M> {
+  /// Pop from the mailbox the message with the highest priority
+  /// 
+  /// Await till a messages is available.
+  /// Return `None` when all the senders to this mailbox have been dropped and all the messages consumed.
+  pub async fn next(&mut self) -> Option<M> {
+    // ...
+  }
+  
+  /// Turn on/off logging of the messages consumed from this mailbox.
+  /// 
+  /// The messages are logged when returned by the `next()` method.
+  pub fn log_inputs(&mut self, on: bool) {
+    // ...
+  }
+}
+
+pub enum RuntimeMessage {
+  RuntimeError(RuntimeError),
+  Timeout,
+  Shutdown,
+  LogInputs(bool),
+  LogOutputs(bool),
+  // ...
+}
+```
+
+The message sender of an actor is implemented as an `Address<M>`, the address of its mailbox.
+
+```rust
+/// Create a new mailbox with its address
+pub fn new_mailbox<M>(buffer: usize) -> (Mailbox<M>, Address<M>) {
+  // ...
+}
+
+impl<M : From<RuntimeMessage>> Address<M> {
+  /// Send a message to the mailbox with that address
+  /// 
+  /// Await the messages is actually in the mailbox.
+  /// Fail when the mailbox has been dropped.
+  pub async fn send_message(&mut self, message: M) -> Result<(), ChannelError> {
+    // ...
+  }
+
+  /// Clone this address which can then be used from another actor
+  fn clone(&self) -> Self {
+    // ...
+  }
+}
+```
+
+However, actors can not directly use the addresses of their peers.
+If an actor sends messages of type `A` to an actor that processes messages of type `B: From<A>`,
+then we do not want the source actor to be aware of the `B` message type,
+and still less the unrelated message types consumed by the target as `C: Into<B>`.
+Indeed, that `B` message type encompasses all the message kinds supported by the target,
+and these, as the `C` type, can be completely unrelated to the source business domain that is described by the `A` type.
+
+Instead of an `Address<B>`, the source must be provided a `Recipient<A>`,
+that wraps the `Address<B>` and casts the `A` messages into `B` values under the hood.
+Without such an adapter, the source actor would have to depend on the `B` type. 
+
+![recipients](diagrams/recipients.svg)
+
+This adaptation of addresses into recipients is done using an intermediate trait: `Sender<M>`.
+The `Recipient<M>` is just a convenient way to manipulate boxes of `dyn` values.
+
+```rust
+/// A recipient for messages of type `M`
+pub type Recipient<M> = Box<dyn Sender<M>>;
+
+#[async_trait]
+pub trait Sender<M>: 'static + Send + Sync {
+    /// Send a message to the recipient,
+    /// returning an error if the recipient is no more expecting messages
+    async fn send(&mut self, message: M) -> Result<(), ChannelError>;
+
+    /// Clone this sender in order to send messages to the same recipient from another actor
+    fn recipient_clone(&self) -> Recipient<M>;
+}
+
+/// An `Address<M>` is a `Recipient<N>` provided `N` implements `Into<M>`
+impl<M: Message> Address<M> {
+  pub fn as_recipient<N: Message + Into<M>>(&self) -> Recipient<N> {
+    self.clone().into()
+  }
+}
+
+impl<M: Message, N: Message + Into<M>> Into<Recipient<N>> for Address<M> {
+  fn into(self) -> Recipient<N> {
+    Box::new(self)
+  }
+}
+
+#[async_trait]
+impl<M: Message, N: Message + Into<M>> Sender<N> for Address<M> {
+  async fn send(&mut self, message: N) -> Result<(), ChannelError> {
+    Ok(self.sender.send(message.into()).await?)
+  }
+
+  fn recipient_clone(&self) -> Recipient<N> {
+    Box::new(self.clone())
+  }
+}
+```
+
 #### Channel creation and ownership
 
 #### Actor with no inputs or outputs
