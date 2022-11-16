@@ -136,29 +136,9 @@ source ./ci/package_list.sh
 # build release for target
 "$BUILD_CMD" build --release "${TARGET[@]}"
 
-# Work out which strip command
-# Figure out what strip tool to use if any
-STRIP=
-if [ -n "$ARCH" ]; then
-    STRIP="strip"
-
-    case "$ARCH" in
-        arm-unknown-linux-*) STRIP="arm-linux-gnueabihf-strip" ;;
-        armv7-unknown-linux-*) STRIP="arm-linux-gnueabihf-strip" ;;
-        aarch64-unknown-linux-gnu) STRIP="aarch64-linux-gnu-strip" ;;
-        aarch64-unknown-linux-musl) STRIP="aarch64-linux-gnu-strip" ;;
-        x86_64-unknown-linux-*) STRIP="x86_64-linux-gnu-strip" ;;
-        *-pc-windows-msvc) STRIP="" ;;
-    esac;
-fi
-
-# Strip and create debian packages for release artifacts
+# Create debian packages for release artifacts
 for PACKAGE in "${RELEASE_PACKAGES[@]}"
 do
-    if [ -n "$STRIP" ]; then
-        "$STRIP" target/"$ARCH"/release/"$PACKAGE"
-    fi
-
     cargo deb -p "$PACKAGE" --no-strip --no-build "${TARGET[@]}"
 done
 
@@ -166,8 +146,4 @@ done
 for PACKAGE in "${TEST_PACKAGES[@]}"
 do
     "$BUILD_CMD" build --release -p "$PACKAGE" "${TARGET[@]}"
-
-    if [ -n "$STRIP" ]; then
-        "$STRIP" target/"$ARCH"/release/"$PACKAGE"
-    fi
 done
