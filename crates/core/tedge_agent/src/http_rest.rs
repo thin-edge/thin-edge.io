@@ -45,7 +45,6 @@ impl HttpConfig {
         }
     }
 
-    #[cfg(test)]
     pub fn with_port(self, port: u16) -> HttpConfig {
         let mut bind_address = self.bind_address;
         bind_address.set_port(port);
