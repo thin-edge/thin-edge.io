@@ -11,7 +11,7 @@ The Apama plugin, part of the Apama thin-edge support package, can be used to in
     - **Description**: apama-thin-edge-support (or something else if you choose)
     - **Device Filter Type**: (leave empty)
     - **Software Type**: apt
-    - **Version**: 10.15.1.0-1::apt
+    - **Version**: 10.15.0.2-1::apt
     - **SOFTWARE FILE**: select the **Provide a file path** option and give an **empty space** (' ').
 4. Click the **Add Software** button.
 5. Now return to the **Devices** menu option and then select **All devices**.
