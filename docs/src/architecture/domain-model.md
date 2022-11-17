@@ -15,13 +15,13 @@ Here _state_ refers to e.g. **Device Management** details as _installed software
 
   * **Measurement**:
      * has a _type name_
-     * carries a _series_ of **samples**
+     * carries a _sequence_ of **samples**
        * a **sample** is a single value or set of values, all taken at a single point in time
          * could be a mix of values coming from physical **Sensors**[^1] and the device's **Domain Application**[^1];
            e.g. _voltage_ and _current_ of an electricity meter, and current state of the manufacturing control process
          * all **sample's** values could be a mix of numbers, strings or booleans
          * a **sample** has _one_ timestamp
-       * a _series_ of **samples** is a set of **samples** over a period of time;
+       * a _sequence_ of **samples** is a set of **samples** over a period of time;
          e.g. _voltage_ and _current_ captured in a fixed interval
      * a measurement optionally holds individual _units_ for the values of the **samples**
      * a measurement relates to a source, i.e. a device or a process
