@@ -9,7 +9,7 @@ use crate::smartrest::{
 use async_trait::async_trait;
 use mockall::automock;
 use mqtt_channel::{Connection, PubChannel, StreamExt, Topic, TopicFilter};
-use reqwest::Url;
+use reqwest::{RequestBuilder, Response, StatusCode, Url};
 use std::path::Path;
 use std::{collections::HashMap, time::Duration};
 use tedge_config::{
@@ -149,35 +149,46 @@ pub trait C8yJwtTokenRetriever: Send + Sync {
 }
 
 pub struct C8yMqttJwtTokenRetriever {
-    mqtt_con: mqtt_channel::Connection,
+    mqtt_config: mqtt_channel::Config,
 }
 
 impl C8yMqttJwtTokenRetriever {
-    pub fn new(mqtt_con: mqtt_channel::Connection) -> Self {
-        C8yMqttJwtTokenRetriever { mqtt_con }
+    pub async fn try_new(tedge_config: &TEdgeConfig) -> Result<Self, SMCumulocityMapperError> {
+        let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
+        let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
+        let topic = TopicFilter::new("c8y/s/dat")?;
+        let mqtt_config = mqtt_channel::Config::default()
+            .with_port(mqtt_port)
+            .with_clean_session(true)
+            .with_host(mqtt_host)
+            .with_subscriptions(topic);
+
+        Ok(C8yMqttJwtTokenRetriever { mqtt_config })
     }
 }
 
 #[async_trait]
 impl C8yJwtTokenRetriever for C8yMqttJwtTokenRetriever {
     async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
-        self.mqtt_con
+        let mut mqtt_con = Connection::new(&self.mqtt_config).await?;
+
+        // Ignore errors on this connection
+        mqtt_con.errors.close();
+
+        mqtt_con
             .published
             .publish(mqtt_channel::Message::new(
                 &Topic::new_unchecked("c8y/s/uat"),
                 "".to_string(),
             ))
             .await?;
-        let token_smartrest = match tokio::time::timeout(
-            Duration::from_secs(10),
-            self.mqtt_con.received.next(),
-        )
-        .await
-        {
-            Ok(Some(msg)) => msg.payload_str()?.to_string(),
-            Ok(None) => return Err(SMCumulocityMapperError::InvalidMqttMessage),
-            Err(_elapsed) => return Err(SMCumulocityMapperError::RequestTimeout),
-        };
+
+        let token_smartrest =
+            match tokio::time::timeout(Duration::from_secs(10), mqtt_con.received.next()).await {
+                Ok(Some(msg)) => msg.payload_str()?.to_string(),
+                Ok(None) => return Err(SMCumulocityMapperError::InvalidMqttMessage),
+                Err(_elapsed) => return Err(SMCumulocityMapperError::RequestTimeout),
+            };
 
         Ok(SmartRestJwtResponse::try_new(&token_smartrest)?)
     }
@@ -188,7 +199,7 @@ impl C8yJwtTokenRetriever for C8yMqttJwtTokenRetriever {
 /// - Keep the connection info to c8y and the internal Id of the device
 /// - Handle JWT requests
 pub struct JwtAuthHttpProxy {
-    jwt_token_retriver: Box<dyn C8yJwtTokenRetriever>,
+    jwt_token_retriever: Box<dyn C8yJwtTokenRetriever>,
     http_con: reqwest::Client,
     end_point: C8yEndPoint,
     child_devices: HashMap<String, String>,
@@ -196,13 +207,13 @@ pub struct JwtAuthHttpProxy {
 
 impl JwtAuthHttpProxy {
     pub fn new(
-        jwt_token_retriver: Box<dyn C8yJwtTokenRetriever>,
+        jwt_token_retriever: Box<dyn C8yJwtTokenRetriever>,
         http_con: reqwest::Client,
         c8y_host: &str,
         device_id: &str,
     ) -> JwtAuthHttpProxy {
         JwtAuthHttpProxy {
-            jwt_token_retriver,
+            jwt_token_retriever,
             http_con,
             end_point: C8yEndPoint {
                 c8y_host: c8y_host.into(),
@@ -230,24 +241,10 @@ impl JwtAuthHttpProxy {
             false => client_builder.build()?,
         };
 
-        let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
-        let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
-        let topic = TopicFilter::new("c8y/s/dat")?;
-        let mqtt_config = mqtt_channel::Config::default()
-            .with_port(mqtt_port)
-            .with_clean_session(true)
-            .with_host(mqtt_host)
-            .with_subscriptions(topic);
-
-        let mut mqtt_con = Connection::new(&mqtt_config).await?;
-
-        // Ignore errors on this connection
-        mqtt_con.errors.close();
-
-        let jwt_token_retriver = Box::new(C8yMqttJwtTokenRetriever::new(mqtt_con));
+        let jwt_token_retriever = Box::new(C8yMqttJwtTokenRetriever::try_new(tedge_config).await?);
 
         Ok(JwtAuthHttpProxy::new(
-            jwt_token_retriver,
+            jwt_token_retriever,
             http_con,
             &c8y_host,
             &device_id,
@@ -277,15 +274,10 @@ impl JwtAuthHttpProxy {
         &mut self,
         device_id: Option<&str>,
     ) -> Result<String, SMCumulocityMapperError> {
-        let token = self.get_jwt_token().await?;
         let url_get_id = self.end_point.get_url_for_get_id(device_id);
 
-        let internal_id = self
-            .http_con
-            .get(url_get_id)
-            .bearer_auth(token.token())
-            .send()
-            .await?;
+        let request_internal_id = self.http_con.get(url_get_id);
+        let internal_id = self.execute(request_internal_id).await?;
         let internal_id_response = internal_id.json::<InternalIdResponse>().await?;
 
         let internal_id = internal_id_response.id();
@@ -322,23 +314,51 @@ impl JwtAuthHttpProxy {
         &mut self,
         c8y_event: C8yCreateEvent,
     ) -> Result<String, SMCumulocityMapperError> {
-        let token = self.get_jwt_token().await?;
         let create_event_url = self.end_point.get_url_for_create_event();
 
         let request = self
             .http_con
             .post(create_event_url)
             .json(&c8y_event)
-            .bearer_auth(token.token())
-            .header("Accept", "application/json")
-            .timeout(Duration::from_millis(10000))
-            .build()?;
+            .header("Accept", "application/json");
 
-        let response = self.http_con.execute(request).await?;
+        let response = self.execute(request).await?;
         let _ = response.error_for_status_ref()?;
         let event_response_body = response.json::<C8yEventResponse>().await?;
 
         Ok(event_response_body.id)
+    }
+
+    async fn execute(
+        &mut self,
+        request_builder: RequestBuilder,
+    ) -> Result<Response, SMCumulocityMapperError> {
+        // Due to builder constraints, the second attempt builder must be created first just in case.
+        let mut second_attempt_builder = request_builder.try_clone();
+
+        // Get a JWT token to authenticate the device
+        let token = self.get_jwt_token().await?;
+        let request = request_builder
+            .bearer_auth(token.token())
+            .timeout(Duration::from_millis(10000))
+            .build()?;
+        let first_response = self.http_con.execute(request).await;
+
+        // The first attempt might be unauthorized, if the token has concurrently expired
+        if let Ok(ref response) = first_response {
+            if response.status() == StatusCode::UNAUTHORIZED {
+                // Let's retry with a fresh JWT token
+                if let Some(request_builder) = second_attempt_builder.take() {
+                    let token = self.get_jwt_token().await?;
+                    let request = request_builder
+                        .bearer_auth(token.token())
+                        .timeout(Duration::from_millis(10000))
+                        .build()?;
+                    return Ok(self.http_con.execute(request).await?);
+                }
+            }
+        }
+        Ok(first_response?)
     }
 }
 
@@ -367,7 +387,7 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
     }
 
     async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
-        self.jwt_token_retriver.get_jwt_token().await
+        self.jwt_token_retriever.get_jwt_token().await
     }
 
     async fn send_event(
@@ -387,17 +407,10 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         c8y_software_list: &C8yUpdateSoftwareListResponse,
     ) -> Result<(), SMCumulocityMapperError> {
         let url = self.end_point.get_url_for_sw_list();
-        let token = self.get_jwt_token().await?;
 
-        let request = self
-            .http_con
-            .put(url)
-            .json(c8y_software_list)
-            .bearer_auth(&token.token())
-            .timeout(Duration::from_millis(10000))
-            .build()?;
+        let request = self.http_con.put(url).json(c8y_software_list);
 
-        let _response = self.http_con.execute(request).await?;
+        let _response = self.execute(request).await?;
 
         Ok(())
     }
@@ -408,8 +421,6 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         log_content: &str,
         child_device_id: Option<String>,
     ) -> Result<String, SMCumulocityMapperError> {
-        let token = self.get_jwt_token().await?;
-
         let log_event = self
             .create_event(log_type.to_string(), None, None, child_device_id)
             .await?;
@@ -423,12 +434,9 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
             .post(&binary_upload_event_url)
             .header("Accept", "application/json")
             .header("Content-Type", "text/plain")
-            .body(log_content.to_string())
-            .bearer_auth(token.token())
-            .timeout(Duration::from_millis(10000))
-            .build()?;
+            .body(log_content.to_string());
 
-        let _response = self.http_con.execute(request).await?;
+        let _response = self.execute(request).await?;
         Ok(binary_upload_event_url)
     }
 
@@ -438,8 +446,6 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         config_type: &str,
         child_device_id: Option<String>,
     ) -> Result<String, SMCumulocityMapperError> {
-        let token = self.get_jwt_token().await?;
-
         // read the config file contents
         let config_content = std::fs::read_to_string(config_path)?;
 
@@ -456,12 +462,9 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
             .post(&binary_upload_event_url)
             .header("Accept", "application/json")
             .header("Content-Type", "text/plain")
-            .body(config_content.to_string())
-            .bearer_auth(token.token())
-            .timeout(Duration::from_millis(10000))
-            .build()?;
+            .body(config_content.to_string());
 
-        let _response = self.http_con.execute(request).await?;
+        let _response = self.execute(request).await?;
         Ok(binary_upload_event_url)
     }
 }
@@ -534,14 +537,14 @@ mod tests {
             .create();
 
         // An JwtAuthHttpProxy ...
-        let mut jwt_token_retriver = Box::new(MockC8yJwtTokenRetriever::new());
-        jwt_token_retriver
+        let mut jwt_token_retriever = Box::new(MockC8yJwtTokenRetriever::new());
+        jwt_token_retriever
             .expect_get_jwt_token()
             .returning(|| Ok(SmartRestJwtResponse::default()));
 
         let http_client = reqwest::ClientBuilder::new().build().unwrap();
         let mut http_proxy = JwtAuthHttpProxy::new(
-            jwt_token_retriver,
+            jwt_token_retriever,
             http_client,
             mockito::server_url().as_str(),
             device_id,
@@ -577,14 +580,14 @@ mod tests {
             .create();
 
         // An JwtAuthHttpProxy ...
-        let mut jwt_token_retriver = Box::new(MockC8yJwtTokenRetriever::new());
-        jwt_token_retriver
+        let mut jwt_token_retriever = Box::new(MockC8yJwtTokenRetriever::new());
+        jwt_token_retriever
             .expect_get_jwt_token()
             .returning(|| Ok(SmartRestJwtResponse::default()));
 
         let http_client = reqwest::ClientBuilder::new().build().unwrap();
         let mut http_proxy = JwtAuthHttpProxy::new(
-            jwt_token_retriver,
+            jwt_token_retriever,
             http_client,
             mockito::server_url().as_str(),
             device_id,
@@ -604,7 +607,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn upload_config_file() -> anyhow::Result<()> {
+    async fn upload_config_file_authorized() -> anyhow::Result<()> {
+        let token_expired = false;
+        upload_config_file(token_expired).await
+    }
+
+    #[tokio::test]
+    async fn upload_config_file_unauthorized() -> anyhow::Result<()> {
+        let token_expired = true;
+        upload_config_file(token_expired).await
+    }
+
+    async fn upload_config_file(token_expired: bool) -> anyhow::Result<()> {
         let device_id = "test-device";
         let event_id = "456";
 
@@ -621,6 +635,20 @@ mod tests {
         let config_file = create_test_config_file_with_content(config_content)?;
 
         // Mock endpoint for config upload event creation
+        if token_expired {
+            // Fake an expired JWT token by rejecting the first config upload request
+            let _config_file_event_mock = mock("POST", "/event/events/")
+                .match_body(Matcher::PartialJson(
+                    json!({ "type": config_type, "text": config_type }),
+                ))
+                .expect(1)
+                .with_status(401)
+                .with_body(json!({ "id": event_id }).to_string())
+                .create();
+        }
+
+        // Mock endpoint for config upload event creation
+        // Accept subsequent requests
         let _config_file_event_mock = mock("POST", "/event/events/")
             .match_body(Matcher::PartialJson(
                 json!({ "type": config_type, "text": config_type }),
@@ -639,15 +667,15 @@ mod tests {
             .create();
 
         // An JwtAuthHttpProxy ...
-        let mut jwt_token_retriver = Box::new(MockC8yJwtTokenRetriever::new());
-        jwt_token_retriver
+        let mut jwt_token_retriever = Box::new(MockC8yJwtTokenRetriever::new());
+        jwt_token_retriever
             .expect_get_jwt_token()
             .returning(|| Ok(SmartRestJwtResponse::default()));
 
         let http_client = reqwest::ClientBuilder::new().build().unwrap();
 
         let mut http_proxy = JwtAuthHttpProxy::new(
-            jwt_token_retriver,
+            jwt_token_retriever,
             http_client,
             mockito::server_url().as_str(),
             device_id,
