@@ -26,13 +26,13 @@ Here _state_ refers to e.g. **Device Management** details as _installed software
      * a measurement optionally holds individual _units_ for the values of the **samples**
      * a measurement relates to a source, i.e. a device or a process
   * **Setpoint**, is a single value or set of values
-    * values are visible in the cloud, similar to measurements (e.g. a "temperature upper limit")
-    * values are used on the device-site, e.g. the **Domain Application**[^1]
-    * values can be manipulated from cloud-site or the device-site, e.g. to
-      - set one or more process variables[^1] (e.g. upper/lower limits or threshold of a climate control)
-    * a manipulation leads not to an synchronous action (like an operation),
-      instead new values are used by the **Domain Application**[^1] asynchronously from next control-cycle on
-    * values could be a mix of numbers, strings or booleans
+    * the values are process variables, used by the **Domain Application**[^1];<br/>
+      e.g. the _lower limit_ and the _upper limit_ of a climate control process
+    * the values are visible in the cloud, similar to measurements
+    * the values can be manipulated from cloud-site or the device-site
+      * each manipulation is processed asynchronously;
+        i.e. once new values were set, those are used by the **Domain Application**[^1] from next control-cycle on
+    * the values could be a mix of numbers, strings or booleans
   * **Event**, is a notification that something happened on the device's environment or software system
     * has one timestamp
     * common triggers for an **event** can be
