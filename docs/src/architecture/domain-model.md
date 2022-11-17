@@ -113,25 +113,26 @@ The figure below illustrates the child-device concept.
   * to realize **Device Management** functionality, a **plugin** accesses _resources_ and _services_ of the device, as e.g.
       * _software management_ uses the device's _package manager_
       * _configuration management_ reads/writes device's _configuration files_
-  * a **plugin** can facilitate **Device Management** functionality for the **main-device** and **external child-device**, but runs usually only on the **main-device**
-    * _resources_ and _services_ (e.g. file system, package manager, ...) of the **main-device** can be directly accessed by the **plugin**, as it runs on the **main-device**
-    * all _resources_ and _services_ of an **external child-device** are only remotely accessible for the **main-device**
-      * the **plugin** running on the **main-device** needs another software component that establish the remote access for those _resources_ and _services_
-      * that software component is referred as **child-device agent**
-  * a **plugin** can also facilitate **Device Management** functionality for containers running on the **main-device**
-    * similar to **external child-devices**, all _resources_ and _services_ of a container are accessed by a **plugin** via a **child-device agent** that runs inside the corresponding container 
+  * a **plugin** can facilitate **Device Management** functionality for the **main-device** and **external child-devices**, or even containers on the **main-device** (e.g. docker containers)
+    * a **plugin** runs usually on the **main-device**
+    * _resources_ and _services_ (e.g. file system, package manager, ...) of **external child-devices** or other containers can not accessed directly by the **plugin**
+    * the access to those _resources_ and _services_ is established by another software component, referred as **child-device agent**
+      * **child-device agent** can run on the **external child-device** or inside the container, and provides access via network to the **plugin**
+
 
 The figure below illustrates the concept of **plugins** and **child-devices agents**.
 
 ![Plugin Concept](images/plugin-concept.svg)
 
 ### Child-Device Agent
-  * a **child-device agent** is the counterpart of a **plugin**, that takes the responsibility to access to the **external child-device's** _resources_
+
+A **child-device agent** is the counterpart of a **plugin**, that takes the responsibility to access the **external child-device's** or container's _resources_ and _services_.
   * a **child-device agent** can serve one or more **plugins**
-  * a **child-device agent** can be installed and executed on the **external child-device**, or on the **main-device**
-    * if it runs in the **external child-device** it can access the _resources_ directly
-    * if it runs on the **main-device** it can use any (low-level) interfaces the **external child-device** provides to access those resources
+  * for access to an **external child-device**, the **child-device agent** can be installed and executed on that **external child-device**, or on the **main-device**
+    * if it runs on the **external child-device** it can access the _resources_ and _services_ directly
+    * if it runs on the **main-device** it can use any (low-level) interfaces the **external child-device** provides to access those _resources_
       * One main reason to install the **child-device agent** on the **main-device** is, when the **external child-device** cannot or shall not be altered.
+  * for access to another container, the **child-device agent** can be installed and executed inside that container, where it can access the _resources_ and _services_ directly
 
 ### Plugin-Contract
 
