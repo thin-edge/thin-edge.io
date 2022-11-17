@@ -21,6 +21,9 @@ pub(crate) struct TEdgeConfigDto {
     pub(crate) mqtt: MqttConfigDto,
 
     #[serde(default)]
+    pub(crate) http: HttpConfigDto,
+
+    #[serde(default)]
     pub(crate) software: SoftwareConfigDto,
 
     #[serde(default)]
@@ -97,6 +100,12 @@ pub(crate) struct MqttConfigDto {
     pub(crate) external_capath: Option<FilePath>,
     pub(crate) external_certfile: Option<FilePath>,
     pub(crate) external_keyfile: Option<FilePath>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct HttpConfigDto {
+    pub(crate) port: Option<u16>,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]

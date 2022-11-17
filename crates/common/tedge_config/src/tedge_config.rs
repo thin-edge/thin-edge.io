@@ -305,6 +305,27 @@ impl ConfigSettingAccessor<MqttPortSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<HttpPortSetting> for TEdgeConfig {
+    fn query(&self, _setting: HttpPortSetting) -> ConfigSettingResult<Port> {
+        Ok(self
+            .data
+            .http
+            .port
+            .map(Port)
+            .unwrap_or_else(|| self.config_defaults.default_http_port))
+    }
+
+    fn update(&mut self, _setting: HttpPortSetting, value: Port) -> ConfigSettingResult<()> {
+        self.data.http.port = Some(value.into());
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: HttpPortSetting) -> ConfigSettingResult<()> {
+        self.data.http.port = None;
+        Ok(())
+    }
+}
+
 impl ConfigSettingAccessor<MqttBindAddressSetting> for TEdgeConfig {
     fn query(&self, _setting: MqttBindAddressSetting) -> ConfigSettingResult<IpAddress> {
         Ok(self

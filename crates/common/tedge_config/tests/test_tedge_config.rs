@@ -893,6 +893,7 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_azure_root_cert_path: FilePath::from("/dev/null"),
         default_mapper_timestamp: Flag(true),
         default_mqtt_port: Port(1883),
+        default_http_port: Port(8000),
         default_tmp_path: FilePath::from("/tmp"),
         default_logs_path: FilePath::from("/var/log"),
         default_run_path: FilePath::from("/run"),

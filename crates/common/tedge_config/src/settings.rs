@@ -191,6 +191,20 @@ impl ConfigSetting for MqttPortSetting {
     type Value = Port;
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct HttpPortSetting;
+
+impl ConfigSetting for HttpPortSetting {
+    const KEY: &'static str = "http.port";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Http client port, which is used by the File Transfer Service",
+        "Example: 8000"
+    );
+
+    type Value = Port;
+}
+
 pub struct MqttBindAddressSetting;
 
 impl ConfigSetting for MqttBindAddressSetting {
