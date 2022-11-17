@@ -109,7 +109,7 @@ The figure below illustrates the child-device concept.
 
 **thin-edge** realizes **Device Management** based on **plugins**.
   * a **plugin** can be an (external) executable (e.g. as the `c8y_configuration_plugin` for _configuration management_)
-    or a thin-edge built-in software component (e.g. as for _software management_)
+    or part of a thin-edge built-in software component (e.g. _software management_ in `tedge-agent`)
   * to realize **Device Management** functionality, a **plugin** accesses _resources_ and _services_ of the device, as e.g.
       * _software management_ uses the device's _package manager_
       * _configuration management_ reads/writes device's _configuration files_
