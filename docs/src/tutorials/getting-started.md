@@ -359,11 +359,9 @@ sudo systemctl start c8y-configuration-plugin.service
 sudo systemctl enable c8y-configuration-plugin.service
 ```
 
-<<<<<<< HEAD
+
 Then navigate to  Cumulocity IoT Device Management and the desired device. Open its Configuration tab. You can find c8y-configuration-plugin and more are listed as supported configuration types, as declared in the plugin configuration file. Here you can save the configuration files into the repository or download them.
-=======
-Then navigate to Cumulocity IoT Device Management and the desired device. Open its Configuration tab. You can find c8y-configuration-plugin and more are listed as supported configuration types, as declared in the plugin configuration file. Here you can save the configuration files into the repository or download them.
->>>>>>> 93f76a156 (resolved broken links and typos)
+
 
 ## Change configuration files via Cumulocity IoT.
 
@@ -385,13 +383,13 @@ In this tutorial the last option is explained, there are some steps to be taken:
 5. Click on `Add configuration snapshot` (top right).
 6. Fill the fields, make sure the device type is `thin-edge.io`, select the right Configuration type and add the (just edited) configuration file and click on  `Add configuration`.
 7. Go back to the device and then to the configuration. In the Available supported configuration you will see the configuration file which was just created. When you click on it, you will see the content.
-<<<<<<< HEAD
+
 8. Then click on  ``` send configuration to device ``` the configuration file is uploaded to the device.
 9. If you then click on ``` get snapshot from device ``` (select the right configuration file in device supported configurations), you will see the change of the configuration file.
-=======
+
 8. Then click on  `send configuration to device` the configuration file is uploaded to the device.
 9. If you then click on `get snapshot from device` (select the right configuration file in device-supported configurations), you will see the change of the configuration file.
->>>>>>> 93f76a156 (resolved broken links and typos)
+
 
 
 ![Change Configuration](./images/ChangeConfiguration.png)
@@ -407,19 +405,11 @@ To change the collectd metrics of the device, which are displayed in Cumulocity 
 3. Go to `Management -> configuration` snapshots repository
 4. Download the configuration file which needs to be changed
 5. Edit this file as needed
-<<<<<<< HEAD
 6. Click on ``` Add configuration snapshot ``` (top right)
 7. Fill in the fields, make sure the device type is ``` thin-edge.io ``` and select the right Configuration type and add the (just edited) configuration file.) and click on  ```Add configuration ```
 8. Go back to the device and then to the configuration. In the Available supported configuration you will see the configuration file which was just created. When you click on it, you will see the content
 9. Then click on  ``` send configuration toe device ``` the configuration file is uploaded to the device.
 10. If you then click on get snapshot from device (select the right configuration file in device supported configurations), you will see the change of the configuration file.
-=======
-6. Click on `Add configuration snapshot` (top right)
-7. Fill in the fields, make sure the device type is `thin-edge.io`, select the right Configuration type and add the (just edited) configuration file and click on  `Add configuration.`
-8. Go back to the device and then to the configuration. In the available supported configuration, you will see the configuration file which was just created. When you click on it, you will see the content
-9. Then click on  `send configuration to device` the configuration file is uploaded to the device.
-10. If you then click on `get snapshot from device` (select the right configuration file in device supported configurations), you will see the change of the configuration file.
->>>>>>> 93f76a156 (resolved broken links and typos)
 
 
 ## Step 7 Manage Log Files
@@ -465,7 +455,5 @@ However, keep in mind that the daemon has to be restarted every time the `/etc/t
 ### Final remarks and summary
 
 With this getting started tutorial you gained some insights on how to install and configure thin-edge.io on a Raspberry Pi.
-
-``NOTE``:We are in the middle of restructuring our documentation, including the tutorials and how-to's. So keep in mind that some of the documentation needs to be updated.
 
 If you didn't try the optional steps in this tutorial, it might be a nice idea to work on these as you then get a better insight into the device management capabilities of thin-edge.io. Other things you can work on are capabilities like working with child devices, building your own plugin etc. Tutorials for that can be found [here](https://thin-edge.github.io/thin-edge.io/html/).
