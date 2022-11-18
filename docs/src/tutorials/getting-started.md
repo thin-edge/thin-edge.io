@@ -358,7 +358,7 @@ sudo systemctl start c8y-configuration-plugin.service
 sudo systemctl enable c8y-configuration-plugin.service
 ```
 
-Then navigate to  Cumulocity IoT Device Management and the desired device. Open its Configuration tab. You can find c8y-configuration-plugin and more are listed as supported configuration types, as declared in the plugin configuration file. Her you can save the configuration files into the repository or download them.
+Then navigate to  Cumulocity IoT Device Management and the desired device. Open its Configuration tab. You can find c8y-configuration-plugin and more are listed as supported configuration types, as declared in the plugin configuration file. Here you can save the configuration files into the repository or download them.
 
 ## Change configuration files via Cumulocity IoT.
 
