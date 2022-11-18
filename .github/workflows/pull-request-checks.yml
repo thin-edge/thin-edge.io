@@ -81,7 +81,7 @@ jobs:
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
       - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@1.70.0
+      - uses: dtolnay/rust-toolchain@nightly
       - name: Run cargo-udeps
         uses: aig787/cargo-udeps-action@v1
         with:
