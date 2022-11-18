@@ -64,7 +64,15 @@ That includes:
       * the **domain application**[^1]
       * parts from **OS / Libs / Runtime**[^1], or the whole thing as one
       * **thin-edge** itself
-* **Configuration Management**:
+  * **Firmware Management**:
+    * allows to update the _OS base-image_ of the device as one (e.g. the Linux distribution)
+    * a firmware update might dictate a new software list and new configurations
+      * i.e. _software modules_ previously installed with **Software Management** might be gone after a firmware update;
+        e.g. when those _software modules_ were installed into the area of the _OS base-image_
+      * the actual behaviour of **Software Management** together with **Firmware Management** depends on details of the
+        specific deployment and package management of the custom device
+      * same also applies for **Configuration Management** together with **Firmware Management**
+  * **Configuration Management**:
     * allows viewing and changing configurations on the device, as
       * list available configurations
       * transfer individual configurations from device to cloud, and vice versa
@@ -72,7 +80,7 @@ That includes:
       * configuration file(s) of the **domain application**[^1]
       * configuration file(s) of **OS / Libs / Runtime**[^1]
       * configuration file(s) of **thin-edge** it-self
-* **Log Management**:
+  * **Log Management**:
     * allows viewing logs from the device
       * lists available logs
       * transfer individual logs from device to cloud
@@ -80,7 +88,7 @@ That includes:
       * log file(s) of the **domain application**[^1]
       * log file(s) of **OS / Libs / Runtime**[^1]
       * log file(s) of **thin-edge** it-self
-* **Device Monitoring**:
+  * **Device Monitoring**:
     * collects metrics (e.g. cpu, memory and disk metrics) from the device and forward these to the IoT cloud
     * allows monitoring the health of devices
     * helps troubleshooting when problems with the device are reported
