@@ -124,7 +124,7 @@ First, we need to create the device certificate locally (If the device certifica
 ```
 sudo tedge cert create --device-id {{YOUR_UNIQUE_DEVICE_ID}}
 ```
-The device id is a unique identifier e.g. MAC address that identifies a physical device.
+The device id is a unique identifier e.g. the MAC address that identifies the physical device.
 
 The certificate is uploaded to the Cumulocity IoT Tenant via:
 ```
