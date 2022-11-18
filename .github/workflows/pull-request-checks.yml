@@ -54,7 +54,7 @@ jobs:
       locks: ${{ steps.filter.outputs.locks }}
     steps:
       - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@1.63.0
+      - uses: dtolnay/rust-toolchain@1.70.0
         with:
           targets: armv7-unknown-linux-gnueabihf
 
@@ -81,7 +81,7 @@ jobs:
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
       - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@1.70.0
       - name: Run cargo-udeps
         uses: aig787/cargo-udeps-action@v1
         with:
@@ -168,7 +168,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: enable toolchain via github action
-        uses: dtolnay/rust-toolchain@1.63.0
+        uses: dtolnay/rust-toolchain@1.70.0
         with:
           components: rustfmt, clippy
 
@@ -220,7 +220,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: enable toolchain via github action
-        uses: dtolnay/rust-toolchain@1.63.0
+        uses: dtolnay/rust-toolchain@1.70.0
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -258,7 +258,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: enable toolchain via github action
-        uses: dtolnay/rust-toolchain@1.63.0
+        uses: dtolnay/rust-toolchain@1.70.0
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -289,7 +289,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: enable toolchain via github action
-        uses: dtolnay/rust-toolchain@1.63.0
+        uses: dtolnay/rust-toolchain@1.70.0
         with:
           targets: armv7-unknown-linux-gnueabihf
 
@@ -317,7 +317,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: enable toolchain via github action
-        uses: dtolnay/rust-toolchain@1.63.0
+        uses: dtolnay/rust-toolchain@1.70.0
         with:
           target: armv7-unknown-linux-gnueabihf
 
@@ -360,7 +360,7 @@ jobs:
 #        uses: actions/checkout@v3
 #
 #      - name: Install rust v1.63.0
-#        uses: dtolnay/rust-toolchain@1.63.0
+#        uses: dtolnay/rust-toolchain@1.70.0
 #
 #      - name: Enable cache
 #        # https://github.com/marketplace/actions/rust-cache

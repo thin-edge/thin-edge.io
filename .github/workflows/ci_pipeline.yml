@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Enable toolchain via github action
-        uses: dtolnay/rust-toolchain@1.63.0
+        uses: dtolnay/rust-toolchain@1.70.0
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -88,7 +88,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Enable toolchain via github action
-        uses: dtolnay/rust-toolchain@1.63.0
+        uses: dtolnay/rust-toolchain@1.70.0
         with:
           targets: ${{ matrix.target }}
 
