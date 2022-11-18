@@ -3,7 +3,9 @@ use crate::{
         try_cleanup_config_file_from_file_transfer_repositoy, ConfigOperationMessage,
         ConfigOperationRequest, ConfigOperationResponse,
     },
-    config_manager::{DEFAULT_OPERATION_DIR_NAME, DEFAULT_PLUGIN_CONFIG_FILE_NAME},
+    config_manager::{
+        ConfigManager, TimerFuture, DEFAULT_OPERATION_DIR_NAME, DEFAULT_PLUGIN_CONFIG_FILE_NAME,
+    },
     error::{ChildDeviceConfigManagementError, ConfigManagementError},
     PluginConfig,
 };
@@ -20,7 +22,8 @@ use c8y_api::smartrest::{
     },
 };
 
-use mqtt_channel::{Connection, Message, SinkExt, Topic};
+use futures::stream::FuturesUnordered;
+use mqtt_channel::{Message, SinkExt, Topic, UnboundedSender};
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
 use tokio::sync::Mutex;
 
@@ -61,31 +64,39 @@ impl TryIntoOperationStatusMessage for UploadConfigFileStatusMessage {
 
 pub struct ConfigUploadManager {
     tedge_device_id: String,
-    mqtt_client: Arc<Mutex<Connection>>,
+    mqtt_publisher: UnboundedSender<Message>,
     http_client: Arc<Mutex<dyn C8YHttpProxy>>,
     local_http_host: String,
     config_dir: PathBuf,
+    unfinished_child_op_timers: FuturesUnordered<TimerFuture<(String, String)>>,
 }
 
 impl ConfigUploadManager {
     pub fn new(
         tedge_device_id: String,
-        mqtt_client: Arc<Mutex<Connection>>,
+        mqtt_publisher: UnboundedSender<Message>,
         http_client: Arc<Mutex<dyn C8YHttpProxy>>,
         local_http_host: String,
         config_dir: PathBuf,
     ) -> Self {
         ConfigUploadManager {
             tedge_device_id,
-            mqtt_client,
+            mqtt_publisher,
             http_client,
             local_http_host,
             config_dir,
+            unfinished_child_op_timers: FuturesUnordered::new(),
         }
     }
 
+    pub fn child_ops_pending_timeout(
+        &mut self,
+    ) -> &mut FuturesUnordered<TimerFuture<(String, String)>> {
+        &mut self.unfinished_child_op_timers
+    }
+
     pub async fn handle_config_upload_request(
-        &self,
+        &mut self,
         config_upload_request: SmartRestConfigUploadRequest,
     ) -> Result<()> {
         if config_upload_request.device == self.tedge_device_id {
@@ -98,12 +109,12 @@ impl ConfigUploadManager {
     }
 
     pub async fn handle_config_upload_request_tedge_device(
-        &self,
+        &mut self,
         config_upload_request: SmartRestConfigUploadRequest,
     ) -> Result<()> {
         // set config upload request to executing
         let msg = UploadConfigFileStatusMessage::executing()?;
-        self.mqtt_client.lock().await.published.send(msg).await?;
+        self.mqtt_publisher.send(msg).await?;
 
         let config_file_path = self
             .config_dir
@@ -133,23 +144,13 @@ impl ConfigUploadManager {
 
                 let successful_message =
                     UploadConfigFileStatusMessage::successful(Some(upload_event_url))?;
-                self.mqtt_client
-                    .lock()
-                    .await
-                    .published
-                    .send(successful_message)
-                    .await?;
+                self.mqtt_publisher.send(successful_message).await?;
             }
             Err(err) => {
                 error!("The configuration upload for '{target_config_type}' failed.",);
 
                 let failed_message = UploadConfigFileStatusMessage::failed(err.to_string())?;
-                self.mqtt_client
-                    .lock()
-                    .await
-                    .published
-                    .send(failed_message)
-                    .await?;
+                self.mqtt_publisher.send(failed_message).await?;
             }
         }
 
@@ -177,7 +178,7 @@ impl ConfigUploadManager {
     /// A unique URL path for this config file, from the file transfer service, is shared with the child device in the command.
     /// The child device can use this URL to upload the config file snapshot to the file transfer service.
     pub async fn handle_config_upload_request_child_device(
-        &self,
+        &mut self,
         config_upload_request: SmartRestConfigUploadRequest,
     ) -> Result<()> {
         let child_id = config_upload_request.device;
@@ -191,8 +192,8 @@ impl ConfigUploadManager {
         match plugin_config.get_file_entry_from_type(&config_type) {
             Ok(file_entry) => {
                 let config_management = ConfigOperationRequest::Snapshot {
-                    child_id,
-                    file_entry,
+                    child_id: child_id.clone(),
+                    file_entry: file_entry.clone(),
                 };
 
                 info!("Sending config snapshot request to child device");
@@ -200,7 +201,13 @@ impl ConfigUploadManager {
                     &config_management.operation_request_topic(),
                     config_management.operation_request_payload(&self.local_http_host)?,
                 );
-                self.mqtt_client.lock().await.published.send(msg).await?;
+                self.mqtt_publisher.send(msg).await?;
+
+                self.unfinished_child_op_timers
+                    .push(Box::pin(ConfigManager::timer_for_child_op(
+                        child_id,
+                        config_type,
+                    )));
             }
             Err(ConfigManagementError::InvalidRequestedConfigType { config_type }) => {
                 warn!(
@@ -214,7 +221,7 @@ impl ConfigUploadManager {
     }
 
     pub async fn handle_child_device_config_snapshot_response(
-        &self,
+        &mut self,
         config_response: &ConfigOperationResponse,
     ) -> Result<Message, ChildDeviceConfigManagementError> {
         let payload = config_response.get_payload();

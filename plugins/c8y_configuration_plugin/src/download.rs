@@ -2,7 +2,8 @@ use crate::child_device::{
     try_cleanup_config_file_from_file_transfer_repositoy, ConfigOperationMessage,
 };
 use crate::config_manager::{
-    CONFIG_CHANGE_TOPIC, DEFAULT_OPERATION_DIR_NAME, DEFAULT_PLUGIN_CONFIG_FILE_NAME,
+    ConfigManager, TimerFuture, CONFIG_CHANGE_TOPIC, DEFAULT_OPERATION_DIR_NAME,
+    DEFAULT_PLUGIN_CONFIG_FILE_NAME,
 };
 use crate::{child_device::ConfigOperationRequest, config::FileEntry};
 use crate::{
@@ -21,7 +22,8 @@ use c8y_api::smartrest::smartrest_serializer::{
 };
 use c8y_api::smartrest::topic::C8yTopic;
 use download::{Auth, DownloadInfo, Downloader};
-use mqtt_channel::{Connection, Message, SinkExt, Topic};
+use futures::stream::FuturesUnordered;
+use mqtt_channel::{Message, SinkExt, Topic, UnboundedSender};
 
 use serde_json::json;
 use std::os::unix::fs::PermissionsExt;
@@ -34,17 +36,18 @@ use tracing::{info, warn};
 
 pub struct ConfigDownloadManager {
     tedge_device_id: String,
-    mqtt_client: Arc<Mutex<Connection>>,
+    mqtt_publisher: UnboundedSender<Message>,
     http_client: Arc<Mutex<dyn C8YHttpProxy>>,
     local_http_host: String,
     config_dir: PathBuf,
     tmp_dir: PathBuf,
+    unfinished_child_op_timers: FuturesUnordered<TimerFuture<(String, String)>>,
 }
 
 impl ConfigDownloadManager {
     pub fn new(
         tedge_device_id: String,
-        mqtt_client: Arc<Mutex<Connection>>,
+        mqtt_publisher: UnboundedSender<Message>,
         http_client: Arc<Mutex<dyn C8YHttpProxy>>,
         local_http_host: String,
         config_dir: PathBuf,
@@ -52,16 +55,23 @@ impl ConfigDownloadManager {
     ) -> Self {
         ConfigDownloadManager {
             tedge_device_id,
-            mqtt_client,
+            mqtt_publisher,
             http_client,
             local_http_host,
             config_dir,
             tmp_dir,
+            unfinished_child_op_timers: FuturesUnordered::new(),
         }
     }
 
+    pub fn child_ops_pending_timeout(
+        &mut self,
+    ) -> &mut FuturesUnordered<TimerFuture<(String, String)>> {
+        &mut self.unfinished_child_op_timers
+    }
+
     pub async fn handle_config_download_request(
-        &self,
+        &mut self,
         smartrest_request: SmartRestConfigDownloadRequest,
     ) -> Result<(), anyhow::Error> {
         if smartrest_request.device == self.tedge_device_id {
@@ -74,16 +84,11 @@ impl ConfigDownloadManager {
     }
 
     pub async fn handle_config_download_request_tedge_device(
-        &self,
+        &mut self,
         smartrest_request: SmartRestConfigDownloadRequest,
     ) -> Result<(), anyhow::Error> {
         let executing_message = DownloadConfigFileStatusMessage::executing()?;
-        self.mqtt_client
-            .lock()
-            .await
-            .published
-            .send(executing_message)
-            .await?;
+        self.mqtt_publisher.send(executing_message).await?;
 
         let target_config_type = smartrest_request.config_type.clone();
         let mut target_file_entry = FileEntry::default();
@@ -113,35 +118,20 @@ impl ConfigDownloadManager {
                 info!("The configuration download for '{target_config_type}' is successful.");
 
                 let successful_message = DownloadConfigFileStatusMessage::successful(None)?;
-                self.mqtt_client
-                    .lock()
-                    .await
-                    .published
-                    .send(successful_message)
-                    .await?;
+                self.mqtt_publisher.send(successful_message).await?;
 
                 let notification_message = get_file_change_notification_message(
                     &target_file_entry.path,
                     &target_config_type,
                 );
-                self.mqtt_client
-                    .lock()
-                    .await
-                    .published
-                    .send(notification_message)
-                    .await?;
+                self.mqtt_publisher.send(notification_message).await?;
                 Ok(())
             }
             Err(err) => {
                 error!("The configuration download for '{target_config_type}' failed.",);
 
                 let failed_message = DownloadConfigFileStatusMessage::failed(err.to_string())?;
-                self.mqtt_client
-                    .lock()
-                    .await
-                    .published
-                    .send(failed_message)
-                    .await?;
+                self.mqtt_publisher.send(failed_message).await?;
                 Err(err)
             }
         }
@@ -154,7 +144,7 @@ impl ConfigDownloadManager {
     /// A unique URL path for this config file, from the file transfer service, is shared with the child device in the command.
     /// The child device can use this URL to download the config file update from the file transfer service.
     pub async fn handle_config_download_request_child_device(
-        &self,
+        &mut self,
         smartrest_request: SmartRestConfigDownloadRequest,
     ) -> Result<(), anyhow::Error> {
         let child_id = smartrest_request.device;
@@ -193,12 +183,7 @@ impl ConfigDownloadManager {
                         &c8y_child_topic,
                         DownloadConfigFileStatusMessage::status_executing()?,
                     );
-                    self.mqtt_client
-                        .lock()
-                        .await
-                        .published
-                        .send(executing_msg)
-                        .await?;
+                    self.mqtt_publisher.send(executing_msg).await?;
 
                     let failure_reason = format!(
                         "Downloading the config file update from {} failed with {}",
@@ -208,23 +193,17 @@ impl ConfigDownloadManager {
                         &c8y_child_topic,
                         DownloadConfigFileStatusMessage::status_failed(failure_reason)?,
                     );
-                    self.mqtt_client
-                        .lock()
-                        .await
-                        .published
-                        .send(failed_msg)
-                        .await?;
+                    self.mqtt_publisher.send(failed_msg).await?;
                 } else {
                     let config_update_req_msg = Message::new(
                         &config_management.operation_request_topic(),
                         config_management.operation_request_payload(&self.local_http_host)?,
                     );
-                    self.mqtt_client
-                        .lock()
-                        .await
-                        .published
-                        .send(config_update_req_msg)
-                        .await?;
+                    self.mqtt_publisher.send(config_update_req_msg).await?;
+
+                    self.unfinished_child_op_timers.push(Box::pin(
+                        ConfigManager::timer_for_child_op(child_id, config_type),
+                    ));
                 }
             }
             Err(ConfigManagementError::InvalidRequestedConfigType { config_type }) => {

@@ -1,4 +1,7 @@
-use crate::child_device::{ChildDeviceRequestPayload, ChildDeviceResponsePayload};
+use crate::{
+    child_device::{ChildDeviceRequestPayload, ChildDeviceResponsePayload},
+    config_manager::DEFAULT_OPERATION_TIMEOUT,
+};
 
 use super::*;
 use agent_interface::OperationStatus;
@@ -131,7 +134,7 @@ async fn test_handle_config_upload_request_child_device() -> anyhow::Result<()> 
         .file("c8y-configuration-plugin.toml")
         .with_toml_content(toml::toml! {
             files = [
-                { path = test_config_path, type = "file_a" }
+                { path = test_config_path, type = config_type }
             ]
         });
 
@@ -325,7 +328,7 @@ async fn test_handle_config_upload_failed_response_child_device() -> anyhow::Res
 // back-to-back EXECUTING and FAILED messages for c8y_UploadConfigFile operation
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial_test::serial]
-async fn test_invalid_config_upload_response_child_device() -> anyhow::Result<()> {
+async fn test_invalid_config_snapshot_response_child_device() -> anyhow::Result<()> {
     let tedge_device_id = "tedge-device";
     let child_device_id = "child-device";
     let tmp_dir = TempTedgeDir::new();
@@ -366,6 +369,82 @@ async fn test_invalid_config_upload_response_child_device() -> anyhow::Result<()
         &mut smartrest_messages,
         TEST_TIMEOUT_MS,
         &["501,c8y_UploadConfigFile", "502,c8y_UploadConfigFile"],
+    )
+    .await;
+
+    Ok(())
+}
+
+// No response from the child for a config_snapshot request results in a timeout
+// with back-to-back EXECUTING and FAILED messages for c8y_UploadConfigFile operation
+// DO NOT USE the 'multi_threaded' tokio runtime flavour for this test
+// as the tokio::time::advance/resume is only possible with the single threaded runtime
+#[tokio::test]
+#[serial_test::serial]
+async fn test_no_config_snapshot_response_child_device() -> anyhow::Result<()> {
+    let tedge_device_id = "tedge-device";
+    let child_device_id = "child-device";
+    let config_type = "config_type";
+    let test_config_path = "/some/test/config";
+
+    let tmp_dir = TempTedgeDir::new();
+    tmp_dir
+        .dir("c8y")
+        .dir(child_device_id)
+        .file("c8y-configuration-plugin.toml")
+        .with_toml_content(toml::toml! {
+            files = [
+                { path = test_config_path, type = config_type }
+            ]
+        });
+
+    let broker = mqtt_tests::test_mqtt_broker();
+    let c8y_http_client = MockC8YHttpProxy::new();
+
+    let mut config_manager = ConfigManager::new(
+        tedge_device_id,
+        broker.port,
+        Arc::new(Mutex::new(c8y_http_client)),
+        mockito::server_address().to_string(),
+        tmp_dir.path().to_path_buf(),
+        tmp_dir.to_path_buf(),
+    )
+    .await?;
+
+    // Run the plugin's runtime logic in an async task
+    tokio::spawn(async move {
+        let _ = config_manager.run().await;
+    });
+
+    let mut smartrest_messages = broker
+        .messages_published_on(format!("c8y/s/us/{child_device_id}").as_str())
+        .await;
+
+    // Send a c8y_UploadConfigFile request to the plugin
+    broker
+        .publish(
+            "c8y/s/ds",
+            format!("526,{child_device_id},{config_type}").as_str(),
+        )
+        .await?;
+
+    //Pause and advance time beyond the default operation timeout
+    tokio::time::pause();
+    tokio::time::advance(DEFAULT_OPERATION_TIMEOUT).await;
+    tokio::time::resume();
+
+    // Explicitly yielding to the config manager task to trigger the timeout
+    // as this test is running from a single threaded runtime
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // Assert the c8y_UploadConfigFile operation status mapping to FAILED(502)
+    mqtt_tests::assert_received_all_expected(
+        &mut smartrest_messages,
+        DEFAULT_OPERATION_TIMEOUT,
+        &[
+            "501,c8y_UploadConfigFile",
+            "502,c8y_UploadConfigFile,\"Timeout due to lack of response from child device",
+        ],
     )
     .await;
 

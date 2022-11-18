@@ -16,11 +16,15 @@ use c8y_api::smartrest::smartrest_deserializer::{
 };
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
+use futures::Future;
 use mqtt_channel::{Connection, Message, MqttError, SinkExt, StreamExt, Topic, TopicFilter};
 use tokio::sync::Mutex;
+use tokio::time::sleep;
 
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 use tedge_utils::{notify::fs_notify_stream, paths::PathsError};
 use thin_edge_json::health::{health_check_topics, send_health_status};
 
@@ -31,10 +35,13 @@ pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-configuration-plugin.toml
 pub const DEFAULT_OPERATION_DIR_NAME: &str = "c8y/";
 pub const DEFAULT_PLUGIN_CONFIG_TYPE: &str = "c8y-configuration-plugin";
 pub const CONFIG_CHANGE_TOPIC: &str = "tedge/configuration_change";
+pub const DEFAULT_OPERATION_TIMEOUT: Duration = Duration::from_secs(10); //TODO: Make this configurable?
+
+pub type TimerFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>;
 
 pub struct ConfigManager {
     plugin_config: PluginConfig,
-    mqtt_client: Arc<Mutex<Connection>>,
+    mqtt_client: Connection,
     c8y_request_topics: TopicFilter,
     health_check_topics: TopicFilter,
     config_snapshot_response_topics: TopicFilter,
@@ -59,7 +66,6 @@ impl ConfigManager {
             PluginConfig::new(&config_file_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME));
 
         let mqtt_client = Self::create_mqtt_client(mqtt_port).await?;
-        let mqtt_client = Arc::new(Mutex::new(mqtt_client));
 
         let c8y_request_topics: TopicFilter = C8yTopic::SmartRestRequest.into();
         let health_check_topics = health_check_topics("c8y-configuration-plugin");
@@ -81,7 +87,7 @@ impl ConfigManager {
 
         let config_upload_manager = ConfigUploadManager::new(
             tedge_device_id.to_string(),
-            mqtt_client.clone(),
+            mqtt_client.published.clone(),
             http_client.clone(),
             local_http_host.to_string(),
             config_dir.clone(),
@@ -89,7 +95,7 @@ impl ConfigManager {
 
         let config_download_manager = ConfigDownloadManager::new(
             tedge_device_id.to_string(),
-            mqtt_client.clone(),
+            mqtt_client.published.clone(),
             http_client.clone(),
             local_http_host.to_string(),
             config_dir.clone(),
@@ -117,10 +123,8 @@ impl ConfigManager {
     pub async fn run(&mut self) -> Result<(), anyhow::Error> {
         self.get_pending_operations_from_cloud().await?;
         loop {
-            let mut locked_mqtt_client = self.mqtt_client.lock().await;
             tokio::select! {
-                message = locked_mqtt_client.received.next() => {
-                    drop(locked_mqtt_client);   //Unlock self.mqtt_client
+                message = self.mqtt_client.received.next() => {
                     if let Some(message) = message {
                         let topic = message.topic.name.clone();
                         if let Err(err) = self.process_mqtt_message(
@@ -134,6 +138,20 @@ impl ConfigManager {
                         return Ok(())
                     }
                 }
+                Some((child_id, config_type)) = self.config_upload_manager.child_ops_pending_timeout().next() => {
+                    self.fail_pending_config_operation_in_c8y(
+                        ConfigOperation::Snapshot,
+                        child_id.clone(),
+                        format!("Timeout due to lack of response from child device: {} for config type: {}", child_id, config_type),
+                    ).await?;
+                }
+                Some((child_id, config_type)) = self.config_download_manager.child_ops_pending_timeout().next() => {
+                    self.fail_pending_config_operation_in_c8y(
+                        ConfigOperation::Update,
+                        child_id.clone(),
+                        format!("Timeout due to lack of response from child device: {} for config type: {}", child_id, config_type),
+                    ).await?;
+                }
                 Some((path, mask)) = self.fs_notification_stream.rx.recv() => {
                     match mask {
                         FsEvent::Modified | FsEvent::FileDeleted | FsEvent::FileCreated => {
@@ -146,12 +164,12 @@ impl ConfigManager {
                                         if parent_dir_name.eq("c8y") {
                                             let plugin_config = PluginConfig::new(&path);
                                             let message = plugin_config.to_supported_config_types_message()?;
-                                            locked_mqtt_client.published.send(message).await?;
+                                            self.mqtt_client.published.send(message).await?;
                                         } else {
                                             // this is a child device
                                             let plugin_config = PluginConfig::new(&path);
                                             let message = plugin_config.to_supported_config_types_message_for_child(&parent_dir_name.to_string_lossy())?;
-                                            locked_mqtt_client.published.send(message).await?;
+                                            self.mqtt_client.published.send(message).await?;
                                         }
                                     }
                                 },
@@ -163,6 +181,7 @@ impl ConfigManager {
                         }
                     }
                 }
+                // (child_id, config_type) = self.unfinished_config_upload_child_op_timers
             }
         }
     }
@@ -186,11 +205,7 @@ impl ConfigManager {
 
     async fn process_mqtt_message(&mut self, message: Message) -> Result<(), anyhow::Error> {
         if self.health_check_topics.accept(&message) {
-            send_health_status(
-                &mut self.mqtt_client.lock().await.published,
-                "c8y-configuration-plugin",
-            )
-            .await;
+            send_health_status(&mut self.mqtt_client.published, "c8y-configuration-plugin").await;
             return Ok(());
         } else if self.config_snapshot_response_topics.accept(&message) {
             info!("config snapshot response");
@@ -270,30 +285,30 @@ impl ConfigManager {
                     }
                 };
 
-                self.mqtt_client
-                    .lock()
-                    .await
-                    .published
-                    .send(smartrest_response)
-                    .await?;
+                self.mqtt_client.published.send(smartrest_response).await?;
                 Ok(())
             }
             Err(err) => {
-                self.fail_pending_config_operation_in_c8y(message, err.to_string())
-                    .await
+                let config_operation = message.try_into()?;
+                let child_id = get_child_id_from_child_topic(&message.topic.name)?;
+
+                self.fail_pending_config_operation_in_c8y(
+                    config_operation,
+                    child_id,
+                    err.to_string(),
+                )
+                .await
             }
         }
     }
 
     pub async fn fail_pending_config_operation_in_c8y(
         &mut self,
-        message: &Message,
+        config_operation: ConfigOperation,
+        child_id: String,
         failure_reason: String,
     ) -> Result<(), anyhow::Error> {
         // Fail the operation in the cloud by sending EXECUTING and FAILED responses back to back
-        let config_operation = message.try_into()?;
-        let child_id = get_child_id_from_child_topic(&message.topic.name)?;
-
         let c8y_child_topic =
             Topic::new_unchecked(&C8yTopic::ChildSmartRestResponse(child_id).to_string());
 
@@ -321,37 +336,27 @@ impl ConfigManager {
                 (executing_msg, failed_msg)
             }
         };
-        self.mqtt_client
-            .lock()
-            .await
-            .published
-            .send(executing_msg)
-            .await?;
-        self.mqtt_client
-            .lock()
-            .await
-            .published
-            .send(failed_msg)
-            .await?;
+        self.mqtt_client.published.send(executing_msg).await?;
+        self.mqtt_client.published.send(failed_msg).await?;
 
         Ok(())
     }
 
     async fn publish_supported_config_types(&mut self) -> Result<(), MqttError> {
         let message = self.plugin_config.to_supported_config_types_message()?;
-        self.mqtt_client
-            .lock()
-            .await
-            .published
-            .send(message)
-            .await?;
+        self.mqtt_client.published.send(message).await?;
         Ok(())
     }
 
     async fn get_pending_operations_from_cloud(&mut self) -> Result<(), MqttError> {
         // Get pending operations
         let msg = Message::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
-        self.mqtt_client.lock().await.published.send(msg).await?;
+        self.mqtt_client.published.send(msg).await?;
         Ok(())
+    }
+
+    pub async fn timer_for_child_op(child_id: String, config_type: String) -> (String, String) {
+        sleep(DEFAULT_OPERATION_TIMEOUT).await;
+        (child_id, config_type)
     }
 }
