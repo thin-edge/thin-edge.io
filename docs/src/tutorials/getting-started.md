@@ -120,7 +120,7 @@ sudo tedge config set c8y.url {{YOUR_C8Y_URL}}
 
 thin-edge.io connects via MQTT protocol using a X.509 certificate for authentication. To do so, a certificate must be trusted by Cumulocity IoT. A certificate is trusted when it is added to the trusted certificates and is in an activated state.
 
-First, we need to create the device certificate locally (If already a device certificate is uploaded, directly via the UI to Cumulocity IoT this step can be skipped).
+First, we need to create the device certificate locally (If the device certificate is already uploaded, directly via the UI to Cumulocity IoT this step can be skipped).
 ```
 sudo tedge cert create --device-id {{YOUR_UNIQUE_DEVICE_ID}}
 ```
