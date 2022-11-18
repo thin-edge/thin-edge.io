@@ -274,7 +274,7 @@ The monitoring data will appear in Cumulocity IoT on the device in the measureme
 ### Edit Collectd
 
 
-To change the monitored data, it is needed to change the collectd.conf. This can be done via Cumulocity IoT. In Step 6 [Manage configuration files](Manage-configuration-files) is explained how to do that.
+To change the monitored data, it is needed to change the collectd.conf. This can be done via Cumulocity IoT. In Step 6 is explained how to do that.
 
 
 ## Step 5 Add software management
