@@ -53,10 +53,10 @@ Child device bootstrapping
     Startup child device                            #Setting up/Bootstraping of a child device
 Snapshot from device
     Request snapshot from child device              #Using the cloud command Get snapshot from device
-    Child device response on snapshot request       #Child device is sending 'executing' and 'sussessful' MQTT responses
+    Child device response on snapshot request       #Child device is sending 'executing' and 'successful' MQTT responses
 Child device config update
     Send configuration to device                    #Using the cloud command Send configuration to device
-    Child device get configuration file             #Child device is sending 'executing' and 'sussessful' MQTT responses
+    Child device get configuration file             #Child device is sending 'executing' and 'successful' MQTT responses
 
 
 *** Keywords ***
