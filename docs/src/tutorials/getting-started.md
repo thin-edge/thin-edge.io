@@ -446,6 +446,6 @@ However, keep in mind that the daemon has to be restarted every time the ```/etc
 ### Final remarks and summary
 
 With this getting started tutorial you gained some insights on how to install and configure thin-edge.io on a Raspberry Pi.
-If you didn't try the optional steps in this tutorial, it might be a nice idea to work on these as you then get a better insight in the device management capabilities of thin-edge.io. Other things you can work on are capabilities like working with child devices, building your own plugin etc. Tutorials for that can be found ![here](https://thin-edge.github.io/thin-edge.io/html/)
+If you didn't try the optional steps in this tutorial, it might be a nice idea to work on these as you then get a better insight in the device management capabilities of thin-edge.io. Other things you can work on are capabilities like working with child devices, building your own plugin etc. Tutorials for that can be found [here](https://thin-edge.github.io/thin-edge.io/html/)
 
 ``NOTE``:We are in the middle of restructuring our documentation, including the tutorials and how-to's. So keep in mind that some of the documentation needs to be updated.
