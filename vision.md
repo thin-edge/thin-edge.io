@@ -14,47 +14,20 @@ existing projects or applications to enable them with thin-edge.io.
 
 ## Our target segments
 
-**B2B (IoT) Service providers:**  IoT services providers are companies that are
-building and offering products and services based on IoT technology. For them it
-is crucial to deliver business outcomes and return on investment fast, as they
-are dealing with a lot of end-customers who themselves in the past often failed
-"homegrown" IoT initiatives. There is no willingness from the end customer to
-spend a large amount of money and time on device connectivity. Therefore
-thin-edge.io for them is a critical foundation to solve the connectivity
-challenge and to focus on the business applications rather then connectivity and
-device management aspects, which are in a lot of cases considered "hygiene
-factors".
-thin-edge.io enables them to connect industrial sensors and automation to a cloud
-service.
-High assurances in quality and scalability of thin-edge.io, not only itself but
-also in combination with custom-developed components, let the Service Provider
-go from a POC implementation with thin-edge.io in their ecosystem to a rollout
-in production with little friction.
-
-**(Smart) Equipment makers/Hardware manufacturers/OEMs:** Equipment
-Manufacturers are moving away from focusing primarily on selling their equipment
-towards selling their equipment as a service (EaaS). An IIoT platform allowing
-to connect and manage assets as well as to use the visualize, analyze, and
-integrate equipment data is often the foundation to enable service-based
-business models and services. Here thin-edge.io is used as a foundation to bring
-"intelligence" around the equipment. Combined with any IoT platform, single
-purpose gateways or devices which sit on the equipment can be transformed into
-edge deployment options for services and applications that support the overall
-EaaS business model by leveraging thin-egdge.io framework.
-As equipment may be deployed remotely and not always physically accessible,
-thin-edge.io ensures a high level of robustness and security.
-
-**Smart equipment operators:** Rather than dealing with single equipment, smart
-operators are looking to enhance or optimize whole manufacturing processes with
-the help of IIoT. Operating complex manufacturing systems requires not only to
-handle various industry protocols and assets but also requires to connect and
-manage a heterogeneous set of industrial devices and hardware such as PLCs,
-protocol converters or industrial gateways. Here thin-edge.io helps to unify the
-complex device landscape by offering lightweight software modules which can run
-on resource constrained, brownfield hardware.
-The framework does so by providing a frictionless user experience to enable
-customers to develop their own solutions based on the included functionality but
-also by attaching custom functionality with minimum effort.
+While the thin-edge.io framework addresses a broad range of customer segments, it is primarily used in industrial or manufacturing environments by companies that can be characterized as: 
+ 
+-       Industrial gateway or IoT hardware manufacturers (e.g. industrial routers, PLCs or embedded Linux devices) 
+-       IIoT service providers (IoT or industrial automation software companies) 
+-       Industrial equipment makers and operators (machine builders, OEMs)
+ 
+For them thin-edge.io can be used as a foundation to build new digital services and products. 
+ 
+More specifically thin-edge.io focuses on addressing the overlapping needs and challenges around:
+1.     device connectivity (e.g. connect industrial sensors and automation equipment to a cloud service) 
+2.     device management (e.g. monitoring the health of the device or keeping software, firmware, and configurations up to date via a central device management platform)
+3.     device customization (e.g. extending the capabilities of the existing gateway with additional services and applications with thin-edge.io integrated with optional custom-developed components)
+ 
+thin-edge.io helps to unify the complex device landscape by offering lightweight software modules which can run on resource-constrained, brownfield hardware. Furthermore, it is providing a frictionless user experience to enable customers to develop their own solutions based on the included functionality but also by attaching custom functionality with minimum effort. The high level of robustness, security, and scalability allows going from a POC implementation with thin-edge.io to a rollout in production with little friction.
 
 ## Users and Personas
 
