@@ -124,34 +124,34 @@ The figure below illustrates the child-device concept.
   * a **plugin** can facilitate **Device Management** functionality for the **main-device** and **external child-devices**, or even containers on the **main-device** (e.g. docker containers)
     * a **plugin** runs usually on the **main-device**
     * _resources_ and _services_ (e.g. file system, package manager, ...) of **external child-devices** or other containers can not accessed directly by the **plugin**
-    * the access to those _resources_ and _services_ is established by another software component, referred as **child-device agent**
-      * **child-device agent** can run on the **external child-device** or inside the container, and provides access via network to the **plugin**
+    * the access to those _resources_ and _services_ is established by another software component, referred as **plugin adapter**
+      * a **plugin adapter** can run on the **external child-device** or inside the container, and provides access via network to the **plugin**
 
 
-The figure below illustrates the concept of **plugins** and **child-devices agents**.
+The figure below illustrates the concept of **plugins** and **plugin adapters**.
 
 ![Plugin Concept](images/plugin-concept.svg)
 
-### Child-Device Agent
+### Plugin Adapter
 
-A **child-device agent** is the counterpart of a **plugin**, that takes the responsibility to access the **external child-device's** or container's _resources_ and _services_.
-  * a **child-device agent** can serve one or more **plugins**
-  * for access to an **external child-device**, the **child-device agent** can be installed and executed on that **external child-device**, or on the **main-device**
+A **plugin adapter** is the counterpart of a **plugin**, that takes the responsibility to access the **external child-device's** or container's _resources_ and _services_.
+  * a **plugin adapter** can serve one or more **plugins**
+  * for access to an **external child-device**, the **plugin adapter** can be installed and executed on that **external child-device**, or on the **main-device**
     * if it runs on the **external child-device** it can access the _resources_ and _services_ directly
     * if it runs on the **main-device** it can use any (low-level) interfaces the **external child-device** provides to access those _resources_
-      * One main reason to install the **child-device agent** on the **main-device** is, when the **external child-device** cannot or shall not be altered.
-  * for access to another container, the **child-device agent** can be installed and executed inside that container, where it can access the _resources_ and _services_ directly
+      * One main reason to install the **plugin adapter** on the **main-device** is, when the **external child-device** cannot or shall not be altered.
+  * for access to another container, the **plugin adapter** can be installed and executed inside that container, where it can access the _resources_ and _services_ directly
 
 ### Plugin-Identifier and Contract
 
-A **plugin** defines and implements a specific **contract** for all interactions with a **child-device agent**
+A **plugin** defines and implements a specific **contract** for all interactions with a **plugin adapter**
   * part of the **contract** could be e.g.:
-      * the **child-device agent** must listen and react to certain requests of the **plugin**, e.g. on MQTT
-      * the **child-device agent** must provide/consume files to/from the **plugin** on purpose, e.g. via HTTP
+      * the **plugin adapter** must listen and react to certain requests of the **plugin**, e.g. on MQTT
+      * the **plugin adapter** must provide/consume files to/from the **plugin** on purpose, e.g. via HTTP
       * ...and more...
   * a **plugin** can be flagged with a unique _plugin-identifier_ (e.g. `tedge_config`, `tedge_software` or any other unique string for a custom specific plugin)
-    * based on that _plugin-identifier_ a **child-device agent** can report and find **plugins** the child-device intends to contact (e.g. during provisioning phase)
-    * a **plugin** and a **child-device agent** using the same _plugin-identifier_ can assume to implement the same **contract**, and to be compatible with each other
+    * based on that _plugin-identifier_ a **plugin adapter** can report and find **plugins** the child-device intends to contact (e.g. during provisioning phase)
+    * a **plugin** and a **plugin adapter** using the same _plugin-identifier_ can assume to implement the same **contract**, and to be compatible with each other
 
 ## Inventory
 
