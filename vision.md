@@ -96,39 +96,13 @@ Also an "Embedded Developer" with OT focus is an example of a "Plugin Developer"
     - Person writing on the provided Rust crates as hosted on github.com
 
 
-An example for an "Interface Developer" or a "Plugin Developer" is a **Device
-developer / Embedded engineer** whos background consisting of Linux, C/C++, C#,
-embedded systems (IT focused):
 
-- Responsible for
-    - device logic including firmware and software
-    - primarily only tasked to connect one or many devices/types to overall IoT
-      solution
-- Challenges and needs reagarding device enablement:
-    - enable new services and connectivity on the device while keeping stability
-      and robustness (while having limited computing resources)
-    - dealing with certificates, queuing and persisting messages to handle
-      unstable connections
-    - allowing the device to be managed centrally, to keep it secure and
-      up-to-date (while important to him not always #1 prio to overall
-      initiative/project)
-
-An "Embedded Developer" with OT focus is an example of a "Plugin Developer":
-
-- familiar with PLCs, SCADA systems,
-- dealing with emerging need for connectivity and IIoT
-- key concern is security, robusteness and resource efficiency which is
-  usually overruling any "typical" IT solution on the device and implies
-  some kind of custom logic. (e.g. rather closed OS, no dependencies can be
-  installed, very strict certification and QA process, no CI/CD possible,
-  long prodcut lifecycle 10-20 years)
-
-The persona types adressed by thin-edge.io often have conflicting
+The users addressed by thin-edge.io often have conflicting
 requirements and views, this itself is addressed by the project technology
 vision and design principles, allowing thin-edge.io acting as a bridge between
 the OT and IT world.
 
-## Persona needs and solutions
+## Pain points addressed by thin-edge.io 
 
 **Key problems for users:** Until now, when developing device software, IoT
 project teams and device builders were spending a lot of time solving generic
