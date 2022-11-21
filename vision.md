@@ -52,7 +52,19 @@ thin-edge.io targets the following user types:
 - "Interface Developer"
     - Person using the foreign interfaces of a thin-edge.io framework binary to
       complement and extend its functionality.
+An example for an "Interface Developer" is a **(IoT)
+Solution Developer/ Solution Architect**: Background consisting of Python, Java,
+JS, Angular, Kubernetes, Cloud Platforms:
 
+- Responsible for implementing and maintaining the end-to-end IoT
+  solution including the needed logic on the device (aka device agent)
+- Challenges and needs regarding device enablement:
+    - Lack of expertise and knowledge in embedded space, therefore prefers configurations or extensions in python
+    - Dealing with fragmented hardware / linux variants
+    - Focused on expertise outside of embedded device enablement such as analytics, sensor integration or dashboarding 
+    - Expect ready to use or configuration-based solutions, with
+      pre-defined design principles and framework, offering easy
+      extensibility with known tools/languages
 - "Plugin Developer"
     - Person using the provided Rust crates to extend or improve binary plugins
       written for the thin-edge.io framework
