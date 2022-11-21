@@ -171,54 +171,6 @@ and challenges our target personas need to address.
 
 We therefore define the following requirements.
 
-### Functional requirements
-
-<!--
-The following list of functional requirements should be considered
-non-final. It might be extended in the future.
--->
-
-1. The framework provides MQTT connectivity through a component
-1. All errors must be handled in a non-crashing way
-    - Unrecoverable errors may still cause the binary to shutdown eventually,
-      but not unexpectedly.
-1. The core implementation is written in Rust
-    - Plugins that connect to a thin-edge.io binary, may be written in another
-      programming language
-1. A deployment of thin-edge.io consists of a single binary with a single
-   configuration entry-point
-    - The final configuration may consists of more than one resource (file,
-      network resource, etc), and potentially be even loaded over the network,
-      this is left open
-1. The configuration is the single point of truth w.r.t. the initial state of
-   the components mentioned within
-    1. The default state of a plugin must be documented
-    1. A component may use a (documented) default value for a missing
-       configuration entry
-1. The configuration is the single point of truth for the communication between
-   components inside a single thin-edge.io binary deployment
-1. The communication between the components is verified to be compatible in
-   advance
-1. The out- and in-bound connectivity is mediated through a framework specific
-   format
-    - JSON is the lingua franca, but other forms may be acceptable if they stay
-      within the capabilites of JSON
-    - json-schema is used to document the (JSON) format in a machine-readable
-      way
-1. The principal way of extending thin-edge.io is over well-defined Rust interfaces (traits and other types)
-    - This does not preclude other forms of extensions in other languages (i.e.
-      a bridge over MQTT to python)
-1. Starting a thin-edge.io binary for development use or production use is not
-   interactive
-    - Starting a thin-edge.io binary for setup or similar purposes may be
-      interactive
-1. Components can persist data using the framework
-    - to persist data between restarts of the deployment
-    - to cache data during network outages
-    - to provide operation checkpoints during sensitive operations
-1. User-configurable logging is provided via the framework
-    - A user is able to configure logging per-component as well as globally for
-      the framework
 
 ### Capabilities
 
@@ -226,39 +178,19 @@ non-final. It might be extended in the future.
 The following list of capabilities should be considered non-final. It might be
 extended in the future.
 -->
-
-In combination with IoT platforms, thin-edge.io is a foundation for enabling
-devices with the following capabilities:
-
-1. Connectivity to the major cloud providers in the IIOT space
-    - for effortless and secure edge device lifecycle management for single
-      and device fleets
-    - for low-touch provisioning of thin edge devices
-    - for local and remote configuration
-    - for local and remote maintenance including remote access
-      (monitoring/troubleshooting)
-    - decommissioning of thin devices (e.g. for security compromised or end of
-      life devices)
-1. "South bound" connectivity to devices via the major protocols in the IIOT industry
-1. On-device data preprocessing
-    1. Analytical (timeseries analysis, ML, etc...)
-    2. Mathematical operations (avg, sum, etc...)
-    3. Logical operations
-1. On-device data generation (e.g. generating of events)
-1. Device management functionality
-    1. OS updates
-    1. Package updates
-    1. Configuration updates (Of both the thin-edge.io deployment as well as other software)
-    1. Firmware updates for "south bound"/child devices
-1. Device interaction
-    1. File upload/download
-    1. Filesystem listings
-    1. General system informations
-1. Persist data as given by components in different databases (e.g. PostgreSQL, Sqlite, MongoDB, Redis, Memcached, ...)
-1. Documentation of each component and their configuration
-    - This includes information on how to configure each configurable aspect of the component and its valid states
-    - This also includes all message types that the framework knows about
-    - Users with custom thin-edge.io deployments must be able to generate such a documentation themselves
+We believe that device enablement for the major cloud providers in the IIoT space should not only be easy and secure but also easily extensible for various IoT services to allow a best-of-breed combination of IoT capabilities from multiple platforms/services. 
+ 
+Therefore thin-edge.io focused on providing: 
+ 
+- An out-of-the-box integration with IoT and cloud platforms as well as an extensible connectivity framework to create additional cloud/IIoT platform connectors with state-of-the-art security. 
+A comprehensive set of vendor-agnostic device management capabilities that can be easily extended and integrated with various IoT and device management platforms. Here our focus is to enable the complete edge device lifecycle management functionalities in typical IIoT applications such as:
+o   low-touch provisioning of thin edge devices and its child/downstream devices 
+o   Local and remote configuration of the device and its services 
+o   Remote access for device monitoring and troubleshooting
+o   Decommissioning of thin devices (e.g. for security compromised or end-of-life devices)
+o   Local and over-the-air software/package/file and firmware management including OS updates, configuration updates (of both the thin-edge.io deployment as well as other software) as well as firmware updates for "southbound"/child devices
+An foundation for easy integration of existing "South bound" connectivity software and drivers to support major protocols in the IIoT industry. The intention of this is to primarily enable existing protocol libraries to be easily integrated with other thin-edge.io components and the overarching cloud/IIoT platform. 
+A simplified, IoT-centric domain and messaging model, allowing a vendor-agnostic representation of devices  and telemetry coming from sensors, actors and machine assets with language-agnostic integration mechanisms to persist data in local databases or to allow pre-processing and data filtering provided by other services on the device.
 
 ## Closing words
 
