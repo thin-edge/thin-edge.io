@@ -3,16 +3,16 @@
 
 The **thin-edge data model** is used to represent all device-related information.
 
-TODO: add more information what the data model is about
+TODO: add more information what the data model is about, and mention/link to the domain model
 
 ## Inventory
 
-**thin-edge** holds and manages an **inventory**, that stores and provides information about the **thin-edge** device itself, as well as other _external devices_ connected to thin-edge.
+**thin-edge** holds and manages an **inventory**, that stores and provides information about the **thin-edge** device itself, as well as about other _external devices_ connected to thin-edge.
 
 The **inventory** is the communication backbone for **plugins**, **external child-devices**, the **domain application**[^1] and **thin-edge** it-self.
 
- * one can add information to announce capabilities a device supports
- * another one can retrieve those information to identify capabililties a device supports
+ * one (e.g. an **external child-device**) can add information to announce capabilities a device supports
+ * another one (e.g. a **plugin**) can retrieve those information to identify capabililties a device supports
 
 [^1]: more details see TODO: add link to "Appendix 'Device Overview' of Device Domain", that is in "./domain-model.md#device-domain"
 
@@ -24,109 +24,113 @@ The figure below illustrats the **inventory** and its _device objects_.
 
 * The **thin-edge Device** object represents the **main device**, that runs **thin-edge** and manages that **inventory**.
   * The fields `name` and `type` contain the _device-name_ and _device-type_ visible in the cloud.
-  * The field `telemetry_descriptor` contains a description of all **measurements**, **setpoints**, **events** and **alarms** the device provides.
-    * For all of those telemetry data it contains an individual structure:
-    <!-- using below 'javascript' syntax-highlighter instead of 'json', since with JSON comments look really terrible -->
-    ```javascript
-       "telemetry_descriptor": {
-          "measurements":  { /* ... specific description to measurements ...   */ },
-          "setpoints": { /* ... specific description to setpoints ...  */ },
-          "events":   { /* ... specific description to events ...    */ },
-          "alarms":   { /* ... specific description to alarms ...    */ },
-       }
-    ```
-      * Example for `measurements` structure:<br/>
-    ```javascript
-       "measurements": {
-            /* general structure for a measurement: */
-            "<type_name>": {
-                "num_values": <number of values>,
-                "units": ["<unit of 1st value>", "<unit of 2nd value>", ...]
-            },
-
-            "weather_station": {
-                "num_values": 2,
-                "units": ["%", "celsius"] // humidity and temperature
-            },
-            "power_meter": {
-                "num_values": 3,
-                "units": ["V", "V", "V"] // voltage of phase 1, 2, 3
-            },
-        }
-     ```
-      * Where
-        * `type_name`, is a reference string, unique in scope of the given device object
-        * `num-values`, number of values the measurement's **samples** carry
-        * `units`, optional, list of units strings per values of the measurement's **samples**
-        * TODO: field that describes values missing (that what is as comment in example above)
-        * TODO: add a brief introduction about **samples**
-
-      * Example for `setpoints` structure:<br/>
-    ```javascript
-       "setpoints": {
-            /* general structure for a setpoint: */
-            "<type_name>": {
-                "num_values": <number of values>
-            },
-
-            "temperature_limits": {
-                "num_values": 2 // set-points for a lower limit and a higher limit
-            },
-            "relay_array": {
-                "num_values": 8 // 8 relays in series
-            },
-        }
-     ```
-      * Where
-        * `type_name`, is a reference string, unique in scope of the given device object
-        * `num-values`, number of values the setpoints carries
-        * TODO: field that describes values missing (that what is as comment in example above)
-
-      * Example for `events` structure:<br/>
-    ```javascript
-       "events": {
-            /* general structure for an event: */
-            "<type_name>": {
-                /* beyond the type-name no more information available for events */
-            },
-
-            "door_opened": {
-                /* no more information for events available */
-            },
-        }
-     ```
-      * Where
-        * `type_name`, is a reference string, unique in scope of the given device object
-
-      * Example for `alarms` structure:<br/>
-    ```javascript
-       "alarms": {
-            /* general structure for an alarm: */
-            "<type_name>": {
-                /* beyond the type-name no more information available for alarms */
-            },
-
-            "temperature_high": { // when higher temperature limit exceeded
-                /* no more information for alarms available */
-            },
-        }
-     ```
-      * Where
-        * `type_name`, is a reference string, unique in scope of the given device object
-
-
+  * The field `telemetry_descriptor` contains descriptions of all **measurements**, **setpoints**, **events** and **alarms** the device provides.
+    Details about the `telemetry_descriptor` are explained in section [Telemtry Descriptor](#telemtry-descriptor) below.
 * A **Child-Device** object could be exist more than once in the inventory. 
   Each **Child-Device** object represents an _external device_ (e.g. sensor, actuator, PLC, any other kind of device) that is connected to the thin-edge device.
   * Each **child-device** object is assocoiated with a separate individual device in the cloud. 
   * Similar to the **thin-edge Device** object, each **child-device** object has the fields `name`, `type` and `telemetry_descriptor`.
     In addition, each **child-device** object has a field `childid`, that contains a unique ID to address that child-device.
   * NOTE: Not just _external devices_, but also processes running on the thin-edge device itself, can be represented with a **child-device** object in the **inventory** - to treat them as __logical child-devices__.
-
 * Each **Capability** object represents a functionality a device is capable.
   * A capability could be by example _Configuration Management_, _Log file Management_ or _Software Management_, or any custom specific capability provided by a custom specific plugin.
   * The content and structure of each **capability** object is very specific to the capability it represents. E.g. a **capability** object for _Configuration Management_ contains a list of configuration files the device supports, whereas a **capability** object for _Software Management_ contains details about installable package-types the device supports.
   * A schema that describes the content and structure of **capability** objects for a certain capability is called **Capability Schema**. More details see section below [Capability Schemas](#capability-schemas).
   * A device object can contain several **capability** objects.
+
+### Telemtry Descriptor
+
+The `telemetry_descriptor` is part of a _device object_ and contains descriptions for all **measurements**, **setpoints**, **events** and **alarms** the device provides.
+For each kind of telemtry data the `telemetry_descriptor` holds an individual structure:
+
+<!-- using below 'javascript' syntax-highlighter instead of 'json', since with JSON comments look really terrible -->
+```javascript
+   "telemetry_descriptor": {
+      "measurements": { /* ... specific description to measurements ...   */ },
+      "setpoints":    { /* ... specific description to setpoints ...      */ },
+      "events":       { /* ... specific description to events ...         */ },
+      "alarms":       { /* ... specific description to alarms ...         */ },
+   }
+```
+
+Each structure `measurements`, `setpoints`, `events`, `alarms` has it's individual set of fields, just as needed to describe the coresponding kind of telemetry data.
+Next sections describe those structures.
+
+#### Structure `measurements`
+```javascript
+   "measurements": {
+        /* general structure for a measurement: */
+        "<type_name>": {
+            "num_values": <number of values>,
+            "units": ["<unit of 1st value>", "<unit of 2nd value>", ...]
+        },
+        "weather_station": {
+            "num_values": 2,
+            "units": ["%", "celsius"] // humidity and temperature
+        },
+        "power_meter": {
+            "num_values": 3,
+            "units": ["V", "V", "V"] // voltage of phase 1, 2, 3
+        },
+    }
+ ```
+  * Where
+    * `type_name`, is a reference string, unique in scope of the given device object
+    * `num-values`, number of values the measurement's **samples** carry
+    * `units`, optional, list of units strings per values of the measurement's **samples**
+    * TODO: field that describes values missing (that what is as comment in example above)
+    * TODO: add a brief introduction about **samples**
+
+#### Structure `setpoints`
+```javascript
+   "setpoints": {
+        /* general structure for a setpoint: */
+        "<type_name>": {
+            "num_values": <number of values>
+        },
+        "temperature_limits": {
+            "num_values": 2 // set-points for a lower limit and a higher limit
+        },
+        "relay_array": {
+            "num_values": 8 // 8 relays in series
+        },
+    }
+ ```
+  * Where
+    * `type_name`, is a reference string, unique in scope of the given device object
+    * `num-values`, number of values the setpoints carries
+    * TODO: field that describes values missing (that what is as comment in example above)
+
+#### Structure `events`
+```javascript
+   "events": {
+        /* general structure for an event: */
+        "<type_name>": {
+            /* beyond the type-name no more information available for events */
+        },
+        "door_opened": {
+            /* no more information for events available */
+        },
+    }
+ ```
+  * Where
+    * `type_name`, is a reference string, unique in scope of the given device object
+
+#### Structure `alarms`
+```javascript
+   "alarms": {
+        /* general structure for an alarm: */
+        "<type_name>": {
+            /* beyond the type-name no more information available for alarms */
+        },
+        "temperature_high": { // when higher temperature limit exceeded
+            /* no more information for alarms available */
+        },
+    }
+ ```
+  * Where
+    * `type_name`, is a reference string, unique in scope of the given device object
+
 
 ## Capability Schemas
 
