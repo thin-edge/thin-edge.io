@@ -52,25 +52,6 @@ We define the following personas:
 - "Core Developer"
     - Person writing on the provided Rust crates as hosted on github.com
 
-An example for a "System Integrator" or an "Interface Developer" is a **(IoT)
-Solution Developer/ Solution Architect**: Background consisting of Python, Java,
-JS, Angular, Kubernetes, Cloud Platforms:
-
-- Responsible for implementing and maintaining the end-to-end IoT
-  solution
-- Often juggling multiple initiatives covering a broad range of
-  technology stacks in addition to implement and maintaining
-  solutions.
-- Challenges and needs regarding device enablement:
-    - Lack of expertise and knowledge in embedded space
-    - Dealing with fragmented hardware / linux variants
-    - Lack of time to focus on device enablement as building IoT
-      applications on cloud side is main responsibility
-    - No interest/time to dive into "hygiene factors" as device
-      management and security
-    - Expect ready to use or configuration based solution, with
-      pre-defined design principles and framework, offering easy
-      extensibility with known tools/languages
 
 An example for an "Interface Developer" or a "Plugin Developer" is a **Device
 developer / Embedded engineer** whos background consisting of Linux, C/C++, C#,
