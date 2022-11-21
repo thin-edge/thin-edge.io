@@ -115,31 +115,6 @@ moving, and orchestrating workloads on the Edge used to be very challenging as
 it also requires a lot of custom logic to be developed on the device, to be able
 to integrate and support various device management platforms.
 
-**Example applications scenarios:** Edge/embedded devices are critical
-components of any connected asset/smart equipment or operator use case. Within
-the different use-cases and application scenarios, the edge can take over
-different roles to address different IoT challenges:
-
-- Edge devices as a machine gateway:
-    - A typical problem for the target personas is the integration of various
-      asset specific OT interfaces to establish connection to fieldbus or
-      industry protocols.
-- Supporting IoT and other Northbound connectivity
-    - Vendor agnostic connectivtiy of the data plane and control plane,
-      analytics and service/app orchestration from various IoT platforms is
-      required for all future IoT use-cases, as hyperscaler platforms and
-      end-customer vendor preferences might vary.
-- Edge devices as deployment option for IoT services and applications
-    - There is an increasing need for device specific applications close to the
-      device e.g. device configuration, control logic, local monitoring, here a
-      flexible software management framework is needed which is independent from
-      the preferred software artifact type due to different hardware, OS
-      variants and package managers.
-- There is an emerging need for Edge analytics such as data filtering,
-  pre-aggregation, ML model execution.
-- Edge devices as configuration/management interface for asset - local/remote UI
-  for asset configuration/management including software and firmware management
-  of underlying systems to keep them secure and up-to date
 
 ## thin-edge.io as a game changer
 
