@@ -26,7 +26,8 @@ The figure below illustrats the **inventory** and its _device objects_.
   * The fields `name` and `type` contain the _device-name_ and _device-type_ visible in the cloud.
   * The field `telemetry_descriptor` contains a description of all **measurements**, **setpoints**, **events** and **alarms** the device provides.
     * For all of those telemetry data it contains an individual structure:
-    ```json
+    <!-- using below 'javascript' syntax-highlighter instead of 'json', since with JSON comments look really terrible -->
+    ```javascript
        "telemetry_descriptor": {
           "measurements":  { /* ... specific description to measurements ...   */ },
           "setpoints": { /* ... specific description to setpoints ...  */ },
@@ -35,7 +36,7 @@ The figure below illustrats the **inventory** and its _device objects_.
        }
     ```
       * Example for `measurements` structure:<br/>
-    ```json
+    ```javascript
        "measurements": {
             /* general structure for a measurement: */
             "<type_name>": {
@@ -61,7 +62,7 @@ The figure below illustrats the **inventory** and its _device objects_.
         * TODO: add a brief introduction about **samples**
 
       * Example for `setpoints` structure:<br/>
-    ```json
+    ```javascript
        "setpoints": {
             /* general structure for a setpoint: */
             "<type_name>": {
@@ -82,7 +83,7 @@ The figure below illustrats the **inventory** and its _device objects_.
         * TODO: field that describes values missing (that what is as comment in example above)
 
       * Example for `events` structure:<br/>
-    ```json
+    ```javascript
        "events": {
             /* general structure for an event: */
             "<type_name>": {
@@ -98,7 +99,7 @@ The figure below illustrats the **inventory** and its _device objects_.
         * `type_name`, is a reference string, unique in scope of the given device object
 
       * Example for `alarms` structure:<br/>
-    ```json
+    ```javascript
        "alarms": {
             /* general structure for an alarm: */
             "<type_name>": {
@@ -153,7 +154,7 @@ That section lists the pre-defined **capability schemas**.
   | **Behavoiur**        | On cloud request<br/>-  provided configuration files are requested from the device and sent to the cloud<br/>- or downloaded from the cloud and sent to the device.<br/><br/> For details see TODO \[Configuration Managenement documentation](../references/c8y-configuration-management.md#configuration-files-for-child-devices)
 
 Examples **capability** objects for schema `tedge_config`:
-```json
+```javascript
 "tedge_config": {
     "files": [
         { "path": "/etc/tedge/tedge.toml", "type": "tedge.toml" },
@@ -163,7 +164,7 @@ Examples **capability** objects for schema `tedge_config`:
     ]
 }
 ```
-```json
+```javascript
 "tedge_config": {
     "files": [
         { "type": "foo.conf" },
@@ -191,7 +192,7 @@ The inventory is reflected on the MQTT bus under the topic `tedge/inventory`.
 * Example:
    * topic: `/tedge/inventory/main`
    * payload:
-```json
+```javascript
      {
         "name": "thin-edge device",
         "type": "thin-edge.io"   
@@ -202,7 +203,7 @@ The inventory is reflected on the MQTT bus under the topic `tedge/inventory`.
 * Example:
    * topic: `/tedge/inventory/main/tedge_config`
    * payload:
-```json
+```javascript
      {
         "files": [
            { "path": "/etc/tedge/tedge.toml", "type": "tedge.toml" },
@@ -252,7 +253,7 @@ sequenceDiagram
      
        Topic: `tedge/child1/commands/req/inventory/register-device`<br/>
        Payload: 
-       ```json
+       ```javascript
        {
           "name": "child-device 1",
           "type": "thin-edge.io-child",
@@ -274,7 +275,7 @@ sequenceDiagram
      * Example:  
        * Topic: `tedge/inventory/child1`
        * Payload: 
-       ```json
+       ```javascript
        {
           "name": "child-device 1",
           "type": "thin-edge.io-child"
@@ -286,7 +287,7 @@ sequenceDiagram
      * Example 1:  
        * Topic: `tedge/inventory/child1/tedge_config`
        * Payload: 
-       ```json
+       ```javascript
        {
           "files": [ "foo.conf", "bar.conf" ]
        }
@@ -294,7 +295,7 @@ sequenceDiagram
      * Example 2:  
        * Topic: `tedge/inventory/child1/tedge_logging`
        * Payload: 
-       ```json
+       ```javascript
        {
           "files": [ "foo.log", "bar.log" ]
        }
@@ -310,7 +311,7 @@ sequenceDiagram
 
        Topic: `tedge/child1/commands/res/inventory/register-device`<br/>
        Payload:
-       ```json
+       ```javascript
        {
           "status": "success"
        }
@@ -318,7 +319,7 @@ sequenceDiagram
        or
 
        Payload:
-       ```json
+       ```javascript
        {
           "status": "failed",
           "reason": "invalid message format"
