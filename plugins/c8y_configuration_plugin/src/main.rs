@@ -34,9 +34,9 @@ use upload::UploadConfigFileStatusMessage;
 
 use std::path::{Path, PathBuf};
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, DeviceIdSetting, IpAddress, MqttBindAddressSetting,
-    MqttExternalBindAddressSetting, MqttPortSetting, TEdgeConfig, TmpPathSetting,
-    DEFAULT_TEDGE_CONFIG_PATH,
+    ConfigRepository, ConfigSettingAccessor, DeviceIdSetting, HttpPortSetting, IpAddress,
+    MqttBindAddressSetting, MqttExternalBindAddressSetting, MqttPortSetting, TEdgeConfig,
+    TmpPathSetting, DEFAULT_TEDGE_CONFIG_PATH,
 };
 use tedge_utils::{
     file::{create_directory_with_user_group, create_file_with_user_group},
@@ -141,9 +141,9 @@ async fn main() -> Result<(), anyhow::Error> {
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
     let mut http_client = create_http_client(&tedge_config).await?;
     let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
+    let http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
 
-    //TODO: Port number to be read from HttpPortSetting
-    let local_http_host = format!("{}:8000", bind_address.to_string().as_str());
+    let local_http_host = format!("{}:{}", bind_address.to_string().as_str(), http_port);
 
     run(
         tedge_device_id,
