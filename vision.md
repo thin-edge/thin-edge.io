@@ -12,7 +12,7 @@ without having to re-invent the wheel with costly and time-consuming,
 potentially embedded, development projects and without having to reevaluate
 existing projects or applications to enable them with thin-edge.io.
 
-## Our target segments
+## Example usage 
 
 While the thin-edge.io framework addresses a broad range of customer segments, it is primarily used in industrial or manufacturing environments by companies that can be characterized as: 
  
