@@ -31,15 +31,23 @@ thin-edge.io helps to unify the complex device landscape by offering lightweight
 
 ## Users and Personas
 
-We define the following personas:
+thin-edge.io targets the following user types: 
 
-- "End User"
+- "End User"  
     - Person using a binary that has been built with the thin-edge.io framework
       as well as a finished and working configuration
+    - Does not interact directly with the device but only through an IoT / Cloud / Platform UI 
+    - Does not modify or extend the device directly (e.g. through the extension mechanisms of thin-edge.io)
+    - Typically has no embedded development background/knowledge 
+    - An example of an end user is a fleet operator of a centrally managed, large device fleet of elevators, industrial machines, or similar, responsible for monitoring, maintenance, and troubleshooting of those assets via a device management platform.
 
 - "System Integrator"
     - Person using a binary that has been built with the thin-edge.io framework
       and crafts a configuration suited to solve their problems
+    - Has direct access to the device and interacts with the configuration options of thin-edge.io to influence the device behavior 
+    - Might have basic embedded programming knowledge but prefer configurations
+    - Requires an easy way of interacting and re-configuring thin-edge.io (e.g. via CLI, scripts, or config templates)
+    - An example for a system integrator user type is a field/automation engineer or factory IT admin who is tasked to re-configure a device so it can send telemetry to an IoT platform or receive OTA software updates. 
 
 - "Interface Developer"
     - Person using the foreign interfaces of a thin-edge.io framework binary to
