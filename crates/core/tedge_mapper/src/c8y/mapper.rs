@@ -157,7 +157,7 @@ mod tests {
         "tedge/measurements",
         "tedge/errors",
         "{",
-        "Invalid JSON: EOF while parsing an object at line 1 column 1: `{`"
+        "Invalid JSON: EOF while parsing an object at line 1 column 1: `{\n`"
     )] // fail case
     #[test_case(
         "tedge/measurements",
