@@ -147,7 +147,7 @@ it also requires a lot of custom logic to be developed on the device, to be able
 to integrate and support various device management platforms.
 
 
-## thin-edge.io as a game changer
+## Benefits and key capabilities
 
 To address the problems above, we create thin-edge.io as a framework for
 lightweight IoT gateways, PLC’s, routers and other embedded devices which
