@@ -59,19 +59,16 @@ Next sections describe those structures.
 #### Structure `measurements`
 ```javascript
    "measurements": {
-        /* general structure for a measurement: */
+        /* 1st mesasurement */
         "<type_name>": {
-            "num_values": <number of values>,
+            "num_values": /* <number of values> */,
             "units": ["<unit of 1st value>", "<unit of 2nd value>", ...]
         },
-        "weather_station": {
-            "num_values": 2,
-            "units": ["%", "celsius"] // humidity and temperature
-        },
-        "power_meter": {
-            "num_values": 3,
-            "units": ["V", "V", "V"] // voltage of phase 1, 2, 3
-        },
+
+        /* next mesasurement */
+        "<type_name2>": {
+            /* ... */
+        }
     }
  ```
   * Where
@@ -81,36 +78,81 @@ Next sections describe those structures.
     * TODO: field that describes values missing (that what is as comment in example above)
     * TODO: add a brief introduction about **samples**
 
+
+Example:
+```javascript
+   /* Example, contains two measurements */
+   "measurements": {
+        "weather_station": {
+            "num_values": 2,
+            "units": ["%", "celsius"] // humidity and temperature
+        },
+        "power_meter": {
+            "num_values": 3,
+            "units": ["V", "V", "V"] // voltage of phase 1, 2, 3
+        }
+    }
+ ```
+
 #### Structure `setpoints`
 ```javascript
    "setpoints": {
-        /* general structure for a setpoint: */
+        /* 1st setpoint */
         "<type_name>": {
-            "num_values": <number of values>
+            "num_values": /* <number of values> */
         },
-        "temperature_limits": {
-            "num_values": 2 // set-points for a lower limit and a higher limit
-        },
-        "relay_array": {
-            "num_values": 8 // 8 relays in series
-        },
+
+        /* next setpoint */
+        "<type_name2>": {
+            /* ... */
+        }
+
     }
- ```
+````
   * Where
     * `type_name`, is a reference string, unique in scope of the given device object
     * `num-values`, number of values the setpoints carries
     * TODO: field that describes values missing (that what is as comment in example above)
 
+Example:
+```javascript
+   /* Example, contains two setpoints */
+   "setpoints": {
+        "temperature_limits": {
+            "num_values": 2 // set-points for a lower limit and a higher limit
+        },
+        "relay_array": {
+            "num_values": 8 // 8 relays in series
+        }
+    }
+ ```
+
 #### Structure `events`
 ```javascript
    "events": {
-        /* general structure for an event: */
+        /* 1st event */
         "<type_name>": {
             /* beyond the type-name no more information available for events */
         },
+
+        /* next event */
+        "<type_name2>": {
+            /* ... */
+        }
+
+    }
+```
+
+Example:
+```javascript
+   /* Example, contains two events */
+   "events": {
         "door_opened": {
             /* no more information for events available */
         },
+        "service_completed": {
+            /* no more information for events available */
+        }
     }
  ```
   * Where
@@ -119,13 +161,28 @@ Next sections describe those structures.
 #### Structure `alarms`
 ```javascript
    "alarms": {
-        /* general structure for an alarm: */
+        /* 1st alarm */
         "<type_name>": {
             /* beyond the type-name no more information available for alarms */
         },
+
+        /* next alarm */
+        "<type_name2>": {
+            /* ... */
+        }
+    }
+````
+
+Example:
+```javascript
+   /* Example, contains two alarms */
+   "alarms": {
         "temperature_high": { // when higher temperature limit exceeded
             /* no more information for alarms available */
         },
+        "temperature_low": { // when low temperature limit underrun
+            /* no more information for alarms available */
+        }
     }
  ```
   * Where
