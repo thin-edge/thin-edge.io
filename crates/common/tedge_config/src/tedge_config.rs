@@ -326,6 +326,34 @@ impl ConfigSettingAccessor<HttpPortSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<HttpBindAddressSetting> for TEdgeConfig {
+    fn query(&self, _setting: HttpBindAddressSetting) -> ConfigSettingResult<IpAddress> {
+        // we match to external bind address if there is one,
+        // otherwise match to internal bind address
+        let internal_bind_address: IpAddress = self.query(MqttBindAddressSetting)?;
+        let external_bind_address_or_err = self.query(MqttExternalBindAddressSetting);
+
+        match external_bind_address_or_err {
+            Ok(external_bind_address) => Ok(external_bind_address),
+            Err(_) => Ok(internal_bind_address),
+        }
+    }
+
+    fn update(
+        &mut self,
+        _setting: HttpBindAddressSetting,
+        value: IpAddress,
+    ) -> ConfigSettingResult<()> {
+        self.data.http.bind_address = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: HttpBindAddressSetting) -> ConfigSettingResult<()> {
+        self.data.http.bind_address = None;
+        Ok(())
+    }
+}
+
 impl ConfigSettingAccessor<MqttBindAddressSetting> for TEdgeConfig {
     fn query(&self, _setting: MqttBindAddressSetting) -> ConfigSettingResult<IpAddress> {
         Ok(self

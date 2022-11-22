@@ -106,6 +106,7 @@ pub(crate) struct MqttConfigDto {
 #[serde(deny_unknown_fields)]
 pub(crate) struct HttpConfigDto {
     pub(crate) port: Option<u16>,
+    pub(crate) bind_address: Option<IpAddress>,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
