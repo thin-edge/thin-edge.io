@@ -11,10 +11,17 @@ TODO: add more information what the data model is about, and mention/link to the
 
 The **inventory** is the communication backbone for **plugins**, **external child-devices**, the **domain application**[^1] and **thin-edge** it-self.
 
- * one (e.g. an **external child-device**) can add information to announce capabilities a device supports
- * another one (e.g. a **plugin**) can retrieve those information to identify capabililties a device supports
+The **inventory** accepts _information_ from **child-devices** or processes on the **main-device**, e.g.:
+   * list of configuration files the **device** provides
+   * description of measurements the **device** provides
+
+Next **thin-edge**, **plugins**, the **domain application**[^1] or other processes can retrive those _information_ to discover data and functionality the **child-devices** and **main-device**  provide. As example:
+   * the configuration plugin can retrieve a list of configuration files per **device** to provide those files to the cloud
+   * the **domain application** or some 3rd party (e.g. APAMA analytics) can retrieve the description of measurements to discover measurement data provided by the **child-devices** and **main-device** that might be relevant for processing logic or analytics calculation
 
 [^1]: more details see TODO: add link to "Appendix 'Device Overview' of Device Domain", that is in "./domain-model.md#device-domain"
+
+### Format and content
 
 The **inventory** stores for each device a _data object_ with certain _fields_.
 
@@ -40,23 +47,23 @@ The figure below illustrats the **inventory** and its _device objects_.
 
 ### Telemtry Descriptor
 
-The `telemetry_descriptor` is part of a _device object_ and contains descriptions for all **measurements**, **setpoints**, **events** and **alarms** the device provides.
-For each kind of telemtry data the `telemetry_descriptor` holds an individual structure:
+The `telemetry_descriptor` is part of an **inventory's** _device object_ and contains descriptions for all **measurements**, **setpoints**, **events** and **alarms** the device provides.
+For each kind of telemtry data the `telemetry_descriptor` holds an individual `struct`:
 
 <!-- using below 'javascript' syntax-highlighter instead of 'json', since with JSON comments look really terrible -->
 ```javascript
    "telemetry_descriptor": {
-      "measurements": { /* ... specific description to measurements ...   */ },
-      "setpoints":    { /* ... specific description to setpoints ...      */ },
-      "events":       { /* ... specific description to events ...         */ },
-      "alarms":       { /* ... specific description to alarms ...         */ },
+      "measurements": { /* ... specific struct for measurements ...   */ },
+      "setpoints":    { /* ... specific struct for setpoints ...      */ },
+      "events":       { /* ... specific struct for events ...         */ },
+      "alarms":       { /* ... specific struct for alarms ...         */ },
    }
 ```
 
-Each structure `measurements`, `setpoints`, `events`, `alarms` has it's individual set of fields, just as needed to describe the coresponding kind of telemetry data.
+Each struct `measurements`, `setpoints`, `events`, `alarms` has it's individual set of fields, just as needed to describe the coresponding kind of telemetry data.
 Next sections describe those structures.
 
-#### Structure `measurements`
+#### Struct `measurements`
 ```javascript
    "measurements": {
         /* 1st mesasurement */
@@ -94,7 +101,7 @@ Example:
     }
  ```
 
-#### Structure `setpoints`
+#### Struct `setpoints`
 ```javascript
    "setpoints": {
         /* 1st setpoint */
@@ -127,7 +134,7 @@ Example:
     }
  ```
 
-#### Structure `events`
+#### Struct `events`
 ```javascript
    "events": {
         /* 1st event */
@@ -158,7 +165,7 @@ Example:
   * Where
     * `type_name`, is a reference string, unique in scope of the given device object
 
-#### Structure `alarms`
+#### Struct `alarms`
 ```javascript
    "alarms": {
         /* 1st alarm */
@@ -188,60 +195,83 @@ Example:
   * Where
     * `type_name`, is a reference string, unique in scope of the given device object
 
+### Plugin Descriptor
 
-## Capability Schemas
+The `plugin_descriptor` is part of an **inventory's** _device object_.
 
-The content and structure of each **capability** object in the inventory is very specific to the capability it represents. To document and standardize the content and structure of those objects for certain capabilities the **Capability Schemas** are used. That way each **external child-device** can use each **plugin**, as long as both use the same **capability schema**.
+The `plugin_descriptor` lists all **plugins** the **device** intends to connect. For each **plugin**, the `plugin_descriptor` contains the **plugin's** `plugin_identifier` and a **plugin's** specific `struct`.
 
-* A **capability schema** has a unique name, e.g. `tedge_config`, `tedge_log` or `tedge_software`
-
-* A **capability schema** defines the set of fields that must contained in a corresponding inventorie's **capability object**.
-  * All those fields together contain all information a plugin needs to process and provide that certain capability to the corresponding device.
- 
-* thin-edge has a set of pre-defined **capability schemas**, see [Pre-Defined Capability Schemas](#pre-defined-capability-schemas)
-
-* Each plugin can define plugin-specific **capability schemas**, or can use pre-define ones.
-
-### Pre-Defined Capability Schemas
-
-That section lists the pre-defined **capability schemas**.
-
-* Capability Schema: **Configration Management**
-
-  |                      |                     | 
-  |:---------------------|:--------------------|
-  | **Unique name**      | `tedge_config` |
-  | **Field:**`files`    | List of config-files the device provides. Per config file there are the fields as below:<br/><br/>-  `path`, full path to the file in the filesystem. If that field is not set, tedge_agent's HTTP-filetransfer is used to read/write the file.<br/>- `type`, an optional configuration type. If not provided, the path is used as type. If path is not set then `type` is mandatory.<br/>- optional unix file ownership: `user`, `group` and octal `mode`. These are only used when `path` is set, and a configuration file pushed from the cloud doesn't exist on the device|
-  | **Behavoiur**        | On cloud request<br/>-  provided configuration files are requested from the device and sent to the cloud<br/>- or downloaded from the cloud and sent to the device.<br/><br/> For details see TODO \[Configuration Managenement documentation](../references/c8y-configuration-management.md#configuration-files-for-child-devices)
-
-Examples **capability** objects for schema `tedge_config`:
+<!-- using below 'javascript' syntax-highlighter instead of 'json', since with JSON comments look really terrible -->
 ```javascript
-"tedge_config": {
-    "files": [
-        { "path": "/etc/tedge/tedge.toml", "type": "tedge.toml" },
-        { "path": "/etc/tedge/mosquitto-conf/c8y-bridge.conf" },
-        { "path": "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf" },
-        { "path": "/etc/mosquitto/mosquitto.conf", "type": "mosquitto", "user": "mosquitto", "group": "mosquitto", "mode": "0o644" }
-    ]
-}
+   "plugin_descriptor": {
+      "<plugin_identifier 1>": { /* ... struct for plugin 1 ...   */ },
+      "<plugin_identifier 2>": { /* ... struct for plugin 2 ...   */ },
+      /* ... */
+   }
 ```
+  * Where
+    * `plugin_identifier`, is a unique string referencing the plugin (e.g. `tedge_config` for the _c8y_configuration_plugin_)
+    * the assigned `struct` is specific to the plugin referenced with the `plugin_identifier`
+
+Example:
 ```javascript
-"tedge_config": {
-    "files": [
-        { "type": "foo.conf" },
-        { "type": "bar.conf" },
-    ]
-}
+   "plugin_descriptor": {
+      "tedge_software":    { /* ... struct for thin-edge software management ... */ },
+      "tedge_config":      { /* ... struct for thin-edge config management ...   */ },
+      "tedge_log":         { /* ... struct for thin-edge log management ...      */ },
+      "custom_plugin_foo": { /* ... struct for some custom specific plugin ...   */ },
+      "custom_plugin_bar": { /* ... struct for another custom specific plugin .. */ },
+   }
 ```
 
-* Capability Schema: **Logging Management**
+Each **plugin** defines it's own `struct` with individual set of fields, to contain all information the **plugin** needs to operate.
 
-  |                      |              | 
-  |:---------------------|:-------------|
-  | **Unique name**      | `tedge_log`  |
-  | **Field:** `files`   | TODO |
-  | **Behavoiur**        | TODO |
+Each custom specific **plugin** has a unique `plugin_identifier` and `struct`, defined by the **plugin's** developer. For all **plugins** shipped with **thin-edge** `plugin_identifiers` and `structs` are defined as below.
 
+#### Software Management
+Plugin-Identifier: `tedge_software`
+```javascript
+TODO
+```
+
+#### Configuration Management
+Plugin-Identifier: `tedge_config`
+```javascript
+   "tedge_config": {
+      "files": [
+         /* 1st configuration file */
+         { "path": "<path to file>", "type": "<type_name>" },
+
+         /* 2nd configuration file */
+         { "path": "<path to file 2>", "type": "<type_name2>" },
+
+         /* next configuration file */
+         { /* ... */ },
+      ]
+   }
+```
+  * Where
+    * `path`, is a file path; or a key path in some registry of the **device** or any name that makes sense for the corresponding **device**
+    * `type_name`, is a reference string, used to name the configuration file on the cloud;
+    * TODO: add fields user, group and mode (`user = "mosquitto", group = "mosquitto", mode = 0o644`)
+
+Example:
+```javascript
+   "tedge_config": {
+      "files": [
+         { "path": "/etc/tedge/tedge.toml", "type": "tedge.toml" },
+         { "path": "/etc/tedge/mosquitto-conf/c8y-bridge.conf" },
+         { "path": "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf" },
+         { "path": "/etc/mosquitto/mosquitto.conf", type = "mosquitto", user = "mosquitto", group = "mosquitto", mode = 0o644 }
+      ]
+   }
+```
+
+#### Log Management
+Plugin-Identifier: `tedge_log`
+```javascript
+TODO
+```
 
 ## Inventory API
 
