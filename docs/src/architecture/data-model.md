@@ -33,17 +33,15 @@ The figure below illustrats the **inventory** and its _device objects_.
   * The fields `name` and `type` contain the _device-name_ and _device-type_ visible in the cloud.
   * The field `telemetry_descriptor` contains descriptions of all **measurements**, **setpoints**, **events** and **alarms** the device provides.
     Details about the `telemetry_descriptor` are explained in section [Telemtry Descriptor](#telemtry-descriptor) below.
+  * The field `plugin_descriptor` contains descriptions of all **plugins** the **device** intends to make use of
+    (e.g. _Software Management_, _Configuration Management_, _Log file Management_, or any custom specific **plugin**).
+    Details about the `plugin_descriptor` are explained in section [Plugin Descriptor](#plugin-descriptor) below.
 * A **Child-Device** object could be exist more than once in the inventory. 
   Each **Child-Device** object represents an _external device_ (e.g. sensor, actuator, PLC, any other kind of device) that is connected to the thin-edge device.
   * Each **child-device** object is assocoiated with a separate individual device in the cloud. 
-  * Similar to the **thin-edge Device** object, each **child-device** object has the fields `name`, `type` and `telemetry_descriptor`.
+  * Similar to the **thin-edge Device** object, each **child-device** object has the fields `name`, `type`, `telemetry_descriptor` and `plugin_descriptor`.
     In addition, each **child-device** object has a field `childid`, that contains a unique ID to address that child-device.
   * NOTE: Not just _external devices_, but also processes running on the thin-edge device itself, can be represented with a **child-device** object in the **inventory** - to treat them as __logical child-devices__.
-* Each **Capability** object represents a functionality a device is capable.
-  * A capability could be by example _Configuration Management_, _Log file Management_ or _Software Management_, or any custom specific capability provided by a custom specific plugin.
-  * The content and structure of each **capability** object is very specific to the capability it represents. E.g. a **capability** object for _Configuration Management_ contains a list of configuration files the device supports, whereas a **capability** object for _Software Management_ contains details about installable package-types the device supports.
-  * A schema that describes the content and structure of **capability** objects for a certain capability is called **Capability Schema**. More details see section below [Capability Schemas](#capability-schemas).
-  * A device object can contain several **capability** objects.
 
 ### Telemtry Descriptor
 
