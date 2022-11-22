@@ -36,6 +36,9 @@ pub enum AgentError {
     FromConfigSetting(#[from] ConfigSettingError),
 
     #[error(transparent)]
+    FromSystemServices(#[from] tedge_config::system_services::SystemServiceError),
+
+    #[error(transparent)]
     FromFlockfileError(#[from] FlockfileError),
 
     #[error("Command returned non 0 exit code.")]

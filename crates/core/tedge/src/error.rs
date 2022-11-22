@@ -1,5 +1,3 @@
-use crate::system_services;
-
 #[derive(thiserror::Error, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum TEdgeError {
@@ -25,5 +23,5 @@ pub enum TEdgeError {
     FromRumqttClient(#[from] rumqttc::ClientError),
 
     #[error(transparent)]
-    FromSystemServiceError(#[from] system_services::SystemServiceError),
+    FromSystemServiceError(#[from] tedge_config::system_services::SystemServiceError),
 }

@@ -8,6 +8,8 @@ mod tedge_config_dto;
 mod tedge_config_location;
 mod tedge_config_repository;
 
+pub mod system_services;
+
 use self::tedge_config_dto::*;
 pub use self::{config_setting::*, error::*, models::*, settings::*};
 pub use self::{

@@ -58,4 +58,5 @@ test-case = "2.2"
 tedge_utils = { path = "../../common/tedge_utils"}
 tedge_test_utils = { path = "../../tests/tedge_test_utils"}
 tokio-test = "0.4"
+toml = "0.5"
 serial_test = "0.8"
