@@ -34,9 +34,8 @@ use upload::UploadConfigFileStatusMessage;
 
 use std::path::{Path, PathBuf};
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, DeviceIdSetting, HttpPortSetting, IpAddress,
-    MqttBindAddressSetting, MqttExternalBindAddressSetting, MqttPortSetting, TEdgeConfig,
-    TmpPathSetting, DEFAULT_TEDGE_CONFIG_PATH,
+    ConfigRepository, ConfigSettingAccessor, DeviceIdSetting, HttpBindAddressSetting,
+    HttpPortSetting, MqttPortSetting, TEdgeConfig, TmpPathSetting, DEFAULT_TEDGE_CONFIG_PATH,
 };
 use tedge_utils::{
     file::{create_directory_with_user_group, create_file_with_user_group},
@@ -129,21 +128,13 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let tedge_device_id = tedge_config.query(DeviceIdSetting)?;
 
-    // match to external bind address if there is one,
-    // otherwise match to internal bind address
-    let internal_bind_address: IpAddress = tedge_config.query(MqttBindAddressSetting)?;
-    let external_bind_address_or_err = tedge_config.query(MqttExternalBindAddressSetting);
-    let bind_address = match external_bind_address_or_err {
-        Ok(external_bind_address) => external_bind_address,
-        Err(_) => internal_bind_address,
-    };
-
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
     let mut http_client = create_http_client(&tedge_config).await?;
     let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
-    let http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
 
-    let local_http_host = format!("{}:{}", bind_address.to_string().as_str(), http_port);
+    let http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
+    let http_address = tedge_config.query(HttpBindAddressSetting)?.to_string();
+    let local_http_host = format!("{}:{}", http_address, http_port);
 
     run(
         tedge_device_id,
