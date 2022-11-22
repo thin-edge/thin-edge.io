@@ -787,7 +787,7 @@ async fn convert_first_thin_edge_json_invalid_then_valid_with_child_id() {
     let out_first_messages = converter.convert(&in_first_message).await;
     let expected_error_message = Message::new(
         &Topic::new_unchecked("tedge/errors"),
-        r#"Invalid JSON: expected value at line 1 column 10: `invalid}`"#,
+        "Invalid JSON: expected value at line 1 column 10: `invalid}\n`",
     );
     assert_eq!(out_first_messages, vec![expected_error_message]);
 

@@ -355,7 +355,7 @@ mod tests {
 
         assert_eq!(
         res.unwrap_err().to_string(),
-        "Invalid JSON: invalid type: null, expected a borrowed string at line 2 column 13: `l\n}`",
+        "Invalid JSON: invalid type: null, expected a borrowed string at line 2 column 13: `l\n}\n`",
     );
 
         Ok(())
