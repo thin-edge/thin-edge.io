@@ -5,7 +5,8 @@ use crate::{Flag, Port};
 use std::path::Path;
 
 const DEFAULT_ETC_PATH: &str = "/etc";
-const DEFAULT_PORT: u16 = 1883;
+const DEFAULT_MQTT_PORT: u16 = 1883;
+const DEFAULT_HTTP_PORT: u16 = 8000;
 pub const DEFAULT_TMP_PATH: &str = "/tmp";
 pub const DEFAULT_LOG_PATH: &str = "/var/log";
 pub const DEFAULT_RUN_PATH: &str = "/run";
@@ -46,6 +47,9 @@ pub struct TEdgeConfigDefaults {
     /// Default port for mqtt internal listener
     pub default_mqtt_port: Port,
 
+    /// Default port for http file transfer service
+    pub default_http_port: Port,
+
     /// Default tmp path
     pub default_tmp_path: FilePath,
 
@@ -58,8 +62,11 @@ pub struct TEdgeConfigDefaults {
     /// Default device type
     pub default_device_type: String,
 
-    /// Default bind address
+    /// Default mqtt bind address
     pub default_mqtt_bind_address: IpAddress,
+
+    /// Default htpp bind address
+    pub default_http_bind_address: IpAddress,
 }
 
 impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
@@ -82,12 +89,14 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
             default_azure_root_cert_path: system_cert_path.clone().into(),
             default_c8y_root_cert_path: system_cert_path.into(),
             default_mapper_timestamp: Flag(true),
-            default_mqtt_port: Port(DEFAULT_PORT),
+            default_mqtt_port: Port(DEFAULT_MQTT_PORT),
+            default_http_port: Port(DEFAULT_HTTP_PORT),
             default_tmp_path: tmp_path.into(),
             default_logs_path: logs_path.into(),
             default_run_path: run_path.into(),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
             default_mqtt_bind_address: IpAddress::default(),
+            default_http_bind_address: IpAddress::default(),
             default_c8y_smartrest_templates: TemplatesSet::default(),
         }
     }
@@ -110,12 +119,14 @@ fn test_from_tedge_config_location() {
             default_azure_root_cert_path: FilePath::from("/etc/ssl/certs"),
             default_c8y_root_cert_path: FilePath::from("/etc/ssl/certs"),
             default_mapper_timestamp: Flag(true),
-            default_mqtt_port: Port(DEFAULT_PORT),
+            default_mqtt_port: Port(DEFAULT_MQTT_PORT),
+            default_http_port: Port(DEFAULT_HTTP_PORT),
             default_tmp_path: FilePath::from("/tmp"),
             default_logs_path: FilePath::from("/var/log"),
             default_run_path: FilePath::from("/run"),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
             default_mqtt_bind_address: IpAddress::default(),
+            default_http_bind_address: IpAddress::default(),
             default_c8y_smartrest_templates: TemplatesSet::default(),
         }
     );

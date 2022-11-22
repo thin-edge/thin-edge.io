@@ -24,10 +24,10 @@ use crate::http_rest::HttpConfig;
 use std::process::Command;
 use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, LogPathSetting,
-    MqttBindAddressSetting, MqttExternalBindAddressSetting, MqttPortSetting, RunPathSetting,
-    SoftwarePluginDefaultSetting, TEdgeConfigLocation, TmpPathSetting, DEFAULT_LOG_PATH,
-    DEFAULT_RUN_PATH, DEFAULT_TMP_PATH,
+    ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt,
+    HttpBindAddressSetting, HttpPortSetting, LogPathSetting, MqttBindAddressSetting,
+    MqttPortSetting, RunPathSetting, SoftwarePluginDefaultSetting, TEdgeConfigLocation,
+    TmpPathSetting, DEFAULT_LOG_PATH, DEFAULT_RUN_PATH, DEFAULT_TMP_PATH,
 };
 use tedge_utils::file::create_directory_with_user_group;
 use thin_edge_json::health::{health_check_topics, send_health_status};
@@ -157,17 +157,12 @@ impl SmAgentConfig {
         let tedge_run_dir = tedge_config.query_string(RunPathSetting)?.into();
         let tedge_tmp_dir = tedge_config.query_string(TmpPathSetting)?.into();
 
-        let bind_address = tedge_config.query(MqttBindAddressSetting)?;
-        let external_bind_address_or_err = tedge_config.query(MqttExternalBindAddressSetting);
+        let mut http_config = HttpConfig::default();
 
-        // match to external bind address if there is one,
-        // otherwise match to internal bind address
-        let http_config = match external_bind_address_or_err {
-            Ok(external_bind_address) => {
-                HttpConfig::default().with_ip_address(external_bind_address.into())
-            }
-            Err(_) => HttpConfig::default().with_ip_address(bind_address.into()),
-        };
+        let http_bind_address = tedge_config.query(HttpBindAddressSetting)?;
+        http_config = http_config
+            .with_port(tedge_config.query(HttpPortSetting)?.0)
+            .with_ip_address(http_bind_address.into());
 
         Ok(SmAgentConfig::default()
             .with_sm_home(tedge_config_path)
