@@ -59,10 +59,6 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v2
-
       - name: Build for ${{ matrix.target }}
         run: ./ci/build_scripts/build_for_arm.sh ${{ matrix.target }}
 
