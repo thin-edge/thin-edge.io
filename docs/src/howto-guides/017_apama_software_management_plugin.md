@@ -34,7 +34,7 @@ There is a naming convention that you need to follow while creating software ent
 
 For Apama projects:
 
-1. The version must be suffixed with `::Apama` as in `1.0::Apama` or just `::Apama` if no  version number is necessary.
+1. The version must be suffixed with `::apama` as in `1.0::apama` or just `::apama` if no  version number is necessary.
 2. The uploaded binary must be a `zip` file that contains the `project` directory. If a directory named `project` is not found by the plugin at the root level in the zip, it is considered invalid.
 
 ![Add new apama project in Software Repository](./images/apama-plugin/apama-project-c8y-software-repository.png)
