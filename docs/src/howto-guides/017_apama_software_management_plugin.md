@@ -23,7 +23,7 @@ The Apama plugin, part of the Apama thin-edge support package, can be used to in
 
 After installation of the support for Apama onto the thin-edge device, the correlator will attempt to start, but will fail initially because there is not yet an Apama project installed. Instructions are given below for installing an Apama project on the device.
 
-## Install Apama artifacts from Cumulocity
+## Install Apama projects from Cumulocity
 
 Before an Apama project can be installed on the device using the software management feature in Cumulocity, the project files need to be added to the Cumulocity software repository.
 
