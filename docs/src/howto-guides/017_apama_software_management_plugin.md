@@ -2,7 +2,10 @@
 
 The Apama plugin, part of the Apama thin-edge support package, can be used to install Apama projects using the Cumulocity software management feature.
 
-## Add the Apama thin-edge support package to the tenant software repository and deploy it to thin-edge
+## Prerequisites
+
+The Apama thin-edge support package must be installed before you can install Apama projects on thin-edge.
+If not already installed, it can also be installed from the Cumulocity software repository as follows:
 
 1. In the **Device Management** app and go to the **Management** menu option and select the **Software repository**.
 2. Click **Add software** at the right of the top menu bar.
