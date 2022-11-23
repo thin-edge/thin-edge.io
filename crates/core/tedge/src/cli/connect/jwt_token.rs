@@ -1,4 +1,4 @@
-use crate::cli::connect::{ConnectError, RESPONSE_TIMEOUT};
+use crate::cli::connect::{ConnectError, CONNECTION_TIMEOUT, RESPONSE_TIMEOUT};
 use rumqttc::QoS::AtLeastOnce;
 use rumqttc::{Event, Incoming, MqttOptions, Outgoing, Packet};
 
@@ -9,6 +9,7 @@ pub(crate) fn get_connected_c8y_url(port: u16, host: String) -> Result<String, C
 
     let mut options = MqttOptions::new(CLIENT_ID, host, port);
     options.set_keep_alive(RESPONSE_TIMEOUT);
+    options.set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
 
     let (mut client, mut connection) = rumqttc::Client::new(options, 10);
     let mut acknowledged = false;
