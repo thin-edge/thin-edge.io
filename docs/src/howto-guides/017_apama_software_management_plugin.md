@@ -5,9 +5,30 @@ The Apama plugin, part of the Apama thin-edge support package, can be used to in
 ## Prerequisites
 
 The Apama thin-edge support package must be installed before you can install Apama projects on thin-edge.
-If not already installed, it can also be installed from the Cumulocity software repository as follows:
+The recommended way of installing Apama support is with the Debian based distributions apt package manager.
+Further details about this can be found in the thin-edge.io documentation at [Manage the software on your devices from Cumulocity cloud](https://thin-edge.github.io/thin-edge.io/html/tutorials/software-management.html).
 
-1. In the **Device Management** app and go to the **Management** menu option and select the **Software repository**.
+#### Set up the repository from which the packages will be installed
+1. In the Cumulocity IoT tenant, open the **Device Management** app, go to the **Management** menu option and select the **Software repository**.
+2. Click **Add software** at the right of the top menu bar. 
+3. In the **ADD SOFTWARE** dialog enter the following details:
+- **Software**: apama-repo
+- **Description**: apama-repo (or something else if you choose)
+- **Device Filter Type**: (leave empty)
+- **Software Type**: apt
+- **Version**: 2022::apt
+- **SOFTWARE FILE**: check the Provide a file path option and enter the URL:	https://downloads.apamacommunity.com/debian/apama-repo_2022_all.deb
+
+4. Click the **Add Software** button.
+5. Now select the **Devices** menu option and then select **All devices**.
+6. In the list of devices, select the thin-edge device installed previously.
+7. In the sub-menu for the device, select the **Software** option.
+8. Click the **Install software** button in the bottom left; the apama-repo should be listed.
+9. Click the drop-down arrow on the right and check the 2022::apt radio button, then click **Install**.
+10. Finally, click the **Apply changes** button in the lower right of the panel.
+
+#### Add the Apama thin-edge support package to the tenant software repository and deploy it to thin-edge
+1. Return to the **Device Management** app and go to the **Management** menu option and select the **Software repository**.
 2. Click **Add software** at the right of the top menu bar.
 3. In the **ADD SOFTWARE** dialog enter the following details:
     - **Software**: apama-thin-edge-support
