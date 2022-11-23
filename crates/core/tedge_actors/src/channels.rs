@@ -2,6 +2,7 @@ use crate::{ChannelError, Message};
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
+use std::fmt::{Debug, Formatter};
 
 /// Create a new mailbox with its address
 ///
@@ -81,7 +82,7 @@ pub trait Sender<M>: 'static + Send + Sync {
 }
 
 /// An `Address<M>` is a `Recipient<N>` provided `N` implements `Into<M>`
-impl <M: Message, N: Message + Into<M>> From<Address<M>> for Recipient<N> {
+impl<M: Message, N: Message + Into<M>> From<Address<M>> for Recipient<N> {
     fn from(address: Address<M>) -> Self {
         Box::new(address)
     }
@@ -98,10 +99,22 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for Address<M> {
     }
 }
 
+impl<M: Message> Debug for Recipient<M> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("anonymous recipient")
+    }
+}
+
+impl<M: Message> Clone for Recipient<M> {
+    fn clone(&self) -> Self {
+        self.recipient_clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::fan_in_message_type;
     use super::*;
+    use crate::fan_in_message_type;
 
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub struct Msg1 {}
