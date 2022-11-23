@@ -111,10 +111,52 @@ impl<M: Message> Clone for Recipient<M> {
     }
 }
 
+/// Make a `Recipient<N>` from a `Recipient<M>`
+///
+/// This is a workaround to the fact the compiler rejects a From implementation:
+///
+/// ```shell
+///
+///  impl<M: Message, N: Message + Into<M>> From<Recipient<M>> for Recipient<N> {
+///     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+///     |
+///     = note: conflicting implementation in crate `core`:
+///             - impl<T> From<T> for T;
+/// ```
+pub fn adapt<M: Message, N: Message + Into<M>>(sender: &Recipient<M>) -> Recipient<N> {
+    Box::new(Adapter {
+        sender: sender.recipient_clone(),
+    })
+}
+
+struct Adapter<M> {
+    sender: Recipient<M>,
+}
+
+impl<M: Message, N: Message + Into<M>> From<Adapter<M>> for Recipient<N> {
+    fn from(adapter: Adapter<M>) -> Self {
+        Box::new(adapter)
+    }
+}
+
+#[async_trait]
+impl<M: Message, N: Message + Into<M>> Sender<N> for Adapter<M> {
+    async fn send(&mut self, message: N) -> Result<(), ChannelError> {
+        Ok(self.sender.send(message.into()).await?)
+    }
+
+    fn recipient_clone(&self) -> Recipient<N> {
+        Box::new(Adapter {
+            sender: self.sender.recipient_clone(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::fan_in_message_type;
+    use crate::test_utils::VecRecipient;
 
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub struct Msg1 {}
@@ -150,6 +192,35 @@ mod tests {
         assert_eq!(
             mailbox.collect().await,
             vec![Msg::Msg1(Msg1 {}), Msg::Msg1(Msg1 {}), Msg::Msg2(Msg2 {}),]
+        )
+    }
+
+    pub struct Peers {
+        pub peer_1: Recipient<Msg1>,
+        pub peer_2: Recipient<Msg2>,
+    }
+
+    impl From<Recipient<Msg>> for Peers {
+        fn from(recipient: Recipient<Msg>) -> Self {
+            Peers {
+                peer_1: adapt(&recipient),
+                peer_2: adapt(&recipient),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn a_recipient_can_be_adapted_to_accept_sub_messages_from_several_sources() {
+        let messages: VecRecipient<Msg> = VecRecipient::default();
+        let recipient = messages.as_recipient();
+
+        let mut peers = Peers::from(recipient);
+        peers.peer_1.send(Msg1 {}).await.unwrap();
+        peers.peer_2.send(Msg2 {}).await.unwrap();
+
+        assert_eq!(
+            messages.collect().await,
+            vec![Msg::Msg1(Msg1 {}), Msg::Msg2(Msg2 {}),]
         )
     }
 }

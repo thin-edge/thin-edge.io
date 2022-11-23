@@ -13,3 +13,6 @@ pub use messages::*;
 #[macro_use]
 mod macros;
 pub use macros::*;
+
+#[cfg(test)]
+pub mod test_utils;

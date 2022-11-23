@@ -11,4 +11,4 @@ futures = { version = "0.3" }
 thiserror = "1.0"
 
 [dev-dependencies]
-tokio = { version = "1.22", default_features = false, features = ["rt", "macros"] }
+tokio = { version = "1.22", default_features = false, features = ["sync", "rt", "macros"] }
