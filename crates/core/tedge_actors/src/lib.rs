@@ -9,3 +9,7 @@ mod messages;
 pub use channels::*;
 pub use errors::*;
 pub use messages::*;
+
+#[macro_use]
+mod macros;
+pub use macros::*;

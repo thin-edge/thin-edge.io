@@ -100,6 +100,7 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for Address<M> {
 
 #[cfg(test)]
 mod tests {
+    use crate::fan_in_message_type;
     use super::*;
 
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -108,21 +109,7 @@ mod tests {
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub struct Msg2 {}
 
-    #[derive(Clone, Debug, Eq, PartialEq)]
-    pub enum Msg {
-        Msg1(Msg1),
-        Msg2(Msg2),
-    }
-    impl From<Msg1> for Msg {
-        fn from(m: Msg1) -> Msg {
-            Msg::Msg1(m)
-        }
-    }
-    impl From<Msg2> for Msg {
-        fn from(m: Msg2) -> Msg {
-            Msg::Msg2(m)
-        }
-    }
+    fan_in_message_type!(Msg[Msg1,Msg2] : Clone , Debug , Eq , PartialEq);
 
     #[tokio::test]
     async fn an_address_is_a_recipient_of_sub_msg() {
