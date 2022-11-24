@@ -2,10 +2,12 @@
 //!
 //! Actors are processing units that interact using asynchronous messages.
 
+mod actors;
 mod channels;
 mod errors;
 mod messages;
 
+pub use actors::*;
 pub use channels::*;
 pub use errors::*;
 pub use messages::*;
