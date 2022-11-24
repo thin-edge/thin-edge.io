@@ -16,13 +16,10 @@ use c8y_api::smartrest::smartrest_deserializer::{
 };
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
-use futures::Future;
 use mqtt_channel::{Connection, Message, MqttError, SinkExt, StreamExt, Topic, TopicFilter};
 use tokio::sync::Mutex;
-use tokio::time::sleep;
 
 use std::path::PathBuf;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_utils::{notify::fs_notify_stream, paths::PathsError};
@@ -37,8 +34,6 @@ pub const DEFAULT_PLUGIN_CONFIG_TYPE: &str = "c8y-configuration-plugin";
 pub const CONFIG_CHANGE_TOPIC: &str = "tedge/configuration_change";
 pub const DEFAULT_OPERATION_TIMEOUT: Duration = Duration::from_secs(10); //TODO: Make this configurable?
 
-pub type TimerFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'static>>;
-
 pub struct ConfigManager {
     plugin_config: PluginConfig,
     mqtt_client: Connection,
@@ -49,6 +44,12 @@ pub struct ConfigManager {
     fs_notification_stream: NotifyStream,
     config_upload_manager: ConfigUploadManager,
     config_download_manager: ConfigDownloadManager,
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum ActiveOperationState {
+    Pending,
+    Executing,
 }
 
 impl ConfigManager {
@@ -138,17 +139,21 @@ impl ConfigManager {
                         return Ok(())
                     }
                 }
-                Some((child_id, config_type)) = self.config_upload_manager.child_ops_pending_timeout().next() => {
+                Some(((child_id, config_type), op_state)) = self.config_upload_manager.operation_timer.next_timed_out_entry() => {
+                    info!("Config snapshot request for config type: {config_type} on child device: {child_id} timed-out");
                     self.fail_pending_config_operation_in_c8y(
                         ConfigOperation::Snapshot,
                         child_id.clone(),
-                        format!("Timeout due to lack of response from child device: {} for config type: {}", child_id, config_type),
+                        op_state,
+                        format!("Timeout due to lack of response from child device: {child_id} for config type: {config_type}"),
                     ).await?;
                 }
-                Some((child_id, config_type)) = self.config_download_manager.child_ops_pending_timeout().next() => {
+                Some(((child_id, config_type), op_state)) = self.config_download_manager.operation_timer.next_timed_out_entry() => {
+                    info!("Config update request for config type: {config_type} on child device: {child_id} timed-out");
                     self.fail_pending_config_operation_in_c8y(
                         ConfigOperation::Update,
                         child_id.clone(),
+                        op_state,
                         format!("Timeout due to lack of response from child device: {} for config type: {}", child_id, config_type),
                     ).await?;
                 }
@@ -208,7 +213,6 @@ impl ConfigManager {
             send_health_status(&mut self.mqtt_client.published, "c8y-configuration-plugin").await;
             return Ok(());
         } else if self.config_snapshot_response_topics.accept(&message) {
-            info!("config snapshot response");
             self.handle_child_device_config_operation_response(&message)
                 .await?;
         } else if self.config_update_response_topics.accept(&message) {
@@ -274,7 +278,7 @@ impl ConfigManager {
     ) -> Result<(), anyhow::Error> {
         match ConfigOperationResponse::try_from(message) {
             Ok(config_response) => {
-                let smartrest_response = match &config_response {
+                let smartrest_responses = match &config_response {
                     ConfigOperationResponse::Update { .. } => self
                         .config_download_manager
                         .handle_child_device_config_update_response(&config_response)?,
@@ -285,7 +289,10 @@ impl ConfigManager {
                     }
                 };
 
-                self.mqtt_client.published.send(smartrest_response).await?;
+                for smartrest_response in smartrest_responses {
+                    self.mqtt_client.published.send(smartrest_response).await?
+                }
+
                 Ok(())
             }
             Err(err) => {
@@ -295,6 +302,7 @@ impl ConfigManager {
                 self.fail_pending_config_operation_in_c8y(
                     config_operation,
                     child_id,
+                    ActiveOperationState::Pending,
                     err.to_string(),
                 )
                 .await
@@ -306,6 +314,7 @@ impl ConfigManager {
         &mut self,
         config_operation: ConfigOperation,
         child_id: String,
+        op_state: ActiveOperationState,
         failure_reason: String,
     ) -> Result<(), anyhow::Error> {
         // Fail the operation in the cloud by sending EXECUTING and FAILED responses back to back
@@ -336,7 +345,11 @@ impl ConfigManager {
                 (executing_msg, failed_msg)
             }
         };
-        self.mqtt_client.published.send(executing_msg).await?;
+
+        if op_state == ActiveOperationState::Pending {
+            self.mqtt_client.published.send(executing_msg).await?;
+        }
+
         self.mqtt_client.published.send(failed_msg).await?;
 
         Ok(())
@@ -353,10 +366,5 @@ impl ConfigManager {
         let msg = Message::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
         self.mqtt_client.published.send(msg).await?;
         Ok(())
-    }
-
-    pub async fn timer_for_child_op(child_id: String, config_type: String) -> (String, String) {
-        sleep(DEFAULT_OPERATION_TIMEOUT).await;
-        (child_id, config_type)
     }
 }
