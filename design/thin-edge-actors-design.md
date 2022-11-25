@@ -896,6 +896,11 @@ An actor should also be able to handle requests sent by the runtime, typically a
 
 #### Size of the channel buffers
 
+* With unbounded channels, there is a risk of actors being overflowed
+  and failing to catch up till memory exhaustion.
+* Bounded channels enable back-pressure from slow actors onto fast ones,
+  but a cycle of bounded channels might lead to deadlocks.
+
 ### Behavior
 
 ### Instantiation
