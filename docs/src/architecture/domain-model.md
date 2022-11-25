@@ -23,9 +23,10 @@ Here _state_ refers to e.g. **Device Management** details as _installed software
          * a **sample** has _one_ timestamp
        * a _sequence_ of **samples** is a set of **samples** over a period of time;
          e.g. _voltage_ and _current_ captured in a fixed interval
-     * a measurement optionally holds individual _units_ for the values of the **samples**
+     * a measurement optionally holds individual _units_ for the values of the **samples**<br/>
+       🚫 _Support for "units" not yet implemented_ 🚫
      * a measurement relates to a source, i.e. a device or a process
-  * **Setpoint**, is a single value or set of values
+  * **Setpoint**, is a single value or set of values &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;🚫 _Concept of "setpoint" not yet implemented_ 🚫
     * the values are process variables, used by the **Domain Application**[^1];<br/>
       e.g. the _lower limit_ and the _upper limit_ of a climate control process
     * the values are visible in the cloud, similar to measurements
@@ -64,7 +65,7 @@ That includes:
       * the **domain application**[^1]
       * parts from **OS / Libs / Runtime**[^1], or the whole thing as one
       * **thin-edge** itself
-  * **Firmware Management**:
+  * **Firmware Management**:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;🚫 _Concept of "firmware management" not yet implemented_ 🚫
     * allows to update the _OS base-image_ of the device as one (e.g. the Linux distribution)
     * a firmware update might dictate a new software list and new configurations
       * i.e. _software modules_ previously installed with **Software Management** might be gone after a firmware update;
@@ -134,6 +135,8 @@ The figure below illustrates the concept of **plugins** and **plugin adapters**.
 
 ### Plugin Adapter
 
+🚫 _Concept of "plugin adapter" not yet implemented_ 🚫
+
 A **plugin adapter** is the counterpart of a **plugin**, that takes the responsibility to access the **external child-device's** or container's _resources_ and _services_.
   * a **plugin adapter** can serve one or more **plugins**
   * for access to an **external child-device**, the **plugin adapter** can be installed and executed on that **external child-device**, or on the **main-device**
@@ -154,6 +157,8 @@ A **plugin** defines and implements a specific **contract** for all interactions
     * a **plugin** and a **plugin adapter** using the same _plugin-identifier_ can assume to implement the same **contract**, and to be compatible with each other
 
 ## Inventory
+
+🚫 _Concept of "inventory" not yet implemented_ 🚫
 
 **thin-edge** holds and manages an **inventory** on the **main-device**, that stores and provides information about the **main-device** and known **child-devices**
   * information stored per **device** are
