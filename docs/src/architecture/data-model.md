@@ -51,10 +51,10 @@ For each kind of telemtry data the `telemetry_descriptor` holds an individual `s
 <!-- using below 'javascript' syntax-highlighter instead of 'json', since with JSON comments look really terrible -->
 ```javascript
    "telemetry_descriptor": {
-      "measurements": { /* ... specific struct for measurements ...   */ },
-      "setpoints":    { /* ... specific struct for setpoints ...      */ },
-      "events":       { /* ... specific struct for events ...         */ },
-      "alarms":       { /* ... specific struct for alarms ...         */ },
+      "measurements": [ /* ... specific structs for measurements ...   */ ],
+      "setpoints":    [ /* ... specific structs for setpoints ...      */ ],
+      "events":       [ /* ... specific structs for events ...         */ ],
+      "alarms":       [ /* ... specific structs for alarms ...         */ ],
    }
 ```
 
@@ -79,7 +79,8 @@ Next sections describe those structures.
   * Where
     * `type_name`, is a reference string, unique in scope of the given device object
     * `num-values`, number of values the measurement's **samples** carry
-    * `units`, optional, list of units strings per values of the measurement's **samples**
+    * `units`, optional, list of units strings per values of the measurement's **samples**;
+      that list is an ordered list of `units`, where the order must match the order of each **sample's** _value list_
     * TODO: field that describes values missing (that what is as comment in example above)
     * TODO: add a brief introduction about **samples**
 
