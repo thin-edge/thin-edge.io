@@ -8,7 +8,8 @@ The Apama thin-edge support package must be installed before you can install Apa
 The recommended way of installing Apama support on Debian based distributions is with the apt package manager.
 Further details about this can be found in the thin-edge.io documentation at [Manage the software on your devices from Cumulocity cloud](https://thin-edge.github.io/thin-edge.io/html/tutorials/software-management.html).
 
-#### Set up the repository from which the packages will be installed
+#### Set up the Debian repository from which the Apama packages will be installed
+
 1. In the Cumulocity IoT tenant, open the **Device Management** app, go to the **Management** menu option and select the **Software repository**.
 2. Click **Add software** at the right of the top menu bar. 
 3. In the **ADD SOFTWARE** dialog enter the following details:
