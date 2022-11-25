@@ -473,6 +473,37 @@ Even if details are missing, this gives us a sketch of the pieces making an acto
   * This is a place to adapt sent messages to the type actually expected by the receiver.
   * They can also act as facades that build and send messages on regular method invocations.
 
+## Detailed Proposal
+
+Key design ideas:
+
+* All the events, requests and responses that affect the behaviour of an actor (including timeouts and cancellations)
+  are materialized by messages collected in a single mailbox, the actor mailbox.
+  * This mailbox abstracts message gathering and prioritization over independent input channels,
+    and the actor processes messages one after the other.
+  * A typical mailbox encapsulates two channels:
+    one for regular messages, the other one for high-priority messages as cancellations.
+  * An actor implementation can provide a specific mailbox implementation,
+    notably to await the response for a request sent to a peer.
+  * For observability purposes, logging can be turned on/off on a mailbox
+    to trace all the messages just before processing.
+  * For testing purposes, the mailbox of an actor (even if specialized) can be built from a single channel
+    simulating a delivery order of events, possibly interleaved with timeouts and other runtime errors.
+* All the events, requests and responses sent by an actor
+  are materialized by messages going through a single handler, the actor peers handler.
+  * This peers handler abstracts message dispatching of a set of independent out channels.
+  * An actor implementation can provide a specific peers handler implementation,
+    notably to abstract away the message passing interface in favor of regular method calls.
+  * For observability purposes, logging can be turned on/off on a peer handler
+    to trace all the messages just sent.
+  * For testing purposes, the peer handler of an actor (even if specialized) can be built onto a single channel
+    gathering all the output messages in their delivery.
+* The runtime itself is manipulated via messages as any actor.
+  Spawning a new task or a new actor instance
+  is done by sending a message to the runtime.
+  When a shutdown is triggered, this request is broadcast by the runtime
+  to all the running actors using a shutdown message.
+
 ### Messages
 
 Messages must flow freely between actors with no constraints on ownership and thread.
