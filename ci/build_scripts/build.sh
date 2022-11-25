@@ -25,6 +25,7 @@ Args:
 
 Flags:
     --use-cross     Force to use cross to build the packages
+    --install-gcc   Install latest available gcc packages (for your operating system)
 
 Examples:
     $0
@@ -39,12 +40,16 @@ Examples:
     $0 armv7-unknown-linux-gnueabihf
     # Build for armv7 (armhf) linux (gnu lib)
 
+    $0 armv7-unknown-linux-gnueabihf --install-gcc
+    # Build for armv7 (armhf) linux (gnu lib) and install gcc automatically
+
     $0 --use-cross
     # Force to use cross when building for the current architecture
 EOF
 }
 
 ARCH=
+INSTALL_GCC=0
 TARGET=()
 
 REST_ARGS=()
@@ -53,6 +58,10 @@ do
     case "$1" in
         -c|--use-cross)
             USE_CROSS=1
+            ;;
+
+        --install-gcc)
+            INSTALL_GCC=1
             ;;
 
         -h|--help)
@@ -98,35 +107,37 @@ if [ -n "$ARCH" ]; then
     TARGET+=("--target=$ARCH")
 fi
 
-# Install libc/libgcc dependencies for cross compiling and building the deb package
-case "$ARCH" in
-    # e.g. armv5
-    arm-unknown-linux-gnueabi)
-        sudo apt-get -y update
-        sudo apt-get -y install gcc-arm-linux-gnueabi
-        ;;
+# Optionally install libc/libgcc dependencies for cross compiling and building the deb package
+if [ "$INSTALL_GCC" == "1" ]; then
+    case "$ARCH" in
+        # e.g. armv5
+        arm-unknown-linux-gnueabi)
+            sudo apt-get -y update
+            sudo apt-get -y install gcc-arm-linux-gnueabi
+            ;;
 
-    # e.g. armv6 (Raspberry Pi Zero)
-    arm-unknown-linux-gnueabihf)
-        sudo apt-get -y update
-        sudo apt-get -y install -qq gcc-arm-linux-gnueabihf libc6-armhf-cross libc6-dev-armhf-cross
-        ;;
+        # e.g. armv6 (Raspberry Pi Zero)
+        arm-unknown-linux-gnueabihf)
+            sudo apt-get -y update
+            sudo apt-get -y install -qq gcc-arm-linux-gnueabihf libc6-armhf-cross libc6-dev-armhf-cross
+            ;;
 
-    armv7-unknown-linux-gnueabihf)
-        sudo apt-get -y update
-        sudo apt-get -y install gcc-arm-linux-gnueabihf
-        ;;
+        armv7-unknown-linux-gnueabihf)
+            sudo apt-get -y update
+            sudo apt-get -y install gcc-arm-linux-gnueabihf
+            ;;
 
-    aarch64-unknown-linux-gnu)
-        sudo apt-get -y update
-        sudo apt-get -y install gcc-aarch64-linux-gnu
-        ;;
+        aarch64-unknown-linux-gnu)
+            sudo apt-get -y update
+            sudo apt-get -y install gcc-aarch64-linux-gnu
+            ;;
 
-    x86_64-unknown-linux-*)
-        sudo apt-get -y update
-        sudo apt-get -y install gcc-x86-64-linux-gnu
-        ;;
-esac
+        x86_64-unknown-linux-*)
+            sudo apt-get -y update
+            sudo apt-get -y install gcc-x86-64-linux-gnu
+            ;;
+    esac
+fi
 
 
 # Load the release package list as $RELEASE_PACKAGES and $TEST_PACKAGES
