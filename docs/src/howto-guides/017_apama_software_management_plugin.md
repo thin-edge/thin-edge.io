@@ -17,7 +17,7 @@ Further details about this can be found in the thin-edge.io documentation at [Ma
 - **Device Filter Type**: (leave empty)
 - **Software Type**: apt
 - **Version**: 2022::apt
-- **SOFTWARE FILE**: check the Provide a file path option and enter the URL:	https://downloads.apamacommunity.com/debian/apama-repo_2022_all.deb
+- **SOFTWARE FILE**: check the *Provide a file path* option and enter the URL:	https://downloads.apamacommunity.com/debian/apama-repo_2022_all.deb
 
 4. Click the **Add Software** button.
 5. Now select the **Devices** menu option and then select **All devices**.
