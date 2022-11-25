@@ -1,4 +1,4 @@
-# Enable configuration management on child devices
+# Configuration management for child devices
 
 Configuration management can be enabled for child devices using the same `c8y-configuration-plugin`,
 used for configuration management on thin-edge devices.
@@ -43,7 +43,7 @@ The following sections explain the child device agent responsibilities in detail
 The supported configuration list should be sent to thin-edge during the startup/bootstrap phase of the child device agent.
 This bootstrapping is a 3 step process:
 
-1. Prepare a `c8y-configuration-plugin.toml` file with the supported configuration list
+1. Prepare a `c8y-configuration-plugin.toml` file on the child device with its supported configuration list
 1. Upload this file to thin-edge via HTTP
 1. Notify thin-edge about the upload via MQTT
 
@@ -60,13 +60,22 @@ files = [
 * `path` is the full path to the configuration file on the child device file system.
 * `type` is a unique alias for each file entry which will be used to represent that file in Cumulocity UI
 
-The child device agent needs to upload this file to thin-edge with an HTTP PUT request
-to the URL: `http://{tedge-ip}:8000/tedge/file-transfer/{child-id}/c8y-configuration-plugin`
+The child device agent needs to upload this file to thin-edge with an HTTP PUT request to the URL:
+`http://{tedge-ip}:8000/tedge/file-transfer/{child-id}/c8y-configuration-plugin`
 
-* `{tedge-ip}` is the IP of the thin-edge device which is configured as 
-`mqtt.external.bind_address` or `mqtt.bind_address` or `127.0.0.1` if neither is configured.
-* `{child-id}` is the child-device-id
+* {tedge-ip} is the IP of the thin-edge device which is configured as mqtt.external.bind_address or mqtt.bind_address or 127.0.0.1 if neither is configured.
+* {child-id} is the child-device-id
 
+Example:
+
+```console
+curl -X PUT http://192.168.1.120:8000/tedge/file-transfer/child1/c8y-configuration-plugin \
+--data-binary @- << EOF
+files = [
+     { path = '/home/pi/config1', type = 'config1' },
+]
+EOF 
+```
 Once the upload is complete, the agent should notify thin-edge about the upload by sending the following MQTT message:
 
 **Topic:**
@@ -76,10 +85,16 @@ Once the upload is complete, the agent should notify thin-edge about the upload 
 **Payload**:
 
 ```json
-{ "type": "c8y-configuration-plugin”, "path": ”/child/local/fs/path” }
+{ "type": "c8y-configuration-plugin", "path": "/child/local/fs/path" }
 ```
 
-# Handle config snapshot requests from thin-edge
+Example:
+
+```console
+mosquitto_pub -h 192.168.1.100 -t "tedge/child1/commands/res/config_snapshot" -m '{"status": null,  "path": "", "type":"c8y-configuration-plugin", "reason": null}'
+```
+
+## Handle config snapshot request from thin-edge
 
 Handling config snapshot requests from thin-edge is a 4-step process:
 
@@ -89,6 +104,8 @@ Handling config snapshot requests from thin-edge is a 4-step process:
 1. Send a “successful” operation status update via MQTT
 
 These steps are explained in detail below:
+
+**1. Subscribe to, and receive config snapshot requests via MQTT**
 
 The child device agent must subscribe to the `tedge/{child-d}/commands/req/config_snapshot` MQTT topic
 to receive the config snapshot requests from thin-edge.
@@ -104,6 +121,8 @@ These requests arrive in the following JSON format:
 
 The `type` and `path` fields are the same values that the child device sent to thin-edge in its `c8y-configuration-plugin.toml` file.
 The `url` value is what the child device agent must use to upload the requested config file.
+
+**2. Send an “executing” operation status update to acknowledge the receipt of the request via MQTT**
 
 On receipt of the request, the agent must send an "executing" MQTT status message as follows:
 
@@ -121,8 +140,24 @@ On receipt of the request, the agent must send an "executing" MQTT status messag
 }
 ```
 
-After sending this status message, the agent must upload the requested configuration file content to
-the `url` received in the request with an HTTP PUT request.
+Example:
+
+```console
+mosquitto_pub -h 192.168.1.120 -t "tedge/child1/commands/res/config_snapshot" -m '{"status": "executing", "path": "/home/pi/config1", "type": "config1"}'
+```
+
+
+**3. Upload the requested config file to the URL received in the request via HTTP**
+
+After sending this status message, the agent must upload the requested configuration file content to the url received in the request with an HTTP PUT request.
+
+Example:
+
+```console
+curl -X PUT --data-binary @/home/pi/config1 http://192.168.1.120:8000/tedge/file-transfer/child1/config_snapshot/config1'
+```
+
+**4.Send a “successful” operation status update via MQTT**
 
 Once the upload is complete, send a "successful" MQTT status message as follows:
 
@@ -138,6 +173,12 @@ Once the upload is complete, send a "successful" MQTT status message as follows:
     "type": "{config-type}",
     "path": "/child/local/fs/path" 
 }
+```
+
+Example:
+
+```console
+mosquitto_pub -h 192.168.1.120 -t "tedge/child1/commands/res/config_snapshot" -m '{"status": "successful", "path": "/home/pi/config1", "type": "config1"}'
 ```
 
 If there are any failures while reading or uploading the requested config file,
@@ -161,6 +202,10 @@ Handling config update requests from thin-edge is a 5-step process:
 1. Apply the config file update on the child device
 1. Send a “successful” operation status update via MQTT
 
+These steps are explained in detail below:
+
+**1. Subscribe to, and receive config update requests via MQTT**
+
 The child device agent must subscribe to the `tedge/{child-d}/commands/req/config_update` MQTT topic
 to receive the config update requests from thin-edge.
 These requests arrive in the following JSON format:
@@ -174,6 +219,8 @@ These requests arrive in the following JSON format:
 ```
 
 The child device agent must download the config file update for the given `type` from thin-edge using the `url`.
+
+**2. Send an “executing” operation status update to acknowledge the receipt of the request via MQTT**
 
 On receipt of the request, the agent must send an "executing" MQTT status message as follows:
 
@@ -191,9 +238,29 @@ On receipt of the request, the agent must send an "executing" MQTT status messag
 }
 ```
 
+Example:
+
+```console
+mosquitto_pub -h 192.168.1.120 -t "tedge/child1/commands/res/config_update" -m '{"status": "executing", "path": "/home/pi/config2", "type": "config2"}'
+```
+
+**3.Download the config file update from the URL received in the request via HTTP**
+
 After sending this status message, the agent must download the configuration file update
 from the `url` received in the request with an HTTP GET request.
 The agent can then apply the downloaded configuration file update on the device.
+
+Example:
+
+```console
+curl http://192.168.1.120:8000/tedge/file-transfer/child1/config_update/config2 --output config2
+```
+
+**4. Apply the config file update on the child device**
+
+The agent can then apply the downloaded configuration file update on the device.
+
+**5. Send a “successful” operation status update via MQTT**
 
 Once the update is applied, send a "successful" MQTT status message as follows:
 
@@ -211,6 +278,12 @@ Once the update is applied, send a "successful" MQTT status message as follows:
 }
 ```
 
+Example:
+
+```console
+mosquitto_pub -h 192.168.1.120 -t "tedge/child1/commands/res/config_update" -m '{"status": "successful", "path": "/home/pi/config2", "type": "config2"}'
+```
+
 If there are any failures while downloading and applying the update,
 a "failed" status update must be sent instead, to the same topic as follows:
 
@@ -222,8 +295,13 @@ a "failed" status update must be sent instead, to the same topic as follows:
 }
 ```
 
+Example:
+
+```console
+mosquitto_pub -h 192.168.1.120 -t "tedge/child1/commands/res/config_update" -m '{"status": "failed", "path": "/home/pi/config2", "type": "config2"}'
+```
+
 ## References
 
 * Configuration Management [documentation](./025_config_management_plugin.md)
 * Reference implementation of a [child device agent](https://github.com/thin-edge/thin-edge.io_examples/tree/main/child-device-agent) written in Python to demonstrate the contract described in this document.
-
