@@ -274,162 +274,206 @@ TODO
 
 ## Inventory API
 
-The inventory is reflected on the MQTT bus under the topic `tedge/inventory`.
+TODO: That section is a rough draft version of the inventory API documentation.
+The concept need to be detailed and explanation need to be improved significantly.
 
-* Each device object has it own topic: `/tedge/inventory/<device id>`
-* The `device id` is the `childid` of the **child-device** object, or `main` for the **thin-edge device** object.
-* The payload contains all fields of the device object in JSON format.
-* Example:
-   * topic: `/tedge/inventory/main`
-   * payload:
-```javascript
-     {
-        "name": "thin-edge device",
-        "type": "thin-edge.io"   
-     }
+The **inventory** is available on the MQTT bus under the topic `tedge/inventory`.
+* Each **inventorie's** _device object_ has it own topic: `/tedge/inventory/<device_id>`
+  * The `device_id` is the _child-id_ of the **child-device** object, or `main` for the **main-device** object.
+* All **telemetry data** descriptions are under the **device's** topic, followed by `telemetry_descriptor/<kind of telemetry data>/`m and the **telemetry** items `type_name`:
+  * measurements:<br/>
+    `tedge/inventory/<device_id>/telemetry_descriptor/measurements/<type_name>`<br/>
+    Example for a measurement with _type_name_ "temperature":<br/>
+    `tedge/inventory/main/telemetry_descriptor/measurements/temperature`
+  * setpoints:<br/>
+    `tedge/inventory/<device_id>/telemetry_descriptor/setpoint/<type_name>`
+  * events:<br/>
+    `tedge/inventory/<device_id>/telemetry_descriptor/event/<type_name>`
+  * alarms:<br/>
+    `tedge/inventory/<device_id>/telemetry_descriptor/alarm/<type_name>`
+* All **plugin** descriptions are under the **device's** topic, followed by `/plugin_descriptor/` and the plugin's `plugin_identifier`:
+  * `tedge/inventory/<device_id>/plugin_descriptor/<plugin_identifier>`<br/>
+    Example for **Configuration Management**:<br/>
+    `tedge/inventory/main/plugin_descriptor/tedeg_config`
+* All messages on `tedge/inventory` and below are published as **retain messages**, since inventory data shall be kept at that place
+  and shall immediately supplied to a subscriber at any time.
+
+## Example Use-Cases
+
+The examples in that section demonstrate common use-cases the **inventory** is used for.
+
+All those examples make use of the `tedge` CLI MQTT client.
+That way those examples are easily reproducible, and can be even tried and modified on the command line.
+
+### Use-Case 1: Announce **measurements** to the **inventory**
+
+**Description:**
+Processes running on the **main-device** and **child-devices** that produce measurement values, can once announce those kinds of measurements to the **inventory**. That way other processes and the cloud-mapper can be aware of all available measurements.
+
+**Examples:**
+```bash
+# announce measurement "machinery_temperature" for main-device
+tedge mqtt pub -r \
+  'tedge/inventory/main/telemetry_descriptor/measurements/machinery_temperature' \
+  '
+    {
+      "num_values": 1,
+      "units": ["celsius"]
+    }
+  '
 ```
-* The next level of the topic structure containes the **capability** objects per device:<br/>
-  `/tedge/inventory/<device id>/<capability type>`
-* Example:
-   * topic: `/tedge/inventory/main/tedge_config`
-   * payload:
-```javascript
-     {
-        "files": [
-           { "path": "/etc/tedge/tedge.toml", "type": "tedge.toml" },
-           { "path": "/etc/tedge/mosquitto-conf/c8y-bridge.conf" },
-           { "path": "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf" },
-           { "path": "/etc/mosquitto/mosquitto.conf", "type": "mosquitto", "user": "mosquitto", "group": "mosquitto", "mode": "0o644" }
-        ]
-     }
+```bash
+# announce measurement "power_meter" for main-device
+tedge mqtt pub -r \
+  'tedge/inventory/main/telemetry_descriptor/measurements/power_meter' \
+  '
+    {
+      "num_values": 6,
+      /* ordered list of voltage and current of phase 1, 2, 3 */
+      "units": ["V", "V", "V", "A", "A", "A"]
+    }
+  '
 ```
-* All messages to `tedge/inventory` and below are published as retain messages.
-  So one who is interested in any object of the inventory can just subscribe to the object's topic and gets directly the object, if it is available in the inventory.
-
-
-## Registration of a new device
-
-The sequence diagram below illustrates the data/message flow and all components involved, when a new external child-device registers it-self to thin-edge.
-
-```mermaid
-sequenceDiagram
-    participant external child device
-    participant tedge agent
-    participant inventory on MQTT
-    participant C8Y cfg plugin
-    participant C8Y log plugin
-    participant mapper
-    participant C8Y cloud
-        external child device->>tedge agent: (1) register(childid, cfg_capability, log_capability)
-        tedge agent->>inventory on MQTT: (2) create child-device object<br/>and capability objects
-        tedge agent-->>external child device: (3) result    
-
-        inventory on MQTT-->>mapper: (4) notification:<br/>new child-device object(childid)
-        mapper->>C8Y cloud: (5) create child-device twin(childid)
-
-        inventory on MQTT-->>C8Y cfg plugin: (6) notification:new device<br/>object's capability(childid, cfg_capability)
-        C8Y cfg plugin->>mapper: (7) declare operations(<br/>childid, c8y_upload_cfg, c8y_download_cfg)
-        mapper->>C8Y cloud: (8) declare supported operations(<br/>childid, c8y_upload_cfg, c8y_download_cfg, ...)
-        C8Y cfg plugin->>C8Y cloud: (9) declare cfg types(childid, cfg_capability.types)
-        
-        inventory on MQTT-->>C8Y log plugin: (10) notification:new device<br/>object's capability(childid, log_capability)
-        Note right of C8Y log plugin: From here sequence<br>is similar to<br>C8Y cfg plugin        
+```bash
+# announce measurement "machinery_temperature" for child-device "child1"
+tedge mqtt pub -r \
+  'tedge/inventory/child1/telemetry_descriptor/measurements/machinery_temperature' \
+  '
+    {
+      "num_values": 1,
+      "units": ["celsius"]
+    }
+  '
 ```
 
-* Step 1: the external child-device registers to the tedge_agent
-     * Topic:   `tedge/<childid>/commands/req/inventory/register-device`<br/>
-       Payload: **child-device** object with **capability** objects
-     * Example: 
-     
-       Topic: `tedge/child1/commands/req/inventory/register-device`<br/>
-       Payload: 
-       ```javascript
-       {
-          "name": "child-device 1",
-          "type": "thin-edge.io-child",
-          "capabilities": {
-              "tedge_config": {
-                  "files": [ "foo.conf", "bar.conf" ]
-              },
-              "tedge_logging": {
-                  "files": [ "foo.log", "bar.log" ]
-              }
-          }
-       }
-       ```
- 
- * Step 2: the tedge_agent creates the **child-device** object and **capability** objects in the inventory on the MQTT bus
-     * Creating **child-device** object
-       * Topic: `tedge/inventory/<childid>`
-       * Payload: `<child-device object>`
-     * Example:  
-       * Topic: `tedge/inventory/child1`
-       * Payload: 
-       ```javascript
-       {
-          "name": "child-device 1",
-          "type": "thin-edge.io-child"
-       }
-       ```
-     * Creating **capability** objects
-       * Topic: `tedge/inventory/<childid>/<capability type>`
-       * Payload: `<capability object>`
-     * Example 1:  
-       * Topic: `tedge/inventory/child1/tedge_config`
-       * Payload: 
-       ```javascript
-       {
-          "files": [ "foo.conf", "bar.conf" ]
-       }
-       ```
-     * Example 2:  
-       * Topic: `tedge/inventory/child1/tedge_logging`
-       * Payload: 
-       ```javascript
-       {
-          "files": [ "foo.log", "bar.log" ]
-       }
-       ```
- 
- * Step 3: the tedge_agent reports to the external child-device the result of creating inventory-objects
-     * Topic:   `tedge/<childid>/commands/res/inventory/register-device`<br/>
-       Payload: `{ "status": <"failed" or "success">, "reason": <human readable fail reason> }`
 
-     * If status is "success", then field "reason" does not appear.
+### Use-Case 2: Discover **measurements** in the **inventory**
 
-     * Example:
+**Description:**
+Processes running on the **main-device** and **child-devices** that intend to consume specific measurements, can once discover those in the **inventory**. That way the **domain application**, or any 3rd party application (e.g. APAMA analytics) can use the information from **inventory** to learn which kinds of **measurements** are available.
 
-       Topic: `tedge/child1/commands/res/inventory/register-device`<br/>
-       Payload:
-       ```javascript
-       {
-          "status": "success"
-       }
-       ```
-       or
-
-       Payload:
-       ```javascript
-       {
-          "status": "failed",
-          "reason": "invalid message format"
-       }
-       ```
-
- * Step 4: the mapper has subscribed to `tedge/inventory/+`, and receives the new **child-device** object
-
- * Step 5: the mapper creates the child-device twin in the cloud
-
- * Step 6: the CY8 cfg plugin has subscribed to `tedge/inventory/+/tedge_config` and receives the new **capability** object for type `tedge_config`
-
- * Step 7: the CY8 cfg plugin requests the mapper to declare _supported operations_ `c8y_upload_cfg`, `c8y_download_cfg` to the child-device twin
-
- * Step 8: the mapper declares the requested _supported operations_ to the child-device twin in the cloud
-
- * Step 9: the CY8 cfg plugin declares those configuration types to the cloud child-device twin, that were reported in the `register()` message by the external child-device
-
- * Step 10: the C8Y log plugin has subscribed to `tedge/inventory/+/tedge_logging` and receives the new **capability** object for type `tedge_logging`
-
- * Next steps: From here the sequence for the C8Y log plugin is similar to the C8Y cfg plugin's flow.
+NOTE: Examples below assume announcements of _use-case 1_ above had happened before.
 
 
+**Example 1:**
+```bash
+# discovery all measurements "machinery_temperature"  provided by any device
+tedge mqtt sub \
+  'tedge/inventory/+/telemetry_descriptor/measurements/machinery_temperature'
+```
+```bash
+# Output:
+[tedge/inventory/main/telemetry_descriptor/measurements/machinery_temperature]
+    {
+      "num_values": 1,
+      "units": ["celsius"]
+    }
+
+[tedge/inventory/child1/telemetry_descriptor/measurements/machinery_temperature]
+    {
+      "num_values": 1,
+      "units": ["celsius"]
+    }
+```
+
+**Example 2:**
+```bash
+# discovery all measurements the main-device provides
+tedge mqtt sub \
+  'tedge/inventory/main/telemetry_descriptor/measurements/#'
+```
+```bash
+# Output:
+[tedge/inventory/main/telemetry_descriptor/measurements/power_meter]
+    {
+      "num_values": 6,
+      "units": ["V", "V", "V", "A", "A", "A"] /* voltage and current of phase 1, 2, 3 */
+    }
+
+[tedge/inventory/main/telemetry_descriptor/measurements/machinery_temperature]
+    {
+      "num_values": 1,
+      "units": ["celsius"]
+    }
+```
+
+### Use-Case 3: Announce **plugins** a device intends to use
+
+**Description:**
+The **main-device** and **child-devices** that intend to make use of **plugins**, can once announce their intend to the **inventory**. That way all **plugins** can be aware of all devices they need to serve. In addition those announcements contain all information the individual **plugin** needs to operate per **device** (e.g. a list of configuration-files for the "c8y_configuration_plugin").
+
+**Examples  :**
+```bash
+# announce tedge_config for child-device "child1"
+tedge mqtt pub -r \
+  'tedge/inventory/child1/plugin_descriptor/tedge_config' \
+  '
+    {
+      "files": [
+         { "path": "/etc/tedge/tedge.toml", "type": "tedge.toml" },
+         { "path": "/etc/tedge/mosquitto-conf/c8y-bridge.conf" },
+         { "path": "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf" },
+         { "path": "/etc/mosquitto/mosquitto.conf", type = "mosquitto", user = "mosquitto", group = "mosquitto", mode = 0o644 }
+       ]
+    }
+  '
+```
+```bash
+# announce tedge_config for child-device child2
+tedge mqtt pub -r \
+  'tedge/inventory/child2/plugin_descriptor/tedge_config' \
+  '
+    {
+      "files": [
+         { "path": "/etc/foo/foo.conf", "type": "foo.conf" },
+         { "path": "/etc/foo/bar.conf", "type": "bar.conf" }
+       ]
+    }
+  '
+```
+```bash
+# announce tedge_log for child-device child2
+tedge mqtt pub -r \
+  'tedge/inventory/child2/plugin_descriptor/tedge_log' \
+  '
+    {
+      /* TODO: tedge_log fields to be defined */
+    }
+  '
+```
+
+### Use-Case 4: Discover **devices** a **plugin** needs to serve
+
+**Description:**
+A **plugin** running on the **main-device** can discover the inventory for **devices** that intend to make use of the plugin.
+That way the **plugin** can at the same time identify all **devices** it need to serve, as well as fetch all information it needs to operate per **device** (e.g. a list of configuration-files for the "c8y_configuration_plugin").
+
+NOTE: Examples below assume announcements of _use-case 3_ above had happened before.
+
+**Example:**
+```bash
+# the plugin "c8y_configuration_plugin" discovers all devices intend to make use of it,
+# and receives the list of configuration files per device at the same time
+tedge mqtt sub \
+  'tedge/inventory/+/plugin_descriptor/tedge_config'
+```
+```bash
+# Output:
+[tedge/inventory/child1/plugin_descriptor/tedge_config]
+    {
+      "files": [
+         { "path": "/etc/tedge/tedge.toml", "type": "tedge.toml" },
+         { "path": "/etc/tedge/mosquitto-conf/c8y-bridge.conf" },
+         { "path": "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf" },
+         { "path": "/etc/mosquitto/mosquitto.conf", type = "mosquitto", user = "mosquitto", group = "mosquitto", mode = 0o644 }
+       ]
+    }
+
+[tedge/inventory/child2/plugin_descriptor/tedge_config]
+    {
+      "files": [
+         { "path": "/etc/foo/foo.conf", "type": "foo.conf" },
+         { "path": "/etc/foo/bar.conf", "type": "bar.conf" }
+       ]
+    }
+```
