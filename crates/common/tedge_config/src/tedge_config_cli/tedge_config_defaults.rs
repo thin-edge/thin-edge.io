@@ -1,6 +1,5 @@
-use crate::IpAddress;
+use crate::tedge_config_cli::models::{FilePath, IpAddress, TemplatesSet};
 use crate::TEdgeConfigLocation;
-use crate::{models::FilePath, TemplatesSet};
 use crate::{Flag, Port};
 use std::path::Path;
 
