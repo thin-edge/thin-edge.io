@@ -504,6 +504,8 @@ Key design ideas:
   When a shutdown is triggered, this request is broadcast by the runtime
   to all the running actors using a shutdown message.
 
+![an actor](diagrams/actor.svg)
+
 ### Messages
 
 Messages must flow freely between actors with no constraints on ownership and thread.
