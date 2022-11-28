@@ -11,7 +11,7 @@ sudo systemctl stop apama
 source ./ci/package_list.sh
 
 # Fix any broken packages caused by missing dependencies
-sudo apt-get install -f
+sudo apt-get install -f -y
 
 # Purge packages
 sudo apt --assume-yes purge "${RELEASE_PACKAGES[@]}"
