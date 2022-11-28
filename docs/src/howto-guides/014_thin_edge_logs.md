@@ -72,3 +72,37 @@ Collectd logs all the messages at `/var/log/syslog`.
 So, the collectd specific logs can be accessed using the `journalctl` as below
 
 `journalctl -u collectd.service`
+
+## Configuring log levels in `thin-edge.io`
+
+The log levels can be configured for `thin-edge.io` services using either by command line or setting the required log
+level in `system.toml`
+
+### Setting the log level through Cli
+
+The log level can be enabled for a `thin-edge.io` service as below
+
+For example for tedge_mapper:
+
+```shell
+
+sudo -u tedge -- tedge_mapper  --debug c8y
+
+```
+> Note: In a similar way it can be set for all the `thin-edge.io` services.
+  Only `debug` level can be set through cli. Also, it enables `trace` level.
+
+
+### Setting `log level` through `system.toml`
+The log levels can also be configured through the `system.toml` file.
+The supported log levels are `info, warn, error, trace, debug`.
+
+```shell
+[log]
+tedge_mapper = "trace"
+tedge_agent = "info"
+tedge_watchdog = "debug"
+c8y_log_plugin = "warn"
+c8y_configuration_plugin = "error"
+```
+> Note: The log level strings are case insensitive

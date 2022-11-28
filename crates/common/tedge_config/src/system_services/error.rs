@@ -31,4 +31,7 @@ pub enum SystemServiceError {
         cmd: String,
         path: String,
     },
+
+    #[error("Invalid log level: {name:?}, supported levels are info, warn, error and debug")]
+    InvalidLogLevel { name: String },
 }

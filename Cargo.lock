@@ -2912,6 +2912,7 @@ dependencies = [
  "assert_matches",
  "certificate",
  "serde",
+ "strum_macros",
  "tedge_test_utils",
  "tedge_utils",
  "tempfile",
@@ -2919,6 +2920,7 @@ dependencies = [
  "thiserror",
  "toml",
  "tracing",
+ "tracing-subscriber",
  "url",
 ]
 
@@ -2997,7 +2999,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "try-traits",
  "users",
  "whoami",

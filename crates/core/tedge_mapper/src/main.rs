@@ -6,6 +6,7 @@ use crate::{
 };
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
+use tedge_config::system_services::{get_log_level, set_log_level};
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_config::*;
 
@@ -76,15 +77,24 @@ impl fmt::Display for MapperName {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let mapper_opt = MapperOpt::parse();
-    tedge_utils::logging::initialise_tracing_subscriber(mapper_opt.debug);
 
     let component = lookup_component(&mapper_opt.name);
 
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(&mapper_opt.config_dir);
     let config = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone()).load()?;
-    // Run only one instance of a mapper
 
+    let log_level = if mapper_opt.debug {
+        tracing::Level::TRACE
+    } else {
+        get_log_level(
+            "tedge_mapper",
+            tedge_config_location.tedge_config_root_path.to_path_buf(),
+        )?
+    };
+    set_log_level(log_level);
+
+    // Run only one instance of a mapper
     let run_dir: PathBuf = config.query(RunPathSetting)?.into();
     let _flock = check_another_instance_is_not_running(&mapper_opt.name.to_string(), &run_dir)?;
 
