@@ -73,6 +73,15 @@ fn device_id_read_only_error() -> ConfigSettingError {
     }
 }
 
+fn http_bind_address_read_only_error() -> ConfigSettingError {
+    ConfigSettingError::ReadonlySetting {
+        message: concat!(
+            "The http address cannot be set directly. It is read from the mqtt bind address.\n",
+            "To set 'http.bind_address' to some <address>, you can `tedge config set mqtt.bind_address <address>`.",
+        ),
+    }
+}
+
 fn cert_error_into_config_error(key: &'static str, err: CertificateError) -> ConfigSettingError {
     match &err {
         CertificateError::IoError(io_err) => match io_err.kind() {
@@ -342,15 +351,13 @@ impl ConfigSettingAccessor<HttpBindAddressSetting> for TEdgeConfig {
     fn update(
         &mut self,
         _setting: HttpBindAddressSetting,
-        value: IpAddress,
+        _value: IpAddress,
     ) -> ConfigSettingResult<()> {
-        self.data.http.bind_address = Some(value);
-        Ok(())
+        Err(http_bind_address_read_only_error())
     }
 
     fn unset(&mut self, _setting: HttpBindAddressSetting) -> ConfigSettingResult<()> {
-        self.data.http.bind_address = None;
-        Ok(())
+        Err(http_bind_address_read_only_error())
     }
 }
 
