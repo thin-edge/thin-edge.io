@@ -45,7 +45,7 @@ Find more information about [managing the device software](https://cumulocity.co
    * to add a new software, enter a name for the software (and confirm it by clicking Create new in the resulting window),
      a description and its version.
    * to add a new version, select the software for which you want to add a new version from the dropdown list in the Software
-     field and enter a version of the package. The version is optional and can be left with a white space, meaning the latest version.
+     field and enter a version of the package. The version is optional and can be set to "latest" or to an empty space (' '), both meaning the latest version will be used.
    > Note: The version field format is `package_version::plugin_type_name`.The plugin type name that is provided here is used to pick
      the appropriate plugin among those installed in /etc/tedge/sm-plugins.
 
