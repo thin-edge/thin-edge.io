@@ -1,4 +1,4 @@
-use crate::{config_setting::*, models::*};
+use crate::tedge_config_cli::{config_setting::*, models::*};
 
 ///
 /// Identifier of the device within the fleet. It must be globally

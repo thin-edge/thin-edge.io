@@ -13,7 +13,7 @@ pub enum TEdgeConfigError {
     FromConfigSetting(#[from] crate::ConfigSettingError),
 
     #[error(transparent)]
-    FromInvalidConfigUrl(#[from] crate::models::InvalidConnectUrl),
+    FromInvalidConfigUrl(#[from] crate::tedge_config_cli::models::InvalidConnectUrl),
 
     #[error("Config file not found: {0}")]
     ConfigFileNotFound(std::path::PathBuf),
