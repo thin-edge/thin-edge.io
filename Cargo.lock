@@ -501,6 +501,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "c8y_configuration_poc"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "tedge_actors",
+ "tokio",
+]
+
+[[package]]
 name = "cache-padded"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
