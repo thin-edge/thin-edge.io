@@ -6,11 +6,15 @@ mod actors;
 mod channels;
 mod errors;
 mod messages;
+mod runtime;
+mod tasks;
 
 pub use actors::*;
 pub use channels::*;
 pub use errors::*;
 pub use messages::*;
+pub use runtime::*;
+pub use tasks::*;
 
 #[macro_use]
 mod macros;

@@ -9,6 +9,6 @@ edition = "2021"
 async-trait = "0.1"
 futures = { version = "0.3" }
 thiserror = "1.0"
+tokio = { version = "1.22", default_features = false, features = ["sync", "rt", "macros"] }
 
 [dev-dependencies]
-tokio = { version = "1.22", default_features = false, features = ["sync", "rt", "macros"] }

@@ -14,7 +14,7 @@ pub trait Actor: 'static + Sized + Send + Sync {
     type Output: Message;
 
     /// Type of the peers that actor is connected to
-    type Peers: From<Recipient<Self::Output>>;
+    type Peers: From<Recipient<Self::Output>> + Send + Sync;
 
     /// Run the actor
     ///
@@ -110,12 +110,15 @@ mod tests {
             .expect("the actor run to completion")
             .expect("the actor returned Ok");
 
-        assert_eq!(output_messages.collect().await, vec![
-            DoMsg::DoThis(DoThis("Do this".into())),
-            DoMsg::DoThis(DoThis("Do that and this".into())),
-            DoMsg::DoThat(DoThat("Do that and this".into())),
-            DoMsg::DoThat(DoThat("Do that".into())),
-        ])
+        assert_eq!(
+            output_messages.collect().await,
+            vec![
+                DoMsg::DoThis(DoThis("Do this".into())),
+                DoMsg::DoThis(DoThis("Do that and this".into())),
+                DoMsg::DoThat(DoThat("Do that and this".into())),
+                DoMsg::DoThat(DoThat("Do that".into())),
+            ]
+        )
     }
 
     pub struct ActorWithSpecificPeers;
