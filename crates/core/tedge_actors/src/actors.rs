@@ -13,6 +13,9 @@ pub trait Actor: 'static + Sized + Send + Sync {
     /// Type of output messages this actor produces
     type Output: Message;
 
+    /// Type of the mailbox used by this actor
+    type Mailbox: From<Mailbox<Self::Input>> + Send + Sync;
+
     /// Type of the peers that actor is connected to
     type Peers: From<Recipient<Self::Output>> + Send + Sync;
 
@@ -23,7 +26,7 @@ pub trait Actor: 'static + Sized + Send + Sync {
     /// and sending messages to peers.
     async fn run(
         self,
-        messages: Mailbox<Self::Input>,
+        messages: Self::Mailbox,
         peers: Self::Peers,
     ) -> Result<(), ChannelError>;
 }
@@ -41,6 +44,7 @@ mod tests {
     impl Actor for Echo {
         type Input = String;
         type Output = String;
+        type Mailbox = Mailbox<String>;
         type Peers = Recipient<String>;
 
         async fn run(
@@ -127,6 +131,7 @@ mod tests {
     impl Actor for ActorWithSpecificPeers {
         type Input = String;
         type Output = DoMsg;
+        type Mailbox = Mailbox<String>;
         type Peers = SpecificPeers;
 
         async fn run(

@@ -1,4 +1,4 @@
-use crate::{Actor, Mailbox, RuntimeError};
+use crate::{Actor, RuntimeError};
 use async_trait::async_trait;
 use std::fmt::Formatter;
 
@@ -18,12 +18,12 @@ impl std::fmt::Debug for Box<dyn Task> {
 /// A task that run an actor
 pub struct RunActor<A: Actor> {
     actor: A,
-    mailbox: Mailbox<A::Input>,
+    mailbox: A::Mailbox,
     peers: A::Peers,
 }
 
 impl<A: Actor> RunActor<A> {
-    pub fn new(actor: A, mailbox: Mailbox<A::Input>, peers: A::Peers) -> Self {
+    pub fn new(actor: A, mailbox: A::Mailbox, peers: A::Peers) -> Self {
         RunActor {
             actor,
             mailbox,
@@ -35,7 +35,7 @@ impl<A: Actor> RunActor<A> {
 #[async_trait]
 impl<A: Actor> Task for RunActor<A> {
     fn name(&self) -> &str {
-        // TODO: Assign an instance id to actors
+        // TODO: Assign an instance id to each actor and used it here
         //       eg: c8y-mapper or mqtt#12
         "actor"
     }

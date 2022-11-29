@@ -1,4 +1,4 @@
-use crate::{Actor, Mailbox, Recipient, RunActor, RuntimeError, Task};
+use crate::{Actor, Recipient, RunActor, RuntimeError, Task};
 use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
 use tokio::task::JoinHandle;
@@ -106,7 +106,7 @@ impl RuntimeHandle {
     pub async fn run<A: Actor>(
         &mut self,
         actor: A,
-        mailbox: Mailbox<A::Input>,
+        mailbox: A::Mailbox,
         peers: A::Peers,
     ) -> Result<(), RuntimeError> {
         self.spawn(RunActor::new(actor, mailbox, peers)).await
