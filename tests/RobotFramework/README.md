@@ -19,7 +19,7 @@
 #### 1.1.3. MacOS
 1. [Installation guide for OpenVPN Connect Client on macOS](https://openvpn.net/vpn-server-resources/installation-guide-for-openvpn-connect-client-on-macos/)
 
-### 1.2. Add OpenVPN Profile 
+### 1.2. Add OpenVPN Profile
 1. Request a Profile file (*.ovpn)
 2. Open the OpenVPN Connect app and click plus.
 3. Click **Browse** and locate the previously downloaded OpenVPN profile.
@@ -28,7 +28,7 @@
 
 ## 2. List of Devices available
 
-1. Raspberry Pi 4 - 192.168.1.4	(user: pass:) to be used only for executing 
+1. Raspberry Pi 4 - 192.168.1.4	(user: pass:) to be used only for executing
 2. Raspberry Pi 4 - 192.168.1.110 (user:pi pass:thinedge)
 2. Raspberry Pi 3 - 192.168.1.120 (user:pi pass:thinedge)
 3. Raspberry Pi 4 - 192.168.1.130 (user:pi pass:thinedge)
@@ -49,13 +49,13 @@ To run an robot file ssh to 192.168.1.4 and use the following command structure:
 ### 4.1. Task Automations
 ### **Installing specific SW Build**
 
-	File name: `build_install_rpi.robot`	
-	What is this task automation doing:
-	1. Defining the Device ID, structure is (ST'timestamp') (eg. ST01092022091654)
-	2. Checking the architecture in order to download the right SW
-	3. Setting the file name for download
-	4. Checking if thinedge is already installed on device 
-		4.1. if not the selected build version will be downloaded and installed in following order
+File name: `build_install_rpi.robot`
+What is this task automation doing:
+1. Defining the Device ID, structure is (ST'timestamp') (eg. ST01092022091654)
+2. Checking the architecture in order to download the right SW
+3. Setting the file name for download
+4. Checking if thinedge is already installed on device
+	1. if not the selected build version will be downloaded and installed in following order
 		1. Install Mosquitto
 		2. Install Libmosquitto1
 		3. Install Collectd-core
@@ -68,188 +68,199 @@ To run an robot file ssh to 192.168.1.4 and use the following command structure:
 		10. Install Tedge watchdog
 		11. Create self-signed certificate
 		12. Set c8y URL
-		13. Upload certificate 
+		13. Upload certificate
 		14. Connect to c8y
 
-		4.2. if yes than thin-edge.io will be uninstalled using the uninstallation script to purge it and than steps from 4.1 will take place
-	
-	Example command to run the task: 
-	robot -d \results --timestampoutputs --log health_tedge_mapper.html --report NONE --variable HOST:192.168.1.110 health_tedge_mapper.robot
+	2. if yes than thin-edge.io will be uninstalled using the uninstallation script to purge it and than steps from 4.1 will take place
+
+Example command to run the task:
+robot -d \results --timestampoutputs --log health_tedge_mapper.html --report NONE --variable HOST:192.168.1.110 health_tedge_mapper.robot
 
 ## 5. Needed installation if own device is used
 Following installation is needed in order to run the robot files on own device:
 
 1. Python with PiP
-	1. 	[https://www.python.org/downloads/](https://www.python.org/downloads/) 
+	1. 	[https://www.python.org/downloads/](https://www.python.org/downloads/)
 2. Robot Framework
 	3. `pip install robotframework`
 4. Browser Library
-	5. Install node.js 
-		6. `sudo su`
-		6. `curl -fsSL https://deb.nodesource.com/setup_17.x | bash -`
-		7. `sudo apt-get install -y nodejs`
-	6. Update pip `pip install -U pip` to ensure latest version is used
-	7. Install robotframework-browser from the commandline: `pip install robotframework-browser`
-	8. Install the node dependencies: run `rfbrowser init` in your shell
-		9. if rfbrowser is not found, try `python -m Browser.entry init` or `python3 -m Browser.entry init`
+	1. Install node.js
+		1. `sudo su`
+		2. `curl -fsSL https://deb.nodesource.com/setup_17.x | bash -`
+		3. `sudo apt-get install -y nodejs`
+	2. Update pip `pip install -U pip` to ensure latest version is used
+	3. Install robotframework-browser from the commandline: `pip install robotframework-browser`
+	4. Install the node dependencies: run `rfbrowser init` in your shell
+		1. if rfbrowser is not found, try `python -m Browser.entry init` or `python3 -m Browser.entry init`
 10. SSHLibrary
-	11. `pip install --upgrade robotframework-sshlibrary`
+	`pip install --upgrade robotframework-sshlibrary`
 12. CryptoLibrary
-	13. pip install --upgrade robotframework-crypto
+	`pip install --upgrade robotframework-crypto`
 14. MQTTLibrary
-	15. `pip install robotframework-mqttlibrary`
+	`pip install robotframework-mqttlibrary`
 16. Metrics
-	17. `pip install robotframework-metrics==3.3.3`
+	`pip install robotframework-metrics==3.3.3`
 
 ## 6. Command line options for test execution
 
+`-N, --name <name>`
+	Sets the name of the top-level test suite.
 
-`-N, --name <name>`Sets the name of the top-level test suite.
+`-D, --doc <document>`
+	Sets the documentation of the top-level test suite.
 
-`-D, --doc <document>`Sets the documentation of the top-level test suite.
+`-M, --metadata <name:value>`
+	Sets free metadata for the top level test suite.
 
-`-M, --metadata <name:value>` Sets free metadata for the top level test suite.
+`-G, --settag <tag>`
+	Sets the tag(s) to all executed test cases.
 
-`-G, --settag <tag>` Sets the tag(s) to all executed test cases.
+`-t, --test <name>`
+	Selects the test cases by name.
 
-`-t, --test <name>` Selects the test cases by name.
-
-`-s, --suite <name>`Selects the test suites by name.
+`-s, --suite <name>`
+	Selects the test suites by name.
 
 `-R, --rerunfailed <file>`
- 	Selects failed tests from an earlier output file to be re-executed.
- 	
+	Selects failed tests from an earlier output file to be re-executed.
+
 `--runfailed <file>`
- 	Deprecated. Use --rerunfailed instead.
- 	
+	Deprecated. Use --rerunfailed instead.
+
 `-i, --include <tag>`
- 	Selects the test cases by tag.
- 	
+	Selects the test cases by tag.
+
 `-e, --exclude <tag>`
- 	Selects the test cases by tag.
- 	
+	Selects the test cases by tag.
+
 `-c, --critical <tag>`
- 	Tests that have the given tag are considered critical.
- 	
+	Tests that have the given tag are considered critical.
+
 `-n, --noncritical <tag>`
- 	Tests that have the given tag are not critical.
- 	
+	Tests that have the given tag are not critical.
+
 `-v, --variable <name:value>`
- 	Sets individual variables.
- 	
+	Sets individual variables.
+
 `-V, --variablefile <path:args>`
- 	Sets variables using variable files.
- 	
+	Sets variables using variable files.
+
 `-d, --outputdir <dir>`
- 	Defines where to create output files.
- 	
+	Defines where to create output files.
+
 `-o, --output <file>`
- 	Sets the path to the generated output file.
- 	
+	Sets the path to the generated output file.
+
 `-l, --log <file>`
- 	Sets the path to the generated log file.
- 	
+	Sets the path to the generated log file.
+
 `-r, --report <file>`
- 	Sets the path to the generated report file.
- 	
+	Sets the path to the generated report file.
+
 `-x, --xunit <file>`
- 	Sets the path to the generated xUnit compatible result file.
- 	
+	Sets the path to the generated xUnit compatible result file.
+
 `--xunitfile <file>`
- 	Deprecated. Use --xunit instead.
- 	
+	Deprecated. Use --xunit instead.
+
 `--xunitskipnoncritical`
- 	Mark non-critical tests on xUnit compatible result file as skipped.
- 	
+	Mark non-critical tests on xUnit compatible result file as skipped.
+
 `-b, --debugfile <file>`
- 	A debug file that is written during execution.
- 	
+	A debug file that is written during execution.
+
 `-T, --timestampoutputs`
- 	Adds a timestamp to all output files.
- 	
-`--splitlog`	Split log file into smaller pieces that open in browser transparently.
+	Adds a timestamp to all output files.
+
+`--splitlog`
+	Split log file into smaller pieces that open in browser transparently.
 
 `--logtitle <title>`
- 	Sets a title for the generated test log.
- 	
+	Sets a title for the generated test log.
+
 `--reporttitle <title>`
- 	Sets a title for the generated test report.
- 	
+	Sets a title for the generated test report.
+
 `--reportbackground <colors>`
- 	Sets background colors of the generated report.
- 	
+	Sets background colors of the generated report.
+
 `-L, --loglevel <level>`
- 	Sets the threshold level for logging. Optionally the default visible log level can be given separated with a colon (:).
- 	
+	Sets the threshold level for logging. Optionally the default visible log level can be given separated with a colon (:).
+
 `--suitestatlevel <level>`
- 	Defines how many levels to show in the Statistics by Suite table in outputs.
- 	
+	Defines how many levels to show in the Statistics by Suite table in outputs.
+
 `--tagstatinclude <tag>`
- 	Includes only these tags in the Statistics by Tag table.
- 	
+	Includes only these tags in the Statistics by Tag table.
+
 `--tagstatexclude <tag>`
- 	Excludes these tags from the Statistics by Tag table.
- 	
+	Excludes these tags from the Statistics by Tag table.
+
 `--tagstatcombine <tags:title>`
- 	Creates combined statistics based on tags.
- 	
+	Creates combined statistics based on tags.
+
 `--tagdoc <pattern:doc>`
- 	Adds documentation to the specified tags.
- 	
+	Adds documentation to the specified tags.
+
 `--tagstatlink <pattern:link:title>`
- 	Adds external links to the Statistics by Tag table.
- 	
+	Adds external links to the Statistics by Tag table.
+
 `--removekeywords <all|passed|name:pattern|for|wuks>`
- 	Removes keyword data from the generated log file.
- 	
+	Removes keyword data from the generated log file.
+
 `--flattenkeywords <name:pattern>`
- 	Flattens keywords in the generated log file.
- 	
+	Flattens keywords in the generated log file.
+
 `--listener <name:args>`
- 	Sets a listener for monitoring test execution.
- 	
+	Sets a listener for monitoring test execution.
+
 `--warnonskippedfiles`
- 	Show a warning when an invalid file is skipped.
- 	
-`--nostatusrc`	Sets the return code to zero regardless of failures in test cases. Error codes are returned normally.
+	Show a warning when an invalid file is skipped.
+
+`--nostatusrc`
+	Sets the return code to zero regardless of failures in test cases. Error codes are returned normally.
 
 `--runemptysuite`
- 	Executes tests also if the selected test suites are empty.
- 	
-`--dryrun`	In the dry run mode tests are run without executing keywords originating from test libraries. Useful for validating test data syntax.
+	Executes tests also if the selected test suites are empty.
+
+`--dryrun`
+	In the dry run mode tests are run without executing keywords originating from test libraries. Useful for validating test data syntax.
 
 `--exitonfailure`
- 	Stops test execution if any critical test fails.
- 	
-`--exitonerror	`Stops test execution if any error occurs when parsing test data, importing libraries, and so on.
+	Stops test execution if any critical test fails.
+
+`--exitonerror`
+	Stops test execution if any error occurs when parsing test data, importing libraries, and so on.
 
 `--skipteardownonexit`
- 	Skips teardowns is test execution is prematurely stopped.
- 	
+	Skips teardowns is test execution is prematurely stopped.
+
 `--randomize <all|suites|tests|none>`
- 	Randomizes test execution order.
- 	
+	Randomizes test execution order.
+
 `--runmode <mode>`
- 	Deprecated in Robot Framework 2.8. Use separate --dryrun, --exitonfailure, --skipteardownonexit and --randomize options instead.
- 	
+	Deprecated in Robot Framework 2.8. Use separate --dryrun, --exitonfailure, --skipteardownonexit and --randomize options instead.
+
 `-W, --monitorwidth <chars>`
- 	Sets the width of the console output.
- 	
+	Sets the width of the console output.
+
 `-C, --monitorcolors <on|off|force>`
- 	Specifies are colors used on the console.
- 	
+	Specifies are colors used on the console.
+
 `-K, --monitormarkers <on|off|force>`
  	Specifies are console markers (. and F) used.
- 	
-`-P, --pythonpath <path>`
- 	Additional locations where to search test libraries from when they are imported.
- 	
-`-E, --escape <what:with>`
- 	Escapes characters that are problematic in the console.
- 	
-`-A, --argumentfile <path>`
- 	A text file to read more arguments from.
- 	
-`-h, --help`	Prints usage instructions.
 
-`--version`	Prints the version information.
+`-P, --pythonpath <path>`
+	Additional locations where to search test libraries from when they are imported.
+
+`-E, --escape <what:with>`
+	Escapes characters that are problematic in the console.
+
+`-A, --argumentfile <path>`
+	A text file to read more arguments from.
+
+`-h, --help`
+	Prints usage instructions.
+
+`--version`
+	Prints the version information.
