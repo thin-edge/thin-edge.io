@@ -24,11 +24,7 @@ pub trait Actor: 'static + Sized + Send + Sync {
     /// Processing input messages,
     /// updating internal state,
     /// and sending messages to peers.
-    async fn run(
-        self,
-        messages: Self::Mailbox,
-        peers: Self::Peers,
-    ) -> Result<(), ChannelError>;
+    async fn run(self, messages: Self::Mailbox, peers: Self::Peers) -> Result<(), ChannelError>;
 }
 
 #[cfg(test)]
