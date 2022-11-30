@@ -1,5 +1,6 @@
+use async_trait::async_trait;
 use std::path::PathBuf;
-use tedge_actors::{Recipient, RuntimeHandle};
+use tedge_actors::{Recipient, RuntimeError, RuntimeHandle};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WatcherConfig {
@@ -17,10 +18,10 @@ pub enum FileEvent {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FileRequest {}
 
-pub fn new_watcher(
+pub async fn new_watcher(
     runtime: &mut RuntimeHandle,
     config: WatcherConfig,
-    recipient: Recipient<FileEvent>,
-) -> Recipient<FileRequest> {
+    client: Recipient<FileEvent>,
+) -> Result<Recipient<FileRequest>, RuntimeError> {
     todo!()
 }

@@ -1,4 +1,7 @@
-use tedge_actors::{Recipient, RuntimeHandle};
+use async_trait::async_trait;
+use tedge_actors::{
+    new_mailbox, Actor, ChannelError, Mailbox, Recipient, RuntimeError, RuntimeHandle,
+};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct HttpConfig {}
@@ -19,10 +22,50 @@ pub struct HttpResponse {}
 ///             --------------------->|||| ============> http://host
 ///         ||||<---------------------
 /// ```
-pub fn new_private_connection(
+pub async fn new_private_connection(
     runtime: &mut RuntimeHandle,
     config: HttpConfig,
     client: Recipient<HttpResponse>,
-) -> Recipient<HttpRequest> {
-    todo!()
+) -> Result<Recipient<HttpRequest>, RuntimeError> {
+    let (mailbox, address) = new_mailbox(10);
+
+    let actor = PrivateHttpActor::new(config);
+    runtime.run(actor, mailbox, client).await?;
+
+    Ok(address.as_recipient())
+}
+
+struct PrivateHttpActor {
+    // Some HTTP connection to a remote server
+}
+
+impl PrivateHttpActor {
+    fn new(_config: HttpConfig) -> Self {
+        PrivateHttpActor {}
+    }
+}
+
+#[async_trait]
+impl Actor for PrivateHttpActor {
+    type Input = HttpRequest;
+    type Output = HttpResponse;
+    type Mailbox = Mailbox<HttpRequest>;
+    type Peers = Recipient<HttpResponse>;
+
+    async fn run(
+        self,
+        mut requests: Self::Mailbox,
+        mut client: Self::Peers,
+    ) -> Result<(), ChannelError> {
+        while let Some(_request) = requests.next().await {
+            // Forward the request to the http server
+            // Await for a response
+            let response = HttpResponse {};
+
+            // Send the response back to the client
+            client.send(response).await?
+        }
+
+        Ok(())
+    }
 }

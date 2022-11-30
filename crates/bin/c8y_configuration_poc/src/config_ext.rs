@@ -39,18 +39,24 @@ impl ConfigActorBuilder {
         };
 
         let (mailbox, address) = new_config_mailbox();
+
         let mqtt_con =
-            mqtt_ext::new_connection(&mut runtime, self.mqtt_conf, address.events.as_recipient());
+            mqtt_ext::new_connection(&mut runtime, self.mqtt_conf, address.events.as_recipient())
+                .await?;
+
         let http_con = http_ext::new_private_connection(
             &mut runtime,
             self.http_conf,
             address.http_responses.as_recipient(),
-        );
+        )
+        .await?;
+
         let file_watcher = file_system_ext::new_watcher(
             &mut runtime,
             watcher_config,
             address.events.as_recipient(),
-        );
+        )
+        .await?;
 
         let peers = ConfigManagerPeers {
             file_watcher,
@@ -88,10 +94,8 @@ impl ConfigActor {
         peers: &mut ConfigManagerPeers,
     ) -> Result<(), ChannelError> {
         // ..
-        peers.http_con.send(HttpRequest {}).await?;
-        if let Some(response) = messages.http_responses.next().await {
-            // ..
-        }
+        let response = ConfigActor::send_http_request(messages, peers, HttpRequest {}).await?;
+        // ..
         Ok(())
     }
 
