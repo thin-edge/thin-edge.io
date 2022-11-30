@@ -79,6 +79,9 @@ pub enum FileTransferError {
 
     #[error(transparent)]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
+
+    #[error("Could not bind to address: {address}. Address already in use.")]
+    BindingAddressInUse { address: std::net::SocketAddr },
 }
 
 #[derive(Debug, thiserror::Error)]
