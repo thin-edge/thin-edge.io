@@ -15,7 +15,7 @@
 
 use crate::c8y::serializer;
 use clock::{Clock, WallClock};
-use thin_edge_json::parser::*;
+use tedge_api::parser::*;
 use time::{self, OffsetDateTime};
 
 #[derive(thiserror::Error, Debug)]

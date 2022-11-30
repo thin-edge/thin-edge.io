@@ -32,8 +32,8 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
 };
+use tedge_api::event::ThinEdgeEvent;
 use tedge_config::{get_tedge_config, ConfigSettingAccessor, LogPathSetting};
-use thin_edge_json::event::ThinEdgeEvent;
 use time::format_description::well_known::Rfc3339;
 
 use tracing::{debug, info, log::error};

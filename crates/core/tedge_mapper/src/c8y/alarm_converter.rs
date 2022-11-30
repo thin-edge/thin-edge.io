@@ -3,7 +3,7 @@ use std::collections::{hash_map::Entry, HashMap};
 
 use c8y_api::smartrest::alarm;
 use mqtt_channel::{Message, Topic};
-use thin_edge_json::alarm::ThinEdgeAlarm;
+use tedge_api::alarm::ThinEdgeAlarm;
 
 use crate::core::error::ConversionError;
 

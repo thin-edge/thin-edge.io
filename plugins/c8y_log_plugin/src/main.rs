@@ -12,6 +12,7 @@ use clap::Parser;
 use c8y_api::smartrest::message::get_smartrest_device_id;
 use mqtt_channel::{Connection, Message, StreamExt, TopicFilter};
 use std::path::{Path, PathBuf};
+use tedge_api::health::{health_check_topics, send_health_status};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, DeviceIdSetting, LogPathSetting, MqttPortSetting,
     TEdgeConfig, DEFAULT_TEDGE_CONFIG_PATH,
@@ -21,7 +22,6 @@ use tedge_utils::{
     notify::{fs_notify_stream, FsEvent},
     paths::PathsError,
 };
-use thin_edge_json::health::{health_check_topics, send_health_status};
 use tracing::{error, info};
 
 use crate::config::LogPluginConfig;
