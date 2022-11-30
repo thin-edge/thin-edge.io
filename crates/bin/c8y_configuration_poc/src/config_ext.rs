@@ -1,18 +1,21 @@
-use std::path::PathBuf;
-use tedge_actors::{Actor, adapt, Address, ChannelError, fan_in_message_type, Mailbox, new_mailbox, Recipient, RuntimeError, RuntimeHandle};
-use crate::{file_system_ext, http_ext, mqtt_ext};
 use crate::file_system_ext::*;
 use crate::http_ext::*;
 use crate::mqtt_ext::*;
+use crate::{file_system_ext, http_ext, mqtt_ext};
 use async_trait::async_trait;
+use std::path::PathBuf;
+use tedge_actors::{
+    adapt, fan_in_message_type, new_mailbox, Actor, Address, ChannelError, Mailbox, Recipient,
+    RuntimeError, RuntimeHandle,
+};
 
-pub struct ConfigConfig {
+pub struct ConfigActorBuilder {
     pub mqtt_conf: MqttConfig,
     pub http_conf: HttpConfig,
     pub config_dir: PathBuf,
 }
 
-impl ConfigConfig {
+impl ConfigActorBuilder {
     /// What are the steps to create a new Actor?
     ///
     /// 1. Create the actor mailbox with the associated address.
@@ -24,7 +27,10 @@ impl ConfigConfig {
     /// 1. Create the actor peer handlers.
     /// 1. Create the initial state from a config.
     /// 1. Spawn the process, returning a handle to send messages .
-    pub async fn spawn_actor(self, runtime: &mut RuntimeHandle) -> Result<ConfigManagerAddress,RuntimeError> {
+    pub async fn spawn_actor(
+        self,
+        mut runtime: RuntimeHandle,
+    ) -> Result<ConfigManagerAddress, RuntimeError> {
         let actor = ConfigActor {
             config_dir: self.config_dir.clone(),
         };
@@ -32,15 +38,24 @@ impl ConfigConfig {
             directory: self.config_dir,
         };
 
-        let (mailbox, address)= new_config_mailbox();
-        let mqtt_con = mqtt_ext::new_connection(runtime, self.mqtt_conf, address.events.as_recipient());
-        let http_con = http_ext::new_connection(runtime, self.http_conf, address.http_responses.as_recipient());
-        let file_watcher = file_system_ext::new_watcher(runtime, watcher_config, address.events.as_recipient());
+        let (mailbox, address) = new_config_mailbox();
+        let mqtt_con =
+            mqtt_ext::new_connection(&mut runtime, self.mqtt_conf, address.events.as_recipient());
+        let http_con = http_ext::new_private_connection(
+            &mut runtime,
+            self.http_conf,
+            address.http_responses.as_recipient(),
+        );
+        let file_watcher = file_system_ext::new_watcher(
+            &mut runtime,
+            watcher_config,
+            address.events.as_recipient(),
+        );
 
         let peers = ConfigManagerPeers {
             file_watcher,
             http_con,
-            mqtt_con
+            mqtt_con,
         };
 
         runtime.run(actor, mailbox, peers).await?;
@@ -56,6 +71,44 @@ struct ConfigActor {
     config_dir: PathBuf,
 }
 
+impl ConfigActor {
+    pub async fn process_file_event(
+        &mut self,
+        event: FileEvent,
+        messages: &mut ConfigManagerMailbox,
+        peers: &mut ConfigManagerPeers,
+    ) -> Result<(), ChannelError> {
+        todo!()
+    }
+
+    pub async fn process_mqtt_message(
+        &mut self,
+        message: MqttMessage,
+        messages: &mut ConfigManagerMailbox,
+        peers: &mut ConfigManagerPeers,
+    ) -> Result<(), ChannelError> {
+        // ..
+        peers.http_con.send(HttpRequest {}).await?;
+        if let Some(response) = messages.http_responses.next().await {
+            // ..
+        }
+        Ok(())
+    }
+
+    async fn send_http_request(
+        messages: &mut ConfigManagerMailbox,
+        peers: &mut ConfigManagerPeers,
+        request: HttpRequest,
+    ) -> Result<HttpResponse, ChannelError> {
+        peers.http_con.send(request).await?;
+        if let Some(response) = messages.http_responses.next().await {
+            Ok(response)
+        } else {
+            Err(ChannelError::ReceiveError())
+        }
+    }
+}
+
 #[async_trait]
 impl Actor for ConfigActor {
     type Input = ConfigInputAndResponse;
@@ -63,8 +116,24 @@ impl Actor for ConfigActor {
     type Mailbox = ConfigManagerMailbox;
     type Peers = ConfigManagerPeers;
 
-    async fn run(self, messages: Self::Mailbox, peers: Self::Peers) -> Result<(), ChannelError> {
-        todo!()
+    async fn run(
+        mut self,
+        mut messages: Self::Mailbox,
+        mut peers: Self::Peers,
+    ) -> Result<(), ChannelError> {
+        while let Some(event) = messages.events.next().await {
+            match event {
+                ConfigInput::MqttMessage(message) => {
+                    self.process_mqtt_message(message, &mut messages, &mut peers)
+                        .await?;
+                }
+                ConfigInput::FileEvent(event) => {
+                    self.process_file_event(event, &mut messages, &mut peers)
+                        .await?;
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -89,16 +158,19 @@ pub struct ConfigManagerAddress {
     http_responses: Address<HttpResponse>,
 }
 
-pub fn new_config_mailbox() -> (ConfigManagerMailbox, ConfigManagerAddress) {
+fn new_config_mailbox() -> (ConfigManagerMailbox, ConfigManagerAddress) {
     let (events_mailbox, events_address) = new_mailbox(10);
     let (http_mailbox, http_address) = new_mailbox(10);
-    (ConfigManagerMailbox {
-        events: events_mailbox,
-        http_responses: http_mailbox,
-    }, ConfigManagerAddress {
-        events: events_address,
-        http_responses: http_address,
-    })
+    (
+        ConfigManagerMailbox {
+            events: events_mailbox,
+            http_responses: http_mailbox,
+        },
+        ConfigManagerAddress {
+            events: events_address,
+            http_responses: http_address,
+        },
+    )
 }
 
 struct ConfigManagerPeers {
@@ -116,7 +188,3 @@ impl From<Recipient<ConfigOutput>> for ConfigManagerPeers {
         }
     }
 }
-
-
-
-

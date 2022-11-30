@@ -10,10 +10,19 @@ pub struct HttpRequest {}
 pub struct HttpResponse {}
 
 /// Create a new HTTP connection managed behind the scene by an actor
-pub fn new_connection(
+///
+/// This connection is private,
+/// i.e only the callee of `new_private_connection()` will be able to interact with it.
+///
+/// ```
+///       client                    http_con
+///             --------------------->|||| ============> http://host
+///         ||||<---------------------
+/// ```
+pub fn new_private_connection(
     runtime: &mut RuntimeHandle,
     config: HttpConfig,
-    peer: Recipient<HttpResponse>,
+    client: Recipient<HttpResponse>,
 ) -> Recipient<HttpRequest> {
     todo!()
 }
