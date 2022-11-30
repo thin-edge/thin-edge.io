@@ -10,6 +10,7 @@ const REBOOT_COMMAND: &[&str] = &["init", "6"];
 pub struct SystemConfig {
     #[serde(default)]
     pub(crate) init: InitConfig,
+    #[serde(default)]
     pub system: SystemSpecificCommands,
 }
 
