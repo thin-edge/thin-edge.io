@@ -18,19 +18,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
-name = "agent_interface"
-version = "0.8.1"
-dependencies = [
- "csv",
- "download",
- "nanoid",
- "regex",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "0.7.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -331,7 +318,6 @@ checksum = "ec8a7b6a70fde80372154c65702f00a0f56f3e1c36abbc6c440484be248856db"
 name = "c8y_api"
 version = "0.8.1"
 dependencies = [
- "agent_interface",
  "anyhow",
  "assert-json-diff",
  "assert_matches",
@@ -362,7 +348,6 @@ dependencies = [
 name = "c8y_configuration_plugin"
 version = "0.8.1"
 dependencies = [
- "agent_interface",
  "anyhow",
  "assert_matches",
  "c8y_api",
@@ -1958,7 +1943,6 @@ dependencies = [
 name = "plugin_sm"
 version = "0.8.1"
 dependencies = [
- "agent_interface",
  "anyhow",
  "assert_matches",
  "async-trait",
@@ -1968,6 +1952,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
+ "tedge_api",
  "tempfile",
  "test-case",
  "thiserror",
@@ -2822,7 +2807,6 @@ dependencies = [
 name = "tedge_agent"
 version = "0.8.1"
 dependencies = [
- "agent_interface",
  "anyhow",
  "assert-json-diff",
  "assert_cmd",
@@ -2938,7 +2922,6 @@ dependencies = [
 name = "tedge_mapper"
 version = "0.8.1"
 dependencies = [
- "agent_interface",
  "anyhow",
  "assert-json-diff",
  "assert_cmd",
@@ -3092,27 +3075,6 @@ name = "textwrap"
 version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "949517c0cf1bf4ee812e2e07e08ab448e3ae0d23472aee8a06c985f0c8815b16"
-
-[[package]]
-name = "thin_edge_json"
-version = "0.8.1"
-dependencies = [
- "anyhow",
- "assert_matches",
- "clock",
- "criterion",
- "json-writer",
- "mockall",
- "mqtt_channel",
- "proptest",
- "serde",
- "serde_json",
- "stats_alloc",
- "test-case",
- "thiserror",
- "time",
- "walkdir",
-]
 
 [[package]]
 name = "thiserror"

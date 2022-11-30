@@ -20,7 +20,6 @@ assets = [
 [package.metadata.deb.systemd-units]
 
 [dependencies]
-agent_interface = { path = "../../crates/core/agent_interface" }
 anyhow = "1.0"
 c8y_api = { path = "../../crates/core/c8y_api" }
 clap = { version = "3.2", features = ["cargo", "derive"] }

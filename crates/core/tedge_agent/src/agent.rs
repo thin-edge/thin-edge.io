@@ -7,12 +7,12 @@ use crate::{
         StateRepository, StateStatus,
     },
 };
-use agent_interface::{
+use flockfile::{check_another_instance_is_not_running, Flockfile};
+use tedge_api::{
     control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
     RestartOperationResponse, SoftwareError, SoftwareListRequest, SoftwareListResponse,
     SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
-use flockfile::{check_another_instance_is_not_running, Flockfile};
 
 use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic, TopicFilter};
 use plugin_sm::{

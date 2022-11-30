@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod tests {
 
-    use agent_interface::{SoftwareError, SoftwareModule, SoftwareModuleUpdate};
     use plugin_sm::plugin::{deserialize_module_info, ExternalPluginCommand, Plugin};
     use serial_test::serial;
     use std::{fs, io::Write, path::PathBuf, str::FromStr};
+    use tedge_api::{SoftwareError, SoftwareModule, SoftwareModuleUpdate};
     use test_case::test_case;
     use tokio::fs::File;
     use tokio::io::BufWriter;

@@ -5,11 +5,11 @@ use crate::{
     core::{component::TEdgeComponent, mapper::create_mapper, size_threshold::SizeThreshold},
 };
 
-use agent_interface::topic::ResponseTopic;
 use async_trait::async_trait;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use c8y_api::smartrest::{operations::Operations, topic::C8yTopic};
 use mqtt_channel::TopicFilter;
+use tedge_api::topic::ResponseTopic;
 use tedge_config::{
     ConfigSettingAccessor, DeviceIdSetting, DeviceTypeSetting, MqttBindAddressSetting,
     MqttPortSetting, TEdgeConfig,

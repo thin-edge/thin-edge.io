@@ -1,9 +1,9 @@
 use crate::smartrest::error::SmartRestSerializerError;
 use crate::smartrest::topic::C8yTopic;
-use agent_interface::{OperationStatus, SoftwareUpdateResponse};
 use csv::{QuoteStyle, WriterBuilder};
 use mqtt_channel::Message;
 use serde::{Deserialize, Serialize, Serializer};
+use tedge_api::{OperationStatus, SoftwareUpdateResponse};
 
 pub type SmartRest = String;
 
@@ -243,7 +243,7 @@ pub trait TryIntoOperationStatusMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_interface::*;
+    use tedge_api::*;
 
     #[test]
     fn serialize_smartrest_supported_operations() {

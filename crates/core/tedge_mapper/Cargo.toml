@@ -24,7 +24,6 @@ assets = [
 [package.metadata.deb.systemd-units]
 
 [dependencies]
-agent_interface = { path = "../agent_interface"}
 assert_cmd = "2.0"
 anyhow = "1.0"
 async-trait = "0.1"

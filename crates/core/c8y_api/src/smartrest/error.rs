@@ -1,5 +1,5 @@
-use agent_interface::SoftwareUpdateResponse;
 use std::path::PathBuf;
+use tedge_api::SoftwareUpdateResponse;
 
 // allowing large size difference between variants warning,
 // because the enum `SmartRestSerializerError` is already Boxed
@@ -70,10 +70,10 @@ pub enum SMCumulocityMapperError {
     InvalidMqttMessage,
 
     #[error(transparent)]
-    InvalidTopicError(#[from] agent_interface::TopicError),
+    InvalidTopicError(#[from] tedge_api::TopicError),
 
     #[error(transparent)]
-    InvalidThinEdgeJson(#[from] agent_interface::SoftwareError),
+    InvalidThinEdgeJson(#[from] tedge_api::SoftwareError),
 
     #[error(transparent)]
     FromElapsed(#[from] tokio::time::error::Elapsed),

@@ -1,11 +1,6 @@
 use crate::c8y::dynamic_discovery::*;
 use crate::c8y::json;
 use crate::core::{converter::*, error::*, size_threshold::SizeThreshold};
-use agent_interface::{
-    topic::{RequestTopic, ResponseTopic},
-    Auth, DownloadInfo, Jsonify, OperationStatus, RestartOperationRequest,
-    RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
-};
 use async_trait::async_trait;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::{
@@ -33,6 +28,11 @@ use std::{
     path::{Path, PathBuf},
 };
 use tedge_api::event::ThinEdgeEvent;
+use tedge_api::{
+    topic::{RequestTopic, ResponseTopic},
+    Auth, DownloadInfo, Jsonify, OperationStatus, RestartOperationRequest,
+    RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
+};
 use tedge_config::{get_tedge_config, ConfigSettingAccessor, LogPathSetting};
 use time::format_description::well_known::Rfc3339;
 

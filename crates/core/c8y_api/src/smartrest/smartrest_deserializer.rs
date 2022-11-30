@@ -1,10 +1,10 @@
 use crate::smartrest::error::SmartRestDeserializerError;
-use agent_interface::{SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use csv::ReaderBuilder;
 use download::DownloadInfo;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::convert::{TryFrom, TryInto};
+use tedge_api::{SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use time::{format_description, OffsetDateTime};
 
 #[derive(Debug)]
@@ -294,9 +294,9 @@ impl SmartRestJwtResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_interface::*;
     use assert_json_diff::*;
     use serde_json::json;
+    use tedge_api::*;
     use test_case::test_case;
 
     // To avoid using an ID randomly generated, which is not convenient for testing.

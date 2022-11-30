@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
-use agent_interface::SoftwareError;
 use flockfile::FlockfileError;
 use mqtt_channel::MqttError;
+use tedge_api::SoftwareError;
 use tedge_config::{ConfigSettingError, TEdgeConfigError};
 
 #[derive(Debug, thiserror::Error)]

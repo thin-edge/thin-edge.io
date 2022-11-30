@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use agent_interface::{
-    Jsonify, SoftwareListResponse, SoftwareModule, SoftwareType, SoftwareVersion,
-};
+use tedge_api::{Jsonify, SoftwareListResponse, SoftwareModule, SoftwareType, SoftwareVersion};
 
 use crate::smartrest::error::SMCumulocityMapperError;
 use download::DownloadInfo;
