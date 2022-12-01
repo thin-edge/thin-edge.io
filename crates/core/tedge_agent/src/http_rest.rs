@@ -218,7 +218,13 @@ pub fn http_file_transfer_server(
         .build()?;
     let router_service = RouterService::new(router)?;
 
-    Ok(Server::bind(&config.bind_address).serve(router_service))
+    let server_builder = Server::try_bind(&config.bind_address);
+    match server_builder {
+        Ok(server) => Ok(server.serve(router_service)),
+        Err(_err) => Err(FileTransferError::BindingAddressInUse {
+            address: config.bind_address,
+        }),
+    }
 }
 
 #[cfg(test)]
