@@ -37,8 +37,7 @@ You can upload root certificate via [Cumulocity UI](https://cumulocity.com/guide
 > After issuing this command you are going to be prompted for a password. Users usernames and passwords are not stored in configuration due to security.
 
 ```shell
-$ sudo tedge cert upload c8y --user <username>
-Password:
+sudo tedge cert upload c8y --user <username>
 ```
 
 where:
@@ -49,7 +48,10 @@ ___
 To create bridge use [`tedge connect`](../references/tedge-connect.md):
 
 ```shell
-$ sudo tedge connect c8y
+sudo tedge connect c8y
+```
+
+```
 Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
@@ -98,7 +100,10 @@ tedge-agent service successfully started and enabled!
 If connection has already been established following error may appear:
 
 ```shell
-$ sudo tedge connect c8y
+sudo tedge connect c8y
+```
+
+```
 Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
@@ -112,7 +117,10 @@ Caused by:
 To remove existing connection and create new one follow the advice and issue [`tedge disconnect c8y`](../references/tedge-disconnect.md):
 
 ```shell
-$ sudo tedge disconnect c8y
+sudo tedge disconnect c8y
+```
+
+```
 Removing Cumulocity bridge.
 
 Applying changes to mosquitto.
@@ -141,7 +149,10 @@ And now you can issue [`tedge connect c8y`](../references/tedge-connect.md) to c
 Sample output of tedge connect when this warning occurs:
 
 ```shell
-$ sudo tedge connect c8y
+sudo tedge connect c8y
+```
+
+```
 Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
@@ -211,7 +222,10 @@ When this is done, issue [`tedge connect c8y`](../references/tedge-connect.md) a
 Sample output:
 
 ```shell
-$ tedge connect c8y
+tedge connect c8y
+```
+
+```
 Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
@@ -233,13 +247,19 @@ tedge connect cannot access location to create the bridge configuration (`/etc/t
 Example of incorrect permissions:
 
 ```shell
-$ ls -l /etc/tedge
+ls -l /etc/tedge
+```
+
+```
 dr--r--r-- 2 tedge     tedge     4096 Mar 30 15:40 mosquitto-conf
 ```
 
 You should give it the permission 755.
 ```shell
-$ ls -l /etc/tedge
+ls -l /etc/tedge
+```
+
+```
 drwxr-xr-x 2 tedge     tedge     4096 Mar 30 15:40 mosquitto-conf
 ```
 
@@ -248,7 +268,10 @@ drwxr-xr-x 2 tedge     tedge     4096 Mar 30 15:40 mosquitto-conf
 Sample output:
 
 ```shell
-$ sudo tedge connect c8y
+sudo tedge connect c8y
+```
+
+```
 Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.

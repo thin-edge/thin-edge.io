@@ -64,7 +64,10 @@ When called with the `list` command, a plugin returns the list of software modul
 using tab separated values.
 
 ```shell
-$ debian-plugin list
+debian-plugin list
+```
+
+```
 ...
 collectd-core  5.8.1-1.3
 mosquitto   1.5.7-1+deb10u1
@@ -82,11 +85,11 @@ Contract:
 The `prepare` command is invoked by the sm-agent before a sequence of install and remove commands
 
 ```shell
-$ /etc/tedge/sm-plugins/debian prepare
-$ /etc/tedge/sm-plugins/debian install x
-$ /etc/tedge/sm-plugins/debian install y
-$ /etc/tedge/sm-plugins/debian remove z
-$ /etc/tedge/sm-plugins/debian finalize
+/etc/tedge/sm-plugins/debian prepare
+/etc/tedge/sm-plugins/debian install x
+/etc/tedge/sm-plugins/debian install y
+/etc/tedge/sm-plugins/debian remove z
+/etc/tedge/sm-plugins/debian finalize
 ```
 
 For many plugins this command will do nothing. However, It gives an opportunity to the plugin to:
@@ -121,7 +124,7 @@ Contract:
 The `install` command installs a software module, possibly of some expected version.
 
 ```shell
-$ plugin install NAME [--module-version VERSION] [--file FILE]
+plugin install NAME [--module-version VERSION] [--file FILE]
 ```
 
 Contract:
@@ -165,7 +168,7 @@ Contract:
 The `remove` command uninstalls a software module, and possibly its dependencies if no other modules are dependent on those.
 
 ```shell
-$ plugin remove NAME [--module-version VERSION]
+plugin remove NAME [--module-version VERSION]
 ```
 
 Contract:
@@ -199,7 +202,7 @@ This can be needed when order of processing software modules is relevant - e.g. 
 # and passing to plugin's stdin via pipe:
 # NOTE that each argument is tab separated:
 
-$ echo '\
+echo '\
   install	name1	version1
   install	name2		path2
   remove	name3	version3
@@ -227,7 +230,7 @@ Contract:
 Example how to invoke that plugin command `update-list`. Note that each argument is tab separated:
 
 ```shell
-$ plugin update-list <<EOF
+plugin update-list <<EOF
   install	name1	version1
   install	name2		path2
   remove	name3	version3
@@ -238,10 +241,10 @@ EOF
 That is equivalent to use of original commands (`install` and `remove`):
 
 ```shell
-$ plugin install name1 --module-version version1
-$ plugin install name2 --module-path path2
-$ plugin remove "name 3" --module-version version3
-$ plugin remove name4
+plugin install name1 --module-version version1
+plugin install name2 --module-path path2
+plugin remove "name 3" --module-version version3
+plugin remove name4
 ```
 
 Exemplary implementation of a shell script for parsing software list from `stdin`:

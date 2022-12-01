@@ -8,13 +8,17 @@ Avoid using unsafe code.
 ## Code formatting
 Always use rustfmt before you commit as your code won't pass CI pipeline if rustfmt is not applied. We adhere to default settings.
 
-```$ cargo fmt```
+```shell
+cargo fmt
+```
 
 
 ## Code analysis
 Clippy is used to catch common mistakes and we run it as part of our CI pipeline.
 
-```$ cargo clippy```
+```shell
+cargo clippy
+```
 
 
 ## Code testing 

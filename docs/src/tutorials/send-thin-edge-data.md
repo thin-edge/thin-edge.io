@@ -25,7 +25,7 @@ In this tutorial, we'll be using the `tedge mqtt pub` command line utility for d
 The temperature measurement described above can be sent using the `tedge mqtt pub` command as follows:
 
 ```shell
-$ tedge mqtt pub tedge/measurements '{ "temperature": 25 }'
+tedge mqtt pub tedge/measurements '{ "temperature": 25 }'
 ```
 
 The first argument to the `tedge mqtt pub` command is the topic to which the measurements must be published to.
@@ -88,7 +88,7 @@ the measurements are recorded under a child device of your thin-edge.io device.
 Given your desired child device ID is `child1`, publish a Thin Edge JSON message to the `tedge/measurements/child1` topic:
 
 ```shell
-$ tedge mqtt pub tedge/measurements/child1 '{ "temperature": 25 }'
+tedge mqtt pub tedge/measurements/child1 '{ "temperature": 25 }'
 ```
 
 Then, you will see a child device with the name `child1` is created in your Cumulocity IoT tenant,
@@ -104,5 +104,5 @@ So, use it only for debugging purposes during the development phase and it shoul
 You can use the `tedge mqtt sub` command to subscribe to the error topic as follows:
 
 ```shell
-$ tedge mqtt sub tedge/errors
+tedge mqtt sub tedge/errors
 ```

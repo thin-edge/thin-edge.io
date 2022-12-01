@@ -31,13 +31,13 @@ To connect the device to the Cumulocity IoT, one needs to set the URL of your Cu
 Set the URL of your Cumulocity IoT tenant.
 
 ```
-$ sudo tedge config set c8y.url your-tenant.cumulocity.com
+sudo tedge config set c8y.url your-tenant.cumulocity.com
 ```
 
 Set the path to the root certificate if necessary. The default is `/etc/ssl/certs`.
 
 ```
-$ sudo tedge config set c8y.root.cert.path /etc/ssl/certs
+sudo tedge config set c8y.root.cert.path /etc/ssl/certs
 ```
 
 This will set the root certificate path of the Cumulocity IoT.
@@ -51,7 +51,7 @@ If the Cumulocity IoT instance that you're connecting to, is signed with a self-
 then the path to that server certificate must be set as the c8y.root.cert.path as follows:
 
 ```
-$ sudo tedge config set c8y.root.cert.path /path/to/the/self-signed/certificate
+sudo tedge config set c8y.root.cert.path /path/to/the/self-signed/certificate
 ```
 
 > Note: This is the certificate chain of the server and not the device's certificate kept at /etc/tedge/device-certs directory.
@@ -71,13 +71,16 @@ This identifier will be also used as the Common Name (CN) of the certificate.
 Indeed, this certificate aims to authenticate that this device is actually the device with that identity.
 
 ```
-$ sudo tedge cert create --device-id my-device
+sudo tedge cert create --device-id my-device
 ```
 
 You can then check the content of that certificate.
 
+```shell
+sudo tedge cert show
 ```
-$ sudo tedge cert show
+
+```
 Device certificate: /etc/tedge/device-certs/tedge-certificate.pem
 Subject: CN=my-device, O=Thin Edge, OU=Test Device
 Issuer: CN=my-device, O=Thin Edge, OU=Test Device
@@ -104,8 +107,8 @@ This can be done:
   to your tenant "Device Management/Management/Trusted certificates".
 * or using the `tedge cert upload c8y` command.
 
-```
-$ sudo tedge cert upload c8y --user <username>
+```shell
+sudo tedge cert upload c8y --user <username>
 ```
 
 > To upload the certificate to cumulocity this user needs to have "Tenant management" admin rights. If you get an error 503 here, check the appropriate rights in cumulocity user management.
@@ -122,7 +125,10 @@ At last, it sends packets to Cumulocity to check the connection.
 If your device is not yet registered, you will find the digital-twin created in your tenant after `tedge connect c8y`!
 
 ```shell
-$ sudo tedge connect c8y
+sudo tedge connect c8y
+```
+
+```
 Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
@@ -171,8 +177,8 @@ Any messages sent to one of these topics will be forwarded to Cumulocity.
 The messages are expected to have a format specific to each topic.
 Here, we use `tedge mqtt pub` a raw Cumulocity SmartRest message to be understood as a temperature of 20 Celsius.
 
-```
-$ tedge mqtt pub c8y/s/us 211,20
+```shell
+tedge mqtt pub c8y/s/us 211,20
 ```
 
 To check that this message has been received by Cumulocity,

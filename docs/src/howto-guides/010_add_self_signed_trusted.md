@@ -35,7 +35,10 @@ sudo cp <full_path_to_the_certificate> /usr/local/share/ca-certificates/
 Install the certificates:
 
 ```shell
-$ sudo update-ca-certificates
+sudo update-ca-certificates
+```
+
+```
 Updating certificates in /etc/ssl/certs...
 1 added, 0 removed; done.
 Running hooks in /etc/ca-certificates/update.d...

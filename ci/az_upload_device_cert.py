@@ -7,7 +7,7 @@ https://docs.microsoft.com/en-us/rest/api/iothub/service/devices/create-or-updat
 
 
 call example:
-$ ./az_upload_device_cert.py -d devpi3 -t 01F...222 -u ThinEdgeHub -s iothubowner
+./az_upload_device_cert.py -d devpi3 -t 01F...222 -u ThinEdgeHub -s iothubowner
 
 Export environment variable SASKEYIOTHUB to the Shared access key of your IoT Hub.
 """

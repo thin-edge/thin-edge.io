@@ -188,7 +188,7 @@ The `install` command installs a software module, possibly of some expected vers
 A plugin must be executable in the below format.
 
 ```shell
-$ myplugin install NAME [--module-version VERSION] [--file FILE]
+myplugin install NAME [--module-version VERSION] [--file FILE]
 ```
 
 This command takes 1 mandatory argument and has 2 optional flags.
@@ -284,7 +284,7 @@ and possibly its dependencies if no other modules are dependent on those.
 A plugin must be executable in the below format.
 
 ```shell
-$ myplugin remove NAME [--module-version VERSION]
+myplugin remove NAME [--module-version VERSION]
 ```
 
 This command takes 1 mandatory argument and 1 optional argument with a flag.
@@ -337,7 +337,7 @@ First, learn what is the input of `update-list`.
 The Software Management Agent calls a plugin as below. Note that each argument is tab separated:
 
 ```shell
-$ sudo /etc/tedge/sm-plugins/docker update-list <<EOF
+sudo /etc/tedge/sm-plugins/docker update-list <<EOF
   install	name1	version1
   install	name2		path2
   remove	name3	version3
@@ -352,10 +352,10 @@ The behaviour of operations `install` and `remove` is the same as for original c
 The above input is equivalent to the use of original commands (`install` and `remove`):
 
 ```shell
-$ /etc/tedge/sm-plugins/docker install name1 --module-version version1
-$ /etc/tedge/sm-plugins/docker install name2 --file path2
-$ /etc/tedge/sm-plugins/docker remove "name 3" --module-version version3
-$ /etc/tedge/sm-plugins/docker remove name4
+/etc/tedge/sm-plugins/docker install name1 --module-version version1
+/etc/tedge/sm-plugins/docker install name2 --file path2
+/etc/tedge/sm-plugins/docker remove "name 3" --module-version version3
+/etc/tedge/sm-plugins/docker remove name4
 ```
 
 To make the _docker_ plugin accept a list of install and remove actions,

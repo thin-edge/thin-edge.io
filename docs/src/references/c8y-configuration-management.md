@@ -82,12 +82,22 @@ uploading and downloading configuration files
 These two files can be created using the `c8y_configuration_plugin --init` option:
 
 ```shell
-$ sudo c8y_configuration_plugin --init
+sudo c8y_configuration_plugin --init
+```
 
-$ ls -l /etc/tedge/operations/c8y/c8y_UploadConfigFile
+```shell
+ls -l /etc/tedge/operations/c8y/c8y_UploadConfigFile
+```
+
+```
 -rw-r--r-- 1 tedge tedge 95 Mar 22 14:24 /etc/tedge/operations/c8y/c8y_UploadConfigFile
-  
-$ ls -l /etc/tedge/operations/c8y/c8y_DownloadConfigFile
+```
+
+```shell
+ls -l /etc/tedge/operations/c8y/c8y_DownloadConfigFile
+```
+
+```
 -rw-r--r-- 1 tedge tedge 97 Mar 22 14:24 /etc/tedge/operations/c8y/c8y_DownloadConfigFile
 ```
 
@@ -100,11 +110,19 @@ These files are just empty files owned by the `tedge` user.
 These two files are created by the plugin when the child-device agent uploads its supported configuration list to thin-edge.
 
 ```shell
-$ ls -l /etc/tedge/operations/c8y/child-1
+ls -l /etc/tedge/operations/c8y/child-1
+```
+
+```
 -rw-r--r-- 1 tedge tedge 97 Mar 22 14:24 /etc/tedge/operations/c8y/child-1/c8y_DownloadConfigFile
 -rw-r--r-- 1 tedge tedge 95 Mar 22 14:24 /etc/tedge/operations/c8y/child-1/c8y_UploadConfigFile
-  
-$ ls -l /etc/tedge/operations/c8y/child-2
+```
+
+```shell
+ls -l /etc/tedge/operations/c8y/child-2
+```
+
+```
 -rw-r--r-- 1 tedge tedge 97 Mar 22 14:24 /etc/tedge/operations/c8y/child-2/c8y_DownloadConfigFile
 -rw-r--r-- 1 tedge tedge 95 Mar 22 14:24 /etc/tedge/operations/c8y/child-2/c8y_UploadConfigFile
 ```
@@ -118,7 +136,10 @@ Here, the capabilities to upload and download configuration files
 (possibly with other capabilities added independently):
 
 ```shell
-$ tedge mqtt sub 'c8y/s/us/#'
+tedge mqtt sub 'c8y/s/us/#'
+```
+
+```
 [c8y/s/us] 114,c8y_Restart,c8y_SoftwareList,c8y_UploadConfigFile,c8y_DownloadConfigFile
 [c8y/s/us/child-1] 114,c8y_UploadConfigFile,c8y_DownloadConfigFile
 [c8y/s/us/child-2] 114,c8y_UploadConfigFile,c8y_DownloadConfigFile
@@ -141,13 +162,16 @@ Each configuration file is defined by a record with:
   ignoring these parameters.
 
 ```shell
-$ cat /etc/tedge/c8y/c8y-configuration-plugin.toml
+cat /etc/tedge/c8y/c8y-configuration-plugin.toml
+```
+
+```toml
 files = [
-    { path = '/etc/tedge/tedge.toml', type = 'tedge.toml' },
-    { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf' },
-    { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf' },
-    { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto', user = 'mosquitto', group = 'mosquitto', mode = 0o644 }
-  ]
+  { path = '/etc/tedge/tedge.toml', type = 'tedge.toml' },
+  { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf' },
+  { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf' },
+  { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto', user = 'mosquitto', group = 'mosquitto', mode = 0o644 }
+]
 ```
 
 Along this `c8y_configuration_plugin` configuration for the main device,
@@ -167,20 +191,33 @@ that needs to be configured from the cloud.
   but will not be used by the main device if provided.  
 
 ```shell
-$ ls /etc/tedge/c8y/*/c8y-configuration-plugin.toml
+ls /etc/tedge/c8y/*/c8y-configuration-plugin.toml
+```
+
+```
 /etc/tedge/c8y/child-1/c8y-configuration-plugin.toml 
 /etc/tedge/c8y/child-2/c8y-configuration-plugin.toml
+```
 
-$ cat /etc/tedge/c8y/child-1/c8y-configuration-plugin.toml
-files = [
-    { path = '/var/camera.conf', type = 'camera' },
-    { path = '/var/sounds.conf', type = 'sounds' },
-  ]
+```shell
+cat /etc/tedge/c8y/child-1/c8y-configuration-plugin.toml
+```
 
-$ cat /etc/tedge/c8y/child-2/c8y-configuration-plugin.toml
+```toml
 files = [
-    { path = '/var/ai/model' },
-  ]
+  { path = '/var/camera.conf', type = 'camera' },
+  { path = '/var/sounds.conf', type = 'sounds' },
+]
+```
+
+```shell
+cat /etc/tedge/c8y/child-2/c8y-configuration-plugin.toml
+```
+
+```toml
+files = [
+  { path = '/var/ai/model' },
+]
 ```
 
 On start and when one of these files is updated, the configuration plugin sends
@@ -191,7 +228,10 @@ These messages can be observed over the MQTT bus of the thin-edge device.
 In the case of the example, 3 messages are sent - one for the main device and 2 for the child devices:
 
 ```shell
-$ tedge mqtt sub 'c8y/s/us/#'
+tedge mqtt sub 'c8y/s/us/#'
+```
+
+```
 [c8y/s/us] 119,c8y-configuration-plugin,tedge.toml,/etc/tedge/mosquitto-conf/c8y-bridge.conf,/etc/tedge/mosquitto-conf/tedge-mosquitto.conf,mosquitto
 [c8y/s/us/child-1] 119,c8y-configuration-plugin,camera,sounds
 [c8y/s/us/child-2] 119,c8y-configuration-plugin,/var/ai/model
@@ -225,7 +265,10 @@ by the configuration of thin-edge:
 ## Usage
 
 ```shell
-$ c8y_configuration_plugin --help
+c8y_configuration_plugin --help
+```
+
+```
 c8y_configuration_plugin 0.6.2
 Thin-edge device configuration management for Cumulocity
 
