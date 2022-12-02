@@ -1,7 +1,7 @@
 use serde::Serialize;
-use tedge_derive::add_other_field;
+use tedge_derive::serde_other;
 
-#[deserialize_rest]
+#[serde_other]
 #[derive(Serialize, Debug, Clone, Default)]
 struct Foo {}
 
