@@ -19,6 +19,7 @@ const BROKER_GROUP: &str = "mosquitto";
 
 fn main() -> anyhow::Result<()> {
     let opt = cli::Opt::parse();
+    tedge_utils::logging::initialise_tracing_subscriber(false);
 
     if opt.init {
         initialize_tedge(&opt.config_dir)?;

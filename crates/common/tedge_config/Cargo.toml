@@ -11,6 +11,7 @@ serde = { version = "1.0", features = ["derive"] }
 tedge_utils = { path = "../tedge_utils", features = ["tedge-derive"] }
 tempfile = "3.2"
 thiserror = "1.0"
+tracing = "0.1"
 toml = "0.5"
 url = "2.2"
 

@@ -2814,6 +2814,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "toml",
+ "tracing",
  "url",
  "which",
 ]
@@ -2908,6 +2909,7 @@ dependencies = [
  "test-case",
  "thiserror",
  "toml",
+ "tracing",
  "url",
 ]
 
