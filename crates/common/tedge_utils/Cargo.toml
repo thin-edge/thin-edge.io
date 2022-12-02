@@ -12,6 +12,7 @@ description = "tedge_utils provide utilities for thin-edge.io components"
 default = []
 logging = []
 fs-notify = ["strum_macros", "try-traits", "notify"]
+tedge-derive = ["dep:tedge-derive"]
 
 [dependencies]
 futures = "0.3"
@@ -25,6 +26,7 @@ tracing = { version = "0.1", features = [] }
 tracing-subscriber = { version = "0.3", features = [ "time" ] }
 try-traits = { version = "0.1", optional = true }
 users = "0.11.0"
+tedge-derive = { path = "../tedge_utils/tedge-derive", optional = true }
 
 [dev-dependencies]
 assert_matches = "1.5"
@@ -32,5 +34,3 @@ maplit = "1.0"
 tedge_test_utils = { path = "../../tests/tedge_test_utils" }
 tokio = { version = "1.12", features = [ "rt-multi-thread"] }
 whoami = "1.2.1"
-
-
