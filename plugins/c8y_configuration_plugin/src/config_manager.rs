@@ -22,8 +22,8 @@ use tokio::sync::Mutex;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+use tedge_api::health::{health_check_topics, send_health_status};
 use tedge_utils::{notify::fs_notify_stream, paths::PathsError};
-use thin_edge_json::health::{health_check_topics, send_health_status};
 
 use tedge_utils::notify::{FsEvent, NotifyStream};
 use tracing::{error, info};

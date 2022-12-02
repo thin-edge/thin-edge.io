@@ -11,7 +11,6 @@ use crate::{
     error::{ChildDeviceConfigManagementError, ConfigManagementError},
 };
 use crate::{error, PluginConfig};
-use agent_interface::OperationStatus;
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
@@ -23,6 +22,7 @@ use c8y_api::smartrest::smartrest_serializer::{
 use c8y_api::smartrest::topic::C8yTopic;
 use download::{Auth, DownloadInfo, Downloader};
 use mqtt_channel::{Message, SinkExt, Topic, UnboundedSender};
+use tedge_api::OperationStatus;
 
 use serde_json::json;
 use std::os::unix::fs::PermissionsExt;

@@ -1,9 +1,5 @@
 use crate::plugin::{Plugin, LIST};
 use crate::{log_file::LogFile, plugin::ExternalPluginCommand};
-use agent_interface::{
-    SoftwareError, SoftwareListRequest, SoftwareListResponse, SoftwareType, SoftwareUpdateRequest,
-    SoftwareUpdateResponse, DEFAULT,
-};
 use std::path::Path;
 use std::{
     collections::HashMap,
@@ -11,6 +7,10 @@ use std::{
     io::{self, ErrorKind},
     path::PathBuf,
     process::{Command, Stdio},
+};
+use tedge_api::{
+    SoftwareError, SoftwareListRequest, SoftwareListResponse, SoftwareType, SoftwareUpdateRequest,
+    SoftwareUpdateResponse, DEFAULT,
 };
 use tracing::{error, info, warn};
 

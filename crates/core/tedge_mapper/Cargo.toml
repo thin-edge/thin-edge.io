@@ -24,7 +24,6 @@ assets = [
 [package.metadata.deb.systemd-units]
 
 [dependencies]
-agent_interface = { path = "../agent_interface"}
 assert_cmd = "2.0"
 anyhow = "1.0"
 async-trait = "0.1"
@@ -44,9 +43,9 @@ reqwest = { version = "0.11", default-features = false, features = ["json", "rus
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 clap = { version = "3.2", features = ["cargo", "derive"] }
+tedge_api = { path = "../tedge_api" }
 tedge_config = { path = "../../common/tedge_config" }
 tedge_utils = { path = "../../common/tedge_utils", features = ["logging", "fs-notify"] }
-thin_edge_json = { path = "../thin_edge_json" }
 thiserror = "1.0"
 time = "0.3"
 tokio = { version = "1.8", features = ["process", "rt", "rt-multi-thread", "sync", "time"] }

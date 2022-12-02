@@ -7,12 +7,12 @@ use crate::{
         StateRepository, StateStatus,
     },
 };
-use agent_interface::{
+use flockfile::{check_another_instance_is_not_running, Flockfile};
+use tedge_api::{
     control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
     RestartOperationResponse, SoftwareError, SoftwareListRequest, SoftwareListResponse,
     SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
-use flockfile::{check_another_instance_is_not_running, Flockfile};
 
 use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic, TopicFilter};
 use plugin_sm::{
@@ -23,6 +23,7 @@ use plugin_sm::{
 use crate::http_rest::HttpConfig;
 use std::process::Command;
 use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
+use tedge_api::health::{health_check_topics, send_health_status};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt,
     HttpBindAddressSetting, HttpPortSetting, LogPathSetting, MqttBindAddressSetting,
@@ -30,7 +31,6 @@ use tedge_config::{
     TmpPathSetting, DEFAULT_LOG_PATH, DEFAULT_RUN_PATH, DEFAULT_TMP_PATH,
 };
 use tedge_utils::file::create_directory_with_user_group;
-use thin_edge_json::health::{health_check_topics, send_health_status};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, warn};
 

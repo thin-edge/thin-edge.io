@@ -1,6 +1,6 @@
 use clock::Timestamp;
 use mqtt_channel::Payload;
-use thin_edge_json::{
+use tedge_api::{
     group::{MeasurementGroup, MeasurementGrouper, MeasurementGrouperError},
     measurement::MeasurementVisitor,
     serialize::ThinEdgeJsonSerializer,

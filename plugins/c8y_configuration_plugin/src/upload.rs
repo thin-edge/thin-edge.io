@@ -10,7 +10,6 @@ use crate::{
     error::{ChildDeviceConfigManagementError, ConfigManagementError},
     PluginConfig,
 };
-use agent_interface::OperationStatus;
 use anyhow::Result;
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::smartrest::error::SmartRestSerializerError;
@@ -22,6 +21,7 @@ use c8y_api::smartrest::{
         SmartRestSetOperationToFailed, SmartRestSetOperationToSuccessful,
     },
 };
+use tedge_api::OperationStatus;
 
 use mqtt_channel::{Message, SinkExt, Topic, UnboundedSender};
 use tedge_utils::{

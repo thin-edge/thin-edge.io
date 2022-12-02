@@ -4,10 +4,10 @@ use crate::{
 };
 
 use super::*;
-use agent_interface::OperationStatus;
 use c8y_api::{http_proxy::MockC8YHttpProxy, smartrest::error::SMCumulocityMapperError};
 use mockall::predicate;
 use std::time::Duration;
+use tedge_api::OperationStatus;
 use tedge_test_utils::fs::TempTedgeDir;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
