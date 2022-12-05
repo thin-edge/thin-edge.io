@@ -1,5 +1,5 @@
 #!/bin/sh
-
+set -e
 
 if [ "$(id -u)" != 0 ]; then
     printf "Please run as sudo or root!\n"
