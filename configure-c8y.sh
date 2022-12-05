@@ -1,7 +1,10 @@
 #!/bin/sh
 
 
-if [ `id -u` != 0 ] ; 
+if [ "$(id -u)" != 0 ]; then
+    printf "Please run as sudo or root!\n"
+    exit
+fi
   then printf "Please run as sudo or root!\n"
   exit
 fi
