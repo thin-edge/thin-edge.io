@@ -7,6 +7,13 @@ help() {
 Compile and build the tedge components and debian packages.
 Cross is automatically used if you are trying to build for a foreign target (e.g. build for arm64 on a x86_64 machine)
 
+By default, if the project is cloned using git (with all history), the version will be determined
+via the tag and git history (e.g. using "git describe"). This enable the version to be automatically
+incremented between official releases.
+
+Alternatively, if you would like to set a custom version (for development/testing purposes), you can set
+the 'GIT_SEMVER' environment variable before calling this script.
+
 Usage:
     $0 [ARCH] [--use-cross]
 
@@ -27,6 +34,9 @@ Flags:
     --use-cross     Force to use cross to build the packages
     --install-gcc   Install latest available gcc packages (for your operating system)
 
+Env:
+    GIT_SEMVER      Use a custom version when building the packages. Only use for dev/testing purposes!
+
 Examples:
     $0
     # Build for the current CPU architecture
@@ -45,6 +55,9 @@ Examples:
 
     $0 --use-cross
     # Force to use cross when building for the current architecture
+
+    export GIT_SEMVER=0.9.0-experiment-0.1
+    $0 --use-cross
 EOF
 }
 
@@ -144,17 +157,48 @@ fi
 # shellcheck disable=SC1091
 source ./ci/package_list.sh
 
+export GIT_SEMVER="${GIT_SEMVER:-}"
+
+# Set version from scm
+if [ -z "$GIT_SEMVER" ]; then
+    if command -v git >/dev/null 2>&1; then
+        GIT_DESCRIBE=$(git describe --always --tags --abbrev=8 2>/dev/null || true)
+
+        # only match if it looks like a semver version
+        if [[ "$GIT_DESCRIBE" =~ ^[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+            GIT_SEMVER="$GIT_DESCRIBE"
+            echo "Using version set from git: $GIT_SEMVER"
+        else
+            echo "git version does not match. got=$GIT_DESCRIBE, expected=^[0-9]+\.[0-9]+\.[0-9]+.*$"
+        fi
+    else
+        echo "git is not present on system. version will be handled by cargo directly"
+    fi
+else
+    echo "Using version set by user: $GIT_SEMVER"
+fi
+
 # build release for target
+# GIT_SEMVER should be referenced in the build.rs scripts
 "$BUILD_CMD" build --release "${TARGET[@]}"
+
+# set cargo deb options
+DEB_OPTIONS=()
+if [ -n "$GIT_SEMVER" ]; then
+    DEB_OPTIONS+=(
+        --deb-version "$GIT_SEMVER"
+    )
+fi
 
 # Create debian packages for release artifacts
 for PACKAGE in "${RELEASE_PACKAGES[@]}"
 do
-    cargo deb -p "$PACKAGE" --no-strip --no-build "${TARGET[@]}"
+    cargo deb -p "$PACKAGE" --no-strip --no-build "${DEB_OPTIONS[@]}" "${TARGET[@]}"
 done
 
 # Strip and build for test artifacts
 for PACKAGE in "${TEST_PACKAGES[@]}"
 do
     "$BUILD_CMD" build --release -p "$PACKAGE" "${TARGET[@]}"
+    cargo deb -p "$PACKAGE" --no-strip --no-build "${DEB_OPTIONS[@]}" "${TARGET[@]}"
 done
