@@ -869,6 +869,7 @@ fn read_json_from_file(file_path: &str) -> Result<serde_json::Value, ConversionE
     let mut data = String::new();
     file.read_to_string(&mut data)?;
     let json: serde_json::Value = serde_json::from_str(&data)?;
+    info!("Read the fragments from {file_path} file");
     Ok(json)
 }
 
@@ -892,10 +893,15 @@ fn get_inventory_fragments(
                 );
             Ok(json)
         }
-        Err(_) => {
-            info!("Inventory fragments file not found at {inventory_file_path}");
+        Err(ConversionError::FromStdIo(_)) => {
+            info!("Could not read inventory fragments from file {inventory_file_path}");
             Ok(json_fragment)
         }
+        Err(ConversionError::FromSerdeJson(e)) => {
+            info!("Could not parse the {inventory_file_path} file due to: {e}");
+            Ok(json_fragment)
+        }
+        Err(_) => Ok(json_fragment),
     }
 }
 
