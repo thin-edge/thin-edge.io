@@ -82,7 +82,8 @@ if [ $# -eq 1 ]; then
 fi
 
 # Install required cargo crates
-cargo install cargo-deb --version 1.38.1
+# cargo-deb >=1.41.3, the debian package names are automatically converted to a debian-conform name
+cargo install cargo-deb --version 1.41.3
 
 # Detect current host, and use cross to build if the target does not match the current host arch (triple)
 HOST_ARCH=$(rustc -vV | sed -n 's|host: ||p')

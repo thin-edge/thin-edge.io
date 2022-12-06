@@ -65,12 +65,12 @@ fn main() {
 fn process_call_with_file() {
     // When plugins are called by the agent they are forced to use `/tmp` as cwd.
     // If called not by the agent they will use users cwd, unless specifically told not to
-    // and therefore `.tedge_dummy_plugin` directory should exist in that cwd.
+    // and therefore `.tedge-dummy-plugin` directory should exist in that cwd.
     let tedge_dummy_path = std::env::current_dir()
         .unwrap()
-        .join(".tedge_dummy_plugin/");
+        .join(".tedge-dummy-plugin/");
 
-    // List all the files from `.tedge_dummy_plugin` and use them as source of output.
+    // List all the files from `.tedge-dummy-plugin` and use them as source of output.
     // The file should be name as per following scheme:
     // <dummy_name>.<desired_exit_code>
     // The file contents should be exactly as expected stdout response.

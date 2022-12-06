@@ -2,7 +2,7 @@
 
 Thin-edge.io requires config files for its operation. The `tedge --init` option is used to create
 the base directory and other directories inside the base directory with appropriate user and permissions.
-The `tedge_mapper --init c8y/az` and `tedge_agent --init` will create the
+The `tedge-mapper --init c8y/az` and `tedge-agent --init` will create the
 directories/files inside the base directory that are required for their operation.
 
 By default, the config files are created in `/etc/tedge` directory. To create the config files in 
@@ -36,10 +36,10 @@ $ sudo tedge --config-dir /global/path/to/config/dir --init
 Now all the config directories will be created inside the `/global/path/to/config/dir` directory.
 
 
-The directories and files that are required by the `tedge_mapper` are created as below.
+The directories and files that are required by the `tedge-mapper` are created as below.
 
 ```shell
-$ sudo tedge_mapper --init c8y
+$ sudo tedge-mapper --init c8y
 
 $ ls -l /etc/tedge/operations/c8y
 total 0
@@ -49,13 +49,13 @@ total 0
 To create these directories in a custom directory, use `--config-dir` option as below.
 
 ```shell
-$ sudo tedge_mapper --config-dir /global/path/to/config/dir --init c8y
+$ sudo tedge-mapper --config-dir /global/path/to/config/dir --init c8y
 ```
 
-The directories and files that are required by the `tedge_agent` are created as below.
+The directories and files that are required by the `tedge-agent` are created as below.
 
 ```shell
-$ sudo tedge_agent --init
+$ sudo tedge-agent --init
 
 $ ls -l /etc/tedge/.agent
 -rw-r--r-- 1 tedge tedge 0 Jun 15 11:51 /etc/tedge/.agent/current-operation
@@ -63,7 +63,7 @@ $ ls -l /etc/tedge/.agent
 To create these directories and files in a custom directory, use the `--config-dir` option as below as below.
 
 ```shell
-$ sudo tedge_agent --config-dir /global/path/to/config/dir --init
+$ sudo tedge-agent --config-dir /global/path/to/config/dir --init
 ```
 
 ## Manage the configuration parameters

@@ -6,7 +6,7 @@ from threading import Timer
 """
 Validate tedge-agent user has a limited sudo right
 
-Given tedge_apt_plugin and tedge_agent are installed
+Given tedge-apt-plugin and tedge-agent are installed
 When we run plugin located in plugin directory as tedge-agent
 Then a plugin is executed
 When we run plugin located out of plugin directory as tedge-agent

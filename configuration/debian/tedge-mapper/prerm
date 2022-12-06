@@ -17,4 +17,9 @@ if command -v systemctl >/dev/null; then
     fi
 fi
 
+# Deprecate: Remove symlink in 1.x release
+if [ -e /usr/bin/tedge_mapper ]; then
+    rm -f /usr/bin/tedge_mapper
+fi
+
 #DEBHELPER#

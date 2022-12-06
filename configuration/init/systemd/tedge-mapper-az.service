@@ -4,7 +4,7 @@ After=syslog.target network.target mosquitto.service
 
 [Service]
 User=tedge
-ExecStart=/usr/bin/tedge_mapper az
+ExecStart=/usr/bin/tedge-mapper az
 Restart=on-failure
 RestartPreventExitStatus=255
 

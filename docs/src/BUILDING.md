@@ -104,7 +104,7 @@ Build artifacts can be found in `./target/debug` and will include executables:
 ```shell
 $ ls ./target/debug/tedge*
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
--rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge_mapper
+-rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge-mapper
 ```
 
 Binaries can be run eg: `./target/debug/tedge`.
@@ -127,21 +127,21 @@ Build artifacts can be found in `./target/release` and will include executables:
 ```shell
 $ ls ./target/release/tedge*
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
--rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge_mapper
+-rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge-mapper
 ```
 
 Binaries can be run eg: `./target/release/tedge`.
 
 ## Building deb package
 
-Currently thin-edge.io contains 2 binaries, `tedge` (cli) and `tedge_mapper` which are packaged as separate debian packages. To create following commands are to be issued:
+Currently thin-edge.io contains 2 binaries, `tedge` (cli) and `tedge-mapper` which are packaged as separate debian packages. To create following commands are to be issued:
 
 ```shell
 cargo deb -p tedge
 ```
 
 ```shell
-cargo deb -p tedge_mapper
+cargo deb -p tedge-mapper
 ```
 
 All resulting packages are going to be in: `./target/debian/` directory:
@@ -149,8 +149,8 @@ All resulting packages are going to be in: `./target/debian/` directory:
 ```shell
 $ ls ./target/debian -l
 total 2948
--rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_0.5.0_amd64.deb
--rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_mapper_0.5.0_amd64.deb
+-rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_0.9.0_amd64.deb
+-rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge-mapper_0.9.0_amd64.deb
 ```
 
 ## Cross compiling
@@ -166,7 +166,7 @@ Build artifacts can be found in `./target/armv7-unknown-linux-gnueabihf/debug` a
 ```shell
 $ ls ./target/armv7-unknown-linux-gnueabihf/debug/tedge*
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
--rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge_mapper
+-rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge-mapper
 ```
 
 To cross compile release version of the binaries just add `--release` to the above command like so:

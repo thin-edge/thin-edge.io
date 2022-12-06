@@ -79,13 +79,13 @@ impl DisconnectBridgeCommand {
 
         let mut failed = false;
         // Only C8Y changes the status of tedge-mapper
-        if self.use_mapper && which("tedge_mapper").is_ok() {
+        if self.use_mapper && which("tedge-mapper").is_ok() {
             failed = self
                 .service_manager()
                 .stop_and_disable_service(self.cloud.dependent_mapper_service(), std::io::stdout());
         }
 
-        if self.use_agent && which("tedge_agent").is_ok() {
+        if self.use_agent && which("tedge-agent").is_ok() {
             failed = self
                 .service_manager()
                 .stop_and_disable_service(SystemService::TEdgeSMAgent, std::io::stdout());

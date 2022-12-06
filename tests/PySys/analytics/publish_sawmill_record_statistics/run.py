@@ -9,7 +9,7 @@ Publish sawmill and record process statistics
 
 Given a configured system with configured certificate
 When we derive from EnvironmentC8y
-When we publish with the sawtooth_publisher with 100ms cycle time and publish
+When we publish with the sawtooth-publisher with 100ms cycle time and publish
     6 times 100 values to the Sawmill topic (10 on each publish) (60s).
 When we record the output of mosquittos $SYS/# topic
 When we record the /proc/pid/status of mosquitto
@@ -51,13 +51,13 @@ class PublishSawmillRecordStatistics(EnvironmentC8y):
             command="/bin/sh",
             arguments=[
                 "-c",
-                "while true; do cat /proc/$(pgrep -x tedge_mapper)/status; sleep 1; done",
+                "while true; do cat /proc/$(pgrep -x tedge-mapper)/status; sleep 1; done",
             ],
             stdouterr="stats_mapper_stdout",
             background=True,
         )
 
-        publisher = self.project.exampledir + "/sawtooth_publisher"
+        publisher = self.project.exampledir + "/sawtooth-publisher"
         cmd = os.path.expanduser(publisher)
 
         pub = self.startProcess(

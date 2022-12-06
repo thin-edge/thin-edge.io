@@ -27,8 +27,8 @@ use tedge_config::{
 use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
 use tracing::{error, info};
 
-const AFTER_HELP_TEXT: &str = r#"On start, `c8y_configuration_plugin` notifies the cloud tenant of the managed configuration files, listed in the `CONFIG_FILE`, sending this list with a `119` on `c8y/s/us`.
-`c8y_configuration_plugin` subscribes then to `c8y/s/ds` listening for configuration operation requests (messages `524` and `526`).
+const AFTER_HELP_TEXT: &str = r#"On start, `c8y-configuration-plugin` notifies the cloud tenant of the managed configuration files, listed in the `CONFIG_FILE`, sending this list with a `119` on `c8y/s/us`.
+`c8y-configuration-plugin` subscribes then to `c8y/s/ds` listening for configuration operation requests (messages `524` and `526`).
 notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
 
 The thin-edge `CONFIG_DIR` is used to find where:

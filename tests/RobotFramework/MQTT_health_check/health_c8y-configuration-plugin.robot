@@ -30,13 +30,13 @@ Start watchdog service
     Should Be Equal    ${rc}    ${0}
     Sleep    10s
 Check PID of c8y-configuration-plugin
-    ${pid}=    Execute Command    pgrep -f 'c8y_configuration_plugin'
+    ${pid}=    Execute Command    pgrep -f 'c8y-configuration-plugin'
     Set Suite Variable    ${pid}
 Kill the PID
     ${rc}=    Execute Command    sudo kill -9 ${pid}    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 Recheck PID of c8y-configuration-plugin
-    ${pid1}=    Execute Command    pgrep -f 'c8y_configuration_plugin'
+    ${pid1}=    Execute Command    pgrep -f 'c8y-configuration-plugin'
     Set Suite Variable    ${pid1}
 Compare PID change
     Should Not Be Equal    ${pid}    ${pid1}

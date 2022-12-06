@@ -29,14 +29,14 @@ Start watchdog service
     ${rc}=    Execute Command    sudo systemctl start tedge-watchdog.service    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
     Sleep    10s
-Check PID of tedge_mapper
-    ${pid}=    Execute Command    pgrep tedge_agent
+Check PID of tedge-mapper
+    ${pid}=    Execute Command    pgrep tedge-agent
     Set Suite Variable    ${pid}
 Kill the PID
     ${rc}=    Execute Command    sudo kill -9 ${pid}    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
-Recheck PID of tedge_agent
-    ${pid1}=    Execute Command    pgrep tedge_agent
+Recheck PID of tedge-agent
+    ${pid1}=    Execute Command    pgrep tedge-agent
     Set Suite Variable    ${pid1}
 Compare PID change
     Should Not Be Equal    ${pid}    ${pid1}

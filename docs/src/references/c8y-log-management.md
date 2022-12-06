@@ -2,7 +2,7 @@
 
 Thin-edge provides an operation plugin to [fetch log files from the device on to Cumulocity](https://cumulocity.com/guides/users-guide/device-management/#logs).
 
-* Log file management from Cumulocity is provided with a `c8y_log_plugin` which runs as a daemon on thin-edge.
+* Log file management from Cumulocity is provided with a `c8y-log-plugin` which runs as a daemon on thin-edge.
 * The device owner can define the list of log files that can be retrieved from Cumulocity,
   in the plugin's configuration file named `c8y-log-plugin.toml`.
 * Each entry in the the `c8y-log-plugin.toml` file contains a log `type` and a `path` pattern,
@@ -11,20 +11,20 @@ Thin-edge provides an operation plugin to [fetch log files from the device on to
   the log files for that type are retrieved using the `path` pattern defined in this `c8y-log-plugin.toml`,
   matched against the requested time range, search text and maximum line count.
 * The list of managed log files in `c8y-log-plugin.toml` can be updated both locally as well as from Cumulocity cloud,
-  using the configuration management feature of Cumulocity, combined with the `c8y_configuration_plugin` of thin-edge.
+  using the configuration management feature of Cumulocity, combined with the `c8y-configuration-plugin` of thin-edge.
 
 ## Installation
 
 As part of this plugin installation:
 * The `--init` command of the plugin is executed, which creates an empty file at `/etc/tedge/operations/c8y/c8y_LogfileRequest` indicating that this device supports `c8y_LogfileRequest` operation from Cumulocity.
-* On systemd enabled devices, the service definition file for this `c8y_log_plugin` daemon is also installed as part of this plugin installation.
+* On systemd enabled devices, the service definition file for this `c8y-log-plugin` daemon is also installed as part of this plugin installation.
 
-Once installed, the `c8y_log_plugin` is run as a daemon on the device listening to log requests from Cumulocity on `c8y/s/us` MQTT topic.
+Once installed, the `c8y-log-plugin` is run as a daemon on the device listening to log requests from Cumulocity on `c8y/s/us` MQTT topic.
 On startup, it reports all the log file types that it manages, defined in the `c8y-log-plugin.toml`
 
 ## Configuration
 
-The `c8y_log_plugin` configuration is stored by default under `/etc/tedge/c8y/c8y-log-plugin.toml`.
+The `c8y-log-plugin` configuration is stored by default under `/etc/tedge/c8y/c8y-log-plugin.toml`.
 
 This [TOML](https://toml.io/en/) file defines the list of log files that can be retrieved from the cloud tenant.
 The paths to these files can be represented using [glob](https://en.wikipedia.org/wiki/Glob_(programming)) patterns.
@@ -38,7 +38,7 @@ files = [
 ]
 ```
 
-The `c8y_log_plugin` parses this configuration file on startup for all the `type` values specified,
+The `c8y-log-plugin` parses this configuration file on startup for all the `type` values specified,
 and sends the supported log types message(SmartREST `118`) to Cumulocity on `c8y/s/us` topic as follows:
 
 ```csv
@@ -72,16 +72,16 @@ with SmartREST messages `501`(executing), `502`(failed) or `503`(successful) on 
 
 The supported log files list defined in the `c8y-log-plugin.toml` can be updated both locally as well as from Cumulocity cloud.
 Updates from Cumulocity can be achieved simply by listing this log plugin's config file(`c8y-log-plugin.toml`) 
-in the configuration file of the `c8y_configuration_plugin`.
-This will enable the `c8y-log-plugin.toml` to be tracked and managed by the `c8y_configuration_plugin`.
+in the configuration file of the `c8y-configuration-plugin`.
+This will enable the `c8y-log-plugin.toml` to be tracked and managed by the `c8y-configuration-plugin`.
 
 ## Usage
 
 ```shell
-$ c8y_log_plugin
+$ c8y-log-plugin
 Plugin supporting log management from Cumulocity on thin-edge.
 USAGE:
-    c8y_log_plugin [OPTIONS]
+    c8y-log-plugin [OPTIONS]
 OPTIONS:
         --config-dir <CONFIG_DIR>      Root directory of tedge config and plugin config files [default: `/etc/tedge`]
         --config-file <CONFIG_FILE>    Path to the plugin config file [default: `$CONFIG_DIR/c8y/c8y-log-plugin.toml`]
@@ -89,14 +89,14 @@ OPTIONS:
     -h, --help                         Print help information
     -V, --version                      Print version information
 
-    On start, `c8y_log_plugin` notifies the cloud tenant of the managed log types, defined in `c8y-log-plugin.toml`.
+    On start, `c8y-log-plugin` notifies the cloud tenant of the managed log types, defined in `c8y-log-plugin.toml`.
     On receipt of log requests from the cloud, the log files are fetched using the glob path patterns listed in this config file.
     The cloud tenant is also notified of the progress of the log request operation until success/failure.
 ```
 
 ## Logging
 
-The `c8y_log_plugin` reports progress and errors to the OS journal which can be retrieved using `journalctl`.
+The `c8y-log-plugin` reports progress and errors to the OS journal which can be retrieved using `journalctl`.
 
 ## Future enhancements
 

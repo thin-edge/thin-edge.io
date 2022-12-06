@@ -73,12 +73,12 @@ jobs:
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v3
         with:
-          name: sawtooth_publisher_${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/sawtooth_publisher
+          name: sawtooth-publisher_${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/sawtooth-publisher
 
       - name: Upload dummy-plugin as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v3
         with:
-          name: tedge_dummy_plugin_${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/tedge_dummy_plugin
+          name: tedge-dummy-plugin_${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/tedge-dummy-plugin

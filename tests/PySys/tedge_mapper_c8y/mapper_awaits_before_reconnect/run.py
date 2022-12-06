@@ -8,8 +8,8 @@ Validate mapper doesn't reconnect too often.
 Given unconnected system
 
 When we start mosquitto_sub to use fixed MQTT Client ID
-When we start tedge_mapper systemd service to use fixed MQTT Client ID
-When we observe tedge_mapper tries to reconnect
+When we start tedge-mapper systemd service to use fixed MQTT Client ID
+When we observe tedge-mapper tries to reconnect
 
 Then we wait for 5 seconds
 Then we validate output contains no more than 5 error messages

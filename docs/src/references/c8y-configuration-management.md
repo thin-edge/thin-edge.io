@@ -72,17 +72,17 @@ Thin-edge provides an operation plugin to
 
 ## Installation
 
-Assuming the configuration plugin `c8y_configuration_plugin`
-has been installed in `/usr/bin/c8y_configuration_plugin`,
+Assuming the configuration plugin `c8y-configuration-plugin`
+has been installed in `/usr/bin/c8y-configuration-plugin`,
 two files must be added under `/etc/tedge/operations/c8y/`
 to declare that this plugin supports two Cumulocity operations:
 uploading and downloading configuration files
 (which respective SmartRest2 codes are `526` and `524`).
 
-These two files can be created using the `c8y_configuration_plugin --init` option:
+These two files can be created using the `c8y-configuration-plugin --init` option:
 
 ```shell
-$ sudo c8y_configuration_plugin --init
+$ sudo c8y-configuration-plugin --init
 
 $ ls -l /etc/tedge/operations/c8y/c8y_UploadConfigFile
 -rw-r--r-- 1 tedge tedge 95 Mar 22 14:24 /etc/tedge/operations/c8y/c8y_UploadConfigFile
@@ -109,9 +109,9 @@ $ ls -l /etc/tedge/operations/c8y/child-2
 -rw-r--r-- 1 tedge tedge 95 Mar 22 14:24 /etc/tedge/operations/c8y/child-2/c8y_UploadConfigFile
 ```
 
-The `c8y_configuration_plugin` has to be run as a daemon on the device, the latter being connected to Cumulocity.
+The `c8y-configuration-plugin` has to be run as a daemon on the device, the latter being connected to Cumulocity.
 
-On start of `tedge_mapper c8y` and on `/etc/tedge/operations/c8y` directory updates,
+On start of `tedge-mapper c8y` and on `/etc/tedge/operations/c8y` directory updates,
 one can observe on the MQTT bus of the thin-edge device
 the messages sent to Cumulocity to declare the capabilities of the main and child devices.
 Here, the capabilities to upload and download configuration files
@@ -126,7 +126,7 @@ $ tedge mqtt sub 'c8y/s/us/#'
 
 ## Configuration
 
-The `c8y_configuration_plugin` configuration is stored by default under `/etc/tedge/c8y/c8y-configuration-plugin.toml`
+The `c8y-configuration-plugin` configuration is stored by default under `/etc/tedge/c8y/c8y-configuration-plugin.toml`
 
 This [TOML](https://toml.io/en/) file defines the list of files to be managed from the cloud tenant.
 Each configuration file is defined by a record with:
@@ -150,7 +150,7 @@ files = [
   ]
 ```
 
-Along this `c8y_configuration_plugin` configuration for the main device,
+Along this `c8y-configuration-plugin` configuration for the main device,
 the configuration plugin expects a configuration file per child device
 that needs to be configured from the cloud.
 * The configuration for a child-device `$CHILD_DEVICE_ID`
@@ -214,7 +214,7 @@ Note that:
   Similarly, for any file `/etc/tedge/c8y/$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`.
   So, the issue can be fixed from the cloud.
   
-The behavior of the `c8y_configuration_plugin` is also controlled
+The behavior of the `c8y-configuration-plugin` is also controlled
 by the configuration of thin-edge:
 
 * `tedge config get mqtt.bind_address`: the address of the local MQTT bus.
@@ -225,12 +225,12 @@ by the configuration of thin-edge:
 ## Usage
 
 ```shell
-$ c8y_configuration_plugin --help
-c8y_configuration_plugin 0.6.2
+$ c8y-configuration-plugin --help
+c8y-configuration-plugin 0.9.0
 Thin-edge device configuration management for Cumulocity
 
 USAGE:
-    c8y_configuration_plugin [OPTIONS]
+    c8y-configuration-plugin [OPTIONS]
 
 OPTIONS:
         --config-dir <CONFIG_DIR>      [default: /etc/tedge]
@@ -238,9 +238,9 @@ OPTIONS:
     -h, --help                         Print help information
     -V, --version                      Print version information
 
-    On start, `c8y_configuration_plugin` notifies the cloud tenant of the managed configuration files,
+    On start, `c8y-configuration-plugin` notifies the cloud tenant of the managed configuration files,
     listed in `CONFIG_DIR/c8y/c8y-configuration-plugin.toml`, sending this list with a `119` on `c8y/s/us`.
-    `c8y_configuration_plugin` subscribes then to `c8y/s/ds` listening for configuration operation
+    `c8y-configuration-plugin` subscribes then to `c8y/s/ds` listening for configuration operation
     requests (messages `524` and `526`).
     notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
     
@@ -252,7 +252,7 @@ OPTIONS:
 
 ## Logging
 
-The `c8y_configuration_plugin` reports progress and errors on its `stderr`.
+The `c8y-configuration-plugin` reports progress and errors on its `stderr`.
 
 * All upload and download operation requests are logged, when received and when completed,
   with one line per file.
@@ -262,7 +262,7 @@ The `c8y_configuration_plugin` reports progress and errors on its `stderr`.
 ## Notifications
 
 When a configuration file is successfully downloaded from the cloud,
-the `c8y_configuration_plugin` service notifies this update over MQTT.
+the `c8y-configuration-plugin` service notifies this update over MQTT.
 
 * The notification messages are published on the topic `tedge/configuration_change/{type}`,
   where `{type}` is the type of the configuration file that have been updated,
@@ -279,7 +279,7 @@ Note that:
 
 ## Configuration protocol between thin-edge and the child-devices
 
-The configuration plugin `c8y_configuration_plugin` can act as a proxy between the cloud and a child-device.
+The configuration plugin `c8y-configuration-plugin` can act as a proxy between the cloud and a child-device.
 However, for that to work, a client, referred to as child-device-agent, must be installed on the child device
 to perform the actual configuration updates pushed by thin-edge on behalf of the cloud.
 While the configuration plugin tells what need to be updated and when,
@@ -341,7 +341,7 @@ and all the connections to thin-edge are established by the child devices.
 ### The child device downloads configuration updates on notification
 
 When a configuration file for a child device
-is received from the cloud by the `c8y_configuration_plugin` daemon,
+is received from the cloud by the `c8y-configuration-plugin` daemon,
 the configuration plugin manages the transfer of this file to the child device
 and notifies the cloud on the progress of this configuration update operation.
 
@@ -372,13 +372,13 @@ sequenceDiagram
 
 1. On reception of a configuration update for a child device named `$CHILD_DEVICE_ID`
    of a file `{ path = $PATH, type = $TYPE }` defined in `$CHILD_DEVICE_ID/c8y-configuration-plugin.toml` 
-   the `c8y_configuration_plugin` downloads the new configuration content to the temporary directory defined by `tedge config get tmp.path`,
+   the `c8y-configuration-plugin` downloads the new configuration content to the temporary directory defined by `tedge config get tmp.path`,
    and, on success, moves this content under the thin-edge file transfer HTTP root.
    * The file is moved to `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_update/$TYPE`
      making this file available under `http://$TEDGE_HTTP/tedge/file-transfer/$CHILD_DEVICE_ID/config_update/$TYPE`.
    * Note that the `$TYPE` is by default the `$PATH` if not provided by the configuration.  
 1. Once the updated configuration is available over the local HTTP file transfer service,
-   the `c8y_configuration_plugin` notifies the child device by publishing an MQTT message.
+   the `c8y-configuration-plugin` notifies the child device by publishing an MQTT message.
    * The topic is `tedge/$CHILD_DEVICE_ID/commands/req/config_update`
    * The payload is a JSON record with 3 fields
      * `"url": "http://$TEDGE_HTTP/tedge/file-transfer/$CHILD_DEVICE_ID/config_update/$TYPE"`
@@ -406,7 +406,7 @@ sequenceDiagram
       depending on the success of the `GET` and configuration operations.
       It should also send an executing message before starting to process the request.
 1. On reception an operation status message,
-   the `c8y_configuration_plugin` notifies the cloud accordingly.
+   the `c8y-configuration-plugin` notifies the cloud accordingly.
    1. When a success or error message is finally received,
       then the configuration plugin cleans up all the temporary resources,
       notably removing the file under `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_update/$TYPE`.
@@ -417,7 +417,7 @@ sequenceDiagram
 ### The child device uploads current configuration snapshot on request
 
 The configuration files actually used by a child device can be requested from the cloud.
-As for configuration updates, the `c8y_configuration_plugin` daemon drive these requests
+As for configuration updates, the `c8y-configuration-plugin` daemon drive these requests
 using a combination of MQTT to notify the child device of the request
 and of HTTP to let the child device `PUT` the requested file.
 
@@ -447,14 +447,14 @@ sequenceDiagram
 
 1. On reception of a configuration request for a child device named `$CHILD_DEVICE_ID`
    for a file `{ path = $PATH, type = $TYPE }` defined in `$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`
-   the `c8y_configuration_plugin` forwards this request to the child device by publishing an MQTT message
+   the `c8y-configuration-plugin` forwards this request to the child device by publishing an MQTT message
    telling which configuration is expected and where to upload it.
     * The topic is `tedge/$CHILD_DEVICE_ID/commands/req/config_snapshot`
     * The payload is a JSON record with 3 fields
         * `"url": "http://$TEDGE_HTTP/tedge/file-transfer/$CHILD_DEVICE_ID/config_snapshot/$TYPE"`
         * `"path": "$PATH"`
         * `"type": "$TYPE"` (if no `type` has been specified, then this field is omitted) 
-    * The `url` conveys the fact the `c8y_configuration_plugin` expects that, on transfer success,
+    * The `url` conveys the fact the `c8y-configuration-plugin` expects that, on transfer success,
       the file will be stored `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_snapshot/$TYPE`.
       Note that when the `$TYPE` is not explicitly defined in `$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`,
       then the `$PATH` is used as the configuration type.
@@ -479,7 +479,7 @@ sequenceDiagram
        depending on the success of the `PUT` operation.
        It should also send an executing message before starting to process the request.
 1. On reception of an operation status message,
-   the `c8y_configuration_plugin` notifies the cloud accordingly.
+   the `c8y-configuration-plugin` notifies the cloud accordingly.
     1. When a success message is received,
        then the configuration plugin transfers to the cloud the content `PUT` by the child-device
        under `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_snapshop/$TYPE` and
@@ -502,7 +502,7 @@ as if it received a config snapshot request for `c8y-configuration-plugin` type 
       1. Generate a `c8y-configuration-plugin.toml` with the supported config list in the presribed format.
       2. Uploads this file to `http://$TEDGE_HTTP/tedge/file-transfer/$CHILD_DEVICE_ID/config_snapshot/c8y-configuration-plugin` with a `PUT` call.
       3. On success of the upload, the child-device agent
-         notifies the `c8y_configuration_plugin` with an MQTT message published on the topic
+         notifies the `c8y-configuration-plugin` with an MQTT message published on the topic
          `tedge/$CHILD_DEVICE_ID/commands/res/config_snapshot`
          with the payload containing a JSON record with `"type": "c8y-configuration-plugin"` but without the `status` field.
       4. Note that there is no need to send executing notification messages here,

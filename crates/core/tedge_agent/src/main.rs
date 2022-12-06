@@ -49,7 +49,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(agent_opt.config_dir.clone());
     let mut agent = agent::SmAgent::try_new(
-        "tedge_agent",
+        "tedge-agent",
         SmAgentConfig::try_new(tedge_config_location)?,
     )?;
     if agent_opt.init {

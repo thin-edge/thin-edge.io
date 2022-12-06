@@ -3,7 +3,12 @@
 set -e
 
 ### Create supported operation files
-c8y_log_plugin --init
+c8y-log-plugin --init
+
+# Deprecate: Remove symlink in 1.x release
+if [ ! -e /usr/bin/c8y_log_plugin ]; then
+    ln -s /usr/bin/c8y-log-plugin /usr/bin/c8y_log_plugin
+fi
 
 #DEBHELPER#
 

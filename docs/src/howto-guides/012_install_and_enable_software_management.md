@@ -7,7 +7,7 @@ Below steps show how to download, install and enable thin-edge software manageme
 
 ## Download and install software management packages on the device
 
-As a prerequisite, install [tedge and tedge_mapper](../howto-guides/002_installation.md) if not installed already.
+As a prerequisite, install [tedge and tedge-mapper](../howto-guides/002_installation.md) if not installed already.
 
 The thin-edge software management packages are in repository on GitHub: [thin-edge.io](https://github.com/thin-edge/thin-edge.io/releases).
 
@@ -22,20 +22,20 @@ where:
 >
 > `arch` -> architecture type (amd64, armhf)
 
-Download `tedge_apt_plugin` and `tedge_agent`
+Download `tedge-apt-plugin` and `tedge-agent`
 
 ```shell
-curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.5.0/tedge_apt_plugin_0.5.0_armhf.deb
-curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.5.0/tedge_agent_0.5.0_armhf.deb
+curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.9.0/tedge-apt-plugin_0.9.0_armhf.deb
+curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.9.0/tedge-agent_0.9.0_armhf.deb
 ```
 
 Once the packages are downloaded, proceed to installation.
 
-To install `tedge_apt_plugin` and `tedge_agent` on thin-edge device do:
+To install `tedge-apt-plugin` and `tedge-agent` on thin-edge device do:
 
 ```shell
-sudo dpkg -i tedge_apt_plugin_<version>_<arch>.deb
-sudo dpkg -i tedge_agent<version>_<arch>.deb
+sudo dpkg -i tedge-apt-plugin_<version>_<arch>.deb
+sudo dpkg -i tedge-agent_<version>_<arch>.deb
 ```
 
 > Note: Software management feature will be enabled after installation if the device

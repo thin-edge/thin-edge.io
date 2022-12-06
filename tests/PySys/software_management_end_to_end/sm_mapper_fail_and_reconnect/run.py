@@ -11,7 +11,7 @@ Validate the tedge-mapper-c8y does not loose last message from tedge-agent when 
 Given a configured system
 When `rolldice` package is installed
 when a subscriber is started as `sudo tedge mqtt sub 'c8y/s/us'`
-When tedge_agent is started as `sudo systemctl start tedge-agent.service`
+When tedge-agent is started as `sudo systemctl start tedge-agent.service`
 When c8y mapper is started as `sudo systemctl start tedge-mapper-c8y.service`
 When send a delete operation `sudo tedge mqtt pub "c8y/s/ds" "528,tedge,rolldice,,,delete"`
 When c8y mapper is stopped `sudo systemctl stop tedge-mapper-c8y.service`

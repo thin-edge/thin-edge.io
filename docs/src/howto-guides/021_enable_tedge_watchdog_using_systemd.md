@@ -35,7 +35,7 @@ After=syslog.target network.target mosquitto.service tedge-watchdog.service
 
 [Service]
 User=tedge-mapper
-ExecStart=/usr/bin/tedge_mapper c8y
+ExecStart=/usr/bin/tedge-mapper c8y
 Restart=always
 RestartPreventExitStatus=255
 WatchdogSec=30

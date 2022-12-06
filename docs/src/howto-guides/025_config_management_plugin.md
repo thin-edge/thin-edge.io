@@ -5,14 +5,14 @@ With `thin-edge.io`, you can manage config files on a device by using the [Cumul
 If you are new to the Cumulocity **Configuration Management** feature,
 we recommend you to read [the Cumulocity user guide](https://cumulocity.com/guides/users-guide/device-management/#managing-configurations) along with this how-to guide.
 
-## Installation of `c8y_configuration_plugin`
+## Installation of `c8y-configuration-plugin`
 
-To enable the feature, first you need to install the `c8y_configuration_plugin` binary on your device.
+To enable the feature, first you need to install the `c8y-configuration-plugin` binary on your device.
 
 ### Using the `get-thin-edge_io.sh` script on Debian based distributions (Recommended)
 
 If your device supports `apt` as a package manager,
-you can install all `thin-edge.io` packages including the `c8y_configuration_plugin` by the `get-thin-edge_io.sh` script.
+you can install all `thin-edge.io` packages including the `c8y-configuration-plugin` by the `get-thin-edge_io.sh` script.
 If you have already used the `get-thin-edge_io.sh` script,
 this package is installed, by default.
 
@@ -20,23 +20,23 @@ this package is installed, by default.
 curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
 ```
 
-### Using the `c8y_configuration_plugin` Debian package on Debian based distributions
+### Using the `c8y-configuration-plugin` Debian package on Debian based distributions
 
-For Debian based distributions, we provide the `c8y_configuration_plugin_<version>_<arch>.deb` package as a release asset [here](https://github.com/thin-edge/thin-edge.io/releases).
+For Debian based distributions, we provide the `c8y-configuration-plugin_<version>_<arch>.deb` package as a release asset [here](https://github.com/thin-edge/thin-edge.io/releases).
 
-In case that you didn't use the `get-thin-edge_io.sh` script, you can download the `c8y_configuration_plugin_<version>_<arch>.deb`  package on our [Releases](https://github.com/thin-edge/thin-edge.io/releases) and install it.
+In case that you didn't use the `get-thin-edge_io.sh` script, you can download the `c8y-configuration-plugin_<version>_<arch>.deb`  package on our [Releases](https://github.com/thin-edge/thin-edge.io/releases) and install it.
 
 ```shell
-sudo apt install ./path/to/package/c8y_configuration_plugin_<version>_<arch>.deb
+sudo apt install ./path/to/package/c8y-configuration-plugin_<version>_<arch>.deb
 ```
 
 ### Extracting from debian package on non-Debian based distributions
 
-Get the `c8y_configuration_plugin_<version>_<arch>.deb` from our [Releases](https://github.com/thin-edge/thin-edge.io/releases).
+Get the `c8y-configuration-plugin_<version>_<arch>.deb` from our [Releases](https://github.com/thin-edge/thin-edge.io/releases).
 Then, run this command in the directory where the package is stored.
 
 ```shell
-ar -x ./c8y_configuration_plugin_<version>_<arch>.deb | tar -xf ./data.tar.xz
+ar -x ./c8y-configuration-plugin_<version>_<arch>.deb | tar -xf ./data.tar.xz
 ```
 
 The binary is extracted in `<current directory>/usr/bin`.
@@ -47,10 +47,10 @@ For more details, refer to our guide [Extracting from debian package](./015_inst
 Follow our guide [Building thin-edge.io](./../BUILDING.md) and [Building from source](./015_installation_without_deb_support.md#if-building-from-source).
 
 ```shell
-cargo build --release -p c8y_configuration_plugin
+cargo build --release -p c8y-configuration-plugin
 ```
 
-A `systemd` unit file for `c8y_configuration_plugin` can be found in the repository at `configuration/init/systemd/c8y-configuration-plugin.service`
+A `systemd` unit file for `c8y-configuration-plugin` can be found in the repository at `configuration/init/systemd/c8y-configuration-plugin.service`
 and should be installed on the target in: `/lib/systemd/system/c8y-configuration-plugin.service`.
 
 ```shell
@@ -62,11 +62,11 @@ sudo cp <repository_root>/configuration/init/systemd/c8y-configuration-plugin.se
 Before starting anything, make sure [your device is connected to Cumulocity](./../tutorials/connect-c8y.md).
 
 **Step 0**
-Unless you installed `c8y_configuration_plugin` using the debian package,
+Unless you installed `c8y-configuration-plugin` using the debian package,
 you need one additional step to initialize the plugin. Run this command.
 
 ```shell
-sudo c8y_configuration_plugin --init
+sudo c8y-configuration-plugin --init
 ```
 
 **Step 1**
@@ -101,7 +101,7 @@ sudo systemctl enable c8y-configuration-plugin.service
 Alternatively, you can run the process directly.
 
 ```
-sudo c8y_configuration_plugin
+sudo c8y-configuration-plugin
 ```
 
 **Step 3**
@@ -110,7 +110,7 @@ You can find `c8y-configuration-plugin` and more are listed as supported configu
 
 ![Cumulocity Configuration Management Upload](./images/c8y-config-plugin-upload.png)
 
-This is the configuration file of `c8y_configuration_plugin`, where you can add file entries that you want to manage with Cumulocity.
+This is the configuration file of `c8y-configuration-plugin`, where you can add file entries that you want to manage with Cumulocity.
 
 ## Update `c8y-configuration-plugin` from Cumulocity
 
@@ -131,6 +131,6 @@ Then you can find new supported configuration types as you defined.
 > Note: All configuration updates are notified over `tedge/configuration_change/<config-type>` MQTT topic, giving the opportunity to software components installed on the device or a child device to react to these updates.
 > For more details, refer to the [Notifications section of the specification](./../references/c8y-configuration-management.md#notifications).
 
-To get to know more about the `c8y_configuration_plugin`, refer to [Specifications of Device Configuration Management using Cumulocity](./../references/c8y-configuration-management.md).
+To get to know more about the `c8y-configuration-plugin`, refer to [Specifications of Device Configuration Management using Cumulocity](./../references/c8y-configuration-management.md).
 
 

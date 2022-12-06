@@ -30,13 +30,13 @@ Start watchdog service
     Should Be Equal    ${rc}    ${0}
     Sleep    10s
 Check PID of tedge-mapper-az
-    ${pid}=    Execute Command    pgrep -f 'tedge_mapper az'
+    ${pid}=    Execute Command    pgrep -f 'tedge-mapper az'
     Set Suite Variable    ${pid}
 Kill the PID
     ${rc}=    Execute Command    sudo kill -9 ${pid}    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
-Recheck PID of tedge_agent
-    ${pid1}=    Execute Command    pgrep -f 'tedge_mapper az'
+Recheck PID of tedge-agent
+    ${pid1}=    Execute Command    pgrep -f 'tedge-mapper az'
     Set Suite Variable    ${pid1}
 Compare PID change
     Should Not Be Equal    ${pid}    ${pid1}

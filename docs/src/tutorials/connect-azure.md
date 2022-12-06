@@ -99,7 +99,7 @@ This command configures the MQTT broker:
 * to establish a permanent and secure connection to the Azure cloud,
 * to forward local messages to the cloud and vice versa.
 
-Also, if you have installed `tedge_mapper`, this command starts and enables the tedge-mapper-az systemd service.
+Also, if you have installed `tedge-mapper`, this command starts and enables the tedge-mapper-az systemd service.
 At last, it sends packets to Azure IoT Hub to check the connection.
 
 ```shell
