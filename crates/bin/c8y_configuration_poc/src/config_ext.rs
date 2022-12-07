@@ -17,25 +17,35 @@ pub struct ConfigConfigManager {
     pub config_dir: PathBuf,
 }
 
+/// An instance of the config manager
+///
+/// This is an actor builder.
 pub struct ConfigManager {
     config: ConfigConfigManager,
     mailbox: ConfigManagerMailbox,
     address: ConfigManagerAddress,
-    http_con: Recipient<HttpRequest>,
+    http_con: Option<Recipient<HttpRequest>>,
 }
 
 impl ConfigManager {
-    pub fn new(config: ConfigConfigManager, http: &mut HttpActorInstance) -> ConfigManager {
+    pub fn new(config: ConfigConfigManager) -> ConfigManager {
         let (mailbox, address) = new_config_mailbox();
-
-        let http_con = http.add_client(address.http_responses.as_recipient());
 
         ConfigManager {
             config,
             mailbox,
             address,
-            http_con,
+            http_con: None,
         }
+    }
+
+    /// Connect this config manager instance to some http connection provider
+    ///
+    /// TODO: the `http` actor should not be a concrete implementation
+    ///       but an instance that consumes and produces messages of the expected type.
+    pub fn with_http_connection(&mut self, http: &mut HttpActorInstance) {
+        let http_con = http.add_client(self.address.http_responses.as_recipient());
+        self.http_con = Some(http_con);
     }
 }
 
@@ -66,7 +76,7 @@ impl ActorInstance for ConfigManager {
 
         let peers = ConfigManagerPeers {
             file_watcher,
-            http_con: self.http_con,
+            http_con: self.http_con.expect("Missing http connection"), // TODO: add error handling
             mqtt_con,
         };
 
