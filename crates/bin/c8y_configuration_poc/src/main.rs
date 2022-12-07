@@ -1,27 +1,31 @@
 mod config_ext;
 mod file_system_ext;
-mod http_ext;
 mod mqtt_ext;
 
-use crate::http_ext::HttpConfig;
+use crate::config_ext::{ConfigConfigManager, ConfigManager};
 use crate::mqtt_ext::MqttConfig;
 use std::path::PathBuf;
 use tedge_actors::Runtime;
+use tedge_http_ext::HttpConfig;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let runtime_events_logger = None;
-    let runtime = Runtime::try_new(runtime_events_logger).await?;
+    let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
-    let config_actor_builder = config_ext::ConfigActorBuilder {
-        mqtt_conf: MqttConfig::default(),
-        http_conf: HttpConfig::default(),
-        config_dir: PathBuf::from("/etc/tedge/"),
-    };
+    let mut http_actor =
+        tedge_http_ext::HttpActorInstance::new(tedge_http_ext::HttpConfig::default())?;
+    let config_actor = ConfigManager::new(
+        ConfigConfigManager {
+            mqtt_conf: MqttConfig {},
+            http_conf: HttpConfig {},
+            config_dir: PathBuf::from("/etc/tedge".to_string()),
+        },
+        &mut http_actor,
+    );
 
-    config_actor_builder
-        .spawn_actor(runtime.get_handle())
-        .await?;
+    runtime.spawn(http_actor).await?;
+    runtime.spawn(config_actor).await?;
 
     runtime.run_to_completion().await?;
     Ok(())

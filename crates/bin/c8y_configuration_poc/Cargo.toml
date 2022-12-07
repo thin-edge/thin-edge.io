@@ -9,4 +9,5 @@ edition = "2021"
 anyhow = "1.0"
 async-trait = "0.1"
 tedge_actors = { path = "../../core/tedge_actors" }
+tedge_http_ext = { path = "../../extensions/tedge_http_ext" }
 tokio = { version = "1.8", features = ["rt", "rt-multi-thread"] }

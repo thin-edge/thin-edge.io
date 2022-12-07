@@ -1,83 +1,91 @@
 use crate::file_system_ext::*;
-use crate::http_ext::*;
 use crate::mqtt_ext::*;
-use crate::{file_system_ext, http_ext, mqtt_ext};
+use crate::{file_system_ext, mqtt_ext};
 use async_trait::async_trait;
 use std::path::PathBuf;
 use tedge_actors::{
-    adapt, fan_in_message_type, new_mailbox, Actor, Address, ChannelError, Mailbox, Recipient,
-    RuntimeError, RuntimeHandle,
+    adapt, fan_in_message_type, new_mailbox, Actor, ActorInstance, Address, ChannelError, Mailbox,
+    Recipient, RuntimeError, RuntimeHandle,
 };
+use tedge_http_ext::*;
 
-pub struct ConfigActorBuilder {
+/// Configuration of the Configuration Manager
+#[derive(Clone, Debug)]
+pub struct ConfigConfigManager {
     pub mqtt_conf: MqttConfig,
     pub http_conf: HttpConfig,
     pub config_dir: PathBuf,
 }
 
-impl ConfigActorBuilder {
-    /// What are the steps to create a new Actor?
-    ///
-    /// 1. Create the actor mailbox with the associated address.
-    ///    * Most actors have a single mailbox,
-    ///    * but some actors might have several mailboxes each with a specific address,
-    ///      notably, for waiting for responses on dedicated channels.
-    ///    * The mailbox can be private, but the address must be public
-    ///      to be given to other actors.
-    /// 1. Create the actor peer handlers.
-    /// 1. Create the initial state from a config.
-    /// 1. Spawn the process, returning a handle to send messages .
-    pub async fn spawn_actor(
-        self,
-        mut runtime: RuntimeHandle,
-    ) -> Result<ConfigManagerAddress, RuntimeError> {
-        let actor = ConfigActor {
-            config_dir: self.config_dir.clone(),
-        };
-        let watcher_config = file_system_ext::WatcherConfig {
-            directory: self.config_dir,
-        };
+pub struct ConfigManager {
+    config: ConfigConfigManager,
+    mailbox: ConfigManagerMailbox,
+    address: ConfigManagerAddress,
+    http_con: Recipient<HttpRequest>,
+}
 
+impl ConfigManager {
+    pub fn new(config: ConfigConfigManager, http: &mut HttpActorInstance) -> ConfigManager {
         let (mailbox, address) = new_config_mailbox();
 
-        let mqtt_con =
-            mqtt_ext::new_connection(&mut runtime, self.mqtt_conf, address.events.as_recipient())
-                .await?;
+        let http_con = http.add_client(address.http_responses.as_recipient());
 
-        let http_con = http_ext::new_private_connection(
-            &mut runtime,
-            self.http_conf,
-            address.http_responses.as_recipient(),
+        ConfigManager {
+            config,
+            mailbox,
+            address,
+            http_con,
+        }
+    }
+}
+
+#[async_trait]
+impl ActorInstance for ConfigManager {
+    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
+        let actor = ConfigManagerActor {
+            config: self.config.clone(),
+        };
+
+        let watcher_config = file_system_ext::WatcherConfig {
+            directory: self.config.config_dir,
+        };
+
+        let mqtt_con = mqtt_ext::new_connection(
+            runtime,
+            self.config.mqtt_conf,
+            self.address.events.as_recipient(),
         )
         .await?;
 
         let file_watcher = file_system_ext::new_watcher(
-            &mut runtime,
+            runtime,
             watcher_config,
-            address.events.as_recipient(),
+            self.address.events.as_recipient(),
         )
         .await?;
 
         let peers = ConfigManagerPeers {
             file_watcher,
-            http_con,
+            http_con: self.http_con,
             mqtt_con,
         };
 
-        runtime.run(actor, mailbox, peers).await?;
-        Ok(address)
+        runtime.run(actor, self.mailbox, peers).await?;
+        Ok(())
     }
 }
 
-fan_in_message_type!(ConfigInputAndResponse[MqttMessage, FileEvent, HttpResponse] : Clone , Debug);
-fan_in_message_type!(ConfigInput[MqttMessage, FileEvent] : Clone , Debug);
-fan_in_message_type!(ConfigOutput[MqttMessage, HttpRequest, FileRequest] : Clone , Debug);
+type HttpResult = Result<HttpResponse, HttpError>;
 
-struct ConfigActor {
-    config_dir: PathBuf,
+fan_in_message_type!(ConfigInputAndResponse[MqttMessage, FileEvent, HttpResult] : Debug);
+fan_in_message_type!(ConfigInput[MqttMessage, FileEvent] : Debug);
+fan_in_message_type!(ConfigOutput[MqttMessage, HttpRequest, FileRequest] : Debug);
+
+struct ConfigManagerActor {
+    config: ConfigConfigManager,
 }
 
-impl ConfigActor {
+impl ConfigManagerActor {
     pub async fn process_file_event(
         &mut self,
         event: FileEvent,
@@ -94,7 +102,8 @@ impl ConfigActor {
         peers: &mut ConfigManagerPeers,
     ) -> Result<(), ChannelError> {
         // ..
-        let response = ConfigActor::send_http_request(messages, peers, HttpRequest {}).await?;
+        let request = todo!();
+        let response = ConfigManagerActor::send_http_request(messages, peers, request).await?;
         // ..
         Ok(())
     }
@@ -103,7 +112,7 @@ impl ConfigActor {
         messages: &mut ConfigManagerMailbox,
         peers: &mut ConfigManagerPeers,
         request: HttpRequest,
-    ) -> Result<HttpResponse, ChannelError> {
+    ) -> Result<HttpResult, ChannelError> {
         peers.http_con.send(request).await?;
         if let Some(response) = messages.http_responses.next().await {
             Ok(response)
@@ -114,7 +123,7 @@ impl ConfigActor {
 }
 
 #[async_trait]
-impl Actor for ConfigActor {
+impl Actor for ConfigManagerActor {
     type Input = ConfigInputAndResponse;
     type Output = ConfigOutput;
     type Mailbox = ConfigManagerMailbox;
@@ -143,7 +152,7 @@ impl Actor for ConfigActor {
 
 struct ConfigManagerMailbox {
     events: Mailbox<ConfigInput>,
-    http_responses: Mailbox<HttpResponse>,
+    http_responses: Mailbox<HttpResult>,
 }
 
 impl From<Mailbox<ConfigInputAndResponse>> for ConfigManagerMailbox {
@@ -159,7 +168,7 @@ impl From<Mailbox<ConfigInputAndResponse>> for ConfigManagerMailbox {
 // that includes all the C8Y features
 pub struct ConfigManagerAddress {
     events: Address<ConfigInput>,
-    http_responses: Address<HttpResponse>,
+    http_responses: Address<HttpResult>,
 }
 
 fn new_config_mailbox() -> (ConfigManagerMailbox, ConfigManagerAddress) {

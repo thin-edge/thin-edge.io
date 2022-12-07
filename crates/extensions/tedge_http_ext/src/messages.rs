@@ -3,7 +3,7 @@ pub use reqwest::StatusCode;
 use reqwest::Url;
 use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct HttpConfig {}
 
 #[derive(Error, Debug)]

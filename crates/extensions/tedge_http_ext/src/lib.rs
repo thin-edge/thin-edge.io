@@ -4,7 +4,10 @@ mod messages;
 pub use messages::*;
 
 use actor::*;
-use tedge_actors::{new_mailbox, Address, Mailbox, Recipient, RuntimeError, RuntimeHandle};
+use async_trait::async_trait;
+use tedge_actors::{
+    new_mailbox, ActorInstance, Address, Mailbox, Recipient, RuntimeError, RuntimeHandle,
+};
 
 pub struct HttpActorInstance {
     actor: HttpActor,
@@ -35,8 +38,11 @@ impl HttpActorInstance {
 
         KeyedRecipient::new_recipient(client_idx, self.address.clone())
     }
+}
 
-    pub async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
+#[async_trait]
+impl ActorInstance for HttpActorInstance {
+    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
         let actor = self.actor;
         let mailbox = self.mailbox;
         let clients = RecipientVec::new_recipient(self.clients);

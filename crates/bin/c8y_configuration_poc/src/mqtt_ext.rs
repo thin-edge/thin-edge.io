@@ -1,4 +1,3 @@
-use crate::HttpConfig;
 use async_trait::async_trait;
 use tedge_actors::{
     new_mailbox, Actor, ChannelError, Mailbox, Recipient, RuntimeError, RuntimeHandle,
