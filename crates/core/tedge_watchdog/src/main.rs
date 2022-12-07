@@ -1,6 +1,6 @@
 use clap::Parser;
 use std::path::PathBuf;
-use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
+use tedge_config::{system_services::*, DEFAULT_TEDGE_CONFIG_PATH};
 
 mod error;
 
@@ -40,7 +40,19 @@ pub struct WatchdogOpt {
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let watchdog_opt = WatchdogOpt::parse();
-    tedge_utils::logging::initialise_tracing_subscriber(watchdog_opt.debug);
+    let tedge_config_location =
+        tedge_config::TEdgeConfigLocation::from_custom_root(watchdog_opt.config_dir.clone());
+
+    let log_level = if watchdog_opt.debug {
+        tracing::Level::TRACE
+    } else {
+        get_log_level(
+            "tedge_watchdog",
+            tedge_config_location.tedge_config_root_path.to_path_buf(),
+        )?
+    };
+
+    set_log_level(log_level);
 
     watchdog::start_watchdog(watchdog_opt.config_dir).await
 }

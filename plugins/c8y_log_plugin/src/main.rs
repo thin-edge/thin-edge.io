@@ -13,10 +13,12 @@ use c8y_api::smartrest::message::get_smartrest_device_id;
 use mqtt_channel::{Connection, Message, StreamExt, TopicFilter};
 use std::path::{Path, PathBuf};
 use tedge_api::health::{health_check_topics, send_health_status};
+use tedge_config::system_services::{get_log_level, set_log_level};
 use tedge_config::{
     ConfigRepository, ConfigSettingAccessor, DeviceIdSetting, LogPathSetting, MqttPortSetting,
     TEdgeConfig, DEFAULT_TEDGE_CONFIG_PATH,
 };
+
 use tedge_utils::{
     file::{create_directory_with_user_group, create_file_with_user_group},
     notify::{fs_notify_stream, FsEvent},
@@ -203,11 +205,20 @@ async fn main() -> Result<(), anyhow::Error> {
             .unwrap_or(DEFAULT_TEDGE_CONFIG_PATH),
     );
 
-    tedge_utils::logging::initialise_tracing_subscriber(config_plugin_opt.debug);
-
     // Load tedge config from the provided location
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(&config_plugin_opt.config_dir);
+    let log_level = if config_plugin_opt.debug {
+        tracing::Level::TRACE
+    } else {
+        get_log_level(
+            "c8y_log_plugin",
+            tedge_config_location.tedge_config_root_path.to_path_buf(),
+        )?
+    };
+
+    set_log_level(log_level);
+
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
     let tedge_config = config_repository.load()?;
 

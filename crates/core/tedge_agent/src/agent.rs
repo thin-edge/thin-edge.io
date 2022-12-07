@@ -25,18 +25,16 @@ use std::process::Command;
 use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
 use tedge_api::health::{health_check_topics, send_health_status};
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt,
-    HttpBindAddressSetting, HttpPortSetting, LogPathSetting, MqttBindAddressSetting,
-    MqttPortSetting, RunPathSetting, SoftwarePluginDefaultSetting, TEdgeConfigLocation,
-    TmpPathSetting, DEFAULT_LOG_PATH, DEFAULT_RUN_PATH, DEFAULT_TMP_PATH,
+    system_services::SystemConfig, ConfigRepository, ConfigSettingAccessor,
+    ConfigSettingAccessorStringExt, HttpBindAddressSetting, HttpPortSetting, LogPathSetting,
+    MqttBindAddressSetting, MqttPortSetting, RunPathSetting, SoftwarePluginDefaultSetting,
+    TEdgeConfigLocation, TmpPathSetting, DEFAULT_LOG_PATH, DEFAULT_RUN_PATH, DEFAULT_TMP_PATH,
 };
 use tedge_utils::file::create_directory_with_user_group;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, warn};
 
 use std::path::Path;
-
-use tedge_config::system_services::SystemConfig;
 
 const SYNC: &str = "sync";
 const SM_PLUGINS: &str = "sm-plugins";

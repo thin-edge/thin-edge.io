@@ -1,5 +1,6 @@
-use crate::system_services::*;
+use crate::system_services::SystemServiceError;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -9,7 +10,9 @@ const REBOOT_COMMAND: &[&str] = &["init", "6"];
 #[derive(Deserialize, Debug, Default, Eq, PartialEq)]
 pub struct SystemConfig {
     #[serde(default)]
-    pub(crate) init: InitConfig,
+    pub init: InitConfig,
+    #[serde(default)]
+    pub log: HashMap<String, String>,
     #[serde(default)]
     pub system: SystemSpecificCommands,
 }
@@ -25,7 +28,6 @@ pub struct InitConfig {
     pub disable: Vec<String>,
     pub is_active: Vec<String>,
 }
-
 #[derive(Deserialize, Debug, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct SystemSpecificCommands {
@@ -101,6 +103,13 @@ mod tests {
 
             [system]
             reboot = ["init", "6"]
+            
+            [log]
+            tedge_mapper = "Debug"
+            tedge_agent = "Info"
+            tedge_watchdog = "Warn"
+            c8y_log_plugin = "Error"
+            c8y_config_plugin = "Debug"
         "#,
         )
         .unwrap();
@@ -122,6 +131,29 @@ mod tests {
             config.system.reboot,
             Vec::from([String::from("init"), String::from("6")])
         );
+        assert_eq!(config.log.get("tedge_mapper").unwrap(), "Debug");
+        assert_eq!(config.log.get("tedge_agent").unwrap(), "Info");
+        assert_eq!(config.log.get("tedge_watchdog").unwrap(), "Warn");
+        assert_eq!(config.log.get("c8y_log_plugin").unwrap(), "Error");
+        assert_eq!(config.log.get("c8y_config_plugin").unwrap(), "Debug");
+    }
+
+    #[test]
+    fn read_system_log_config_file() -> anyhow::Result<()> {
+        let toml_conf = r#"            
+        [log]
+        tedge_mapper = "Debug"
+        tedge_agent = "Info"
+        tedge_watchdog = "Warn"
+        c8y_log_plugin = "Error"
+        c8y_config_plugin = "Debug"
+    "#;
+        let expected_config: SystemConfig = toml::from_str(toml_conf)?;
+        let (_dir, config_root_path) = create_temp_system_config(toml_conf)?;
+        let config = SystemConfig::try_new(config_root_path).unwrap();
+        assert_eq!(config, expected_config);
+
+        Ok(())
     }
 
     #[test]

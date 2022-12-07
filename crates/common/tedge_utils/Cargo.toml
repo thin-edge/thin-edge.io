@@ -16,14 +16,13 @@ tedge-derive = ["dep:tedge-derive"]
 
 [dependencies]
 futures = "0.3"
-notify =  { version = "5.0", optional = true, default-features = false }
 nix = "0.24"
+notify =  { version = "5.0", optional = true, default-features = false }
 strum_macros = { version = "0.24", optional = true }
 tempfile = "3.2"
 thiserror = "1.0"
 tokio = { version = "1.12", default_features = false, features = [ "fs", "io-util", "macros", "signal", "sync", "time" ] }
 tracing = { version = "0.1", features = [] }
-tracing-subscriber = { version = "0.3", features = [ "time" ] }
 try-traits = { version = "0.1", optional = true }
 users = "0.11.0"
 tedge-derive = { path = "../tedge_utils/tedge-derive", optional = true }
