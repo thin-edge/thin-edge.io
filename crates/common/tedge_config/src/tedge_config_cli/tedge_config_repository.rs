@@ -2,6 +2,42 @@ use crate::*;
 use std::fs;
 use std::path::PathBuf;
 use tedge_utils::fs::atomically_write_file_sync;
+use tracing::warn;
+
+/// Displays warning messages for any unknown toml **fields and or keys**.
+///
+/// It does **not** display values.
+macro_rules! display_unknown_for {
+    ($x:ident, $y:ident) => {
+        let other = &$x.other;
+
+        if !other.is_empty() {
+            let mut vec = vec![];
+            for key in other.keys() {
+                vec.push(key);
+            }
+            let message = format!("Unknown field/s: {:?} in file {:?}", vec, &$y);
+            warn!("{}", message);
+        };
+    };
+    ($x:expr, $y:ident, $z:expr) => {
+        let other = &$x.other;
+
+        if !other.is_empty() {
+            let mut vec = vec![];
+            for key in other.keys() {
+                vec.push(key);
+            }
+
+            let message = format!(
+                "Unknown key/s: {:?} for field: {:?} in file {:?}",
+                vec, &$z, &$y
+            );
+            warn!("{}", message);
+        }
+    };
+}
+//use tracing::warn;
 
 /// TEdgeConfigRepository is responsible for loading and storing TEdgeConfig entities.
 ///
@@ -74,6 +110,18 @@ impl TEdgeConfigRepository {
         match std::fs::read(&path) {
             Ok(bytes) => {
                 let data = toml::from_slice::<TEdgeConfigDto>(bytes.as_slice())?;
+
+                display_unknown_for!(data, path);
+                display_unknown_for!(data.device, path, "device");
+                display_unknown_for!(data.c8y, path, "c8y");
+                display_unknown_for!(data.az, path, "az");
+                display_unknown_for!(data.mqtt, path, "mqtt");
+                display_unknown_for!(data.http, path, "http");
+                display_unknown_for!(data.software, path, "software");
+                display_unknown_for!(data.tmp, path, "tmp");
+                display_unknown_for!(data.logs, path, "logs");
+                display_unknown_for!(data.run, path, "run");
+
                 self.make_tedge_config(data)
             }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
