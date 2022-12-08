@@ -32,7 +32,10 @@ impl ConfigManager {
     }
 
     /// Connect this config manager instance to some http connection provider
-    pub fn with_http_connection(&mut self, http: &mut impl PeerLinker<HttpRequest, HttpResult>) -> Result<(), LinkError> {
+    pub fn with_http_connection(
+        &mut self,
+        http: &mut impl PeerLinker<HttpRequest, HttpResult>,
+    ) -> Result<(), LinkError> {
         let http_con = http.connect(self.address.http_responses.as_recipient())?;
         self.http_con = Some(http_con);
         Ok(())
@@ -65,7 +68,9 @@ impl ActorBuilder for ConfigManager {
         )
         .await?;
 
-        let http_con = self.http_con.ok_or_else(|| LinkError::MissingPeer {role: "http".to_string()})?;
+        let http_con = self.http_con.ok_or_else(|| LinkError::MissingPeer {
+            role: "http".to_string(),
+        })?;
         let peers = ConfigManagerPeers::new(file_watcher, http_con, mqtt_con);
 
         runtime.run(actor, self.mailbox, peers).await?;

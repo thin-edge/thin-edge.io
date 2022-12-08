@@ -1,3 +1,4 @@
+mod c8y_http_proxy;
 mod config_manager;
 mod file_system_ext;
 mod mqtt_ext;

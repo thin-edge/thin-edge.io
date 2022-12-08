@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
+c8y_api = { path = "../../core/c8y_api" }
 tedge_actors = { path = "../../core/tedge_actors" }
 tedge_config = { path = "../../common/tedge_config" }
 tedge_http_ext = { path = "../../extensions/tedge_http_ext" }

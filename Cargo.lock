@@ -506,6 +506,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "c8y_api",
  "tedge_actors",
  "tedge_config",
  "tedge_http_ext",
