@@ -5,9 +5,7 @@ pub use messages::*;
 
 use actor::*;
 use async_trait::async_trait;
-use tedge_actors::{
-    new_mailbox, ActorInstance, Address, Mailbox, Recipient, RuntimeError, RuntimeHandle,
-};
+use tedge_actors::{new_mailbox, ActorInstance, Address, Mailbox, Recipient, RuntimeError, RuntimeHandle, KeyedRecipient, RecipientVec};
 
 pub struct HttpActorInstance {
     actor: HttpActor,

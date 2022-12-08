@@ -5,6 +5,7 @@
 mod actors;
 mod channels;
 mod errors;
+mod keyed_messages;
 mod messages;
 mod runtime;
 mod tasks;
@@ -12,6 +13,7 @@ mod tasks;
 pub use actors::*;
 pub use channels::*;
 pub use errors::*;
+pub use keyed_messages::*;
 pub use messages::*;
 pub use runtime::*;
 pub use tasks::*;
