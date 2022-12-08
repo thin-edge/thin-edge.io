@@ -19,6 +19,7 @@ use mqtt_channel::StreamExt;
 use mqtt_channel::TopicFilter;
 use std::path::Path;
 use std::path::PathBuf;
+use tedge_api::health::get_health_status_down_message;
 use tedge_api::health::health_check_topics;
 use tedge_api::health::send_health_status;
 use tedge_config::system_services::get_log_level;
@@ -87,7 +88,8 @@ async fn create_mqtt_client(
     let mqtt_config = mqtt_channel::Config::default()
         .with_session_name("c8y-log-plugin")
         .with_port(mqtt_port)
-        .with_subscriptions(topics);
+        .with_subscriptions(topics)
+        .with_last_will_message(get_health_status_down_message("c8y-log-plugin"));
 
     let mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
     Ok(mqtt_client)
@@ -123,6 +125,9 @@ async fn run(
             FsEvent::FileCreated,
         ],
     )])?;
+
+    // Now the log plugin is done with the initialization and ready for processing the messages
+    send_health_status(&mut mqtt_client.published, "c8y-log-plugin").await;
 
     loop {
         tokio::select! {

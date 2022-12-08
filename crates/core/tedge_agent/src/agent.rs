@@ -41,6 +41,7 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
+use tedge_api::health::get_health_status_down_message;
 use tedge_api::health::health_check_topics;
 use tedge_api::health::send_health_status;
 use tedge_config::system_services::SystemConfig;
@@ -179,7 +180,8 @@ impl SmAgentConfig {
         let mqtt_config = mqtt_channel::Config::default()
             .with_host(tedge_config.query(MqttBindAddressSetting)?.to_string())
             .with_port(tedge_config.query(MqttPortSetting)?.into())
-            .with_max_packet_size(10 * 1024 * 1024);
+            .with_max_packet_size(10 * 1024 * 1024)
+            .with_last_will_message(get_health_status_down_message("tedge-agent"));
 
         let tedge_config_path = config_repository
             .get_config_location()
@@ -340,6 +342,8 @@ impl SmAgent {
         });
 
         self.process_pending_operation(&mut mqtt.published).await?;
+
+        send_health_status(&mut mqtt.published, "tedge-agent").await;
 
         let http_config = self.config.http_config.clone();
 

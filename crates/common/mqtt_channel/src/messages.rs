@@ -7,7 +7,7 @@ use rumqttc::QoS;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Message {
     pub topic: Topic,
-    payload: Payload,
+    pub payload: Payload,
     pub qos: QoS,
     pub retain: bool,
 }

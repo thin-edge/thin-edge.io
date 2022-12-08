@@ -10,11 +10,12 @@ rust-version = "1.58.1"
 async-trait = "0.1"
 fastrand = "1.8"
 futures = "0.3"
-rumqttc = "0.17"
+rumqttc = "0.18"
 thiserror = "1.0"
 tokio = { version = "1.12", features = ["rt", "time"] }
 
 [dev-dependencies]
 anyhow = "1.0"
+maplit = "1.0"
 mqtt_tests = { path = "../../tests/mqtt_tests" }
 serial_test = "0.8"

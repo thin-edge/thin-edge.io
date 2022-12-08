@@ -22,6 +22,7 @@ use mqtt_channel::SinkExt;
 use mqtt_channel::StreamExt;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
+use tedge_api::health::get_health_status_down_message;
 use tokio::sync::Mutex;
 
 use std::path::PathBuf;
@@ -132,6 +133,10 @@ impl ConfigManager {
 
     pub async fn run(&mut self) -> Result<(), anyhow::Error> {
         self.get_pending_operations_from_cloud().await?;
+
+        // Now the configuration plugin is done with the initialization and ready for processing the messages
+        send_health_status(&mut self.mqtt_client.published, "c8y-configuration-plugin").await;
+
         loop {
             tokio::select! {
                 message = self.mqtt_client.received.next() => {
@@ -211,7 +216,8 @@ impl ConfigManager {
         let mqtt_config = mqtt_channel::Config::default()
             .with_session_name("c8y-configuration-plugin")
             .with_port(mqtt_port)
-            .with_subscriptions(topic_filter);
+            .with_subscriptions(topic_filter)
+            .with_last_will_message(get_health_status_down_message("c8y-configuration-plugin"));
 
         let mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
         Ok(mqtt_client)

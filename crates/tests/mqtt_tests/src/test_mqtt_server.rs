@@ -1,16 +1,19 @@
-use std::collections::HashMap;
+use maplit::hashmap;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::net::SocketAddrV4;
 use std::time::Duration;
 
 use futures::channel::mpsc::UnboundedReceiver;
-use librumqttd::Broker;
-use librumqttd::Config;
-use librumqttd::ConnectionSettings;
-use librumqttd::ConsoleSettings;
-use librumqttd::ServerSettings;
 use once_cell::sync::Lazy;
+use rumqttd::Broker;
+use rumqttd::Config;
+use rumqttd::ConnectionSettings;
+use rumqttd::ConsoleSettings;
+use rumqttd::Notification;
+use rumqttd::RouterConfig;
+use rumqttd::ServerSettings;
+
 use rumqttc::QoS;
 
 const MQTT_TEST_PORT: u16 = 55555;
@@ -77,7 +80,7 @@ impl MqttProcessHandler {
 fn spawn_broker(port: u16) {
     let config = get_rumqttd_config(port);
     let mut broker = Broker::new(config);
-    let mut tx = broker.link("localclient").unwrap();
+    let (mut tx, mut rx) = broker.link("localclient").unwrap();
 
     std::thread::spawn(move || {
         eprintln!("MQTT-TEST INFO: start test MQTT broker (port = {})", port);
@@ -90,69 +93,65 @@ fn spawn_broker(port: u16) {
     });
 
     std::thread::spawn(move || {
-        let mut rx = tx.connect(200).unwrap();
         tx.subscribe("#").unwrap();
-
-        loop {
-            if let Some(message) = rx.recv().unwrap() {
-                for chunk in message.payload.into_iter() {
-                    let mut bytes: Vec<u8> = vec![];
-                    for byte in chunk.into_iter() {
-                        bytes.push(byte);
-                    }
-                    let payload = match std::str::from_utf8(bytes.as_ref()) {
-                        Ok(payload) => format!("{:.110}", payload),
-                        Err(_) => format!("Non uft8 ({} bytes)", bytes.len()),
-                    };
-                    eprintln!(
-                        "MQTT-TEST MSG: topic = {}, payload = {:?}",
-                        message.topic, payload
-                    );
-                }
+        while let Some(notification) = rx.recv().unwrap() {
+            if let Notification::Forward(forward) = notification {
+                let payload = match std::str::from_utf8(&forward.publish.payload) {
+                    Ok(payload) => format!("{:.110}", payload),
+                    Err(_) => format!("Non uft8 ({} bytes)", forward.publish.payload.len()),
+                };
+                eprintln!(
+                    "MQTT-TEST MSG: topic = {:?}, payload = {:?}",
+                    forward.publish.topic, payload
+                );
             }
         }
     });
 }
 
 fn get_rumqttd_config(port: u16) -> Config {
-    let router_config = librumqttd::rumqttlog::Config {
-        id: 0,
-        dir: "/tmp/rumqttd".into(),
-        max_segment_size: 10240,
-        max_segment_count: 10,
-        max_connections: 10,
+    let console_settings = {
+        let mut conset: ConsoleSettings = Default::default();
+        conset.listen =
+            SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 3030)).to_string();
+        conset
+    };
+
+    let rf = RouterConfig {
+        instant_ack: false,
+        max_segment_size: 104857600,
+        max_segment_count: 100,
+        max_read_len: 10240,
+        max_connections: 5000,
+        initialized_filters: None,
     };
 
     let connections_settings = ConnectionSettings {
-        connection_timeout_ms: 10,
-        max_client_id_len: 256,
+        connection_timeout_ms: 60000,
         throttle_delay_ms: 0,
         max_payload_size: 268435455,
         max_inflight_count: 200,
         max_inflight_size: 1024,
-        login_credentials: None,
+        dynamic_filters: false,
     };
 
     let server_config = ServerSettings {
         listen: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), port)),
-        cert: None,
         next_connection_delay_ms: 1,
         connections: connections_settings,
+        name: "mqtt_test_server".to_string(),
+        tls: None,
     };
 
-    let mut servers = HashMap::new();
-    servers.insert("1".to_string(), server_config);
-
-    let console_settings = ConsoleSettings {
-        listen: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 3030)),
-    };
-
-    librumqttd::Config {
-        id: 0,
-        router: router_config,
-        servers,
+    rumqttd::Config {
+        id: 4,
+        router: rf,
+        v4: hashmap! {"testconfig".to_string() => server_config},
+        v5: hashmap! {},
+        ws: hashmap! {},
         cluster: None,
-        replicator: None,
         console: console_settings,
+        bridge: None,
+        prometheus: None,
     }
 }

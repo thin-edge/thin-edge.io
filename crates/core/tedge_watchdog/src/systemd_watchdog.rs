@@ -16,6 +16,8 @@ use std::process::ExitStatus;
 use std::process::Stdio;
 use std::process::{self};
 use std::time::Instant;
+use tedge_api::health::get_health_status_down_message;
+use tedge_api::health::send_health_status;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::MqttBindAddressSetting;
@@ -121,12 +123,16 @@ async fn monitor_tedge_service(
 ) -> Result<(), WatchdogError> {
     let client_id: &str = &format!("{}_{}", name, nanoid!());
     let mqtt_config = get_mqtt_config(tedge_config_location, client_id)?
-        .with_subscriptions(res_topic.try_into()?);
+        .with_subscriptions(res_topic.try_into()?)
+        .with_last_will_message(get_health_status_down_message("tedge-watchdog"));
     let client = mqtt_channel::Connection::new(&mqtt_config).await?;
     let mut received = client.received;
     let mut publisher = client.published;
 
     info!("Starting watchdog for {} service", name);
+
+    // Now the systemd watchdog is done with the initialization and ready for processing the messages
+    send_health_status(&mut publisher, "tedge-watchdog").await;
 
     loop {
         let message = Message::new(&Topic::new(req_topic)?, "");
