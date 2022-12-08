@@ -27,6 +27,7 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
 };
+use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::{
     topic::{RequestTopic, ResponseTopic},
@@ -216,7 +217,7 @@ where
             ));
         } else {
             return Err(ConversionError::TranslatedSizeExceededThreshold {
-                payload: input.payload_str()?[0..50].into(),
+                payload: input.payload_str()?.chars().take(50).collect(),
                 topic: input.topic.name.clone(),
                 actual_size: c8y_json_payload.len(),
                 threshold: self.size_threshold.0,
@@ -230,8 +231,21 @@ where
         input: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
         let mut messages = Vec::new();
+        let mqtt_topic = input.topic.name.clone();
+        let mqtt_payload = input.payload_str().map_err(|e| {
+            ThinEdgeJsonDeserializerError::FailedToParsePayloadToString {
+                topic: mqtt_topic.clone(),
+                error: e.to_string(),
+            }
+        })?;
 
-        let tedge_event = ThinEdgeEvent::try_from(&input.topic.name, input.payload_str()?)?;
+        let tedge_event = ThinEdgeEvent::try_from(&mqtt_topic, mqtt_payload).map_err(|e| {
+            ThinEdgeJsonDeserializerError::FailedToParseJsonPayload {
+                topic: mqtt_topic,
+                error: e.to_string(),
+                payload: mqtt_payload.chars().take(50).collect(),
+            }
+        })?;
         let child_id = tedge_event.source.clone();
         let need_registration = if let Some(child_id) = child_id.clone() {
             add_external_device_registration_message(child_id, &mut self.children, &mut messages)

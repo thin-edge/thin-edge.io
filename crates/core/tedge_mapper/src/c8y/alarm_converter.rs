@@ -3,7 +3,7 @@ use std::collections::{hash_map::Entry, HashMap};
 
 use c8y_api::smartrest::alarm;
 use mqtt_channel::{Message, Topic};
-use tedge_api::alarm::ThinEdgeAlarm;
+use tedge_api::alarm::{ThinEdgeAlarm, ThinEdgeJsonDeserializerError};
 
 use crate::core::error::ConversionError;
 
@@ -47,10 +47,22 @@ impl AlarmConverter {
             }
             Self::Synced => {
                 //Regular conversion phase
-                let tedge_alarm = ThinEdgeAlarm::try_from(
-                    input_message.topic.name.as_str(),
-                    input_message.payload_str()?,
-                )?;
+                let mqtt_topic = input_message.topic.name.clone();
+                let mqtt_payload = input_message.payload_str().map_err(|e| {
+                    ThinEdgeJsonDeserializerError::FailedToParsePayloadToString {
+                        topic: mqtt_topic.clone(),
+                        error: e.to_string(),
+                    }
+                })?;
+
+                let tedge_alarm =
+                    ThinEdgeAlarm::try_from(&mqtt_topic, mqtt_payload).map_err(|e| {
+                        ThinEdgeJsonDeserializerError::FailedToParseJsonPayload {
+                            topic: mqtt_topic,
+                            error: e.to_string(),
+                            payload: mqtt_payload.chars().take(50).collect(),
+                        }
+                    })?;
                 let smartrest_alarm = alarm::serialize_alarm(tedge_alarm)?;
                 let c8y_alarm_topic = Topic::new_unchecked(
                     self.get_c8y_alarm_topic(input_message.topic.name.as_str())?
