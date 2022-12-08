@@ -18,5 +18,5 @@ pub enum DisconnectBridgeError {
     ServiceFailed,
 
     #[error(transparent)]
-    SystemServiceError(#[from] crate::system_services::SystemServiceError),
+    SystemServiceError(#[from] tedge_config::system_services::SystemServiceError),
 }

@@ -1,6 +1,6 @@
 use crate::cli::disconnect::disconnect_bridge::*;
 use crate::command::*;
-use crate::system_services::service_manager;
+use tedge_config::system_services::service_manager;
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";

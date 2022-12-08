@@ -638,25 +638,6 @@ fn test_parse_config_no_config_file() -> Result<(), TEdgeConfigError> {
 }
 
 #[test]
-fn test_parse_unsupported_keys() -> Result<(), TEdgeConfigError> {
-    let toml_conf = r#"
-hey="tedge"
-[c8y]
-hello="tedge"
-"#;
-
-    let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
-    let result = TEdgeConfigRepository::new(config_location).load();
-
-    assert_matches!(
-        result,
-        Err(TEdgeConfigError::FromTOMLParse(_)),
-        "Expected the parsing to fail with TOMLParseError"
-    );
-    Ok(())
-}
-
-#[test]
 fn test_invalid_mqtt_port() -> Result<(), TEdgeConfigError> {
     let toml_conf = r#"
 [mqtt]
@@ -893,11 +874,13 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_azure_root_cert_path: FilePath::from("/dev/null"),
         default_mapper_timestamp: Flag(true),
         default_mqtt_port: Port(1883),
+        default_http_port: Port(8000),
         default_tmp_path: FilePath::from("/tmp"),
         default_logs_path: FilePath::from("/var/log"),
         default_run_path: FilePath::from("/run"),
         default_device_type: String::from("test"),
         default_mqtt_bind_address: IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST)),
+        default_http_bind_address: IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST)),
         default_c8y_smartrest_templates: TemplatesSet::default(),
     }
 }

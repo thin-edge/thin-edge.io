@@ -1,10 +1,10 @@
 use crate::smartrest::error::SmartRestDeserializerError;
-use agent_interface::{SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use csv::ReaderBuilder;
 use download::DownloadInfo;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::convert::{TryFrom, TryInto};
+use tedge_api::{SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
 use time::{format_description, OffsetDateTime};
 
 #[derive(Debug)]
@@ -159,6 +159,17 @@ impl SmartRestUpdateSoftwareModule {
     }
 }
 
+fn fix_timezone_offset(time: &str) -> String {
+    let str_size = time.len();
+    let split = time.split(['+', '-']).last();
+    match split {
+        Some(value) if !value.contains(':') => {
+            time[0..str_size - 2].to_string() + ":" + &time[str_size - 2..str_size]
+        }
+        _ => time.to_string(),
+    }
+}
+
 fn to_datetime<'de, D>(deserializer: D) -> Result<OffsetDateTime, D::Error>
 where
     D: Deserializer<'de>,
@@ -171,15 +182,19 @@ where
     // so we add a ':'
     let mut date_string: String = Deserialize::deserialize(deserializer)?;
 
-    let str_size = date_string.len();
-    // check if `date_string` does not have a colon.
-    let date_string_end = &date_string.split('+').last();
-    date_string = match date_string_end {
-        Some(string) if !string.contains(':') => {
-            date_string[0..str_size - 2].to_string() + ":" + &date_string[str_size - 2..str_size]
+    if date_string.contains('T') {
+        let mut split = date_string.split('T');
+        let mut date_part = split.next().unwrap().to_string(); // safe.
+
+        let maybe_time_part = split.next();
+
+        if let Some(time_part) = maybe_time_part {
+            let time_part = fix_timezone_offset(time_part);
+            date_part.push('T');
+            date_part.push_str(&time_part);
         }
-        _ => date_string,
-    };
+        date_string = date_part;
+    }
 
     match OffsetDateTime::parse(&date_string, &format_description::well_known::Rfc3339) {
         Ok(result) => Ok(result),
@@ -294,9 +309,9 @@ impl SmartRestJwtResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_interface::*;
     use assert_json_diff::*;
     use serde_json::json;
+    use tedge_api::*;
     use test_case::test_case;
 
     // To avoid using an ID randomly generated, which is not convenient for testing.
@@ -554,6 +569,8 @@ mod tests {
     #[test_case("2021-09-21T11:40:27+02:00", "2021-09-22T11:40:27+02:00"; "with colon both")]
     #[test_case("2021-09-21T11:40:27+02:00", "2021-09-22T11:40:27+0200"; "with colon date from")]
     #[test_case("2021-09-21T11:40:27+0200", "2021-09-22T11:40:27+02:00"; "with colon date to")]
+    #[test_case("2021-09-21T11:40:27-0000", "2021-09-22T11:40:27-02:00"; "with negative timezone offset")]
+    #[test_case("2021-09-21T11:40:27Z", "2021-09-22T11:40:00Z"; "utc timezone")]
     fn deserialize_smartrest_log_file_request_operation(date_from: &str, date_to: &str) {
         let smartrest = String::from(&format!(
             "522,DeviceSerial,syslog,{},{},ERROR,1000",

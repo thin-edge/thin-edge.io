@@ -1,7 +1,5 @@
-use crate::{
-    child_device::ChildDeviceResponsePayload, error::ConfigManagementError,
-    DEFAULT_PLUGIN_CONFIG_TYPE,
-};
+use crate::config_manager::DEFAULT_PLUGIN_CONFIG_TYPE;
+use crate::{child_device::ChildDeviceResponsePayload, error::ConfigManagementError};
 use c8y_api::smartrest::topic::C8yTopic;
 use mqtt_channel::{Message, MqttError, Topic};
 use serde::Deserialize;

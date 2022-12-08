@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 
-use agent_interface::{
-    Jsonify, SoftwareListResponse, SoftwareModule, SoftwareType, SoftwareVersion,
-};
+use tedge_api::{Jsonify, SoftwareListResponse, SoftwareModule, SoftwareType, SoftwareVersion};
 
 use crate::smartrest::error::SMCumulocityMapperError;
 use download::DownloadInfo;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use thin_edge_json::event::ThinEdgeEvent;
+use tedge_api::event::ThinEdgeEvent;
 use time::OffsetDateTime;
 
 const EMPTY_STRING: &str = "";
@@ -210,8 +208,8 @@ fn update_the_external_source_event(
 mod tests {
     use anyhow::Result;
     use assert_matches::assert_matches;
+    use tedge_api::event::ThinEdgeEventData;
     use test_case::test_case;
-    use thin_edge_json::event::ThinEdgeEventData;
     use time::macros::datetime;
 
     use super::*;

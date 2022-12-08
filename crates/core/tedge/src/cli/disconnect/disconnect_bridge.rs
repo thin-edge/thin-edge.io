@@ -1,8 +1,8 @@
 use crate::cli::disconnect::error::*;
 use crate::command::*;
-use crate::system_services::*;
 use std::fmt;
 use std::sync::Arc;
+use tedge_config::system_services::*;
 use tedge_config::TEdgeConfigLocation;
 use which::which;
 

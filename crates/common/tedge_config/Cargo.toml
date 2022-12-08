@@ -8,12 +8,17 @@ rust-version = "1.58.1"
 [dependencies]
 certificate = { path = "../certificate" }
 serde = { version = "1.0", features = ["derive"] }
-tedge_utils = { path = "../tedge_utils" }
+tedge_utils = { path = "../tedge_utils", features = ["tedge-derive"] }
+strum_macros = { version = "0.24", optional = true }
 tempfile = "3.2"
 thiserror = "1.0"
 toml = "0.5"
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = { version = "0.3", features = [ "time" ] }
 url = "2.2"
 
 [dev-dependencies]
+anyhow = "1.0"
 assert_matches = "1.5"
 tedge_test_utils = { path = "../../tests/tedge_test_utils" }
+test-case = "2.2"

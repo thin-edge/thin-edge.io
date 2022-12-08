@@ -1,7 +1,7 @@
 use super::{batcher::MessageBatch, collectd::CollectdMessage, error::DeviceMonitorError};
 use batcher::{BatchConfigBuilder, BatchDriver, BatchDriverInput, BatchDriverOutput, Batcher};
 use mqtt_channel::{Connection, Message, QoS, SinkExt, StreamExt, Topic, TopicFilter};
-use thin_edge_json::health::{health_check_topics, send_health_status};
+use tedge_api::health::{health_check_topics, send_health_status};
 use tracing::{error, info, instrument};
 
 const DEFAULT_HOST: &str = "localhost";

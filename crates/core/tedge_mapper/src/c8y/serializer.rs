@@ -1,5 +1,5 @@
 use json_writer::{JsonWriter, JsonWriterError};
-use thin_edge_json::measurement::MeasurementVisitor;
+use tedge_api::measurement::MeasurementVisitor;
 use time::{format_description, OffsetDateTime};
 
 pub struct C8yJsonSerializer {

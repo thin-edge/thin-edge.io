@@ -8,7 +8,7 @@ use clap::Parser;
 mod cli;
 mod command;
 mod error;
-mod system_services;
+use tedge_config::system_services::set_log_level;
 use tedge_utils::file::create_directory_with_user_group;
 
 type ConfigError = crate::error::TEdgeError;
@@ -20,6 +20,8 @@ const BROKER_GROUP: &str = "mosquitto";
 
 fn main() -> anyhow::Result<()> {
     let opt = cli::Opt::parse();
+
+    set_log_level(tracing::Level::WARN);
 
     if opt.init {
         initialize_tedge(&opt.config_dir)?;

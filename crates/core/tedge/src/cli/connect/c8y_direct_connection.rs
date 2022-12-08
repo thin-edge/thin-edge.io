@@ -1,4 +1,5 @@
 use super::{BridgeConfig, ConnectError};
+use crate::cli::connect::CONNECTION_TIMEOUT;
 use certificate::parse_root_certificate::create_tls_config;
 use rumqttc::tokio_rustls::rustls::{AlertDescription, Error};
 use rumqttc::{
@@ -19,6 +20,7 @@ pub fn create_device_with_direct_connection(
 
     let mut mqtt_options = MqttOptions::new(bridge_config.remote_clientid.clone(), host[0], 8883);
     mqtt_options.set_keep_alive(std::time::Duration::from_secs(5));
+    mqtt_options.set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
 
     let tls_config = create_tls_config(
         bridge_config.bridge_root_cert_path.clone().into(),

@@ -7,12 +7,12 @@ use crate::{
         StateRepository, StateStatus,
     },
 };
-use agent_interface::{
+use flockfile::{check_another_instance_is_not_running, Flockfile};
+use tedge_api::{
     control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
     RestartOperationResponse, SoftwareError, SoftwareListRequest, SoftwareListResponse,
     SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
-use flockfile::{check_another_instance_is_not_running, Flockfile};
 
 use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic, TopicFilter};
 use plugin_sm::{
@@ -23,25 +23,28 @@ use plugin_sm::{
 use crate::http_rest::HttpConfig;
 use std::process::Command;
 use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
+use tedge_api::health::{health_check_topics, send_health_status};
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt, LogPathSetting,
-    MqttBindAddressSetting, MqttExternalBindAddressSetting, MqttPortSetting, RunPathSetting,
-    SoftwarePluginDefaultSetting, TEdgeConfigLocation, TmpPathSetting, DEFAULT_LOG_PATH,
-    DEFAULT_RUN_PATH, DEFAULT_TMP_PATH,
+    system_services::SystemConfig, ConfigRepository, ConfigSettingAccessor,
+    ConfigSettingAccessorStringExt, HttpBindAddressSetting, HttpPortSetting, LogPathSetting,
+    MqttBindAddressSetting, MqttPortSetting, RunPathSetting, SoftwarePluginDefaultSetting,
+    TEdgeConfigLocation, TmpPathSetting, DEFAULT_LOG_PATH, DEFAULT_RUN_PATH, DEFAULT_TMP_PATH,
 };
 use tedge_utils::file::create_directory_with_user_group;
-use thin_edge_json::health::{health_check_topics, send_health_status};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, warn};
 
+use std::path::Path;
+
+const SYNC: &str = "sync";
 const SM_PLUGINS: &str = "sm-plugins";
 const AGENT_LOG_PATH: &str = "tedge/agent";
 
 #[cfg(not(test))]
-const INIT_COMMAND: &str = "init";
+const SUDO: &str = "sudo";
 
 #[cfg(test)]
-const INIT_COMMAND: &str = "echo";
+const SUDO: &str = "echo";
 
 #[derive(Debug, Clone)]
 pub struct SmAgentConfig {
@@ -60,7 +63,7 @@ pub struct SmAgentConfig {
     pub log_dir: PathBuf,
     pub run_dir: PathBuf,
     pub tmp_dir: PathBuf,
-    config_location: TEdgeConfigLocation,
+    pub config_location: TEdgeConfigLocation,
     pub download_dir: PathBuf,
     pub http_config: HttpConfig,
 }
@@ -157,17 +160,12 @@ impl SmAgentConfig {
         let tedge_run_dir = tedge_config.query_string(RunPathSetting)?.into();
         let tedge_tmp_dir = tedge_config.query_string(TmpPathSetting)?.into();
 
-        let bind_address = tedge_config.query(MqttBindAddressSetting)?;
-        let external_bind_address_or_err = tedge_config.query(MqttExternalBindAddressSetting);
+        let mut http_config = HttpConfig::default();
 
-        // match to external bind address if there is one,
-        // otherwise match to internal bind address
-        let http_config = match external_bind_address_or_err {
-            Ok(external_bind_address) => {
-                HttpConfig::default().with_ip_address(external_bind_address.into())
-            }
-            Err(_) => HttpConfig::default().with_ip_address(bind_address.into()),
-        };
+        let http_bind_address = tedge_config.query(HttpBindAddressSetting)?;
+        http_config = http_config
+            .with_port(tedge_config.query(HttpPortSetting)?.0)
+            .with_ip_address(http_bind_address.into());
 
         Ok(SmAgentConfig::default()
             .with_sm_home(tedge_config_path)
@@ -286,12 +284,10 @@ impl SmAgent {
         let mut mqtt = Connection::new(&self.config.mqtt_config).await?;
         let sm_plugins_path = self.config.sm_home.join(SM_PLUGINS);
 
-        let server = http_rest::http_file_transfer_server(&self.config.http_config)?;
-
         let plugins = Arc::new(Mutex::new(ExternalPlugins::open(
             &sm_plugins_path,
             get_default_plugin(&self.config.config_location)?,
-            Some("sudo".into()),
+            Some(SUDO.into()),
         )?));
 
         if plugins.lock().await.empty() {
@@ -312,11 +308,11 @@ impl SmAgent {
 
         self.process_pending_operation(&mut mqtt.published).await?;
 
+        let http_config = self.config.http_config.clone();
+
         // spawning file transfer server
         tokio::spawn(async move {
-            if let Err(err) = server.await {
-                error!("{}", err);
-            }
+            start_http_file_transfer_server(&http_config).await;
         });
 
         while let Err(error) = self
@@ -588,7 +584,8 @@ impl SmAgent {
             .await?;
         restart_operation::create_tmp_restart_file(&self.config.tmp_dir)?;
 
-        let command_vec = get_restart_operation_commands();
+        let command_vec =
+            get_restart_operation_commands(&self.config.config_location.tedge_config_root_path)?;
         for mut command in command_vec {
             match command.status() {
                 Ok(status) => {
@@ -661,28 +658,33 @@ impl SmAgent {
     }
 }
 
-#[cfg(test)]
-fn get_restart_operation_commands() -> Vec<Command> {
-    let mut vec = vec![];
-    // running `echo 6` with no sudo
-    let mut command = std::process::Command::new(INIT_COMMAND);
-    command.arg("6");
-    vec.push(command);
-    vec
+async fn start_http_file_transfer_server(http_config: &HttpConfig) {
+    let server = http_rest::http_file_transfer_server(http_config);
+
+    match server {
+        Ok(server) => {
+            if let Err(err) = server.await {
+                error!("{}", err);
+            }
+        }
+        Err(err) => error!("{}", err),
+    }
 }
 
-#[cfg(not(test))]
-fn get_restart_operation_commands() -> Vec<Command> {
+fn get_restart_operation_commands(system_config_path: &Path) -> Result<Vec<Command>, AgentError> {
     let mut vec = vec![];
     // sync first
-    let mut sync_command = std::process::Command::new("sudo");
-    sync_command.arg("sync");
+    let mut sync_command = std::process::Command::new(SUDO);
+    sync_command.arg(SYNC);
     vec.push(sync_command);
-    // running `sudo init 6`
-    let mut command = std::process::Command::new("sudo");
-    command.arg(INIT_COMMAND).arg("6");
+
+    // reading `system_config_path` to get the restart command or defaulting to `["init", "6"]'
+    let system_config = SystemConfig::try_new(system_config_path.to_path_buf())?;
+
+    let mut command = std::process::Command::new(SUDO);
+    command.args(system_config.system.reboot);
     vec.push(command);
-    vec
+    Ok(vec)
 }
 
 fn get_default_plugin(
@@ -710,8 +712,6 @@ mod tests {
 
     #[tokio::test]
     async fn check_agent_restart_file_is_created() -> Result<(), AgentError> {
-        assert_eq!(INIT_COMMAND, "echo");
-
         let (dir, tedge_config_location) = create_temp_tedge_config().unwrap();
         let agent = SmAgent::try_new(
             "tedge_agent_test",
@@ -750,6 +750,12 @@ mod tests {
         ttd.dir("logs");
         ttd.dir("run").dir("tedge_agent");
         ttd.dir("run").dir("lock");
+        let system_toml_content = toml::toml! {
+            [system]
+            reboot = ["echo", "6"]
+        };
+        ttd.file("system.toml")
+            .with_toml_content(system_toml_content);
         let toml_conf = &format!(
             r#"
             [tmp]
@@ -798,7 +804,7 @@ mod tests {
                 ExternalPlugins::open(
                     PathBuf::from(&dir.temp_dir.path()).join("sm-plugins"),
                     get_default_plugin(&agent.config.config_location).unwrap(),
-                    Some("sudo".into()),
+                    Some(SUDO.into()),
                 )
                 .unwrap(),
             ));
@@ -842,7 +848,7 @@ mod tests {
                 ExternalPlugins::open(
                     PathBuf::from(&dir.temp_dir.path()).join("sm-plugins"),
                     get_default_plugin(&agent.config.config_location).unwrap(),
-                    Some("sudo".into()),
+                    Some(SUDO.into()),
                 )
                 .unwrap(),
             ));
@@ -861,6 +867,33 @@ mod tests {
             assert_json_include!(actual: &health_status, expected: json!({"status": "up"}));
             assert!(health_status["pid"].is_number());
         }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn check_tedge_agent_does_not_panic_when_port_is_in_use() -> Result<(), anyhow::Error> {
+        let http_config = HttpConfig::default().with_port(3000);
+        let config_clone = http_config.clone();
+
+        // handle_one uses port 3000.
+        // handle_two will not be able to bind to the same port.
+        let handle_one = tokio::spawn(async move {
+            start_http_file_transfer_server(&config_clone).await;
+        });
+
+        let handle_two = tokio::spawn(async move {
+            start_http_file_transfer_server(&http_config).await;
+        });
+
+        // although the code inside handle_two throws an error it does not panic.
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        // to check for the error, we assert that handle_one is still running
+        // while handle_two is finished.
+        assert_eq!(handle_one.is_finished(), false);
+        assert_eq!(handle_two.is_finished(), true);
 
         Ok(())
     }

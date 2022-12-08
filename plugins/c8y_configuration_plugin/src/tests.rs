@@ -1,10 +1,13 @@
-use crate::child_device::{ChildDeviceRequestPayload, ChildDeviceResponsePayload};
+use crate::{
+    child_device::{ChildDeviceRequestPayload, ChildDeviceResponsePayload},
+    config_manager::DEFAULT_OPERATION_TIMEOUT,
+};
 
 use super::*;
-use agent_interface::OperationStatus;
 use c8y_api::{http_proxy::MockC8YHttpProxy, smartrest::error::SMCumulocityMapperError};
 use mockall::predicate;
 use std::time::Duration;
+use tedge_api::OperationStatus;
 use tedge_test_utils::fs::TempTedgeDir;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
@@ -29,8 +32,8 @@ async fn test_handle_config_upload_request_tedge_device() -> anyhow::Result<()> 
 
     let mut messages = broker.messages_published_on("c8y/s/us").await;
 
-    let mut http_client = MockC8YHttpProxy::new();
-    http_client
+    let mut c8y_http_client = MockC8YHttpProxy::new();
+    c8y_http_client
         .expect_upload_config_file()
         .with(
             predicate::always(),
@@ -40,7 +43,7 @@ async fn test_handle_config_upload_request_tedge_device() -> anyhow::Result<()> 
         .return_once(
             |_path, _type, _child_id| Ok("http://server/some/test/config/url".to_string()),
         );
-    http_client
+    c8y_http_client
         .expect_upload_config_file()
         .with(
             predicate::always(),
@@ -51,18 +54,15 @@ async fn test_handle_config_upload_request_tedge_device() -> anyhow::Result<()> 
             Ok("http://server/c8y/config/plugin/url".to_string())
         });
 
-    // Run the plugin's runtime logic in an async task
-    tokio::spawn(async move {
-        let _ = run(
-            tedge_device_id.into(),
-            broker.port,
-            &mut http_client,
-            "localhost",
-            ttd.path().to_path_buf(),
-            ttd.path(),
-        )
-        .await;
-    });
+    let mut config_manager = ConfigManager::new(
+        tedge_device_id,
+        broker.port,
+        Arc::new(Mutex::new(c8y_http_client)),
+        mockito::server_address().to_string(),
+        ttd.path().to_path_buf(),
+        ttd.to_path_buf(),
+    )
+    .await?;
 
     // Assert supported config types message(119) on plugin startup
     mqtt_tests::assert_received_all_expected(
@@ -71,6 +71,11 @@ async fn test_handle_config_upload_request_tedge_device() -> anyhow::Result<()> 
         &[format!("119,{c8y_config_plugin_type},{test_config_type}")],
     )
     .await;
+
+    // Run the plugin's runtime logic in an async task
+    tokio::spawn(async move {
+        let _ = config_manager.run().await;
+    });
 
     // Send a config upload request to the plugin
     broker
@@ -129,25 +134,27 @@ async fn test_handle_config_upload_request_child_device() -> anyhow::Result<()> 
         .file("c8y-configuration-plugin.toml")
         .with_toml_content(toml::toml! {
             files = [
-                { path = test_config_path, type = "file_a" }
+                { path = test_config_path, type = config_type }
             ]
         });
 
     let server_address = mockito::server_address().to_string();
     let broker = mqtt_tests::test_mqtt_broker();
-    let mut c8y_http_client = MockC8YHttpProxy::new();
+    let c8y_http_client = MockC8YHttpProxy::new();
+
+    let mut config_manager = ConfigManager::new(
+        tedge_device_id,
+        broker.port,
+        Arc::new(Mutex::new(c8y_http_client)),
+        mockito::server_address().to_string(),
+        tmp_dir.path().to_path_buf(),
+        tmp_dir.to_path_buf(),
+    )
+    .await?;
 
     // Run the plugin's runtime logic in an async task
     tokio::spawn(async move {
-        let _ = run(
-            tedge_device_id.into(),
-            broker.port,
-            &mut c8y_http_client,
-            &mockito::server_address().to_string(),
-            tmp_dir.path().to_path_buf(),
-            tmp_dir.path(),
-        )
-        .await;
+        let _ = config_manager.run().await;
     });
 
     let mut tedge_command_messages = broker
@@ -204,19 +211,21 @@ async fn test_handle_config_upload_executing_response_child_device() -> anyhow::
         });
 
     let broker = mqtt_tests::test_mqtt_broker();
-    let mut c8y_http_client = MockC8YHttpProxy::new();
+    let c8y_http_client = MockC8YHttpProxy::new();
+
+    let mut config_manager = ConfigManager::new(
+        tedge_device_id,
+        broker.port,
+        Arc::new(Mutex::new(c8y_http_client)),
+        mockito::server_address().to_string(),
+        ttd.path().to_path_buf(),
+        ttd.to_path_buf(),
+    )
+    .await?;
 
     // Run the plugin's runtime logic in an async task
     tokio::spawn(async move {
-        let _ = run(
-            tedge_device_id.into(),
-            broker.port,
-            &mut c8y_http_client,
-            &mockito::server_url(),
-            ttd.path().to_path_buf(),
-            ttd.path(),
-        )
-        .await;
+        let _ = config_manager.run().await;
     });
 
     let mut smartrest_messages = broker
@@ -269,19 +278,21 @@ async fn test_handle_config_upload_failed_response_child_device() -> anyhow::Res
         });
 
     let broker = mqtt_tests::test_mqtt_broker();
-    let mut c8y_http_client = MockC8YHttpProxy::new();
+    let c8y_http_client = MockC8YHttpProxy::new();
+
+    let mut config_manager = ConfigManager::new(
+        tedge_device_id,
+        broker.port,
+        Arc::new(Mutex::new(c8y_http_client)),
+        mockito::server_address().to_string(),
+        ttd.path().to_path_buf(),
+        ttd.to_path_buf(),
+    )
+    .await?;
 
     // Run the plugin's runtime logic in an async task
     tokio::spawn(async move {
-        let _ = run(
-            tedge_device_id.into(),
-            broker.port,
-            &mut c8y_http_client,
-            &mockito::server_url(),
-            ttd.path().to_path_buf(),
-            ttd.path(),
-        )
-        .await;
+        let _ = config_manager.run().await;
     });
 
     let mut smartrest_messages = broker
@@ -317,26 +328,28 @@ async fn test_handle_config_upload_failed_response_child_device() -> anyhow::Res
 // back-to-back EXECUTING and FAILED messages for c8y_UploadConfigFile operation
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial_test::serial]
-async fn test_invalid_config_upload_response_child_device() -> anyhow::Result<()> {
+async fn test_invalid_config_snapshot_response_child_device() -> anyhow::Result<()> {
     let tedge_device_id = "tedge-device";
     let child_device_id = "child-device";
     let tmp_dir = TempTedgeDir::new();
     tmp_dir.dir("c8y").file("c8y-configuration-plugin.toml");
 
     let broker = mqtt_tests::test_mqtt_broker();
-    let mut c8y_http_client = MockC8YHttpProxy::new();
+    let c8y_http_client = MockC8YHttpProxy::new();
+
+    let mut config_manager = ConfigManager::new(
+        tedge_device_id,
+        broker.port,
+        Arc::new(Mutex::new(c8y_http_client)),
+        mockito::server_address().to_string(),
+        tmp_dir.path().to_path_buf(),
+        tmp_dir.to_path_buf(),
+    )
+    .await?;
 
     // Run the plugin's runtime logic in an async task
     tokio::spawn(async move {
-        let _ = run(
-            tedge_device_id.into(),
-            broker.port,
-            &mut c8y_http_client,
-            &mockito::server_url(),
-            tmp_dir.path().to_path_buf(),
-            tmp_dir.path(),
-        )
-        .await;
+        let _ = config_manager.run().await;
     });
 
     let mut smartrest_messages = broker
@@ -356,6 +369,82 @@ async fn test_invalid_config_upload_response_child_device() -> anyhow::Result<()
         &mut smartrest_messages,
         TEST_TIMEOUT_MS,
         &["501,c8y_UploadConfigFile", "502,c8y_UploadConfigFile"],
+    )
+    .await;
+
+    Ok(())
+}
+
+// No response from the child for a config_snapshot request results in a timeout
+// with back-to-back EXECUTING and FAILED messages for c8y_UploadConfigFile operation
+// DO NOT USE the 'multi_threaded' tokio runtime flavour for this test
+// as the tokio::time::advance/resume is only possible with the single threaded runtime
+#[tokio::test]
+#[serial_test::serial]
+async fn test_no_config_snapshot_response_child_device() -> anyhow::Result<()> {
+    let tedge_device_id = "tedge-device";
+    let child_device_id = "child-device";
+    let config_type = "config_type";
+    let test_config_path = "/some/test/config";
+
+    let tmp_dir = TempTedgeDir::new();
+    tmp_dir
+        .dir("c8y")
+        .dir(child_device_id)
+        .file("c8y-configuration-plugin.toml")
+        .with_toml_content(toml::toml! {
+            files = [
+                { path = test_config_path, type = config_type }
+            ]
+        });
+
+    let broker = mqtt_tests::test_mqtt_broker();
+    let c8y_http_client = MockC8YHttpProxy::new();
+
+    let mut config_manager = ConfigManager::new(
+        tedge_device_id,
+        broker.port,
+        Arc::new(Mutex::new(c8y_http_client)),
+        mockito::server_address().to_string(),
+        tmp_dir.path().to_path_buf(),
+        tmp_dir.to_path_buf(),
+    )
+    .await?;
+
+    // Run the plugin's runtime logic in an async task
+    tokio::spawn(async move {
+        let _ = config_manager.run().await;
+    });
+
+    let mut smartrest_messages = broker
+        .messages_published_on(format!("c8y/s/us/{child_device_id}").as_str())
+        .await;
+
+    // Send a c8y_UploadConfigFile request to the plugin
+    broker
+        .publish(
+            "c8y/s/ds",
+            format!("526,{child_device_id},{config_type}").as_str(),
+        )
+        .await?;
+
+    //Pause and advance time beyond the default operation timeout
+    tokio::time::pause();
+    tokio::time::advance(DEFAULT_OPERATION_TIMEOUT).await;
+    tokio::time::resume();
+
+    // Explicitly yielding to the config manager task to trigger the timeout
+    // as this test is running from a single threaded runtime
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // Assert the c8y_UploadConfigFile operation status mapping to FAILED(502)
+    mqtt_tests::assert_received_all_expected(
+        &mut smartrest_messages,
+        DEFAULT_OPERATION_TIMEOUT,
+        &[
+            "501,c8y_UploadConfigFile",
+            "502,c8y_UploadConfigFile,\"Timeout due to lack of response from child device",
+        ],
     )
     .await;
 
@@ -383,8 +472,6 @@ async fn test_handle_config_upload_successful_response_child_device() -> anyhow:
 
     let broker = mqtt_tests::test_mqtt_broker();
 
-    let local_http_host = mockito::server_address().to_string();
-
     //Mock the config file upload to Cumulocity
     let mut c8y_http_client = MockC8YHttpProxy::new();
     c8y_http_client
@@ -396,17 +483,19 @@ async fn test_handle_config_upload_successful_response_child_device() -> anyhow:
         )
         .return_once(|_path, _type, _child_id| Ok("http://server/config/file/url".to_string()));
 
+    let mut config_manager = ConfigManager::new(
+        tedge_device_id,
+        broker.port,
+        Arc::new(Mutex::new(c8y_http_client)),
+        mockito::server_address().to_string(),
+        ttd.path().to_path_buf(),
+        ttd.to_path_buf(),
+    )
+    .await?;
+
     // Run the plugin's runtime logic in an async task
     tokio::spawn(async move {
-        let _ = run(
-            tedge_device_id.into(),
-            broker.port,
-            &mut c8y_http_client,
-            &local_http_host,
-            ttd.path().to_path_buf(),
-            ttd.path(),
-        )
-        .await;
+        let _ = config_manager.run().await;
     });
 
     let mut smartrest_messages = broker
@@ -453,8 +542,6 @@ async fn test_child_config_upload_successful_response_mapped_to_failed_without_u
 
     let broker = mqtt_tests::test_mqtt_broker();
 
-    let local_http_host = mockito::server_address().to_string();
-
     // Mock the config file upload to Cumulocity to fail with file not found
     let mut c8y_http_client = MockC8YHttpProxy::new();
     c8y_http_client
@@ -470,17 +557,19 @@ async fn test_child_config_upload_successful_response_mapped_to_failed_without_u
             ))
         });
 
+    let mut config_manager = ConfigManager::new(
+        tedge_device_id,
+        broker.port,
+        Arc::new(Mutex::new(c8y_http_client)),
+        mockito::server_address().to_string(),
+        tmp_dir.to_path_buf(),
+        tmp_dir.to_path_buf(),
+    )
+    .await?;
+
     // Run the plugin's runtime logic in an async task
     tokio::spawn(async move {
-        let _ = run(
-            tedge_device_id.into(),
-            broker.port,
-            &mut c8y_http_client,
-            &local_http_host,
-            tmp_dir.path().to_path_buf(),
-            tmp_dir.path(),
-        )
-        .await;
+        let _ = config_manager.run().await;
     });
 
     let mut smartrest_messages = broker
@@ -548,17 +637,19 @@ async fn test_handle_config_update_request_tedge_device() -> anyhow::Result<()> 
     let local_http_host = mockito::server_url();
     let config_update_download_url = format!("{local_http_host}{config_update_cloud_url_path}");
 
+    let mut config_manager = ConfigManager::new(
+        tedge_device_id,
+        broker.port,
+        Arc::new(Mutex::new(c8y_http_client)),
+        mockito::server_address().to_string(),
+        tmp_dir.to_path_buf(),
+        tmp_dir.to_path_buf(),
+    )
+    .await?;
+
     // Run the plugin's runtime logic in an async task
     tokio::spawn(async move {
-        let _ = run(
-            tedge_device_id.into(),
-            broker.port,
-            &mut c8y_http_client,
-            local_http_host.as_str(),
-            tmp_dir.path().to_path_buf(),
-            tmp_dir.path(),
-        )
-        .await;
+        let _ = config_manager.run().await;
     });
 
     let mut messages = broker.messages_published_on("c8y/s/us").await;
@@ -619,24 +710,25 @@ async fn test_handle_config_update_request_child_device() -> anyhow::Result<()> 
         });
 
     let broker = mqtt_tests::test_mqtt_broker();
-    let local_http_host = mockito::server_address().to_string();
     let mut c8y_http_client = MockC8YHttpProxy::new();
     c8y_http_client
         .expect_url_is_in_my_tenant_domain()
         .with(predicate::always())
         .return_once(|_path| false);
 
+    let mut config_manager = ConfigManager::new(
+        tedge_device_id,
+        broker.port,
+        Arc::new(Mutex::new(c8y_http_client)),
+        mockito::server_address().to_string(),
+        tmp_dir.to_path_buf(),
+        tmp_dir.to_path_buf(),
+    )
+    .await?;
+
     // Run the plugin's runtime logic in an async task
     tokio::spawn(async move {
-        let _ = run(
-            tedge_device_id.into(),
-            broker.port,
-            &mut c8y_http_client,
-            local_http_host.as_str(),
-            tmp_dir.path().to_path_buf(),
-            tmp_dir.path(),
-        )
-        .await;
+        let _ = config_manager.run().await;
     });
 
     let mut tedge_command_messages = broker
@@ -702,24 +794,25 @@ async fn test_c8y_config_download_child_device_fail_on_broken_url() -> anyhow::R
         });
 
     let broker = mqtt_tests::test_mqtt_broker();
-    let local_http_host = mockito::server_address().to_string();
     let mut c8y_http_client = MockC8YHttpProxy::new();
     c8y_http_client
         .expect_url_is_in_my_tenant_domain()
         .with(predicate::always())
         .return_once(|_path| false);
 
+    let mut config_manager = ConfigManager::new(
+        tedge_device_id,
+        broker.port,
+        Arc::new(Mutex::new(c8y_http_client)),
+        mockito::server_address().to_string(),
+        tmp_dir.to_path_buf(),
+        tmp_dir.to_path_buf(),
+    )
+    .await?;
+
     // Run the plugin's runtime logic in an async task
     tokio::spawn(async move {
-        let _ = run(
-            tedge_device_id.into(),
-            broker.port,
-            &mut c8y_http_client,
-            local_http_host.as_str(),
-            tmp_dir.path().to_path_buf(),
-            tmp_dir.path(),
-        )
-        .await;
+        let _ = config_manager.run().await;
     });
 
     let mut smartrest_messages = broker
@@ -773,20 +866,21 @@ async fn test_handle_config_update_successful_response_child_device() -> anyhow:
         });
 
     let broker = mqtt_tests::test_mqtt_broker();
-    let local_http_host = mockito::server_address().to_string();
-    let mut c8y_http_client = MockC8YHttpProxy::new();
+    let c8y_http_client = MockC8YHttpProxy::new();
+
+    let mut config_manager = ConfigManager::new(
+        tedge_device_id,
+        broker.port,
+        Arc::new(Mutex::new(c8y_http_client)),
+        mockito::server_address().to_string(),
+        ttd.to_path_buf(),
+        ttd.to_path_buf(),
+    )
+    .await?;
 
     // Run the plugin's runtime logic in an async task
     tokio::spawn(async move {
-        let _ = run(
-            tedge_device_id.into(),
-            broker.port,
-            &mut c8y_http_client,
-            &local_http_host,
-            ttd.path().to_path_buf(),
-            ttd.path(),
-        )
-        .await;
+        let _ = config_manager.run().await;
     });
 
     let mut smartrest_messages = broker
@@ -829,19 +923,21 @@ async fn test_invalid_config_update_response_child_device() -> anyhow::Result<()
     tmp_dir.dir("c8y").file("c8y-configuration-plugin.toml");
 
     let broker = mqtt_tests::test_mqtt_broker();
-    let mut c8y_http_client = MockC8YHttpProxy::new();
+    let c8y_http_client = MockC8YHttpProxy::new();
+
+    let mut config_manager = ConfigManager::new(
+        tedge_device_id,
+        broker.port,
+        Arc::new(Mutex::new(c8y_http_client)),
+        mockito::server_address().to_string(),
+        tmp_dir.to_path_buf(),
+        tmp_dir.to_path_buf(),
+    )
+    .await?;
 
     // Run the plugin's runtime logic in an async task
     tokio::spawn(async move {
-        let _ = run(
-            tedge_device_id.into(),
-            broker.port,
-            &mut c8y_http_client,
-            &mockito::server_url(),
-            tmp_dir.path().to_path_buf(),
-            tmp_dir.path(),
-        )
-        .await;
+        let _ = config_manager.run().await;
     });
 
     let mut smartrest_messages = broker
@@ -879,8 +975,8 @@ async fn test_handle_multiline_config_upload_requests() -> anyhow::Result<()> {
 
     let mut messages = broker.messages_published_on("c8y/s/us").await;
 
-    let mut http_client = MockC8YHttpProxy::new();
-    http_client
+    let mut c8y_http_client = MockC8YHttpProxy::new();
+    c8y_http_client
         .expect_upload_config_file()
         .with(
             predicate::always(),
@@ -889,17 +985,19 @@ async fn test_handle_multiline_config_upload_requests() -> anyhow::Result<()> {
         )
         .returning(|_path, _type, _child_id| Ok("http://server/some/test/config/url".to_string()));
 
+    let mut config_manager = ConfigManager::new(
+        tedge_device_id,
+        broker.port,
+        Arc::new(Mutex::new(c8y_http_client)),
+        mockito::server_address().to_string(),
+        ttd.path().to_path_buf(),
+        ttd.to_path_buf(),
+    )
+    .await?;
+
     // Run the plugin's runtime logic in an async task
     tokio::spawn(async move {
-        let _ = run(
-            tedge_device_id.into(),
-            broker.port,
-            &mut http_client,
-            "localhost",
-            ttd.path().to_path_buf(),
-            ttd.path(),
-        )
-        .await;
+        let _ = config_manager.run().await;
     });
 
     // Assert supported config types message(119) on plugin startup
