@@ -4,7 +4,10 @@ use tedge_actors::{
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct MqttConfig {}
+pub struct MqttConfig {
+    pub host: String,
+    pub port: u16,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MqttMessage {

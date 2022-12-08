@@ -507,6 +507,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "tedge_actors",
+ "tedge_config",
  "tedge_http_ext",
  "tokio",
 ]

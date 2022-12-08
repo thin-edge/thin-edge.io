@@ -1,12 +1,9 @@
-mod config_ext;
+mod config_manager;
 mod file_system_ext;
 mod mqtt_ext;
 
-use crate::config_ext::{ConfigConfigManager, ConfigManager};
-use crate::mqtt_ext::MqttConfig;
-use std::path::PathBuf;
+use crate::config_manager::{ConfigConfigManager, ConfigManager};
 use tedge_actors::Runtime;
-use tedge_http_ext::HttpConfig;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -16,13 +13,8 @@ async fn main() -> anyhow::Result<()> {
     // Create actor instances
     let mut http_actor =
         tedge_http_ext::HttpActorInstance::new(tedge_http_ext::HttpConfig::default())?;
-    let mut config_actor = ConfigManager::new(
-        ConfigConfigManager {
-            mqtt_conf: MqttConfig {},
-            http_conf: HttpConfig {},
-            config_dir: PathBuf::from("/etc/tedge".to_string()),
-        }
-    );
+    let mut config_actor =
+        ConfigManager::new(ConfigConfigManager::from_tedge_config("/etc/tedge")?);
 
     // Connect actor instances
     config_actor.with_http_connection(&mut http_actor);
