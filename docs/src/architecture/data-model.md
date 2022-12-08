@@ -6,20 +6,19 @@ The **thin-edge data model** is used to represent all device-related information
 TODO: add more information what the data model is about, and mention/link to the domain model
 
 ## Inventory
-
-**thin-edge** holds and manages an **inventory**, that stores and provides information about the **thin-edge** device itself, as well as about other _external devices_ connected to thin-edge.
-
-The **inventory** is the communication backbone for **plugins**, **external child-devices**, the **domain application**[^1] and **thin-edge** it-self.
-
-The **inventory** accepts _information_ from **child-devices** or processes on the **main-device**, e.g.:
-   * list of configuration files the **device** provides
-   * description of measurements the **device** provides
-
-Next **thin-edge**, **plugins**, the **domain application**[^1] or other processes can retrive those _information_ to discover data and functionality the **child-devices** and **main-device**  provide. As example:
-   * the configuration plugin can retrieve a list of configuration files per **device** to provide those files to the cloud
-   * the **domain application** or some 3rd party (e.g. APAMA analytics) can retrieve the description of measurements to discover measurement data provided by the **child-devices** and **main-device** that might be relevant for processing logic or analytics calculation
-
-[^1]: more details see TODO: add link to "Appendix 'Device Overview' of Device Domain", that is in "./domain-model.md#device-domain"
+**thin-edge** holds and manages an **inventory**.
+That **inventory** is the communication backbone for **thin-edge** and all devices and components working with **thin-edge**.
+It is the place that holds information about all **devices** (i.E. the **main-device** and all **child-devices**).
+  * All processes on all devices can _put_ information into the **inventory**.
+  * And all procssess on all devices can _query_ information from the **inventory**.
+  * The inventory can be used to anounce and discover **telemetry data**.
+    * Processes (on any device) that provide **telemetry data**, e.g. **measurements** or **alarms**, can put descriptions of those into the **inventory**.
+    * Other processes (on any device) that react on a specific **alarm type** or consume a specific **measurement type** can query the **inventory** for those.
+      Based on the query result the processes can subscribe to corresponding **alarm** / **measurement** MQTT topics to consume occurring alarm-triggers / measurement samples.
+  * Also **plugins** can use the inventory, to discover **child-devices** or containers that intend to make use of their functionality.
+    * Proccesses (on any device) that e.g. provide log files can put a list of those log files into the **inventory**.
+    * The log-management plugin can query the **inventory** for those log file lists (from any device).
+      Based on the query result it can operate with corresponding devices to provide those log files to the cloud.
 
 ### Format and content
 
