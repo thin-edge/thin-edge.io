@@ -10,11 +10,13 @@
 
 mod command_builder;
 mod error;
+mod log_config;
 mod manager;
 mod manager_ext;
 mod managers;
 mod services;
 
 pub use self::{
-    command_builder::*, error::*, manager::*, manager_ext::*, managers::*, services::*,
+    command_builder::*, error::*, log_config::*, manager::*, manager_ext::*, managers::*,
+    services::*,
 };

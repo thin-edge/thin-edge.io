@@ -1,7 +1,8 @@
 use crate::system_services::{
-    CommandBuilder, InitConfig, SystemConfig, SystemService, SystemServiceError,
-    SystemServiceManager, SERVICE_CONFIG_FILE,
+    CommandBuilder, SystemService, SystemServiceError, SystemServiceManager,
 };
+
+use super::config::{InitConfig, SystemConfig, SERVICE_CONFIG_FILE};
 use std::fmt;
 use std::path::PathBuf;
 use std::process::ExitStatus;

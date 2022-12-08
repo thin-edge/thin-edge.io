@@ -2828,8 +2828,19 @@ dependencies = [
  "thiserror",
  "tokio",
  "toml",
+ "tracing",
  "url",
  "which",
+]
+
+[[package]]
+name = "tedge-derive"
+version = "0.8.1"
+dependencies = [
+ "quote 1.0.21",
+ "serde",
+ "syn 1.0.102",
+ "toml",
 ]
 
 [[package]]
@@ -2895,6 +2906,26 @@ dependencies = [
  "tedge_utils",
  "test-case",
  "thiserror",
+]
+
+[[package]]
+name = "tedge_config"
+version = "0.8.1"
+dependencies = [
+ "anyhow",
+ "assert_matches",
+ "certificate",
+ "serde",
+ "strum_macros",
+ "tedge_test_utils",
+ "tedge_utils",
+ "tempfile",
+ "test-case",
+ "thiserror",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -3028,12 +3059,12 @@ dependencies = [
  "nix",
  "notify",
  "strum_macros",
+ "tedge-derive",
  "tedge_test_utils",
  "tempfile",
  "thiserror",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "try-traits",
  "users",
  "whoami",
