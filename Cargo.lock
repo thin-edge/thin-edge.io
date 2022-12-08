@@ -2834,16 +2834,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tedge-derive"
-version = "0.8.1"
-dependencies = [
- "quote 1.0.21",
- "serde",
- "syn 1.0.102",
- "toml",
-]
-
-[[package]]
 name = "tedge-agent"
 version = "0.8.1"
 dependencies = [
@@ -2909,23 +2899,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "tedge_config"
+name = "tedge-derive"
 version = "0.8.1"
 dependencies = [
- "anyhow",
- "assert_matches",
- "certificate",
+ "quote 1.0.21",
  "serde",
- "strum_macros",
- "tedge_test_utils",
- "tedge_utils",
- "tempfile",
- "test-case",
- "thiserror",
+ "syn 1.0.105",
  "toml",
- "tracing",
- "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -3031,12 +3011,15 @@ dependencies = [
  "assert_matches",
  "certificate",
  "serde",
+ "strum_macros",
  "tedge_test_utils",
  "tedge_utils",
  "tempfile",
  "test-case",
  "thiserror",
  "toml",
+ "tracing",
+ "tracing-subscriber",
  "url",
 ]
 
