@@ -11,7 +11,7 @@ Alternatively, we can use the Azure SDK to access the IoT Hub directly.
 When this script is called you need to be already connected to Azure.
 
 Call example:
-$ ./roundtrip_local_to_az.py  -a 10 -p sas_policy -b thinedgebus -q testqueue
+./roundtrip_local_to_az.py  -a 10 -p sas_policy -b thinedgebus -q testqueue
     Set Env:
     - SASKEYQUEUE : Shared Access Key to the service bus queue
 

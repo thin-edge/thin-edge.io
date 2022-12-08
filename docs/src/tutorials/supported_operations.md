@@ -57,7 +57,7 @@ This directory should have permissions set to `755` and the owner to `tedge`.
 This directory will contain a set subdirectories based on cloud providers currently supported eg:
 
 ```shell
-$ ls -l /etc/tedge/operations
+ls -l /etc/tedge/operations
 
 drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 az
 drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 c8y
@@ -69,7 +69,7 @@ The directories should be readable by `thin-edge.io` user - `tedge` - and should
 To list all currently supported operations for a cloud provider, run:
 
 ```shell
-$ ls -l /etc/tedge/operations/c8y
+ls -l /etc/tedge/operations/c8y
 
 -rw-r--r-- 1 tedge tedge 0 Jan 01 00:00 c8y_Restart
 ```
@@ -78,7 +78,10 @@ To list all currently supported operations, run:
 The operations files should have permissions `644` and the owner `tedge`.
 
 ```shell
-$ sudo ls -lR /etc/tedge/operations
+sudo ls -lR /etc/tedge/operations
+```
+
+```
 /etc/tedge/operations:
 drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 az
 drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 c8y
@@ -92,7 +95,10 @@ drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 c8y
 One can list all the currently supported operations for a child device as below
 
 ```shell
-$ sudo ls -lR /etc/tedge/operations/c8y/<child-device>
+sudo ls -lR /etc/tedge/operations/c8y/<child-device>
+```
+
+```
 -rw-r--r-- 1 tedge tedge 0 Oct 26 11:24 c8y_LogfileRequest
 ```
 

@@ -164,14 +164,17 @@ on the topic `tedge/errors` with the QoS level 1 (at least once).
 Here is an example if you publish invalid Thin Edge JSON messages on `tedge/measurements`:
 
 ```shell
-$ tedge mqtt pub tedge/measurements '{"temperature": 23,"pressure": 220'
-$ tedge mqtt pub tedge/measurements '{"temperature": 23,"time": 220}'
+tedge mqtt pub tedge/measurements '{"temperature": 23,"pressure": 220'
+tedge mqtt pub tedge/measurements '{"temperature": 23,"time": 220}'
 ```
 
 Then, you'll receive error messages from the mapper on the topic `tedge/errors`:
 
 ```shell
-$ tedge mqtt sub tedge/errors
+tedge mqtt sub tedge/errors
+```
+
+```
 [tedge/errors] Invalid JSON: Unexpected end of JSON: {"temperature":23,"pressure":220
 [tedge/errors] Not a timestamp: the time value must be an ISO8601 timestamp string in the YYYY-MM-DDThh:mm:ss.sss.±hh:mm format, not a number.
 ```

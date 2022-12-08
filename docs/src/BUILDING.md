@@ -48,7 +48,10 @@ export PATH=$PATH:$HOME/.cargo/bin
 And then you can run `rustc` to view current version:
 
 ```shell
-$ rustc --version
+rustc --version
+```
+
+```
 rustc 1.58.1 (db9d1b20b 2022-01-20)
 ```
 
@@ -102,7 +105,10 @@ cargo build
 Build artifacts can be found in `./target/debug` and will include executables:
 
 ```shell
-$ ls ./target/debug/tedge*
+ls ./target/debug/tedge*
+```
+
+```
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge_mapper
 ```
@@ -125,7 +131,10 @@ cargo build --release
 Build artifacts can be found in `./target/release` and will include executables:
 
 ```shell
-$ ls ./target/release/tedge*
+ls ./target/release/tedge*
+```
+
+```
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge_mapper
 ```
@@ -147,7 +156,10 @@ cargo deb -p tedge_mapper
 All resulting packages are going to be in: `./target/debian/` directory:
 
 ```shell
-$ ls ./target/debian -l
+ls ./target/debian -l
+```
+
+```
 total 2948
 -rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_0.5.0_amd64.deb
 -rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_mapper_0.5.0_amd64.deb
@@ -164,7 +176,10 @@ cross build --target armv7-unknown-linux-gnueabihf
 Build artifacts can be found in `./target/armv7-unknown-linux-gnueabihf/debug` and will include executables:
 
 ```shell
-$ ls ./target/armv7-unknown-linux-gnueabihf/debug/tedge*
+ls ./target/armv7-unknown-linux-gnueabihf/debug/tedge*
+```
+
+```
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge_mapper
 ```
