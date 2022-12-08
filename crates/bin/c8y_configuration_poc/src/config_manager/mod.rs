@@ -6,7 +6,7 @@ use crate::{file_system_ext, mqtt_ext};
 use actor::*;
 use async_trait::async_trait;
 pub use config::*;
-use tedge_actors::{ActorInstance, Recipient, RuntimeError, RuntimeHandle};
+use tedge_actors::{ActorBuilder, LinkError, PeerLinker, Recipient, RuntimeError, RuntimeHandle};
 use tedge_http_ext::*;
 
 /// An instance of the config manager
@@ -32,17 +32,15 @@ impl ConfigManager {
     }
 
     /// Connect this config manager instance to some http connection provider
-    ///
-    /// TODO: the `http` actor instance should not be a concrete implementation
-    ///       but an instance that consumes and produces messages of the expected type.
-    pub fn with_http_connection(&mut self, http: &mut HttpActorInstance) {
-        let http_con = http.add_client(self.address.http_responses.as_recipient());
+    pub fn with_http_connection(&mut self, http: &mut impl PeerLinker<HttpRequest, HttpResult>) -> Result<(), LinkError> {
+        let http_con = http.connect(self.address.http_responses.as_recipient())?;
         self.http_con = Some(http_con);
+        Ok(())
     }
 }
 
 #[async_trait]
-impl ActorInstance for ConfigManager {
+impl ActorBuilder for ConfigManager {
     async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
         let actor = ConfigManagerActor {};
 
@@ -67,9 +65,7 @@ impl ActorInstance for ConfigManager {
         )
         .await?;
 
-        // TODO: add error handling
-        let http_con = self.http_con.expect("Missing http connection");
-
+        let http_con = self.http_con.ok_or_else(|| LinkError::MissingPeer {role: "http".to_string()})?;
         let peers = ConfigManagerPeers::new(file_watcher, http_con, mqtt_con);
 
         runtime.run(actor, self.mailbox, peers).await?;

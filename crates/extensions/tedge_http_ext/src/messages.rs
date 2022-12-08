@@ -51,3 +51,5 @@ impl From<reqwest::Response> for HttpResponse {
         HttpResponse { status }
     }
 }
+
+pub type HttpResult = Result<HttpResponse, HttpError>;

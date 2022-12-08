@@ -1,5 +1,4 @@
-use crate::{Actor, Recipient, RunActor, RuntimeError, Task};
-use async_trait::async_trait;
+use crate::{Actor, ActorBuilder, Recipient, RunActor, RuntimeError, Task};
 use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
 use tokio::task::JoinHandle;
@@ -57,7 +56,7 @@ impl Runtime {
     }
 
     /// Spawn an actor
-    pub async fn spawn(&mut self, actor: impl ActorInstance) -> Result<(), RuntimeError> {
+    pub async fn spawn(&mut self, actor: impl ActorBuilder) -> Result<(), RuntimeError> {
         actor.spawn(&mut self.handle).await
     }
 
@@ -89,11 +88,6 @@ impl Runtime {
             }
         })
     }
-}
-
-#[async_trait]
-pub trait ActorInstance {
-    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError>;
 }
 
 /// A handle passed to actors to interact with the runtime

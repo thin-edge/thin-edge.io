@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use std::path::PathBuf;
 use tedge_actors::{Recipient, RuntimeError, RuntimeHandle};
 
@@ -19,9 +18,9 @@ pub enum FileEvent {
 pub enum FileRequest {}
 
 pub async fn new_watcher(
-    runtime: &mut RuntimeHandle,
-    config: WatcherConfig,
-    client: Recipient<FileEvent>,
+    _runtime: &mut RuntimeHandle,
+    _config: WatcherConfig,
+    _client: Recipient<FileEvent>,
 ) -> Result<Recipient<FileRequest>, RuntimeError> {
     todo!()
 }

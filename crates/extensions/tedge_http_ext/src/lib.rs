@@ -5,7 +5,10 @@ pub use messages::*;
 
 use actor::*;
 use async_trait::async_trait;
-use tedge_actors::{new_mailbox, ActorInstance, Address, Mailbox, Recipient, RuntimeError, RuntimeHandle, KeyedRecipient, RecipientVec};
+use tedge_actors::{
+    new_mailbox, ActorBuilder, Address, KeyedRecipient, LinkError, Mailbox, PeerLinker, Recipient,
+    RecipientVec, RuntimeError, RuntimeHandle,
+};
 
 pub struct HttpActorInstance {
     actor: HttpActor,
@@ -26,25 +29,30 @@ impl HttpActorInstance {
             clients: vec![],
         })
     }
-
-    pub fn add_client(
-        &mut self,
-        client: Recipient<Result<HttpResponse, HttpError>>,
-    ) -> Recipient<HttpRequest> {
-        let client_idx = self.clients.len();
-        self.clients.push(client);
-
-        KeyedRecipient::new_recipient(client_idx, self.address.clone())
-    }
 }
 
 #[async_trait]
-impl ActorInstance for HttpActorInstance {
+impl ActorBuilder for HttpActorInstance {
     async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
         let actor = self.actor;
         let mailbox = self.mailbox;
         let clients = RecipientVec::new_recipient(self.clients);
 
         runtime.run(actor, mailbox, clients).await
+    }
+}
+
+impl PeerLinker<HttpRequest, HttpResult> for HttpActorInstance {
+    fn connect(
+        &mut self,
+        client: Recipient<HttpResult>,
+    ) -> Result<Recipient<HttpRequest>, LinkError> {
+        let client_idx = self.clients.len();
+        self.clients.push(client);
+
+        Ok(KeyedRecipient::new_recipient(
+            client_idx,
+            self.address.clone(),
+        ))
     }
 }

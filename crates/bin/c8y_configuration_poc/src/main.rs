@@ -17,7 +17,7 @@ async fn main() -> anyhow::Result<()> {
         ConfigManager::new(ConfigConfigManager::from_tedge_config("/etc/tedge")?);
 
     // Connect actor instances
-    config_actor.with_http_connection(&mut http_actor);
+    config_actor.with_http_connection(&mut http_actor)?;
 
     // Run the actors
     runtime.spawn(http_actor).await?;
