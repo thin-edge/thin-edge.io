@@ -3348,9 +3348,11 @@ name = "tedge_http_ext"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "futures",
  "reqwest",
  "tedge_actors",
  "thiserror",
+ "tokio",
  "url",
 ]
 
