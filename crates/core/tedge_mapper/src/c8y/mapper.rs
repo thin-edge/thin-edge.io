@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::c8y::converter::CumulocityConverter;
+use crate::c8y::converter::{CumulocityConverter, CumulocityDeviceInfo};
 use crate::core::converter::{make_valid_topic_or_panic, MapperConfig};
 use crate::core::mapper::{create_mapper_with_mqtt_channels, mqtt_config};
 use crate::core::{component::TEdgeComponent, size_threshold::SizeThreshold};
@@ -79,11 +79,15 @@ impl TEdgeComponent for CumulocityMapper {
         )
         .await?;
 
-        let converter = Box::new(CumulocityConverter::new(
-            size_threshold,
+        let device_info = CumulocityDeviceInfo {
             device_name,
             device_type,
             operations,
+        };
+
+        let converter = Box::new(CumulocityConverter::new(
+            size_threshold,
+            device_info,
             http_proxy,
             cfg_dir,
             child_ops,

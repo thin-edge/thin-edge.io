@@ -58,6 +58,13 @@ const TEDGE_AGENT_LOG_DIR: &str = "tedge/agent";
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
 
 #[derive(Debug)]
+pub struct CumulocityDeviceInfo {
+    pub device_name: String,
+    pub device_type: String,
+    pub operations: Operations,
+}
+
+#[derive(Debug)]
 pub struct CumulocityConverter<Proxy>
 where
     Proxy: C8YHttpProxy,
@@ -81,9 +88,7 @@ where
 {
     pub fn new(
         size_threshold: SizeThreshold,
-        device_name: String,
-        device_type: String,
-        operations: Operations,
+        device_info: CumulocityDeviceInfo,
         http_proxy: Proxy,
         cfg_dir: &Path,
         children: HashMap<String, Operations>,
@@ -98,6 +103,10 @@ where
         let log_dir = PathBuf::from(&format!("{}/{TEDGE_AGENT_LOG_DIR}", logs_path));
 
         let operation_logs = OperationLogs::try_new(log_dir)?;
+
+        let device_name = device_info.device_name;
+        let device_type = device_info.device_type;
+        let operations = device_info.operations;
 
         Ok(CumulocityConverter {
             size_threshold,
