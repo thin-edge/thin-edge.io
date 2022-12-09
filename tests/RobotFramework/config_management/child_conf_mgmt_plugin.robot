@@ -32,11 +32,11 @@ ${payl_exec}             '{"status": "executing", "path": "/home/pi/config1", "t
 ${payl_succ}             '{"status": "successful", "path": "/home/pi/config1", "type": "config1", "reason": null}'
 
 
-*** Tasks ***
+*** Test Cases ***
 Create child device name
     Create Timestamp                                    #Timestamp is used for unique names
     Define Child Device name                            #Adding CD in front of the timestamp
-Clean the cloud from devices
+Clean devices from the cloud
     Remove all managedObjects from cloud                #Removing all existing devices from the tenant 
 Prerequisite Parent
     Parent Connection                                   #Creates ssh connection to the parent device  
@@ -103,7 +103,7 @@ Check for child related content
 Delete child related content
     Execute Command    sudo rm -rf /etc/tedge/operations/c8y/CD*         #if folder exists, child device will be created
     Execute Command    sudo rm c8y-configuration-plugin.toml
-    Execute Command    sudo rm -rf /etc/tedge/c8y/*                    #if folder exists, child device will be created
+    Execute Command    sudo rm -rf /etc/tedge/c8y/CD*                    #if folder exists, child device will be created
     Execute Command    sudo rm -rf /var/tedge/*
 Remove all managedObjects from cloud
     Get all existing managedObjects
