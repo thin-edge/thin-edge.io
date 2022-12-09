@@ -1,4 +1,4 @@
-use crate::{Actor, ActorBuilder, Recipient, RunActor, RuntimeError, Task};
+use crate::{Actor, ActorBuilder, DynSender, RunActor, RuntimeError, Task};
 use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
 use tokio::task::JoinHandle;
@@ -36,7 +36,7 @@ impl Runtime {
     ///
     /// TODO ensure this can only be called once
     pub async fn try_new(
-        events_sender: Option<Recipient<RuntimeEvent>>,
+        events_sender: Option<DynSender<RuntimeEvent>>,
     ) -> Result<Runtime, RuntimeError> {
         let (actions_sender, actions_receiver) = mpsc::channel(16);
         let runtime_actor = RuntimeActor {
@@ -127,7 +127,7 @@ impl RuntimeHandle {
 /// The actual runtime implementation
 struct RuntimeActor {
     actions: mpsc::Receiver<RuntimeAction>,
-    _events: Option<Recipient<RuntimeEvent>>,
+    _events: Option<DynSender<RuntimeEvent>>,
     // TODO store a join handle for each running task/actor
     // TODO store a sender of RuntimeRequest to each actors
 }

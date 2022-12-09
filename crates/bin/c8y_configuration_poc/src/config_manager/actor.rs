@@ -2,7 +2,7 @@ use crate::file_system_ext::{FileEvent, FileRequest};
 use crate::mqtt_ext::MqttMessage;
 use async_trait::async_trait;
 use tedge_actors::{
-    adapt, fan_in_message_type, new_mailbox, Actor, Address, ChannelError, Mailbox, Recipient,
+    adapt, fan_in_message_type, new_mailbox, Actor, Address, ChannelError, Mailbox, DynSender,
 };
 use tedge_http_ext::{HttpError, HttpRequest, HttpResponse};
 
@@ -116,16 +116,16 @@ pub fn new_config_mailbox() -> (ConfigManagerMailbox, ConfigManagerAddress) {
 }
 
 pub struct ConfigManagerPeers {
-    file_watcher: Recipient<FileRequest>,
-    http_con: Recipient<HttpRequest>,
-    mqtt_con: Recipient<MqttMessage>,
+    file_watcher: DynSender<FileRequest>,
+    http_con: DynSender<HttpRequest>,
+    mqtt_con: DynSender<MqttMessage>,
 }
 
 impl ConfigManagerPeers {
     pub fn new(
-        file_watcher: Recipient<FileRequest>,
-        http_con: Recipient<HttpRequest>,
-        mqtt_con: Recipient<MqttMessage>,
+        file_watcher: DynSender<FileRequest>,
+        http_con: DynSender<HttpRequest>,
+        mqtt_con: DynSender<MqttMessage>,
     ) -> ConfigManagerPeers {
         ConfigManagerPeers {
             file_watcher,
@@ -134,8 +134,8 @@ impl ConfigManagerPeers {
         }
     }
 }
-impl From<Recipient<ConfigOutput>> for ConfigManagerPeers {
-    fn from(recipient: Recipient<ConfigOutput>) -> Self {
+impl From<DynSender<ConfigOutput>> for ConfigManagerPeers {
+    fn from(recipient: DynSender<ConfigOutput>) -> Self {
         ConfigManagerPeers {
             file_watcher: adapt(&recipient),
             http_con: adapt(&recipient),

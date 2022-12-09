@@ -60,7 +60,7 @@ impl<M> Clone for Address<M> {
 impl<M: Message> Address<M> {
     /// Build a clone of this address to used as a recipient of sub-messages,
     /// i.e. messages that can be cast into those expected by the mailbox.
-    pub fn as_recipient<N: Message + Into<M>>(&self) -> Recipient<N> {
+    pub fn as_recipient<N: Message + Into<M>>(&self) -> DynSender<N> {
         self.clone().into()
     }
 }
@@ -69,7 +69,7 @@ impl<M: Message> Address<M> {
 ///
 /// Actors don't access directly the addresses of their peers,
 /// but use intermediate recipients that adapt the messages when sent.
-pub type Recipient<M> = Box<dyn Sender<M>>;
+pub type DynSender<M> = Box<dyn Sender<M>>;
 
 #[async_trait]
 pub trait Sender<M>: 'static + Send + Sync {
@@ -78,11 +78,11 @@ pub trait Sender<M>: 'static + Send + Sync {
     async fn send(&mut self, message: M) -> Result<(), ChannelError>;
 
     /// Clone this sender in order to send messages to the same recipient from another actor
-    fn recipient_clone(&self) -> Recipient<M>;
+    fn sender_clone(&self) -> DynSender<M>;
 }
 
 /// An `Address<M>` is a `Recipient<N>` provided `N` implements `Into<M>`
-impl<M: Message, N: Message + Into<M>> From<Address<M>> for Recipient<N> {
+impl<M: Message, N: Message + Into<M>> From<Address<M>> for DynSender<N> {
     fn from(address: Address<M>) -> Self {
         Box::new(address)
     }
@@ -94,46 +94,46 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for Address<M> {
         Ok(self.sender.send(message.into()).await?)
     }
 
-    fn recipient_clone(&self) -> Recipient<N> {
+    fn sender_clone(&self) -> DynSender<N> {
         Box::new(self.clone())
     }
 }
 
-impl<M: Message> Debug for Recipient<M> {
+impl<M: Message> Debug for DynSender<M> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("anonymous recipient")
     }
 }
 
-impl<M: Message> Clone for Recipient<M> {
+impl<M: Message> Clone for DynSender<M> {
     fn clone(&self) -> Self {
-        self.recipient_clone()
+        self.sender_clone()
     }
 }
 
-/// Make a `Recipient<N>` from a `Recipient<M>`
+/// Make a `DynSender<N>` from a `DynSender<M>`
 ///
 /// This is a workaround to the fact the compiler rejects a From implementation:
 ///
 /// ```shell
 ///
-///  impl<M: Message, N: Message + Into<M>> From<Recipient<M>> for Recipient<N> {
+///  impl<M: Message, N: Message + Into<M>> From<DynSender<M>> for DynSender<N> {
 ///     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ///     |
 ///     = note: conflicting implementation in crate `core`:
 ///             - impl<T> From<T> for T;
 /// ```
-pub fn adapt<M: Message, N: Message + Into<M>>(sender: &Recipient<M>) -> Recipient<N> {
+pub fn adapt<M: Message, N: Message + Into<M>>(sender: &DynSender<M>) -> DynSender<N> {
     Box::new(Adapter {
-        sender: sender.recipient_clone(),
+        sender: sender.sender_clone(),
     })
 }
 
 struct Adapter<M> {
-    sender: Recipient<M>,
+    sender: DynSender<M>,
 }
 
-impl<M: Message, N: Message + Into<M>> From<Adapter<M>> for Recipient<N> {
+impl<M: Message, N: Message + Into<M>> From<Adapter<M>> for DynSender<N> {
     fn from(adapter: Adapter<M>) -> Self {
         Box::new(adapter)
     }
@@ -145,9 +145,9 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for Adapter<M> {
         Ok(self.sender.send(message.into()).await?)
     }
 
-    fn recipient_clone(&self) -> Recipient<N> {
+    fn sender_clone(&self) -> DynSender<N> {
         Box::new(Adapter {
-            sender: self.sender.recipient_clone(),
+            sender: self.sender.sender_clone(),
         })
     }
 }
@@ -172,7 +172,7 @@ mod tests {
 
         {
             let mut address = address;
-            let mut recipient_msg1: Recipient<Msg1> = address.as_recipient();
+            let mut recipient_msg1: DynSender<Msg1> = address.as_recipient();
             let mut recipient_msg2 = address.as_recipient();
 
             address
@@ -196,12 +196,12 @@ mod tests {
     }
 
     pub struct Peers {
-        pub peer_1: Recipient<Msg1>,
-        pub peer_2: Recipient<Msg2>,
+        pub peer_1: DynSender<Msg1>,
+        pub peer_2: DynSender<Msg2>,
     }
 
-    impl From<Recipient<Msg>> for Peers {
-        fn from(recipient: Recipient<Msg>) -> Self {
+    impl From<DynSender<Msg>> for Peers {
+        fn from(recipient: DynSender<Msg>) -> Self {
             Peers {
                 peer_1: adapt(&recipient),
                 peer_2: adapt(&recipient),

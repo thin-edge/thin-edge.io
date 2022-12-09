@@ -1,5 +1,5 @@
 use crate::ChannelError;
-use crate::{Mailbox, Message, Recipient};
+use crate::{Mailbox, Message, DynSender};
 use async_trait::async_trait;
 
 /// Enable a struct to be used as an actor.
@@ -17,7 +17,7 @@ pub trait Actor: 'static + Sized + Send + Sync {
     type Mailbox: From<Mailbox<Self::Input>> + Send + Sync;
 
     /// Type of the peers that actor is connected to
-    type Peers: From<Recipient<Self::Output>> + Send + Sync;
+    type Peers: From<DynSender<Self::Output>> + Send + Sync;
 
     /// Run the actor
     ///
@@ -41,7 +41,7 @@ mod tests {
         type Input = String;
         type Output = String;
         type Mailbox = Mailbox<String>;
-        type Peers = Recipient<String>;
+        type Peers = DynSender<String>;
 
         async fn run(
             mut self,
@@ -156,8 +156,8 @@ mod tests {
     fan_in_message_type!(DoMsg[DoThis,DoThat] : Clone , Debug , Eq , PartialEq);
 
     pub struct SpecificPeers {
-        pub peer_1: Recipient<DoThis>,
-        pub peer_2: Recipient<DoThat>,
+        pub peer_1: DynSender<DoThis>,
+        pub peer_2: DynSender<DoThat>,
     }
 
     impl SpecificPeers {
@@ -170,8 +170,8 @@ mod tests {
         }
     }
 
-    impl From<Recipient<DoMsg>> for SpecificPeers {
-        fn from(recipient: Recipient<DoMsg>) -> Self {
+    impl From<DynSender<DoMsg>> for SpecificPeers {
+        fn from(recipient: DynSender<DoMsg>) -> Self {
             SpecificPeers {
                 peer_1: adapt(&recipient),
                 peer_2: adapt(&recipient),

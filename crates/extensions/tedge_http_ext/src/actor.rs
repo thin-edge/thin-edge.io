@@ -1,6 +1,6 @@
 use crate::{HttpConfig, HttpError, HttpRequest, HttpResponse, HttpResult};
 use async_trait::async_trait;
-use tedge_actors::{Actor, ChannelError, Mailbox, Recipient};
+use tedge_actors::{Actor, ChannelError, Mailbox, DynSender};
 
 pub(crate) struct HttpActor {
     client: reqwest::Client,
@@ -18,7 +18,7 @@ impl Actor for HttpActor {
     type Input = (usize, HttpRequest);
     type Output = (usize, Result<HttpResponse, HttpError>);
     type Mailbox = Mailbox<Self::Input>;
-    type Peers = Recipient<Self::Output>;
+    type Peers = DynSender<Self::Output>;
 
     async fn run(
         self,
@@ -58,7 +58,7 @@ struct HttpPeers {
     requests: Mailbox<(usize, HttpRequest)>,
 
     /// Responses sent by this actor to its clients
-    responses: Recipient<(usize, HttpResult)>,
+    responses: DynSender<(usize, HttpResult)>,
 
     /// Pending responses
     pending_responses: futures::stream::FuturesUnordered<PendingResult>,
@@ -70,7 +70,7 @@ impl HttpPeers {
     fn new(
         max_concurrency: usize,
         requests: Mailbox<(usize, HttpRequest)>,
-        responses: Recipient<(usize, HttpResult)>,
+        responses: DynSender<(usize, HttpResult)>,
     ) -> HttpPeers {
         HttpPeers {
             max_concurrency,

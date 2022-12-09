@@ -1,7 +1,7 @@
 use crate::c8y_http_proxy::messages::{C8YRestRequest, C8YRestResponse};
 use async_trait::async_trait;
 use tedge_actors::{
-    new_mailbox, ActorBuilder, Address, LinkError, Mailbox, PeerLinker, Recipient, RuntimeError,
+    new_mailbox, ActorBuilder, Address, LinkError, Mailbox, PeerLinker, DynSender, RuntimeError,
     RuntimeHandle,
 };
 use tedge_http_ext::{HttpRequest, HttpResult};
@@ -30,12 +30,12 @@ pub struct C8YHttpProxyBuilder {
     /// To be connected to some clients
     ///
     /// If None is given, there is no point to spawn this actor
-    responses: Option<Recipient<C8YRestResponse>>,
+    responses: Option<DynSender<C8YRestResponse>>,
 
     /// To be connected to the HTTP actor
     ///
     /// If None is given, this actor cannot run
-    http_requests: Option<Recipient<HttpRequest>>,
+    http_requests: Option<DynSender<HttpRequest>>,
 }
 
 impl C8YHttpProxyBuilder {
@@ -70,8 +70,8 @@ impl ActorBuilder for C8YHttpProxyBuilder {
 impl PeerLinker<C8YRestRequest, C8YRestResponse> for C8YHttpProxyBuilder {
     fn connect(
         &mut self,
-        output_sender: Recipient<C8YRestResponse>,
-    ) -> Result<Recipient<C8YRestRequest>, LinkError> {
+        output_sender: DynSender<C8YRestResponse>,
+    ) -> Result<DynSender<C8YRestRequest>, LinkError> {
         if self.responses.is_some() {
             return Err(LinkError::ExcessPeer {
                 role: "input requests".into(),

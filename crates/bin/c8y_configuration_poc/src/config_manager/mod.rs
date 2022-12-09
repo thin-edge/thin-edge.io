@@ -6,7 +6,7 @@ use crate::{file_system_ext, mqtt_ext};
 use actor::*;
 use async_trait::async_trait;
 pub use config::*;
-use tedge_actors::{ActorBuilder, LinkError, PeerLinker, Recipient, RuntimeError, RuntimeHandle};
+use tedge_actors::{ActorBuilder, LinkError, PeerLinker, DynSender, RuntimeError, RuntimeHandle};
 use tedge_http_ext::*;
 
 /// An instance of the config manager
@@ -16,7 +16,7 @@ pub struct ConfigManager {
     config: ConfigConfigManager,
     mailbox: ConfigManagerMailbox,
     address: ConfigManagerAddress,
-    http_con: Option<Recipient<HttpRequest>>,
+    http_con: Option<DynSender<HttpRequest>>,
 }
 
 impl ConfigManager {

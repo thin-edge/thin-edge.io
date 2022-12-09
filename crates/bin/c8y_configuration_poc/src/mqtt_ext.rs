@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use tedge_actors::{
-    new_mailbox, Actor, ChannelError, Mailbox, Recipient, RuntimeError, RuntimeHandle,
+    new_mailbox, Actor, ChannelError, Mailbox, DynSender, RuntimeError, RuntimeHandle,
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -26,8 +26,8 @@ pub struct MqttMessage {
 pub async fn new_connection(
     runtime: &mut RuntimeHandle,
     config: MqttConfig,
-    sub_messages: Recipient<MqttMessage>,
-) -> Result<Recipient<MqttMessage>, RuntimeError> {
+    sub_messages: DynSender<MqttMessage>,
+) -> Result<DynSender<MqttMessage>, RuntimeError> {
     let (mailbox, address) = new_mailbox(10);
 
     let actor = MqttActor::new(config);
@@ -57,7 +57,7 @@ impl Actor for MqttActor {
     type Input = MqttMessage;
     type Output = MqttMessage;
     type Mailbox = Mailbox<MqttMessage>;
-    type Peers = Recipient<MqttMessage>;
+    type Peers = DynSender<MqttMessage>;
 
     async fn run(
         self,
