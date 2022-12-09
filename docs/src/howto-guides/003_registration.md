@@ -16,7 +16,10 @@ To use a custom location, refer to [`tedge config`](../references/tedge-config.m
 Now you should have a certificate in the `/etc/tedge/device-certs/` directory.
 
 ```shell
-$ ls /etc/tedge/device-certs/
+ls /etc/tedge/device-certs/
+```
+
+```
 /etc/tedge/device-certs/tedge-certificate.pem
 ```
 

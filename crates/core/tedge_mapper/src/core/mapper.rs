@@ -8,8 +8,8 @@ use mqtt_channel::{
 
 use std::path::Path;
 use std::time::Duration;
+use tedge_api::health::{health_check_topics, send_health_status};
 use tedge_utils::notify::{fs_notify_stream, FsEvent};
-use thin_edge_json::health::{health_check_topics, send_health_status};
 
 use tracing::{error, info, instrument, warn};
 const SYNC_WINDOW: Duration = Duration::from_secs(3);

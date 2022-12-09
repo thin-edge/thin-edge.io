@@ -2,7 +2,10 @@ use std::path::PathBuf;
 
 use agent::SmAgentConfig;
 use clap::Parser;
-use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
+use tedge_config::{
+    system_services::{get_log_level, set_log_level},
+    DEFAULT_TEDGE_CONFIG_PATH,
+};
 
 mod agent;
 mod error;
@@ -44,14 +47,27 @@ pub struct AgentOpt {
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let agent_opt = AgentOpt::parse();
-    tedge_utils::logging::initialise_tracing_subscriber(agent_opt.debug);
-
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(agent_opt.config_dir.clone());
+
+    // If `debug` is `false` then only `error!`, `warn!` and `info!` are reported.
+    // If `debug` is `true` then only `debug!` and `trace!` are reported.
+    let log_level = if agent_opt.debug {
+        tracing::Level::TRACE
+    } else {
+        get_log_level(
+            "tedge_agent",
+            tedge_config_location.tedge_config_root_path.to_path_buf(),
+        )?
+    };
+
+    set_log_level(log_level);
+
     let mut agent = agent::SmAgent::try_new(
         "tedge_agent",
         SmAgentConfig::try_new(tedge_config_location)?,
     )?;
+
     if agent_opt.init {
         agent.init(agent_opt.config_dir).await?;
     } else if agent_opt.clear {

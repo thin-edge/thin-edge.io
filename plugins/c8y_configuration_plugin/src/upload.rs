@@ -4,12 +4,12 @@ use crate::{
         ConfigOperationRequest, ConfigOperationResponse,
     },
     config_manager::{
-        ConfigManager, TimerFuture, DEFAULT_OPERATION_DIR_NAME, DEFAULT_PLUGIN_CONFIG_FILE_NAME,
+        ActiveOperationState, DEFAULT_OPERATION_DIR_NAME, DEFAULT_OPERATION_TIMEOUT,
+        DEFAULT_PLUGIN_CONFIG_FILE_NAME,
     },
     error::{ChildDeviceConfigManagementError, ConfigManagementError},
     PluginConfig,
 };
-use agent_interface::OperationStatus;
 use anyhow::Result;
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::smartrest::error::SmartRestSerializerError;
@@ -21,10 +21,13 @@ use c8y_api::smartrest::{
         SmartRestSetOperationToFailed, SmartRestSetOperationToSuccessful,
     },
 };
+use tedge_api::OperationStatus;
 
-use futures::stream::FuturesUnordered;
 use mqtt_channel::{Message, SinkExt, Topic, UnboundedSender};
-use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
+use tedge_utils::{
+    file::{create_directory_with_user_group, create_file_with_user_group},
+    timers::Timers,
+};
 use tokio::sync::Mutex;
 
 use std::{
@@ -68,7 +71,7 @@ pub struct ConfigUploadManager {
     http_client: Arc<Mutex<dyn C8YHttpProxy>>,
     local_http_host: String,
     config_dir: PathBuf,
-    unfinished_child_op_timers: FuturesUnordered<TimerFuture<(String, String)>>,
+    pub operation_timer: Timers<(String, String), ActiveOperationState>,
 }
 
 impl ConfigUploadManager {
@@ -85,20 +88,19 @@ impl ConfigUploadManager {
             http_client,
             local_http_host,
             config_dir,
-            unfinished_child_op_timers: FuturesUnordered::new(),
+            operation_timer: Timers::new(),
         }
-    }
-
-    pub fn child_ops_pending_timeout(
-        &mut self,
-    ) -> &mut FuturesUnordered<TimerFuture<(String, String)>> {
-        &mut self.unfinished_child_op_timers
     }
 
     pub async fn handle_config_upload_request(
         &mut self,
         config_upload_request: SmartRestConfigUploadRequest,
     ) -> Result<()> {
+        info!(
+            "Received c8y_UploadConfigFile request for config type: {} from device: {}",
+            config_upload_request.config_type, config_upload_request.device
+        );
+
         if config_upload_request.device == self.tedge_device_id {
             self.handle_config_upload_request_tedge_device(config_upload_request)
                 .await
@@ -196,18 +198,18 @@ impl ConfigUploadManager {
                     file_entry: file_entry.clone(),
                 };
 
-                info!("Sending config snapshot request to child device");
                 let msg = Message::new(
                     &config_management.operation_request_topic(),
                     config_management.operation_request_payload(&self.local_http_host)?,
                 );
                 self.mqtt_publisher.send(msg).await?;
+                info!("Config snapshot request for config type: {config_type} sent to child device: {child_id}");
 
-                self.unfinished_child_op_timers
-                    .push(Box::pin(ConfigManager::timer_for_child_op(
-                        child_id,
-                        config_type,
-                    )));
+                self.operation_timer.start_timer(
+                    (child_id, config_type),
+                    ActiveOperationState::Pending,
+                    DEFAULT_OPERATION_TIMEOUT,
+                );
             }
             Err(ConfigManagementError::InvalidRequestedConfigType { config_type }) => {
                 warn!(
@@ -223,47 +225,69 @@ impl ConfigUploadManager {
     pub async fn handle_child_device_config_snapshot_response(
         &mut self,
         config_response: &ConfigOperationResponse,
-    ) -> Result<Message, ChildDeviceConfigManagementError> {
+    ) -> Result<Vec<Message>, ChildDeviceConfigManagementError> {
         let payload = config_response.get_payload();
         let c8y_child_topic = Topic::new_unchecked(&config_response.get_child_topic());
         let config_dir = self.config_dir.display();
+        let child_id = config_response.get_child_id();
+        let config_type = config_response.get_config_type();
+
+        info!("Config snapshot response received for type: {config_type} from child: {child_id}");
+
+        let operation_key = (child_id, config_type);
+        let mut mapped_responses = vec![];
 
         if let Some(operation_status) = payload.status {
+            let current_operation_state = self.operation_timer.current_value(&operation_key);
+            if current_operation_state != Some(&ActiveOperationState::Executing) {
+                let executing_status_payload = UploadConfigFileStatusMessage::status_executing()?;
+                mapped_responses.push(Message::new(&c8y_child_topic, executing_status_payload));
+            }
+
             match operation_status {
                 OperationStatus::Successful => {
+                    self.operation_timer.stop_timer(operation_key);
+
                     match self
                         .handle_child_device_successful_config_snapshot_response(config_response)
                         .await
                     {
-                        Ok(message) => Ok(message),
+                        Ok(message) => mapped_responses.push(message),
                         Err(err) => {
                             let failed_status_payload =
                                 UploadConfigFileStatusMessage::status_failed(err.to_string())?;
-                            Ok(Message::new(&c8y_child_topic, failed_status_payload))
+                            mapped_responses
+                                .push(Message::new(&c8y_child_topic, failed_status_payload));
                         }
                     }
                 }
                 OperationStatus::Failed => {
+                    self.operation_timer.stop_timer(operation_key);
+
                     if let Some(error_message) = &payload.reason {
                         let failed_status_payload = UploadConfigFileStatusMessage::status_failed(
                             error_message.to_string(),
                         )?;
-                        Ok(Message::new(&c8y_child_topic, failed_status_payload))
+                        mapped_responses
+                            .push(Message::new(&c8y_child_topic, failed_status_payload));
                     } else {
                         let default_error_message =
                             String::from("No fail reason provided by child device.");
                         let failed_status_payload =
                             UploadConfigFileStatusMessage::status_failed(default_error_message)?;
-                        Ok(Message::new(&c8y_child_topic, failed_status_payload))
+                        mapped_responses
+                            .push(Message::new(&c8y_child_topic, failed_status_payload));
                     }
                 }
                 OperationStatus::Executing => {
-                    // is cloud request pending?
-                    let executing_status_payload =
-                        UploadConfigFileStatusMessage::status_executing()?;
-                    Ok(Message::new(&c8y_child_topic, executing_status_payload))
+                    self.operation_timer.start_timer(
+                        operation_key,
+                        ActiveOperationState::Executing,
+                        DEFAULT_OPERATION_TIMEOUT,
+                    );
                 }
             }
+            Ok(mapped_responses)
         } else {
             if &config_response.get_config_type() == "c8y-configuration-plugin" {
                 // create directories
@@ -329,7 +353,7 @@ impl ConfigUploadManager {
             // Publish supported configuration types for child devices
             let message = child_plugin_config
                 .to_supported_config_types_message_for_child(&config_response.get_child_id())?;
-            Ok(message)
+            Ok(vec![message])
         }
     }
 

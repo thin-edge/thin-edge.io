@@ -12,13 +12,13 @@ Follow the below steps in order to retrieve the token from the Cumulocity cloud 
 Subscribe to `c8y/s/dat` topic
 
 ```
-$ tedge mqtt sub c8y/s/dat --no-topic
+tedge mqtt sub c8y/s/dat --no-topic
 ```
 
 Publish an empty message on `c8y/s/uat` topic
 
 ```
-$ tedge mqtt pub c8y/s/uat ''
+tedge mqtt pub c8y/s/uat ''
 ```
 
 After a while the token will be published on the subscribed topic `c8y/s/dat` in the below format

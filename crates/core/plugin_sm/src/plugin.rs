@@ -1,4 +1,3 @@
-use agent_interface::*;
 use async_trait::async_trait;
 use csv::ReaderBuilder;
 use download::Downloader;
@@ -6,6 +5,7 @@ use logged_command::LoggedCommand;
 use serde::Deserialize;
 use std::path::Path;
 use std::{path::PathBuf, process::Output};
+use tedge_api::*;
 use tokio::io::BufWriter;
 use tokio::{fs::File, io::AsyncWriteExt};
 use tracing::error;

@@ -3,7 +3,7 @@ use crate::core::{converter::*, error::*, size_threshold::SizeThreshold};
 use async_trait::async_trait;
 use clock::Clock;
 use mqtt_channel::{Message, TopicFilter};
-use thin_edge_json::serialize::ThinEdgeJsonSerializer;
+use tedge_api::serialize::ThinEdgeJsonSerializer;
 
 pub struct AzureConverter {
     pub(crate) add_timestamp: bool,
@@ -44,7 +44,7 @@ impl Converter for AzureConverter {
         self.size_threshold.validate(input)?;
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
         let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
-        thin_edge_json::parser::parse_str(input.payload_str()?, &mut serializer)?;
+        tedge_api::parser::parse_str(input.payload_str()?, &mut serializer)?;
 
         let payload = serializer.into_string()?;
         Ok(vec![(Message::new(&self.mapper_config.out_topic, payload))])

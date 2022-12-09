@@ -16,6 +16,7 @@ use anyhow::Result;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use clap::Parser;
 use config_manager::ConfigManager;
+use tedge_config::system_services::{get_log_level, set_log_level};
 use tokio::sync::Mutex;
 
 use std::path::{Path, PathBuf};
@@ -70,7 +71,6 @@ pub async fn create_http_client(
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let config_plugin_opt = ConfigPluginOpt::parse();
-    tedge_utils::logging::initialise_tracing_subscriber(config_plugin_opt.debug);
 
     if config_plugin_opt.init {
         init(config_plugin_opt.config_dir)?;
@@ -81,6 +81,17 @@ async fn main() -> Result<(), anyhow::Error> {
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(&config_plugin_opt.config_dir);
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
+
+    let log_level = if config_plugin_opt.debug {
+        tracing::Level::TRACE
+    } else {
+        get_log_level(
+            "c8y_configuration_plugin",
+            tedge_config_location.tedge_config_root_path.to_path_buf(),
+        )?
+    };
+    set_log_level(log_level);
+
     let tedge_config = config_repository.load()?;
 
     let tedge_device_id = tedge_config.query(DeviceIdSetting)?;

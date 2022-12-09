@@ -1,6 +1,6 @@
 use batcher::Batchable;
 use mqtt_channel::Message;
-use thin_edge_json::measurement::MeasurementVisitor;
+use tedge_api::measurement::MeasurementVisitor;
 use time::{Duration, OffsetDateTime};
 
 #[derive(Debug)]

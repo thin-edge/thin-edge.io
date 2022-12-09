@@ -7,12 +7,12 @@ use crate::{
         StateRepository, StateStatus,
     },
 };
-use agent_interface::{
+use flockfile::{check_another_instance_is_not_running, Flockfile};
+use tedge_api::{
     control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
     RestartOperationResponse, SoftwareError, SoftwareListRequest, SoftwareListResponse,
     SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest, SoftwareUpdateResponse,
 };
-use flockfile::{check_another_instance_is_not_running, Flockfile};
 
 use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic, TopicFilter};
 use plugin_sm::{
@@ -23,20 +23,18 @@ use plugin_sm::{
 use crate::http_rest::HttpConfig;
 use std::process::Command;
 use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
+use tedge_api::health::{health_check_topics, send_health_status};
 use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, ConfigSettingAccessorStringExt,
-    HttpBindAddressSetting, HttpPortSetting, LogPathSetting, MqttBindAddressSetting,
-    MqttPortSetting, RunPathSetting, SoftwarePluginDefaultSetting, TEdgeConfigLocation,
-    TmpPathSetting, DEFAULT_LOG_PATH, DEFAULT_RUN_PATH, DEFAULT_TMP_PATH,
+    system_services::SystemConfig, ConfigRepository, ConfigSettingAccessor,
+    ConfigSettingAccessorStringExt, HttpBindAddressSetting, HttpPortSetting, LogPathSetting,
+    MqttBindAddressSetting, MqttPortSetting, RunPathSetting, SoftwarePluginDefaultSetting,
+    TEdgeConfigLocation, TmpPathSetting, DEFAULT_LOG_PATH, DEFAULT_RUN_PATH, DEFAULT_TMP_PATH,
 };
 use tedge_utils::file::create_directory_with_user_group;
-use thin_edge_json::health::{health_check_topics, send_health_status};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, warn};
 
 use std::path::Path;
-
-use tedge_config::system_services::SystemConfig;
 
 const SYNC: &str = "sync";
 const SM_PLUGINS: &str = "sm-plugins";
@@ -286,8 +284,6 @@ impl SmAgent {
         let mut mqtt = Connection::new(&self.config.mqtt_config).await?;
         let sm_plugins_path = self.config.sm_home.join(SM_PLUGINS);
 
-        let server = http_rest::http_file_transfer_server(&self.config.http_config)?;
-
         let plugins = Arc::new(Mutex::new(ExternalPlugins::open(
             &sm_plugins_path,
             get_default_plugin(&self.config.config_location)?,
@@ -312,11 +308,11 @@ impl SmAgent {
 
         self.process_pending_operation(&mut mqtt.published).await?;
 
+        let http_config = self.config.http_config.clone();
+
         // spawning file transfer server
         tokio::spawn(async move {
-            if let Err(err) = server.await {
-                error!("{}", err);
-            }
+            start_http_file_transfer_server(&http_config).await;
         });
 
         while let Err(error) = self
@@ -662,6 +658,19 @@ impl SmAgent {
     }
 }
 
+async fn start_http_file_transfer_server(http_config: &HttpConfig) {
+    let server = http_rest::http_file_transfer_server(http_config);
+
+    match server {
+        Ok(server) => {
+            if let Err(err) = server.await {
+                error!("{}", err);
+            }
+        }
+        Err(err) => error!("{}", err),
+    }
+}
+
 fn get_restart_operation_commands(system_config_path: &Path) -> Result<Vec<Command>, AgentError> {
     let mut vec = vec![];
     // sync first
@@ -858,6 +867,33 @@ mod tests {
             assert_json_include!(actual: &health_status, expected: json!({"status": "up"}));
             assert!(health_status["pid"].is_number());
         }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn check_tedge_agent_does_not_panic_when_port_is_in_use() -> Result<(), anyhow::Error> {
+        let http_config = HttpConfig::default().with_port(3000);
+        let config_clone = http_config.clone();
+
+        // handle_one uses port 3000.
+        // handle_two will not be able to bind to the same port.
+        let handle_one = tokio::spawn(async move {
+            start_http_file_transfer_server(&config_clone).await;
+        });
+
+        let handle_two = tokio::spawn(async move {
+            start_http_file_transfer_server(&http_config).await;
+        });
+
+        // although the code inside handle_two throws an error it does not panic.
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        // to check for the error, we assert that handle_one is still running
+        // while handle_two is finished.
+        assert_eq!(handle_one.is_finished(), false);
+        assert_eq!(handle_two.is_finished(), true);
 
         Ok(())
     }

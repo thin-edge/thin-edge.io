@@ -1,11 +1,6 @@
 use crate::c8y::dynamic_discovery::*;
 use crate::c8y::json;
 use crate::core::{converter::*, error::*, size_threshold::SizeThreshold};
-use agent_interface::{
-    topic::{RequestTopic, ResponseTopic},
-    Auth, DownloadInfo, Jsonify, OperationStatus, RestartOperationRequest,
-    RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
-};
 use async_trait::async_trait;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::{
@@ -33,8 +28,13 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
 };
+use tedge_api::event::ThinEdgeEvent;
+use tedge_api::{
+    topic::{RequestTopic, ResponseTopic},
+    Auth, DownloadInfo, Jsonify, OperationStatus, RestartOperationRequest,
+    RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
+};
 use tedge_config::{get_tedge_config, ConfigSettingAccessor, LogPathSetting};
-use thin_edge_json::event::ThinEdgeEvent;
 use time::format_description::well_known::Rfc3339;
 use tracing::{debug, info, log::error};
 
@@ -898,6 +898,7 @@ fn read_json_from_file(file_path: &str) -> Result<serde_json::Value, ConversionE
     let mut data = String::new();
     file.read_to_string(&mut data)?;
     let json: serde_json::Value = serde_json::from_str(&data)?;
+    info!("Read the fragments from {file_path} file");
     Ok(json)
 }
 
@@ -921,10 +922,15 @@ fn get_inventory_fragments(
                 );
             Ok(json)
         }
-        Err(_) => {
-            info!("Inventory fragments file not found at {inventory_file_path}");
+        Err(ConversionError::FromStdIo(_)) => {
+            info!("Could not read inventory fragments from file {inventory_file_path}");
             Ok(json_fragment)
         }
+        Err(ConversionError::FromSerdeJson(e)) => {
+            info!("Could not parse the {inventory_file_path} file due to: {e}");
+            Ok(json_fragment)
+        }
+        Err(_) => Ok(json_fragment),
     }
 }
 

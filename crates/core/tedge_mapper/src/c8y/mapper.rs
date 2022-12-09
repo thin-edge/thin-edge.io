@@ -1,20 +1,21 @@
 use std::path::{Path, PathBuf};
 
 use crate::c8y::converter::{CumulocityConverter, CumulocityDeviceInfo};
+use crate::core::component::TEdgeComponent;
 use crate::core::converter::{make_valid_topic_or_panic, MapperConfig};
 use crate::core::mapper::{create_mapper_with_mqtt_channels, mqtt_config};
-use crate::core::{component::TEdgeComponent, size_threshold::SizeThreshold};
-use agent_interface::topic::ResponseTopic;
+use crate::core::size_threshold::SizeThreshold;
 use async_trait::async_trait;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use c8y_api::smartrest::{operations::Operations, topic::C8yTopic};
 use mqtt_channel::{Connection, TopicFilter};
+use tedge_api::health::health_check_topics;
+use tedge_api::topic::ResponseTopic;
 use tedge_config::{
     ConfigSettingAccessor, DeviceIdSetting, DeviceTypeSetting, MqttBindAddressSetting,
     MqttPortSetting, TEdgeConfig,
 };
 use tedge_utils::file::*;
-use thin_edge_json::health::health_check_topics;
 use tracing::{info, info_span, Instrument};
 
 const CUMULOCITY_MAPPER_NAME: &str = "tedge-mapper-c8y";

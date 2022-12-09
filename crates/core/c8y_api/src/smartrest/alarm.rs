@@ -1,4 +1,4 @@
-use thin_edge_json::alarm::{AlarmSeverity, ThinEdgeAlarm};
+use tedge_api::alarm::{AlarmSeverity, ThinEdgeAlarm};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use crate::smartrest::error::SmartRestSerializerError;
@@ -38,8 +38,8 @@ mod tests {
     use super::*;
     use assert_matches::assert_matches;
     use serde::Deserialize;
+    use tedge_api::alarm::ThinEdgeAlarmData;
     use test_case::test_case;
-    use thin_edge_json::alarm::ThinEdgeAlarmData;
     use time::macros::datetime;
 
     #[test_case(

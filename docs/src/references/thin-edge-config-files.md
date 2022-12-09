@@ -13,13 +13,14 @@ a custom base directory one has to use `--config-dir <Path to base directory>` o
 The config files are created using `tedge --init` as below.
 
 ```shell
-$ sudo tedge --init
+sudo tedge --init
 ```
 
 All the directories will be created in the `/etc/tedge` directory. The directories layout looks as below.
 
 ```shell
-$ ls -l /etc/tedge
+ls -l /etc/tedge
+
 total 16
 drwxrwxr-x 2 mosquitto mosquitto 4096 Jun 10 14:49 device-certs
 drwxrwxr-x 2 tedge     tedge     4096 Jun 10 14:49 mosquitto-conf
@@ -30,7 +31,7 @@ drwxrwxr-x 2 tedge     tedge     4096 Jun 10 14:49 plugins
 Use the below command to create the config directories in a custom directory.
 
 ```shell
-$ sudo tedge --config-dir /global/path/to/config/dir --init
+sudo tedge --config-dir /global/path/to/config/dir --init
 ```
 
 Now all the config directories will be created inside the `/global/path/to/config/dir` directory.
@@ -39,9 +40,11 @@ Now all the config directories will be created inside the `/global/path/to/confi
 The directories and files that are required by the `tedge_mapper` are created as below.
 
 ```shell
-$ sudo tedge_mapper --init c8y
+sudo tedge_mapper --init c8y
+```
 
-$ ls -l /etc/tedge/operations/c8y
+```
+ls -l /etc/tedge/operations/c8y
 total 0
 -rw-r--r-- 1 tedge tedge 0 Jun 14 14:37 c8y_Restart
 -rw-r--r-- 1 tedge tedge 0 Jun 14 14:37 c8y_SoftwareUpdate
@@ -49,21 +52,23 @@ total 0
 To create these directories in a custom directory, use `--config-dir` option as below.
 
 ```shell
-$ sudo tedge_mapper --config-dir /global/path/to/config/dir --init c8y
+sudo tedge_mapper --config-dir /global/path/to/config/dir --init c8y
 ```
 
 The directories and files that are required by the `tedge_agent` are created as below.
 
 ```shell
-$ sudo tedge_agent --init
+sudo tedge_agent --init
+```
 
-$ ls -l /etc/tedge/.agent
+```
+ls -l /etc/tedge/.agent
 -rw-r--r-- 1 tedge tedge 0 Jun 15 11:51 /etc/tedge/.agent/current-operation
 ```
 To create these directories and files in a custom directory, use the `--config-dir` option as below as below.
 
 ```shell
-$ sudo tedge_agent --config-dir /global/path/to/config/dir --init
+sudo tedge_agent --config-dir /global/path/to/config/dir --init
 ```
 
 ## Manage the configuration parameters
@@ -73,7 +78,7 @@ The configuration parameters can be set/unset/list in a config file as below
 For example, the config parameter can be set as below.
 
 ```shell
-$ sudo tedge config set c8y.url your.cumulocity.io
+sudo tedge config set c8y.url your.cumulocity.io
 ```
 Now the configuration will be added into `/etc/tedge/tedge.toml`
 
@@ -81,7 +86,7 @@ Use the below command to set/unset/list configuration parameters in a config fil
 in a custom directory.
 
 ```shell
-$ sudo tedge --config-dir /global/path/to/config/dir config set c8y.url your.cumulocity.io
+sudo tedge --config-dir /global/path/to/config/dir config set c8y.url your.cumulocity.io
 ```
 
 Now the config will be set in `/global/path/to/config/dir/tedge/tedge.toml`
@@ -91,11 +96,11 @@ Now the config will be set in `/global/path/to/config/dir/tedge/tedge.toml`
 To create/remove/upload the certificate, one can use the below command.
 
 ```shell
-$ sudo tedge cert create --device-id thinedge
+sudo tedge cert create --device-id thinedge
 
 # Find the certificates that are created as below.
 
-$ ls -l /etc/tedge/device-certs/
+ls -l /etc/tedge/device-certs/
 total 8
 -r--r--r-- 1 mosquitto mosquitto 638 Jun 14 14:38 tedge-certificate.pem
 -r-------- 1 mosquitto mosquitto 246 Jun 14 14:38 tedge-private-key.pem
@@ -104,11 +109,11 @@ total 8
 Use the below command to create/remove/upload the certificate.
 
 ```shell
-$ sudo tedge --config-dir /global/path/to/config/dir cert create --device-id thinedge
+sudo tedge --config-dir /global/path/to/config/dir cert create --device-id thinedge
 
 # Find the certificates that are created as below.
 
-$ ls -l /global/path/to/config/dir/tedge/device-certs/
+ls -l /global/path/to/config/dir/tedge/device-certs/
 total 8
 -r--r--r-- 1 mosquitto mosquitto 638 Jun 14 14:38 tedge-certificate.pem
 -r-------- 1 mosquitto mosquitto 246 Jun 14 14:38 tedge-private-key.pem
@@ -137,7 +142,7 @@ So, the below line has to be added to your `mosquitto.conf` file manually.
 Use the below command to connect to `Cumulocity IoT or Azure IoT Hub` cloud using `--config-dir`
 
 ```shell
-$ sudo tedge --config-dir /global/path/to/config/dir connect c8y/az
+sudo tedge --config-dir /global/path/to/config/dir connect c8y/az
 ```
 
 Here the `path/to/config/dir` is the directory where the configuration files are present.

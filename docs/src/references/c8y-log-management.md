@@ -78,7 +78,10 @@ This will enable the `c8y-log-plugin.toml` to be tracked and managed by the `c8y
 ## Usage
 
 ```shell
-$ c8y_log_plugin
+c8y_log_plugin
+```
+
+```
 Plugin supporting log management from Cumulocity on thin-edge.
 USAGE:
     c8y_log_plugin [OPTIONS]

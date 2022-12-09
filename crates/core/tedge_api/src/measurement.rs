@@ -5,7 +5,7 @@ use time::OffsetDateTime;
 /// Here is an implementation of the `MeasurementVisitor` trait that prints the measurements:
 ///
 /// ```
-/// # use thin_edge_json::measurement::*;
+/// # use tedge_api::measurement::*;
 /// # use time::{OffsetDateTime, format_description};
 ///
 /// struct MeasurementPrinter {

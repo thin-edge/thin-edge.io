@@ -4,8 +4,8 @@ use crate::c8y::error::CumulocityMapperError;
 
 use c8y_api::smartrest::error::OperationsError;
 use mqtt_channel::MqttError;
+use tedge_api::serialize::ThinEdgeJsonSerializationError;
 use tedge_config::TEdgeConfigError;
-use thin_edge_json::serialize::ThinEdgeJsonSerializationError;
 
 // allowing enum_variant_names due to a False positive where it is
 // detected that "all variants have the same prefix: `From`"
@@ -53,17 +53,15 @@ pub enum ConversionError {
     FromThinEdgeJsonSerialization(#[from] ThinEdgeJsonSerializationError),
 
     #[error(transparent)]
-    FromThinEdgeJsonAlarmDeserialization(
-        #[from] thin_edge_json::alarm::ThinEdgeJsonDeserializerError,
-    ),
+    FromThinEdgeJsonAlarmDeserialization(#[from] tedge_api::alarm::ThinEdgeJsonDeserializerError),
 
     #[error(transparent)]
     FromThinEdgeJsonEventDeserialization(
-        #[from] thin_edge_json::event::error::ThinEdgeJsonDeserializerError,
+        #[from] tedge_api::event::error::ThinEdgeJsonDeserializerError,
     ),
 
     #[error(transparent)]
-    FromThinEdgeJsonParser(#[from] thin_edge_json::parser::ThinEdgeJsonParserError),
+    FromThinEdgeJsonParser(#[from] tedge_api::parser::ThinEdgeJsonParserError),
 
     #[error("The size of the message received on {topic} is {actual_size} which is greater than the threshold size of {threshold}.")]
     SizeThresholdExceeded {

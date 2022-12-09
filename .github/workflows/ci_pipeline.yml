@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Enable toolchain via github action
         uses: dtolnay/rust-toolchain@1.63.0
@@ -33,7 +35,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build packages for amd64
-        run: ./ci/build_scripts/build_for_amd64.sh
+        run: bash -x ./ci/build_scripts/build.sh
 
       - name: Upload artifacts as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
@@ -86,6 +88,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Enable toolchain via github action
         uses: dtolnay/rust-toolchain@1.63.0
@@ -93,7 +97,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Build for ${{ matrix.target }}
-        run: ./ci/build_scripts/build_for_arm.sh ${{ matrix.target }}
+        run: bash -x ./ci/build_scripts/build.sh ${{ matrix.target }}
 
       - name: Upload debian packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact

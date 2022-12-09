@@ -8,10 +8,10 @@ use plugin_sm::operation_logs::OperationLogsError;
 #[allow(clippy::enum_variant_names)]
 pub enum CumulocityMapperError {
     #[error(transparent)]
-    InvalidTopicError(#[from] agent_interface::TopicError),
+    InvalidTopicError(#[from] tedge_api::TopicError),
 
     #[error(transparent)]
-    InvalidThinEdgeJson(#[from] agent_interface::SoftwareError),
+    InvalidThinEdgeJson(#[from] tedge_api::SoftwareError),
 
     #[error(transparent)]
     FromElapsed(#[from] tokio::time::error::Elapsed),

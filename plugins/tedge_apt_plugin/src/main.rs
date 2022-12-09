@@ -125,11 +125,22 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
             for update_module in updates {
                 match update_module.action {
                     UpdateAction::Install => {
-                        let (installer, metadata) = get_installer(
-                            update_module.name,
-                            update_module.version,
-                            update_module.path,
-                        )?;
+                        // if version is `latest` we want to set `version` to an empty value, so
+                        // the apt plugin fetches the most up to date version.
+                        let version = {
+                            if let Some(version) = update_module.version {
+                                if version.eq("latest") {
+                                    None
+                                } else {
+                                    Some(version)
+                                }
+                            } else {
+                                None
+                            }
+                        };
+
+                        let (installer, metadata) =
+                            get_installer(update_module.name, version, update_module.path)?;
                         args.push(installer);
                         metadata_vec.push(metadata);
                     }

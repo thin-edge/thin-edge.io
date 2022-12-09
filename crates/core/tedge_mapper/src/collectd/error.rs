@@ -10,13 +10,13 @@ pub enum DeviceMonitorError {
     FromInvalidCollectdMeasurement(#[from] crate::collectd::collectd::CollectdError),
 
     #[error(transparent)]
-    FromInvalidThinEdgeJson(#[from] thin_edge_json::group::MeasurementGrouperError),
+    FromInvalidThinEdgeJson(#[from] tedge_api::group::MeasurementGrouperError),
 
     #[error(transparent)]
     FromThinEdgeJsonSerializationError(
-        #[from] thin_edge_json::serialize::ThinEdgeJsonSerializationError,
+        #[from] tedge_api::serialize::ThinEdgeJsonSerializationError,
     ),
 
     #[error(transparent)]
-    FromBatchingError(#[from] SendError<thin_edge_json::group::MeasurementGrouper>),
+    FromBatchingError(#[from] SendError<tedge_api::group::MeasurementGrouper>),
 }

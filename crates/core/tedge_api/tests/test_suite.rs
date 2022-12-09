@@ -10,8 +10,8 @@ fn it_rejects_invalid_thin_edge_json() -> anyhow::Result<()> {
         println!("Fixture: {:?}", fixture.path());
 
         let res: anyhow::Result<_> = {
-            let mut builder = thin_edge_json::builder::ThinEdgeJsonBuilder::default();
-            thin_edge_json::parser::parse_str(&input, &mut builder)
+            let mut builder = tedge_api::builder::ThinEdgeJsonBuilder::default();
+            tedge_api::parser::parse_str(&input, &mut builder)
                 .map_err(Into::into)
                 .and_then(|_| builder.done().map_err(Into::into))
         };
@@ -43,8 +43,8 @@ fn it_transforms_valid_thin_edge_json() -> anyhow::Result<()> {
         let input = std::fs::read_to_string(fixture.path())?;
 
         let output = {
-            let mut builder = thin_edge_json::serialize::ThinEdgeJsonSerializer::new();
-            let res = thin_edge_json::parser::parse_str(&input, &mut builder);
+            let mut builder = tedge_api::serialize::ThinEdgeJsonSerializer::new();
+            let res = tedge_api::parser::parse_str(&input, &mut builder);
             assert!(res.is_ok());
             builder.into_string()?
         };
