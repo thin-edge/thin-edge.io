@@ -9,7 +9,7 @@ use librumqttd::{Broker, Config, ConnectionSettings, ConsoleSettings, ServerSett
 use once_cell::sync::Lazy;
 use rumqttc::QoS;
 
-const MQTT_TEST_PORT: u16 = 55555;
+pub const MQTT_TEST_PORT: u16 = 55555;
 
 static SERVER: Lazy<MqttProcessHandler> = Lazy::new(|| MqttProcessHandler::new(MQTT_TEST_PORT));
 

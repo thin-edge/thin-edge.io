@@ -13,6 +13,7 @@ use thin_edge_json::health::{health_check_topics, send_health_status};
 
 use tracing::{error, info, instrument, warn};
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
+use futures::channel::mpsc;
 use std::result::Result::Ok;
 
 pub async fn create_mapper(
@@ -21,8 +22,6 @@ pub async fn create_mapper(
     mqtt_port: u16,
     converter: Box<dyn Converter<Error = ConversionError>>,
 ) -> Result<Mapper, anyhow::Error> {
-    info!("{} starting", app_name);
-
     let health_check_topics: TopicFilter = health_check_topics(app_name);
 
     let mapper_config = converter.get_mapper_config();
@@ -32,15 +31,35 @@ pub async fn create_mapper(
     let mqtt_client =
         Connection::new(&mqtt_config(app_name, &mqtt_host, mqtt_port, topic_filter)?).await?;
 
-    Mapper::subscribe_errors(mqtt_client.errors);
-
-    Ok(Mapper::new(
-        app_name.to_string(),
+    Ok(create_mapper_with_mqtt_channels(
+        app_name,
+        converter,
         mqtt_client.received,
         mqtt_client.published,
+        mqtt_client.errors,
+    ))
+}
+
+pub fn create_mapper_with_mqtt_channels(
+    app_name: &str,
+    converter: Box<dyn Converter<Error = ConversionError>>,
+    mqtt_receiver: mpsc::UnboundedReceiver<Message>,
+    mqtt_publisher: mpsc::UnboundedSender<Message>,
+    mqtt_errors: mpsc::UnboundedReceiver<MqttError>,
+) -> Mapper {
+    info!("{} starting", app_name);
+
+    let health_check_topics: TopicFilter = health_check_topics(app_name);
+
+    Mapper::subscribe_errors(mqtt_errors);
+
+    Mapper::new(
+        app_name.to_string(),
+        mqtt_receiver,
+        mqtt_publisher,
         converter,
         health_check_topics,
-    ))
+    )
 }
 
 pub fn mqtt_config(

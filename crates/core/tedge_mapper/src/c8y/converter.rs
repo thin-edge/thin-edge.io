@@ -22,8 +22,9 @@ use c8y_api::{
     http_proxy::C8YHttpProxy,
     json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
 };
+use futures::{channel::mpsc, SinkExt};
 use logged_command::LoggedCommand;
-use mqtt_channel::{Message, Topic, TopicFilter};
+use mqtt_channel::{Message, Topic};
 use plugin_sm::operation_logs::OperationLogs;
 use std::collections::HashMap;
 use std::fs;
@@ -35,14 +36,12 @@ use std::{
 use tedge_config::{get_tedge_config, ConfigSettingAccessor, LogPathSetting};
 use thin_edge_json::event::ThinEdgeEvent;
 use time::format_description::well_known::Rfc3339;
-
 use tracing::{debug, info, log::error};
 
 use super::alarm_converter::AlarmConverter;
 use super::{
     error::CumulocityMapperError,
     fragments::{C8yAgentFragment, C8yDeviceDataFragment},
-    mapper::CumulocityMapper,
 };
 use c8y_api::smartrest::message::{get_smartrest_device_id, get_smartrest_template_id};
 use c8y_api::smartrest::topic::{C8yTopic, MapperSubscribeTopic, SMARTREST_PUBLISH_TOPIC};
@@ -73,6 +72,7 @@ where
     http_proxy: Proxy,
     cfg_dir: PathBuf,
     pub children: HashMap<String, Operations>,
+    mqtt_publisher: mpsc::UnboundedSender<Message>,
 }
 
 impl<Proxy> CumulocityConverter<Proxy>
@@ -87,28 +87,9 @@ where
         http_proxy: Proxy,
         cfg_dir: &Path,
         children: HashMap<String, Operations>,
+        mapper_config: MapperConfig,
+        mqtt_publisher: mpsc::UnboundedSender<Message>,
     ) -> Result<Self, CumulocityMapperError> {
-        let mut topic_filter: TopicFilter = vec![
-            "tedge/measurements",
-            "tedge/measurements/+",
-            "tedge/alarms/+/+",
-            "tedge/alarms/+/+/+",
-            "c8y-internal/alarms/+/+",
-            "c8y-internal/alarms/+/+/+",
-            "tedge/events/+",
-            "tedge/events/+/+",
-        ]
-        .try_into()
-        .expect("topics that mapper should subscribe to");
-
-        topic_filter.add_all(CumulocityMapper::subscriptions(&operations).unwrap());
-
-        let mapper_config = MapperConfig {
-            in_topic_filter: topic_filter,
-            out_topic: make_valid_topic_or_panic("c8y/measurement/measurements/create"),
-            errors_topic: make_valid_topic_or_panic("tedge/errors"),
-        };
-
         let alarm_converter = AlarmConverter::new();
 
         let tedge_config = get_tedge_config()?;
@@ -129,6 +110,7 @@ where
             http_proxy,
             cfg_dir: cfg_dir.to_path_buf(),
             children,
+            mqtt_publisher,
         })
     }
 
@@ -141,28 +123,9 @@ where
         http_proxy: Proxy,
         logs_path: PathBuf,
         cfg_dir: PathBuf,
+        mapper_config: MapperConfig,
+        mqtt_publisher: mpsc::UnboundedSender<Message>,
     ) -> Result<Self, CumulocityMapperError> {
-        let mut topic_filter: TopicFilter = vec![
-            "tedge/measurements",
-            "tedge/measurements/+",
-            "tedge/alarms/+/+",
-            "tedge/alarms/+/+/+",
-            "c8y-internal/alarms/+/+",
-            "c8y-internal/alarms/+/+/+",
-            "tedge/events/+",
-            "tedge/events/+/+",
-        ]
-        .try_into()
-        .expect("topics that mapper should subscribe to");
-
-        topic_filter.add_all(CumulocityMapper::subscriptions(&operations).unwrap());
-
-        let mapper_config = MapperConfig {
-            in_topic_filter: topic_filter,
-            out_topic: make_valid_topic_or_panic("c8y/measurement/measurements/create"),
-            errors_topic: make_valid_topic_or_panic("tedge/errors"),
-        };
-
         let alarm_converter = AlarmConverter::new();
 
         let log_dir = PathBuf::from(&format!(
@@ -184,6 +147,7 @@ where
             http_proxy,
             cfg_dir,
             children,
+            mqtt_publisher,
         })
     }
 
@@ -367,6 +331,7 @@ where
                         &mut self.http_proxy,
                         &self.operation_logs,
                         &self.device_name,
+                        &self.mqtt_publisher,
                     )
                     .await
                 }
@@ -478,6 +443,7 @@ async fn parse_c8y_topics(
     http_proxy: &mut impl C8YHttpProxy,
     operation_logs: &OperationLogs,
     device_name: &str,
+    mqtt_publisher: &mpsc::UnboundedSender<Message>,
 ) -> Result<Vec<Message>, ConversionError> {
     let mut output: Vec<Message> = Vec::new();
     for smartrest_message in message.payload_str()?.split('\n') {
@@ -487,6 +453,7 @@ async fn parse_c8y_topics(
             http_proxy,
             operation_logs,
             device_name,
+            mqtt_publisher,
         )
         .await
         {
@@ -738,6 +705,7 @@ async fn execute_operation(
     command: &str,
     operation_name: &str,
     operation_logs: &OperationLogs,
+    mqtt_publisher: &mpsc::UnboundedSender<Message>,
 ) -> Result<(), CumulocityMapperError> {
     let command = command.to_owned();
     let payload = payload.to_string();
@@ -761,9 +729,49 @@ async fn execute_operation(
 
     match child {
         Ok(child) => {
+            let op_name = operation_name.to_string();
+            let mut mqtt_publisher = mqtt_publisher.clone();
+
             tokio::spawn(async move {
                 let logger = log_file.buffer();
-                let _result = child.wait_with_output(logger).await.unwrap();
+
+                // mqtt client publishes executing
+                let topic = C8yTopic::SmartRestResponse.to_topic().unwrap();
+                let executing_str = format!("501,{op_name}");
+                mqtt_publisher
+                    .send(Message::new(&topic, executing_str.as_str()))
+                    .await
+                    .unwrap_or_else(|err| {
+                        error!("Failed to publish a message: {executing_str}. Error: {err}")
+                    });
+
+                // execute the command and wait until it finishes
+                // mqtt client publishes failed or successful depending on the exit code
+                if let Ok(output) = child.wait_with_output(logger).await {
+                    debug!("{output:?}");
+                    match output.status.code() {
+                        Some(0) => {
+                            let stdout = String::from_utf8(output.stdout).unwrap_or_default();
+                            let successful_str = format!("503,{op_name},\"{stdout}\"");
+                            mqtt_publisher.send(Message::new(&topic, successful_str.as_str())).await
+                                    .unwrap_or_else(|err| {
+                                        error!("Failed to publish a message: {successful_str}. Error: {err}")
+                                    })
+                        }
+                        _ => {
+                            let stderr = String::from_utf8(output.stderr).unwrap_or_default();
+                            let failed_str = format!("502,{op_name},\"{stderr}\"");
+                            mqtt_publisher
+                                .send(Message::new(&topic, failed_str.as_str()))
+                                .await
+                                .unwrap_or_else(|err| {
+                                    error!(
+                                        "Failed to publish a message: {failed_str}. Error: {err}"
+                                    )
+                                })
+                        }
+                    }
+                }
             });
             Ok(())
         }
@@ -777,6 +785,7 @@ async fn process_smartrest(
     http_proxy: &mut impl C8YHttpProxy,
     operation_logs: &OperationLogs,
     device_name: &str,
+    mqtt_publisher: &mpsc::UnboundedSender<Message>,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
     match get_smartrest_device_id(payload) {
         Some(device_id) if device_id == device_name => {
@@ -784,7 +793,14 @@ async fn process_smartrest(
                 "528" => forward_software_request(payload, http_proxy).await,
                 "510" => forward_restart_request(payload),
                 template => {
-                    forward_operation_request(payload, template, operations, operation_logs).await
+                    forward_operation_request(
+                        payload,
+                        template,
+                        operations,
+                        operation_logs,
+                        mqtt_publisher,
+                    )
+                    .await
                 }
             }
         }
@@ -841,21 +857,25 @@ async fn forward_operation_request(
     template: &str,
     operations: &Operations,
     operation_logs: &OperationLogs,
+    mqtt_publisher: &mpsc::UnboundedSender<Message>,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
     match operations.matching_smartrest_template(template) {
         Some(operation) => {
             if let Some(command) = operation.command() {
-                execute_operation(payload, command.as_str(), &operation.name, operation_logs)
-                    .await?;
+                execute_operation(
+                    payload,
+                    command.as_str(),
+                    &operation.name,
+                    operation_logs,
+                    mqtt_publisher,
+                )
+                .await?;
             }
-            let topic = C8yTopic::SmartRestResponse.to_topic()?;
-            let msg1 = Message::new(&topic, format!("501,{}", operation.name));
-            let msg2 = Message::new(&topic, format!("503,{}", operation.name));
-
-            Ok(vec![msg1, msg2])
         }
-        None => Ok(vec![]),
+        None => {}
     }
+    // MQTT messages will be sent during the operation execution
+    Ok(vec![])
 }
 
 /// reads a json file to serde_json::Value
@@ -910,7 +930,7 @@ pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>
 
 #[cfg(test)]
 mod tests {
-    use crate::c8y::tests::FakeC8YHttpProxy;
+    use crate::c8y::tests::{create_test_mqtt_client_with_default, FakeC8YHttpProxy};
     use plugin_sm::operation_logs::OperationLogs;
     use tedge_test_utils::fs::TempTedgeDir;
 
@@ -919,13 +939,27 @@ mod tests {
         let log_dir = TempTedgeDir::new();
         let operation_logs = OperationLogs::try_new(log_dir.path().to_path_buf()).unwrap();
 
+        let mqtt_client = create_test_mqtt_client_with_default().await;
+
         let now = std::time::Instant::now();
-        super::execute_operation("5", "sleep", "sleep_one", &operation_logs)
-            .await
-            .unwrap();
-        super::execute_operation("5", "sleep", "sleep_two", &operation_logs)
-            .await
-            .unwrap();
+        super::execute_operation(
+            "5",
+            "sleep",
+            "sleep_one",
+            &operation_logs,
+            &mqtt_client.published,
+        )
+        .await
+        .unwrap();
+        super::execute_operation(
+            "5",
+            "sleep",
+            "sleep_two",
+            &operation_logs,
+            &mqtt_client.published,
+        )
+        .await
+        .unwrap();
 
         // a result between now and elapsed that is not 0 probably means that the operations are
         // blocking and that you probably removed a tokio::spawn handle (;
@@ -934,6 +968,7 @@ mod tests {
 
     #[tokio::test]
     async fn ignore_operations_for_child_device() {
+        let mqtt_client = create_test_mqtt_client_with_default().await;
         let output = super::process_smartrest(
             "528,childId,software_a,version_a,url_a,install",
             &Default::default(),
@@ -942,6 +977,7 @@ mod tests {
                 log_dir: Default::default(),
             },
             "testDevice",
+            &mqtt_client.published,
         )
         .await
         .unwrap();
