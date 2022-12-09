@@ -1,4 +1,4 @@
-use crate::{LinkError, DynSender, RuntimeError, RuntimeHandle};
+use crate::{DynSender, LinkError, RuntimeError, RuntimeHandle};
 use async_trait::async_trait;
 
 /// Materialize an actor instance under construction

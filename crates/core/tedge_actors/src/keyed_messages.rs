@@ -1,4 +1,4 @@
-use crate::{Address, ChannelError, Message, DynSender, Sender};
+use crate::{Address, ChannelError, DynSender, Message, Sender};
 use async_trait::async_trait;
 
 /// A sender that adds a key to messages on the fly
@@ -49,11 +49,7 @@ impl<M: Message> Sender<(usize, M)> for SenderVec<M> {
     }
 
     fn sender_clone(&self) -> DynSender<(usize, M)> {
-        let senders = self
-            .senders
-            .iter()
-            .map(|r| r.sender_clone())
-            .collect();
+        let senders = self.senders.iter().map(|r| r.sender_clone()).collect();
         Box::new(SenderVec { senders })
     }
 }

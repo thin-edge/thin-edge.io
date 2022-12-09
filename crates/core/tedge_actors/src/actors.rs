@@ -1,5 +1,5 @@
 use crate::ChannelError;
-use crate::{Mailbox, Message, DynSender};
+use crate::{DynSender, Mailbox, Message};
 use async_trait::async_trait;
 
 /// Enable a struct to be used as an actor.
@@ -61,12 +61,12 @@ mod tests {
 
         let actor = Echo;
         let (mailbox, input) = new_mailbox(10);
-        let output = messages.as_recipient();
+        let output = messages.as_sender();
 
         let actor_task = spawn(actor.run(mailbox, output));
 
         spawn(async move {
-            let mut input = input.as_recipient();
+            let mut input: DynSender<&str> = input.into();
             input
                 .send("Hello")
                 .await
@@ -94,11 +94,11 @@ mod tests {
 
         let actor = ActorWithSpecificPeers;
         let (mailbox, input) = new_mailbox(10);
-        let output = output_messages.as_recipient();
+        let output = output_messages.as_sender();
         let actor_task = spawn(actor.run(mailbox, output.into()));
 
         spawn(async move {
-            let mut input = input.as_recipient();
+            let mut input: DynSender<&str> = input.into();
             input.send("Do this").await.expect("sent");
             input.send("Do nothing").await.expect("sent");
             input.send("Do that and this").await.expect("sent");

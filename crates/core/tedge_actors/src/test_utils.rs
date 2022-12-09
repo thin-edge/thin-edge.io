@@ -1,4 +1,4 @@
-use crate::{ChannelError, Message, DynSender, Sender};
+use crate::{ChannelError, DynSender, Message, Sender};
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -35,7 +35,7 @@ impl<M: Message> Default for VecRecipient<M> {
 }
 
 impl<M: Message + Clone> VecRecipient<M> {
-    pub fn as_recipient(&self) -> DynSender<M> {
+    pub fn as_sender(&self) -> DynSender<M> {
         Box::new(self.clone())
     }
 

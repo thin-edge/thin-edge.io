@@ -6,7 +6,7 @@ use crate::{file_system_ext, mqtt_ext};
 use actor::*;
 use async_trait::async_trait;
 pub use config::*;
-use tedge_actors::{ActorBuilder, LinkError, PeerLinker, DynSender, RuntimeError, RuntimeHandle};
+use tedge_actors::{ActorBuilder, DynSender, LinkError, PeerLinker, RuntimeError, RuntimeHandle};
 use tedge_http_ext::*;
 
 /// An instance of the config manager
@@ -36,7 +36,7 @@ impl ConfigManager {
         &mut self,
         http: &mut impl PeerLinker<HttpRequest, HttpResult>,
     ) -> Result<(), LinkError> {
-        let http_con = http.connect(self.address.http_responses.as_recipient())?;
+        let http_con = http.connect(self.address.http_responses.clone().into())?;
         self.http_con = Some(http_con);
         Ok(())
     }
@@ -57,14 +57,14 @@ impl ActorBuilder for ConfigManager {
                 host: self.config.mqtt_host.to_string(),
                 port: self.config.mqtt_port,
             },
-            self.address.events.as_recipient(),
+            self.address.events.clone().into(),
         )
         .await?;
 
         let file_watcher = file_system_ext::new_watcher(
             runtime,
             watcher_config,
-            self.address.events.as_recipient(),
+            self.address.events.clone().into(),
         )
         .await?;
 

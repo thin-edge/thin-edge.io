@@ -2,7 +2,7 @@ use crate::file_system_ext::{FileEvent, FileRequest};
 use crate::mqtt_ext::MqttMessage;
 use async_trait::async_trait;
 use tedge_actors::{
-    adapt, fan_in_message_type, new_mailbox, Actor, Address, ChannelError, Mailbox, DynSender,
+    adapt, fan_in_message_type, new_mailbox, Actor, Address, ChannelError, DynSender, Mailbox,
 };
 use tedge_http_ext::{HttpError, HttpRequest, HttpResponse};
 

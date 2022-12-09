@@ -1,6 +1,6 @@
 use crate::c8y_http_proxy::messages::{C8YRestRequest, C8YRestResponse};
 use async_trait::async_trait;
-use tedge_actors::{new_mailbox, Actor, Address, ChannelError, Mailbox, DynSender};
+use tedge_actors::{new_mailbox, Actor, Address, ChannelError, DynSender, Mailbox};
 use tedge_http_ext::{HttpActorInstance, HttpRequest, HttpResult};
 
 struct C8YHttpProxyActor {}
@@ -32,9 +32,15 @@ struct C8YHttpProxyPeers {
 }
 
 impl C8YHttpProxyPeers {
-    pub async fn send_http_request(&mut self, request: HttpRequest) -> Result<HttpResult, ChannelError> {
+    pub async fn send_http_request(
+        &mut self,
+        request: HttpRequest,
+    ) -> Result<HttpResult, ChannelError> {
         self.http_requests.send(request).await?;
-        self.http_responses.next().await.ok_or(ChannelError::ReceiveError())
+        self.http_responses
+            .next()
+            .await
+            .ok_or(ChannelError::ReceiveError())
     }
 }
 
@@ -42,11 +48,7 @@ impl C8YHttpProxyActor {
     pub async fn run(self, mut peers: C8YHttpProxyPeers) -> Result<(), ChannelError> {
         while let Some(request) = peers.requests.next().await {
             match request {
-                C8YRestRequest::C8yCreateEvent(_) => {
-
-
-
-                }
+                C8YRestRequest::C8yCreateEvent(_) => {}
                 C8YRestRequest::C8yUpdateSoftwareListResponse(_) => {}
                 C8YRestRequest::UploadLogBinary(_) => {}
                 C8YRestRequest::UploadConfigFile(_) => {}

@@ -1,7 +1,7 @@
 use crate::c8y_http_proxy::messages::{C8YRestRequest, C8YRestResponse};
 use async_trait::async_trait;
 use tedge_actors::{
-    new_mailbox, ActorBuilder, Address, LinkError, Mailbox, PeerLinker, DynSender, RuntimeError,
+    new_mailbox, ActorBuilder, Address, DynSender, LinkError, Mailbox, PeerLinker, RuntimeError,
     RuntimeHandle,
 };
 use tedge_http_ext::{HttpRequest, HttpResult};
@@ -54,7 +54,7 @@ impl C8YHttpProxyBuilder {
         &mut self,
         http: &mut impl PeerLinker<HttpRequest, HttpResult>,
     ) -> Result<(), LinkError> {
-        let http_requests = http.connect(self.http_responses.1.as_recipient())?;
+        let http_requests = http.connect(self.http_responses.1.clone().into())?;
         self.http_requests = Some(http_requests);
         Ok(())
     }
@@ -79,6 +79,6 @@ impl PeerLinker<C8YRestRequest, C8YRestResponse> for C8YHttpProxyBuilder {
         }
 
         self.responses = Some(output_sender);
-        Ok(self.requests.1.as_recipient())
+        Ok(self.requests.1.clone().into())
     }
 }

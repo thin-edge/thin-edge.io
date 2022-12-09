@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use tedge_actors::{
-    new_mailbox, Actor, ChannelError, Mailbox, DynSender, RuntimeError, RuntimeHandle,
+    new_mailbox, Actor, ChannelError, DynSender, Mailbox, RuntimeError, RuntimeHandle,
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -33,7 +33,7 @@ pub async fn new_connection(
     let actor = MqttActor::new(config);
     runtime.run(actor, mailbox, sub_messages).await?;
 
-    Ok(address.as_recipient())
+    Ok(address.into())
 }
 
 struct MqttActor {

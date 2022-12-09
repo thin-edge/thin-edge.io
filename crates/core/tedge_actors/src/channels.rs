@@ -4,15 +4,16 @@ use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
 use std::fmt::{Debug, Formatter};
 
+pub type Address<M> = mpsc::Sender<M>;
+
 /// Create a new mailbox with its address
 ///
 /// Such a mailbox is used by an actor to receive all its messages.
 /// Clones of the address are given to the sending peers.
 pub fn new_mailbox<M>(bound: usize) -> (Mailbox<M>, Address<M>) {
     let (sender, receiver) = mpsc::channel(bound);
-    let address = Address { sender };
     let mailbox = Mailbox { receiver };
-    (mailbox, address)
+    (mailbox, sender)
 }
 
 /// A mailbox that gather *all* the messages sent to an actor
@@ -43,55 +44,33 @@ impl<M> Mailbox<M> {
     }
 }
 
-/// The address of an actor
-pub struct Address<M> {
-    sender: mpsc::Sender<M>,
-}
-
-// The derive macro incorrectly requires M to be Clone
-impl<M> Clone for Address<M> {
-    fn clone(&self) -> Self {
-        Address {
-            sender: self.sender.clone(),
-        }
-    }
-}
-
-impl<M: Message> Address<M> {
-    /// Build a clone of this address to used as a recipient of sub-messages,
-    /// i.e. messages that can be cast into those expected by the mailbox.
-    pub fn as_recipient<N: Message + Into<M>>(&self) -> DynSender<N> {
-        self.clone().into()
-    }
-}
-
-/// A recipient for messages of type `M`
+/// A sender of messages of type `M`
 ///
 /// Actors don't access directly the addresses of their peers,
-/// but use intermediate recipients that adapt the messages when sent.
+/// but use intermediate senders that adapt the messages when sent.
 pub type DynSender<M> = Box<dyn Sender<M>>;
 
 #[async_trait]
 pub trait Sender<M>: 'static + Send + Sync {
-    /// Send a message to the recipient,
-    /// returning an error if the recipient is no more expecting messages
+    /// Send a message to the receiver behind this sender,
+    /// returning an error if the receiver is no more expecting messages
     async fn send(&mut self, message: M) -> Result<(), ChannelError>;
 
-    /// Clone this sender in order to send messages to the same recipient from another actor
+    /// Clone this sender in order to send messages to the same receiver from another actor
     fn sender_clone(&self) -> DynSender<M>;
 }
 
-/// An `Address<M>` is a `Recipient<N>` provided `N` implements `Into<M>`
-impl<M: Message, N: Message + Into<M>> From<Address<M>> for DynSender<N> {
-    fn from(address: Address<M>) -> Self {
+/// An `mpsc::Sender<M>` is a `DynSender<N>` provided `N` implements `Into<M>`
+impl<M: Message, N: Message + Into<M>> From<mpsc::Sender<M>> for DynSender<N> {
+    fn from(address: mpsc::Sender<M>) -> Self {
         Box::new(address)
     }
 }
 
 #[async_trait]
-impl<M: Message, N: Message + Into<M>> Sender<N> for Address<M> {
+impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::Sender<M> {
     async fn send(&mut self, message: N) -> Result<(), ChannelError> {
-        Ok(self.sender.send(message.into()).await?)
+        Ok(SinkExt::send(&mut self, message.into()).await?)
     }
 
     fn sender_clone(&self) -> DynSender<N> {
@@ -101,7 +80,7 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for Address<M> {
 
 impl<M: Message> Debug for DynSender<M> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str("anonymous recipient")
+        f.write_str("anonymous sender")
     }
 }
 
@@ -172,11 +151,10 @@ mod tests {
 
         {
             let mut address = address;
-            let mut recipient_msg1: DynSender<Msg1> = address.as_recipient();
-            let mut recipient_msg2 = address.as_recipient();
+            let mut recipient_msg1: DynSender<Msg1> = address.clone().into();
+            let mut recipient_msg2: DynSender<Msg2> = address.clone().into();
 
-            address
-                .send(Msg::Msg1(Msg1 {}))
+            SinkExt::send(&mut address, Msg::Msg1(Msg1 {}))
                 .await
                 .expect("enough room in the mailbox");
             recipient_msg1
@@ -212,7 +190,7 @@ mod tests {
     #[tokio::test]
     async fn a_recipient_can_be_adapted_to_accept_sub_messages_from_several_sources() {
         let messages: VecRecipient<Msg> = VecRecipient::default();
-        let recipient = messages.as_recipient();
+        let recipient = messages.as_sender();
 
         let mut peers = Peers::from(recipient);
         peers.peer_1.send(Msg1 {}).await.unwrap();
