@@ -19,7 +19,7 @@ impl Actor for C8YHttpProxyActor {
 
 struct C8YHttpProxyPeers {
     /// Requests received by this actor from its clients
-    requests: Address<C8YRestRequest>,
+    requests: Mailbox<C8YRestRequest>,
 
     /// Responses sent by this actor to its clients
     responses: Recipient<C8YRestResponse>,
@@ -28,5 +28,30 @@ struct C8YHttpProxyPeers {
     http_requests: Recipient<HttpRequest>,
 
     /// Responses received by this actor over HTTP
-    http_responses: Address<HttpResult>,
+    http_responses: Mailbox<HttpResult>,
+}
+
+impl C8YHttpProxyPeers {
+    pub async fn send_http_request(&mut self, request: HttpRequest) -> Result<HttpResult, ChannelError> {
+        self.http_requests.send(request).await?;
+        self.http_responses.next().await.ok_or(ChannelError::ReceiveError())
+    }
+}
+
+impl C8YHttpProxyActor {
+    pub async fn run(self, mut peers: C8YHttpProxyPeers) -> Result<(), ChannelError> {
+        while let Some(request) = peers.requests.next().await {
+            match request {
+                C8YRestRequest::C8yCreateEvent(_) => {
+
+
+
+                }
+                C8YRestRequest::C8yUpdateSoftwareListResponse(_) => {}
+                C8YRestRequest::UploadLogBinary(_) => {}
+                C8YRestRequest::UploadConfigFile(_) => {}
+            }
+        }
+        Ok(())
+    }
 }
