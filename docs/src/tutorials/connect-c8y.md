@@ -74,6 +74,10 @@ Indeed, this certificate aims to authenticate that this device is actually the d
 sudo tedge cert create --device-id my-device
 ```
 
+```
+Certificate was successfully created
+```
+
 You can then check the content of that certificate.
 
 ```shell

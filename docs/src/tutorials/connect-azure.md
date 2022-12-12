@@ -33,6 +33,10 @@ Indeed, this certificate aims to authenticate that this device is the device wit
 sudo tedge cert create --device-id my-device
 ```
 
+```
+Certificate was successfully created
+```
+
 ## Show certificate details
 
 You can then check the content of that certificate.

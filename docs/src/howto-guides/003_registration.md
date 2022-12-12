@@ -8,6 +8,10 @@ To create new certificate you can use [`tedge cert create`](../references/tedge-
 sudo tedge cert create --device-id alpha
 ```
 
+```
+Certificate was successfully created
+```
+
 > Note: `tedge cert` requires `sudo` privilege. This command provides no output on success.
 
 [`sudo tedge cert create`](../references/tedge-cert.md) will create certificate in a default location (`/etc/tedge/device-certs/`).
@@ -57,6 +61,10 @@ Follow the instruction to remove the existing certificate and issue [`tedge cert
 
 ```shell
 sudo tedge cert remove
+```
+
+```
+Certificate was successfully removed
 ```
 
 and try [`tedge cert create`](../references/tedge-cert.md) once again.

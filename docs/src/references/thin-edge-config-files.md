@@ -97,6 +97,7 @@ To create/remove/upload the certificate, one can use the below command.
 
 ```shell
 sudo tedge cert create --device-id thinedge
+Certificate was successfully created
 
 # Find the certificates that are created as below.
 
