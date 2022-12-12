@@ -43,7 +43,7 @@ Further details about this can be found in the thin-edge.io documentation at [Ma
 6. In the list of devices, select the thin-edge device installed previously.
 7. In the sub-menu for the device, select the **Software** option.
 8. Click the **Install software** button in the bottom left; the apama-thin-edge-support should be listed.
-9. Click the drop-down arrow on the right and check the ::apt radio button, then click **Install**.
+9. Click the drop-down arrow on the right and check the `latest::apt` radio button, then click **Install**.
 10. Finally, click the **Apply changes** button in the lower right of the panel.
 
 After installation of the support for Apama onto the thin-edge device, the correlator will attempt to start, but will fail initially because there is not yet an Apama project installed. Instructions are given below for installing an Apama project on the device.
