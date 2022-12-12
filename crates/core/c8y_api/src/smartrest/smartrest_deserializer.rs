@@ -306,6 +306,24 @@ impl SmartRestJwtResponse {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct AvailableChildDevices {
+    pub message_id: String,
+    #[serde(default)]
+    pub devices: std::collections::HashSet<String>,
+}
+
+impl SmartRestRequestGeneric for AvailableChildDevices {}
+
+impl Default for AvailableChildDevices {
+    fn default() -> Self {
+        Self {
+            message_id: "106".into(),
+            devices: Default::default(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

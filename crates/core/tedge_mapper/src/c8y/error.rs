@@ -1,5 +1,5 @@
 use c8y_api::smartrest::error::{
-    SMCumulocityMapperError, SmartRestDeserializerError, SmartRestSerializerError,
+    OperationsError, SMCumulocityMapperError, SmartRestDeserializerError, SmartRestSerializerError,
 };
 use plugin_sm::operation_logs::OperationLogsError;
 
@@ -49,6 +49,12 @@ pub enum CumulocityMapperError {
         command: String,
         operation_name: String,
     },
+
+    #[error("Failed to read the child device operations in directory: {dir}")]
+    ReadDirError { dir: std::path::PathBuf },
+
+    #[error(transparent)]
+    FromOperationsError(#[from] OperationsError),
 
     #[error(transparent)]
     FromOperationLogs(#[from] OperationLogsError),
