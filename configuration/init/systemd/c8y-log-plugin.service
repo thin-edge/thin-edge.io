@@ -4,7 +4,7 @@ After=tedge-mapper-c8y.service
 
 [Service]
 User=root
-ExecStart=/usr/bin/c8y_log_plugin
+ExecStart=/usr/bin/c8y-log-plugin
 Restart=on-failure
 RestartPreventExitStatus=255
 

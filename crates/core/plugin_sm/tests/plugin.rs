@@ -392,7 +392,7 @@ mod tests {
             .unwrap()
             .parent() // ./thin-edge.io/
             .unwrap()
-            .join("target/debug/tedge_dummy_plugin");
+            .join("target/debug/tedge-dummy-plugin");
 
         dummy_plugin_path
     }
@@ -408,7 +408,7 @@ mod tests {
     }
 
     fn get_dummy_plugin_tmp_path() -> PathBuf {
-        let path = PathBuf::from_str("/tmp/.tedge_dummy_plugin").unwrap();
+        let path = PathBuf::from_str("/tmp/.tedge-dummy-plugin").unwrap();
         if !&path.exists() {
             fs::create_dir(&path).unwrap();
         }

@@ -1153,7 +1153,7 @@ async fn mapper_handles_multiline_sm_requests() {
 async fn mapper_publishes_supported_operations() {
     // The test assures tede-mapper reads/parses the operations from operations directory and
     // correctly publishes the supported operations message on `c8y/s/us`
-    // and verifies the supported operations that are published by the tedge_mapper.
+    // and verifies the supported operations that are published by the tedge-mapper.
     let broker = mqtt_tests::test_mqtt_broker();
     let cfg_dir = TempTedgeDir::new();
     create_thin_edge_operations(&cfg_dir, vec!["c8y_TestOp1", "c8y_TestOp2"]);

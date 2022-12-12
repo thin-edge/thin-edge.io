@@ -9,7 +9,7 @@ Publish to sawmill topic
 
 Given a configured system with configured certificate
 When we derive from EnvironmentC8y
-When we publish with the sawtooth_publisher with 100ms cycle time and publish
+When we publish with the sawtooth-publisher with 100ms cycle time and publish
     5 times 100 values to the Sawmill topic (10 on each publish).
 Then we manually observe the data in C8y
 
@@ -27,7 +27,7 @@ class PublishSawmill(EnvironmentC8y):
     def execute(self):
         super().execute()
         self.log.info("Execute")
-        publisher = self.project.exampledir + "/sawtooth_publisher"
+        publisher = self.project.exampledir + "/sawtooth-publisher"
         cmd = os.path.expanduser(publisher)
 
         pub = self.startProcess(

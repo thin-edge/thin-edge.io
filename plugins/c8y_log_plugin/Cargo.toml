@@ -1,5 +1,5 @@
 [package]
-name = "c8y_log_plugin"
+name = "c8y-log-plugin"
 version = "0.8.1"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
@@ -11,10 +11,11 @@ repository = "https://github.com/thin-edge/thin-edge.io"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [package.metadata.deb]
-maintainer-scripts = "../../configuration/debian/c8y_log_plugin"
+replaces = "c8y_log_plugin"
+maintainer-scripts = "../../configuration/debian/c8y-log-plugin"
 assets = [
     ["../../configuration/init/systemd/c8y-log-plugin.service", "/lib/systemd/system/c8y-log-plugin.service", "644"],
-    ["target/release/c8y_log_plugin", "/usr/bin/c8y_log_plugin", "755"],
+    ["target/release/c8y-log-plugin", "/usr/bin/c8y-log-plugin", "755"],
 ]
 
 # Required for DEBHELPER

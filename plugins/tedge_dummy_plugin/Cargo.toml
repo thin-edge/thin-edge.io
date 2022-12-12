@@ -1,5 +1,5 @@
 [package]
-name = "tedge_dummy_plugin"
+name = "tedge-dummy-plugin"
 version = "0.8.1"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
@@ -8,6 +8,9 @@ license = "Apache-2.0"
 description = "thin.edge.io dummy plugin for testing"
 homepage = "https://thin-edge.io"
 repository = "https://github.com/thin-edge/thin-edge.io"
+
+[package.metadata.deb]
+replaces = "tedge_dummy_plugin"
 
 [dependencies]
 clap = { version = "3", features = ["derive"] }

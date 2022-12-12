@@ -2,6 +2,11 @@
 
 set -e
 
+# Deprecate: Remove symlink in 1.x release
+if [ ! -e /usr/bin/tedge_watchdog ]; then
+    ln -s /usr/bin/tedge-watchdog /usr/bin/tedge_watchdog
+fi
+
 #DEBHELPER#
 
 # Enable the service only if systemctl is available

@@ -237,7 +237,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: build
-          args: -p tedge_dummy_plugin
+          args: -p tedge-dummy-plugin
 
       - name: Cargo test
         uses: actions-rs/cargo@v1

@@ -34,8 +34,8 @@ Currently all binaries provided with releases are packaged into `deb` packages.
 
 ```shell
 ar -x tedge_<version>_amd64.deb | tar -xf data.tar.xz
-ar -x tedge_agent_<version>_amd64.deb | tar -xf data.tar.xz
-ar -x tedge_mapper_<version>_amd64.deb | tar -xf data.tar.xz
+ar -x tedge-agent_<version>_amd64.deb | tar -xf data.tar.xz
+ar -x tedge-mapper_<version>_amd64.deb | tar -xf data.tar.xz
 ```
 
 Which should give you `usr` and/or `lib` directory where you can find binaries.
@@ -43,8 +43,8 @@ After extracting all packages, you should now adjust permissions on those files:
 
 ```shell
 chown root:root /usr/bin/tedge
-chown root:root /usr/bin/tedge_agent
-chown root:root /usr/bin/tedge_mapper
+chown root:root /usr/bin/tedge-agent
+chown root:root /usr/bin/tedge-mapper
 ```
 
 and then move your binaries to the appropriate directory, eg:
@@ -57,7 +57,7 @@ mv ./lib/ ./bin/ /
 
 If you have built the binaries from source you should install them on the target in: `/usr/bin/`.
 
-`systemd` unit files for `tedge_mapper` and `tedge_agent` can be found in the repository at `configuration/init/systemd/tedge-*` and should be installed on the target in: `lib/systemd/system/tedge-*`.
+`systemd` unit files for `tedge-mapper` and `tedge-agent` can be found in the repository at `configuration/init/systemd/tedge-*` and should be installed on the target in: `lib/systemd/system/tedge-*`.
 
 ### Configuring the system and systemd-units
 
@@ -66,7 +66,7 @@ If you have built the binaries from source you should install them on the target
 On most Linux distribution it should suffice to execute them as `root` to do the setup, but in some cases (eg, your system uses `useradd` instead of `adduser` package) more detailed instructions are documented:
 
 * [tedge](https://github.com/thin-edge/thin-edge.io/blob/main/configuration/debian/tedge/postinst)
-* [tedge-agent](https://github.com/thin-edge/thin-edge.io/blob/main/configuration/debian/tedge_agent/postinst)
-* [tedge-mapper](https://github.com/thin-edge/thin-edge.io/blob/main/configuration/debian/tedge_mapper/postinst)
+* [tedge-agent](https://github.com/thin-edge/thin-edge.io/blob/main/configuration/debian/tedge-agent/postinst)
+* [tedge-mapper](https://github.com/thin-edge/thin-edge.io/blob/main/configuration/debian/tedge-mapper/postinst)
 
 After following steps for all the components installed `thin-edge.io` should be operational.

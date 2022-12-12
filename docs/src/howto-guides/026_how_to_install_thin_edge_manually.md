@@ -42,11 +42,11 @@ A minimal thin-edge.io installation requires three components:
 
 ```shell
 sudo mv target/release/tedge /usr/bin
-sudo mv target/release/tedge_agent /usr/bin
-sudo mv target/release/tedge_mapper /usr/bin
+sudo mv target/release/tedge-agent /usr/bin
+sudo mv target/release/tedge-mapper /usr/bin
 ```
 
-You should now have access to the `tedge`, `tedge_agent` and `tedge_mapper` binaries.
+You should now have access to the `tedge`, `tedge-agent` and `tedge-mapper` binaries.
 
 <p align="center">
   <img src="./images/manual_installation-tedge_binary_dry_run.png" alt="Sublime's custom image"/>
@@ -106,8 +106,8 @@ Next, create the files and directories required by thin-edge.io and restart mosq
 sudo rc-service mosquitto stop
 sudo tedge --init
 sudo rc-service mosquitto start
-sudo tedge_agent --init
-sudo tedge_mapper --init c8y
+sudo tedge-agent --init
+sudo tedge-mapper --init c8y
 ```
 
 This should show the following output:
@@ -150,13 +150,13 @@ For the `tedge-agent` service an example file is the following:
 
 start() {
    ebegin "Starting tedge-agent"
-   start-stop-daemon --user tedge --start --background --exec tedge_agent
+   start-stop-daemon --user tedge --start --background --exec tedge-agent
    eend $?
 }
 
 stop() {
     ebegin "Stopping tedge-agent"
-    start-stop-daemon --stop --exec tedge_agent
+    start-stop-daemon --stop --exec tedge-agent
     eend $?
 }
 ```
@@ -168,13 +168,13 @@ For the `tedge-mapper-c8y` service an example file is the following:
 
 start() {
    ebegin "Starting tedge-mapper-c8y"
-   start-stop-daemon --user tedge --start --background --exec tedge_mapper c8y
+   start-stop-daemon --user tedge --start --background --exec tedge-mapper c8y
    eend $?
 }
 
 stop() {
    ebegin "Stopping tedge-mapper-c8y"
-   start-stop-daemon --stop --exec tedge_mapper
+   start-stop-daemon --stop --exec tedge-mapper
    eend $?
 }
 ```

@@ -89,25 +89,25 @@ thin-edge.io installation
     ${rc}=    Execute Command    sudo dpkg -i ./tedge_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 Install Tedge mapper
-    ${rc}=    Execute Command    sudo dpkg -i ./tedge_mapper_${Version}_arm*.deb    return_stdout=False    return_rc=True
+    ${rc}=    Execute Command    sudo dpkg -i ./tedge-mapper_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 Install Tedge agent
-    ${rc}=    Execute Command    sudo dpkg -i ./tedge_agent_${Version}_arm*.deb    return_stdout=False    return_rc=True
+    ${rc}=    Execute Command    sudo dpkg -i ./tedge-agent_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 Install Tedge apama plugin
-    ${rc}=    Execute Command    sudo dpkg -i ./tedge_apama_plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
+    ${rc}=    Execute Command    sudo dpkg -i ./tedge-apama-plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 Install tedge apt plugin
-   ${rc}=    Execute Command    sudo dpkg -i ./tedge_apt_plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
+   ${rc}=    Execute Command    sudo dpkg -i ./tedge-apt-plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 Install Tedge logfile request plugin
-   ${rc}=    Execute Command    sudo dpkg -i ./c8y_log_plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
+   ${rc}=    Execute Command    sudo dpkg -i ./c8y-log-plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 Install C8y configuration plugin
-    ${rc}=    Execute Command    sudo dpkg -i ./c8y_configuration_plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
+    ${rc}=    Execute Command    sudo dpkg -i ./c8y-configuration-plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 Install Watchdog
-    ${rc}=    Execute Command    sudo dpkg -i ./tedge_watchdog_${Version}_arm*.deb    return_stdout=False    return_rc=True
+    ${rc}=    Execute Command    sudo dpkg -i ./tedge-watchdog_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 Executing Create self-signed certificate
     ${rc}=    Execute Command    sudo tedge cert create --device-id ${DeviceID}    return_stdout=False    return_rc=True

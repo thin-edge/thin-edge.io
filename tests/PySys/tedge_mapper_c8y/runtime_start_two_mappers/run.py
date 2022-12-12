@@ -1,13 +1,13 @@
 from pysys.basetest import BaseTest
 
 """
-Validate tedge_mapper can't be started twice.
+Validate tedge-mapper can't be started twice.
 
 
 Given unconnected system
 
-When we start first tedge_mapper it runs uninterrupted
-When we start second tedge_mapper it doesn't connect to broker and exits with code 1 and logs error message
+When we start first tedge-mapper it runs uninterrupted
+When we start second tedge-mapper it doesn't connect to broker and exits with code 1 and logs error message
 
 Then we validate output appropriate error message
 
@@ -16,7 +16,7 @@ Then we validate output appropriate error message
 
 class RuntimeMultiMappers(BaseTest):
     def execute(self):
-        tedge_mapper = "/usr/bin/tedge_mapper"
+        tedge_mapper = "/usr/bin/tedge-mapper"
         self.sudo = "/usr/bin/sudo"
 
         # starting the first tedge mapper instance

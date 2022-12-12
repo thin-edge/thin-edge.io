@@ -64,7 +64,7 @@ async fn main() -> Result<(), anyhow::Error> {
     set_log_level(log_level);
 
     let mut agent = agent::SmAgent::try_new(
-        "tedge_agent",
+        "tedge-agent",
         SmAgentConfig::try_new(tedge_config_location)?,
     )?;
 

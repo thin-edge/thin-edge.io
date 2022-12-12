@@ -9,4 +9,8 @@ if command -v systemctl >/dev/null; then
     fi
 fi
 
+if [ -e /usr/bin/c8y_configuration_plugin ]; then
+    rm -f /usr/bin/c8y_configuration_plugin
+fi
+
 #DEBHELPER#

@@ -3,19 +3,19 @@
 # Note: Must be in the expected installation order
 RELEASE_PACKAGES=(
     tedge
-    tedge_mapper
-    tedge_agent
-    tedge_watchdog
-    tedge_apt_plugin
-    tedge_apama_plugin
-    c8y_log_plugin
-    c8y_configuration_plugin
+    tedge-mapper
+    tedge-agent
+    tedge-watchdog
+    tedge-apt-plugin
+    tedge-apama-plugin
+    c8y-log-plugin
+    c8y-configuration-plugin
 )
 export RELEASE_PACKAGES
 
 TEST_PACKAGES=(
-    sawtooth_publisher
-    tedge_dummy_plugin
+    sawtooth-publisher
+    tedge-dummy-plugin
 )
 export TEST_PACKAGES
 

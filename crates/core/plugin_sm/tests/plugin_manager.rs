@@ -196,7 +196,7 @@ mod tests {
             .unwrap()
             .parent() // ./thin-edge.io/
             .unwrap()
-            .join("target/debug/tedge_dummy_plugin");
+            .join("target/debug/tedge-dummy-plugin");
 
         dummy_plugin_path
     }

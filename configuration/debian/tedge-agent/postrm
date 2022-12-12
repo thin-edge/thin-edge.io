@@ -9,9 +9,14 @@ purge_agent_directory() {
 }
 
 purge_agent_lock() {
-   if [ -f "/run/lock/tedge_agent.lock" ]; then
-       rm -rf /run/lock/tedge_agent.lock
-   fi
+    # remove old lock file path
+    if [ -f "/run/lock/tedge_agent.lock" ]; then
+        rm -rf /run/lock/tedge_agent.lock
+    fi
+    
+    if [ -f "/run/lock/tedge-agent.lock" ]; then
+        rm -rf /run/lock/tedge-agent.lock
+    fi
 }
 
 purge_agent_logs() {
