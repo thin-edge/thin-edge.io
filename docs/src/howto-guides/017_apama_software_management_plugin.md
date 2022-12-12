@@ -36,7 +36,7 @@ Further details about this can be found in the thin-edge.io documentation at [Ma
     - **Description**: apama-thin-edge-support (or something else if you choose)
     - **Device Filter Type**: (leave empty)
     - **Software Type**: apt
-    - **Version**: ::apt
+    - **Version**: latest::apt
     - **SOFTWARE FILE**: select the **Provide a file path** option and give an **empty space** (' ').
 4. Click the **Add Software** button.
 5. Now return to the **Devices** menu option and then select **All devices**.
