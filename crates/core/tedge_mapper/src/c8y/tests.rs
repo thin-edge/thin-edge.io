@@ -1188,6 +1188,8 @@ async fn mapper_publishes_child_device_create_message() {
 
     publish_a_fake_jwt_token(broker).await;
 
+    broker.publish("c8y/s/ds", "106,child-one").await.unwrap();
+
     // Expect smartrest message on `c8y/s/us` with expected payload "101,child1,child1,thin-edge.io-child".
     mqtt_tests::assert_received_all_expected(
         &mut messages,
@@ -1212,6 +1214,7 @@ async fn mapper_publishes_supported_operations_for_child_device() {
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     publish_a_fake_jwt_token(broker).await;
+    broker.publish("c8y/s/ds", "106,child-one").await.unwrap();
 
     // Expect smartrest message on `c8y/s/us/child1` with expected payload "114,c8y_ChildTestOp1,c8y_ChildTestOp2.
     mqtt_tests::assert_received_all_expected(
