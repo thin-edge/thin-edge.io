@@ -30,7 +30,7 @@ This identifier will be also used as the Common Name (CN) of the certificate.
 Indeed, this certificate aims to authenticate that this device is the device with that identity.
 
 ```shell
-$ sudo tedge cert create --device-id my-device
+sudo tedge cert create --device-id my-device
 ```
 
 ## Show certificate details
@@ -38,7 +38,10 @@ $ sudo tedge cert create --device-id my-device
 You can then check the content of that certificate.
 
 ```shell
-$ sudo tedge cert show
+sudo tedge cert show
+```
+
+```
 Device certificate: /etc/tedge/device-certs/tedge-certificate.pem
 Subject: CN=my-device, O=Thin Edge, OU=Test Device
 Issuer: CN=my-device, O=Thin Edge, OU=Test Device
@@ -103,7 +106,10 @@ Also, if you have installed `tedge-mapper`, this command starts and enables the 
 At last, it sends packets to Azure IoT Hub to check the connection.
 
 ```shell
-$ sudo tedge connect az
+sudo tedge connect az
+```
+
+```
 Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
@@ -141,7 +147,7 @@ Any messages sent on the topic will be forwarded to Azure.
 Here, we use `tedge mqtt pub az/messages/events/` a message to be understood as a temperature of 20 Degree.
 
 ```shell
-$ tedge mqtt pub az/messages/events/ '{"temperature": 20}'
+tedge mqtt pub az/messages/events/ '{"temperature": 20}'
 ```
 To view the messages that were sent from the device to the cloud, follow this [document](https://docs.microsoft.com/en-us/azure/iot-hub/quickstart-send-telemetry-cli#create-and-monitor-a-device).
 

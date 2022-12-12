@@ -132,9 +132,11 @@ You can inspect the collected and translated metrics, by subscribing to these to
 
 The metrics collected by `collectd` are emitted to subtopics named after the collectd plugin and the metric name:
 
+```shell
+tedge mqtt sub 'collectd/#'
 ```
-$ tedge mqtt sub 'collectd/#'
 
+```
 [collectd/raspberrypi/cpu/percent-active] 1623076679.154:0.50125313283208
 [collectd/raspberrypi/memory/percent-used] 1623076679.159:1.10760866126707
 [collectd/raspberrypi/cpu/percent-active] 1623076680.154:0

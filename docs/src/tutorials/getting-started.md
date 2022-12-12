@@ -18,7 +18,7 @@ To follow this guide, you only need the following:
 - A Raspberry Pi (3 or 4) with Raspian installed, for other boards and OS'es have a look [here](https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/supported-platforms.md)
 - Updated device:
 `
-$ sudo apt-get update && sudo apt-get upgrade
+sudo apt-get update && sudo apt-get upgrade
 `
 
 ## Steps
@@ -76,8 +76,10 @@ When running this command something similar like the following will be displayed
 
 
 ```shell
-$ sudo tedge -h
+sudo tedge -h
+```
 
+```
 tedge 0.8.1
 tedge is the cli tool for thin-edge.io
 
@@ -234,7 +236,10 @@ tedge mqtt sub collectd/#
  The output will be similar like:
 
 ```shell
-$ tedge mqtt sub collectd/#
+tedge mqtt sub 'collectd/#'
+```
+
+```
 INFO: Connected
 [collectd/raspberrypi/df-root/percent_bytes-used] 1667205183.407:11.7998857498169
 [collectd/raspberrypi/memory/percent-used] 1667205183.408:4.87045198079293
@@ -257,7 +262,10 @@ tedge mqtt sub 'c8y/#'
 The output will be similar like:
 
 ```shell
-$ tedge mqtt sub c8y/#
+tedge mqtt sub 'c8y/#'
+```
+
+```shell
 INFO: Connected
 [c8y/measurement/measurements/create] {"type":"ThinEdgeMeasurement","time":"2022-10-31T08:35:44.398000001Z","cpu":{"percent-active":{"value":1.26262626262626}},"memory":{"percent-used":{"value":4.87024847292786}}}
 [c8y/measurement/measurements/create] {"type":"ThinEdgeMeasurement","time":"2022-10-31T08:35:45.398000001Z","memory":{"percent-used":{"value":4.87024847292786}},"cpu":{"percent-active":{"value":1.01522842639594}}}

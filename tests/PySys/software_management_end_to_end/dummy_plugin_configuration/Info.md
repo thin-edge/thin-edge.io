@@ -3,7 +3,7 @@
 
 Build the plugin:
 
-    $ cargo build --bin tedge-dummy-plugin
+    cargo build --bin tedge-dummy-plugin
 
 On every invocation, the dummy plugin will respond with the
 contents of file list-valid.<return_code> . Where the return code
@@ -39,10 +39,10 @@ Copy file list-valid.0 to the following place to use it as a plugin:
 
     /tmp/.tedge-dummy-plugin/list-valid.0
 
-    $ sudo cp tests/PySys/software-management-end-to-end/dummy-plugin-configuration/list-valid.0 /tmp/.tedge-dummy-plugin/list-valid.0
+    sudo cp tests/PySys/software-management-end-to-end/dummy-plugin-configuration/list-valid.0 /tmp/.tedge-dummy-plugin/list-valid.0
 
 Otherwise, the file needs to be in the current directory under ´.tedge-dummy-plugin/list-valid.0´.
 
 Manual invocation e.g.:
 
-    $ /etc/tedge/sm-plugins/fruits list
+    /etc/tedge/sm-plugins/fruits list

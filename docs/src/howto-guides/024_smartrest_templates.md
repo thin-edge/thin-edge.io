@@ -63,7 +63,10 @@ tedge config unset c8y.smartrest.templates
 To remove one of existing templates you can overwrite the existing `c8y.smartrest.templates` with the new set which doesn't contain the unwanted template.
 
 ```shell
-$ tedge config get c8y.smartrest.templates
+tedge config get c8y.smartrest.templates
+```
+
+```toml
 ["template-1", "template-2"]
 ```
 
@@ -72,6 +75,9 @@ tedge config set c8y.smartrest.templates template-1
 ```
 
 ```shell
-$ tedge config get c8y.smartrest.templates
+tedge config get c8y.smartrest.templates
+```
+
+```toml
 ["template-1"]
 ```

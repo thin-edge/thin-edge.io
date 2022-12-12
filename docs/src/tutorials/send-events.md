@@ -116,7 +116,7 @@ Here is a sample event triggered for a `login_event` event type for the `externa
 Command to send the event from a external device as below:
 
 ```shell
-$ sudo tedge mqtt pub tedge/events/login_event/external_sensor '{
+sudo tedge mqtt pub tedge/events/login_event/external_sensor '{
     "type":"login_event",
     "text":"A user just logged in",
     "time":"2021-01-01T05:30:45+00:00"
