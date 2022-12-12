@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::c8y::converter::{CumulocityConverter, CumulocityDeviceInfo};
 use crate::core::component::TEdgeComponent;
 use crate::core::converter::{make_valid_topic_or_panic, MapperConfig};
-use crate::core::mapper::{create_mapper_with_mqtt_channels, mqtt_config};
+use crate::core::mapper::{mqtt_config, Mapper};
 use crate::core::size_threshold::SizeThreshold;
 use async_trait::async_trait;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
@@ -96,12 +96,12 @@ impl TEdgeComponent for CumulocityMapper {
             mqtt_client.published.clone(),
         )?);
 
-        let mut mapper = create_mapper_with_mqtt_channels(
-            CUMULOCITY_MAPPER_NAME,
-            converter,
+        let mut mapper = Mapper::new(
+            CUMULOCITY_MAPPER_NAME.to_string(),
             mqtt_client.received,
             mqtt_client.published,
             mqtt_client.errors,
+            converter,
         );
 
         let ops_dir = PathBuf::from(format!("{}/operations/c8y", &config_dir));

@@ -722,7 +722,7 @@ async fn execute_operation(
     let mut logged = LoggedCommand::new(&command);
     logged.arg(&payload);
 
-    let child = logged
+    let maybe_child_process = logged
         .spawn()
         .map_err(|e| CumulocityMapperError::ExecuteFailed {
             error_message: e.to_string(),
@@ -736,8 +736,8 @@ async fn execute_operation(
         ))
         .await?;
 
-    match child {
-        Ok(child) => {
+    match maybe_child_process {
+        Ok(child_process) => {
             let op_name = operation_name.to_string();
             let mut mqtt_publisher = mqtt_publisher.clone();
 
@@ -756,7 +756,7 @@ async fn execute_operation(
 
                 // execute the command and wait until it finishes
                 // mqtt client publishes failed or successful depending on the exit code
-                if let Ok(output) = child.wait_with_output(logger).await {
+                if let Ok(output) = child_process.wait_with_output(logger).await {
                     debug!("{output:?}");
                     match output.status.code() {
                         Some(0) => {
@@ -945,7 +945,7 @@ pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>
 
 #[cfg(test)]
 mod tests {
-    use crate::c8y::tests::{create_test_mqtt_client_with_default, FakeC8YHttpProxy};
+    use crate::c8y::tests::{create_test_mqtt_client_with_empty_operations, FakeC8YHttpProxy};
     use plugin_sm::operation_logs::OperationLogs;
     use tedge_test_utils::fs::TempTedgeDir;
 
@@ -954,7 +954,7 @@ mod tests {
         let log_dir = TempTedgeDir::new();
         let operation_logs = OperationLogs::try_new(log_dir.path().to_path_buf()).unwrap();
 
-        let mqtt_client = create_test_mqtt_client_with_default().await;
+        let mqtt_client = create_test_mqtt_client_with_empty_operations().await;
 
         let now = std::time::Instant::now();
         super::execute_operation(
@@ -983,7 +983,7 @@ mod tests {
 
     #[tokio::test]
     async fn ignore_operations_for_child_device() {
-        let mqtt_client = create_test_mqtt_client_with_default().await;
+        let mqtt_client = create_test_mqtt_client_with_empty_operations().await;
         let output = super::process_smartrest(
             "528,childId,software_a,version_a,url_a,install",
             &Default::default(),

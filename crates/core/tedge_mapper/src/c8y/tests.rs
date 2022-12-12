@@ -18,7 +18,7 @@ use crate::c8y::mapper::{create_mapper_config, create_mqtt_client};
 use crate::core::converter::MapperConfig;
 use futures::StreamExt;
 use mqtt_channel::{Connection, Message, Topic};
-use mqtt_tests::test_mqtt_server::{MqttProcessHandler, MQTT_TEST_PORT};
+use mqtt_tests::test_mqtt_server::MqttProcessHandler;
 use mqtt_tests::with_timeout::WithTimeout;
 use serde_json::json;
 use serial_test::serial;
@@ -1533,17 +1533,18 @@ async fn publish_a_fake_jwt_token(broker: &MqttProcessHandler) {
 }
 
 pub async fn create_test_mqtt_client(mapper_config: &MapperConfig) -> Connection {
+    let broker = mqtt_tests::test_mqtt_broker();
     create_mqtt_client(
         "c8y-mapper-test-client",
         MQTT_HOST.to_string(),
-        MQTT_TEST_PORT,
+        broker.port,
         &mapper_config,
     )
     .await
     .unwrap()
 }
 
-pub async fn create_test_mqtt_client_with_default() -> Connection {
+pub async fn create_test_mqtt_client_with_empty_operations() -> Connection {
     let mapper_config = create_mapper_config(&Operations::default());
     create_test_mqtt_client(&mapper_config).await
 }
