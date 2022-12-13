@@ -15,6 +15,18 @@ pub mod bridge {
     }
 }
 
+pub mod child_device {
+    use crate::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
+    use mqtt_channel::{Message, Topic};
+
+    pub fn new_child_device_message(child_id: &str) -> Message {
+        Message::new(
+            &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
+            format!("101,{child_id},{child_id},thin-edge.io-child"),
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use mqtt_channel::{Message, Topic};

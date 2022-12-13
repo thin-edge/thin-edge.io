@@ -2,7 +2,6 @@ use crate::c8y::dynamic_discovery::*;
 use crate::c8y::json;
 use crate::core::{converter::*, error::*, size_threshold::SizeThreshold};
 use async_trait::async_trait;
-use c8y_api::smartrest::smartrest_deserializer::{AvailableChildDevices, SmartRestRequestGeneric};
 use c8y_api::smartrest::{
     error::SmartRestDeserializerError,
     operations::{get_operation, Operations},
@@ -16,6 +15,10 @@ use c8y_api::smartrest::{
 use c8y_api::{
     http_proxy::C8YHttpProxy,
     json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
+};
+use c8y_api::{
+    smartrest::smartrest_deserializer::{AvailableChildDevices, SmartRestRequestGeneric},
+    utils::child_device::new_child_device_message,
 };
 use logged_command::LoggedCommand;
 use mqtt_channel::{Message, Topic, TopicFilter};
@@ -578,13 +581,6 @@ fn create_supported_operations(path: &Path) -> Result<Message, ConversionError> 
 
 fn create_request_for_cloud_child_devices() -> Message {
     Message::new(&Topic::new_unchecked("c8y/s/us"), "105")
-}
-
-fn new_child_device_message(child_id: &str) -> Message {
-    Message::new(
-        &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
-        format!("101,{child_id},{child_id},thin-edge.io-child"),
-    )
 }
 
 fn add_external_device_registration_message(
