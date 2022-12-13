@@ -2,7 +2,7 @@ use crate::file_system_ext::{FileEvent, FileRequest};
 use crate::mqtt_ext::MqttMessage;
 use async_trait::async_trait;
 use tedge_actors::{
-    adapt, fan_in_message_type, new_mailbox, Actor, Address, ChannelError, DynSender, Mailbox,
+    adapt, fan_in_message_type, mpsc, Actor, ChannelError, DynSender, MessageBox, StreamExt,
 };
 use tedge_http_ext::{HttpError, HttpRequest, HttpResponse};
 
@@ -17,61 +17,37 @@ pub struct ConfigManagerActor {}
 impl ConfigManagerActor {
     pub async fn process_file_event(
         &mut self,
-        event: FileEvent,
-        messages: &mut ConfigManagerMailbox,
-        peers: &mut ConfigManagerPeers,
+        _event: FileEvent,
+        _messages: &mut ConfigManagerPeers,
     ) -> Result<(), ChannelError> {
         todo!()
     }
 
     pub async fn process_mqtt_message(
         &mut self,
-        message: MqttMessage,
-        messages: &mut ConfigManagerMailbox,
-        peers: &mut ConfigManagerPeers,
+        _message: MqttMessage,
+        messages: &mut ConfigManagerPeers,
     ) -> Result<(), ChannelError> {
         // ..
         let request = todo!();
-        let response = ConfigManagerActor::send_http_request(messages, peers, request).await?;
+        let response = messages.send_http_request(request).await?;
         // ..
         Ok(())
-    }
-
-    async fn send_http_request(
-        messages: &mut ConfigManagerMailbox,
-        peers: &mut ConfigManagerPeers,
-        request: HttpRequest,
-    ) -> Result<HttpResult, ChannelError> {
-        peers.http_con.send(request).await?;
-        if let Some(response) = messages.http_responses.next().await {
-            Ok(response)
-        } else {
-            Err(ChannelError::ReceiveError())
-        }
     }
 }
 
 #[async_trait]
 impl Actor for ConfigManagerActor {
-    type Input = ConfigInputAndResponse;
-    type Output = ConfigOutput;
-    type Mailbox = ConfigManagerMailbox;
-    type Peers = ConfigManagerPeers;
+    type MessageBox = ConfigManagerPeers;
 
-    async fn run(
-        mut self,
-        mut messages: Self::Mailbox,
-        mut peers: Self::Peers,
-    ) -> Result<(), ChannelError> {
+    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
         while let Some(event) = messages.events.next().await {
             match event {
                 ConfigInput::MqttMessage(message) => {
-                    self.process_mqtt_message(message, &mut messages, &mut peers)
-                        .await?;
+                    self.process_mqtt_message(message, &mut messages).await?;
                 }
                 ConfigInput::FileEvent(event) => {
-                    self.process_file_event(event, &mut messages, &mut peers)
-                        .await?;
+                    self.process_file_event(event, &mut messages).await?;
                 }
             }
         }
@@ -79,67 +55,49 @@ impl Actor for ConfigManagerActor {
     }
 }
 
-pub struct ConfigManagerMailbox {
-    pub events: Mailbox<ConfigInput>,
-    pub http_responses: Mailbox<HttpResult>,
-}
-
-impl From<Mailbox<ConfigInputAndResponse>> for ConfigManagerMailbox {
-    fn from(_: Mailbox<ConfigInputAndResponse>) -> Self {
-        todo!()
-    }
-}
-
-// Is this struct useful?
-//
-// Could be useful for peers to peek the appropriate address.
-// There is no such peers in this plugin, but it could be in a larger plugin
-// that includes all the C8Y features
-pub struct ConfigManagerAddress {
-    pub events: Address<ConfigInput>,
-    pub http_responses: Address<HttpResult>,
-}
-
-pub fn new_config_mailbox() -> (ConfigManagerMailbox, ConfigManagerAddress) {
-    let (events_mailbox, events_address) = new_mailbox(10);
-    let (http_mailbox, http_address) = new_mailbox(10);
-    (
-        ConfigManagerMailbox {
-            events: events_mailbox,
-            http_responses: http_mailbox,
-        },
-        ConfigManagerAddress {
-            events: events_address,
-            http_responses: http_address,
-        },
-    )
+pub struct ConfigManagerBoxBuilder {
+    events_receiver: mpsc::Receiver<ConfigInput>,
+    http_responses_receiver: mpsc::Receiver<HttpResult>,
+    events_sender: mpsc::Sender<ConfigInput>,
+    http_responses_sender: mpsc::Sender<HttpResult>,
 }
 
 pub struct ConfigManagerPeers {
-    file_watcher: DynSender<FileRequest>,
-    http_con: DynSender<HttpRequest>,
-    mqtt_con: DynSender<MqttMessage>,
+    pub events: mpsc::Receiver<ConfigInput>,
+    pub http_responses: mpsc::Receiver<HttpResult>,
+    pub file_watcher: DynSender<FileRequest>,
+    pub http_con: DynSender<HttpRequest>,
+    pub mqtt_con: DynSender<MqttMessage>,
 }
 
 impl ConfigManagerPeers {
     pub fn new(
+        events: mpsc::Receiver<ConfigInput>,
+        http_responses: mpsc::Receiver<HttpResult>,
         file_watcher: DynSender<FileRequest>,
         http_con: DynSender<HttpRequest>,
         mqtt_con: DynSender<MqttMessage>,
     ) -> ConfigManagerPeers {
         ConfigManagerPeers {
+            events,
+            http_responses,
             file_watcher,
             http_con,
             mqtt_con,
         }
     }
-}
-impl From<DynSender<ConfigOutput>> for ConfigManagerPeers {
-    fn from(recipient: DynSender<ConfigOutput>) -> Self {
-        ConfigManagerPeers {
-            file_watcher: adapt(&recipient),
-            http_con: adapt(&recipient),
-            mqtt_con: adapt(&recipient),
+
+    async fn send_http_request(
+        &mut self,
+        request: HttpRequest,
+    ) -> Result<HttpResult, ChannelError> {
+        self.http_con.send(request).await?;
+        if let Some(response) = self.http_responses.next().await {
+            Ok(response)
+        } else {
+            Err(ChannelError::ReceiveError())
         }
     }
 }
+
+impl MessageBox for ConfigManagerPeers {}

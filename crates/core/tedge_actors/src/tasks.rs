@@ -18,17 +18,12 @@ impl std::fmt::Debug for Box<dyn Task> {
 /// A task that run an actor
 pub struct RunActor<A: Actor> {
     actor: A,
-    mailbox: A::Mailbox,
-    peers: A::Peers,
+    messages: A::MessageBox,
 }
 
 impl<A: Actor> RunActor<A> {
-    pub fn new(actor: A, mailbox: A::Mailbox, peers: A::Peers) -> Self {
-        RunActor {
-            actor,
-            mailbox,
-            peers,
-        }
+    pub fn new(actor: A, messages: A::MessageBox) -> Self {
+        RunActor { actor, messages }
     }
 }
 
@@ -42,9 +37,8 @@ impl<A: Actor> Task for RunActor<A> {
 
     async fn run(mut self: Box<Self>) -> Result<(), RuntimeError> {
         let actor = self.actor;
-        let mailbox = self.mailbox;
-        let peers = self.peers;
+        let messages = self.messages;
 
-        Ok(actor.run(mailbox, peers).await?)
+        Ok(actor.run(messages).await?)
     }
 }

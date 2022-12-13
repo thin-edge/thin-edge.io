@@ -1,8 +1,7 @@
 use crate::c8y_http_proxy::messages::{C8YRestRequest, C8YRestResponse};
 use async_trait::async_trait;
 use tedge_actors::{
-    new_mailbox, ActorBuilder, Address, DynSender, LinkError, Mailbox, PeerLinker, RuntimeError,
-    RuntimeHandle,
+    mpsc, ActorBuilder, DynSender, LinkError, PeerLinker, RuntimeError, RuntimeHandle,
 };
 use tedge_http_ext::{HttpRequest, HttpResult};
 
@@ -22,10 +21,10 @@ pub struct C8YHttpProxyBuilder {
     config: C8YHttpConfig,
 
     /// Mailbox & address for peers requests
-    requests: (Mailbox<C8YRestRequest>, Address<C8YRestRequest>),
+    requests: (mpsc::Sender<C8YRestRequest>, mpsc::Receiver<C8YRestRequest>),
 
     /// Mailbox & address for HTTP responses
-    http_responses: (Mailbox<HttpResult>, Address<HttpResult>),
+    http_responses: (mpsc::Sender<HttpResult>, mpsc::Receiver<HttpResult>),
 
     /// To be connected to some clients
     ///
@@ -42,8 +41,8 @@ impl C8YHttpProxyBuilder {
     fn new(config: C8YHttpConfig) -> Self {
         C8YHttpProxyBuilder {
             config,
-            requests: new_mailbox(10),
-            http_responses: new_mailbox(1),
+            requests: mpsc::channel(10),
+            http_responses: mpsc::channel(1),
             responses: None,
             http_requests: None,
         }
@@ -54,7 +53,7 @@ impl C8YHttpProxyBuilder {
         &mut self,
         http: &mut impl PeerLinker<HttpRequest, HttpResult>,
     ) -> Result<(), LinkError> {
-        let http_requests = http.connect(self.http_responses.1.clone().into())?;
+        let http_requests = http.connect(self.http_responses.0.clone().into())?;
         self.http_requests = Some(http_requests);
         Ok(())
     }
@@ -79,6 +78,6 @@ impl PeerLinker<C8YRestRequest, C8YRestResponse> for C8YHttpProxyBuilder {
         }
 
         self.responses = Some(output_sender);
-        Ok(self.requests.1.clone().into())
+        Ok(self.requests.0.clone().into())
     }
 }

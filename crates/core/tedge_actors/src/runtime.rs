@@ -111,10 +111,9 @@ impl RuntimeHandle {
     pub async fn run<A: Actor>(
         &mut self,
         actor: A,
-        mailbox: A::Mailbox,
-        peers: A::Peers,
+        messages: A::MessageBox,
     ) -> Result<(), RuntimeError> {
-        self.spawn(RunActor::new(actor, mailbox, peers)).await
+        self.spawn(RunActor::new(actor, messages)).await
     }
 
     /// Send an action to the runtime

@@ -4,44 +4,21 @@ use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
 use std::fmt::{Debug, Formatter};
 
+// TODO fully remove Address and Mailbox types
 pub type Address<M> = mpsc::Sender<M>;
+pub type Mailbox<M> = mpsc::Receiver<M>;
 
-/// Create a new mailbox with its address
+/// Collect all the messages of the receiver into a vector
 ///
-/// Such a mailbox is used by an actor to receive all its messages.
-/// Clones of the address are given to the sending peers.
-pub fn new_mailbox<M>(bound: usize) -> (Mailbox<M>, Address<M>) {
-    let (sender, receiver) = mpsc::channel(bound);
-    let mailbox = Mailbox { receiver };
-    (mailbox, sender)
-}
-
-/// A mailbox that gather *all* the messages sent to an actor
-pub struct Mailbox<M> {
-    receiver: mpsc::Receiver<M>,
-}
-
-impl<M> Mailbox<M> {
-    /// Pop from the mailbox the message with the highest priority
-    ///
-    /// Await till a messages is available.
-    /// Return `None` when all the senders to this mailbox have been dropped and all the messages consumed.
-    pub async fn next(&mut self) -> Option<M> {
-        self.receiver.next().await
+/// Mostly useful for testing.
+/// Note that this will block until there is no more senders,
+/// .i.e. the mailbox address and all its clones have been dropped.
+pub async fn collect<M>(mut receiver: mpsc::Receiver<M>) -> Vec<M> {
+    let mut messages = vec![];
+    while let Some(message) = receiver.next().await {
+        messages.push(message);
     }
-
-    /// Collect all the messages of the mailbox into a vector
-    ///
-    /// Mostly useful for testing.
-    /// Note that this will block until there is no more senders,
-    /// .i.e. the mailbox address and all its clones have been dropped.
-    pub async fn collect(mut self) -> Vec<M> {
-        let mut messages = vec![];
-        while let Some(message) = self.next().await {
-            messages.push(message);
-        }
-        messages
-    }
+    messages
 }
 
 /// A sender of messages of type `M`
@@ -147,28 +124,28 @@ mod tests {
 
     #[tokio::test]
     async fn an_address_is_a_recipient_of_sub_msg() {
-        let (mailbox, address) = new_mailbox::<Msg>(10);
+        let (address, mailbox) = mpsc::channel::<Msg>(10);
 
         {
             let mut address = address;
-            let mut recipient_msg1: DynSender<Msg1> = address.clone().into();
-            let mut recipient_msg2: DynSender<Msg2> = address.clone().into();
+            let mut sender_msg1: DynSender<Msg1> = address.clone().into();
+            let mut sender_msg2: DynSender<Msg2> = address.clone().into();
 
             SinkExt::send(&mut address, Msg::Msg1(Msg1 {}))
                 .await
                 .expect("enough room in the mailbox");
-            recipient_msg1
+            sender_msg1
                 .send(Msg1 {})
                 .await
                 .expect("enough room in the mailbox");
-            recipient_msg2
+            sender_msg2
                 .send(Msg2 {})
                 .await
                 .expect("enough room in the mailbox");
         }
 
         assert_eq!(
-            mailbox.collect().await,
+            collect(mailbox).await,
             vec![Msg::Msg1(Msg1 {}), Msg::Msg1(Msg1 {}), Msg::Msg2(Msg2 {}),]
         )
     }

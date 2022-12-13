@@ -1,6 +1,7 @@
-use crate::{HttpConfig, HttpError, HttpRequest, HttpResponse, HttpResult};
+use crate::{HttpConfig, HttpError, HttpRequest, HttpResult};
 use async_trait::async_trait;
-use tedge_actors::{Actor, ChannelError, DynSender, Mailbox};
+use futures::channel::mpsc;
+use tedge_actors::{Actor, ChannelError, DynSender, MessageBox};
 
 pub(crate) struct HttpActor {
     client: reqwest::Client,
@@ -15,19 +16,10 @@ impl HttpActor {
 
 #[async_trait]
 impl Actor for HttpActor {
-    type Input = (usize, HttpRequest);
-    type Output = (usize, Result<HttpResponse, HttpError>);
-    type Mailbox = Mailbox<Self::Input>;
-    type Peers = DynSender<Self::Output>;
+    type MessageBox = HttpMessageBox;
 
-    async fn run(
-        self,
-        requests: Self::Mailbox,
-        responses: Self::Peers,
-    ) -> Result<(), ChannelError> {
-        let mut peers = HttpPeers::new(4, requests, responses);
-
-        while let Some((client_id, request)) = peers.next_request().await {
+    async fn run(self, mut messages: HttpMessageBox) -> Result<(), ChannelError> {
+        while let Some((client_id, request)) = messages.next_request().await {
             let request = request.into();
             let client = self.client.clone();
 
@@ -41,7 +33,7 @@ impl Actor for HttpActor {
             });
 
             // Send the response back to the client
-            peers.send_response_once_done(pending_result);
+            messages.send_response_once_done(pending_result);
         }
 
         Ok(())
@@ -50,12 +42,12 @@ impl Actor for HttpActor {
 
 type PendingResult = tokio::task::JoinHandle<(usize, HttpResult)>;
 
-struct HttpPeers {
+pub(crate) struct HttpMessageBox {
     /// Max concurrent requests
     max_concurrency: usize,
 
     /// Requests received by this actor from its clients
-    requests: Mailbox<(usize, HttpRequest)>,
+    requests: mpsc::Receiver<(usize, HttpRequest)>,
 
     /// Responses sent by this actor to its clients
     responses: DynSender<(usize, HttpResult)>,
@@ -66,13 +58,13 @@ struct HttpPeers {
 
 use futures::StreamExt;
 
-impl HttpPeers {
-    fn new(
+impl HttpMessageBox {
+    pub(crate) fn new(
         max_concurrency: usize,
-        requests: Mailbox<(usize, HttpRequest)>,
+        requests: mpsc::Receiver<(usize, HttpRequest)>,
         responses: DynSender<(usize, HttpResult)>,
-    ) -> HttpPeers {
-        HttpPeers {
+    ) -> HttpMessageBox {
+        HttpMessageBox {
             max_concurrency,
             requests,
             responses,
@@ -119,3 +111,5 @@ impl HttpPeers {
         // - send fails
     }
 }
+
+impl MessageBox for HttpMessageBox {}

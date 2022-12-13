@@ -5,44 +5,45 @@ pub use messages::*;
 
 use actor::*;
 use async_trait::async_trait;
+use futures::channel::mpsc;
 use tedge_actors::{
-    new_mailbox, ActorBuilder, Address, DynSender, KeyedSender, LinkError, Mailbox, PeerLinker,
-    RuntimeError, RuntimeHandle, SenderVec,
+    ActorBuilder, DynSender, KeyedSender, LinkError, PeerLinker, RuntimeError, RuntimeHandle,
+    SenderVec,
 };
 
-pub struct HttpActorInstance {
+pub struct HttpActorBuilder {
     actor: HttpActor,
-    mailbox: Mailbox<(usize, HttpRequest)>,
-    address: Address<(usize, HttpRequest)>,
+    receiver: mpsc::Receiver<(usize, HttpRequest)>,
+    sender: mpsc::Sender<(usize, HttpRequest)>,
     clients: Vec<DynSender<Result<HttpResponse, HttpError>>>,
 }
 
-impl HttpActorInstance {
+impl HttpActorBuilder {
     pub fn new(config: HttpConfig) -> Result<Self, HttpError> {
         let actor = HttpActor::new(config)?;
-        let (mailbox, address) = new_mailbox(10);
+        let (sender, receiver) = mpsc::channel(10);
 
-        Ok(HttpActorInstance {
+        Ok(HttpActorBuilder {
             actor,
-            mailbox,
-            address,
+            receiver,
+            sender,
             clients: vec![],
         })
     }
 }
 
 #[async_trait]
-impl ActorBuilder for HttpActorInstance {
+impl ActorBuilder for HttpActorBuilder {
     async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
         let actor = self.actor;
-        let mailbox = self.mailbox;
-        let clients = SenderVec::new_sender(self.clients);
-
-        runtime.run(actor, mailbox, clients).await
+        let request_receiver = self.receiver;
+        let response_sender = SenderVec::new_sender(self.clients);
+        let messages = HttpMessageBox::new(4, request_receiver, response_sender);
+        runtime.run(actor, messages).await
     }
 }
 
-impl PeerLinker<HttpRequest, HttpResult> for HttpActorInstance {
+impl PeerLinker<HttpRequest, HttpResult> for HttpActorBuilder {
     fn connect(
         &mut self,
         client: DynSender<HttpResult>,
@@ -50,6 +51,6 @@ impl PeerLinker<HttpRequest, HttpResult> for HttpActorInstance {
         let client_idx = self.clients.len();
         self.clients.push(client);
 
-        Ok(KeyedSender::new_sender(client_idx, self.address.clone()))
+        Ok(KeyedSender::new_sender(client_idx, self.sender.clone()))
     }
 }

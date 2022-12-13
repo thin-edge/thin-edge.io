@@ -13,7 +13,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Create actor instances
     let mut http_actor =
-        tedge_http_ext::HttpActorInstance::new(tedge_http_ext::HttpConfig::default())?;
+        tedge_http_ext::HttpActorBuilder::new(tedge_http_ext::HttpConfig::default())?;
     let mut config_actor =
         ConfigManager::new(ConfigConfigManager::from_tedge_config("/etc/tedge")?);
 

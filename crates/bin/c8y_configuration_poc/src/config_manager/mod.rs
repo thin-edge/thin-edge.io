@@ -6,7 +6,9 @@ use crate::{file_system_ext, mqtt_ext};
 use actor::*;
 use async_trait::async_trait;
 pub use config::*;
-use tedge_actors::{ActorBuilder, DynSender, LinkError, PeerLinker, RuntimeError, RuntimeHandle};
+use tedge_actors::{
+    mpsc, ActorBuilder, DynSender, LinkError, PeerLinker, RuntimeError, RuntimeHandle,
+};
 use tedge_http_ext::*;
 
 /// An instance of the config manager
@@ -14,19 +16,24 @@ use tedge_http_ext::*;
 /// This is an actor builder.
 pub struct ConfigManager {
     config: ConfigConfigManager,
-    mailbox: ConfigManagerMailbox,
-    address: ConfigManagerAddress,
+    events_receiver: mpsc::Receiver<ConfigInput>,
+    http_responses_receiver: mpsc::Receiver<HttpResult>,
+    events_sender: mpsc::Sender<ConfigInput>,
+    http_responses_sender: mpsc::Sender<HttpResult>,
     http_con: Option<DynSender<HttpRequest>>,
 }
 
 impl ConfigManager {
     pub fn new(config: ConfigConfigManager) -> ConfigManager {
-        let (mailbox, address) = new_config_mailbox();
+        let (events_sender, events_receiver) = mpsc::channel(10);
+        let (http_responses_sender, http_responses_receiver) = mpsc::channel(10);
 
         ConfigManager {
             config,
-            mailbox,
-            address,
+            events_receiver,
+            http_responses_receiver,
+            events_sender,
+            http_responses_sender,
             http_con: None,
         }
     }
@@ -36,7 +43,7 @@ impl ConfigManager {
         &mut self,
         http: &mut impl PeerLinker<HttpRequest, HttpResult>,
     ) -> Result<(), LinkError> {
-        let http_con = http.connect(self.address.http_responses.clone().into())?;
+        let http_con = http.connect(self.http_responses_sender.clone().into())?;
         self.http_con = Some(http_con);
         Ok(())
     }
@@ -57,23 +64,29 @@ impl ActorBuilder for ConfigManager {
                 host: self.config.mqtt_host.to_string(),
                 port: self.config.mqtt_port,
             },
-            self.address.events.clone().into(),
+            self.events_sender.clone().into(),
         )
         .await?;
 
         let file_watcher = file_system_ext::new_watcher(
             runtime,
             watcher_config,
-            self.address.events.clone().into(),
+            self.events_sender.clone().into(),
         )
         .await?;
 
         let http_con = self.http_con.ok_or_else(|| LinkError::MissingPeer {
             role: "http".to_string(),
         })?;
-        let peers = ConfigManagerPeers::new(file_watcher, http_con, mqtt_con);
+        let peers = ConfigManagerPeers::new(
+            self.events_receiver,
+            self.http_responses_receiver,
+            file_watcher,
+            http_con,
+            mqtt_con,
+        );
 
-        runtime.run(actor, self.mailbox, peers).await?;
+        runtime.run(actor, peers).await?;
         Ok(())
     }
 }
