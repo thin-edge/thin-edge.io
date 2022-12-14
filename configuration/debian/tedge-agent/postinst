@@ -53,4 +53,9 @@ if command -v systemctl >/dev/null; then
     fi
 fi
 
+if [ -f /var/lib/dpkg/info/tedge_agent.postrm ]; then
+    # Prevent purge from deleting files related to the package
+    rm -f /var/lib/dpkg/info/tedge_agent.postrm
+fi
+
 # Do not use DEBHELPER: for OTA self-update one needs a fine-control over the deb options

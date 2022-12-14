@@ -11,6 +11,8 @@ repository = "https://github.com/thin-edge/thin-edge.io"
 
 [package.metadata.deb]
 replaces = "tedge_dummy_plugin"
+conflicts = "tedge_dummy_plugin (<= 0.8.1)"
+breaks = "tedge_dummy_plugin (<= 0.8.1)"
 
 [dependencies]
 clap = { version = "3", features = ["derive"] }

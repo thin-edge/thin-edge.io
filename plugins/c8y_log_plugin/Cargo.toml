@@ -12,6 +12,8 @@ repository = "https://github.com/thin-edge/thin-edge.io"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [package.metadata.deb]
 replaces = "c8y_log_plugin"
+conflicts = "c8y_log_plugin (<= 0.8.1)"
+breaks = "c8y_log_plugin (<= 0.8.1)"
 maintainer-scripts = "../../configuration/debian/c8y-log-plugin"
 assets = [
     ["../../configuration/init/systemd/c8y-log-plugin.service", "/lib/systemd/system/c8y-log-plugin.service", "644"],
