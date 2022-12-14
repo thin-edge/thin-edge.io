@@ -7,7 +7,6 @@ RELEASE_PACKAGES=(
     tedge-agent
     tedge-watchdog
     tedge-apt-plugin
-    tedge-apama-plugin
     c8y-log-plugin
     c8y-configuration-plugin
 )
