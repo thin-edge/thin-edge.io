@@ -15,7 +15,7 @@ use tedge_http_ext::*;
 ///
 /// This is an actor builder.
 pub struct ConfigManager {
-    config: ConfigConfigManager,
+    config: ConfigManagerConfig,
     events_receiver: mpsc::Receiver<ConfigInput>,
     http_responses_receiver: mpsc::Receiver<HttpResult>,
     events_sender: mpsc::Sender<ConfigInput>,
@@ -24,7 +24,7 @@ pub struct ConfigManager {
 }
 
 impl ConfigManager {
-    pub fn new(config: ConfigConfigManager) -> ConfigManager {
+    pub fn new(config: ConfigManagerConfig) -> ConfigManager {
         let (events_sender, events_receiver) = mpsc::channel(10);
         let (http_responses_sender, http_responses_receiver) = mpsc::channel(10);
 

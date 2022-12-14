@@ -3,7 +3,7 @@ use tedge_config::*;
 
 /// Configuration of the Configuration Manager
 #[derive(Clone, Debug)]
-pub struct ConfigConfigManager {
+pub struct ConfigManagerConfig {
     pub config_dir: PathBuf,
     pub tmp_dir: PathBuf,
     pub device_id: String,
@@ -14,14 +14,14 @@ pub struct ConfigConfigManager {
     pub tedge_http_port: u16,
 }
 
-impl ConfigConfigManager {
-    pub fn from_default_tedge_config() -> Result<ConfigConfigManager, TEdgeConfigError> {
-        ConfigConfigManager::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH)
+impl ConfigManagerConfig {
+    pub fn from_default_tedge_config() -> Result<ConfigManagerConfig, TEdgeConfigError> {
+        ConfigManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH)
     }
 
     pub fn from_tedge_config(
         config_dir: impl AsRef<Path>,
-    ) -> Result<ConfigConfigManager, TEdgeConfigError> {
+    ) -> Result<ConfigManagerConfig, TEdgeConfigError> {
         let config_dir: PathBuf = config_dir.as_ref().into();
         let config_location =
             tedge_config::TEdgeConfigLocation::from_custom_root(config_dir.clone());
@@ -38,7 +38,7 @@ impl ConfigConfigManager {
         let tedge_http_host = tedge_config.query(HttpBindAddressSetting)?;
         let tedge_http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
 
-        Ok(ConfigConfigManager {
+        Ok(ConfigManagerConfig {
             config_dir,
             tmp_dir,
             device_id,
