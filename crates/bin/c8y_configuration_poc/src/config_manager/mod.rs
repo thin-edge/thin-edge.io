@@ -14,7 +14,7 @@ use tedge_http_ext::*;
 /// An instance of the config manager
 ///
 /// This is an actor builder.
-pub struct ConfigManager {
+pub struct ConfigManagerBuilder {
     config: ConfigManagerConfig,
     events_receiver: mpsc::Receiver<ConfigInput>,
     http_responses_receiver: mpsc::Receiver<HttpResult>,
@@ -24,12 +24,12 @@ pub struct ConfigManager {
     http_con: Option<DynSender<HttpRequest>>,
 }
 
-impl ConfigManager {
-    pub fn new(config: ConfigManagerConfig) -> ConfigManager {
+impl ConfigManagerBuilder {
+    pub fn new(config: ConfigManagerConfig) -> ConfigManagerBuilder {
         let (events_sender, events_receiver) = mpsc::channel(10);
         let (http_responses_sender, http_responses_receiver) = mpsc::channel(10);
 
-        ConfigManager {
+        ConfigManagerBuilder {
             config,
             events_receiver,
             http_responses_receiver,
@@ -68,7 +68,7 @@ impl ConfigManager {
 }
 
 #[async_trait]
-impl ActorBuilder for ConfigManager {
+impl ActorBuilder for ConfigManagerBuilder {
     async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
         let actor = ConfigManagerActor {};
 
@@ -91,7 +91,7 @@ impl ActorBuilder for ConfigManager {
             role: "http".to_string(),
         })?;
 
-        let peers = ConfigManagerPeers::new(
+        let peers = ConfigManagerMessageBox::new(
             self.events_receiver,
             self.http_responses_receiver,
             file_watcher,

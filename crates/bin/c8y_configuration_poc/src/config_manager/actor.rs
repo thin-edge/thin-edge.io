@@ -18,7 +18,7 @@ impl ConfigManagerActor {
     pub async fn process_file_event(
         &mut self,
         _event: FileEvent,
-        _messages: &mut ConfigManagerPeers,
+        _messages: &mut ConfigManagerMessageBox,
     ) -> Result<(), ChannelError> {
         todo!()
     }
@@ -26,7 +26,7 @@ impl ConfigManagerActor {
     pub async fn process_mqtt_message(
         &mut self,
         _message: MqttMessage,
-        messages: &mut ConfigManagerPeers,
+        messages: &mut ConfigManagerMessageBox,
     ) -> Result<(), ChannelError> {
         // ..
         let request = todo!();
@@ -38,7 +38,7 @@ impl ConfigManagerActor {
 
 #[async_trait]
 impl Actor for ConfigManagerActor {
-    type MessageBox = ConfigManagerPeers;
+    type MessageBox = ConfigManagerMessageBox;
 
     async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
         while let Some(event) = messages.events.next().await {
@@ -62,7 +62,7 @@ pub struct ConfigManagerBoxBuilder {
     http_responses_sender: mpsc::Sender<HttpResult>,
 }
 
-pub struct ConfigManagerPeers {
+pub struct ConfigManagerMessageBox {
     pub events: mpsc::Receiver<ConfigInput>,
     pub http_responses: mpsc::Receiver<HttpResult>,
     pub file_watcher: DynSender<FileRequest>,
@@ -70,15 +70,15 @@ pub struct ConfigManagerPeers {
     pub mqtt_con: DynSender<MqttMessage>,
 }
 
-impl ConfigManagerPeers {
+impl ConfigManagerMessageBox {
     pub fn new(
         events: mpsc::Receiver<ConfigInput>,
         http_responses: mpsc::Receiver<HttpResult>,
         file_watcher: DynSender<FileRequest>,
         http_con: DynSender<HttpRequest>,
         mqtt_con: DynSender<MqttMessage>,
-    ) -> ConfigManagerPeers {
-        ConfigManagerPeers {
+    ) -> ConfigManagerMessageBox {
+        ConfigManagerMessageBox {
             events,
             http_responses,
             file_watcher,
@@ -100,4 +100,4 @@ impl ConfigManagerPeers {
     }
 }
 
-impl MessageBox for ConfigManagerPeers {}
+impl MessageBox for ConfigManagerMessageBox {}
