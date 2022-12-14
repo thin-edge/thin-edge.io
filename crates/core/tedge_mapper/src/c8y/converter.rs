@@ -371,6 +371,7 @@ where
                         &self.operation_logs,
                         &self.device_name,
                         &self.cfg_dir,
+                        &mut self.children,
                     )
                     .await
                 }
@@ -482,6 +483,7 @@ async fn parse_c8y_topics(
     operation_logs: &OperationLogs,
     device_name: &str,
     config_dir: &Path,
+    children: &mut HashMap<String, Operations>,
 ) -> Result<Vec<Message>, ConversionError> {
     let mut output: Vec<Message> = Vec::new();
     for smartrest_message in message.payload_str()?.split('\n') {
@@ -492,6 +494,7 @@ async fn parse_c8y_topics(
             operation_logs,
             device_name,
             config_dir,
+            children,
         )
         .await
         {
@@ -752,6 +755,7 @@ pub fn get_local_child_devices_list(
 fn register_child_device_supported_operations(
     config_dir: &Path,
     payload: &str,
+    children: &mut HashMap<String, Operations>,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
     let mut messages_vec = vec![];
     // 106 lists the child devices that are linked with the parent device in the
@@ -775,7 +779,10 @@ fn register_child_device_supported_operations(
     }
     // loop over all local child devices and update the operations
     for child_id in local_child_devices {
+        // update the children cache with the operations supported
         let ops = Operations::try_new(path_to_child_devices.join(&child_id))?;
+        children.insert(child_id.clone(), ops.clone());
+
         let ops_msg = ops.create_smartrest_ops_message()?;
         let topic_str = format!("{SMARTREST_PUBLISH_TOPIC}/{}", child_id);
         let topic = Topic::new_unchecked(&topic_str);
@@ -791,6 +798,7 @@ async fn process_smartrest(
     operation_logs: &OperationLogs,
     device_name: &str,
     config_dir: &Path,
+    children: &mut HashMap<String, Operations>,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
     match get_smartrest_device_id(payload) {
         Some(device_id) if device_id == device_name => {
@@ -804,7 +812,7 @@ async fn process_smartrest(
         }
         _ => {
             match get_smartrest_template_id(payload).as_str() {
-                "106" => register_child_device_supported_operations(config_dir, payload),
+                "106" => register_child_device_supported_operations(config_dir, payload, children),
                 // Ignore any other child device incoming request as not yet supported
                 _ => {
                     debug!("Ignored. Message not yet supported: {payload}");
@@ -971,6 +979,7 @@ mod tests {
             },
             "testDevice",
             std::path::Path::new(""),
+            &mut std::collections::HashMap::default(),
         )
         .await
         .unwrap();
