@@ -1,7 +1,18 @@
-use crate::{ChannelError, DynSender, Message, Sender};
+use crate::{mpsc, ChannelError, DynSender, Message, Sender, StreamExt};
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+/// Collect all the messages of the receiver into a vector
+///
+/// Note that this will block until all the senders are dropped.
+pub async fn collect<M>(mut receiver: mpsc::Receiver<M>) -> Vec<M> {
+    let mut messages = vec![];
+    while let Some(message) = receiver.next().await {
+        messages.push(message);
+    }
+    messages
+}
 
 /// A recipient that collects all the messages in a vector
 ///

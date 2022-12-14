@@ -20,10 +20,10 @@ pub struct C8YHttpProxyBuilder {
     /// Config
     config: C8YHttpConfig,
 
-    /// Mailbox & address for peers requests
+    /// Sender and receiver for peers requests
     requests: (mpsc::Sender<C8YRestRequest>, mpsc::Receiver<C8YRestRequest>),
 
-    /// Mailbox & address for HTTP responses
+    /// Sender and receiver for HTTP responses
     http_responses: (mpsc::Sender<HttpResult>, mpsc::Receiver<HttpResult>),
 
     /// To be connected to some clients

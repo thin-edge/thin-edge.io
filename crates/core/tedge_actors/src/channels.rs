@@ -1,29 +1,12 @@
 use crate::{ChannelError, Message};
 use async_trait::async_trait;
 use futures::channel::mpsc;
-use futures::{SinkExt, StreamExt};
+use futures::SinkExt;
 use std::fmt::{Debug, Formatter};
-
-// TODO fully remove Address and Mailbox types
-pub type Address<M> = mpsc::Sender<M>;
-pub type Mailbox<M> = mpsc::Receiver<M>;
-
-/// Collect all the messages of the receiver into a vector
-///
-/// Mostly useful for testing.
-/// Note that this will block until there is no more senders,
-/// .i.e. the mailbox address and all its clones have been dropped.
-pub async fn collect<M>(mut receiver: mpsc::Receiver<M>) -> Vec<M> {
-    let mut messages = vec![];
-    while let Some(message) = receiver.next().await {
-        messages.push(message);
-    }
-    messages
-}
 
 /// A sender of messages of type `M`
 ///
-/// Actors don't access directly the addresses of their peers,
+/// Actors don't access directly the `mpsc::Sender` of their peers,
 /// but use intermediate senders that adapt the messages when sent.
 pub type DynSender<M> = Box<dyn Sender<M>>;
 
@@ -39,8 +22,8 @@ pub trait Sender<M>: 'static + Send + Sync {
 
 /// An `mpsc::Sender<M>` is a `DynSender<N>` provided `N` implements `Into<M>`
 impl<M: Message, N: Message + Into<M>> From<mpsc::Sender<M>> for DynSender<N> {
-    fn from(address: mpsc::Sender<M>) -> Self {
-        Box::new(address)
+    fn from(sender: mpsc::Sender<M>) -> Self {
+        Box::new(sender)
     }
 }
 
@@ -112,6 +95,7 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for Adapter<M> {
 mod tests {
     use super::*;
     use crate::fan_in_message_type;
+    use crate::test_utils::collect;
     use crate::test_utils::VecRecipient;
 
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -123,29 +107,29 @@ mod tests {
     fan_in_message_type!(Msg[Msg1,Msg2] : Clone , Debug , Eq , PartialEq);
 
     #[tokio::test]
-    async fn an_address_is_a_recipient_of_sub_msg() {
-        let (address, mailbox) = mpsc::channel::<Msg>(10);
+    async fn an_mpsc_sender_is_a_recipient_of_sub_msg() {
+        let (sender, receiver) = mpsc::channel::<Msg>(10);
 
         {
-            let mut address = address;
-            let mut sender_msg1: DynSender<Msg1> = address.clone().into();
-            let mut sender_msg2: DynSender<Msg2> = address.clone().into();
+            let mut sender = sender;
+            let mut sender_msg1: DynSender<Msg1> = sender.clone().into();
+            let mut sender_msg2: DynSender<Msg2> = sender.clone().into();
 
-            SinkExt::send(&mut address, Msg::Msg1(Msg1 {}))
+            SinkExt::send(&mut sender, Msg::Msg1(Msg1 {}))
                 .await
-                .expect("enough room in the mailbox");
+                .expect("enough room in the receiver queue");
             sender_msg1
                 .send(Msg1 {})
                 .await
-                .expect("enough room in the mailbox");
+                .expect("enough room in the receiver queue");
             sender_msg2
                 .send(Msg2 {})
                 .await
-                .expect("enough room in the mailbox");
+                .expect("enough room in the receiver queue");
         }
 
         assert_eq!(
-            collect(mailbox).await,
+            collect(receiver).await,
             vec![Msg::Msg1(Msg1 {}), Msg::Msg1(Msg1 {}), Msg::Msg2(Msg2 {}),]
         )
     }

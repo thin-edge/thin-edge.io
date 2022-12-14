@@ -1,28 +1,28 @@
-use crate::{Address, ChannelError, DynSender, Message, Sender};
+use crate::{mpsc, ChannelError, DynSender, Message, Sender};
 use async_trait::async_trait;
 
 /// A sender that adds a key to messages on the fly
 pub struct KeyedSender<K: Message + Clone, M: Message> {
     key: K,
-    address: Address<(K, M)>,
+    sender: mpsc::Sender<(K, M)>,
 }
 
 impl<K: Message + Clone, M: Message> KeyedSender<K, M> {
-    pub fn new_sender(key: K, address: Address<(K, M)>) -> DynSender<M> {
-        Box::new(KeyedSender { key, address })
+    pub fn new_sender(key: K, sender: mpsc::Sender<(K, M)>) -> DynSender<M> {
+        Box::new(KeyedSender { key, sender })
     }
 }
 
 #[async_trait]
 impl<K: Message + Clone, M: Message> Sender<M> for KeyedSender<K, M> {
     async fn send(&mut self, message: M) -> Result<(), ChannelError> {
-        self.address.send((self.key.clone(), message)).await
+        self.sender.send((self.key.clone(), message)).await
     }
 
     fn sender_clone(&self) -> DynSender<M> {
         Box::new(KeyedSender {
             key: self.key.clone(),
-            address: self.address.clone(),
+            sender: self.sender.clone(),
         })
     }
 }
