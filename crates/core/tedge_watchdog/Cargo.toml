@@ -14,6 +14,8 @@ repository = "https://github.com/thin-edge/thin-edge.io"
 [package.metadata.deb]
 pre-depends = "tedge"
 replaces = "tedge_watchdog"
+conflicts = "tedge_watchdog (<= 0.8.1)"
+breaks = "tedge_watchdog (<= 0.8.1)"
 maintainer-scripts = "../../../configuration/debian/tedge-watchdog"
 assets = [
     ["../../../configuration/init/systemd/tedge-watchdog.service", "/lib/systemd/system/tedge-watchdog.service", "644"],

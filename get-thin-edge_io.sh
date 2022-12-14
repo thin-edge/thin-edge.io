@@ -19,6 +19,8 @@ TEDGE_APAMA_PLUGIN=tedge-apama-plugin
 C8Y_CONFIGURATION_PLUGIN=c8y-configuration-plugin
 C8Y_LOG_PLUGIN=c8y-log-plugin
 
+PURGE_OLD_PACKAGES=
+
 # Set shell used by the script (can be overwritten during dry run mode)
 sh_c='sh -c'
 
@@ -179,13 +181,43 @@ install_artifact() {
     fi
 }
 
+remove_package() {
+    #
+    # Remove/purge a package. This should only be
+    # used to remove packages which are no longer needed
+    #
+    name="$1"
+    
+    if dpkg -s >/dev/null 2>&1; then
+        printf 'Purging renamed package %s...' "$name"
+        if $sh_c "dpkg --purge $name" >> "$LOGFILE" 2>&1; then
+            if is_dry_run; then
+                echo "OK (DRY-RUN)"
+            else
+                echo "OK"
+            fi
+        else
+            echo "FAILED"
+            fail 3 "Failed to purge old renamed package '$name'"
+        fi
+    fi
+}
+
 install_basic_components() {
     install_artifact "$TEDGE"
     install_artifact "$TEDGE_MAPPER"
+
+    if [ -n "$PURGE_OLD_PACKAGES" ]; then
+        remove_package "tedge_mapper"
+    fi
 }
 
 install_tedge_agent() {
     install_artifact "$TEDGE_AGENT"
+
+    if [ -n "$PURGE_OLD_PACKAGES" ]; then
+        remove_package "tedge_agent"
+    fi
 }
 
 install_tedge_plugins() {
@@ -194,6 +226,14 @@ install_tedge_plugins() {
     install_artifact "$C8Y_CONFIGURATION_PLUGIN"
     install_artifact "$C8Y_LOG_PLUGIN"
     install_artifact "$TEDGE_WATCHDOG"
+
+    if [ -n "$PURGE_OLD_PACKAGES" ]; then
+        remove_package "tedge_apt_plugin"
+        remove_package "tedge_apama_plugin"
+        remove_package "c8y_configuration_plugin"
+        remove_package "c8y_log_plugin"
+        remove_package "tedge_watchdog"
+    fi
 }
 
 main() {
@@ -217,6 +257,12 @@ main() {
         TEDGE_APAMA_PLUGIN=tedge_apama_plugin
         C8Y_CONFIGURATION_PLUGIN=c8y_configuration_plugin
         C8Y_LOG_PLUGIN=c8y_log_plugin
+    else
+        # New package names will be installed so activate
+        # flag to remove the old packages after the installation
+        # Note: No configuration files will be removed as the legacy postrm
+        # are removed by the renamed packages
+        PURGE_OLD_PACKAGES=1
     fi
 
     echo "Thank you for trying thin-edge.io!"

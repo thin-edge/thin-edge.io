@@ -12,6 +12,9 @@ repository = "https://github.com/thin-edge/thin-edge.io"
 [package.metadata.deb]
 pre-depends = "tedge-mapper"
 replaces = "tedge_agent"
+conflicts = "tedge_agent (<= 0.8.1)"
+breaks = "tedge_agent (<= 0.8.1)"
+provides = "tedge_agent"
 maintainer-scripts = "../../../configuration/debian/tedge-agent"
 assets = [
     ["../../../configuration/init/systemd/tedge-agent.service", "/lib/systemd/system/tedge-agent.service", "644"],
