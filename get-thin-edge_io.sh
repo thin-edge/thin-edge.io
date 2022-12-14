@@ -15,7 +15,6 @@ TEDGE_MAPPER=tedge-mapper
 TEDGE_AGENT=tedge-agent
 TEDGE_WATCHDOG=tedge-watchdog
 TEDGE_APT_PLUGIN=tedge-apt-plugin
-TEDGE_APAMA_PLUGIN=tedge-apama-plugin
 C8Y_CONFIGURATION_PLUGIN=c8y-configuration-plugin
 C8Y_LOG_PLUGIN=c8y-log-plugin
 
@@ -222,7 +221,6 @@ install_tedge_agent() {
 
 install_tedge_plugins() {
     install_artifact "$TEDGE_APT_PLUGIN"
-    install_artifact "$TEDGE_APAMA_PLUGIN"
     install_artifact "$C8Y_CONFIGURATION_PLUGIN"
     install_artifact "$C8Y_LOG_PLUGIN"
     install_artifact "$TEDGE_WATCHDOG"
@@ -254,7 +252,6 @@ main() {
         TEDGE_AGENT=tedge_agent
         TEDGE_WATCHDOG=tedge_watchdog
         TEDGE_APT_PLUGIN=tedge_apt_plugin
-        TEDGE_APAMA_PLUGIN=tedge_apama_plugin
         C8Y_CONFIGURATION_PLUGIN=c8y_configuration_plugin
         C8Y_LOG_PLUGIN=c8y_log_plugin
     else

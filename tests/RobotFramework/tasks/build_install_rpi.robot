@@ -94,9 +94,6 @@ Install Tedge mapper
 Install Tedge agent
     ${rc}=    Execute Command    sudo dpkg -i ./tedge-agent_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
-Install Tedge apama plugin
-    ${rc}=    Execute Command    sudo dpkg -i ./tedge-apama-plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
-    Should Be Equal    ${rc}    ${0}
 Install tedge apt plugin
    ${rc}=    Execute Command    sudo dpkg -i ./tedge-apt-plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
