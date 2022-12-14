@@ -81,7 +81,13 @@ jobs:
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
       - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@nightly
+      
+      - name: Install nightly toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+
       - name: Run cargo-udeps
         uses: aig787/cargo-udeps-action@v1
         with:
