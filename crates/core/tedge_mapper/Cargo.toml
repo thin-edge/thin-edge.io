@@ -59,6 +59,7 @@ serde = "1.0"
 mockito = "0.31"
 mqtt_tests = { path = "../../tests/mqtt_tests" }
 proptest = "1.0"
+rand = "0.8"
 serde_json = "1.0"
 serial_test = "0.8"
 tedge_test_utils = { path = "../../tests/tedge_test_utils" }

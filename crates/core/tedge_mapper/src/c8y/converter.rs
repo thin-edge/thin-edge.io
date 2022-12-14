@@ -946,9 +946,23 @@ pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::c8y::tests::FakeC8YHttpProxy;
+    use c8y_api::smartrest::operations::Operations;
     use plugin_sm::operation_logs::OperationLogs;
+    use rand::{prelude::Distribution, seq::SliceRandom, SeedableRng};
     use tedge_test_utils::fs::TempTedgeDir;
+    use test_case::test_case;
+
+    const OPERATIONS: &[&str] = &[
+        "c8y_DownloadConfigFile",
+        "c8y_LogfileRequest",
+        "c8y_SoftwareUpdate",
+        "c8y_Command",
+    ];
+
+    const EXPECTED_CHILD_DEVICES: &[&str] = &["child-0", "child-1", "child-2", "child-3"];
 
     #[tokio::test]
     async fn test_execute_operation_is_not_blocked() {
@@ -984,5 +998,110 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(output, vec![]);
+    }
+
+    /// Creates `n` child devices named "child-n".
+    /// for each child device a `k` is selected using a random seed so that
+    /// each child devices is assigned a random set of operations.
+    ///
+    /// The resulting dir structure is the following:
+    /// .
+    /// └── operations
+    ///     └── c8y
+    ///         ├── child-0
+    ///         │   └── c8y_LogfileRequest
+    ///         ├── child-1
+    ///         │   ├── c8y_Command
+    ///         │   ├── c8y_DownloadConfigFile
+    ///         │   └── c8y_SoftwareUpdate
+    ///         ├── child-2
+    ///         │   ├── c8y_Command
+    ///         │   ├── c8y_DownloadConfigFile
+    ///         │   └── c8y_LogfileRequest
+    ///         └── child-3
+    ///             └── c8y_LogfileRequest
+    fn make_n_child_devices_with_k_operations(n: u8, ttd: &TempTedgeDir) {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(11);
+        let dist = rand::distributions::Uniform::from(1..OPERATIONS.len());
+
+        for i in 0..n {
+            let dir = ttd.dir(&format!("child-{i}"));
+
+            let k = dist.sample(&mut rng);
+            let operations: Vec<_> = OPERATIONS
+                .choose_multiple(&mut rand::thread_rng(), k)
+                .collect();
+            for op in &operations {
+                dir.file(op);
+            }
+        }
+    }
+
+    /// Tests that the child device cache is updated and that only devices represented locally are
+    /// actually updated to the cloud.
+    ///
+    /// This means that:
+    ///     - Any child device that is not present locally but is seen in the cloud, will not be
+    ///     updated with operations. This child device will not be cached.
+    ///
+    ///     - Any child device that is present locally but not in the cloud will be created and
+    ///     then supported operations will be published to the cloud and the device will be cached.
+    #[test_case("106", EXPECTED_CHILD_DEVICES; "cloud representation is empty")]
+    #[test_case("106,child-one,child-two", EXPECTED_CHILD_DEVICES; "cloud representation is completely different")]
+    #[test_case("106,child-3,child-one,child-1", &["child-0", "child-2"]; "cloud representation has some similar child devices")]
+    #[test_case("106,child-0,child-1,child-2,child-3", &[]; "cloud representation has seen all child devices")]
+    #[tokio::test]
+    async fn test_child_device_cache_is_updated(
+        cloud_child_devies: &str,
+        expected_101_child_devices: &[&str],
+    ) {
+        let ttd = TempTedgeDir::new();
+        let dir = ttd.dir("operations").dir("c8y");
+        make_n_child_devices_with_k_operations(4, &dir);
+        let mut hm: HashMap<String, Operations> = HashMap::default();
+
+        let output_messages = super::process_smartrest(
+            cloud_child_devies,
+            &Default::default(),
+            &mut FakeC8YHttpProxy {},
+            &OperationLogs {
+                log_dir: Default::default(),
+            },
+            "testDevice",
+            ttd.path(),
+            &mut hm,
+        )
+        .await
+        .unwrap();
+
+        let mut actual_child_devices: Vec<String> = hm.into_keys().collect();
+        actual_child_devices.sort();
+
+        assert_eq!(actual_child_devices, EXPECTED_CHILD_DEVICES);
+
+        let mut supported_operations_counter = 0;
+        // Checking `output_messages` for device create 101 events.
+        let mut message_hm = HashMap::new();
+        for message in output_messages {
+            let mut payload = message.payload_str().unwrap().split(',');
+            let smartrest_id = payload.next().unwrap().to_string();
+
+            if smartrest_id == "101" {
+                let child_id = payload.next().unwrap().to_string();
+                let entry = message_hm.entry(child_id).or_insert(vec![]);
+                entry.push(smartrest_id.clone());
+            }
+
+            if smartrest_id == "114" {
+                supported_operations_counter += 1;
+            }
+        }
+
+        for child in expected_101_child_devices {
+            assert!(message_hm.contains_key(*child));
+        }
+
+        // no matter what, we expected 114 to happen for all 4 child devices.
+        assert_eq!(supported_operations_counter, 4);
     }
 }
