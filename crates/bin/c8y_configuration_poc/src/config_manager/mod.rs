@@ -19,6 +19,7 @@ pub struct ConfigManager {
     events_receiver: mpsc::Receiver<ConfigInput>,
     http_responses_receiver: mpsc::Receiver<HttpResult>,
     events_sender: mpsc::Sender<ConfigInput>,
+    mqtt_publisher: Option<DynSender<MqttMessage>>,
     http_responses_sender: mpsc::Sender<HttpResult>,
     http_con: Option<DynSender<HttpRequest>>,
 }
@@ -33,6 +34,7 @@ impl ConfigManager {
             events_receiver,
             http_responses_receiver,
             events_sender,
+            mqtt_publisher: None,
             http_responses_sender,
             http_con: None,
         }
@@ -47,6 +49,22 @@ impl ConfigManager {
         self.http_con = Some(http_con);
         Ok(())
     }
+
+    /// Connect this config manager instance to some mqtt connection provider
+    pub fn with_mqtt_connection(&mut self, mqtt: &mut MqttActorBuilder) -> Result<(), LinkError> {
+        let subscriptions = vec![
+            "c8y/s/us",
+            "tedge/+/commands/res/config_snapshot",
+            "tedge/+/commands/res/config_update",
+        ]
+        .try_into()
+        .unwrap();
+
+        let mqtt_publisher = mqtt.add_client(subscriptions, self.events_sender.clone().into())?;
+
+        self.mqtt_publisher = Some(mqtt_publisher);
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -58,16 +76,6 @@ impl ActorBuilder for ConfigManager {
             directory: self.config.config_dir,
         };
 
-        let mqtt_con = mqtt_ext::new_connection(
-            runtime,
-            MqttConfig {
-                host: self.config.mqtt_host.to_string(),
-                port: self.config.mqtt_port,
-            },
-            self.events_sender.clone().into(),
-        )
-        .await?;
-
         let file_watcher = file_system_ext::new_watcher(
             runtime,
             watcher_config,
@@ -75,9 +83,14 @@ impl ActorBuilder for ConfigManager {
         )
         .await?;
 
+        let mqtt_con = self.mqtt_publisher.ok_or_else(|| LinkError::MissingPeer {
+            role: "mqtt".to_string(),
+        })?;
+
         let http_con = self.http_con.ok_or_else(|| LinkError::MissingPeer {
             role: "http".to_string(),
         })?;
+
         let peers = ConfigManagerPeers::new(
             self.events_receiver,
             self.http_responses_receiver,

@@ -507,6 +507,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "c8y_api",
+ "mqtt_channel",
  "tedge_actors",
  "tedge_config",
  "tedge_http_ext",

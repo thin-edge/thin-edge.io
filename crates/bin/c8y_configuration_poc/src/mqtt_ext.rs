@@ -1,70 +1,123 @@
 use async_trait::async_trait;
+use mqtt_channel::{Message, MqttError, SinkExt, StreamExt, TopicFilter};
+use tedge_actors::mpsc::{channel, Receiver, Sender};
 use tedge_actors::{
-    Actor, ChannelError, DynSender, MessageBoxBuilder, RuntimeError, RuntimeHandle,
-    SimpleMessageBox, SimpleMessageBoxBuilder,
+    Actor, ActorBuilder, ChannelError, DynSender, LinkError, MessageBox, PeerLinker, RuntimeError,
+    RuntimeHandle, SimpleMessageBox,
 };
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct MqttConfig {
-    pub host: String,
-    pub port: u16,
+pub type MqttMessage = mqtt_channel::Message;
+
+pub struct MqttActorBuilder {
+    pub mqtt_config: mqtt_channel::Config,
+    pub publish_channel: (Sender<MqttMessage>, Receiver<MqttMessage>),
+    pub subscriber_addresses: Vec<(TopicFilter, DynSender<MqttMessage>)>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MqttMessage {
-    pub topic: String,
-    pub payload: String,
-}
-
-/// Open a new MQTT connection using the given config
-///
-/// A call to `let pub_message_sender = new_connection(runtime, config, sub_message_sender)`
-/// spawn an MQTT actor and returns a `pub_messages` recipient of `MqttMessage`.
-/// * The `sub_message_sender` sender argument is used by this actor
-///   the forward received messages.
-/// * The `pub_message_sender` returned sender is used by the callee
-///   to send messages to have them published over MQTT.
-pub async fn new_connection(
-    runtime: &mut RuntimeHandle,
-    config: MqttConfig,
-    sub_message_sender: DynSender<MqttMessage>,
-) -> Result<DynSender<MqttMessage>, RuntimeError> {
-    let mut box_builder = SimpleMessageBoxBuilder::new(10);
-    let pub_message_sender = box_builder.get_input();
-    box_builder.set_output(sub_message_sender)?;
-
-    let actor = MqttActor::new(config);
-    let message_box = box_builder.build()?;
-    runtime.run(actor, message_box).await?;
-
-    Ok(pub_message_sender)
-}
-
-struct MqttActor {
-    // Some TCP connection an MQTT server
-}
-
-impl MqttActor {
-    fn new(_config: MqttConfig) -> Self {
-        MqttActor {}
+impl MqttActorBuilder {
+    pub fn new(config: mqtt_channel::Config) -> Self {
+        MqttActorBuilder {
+            mqtt_config: config,
+            publish_channel: channel(10),
+            subscriber_addresses: Vec::new(),
+        }
     }
 
-    async fn publish(&self, _message: MqttMessage) {}
+    pub fn register_peer(
+        &mut self,
+        topics: TopicFilter,
+    ) -> (Sender<MqttMessage>, Receiver<MqttMessage>) {
+        let (sender, receiver) = channel(10);
+        self.subscriber_addresses.push((topics, sender.into()));
+        (self.publish_channel.0.clone(), receiver)
+    }
 
-    async fn receive(&self) -> Option<MqttMessage> {
-        None
+    pub fn add_client(
+        &mut self,
+        subscriptions: TopicFilter,
+        received_message_sender: DynSender<MqttMessage>,
+    ) -> Result<DynSender<MqttMessage>, LinkError> {
+        self.subscriber_addresses
+            .push((subscriptions, received_message_sender));
+        Ok(self.publish_channel.0.clone().into())
+    }
+}
+
+impl PeerLinker<MqttMessage, MqttMessage> for MqttActorBuilder {
+    fn connect(
+        &mut self,
+        output_sender: DynSender<MqttMessage>,
+    ) -> Result<DynSender<MqttMessage>, LinkError> {
+        todo!()
+        // Indeed, this PeerLinker abstraction abstracts away too many things!
+        // Here, we need a topic filter associated to the sender.
     }
 }
 
 #[async_trait]
-impl Actor for MqttActor {
-    type MessageBox = SimpleMessageBox<MqttMessage, MqttMessage>;
+impl ActorBuilder for MqttActorBuilder {
+    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
+        let mut combined_topic_filter = TopicFilter::empty();
+        for (topic_filter, _) in self.subscriber_addresses.iter() {
+            combined_topic_filter.add_all(topic_filter.to_owned());
+        }
+        let mqtt_config = self.mqtt_config.with_subscriptions(combined_topic_filter);
+        let mqtt_actor = MqttActor::new(
+            mqtt_config,
+            self.publish_channel.1,
+            self.subscriber_addresses,
+        )
+        .await
+        .unwrap(); // Convert MqttError to RuntimeError
 
-    async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+        runtime.run(mqtt_actor, UnusedMessageBox).await?;
+        Ok(())
+    }
+}
+
+struct MqttActor {
+    mqtt_client: mqtt_channel::Connection,
+    mailbox: Receiver<MqttMessage>,
+    peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
+}
+
+impl MqttActor {
+    async fn new(
+        mqtt_config: mqtt_channel::Config,
+        mailbox: Receiver<MqttMessage>,
+        peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
+    ) -> Result<Self, MqttError> {
+        let mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
+        Ok(MqttActor {
+            mqtt_client,
+            mailbox,
+            peer_senders,
+        })
+    }
+}
+
+struct UnusedMessageBox;
+
+impl MessageBox for UnusedMessageBox {}
+
+#[async_trait]
+impl Actor for MqttActor {
+    type MessageBox = UnusedMessageBox;
+
+    async fn run(mut self, _unused: UnusedMessageBox) -> Result<(), ChannelError> {
         loop {
             tokio::select! {
-                Some(out_message) = messages.next() => self.publish(out_message).await,
-                Some(in_message) = self.receive() => messages.send(in_message).await?,
+                Some(message) = self.mailbox.next() => {
+                    self.mqtt_client.published.send(message).await.expect("TODO catch actor specific errors");
+                },
+                Some(message) = self.mqtt_client.received.next() => {
+                    for (topic_filter, peer_sender) in self.peer_senders.iter_mut() {
+                        if topic_filter.accept(&message) {
+                            let message = message.clone();
+                            peer_sender.send(message).await?;
+                        }
+                    }
+                },
                 else => return Ok(()),
             }
         }
