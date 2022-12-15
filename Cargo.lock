@@ -2893,6 +2893,7 @@ dependencies = [
  "mqtt_tests",
  "plugin_sm",
  "proptest",
+ "rand",
  "reqwest",
  "serde",
  "serde_json",

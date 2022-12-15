@@ -2,7 +2,6 @@ use crate::c8y::dynamic_discovery::*;
 use crate::c8y::json;
 use crate::core::{converter::*, error::*, size_threshold::SizeThreshold};
 use async_trait::async_trait;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::{
     error::SmartRestDeserializerError,
     operations::{get_operation, Operations},
@@ -16,6 +15,10 @@ use c8y_api::smartrest::{
 use c8y_api::{
     http_proxy::C8YHttpProxy,
     json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
+};
+use c8y_api::{
+    smartrest::smartrest_deserializer::{AvailableChildDevices, SmartRestRequestGeneric},
+    utils::child_device::new_child_device_message,
 };
 use logged_command::LoggedCommand;
 use mqtt_channel::{Message, Topic, TopicFilter};
@@ -71,7 +74,7 @@ where
     pub operations: Operations,
     operation_logs: OperationLogs,
     http_proxy: Proxy,
-    cfg_dir: PathBuf,
+    pub cfg_dir: PathBuf,
     pub children: HashMap<String, Operations>,
 }
 
@@ -367,6 +370,8 @@ where
                         &mut self.http_proxy,
                         &self.operation_logs,
                         &self.device_name,
+                        &self.cfg_dir,
+                        &mut self.children,
                     )
                     .await
                 }
@@ -386,9 +391,8 @@ where
         let supported_operations_message = self.wrap_error(create_supported_operations(
             &self.cfg_dir.join("operations").join("c8y"),
         ));
-        let sops =
-            create_child_supported_operations_fragments_message(&mut self.children, &self.cfg_dir);
-        let mut supported_child_operations_message = self.wrap_errors(sops);
+
+        let cloud_child_devices_message = create_request_for_cloud_child_devices();
 
         let device_data_message = self.wrap_error(create_device_data_fragments(
             &self.device_name,
@@ -397,15 +401,15 @@ where
 
         let pending_operations_message = self.wrap_error(create_get_pending_operations_message());
         let software_list_message = self.wrap_error(create_get_software_list_message());
-        let mut msg = vec![
+
+        Ok(vec![
             inventory_fragments_message,
             supported_operations_message,
             device_data_message,
             pending_operations_message,
             software_list_message,
-        ];
-        msg.append(&mut supported_child_operations_message);
-        Ok(msg)
+            cloud_child_devices_message,
+        ])
     }
 
     fn sync_messages(&mut self) -> Vec<Message> {
@@ -478,6 +482,8 @@ async fn parse_c8y_topics(
     http_proxy: &mut impl C8YHttpProxy,
     operation_logs: &OperationLogs,
     device_name: &str,
+    config_dir: &Path,
+    children: &mut HashMap<String, Operations>,
 ) -> Result<Vec<Message>, ConversionError> {
     let mut output: Vec<Message> = Vec::new();
     for smartrest_message in message.payload_str()?.split('\n') {
@@ -487,6 +493,8 @@ async fn parse_c8y_topics(
             http_proxy,
             operation_logs,
             device_name,
+            config_dir,
+            children,
         )
         .await
         {
@@ -574,51 +582,8 @@ fn create_supported_operations(path: &Path) -> Result<Message, ConversionError> 
     }
 }
 
-fn create_child_supported_operations_fragments_message(
-    children: &mut HashMap<String, Operations>,
-    cfg_dir: &Path,
-) -> Result<Vec<Message>, ConversionError> {
-    let mut mqtt_messages = Vec::new();
-    let ops_dir = format!("{}/{SUPPORTED_OPERATIONS_DIRECTORY}", cfg_dir.display());
-    let path: PathBuf = ops_dir.into();
-    let child_entries = fs::read_dir(&path.join(C8Y_CLOUD))
-        .map_err(|_| ConversionError::ReadDirError {
-            dir: PathBuf::from(&path),
-        })?
-        .map(|entry| entry.map(|e| e.path()))
-        .collect::<Result<Vec<PathBuf>, _>>()?
-        .into_iter()
-        .filter(|path| path.is_dir())
-        .collect::<Vec<PathBuf>>();
-
-    for cdir in child_entries {
-        supported_ops_and_register_device_message_for_child_device(
-            cdir,
-            children,
-            &mut mqtt_messages,
-        )?;
-    }
-    Ok(mqtt_messages)
-}
-
-// Check if the child is already created or not
-// If not create the child creation message and then the operations message.
-fn supported_ops_and_register_device_message_for_child_device(
-    cdir: PathBuf,
-    children: &mut HashMap<String, Operations>,
-    mqtt_messages: &mut Vec<Message>,
-) -> Result<(), ConversionError> {
-    let ops = Operations::try_new(cdir.clone())?;
-    let ops_msg = ops.create_smartrest_ops_message()?;
-    if let Some(id) = cdir.file_name() {
-        if let Some(child_id) = id.to_str() {
-            add_external_device_registration_message(child_id.to_string(), children, mqtt_messages);
-            let topic_str = format!("{SMARTREST_PUBLISH_TOPIC}/{}", child_id);
-            let topic = Topic::new_unchecked(&topic_str);
-            mqtt_messages.push(Message::new(&topic, ops_msg));
-        }
-    }
-    Ok(())
+fn create_request_for_cloud_child_devices() -> Message {
+    Message::new(&Topic::new_unchecked("c8y/s/us"), "105")
 }
 
 fn add_external_device_registration_message(
@@ -628,10 +593,7 @@ fn add_external_device_registration_message(
 ) -> bool {
     if !children.contains_key(&child_id) {
         children.insert(child_id.to_string(), Operations::default());
-        mqtt_messages.push(Message::new(
-            &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
-            format!("101,{child_id},{child_id},thin-edge.io-child"),
-        ));
+        mqtt_messages.push(new_child_device_message(&child_id));
         return true;
     }
     false
@@ -771,12 +733,72 @@ async fn execute_operation(
     }
 }
 
+/// Lists all the locally available child devices linked to this parent device.
+///
+/// The set of all locally available child devices is defined as any directory
+/// created under "`config_dir`/operations/c8y" for example "/etc/tedge/operations/c8y"
+pub fn get_local_child_devices_list(
+    path: &Path,
+) -> Result<std::collections::HashSet<String>, CumulocityMapperError> {
+    Ok(fs::read_dir(&path)
+        .map_err(|_| CumulocityMapperError::ReadDirError {
+            dir: PathBuf::from(&path),
+        })?
+        .map(|entry| entry.map(|e| e.path()))
+        .collect::<Result<Vec<PathBuf>, _>>()?
+        .into_iter()
+        .filter(|path| path.is_dir())
+        .map(|entry| entry.file_name().unwrap().to_string_lossy().to_string()) // safe unwrap
+        .collect::<std::collections::HashSet<String>>())
+}
+
+fn register_child_device_supported_operations(
+    config_dir: &Path,
+    payload: &str,
+    children: &mut HashMap<String, Operations>,
+) -> Result<Vec<Message>, CumulocityMapperError> {
+    let mut messages_vec = vec![];
+    // 106 lists the child devices that are linked with the parent device in the
+    //     cloud.
+    let path_to_child_devices = config_dir
+        .join(SUPPORTED_OPERATIONS_DIRECTORY)
+        .join(C8Y_CLOUD);
+
+    let cloud_child_devices = AvailableChildDevices::from_smartrest(payload)?;
+    let local_child_devices = get_local_child_devices_list(&path_to_child_devices)?;
+    // if there are any local child devices that are not included in the
+    // `cloud_child_devices` struct, we create them on the cloud, sending a 101
+    // message. Then proceed to declare their supported operations.
+    let difference: Vec<&String> = local_child_devices
+        .difference(&cloud_child_devices.devices)
+        .collect();
+
+    for child_id in difference {
+        // here we register new child devices, sending the 101 code
+        messages_vec.push(new_child_device_message(child_id));
+    }
+    // loop over all local child devices and update the operations
+    for child_id in local_child_devices {
+        // update the children cache with the operations supported
+        let ops = Operations::try_new(path_to_child_devices.join(&child_id))?;
+        children.insert(child_id.clone(), ops.clone());
+
+        let ops_msg = ops.create_smartrest_ops_message()?;
+        let topic_str = format!("{SMARTREST_PUBLISH_TOPIC}/{}", child_id);
+        let topic = Topic::new_unchecked(&topic_str);
+        messages_vec.push(Message::new(&topic, ops_msg));
+    }
+    Ok(messages_vec)
+}
+
 async fn process_smartrest(
     payload: &str,
     operations: &Operations,
     http_proxy: &mut impl C8YHttpProxy,
     operation_logs: &OperationLogs,
     device_name: &str,
+    config_dir: &Path,
+    children: &mut HashMap<String, Operations>,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
     match get_smartrest_device_id(payload) {
         Some(device_id) if device_id == device_name => {
@@ -788,8 +810,16 @@ async fn process_smartrest(
                 }
             }
         }
-        // Ignore all operations for child devices as not yet supported
-        _ => Ok(vec![]),
+        _ => {
+            match get_smartrest_template_id(payload).as_str() {
+                "106" => register_child_device_supported_operations(config_dir, payload, children),
+                // Ignore any other child device incoming request as not yet supported
+                _ => {
+                    debug!("Ignored. Message not yet supported: {payload}");
+                    Ok(vec![])
+                }
+            }
+        }
     }
 }
 
@@ -916,9 +946,23 @@ pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::c8y::tests::FakeC8YHttpProxy;
+    use c8y_api::smartrest::operations::Operations;
     use plugin_sm::operation_logs::OperationLogs;
+    use rand::{prelude::Distribution, seq::SliceRandom, SeedableRng};
     use tedge_test_utils::fs::TempTedgeDir;
+    use test_case::test_case;
+
+    const OPERATIONS: &[&str] = &[
+        "c8y_DownloadConfigFile",
+        "c8y_LogfileRequest",
+        "c8y_SoftwareUpdate",
+        "c8y_Command",
+    ];
+
+    const EXPECTED_CHILD_DEVICES: &[&str] = &["child-0", "child-1", "child-2", "child-3"];
 
     #[tokio::test]
     async fn test_execute_operation_is_not_blocked() {
@@ -948,9 +992,116 @@ mod tests {
                 log_dir: Default::default(),
             },
             "testDevice",
+            std::path::Path::new(""),
+            &mut std::collections::HashMap::default(),
         )
         .await
         .unwrap();
         assert_eq!(output, vec![]);
+    }
+
+    /// Creates `n` child devices named "child-n".
+    /// for each child device a `k` is selected using a random seed so that
+    /// each child devices is assigned a random set of operations.
+    ///
+    /// The resulting dir structure is the following:
+    /// .
+    /// └── operations
+    ///     └── c8y
+    ///         ├── child-0
+    ///         │   └── c8y_LogfileRequest
+    ///         ├── child-1
+    ///         │   ├── c8y_Command
+    ///         │   ├── c8y_DownloadConfigFile
+    ///         │   └── c8y_SoftwareUpdate
+    ///         ├── child-2
+    ///         │   ├── c8y_Command
+    ///         │   ├── c8y_DownloadConfigFile
+    ///         │   └── c8y_LogfileRequest
+    ///         └── child-3
+    ///             └── c8y_LogfileRequest
+    fn make_n_child_devices_with_k_operations(n: u8, ttd: &TempTedgeDir) {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(11);
+        let dist = rand::distributions::Uniform::from(1..OPERATIONS.len());
+
+        for i in 0..n {
+            let dir = ttd.dir(&format!("child-{i}"));
+
+            let k = dist.sample(&mut rng);
+            let operations: Vec<_> = OPERATIONS
+                .choose_multiple(&mut rand::thread_rng(), k)
+                .collect();
+            for op in &operations {
+                dir.file(op);
+            }
+        }
+    }
+
+    /// Tests that the child device cache is updated and that only devices represented locally are
+    /// actually updated to the cloud.
+    ///
+    /// This means that:
+    ///     - Any child device that is not present locally but is seen in the cloud, will not be
+    ///     updated with operations. This child device will not be cached.
+    ///
+    ///     - Any child device that is present locally but not in the cloud will be created and
+    ///     then supported operations will be published to the cloud and the device will be cached.
+    #[test_case("106", EXPECTED_CHILD_DEVICES; "cloud representation is empty")]
+    #[test_case("106,child-one,child-two", EXPECTED_CHILD_DEVICES; "cloud representation is completely different")]
+    #[test_case("106,child-3,child-one,child-1", &["child-0", "child-2"]; "cloud representation has some similar child devices")]
+    #[test_case("106,child-0,child-1,child-2,child-3", &[]; "cloud representation has seen all child devices")]
+    #[tokio::test]
+    async fn test_child_device_cache_is_updated(
+        cloud_child_devies: &str,
+        expected_101_child_devices: &[&str],
+    ) {
+        let ttd = TempTedgeDir::new();
+        let dir = ttd.dir("operations").dir("c8y");
+        make_n_child_devices_with_k_operations(4, &dir);
+        let mut hm: HashMap<String, Operations> = HashMap::default();
+
+        let output_messages = super::process_smartrest(
+            cloud_child_devies,
+            &Default::default(),
+            &mut FakeC8YHttpProxy {},
+            &OperationLogs {
+                log_dir: Default::default(),
+            },
+            "testDevice",
+            ttd.path(),
+            &mut hm,
+        )
+        .await
+        .unwrap();
+
+        let mut actual_child_devices: Vec<String> = hm.into_keys().collect();
+        actual_child_devices.sort();
+
+        assert_eq!(actual_child_devices, EXPECTED_CHILD_DEVICES);
+
+        let mut supported_operations_counter = 0;
+        // Checking `output_messages` for device create 101 events.
+        let mut message_hm = HashMap::new();
+        for message in output_messages {
+            let mut payload = message.payload_str().unwrap().split(',');
+            let smartrest_id = payload.next().unwrap().to_string();
+
+            if smartrest_id == "101" {
+                let child_id = payload.next().unwrap().to_string();
+                let entry = message_hm.entry(child_id).or_insert(vec![]);
+                entry.push(smartrest_id.clone());
+            }
+
+            if smartrest_id == "114" {
+                supported_operations_counter += 1;
+            }
+        }
+
+        for child in expected_101_child_devices {
+            assert!(message_hm.contains_key(*child));
+        }
+
+        // no matter what, we expected 114 to happen for all 4 child devices.
+        assert_eq!(supported_operations_counter, 4);
     }
 }

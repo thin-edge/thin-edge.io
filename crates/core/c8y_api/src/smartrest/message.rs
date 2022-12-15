@@ -37,10 +37,12 @@ mod tests {
     #[test_case("cds50223434,uninstall-test"; "valid template")]
     #[test_case("5000000000000000000000000000000000000000000000000,uninstall-test"; "long valid template")]
     #[test_case(""; "empty payload")]
+    #[test_case("106"; "106 but no child devices")]
     fn extract_smartrest_template(payload: &str) {
         match get_smartrest_template_id(payload) {
             id if id.contains("cds50223434")
                 || id.contains("5000000000000000000000000000000000000000000000000")
+                || id.contains("106")
                 || id.contains("") =>
             {
                 assert!(true)
