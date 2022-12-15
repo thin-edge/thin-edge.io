@@ -8,6 +8,7 @@ use tedge_actors::{
 
 pub type MqttMessage = mqtt_channel::Message;
 
+#[derive(Debug)]
 pub enum MqttActorMessage {
     DirectMessage(mqtt_channel::Message),
     PeerMessage(mqtt_channel::Message),
@@ -89,7 +90,6 @@ struct MqttMessageBox {
     peer_receiver: Receiver<MqttMessage>,
     peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
 }
-impl MessageBox for MqttMessageBox {}
 
 impl MqttMessageBox {
     async fn new(
@@ -104,19 +104,26 @@ impl MqttMessageBox {
             peer_senders,
         })
     }
+}
 
-    pub async fn recv(&mut self) -> MqttActorMessage {
+#[async_trait]
+impl MessageBox for MqttMessageBox {
+    type Input = MqttActorMessage;
+    type Output = MqttActorMessage;
+
+    async fn recv(&mut self) -> Option<MqttActorMessage> {
         tokio::select! {
             Some(message) = self.peer_receiver.next() => {
-                MqttActorMessage::PeerMessage(message)
+                Some(MqttActorMessage::PeerMessage(message))
             },
             Some(message) = self.mqtt_client.received.next() => {
-                MqttActorMessage::DirectMessage(message)
+                Some(MqttActorMessage::DirectMessage(message))
             },
+            else => None,
         }
     }
 
-    pub async fn send(&mut self, message: MqttActorMessage) -> Result<(), ChannelError> {
+    async fn send(&mut self, message: MqttActorMessage) -> Result<(), ChannelError> {
         match message {
             MqttActorMessage::DirectMessage(message) => {
                 for (topic_filter, peer_sender) in self.peer_senders.iter_mut() {
@@ -145,9 +152,9 @@ impl Actor for MqttActor {
     type MessageBox = MqttMessageBox;
 
     async fn run(mut self, mut mailbox: MqttMessageBox) -> Result<(), ChannelError> {
-        loop {
-            let message = mailbox.recv().await;
+        while let Some(message) = mailbox.recv().await {
             mailbox.send(message).await?;
         }
+        Ok(())
     }
 }

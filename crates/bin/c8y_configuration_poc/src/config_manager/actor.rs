@@ -94,4 +94,35 @@ impl ConfigManagerMessageBox {
     }
 }
 
-impl MessageBox for ConfigManagerMessageBox {}
+#[async_trait]
+impl MessageBox for ConfigManagerMessageBox {
+    type Input = ConfigInputAndResponse;
+    type Output = ConfigOutput;
+
+    async fn recv(&mut self) -> Option<Self::Input> {
+        tokio::select! {
+            Some(message) = self.events.next() => {
+                match message {
+                    ConfigInput::MqttMessage(message) => {
+                        Some(ConfigInputAndResponse::MqttMessage(message))
+                    },
+                    ConfigInput::FileEvent(message) => {
+                        Some(ConfigInputAndResponse::FileEvent(message))
+                    }
+                }
+            },
+            Some(message) = self.http_responses.next() => {
+                Some(ConfigInputAndResponse::HttpResult(message))
+            },
+            else => None,
+        }
+    }
+
+    async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
+        match message {
+            ConfigOutput::MqttMessage(msg) => self.mqtt_con.send(msg).await,
+            ConfigOutput::HttpRequest(msg) => self.http_con.send(msg).await,
+            ConfigOutput::FileRequest(msg) => self.file_watcher.send(msg).await,
+        }
+    }
+}

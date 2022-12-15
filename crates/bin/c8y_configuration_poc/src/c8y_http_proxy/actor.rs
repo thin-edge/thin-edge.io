@@ -41,7 +41,19 @@ impl C8YHttpProxyMessageBox {
     }
 }
 
-impl MessageBox for C8YHttpProxyMessageBox {}
+#[async_trait]
+impl MessageBox for C8YHttpProxyMessageBox {
+    type Input = ();
+    type Output = ();
+
+    async fn recv(&mut self) -> Option<Self::Input> {
+        todo!()
+    }
+
+    async fn send(&mut self, _message: Self::Output) -> Result<(), ChannelError> {
+        todo!()
+    }
+}
 
 impl C8YHttpProxyActor {
     pub async fn run(self, mut messages: C8YHttpProxyMessageBox) -> Result<(), ChannelError> {
