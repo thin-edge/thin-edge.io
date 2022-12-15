@@ -110,13 +110,6 @@ jobs:
           mdbook-version: "0.4.18"
           #mdbook-version: 'latest'
 
-      - name: Install mdbook-toc
-        uses: actions-rs/install@v0.1
-        # https://github.com/marketplace/actions/rust-cargo-install
-        with:
-          crate: mdbook-toc
-          version: latest
-
       - name: Install mdbook-mermaid
         uses: actions-rs/install@v0.1
         # https://github.com/marketplace/actions/rust-cargo-install
