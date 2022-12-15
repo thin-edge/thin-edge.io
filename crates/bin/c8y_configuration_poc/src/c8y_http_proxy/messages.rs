@@ -7,16 +7,16 @@ fan_in_message_type!(C8YRestResponse[EventId, Unit]: Debug);
 
 #[derive(Debug)]
 pub struct UploadLogBinary {
-    log_type: String,
-    log_content: String,
-    child_device_id: Option<String>,
+    _log_type: String,
+    _log_content: String,
+    _child_device_id: Option<String>,
 }
 
 #[derive(Debug)]
 pub struct UploadConfigFile {
-    config_path: PathBuf,
-    config_type: String,
-    child_device_id: Option<String>,
+    _config_path: PathBuf,
+    _config_type: String,
+    _child_device_id: Option<String>,
 }
 
 pub type EventId = String;

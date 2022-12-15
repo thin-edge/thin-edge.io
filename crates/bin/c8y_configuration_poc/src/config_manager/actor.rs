@@ -2,7 +2,7 @@ use crate::file_system_ext::{FileEvent, FileRequest};
 use crate::mqtt_ext::MqttMessage;
 use async_trait::async_trait;
 use tedge_actors::{
-    adapt, fan_in_message_type, mpsc, Actor, ChannelError, DynSender, MessageBox, StreamExt,
+    fan_in_message_type, mpsc, Actor, ChannelError, DynSender, MessageBox, StreamExt,
 };
 use tedge_http_ext::{HttpError, HttpRequest, HttpResponse};
 
@@ -29,8 +29,9 @@ impl ConfigManagerActor {
         messages: &mut ConfigManagerMessageBox,
     ) -> Result<(), ChannelError> {
         // ..
-        let request = todo!();
-        let response = messages.send_http_request(request).await?;
+        let request = HttpRequest::new(Default::default(), "https://my-tenant.c8y.io")
+            .expect("well formed url");
+        let _response = messages.send_http_request(request).await?;
         // ..
         Ok(())
     }
@@ -53,13 +54,6 @@ impl Actor for ConfigManagerActor {
         }
         Ok(())
     }
-}
-
-pub struct ConfigManagerBoxBuilder {
-    events_receiver: mpsc::Receiver<ConfigInput>,
-    http_responses_receiver: mpsc::Receiver<HttpResult>,
-    events_sender: mpsc::Sender<ConfigInput>,
-    http_responses_sender: mpsc::Sender<HttpResult>,
 }
 
 pub struct ConfigManagerMessageBox {

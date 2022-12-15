@@ -9,6 +9,7 @@ mod actor;
 mod messages;
 
 /// Configuration of C8Y REST API
+#[derive(Default)]
 pub struct C8YHttpConfig {
     pub c8y_url: String,
 }
@@ -18,7 +19,7 @@ pub struct C8YHttpConfig {
 /// This is an actor builder.
 pub struct C8YHttpProxyBuilder {
     /// Config
-    config: C8YHttpConfig,
+    _config: C8YHttpConfig,
 
     /// Sender and receiver for peers requests
     requests: (mpsc::Sender<C8YRestRequest>, mpsc::Receiver<C8YRestRequest>),
@@ -38,9 +39,9 @@ pub struct C8YHttpProxyBuilder {
 }
 
 impl C8YHttpProxyBuilder {
-    fn new(config: C8YHttpConfig) -> Self {
+    pub fn new(config: C8YHttpConfig) -> Self {
         C8YHttpProxyBuilder {
-            config,
+            _config: config,
             requests: mpsc::channel(10),
             http_responses: mpsc::channel(1),
             responses: None,
@@ -49,7 +50,7 @@ impl C8YHttpProxyBuilder {
     }
 
     /// Connect this instance to some http connection provider
-    pub fn set_http_connection(
+    pub fn with_http_connection(
         &mut self,
         http: &mut impl PeerLinker<HttpRequest, HttpResult>,
     ) -> Result<(), LinkError> {
@@ -61,7 +62,7 @@ impl C8YHttpProxyBuilder {
 
 #[async_trait]
 impl ActorBuilder for C8YHttpProxyBuilder {
-    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
+    async fn spawn(self, _runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
         todo!()
     }
 }

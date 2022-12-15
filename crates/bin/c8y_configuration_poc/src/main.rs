@@ -3,6 +3,7 @@ mod config_manager;
 mod file_system_ext;
 mod mqtt_ext;
 
+use crate::c8y_http_proxy::{C8YHttpConfig, C8YHttpProxyBuilder};
 use crate::config_manager::{ConfigManagerBuilder, ConfigManagerConfig};
 use crate::mqtt_ext::MqttActorBuilder;
 use tedge_actors::Runtime;
@@ -13,19 +14,22 @@ async fn main() -> anyhow::Result<()> {
     let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
     // Create actor instances
-    let mut mqtt_actor_builder = MqttActorBuilder::new(mqtt_channel::Config::default());
+    let mut mqtt_actor = MqttActorBuilder::new(mqtt_channel::Config::default());
     let mut http_actor =
         tedge_http_ext::HttpActorBuilder::new(tedge_http_ext::HttpConfig::default())?;
+    let mut c8y_http_proxy_actor = C8YHttpProxyBuilder::new(C8YHttpConfig::default());
     let mut config_actor =
-        ConfigManagerBuilder::new(ConfigManagerConfig::from_tedge_config("/etc/tedge")?);
+        ConfigManagerBuilder::new(ConfigManagerConfig::from_default_tedge_config()?);
 
     // Connect actor instances
+    c8y_http_proxy_actor.with_http_connection(&mut http_actor)?;
     config_actor.with_http_connection(&mut http_actor)?;
-    config_actor.with_mqtt_connection(&mut mqtt_actor_builder)?;
+    config_actor.with_mqtt_connection(&mut mqtt_actor)?;
 
     // Run the actors
-    runtime.spawn(mqtt_actor_builder).await?;
+    runtime.spawn(mqtt_actor).await?;
     runtime.spawn(http_actor).await?;
+    runtime.spawn(c8y_http_proxy_actor).await?;
     runtime.spawn(config_actor).await?;
 
     runtime.run_to_completion().await?;

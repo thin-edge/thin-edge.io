@@ -8,10 +8,10 @@ pub struct WatcherConfig {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FileEvent {
-    FileDeleted(PathBuf),
-    FileCreated(PathBuf),
-    DirectoryDeleted(PathBuf),
-    DirectoryCreated(PathBuf),
+    //FileDeleted(PathBuf),
+    //FileCreated(PathBuf),
+    //DirectoryDeleted(PathBuf),
+    //DirectoryCreated(PathBuf),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

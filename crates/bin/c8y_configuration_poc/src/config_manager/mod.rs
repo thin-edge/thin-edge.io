@@ -1,8 +1,8 @@
 mod actor;
 mod config;
 
+use crate::file_system_ext;
 use crate::mqtt_ext::*;
-use crate::{file_system_ext, mqtt_ext};
 use actor::*;
 use async_trait::async_trait;
 pub use config::*;
