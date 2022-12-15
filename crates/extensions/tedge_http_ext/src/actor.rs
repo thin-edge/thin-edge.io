@@ -19,7 +19,7 @@ impl Actor for HttpActor {
     type MessageBox = HttpMessageBox;
 
     async fn run(self, mut messages: HttpMessageBox) -> Result<(), ChannelError> {
-        while let Some((client_id, request)) = messages.next_request().await {
+        while let Some((client_id, request)) = messages.recv().await {
             let request = request.into();
             let client = self.client.clone();
 
@@ -33,7 +33,7 @@ impl Actor for HttpActor {
             });
 
             // Send the response back to the client
-            messages.send_response_once_done(pending_result);
+            messages.send_response_once_done(pending_result)
         }
 
         Ok(())
@@ -112,4 +112,16 @@ impl HttpMessageBox {
     }
 }
 
-impl MessageBox for HttpMessageBox {}
+#[async_trait]
+impl MessageBox for HttpMessageBox {
+    type Input = (usize, HttpRequest);
+    type Output = (usize, HttpResult);
+
+    async fn recv(&mut self) -> Option<Self::Input> {
+        self.next_request().await
+    }
+
+    async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
+        self.responses.send(message).await
+    }
+}
