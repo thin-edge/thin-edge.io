@@ -43,7 +43,10 @@ use super::{
     error::CumulocityMapperError,
     fragments::{C8yAgentFragment, C8yDeviceDataFragment},
 };
-use c8y_api::smartrest::message::{get_smartrest_device_id, get_smartrest_template_id};
+use c8y_api::smartrest::message::{
+    get_last_line_for_smartrest, get_smartrest_device_id, get_smartrest_template_id,
+    sanitize_for_smartrest, MAX_PAYLOAD_LIMIT_IN_BYTES,
+};
 use c8y_api::smartrest::topic::{C8yTopic, MapperSubscribeTopic, SMARTREST_PUBLISH_TOPIC};
 
 const C8Y_CLOUD: &str = "c8y";
@@ -757,19 +760,22 @@ async fn execute_operation(
                 // execute the command and wait until it finishes
                 // mqtt client publishes failed or successful depending on the exit code
                 if let Ok(output) = child_process.wait_with_output(logger).await {
-                    debug!("{output:?}");
                     match output.status.code() {
                         Some(0) => {
-                            let stdout = String::from_utf8(output.stdout).unwrap_or_default();
-                            let successful_str = format!("503,{op_name},\"{stdout}\"");
+                            let sanitized_stdout =
+                                sanitize_for_smartrest(output.stdout, MAX_PAYLOAD_LIMIT_IN_BYTES);
+                            let successful_str = format!("503,{op_name},\"{sanitized_stdout}\"");
                             mqtt_publisher.send(Message::new(&topic, successful_str.as_str())).await
                                     .unwrap_or_else(|err| {
                                         error!("Failed to publish a message: {successful_str}. Error: {err}")
                                     })
                         }
                         _ => {
-                            let stderr = String::from_utf8(output.stderr).unwrap_or_default();
-                            let failed_str = format!("502,{op_name},\"{stderr}\"");
+                            let last_line = get_last_line_for_smartrest(
+                                output.stderr,
+                                MAX_PAYLOAD_LIMIT_IN_BYTES,
+                            );
+                            let failed_str = format!("502,{op_name},\"{last_line}\"");
                             mqtt_publisher
                                 .send(Message::new(&topic, failed_str.as_str()))
                                 .await
