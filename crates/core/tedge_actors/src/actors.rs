@@ -36,7 +36,7 @@ mod tests {
             mut self,
             mut messages: SimpleMessageBox<String, String>,
         ) -> Result<(), ChannelError> {
-            while let Some(message) = messages.next().await {
+            while let Some(message) = messages.recv().await {
                 messages.send(message).await?
             }
             Ok(())
@@ -165,7 +165,22 @@ mod tests {
         }
     }
 
-    impl MessageBox for SpecificMessageBox {}
+    #[async_trait]
+    impl MessageBox for SpecificMessageBox {
+        type Input = String;
+        type Output = DoMsg;
+
+        async fn recv(&mut self) -> Option<Self::Input> {
+            self.input.next().await
+        }
+
+        async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
+            match message {
+                DoMsg::DoThis(message) => self.peer_1.send(message).await,
+                DoMsg::DoThat(message) => self.peer_2.send(message).await,
+            }
+        }
+    }
 
     pub struct SpecificMessageBoxBuilder {
         sender: mpsc::Sender<String>,
@@ -184,14 +199,8 @@ mod tests {
                 peer_2: None,
             }
         }
-    }
 
-    impl MessageBoxBuilder for SpecificMessageBoxBuilder {
-        type Input = String;
-        type Output = DoMsg;
-        type MessageBox = SpecificMessageBox;
-
-        fn build(self) -> Result<Self::MessageBox, LinkError> {
+        pub fn build(self) -> Result<SpecificMessageBox, LinkError> {
             Ok(SpecificMessageBox {
                 input: self.input,
                 peer_1: self.peer_1.expect("peer_1 has been set"),
@@ -199,11 +208,11 @@ mod tests {
             })
         }
 
-        fn get_input(&self) -> DynSender<Self::Input> {
+        pub fn get_input(&self) -> DynSender<String> {
             self.sender.clone().into()
         }
 
-        fn set_output(&mut self, output: DynSender<Self::Output>) -> Result<(), LinkError> {
+        pub fn set_output(&mut self, output: DynSender<DoMsg>) -> Result<(), LinkError> {
             self.peer_1 = Some(adapt(&output));
             self.peer_2 = Some(adapt(&output));
             Ok(())
