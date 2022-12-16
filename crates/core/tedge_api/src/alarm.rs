@@ -42,6 +42,16 @@ pub enum ThinEdgeJsonDeserializerError {
 
     #[error("Unsupported external device ID in topic: {0}")]
     UnsupportedExternalDeviceId(String),
+
+    #[error("Parsing of alarm message received on topic: {topic} failed due to error: {error}. Snipped payload: {payload}")]
+    FailedToParseJsonPayload {
+        topic: String,
+        error: String,
+        payload: String,
+    },
+
+    #[error("Failed to parse as an UTF-8 string the payload received on topic: {topic}, due to error: {error}.")]
+    FailedToParsePayloadToString { topic: String, error: String },
 }
 
 impl TryFrom<&str> for AlarmSeverity {
