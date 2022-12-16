@@ -1155,7 +1155,7 @@ async fn mapper_handles_multiline_sm_requests() {
 async fn mapper_publishes_supported_operations() {
     // The test assures tede-mapper reads/parses the operations from operations directory and
     // correctly publishes the supported operations message on `c8y/s/us`
-    // and verifies the supported operations that are published by the tedge_mapper.
+    // and verifies the supported operations that are published by the tedge-mapper.
     let broker = mqtt_tests::test_mqtt_broker();
     let cfg_dir = TempTedgeDir::new();
     create_thin_edge_operations(&cfg_dir, vec!["c8y_TestOp1", "c8y_TestOp2"]);
@@ -1190,6 +1190,8 @@ async fn mapper_publishes_child_device_create_message() {
 
     publish_a_fake_jwt_token(broker).await;
 
+    broker.publish("c8y/s/ds", "106,child-one").await.unwrap();
+
     // Expect smartrest message on `c8y/s/us` with expected payload "101,child1,child1,thin-edge.io-child".
     mqtt_tests::assert_received_all_expected(
         &mut messages,
@@ -1214,6 +1216,7 @@ async fn mapper_publishes_supported_operations_for_child_device() {
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     publish_a_fake_jwt_token(broker).await;
+    broker.publish("c8y/s/ds", "106,child-one").await.unwrap();
 
     // Expect smartrest message on `c8y/s/us/child1` with expected payload "114,c8y_ChildTestOp1,c8y_ChildTestOp2.
     mqtt_tests::assert_received_all_expected(

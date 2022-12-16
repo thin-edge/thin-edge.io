@@ -22,8 +22,8 @@ Customize the log path
     ${rc}=    Execute Command    sudo tedge config set logs.path /test    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 
-Initialize tedge_agent
-    ${rc}=    Execute Command    sudo tedge_agent --init    return_stdout=False    return_rc=True
+Initialize tedge-agent
+    ${rc}=    Execute Command    sudo tedge-agent --init    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 
 Check created folders

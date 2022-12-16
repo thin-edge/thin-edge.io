@@ -1,5 +1,5 @@
 [package]
-name = "tedge_apt_plugin"
+name = "tedge-apt-plugin"
 version = "0.8.1"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
@@ -10,8 +10,11 @@ homepage = "https://thin-edge.io"
 repository = "https://github.com/thin-edge/thin-edge.io"
 
 [package.metadata.deb]
+replaces = "tedge_apt_plugin"
+conflicts = "tedge_apt_plugin (<= 0.8.1)"
+breaks = "tedge_apt_plugin (<= 0.8.1)"
 assets = [
-    ["target/release/tedge_apt_plugin", "/etc/tedge/sm-plugins/apt", "755"],
+    ["target/release/tedge-apt-plugin", "/etc/tedge/sm-plugins/apt", "755"],
 ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

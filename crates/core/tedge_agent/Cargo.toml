@@ -1,20 +1,24 @@
 [package]
-name = "tedge_agent"
+name = "tedge-agent"
 version = "0.8.1"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
 license = "Apache-2.0"
-description = "tedge_agent interacts with a Cloud Mapper and one or more Software Plugins"
+description = "tedge-agent interacts with a Cloud Mapper and one or more Software Plugins"
 homepage = "https://thin-edge.io"
 repository = "https://github.com/thin-edge/thin-edge.io"
 
 [package.metadata.deb]
-pre-depends = "tedge_mapper"
-maintainer-scripts = "../../../configuration/debian/tedge_agent"
+pre-depends = "tedge-mapper"
+replaces = "tedge_agent"
+conflicts = "tedge_agent (<= 0.8.1)"
+breaks = "tedge_agent (<= 0.8.1)"
+provides = "tedge_agent"
+maintainer-scripts = "../../../configuration/debian/tedge-agent"
 assets = [
     ["../../../configuration/init/systemd/tedge-agent.service", "/lib/systemd/system/tedge-agent.service", "644"],
-    ["target/release/tedge_agent", "/usr/bin/tedge_agent", "755"],
+    ["target/release/tedge-agent", "/usr/bin/tedge-agent", "755"],
 ]
 
 # Contrary to the other daemons,

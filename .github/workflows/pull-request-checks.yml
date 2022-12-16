@@ -81,7 +81,13 @@ jobs:
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
       - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@nightly
+      
+      - name: Install nightly toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+
       - name: Run cargo-udeps
         uses: aig787/cargo-udeps-action@v1
         with:
@@ -103,13 +109,6 @@ jobs:
         with:
           mdbook-version: "0.4.18"
           #mdbook-version: 'latest'
-
-      - name: Install mdbook-toc
-        uses: actions-rs/install@v0.1
-        # https://github.com/marketplace/actions/rust-cargo-install
-        with:
-          crate: mdbook-toc
-          version: latest
 
       - name: Install mdbook-mermaid
         uses: actions-rs/install@v0.1
@@ -140,6 +139,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
+      - name: enable toolchain via github action
+        uses: dtolnay/rust-toolchain@1.63.0
+        with:
+          components: rustfmt
 
       - name: Cargo fmt --version
         uses: actions-rs/cargo@v1
@@ -237,7 +241,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: build
-          args: -p tedge_dummy_plugin
+          args: -p tedge-dummy-plugin
 
       - name: Cargo test
         uses: actions-rs/cargo@v1

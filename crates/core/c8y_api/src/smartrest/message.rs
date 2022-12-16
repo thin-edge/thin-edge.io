@@ -30,7 +30,7 @@ pub fn get_smartrest_template_id(payload: &str) -> String {
 /// Sanitize the input to be SmartREST compatible.
 /// If the input contains invalid UTF-8, it returns an empty String.
 /// - Remove all control characters except for `\n`, `\t`, `\r`.
-/// - Double quote is escaped as `\"`.
+/// - Double quote is escaped as `\"\"`.
 /// - Strip the input according to `max_size`.
 pub fn sanitize_for_smartrest(input: Vec<u8>, max_size: usize) -> String {
     String::from_utf8(input)
@@ -81,10 +81,12 @@ mod tests {
     #[test_case("cds50223434,uninstall-test"; "valid template")]
     #[test_case("5000000000000000000000000000000000000000000000000,uninstall-test"; "long valid template")]
     #[test_case(""; "empty payload")]
+    #[test_case("106"; "106 but no child devices")]
     fn extract_smartrest_template(payload: &str) {
         match get_smartrest_template_id(payload) {
             id if id.contains("cds50223434")
                 || id.contains("5000000000000000000000000000000000000000000000000")
+                || id.contains("106")
                 || id.contains("") =>
             {
                 assert!(true)

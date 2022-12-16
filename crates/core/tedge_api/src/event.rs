@@ -41,6 +41,16 @@ pub mod error {
 
         #[error(transparent)]
         SerdeJsonError(#[from] serde_json::error::Error),
+
+        #[error("Parsing of alarm message received on topic: {topic} failed due to error: {error}. Snipped payload: {payload}")]
+        FailedToParseJsonPayload {
+            topic: String,
+            error: String,
+            payload: String,
+        },
+
+        #[error("Failed to parse as an UTF-8 string the payload received on topic: {topic}, due to error: {error}.")]
+        FailedToParsePayloadToString { topic: String, error: String },
     }
 }
 

@@ -28,7 +28,7 @@ PAGE_SIZE = "500"
 # sudo is currently needed to avoid "User's Home Directory not found."
 CMD_PUBLISH_REST = "sudo tedge mqtt pub c8y/s/us 211,%i"
 
-CMD_PUBLISH_JSON = "sawtooth_publisher %s %s 1 flux"
+CMD_PUBLISH_JSON = "sawtooth-publisher %s %s 1 flux"
 
 
 def is_timezone_aware(stamp):  #:datetime):
@@ -261,7 +261,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--mode", help="Mode JSON or REST")
-    parser.add_argument("-pub", "--publisher", help="Path to sawtooth_publisher")
+    parser.add_argument("-pub", "--publisher", help="Path to sawtooth-publisher")
     parser.add_argument("-u", "--user", help="C8y username")
     parser.add_argument("-t", "--tenant", help="C8y tenant")
     parser.add_argument("-id", "--id", help="Device ID for C8y")

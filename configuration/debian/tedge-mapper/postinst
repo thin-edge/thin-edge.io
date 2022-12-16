@@ -2,9 +2,14 @@
 
 set -e
 
+# Deprecate: Remove symlink in 1.x release
+if [ ! -e /usr/bin/tedge_mapper ]; then
+    ln -s /usr/bin/tedge-mapper /usr/bin/tedge_mapper
+fi
+
 ### Initialize the mapper
-sudo -u tedge -- tedge_mapper --init c8y
-sudo -u tedge -- tedge_mapper --init az
+sudo -u tedge -- tedge-mapper --init c8y
+sudo -u tedge -- tedge-mapper --init az
 
 #DEBHELPER#
 
@@ -24,4 +29,9 @@ if command -v systemctl >/dev/null; then
     if systemctl is-active --quiet collectd.service; then
         systemctl start tedge-mapper-collectd.service
     fi
+fi
+
+if [ -f /var/lib/dpkg/info/tedge_mapper.postrm ]; then
+    # Prevent purge from deleting files related to the package
+    rm -f /var/lib/dpkg/info/tedge_mapper.postrm
 fi

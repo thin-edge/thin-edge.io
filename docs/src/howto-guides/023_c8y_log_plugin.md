@@ -1,14 +1,14 @@
 # How to retrieve logs with the log plugin
 
 You can now access any type of logs directly from your Cumulocity UI, using the
-`c8y_log_plugin` daemon. To get started install the `c8y_log_plugin` via the
+`c8y-log-plugin` daemon. To get started install the `c8y-log-plugin` via the
 debian package.
 
 If you have not installed via the debian package, make sure you have the following:
 
-- run `sudo c8y_log_plugin --init`
+- run `sudo c8y-log-plugin --init`
 - a `c8y-log-plugin.service` file in `/lib/systemd/system/c8y-log-plugin.service`
-- a `c8y_log_plugin` binary in `/usr/bin/c8y_log_plugin`
+- a `c8y-log-plugin` binary in `/usr/bin/c8y-log-plugin`
 - check if `/etc/tedge/c8y/c8y-log-plugin.toml` was created
 
 After the device is connected to Cumulocity, this plugin needs to be started and

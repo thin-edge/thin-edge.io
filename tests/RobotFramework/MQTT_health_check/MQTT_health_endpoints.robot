@@ -22,7 +22,7 @@ Start c8y-log-plugin
     Should Be Equal As Integers    ${rc}    0
 
 Note the PID Number
-    ${pid}    Execute Command    pgrep c8y_log_plugin
+    ${pid}    Execute Command    pgrep c8y-log-plugin
     Set Suite Variable    ${pid}
 
 Start MQTT Subscriber c8y-log-plugin & send empty message

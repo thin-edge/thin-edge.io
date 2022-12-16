@@ -1,7 +1,7 @@
 from pysys.basetest import BaseTest
 
 """
-Validate tedge_mapper c8y init session feature.
+Validate tedge-mapper c8y init session feature.
 
 Given unconnected system
 
@@ -27,7 +27,7 @@ class TedgeSMMapperInitSession(EnvironmentC8y):
         self.sudo = "/usr/bin/sudo"
         self.tedge = "/usr/bin/tedge"
         self.systemctl = "/usr/bin/systemctl"
-        self.tedge_mapper = "/usr/bin/tedge_mapper"
+        self.tedge_mapper = "/usr/bin/tedge-mapper"
 
         self.addCleanupFunction(self.init_cleanup)
 

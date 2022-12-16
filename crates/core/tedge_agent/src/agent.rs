@@ -748,7 +748,7 @@ mod tests {
         ttd.dir("sm-plugins");
         ttd.dir("tmp");
         ttd.dir("logs");
-        ttd.dir("run").dir("tedge_agent");
+        ttd.dir("run").dir("tedge-agent");
         ttd.dir("run").dir("lock");
         let system_toml_content = toml::toml! {
             [system]

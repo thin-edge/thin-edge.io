@@ -286,7 +286,7 @@ mod tests {
         // subscribe to `sub_topic`
         let mut messages = broker.messages_published_on(sub_topic).await;
 
-        // run tedge_mapper in background
+        // run tedge-mapper in background
         tokio::spawn(async move {
             mapper
                 .run(None)

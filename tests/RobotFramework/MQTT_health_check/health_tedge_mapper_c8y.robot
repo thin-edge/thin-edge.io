@@ -32,14 +32,14 @@ Start watchdog service
     ${rc}=    Execute Command    sudo systemctl start tedge-watchdog.service    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
     Sleep    10s
-Check PID of tedge_mapper
-    ${pid}=    Execute Command    pgrep 'tedge_mapper c8y'
+Check PID of tedge-mapper
+    ${pid}=    Execute Command    pgrep 'tedge-mapper c8y'
     Set Suite Variable    ${pid}
 Kill the PID
     ${rc}=    Execute Command    sudo kill -9 ${pid}    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
-Recheck PID of tedge_mapper
-    ${pid1}=    Execute Command    pgrep 'tedge_mapper c8y'
+Recheck PID of tedge-mapper
+    ${pid1}=    Execute Command    pgrep 'tedge-mapper c8y'
     Set Suite Variable    ${pid1}
 Compare PID change
     Should Not Be Equal    ${pid}    ${pid1}

@@ -33,17 +33,17 @@ This is a small and flexible publisher for deterministic test data.
 // Create temperature measurement (211)
 // Create battery measurement (212)
 
-// sawtooth_publisher <wait_time_ms> <height> <iterations> <template>
+// sawtooth-publisher <wait_time_ms> <height> <iterations> <template>
 //
-// cargo run sawtooth_publisher 100 100 100 flux
-// cargo run sawtooth_publisher 1000 10 10 sawmill
+// cargo run sawtooth-publisher 100 100 100 flux
+// cargo run sawtooth-publisher 1000 10 10 sawmill
 
 #[tokio::main(flavor = "current_thread")]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     // wait time, template, tooth-height,
     if args.len() != 5 {
-        println!("Usage: sawtooth_publisher <wait_time_ms> <height> <iterations> <template: sawmill|flux>");
+        println!("Usage: sawtooth-publisher <wait_time_ms> <height> <iterations> <template: sawmill|flux>");
         panic!("Errof: Not enough Command line Arguments");
     }
     let wait: i32 = args[1].parse().expect("Cannot parse wait time");

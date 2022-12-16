@@ -62,15 +62,14 @@ To run an robot file ssh to 192.168.1.4 and use the following command structure:
 		4. thin-edge.io installation
 		5. Install Tedge mapper
 		6. Install Tedge agent
-		7. Install Tedge apama plugin
-		8. Install tedge apt plugin
-		9. Install Install c8y log plugin
-		10. Install c8y configuration plugin
-		11. Install Tedge watchdog
-		12. Create self-signed certificate
-		13. Set c8y URL
-		14. Upload certificate 
-		15. Connect to c8y
+		7. Install tedge apt plugin
+		8. Install Install c8y log plugin
+		9. Install c8y configuration plugin
+		10. Install Tedge watchdog
+		11. Create self-signed certificate
+		12. Set c8y URL
+		13. Upload certificate 
+		14. Connect to c8y
 
 		4.2. if yes than thin-edge.io will be uninstalled using the uninstallation script to purge it and than steps from 4.1 will take place
 	

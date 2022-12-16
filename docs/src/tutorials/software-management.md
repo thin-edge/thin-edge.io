@@ -13,12 +13,12 @@ Three components are required on your devices to enable software management:
 
 1. Software management mapper for Cumulocity cloud acts as a proxy between the cloud and the device.
    This translates the cloud specific message type into device specific type and vice-versa.(Example: Cumulocity smart-rest to/from thin-edge json)
-   The messages from cloud will be translated and forwarded to the `tedge_agent` and messages from `tedge_agent` will be translated and sent to cumulocity cloud.
-   You can find this process with the name `tedge_mapper c8y` in `ps` once it starts.
+   The messages from cloud will be translated and forwarded to the `tedge-agent` and messages from `tedge-agent` will be translated and sent to cumulocity cloud.
+   You can find this process with the name `tedge-mapper c8y` in `ps` once it starts.
 
 2. Software management agent
    The thin-edge software management agent is the one that calls the plugins.
-   You can find this process with the name `tedge_agent` in `ps` once it starts.
+   You can find this process with the name `tedge-agent` in `ps` once it starts.
 
 3. Software management plugin
    Plugins are the interfaces that call the package manager (example: apt/apt-get) to do the software management operations (Install, Remove or update)

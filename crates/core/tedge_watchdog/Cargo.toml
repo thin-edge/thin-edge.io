@@ -1,11 +1,11 @@
 [package]
-name = "tedge_watchdog"
+name = "tedge-watchdog"
 version = "0.8.1"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
 license = "Apache-2.0"
-description = "tedge_watchdog checks the health of all the thin-edge.io components/services."
+description = "tedge-watchdog checks the health of all the thin-edge.io components/services."
 homepage = "https://thin-edge.io"
 repository = "https://github.com/thin-edge/thin-edge.io"
 
@@ -13,10 +13,13 @@ repository = "https://github.com/thin-edge/thin-edge.io"
 
 [package.metadata.deb]
 pre-depends = "tedge"
-maintainer-scripts = "../../../configuration/debian/tedge_watchdog"
+replaces = "tedge_watchdog"
+conflicts = "tedge_watchdog (<= 0.8.1)"
+breaks = "tedge_watchdog (<= 0.8.1)"
+maintainer-scripts = "../../../configuration/debian/tedge-watchdog"
 assets = [
     ["../../../configuration/init/systemd/tedge-watchdog.service", "/lib/systemd/system/tedge-watchdog.service", "644"],
-    ["target/release/tedge_watchdog", "/usr/bin/tedge_watchdog", "755"],
+    ["target/release/tedge-watchdog", "/usr/bin/tedge-watchdog", "755"],
 ]
 
 # Required for DEBHELPER

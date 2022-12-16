@@ -7,10 +7,10 @@ Validate tedge agent init session feature.
 
 Given unconnected system
 
-When we start tedge_agent to initialize session and exit
+When we start tedge-agent to initialize session and exit
 When we start publish the software list request
 When we start a subscriber to get the response for the request
-When we start the tedge_agent, it gets the previous response and responds
+When we start the tedge-agent, it gets the previous response and responds
 Then stop the agent and the subscriber
 Then validate the output of the subscriber for response
 """
@@ -19,13 +19,13 @@ Then validate the output of the subscriber for response
 class AgentInitSession(BaseTest):
     def setup(self):
         self.sudo = "/usr/bin/sudo"
-        self.tedge_agent = "/usr/bin/tedge_agent"
+        self.tedge_agent = "/usr/bin/tedge-agent"
         self.tedge = "/usr/bin/tedge"
         self.systemctl = "/usr/bin/systemctl"
 
         remove_lock = self.startProcess(
             command=self.sudo,
-            arguments=["rm", "-rf", "/var/lock/tedge_agent.lock"],
+            arguments=["rm", "-rf", "/var/lock/tedge-agent.lock"],
             stdouterr="remove_lock",
         )
 

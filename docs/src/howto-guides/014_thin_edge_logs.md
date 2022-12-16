@@ -14,7 +14,7 @@ cloud can be accessed as below
 
 `journalctl -u tedge-mapper-c8y.service`
 
-> Note: Run `tedge_mapper --debug c8y` to log more debug messages
+> Note: Run `tedge-mapper --debug c8y` to log more debug messages
 
 #### Tedge Azure mapper
 The log messages of the Azure mapper component that sends the measurement data from the thin-edge device to the Azure
@@ -22,7 +22,7 @@ cloud can be accessed as below.
 
 `journalctl -u tedge-mapper-az.service`
 
-> Note: Run `tedge_mapper --debug az` to log more debug messages
+> Note: Run `tedge-mapper --debug az` to log more debug messages
 
 ### Device monitoring logs
 The thin-edge device monitoring component logs can be found as below
@@ -32,7 +32,7 @@ The log messages of the collectd mapper that sends the monitoring data to the cl
 
 `journalctl -u tedge-mapper-collectd.service`
 
-> Note: Run `tedge_mapper --debug collectd` to log more debug messages
+> Note: Run `tedge-mapper --debug collectd` to log more debug messages
 
 ### Software Management logs
 This section describes how to access the software management component logs
@@ -53,7 +53,7 @@ tedge-agent : TTY=unknown ; PWD=/tmp ; USER=root ; COMMAND=/etc/tedge/sm-plugins
 
 tedge-agent : TTY=unknown ; PWD=/tmp ; USER=root ; COMMAND=/etc/tedge/sm-plugins/apt list
 
-> Note: Run `tedge_agent --debug` to log more debug messages
+> Note: Run `tedge-agent --debug` to log more debug messages
 
 ## Thirdparty component logs
 Thin-edge uses the third-party components `Mosquitto` as the mqtt broker and `Collectd` for monitoring purpose.

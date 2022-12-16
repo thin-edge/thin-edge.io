@@ -2,18 +2,27 @@
 
 set -e
 
+# Deprecate: Remove symlink in 1.x release
+if [ ! -e /usr/bin/tedge_agent ]; then
+    ln -s /usr/bin/tedge-agent /usr/bin/tedge_agent
+fi
+
 # Initialize the agent __only__ if not when agent is running.
 # Indeed, during an OTA self-update, the previous version of the  `agent` is kept running
 # to monitor the installation of the new version up to completion.
 if command -v systemctl >/dev/null; then
     if ! systemctl is-active --quiet tedge-agent ; then
-         # Flock file should be removed as `tedge_agent --init` must run as root
+         # Flock file should be removed as `tedge-agent --init` must run as root
          # although the flockfile is owned by `tedge`.
          if [ -f "/run/lock/tedge_agent.lock" ]; then
                 rm /run/lock/tedge_agent.lock
          fi
+
+         if [ -f "/run/lock/tedge-agent.lock" ]; then
+                rm /run/lock/tedge-agent.lock
+         fi
          # It must be run as root to create the directory `/var/tedge`.
-         tedge_agent --init
+         tedge-agent --init
     fi
 fi
 
@@ -42,6 +51,11 @@ if command -v systemctl >/dev/null; then
         systemctl start tedge-agent.service
         systemctl enable tedge-agent.service
     fi
+fi
+
+if [ -f /var/lib/dpkg/info/tedge_agent.postrm ]; then
+    # Prevent purge from deleting files related to the package
+    rm -f /var/lib/dpkg/info/tedge_agent.postrm
 fi
 
 # Do not use DEBHELPER: for OTA self-update one needs a fine-control over the deb options

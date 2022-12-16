@@ -15,7 +15,7 @@ When the thin edge device is connected to cloud, `sudo tedge connect c8y`
 Now validate the services that use the mqtt port
    Validate tedge mqtt pub/sub
    Validate tedge connect c8y --test
-   Validate tedge_mapper status
+   Validate tedge-mapper status
    Validate collectd_mapper status
 
 """

@@ -3,7 +3,7 @@ Description=Thin-edge device configuration management for Cumulocity
 After=syslog.target network.target mosquitto.service
 
 [Service]
-ExecStart=/usr/bin/c8y_configuration_plugin
+ExecStart=/usr/bin/c8y-configuration-plugin
 Restart=on-failure
 RestartPreventExitStatus=255
 

@@ -7,7 +7,6 @@ members = [
     "plugins/c8y_log_plugin",
     "plugins/tedge_apt_plugin",
     "plugins/tedge_dummy_plugin",
-    "plugins/tedge_apama_plugin",
 ]
 resolver = "2"
 

@@ -44,6 +44,10 @@ if [ -f "/run/lock/tedge_agent.lock" ]; then
     sudo chown tedge:tedge /run/lock/tedge_agent.lock
 fi
 
+if [ -f "/run/lock/tedge-agent.lock" ]; then
+    sudo chown tedge:tedge /run/lock/tedge-agent.lock
+fi
+
 if [ -f "/run/lock/tedge-mapper-c8y.lock" ]; then
     sudo chown tedge:tedge /run/lock/tedge-mapper-c8y.lock
 fi
