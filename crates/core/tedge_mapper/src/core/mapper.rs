@@ -21,8 +21,6 @@ pub async fn create_mapper(
     mqtt_port: u16,
     converter: Box<dyn Converter<Error = ConversionError>>,
 ) -> Result<Mapper, anyhow::Error> {
-    info!("{} starting", app_name);
-
     let health_check_topics: TopicFilter = health_check_topics(app_name);
 
     let mapper_config = converter.get_mapper_config();
@@ -32,14 +30,12 @@ pub async fn create_mapper(
     let mqtt_client =
         Connection::new(&mqtt_config(app_name, &mqtt_host, mqtt_port, topic_filter)?).await?;
 
-    Mapper::subscribe_errors(mqtt_client.errors);
-
     Ok(Mapper::new(
         app_name.to_string(),
         mqtt_client.received,
         mqtt_client.published,
+        mqtt_client.errors,
         converter,
-        health_check_topics,
     ))
 }
 
@@ -70,9 +66,12 @@ impl Mapper {
         mapper_name: String,
         input: UnboundedReceiver<Message>,
         output: UnboundedSender<Message>,
+        errors: UnboundedReceiver<MqttError>,
         converter: Box<dyn Converter<Error = ConversionError>>,
-        health_check_topics: TopicFilter,
     ) -> Self {
+        info!("{mapper_name} starting");
+        let health_check_topics: TopicFilter = health_check_topics(&mapper_name);
+        Self::subscribe_errors(errors);
         Self {
             mapper_name,
             input,

@@ -14,8 +14,10 @@ use c8y_api::{
     json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
 };
 
+use crate::c8y::mapper::{create_mapper_config, create_mqtt_client};
+use crate::core::converter::MapperConfig;
 use futures::StreamExt;
-use mqtt_channel::{Message, Topic};
+use mqtt_channel::{Connection, Message, Topic};
 use mqtt_tests::test_mqtt_server::MqttProcessHandler;
 use mqtt_tests::with_timeout::WithTimeout;
 use serde_json::json;
@@ -631,7 +633,7 @@ async fn c8y_mapper_syncs_pending_child_alarms_on_startup() {
 #[serial]
 async fn test_sync_alarms() {
     let cfg_dir = TempTedgeDir::new();
-    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
 
     let alarm_topic = "tedge/alarms/critical/temperature_alarm";
     let alarm_payload = r#"{ "text": "Temperature very high" }"#;
@@ -686,7 +688,7 @@ async fn test_sync_alarms() {
 #[serial]
 async fn test_sync_child_alarms() {
     let cfg_dir = TempTedgeDir::new();
-    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
 
     let alarm_topic = "tedge/alarms/critical/temperature_alarm/external_sensor";
     let alarm_payload = r#"{ "text": "Temperature very high" }"#;
@@ -741,7 +743,7 @@ async fn test_sync_child_alarms() {
 #[serial]
 async fn convert_thin_edge_json_with_child_id() {
     let cfg_dir = TempTedgeDir::new();
-    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
 
     let in_topic = "tedge/measurements/child1";
     let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
@@ -775,7 +777,7 @@ async fn convert_thin_edge_json_with_child_id() {
 #[serial]
 async fn convert_first_thin_edge_json_invalid_then_valid_with_child_id() {
     let cfg_dir = TempTedgeDir::new();
-    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
 
     let in_topic = "tedge/measurements/child1";
     let in_invalid_payload = r#"{"temp": invalid}"#;
@@ -811,7 +813,7 @@ async fn convert_first_thin_edge_json_invalid_then_valid_with_child_id() {
 #[serial]
 async fn convert_two_thin_edge_json_messages_given_different_child_id() {
     let cfg_dir = TempTedgeDir::new();
-    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
     let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
 
     // First message from "child1"
@@ -878,7 +880,7 @@ fn extract_child_id(in_topic: &str, expected_child_id: Option<String>) {
 #[tokio::test]
 async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
     let cfg_dir = TempTedgeDir::new();
-    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
 
     let alarm_topic = "tedge/alarms/critical/temperature_alarm";
     let big_alarm_text = create_packet(1024 * 20);
@@ -899,7 +901,7 @@ async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn convert_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
     let cfg_dir = TempTedgeDir::new();
-    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
     let event_topic = "tedge/events/click_event";
     let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
     let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -920,7 +922,7 @@ async fn convert_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn convert_event_with_extra_fields_to_c8y_json() -> Result<()> {
     let cfg_dir = TempTedgeDir::new();
-    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
     let event_topic = "tedge/events/click_event";
     let event_payload = r#"{ "text": "tick", "foo": "bar" }"#;
     let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
@@ -946,7 +948,7 @@ async fn convert_event_with_extra_fields_to_c8y_json() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_convert_big_event() {
     let cfg_dir = TempTedgeDir::new();
-    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
 
     let event_topic = "tedge/events/click_event";
     let big_event_text = create_packet((16 + 1) * 1024); // Event payload > size_threshold
@@ -959,7 +961,7 @@ async fn test_convert_big_event() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_convert_big_measurement() {
     let cfg_dir = TempTedgeDir::new();
-    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
     let measurement_topic = "tedge/measurements";
     let big_measurement_payload = create_thin_edge_measurement(10 * 1024); // Measurement payload > size_threshold after converting to c8y json
 
@@ -989,7 +991,7 @@ async fn test_convert_big_measurement() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_convert_small_measurement() {
     let cfg_dir = TempTedgeDir::new();
-    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
     let measurement_topic = "tedge/measurements";
     let big_measurement_payload = create_thin_edge_measurement(20); // Measurement payload size is 20 bytes
 
@@ -1014,7 +1016,7 @@ async fn test_convert_small_measurement() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_convert_big_measurement_for_child_device() {
     let cfg_dir = TempTedgeDir::new();
-    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
     let measurement_topic = "tedge/measurements/child1";
     let big_measurement_payload = create_thin_edge_measurement(10 * 1024); // Measurement payload > size_threshold after converting to c8y json
 
@@ -1052,7 +1054,7 @@ async fn test_convert_small_measurement_for_child_device() {
         big_measurement_payload,
     );
     let cfg_dir = TempTedgeDir::new();
-    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir);
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
     let result = converter.convert(&big_measurement_message).await;
 
     assert!(result
@@ -1462,7 +1464,7 @@ async fn start_c8y_mapper(
     mqtt_port: u16,
     ops_dir: &TempTedgeDir,
 ) -> Result<(TempTedgeDir, JoinHandle<()>), anyhow::Error> {
-    let (temp_dir, converter) = create_c8y_converter(ops_dir);
+    let (temp_dir, converter) = create_c8y_converter(ops_dir).await;
     let mut mapper = create_mapper(
         "c8y-mapper-test",
         MQTT_HOST.to_string(),
@@ -1477,7 +1479,7 @@ async fn start_c8y_mapper(
     Ok((temp_dir, mapper_task))
 }
 
-fn create_c8y_converter(
+async fn create_c8y_converter(
     ops_dir: &TempTedgeDir,
 ) -> (TempTedgeDir, CumulocityConverter<FakeC8YHttpProxy>) {
     let size_threshold = SizeThreshold(16 * 1024);
@@ -1488,6 +1490,9 @@ fn create_c8y_converter(
 
     let tmp_dir = TempTedgeDir::new();
 
+    let mapper_config = create_mapper_config(&operations);
+    let mqtt_client = create_test_mqtt_client(&mapper_config).await;
+
     let converter = CumulocityConverter::from_logs_path(
         size_threshold,
         device_name,
@@ -1496,6 +1501,8 @@ fn create_c8y_converter(
         http_proxy,
         tmp_dir.path().to_path_buf(),
         ops_dir.path().to_path_buf(),
+        mapper_config,
+        mqtt_client.published.clone(),
     )
     .unwrap();
     (tmp_dir, converter)
@@ -1526,4 +1533,21 @@ fn remove_whitespace(s: &str) -> String {
 
 async fn publish_a_fake_jwt_token(broker: &MqttProcessHandler) {
     broker.publish("c8y/s/dat", "71,1111").await.unwrap();
+}
+
+pub async fn create_test_mqtt_client(mapper_config: &MapperConfig) -> Connection {
+    let broker = mqtt_tests::test_mqtt_broker();
+    create_mqtt_client(
+        "c8y-mapper-test-client",
+        MQTT_HOST.to_string(),
+        broker.port,
+        &mapper_config,
+    )
+    .await
+    .unwrap()
+}
+
+pub async fn create_test_mqtt_client_with_empty_operations() -> Connection {
+    let mapper_config = create_mapper_config(&Operations::default());
+    create_test_mqtt_client(&mapper_config).await
 }

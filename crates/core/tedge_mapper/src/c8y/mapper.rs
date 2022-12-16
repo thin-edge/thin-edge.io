@@ -1,14 +1,15 @@
 use std::path::{Path, PathBuf};
 
-use crate::{
-    c8y::converter::CumulocityConverter,
-    core::{component::TEdgeComponent, mapper::create_mapper, size_threshold::SizeThreshold},
-};
-
+use crate::c8y::converter::{CumulocityConverter, CumulocityDeviceInfo};
+use crate::core::component::TEdgeComponent;
+use crate::core::converter::{make_valid_topic_or_panic, MapperConfig};
+use crate::core::mapper::{mqtt_config, Mapper};
+use crate::core::size_threshold::SizeThreshold;
 use async_trait::async_trait;
 use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
 use c8y_api::smartrest::{operations::Operations, topic::C8yTopic};
-use mqtt_channel::TopicFilter;
+use mqtt_channel::{Connection, TopicFilter};
+use tedge_api::health::health_check_topics;
 use tedge_api::topic::ResponseTopic;
 use tedge_config::{
     ConfigSettingAccessor, DeviceIdSetting, DeviceTypeSetting, MqttBindAddressSetting,
@@ -69,23 +70,39 @@ impl TEdgeComponent for CumulocityMapper {
         let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
         let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
 
-        let converter = Box::new(CumulocityConverter::new(
-            size_threshold,
-            device_name,
-            device_type,
-            operations,
-            http_proxy,
-            cfg_dir,
-            child_ops,
-        )?);
+        let mapper_config = create_mapper_config(&operations);
 
-        let mut mapper = create_mapper(
+        let mqtt_client = create_mqtt_client(
             CUMULOCITY_MAPPER_NAME,
             mqtt_host.clone(),
             mqtt_port,
-            converter,
+            &mapper_config,
         )
         .await?;
+
+        let device_info = CumulocityDeviceInfo {
+            device_name,
+            device_type,
+            operations,
+        };
+
+        let converter = Box::new(CumulocityConverter::new(
+            size_threshold,
+            device_info,
+            http_proxy,
+            cfg_dir,
+            child_ops,
+            mapper_config,
+            mqtt_client.published.clone(),
+        )?);
+
+        let mut mapper = Mapper::new(
+            CUMULOCITY_MAPPER_NAME.to_string(),
+            mqtt_client.received,
+            mqtt_client.published,
+            mqtt_client.errors,
+            converter,
+        );
 
         let ops_dir = PathBuf::from(format!("{}/operations/c8y", &config_dir));
 
@@ -96,6 +113,45 @@ impl TEdgeComponent for CumulocityMapper {
 
         Ok(())
     }
+}
+
+pub fn create_mapper_config(operations: &Operations) -> MapperConfig {
+    let mut topic_filter: TopicFilter = vec![
+        "tedge/measurements",
+        "tedge/measurements/+",
+        "tedge/alarms/+/+",
+        "tedge/alarms/+/+/+",
+        "c8y-internal/alarms/+/+",
+        "c8y-internal/alarms/+/+/+",
+        "tedge/events/+",
+        "tedge/events/+/+",
+    ]
+    .try_into()
+    .expect("topics that mapper should subscribe to");
+
+    topic_filter.add_all(CumulocityMapper::subscriptions(operations).unwrap());
+
+    MapperConfig {
+        in_topic_filter: topic_filter,
+        out_topic: make_valid_topic_or_panic("c8y/measurement/measurements/create"),
+        errors_topic: make_valid_topic_or_panic("tedge/errors"),
+    }
+}
+
+pub async fn create_mqtt_client(
+    app_name: &str,
+    mqtt_host: String,
+    mqtt_port: u16,
+    mapper_config: &MapperConfig,
+) -> Result<Connection, anyhow::Error> {
+    let health_check_topics: TopicFilter = health_check_topics(app_name);
+    let mut topic_filter = mapper_config.in_topic_filter.clone();
+    topic_filter.add_all(health_check_topics.clone());
+
+    let mqtt_client =
+        Connection::new(&mqtt_config(app_name, &mqtt_host, mqtt_port, topic_filter)?).await?;
+
+    Ok(mqtt_client)
 }
 
 fn create_directories(config_dir: &Path) -> Result<(), anyhow::Error> {
@@ -133,6 +189,8 @@ fn create_directories(config_dir: &Path) -> Result<(), anyhow::Error> {
 mod tests {
     use super::*;
 
+    use crate::c8y::tests::create_test_mqtt_client;
+    use crate::core::mapper::create_mapper;
     use c8y_api::http_proxy::MockC8yJwtTokenRetriever;
     use c8y_api::smartrest::smartrest_deserializer::SmartRestJwtResponse;
     use mockito::mock;
@@ -193,11 +251,13 @@ mod tests {
             DEVICE_ID,
         );
 
-        // mapper config
+        // required to create a converter
         let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
         let operations = Operations::default();
-
         let tmp_dir = TempTedgeDir::new();
+        let mapper_config = create_mapper_config(&operations);
+        let mqtt_client = create_test_mqtt_client(&mapper_config).await;
+
         let converter = Box::new(
             CumulocityConverter::from_logs_path(
                 size_threshold,
@@ -207,6 +267,8 @@ mod tests {
                 proxy,
                 tmp_dir.path().to_path_buf(),
                 tmp_dir.path().to_path_buf(),
+                mapper_config,
+                mqtt_client.published.clone(),
             )
             .unwrap(),
         );
