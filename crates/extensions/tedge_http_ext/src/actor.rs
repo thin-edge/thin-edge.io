@@ -124,4 +124,11 @@ impl MessageBox for HttpMessageBox {
     async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
         self.responses.send(message).await
     }
+
+    fn new_box(capacity: usize, output: DynSender<Self::Output>) -> (DynSender<Self::Input>, Self) {
+        let max_concurrency = 4;
+        let (request_sender, request_receiver) = mpsc::channel(capacity);
+        let message_box = HttpMessageBox::new(max_concurrency, request_receiver, output);
+        (request_sender.into(), message_box)
+    }
 }

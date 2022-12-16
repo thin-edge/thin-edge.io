@@ -2,7 +2,7 @@ use crate::file_system_ext::{FileEvent, FileRequest};
 use crate::mqtt_ext::MqttMessage;
 use async_trait::async_trait;
 use tedge_actors::{
-    fan_in_message_type, mpsc, Actor, ChannelError, DynSender, MessageBox, StreamExt,
+    adapt, fan_in_message_type, mpsc, Actor, ChannelError, DynSender, MessageBox, StreamExt,
 };
 use tedge_http_ext::{HttpError, HttpRequest, HttpResponse};
 
@@ -124,5 +124,50 @@ impl MessageBox for ConfigManagerMessageBox {
             ConfigOutput::HttpRequest(msg) => self.http_con.send(msg).await,
             ConfigOutput::FileRequest(msg) => self.file_watcher.send(msg).await,
         }
+    }
+
+    fn new_box(capacity: usize, output: DynSender<Self::Output>) -> (DynSender<Self::Input>, Self) {
+        let (events_sender, events_receiver) = mpsc::channel(capacity);
+        let (http_responses_sender, http_responses_receiver) = mpsc::channel(1);
+        let input_sender = FanOutSender {
+            events_sender,
+            http_responses_sender,
+        };
+        let message_box = ConfigManagerMessageBox {
+            events: events_receiver,
+            http_responses: http_responses_receiver,
+            file_watcher: adapt(&output.clone()),
+            http_con: adapt(&output.clone()),
+            mqtt_con: adapt(&output.clone()),
+        };
+        (input_sender.into(), message_box)
+    }
+}
+
+// One should be able to have a macro to generate this fan-out sender type
+#[derive(Clone)]
+struct FanOutSender {
+    events_sender: mpsc::Sender<ConfigInput>,
+    http_responses_sender: mpsc::Sender<HttpResult>,
+}
+
+#[async_trait]
+impl tedge_actors::Sender<ConfigInputAndResponse> for FanOutSender {
+    async fn send(&mut self, message: ConfigInputAndResponse) -> Result<(), ChannelError> {
+        match message {
+            ConfigInputAndResponse::MqttMessage(msg) => self.events_sender.send(msg).await,
+            ConfigInputAndResponse::FileEvent(msg) => self.events_sender.send(msg).await,
+            ConfigInputAndResponse::HttpResult(msg) => self.http_responses_sender.send(msg).await,
+        }
+    }
+
+    fn sender_clone(&self) -> DynSender<ConfigInputAndResponse> {
+        Box::new(self.clone())
+    }
+}
+
+impl From<FanOutSender> for tedge_actors::DynSender<ConfigInputAndResponse> {
+    fn from(sender: FanOutSender) -> Self {
+        Box::new(sender)
     }
 }

@@ -45,20 +45,16 @@ mod tests {
 
     #[tokio::test]
     async fn running_an_actor_without_a_runtime() {
-        let messages: VecRecipient<String> = VecRecipient::default();
+        let actor_output_collector: VecRecipient<String> = VecRecipient::default();
 
-        let mut message_box_builder = SimpleMessageBoxBuilder::new(10);
-        message_box_builder
-            .set_output(messages.as_sender())
-            .expect("A builder with output set");
+        let (actor_input_sender, message_box) =
+            SimpleMessageBox::new_box(10, actor_output_collector.as_sender());
 
         let actor = Echo;
-        let actor_sender = adapt(&message_box_builder.get_input());
-        let actor_messages = message_box_builder.build().expect("A message box");
-        let actor_task = spawn(actor.run(actor_messages));
+        let actor_task = spawn(actor.run(message_box));
 
         spawn(async move {
-            let mut sender: DynSender<&str> = actor_sender.into();
+            let mut sender: DynSender<&str> = adapt(&actor_input_sender.into());
             sender
                 .send("Hello")
                 .await
@@ -75,7 +71,7 @@ mod tests {
             .expect("the actor returned Ok");
 
         assert_eq!(
-            messages.collect().await,
+            actor_output_collector.collect().await,
             vec!["Hello".to_string(), "World".to_string()]
         )
     }
@@ -84,18 +80,13 @@ mod tests {
     async fn an_actor_can_send_messages_to_specific_peers() {
         let output_messages: VecRecipient<DoMsg> = VecRecipient::default();
 
-        let mut message_box_builder = SpecificMessageBoxBuilder::new(10);
-        message_box_builder
-            .set_output(output_messages.as_sender())
-            .expect("a builder ready to use");
-
         let actor = ActorWithSpecificMessageBox;
-        let actor_sender = adapt(&message_box_builder.get_input());
-        let actor_messages = message_box_builder.build().expect("a message box");
-        let actor_task = spawn(actor.run(actor_messages));
+        let (actor_input, message_box) =
+            SpecificMessageBox::new_box(10, output_messages.as_sender());
+        let actor_task = spawn(actor.run(message_box));
 
         spawn(async move {
-            let mut sender: DynSender<&str> = actor_sender.into();
+            let mut sender: DynSender<&str> = adapt(&actor_input.into());
             sender.send("Do this").await.expect("sent");
             sender.send("Do nothing").await.expect("sent");
             sender.send("Do that and this").await.expect("sent");
@@ -180,42 +171,20 @@ mod tests {
                 DoMsg::DoThat(message) => self.peer_2.send(message).await,
             }
         }
-    }
 
-    pub struct SpecificMessageBoxBuilder {
-        sender: mpsc::Sender<String>,
-        input: mpsc::Receiver<String>,
-        peer_1: Option<DynSender<DoThis>>,
-        peer_2: Option<DynSender<DoThat>>,
-    }
-
-    impl SpecificMessageBoxBuilder {
-        pub fn new(size: usize) -> Self {
-            let (sender, input) = mpsc::channel(size);
-            SpecificMessageBoxBuilder {
-                sender,
+        fn new_box(
+            capacity: usize,
+            output: DynSender<Self::Output>,
+        ) -> (DynSender<Self::Input>, Self) {
+            let (sender, input) = mpsc::channel(capacity);
+            let peer_1 = adapt(&output);
+            let peer_2 = adapt(&output);
+            let message_box = SpecificMessageBox {
                 input,
-                peer_1: None,
-                peer_2: None,
-            }
-        }
-
-        pub fn build(self) -> Result<SpecificMessageBox, LinkError> {
-            Ok(SpecificMessageBox {
-                input: self.input,
-                peer_1: self.peer_1.expect("peer_1 has been set"),
-                peer_2: self.peer_2.expect("peer_2 has been set"),
-            })
-        }
-
-        pub fn get_input(&self) -> DynSender<String> {
-            self.sender.clone().into()
-        }
-
-        pub fn set_output(&mut self, output: DynSender<DoMsg>) -> Result<(), LinkError> {
-            self.peer_1 = Some(adapt(&output));
-            self.peer_2 = Some(adapt(&output));
-            Ok(())
+                peer_1,
+                peer_2,
+            };
+            (sender.into(), message_box)
         }
     }
 }

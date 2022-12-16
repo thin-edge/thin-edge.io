@@ -143,6 +143,16 @@ impl MessageBox for MqttMessageBox {
         }
         Ok(())
     }
+
+    fn new_box(
+        _capacity: usize,
+        _output: DynSender<Self::Output>,
+    ) -> (DynSender<Self::Input>, Self) {
+        todo!()
+        // No so obvious to implement.
+        // The Input and Output types of this MessageBox are seen from the inside,
+        // while this `new_box` expect message types as seen by the client.
+    }
 }
 
 struct MqttActor;

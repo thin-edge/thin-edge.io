@@ -27,7 +27,7 @@ pub struct ConfigManagerBuilder {
 impl ConfigManagerBuilder {
     pub fn new(config: ConfigManagerConfig) -> ConfigManagerBuilder {
         let (events_sender, events_receiver) = mpsc::channel(10);
-        let (http_responses_sender, http_responses_receiver) = mpsc::channel(10);
+        let (http_responses_sender, http_responses_receiver) = mpsc::channel(1);
 
         ConfigManagerBuilder {
             config,

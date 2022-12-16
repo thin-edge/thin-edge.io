@@ -1,6 +1,8 @@
 use crate::c8y_http_proxy::messages::{C8YRestRequest, C8YRestResponse};
 use async_trait::async_trait;
-use tedge_actors::{mpsc, Actor, ChannelError, DynSender, MessageBox, StreamExt};
+use tedge_actors::{
+    fan_in_message_type, mpsc, Actor, ChannelError, DynSender, MessageBox, StreamExt,
+};
 use tedge_http_ext::{HttpRequest, HttpResult};
 
 struct C8YHttpProxyActor {}
@@ -41,17 +43,39 @@ impl C8YHttpProxyMessageBox {
     }
 }
 
+fan_in_message_type!(C8YHttpProxyInput[C8YRestRequest, HttpResult] : Debug);
+fan_in_message_type!(C8YHttpProxyOutput[C8YRestResponse, HttpRequest] : Debug);
+
 #[async_trait]
 impl MessageBox for C8YHttpProxyMessageBox {
-    type Input = ();
-    type Output = ();
+    type Input = C8YHttpProxyInput;
+    type Output = C8YHttpProxyOutput;
 
     async fn recv(&mut self) -> Option<Self::Input> {
-        todo!()
+        tokio::select! {
+            Some(message) = self.requests.next() => {
+                Some(C8YHttpProxyInput::C8YRestRequest(message))
+            },
+            Some(message) = self.http_responses.next() => {
+                Some(C8YHttpProxyInput::HttpResult(message))
+            },
+            else => None,
+        }
     }
 
-    async fn send(&mut self, _message: Self::Output) -> Result<(), ChannelError> {
+    async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
+        match message {
+            C8YHttpProxyOutput::C8YRestResponse(message) => self.responses.send(message).await,
+            C8YHttpProxyOutput::HttpRequest(message) => self.http_requests.send(message).await,
+        }
+    }
+
+    fn new_box(
+        _capacity: usize,
+        _output: DynSender<Self::Output>,
+    ) -> (DynSender<Self::Input>, Self) {
         todo!()
+        // Similar impl as for ConfigManagerMessageBox
     }
 }
 
