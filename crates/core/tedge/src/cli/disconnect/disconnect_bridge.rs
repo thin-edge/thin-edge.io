@@ -1,36 +1,11 @@
-use crate::cli::disconnect::error::*;
+use crate::cli::{common::Cloud, disconnect::error::*};
 use crate::command::*;
-use std::fmt;
 use std::sync::Arc;
 use tedge_config::system_services::*;
 use tedge_config::TEdgeConfigLocation;
 use which::which;
 
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
-
-#[derive(Copy, Clone, Debug)]
-pub enum Cloud {
-    C8y,
-    Azure,
-}
-
-impl Cloud {
-    fn dependent_mapper_service(&self) -> SystemService {
-        match self {
-            Cloud::Azure => SystemService::TEdgeMapperAz,
-            Cloud::C8y => SystemService::TEdgeMapperC8y,
-        }
-    }
-}
-
-impl fmt::Display for Cloud {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Cloud::C8y => write!(f, "Cumulocity"),
-            Cloud::Azure => write!(f, "Azure"),
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct DisconnectBridgeCommand {

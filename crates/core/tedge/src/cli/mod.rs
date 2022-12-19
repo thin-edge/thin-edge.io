@@ -4,6 +4,7 @@ use crate::command::{BuildCommand, BuildContext, Command};
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 mod certificate;
+mod common;
 mod config;
 mod connect;
 mod disconnect;
