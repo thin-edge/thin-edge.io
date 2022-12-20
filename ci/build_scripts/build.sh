@@ -63,6 +63,7 @@ EOF
 
 ARCH=
 INSTALL_GCC=0
+SHOW_VERSION=0
 TARGET=()
 
 REST_ARGS=()
@@ -75,6 +76,10 @@ do
 
         --install-gcc)
             INSTALL_GCC=1
+            ;;
+
+        --version)
+            SHOW_VERSION=1
             ;;
 
         -h|--help)
@@ -177,6 +182,12 @@ if [ -z "$GIT_SEMVER" ]; then
     fi
 else
     echo "Using version set by user: $GIT_SEMVER"
+fi
+
+# Only show version (for usage with other tooling)
+if [ "$SHOW_VERSION" == "1" ]; then
+    echo "$GIT_SEMVER"
+    exit 0
 fi
 
 # build release for target
