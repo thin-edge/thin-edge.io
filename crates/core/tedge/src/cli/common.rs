@@ -9,7 +9,7 @@ pub enum Cloud {
 }
 
 impl Cloud {
-    pub fn dependent_mapper_service(&self) -> SystemService {
+    pub fn mapper_service(&self) -> SystemService {
         match self {
             Cloud::Azure => SystemService::TEdgeMapperAz,
             Cloud::C8y => SystemService::TEdgeMapperC8y,

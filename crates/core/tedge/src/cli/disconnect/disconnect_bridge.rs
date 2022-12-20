@@ -57,7 +57,7 @@ impl DisconnectBridgeCommand {
         if self.use_mapper && which("tedge-mapper").is_ok() {
             failed = self
                 .service_manager()
-                .stop_and_disable_service(self.cloud.dependent_mapper_service(), std::io::stdout());
+                .stop_and_disable_service(self.cloud.mapper_service(), std::io::stdout());
         }
 
         if self.use_agent && which("tedge-agent").is_ok() {
