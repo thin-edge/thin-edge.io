@@ -130,7 +130,7 @@ impl NotifyStream {
         &mut self.metadata
     }
 
-    fn add_watcher(
+    pub fn add_watcher(
         &mut self,
         dir_path: &Path,
         file: Option<String>,

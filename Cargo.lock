@@ -511,7 +511,9 @@ dependencies = [
  "tedge_actors",
  "tedge_config",
  "tedge_http_ext",
+ "tedge_utils",
  "tokio",
+ "try-traits",
 ]
 
 [[package]]

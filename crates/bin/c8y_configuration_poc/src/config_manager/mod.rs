@@ -1,7 +1,7 @@
 mod actor;
 mod config;
 
-use crate::file_system_ext;
+use crate::file_system_ext::FsWatchActorBuilder;
 use crate::mqtt_ext::*;
 use actor::*;
 use async_trait::async_trait;
@@ -65,23 +65,22 @@ impl ConfigManagerBuilder {
         self.mqtt_publisher = Some(mqtt_publisher);
         Ok(())
     }
+
+    pub fn with_fs_connection(
+        &mut self,
+        fs_builder: &mut FsWatchActorBuilder,
+    ) -> Result<(), LinkError> {
+        let config_dir = self.config.config_dir.clone();
+        fs_builder.new_watcher(config_dir, self.events_sender.clone().into());
+
+        Ok(())
+    }
 }
 
 #[async_trait]
 impl ActorBuilder for ConfigManagerBuilder {
     async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
         let actor = ConfigManagerActor {};
-
-        let watcher_config = file_system_ext::WatcherConfig {
-            directory: self.config.config_dir,
-        };
-
-        let file_watcher = file_system_ext::new_watcher(
-            runtime,
-            watcher_config,
-            self.events_sender.clone().into(),
-        )
-        .await?;
 
         let mqtt_con = self.mqtt_publisher.ok_or_else(|| LinkError::MissingPeer {
             role: "mqtt".to_string(),
@@ -94,7 +93,6 @@ impl ActorBuilder for ConfigManagerBuilder {
         let peers = ConfigManagerMessageBox::new(
             self.events_receiver,
             self.http_responses_receiver,
-            file_watcher,
             http_con,
             mqtt_con,
         );

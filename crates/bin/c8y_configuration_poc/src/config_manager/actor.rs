@@ -1,6 +1,10 @@
-use crate::file_system_ext::{FileEvent, FileRequest};
+use std::path::Path;
+
+use crate::file_system_ext::FsWatchEvent;
 use crate::mqtt_ext::MqttMessage;
 use async_trait::async_trait;
+use c8y_api::smartrest::topic::C8yTopic;
+use mqtt_channel::Message;
 use tedge_actors::{
     adapt, fan_in_message_type, mpsc, Actor, ChannelError, DynSender, MessageBox, StreamExt,
 };
@@ -8,19 +12,33 @@ use tedge_http_ext::{HttpError, HttpRequest, HttpResponse};
 
 type HttpResult = Result<HttpResponse, HttpError>;
 
-fan_in_message_type!(ConfigInputAndResponse[MqttMessage, FileEvent, HttpResult] : Debug);
-fan_in_message_type!(ConfigInput[MqttMessage, FileEvent] : Debug);
-fan_in_message_type!(ConfigOutput[MqttMessage, HttpRequest, FileRequest] : Debug);
+fan_in_message_type!(ConfigInputAndResponse[MqttMessage, FsWatchEvent, HttpResult] : Debug);
+fan_in_message_type!(ConfigInput[MqttMessage, FsWatchEvent] : Debug);
+fan_in_message_type!(ConfigOutput[MqttMessage, HttpRequest] : Debug);
 
 pub struct ConfigManagerActor {}
 
 impl ConfigManagerActor {
     pub async fn process_file_event(
         &mut self,
-        _event: FileEvent,
-        _messages: &mut ConfigManagerMessageBox,
+        event: FsWatchEvent,
+        messages: &mut ConfigManagerMessageBox,
     ) -> Result<(), ChannelError> {
-        todo!()
+        let path = match event {
+            FsWatchEvent::Modified(path) => path,
+            FsWatchEvent::FileDeleted(path) => path,
+            FsWatchEvent::FileCreated(path) => path,
+            FsWatchEvent::DirectoryDeleted(_) => return Ok(()),
+            FsWatchEvent::DirectoryCreated(_) => return Ok(()),
+        };
+
+        let mqtt_message = Self::supported_operations_message(path.as_path());
+        messages.send(ConfigOutput::MqttMessage(mqtt_message)).await
+    }
+
+    pub fn supported_operations_message(_path: &Path) -> MqttMessage {
+        let topic = C8yTopic::SmartRestResponse.to_topic().expect("Infallible");
+        Message::new(&topic, "114")
     }
 
     pub async fn process_mqtt_message(
@@ -47,7 +65,7 @@ impl Actor for ConfigManagerActor {
                 ConfigInput::MqttMessage(message) => {
                     self.process_mqtt_message(message, &mut messages).await?;
                 }
-                ConfigInput::FileEvent(event) => {
+                ConfigInput::FsWatchEvent(event) => {
                     self.process_file_event(event, &mut messages).await?;
                 }
             }
@@ -59,7 +77,6 @@ impl Actor for ConfigManagerActor {
 pub struct ConfigManagerMessageBox {
     pub events: mpsc::Receiver<ConfigInput>,
     pub http_responses: mpsc::Receiver<HttpResult>,
-    pub file_watcher: DynSender<FileRequest>,
     pub http_con: DynSender<HttpRequest>,
     pub mqtt_con: DynSender<MqttMessage>,
 }
@@ -68,14 +85,12 @@ impl ConfigManagerMessageBox {
     pub fn new(
         events: mpsc::Receiver<ConfigInput>,
         http_responses: mpsc::Receiver<HttpResult>,
-        file_watcher: DynSender<FileRequest>,
         http_con: DynSender<HttpRequest>,
         mqtt_con: DynSender<MqttMessage>,
     ) -> ConfigManagerMessageBox {
         ConfigManagerMessageBox {
             events,
             http_responses,
-            file_watcher,
             http_con,
             mqtt_con,
         }
@@ -106,8 +121,8 @@ impl MessageBox for ConfigManagerMessageBox {
                     ConfigInput::MqttMessage(message) => {
                         Some(ConfigInputAndResponse::MqttMessage(message))
                     },
-                    ConfigInput::FileEvent(message) => {
-                        Some(ConfigInputAndResponse::FileEvent(message))
+                    ConfigInput::FsWatchEvent(message) => {
+                        Some(ConfigInputAndResponse::FsWatchEvent(message))
                     }
                 }
             },
@@ -122,7 +137,6 @@ impl MessageBox for ConfigManagerMessageBox {
         match message {
             ConfigOutput::MqttMessage(msg) => self.mqtt_con.send(msg).await,
             ConfigOutput::HttpRequest(msg) => self.http_con.send(msg).await,
-            ConfigOutput::FileRequest(msg) => self.file_watcher.send(msg).await,
         }
     }
 
@@ -136,7 +150,6 @@ impl MessageBox for ConfigManagerMessageBox {
         let message_box = ConfigManagerMessageBox {
             events: events_receiver,
             http_responses: http_responses_receiver,
-            file_watcher: adapt(&output.clone()),
             http_con: adapt(&output.clone()),
             mqtt_con: adapt(&output.clone()),
         };
@@ -156,7 +169,7 @@ impl tedge_actors::Sender<ConfigInputAndResponse> for FanOutSender {
     async fn send(&mut self, message: ConfigInputAndResponse) -> Result<(), ChannelError> {
         match message {
             ConfigInputAndResponse::MqttMessage(msg) => self.events_sender.send(msg).await,
-            ConfigInputAndResponse::FileEvent(msg) => self.events_sender.send(msg).await,
+            ConfigInputAndResponse::FsWatchEvent(msg) => self.events_sender.send(msg).await,
             ConfigInputAndResponse::HttpResult(msg) => self.http_responses_sender.send(msg).await,
         }
     }

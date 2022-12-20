@@ -13,4 +13,6 @@ mqtt_channel = { path = "../../common/mqtt_channel" }
 tedge_actors = { path = "../../core/tedge_actors" }
 tedge_config = { path = "../../common/tedge_config" }
 tedge_http_ext = { path = "../../extensions/tedge_http_ext" }
+tedge_utils = { path = "../../common/tedge_utils", features = ["fs-notify"] }
 tokio = { version = "1.8", features = ["rt", "rt-multi-thread"] }
+try-traits = { version = "0.1" }

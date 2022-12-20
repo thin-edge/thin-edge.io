@@ -1,26 +1,134 @@
+use async_trait::async_trait;
 use std::path::PathBuf;
-use tedge_actors::{DynSender, RuntimeError, RuntimeHandle};
+use tedge_actors::{
+    Actor, ActorBuilder, ChannelError, DynSender, MessageBox, RuntimeError, RuntimeHandle,
+};
+use tedge_utils::notify::{FsEvent, NotifyStream};
+use tokio::sync::mpsc::Receiver;
+use try_traits::default::TryDefault;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct WatcherConfig {
-    pub directory: PathBuf,
+pub enum FsWatchEvent {
+    Modified(PathBuf),
+    FileDeleted(PathBuf),
+    FileCreated(PathBuf),
+    DirectoryDeleted(PathBuf),
+    DirectoryCreated(PathBuf),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum FileEvent {
-    //FileDeleted(PathBuf),
-    //FileCreated(PathBuf),
-    //DirectoryDeleted(PathBuf),
-    //DirectoryCreated(PathBuf),
+#[derive(Debug)]
+enum NullInput {}
+
+struct FsWatchMessageBox {
+    watch_dirs: Vec<(PathBuf, DynSender<FsWatchEvent>)>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum FileRequest {}
+#[async_trait]
+impl MessageBox for FsWatchMessageBox {
+    type Input = NullInput;
+    type Output = FsWatchEvent;
 
-pub async fn new_watcher(
-    _runtime: &mut RuntimeHandle,
-    _config: WatcherConfig,
-    _client: DynSender<FileEvent>,
-) -> Result<DynSender<FileRequest>, RuntimeError> {
-    todo!()
+    async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
+        let path = match message.clone() {
+            FsWatchEvent::Modified(path) => path,
+            FsWatchEvent::FileDeleted(path) => path,
+            FsWatchEvent::FileCreated(path) => path,
+            FsWatchEvent::DirectoryDeleted(path) => path,
+            FsWatchEvent::DirectoryCreated(path) => path,
+        };
+
+        for (watch_path, sender) in self.watch_dirs.iter_mut() {
+            if path.starts_with(watch_path) {
+                sender.send(message.clone()).await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn recv(&mut self) -> Option<Self::Input> {
+        return None; //As this actor supports no input, yet
+    }
+
+    fn new_box(
+        _capacity: usize,
+        _output: DynSender<Self::Output>,
+    ) -> (DynSender<Self::Input>, Self) {
+        todo!()
+    }
+}
+
+pub struct FsWatchActorBuilder {
+    watch_dirs: Vec<(PathBuf, DynSender<FsWatchEvent>)>,
+}
+
+impl FsWatchActorBuilder {
+    pub fn new() -> Self {
+        Self {
+            watch_dirs: Vec::new(),
+        }
+    }
+}
+
+impl FsWatchActorBuilder {
+    pub fn new_watcher(&mut self, watch_path: PathBuf, peer_sender: DynSender<FsWatchEvent>) {
+        self.watch_dirs.push((watch_path, peer_sender));
+    }
+}
+
+#[async_trait]
+impl ActorBuilder for FsWatchActorBuilder {
+    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
+        let mut fs_notify = NotifyStream::try_default().unwrap();
+        for (watch_path, _) in self.watch_dirs.iter() {
+            fs_notify
+                .add_watcher(
+                    watch_path,
+                    None,
+                    &[
+                        FsEvent::Modified,
+                        FsEvent::FileDeleted,
+                        FsEvent::FileCreated,
+                    ],
+                )
+                .unwrap();
+        }
+
+        let fs_event_actor = FsWatchActor {
+            fs_notify_receiver: fs_notify.rx,
+        };
+
+        let mailbox = FsWatchMessageBox {
+            watch_dirs: self.watch_dirs,
+        };
+
+        runtime.run(fs_event_actor, mailbox).await?;
+
+        Ok(())
+    }
+}
+struct FsWatchActor {
+    fs_notify_receiver: Receiver<(PathBuf, FsEvent)>,
+}
+
+#[async_trait]
+impl Actor for FsWatchActor {
+    type MessageBox = FsWatchMessageBox;
+
+    async fn run(mut self, mut mailbox: Self::MessageBox) -> Result<(), ChannelError> {
+        loop {
+            if let Some((path, fs_event)) = self.fs_notify_receiver.recv().await {
+                let output = match fs_event {
+                    FsEvent::Modified => FsWatchEvent::Modified(path),
+                    FsEvent::FileCreated => FsWatchEvent::FileCreated(path),
+                    FsEvent::FileDeleted => FsWatchEvent::FileDeleted(path),
+                    FsEvent::DirectoryCreated => FsWatchEvent::DirectoryCreated(path),
+                    FsEvent::DirectoryDeleted => FsWatchEvent::DirectoryDeleted(path),
+                };
+                mailbox.send(output).await?;
+            } else {
+                return Err(ChannelError::ReceiveError());
+            }
+        }
+    }
 }
