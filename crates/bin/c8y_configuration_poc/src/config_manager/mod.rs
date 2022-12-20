@@ -1,6 +1,7 @@
 mod actor;
 mod config;
 
+use crate::c8y_http_proxy::messages::{C8YRestRequest, C8YRestResponse};
 use crate::file_system_ext::FsWatchActorBuilder;
 use crate::mqtt_ext::*;
 use actor::*;
@@ -9,7 +10,6 @@ pub use config::*;
 use tedge_actors::{
     mpsc, ActorBuilder, DynSender, LinkError, PeerLinker, RuntimeError, RuntimeHandle,
 };
-use tedge_http_ext::*;
 
 /// An instance of the config manager
 ///
@@ -17,11 +17,11 @@ use tedge_http_ext::*;
 pub struct ConfigManagerBuilder {
     config: ConfigManagerConfig,
     events_receiver: mpsc::Receiver<ConfigInput>,
-    http_responses_receiver: mpsc::Receiver<HttpResult>,
+    http_responses_receiver: mpsc::Receiver<C8YRestResponse>,
     events_sender: mpsc::Sender<ConfigInput>,
     mqtt_publisher: Option<DynSender<MqttMessage>>,
-    http_responses_sender: mpsc::Sender<HttpResult>,
-    http_con: Option<DynSender<HttpRequest>>,
+    http_responses_sender: mpsc::Sender<C8YRestResponse>,
+    http_requests_sender: Option<DynSender<C8YRestRequest>>,
 }
 
 impl ConfigManagerBuilder {
@@ -36,17 +36,17 @@ impl ConfigManagerBuilder {
             events_sender,
             mqtt_publisher: None,
             http_responses_sender,
-            http_con: None,
+            http_requests_sender: None,
         }
     }
 
     /// Connect this config manager instance to some http connection provider
-    pub fn with_http_connection(
+    pub fn with_c8y_http_proxy(
         &mut self,
-        http: &mut impl PeerLinker<HttpRequest, HttpResult>,
+        http: &mut impl PeerLinker<C8YRestRequest, C8YRestResponse>,
     ) -> Result<(), LinkError> {
-        let http_con = http.connect(self.http_responses_sender.clone().into())?;
-        self.http_con = Some(http_con);
+        let http_requests_sender = http.connect(self.http_responses_sender.clone().into())?;
+        self.http_requests_sender = Some(http_requests_sender);
         Ok(())
     }
 
@@ -86,9 +86,11 @@ impl ActorBuilder for ConfigManagerBuilder {
             role: "mqtt".to_string(),
         })?;
 
-        let http_con = self.http_con.ok_or_else(|| LinkError::MissingPeer {
-            role: "http".to_string(),
-        })?;
+        let http_con = self
+            .http_requests_sender
+            .ok_or_else(|| LinkError::MissingPeer {
+                role: "http".to_string(),
+            })?;
 
         let peers = ConfigManagerMessageBox::new(
             self.events_receiver,

@@ -24,8 +24,9 @@ async fn main() -> anyhow::Result<()> {
         ConfigManagerBuilder::new(ConfigManagerConfig::from_default_tedge_config()?);
 
     // Connect actor instances
+    c8y_http_proxy_actor.with_http_connection(&mut http_actor)?;
     config_actor.with_fs_connection(&mut fs_watch_actor)?;
-    config_actor.with_http_connection(&mut http_actor)?;
+    config_actor.with_c8y_http_proxy(&mut c8y_http_proxy_actor)?;
     config_actor.with_mqtt_connection(&mut mqtt_actor)?;
 
     // Run the actors

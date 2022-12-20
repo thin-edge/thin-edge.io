@@ -6,7 +6,7 @@ use tedge_actors::{
 use tedge_http_ext::{HttpRequest, HttpResult};
 
 mod actor;
-mod messages;
+pub mod messages;
 
 /// Configuration of C8Y REST API
 #[derive(Default)]

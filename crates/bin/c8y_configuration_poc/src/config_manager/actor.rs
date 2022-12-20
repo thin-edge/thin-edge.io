@@ -1,20 +1,20 @@
 use std::path::Path;
 
+use crate::c8y_http_proxy::messages::{C8YRestRequest, C8YRestResponse};
 use crate::file_system_ext::FsWatchEvent;
 use crate::mqtt_ext::MqttMessage;
 use async_trait::async_trait;
+use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::smartrest::topic::C8yTopic;
+use c8y_api::OffsetDateTime;
 use mqtt_channel::Message;
 use tedge_actors::{
     adapt, fan_in_message_type, mpsc, Actor, ChannelError, DynSender, MessageBox, StreamExt,
 };
-use tedge_http_ext::{HttpError, HttpRequest, HttpResponse};
 
-type HttpResult = Result<HttpResponse, HttpError>;
-
-fan_in_message_type!(ConfigInputAndResponse[MqttMessage, FsWatchEvent, HttpResult] : Debug);
+fan_in_message_type!(ConfigInputAndResponse[MqttMessage, FsWatchEvent, C8YRestResponse] : Debug);
 fan_in_message_type!(ConfigInput[MqttMessage, FsWatchEvent] : Debug);
-fan_in_message_type!(ConfigOutput[MqttMessage, HttpRequest] : Debug);
+fan_in_message_type!(ConfigOutput[MqttMessage, C8YRestRequest] : Debug);
 
 pub struct ConfigManagerActor {}
 
@@ -47,9 +47,16 @@ impl ConfigManagerActor {
         messages: &mut ConfigManagerMessageBox,
     ) -> Result<(), ChannelError> {
         // ..
-        let request = HttpRequest::new(Default::default(), "https://my-tenant.c8y.io")
-            .expect("well formed url");
-        let _response = messages.send_http_request(request).await?;
+        let request = C8yCreateEvent::new(
+            None,
+            "".to_string(),
+            OffsetDateTime::now_utc(),
+            Default::default(),
+            Default::default(),
+        );
+        let _response = messages
+            .send_http_request(C8YRestRequest::C8yCreateEvent(request))
+            .await?;
         // ..
         Ok(())
     }
@@ -76,31 +83,31 @@ impl Actor for ConfigManagerActor {
 
 pub struct ConfigManagerMessageBox {
     pub events: mpsc::Receiver<ConfigInput>,
-    pub http_responses: mpsc::Receiver<HttpResult>,
-    pub http_con: DynSender<HttpRequest>,
-    pub mqtt_con: DynSender<MqttMessage>,
+    pub http_responses: mpsc::Receiver<C8YRestResponse>,
+    pub http_requests: DynSender<C8YRestRequest>,
+    pub mqtt_requests: DynSender<MqttMessage>,
 }
 
 impl ConfigManagerMessageBox {
     pub fn new(
         events: mpsc::Receiver<ConfigInput>,
-        http_responses: mpsc::Receiver<HttpResult>,
-        http_con: DynSender<HttpRequest>,
+        http_responses: mpsc::Receiver<C8YRestResponse>,
+        http_con: DynSender<C8YRestRequest>,
         mqtt_con: DynSender<MqttMessage>,
     ) -> ConfigManagerMessageBox {
         ConfigManagerMessageBox {
             events,
             http_responses,
-            http_con,
-            mqtt_con,
+            http_requests: http_con,
+            mqtt_requests: mqtt_con,
         }
     }
 
     async fn send_http_request(
         &mut self,
-        request: HttpRequest,
-    ) -> Result<HttpResult, ChannelError> {
-        self.http_con.send(request).await?;
+        request: C8YRestRequest,
+    ) -> Result<C8YRestResponse, ChannelError> {
+        self.http_requests.send(request).await?;
         if let Some(response) = self.http_responses.next().await {
             Ok(response)
         } else {
@@ -127,7 +134,7 @@ impl MessageBox for ConfigManagerMessageBox {
                 }
             },
             Some(message) = self.http_responses.next() => {
-                Some(ConfigInputAndResponse::HttpResult(message))
+                Some(ConfigInputAndResponse::C8YRestResponse(message))
             },
             else => None,
         }
@@ -135,8 +142,8 @@ impl MessageBox for ConfigManagerMessageBox {
 
     async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
         match message {
-            ConfigOutput::MqttMessage(msg) => self.mqtt_con.send(msg).await,
-            ConfigOutput::HttpRequest(msg) => self.http_con.send(msg).await,
+            ConfigOutput::MqttMessage(msg) => self.mqtt_requests.send(msg).await,
+            ConfigOutput::C8YRestRequest(msg) => self.http_requests.send(msg).await,
         }
     }
 
@@ -150,8 +157,8 @@ impl MessageBox for ConfigManagerMessageBox {
         let message_box = ConfigManagerMessageBox {
             events: events_receiver,
             http_responses: http_responses_receiver,
-            http_con: adapt(&output.clone()),
-            mqtt_con: adapt(&output.clone()),
+            http_requests: adapt(&output.clone()),
+            mqtt_requests: adapt(&output.clone()),
         };
         (input_sender.into(), message_box)
     }
@@ -161,7 +168,7 @@ impl MessageBox for ConfigManagerMessageBox {
 #[derive(Clone)]
 struct FanOutSender {
     events_sender: mpsc::Sender<ConfigInput>,
-    http_responses_sender: mpsc::Sender<HttpResult>,
+    http_responses_sender: mpsc::Sender<C8YRestResponse>,
 }
 
 #[async_trait]
@@ -170,7 +177,9 @@ impl tedge_actors::Sender<ConfigInputAndResponse> for FanOutSender {
         match message {
             ConfigInputAndResponse::MqttMessage(msg) => self.events_sender.send(msg).await,
             ConfigInputAndResponse::FsWatchEvent(msg) => self.events_sender.send(msg).await,
-            ConfigInputAndResponse::HttpResult(msg) => self.http_responses_sender.send(msg).await,
+            ConfigInputAndResponse::C8YRestResponse(msg) => {
+                self.http_responses_sender.send(msg).await
+            }
         }
     }
 
