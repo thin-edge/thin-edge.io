@@ -41,7 +41,7 @@ macro_rules! display_unknown_for {
 
 /// TEdgeConfigRepository is responsible for loading and storing TEdgeConfig entities.
 ///
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TEdgeConfigRepository {
     config_location: TEdgeConfigLocation,
     config_defaults: TEdgeConfigDefaults,

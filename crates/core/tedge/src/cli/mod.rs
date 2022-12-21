@@ -4,10 +4,12 @@ use crate::command::{BuildCommand, BuildContext, Command};
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 mod certificate;
+mod common;
 mod config;
 mod connect;
 mod disconnect;
 mod mqtt;
+mod reconnect;
 
 #[derive(clap::Parser, Debug)]
 #[clap(
@@ -47,6 +49,10 @@ pub enum TEdgeOpt {
     #[clap(subcommand)]
     Disconnect(disconnect::TEdgeDisconnectBridgeCli),
 
+    /// Reconnect command, calls disconnect followed by connect
+    #[clap(subcommand)]
+    Reconnect(reconnect::TEdgeReconnectCli),
+
     /// Publish a message on a topic and subscribe a topic.
     #[clap(subcommand)]
     Mqtt(mqtt::TEdgeMqttCli),
@@ -60,6 +66,7 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::Connect(opt) => opt.build_command(context),
             TEdgeOpt::Disconnect(opt) => opt.build_command(context),
             TEdgeOpt::Mqtt(opt) => opt.build_command(context),
+            TEdgeOpt::Reconnect(opt) => opt.build_command(context),
         }
     }
 }

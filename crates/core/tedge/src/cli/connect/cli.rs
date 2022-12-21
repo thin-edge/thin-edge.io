@@ -1,6 +1,6 @@
 use tedge_config::system_services::service_manager;
 
-use crate::cli::connect::*;
+use crate::cli::{common::Cloud, connect::*};
 use crate::command::{BuildCommand, BuildContext, Command};
 
 #[derive(clap::Subcommand, Debug, Eq, PartialEq)]
