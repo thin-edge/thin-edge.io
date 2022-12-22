@@ -1588,7 +1588,6 @@ dependencies = [
  "anyhow",
  "fastrand",
  "futures",
- "maplit",
  "once_cell",
  "rumqttc 0.18.0",
  "rumqttd",
