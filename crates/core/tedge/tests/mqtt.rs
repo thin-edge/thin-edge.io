@@ -26,8 +26,7 @@ mod tests {
 
     #[test_case(Some("0"))]
     #[test_case(Some("1"))]
-    // Disabled because the qos 2 (ExactlyOnce) is not supported by rumqttd broker
-    // #[test_case(Some("2"))]
+    #[test_case(Some("2"))]
     #[test_case(None)]
     #[tokio::test]
     async fn test_cli_pub_basic(qos: Option<&str>) -> Result<(), anyhow::Error> {
