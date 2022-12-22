@@ -1149,7 +1149,6 @@ async fn mapper_handles_multiline_sm_requests() {
         ],
     )
     .await;
-
     c8y_mapper.abort();
 }
 
