@@ -139,11 +139,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: enable toolchain via github action
-        uses: dtolnay/rust-toolchain@1.63.0
+      
+      # Nightly toolchain is needed for cargo fmt since issue: https://github.com/thin-edge/thin-edge.io/issues/1660
+      - name: Install nightly toolchain
+        uses: actions-rs/toolchain@v1
         with:
+          toolchain: nightly
           components: rustfmt
+          override: true
 
       - name: Cargo fmt --version
         uses: actions-rs/cargo@v1
