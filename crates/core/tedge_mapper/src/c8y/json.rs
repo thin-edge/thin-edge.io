@@ -14,9 +14,11 @@
 //! ```
 
 use crate::c8y::serializer;
-use clock::{Clock, WallClock};
+use clock::Clock;
+use clock::WallClock;
 use tedge_api::parser::*;
-use time::{self, OffsetDateTime};
+use time::OffsetDateTime;
+use time::{self};
 
 #[derive(thiserror::Error, Debug)]
 pub enum CumulocityJsonError {
@@ -59,9 +61,11 @@ mod tests {
     use super::*;
     use assert_json_diff::*;
     use proptest::prelude::*;
-    use serde_json::{json, Value};
+    use serde_json::json;
+    use serde_json::Value;
     use test_case::test_case;
-    use time::{format_description, macros::datetime};
+    use time::format_description;
+    use time::macros::datetime;
 
     #[test]
     fn check_single_value_translation() {

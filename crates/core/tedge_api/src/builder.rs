@@ -1,6 +1,7 @@
 use time::OffsetDateTime;
 
-use crate::{data::*, measurement::*};
+use crate::data::*;
+use crate::measurement::*;
 
 /// A `MeasurementVisitor` that builds up `ThinEdgeJson`.
 #[derive(Default)]

@@ -1,4 +1,5 @@
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
+use std::convert::TryInto;
 
 use clock::Timestamp;
 use serde::Deserialize;
@@ -122,7 +123,8 @@ impl ThinEdgeAlarm {
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
-    use serde_json::{json, Value};
+    use serde_json::json;
+    use serde_json::Value;
     use test_case::test_case;
     use time::macros::datetime;
 

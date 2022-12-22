@@ -1,5 +1,6 @@
 use crate::cli::connect::BridgeConfig;
-use tedge_config::{ConnectUrl, FilePath};
+use tedge_config::ConnectUrl;
+use tedge_config::FilePath;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfigAzureParams {

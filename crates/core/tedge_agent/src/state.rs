@@ -1,7 +1,9 @@
 use crate::error::StateError;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, str::FromStr};
+use serde::Deserialize;
+use serde::Serialize;
+use std::path::PathBuf;
+use std::str::FromStr;
 use tedge_utils::fs::atomically_write_file_async;
 use tokio::fs;
 use tracing::error;
@@ -118,10 +120,12 @@ pub struct State {
 
 #[cfg(test)]
 mod tests {
-    use crate::state::{
-        AgentStateRepository, RestartOperationStatus, SoftwareOperationVariants, State,
-        StateRepository, StateStatus,
-    };
+    use crate::state::AgentStateRepository;
+    use crate::state::RestartOperationStatus;
+    use crate::state::SoftwareOperationVariants;
+    use crate::state::State;
+    use crate::state::StateRepository;
+    use crate::state::StateStatus;
 
     use tedge_test_utils::fs::TempTedgeDir;
 

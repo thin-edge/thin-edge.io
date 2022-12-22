@@ -1,9 +1,12 @@
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 
 use c8y_api::smartrest::alarm;
-use mqtt_channel::{Message, Topic};
-use tedge_api::alarm::{ThinEdgeAlarm, ThinEdgeJsonDeserializerError};
+use mqtt_channel::Message;
+use mqtt_channel::Topic;
+use tedge_api::alarm::ThinEdgeAlarm;
+use tedge_api::alarm::ThinEdgeJsonDeserializerError;
 
 use crate::core::error::ConversionError;
 

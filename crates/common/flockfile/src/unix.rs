@@ -1,11 +1,16 @@
-use nix::fcntl::{flock, FlockArg};
-use std::{
-    fs::{self, File, OpenOptions},
-    io,
-    os::unix::io::AsRawFd,
-    path::{Path, PathBuf},
-};
-use tracing::{debug, error, info, warn};
+use nix::fcntl::flock;
+use nix::fcntl::FlockArg;
+use std::fs::File;
+use std::fs::OpenOptions;
+use std::fs::{self};
+use std::io;
+use std::os::unix::io::AsRawFd;
+use std::path::Path;
+use std::path::PathBuf;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 const LOCK_CHILD_DIRECTORY: &str = "lock/";
 
@@ -131,7 +136,8 @@ mod tests {
 
     use super::*;
     use assert_matches::*;
-    use std::{fs, io};
+    use std::fs;
+    use std::io;
     use tempfile::NamedTempFile;
 
     #[test]

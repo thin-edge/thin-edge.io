@@ -1,6 +1,11 @@
-use super::{create::CreateCertCmd, remove::RemoveCertCmd, show::ShowCertCmd, upload::*};
+use super::create::CreateCertCmd;
+use super::remove::RemoveCertCmd;
+use super::show::ShowCertCmd;
+use super::upload::*;
 
-use crate::command::{BuildCommand, BuildContext, Command};
+use crate::command::BuildCommand;
+use crate::command::BuildContext;
+use crate::command::Command;
 use crate::ConfigError;
 
 use tedge_config::*;

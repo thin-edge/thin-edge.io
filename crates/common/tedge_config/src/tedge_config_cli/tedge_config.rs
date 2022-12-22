@@ -1,6 +1,8 @@
 use crate::*;
-use certificate::{CertificateError, PemCertificate};
-use std::convert::{TryFrom, TryInto};
+use certificate::CertificateError;
+use certificate::PemCertificate;
+use std::convert::TryFrom;
+use std::convert::TryInto;
 
 /// loads tedge config from system default
 pub fn get_tedge_config() -> Result<TEdgeConfig, TEdgeConfigError> {

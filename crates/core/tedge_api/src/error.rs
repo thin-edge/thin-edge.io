@@ -1,7 +1,11 @@
-use crate::software::{SoftwareModule, SoftwareName, SoftwareType, SoftwareVersion};
+use crate::software::SoftwareModule;
+use crate::software::SoftwareName;
+use crate::software::SoftwareType;
+use crate::software::SoftwareVersion;
 use csv;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 #[derive(thiserror::Error, Debug)]
 pub enum TopicError {

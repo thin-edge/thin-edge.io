@@ -1,7 +1,9 @@
 use std::io;
 
 #[cfg(not(windows))]
-use tokio::signal::unix::{signal, SignalKind};
+use tokio::signal::unix::signal;
+#[cfg(not(windows))]
+use tokio::signal::unix::SignalKind;
 
 #[cfg(not(windows))]
 pub async fn interrupt() -> io::Result<()> {

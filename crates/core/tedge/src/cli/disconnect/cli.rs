@@ -1,4 +1,5 @@
-use crate::cli::{common::Cloud, disconnect::disconnect_bridge::*};
+use crate::cli::common::Cloud;
+use crate::cli::disconnect::disconnect_bridge::*;
 use crate::command::*;
 use tedge_config::system_services::service_manager;
 

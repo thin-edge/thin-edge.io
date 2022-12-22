@@ -1,8 +1,23 @@
-use super::{batcher::MessageBatch, collectd::CollectdMessage, error::DeviceMonitorError};
-use batcher::{BatchConfigBuilder, BatchDriver, BatchDriverInput, BatchDriverOutput, Batcher};
-use mqtt_channel::{Connection, Message, QoS, SinkExt, StreamExt, Topic, TopicFilter};
-use tedge_api::health::{health_check_topics, send_health_status};
-use tracing::{error, info, instrument};
+use super::batcher::MessageBatch;
+use super::collectd::CollectdMessage;
+use super::error::DeviceMonitorError;
+use batcher::BatchConfigBuilder;
+use batcher::BatchDriver;
+use batcher::BatchDriverInput;
+use batcher::BatchDriverOutput;
+use batcher::Batcher;
+use mqtt_channel::Connection;
+use mqtt_channel::Message;
+use mqtt_channel::QoS;
+use mqtt_channel::SinkExt;
+use mqtt_channel::StreamExt;
+use mqtt_channel::Topic;
+use mqtt_channel::TopicFilter;
+use tedge_api::health::health_check_topics;
+use tedge_api::health::send_health_status;
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
 
 const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_PORT: u16 = 1883;

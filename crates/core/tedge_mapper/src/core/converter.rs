@@ -1,6 +1,8 @@
 use crate::c8y::dynamic_discovery::DiscoverOp;
 use async_trait::async_trait;
-use mqtt_channel::{Message, Topic, TopicFilter};
+use mqtt_channel::Message;
+use mqtt_channel::Topic;
+use mqtt_channel::TopicFilter;
 use std::fmt::Display;
 use tracing::error;
 

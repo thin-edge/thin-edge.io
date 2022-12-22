@@ -1,17 +1,23 @@
-use crate::{
-    cli::connect::jwt_token::*,
-    cli::{common::Cloud, connect::*},
-    command::Command,
-    ConfigError,
-};
+use crate::cli::common::Cloud;
+use crate::cli::connect::jwt_token::*;
+use crate::cli::connect::*;
+use crate::command::Command;
+use crate::ConfigError;
+use rumqttc::Event;
+use rumqttc::Incoming;
+use rumqttc::MqttOptions;
+use rumqttc::Outgoing;
+use rumqttc::Packet;
 use rumqttc::QoS::AtLeastOnce;
-use rumqttc::{Event, Incoming, MqttOptions, Outgoing, Packet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_config::system_services::*;
 use tedge_config::*;
-use tedge_utils::paths::{create_directories, ok_if_not_found, DraftFile};
+use tedge_utils::paths::create_directories;
+use tedge_utils::paths::ok_if_not_found;
+use tedge_utils::paths::DraftFile;
 use which::which;
 
 const WAIT_FOR_CHECK_SECONDS: u64 = 2;

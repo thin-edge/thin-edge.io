@@ -1,6 +1,9 @@
-use std::{fs as std_fs, io::Write, path::Path};
+use std::fs as std_fs;
+use std::io::Write;
+use std::path::Path;
 
-use tokio::{fs as tokio_fs, io::AsyncWriteExt};
+use tokio::fs as tokio_fs;
+use tokio::io::AsyncWriteExt;
 
 /// Write file to filesystem atomically using std::fs synchronously.
 pub fn atomically_write_file_sync(
@@ -57,7 +60,8 @@ pub async fn atomically_write_file_async(
 
 #[cfg(test)]
 mod tests {
-    use crate::fs::{atomically_write_file_async, atomically_write_file_sync};
+    use crate::fs::atomically_write_file_async;
+    use crate::fs::atomically_write_file_sync;
 
     use tempfile::tempdir;
 

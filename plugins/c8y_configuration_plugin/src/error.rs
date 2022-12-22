@@ -1,5 +1,6 @@
 use mqtt_channel::Topic;
-use std::{io, path::PathBuf};
+use std::io;
+use std::path::PathBuf;
 use tedge_utils::file::FileError;
 
 #[derive(thiserror::Error, Debug)]

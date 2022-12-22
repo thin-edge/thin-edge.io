@@ -1,6 +1,7 @@
 use clap::Parser;
 use std::path::PathBuf;
-use tedge_config::{system_services::*, DEFAULT_TEDGE_CONFIG_PATH};
+use tedge_config::system_services::*;
+use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 mod error;
 

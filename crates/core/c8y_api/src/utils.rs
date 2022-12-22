@@ -17,7 +17,8 @@ pub mod bridge {
 
 pub mod child_device {
     use crate::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
-    use mqtt_channel::{Message, Topic};
+    use mqtt_channel::Message;
+    use mqtt_channel::Topic;
 
     pub fn new_child_device_message(child_id: &str) -> Message {
         Message::new(
@@ -29,10 +30,12 @@ pub mod child_device {
 
 #[cfg(test)]
 mod tests {
-    use mqtt_channel::{Message, Topic};
+    use mqtt_channel::Message;
+    use mqtt_channel::Topic;
     use test_case::test_case;
 
-    use crate::utils::bridge::{is_c8y_bridge_up, C8Y_BRIDGE_HEALTH_TOPIC};
+    use crate::utils::bridge::is_c8y_bridge_up;
+    use crate::utils::bridge::C8Y_BRIDGE_HEALTH_TOPIC;
 
     #[test_case(C8Y_BRIDGE_HEALTH_TOPIC, "1", true)]
     #[test_case(C8Y_BRIDGE_HEALTH_TOPIC, "0", false)]

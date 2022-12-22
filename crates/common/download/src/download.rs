@@ -1,16 +1,19 @@
 use crate::error::DownloadError;
-use backoff::{future::retry, ExponentialBackoff};
+use backoff::future::retry;
+use backoff::ExponentialBackoff;
 #[cfg(target_os = "linux")]
-use nix::fcntl::{fallocate, FallocateFlags};
+use nix::fcntl::fallocate;
+#[cfg(target_os = "linux")]
+use nix::fcntl::FallocateFlags;
 use nix::sys::statvfs;
-use serde::{Deserialize, Serialize};
-use std::{
-    fs::File,
-    io::Write,
-    os::unix::prelude::AsRawFd,
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use serde::Deserialize;
+use serde::Serialize;
+use std::fs::File;
+use std::io::Write;
+use std::os::unix::prelude::AsRawFd;
+use std::path::Path;
+use std::path::PathBuf;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -200,8 +203,10 @@ mod tests {
     use mockito::mock;
     use nix::sys::statvfs;
     use std::io::Write;
-    use std::path::{Path, PathBuf};
-    use tempfile::{NamedTempFile, TempDir};
+    use std::path::Path;
+    use std::path::PathBuf;
+    use tempfile::NamedTempFile;
+    use tempfile::TempDir;
     use test_case::test_case;
 
     #[test]

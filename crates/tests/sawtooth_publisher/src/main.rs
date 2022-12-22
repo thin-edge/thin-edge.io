@@ -4,15 +4,22 @@ use futures_timer::Delay;
 use log::debug;
 use log::error;
 use log::info;
-use mqtt_channel::{
-    Config, Connection, ErrChannel, Message, MqttError, PubChannel, SubChannel, Topic, TopicFilter,
-};
+use mqtt_channel::Config;
+use mqtt_channel::Connection;
+use mqtt_channel::ErrChannel;
+use mqtt_channel::Message;
+use mqtt_channel::MqttError;
+use mqtt_channel::PubChannel;
+use mqtt_channel::SubChannel;
+use mqtt_channel::Topic;
+use mqtt_channel::TopicFilter;
 use std::convert::TryFrom;
 use std::env;
 use std::fmt::Write as _;
 use std::io::Write;
 use std::process;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
 /*
 

@@ -1,15 +1,20 @@
+use crate::child_device::ChildDeviceResponsePayload;
 use crate::config_manager::DEFAULT_PLUGIN_CONFIG_TYPE;
-use crate::{child_device::ChildDeviceResponsePayload, error::ConfigManagementError};
+use crate::error::ConfigManagementError;
 use c8y_api::smartrest::topic::C8yTopic;
-use mqtt_channel::{Message, MqttError, Topic};
+use mqtt_channel::Message;
+use mqtt_channel::MqttError;
+use mqtt_channel::Topic;
 use serde::Deserialize;
 use std::borrow::Borrow;
 use std::collections::HashSet;
 use std::fs;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::path::Path;
 use tedge_utils::file::PermissionEntry;
-use tracing::{error, info};
+use tracing::error;
+use tracing::info;
 
 #[derive(Deserialize, Debug, Default)]
 #[serde(deny_unknown_fields)]

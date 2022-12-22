@@ -1,32 +1,41 @@
+use crate::child_device::get_child_id_from_child_topic;
+use crate::child_device::ConfigOperationResponse;
 use crate::config::PluginConfig;
 use crate::download::ConfigDownloadManager;
+use crate::download::DownloadConfigFileStatusMessage;
 use crate::operation::ConfigOperation;
 use crate::topic::ConfigOperationResponseTopic;
 use crate::upload::ConfigUploadManager;
-use crate::{
-    child_device::{get_child_id_from_child_topic, ConfigOperationResponse},
-    download::DownloadConfigFileStatusMessage,
-    upload::UploadConfigFileStatusMessage,
-};
+use crate::upload::UploadConfigFileStatusMessage;
 
 use anyhow::Result;
 use c8y_api::http_proxy::C8YHttpProxy;
-use c8y_api::smartrest::smartrest_deserializer::{
-    SmartRestConfigDownloadRequest, SmartRestConfigUploadRequest, SmartRestRequestGeneric,
-};
+use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
-use mqtt_channel::{Connection, Message, MqttError, SinkExt, StreamExt, Topic, TopicFilter};
+use mqtt_channel::Connection;
+use mqtt_channel::Message;
+use mqtt_channel::MqttError;
+use mqtt_channel::SinkExt;
+use mqtt_channel::StreamExt;
+use mqtt_channel::Topic;
+use mqtt_channel::TopicFilter;
 use tokio::sync::Mutex;
 
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use tedge_api::health::{health_check_topics, send_health_status};
-use tedge_utils::{notify::fs_notify_stream, paths::PathsError};
+use tedge_api::health::health_check_topics;
+use tedge_api::health::send_health_status;
+use tedge_utils::notify::fs_notify_stream;
+use tedge_utils::paths::PathsError;
 
-use tedge_utils::notify::{FsEvent, NotifyStream};
-use tracing::{error, info};
+use tedge_utils::notify::FsEvent;
+use tedge_utils::notify::NotifyStream;
+use tracing::error;
+use tracing::info;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-configuration-plugin.toml";
 pub const DEFAULT_OPERATION_DIR_NAME: &str = "c8y/";

@@ -1,7 +1,11 @@
 use crate::cli::mqtt::MqttError;
 use crate::command::Command;
+use rumqttc::Client;
+use rumqttc::Event;
+use rumqttc::Incoming;
+use rumqttc::MqttOptions;
+use rumqttc::Packet;
 use rumqttc::QoS;
-use rumqttc::{Client, Event, Incoming, MqttOptions, Packet};
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
 const MAX_PACKET_SIZE: usize = 1048575;

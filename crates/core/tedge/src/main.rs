@@ -13,7 +13,8 @@ use tedge_utils::file::create_directory_with_user_group;
 
 type ConfigError = crate::error::TEdgeError;
 
-use command::{BuildCommand, BuildContext};
+use command::BuildCommand;
+use command::BuildContext;
 
 const BROKER_USER: &str = "mosquitto";
 const BROKER_GROUP: &str = "mosquitto";

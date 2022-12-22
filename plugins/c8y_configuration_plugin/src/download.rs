@@ -1,40 +1,50 @@
-use crate::child_device::{
-    try_cleanup_config_file_from_file_transfer_repositoy, ConfigOperationMessage,
-};
-use crate::config_manager::{
-    ActiveOperationState, CONFIG_CHANGE_TOPIC, DEFAULT_OPERATION_DIR_NAME,
-    DEFAULT_OPERATION_TIMEOUT, DEFAULT_PLUGIN_CONFIG_FILE_NAME,
-};
-use crate::{child_device::ConfigOperationRequest, config::FileEntry};
-use crate::{
-    child_device::ConfigOperationResponse,
-    error::{ChildDeviceConfigManagementError, ConfigManagementError},
-};
-use crate::{error, PluginConfig};
+use crate::child_device::try_cleanup_config_file_from_file_transfer_repositoy;
+use crate::child_device::ConfigOperationMessage;
+use crate::child_device::ConfigOperationRequest;
+use crate::child_device::ConfigOperationResponse;
+use crate::config::FileEntry;
+use crate::config_manager::ActiveOperationState;
+use crate::config_manager::CONFIG_CHANGE_TOPIC;
+use crate::config_manager::DEFAULT_OPERATION_DIR_NAME;
+use crate::config_manager::DEFAULT_OPERATION_TIMEOUT;
+use crate::config_manager::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
+use crate::error;
+use crate::error::ChildDeviceConfigManagementError;
+use crate::error::ConfigManagementError;
+use crate::PluginConfig;
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
-use c8y_api::smartrest::smartrest_serializer::{
-    CumulocitySupportedOperations, SmartRest, SmartRestSerializer,
-    SmartRestSetOperationToExecuting, SmartRestSetOperationToFailed,
-    SmartRestSetOperationToSuccessful, TryIntoOperationStatusMessage,
-};
+use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use c8y_api::smartrest::smartrest_serializer::SmartRest;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
+use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
-use download::{Auth, DownloadInfo, Downloader};
-use mqtt_channel::{Message, SinkExt, Topic, UnboundedSender};
+use download::Auth;
+use download::DownloadInfo;
+use download::Downloader;
+use mqtt_channel::Message;
+use mqtt_channel::SinkExt;
+use mqtt_channel::Topic;
+use mqtt_channel::UnboundedSender;
 use tedge_api::OperationStatus;
 
 use serde_json::json;
+use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::{fs, path::Path};
-use tedge_utils::{
-    file::{get_filename, get_metadata, PermissionEntry},
-    timers::Timers,
-};
+use tedge_utils::file::get_filename;
+use tedge_utils::file::get_metadata;
+use tedge_utils::file::PermissionEntry;
+use tedge_utils::timers::Timers;
 use tokio::sync::Mutex;
-use tracing::{info, warn};
+use tracing::info;
+use tracing::warn;
 
 pub struct ConfigDownloadManager {
     tedge_device_id: String,

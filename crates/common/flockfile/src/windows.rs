@@ -1,7 +1,6 @@
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+use std::io;
+use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(thiserror::Error, Debug)]
 pub enum FlockfileError {

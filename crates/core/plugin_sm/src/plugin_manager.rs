@@ -1,18 +1,25 @@
-use crate::plugin::{Plugin, LIST};
-use crate::{log_file::LogFile, plugin::ExternalPluginCommand};
+use crate::log_file::LogFile;
+use crate::plugin::ExternalPluginCommand;
+use crate::plugin::Plugin;
+use crate::plugin::LIST;
+use std::collections::HashMap;
+use std::fs;
+use std::io::ErrorKind;
+use std::io::{self};
 use std::path::Path;
-use std::{
-    collections::HashMap,
-    fs,
-    io::{self, ErrorKind},
-    path::PathBuf,
-    process::{Command, Stdio},
-};
-use tedge_api::{
-    SoftwareError, SoftwareListRequest, SoftwareListResponse, SoftwareType, SoftwareUpdateRequest,
-    SoftwareUpdateResponse, DEFAULT,
-};
-use tracing::{error, info, warn};
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Stdio;
+use tedge_api::SoftwareError;
+use tedge_api::SoftwareListRequest;
+use tedge_api::SoftwareListResponse;
+use tedge_api::SoftwareType;
+use tedge_api::SoftwareUpdateRequest;
+use tedge_api::SoftwareUpdateResponse;
+use tedge_api::DEFAULT;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 /// The main responsibility of a `Plugins` implementation is to retrieve the appropriate plugin for a given software module.
 pub trait Plugins {

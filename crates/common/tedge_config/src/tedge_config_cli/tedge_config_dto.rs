@@ -1,7 +1,8 @@
 //! Crate-private plain-old data-type used for serialization.
 
 use crate::*;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use tedge_utils::tedge_derive;
 
 #[tedge_derive::serde_other]

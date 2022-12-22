@@ -1,33 +1,36 @@
-use crate::core::{
-    converter::Converter, error::ConversionError, mapper::create_mapper,
-    size_threshold::SizeThreshold,
-};
+use crate::core::converter::Converter;
+use crate::core::error::ConversionError;
+use crate::core::mapper::create_mapper;
+use crate::core::size_threshold::SizeThreshold;
 use anyhow::Result;
 use assert_json_diff::assert_json_include;
 use assert_matches::assert_matches;
-use c8y_api::smartrest::{
-    error::SMCumulocityMapperError, operations::Operations,
-    smartrest_deserializer::SmartRestJwtResponse,
-};
-use c8y_api::{
-    http_proxy::C8YHttpProxy,
-    json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
-};
+use c8y_api::http_proxy::C8YHttpProxy;
+use c8y_api::json_c8y::C8yCreateEvent;
+use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
+use c8y_api::smartrest::error::SMCumulocityMapperError;
+use c8y_api::smartrest::operations::Operations;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestJwtResponse;
 
-use crate::c8y::mapper::{create_mapper_config, create_mqtt_client};
+use crate::c8y::mapper::create_mapper_config;
+use crate::c8y::mapper::create_mqtt_client;
 use crate::core::converter::MapperConfig;
 use futures::StreamExt;
-use mqtt_channel::{Connection, Message, Topic};
+use mqtt_channel::Connection;
+use mqtt_channel::Message;
+use mqtt_channel::Topic;
 use mqtt_tests::test_mqtt_server::MqttProcessHandler;
 use mqtt_tests::with_timeout::WithTimeout;
 use serde_json::json;
 use serial_test::serial;
-use std::{path::Path, time::Duration};
+use std::path::Path;
+use std::time::Duration;
 use tedge_test_utils::fs::TempTedgeDir;
 use test_case::test_case;
 use tokio::task::JoinHandle;
 
-use super::converter::{get_child_id_from_measurement_topic, CumulocityConverter};
+use super::converter::get_child_id_from_measurement_topic;
+use super::converter::CumulocityConverter;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 const MQTT_HOST: &str = "127.0.0.1";

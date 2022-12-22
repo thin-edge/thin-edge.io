@@ -1,17 +1,28 @@
 use crate::c8y::dynamic_discovery::*;
-use crate::core::{converter::*, error::*};
+use crate::core::converter::*;
+use crate::core::error::*;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
-use mqtt_channel::{
-    Connection, Message, MqttError, SinkExt, StreamExt, Topic, TopicFilter, UnboundedReceiver,
-    UnboundedSender,
-};
+use mqtt_channel::Connection;
+use mqtt_channel::Message;
+use mqtt_channel::MqttError;
+use mqtt_channel::SinkExt;
+use mqtt_channel::StreamExt;
+use mqtt_channel::Topic;
+use mqtt_channel::TopicFilter;
+use mqtt_channel::UnboundedReceiver;
+use mqtt_channel::UnboundedSender;
 
 use std::path::Path;
 use std::time::Duration;
-use tedge_api::health::{health_check_topics, send_health_status};
-use tedge_utils::notify::{fs_notify_stream, FsEvent};
+use tedge_api::health::health_check_topics;
+use tedge_api::health::send_health_status;
+use tedge_utils::notify::fs_notify_stream;
+use tedge_utils::notify::FsEvent;
 
-use tracing::{error, info, instrument, warn};
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
+use tracing::warn;
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 use std::result::Result::Ok;
 
@@ -195,7 +206,9 @@ mod tests {
     use super::*;
     use assert_json_diff::assert_json_include;
     use async_trait::async_trait;
-    use mqtt_channel::{Message, Topic, TopicFilter};
+    use mqtt_channel::Message;
+    use mqtt_channel::Topic;
+    use mqtt_channel::TopicFilter;
     use serde_json::Value;
     use std::time::Duration;
     use tokio::time::sleep;

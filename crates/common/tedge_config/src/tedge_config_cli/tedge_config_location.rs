@@ -1,4 +1,5 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 pub const DEFAULT_TEDGE_CONFIG_PATH: &str = "/etc/tedge";
 const TEDGE_CONFIG_FILE: &str = "tedge.toml";

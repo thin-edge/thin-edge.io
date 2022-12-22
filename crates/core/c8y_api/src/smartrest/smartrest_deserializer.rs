@@ -2,10 +2,16 @@ use crate::smartrest::error::SmartRestDeserializerError;
 use csv::ReaderBuilder;
 use download::DownloadInfo;
 use serde::de::Error;
-use serde::{Deserialize, Deserializer, Serialize};
-use std::convert::{TryFrom, TryInto};
-use tedge_api::{SoftwareModule, SoftwareModuleUpdate, SoftwareUpdateRequest};
-use time::{format_description, OffsetDateTime};
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use std::convert::TryFrom;
+use std::convert::TryInto;
+use tedge_api::SoftwareModule;
+use tedge_api::SoftwareModuleUpdate;
+use tedge_api::SoftwareUpdateRequest;
+use time::format_description;
+use time::OffsetDateTime;
 
 #[derive(Debug)]
 enum CumulocitySoftwareUpdateActions {

@@ -1,4 +1,5 @@
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
+use std::convert::TryInto;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Port(pub u16);

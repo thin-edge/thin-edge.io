@@ -1,7 +1,11 @@
 pub mod restart_operation {
 
     use crate::error::AgentError;
-    use std::{fs::File, fs::OpenOptions, io::Read, io::Write, path::Path};
+    use std::fs::File;
+    use std::fs::OpenOptions;
+    use std::io::Read;
+    use std::io::Write;
+    use std::path::Path;
     use time::OffsetDateTime;
 
     const TEDGE_AGENT_RESTART: &str = "tedge_agent_restart";

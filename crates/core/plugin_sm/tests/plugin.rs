@@ -1,10 +1,17 @@
 #[cfg(test)]
 mod tests {
 
-    use plugin_sm::plugin::{deserialize_module_info, ExternalPluginCommand, Plugin};
+    use plugin_sm::plugin::deserialize_module_info;
+    use plugin_sm::plugin::ExternalPluginCommand;
+    use plugin_sm::plugin::Plugin;
     use serial_test::serial;
-    use std::{fs, io::Write, path::PathBuf, str::FromStr};
-    use tedge_api::{SoftwareError, SoftwareModule, SoftwareModuleUpdate};
+    use std::fs;
+    use std::io::Write;
+    use std::path::PathBuf;
+    use std::str::FromStr;
+    use tedge_api::SoftwareError;
+    use tedge_api::SoftwareModule;
+    use tedge_api::SoftwareModuleUpdate;
     use test_case::test_case;
     use tokio::fs::File;
     use tokio::io::BufWriter;

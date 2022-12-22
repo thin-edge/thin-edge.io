@@ -3,7 +3,8 @@ mod tests {
 
     // These test cases need mosquitto on localhost on GH hosted machine.
 
-    use std::{io::Write, time::Duration};
+    use std::io::Write;
+    use std::time::Duration;
 
     use assert_cmd::assert::OutputAssertExt;
     use assert_cmd::Command;

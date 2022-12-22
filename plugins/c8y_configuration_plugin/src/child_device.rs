@@ -1,11 +1,13 @@
 use std::fs;
 
 use c8y_api::smartrest::topic::C8yTopic;
-use mqtt_channel::{Message, Topic};
+use mqtt_channel::Message;
+use mqtt_channel::Topic;
 use tedge_api::OperationStatus;
 use tracing::error;
 
-use crate::{config::FileEntry, error::ChildDeviceConfigManagementError};
+use crate::config::FileEntry;
+use crate::error::ChildDeviceConfigManagementError;
 
 // FIXME move this to tedge config
 #[cfg(test)]

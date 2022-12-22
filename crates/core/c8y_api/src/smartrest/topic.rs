@@ -1,7 +1,8 @@
 use mqtt_channel::MqttError;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
-use tedge_api::{topic::ResponseTopic, TopicError};
+use tedge_api::topic::ResponseTopic;
+use tedge_api::TopicError;
 
 pub const SMARTREST_PUBLISH_TOPIC: &str = "c8y/s/us";
 pub const SMARTREST_SUBSCRIBE_TOPIC: &str = "c8y/s/ds";

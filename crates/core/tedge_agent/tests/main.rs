@@ -1,7 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use std::process::{Command, Stdio};
-    use std::{thread, time};
+    use std::process::Command;
+    use std::process::Stdio;
+    use std::thread;
+    use std::time;
 
     use assert_cmd::prelude::*;
     use predicates::prelude::*;

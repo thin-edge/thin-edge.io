@@ -1,7 +1,10 @@
 use tedge_config::system_services::service_manager;
 
-use crate::cli::{common::Cloud, connect::*};
-use crate::command::{BuildCommand, BuildContext, Command};
+use crate::cli::common::Cloud;
+use crate::cli::connect::*;
+use crate::command::BuildCommand;
+use crate::command::BuildContext;
+use crate::command::Command;
 
 #[derive(clap::Subcommand, Debug, Eq, PartialEq)]
 pub enum TEdgeConnectOpt {

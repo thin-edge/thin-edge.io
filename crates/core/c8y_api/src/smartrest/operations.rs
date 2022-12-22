@@ -1,13 +1,12 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fs,
-    path::{Path, PathBuf},
-};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
 
-use crate::smartrest::{
-    error::OperationsError,
-    smartrest_serializer::{SmartRestSerializer, SmartRestSetSupportedOperations},
-};
+use crate::smartrest::error::OperationsError;
+use crate::smartrest::smartrest_serializer::SmartRestSerializer;
+use crate::smartrest::smartrest_serializer::SmartRestSetSupportedOperations;
 use serde::Deserialize;
 
 /// Operations are derived by reading files subdirectories per cloud /etc/tedge/operations directory

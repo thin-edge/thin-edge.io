@@ -1,10 +1,10 @@
-use crate::{
-    child_device::{ChildDeviceRequestPayload, ChildDeviceResponsePayload},
-    config_manager::DEFAULT_OPERATION_TIMEOUT,
-};
+use crate::child_device::ChildDeviceRequestPayload;
+use crate::child_device::ChildDeviceResponsePayload;
+use crate::config_manager::DEFAULT_OPERATION_TIMEOUT;
 
 use super::*;
-use c8y_api::{http_proxy::MockC8YHttpProxy, smartrest::error::SMCumulocityMapperError};
+use c8y_api::http_proxy::MockC8YHttpProxy;
+use c8y_api::smartrest::error::SMCumulocityMapperError;
 use mockall::predicate;
 use std::time::Duration;
 use tedge_api::OperationStatus;

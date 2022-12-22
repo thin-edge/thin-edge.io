@@ -1,40 +1,42 @@
-use crate::{
-    child_device::{
-        try_cleanup_config_file_from_file_transfer_repositoy, ConfigOperationMessage,
-        ConfigOperationRequest, ConfigOperationResponse,
-    },
-    config_manager::{
-        ActiveOperationState, DEFAULT_OPERATION_DIR_NAME, DEFAULT_OPERATION_TIMEOUT,
-        DEFAULT_PLUGIN_CONFIG_FILE_NAME,
-    },
-    error::{ChildDeviceConfigManagementError, ConfigManagementError},
-    PluginConfig,
-};
+use crate::child_device::try_cleanup_config_file_from_file_transfer_repositoy;
+use crate::child_device::ConfigOperationMessage;
+use crate::child_device::ConfigOperationRequest;
+use crate::child_device::ConfigOperationResponse;
+use crate::config_manager::ActiveOperationState;
+use crate::config_manager::DEFAULT_OPERATION_DIR_NAME;
+use crate::config_manager::DEFAULT_OPERATION_TIMEOUT;
+use crate::config_manager::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
+use crate::error::ChildDeviceConfigManagementError;
+use crate::error::ConfigManagementError;
+use crate::PluginConfig;
 use anyhow::Result;
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::smartrest::error::SmartRestSerializerError;
-use c8y_api::smartrest::smartrest_serializer::{SmartRest, TryIntoOperationStatusMessage};
-use c8y_api::smartrest::{
-    smartrest_deserializer::SmartRestConfigUploadRequest,
-    smartrest_serializer::{
-        CumulocitySupportedOperations, SmartRestSerializer, SmartRestSetOperationToExecuting,
-        SmartRestSetOperationToFailed, SmartRestSetOperationToSuccessful,
-    },
-};
+use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
+use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use c8y_api::smartrest::smartrest_serializer::SmartRest;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
+use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use tedge_api::OperationStatus;
 
-use mqtt_channel::{Message, SinkExt, Topic, UnboundedSender};
-use tedge_utils::{
-    file::{create_directory_with_user_group, create_file_with_user_group},
-    timers::Timers,
-};
+use mqtt_channel::Message;
+use mqtt_channel::SinkExt;
+use mqtt_channel::Topic;
+use mqtt_channel::UnboundedSender;
+use tedge_utils::file::create_directory_with_user_group;
+use tedge_utils::file::create_file_with_user_group;
+use tedge_utils::timers::Timers;
 use tokio::sync::Mutex;
 
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
-use tracing::{error, info, warn};
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 pub struct UploadConfigFileStatusMessage {}
 

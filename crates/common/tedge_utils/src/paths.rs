@@ -1,11 +1,11 @@
-use std::{
-    ffi::OsString,
-    fs::File,
-    path::{Path, PathBuf},
-};
+use std::ffi::OsString;
+use std::fs::File;
+use std::path::Path;
+use std::path::PathBuf;
 
 use std::io::Write;
-use tempfile::{NamedTempFile, PersistError};
+use tempfile::NamedTempFile;
+use tempfile::PersistError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum PathsError {

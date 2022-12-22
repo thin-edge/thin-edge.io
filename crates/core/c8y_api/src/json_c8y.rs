@@ -1,10 +1,15 @@
 use std::collections::HashMap;
 
-use tedge_api::{Jsonify, SoftwareListResponse, SoftwareModule, SoftwareType, SoftwareVersion};
+use tedge_api::Jsonify;
+use tedge_api::SoftwareListResponse;
+use tedge_api::SoftwareModule;
+use tedge_api::SoftwareType;
+use tedge_api::SoftwareVersion;
 
 use crate::smartrest::error::SMCumulocityMapperError;
 use download::DownloadInfo;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Value;
 use tedge_api::event::ThinEdgeEvent;
 use time::OffsetDateTime;

@@ -1,4 +1,5 @@
-use crate::cli::config::{commands::*, config_key::*};
+use crate::cli::config::commands::*;
+use crate::cli::config::config_key::*;
 use crate::command::*;
 use crate::ConfigError;
 use tedge_config::ConfigRepository;

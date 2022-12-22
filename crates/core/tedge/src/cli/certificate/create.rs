@@ -1,13 +1,14 @@
 use super::error::CertError;
 use crate::command::Command;
-use certificate::{KeyCertPair, NewCertificateConfig};
-use std::{
-    fs::{File, OpenOptions},
-    io::prelude::*,
-    path::Path,
-};
+use certificate::KeyCertPair;
+use certificate::NewCertificateConfig;
+use std::fs::File;
+use std::fs::OpenOptions;
+use std::io::prelude::*;
+use std::path::Path;
 use tedge_config::*;
-use tedge_utils::paths::{set_permission, validate_parent_dir_exists};
+use tedge_utils::paths::set_permission;
+use tedge_utils::paths::validate_parent_dir_exists;
 
 /// Create a self-signed device certificate
 pub struct CreateCertCmd {

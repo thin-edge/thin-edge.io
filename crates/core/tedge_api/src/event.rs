@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use clock::Timestamp;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Value;
 
 use self::error::ThinEdgeJsonDeserializerError;
@@ -97,7 +98,8 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use assert_matches::assert_matches;
-    use serde_json::{json, Value};
+    use serde_json::json;
+    use serde_json::Value;
     use test_case::test_case;
     use time::macros::datetime;
 

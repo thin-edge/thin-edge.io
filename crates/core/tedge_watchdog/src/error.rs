@@ -1,6 +1,7 @@
 use mqtt_channel::MqttError;
 
-use tedge_config::{ConfigSettingError, TEdgeConfigError};
+use tedge_config::ConfigSettingError;
+use tedge_config::TEdgeConfigError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WatchdogError {

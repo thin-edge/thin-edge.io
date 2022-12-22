@@ -1,22 +1,33 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
-use crate::c8y::converter::{CumulocityConverter, CumulocityDeviceInfo};
+use crate::c8y::converter::CumulocityConverter;
+use crate::c8y::converter::CumulocityDeviceInfo;
 use crate::core::component::TEdgeComponent;
-use crate::core::converter::{make_valid_topic_or_panic, MapperConfig};
-use crate::core::mapper::{mqtt_config, Mapper};
+use crate::core::converter::make_valid_topic_or_panic;
+use crate::core::converter::MapperConfig;
+use crate::core::mapper::mqtt_config;
+use crate::core::mapper::Mapper;
 use crate::core::size_threshold::SizeThreshold;
 use async_trait::async_trait;
-use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
-use c8y_api::smartrest::{operations::Operations, topic::C8yTopic};
-use mqtt_channel::{Connection, TopicFilter};
+use c8y_api::http_proxy::C8YHttpProxy;
+use c8y_api::http_proxy::JwtAuthHttpProxy;
+use c8y_api::smartrest::operations::Operations;
+use c8y_api::smartrest::topic::C8yTopic;
+use mqtt_channel::Connection;
+use mqtt_channel::TopicFilter;
 use tedge_api::health::health_check_topics;
 use tedge_api::topic::ResponseTopic;
-use tedge_config::{
-    ConfigSettingAccessor, DeviceIdSetting, DeviceTypeSetting, MqttBindAddressSetting,
-    MqttPortSetting, TEdgeConfig,
-};
+use tedge_config::ConfigSettingAccessor;
+use tedge_config::DeviceIdSetting;
+use tedge_config::DeviceTypeSetting;
+use tedge_config::MqttBindAddressSetting;
+use tedge_config::MqttPortSetting;
+use tedge_config::TEdgeConfig;
 use tedge_utils::file::*;
-use tracing::{info, info_span, Instrument};
+use tracing::info;
+use tracing::info_span;
+use tracing::Instrument;
 
 const CUMULOCITY_MAPPER_NAME: &str = "tedge-mapper-c8y";
 const MQTT_MESSAGE_SIZE_THRESHOLD: usize = 16184;
@@ -194,7 +205,8 @@ mod tests {
     use c8y_api::http_proxy::MockC8yJwtTokenRetriever;
     use c8y_api::smartrest::smartrest_deserializer::SmartRestJwtResponse;
     use mockito::mock;
-    use mqtt_tests::{assert_received_all_expected, test_mqtt_broker};
+    use mqtt_tests::assert_received_all_expected;
+    use mqtt_tests::test_mqtt_broker;
     use serde_json::json;
     use std::time::Duration;
     use tedge_test_utils::fs::TempTedgeDir;

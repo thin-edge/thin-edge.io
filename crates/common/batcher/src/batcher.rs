@@ -1,4 +1,5 @@
-use crate::batch::{Batch, BatchAdd};
+use crate::batch::Batch;
+use crate::batch::BatchAdd;
 use crate::batchable::Batchable;
 use crate::config::BatchConfig;
 use time::OffsetDateTime;
