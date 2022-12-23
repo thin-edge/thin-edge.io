@@ -28,11 +28,12 @@ assets = [
 [package.metadata.deb.systemd-units]
 
 [dependencies]
-assert_cmd = "2.0"
 anyhow = "1.0"
+assert_cmd = "2.0"
 async-trait = "0.1"
 batcher = { path = "../../common/batcher" }
 c8y_api = { path = "../c8y_api" }
+clap = { version = "3.2", features = ["cargo", "derive"] }
 clock = { path = "../../common/clock" }
 csv = "1.1"
 download = { path = "../../common/download" }
@@ -46,7 +47,6 @@ plugin_sm = { path = "../plugin_sm" }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-clap = { version = "3.2", features = ["cargo", "derive"] }
 tedge_api = { path = "../tedge_api" }
 tedge_config = { path = "../../common/tedge_config" }
 tedge_utils = { path = "../../common/tedge_utils", features = ["logging", "fs-notify"] }
@@ -57,13 +57,13 @@ toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 
 [dev-dependencies]
-assert_matches = "1.5"
 assert-json-diff = "2.0"
-serde = "1.0"
+assert_matches = "1.5"
 mockito = "0.31"
 mqtt_tests = { path = "../../tests/mqtt_tests" }
 proptest = "1.0"
 rand = "0.8"
+serde = "1.0"
 serde_json = "1.0"
 serial_test = "0.8"
 tedge_test_utils = { path = "../../tests/tedge_test_utils" }

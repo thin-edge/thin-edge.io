@@ -8,7 +8,6 @@ license = "Apache-2.0"
 description = "tedge-watchdog checks the health of all the thin-edge.io components/services."
 homepage = "https://thin-edge.io"
 repository = "https://github.com/thin-edge/thin-edge.io"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [package.metadata.deb]
@@ -28,15 +27,15 @@ assets = [
 [dependencies]
 anyhow = "1.0"
 clap = { version = "3.2", features = ["cargo", "derive"] }
+freedesktop_entry_parser = "1.3.0"
 futures = "0.3.21"
 mqtt_channel = { path = "../../common/mqtt_channel" }
 nanoid = "0.4.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-freedesktop_entry_parser = "1.3.0"
 tedge_config = { path = "../../common/tedge_config" }
 tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
-thiserror ="1.0.30"
+thiserror = "1.0.30"
 time = { version = "0.3", features = ["formatting", "serde-well-known"] }
 tokio = { version = "1.12", features = ["sync",  "time", "rt-multi-thread"] }
 tracing = { version = "0.1", features = ["attributes", "log"] }

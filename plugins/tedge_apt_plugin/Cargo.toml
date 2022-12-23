@@ -16,14 +16,13 @@ breaks = "tedge_apt_plugin (<= 0.8.1)"
 assets = [
     ["target/release/tedge-apt-plugin", "/etc/tedge/sm-plugins/apt", "755"],
 ]
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 clap = { version = "3", features = ["derive"] }
-thiserror = "1.0"
 csv = "1.1"
 serde = { version = "1", features = ["derive"] }
+thiserror = "1.0"
 
 [dev-dependencies]
 anyhow = "1.0"
