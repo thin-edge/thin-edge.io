@@ -9,7 +9,6 @@ rust-version = "1.58.1"
 log = "0.4"
 tokio = { version = "1.8", features = [ "fs", "io-util", "macros", "process", "rt" ] }
 
-
 [dev-dependencies]
 anyhow = "1.0"
 assert_matches = "1.5"

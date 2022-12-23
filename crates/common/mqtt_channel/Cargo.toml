@@ -4,13 +4,12 @@ version = "0.8.1"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
 rust-version = "1.58.1"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 async-trait = "0.1"
-futures = "0.3"
 fastrand = "1.8"
+futures = "0.3"
 rumqttc = "0.17"
 thiserror = "1.0"
 tokio = { version = "1.12", features = ["rt", "time"] }

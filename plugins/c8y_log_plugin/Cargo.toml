@@ -33,11 +33,11 @@ glob = "0.3"
 mqtt_channel = { path = "../../crates/common/mqtt_channel" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+tedge_api = { path = "../../crates/core/tedge_api" }
 tedge_config = { path = "../../crates/common/tedge_config" }
 tedge_utils = { path = "../../crates/common/tedge_utils", features = ["logging", "fs-notify"] }
-time = { version = "0.3" }
-tedge_api = { path = "../../crates/core/tedge_api" }
 thiserror = "1.0"
+time = { version = "0.3" }
 tokio = { version = "1.9", default_features = false, features = [ "fs", "io-util", "macros", "rt-multi-thread","signal"] }
 toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
@@ -46,6 +46,6 @@ tracing = { version = "0.1", features = ["attributes", "log"] }
 assert_matches = "1.5"
 filetime = "0.2"
 mockall = "0.11"
+serial_test = "0.8"
 tempfile = "3.3"
 test-case = "2.2"
-serial_test = "0.8"

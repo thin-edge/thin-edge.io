@@ -130,6 +130,30 @@ jobs:
           cd docs
           mdbook build
 
+  cargo-sort:
+    name: Run cargo sort
+    runs-on: Ubuntu-20.04
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Install cargo sort 
+        uses: actions-rs/install@v0.1
+        # https://github.com/marketplace/actions/rust-cargo-install
+        with:
+          crate: cargo-sort 
+          version: latest
+
+      - name: Cargo sort
+        uses: actions-rs/cargo@v1
+        # https://github.com/marketplace/actions/rust-cargo
+        with:
+          command: sort
+          args: -w . --check
+
   cargo-fmt:
     name: Run cargo fmt
     runs-on: Ubuntu-20.04
@@ -220,7 +244,7 @@ jobs:
     runs-on: Ubuntu-20.04
     env:
       RUSTFLAGS: -D warnings
-    needs: [cargo-fmt, cargo-clippy]
+    needs: [cargo-fmt, cargo-clippy, cargo-sort]
 
     steps:
       - name: Checkout
@@ -258,7 +282,7 @@ jobs:
     runs-on: Ubuntu-20.04
     env:
       RUSTFLAGS: -D warnings
-    needs: [cargo-fmt, cargo-clippy]
+    needs: [cargo-fmt, cargo-clippy, cargo-sort]
 
     steps:
       - name: Checkout
@@ -289,7 +313,7 @@ jobs:
     runs-on: Ubuntu-20.04
     env:
       RUSTFLAGS: -D warnings
-    needs: [cargo-fmt, cargo-clippy]
+    needs: [cargo-fmt, cargo-clippy, cargo-sort]
 
     steps:
       - name: checkout
@@ -317,7 +341,7 @@ jobs:
     runs-on: Ubuntu-20.04
     env:
       RUSTFLAGS: -D warnings
-    needs: [cargo-fmt, cargo-clippy]
+    needs: [cargo-fmt, cargo-clippy, cargo-sort]
 
     steps:
       - name: checkout
