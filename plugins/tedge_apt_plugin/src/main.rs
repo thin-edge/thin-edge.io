@@ -69,22 +69,22 @@ fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
         PluginOp::List {} => {
             let apt = Command::new("apt")
                 .args(vec!["--manual-installed", "list"])
-                .stdout(Stdio::piped()) // To pipe apt.stdout into awk.stdin
+                .stdout(Stdio::piped())
                 .spawn()
+                .map_err(|err| InternalError::exec_error("apt", err))?
+                .wait_with_output()
                 .map_err(|err| InternalError::exec_error("apt", err))?;
 
-            // apt output    = openssl/focal-security,now 1.1.1f-1ubuntu2.3 amd64 [installed]
-            // awk -F '[/ ]' =   $1   ^       $2         ^   $3            ^   $4
-            // awk print     =   name ^                  ^   version       ^
-            Command::new("awk")
-                .args(vec![
-                    "-F",
-                    "[/ ]",
-                    r#"{if ($1 != "Listing...") { print $1"\t"$3}}"#,
-                ])
-                .stdin(apt.stdout.unwrap()) // Cannot panic: apt.stdout has been set
-                .status()
-                .map_err(|err| InternalError::exec_error("awk", err))?
+            let stdout = String::from_utf8(apt.stdout.as_slice().to_vec()).unwrap_or_default();
+            for line in stdout.trim_end().split('\n') {
+                if line == "Listing..." {
+                    // Ignore the first line of the stdout
+                    continue;
+                }
+                let (name, version) = get_name_and_version(line);
+                println!("{name}\t{version}");
+            }
+            apt.status
         }
 
         PluginOp::Install {
@@ -247,6 +247,27 @@ fn run_cmd(cmd: &str, args: &str) -> Result<ExitStatus, InternalError> {
     Ok(status)
 }
 
+fn get_name_and_version(line: &str) -> (&str, &str) {
+    let vec: Vec<&str> = line.split(' ').collect();
+    // The first element should always exist and has slash, like tedge/tedge-main
+    let name = vec
+        .first()
+        .unwrap_or(&"unknown name")
+        .split_once('/')
+        .unwrap_or((&"unknown name", &"others"))
+        .0;
+    let version = if line.contains("upgradable from:") {
+        // e.g. tedge/tedge-main 0.8.1-127-gb7d7d599 arm64 [upgradable from: 0.8.1]
+        vec.get(5)
+            .unwrap_or(&"unknown version")
+            .trim_end_matches(']')
+    } else {
+        // e.g. tedge_agent/now 0.8.1 arm64 [installed,local]
+        vec.get(1).unwrap_or(&"unknown version")
+    };
+    (name, version)
+}
+
 fn main() {
     // On usage error, the process exits with a status code of 1
 
@@ -280,5 +301,27 @@ fn main() {
             eprintln!("ERROR: {}", err);
             std::process::exit(5);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test_case::test_case;
+
+    #[test_case(
+    "aptdaemon/focal-updates,focal-updates,focal-security,focal-security,now 1.1.1+bzr982-0ubuntu32.3 all [installed]",
+    "aptdaemon", "1.1.1+bzr982-0ubuntu32.3"
+    ; "installed"
+    )]
+    #[test_case(
+    "language-pack-gnome-en-base/focal-updates,focal-updates 1:20.04+20220818 all [upgradable from: 1:20.04+20220211]",
+    "language-pack-gnome-en-base", "1:20.04+20220211"
+    ; "upgradable"
+    )]
+    fn get_package_name_and_version(line: &str, expected_name: &str, expected_version: &str) {
+        let (name, version) = get_name_and_version(line);
+        assert_eq!(name, expected_name);
+        assert_eq!(version, expected_version);
     }
 }
