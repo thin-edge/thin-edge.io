@@ -1,8 +1,11 @@
 #[cfg(test)]
 mod tests {
 
-    use plugin_sm::plugin_manager::{ExternalPlugins, Plugins};
-    use std::{fs::File, path::PathBuf, str::FromStr};
+    use plugin_sm::plugin_manager::ExternalPlugins;
+    use plugin_sm::plugin_manager::Plugins;
+    use std::fs::File;
+    use std::path::PathBuf;
+    use std::str::FromStr;
     use tempfile::NamedTempFile;
 
     #[test]

@@ -1,8 +1,7 @@
 use mqtt_channel::Message;
 
-use crate::{
-    child_device::get_operation_name_from_child_topic, error::ChildDeviceConfigManagementError,
-};
+use crate::child_device::get_operation_name_from_child_topic;
+use crate::error::ChildDeviceConfigManagementError;
 
 pub enum ConfigOperation {
     Snapshot,

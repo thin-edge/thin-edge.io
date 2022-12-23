@@ -1,13 +1,17 @@
 use std::path::Path;
 
-use crate::{
-    collectd::monitor::{DeviceMonitor, DeviceMonitorConfig},
-    core::component::TEdgeComponent,
-};
+use crate::collectd::monitor::DeviceMonitor;
+use crate::collectd::monitor::DeviceMonitorConfig;
+use crate::core::component::TEdgeComponent;
 use async_trait::async_trait;
 use mqtt_channel::TopicFilter;
-use tedge_config::{ConfigSettingAccessor, MqttBindAddressSetting, MqttPortSetting, TEdgeConfig};
-use tracing::{info, info_span, Instrument};
+use tedge_config::ConfigSettingAccessor;
+use tedge_config::MqttBindAddressSetting;
+use tedge_config::MqttPortSetting;
+use tedge_config::TEdgeConfig;
+use tracing::info;
+use tracing::info_span;
+use tracing::Instrument;
 
 const COLLECTD_MAPPER_NAME: &str = "tedge-mapper-collectd";
 

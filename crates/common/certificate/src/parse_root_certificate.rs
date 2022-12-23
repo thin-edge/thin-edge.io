@@ -1,6 +1,14 @@
-use rustls::{Certificate, ClientConfig, PrivateKey, RootCertStore};
-use rustls_pemfile::{certs, pkcs8_private_keys, rsa_private_keys};
-use std::{fs, fs::File, io::BufReader, path::PathBuf};
+use rustls::Certificate;
+use rustls::ClientConfig;
+use rustls::PrivateKey;
+use rustls::RootCertStore;
+use rustls_pemfile::certs;
+use rustls_pemfile::pkcs8_private_keys;
+use rustls_pemfile::rsa_private_keys;
+use std::fs;
+use std::fs::File;
+use std::io::BufReader;
+use std::path::PathBuf;
 
 use crate::CertificateError;
 
@@ -98,7 +106,8 @@ pub fn read_cert_chain(cert_file: PathBuf) -> Result<Vec<Certificate>, Certifica
 mod tests {
     use super::*;
     use std::io::Write;
-    use tempfile::{NamedTempFile, TempDir};
+    use tempfile::NamedTempFile;
+    use tempfile::TempDir;
 
     #[test]
     fn parse_private_rsa_key() {

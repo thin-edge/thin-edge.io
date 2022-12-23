@@ -1,5 +1,7 @@
 use crate::cli::connect::BridgeConfig;
-use tedge_config::{ConnectUrl, FilePath, TemplatesSet};
+use tedge_config::ConnectUrl;
+use tedge_config::FilePath;
+use tedge_config::TemplatesSet;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfigC8yParams {

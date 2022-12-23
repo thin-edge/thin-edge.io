@@ -3,20 +3,29 @@ use freedesktop_entry_parser::parse_entry;
 use futures::channel::mpsc;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use mqtt_channel::{Config, Message, PubChannel, Topic};
+use mqtt_channel::Config;
+use mqtt_channel::Message;
+use mqtt_channel::PubChannel;
+use mqtt_channel::Topic;
 use nanoid::nanoid;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::ExitStatus;
+use std::process::Stdio;
+use std::process::{self};
 use std::time::Instant;
-use std::{
-    path::PathBuf,
-    process::{self, Command, ExitStatus, Stdio},
-};
-use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, MqttBindAddressSetting, MqttPortSetting,
-    TEdgeConfigLocation,
-};
+use tedge_config::ConfigRepository;
+use tedge_config::ConfigSettingAccessor;
+use tedge_config::MqttBindAddressSetting;
+use tedge_config::MqttPortSetting;
+use tedge_config::TEdgeConfigLocation;
 use time::OffsetDateTime;
-use tracing::{debug, error, info, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HealthStatus {

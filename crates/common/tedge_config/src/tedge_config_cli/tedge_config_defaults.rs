@@ -1,6 +1,9 @@
-use crate::tedge_config_cli::models::{FilePath, IpAddress, TemplatesSet};
+use crate::tedge_config_cli::models::FilePath;
+use crate::tedge_config_cli::models::IpAddress;
+use crate::tedge_config_cli::models::TemplatesSet;
+use crate::Flag;
+use crate::Port;
 use crate::TEdgeConfigLocation;
-use crate::{Flag, Port};
 use std::path::Path;
 
 const DEFAULT_ETC_PATH: &str = "/etc";

@@ -3,33 +3,46 @@ mod error;
 mod logfile_request;
 
 use anyhow::Result;
-use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
-use c8y_api::smartrest::smartrest_deserializer::{SmartRestLogRequest, SmartRestRequestGeneric};
+use c8y_api::http_proxy::C8YHttpProxy;
+use c8y_api::http_proxy::JwtAuthHttpProxy;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::topic::C8yTopic;
-use c8y_api::utils::bridge::{is_c8y_bridge_up, C8Y_BRIDGE_HEALTH_TOPIC};
+use c8y_api::utils::bridge::is_c8y_bridge_up;
+use c8y_api::utils::bridge::C8Y_BRIDGE_HEALTH_TOPIC;
 use clap::Parser;
 
 use c8y_api::smartrest::message::get_smartrest_device_id;
-use mqtt_channel::{Connection, Message, StreamExt, TopicFilter};
-use std::path::{Path, PathBuf};
-use tedge_api::health::{health_check_topics, send_health_status};
-use tedge_config::system_services::{get_log_level, set_log_level};
-use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, DeviceIdSetting, LogPathSetting, MqttPortSetting,
-    TEdgeConfig, DEFAULT_TEDGE_CONFIG_PATH,
-};
+use mqtt_channel::Connection;
+use mqtt_channel::Message;
+use mqtt_channel::StreamExt;
+use mqtt_channel::TopicFilter;
+use std::path::Path;
+use std::path::PathBuf;
+use tedge_api::health::health_check_topics;
+use tedge_api::health::send_health_status;
+use tedge_config::system_services::get_log_level;
+use tedge_config::system_services::set_log_level;
+use tedge_config::ConfigRepository;
+use tedge_config::ConfigSettingAccessor;
+use tedge_config::DeviceIdSetting;
+use tedge_config::LogPathSetting;
+use tedge_config::MqttPortSetting;
+use tedge_config::TEdgeConfig;
+use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
-use tedge_utils::{
-    file::{create_directory_with_user_group, create_file_with_user_group},
-    notify::{fs_notify_stream, FsEvent},
-    paths::PathsError,
-};
-use tracing::{error, info};
+use tedge_utils::file::create_directory_with_user_group;
+use tedge_utils::file::create_file_with_user_group;
+use tedge_utils::notify::fs_notify_stream;
+use tedge_utils::notify::FsEvent;
+use tedge_utils::paths::PathsError;
+use tracing::error;
+use tracing::info;
 
 use crate::config::LogPluginConfig;
-use crate::logfile_request::{
-    handle_dynamic_log_type_update, handle_logfile_request_operation, read_log_config,
-};
+use crate::logfile_request::handle_dynamic_log_type_update;
+use crate::logfile_request::handle_logfile_request_operation;
+use crate::logfile_request::read_log_config;
 
 const DEFAULT_PLUGIN_CONFIG_FILE: &str = "c8y/c8y-log-plugin.toml";
 const AFTER_HELP_TEXT: &str = r#"On start, `c8y-log-plugin` notifies the cloud tenant of the log types listed in the `CONFIG_FILE`, sending this list with a `118` on `c8y/s/us`.

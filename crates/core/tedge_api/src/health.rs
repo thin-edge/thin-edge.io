@@ -1,6 +1,9 @@
 use std::process;
 
-use mqtt_channel::{Message, PubChannel, Topic, TopicFilter};
+use mqtt_channel::Message;
+use mqtt_channel::PubChannel;
+use mqtt_channel::Topic;
+use mqtt_channel::TopicFilter;
 use serde_json::json;
 use time::OffsetDateTime;
 

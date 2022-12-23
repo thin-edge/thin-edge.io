@@ -5,7 +5,8 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 use time::OffsetDateTime;
 use tokio::sync::mpsc::error::SendError;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::Sender;
 
 /// Input message to the BatchDriver's input channel.
 #[derive(Debug)]
@@ -147,8 +148,10 @@ mod tests {
     use crate::config::BatchConfigBuilder;
     use crate::driver::BatchDriver;
     use std::time::Duration;
+    use tokio::sync::mpsc::channel;
     use tokio::sync::mpsc::error::SendError;
-    use tokio::sync::mpsc::{channel, Receiver, Sender};
+    use tokio::sync::mpsc::Receiver;
+    use tokio::sync::mpsc::Sender;
     use tokio::time::timeout;
 
     #[tokio::test]

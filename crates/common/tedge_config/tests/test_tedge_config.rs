@@ -1,7 +1,8 @@
 use assert_matches::assert_matches;
 use std::convert::TryFrom;
 use std::io::Write;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
 use tedge_config::*;
 use tedge_test_utils::fs::TempTedgeDir;
 

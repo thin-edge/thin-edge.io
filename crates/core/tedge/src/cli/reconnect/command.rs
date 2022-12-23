@@ -1,17 +1,14 @@
 use std::sync::Arc;
 
-use tedge_config::{
-    system_services::SystemServiceManager, TEdgeConfigLocation, TEdgeConfigRepository,
-};
+use tedge_config::system_services::SystemServiceManager;
+use tedge_config::TEdgeConfigLocation;
+use tedge_config::TEdgeConfigRepository;
 
-use crate::{
-    cli::{
-        common::Cloud,
-        connect::{CommonMosquittoConfig, ConnectCommand},
-        disconnect::disconnect_bridge::DisconnectBridgeCommand,
-    },
-    command::Command,
-};
+use crate::cli::common::Cloud;
+use crate::cli::connect::CommonMosquittoConfig;
+use crate::cli::connect::ConnectCommand;
+use crate::cli::disconnect::disconnect_bridge::DisconnectBridgeCommand;
+use crate::command::Command;
 
 #[derive(Debug)]
 pub struct ReconnectBridgeCommand {

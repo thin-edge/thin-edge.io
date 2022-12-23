@@ -1,8 +1,9 @@
 use certificate::translate_rustls_error;
 use reqwest::StatusCode;
 use std::error::Error;
+use tedge_config::ConfigSettingError;
 use tedge_config::FilePath;
-use tedge_config::{ConfigSettingError, TEdgeConfigError};
+use tedge_config::TEdgeConfigError;
 use tedge_utils::paths::PathsError;
 
 #[derive(thiserror::Error, Debug)]

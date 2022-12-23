@@ -1,7 +1,14 @@
 use crate::with_timeout::WithTimeout;
-use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures::{SinkExt, StreamExt};
-use rumqttc::{AsyncClient, Event, EventLoop, MqttOptions, Packet, QoS};
+use futures::channel::mpsc::UnboundedReceiver;
+use futures::channel::mpsc::UnboundedSender;
+use futures::SinkExt;
+use futures::StreamExt;
+use rumqttc::AsyncClient;
+use rumqttc::Event;
+use rumqttc::EventLoop;
+use rumqttc::MqttOptions;
+use rumqttc::Packet;
+use rumqttc::QoS;
 use std::time::Duration;
 
 /// Returns the stream of messages received on a specific topic.

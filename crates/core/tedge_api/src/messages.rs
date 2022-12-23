@@ -1,7 +1,9 @@
-use crate::{error::SoftwareError, software::*};
+use crate::error::SoftwareError;
+use crate::software::*;
 use download::DownloadInfo;
 use nanoid::nanoid;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// All the messages are serialized using json.
 pub trait Jsonify<'a>

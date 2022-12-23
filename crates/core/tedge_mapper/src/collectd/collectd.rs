@@ -1,7 +1,8 @@
 use batcher::Batchable;
 use mqtt_channel::Message;
 use tedge_api::measurement::MeasurementVisitor;
-use time::{Duration, OffsetDateTime};
+use time::Duration;
+use time::OffsetDateTime;
 
 #[derive(Debug)]
 pub struct CollectdMessage {

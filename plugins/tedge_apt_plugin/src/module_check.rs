@@ -1,9 +1,8 @@
 use crate::error::InternalError;
+use std::ffi::OsStr;
+use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
-use std::{
-    ffi::OsStr,
-    path::{Path, PathBuf},
-};
 
 pub struct PackageMetadata {
     file_path: PathBuf,

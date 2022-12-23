@@ -1,6 +1,7 @@
-use c8y_api::smartrest::error::{
-    OperationsError, SMCumulocityMapperError, SmartRestDeserializerError, SmartRestSerializerError,
-};
+use c8y_api::smartrest::error::OperationsError;
+use c8y_api::smartrest::error::SMCumulocityMapperError;
+use c8y_api::smartrest::error::SmartRestDeserializerError;
+use c8y_api::smartrest::error::SmartRestSerializerError;
 use plugin_sm::operation_logs::OperationLogsError;
 
 #[derive(thiserror::Error, Debug)]

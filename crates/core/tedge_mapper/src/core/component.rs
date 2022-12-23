@@ -2,9 +2,11 @@ use std::path::Path;
 
 use async_trait::async_trait;
 use mqtt_channel::TopicFilter;
-use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, MqttBindAddressSetting, MqttPortSetting, TEdgeConfig,
-};
+use tedge_config::ConfigRepository;
+use tedge_config::ConfigSettingAccessor;
+use tedge_config::MqttBindAddressSetting;
+use tedge_config::MqttPortSetting;
+use tedge_config::TEdgeConfig;
 use tracing::info;
 
 #[async_trait]

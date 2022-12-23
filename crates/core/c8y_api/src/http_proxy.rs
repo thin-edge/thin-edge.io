@@ -1,24 +1,38 @@
-use crate::json_c8y::{
-    C8yCreateEvent, C8yEventResponse, C8yManagedObject, C8yUpdateSoftwareListResponse,
-    InternalIdResponse,
-};
+use crate::json_c8y::C8yCreateEvent;
+use crate::json_c8y::C8yEventResponse;
+use crate::json_c8y::C8yManagedObject;
+use crate::json_c8y::C8yUpdateSoftwareListResponse;
+use crate::json_c8y::InternalIdResponse;
 
-use crate::smartrest::{
-    error::SMCumulocityMapperError, smartrest_deserializer::SmartRestJwtResponse,
-};
+use crate::smartrest::error::SMCumulocityMapperError;
+use crate::smartrest::smartrest_deserializer::SmartRestJwtResponse;
 use async_trait::async_trait;
 use mockall::automock;
-use mqtt_channel::{Connection, PubChannel, StreamExt, Topic, TopicFilter};
-use reqwest::{RequestBuilder, Response, StatusCode, Url};
+use mqtt_channel::Connection;
+use mqtt_channel::PubChannel;
+use mqtt_channel::StreamExt;
+use mqtt_channel::Topic;
+use mqtt_channel::TopicFilter;
+use reqwest::RequestBuilder;
+use reqwest::Response;
+use reqwest::StatusCode;
+use reqwest::Url;
+use std::collections::HashMap;
 use std::path::Path;
-use std::{collections::HashMap, time::Duration};
-use tedge_config::{
-    C8yRootCertPathSetting, C8yUrlSetting, ConfigSettingAccessor, ConfigSettingAccessorStringExt,
-    DeviceIdSetting, MqttBindAddressSetting, MqttPortSetting, TEdgeConfig,
-};
+use std::time::Duration;
+use tedge_config::C8yRootCertPathSetting;
+use tedge_config::C8yUrlSetting;
+use tedge_config::ConfigSettingAccessor;
+use tedge_config::ConfigSettingAccessorStringExt;
+use tedge_config::DeviceIdSetting;
+use tedge_config::MqttBindAddressSetting;
+use tedge_config::MqttPortSetting;
+use tedge_config::TEdgeConfig;
 use time::OffsetDateTime;
 
-use tracing::{error, info, instrument};
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
 
 const RETRY_TIMEOUT_SECS: u64 = 60;
 
@@ -475,7 +489,8 @@ mod tests {
 
     use super::*;
     use anyhow::Result;
-    use mockito::{mock, Matcher};
+    use mockito::mock;
+    use mockito::Matcher;
     use serde_json::json;
     use tempfile::NamedTempFile;
     use test_case::test_case;

@@ -1,7 +1,10 @@
-pub use self::{
-    bridge_config::*, bridge_config_azure::*, bridge_config_c8y::*, cli::*, command::*,
-    common_mosquitto_config::*, error::*,
-};
+pub use self::bridge_config::*;
+pub use self::bridge_config_azure::*;
+pub use self::bridge_config_c8y::*;
+pub use self::cli::*;
+pub use self::command::*;
+pub use self::common_mosquitto_config::*;
+pub use self::error::*;
 
 mod bridge_config;
 mod bridge_config_azure;

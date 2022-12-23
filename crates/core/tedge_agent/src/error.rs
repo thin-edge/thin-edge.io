@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use flockfile::FlockfileError;
 use mqtt_channel::MqttError;
 use tedge_api::SoftwareError;
-use tedge_config::{ConfigSettingError, TEdgeConfigError};
+use tedge_config::ConfigSettingError;
+use tedge_config::TEdgeConfigError;
 
 #[derive(Debug, thiserror::Error)]
 #[allow(clippy::enum_variant_names)]

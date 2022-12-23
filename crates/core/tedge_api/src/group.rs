@@ -193,7 +193,8 @@ mod tests {
     use super::*;
     use mockall::predicate::*;
     use mockall::*;
-    use time::{macros::datetime, Duration};
+    use time::macros::datetime;
+    use time::Duration;
 
     #[derive(thiserror::Error, Debug, Clone)]
     pub enum TestError {

@@ -1,4 +1,5 @@
-use std::{fs, io};
+use std::fs;
+use std::io;
 
 use super::error::CertError;
 use crate::command::Command;

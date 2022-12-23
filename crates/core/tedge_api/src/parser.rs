@@ -3,14 +3,15 @@
 //! [^1]: It only allocates in presence of escaped strings as keys.
 //!
 use crate::measurement::MeasurementVisitor;
-use serde::{
-    de::{self, DeserializeSeed, MapAccess},
-    Deserializer,
-};
+use serde::de::DeserializeSeed;
+use serde::de::MapAccess;
+use serde::de::{self};
+use serde::Deserializer;
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::fmt;
-use time::{format_description, OffsetDateTime};
+use time::format_description;
+use time::OffsetDateTime;
 
 /// Parses `input` as ThinEdge JSON yielding the parsed measurements to the `visitor`.
 pub fn parse_str<T: MeasurementVisitor>(

@@ -1,11 +1,14 @@
 use nix::unistd::*;
+use std::fs;
+use std::io;
 use std::io::Write;
 use std::os::linux::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
-use std::{fs, io};
+use std::path::Path;
+use std::path::PathBuf;
 use tracing::debug;
-use users::{get_group_by_name, get_user_by_name};
+use users::get_group_by_name;
+use users::get_user_by_name;
 
 #[derive(thiserror::Error, Debug)]
 pub enum FileError {

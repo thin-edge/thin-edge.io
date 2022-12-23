@@ -1,14 +1,23 @@
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-    path::{Path, PathBuf},
-};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::hash::Hash;
+use std::path::Path;
+use std::path::PathBuf;
 
-use notify::{
-    event::{AccessKind, AccessMode, CreateKind, DataChange, ModifyKind, RemoveKind},
-    Config, EventKind, INotifyWatcher, RecommendedWatcher, RecursiveMode, Watcher,
-};
-use tokio::sync::mpsc::{channel, Receiver};
+use notify::event::AccessKind;
+use notify::event::AccessMode;
+use notify::event::CreateKind;
+use notify::event::DataChange;
+use notify::event::ModifyKind;
+use notify::event::RemoveKind;
+use notify::Config;
+use notify::EventKind;
+use notify::INotifyWatcher;
+use notify::RecommendedWatcher;
+use notify::RecursiveMode;
+use notify::Watcher;
+use tokio::sync::mpsc::channel;
+use tokio::sync::mpsc::Receiver;
 use try_traits::default::TryDefault;
 
 use strum_macros::Display;
@@ -157,7 +166,8 @@ pub fn fs_notify_stream(
 
 #[cfg(test)]
 mod notify_tests {
-    use std::{collections::HashMap, sync::Arc};
+    use std::collections::HashMap;
+    use std::sync::Arc;
 
     use maplit::hashmap;
     use tedge_test_utils::fs::TempTedgeDir;
@@ -165,7 +175,8 @@ mod notify_tests {
 
     use crate::notify::FsEvent;
 
-    use super::{fs_notify_stream, NotifyStream};
+    use super::fs_notify_stream;
+    use super::NotifyStream;
 
     /// This test:
     ///     Creates a duplicate watcher (same directory path, same file name, same event)

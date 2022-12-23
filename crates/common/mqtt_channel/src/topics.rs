@@ -1,6 +1,7 @@
 use crate::errors::MqttError;
 use crate::Message;
-use rumqttc::{QoS, SubscribeFilter};
+use rumqttc::QoS;
+use rumqttc::SubscribeFilter;
 use std::convert::TryInto;
 
 /// An MQTT topic

@@ -1,7 +1,9 @@
 use proc_macro::TokenStream;
 use quote::quote;
+use syn::parse;
 use syn::parse::Parser;
-use syn::{parse, parse_macro_input, ItemStruct};
+use syn::parse_macro_input;
+use syn::ItemStruct;
 
 #[proc_macro_attribute]
 /// Adds a field called "other" to a deserialize-able struct.

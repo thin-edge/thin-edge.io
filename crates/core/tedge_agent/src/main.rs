@@ -2,10 +2,9 @@ use std::path::PathBuf;
 
 use agent::SmAgentConfig;
 use clap::Parser;
-use tedge_config::{
-    system_services::{get_log_level, set_log_level},
-    DEFAULT_TEDGE_CONFIG_PATH,
-};
+use tedge_config::system_services::get_log_level;
+use tedge_config::system_services::set_log_level;
+use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 mod agent;
 mod error;

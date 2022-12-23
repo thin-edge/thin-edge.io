@@ -1,6 +1,8 @@
 use crate::measurement::MeasurementVisitor;
-use json_writer::{JsonWriter, JsonWriterError};
-use time::{format_description, OffsetDateTime};
+use json_writer::JsonWriter;
+use json_writer::JsonWriterError;
+use time::format_description;
+use time::OffsetDateTime;
 
 pub struct ThinEdgeJsonSerializer {
     json: JsonWriter,

@@ -1,57 +1,71 @@
 use crate::c8y::dynamic_discovery::*;
 use crate::c8y::json;
-use crate::core::{converter::*, error::*, size_threshold::SizeThreshold};
+use crate::core::converter::*;
+use crate::core::error::*;
+use crate::core::size_threshold::SizeThreshold;
 use async_trait::async_trait;
-use c8y_api::smartrest::{
-    error::SmartRestDeserializerError,
-    operations::{get_operation, Operations},
-    smartrest_deserializer::{
-        AvailableChildDevices, SmartRestRequestGeneric, SmartRestRestartRequest,
-        SmartRestUpdateSoftware,
-    },
-    smartrest_serializer::{
-        CumulocitySupportedOperations, SmartRestGetPendingOperations, SmartRestSerializer,
-        SmartRestSetOperationToExecuting, SmartRestSetOperationToFailed,
-        SmartRestSetOperationToSuccessful,
-    },
-};
-use c8y_api::{
-    http_proxy::C8YHttpProxy,
-    json_c8y::{C8yCreateEvent, C8yUpdateSoftwareListResponse},
-    utils::child_device::new_child_device_message,
-};
-use futures::{channel::mpsc, SinkExt};
+use c8y_api::http_proxy::C8YHttpProxy;
+use c8y_api::json_c8y::C8yCreateEvent;
+use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
+use c8y_api::smartrest::error::SmartRestDeserializerError;
+use c8y_api::smartrest::operations::get_operation;
+use c8y_api::smartrest::operations::Operations;
+use c8y_api::smartrest::smartrest_deserializer::AvailableChildDevices;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestRestartRequest;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestUpdateSoftware;
+use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use c8y_api::smartrest::smartrest_serializer::SmartRestGetPendingOperations;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
+use c8y_api::utils::child_device::new_child_device_message;
+use futures::channel::mpsc;
+use futures::SinkExt;
 use logged_command::LoggedCommand;
-use mqtt_channel::{Message, Topic};
+use mqtt_channel::Message;
+use mqtt_channel::Topic;
 use plugin_sm::operation_logs::OperationLogs;
 use std::collections::HashMap;
 use std::fs;
-use std::{
-    fs::File,
-    io::Read,
-    path::{Path, PathBuf},
-};
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
+use std::path::PathBuf;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
-use tedge_api::{
-    topic::{RequestTopic, ResponseTopic},
-    Auth, DownloadInfo, Jsonify, OperationStatus, RestartOperationRequest,
-    RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareUpdateResponse,
-};
-use tedge_config::{get_tedge_config, ConfigSettingAccessor, LogPathSetting};
+use tedge_api::topic::RequestTopic;
+use tedge_api::topic::ResponseTopic;
+use tedge_api::Auth;
+use tedge_api::DownloadInfo;
+use tedge_api::Jsonify;
+use tedge_api::OperationStatus;
+use tedge_api::RestartOperationRequest;
+use tedge_api::RestartOperationResponse;
+use tedge_api::SoftwareListRequest;
+use tedge_api::SoftwareListResponse;
+use tedge_api::SoftwareUpdateResponse;
+use tedge_config::get_tedge_config;
+use tedge_config::ConfigSettingAccessor;
+use tedge_config::LogPathSetting;
 use time::format_description::well_known::Rfc3339;
-use tracing::{debug, info, log::error};
+use tracing::debug;
+use tracing::info;
+use tracing::log::error;
 
 use super::alarm_converter::AlarmConverter;
-use super::{
-    error::CumulocityMapperError,
-    fragments::{C8yAgentFragment, C8yDeviceDataFragment},
-};
-use c8y_api::smartrest::message::{
-    get_last_line_for_smartrest, get_smartrest_device_id, get_smartrest_template_id,
-    sanitize_for_smartrest, MAX_PAYLOAD_LIMIT_IN_BYTES,
-};
-use c8y_api::smartrest::topic::{C8yTopic, MapperSubscribeTopic, SMARTREST_PUBLISH_TOPIC};
+use super::error::CumulocityMapperError;
+use super::fragments::C8yAgentFragment;
+use super::fragments::C8yDeviceDataFragment;
+use c8y_api::smartrest::message::get_last_line_for_smartrest;
+use c8y_api::smartrest::message::get_smartrest_device_id;
+use c8y_api::smartrest::message::get_smartrest_template_id;
+use c8y_api::smartrest::message::sanitize_for_smartrest;
+use c8y_api::smartrest::message::MAX_PAYLOAD_LIMIT_IN_BYTES;
+use c8y_api::smartrest::topic::C8yTopic;
+use c8y_api::smartrest::topic::MapperSubscribeTopic;
+use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 
 const C8Y_CLOUD: &str = "c8y";
 const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
@@ -997,10 +1011,13 @@ pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>
 
 #[cfg(test)]
 mod tests {
-    use crate::c8y::tests::{create_test_mqtt_client_with_empty_operations, FakeC8YHttpProxy};
+    use crate::c8y::tests::create_test_mqtt_client_with_empty_operations;
+    use crate::c8y::tests::FakeC8YHttpProxy;
     use c8y_api::smartrest::operations::Operations;
     use plugin_sm::operation_logs::OperationLogs;
-    use rand::{prelude::Distribution, seq::SliceRandom, SeedableRng};
+    use rand::prelude::Distribution;
+    use rand::seq::SliceRandom;
+    use rand::SeedableRng;
     use std::collections::HashMap;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;

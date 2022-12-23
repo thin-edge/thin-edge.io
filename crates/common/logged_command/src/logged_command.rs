@@ -1,13 +1,12 @@
 use log::error;
-use std::{
-    ffi::OsStr,
-    process::{Output, Stdio},
-};
-use tokio::{
-    fs::File,
-    io::{AsyncWriteExt, BufWriter},
-    process::{Child, Command},
-};
+use std::ffi::OsStr;
+use std::process::Output;
+use std::process::Stdio;
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
+use tokio::io::BufWriter;
+use tokio::process::Child;
+use tokio::process::Command;
 
 #[derive(Debug)]
 pub struct LoggingChild {

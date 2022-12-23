@@ -1,9 +1,9 @@
-use std::{
-    fs::{self, OpenOptions},
-    io::Write,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::fs::OpenOptions;
+use std::fs::{self};
+use std::io::Write;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
 use tempfile::TempDir;
 #[derive(Debug, Clone)]
 pub struct TempTedgeDir {
@@ -129,7 +129,8 @@ pub fn create_full_tedge_dir_structure() {
 #[cfg(test)]
 mod tests {
     use super::TempTedgeDir;
-    use std::{io::Read, path::Path};
+    use std::io::Read;
+    use std::path::Path;
 
     #[test]
     fn assert_dir_file_and_content() -> Result<(), anyhow::Error> {

@@ -1,38 +1,71 @@
-use crate::{
-    error::AgentError,
-    http_rest,
-    restart_operation_handler::restart_operation,
-    state::{
-        AgentStateRepository, RestartOperationStatus, SoftwareOperationVariants, State,
-        StateRepository, StateStatus,
-    },
-};
-use flockfile::{check_another_instance_is_not_running, Flockfile};
-use tedge_api::{
-    control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
-    RestartOperationResponse, SoftwareError, SoftwareListRequest, SoftwareListResponse,
-    SoftwareRequestResponse, SoftwareType, SoftwareUpdateRequest, SoftwareUpdateResponse,
-};
+use crate::error::AgentError;
+use crate::http_rest;
+use crate::restart_operation_handler::restart_operation;
+use crate::state::AgentStateRepository;
+use crate::state::RestartOperationStatus;
+use crate::state::SoftwareOperationVariants;
+use crate::state::State;
+use crate::state::StateRepository;
+use crate::state::StateStatus;
+use flockfile::check_another_instance_is_not_running;
+use flockfile::Flockfile;
+use tedge_api::control_filter_topic;
+use tedge_api::software_filter_topic;
+use tedge_api::Jsonify;
+use tedge_api::OperationStatus;
+use tedge_api::RestartOperationRequest;
+use tedge_api::RestartOperationResponse;
+use tedge_api::SoftwareError;
+use tedge_api::SoftwareListRequest;
+use tedge_api::SoftwareListResponse;
+use tedge_api::SoftwareRequestResponse;
+use tedge_api::SoftwareType;
+use tedge_api::SoftwareUpdateRequest;
+use tedge_api::SoftwareUpdateResponse;
 
-use mqtt_channel::{Connection, Message, PubChannel, StreamExt, SubChannel, Topic, TopicFilter};
-use plugin_sm::{
-    operation_logs::{LogKind, OperationLogs},
-    plugin_manager::{ExternalPlugins, Plugins},
-};
+use mqtt_channel::Connection;
+use mqtt_channel::Message;
+use mqtt_channel::PubChannel;
+use mqtt_channel::StreamExt;
+use mqtt_channel::SubChannel;
+use mqtt_channel::Topic;
+use mqtt_channel::TopicFilter;
+use plugin_sm::operation_logs::LogKind;
+use plugin_sm::operation_logs::OperationLogs;
+use plugin_sm::plugin_manager::ExternalPlugins;
+use plugin_sm::plugin_manager::Plugins;
 
 use crate::http_rest::HttpConfig;
+use std::convert::TryInto;
+use std::fmt::Debug;
+use std::path::PathBuf;
 use std::process::Command;
-use std::{convert::TryInto, fmt::Debug, path::PathBuf, sync::Arc};
-use tedge_api::health::{health_check_topics, send_health_status};
-use tedge_config::{
-    system_services::SystemConfig, ConfigRepository, ConfigSettingAccessor,
-    ConfigSettingAccessorStringExt, HttpBindAddressSetting, HttpPortSetting, LogPathSetting,
-    MqttBindAddressSetting, MqttPortSetting, RunPathSetting, SoftwarePluginDefaultSetting,
-    TEdgeConfigLocation, TmpPathSetting, DEFAULT_LOG_PATH, DEFAULT_RUN_PATH, DEFAULT_TMP_PATH,
-};
+use std::sync::Arc;
+use tedge_api::health::health_check_topics;
+use tedge_api::health::send_health_status;
+use tedge_config::system_services::SystemConfig;
+use tedge_config::ConfigRepository;
+use tedge_config::ConfigSettingAccessor;
+use tedge_config::ConfigSettingAccessorStringExt;
+use tedge_config::HttpBindAddressSetting;
+use tedge_config::HttpPortSetting;
+use tedge_config::LogPathSetting;
+use tedge_config::MqttBindAddressSetting;
+use tedge_config::MqttPortSetting;
+use tedge_config::RunPathSetting;
+use tedge_config::SoftwarePluginDefaultSetting;
+use tedge_config::TEdgeConfigLocation;
+use tedge_config::TmpPathSetting;
+use tedge_config::DEFAULT_LOG_PATH;
+use tedge_config::DEFAULT_RUN_PATH;
+use tedge_config::DEFAULT_TMP_PATH;
 use tedge_utils::file::create_directory_with_user_group;
 use tokio::sync::Mutex;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
+use tracing::warn;
 
 use std::path::Path;
 
@@ -702,7 +735,8 @@ mod tests {
     use std::path::PathBuf;
 
     use assert_json_diff::assert_json_include;
-    use serde_json::{json, Value};
+    use serde_json::json;
+    use serde_json::Value;
 
     use super::*;
 

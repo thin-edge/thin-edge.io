@@ -1,5 +1,6 @@
 use std::convert::TryInto;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 /// Represents a path to a file or directory.
 ///

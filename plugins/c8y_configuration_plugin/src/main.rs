@@ -13,20 +13,30 @@ mod tests;
 use crate::config::PluginConfig;
 
 use anyhow::Result;
-use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
+use c8y_api::http_proxy::C8YHttpProxy;
+use c8y_api::http_proxy::JwtAuthHttpProxy;
 use clap::Parser;
 use config_manager::ConfigManager;
-use tedge_config::system_services::{get_log_level, set_log_level};
+use tedge_config::system_services::get_log_level;
+use tedge_config::system_services::set_log_level;
 use tokio::sync::Mutex;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
-use tedge_config::{
-    ConfigRepository, ConfigSettingAccessor, DeviceIdSetting, HttpBindAddressSetting,
-    HttpPortSetting, MqttPortSetting, TEdgeConfig, TmpPathSetting, DEFAULT_TEDGE_CONFIG_PATH,
-};
-use tedge_utils::file::{create_directory_with_user_group, create_file_with_user_group};
-use tracing::{error, info};
+use tedge_config::ConfigRepository;
+use tedge_config::ConfigSettingAccessor;
+use tedge_config::DeviceIdSetting;
+use tedge_config::HttpBindAddressSetting;
+use tedge_config::HttpPortSetting;
+use tedge_config::MqttPortSetting;
+use tedge_config::TEdgeConfig;
+use tedge_config::TmpPathSetting;
+use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
+use tedge_utils::file::create_directory_with_user_group;
+use tedge_utils::file::create_file_with_user_group;
+use tracing::error;
+use tracing::info;
 
 const AFTER_HELP_TEXT: &str = r#"On start, `c8y-configuration-plugin` notifies the cloud tenant of the managed configuration files, listed in the `CONFIG_FILE`, sending this list with a `119` on `c8y/s/us`.
 `c8y-configuration-plugin` subscribes then to `c8y/s/ds` listening for configuration operation requests (messages `524` and `526`).

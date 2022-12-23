@@ -1,12 +1,13 @@
 use clock::Timestamp;
 use mqtt_channel::Payload;
-use tedge_api::{
-    group::{MeasurementGroup, MeasurementGrouper, MeasurementGrouperError},
-    measurement::MeasurementVisitor,
-    serialize::ThinEdgeJsonSerializer,
-};
+use tedge_api::group::MeasurementGroup;
+use tedge_api::group::MeasurementGrouper;
+use tedge_api::group::MeasurementGrouperError;
+use tedge_api::measurement::MeasurementVisitor;
+use tedge_api::serialize::ThinEdgeJsonSerializer;
 
-use super::{collectd::CollectdMessage, error::DeviceMonitorError};
+use super::collectd::CollectdMessage;
+use super::error::DeviceMonitorError;
 
 #[derive(Debug)]
 pub struct MessageBatch {
@@ -70,7 +71,8 @@ impl MessageBatch {
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
-    use clock::{Clock, WallClock};
+    use clock::Clock;
+    use clock::WallClock;
     use time::macros::datetime;
 
     #[test]

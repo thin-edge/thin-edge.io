@@ -1,24 +1,25 @@
-use std::{
-    collections::VecDeque,
-    path::{Path, PathBuf},
-};
+use std::collections::VecDeque;
+use std::path::Path;
+use std::path::PathBuf;
 
 use easy_reader::EasyReader;
 use glob::glob;
 use time::OffsetDateTime;
 use tracing::info;
 
-use crate::{config::LogPluginConfig, error::LogRetrievalError};
-use c8y_api::http_proxy::{C8YHttpProxy, JwtAuthHttpProxy};
-use c8y_api::smartrest::{
-    smartrest_deserializer::SmartRestLogRequest,
-    smartrest_serializer::{
-        CumulocitySupportedOperations, SmartRestSerializer, SmartRestSetOperationToExecuting,
-        SmartRestSetOperationToFailed, SmartRestSetOperationToSuccessful,
-        TryIntoOperationStatusMessage,
-    },
-};
-use mqtt_channel::{Connection, SinkExt};
+use crate::config::LogPluginConfig;
+use crate::error::LogRetrievalError;
+use c8y_api::http_proxy::C8YHttpProxy;
+use c8y_api::http_proxy::JwtAuthHttpProxy;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
+use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
+use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
+use mqtt_channel::Connection;
+use mqtt_channel::SinkExt;
 
 pub struct LogfileRequest {}
 
@@ -271,22 +272,23 @@ pub async fn handle_dynamic_log_type_update(
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        io::Write,
-        path::{Path, PathBuf},
-    };
+    use std::io::Write;
+    use std::path::Path;
+    use std::path::PathBuf;
 
     use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
-    use filetime::{set_file_mtime, FileTime};
+    use filetime::set_file_mtime;
+    use filetime::FileTime;
     use tempfile::TempDir;
     use time::macros::datetime;
 
-    use crate::{
-        config::{FileEntry, LogPluginConfig},
-        logfile_request::new_read_logs,
-    };
+    use crate::config::FileEntry;
+    use crate::config::LogPluginConfig;
+    use crate::logfile_request::new_read_logs;
 
-    use super::{filter_logs_on_type, filter_logs_path_on_metadata, read_log_content};
+    use super::filter_logs_on_type;
+    use super::filter_logs_path_on_metadata;
+    use super::read_log_content;
 
     /// Preparing a temp directory containing four files, with
     /// two types { type_one, type_two }:

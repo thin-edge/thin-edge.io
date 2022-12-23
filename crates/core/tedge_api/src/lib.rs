@@ -16,11 +16,17 @@ pub mod utils;
 
 pub use download::*;
 pub use error::*;
-pub use messages::{
-    control_filter_topic, software_filter_topic, Jsonify, OperationStatus, RestartOperationRequest,
-    RestartOperationResponse, SoftwareListRequest, SoftwareListResponse, SoftwareRequestResponse,
-    SoftwareUpdateRequest, SoftwareUpdateResponse,
-};
+pub use messages::control_filter_topic;
+pub use messages::software_filter_topic;
+pub use messages::Jsonify;
+pub use messages::OperationStatus;
+pub use messages::RestartOperationRequest;
+pub use messages::RestartOperationResponse;
+pub use messages::SoftwareListRequest;
+pub use messages::SoftwareListResponse;
+pub use messages::SoftwareRequestResponse;
+pub use messages::SoftwareUpdateRequest;
+pub use messages::SoftwareUpdateResponse;
 pub use software::*;
 
 #[cfg(test)]

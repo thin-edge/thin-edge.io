@@ -1,11 +1,15 @@
-use std::{
-    collections::HashMap,
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-    time::Duration,
-};
+use std::collections::HashMap;
+use std::net::Ipv4Addr;
+use std::net::SocketAddr;
+use std::net::SocketAddrV4;
+use std::time::Duration;
 
 use futures::channel::mpsc::UnboundedReceiver;
-use librumqttd::{Broker, Config, ConnectionSettings, ConsoleSettings, ServerSettings};
+use librumqttd::Broker;
+use librumqttd::Config;
+use librumqttd::ConnectionSettings;
+use librumqttd::ConsoleSettings;
+use librumqttd::ServerSettings;
 use once_cell::sync::Lazy;
 use rumqttc::QoS;
 

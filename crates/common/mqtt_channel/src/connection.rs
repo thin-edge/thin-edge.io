@@ -1,10 +1,21 @@
-use crate::{Config, ErrChannel, Message, MqttError, PubChannel, SubChannel};
+use crate::Config;
+use crate::ErrChannel;
+use crate::Message;
+use crate::MqttError;
+use crate::PubChannel;
+use crate::SubChannel;
 use futures::channel::mpsc;
 use futures::channel::oneshot;
-use futures::{SinkExt, StreamExt};
-use rumqttc::{
-    AsyncClient, ConnectionError, Event, EventLoop, Incoming, Outgoing, Packet, StateError,
-};
+use futures::SinkExt;
+use futures::StreamExt;
+use rumqttc::AsyncClient;
+use rumqttc::ConnectionError;
+use rumqttc::Event;
+use rumqttc::EventLoop;
+use rumqttc::Incoming;
+use rumqttc::Outgoing;
+use rumqttc::Packet;
+use rumqttc::StateError;
 use std::time::Duration;
 use tokio::time::sleep;
 

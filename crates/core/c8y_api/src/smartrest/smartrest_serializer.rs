@@ -1,9 +1,13 @@
 use crate::smartrest::error::SmartRestSerializerError;
 use crate::smartrest::topic::C8yTopic;
-use csv::{QuoteStyle, WriterBuilder};
+use csv::QuoteStyle;
+use csv::WriterBuilder;
 use mqtt_channel::Message;
-use serde::{Deserialize, Serialize, Serializer};
-use tedge_api::{OperationStatus, SoftwareUpdateResponse};
+use serde::Deserialize;
+use serde::Serialize;
+use serde::Serializer;
+use tedge_api::OperationStatus;
+use tedge_api::SoftwareUpdateResponse;
 
 pub type SmartRest = String;
 

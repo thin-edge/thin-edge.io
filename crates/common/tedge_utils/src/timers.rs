@@ -1,7 +1,14 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash, pin::Pin, time::Duration};
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::hash::Hash;
+use std::pin::Pin;
+use std::time::Duration;
 
-use futures::{stream::FuturesUnordered, Future, StreamExt};
-use tokio::time::{sleep, Instant};
+use futures::stream::FuturesUnordered;
+use futures::Future;
+use futures::StreamExt;
+use tokio::time::sleep;
+use tokio::time::Instant;
 
 pub type TimerFuture<T> = Pin<Box<dyn Future<Output = T> + Send + Sync>>;
 

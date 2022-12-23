@@ -1,12 +1,14 @@
-use std::{fmt, path::PathBuf};
+use std::fmt;
+use std::path::PathBuf;
 
-use crate::{
-    az::mapper::AzureMapper, c8y::mapper::CumulocityMapper, collectd::mapper::CollectdMapper,
-    core::component::TEdgeComponent,
-};
+use crate::az::mapper::AzureMapper;
+use crate::c8y::mapper::CumulocityMapper;
+use crate::collectd::mapper::CollectdMapper;
+use crate::core::component::TEdgeComponent;
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
-use tedge_config::system_services::{get_log_level, set_log_level};
+use tedge_config::system_services::get_log_level;
+use tedge_config::system_services::set_log_level;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_config::*;
 

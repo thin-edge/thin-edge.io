@@ -1,6 +1,12 @@
-use crate::cli::connect::{ConnectError, CONNECTION_TIMEOUT, RESPONSE_TIMEOUT};
+use crate::cli::connect::ConnectError;
+use crate::cli::connect::CONNECTION_TIMEOUT;
+use crate::cli::connect::RESPONSE_TIMEOUT;
+use rumqttc::Event;
+use rumqttc::Incoming;
+use rumqttc::MqttOptions;
+use rumqttc::Outgoing;
+use rumqttc::Packet;
 use rumqttc::QoS::AtLeastOnce;
-use rumqttc::{Event, Incoming, MqttOptions, Outgoing, Packet};
 
 pub(crate) fn get_connected_c8y_url(port: u16, host: String) -> Result<String, ConnectError> {
     const C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM: &str = "c8y/s/uat";

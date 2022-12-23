@@ -1,4 +1,5 @@
-use crate::cli::{common::Cloud, disconnect::error::*};
+use crate::cli::common::Cloud;
+use crate::cli::disconnect::error::*;
 use crate::command::*;
 use std::sync::Arc;
 use tedge_config::system_services::*;

@@ -3,10 +3,13 @@ mod module_check;
 
 use crate::error::InternalError;
 use crate::module_check::PackageMetadata;
-use clap::{IntoApp, Parser};
+use clap::IntoApp;
+use clap::Parser;
 use serde::Deserialize;
 use std::io::{self};
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::Command;
+use std::process::ExitStatus;
+use std::process::Stdio;
 
 #[derive(Parser)]
 struct AptCli {

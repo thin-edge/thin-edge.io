@@ -1,8 +1,11 @@
-use crate::core::{converter::*, error::*, size_threshold::SizeThreshold};
+use crate::core::converter::*;
+use crate::core::error::*;
+use crate::core::size_threshold::SizeThreshold;
 
 use async_trait::async_trait;
 use clock::Clock;
-use mqtt_channel::{Message, TopicFilter};
+use mqtt_channel::Message;
+use mqtt_channel::TopicFilter;
 use tedge_api::serialize::ThinEdgeJsonSerializer;
 
 pub struct AzureConverter {
@@ -53,15 +56,16 @@ impl Converter for AzureConverter {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        az::converter::AzureConverter,
-        core::{converter::*, error::ConversionError, size_threshold::SizeThreshold},
-    };
+    use crate::az::converter::AzureConverter;
+    use crate::core::converter::*;
+    use crate::core::error::ConversionError;
+    use crate::core::size_threshold::SizeThreshold;
 
     use assert_json_diff::*;
     use assert_matches::*;
     use clock::Clock;
-    use mqtt_channel::{Message, Topic};
+    use mqtt_channel::Message;
+    use mqtt_channel::Topic;
     use serde_json::json;
     use time::macros::datetime;
 

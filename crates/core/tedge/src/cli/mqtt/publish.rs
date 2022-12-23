@@ -1,7 +1,13 @@
 use crate::cli::mqtt::MqttError;
 use crate::command::Command;
-use rumqttc::QoS::{AtLeastOnce, AtMostOnce, ExactlyOnce};
-use rumqttc::{Event, Incoming, MqttOptions, Outgoing, Packet};
+use rumqttc::Event;
+use rumqttc::Incoming;
+use rumqttc::MqttOptions;
+use rumqttc::Outgoing;
+use rumqttc::Packet;
+use rumqttc::QoS::AtLeastOnce;
+use rumqttc::QoS::AtMostOnce;
+use rumqttc::QoS::ExactlyOnce;
 use std::time::Duration;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;

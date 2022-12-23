@@ -1,6 +1,7 @@
 use core::future::Future;
 use tokio::time::timeout;
-use tokio::time::{Duration, Timeout};
+use tokio::time::Duration;
+use tokio::time::Timeout;
 
 pub trait WithTimeout<T>
 where

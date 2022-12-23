@@ -1,5 +1,8 @@
-use crate::{Config, MqttError};
-use rumqttc::{AsyncClient, Event, Packet};
+use crate::Config;
+use crate::MqttError;
+use rumqttc::AsyncClient;
+use rumqttc::Event;
+use rumqttc::Packet;
 
 /// Create a persistent session on the MQTT server `config.host`.
 ///

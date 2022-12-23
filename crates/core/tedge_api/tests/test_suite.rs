@@ -1,5 +1,6 @@
 use std::path::*;
-use walkdir::{DirEntry, WalkDir};
+use walkdir::DirEntry;
+use walkdir::WalkDir;
 
 #[test]
 fn it_rejects_invalid_thin_edge_json() -> anyhow::Result<()> {

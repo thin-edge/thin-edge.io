@@ -1,7 +1,10 @@
-use super::error::{get_webpki_error_from_reqwest, CertError};
+use super::error::get_webpki_error_from_reqwest;
+use super::error::CertError;
 use crate::command::Command;
-use reqwest::{StatusCode, Url};
-use std::{io::prelude::*, path::Path};
+use reqwest::StatusCode;
+use reqwest::Url;
+use std::io::prelude::*;
+use std::path::Path;
 use tedge_config::*;
 
 #[derive(Debug, serde::Deserialize)]

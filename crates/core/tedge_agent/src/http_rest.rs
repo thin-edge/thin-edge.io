@@ -1,12 +1,20 @@
 use futures::StreamExt;
-use hyper::{server::conn::AddrIncoming, Body, Request, Response, Server};
+use hyper::server::conn::AddrIncoming;
+use hyper::Body;
+use hyper::Request;
+use hyper::Response;
+use hyper::Server;
 use path_clean::PathClean;
-use routerify::{Router, RouterService};
+use routerify::Router;
+use routerify::RouterService;
+use std::net::IpAddr;
+use std::net::SocketAddr;
 use std::path::Path;
-use std::{net::IpAddr, net::SocketAddr, path::PathBuf};
+use std::path::PathBuf;
 
 use tedge_utils::paths::create_directories;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 
 use crate::error::FileTransferError;
 
@@ -232,10 +240,15 @@ mod test {
 
     use std::path::PathBuf;
 
-    use super::{http_file_transfer_server, separate_path_and_file_name};
+    use super::http_file_transfer_server;
+    use super::separate_path_and_file_name;
     use crate::error::FileTransferError;
     use crate::http_rest::HttpConfig;
-    use hyper::{server::conn::AddrIncoming, Body, Method, Request, Server};
+    use hyper::server::conn::AddrIncoming;
+    use hyper::Body;
+    use hyper::Method;
+    use hyper::Request;
+    use hyper::Server;
     use routerify::RouterService;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;

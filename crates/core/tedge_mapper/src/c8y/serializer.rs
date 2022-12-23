@@ -1,6 +1,8 @@
-use json_writer::{JsonWriter, JsonWriterError};
+use json_writer::JsonWriter;
+use json_writer::JsonWriterError;
 use tedge_api::measurement::MeasurementVisitor;
-use time::{format_description, OffsetDateTime};
+use time::format_description;
+use time::OffsetDateTime;
 
 pub struct C8yJsonSerializer {
     json: JsonWriter,

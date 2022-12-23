@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
     use crate::*;
-    use futures::{SinkExt, StreamExt};
+    use futures::SinkExt;
+    use futures::StreamExt;
     use serial_test::serial;
     use std::convert::TryInto;
     use std::time::Duration;

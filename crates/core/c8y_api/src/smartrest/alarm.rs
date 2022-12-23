@@ -1,5 +1,7 @@
-use tedge_api::alarm::{AlarmSeverity, ThinEdgeAlarm};
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use tedge_api::alarm::AlarmSeverity;
+use tedge_api::alarm::ThinEdgeAlarm;
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 
 use crate::smartrest::error::SmartRestSerializerError;
 
