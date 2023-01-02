@@ -10,7 +10,7 @@
     - [Getting started with thin-edge.io](./tutorials/getting-started.md)
     - [Connect my device to Cumulocity IoT](./tutorials/connect-c8y.md)
     - [Connect my device to Azure IoT](./tutorials/connect-azure.md)
-    - [Send Thin Edge Json data](./tutorials/send-thin-edge-data.md)
+    - [Send measurements](./tutorials/send-thin-edge-data.md)
     - [Raise alarms](./tutorials/raise-alarm.md)
     - [Send events](./tutorials/send-events.md)
     - [Monitor my device](./tutorials/device-monitoring.md)
@@ -18,7 +18,7 @@
     - [Write my software management plugin](./tutorials/write-my-software-management-plugin.md)
     - [Supported Operations Management for Cumulocity IoT](./tutorials/supported_operations.md)
     - [Build Thin Edge for a Yocto Linux distribution](tutorials/yocto-linux.md)
-    - [Child device config management](./tutorials/child-device-config-management.md)
+    - [Configuration management on child-devices](./tutorials/child-device-config-management.md)
 
   - [How-to Guides](howto-guides/howto-guides.md)
     - [Installation](howto-guides/002_installation.md)
