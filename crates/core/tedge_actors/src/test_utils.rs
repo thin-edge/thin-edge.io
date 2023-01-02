@@ -1,4 +1,9 @@
-use crate::{mpsc, ChannelError, DynSender, Message, Sender, StreamExt};
+use crate::mpsc;
+use crate::ChannelError;
+use crate::DynSender;
+use crate::Message;
+use crate::Sender;
+use crate::StreamExt;
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::Mutex;

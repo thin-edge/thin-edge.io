@@ -6,10 +6,14 @@ pub use messages::*;
 use actor::*;
 use async_trait::async_trait;
 use futures::channel::mpsc;
-use tedge_actors::{
-    ActorBuilder, DynSender, KeyedSender, LinkError, PeerLinker, RuntimeError, RuntimeHandle,
-    SenderVec,
-};
+use tedge_actors::ActorBuilder;
+use tedge_actors::DynSender;
+use tedge_actors::KeyedSender;
+use tedge_actors::LinkError;
+use tedge_actors::PeerLinker;
+use tedge_actors::RuntimeError;
+use tedge_actors::RuntimeHandle;
+use tedge_actors::SenderVec;
 
 pub struct HttpActorBuilder {
     actor: HttpActor,

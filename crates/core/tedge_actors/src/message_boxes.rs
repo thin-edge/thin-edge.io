@@ -1,4 +1,6 @@
-use crate::{ChannelError, DynSender, Message};
+use crate::ChannelError;
+use crate::DynSender;
+use crate::Message;
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::StreamExt;

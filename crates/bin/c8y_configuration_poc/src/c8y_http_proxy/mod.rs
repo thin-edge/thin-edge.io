@@ -1,9 +1,15 @@
-use crate::c8y_http_proxy::messages::{C8YRestRequest, C8YRestResponse};
+use crate::c8y_http_proxy::messages::C8YRestRequest;
+use crate::c8y_http_proxy::messages::C8YRestResponse;
 use async_trait::async_trait;
-use tedge_actors::{
-    mpsc, ActorBuilder, DynSender, LinkError, PeerLinker, RuntimeError, RuntimeHandle,
-};
-use tedge_http_ext::{HttpRequest, HttpResult};
+use tedge_actors::mpsc;
+use tedge_actors::ActorBuilder;
+use tedge_actors::DynSender;
+use tedge_actors::LinkError;
+use tedge_actors::PeerLinker;
+use tedge_actors::RuntimeError;
+use tedge_actors::RuntimeHandle;
+use tedge_http_ext::HttpRequest;
+use tedge_http_ext::HttpResult;
 
 mod actor;
 pub mod messages;

@@ -1,9 +1,14 @@
 use async_trait::async_trait;
 use std::path::PathBuf;
-use tedge_actors::{
-    Actor, ActorBuilder, ChannelError, DynSender, MessageBox, RuntimeError, RuntimeHandle,
-};
-use tedge_utils::notify::{FsEvent, NotifyStream};
+use tedge_actors::Actor;
+use tedge_actors::ActorBuilder;
+use tedge_actors::ChannelError;
+use tedge_actors::DynSender;
+use tedge_actors::MessageBox;
+use tedge_actors::RuntimeError;
+use tedge_actors::RuntimeHandle;
+use tedge_utils::notify::FsEvent;
+use tedge_utils::notify::NotifyStream;
 use tokio::sync::mpsc::Receiver;
 use try_traits::default::TryDefault;
 

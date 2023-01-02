@@ -1,15 +1,20 @@
 mod actor;
 mod config;
 
-use crate::c8y_http_proxy::messages::{C8YRestRequest, C8YRestResponse};
+use crate::c8y_http_proxy::messages::C8YRestRequest;
+use crate::c8y_http_proxy::messages::C8YRestResponse;
 use crate::file_system_ext::FsWatchActorBuilder;
 use crate::mqtt_ext::*;
 use actor::*;
 use async_trait::async_trait;
 pub use config::*;
-use tedge_actors::{
-    mpsc, ActorBuilder, DynSender, LinkError, PeerLinker, RuntimeError, RuntimeHandle,
-};
+use tedge_actors::mpsc;
+use tedge_actors::ActorBuilder;
+use tedge_actors::DynSender;
+use tedge_actors::LinkError;
+use tedge_actors::PeerLinker;
+use tedge_actors::RuntimeError;
+use tedge_actors::RuntimeHandle;
 
 /// An instance of the config manager
 ///

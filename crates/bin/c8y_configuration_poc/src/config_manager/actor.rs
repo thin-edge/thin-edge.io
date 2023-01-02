@@ -1,6 +1,7 @@
 use std::path::Path;
 
-use crate::c8y_http_proxy::messages::{C8YRestRequest, C8YRestResponse};
+use crate::c8y_http_proxy::messages::C8YRestRequest;
+use crate::c8y_http_proxy::messages::C8YRestResponse;
 use crate::file_system_ext::FsWatchEvent;
 use crate::mqtt_ext::MqttMessage;
 use async_trait::async_trait;
@@ -8,9 +9,14 @@ use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_api::OffsetDateTime;
 use mqtt_channel::Message;
-use tedge_actors::{
-    adapt, fan_in_message_type, mpsc, Actor, ChannelError, DynSender, MessageBox, StreamExt,
-};
+use tedge_actors::adapt;
+use tedge_actors::fan_in_message_type;
+use tedge_actors::mpsc;
+use tedge_actors::Actor;
+use tedge_actors::ChannelError;
+use tedge_actors::DynSender;
+use tedge_actors::MessageBox;
+use tedge_actors::StreamExt;
 
 fan_in_message_type!(ConfigInputAndResponse[MqttMessage, FsWatchEvent, C8YRestResponse] : Debug);
 fan_in_message_type!(ConfigInput[MqttMessage, FsWatchEvent] : Debug);

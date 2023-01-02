@@ -1,4 +1,5 @@
-use crate::{ChannelError, MessageBox};
+use crate::ChannelError;
+use crate::MessageBox;
 use async_trait::async_trait;
 
 /// Enable a struct to be used as an actor.

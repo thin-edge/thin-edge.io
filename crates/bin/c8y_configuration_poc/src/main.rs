@@ -3,8 +3,10 @@ mod config_manager;
 mod file_system_ext;
 mod mqtt_ext;
 
-use crate::c8y_http_proxy::{C8YHttpConfig, C8YHttpProxyBuilder};
-use crate::config_manager::{ConfigManagerBuilder, ConfigManagerConfig};
+use crate::c8y_http_proxy::C8YHttpConfig;
+use crate::c8y_http_proxy::C8YHttpProxyBuilder;
+use crate::config_manager::ConfigManagerBuilder;
+use crate::config_manager::ConfigManagerConfig;
 use crate::mqtt_ext::MqttActorBuilder;
 use file_system_ext::FsWatchActorBuilder;
 use tedge_actors::Runtime;

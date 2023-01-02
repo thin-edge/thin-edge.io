@@ -1,10 +1,20 @@
 use async_trait::async_trait;
-use mqtt_channel::{MqttError, SinkExt, StreamExt, TopicFilter};
-use tedge_actors::mpsc::{channel, Receiver, Sender};
-use tedge_actors::{
-    Actor, ActorBuilder, ChannelError, DynSender, LinkError, MessageBox, PeerLinker, RuntimeError,
-    RuntimeHandle,
-};
+use mqtt_channel::MqttError;
+use mqtt_channel::SinkExt;
+use mqtt_channel::StreamExt;
+use mqtt_channel::TopicFilter;
+use tedge_actors::mpsc::channel;
+use tedge_actors::mpsc::Receiver;
+use tedge_actors::mpsc::Sender;
+use tedge_actors::Actor;
+use tedge_actors::ActorBuilder;
+use tedge_actors::ChannelError;
+use tedge_actors::DynSender;
+use tedge_actors::LinkError;
+use tedge_actors::MessageBox;
+use tedge_actors::PeerLinker;
+use tedge_actors::RuntimeError;
+use tedge_actors::RuntimeHandle;
 
 pub type MqttMessage = mqtt_channel::Message;
 

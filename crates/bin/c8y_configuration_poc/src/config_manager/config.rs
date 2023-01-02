@@ -1,4 +1,5 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use tedge_config::*;
 
 /// Configuration of the Configuration Manager

@@ -1,9 +1,15 @@
-use crate::c8y_http_proxy::messages::{C8YRestRequest, C8YRestResponse};
+use crate::c8y_http_proxy::messages::C8YRestRequest;
+use crate::c8y_http_proxy::messages::C8YRestResponse;
 use async_trait::async_trait;
-use tedge_actors::{
-    fan_in_message_type, mpsc, Actor, ChannelError, DynSender, MessageBox, StreamExt,
-};
-use tedge_http_ext::{HttpRequest, HttpResult};
+use tedge_actors::fan_in_message_type;
+use tedge_actors::mpsc;
+use tedge_actors::Actor;
+use tedge_actors::ChannelError;
+use tedge_actors::DynSender;
+use tedge_actors::MessageBox;
+use tedge_actors::StreamExt;
+use tedge_http_ext::HttpRequest;
+use tedge_http_ext::HttpResult;
 
 struct C8YHttpProxyActor {}
 

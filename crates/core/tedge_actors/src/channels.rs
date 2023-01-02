@@ -1,8 +1,10 @@
-use crate::{ChannelError, Message};
+use crate::ChannelError;
+use crate::Message;
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::SinkExt;
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use std::fmt::Formatter;
 
 /// A sender of messages of type `M`
 ///

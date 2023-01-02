@@ -1,7 +1,13 @@
-use crate::{HttpConfig, HttpError, HttpRequest, HttpResult};
+use crate::HttpConfig;
+use crate::HttpError;
+use crate::HttpRequest;
+use crate::HttpResult;
 use async_trait::async_trait;
 use futures::channel::mpsc;
-use tedge_actors::{Actor, ChannelError, DynSender, MessageBox};
+use tedge_actors::Actor;
+use tedge_actors::ChannelError;
+use tedge_actors::DynSender;
+use tedge_actors::MessageBox;
 
 pub(crate) struct HttpActor {
     client: reqwest::Client,

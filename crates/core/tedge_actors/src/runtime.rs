@@ -1,6 +1,12 @@
-use crate::{Actor, ActorBuilder, DynSender, RunActor, RuntimeError, Task};
+use crate::Actor;
+use crate::ActorBuilder;
+use crate::DynSender;
+use crate::RunActor;
+use crate::RuntimeError;
+use crate::Task;
 use futures::channel::mpsc;
-use futures::{SinkExt, StreamExt};
+use futures::SinkExt;
+use futures::StreamExt;
 use tokio::task::JoinHandle;
 
 /// Actions sent by actors to the runtime

@@ -1,4 +1,8 @@
-use crate::{mpsc, ChannelError, DynSender, Message, Sender};
+use crate::mpsc;
+use crate::ChannelError;
+use crate::DynSender;
+use crate::Message;
+use crate::Sender;
 use async_trait::async_trait;
 
 /// A sender that adds a key to messages on the fly
