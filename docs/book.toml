@@ -5,6 +5,10 @@ language = "en"
 multilingual = false
 src = "src"
 
+[output.html]
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
+additional-css = ["././mdbook-admonish.css"]
+
 [output.html.fold]
     enable = true
 
@@ -24,5 +28,14 @@ traverse-parent-directories = true
 # - "ignore" will ignore warnings, suppressing diagnostic messages and allowing
 #   the linkcheck to continuing
 warning-policy = "warn"
+
+[preprocessor]
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[preprocessor.admonish]
+command = "mdbook-admonish"
+assets_version = "2.0.0" # do not edit: managed by `mdbook-admonish install`
 
 #exclude = [ 'README.md' ]
