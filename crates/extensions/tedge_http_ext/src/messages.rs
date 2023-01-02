@@ -1,55 +1,92 @@
-pub use reqwest::Method;
-pub use reqwest::StatusCode;
-use reqwest::Url;
+use http::header::HeaderName;
+use http::header::HeaderValue;
 use thiserror::Error;
 
 #[derive(Clone, Debug, Default)]
 pub struct HttpConfig {}
 
 #[derive(Error, Debug)]
-pub enum HttpError {
+pub enum HttpParseError {
     #[error(transparent)]
-    HttpError(#[from] reqwest::Error),
+    HttpError(#[from] http::Error),
 
     #[error(transparent)]
-    ParseError(#[from] url::ParseError),
+    JsonError(#[from] serde_json::Error),
 }
 
-// It could be good to use directly `reqwest::Request` here.
-// This would avoid to have boilerplate code and give more freedom to the callers.
-// However, in the case of thin-edge one needs to add a bearer (a JWT token).
-// and it's better to get this JWT token just before executing the request
-// (caching the token in a serialized message has been proven to be problematic).
-// An alternative could be then to encapsulate a `reqwest::RequestBuilder` instead.
-#[derive(Debug)]
-pub struct HttpRequest {
-    pub method: Method,
-    pub url: Url,
-}
+pub type HttpError = hyper::Error;
 
-impl HttpRequest {
-    pub fn new(method: Method, url: &str) -> Result<Self, HttpError> {
-        let url = reqwest::Url::parse(url)?;
-        Ok(HttpRequest { method, url })
-    }
-}
+pub type HttpRequest = http::Request<hyper::Body>;
 
-#[derive(Debug)]
-pub struct HttpResponse {
-    pub status: StatusCode,
-}
-
-impl From<HttpRequest> for reqwest::Request {
-    fn from(request: HttpRequest) -> Self {
-        reqwest::Request::new(request.method, request.url)
-    }
-}
-
-impl From<reqwest::Response> for HttpResponse {
-    fn from(response: reqwest::Response) -> Self {
-        let status = response.status();
-        HttpResponse { status }
-    }
-}
+pub type HttpResponse = http::Response<hyper::Body>;
 
 pub type HttpResult = Result<HttpResponse, HttpError>;
+
+/// An Http Request builder
+pub struct HttpRequestBuilder {
+    inner: http::request::Builder,
+    body: Result<hyper::Body, HttpParseError>,
+}
+
+impl HttpRequestBuilder {
+    /// Build the request
+    pub fn build(self) -> Result<HttpRequest, HttpParseError> {
+        self.body
+            .and_then(|body| self.inner.body(body).map_err(|err| err.into()))
+    }
+
+    /// Start to build a GET request
+    pub fn get<T>(uri: T) -> Self
+    where
+        hyper::Uri: TryFrom<T>,
+        <hyper::Uri as TryFrom<T>>::Error: Into<http::Error>,
+    {
+        HttpRequestBuilder {
+            inner: hyper::Request::get(uri),
+            body: Ok(hyper::Body::empty()),
+        }
+    }
+
+    /// Start to build a POST request
+    pub fn post<T>(uri: T) -> Self
+    where
+        hyper::Uri: TryFrom<T>,
+        <hyper::Uri as TryFrom<T>>::Error: Into<http::Error>,
+    {
+        HttpRequestBuilder {
+            inner: hyper::Request::post(uri),
+            body: Ok(hyper::Body::empty()),
+        }
+    }
+
+    /// Add an HTTP header to this request
+    pub fn header<K, V>(self, key: K, value: V) -> Self
+    where
+        HeaderName: TryFrom<K>,
+        <HeaderName as TryFrom<K>>::Error: Into<http::Error>,
+        HeaderValue: TryFrom<V>,
+        <HeaderValue as TryFrom<V>>::Error: Into<http::Error>,
+    {
+        HttpRequestBuilder {
+            inner: self.inner.header(key, value),
+            ..self
+        }
+    }
+
+    /// Send a JSON body
+    pub fn json<T: serde::Serialize + ?Sized>(self, json: &T) -> Self {
+        let body = serde_json::to_vec(json)
+            .map(|bytes| bytes.into())
+            .map_err(|err| err.into());
+        HttpRequestBuilder { body, ..self }
+    }
+
+    /// Add bearer authentication (e.g. a JWT token)
+    pub fn bearer_auth<T>(self, token: T) -> Self
+    where
+        T: std::fmt::Display,
+    {
+        let header_value = format!("Bearer {}", token);
+        self.header(http::header::AUTHORIZATION, header_value)
+    }
+}

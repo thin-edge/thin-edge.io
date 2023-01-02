@@ -3352,11 +3352,13 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "futures",
- "reqwest",
+ "http",
+ "hyper",
+ "serde",
+ "serde_json",
  "tedge_actors",
  "thiserror",
  "tokio",
- "url",
 ]
 
 [[package]]

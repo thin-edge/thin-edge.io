@@ -4,18 +4,19 @@ use crate::HttpRequest;
 use crate::HttpResult;
 use async_trait::async_trait;
 use futures::channel::mpsc;
+use futures::StreamExt;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
 
 pub(crate) struct HttpActor {
-    client: reqwest::Client,
+    client: hyper::client::Client<hyper::client::connect::HttpConnector, hyper::body::Body>,
 }
 
 impl HttpActor {
     pub(crate) fn new(_config: HttpConfig) -> Result<Self, HttpError> {
-        let client = reqwest::Client::builder().build()?;
+        let client = hyper::client::Client::builder().build_http();
         Ok(HttpActor { client })
     }
 }
@@ -26,15 +27,11 @@ impl Actor for HttpActor {
 
     async fn run(self, mut messages: HttpMessageBox) -> Result<(), ChannelError> {
         while let Some((client_id, request)) = messages.recv().await {
-            let request = request.into();
             let client = self.client.clone();
 
             // Spawn the request
             let pending_result = tokio::spawn(async move {
-                let response = match client.execute(request).await {
-                    Ok(res) => Ok(res.into()),
-                    Err(err) => Err(err.into()),
-                };
+                let response = client.request(request).await;
                 (client_id, response)
             });
 
@@ -61,8 +58,6 @@ pub(crate) struct HttpMessageBox {
     /// Pending responses
     pending_responses: futures::stream::FuturesUnordered<PendingResult>,
 }
-
-use futures::StreamExt;
 
 impl HttpMessageBox {
     pub(crate) fn new(

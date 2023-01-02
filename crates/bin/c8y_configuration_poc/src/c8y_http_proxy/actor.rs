@@ -9,6 +9,7 @@ use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
 use tedge_actors::StreamExt;
 use tedge_http_ext::HttpRequest;
+use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResult;
 
 struct C8YHttpProxyActor {}
@@ -90,7 +91,8 @@ impl C8YHttpProxyActor {
         while let Some(request) = messages.requests.next().await {
             match request {
                 C8YRestRequest::C8yCreateEvent(_) => {
-                    let request = HttpRequest::new(Default::default(), "")
+                    let request = HttpRequestBuilder::get("http://foo.com")
+                        .build()
                         .expect("TODO handle actor specific error");
                     let _response = messages.send_http_request(request).await?;
                     messages.responses.send(().into()).await?;
