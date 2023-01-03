@@ -254,7 +254,7 @@ fn get_name_and_version(line: &str) -> (&str, &str) {
         .first()
         .unwrap_or(&"unknown name")
         .split_once('/')
-        .unwrap_or((&"unknown name", &"others"))
+        .unwrap_or(("unknown name", "others"))
         .0;
     let version = if line.contains("upgradable from:") {
         // e.g. tedge/tedge-main 0.8.1-127-gb7d7d599 arm64 [upgradable from: 0.8.1]
