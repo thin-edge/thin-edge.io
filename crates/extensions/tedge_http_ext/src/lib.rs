@@ -1,26 +1,25 @@
 mod actor;
-mod handle;
 mod messages;
 
-pub use handle::*;
 pub use messages::*;
+use std::convert::Infallible;
 
 use actor::*;
 use async_trait::async_trait;
-use futures::channel::mpsc;
+use tedge_actors::mpsc;
 use tedge_actors::ActorBuilder;
+use tedge_actors::ConnectionBuilder;
 use tedge_actors::DynSender;
 use tedge_actors::KeyedSender;
+use tedge_actors::RequestResponseHandler;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
 use tedge_actors::SenderVec;
 
-pub trait HttpConnectionBuilder {
-    fn connect(&mut self, client: DynSender<HttpResult>) -> DynSender<HttpRequest>;
-
-    fn new_handle(&mut self) -> HttpHandle {
-        HttpHandle::new(self)
-    }
+pub type HttpHandle = RequestResponseHandler<HttpRequest, HttpResult>;
+pub trait HttpConnectionBuilder:
+    ConnectionBuilder<HttpRequest, HttpResult, (), Infallible>
+{
 }
 
 pub struct HttpActorBuilder {
@@ -55,11 +54,17 @@ impl ActorBuilder for HttpActorBuilder {
     }
 }
 
-impl HttpConnectionBuilder for HttpActorBuilder {
-    fn connect(&mut self, client: DynSender<HttpResult>) -> DynSender<HttpRequest> {
+impl ConnectionBuilder<HttpRequest, HttpResult, (), Infallible> for HttpActorBuilder {
+    fn connect(
+        &mut self,
+        _config: (),
+        client: DynSender<HttpResult>,
+    ) -> Result<DynSender<HttpRequest>, Infallible> {
         let client_idx = self.clients.len();
         self.clients.push(client);
 
-        KeyedSender::new_sender(client_idx, self.sender.clone())
+        Ok(KeyedSender::new_sender(client_idx, self.sender.clone()))
     }
 }
+
+impl HttpConnectionBuilder for HttpActorBuilder {}
