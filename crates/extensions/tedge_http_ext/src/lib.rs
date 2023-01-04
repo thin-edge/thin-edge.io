@@ -1,6 +1,8 @@
 mod actor;
+mod handle;
 mod messages;
 
+pub use handle::*;
 pub use messages::*;
 
 use actor::*;
@@ -9,11 +11,17 @@ use futures::channel::mpsc;
 use tedge_actors::ActorBuilder;
 use tedge_actors::DynSender;
 use tedge_actors::KeyedSender;
-use tedge_actors::LinkError;
-use tedge_actors::PeerLinker;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
 use tedge_actors::SenderVec;
+
+pub trait HttpConnectionBuilder {
+    fn connect(&mut self, client: DynSender<HttpResult>) -> DynSender<HttpRequest>;
+
+    fn new_handle(&mut self) -> HttpHandle {
+        HttpHandle::new(self)
+    }
+}
 
 pub struct HttpActorBuilder {
     actor: HttpActor,
@@ -47,14 +55,11 @@ impl ActorBuilder for HttpActorBuilder {
     }
 }
 
-impl PeerLinker<HttpRequest, HttpResult> for HttpActorBuilder {
-    fn connect(
-        &mut self,
-        client: DynSender<HttpResult>,
-    ) -> Result<DynSender<HttpRequest>, LinkError> {
+impl HttpConnectionBuilder for HttpActorBuilder {
+    fn connect(&mut self, client: DynSender<HttpResult>) -> DynSender<HttpRequest> {
         let client_idx = self.clients.len();
         self.clients.push(client);
 
-        Ok(KeyedSender::new_sender(client_idx, self.sender.clone()))
+        KeyedSender::new_sender(client_idx, self.sender.clone())
     }
 }
