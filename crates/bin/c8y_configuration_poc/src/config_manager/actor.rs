@@ -1,14 +1,8 @@
-use std::path::Path;
-
 use crate::c8y_http_proxy::messages::C8YRestRequest;
 use crate::c8y_http_proxy::messages::C8YRestResponse;
 use crate::file_system_ext::FsWatchEvent;
 use crate::mqtt_ext::MqttMessage;
 use async_trait::async_trait;
-use c8y_api::json_c8y::C8yCreateEvent;
-use c8y_api::smartrest::topic::C8yTopic;
-use c8y_api::OffsetDateTime;
-use mqtt_channel::Message;
 use tedge_actors::adapt;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::mpsc;
@@ -18,54 +12,14 @@ use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
 use tedge_actors::StreamExt;
 
+use super::config_manager::ConfigManager;
+
 fan_in_message_type!(ConfigInputAndResponse[MqttMessage, FsWatchEvent, C8YRestResponse] : Debug);
 fan_in_message_type!(ConfigInput[MqttMessage, FsWatchEvent] : Debug);
 fan_in_message_type!(ConfigOutput[MqttMessage, C8YRestRequest] : Debug);
 
-pub struct ConfigManagerActor {}
-
-impl ConfigManagerActor {
-    pub async fn process_file_event(
-        &mut self,
-        event: FsWatchEvent,
-        messages: &mut ConfigManagerMessageBox,
-    ) -> Result<(), ChannelError> {
-        let path = match event {
-            FsWatchEvent::Modified(path) => path,
-            FsWatchEvent::FileDeleted(path) => path,
-            FsWatchEvent::FileCreated(path) => path,
-            FsWatchEvent::DirectoryDeleted(_) => return Ok(()),
-            FsWatchEvent::DirectoryCreated(_) => return Ok(()),
-        };
-
-        let mqtt_message = Self::supported_operations_message(path.as_path());
-        messages.send(ConfigOutput::MqttMessage(mqtt_message)).await
-    }
-
-    pub fn supported_operations_message(_path: &Path) -> MqttMessage {
-        let topic = C8yTopic::SmartRestResponse.to_topic().expect("Infallible");
-        Message::new(&topic, "114")
-    }
-
-    pub async fn process_mqtt_message(
-        &mut self,
-        _message: MqttMessage,
-        messages: &mut ConfigManagerMessageBox,
-    ) -> Result<(), ChannelError> {
-        // ..
-        let request = C8yCreateEvent::new(
-            None,
-            "".to_string(),
-            OffsetDateTime::now_utc(),
-            Default::default(),
-            Default::default(),
-        );
-        let _response = messages
-            .send_http_request(C8YRestRequest::C8yCreateEvent(request))
-            .await?;
-        // ..
-        Ok(())
-    }
+pub struct ConfigManagerActor {
+    pub config_manager: ConfigManager,
 }
 
 #[async_trait]
@@ -76,10 +30,16 @@ impl Actor for ConfigManagerActor {
         while let Some(event) = messages.events.next().await {
             match event {
                 ConfigInput::MqttMessage(message) => {
-                    self.process_mqtt_message(message, &mut messages).await?;
+                    self.config_manager
+                        .process_mqtt_message(message)
+                        .await
+                        .unwrap();
                 }
                 ConfigInput::FsWatchEvent(event) => {
-                    self.process_file_event(event, &mut messages).await?;
+                    self.config_manager
+                        .process_file_watch_events(event)
+                        .await
+                        .unwrap();
                 }
             }
         }

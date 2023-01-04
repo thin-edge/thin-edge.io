@@ -37,9 +37,23 @@ pub fn health_status_down_message(daemon_name: &str) -> Message {
         payload: json!({
             "status": "down",
             "pid": process::id()})
-        .to_string()
-        .into(),
+            .to_string()
+            .into(),
         qos: mqtt_channel::QoS::AtLeastOnce,
         retain: true,
     }
+}
+
+pub async fn get_health_status_message(daemon_name: &str) -> Message {
+    let response_topic_health =
+        Topic::new_unchecked(format!("tedge/health/{daemon_name}").as_str());
+
+    let health_status = json!({
+        "status": "up",
+        "pid": process::id(),
+        "time": OffsetDateTime::now_utc().unix_timestamp(),
+    })
+    .to_string();
+
+    Message::new(&response_topic_health, health_status)
 }

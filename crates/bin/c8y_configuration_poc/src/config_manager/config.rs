@@ -2,6 +2,12 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_config::*;
 
+use super::plugin_config::PluginConfig;
+
+pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-configuration-plugin.toml";
+pub const DEFAULT_OPERATION_DIR_NAME: &str = "c8y/";
+pub const DEFAULT_PLUGIN_CONFIG_TYPE: &str = "c8y-configuration-plugin";
+
 /// Configuration of the Configuration Manager
 #[derive(Clone, Debug)]
 pub struct ConfigManagerConfig {
@@ -13,6 +19,7 @@ pub struct ConfigManagerConfig {
     pub c8y_url: ConnectUrl,
     pub tedge_http_host: IpAddress,
     pub tedge_http_port: u16,
+    pub plugin_config: PluginConfig,
 }
 
 impl ConfigManagerConfig {
@@ -39,6 +46,10 @@ impl ConfigManagerConfig {
         let tedge_http_host = tedge_config.query(HttpBindAddressSetting)?;
         let tedge_http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
 
+        let config_file_dir = config_dir.join(DEFAULT_OPERATION_DIR_NAME);
+        let plugin_config =
+            PluginConfig::new(&config_file_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME));
+
         Ok(ConfigManagerConfig {
             config_dir,
             tmp_dir,
@@ -48,6 +59,7 @@ impl ConfigManagerConfig {
             c8y_url,
             tedge_http_host,
             tedge_http_port,
+            plugin_config,
         })
     }
 }
