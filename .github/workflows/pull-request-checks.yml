@@ -124,6 +124,12 @@ jobs:
           crate: mdbook-linkcheck
           version: latest
 
+      - name: Install mdbook-admonish
+        uses: actions-rs/install@v0.1
+        with:
+          crate: mdbook-admonish
+          version: latest
+
       - name: Run mdbook build
         run: |
           ls -l

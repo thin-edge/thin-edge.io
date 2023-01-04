@@ -28,6 +28,11 @@ jobs:
           crate: mdbook-linkcheck
           version: latest
 
+      - uses: actions-rs/install@v0.1
+        with:
+          crate: mdbook-admonish
+          version: latest
+
       - run: |
           ls -l
           cd docs
