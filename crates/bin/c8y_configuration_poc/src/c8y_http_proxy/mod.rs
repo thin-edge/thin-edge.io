@@ -9,6 +9,8 @@ use tedge_actors::LinkError;
 use tedge_actors::PeerLinker;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
+use tedge_http_ext::HttpConnectionBuilder;
+use tedge_http_ext::HttpHandle;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
 
@@ -32,9 +34,6 @@ pub struct C8YHttpProxyBuilder {
     /// Sender and receiver for peers requests
     requests: (mpsc::Sender<C8YRestRequest>, mpsc::Receiver<C8YRestRequest>),
 
-    /// Sender and receiver for HTTP responses
-    http_responses: (mpsc::Sender<HttpResult>, mpsc::Receiver<HttpResult>),
-
     /// To be connected to some clients
     ///
     /// If None is given, there is no point to spawn this actor
@@ -43,7 +42,7 @@ pub struct C8YHttpProxyBuilder {
     /// To be connected to the HTTP actor
     ///
     /// If None is given, this actor cannot run
-    http_requests: Option<DynSender<HttpRequest>>,
+    http: Option<HttpHandle>,
 }
 
 impl C8YHttpProxyBuilder {
@@ -51,19 +50,17 @@ impl C8YHttpProxyBuilder {
         C8YHttpProxyBuilder {
             _config: config,
             requests: mpsc::channel(10),
-            http_responses: mpsc::channel(1),
             responses: None,
-            http_requests: None,
+            http: None,
         }
     }
 
     /// Connect this instance to some http connection provider
     pub fn with_http_connection(
         &mut self,
-        http: &mut impl PeerLinker<HttpRequest, HttpResult>,
+        http: &mut impl HttpConnectionBuilder,
     ) -> Result<(), LinkError> {
-        let http_requests = http.connect(self.http_responses.0.clone().into())?;
-        self.http_requests = Some(http_requests);
+        self.http = Some(http.new_handle());
         Ok(())
     }
 
@@ -80,18 +77,17 @@ impl ActorBuilder for C8YHttpProxyBuilder {
     }
 }
 
-impl PeerLinker<C8YRestRequest, C8YRestResponse> for C8YHttpProxyBuilder {
-    fn connect(
-        &mut self,
-        output_sender: DynSender<C8YRestResponse>,
-    ) -> Result<DynSender<C8YRestRequest>, LinkError> {
-        if self.responses.is_some() {
-            return Err(LinkError::ExcessPeer {
-                role: "input requests".into(),
-            });
-        }
+pub trait C8YConnectionBuilder {
+    fn connect(&mut self, client: DynSender<C8YRestResponse>) -> DynSender<C8YRestRequest>;
 
+    fn new_handle(&mut self) -> C8YHttpProxy {
+        C8YHttpProxy::new(self)
+    }
+}
+
+impl C8YConnectionBuilder for C8YHttpProxyBuilder {
+    fn connect(&mut self, output_sender: DynSender<C8YRestResponse>) -> DynSender<C8YRestRequest> {
         self.responses = Some(output_sender);
-        Ok(self.requests.0.clone().into())
+        self.requests.0.clone().into()
     }
 }

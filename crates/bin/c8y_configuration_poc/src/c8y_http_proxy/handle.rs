@@ -2,9 +2,9 @@ use crate::c8y_http_proxy::messages::C8YRestRequest;
 use crate::c8y_http_proxy::messages::C8YRestResponse;
 use crate::c8y_http_proxy::messages::UploadConfigFile;
 use crate::c8y_http_proxy::messages::UploadLogBinary;
+use crate::c8y_http_proxy::C8YConnectionBuilder;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
-use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations::C8yUploadConfigFile;
 use mqtt_channel::StreamExt;
 use std::path::Path;
 use tedge_actors::mpsc;
@@ -20,11 +20,11 @@ pub struct C8YHttpProxy {
 
 impl C8YHttpProxy {
     /// Create a new handle to the C8YHttpProxy actor
-    pub fn new(proxy: &mut impl PeerLinker<C8YRestRequest, C8YRestResponse>) -> C8YHttpProxy {
+    pub fn new(proxy: &mut (impl C8YConnectionBuilder + ?Sized)) -> C8YHttpProxy {
         // At most one response is expected
         let (response_sender, response_receiver) = mpsc::channel(1);
 
-        let request_sender = proxy.connect(response_sender.into()).unwrap();
+        let request_sender = proxy.connect(response_sender.into());
         C8YHttpProxy {
             request_sender,
             response_receiver,

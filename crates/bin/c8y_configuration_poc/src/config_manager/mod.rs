@@ -9,6 +9,7 @@ mod upload;
 use crate::c8y_http_proxy::handle::C8YHttpProxy;
 use crate::c8y_http_proxy::messages::C8YRestRequest;
 use crate::c8y_http_proxy::messages::C8YRestResponse;
+use crate::c8y_http_proxy::C8YConnectionBuilder;
 use crate::c8y_http_proxy::C8YHttpProxyBuilder;
 use crate::file_system_ext::FsWatchActorBuilder;
 use crate::mqtt_ext::*;
@@ -58,7 +59,7 @@ impl ConfigManagerBuilder {
 
     /// Connect this config manager instance to some http connection provider
     pub fn with_c8y_http_proxy(&mut self, http: &mut C8YHttpProxyBuilder) -> Result<(), LinkError> {
-        let http_requests_sender = http.connect(self.http_responses_sender.clone().into())?;
+        let http_requests_sender = http.connect(self.http_responses_sender.clone().into());
         self.http_requests_sender = Some(http_requests_sender);
         self.c8y_http_proxy = Some(http.handle());
         Ok(())

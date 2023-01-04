@@ -8,6 +8,7 @@ use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
 use tedge_actors::StreamExt;
+use tedge_http_ext::HttpHandle;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResult;
@@ -30,24 +31,8 @@ struct C8YHttpProxyMessageBox {
     /// Responses sent by this actor to its clients
     responses: DynSender<C8YRestResponse>,
 
-    /// Requests sent by this actor over HTTP
-    http_requests: DynSender<HttpRequest>,
-
-    /// Responses received by this actor over HTTP
-    http_responses: mpsc::Receiver<HttpResult>,
-}
-
-impl C8YHttpProxyMessageBox {
-    pub async fn send_http_request(
-        &mut self,
-        request: HttpRequest,
-    ) -> Result<HttpResult, ChannelError> {
-        self.http_requests.send(request).await?;
-        self.http_responses
-            .next()
-            .await
-            .ok_or(ChannelError::ReceiveError())
-    }
+    /// Handle on some HTTP connection
+    http: HttpHandle,
 }
 
 fan_in_message_type!(C8YHttpProxyInput[C8YRestRequest, HttpResult] : Debug);
@@ -63,7 +48,7 @@ impl MessageBox for C8YHttpProxyMessageBox {
             Some(message) = self.requests.next() => {
                 Some(C8YHttpProxyInput::C8YRestRequest(message))
             },
-            Some(message) = self.http_responses.next() => {
+            Some(message) = self.http.recv() => {
                 Some(C8YHttpProxyInput::HttpResult(message))
             },
             else => None,
@@ -73,7 +58,7 @@ impl MessageBox for C8YHttpProxyMessageBox {
     async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
         match message {
             C8YHttpProxyOutput::C8YRestResponse(message) => self.responses.send(message).await,
-            C8YHttpProxyOutput::HttpRequest(message) => self.http_requests.send(message).await,
+            C8YHttpProxyOutput::HttpRequest(message) => self.http.send(message).await,
         }
     }
 
@@ -94,7 +79,7 @@ impl C8YHttpProxyActor {
                     let request = HttpRequestBuilder::get("http://foo.com")
                         .build()
                         .expect("TODO handle actor specific error");
-                    let _response = messages.send_http_request(request).await?;
+                    let _response = messages.http.await_response(request).await?;
                     messages.responses.send(().into()).await?;
                 }
                 C8YRestRequest::C8yUpdateSoftwareListResponse(_) => {}
