@@ -61,17 +61,6 @@ impl MqttActorBuilder {
     }
 }
 
-impl PeerLinker<MqttMessage, MqttMessage> for MqttActorBuilder {
-    fn connect(
-        &mut self,
-        _output_sender: DynSender<MqttMessage>,
-    ) -> Result<DynSender<MqttMessage>, LinkError> {
-        todo!()
-        // Indeed, this PeerLinker abstraction abstracts away too many things!
-        // Here, we need a topic filter associated to the sender.
-    }
-}
-
 #[async_trait]
 impl ActorBuilder for MqttActorBuilder {
     async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {

@@ -10,7 +10,6 @@ use std::path::Path;
 use tedge_actors::mpsc;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
-use tedge_actors::PeerLinker;
 
 /// Handle to the C8YHttpProxy
 pub struct C8YHttpProxy {

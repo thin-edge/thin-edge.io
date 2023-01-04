@@ -20,7 +20,6 @@ use tedge_actors::mpsc;
 use tedge_actors::ActorBuilder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
-use tedge_actors::PeerLinker;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
 

@@ -6,15 +6,13 @@ use tedge_actors::mpsc;
 use tedge_actors::ActorBuilder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
-use tedge_actors::PeerLinker;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
 use tedge_http_ext::HttpConnectionBuilder;
 use tedge_http_ext::HttpHandle;
-use tedge_http_ext::HttpRequest;
-use tedge_http_ext::HttpResult;
 
 mod actor;
+mod credentials;
 pub mod handle;
 pub mod messages;
 
@@ -60,7 +58,7 @@ impl C8YHttpProxyBuilder {
         &mut self,
         http: &mut impl HttpConnectionBuilder,
     ) -> Result<(), LinkError> {
-        self.http = Some(http.new_handle());
+        self.http = Some(http.new_request_handle(()));
         Ok(())
     }
 
