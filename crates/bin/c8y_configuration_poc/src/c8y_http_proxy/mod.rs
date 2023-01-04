@@ -1,3 +1,4 @@
+use crate::c8y_http_proxy::handle::C8YHttpProxy;
 use crate::c8y_http_proxy::messages::C8YRestRequest;
 use crate::c8y_http_proxy::messages::C8YRestResponse;
 use async_trait::async_trait;
@@ -12,6 +13,7 @@ use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
 
 mod actor;
+pub mod handle;
 pub mod messages;
 
 /// Configuration of C8Y REST API
@@ -63,6 +65,11 @@ impl C8YHttpProxyBuilder {
         let http_requests = http.connect(self.http_responses.0.clone().into())?;
         self.http_requests = Some(http_requests);
         Ok(())
+    }
+
+    /// Return a new handle to the actor under construction
+    pub fn handle(&mut self) -> C8YHttpProxy {
+        C8YHttpProxy::new(self)
     }
 }
 
