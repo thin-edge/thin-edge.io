@@ -1,6 +1,9 @@
 use crate::ChannelError;
 use crate::DynSender;
+use crate::KeyedSender;
 use crate::Message;
+use crate::RequestResponseHandler;
+use crate::SenderVec;
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::StreamExt;
@@ -76,5 +79,91 @@ impl<Input: Message, Output: Message> MessageBox for SimpleMessageBox<Input, Out
             output_sender,
         };
         (input_sender.into(), message_box)
+    }
+}
+
+/// A message box for a request-response service
+pub struct ServiceMessageBox<Request, Response> {
+    /// Requests received by this actor from its clients
+    requests: mpsc::Receiver<(ClientId, Request)>,
+
+    /// Responses sent by this actor to its clients
+    responses: DynSender<(ClientId, Response)>,
+}
+
+type ClientId = usize;
+
+#[async_trait]
+impl<Request: Message, Response: Message> MessageBox for ServiceMessageBox<Request, Response> {
+    type Input = (ClientId, Request);
+    type Output = (ClientId, Response);
+
+    async fn recv(&mut self) -> Option<Self::Input> {
+        self.requests.next().await
+    }
+
+    async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
+        self.responses.send(message).await
+    }
+
+    fn new_box(capacity: usize, output: DynSender<Self::Output>) -> (DynSender<Self::Input>, Self) {
+        let (request_sender, input) = mpsc::channel(capacity);
+        let message_box = ServiceMessageBox {
+            requests: input,
+            responses: output,
+        };
+        (request_sender.into(), message_box)
+    }
+}
+
+/// A message box builder for request-response service
+pub struct ServiceMessageBoxBuilder<Request, Response> {
+    request_sender: mpsc::Sender<(ClientId, Request)>,
+    request_receiver: mpsc::Receiver<(ClientId, Request)>,
+    clients: Vec<DynSender<Response>>,
+}
+
+impl<Request: Message, Response: Message> ServiceMessageBoxBuilder<Request, Response> {
+    /// Start to build a new message box for a service
+    pub fn new(capacity: usize) -> Self {
+        let (request_sender, request_receiver) = mpsc::channel(capacity);
+        ServiceMessageBoxBuilder {
+            request_sender,
+            request_receiver,
+            clients: vec![],
+        }
+    }
+
+    /// Connect a new client that expects responses on the provided channel
+    ///
+    /// Return a channel to which requests will have to be sent.
+    pub fn connect(&mut self, client: DynSender<Response>) -> DynSender<Request> {
+        let client_id = self.clients.len();
+        self.clients.push(client);
+
+        KeyedSender::new_sender(client_id, self.request_sender.clone())
+    }
+
+    /// Add a new client, returning a message box to send requests and awaiting responses
+    pub fn add_client(&mut self) -> RequestResponseHandler<Request, Response> {
+        // At most one response is expected
+        let (response_sender, response_receiver) = mpsc::channel(1);
+
+        let request_sender = self.connect(response_sender.into());
+        RequestResponseHandler {
+            request_sender,
+            response_receiver,
+        }
+    }
+
+    /// Build a message box ready to be used by the service actor
+    pub fn build(self) -> ServiceMessageBox<Request, Response> {
+        let request_receiver = self.request_receiver;
+        let response_sender = SenderVec::new_sender(self.clients);
+
+        ServiceMessageBox {
+            requests: request_receiver,
+            responses: response_sender,
+        }
     }
 }

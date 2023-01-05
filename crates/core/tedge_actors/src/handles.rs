@@ -7,6 +7,9 @@ use crate::StreamExt;
 use async_trait::async_trait;
 
 /// Client side handler of requests/responses sent to an actor
+///
+/// TODO since this is a MessageBox for a client of a service,
+///      a better name could ClientMessageBox.
 pub struct RequestResponseHandler<Request, Response> {
     pub(crate) request_sender: DynSender<Request>,
     pub(crate) response_receiver: mpsc::Receiver<Response>,
