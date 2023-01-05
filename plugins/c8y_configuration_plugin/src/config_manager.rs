@@ -135,11 +135,7 @@ impl ConfigManager {
         self.get_pending_operations_from_cloud().await?;
 
         // Now the configuration plugin is done with the initialization and ready for processing the messages
-        send_health_status(
-            &mut self.mqtt_client.published,
-            DEFAULT_PLUGIN_CONFIG_TYPE,
-        )
-        .await;
+        send_health_status(&mut self.mqtt_client.published, DEFAULT_PLUGIN_CONFIG_TYPE).await;
 
         info!("Ready to serve the configuration request");
 
@@ -231,11 +227,7 @@ impl ConfigManager {
 
     async fn process_mqtt_message(&mut self, message: Message) -> Result<(), anyhow::Error> {
         if self.health_check_topics.accept(&message) {
-            send_health_status(
-                &mut self.mqtt_client.published,
-                DEFAULT_PLUGIN_CONFIG_TYPE,
-            )
-            .await;
+            send_health_status(&mut self.mqtt_client.published, DEFAULT_PLUGIN_CONFIG_TYPE).await;
             return Ok(());
         } else if self.config_snapshot_response_topics.accept(&message) {
             self.handle_child_device_config_operation_response(&message)
