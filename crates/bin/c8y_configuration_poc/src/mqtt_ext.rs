@@ -12,7 +12,6 @@ use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::MessageBox;
-use tedge_actors::PeerLinker;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
 

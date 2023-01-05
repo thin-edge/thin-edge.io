@@ -1,5 +1,7 @@
 use crate::ChannelError;
+use crate::Message;
 use crate::MessageBox;
+use crate::ServiceMessageBox;
 use async_trait::async_trait;
 
 /// Enable a struct to be used as an actor.
@@ -16,6 +18,41 @@ pub trait Actor: 'static + Sized + Send + Sync {
     /// updating internal state,
     /// and sending messages to peers.
     async fn run(self, messages: Self::MessageBox) -> Result<(), ChannelError>;
+}
+
+/// An actor that wraps a request-response service
+///
+/// Requests are processed in turn, leading either to a response or an error.
+pub struct ServiceActor<S: Service> {
+    service: S,
+}
+
+impl<S: Service> ServiceActor<S> {
+    pub fn new(service: S) -> Self {
+        ServiceActor { service }
+    }
+}
+
+#[async_trait]
+pub trait Service: 'static + Sized + Send + Sync {
+    type Request: Message;
+    type Response: Message;
+
+    async fn handle(&mut self, request: Self::Request) -> Self::Response;
+}
+
+#[async_trait]
+impl<S: Service> Actor for ServiceActor<S> {
+    type MessageBox = ServiceMessageBox<S::Request, S::Response>;
+
+    async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+        let mut service = self.service;
+        while let Some((client_id, request)) = messages.recv().await {
+            let result = service.handle(request).await;
+            messages.send((client_id, result)).await?
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
