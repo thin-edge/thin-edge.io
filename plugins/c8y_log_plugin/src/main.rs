@@ -131,6 +131,8 @@ async fn run(
     // Now the log plugin is done with the initialization and ready for processing the messages
     send_health_status(&mut mqtt_client.published, C8Y_LOG_PLUGIN).await;
 
+    info!("Ready to serve log requests");
+
     loop {
         tokio::select! {
                 message = mqtt_client.received.next() => {

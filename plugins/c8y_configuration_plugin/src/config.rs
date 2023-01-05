@@ -88,7 +88,7 @@ impl From<ChildDeviceResponsePayload> for FileEntry {
 impl RawPluginConfig {
     fn new(config_file_path: &Path) -> Self {
         let path_str = config_file_path.display().to_string();
-        info!("Reading the config file from {}", path_str);
+        info!("Using the configuration from {}", path_str);
         match fs::read_to_string(config_file_path) {
             Ok(contents) => match toml::from_str(contents.as_str()) {
                 Ok(config) => config,
