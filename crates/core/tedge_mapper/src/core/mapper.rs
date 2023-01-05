@@ -14,8 +14,8 @@ use mqtt_channel::UnboundedSender;
 
 use std::path::Path;
 use std::time::Duration;
-use tedge_api::health::get_health_status_down_message;
 use tedge_api::health::health_check_topics;
+use tedge_api::health::health_status_down_message;
 use tedge_api::health::send_health_status;
 use tedge_utils::notify::fs_notify_stream;
 use tedge_utils::notify::FsEvent;
@@ -63,7 +63,7 @@ pub fn mqtt_config(
         .with_session_name(name)
         .with_subscriptions(topic_filter)
         .with_max_packet_size(10 * 1024 * 1024)
-        .with_last_will_message(get_health_status_down_message(name)))
+        .with_last_will_message(health_status_down_message(name)))
 }
 
 pub struct Mapper {

@@ -31,7 +31,7 @@ pub async fn send_health_status(responses: &mut impl PubChannel, daemon_name: &s
     let _ = responses.send(health_message).await;
 }
 
-pub fn get_health_status_down_message(daemon_name: &str) -> Message {
+pub fn health_status_down_message(daemon_name: &str) -> Message {
     Message {
         topic: Topic::new_unchecked(&format!("tedge/health/{daemon_name}")),
         payload: json!({

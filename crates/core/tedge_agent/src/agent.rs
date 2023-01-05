@@ -41,8 +41,8 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
-use tedge_api::health::get_health_status_down_message;
 use tedge_api::health::health_check_topics;
+use tedge_api::health::health_status_down_message;
 use tedge_api::health::send_health_status;
 use tedge_config::system_services::SystemConfig;
 use tedge_config::ConfigRepository;
@@ -73,6 +73,7 @@ use std::path::Path;
 const SYNC: &str = "sync";
 const SM_PLUGINS: &str = "sm-plugins";
 const AGENT_LOG_PATH: &str = "tedge/agent";
+const TEDGE_AGENT: &str = "tedge-agent";
 
 #[cfg(not(test))]
 const SUDO: &str = "sudo";
@@ -181,7 +182,8 @@ impl SmAgentConfig {
             .with_host(tedge_config.query(MqttBindAddressSetting)?.to_string())
             .with_port(tedge_config.query(MqttPortSetting)?.into())
             .with_max_packet_size(10 * 1024 * 1024)
-            .with_last_will_message(get_health_status_down_message("tedge-agent"));
+            .with_session_name(TEDGE_AGENT)
+            .with_last_will_message(health_status_down_message(TEDGE_AGENT));
 
         let tedge_config_path = config_repository
             .get_config_location()

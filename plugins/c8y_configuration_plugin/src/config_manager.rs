@@ -22,7 +22,7 @@ use mqtt_channel::SinkExt;
 use mqtt_channel::StreamExt;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
-use tedge_api::health::get_health_status_down_message;
+use tedge_api::health::health_status_down_message;
 use tokio::sync::Mutex;
 
 use std::path::PathBuf;
@@ -79,7 +79,7 @@ impl ConfigManager {
         let mqtt_client = Self::create_mqtt_client(mqtt_port).await?;
 
         let c8y_request_topics: TopicFilter = C8yTopic::SmartRestRequest.into();
-        let health_check_topics = health_check_topics("c8y-configuration-plugin");
+        let health_check_topics = health_check_topics("DEFAULT_PLUGIN_CONFIG_TYPE");
         let config_snapshot_response_topics: TopicFilter =
             ConfigOperationResponseTopic::SnapshotResponse.into();
         let config_update_response_topics: TopicFilter =
@@ -135,7 +135,11 @@ impl ConfigManager {
         self.get_pending_operations_from_cloud().await?;
 
         // Now the configuration plugin is done with the initialization and ready for processing the messages
-        send_health_status(&mut self.mqtt_client.published, "c8y-configuration-plugin").await;
+        send_health_status(
+            &mut self.mqtt_client.published,
+            "DEFAULT_PLUGIN_CONFIG_TYPE",
+        )
+        .await;
 
         loop {
             tokio::select! {
@@ -208,16 +212,16 @@ impl ConfigManager {
     async fn create_mqtt_client(mqtt_port: u16) -> Result<mqtt_channel::Connection, anyhow::Error> {
         let mut topic_filter =
             mqtt_channel::TopicFilter::new_unchecked(&C8yTopic::SmartRestRequest.to_string());
-        topic_filter.add_all(health_check_topics("c8y-configuration-plugin"));
+        topic_filter.add_all(health_check_topics("DEFAULT_PLUGIN_CONFIG_TYPE"));
 
         topic_filter.add_all(ConfigOperationResponseTopic::SnapshotResponse.into());
         topic_filter.add_all(ConfigOperationResponseTopic::UpdateResponse.into());
 
         let mqtt_config = mqtt_channel::Config::default()
-            .with_session_name("c8y-configuration-plugin")
+            .with_session_name("DEFAULT_PLUGIN_CONFIG_TYPE")
             .with_port(mqtt_port)
             .with_subscriptions(topic_filter)
-            .with_last_will_message(get_health_status_down_message("c8y-configuration-plugin"));
+            .with_last_will_message(health_status_down_message("DEFAULT_PLUGIN_CONFIG_TYPE"));
 
         let mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
         Ok(mqtt_client)
@@ -225,7 +229,11 @@ impl ConfigManager {
 
     async fn process_mqtt_message(&mut self, message: Message) -> Result<(), anyhow::Error> {
         if self.health_check_topics.accept(&message) {
-            send_health_status(&mut self.mqtt_client.published, "c8y-configuration-plugin").await;
+            send_health_status(
+                &mut self.mqtt_client.published,
+                "DEFAULT_PLUGIN_CONFIG_TYPE",
+            )
+            .await;
             return Ok(());
         } else if self.config_snapshot_response_topics.accept(&message) {
             self.handle_child_device_config_operation_response(&message)
