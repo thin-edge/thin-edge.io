@@ -33,6 +33,7 @@ mqtt_channel = { path = "../../common/mqtt_channel" }
 nanoid = "0.4.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+tedge_api = { path = "../../core/tedge_api" }
 tedge_config = { path = "../../common/tedge_config" }
 tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
 thiserror = "1.0.30"
