@@ -1573,7 +1573,6 @@ dependencies = [
  "async-trait",
  "fastrand",
  "futures",
- "maplit",
  "mqtt_tests",
  "rumqttc 0.18.0",
  "serial_test",
