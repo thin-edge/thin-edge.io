@@ -79,7 +79,7 @@ impl ConfigManager {
         let mqtt_client = Self::create_mqtt_client(mqtt_port).await?;
 
         let c8y_request_topics: TopicFilter = C8yTopic::SmartRestRequest.into();
-        let health_check_topics = health_check_topics("DEFAULT_PLUGIN_CONFIG_TYPE");
+        let health_check_topics = health_check_topics(DEFAULT_PLUGIN_CONFIG_TYPE);
         let config_snapshot_response_topics: TopicFilter =
             ConfigOperationResponseTopic::SnapshotResponse.into();
         let config_update_response_topics: TopicFilter =
@@ -137,9 +137,11 @@ impl ConfigManager {
         // Now the configuration plugin is done with the initialization and ready for processing the messages
         send_health_status(
             &mut self.mqtt_client.published,
-            "DEFAULT_PLUGIN_CONFIG_TYPE",
+            DEFAULT_PLUGIN_CONFIG_TYPE,
         )
         .await;
+
+        info!("Ready to serve the configuration request");
 
         loop {
             tokio::select! {
@@ -212,16 +214,16 @@ impl ConfigManager {
     async fn create_mqtt_client(mqtt_port: u16) -> Result<mqtt_channel::Connection, anyhow::Error> {
         let mut topic_filter =
             mqtt_channel::TopicFilter::new_unchecked(&C8yTopic::SmartRestRequest.to_string());
-        topic_filter.add_all(health_check_topics("DEFAULT_PLUGIN_CONFIG_TYPE"));
+        topic_filter.add_all(health_check_topics(DEFAULT_PLUGIN_CONFIG_TYPE));
 
         topic_filter.add_all(ConfigOperationResponseTopic::SnapshotResponse.into());
         topic_filter.add_all(ConfigOperationResponseTopic::UpdateResponse.into());
 
         let mqtt_config = mqtt_channel::Config::default()
-            .with_session_name("DEFAULT_PLUGIN_CONFIG_TYPE")
+            .with_session_name(DEFAULT_PLUGIN_CONFIG_TYPE)
             .with_port(mqtt_port)
             .with_subscriptions(topic_filter)
-            .with_last_will_message(health_status_down_message("DEFAULT_PLUGIN_CONFIG_TYPE"));
+            .with_last_will_message(health_status_down_message(DEFAULT_PLUGIN_CONFIG_TYPE));
 
         let mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
         Ok(mqtt_client)
@@ -231,7 +233,7 @@ impl ConfigManager {
         if self.health_check_topics.accept(&message) {
             send_health_status(
                 &mut self.mqtt_client.published,
-                "DEFAULT_PLUGIN_CONFIG_TYPE",
+                DEFAULT_PLUGIN_CONFIG_TYPE,
             )
             .await;
             return Ok(());
