@@ -52,7 +52,7 @@ rustc --version
 ```
 
 ```
-rustc 1.58.1 (db9d1b20b 2022-01-20)
+rustc 1.63.0 (4b91a6ea7 2022-08-08)
 ```
 
 > Note: Above command will add rust to path only for existing session,
@@ -65,7 +65,7 @@ rustc 1.58.1 (db9d1b20b 2022-01-20)
 
 thin-edge.io operates the `MSRV` (Minimum Supported Rust Version) and uses stable toolchain.
 
-Current MSRV is `1.58.1`.
+Current MSRV is `1.63`.
 
 ### Cross compilation toolchain (optional)
 
