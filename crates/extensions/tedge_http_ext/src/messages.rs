@@ -81,6 +81,12 @@ impl HttpRequestBuilder {
         HttpRequestBuilder { body, ..self }
     }
 
+    /// Send a  body
+    pub fn body(self, content: impl Into<hyper::Body>) -> Self {
+        let body = Ok(content.into());
+        HttpRequestBuilder { body, ..self }
+    }
+
     /// Add bearer authentication (e.g. a JWT token)
     pub fn bearer_auth<T>(self, token: T) -> Self
     where
