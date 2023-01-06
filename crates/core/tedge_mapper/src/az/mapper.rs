@@ -49,7 +49,7 @@ impl TEdgeComponent for AzureMapper {
     async fn start(
         &self,
         tedge_config: TEdgeConfig,
-        _config_dir: &Path,
+        config_dir: &Path,
     ) -> Result<(), anyhow::Error> {
         let add_timestamp = tedge_config.query(AzureMapperTimestamp)?.is_set();
         let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
@@ -62,7 +62,7 @@ impl TEdgeComponent for AzureMapper {
         let mut mapper = create_mapper(AZURE_MAPPER_NAME, mqtt_host, mqtt_port, converter).await?;
 
         mapper
-            .run(None)
+            .run(Some(&config_dir.join("operations/az")))
             .instrument(info_span!(AZURE_MAPPER_NAME))
             .await?;
 
