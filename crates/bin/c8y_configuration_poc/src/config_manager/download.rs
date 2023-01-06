@@ -1,18 +1,8 @@
-use super::config_manager::ActiveOperationState;
-use super::config_manager::CONFIG_CHANGE_TOPIC;
-use super::config_manager::DEFAULT_OPERATION_DIR_NAME;
-use super::config_manager::DEFAULT_OPERATION_TIMEOUT;
-use super::config_manager::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
-use super::error;
-use super::error::ChildDeviceConfigManagementError;
-use super::error::ConfigManagementError;
 use super::plugin_config::FileEntry;
 use super::plugin_config::PluginConfig;
 use super::ConfigManagerConfig;
-use crate::c8y_http_proxy::messages::C8YRestRequest;
-use crate::c8y_http_proxy::messages::C8YRestResponse;
+use crate::c8y_http_proxy::handle::C8YHttpProxy;
 use crate::mqtt_ext::MqttMessage;
-use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
@@ -22,54 +12,34 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
-use c8y_api::smartrest::topic::C8yTopic;
-use download::Auth;
-use download::DownloadInfo;
-use download::Downloader;
 use mqtt_channel::Message;
-use mqtt_channel::SinkExt;
 use mqtt_channel::Topic;
-use mqtt_channel::UnboundedSender;
-use tedge_actors::mpsc;
-use tedge_actors::DynSender;
-use tedge_api::OperationStatus;
-
 use serde_json::json;
-use std::fs;
-use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Arc;
-use tedge_utils::file::get_filename;
-use tedge_utils::file::get_metadata;
+use tedge_actors::DynSender;
 use tedge_utils::file::PermissionEntry;
-use tedge_utils::timers::Timers;
-use tokio::sync::Mutex;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
 
+pub const CONFIG_CHANGE_TOPIC: &str = "tedge/configuration_change";
+
 pub struct ConfigDownloadManager {
     config: ConfigManagerConfig,
     mqtt_publisher: DynSender<MqttMessage>,
-    c8y_http_req_sender: DynSender<C8YRestRequest>,
-    c8y_http_res_receiver: mpsc::Receiver<C8YRestResponse>,
-    pub operation_timer: Timers<(String, String), ActiveOperationState>,
+    c8y_http_proxy: C8YHttpProxy,
 }
 
 impl ConfigDownloadManager {
     pub fn new(
         config: ConfigManagerConfig,
         mqtt_publisher: DynSender<MqttMessage>,
-        c8y_http_req_sender: DynSender<C8YRestRequest>,
-        c8y_http_res_receiver: mpsc::Receiver<C8YRestResponse>,
+        c8y_http_proxy: C8YHttpProxy,
     ) -> Self {
         ConfigDownloadManager {
             config,
             mqtt_publisher,
-            c8y_http_req_sender,
-            c8y_http_res_receiver,
-            operation_timer: Timers::new(),
+            c8y_http_proxy,
         }
     }
 
@@ -96,11 +66,7 @@ impl ConfigDownloadManager {
         let target_config_type = smartrest_request.config_type.clone();
         let mut target_file_entry = FileEntry::default();
 
-        let config_file_path = self
-            .config_dir
-            .join(DEFAULT_OPERATION_DIR_NAME)
-            .join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
-        let plugin_config = PluginConfig::new(&config_file_path);
+        let plugin_config = PluginConfig::new(&self.config.plugin_config_path);
         let download_result = {
             match plugin_config.get_file_entry_from_type(&target_config_type) {
                 Ok(file_entry) => {
@@ -141,147 +107,15 @@ impl ConfigDownloadManager {
     }
 
     async fn download_config_file(
-        &self,
+        &mut self,
         download_url: &str,
         file_path: PathBuf,
         file_permissions: PermissionEntry,
     ) -> Result<(), anyhow::Error> {
-        // Convert smartrest request to config download request struct
-        let mut config_download_request = ConfigDownloadRequest::try_new(
-            download_url,
-            file_path.clone(),
-            self.tmp_dir.clone(),
-            file_permissions,
-        )?;
-
-        if file_path.exists() {
-            // Confirm that the file has write access before any http request attempt
-            config_download_request.has_write_access()?;
-        } else if let Some(file_parent) = file_path.parent() {
-            if !file_parent.exists() {
-                fs::create_dir_all(file_parent)?;
-            }
-        }
-
-        // If the provided url is c8y, add auth
-        if self
-            .http_client
-            .lock()
+        self.c8y_http_proxy
+            .download_file(download_url, file_path, file_permissions)
             .await
-            .url_is_in_my_tenant_domain(config_download_request.download_info.url())
-        {
-            let token = self.http_client.lock().await.get_jwt_token().await?;
-            config_download_request.download_info.auth = Some(Auth::new_bearer(&token.token()));
-        }
-
-        // Download a file to tmp dir
-        let downloader = config_download_request.create_downloader();
-        downloader
-            .download(&config_download_request.download_info)
-            .await?;
-
-        // Move the downloaded file to the final destination
-        config_download_request.move_file()?;
-
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ConfigDownloadRequest {
-    pub download_info: DownloadInfo,
-    pub file_path: PathBuf,
-    pub tmp_dir: PathBuf,
-    pub file_permissions: PermissionEntry,
-    pub file_name: String,
-}
-
-impl ConfigDownloadRequest {
-    fn try_new(
-        download_url: &str,
-        file_path: PathBuf,
-        tmp_dir: PathBuf,
-        file_permissions: PermissionEntry,
-    ) -> Result<Self, ConfigManagementError> {
-        let file_name = get_filename(file_path.clone()).ok_or_else(|| {
-            ConfigManagementError::FileNameNotFound {
-                path: file_path.clone(),
-            }
-        })?;
-
-        Ok(Self {
-            download_info: DownloadInfo {
-                url: download_url.into(),
-                auth: None,
-            },
-            file_path,
-            tmp_dir,
-            file_permissions,
-            file_name,
-        })
-    }
-
-    fn has_write_access(&self) -> Result<(), ConfigManagementError> {
-        let metadata =
-            if self.file_path.is_file() {
-                get_metadata(&self.file_path)?
-            } else {
-                // If the file does not exist before downloading file, check the directory perms
-                let parent_dir = &self.file_path.parent().ok_or_else(|| {
-                    ConfigManagementError::NoWriteAccess {
-                        path: self.file_path.clone(),
-                    }
-                })?;
-                get_metadata(parent_dir)?
-            };
-
-        // Write permission check
-        if metadata.permissions().readonly() {
-            Err(ConfigManagementError::NoWriteAccess {
-                path: self.file_path.clone(),
-            })
-        } else {
-            Ok(())
-        }
-    }
-
-    fn create_downloader(&self) -> Downloader {
-        Downloader::new(&self.file_name, &None, &self.tmp_dir)
-    }
-
-    fn move_file(&self) -> Result<(), ConfigManagementError> {
-        let src = &self.tmp_dir.join(&self.file_name);
-        let dest = &self.file_path;
-
-        if let Some(dest_dir) = dest.parent() {
-            if !dest_dir.exists() {
-                fs::create_dir_all(dest_dir)?;
-            }
-        }
-
-        let original_permission_mode = match self.file_path.is_file() {
-            true => {
-                let metadata = get_metadata(&self.file_path)?;
-                let mode = metadata.permissions().mode();
-                Some(mode)
-            }
-            false => None,
-        };
-
-        let _ = fs::copy(src, dest).map_err(|_| ConfigManagementError::FileCopyFailed {
-            src: src.to_path_buf(),
-            dest: dest.to_path_buf(),
-        })?;
-
-        let file_permissions = if let Some(mode) = original_permission_mode {
-            // Use the same file permission as the original one
-            PermissionEntry::new(None, None, Some(mode))
-        } else {
-            // Set the user, group, and mode as given for a new file
-            self.file_permissions.clone()
-        };
-
-        file_permissions.apply(&self.file_path)?;
+            .unwrap();
 
         Ok(())
     }
@@ -319,4 +153,11 @@ impl TryIntoOperationStatusMessage for DownloadConfigFileStatusMessage {
         )
         .to_smartrest()
     }
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test() {}
 }

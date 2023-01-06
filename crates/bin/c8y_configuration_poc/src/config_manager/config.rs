@@ -19,6 +19,7 @@ pub struct ConfigManagerConfig {
     pub c8y_url: ConnectUrl,
     pub tedge_http_host: IpAddress,
     pub tedge_http_port: u16,
+    pub plugin_config_path: PathBuf,
     pub plugin_config: PluginConfig,
 }
 
@@ -46,9 +47,11 @@ impl ConfigManagerConfig {
         let tedge_http_host = tedge_config.query(HttpBindAddressSetting)?;
         let tedge_http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
 
-        let config_file_dir = config_dir.join(DEFAULT_OPERATION_DIR_NAME);
-        let plugin_config =
-            PluginConfig::new(&config_file_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME));
+        let plugin_config_path = config_dir
+            .join(DEFAULT_OPERATION_DIR_NAME)
+            .join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
+
+        let plugin_config = PluginConfig::new(&plugin_config_path);
 
         Ok(ConfigManagerConfig {
             config_dir,
@@ -59,6 +62,7 @@ impl ConfigManagerConfig {
             c8y_url,
             tedge_http_host,
             tedge_http_port,
+            plugin_config_path,
             plugin_config,
         })
     }

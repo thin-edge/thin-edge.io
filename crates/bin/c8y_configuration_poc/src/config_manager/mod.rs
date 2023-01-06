@@ -1,7 +1,6 @@
 mod actor;
 mod config;
-mod config_manager;
-// mod download;
+mod download;
 mod error;
 mod plugin_config;
 mod upload;
@@ -23,8 +22,6 @@ use tedge_actors::LinkError;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
 
-use self::config_manager::ConfigManager;
-
 /// An instance of the config manager
 ///
 /// This is an actor builder.
@@ -36,7 +33,8 @@ pub struct ConfigManagerBuilder {
     mqtt_publisher: Option<DynSender<MqttMessage>>,
     http_responses_sender: mpsc::Sender<C8YRestResponse>,
     http_requests_sender: Option<DynSender<C8YRestRequest>>,
-    c8y_http_proxy: Option<C8YHttpProxy>,
+    c8y_upload_http_proxy: Option<C8YHttpProxy>,
+    c8y_download_http_proxy: Option<C8YHttpProxy>,
 }
 
 impl ConfigManagerBuilder {
@@ -52,7 +50,8 @@ impl ConfigManagerBuilder {
             mqtt_publisher: None,
             http_responses_sender,
             http_requests_sender: None,
-            c8y_http_proxy: None,
+            c8y_upload_http_proxy: None,
+            c8y_download_http_proxy: None,
         }
     }
 
@@ -60,7 +59,8 @@ impl ConfigManagerBuilder {
     pub fn with_c8y_http_proxy(&mut self, http: &mut C8YHttpProxyBuilder) -> Result<(), LinkError> {
         let http_requests_sender = http.connect(self.http_responses_sender.clone().into());
         self.http_requests_sender = Some(http_requests_sender);
-        self.c8y_http_proxy = Some(http.handle());
+        self.c8y_upload_http_proxy = Some(http.new_handle());
+        self.c8y_download_http_proxy = Some(http.new_handle());
         Ok(())
     }
 
@@ -111,12 +111,13 @@ impl ActorBuilder for ConfigManagerBuilder {
             mqtt_con.clone(),
         );
 
-        let config_manager =
-            ConfigManager::new(self.config.clone(), mqtt_con, self.c8y_http_proxy.unwrap())
-                .await
-                .unwrap();
-
-        let actor = ConfigManagerActor { config_manager };
+        let actor = ConfigManagerActor::new(
+            self.config.clone(),
+            mqtt_con,
+            self.c8y_upload_http_proxy.unwrap(),
+            self.c8y_download_http_proxy.unwrap(),
+        )
+        .await;
 
         runtime.run(actor, peers).await?;
         Ok(())

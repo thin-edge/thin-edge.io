@@ -1,11 +1,7 @@
-use crate::c8y_http_proxy::handle::C8YHttpProxy;
-use crate::mqtt_ext::MqttMessage;
-
-use super::config_manager::ActiveOperationState;
-use super::config_manager::DEFAULT_OPERATION_DIR_NAME;
-use super::config_manager::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
 use super::plugin_config::PluginConfig;
 use super::ConfigManagerConfig;
+use crate::c8y_http_proxy::handle::C8YHttpProxy;
+use crate::mqtt_ext::MqttMessage;
 use anyhow::Result;
 use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
@@ -18,7 +14,6 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use std::path::Path;
 use tedge_actors::DynSender;
-use tedge_utils::timers::Timers;
 use tracing::error;
 use tracing::info;
 
@@ -26,7 +21,6 @@ pub struct ConfigUploadManager {
     config: ConfigManagerConfig,
     mqtt_publisher: DynSender<MqttMessage>,
     c8y_http_proxy: C8YHttpProxy,
-    pub operation_timer: Timers<(String, String), ActiveOperationState>,
 }
 
 impl ConfigUploadManager {
@@ -39,7 +33,6 @@ impl ConfigUploadManager {
             config,
             mqtt_publisher,
             c8y_http_proxy,
-            operation_timer: Timers::new(),
         }
     }
 
@@ -64,12 +57,7 @@ impl ConfigUploadManager {
         let msg = UploadConfigFileStatusMessage::executing()?;
         self.mqtt_publisher.send(msg).await?;
 
-        let config_file_path = self
-            .config
-            .config_dir
-            .join(DEFAULT_OPERATION_DIR_NAME)
-            .join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
-        let plugin_config = PluginConfig::new(&config_file_path);
+        let plugin_config = PluginConfig::new(&self.config.plugin_config_path);
 
         let upload_result = {
             match plugin_config.get_file_entry_from_type(&config_upload_request.config_type) {

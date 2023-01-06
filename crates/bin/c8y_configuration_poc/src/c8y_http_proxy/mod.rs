@@ -71,7 +71,7 @@ impl C8YHttpProxyBuilder {
 #[async_trait]
 impl ActorBuilder for C8YHttpProxyBuilder {
     async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
-        let actor = C8YHttpProxyActor;
+        let actor = C8YHttpProxyActor {};
         let message_box = C8YHttpProxyMessageBox {
             clients: self.clients.build(),
             http: self.http,

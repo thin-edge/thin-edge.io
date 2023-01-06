@@ -7,9 +7,13 @@ use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use mqtt_channel::StreamExt;
 use std::path::Path;
+use std::path::PathBuf;
 use tedge_actors::mpsc;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
+use tedge_utils::file::PermissionEntry;
+
+use super::messages::DownloadFile;
 
 /// Handle to the C8YHttpProxy
 pub struct C8YHttpProxy {
@@ -85,6 +89,25 @@ impl C8YHttpProxy {
         match self.response_receiver.next().await {
             None => Err(ChannelError::ReceiveError()),
             Some(C8YRestResponse::EventId(id)) => Ok(id),
+            _ => Err(ChannelError::ReceiveError()), // TODO add ChannelError::ProtocolError
+        }
+    }
+
+    pub async fn download_file(
+        &mut self,
+        download_url: &str,
+        file_path: PathBuf,
+        file_permissions: PermissionEntry,
+    ) -> Result<(), ChannelError> {
+        let request = DownloadFile {
+            download_url: download_url.into(),
+            file_path,
+            file_permissions,
+        };
+        self.request_sender.send(request.into()).await?;
+        match self.response_receiver.next().await {
+            None => Err(ChannelError::ReceiveError()),
+            Some(C8YRestResponse::Unit(())) => Ok(()),
             _ => Err(ChannelError::ReceiveError()), // TODO add ChannelError::ProtocolError
         }
     }

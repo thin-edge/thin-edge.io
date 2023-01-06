@@ -1,5 +1,5 @@
-use super::config_manager::DEFAULT_PLUGIN_CONFIG_TYPE;
 use super::error::ConfigManagementError;
+use super::DEFAULT_PLUGIN_CONFIG_TYPE;
 use c8y_api::smartrest::topic::C8yTopic;
 use mqtt_channel::Message;
 use mqtt_channel::MqttError;

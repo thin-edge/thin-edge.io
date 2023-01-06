@@ -100,6 +100,7 @@ impl C8YHttpProxyActor {
                 C8YRestRequest::C8yUpdateSoftwareListResponse(_) => {}
                 C8YRestRequest::UploadLogBinary(_) => {}
                 C8YRestRequest::UploadConfigFile(_) => {}
+                C8YRestRequest::DownloadFile(_) => {}
             }
         }
         Ok(())
