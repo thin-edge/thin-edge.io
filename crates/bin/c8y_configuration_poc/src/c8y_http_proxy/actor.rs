@@ -11,7 +11,11 @@ use crate::c8y_http_proxy::messages::UploadConfigFile;
 use crate::c8y_http_proxy::messages::UploadLogBinary;
 use async_trait::async_trait;
 use c8y_api::json_c8y::C8yCreateEvent;
+use c8y_api::json_c8y::C8yManagedObject;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
+use c8y_api::smartrest::error::SMCumulocityMapperError;
+use c8y_api::OffsetDateTime;
+use std::collections::HashMap;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
@@ -140,14 +144,15 @@ impl C8YHttpProxyActor {
     async fn create_event(
         &mut self,
         http: &mut HttpHandle,
-        _jwt: &mut JwtRetriever,
-        _request: C8yCreateEvent,
+        jwt: &mut JwtRetriever,
+        mut c8y_event: C8yCreateEvent,
     ) -> Result<EventId, C8YRestError> {
-        let http_request = HttpRequestBuilder::get("http://foo.com")
-            .build()
-            .expect("TODO handle actor specific error");
-        let http_result = http.await_response(http_request).await?;
-        Ok("TODO".to_string())
+        if c8y_event.source.is_none() {
+            c8y_event.source = Some(C8yManagedObject {
+                id: "FIXME".to_string(), // self.end_point.c8y_internal_id.clone(),
+            });
+        }
+        self.send_event_internal(http, jwt, c8y_event).await
     }
 
     async fn send_software_list_http(
@@ -170,11 +175,37 @@ impl C8YHttpProxyActor {
 
     async fn upload_config_file(
         &mut self,
-        _http: &mut HttpHandle,
-        _jwt: &mut JwtRetriever,
-        _request: UploadConfigFile,
+        http: &mut HttpHandle,
+        jwt: &mut JwtRetriever,
+        request: UploadConfigFile,
     ) -> Result<EventId, C8YRestError> {
-        todo!()
+        // read the config file contents
+        let config_content = std::fs::read_to_string(request.config_path)
+            .map_err(|err| <std::io::Error as Into<SMCumulocityMapperError>>::into(err))?;
+
+        let config_file_event = self
+            .create_event_request(request.config_type, None, None, request.child_device_id)
+            .await?;
+
+        let event_response_id = self
+            .send_event_internal(http, jwt, config_file_event)
+            .await?;
+
+        // FIXME
+        let binary_upload_event_url = "https://foo".into();
+        // let binary_upload_event_url = self
+        //    .end_point
+        //    .get_url_for_event_binary_upload(&event_response_id);
+
+        let request = HttpRequestBuilder::post(&binary_upload_event_url)
+            .header("Accept", "application/json")
+            .header("Content-Type", "text/plain")
+            .body(config_content.to_string())
+            .build()
+            .unwrap(); // FIXME
+
+        let _response = http.await_response(request).await?;
+        Ok(binary_upload_event_url)
     }
 
     async fn download_file(
@@ -184,5 +215,45 @@ impl C8YHttpProxyActor {
         _request: DownloadFile,
     ) -> Result<Unit, C8YRestError> {
         todo!()
+    }
+
+    async fn create_event_request(
+        &mut self,
+        event_type: String,
+        event_text: Option<String>,
+        event_time: Option<OffsetDateTime>,
+        _child_device_id: Option<String>,
+    ) -> Result<C8yCreateEvent, SMCumulocityMapperError> {
+        let device_internal_id = "FIXME".to_string();
+        // let device_internal_id = if let Some(device_id) = child_device_id {
+        //     self.get_c8y_internal_child_id(device_id).await?
+        // } else {
+        //     self.end_point.c8y_internal_id.clone()
+        // };
+
+        let c8y_managed_object = C8yManagedObject {
+            id: device_internal_id,
+        };
+
+        Ok(C8yCreateEvent::new(
+            Some(c8y_managed_object),
+            event_type.clone(),
+            event_time.unwrap_or_else(OffsetDateTime::now_utc),
+            event_text.unwrap_or(event_type),
+            HashMap::new(),
+        ))
+    }
+
+    async fn send_event_internal(
+        &mut self,
+        http: &mut HttpHandle,
+        _jwt: &mut JwtRetriever,
+        _request: C8yCreateEvent,
+    ) -> Result<EventId, C8YRestError> {
+        let http_request = HttpRequestBuilder::get("http://foo.com")
+            .build()
+            .expect("TODO handle actor specific error");
+        let http_result = http.await_response(http_request).await?;
+        Ok("TODO".to_string())
     }
 }
