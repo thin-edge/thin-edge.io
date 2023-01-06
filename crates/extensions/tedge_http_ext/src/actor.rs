@@ -25,6 +25,10 @@ impl HttpActor {
 impl Actor for HttpActor {
     type MessageBox = HttpMessageBox;
 
+    fn name(&self) -> &str {
+        "HTTP"
+    }
+
     async fn run(self, mut messages: HttpMessageBox) -> Result<(), ChannelError> {
         while let Some((client_id, request)) = messages.recv().await {
             let client = self.client.clone();

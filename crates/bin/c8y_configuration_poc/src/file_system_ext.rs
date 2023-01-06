@@ -120,6 +120,10 @@ struct FsWatchActor {
 impl Actor for FsWatchActor {
     type MessageBox = FsWatchMessageBox;
 
+    fn name(&self) -> &str {
+        "FsWatcher"
+    }
+
     async fn run(mut self, mut mailbox: Self::MessageBox) -> Result<(), ChannelError> {
         loop {
             if let Some((path, fs_event)) = self.fs_notify_receiver.recv().await {

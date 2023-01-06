@@ -12,6 +12,9 @@ pub trait Actor: 'static + Sized + Send + Sync {
     /// Type of message box used by this actor
     type MessageBox: MessageBox;
 
+    /// Return the actor instance name
+    fn name(&self) -> &str;
+
     /// Run the actor
     ///
     /// Processing input messages,
@@ -38,12 +41,22 @@ pub trait Service: 'static + Sized + Send + Sync {
     type Request: Message;
     type Response: Message;
 
+    /// Return the service name
+    fn name(&self) -> &str;
+
+    /// Handle the request returning the response when done
+    ///
+    /// For such a service to return errors, the response type must be a `Result`.
     async fn handle(&mut self, request: Self::Request) -> Self::Response;
 }
 
 #[async_trait]
 impl<S: Service> Actor for ServiceActor<S> {
     type MessageBox = ServiceMessageBox<S::Request, S::Response>;
+
+    fn name(&self) -> &str {
+        self.service.name()
+    }
 
     async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
         let mut service = self.service;
@@ -69,6 +82,10 @@ mod tests {
     #[async_trait]
     impl Actor for Echo {
         type MessageBox = SimpleMessageBox<String, String>;
+
+        fn name(&self) -> &str {
+            "Echo"
+        }
 
         async fn run(
             mut self,
@@ -152,6 +169,10 @@ mod tests {
     #[async_trait]
     impl Actor for ActorWithSpecificMessageBox {
         type MessageBox = SpecificMessageBox;
+
+        fn name(&self) -> &str {
+            "ActorWithSpecificMessageBox"
+        }
 
         async fn run(self, mut messages: SpecificMessageBox) -> Result<(), ChannelError> {
             while let Some(message) = messages.next().await {

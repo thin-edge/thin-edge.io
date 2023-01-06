@@ -21,6 +21,10 @@ pub(crate) struct C8YHttpProxyActor {}
 impl Actor for C8YHttpProxyActor {
     type MessageBox = C8YHttpProxyMessageBox;
 
+    fn name(&self) -> &str {
+        "C8YHttpProxy"
+    }
+
     async fn run(self, messages: Self::MessageBox) -> Result<(), ChannelError> {
         C8YHttpProxyActor::run(self, messages).await
     }

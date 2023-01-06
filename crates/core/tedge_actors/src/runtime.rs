@@ -38,7 +38,7 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    /// Launch the runtime returning a runtime handler
+    /// Launch the runtime, returning a runtime handler
     ///
     /// TODO ensure this can only be called once
     pub async fn try_new(
@@ -73,8 +73,10 @@ impl Runtime {
     /// - Or, all the runtime handler clones have been dropped
     ///       and all the running tasks have reach completion (successfully or not).
     pub async fn run_to_completion(self) -> Result<(), RuntimeError> {
-        let bg_task = self.drop_runtime_handle();
-        Runtime::wait_for_completion(bg_task).await
+        // FIXME Dropping the handler terminates the runtime too soon
+        //       because the actors have currently no sender connected to the runtime.
+        // let bg_task = self.drop_runtime_handle();
+        Runtime::wait_for_completion(self.bg_task).await
     }
 
     /// Drop the runtime handle,
@@ -124,6 +126,7 @@ impl RuntimeHandle {
 
     /// Send an action to the runtime
     pub async fn send(&mut self, action: RuntimeAction) -> Result<(), RuntimeError> {
+        eprintln!("Runtime: schedule {:?}", action);
         self.actions_sender.send(action).await?;
         Ok(())
     }
@@ -139,6 +142,7 @@ struct RuntimeActor {
 
 impl RuntimeActor {
     async fn run(mut self) {
+        eprintln!("Runtime: started");
         // TODO select next action or next task completion
         while let Some(action) = self.actions.next().await {
             match action {
@@ -148,6 +152,7 @@ impl RuntimeActor {
                     // TODO wait say 60 s, then cancel all tasks still running
                 }
                 RuntimeAction::Spawn(task) => {
+                    eprintln!("Runtime: spawn {}", task.name());
                     tokio::spawn(task.run());
 
                     // TODO log a start event
@@ -157,5 +162,6 @@ impl RuntimeActor {
                 }
             }
         }
+        eprintln!("Runtime: stopped");
     }
 }

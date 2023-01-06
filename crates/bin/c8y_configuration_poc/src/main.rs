@@ -34,8 +34,11 @@ async fn main() -> anyhow::Result<()> {
     config_actor.with_mqtt_connection(&mut mqtt_actor)?;
 
     // Run the actors
+    // FIXME having to list all the actors is error prone
     runtime.spawn(mqtt_actor).await?;
+    runtime.spawn(jwt_actor).await?;
     runtime.spawn(http_actor).await?;
+    runtime.spawn(c8y_http_proxy_actor).await?;
     runtime.spawn(fs_watch_actor).await?;
     runtime.spawn(config_actor).await?;
 

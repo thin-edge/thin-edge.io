@@ -507,7 +507,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "c8y_api",
- "clap 3.2.23",
  "csv",
  "download",
  "mqtt_channel",

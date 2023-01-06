@@ -159,6 +159,10 @@ struct MqttActor;
 impl Actor for MqttActor {
     type MessageBox = MqttMessageBox;
 
+    fn name(&self) -> &str {
+        "MQTT"
+    }
+
     async fn run(mut self, mut mailbox: MqttMessageBox) -> Result<(), ChannelError> {
         while let Some(message) = mailbox.recv().await {
             mailbox.send(message).await?;

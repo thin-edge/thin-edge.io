@@ -194,6 +194,10 @@ impl ConfigManagerActor {
 impl Actor for ConfigManagerActor {
     type MessageBox = ConfigManagerMessageBox;
 
+    fn name(&self) -> &str {
+        "ConfigManager"
+    }
+
     async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
         self.publish_supported_config_types().await.unwrap();
         self.get_pending_operations_from_cloud().await.unwrap();

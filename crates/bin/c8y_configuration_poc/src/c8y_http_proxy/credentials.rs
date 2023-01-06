@@ -39,6 +39,10 @@ impl Service for C8YJwtRetriever {
     type Request = JwtRequest;
     type Response = JwtResult;
 
+    fn name(&self) -> &str {
+        "C8YJwtRetriever"
+    }
+
     async fn handle(&mut self, _request: Self::Request) -> Self::Response {
         let mut mqtt_con = Connection::new(&self.mqtt_config)
             .await
@@ -76,6 +80,10 @@ pub struct ConstJwtRetriever {
 impl Service for ConstJwtRetriever {
     type Request = JwtRequest;
     type Response = JwtResult;
+
+    fn name(&self) -> &str {
+        "ConstJwtRetriever"
+    }
 
     async fn handle(&mut self, _request: Self::Request) -> Self::Response {
         Ok(self.token.clone())

@@ -8,7 +8,6 @@ edition = "2021"
 anyhow = "1.0"
 async-trait = "0.1"
 c8y_api = { path = "../../core/c8y_api" }
-clap = { version = "3.2", features = ["cargo", "derive"] }
 csv = "1.1"
 download = { path = "../../common/download" }
 mqtt_channel = { path = "../../common/mqtt_channel" }
