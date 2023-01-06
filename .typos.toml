@@ -5,5 +5,9 @@ tegde = "tedge"
 OT = "OT"
 
 [files]
-extend-exclude = [ "**certificate.txt", "**test_root_cert*.txt" ]
+extend-exclude = [
+    "**certificate.txt",
+    "**test_root_cert*.txt",
+    "**.min.js"
+]
 
