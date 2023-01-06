@@ -1,9 +1,17 @@
 use crate::c8y_http_proxy::credentials::JwtRequest;
 use crate::c8y_http_proxy::credentials::JwtResult;
 use crate::c8y_http_proxy::credentials::JwtRetriever;
+use crate::c8y_http_proxy::messages::C8YRestError;
 use crate::c8y_http_proxy::messages::C8YRestRequest;
-use crate::c8y_http_proxy::messages::C8YRestResponse;
+use crate::c8y_http_proxy::messages::C8YRestResult;
+use crate::c8y_http_proxy::messages::DownloadFile;
+use crate::c8y_http_proxy::messages::EventId;
+use crate::c8y_http_proxy::messages::Unit;
+use crate::c8y_http_proxy::messages::UploadConfigFile;
+use crate::c8y_http_proxy::messages::UploadLogBinary;
 use async_trait::async_trait;
+use c8y_api::json_c8y::C8yCreateEvent;
+use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
@@ -32,7 +40,7 @@ impl Actor for C8YHttpProxyActor {
 
 pub(crate) struct C8YHttpProxyMessageBox {
     /// Connection to the clients
-    pub(crate) clients: ServiceMessageBox<C8YRestRequest, C8YRestResponse>,
+    pub(crate) clients: ServiceMessageBox<C8YRestRequest, C8YRestResult>,
 
     /// Connection to an HTTP actor
     pub(crate) http: HttpHandle,
@@ -45,7 +53,7 @@ pub(crate) struct C8YHttpProxyMessageBox {
 pub struct C8YRestRequestWithClientId(usize, C8YRestRequest);
 
 #[derive(Debug)]
-pub struct C8YRestResponseWithClientId(usize, C8YRestResponse);
+pub struct C8YRestResponseWithClientId(usize, C8YRestResult);
 
 fan_in_message_type!(C8YHttpProxyInput[C8YRestRequestWithClientId, HttpResult, JwtResult] : Debug);
 fan_in_message_type!(C8YHttpProxyOutput[C8YRestResponseWithClientId, HttpRequest, JwtRequest] : Debug);
@@ -85,28 +93,96 @@ impl MessageBox for C8YHttpProxyMessageBox {
         _capacity: usize,
         _output: DynSender<Self::Output>,
     ) -> (DynSender<Self::Input>, Self) {
+        // FIXME Is this method useful?
         todo!()
         // Similar impl as for ConfigManagerMessageBox
     }
 }
 
 impl C8YHttpProxyActor {
-    pub async fn run(self, mut messages: C8YHttpProxyMessageBox) -> Result<(), ChannelError> {
-        while let Some((client_id, request)) = messages.clients.recv().await {
-            match request {
-                C8YRestRequest::C8yCreateEvent(_) => {
-                    let request = HttpRequestBuilder::get("http://foo.com")
-                        .build()
-                        .expect("TODO handle actor specific error");
-                    let _response = messages.http.await_response(request).await?;
-                    messages.clients.send((client_id, ().into())).await?;
-                }
-                C8YRestRequest::C8yUpdateSoftwareListResponse(_) => {}
-                C8YRestRequest::UploadLogBinary(_) => {}
-                C8YRestRequest::UploadConfigFile(_) => {}
-                C8YRestRequest::DownloadFile(_) => {}
-            }
+    pub async fn run(mut self, mut messages: C8YHttpProxyMessageBox) -> Result<(), ChannelError> {
+        let clients = &mut messages.clients;
+        let http = &mut messages.http;
+        let jwt = &mut messages.jwt;
+
+        while let Some((client_id, request)) = clients.recv().await {
+            let result = match request {
+                C8YRestRequest::C8yCreateEvent(request) => self
+                    .create_event(http, jwt, request)
+                    .await
+                    .map(|response| response.into()),
+
+                C8YRestRequest::C8yUpdateSoftwareListResponse(request) => self
+                    .send_software_list_http(http, jwt, request)
+                    .await
+                    .map(|response| response.into()),
+
+                C8YRestRequest::UploadLogBinary(request) => self
+                    .upload_log_binary(http, jwt, request)
+                    .await
+                    .map(|response| response.into()),
+
+                C8YRestRequest::UploadConfigFile(request) => self
+                    .upload_config_file(http, jwt, request)
+                    .await
+                    .map(|response| response.into()),
+
+                C8YRestRequest::DownloadFile(request) => self
+                    .download_file(http, jwt, request)
+                    .await
+                    .map(|response| response.into()),
+            };
+            clients.send((client_id, result).into()).await?;
         }
         Ok(())
+    }
+
+    async fn create_event(
+        &mut self,
+        http: &mut HttpHandle,
+        _jwt: &mut JwtRetriever,
+        _request: C8yCreateEvent,
+    ) -> Result<EventId, C8YRestError> {
+        let http_request = HttpRequestBuilder::get("http://foo.com")
+            .build()
+            .expect("TODO handle actor specific error");
+        let http_result = http.await_response(http_request).await?;
+        Ok("TODO".to_string())
+    }
+
+    async fn send_software_list_http(
+        &mut self,
+        _http: &mut HttpHandle,
+        _jwt: &mut JwtRetriever,
+        _request: C8yUpdateSoftwareListResponse,
+    ) -> Result<Unit, C8YRestError> {
+        todo!()
+    }
+
+    async fn upload_log_binary(
+        &mut self,
+        _http: &mut HttpHandle,
+        _jwt: &mut JwtRetriever,
+        _request: UploadLogBinary,
+    ) -> Result<EventId, C8YRestError> {
+        todo!()
+    }
+
+    async fn upload_config_file(
+        &mut self,
+        _http: &mut HttpHandle,
+        _jwt: &mut JwtRetriever,
+        _request: UploadConfigFile,
+    ) -> Result<EventId, C8YRestError> {
+        todo!()
+    }
+
+    async fn download_file(
+        &mut self,
+        _http: &mut HttpHandle,
+        _jwt: &mut JwtRetriever,
+        _request: DownloadFile,
+    ) -> Result<Unit, C8YRestError> {
+        todo!()
     }
 }

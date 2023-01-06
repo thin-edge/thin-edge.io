@@ -1,5 +1,7 @@
+use crate::c8y_http_proxy::messages::C8YRestError;
 use crate::c8y_http_proxy::messages::C8YRestRequest;
 use crate::c8y_http_proxy::messages::C8YRestResponse;
+use crate::c8y_http_proxy::messages::C8YRestResult;
 use crate::c8y_http_proxy::messages::UploadConfigFile;
 use crate::c8y_http_proxy::messages::UploadLogBinary;
 use crate::c8y_http_proxy::C8YConnectionBuilder;
@@ -9,7 +11,6 @@ use mqtt_channel::StreamExt;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::mpsc;
-use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_utils::file::PermissionEntry;
 
@@ -18,7 +19,7 @@ use super::messages::DownloadFile;
 /// Handle to the C8YHttpProxy
 pub struct C8YHttpProxy {
     request_sender: DynSender<C8YRestRequest>,
-    response_receiver: mpsc::Receiver<C8YRestResponse>,
+    response_receiver: mpsc::Receiver<C8YRestResult>,
 }
 
 impl C8YHttpProxy {
@@ -34,24 +35,22 @@ impl C8YHttpProxy {
         }
     }
 
-    pub async fn send_event(&mut self, c8y_event: C8yCreateEvent) -> Result<String, ChannelError> {
+    pub async fn send_event(&mut self, c8y_event: C8yCreateEvent) -> Result<String, C8YRestError> {
         self.request_sender.send(c8y_event.into()).await?;
         match self.response_receiver.next().await {
-            None => Err(ChannelError::ReceiveError()),
-            Some(C8YRestResponse::EventId(id)) => Ok(id),
-            _ => Err(ChannelError::ReceiveError()), // TODO add ChannelError::ProtocolError
+            Some(Ok(C8YRestResponse::EventId(id))) => Ok(id),
+            unexpected => Err(unexpected.into()),
         }
     }
 
     pub async fn send_software_list_http(
         &mut self,
         c8y_software_list: C8yUpdateSoftwareListResponse,
-    ) -> Result<(), ChannelError> {
+    ) -> Result<(), C8YRestError> {
         self.request_sender.send(c8y_software_list.into()).await?;
         match self.response_receiver.next().await {
-            None => Err(ChannelError::ReceiveError()),
-            Some(C8YRestResponse::Unit(_)) => Ok(()),
-            _ => Err(ChannelError::ReceiveError()), // TODO add ChannelError::ProtocolError
+            Some(Ok(C8YRestResponse::Unit(_))) => Ok(()),
+            unexpected => Err(unexpected.into()),
         }
     }
 
@@ -60,7 +59,7 @@ impl C8YHttpProxy {
         log_type: &str,
         log_content: &str,
         child_device_id: Option<String>,
-    ) -> Result<String, ChannelError> {
+    ) -> Result<String, C8YRestError> {
         let request = UploadLogBinary {
             log_type: log_type.to_string(),
             log_content: log_content.to_string(),
@@ -68,9 +67,8 @@ impl C8YHttpProxy {
         };
         self.request_sender.send(request.into()).await?;
         match self.response_receiver.next().await {
-            None => Err(ChannelError::ReceiveError()),
-            Some(C8YRestResponse::EventId(id)) => Ok(id),
-            _ => Err(ChannelError::ReceiveError()), // TODO add ChannelError::ProtocolError
+            Some(Ok(C8YRestResponse::EventId(id))) => Ok(id),
+            unexpected => Err(unexpected.into()),
         }
     }
 
@@ -79,7 +77,7 @@ impl C8YHttpProxy {
         config_path: &Path,
         config_type: &str,
         child_device_id: Option<String>,
-    ) -> Result<String, ChannelError> {
+    ) -> Result<String, C8YRestError> {
         let request = UploadConfigFile {
             config_path: config_path.to_owned(),
             config_type: config_type.to_string(),
@@ -87,9 +85,8 @@ impl C8YHttpProxy {
         };
         self.request_sender.send(request.into()).await?;
         match self.response_receiver.next().await {
-            None => Err(ChannelError::ReceiveError()),
-            Some(C8YRestResponse::EventId(id)) => Ok(id),
-            _ => Err(ChannelError::ReceiveError()), // TODO add ChannelError::ProtocolError
+            Some(Ok(C8YRestResponse::EventId(id))) => Ok(id),
+            unexpected => Err(unexpected.into()),
         }
     }
 
@@ -98,7 +95,7 @@ impl C8YHttpProxy {
         download_url: &str,
         file_path: PathBuf,
         file_permissions: PermissionEntry,
-    ) -> Result<(), ChannelError> {
+    ) -> Result<(), C8YRestError> {
         let request = DownloadFile {
             download_url: download_url.into(),
             file_path,
@@ -106,9 +103,8 @@ impl C8YHttpProxy {
         };
         self.request_sender.send(request.into()).await?;
         match self.response_receiver.next().await {
-            None => Err(ChannelError::ReceiveError()),
-            Some(C8YRestResponse::Unit(())) => Ok(()),
-            _ => Err(ChannelError::ReceiveError()), // TODO add ChannelError::ProtocolError
+            Some(Ok(C8YRestResponse::Unit(()))) => Ok(()),
+            unexpected => Err(unexpected.into()),
         }
     }
 }

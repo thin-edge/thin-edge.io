@@ -2,10 +2,9 @@ use crate::c8y_http_proxy::actor::C8YHttpProxyActor;
 use crate::c8y_http_proxy::actor::C8YHttpProxyMessageBox;
 use crate::c8y_http_proxy::credentials::JwtResult;
 use crate::c8y_http_proxy::credentials::JwtRetriever;
-use crate::c8y_http_proxy::credentials::JwtRetrieverBuilder;
 use crate::c8y_http_proxy::handle::C8YHttpProxy;
 use crate::c8y_http_proxy::messages::C8YRestRequest;
-use crate::c8y_http_proxy::messages::C8YRestResponse;
+use crate::c8y_http_proxy::messages::C8YRestResult;
 use async_trait::async_trait;
 use std::convert::Infallible;
 use tedge_actors::ActorBuilder;
@@ -36,7 +35,7 @@ pub struct C8YHttpProxyBuilder {
     config: C8YHttpConfig,
 
     /// Message box for client requests and responses
-    clients: ServiceMessageBoxBuilder<C8YRestRequest, C8YRestResponse>,
+    clients: ServiceMessageBoxBuilder<C8YRestRequest, C8YRestResult>,
 
     /// Connection to an HTTP actor
     http: HttpHandle,
@@ -82,7 +81,7 @@ impl ActorBuilder for C8YHttpProxyBuilder {
 }
 
 pub trait C8YConnectionBuilder {
-    fn connect(&mut self, client: DynSender<C8YRestResponse>) -> DynSender<C8YRestRequest>;
+    fn connect(&mut self, client: DynSender<C8YRestResult>) -> DynSender<C8YRestRequest>;
 
     fn new_handle(&mut self) -> C8YHttpProxy {
         C8YHttpProxy::new(self)
@@ -90,7 +89,7 @@ pub trait C8YConnectionBuilder {
 }
 
 impl C8YConnectionBuilder for C8YHttpProxyBuilder {
-    fn connect(&mut self, output_sender: DynSender<C8YRestResponse>) -> DynSender<C8YRestRequest> {
+    fn connect(&mut self, output_sender: DynSender<C8YRestResult>) -> DynSender<C8YRestRequest> {
         self.clients.connect(output_sender)
     }
 }

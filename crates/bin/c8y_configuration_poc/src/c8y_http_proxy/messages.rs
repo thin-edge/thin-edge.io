@@ -1,10 +1,30 @@
 use c8y_api::json_c8y::*;
+use c8y_api::smartrest::error::SMCumulocityMapperError;
 use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
+use tedge_actors::ChannelError;
 use tedge_utils::file::PermissionEntry;
 
 fan_in_message_type!(C8YRestRequest[C8yCreateEvent, C8yUpdateSoftwareListResponse, UploadLogBinary, UploadConfigFile, DownloadFile]: Debug);
 fan_in_message_type!(C8YRestResponse[EventId, Unit]: Debug);
+
+#[derive(thiserror::Error, Debug)]
+pub enum C8YRestError {
+    #[error(transparent)]
+    FromChannel(#[from] ChannelError),
+
+    // TODO impl a proper C8YRest Error type
+    #[error(transparent)]
+    FromC8YRest(#[from] SMCumulocityMapperError),
+
+    // FIXME: Consider to replace this error by a panic,
+    //        since this can only happens if the actor is buggy
+    //        e.g. responding to a request A with a response for B.
+    #[error("Unexpected response")]
+    ProtocolError,
+}
+
+pub type C8YRestResult = Result<C8YRestResponse, C8YRestError>;
 
 #[derive(Debug)]
 pub struct UploadLogBinary {
@@ -30,3 +50,14 @@ pub struct DownloadFile {
 pub type EventId = String;
 
 pub type Unit = ();
+
+// Transform any unexpected message into an error
+impl From<Option<C8YRestResult>> for C8YRestError {
+    fn from(maybe_result: Option<C8YRestResult>) -> Self {
+        match maybe_result {
+            None => ChannelError::ReceiveError().into(),
+            Some(Err(rest_err)) => rest_err.into(),
+            _ => C8YRestError::ProtocolError,
+        }
+    }
+}

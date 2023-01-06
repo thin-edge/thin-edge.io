@@ -7,7 +7,7 @@ mod upload;
 
 use crate::c8y_http_proxy::handle::C8YHttpProxy;
 use crate::c8y_http_proxy::messages::C8YRestRequest;
-use crate::c8y_http_proxy::messages::C8YRestResponse;
+use crate::c8y_http_proxy::messages::C8YRestResult;
 use crate::c8y_http_proxy::C8YConnectionBuilder;
 use crate::c8y_http_proxy::C8YHttpProxyBuilder;
 use crate::file_system_ext::FsWatchActorBuilder;
@@ -28,10 +28,10 @@ use tedge_actors::RuntimeHandle;
 pub struct ConfigManagerBuilder {
     config: ConfigManagerConfig,
     events_receiver: mpsc::Receiver<ConfigInput>,
-    http_responses_receiver: mpsc::Receiver<C8YRestResponse>,
+    http_responses_receiver: mpsc::Receiver<C8YRestResult>,
     events_sender: mpsc::Sender<ConfigInput>,
     mqtt_publisher: Option<DynSender<MqttMessage>>,
-    http_responses_sender: mpsc::Sender<C8YRestResponse>,
+    http_responses_sender: mpsc::Sender<C8YRestResult>,
     http_requests_sender: Option<DynSender<C8YRestRequest>>,
     c8y_upload_http_proxy: Option<C8YHttpProxy>,
     c8y_download_http_proxy: Option<C8YHttpProxy>,

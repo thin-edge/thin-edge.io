@@ -5,7 +5,7 @@ use super::ConfigManagerConfig;
 use super::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
 use crate::c8y_http_proxy::handle::C8YHttpProxy;
 use crate::c8y_http_proxy::messages::C8YRestRequest;
-use crate::c8y_http_proxy::messages::C8YRestResponse;
+use crate::c8y_http_proxy::messages::C8YRestResult;
 use crate::file_system_ext::FsWatchEvent;
 use crate::mqtt_ext::MqttMessage;
 use anyhow::Result;
@@ -29,7 +29,7 @@ use tedge_api::health::health_check_topics;
 use tedge_utils::paths::PathsError;
 use tracing::error;
 
-fan_in_message_type!(ConfigInputAndResponse[MqttMessage, FsWatchEvent, C8YRestResponse] : Debug);
+fan_in_message_type!(ConfigInputAndResponse[MqttMessage, FsWatchEvent, C8YRestResult] : Debug);
 fan_in_message_type!(ConfigInput[MqttMessage, FsWatchEvent] : Debug);
 fan_in_message_type!(ConfigOutput[MqttMessage, C8YRestRequest] : Debug);
 
@@ -218,7 +218,7 @@ impl Actor for ConfigManagerActor {
 
 pub struct ConfigManagerMessageBox {
     pub events: mpsc::Receiver<ConfigInput>,
-    pub http_responses: mpsc::Receiver<C8YRestResponse>,
+    pub http_responses: mpsc::Receiver<C8YRestResult>,
     pub http_requests: DynSender<C8YRestRequest>,
     pub mqtt_requests: DynSender<MqttMessage>,
 }
@@ -226,7 +226,7 @@ pub struct ConfigManagerMessageBox {
 impl ConfigManagerMessageBox {
     pub fn new(
         events: mpsc::Receiver<ConfigInput>,
-        http_responses: mpsc::Receiver<C8YRestResponse>,
+        http_responses: mpsc::Receiver<C8YRestResult>,
         http_con: DynSender<C8YRestRequest>,
         mqtt_con: DynSender<MqttMessage>,
     ) -> ConfigManagerMessageBox {
@@ -257,7 +257,7 @@ impl MessageBox for ConfigManagerMessageBox {
                 }
             },
             Some(message) = self.http_responses.next() => {
-                Some(ConfigInputAndResponse::C8YRestResponse(message))
+                Some(ConfigInputAndResponse::C8YRestResult(message))
             },
             else => None,
         }
@@ -291,7 +291,7 @@ impl MessageBox for ConfigManagerMessageBox {
 #[derive(Clone)]
 struct FanOutSender {
     events_sender: mpsc::Sender<ConfigInput>,
-    http_responses_sender: mpsc::Sender<C8YRestResponse>,
+    http_responses_sender: mpsc::Sender<C8YRestResult>,
 }
 
 #[async_trait]
@@ -300,7 +300,7 @@ impl tedge_actors::Sender<ConfigInputAndResponse> for FanOutSender {
         match message {
             ConfigInputAndResponse::MqttMessage(msg) => self.events_sender.send(msg).await,
             ConfigInputAndResponse::FsWatchEvent(msg) => self.events_sender.send(msg).await,
-            ConfigInputAndResponse::C8YRestResponse(msg) => {
+            ConfigInputAndResponse::C8YRestResult(msg) => {
                 self.http_responses_sender.send(msg).await
             }
         }
