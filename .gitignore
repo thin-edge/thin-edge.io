@@ -30,6 +30,5 @@ tests/PySys/**/Output/
 **/*venv*
 
 # Other files
-Makefile.toml
 .vimspector.json
 .env
