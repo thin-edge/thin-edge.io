@@ -50,6 +50,8 @@
 
   - [Architecture](architecture/architecture.md)
 
+    - [Domain Model](architecture/domain-model.md)
+    - [Data Model](architecture/data-model.md)
     - [Thin Edge Json](architecture/thin-edge-json.md)
     - [The Mapper](architecture/mapper.md)
     - [Software Management](architecture/software-management.md)
