@@ -18,6 +18,7 @@ tedge_actors = { path = "../../core/tedge_actors" }
 tedge_api = { path = "../../core/tedge_api" }
 tedge_config = { path = "../../common/tedge_config" }
 tedge_http_ext = { path = "../../extensions/tedge_http_ext" }
+tedge_signal_ext = { path = "../../extensions/tedge_signal_ext" }
 tedge_utils = { path = "../../common/tedge_utils", features = ["fs-notify"] }
 thiserror = "1.0"
 tokio = { version = "1.8", features = ["rt", "rt-multi-thread"] }

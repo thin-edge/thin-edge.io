@@ -11,6 +11,7 @@ use crate::config_manager::ConfigManagerConfig;
 use crate::mqtt_ext::MqttActorBuilder;
 use file_system_ext::FsWatchActorBuilder;
 use tedge_actors::Runtime;
+use tedge_signal_ext::SignalActor;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -28,6 +29,7 @@ async fn main() -> anyhow::Result<()> {
     let mut fs_watch_actor = FsWatchActorBuilder::new();
     let mut config_actor =
         ConfigManagerBuilder::new(ConfigManagerConfig::from_default_tedge_config()?);
+    let signal_actor = SignalActor::builder();
 
     // Connect actor instances
     config_actor.with_fs_connection(&mut fs_watch_actor)?;
@@ -36,6 +38,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Run the actors
     // FIXME having to list all the actors is error prone
+    runtime.spawn(signal_actor).await?;
     runtime.spawn(mqtt_actor).await?;
     runtime.spawn(jwt_actor).await?;
     runtime.spawn(http_actor).await?;

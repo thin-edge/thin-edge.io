@@ -516,6 +516,7 @@ dependencies = [
  "tedge_api",
  "tedge_config",
  "tedge_http_ext",
+ "tedge_signal_ext",
  "tedge_utils",
  "thiserror",
  "tokio",
@@ -2983,12 +2984,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "signal-hook"
+version = "0.3.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a253b5e89e2698464fc26b545c9edceb338e18a89effeeecfea192c3025be29d"
+dependencies = [
+ "libc",
+ "signal-hook-registry",
+]
+
+[[package]]
 name = "signal-hook-registry"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e51e73328dc4ac0c7ccbda3a494dfa03df1de2f46018127f60c693f2648455b0"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "signal-hook-tokio"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "213241f76fb1e37e27de3b6aa1b068a2c333233b59cca6634f634b80a27ecf1e"
+dependencies = [
+ "futures-core",
+ "libc",
+ "signal-hook",
+ "tokio",
 ]
 
 [[package]]
@@ -3368,6 +3391,16 @@ dependencies = [
  "tedge_actors",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "tedge_signal_ext"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "signal-hook",
+ "signal-hook-tokio",
+ "tedge_actors",
 ]
 
 [[package]]
