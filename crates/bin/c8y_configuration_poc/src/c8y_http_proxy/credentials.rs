@@ -7,6 +7,7 @@ use mqtt_channel::StreamExt;
 use mqtt_channel::Topic;
 use std::convert::Infallible;
 use std::time::Duration;
+use tedge_actors::Actor;
 use tedge_actors::ActorBuilder;
 use tedge_actors::ConnectionBuilder;
 use tedge_actors::DynSender;
@@ -99,7 +100,7 @@ pub struct JwtRetrieverBuilder<S: Service<Request = JwtRequest, Response = JwtRe
 impl<S: Service<Request = JwtRequest, Response = JwtResult>> JwtRetrieverBuilder<S> {
     pub fn new(service: S) -> Self {
         let actor = ServiceActor::new(service);
-        let message_box = ServiceMessageBoxBuilder::new(10);
+        let message_box = ServiceMessageBoxBuilder::new(actor.name(), 10);
         JwtRetrieverBuilder { actor, message_box }
     }
 }

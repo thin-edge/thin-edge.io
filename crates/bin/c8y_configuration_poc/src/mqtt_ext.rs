@@ -112,7 +112,9 @@ impl MessageBox for MqttMessageBox {
     async fn recv(&mut self) -> Option<MqttActorMessage> {
         tokio::select! {
             Some(message) = self.peer_receiver.next() => {
-                Some(MqttActorMessage::PeerMessage(message))
+                let message = MqttActorMessage::PeerMessage(message);
+                self.log_input(&message);
+                Some(message)
             },
             Some(message) = self.mqtt_client.received.next() => {
                 Some(MqttActorMessage::DirectMessage(message))
@@ -124,6 +126,9 @@ impl MessageBox for MqttMessageBox {
     async fn send(&mut self, message: MqttActorMessage) -> Result<(), ChannelError> {
         match message {
             MqttActorMessage::DirectMessage(message) => {
+                // FIXME one should trace all the sent copies of this message.
+                self.log_output(&MqttActorMessage::DirectMessage(message.clone()));
+
                 for (topic_filter, peer_sender) in self.peer_senders.iter_mut() {
                     if topic_filter.accept(&message) {
                         let message = message.clone();
@@ -143,6 +148,7 @@ impl MessageBox for MqttMessageBox {
     }
 
     fn new_box(
+        _name: &str,
         _capacity: usize,
         _output: DynSender<Self::Output>,
     ) -> (DynSender<Self::Input>, Self) {
@@ -150,6 +156,16 @@ impl MessageBox for MqttMessageBox {
         // No so obvious to implement.
         // The Input and Output types of this MessageBox are seen from the inside,
         // while this `new_box` expect message types as seen by the client.
+    }
+
+    fn turn_logging_on(&mut self, _on: bool) {}
+
+    fn name(&self) -> &str {
+        "MQTT"
+    }
+
+    fn logging_is_on(&self) -> bool {
+        true
     }
 }
 

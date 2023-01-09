@@ -3,7 +3,7 @@ use crate::ChannelError;
 use crate::DynSender;
 use crate::Message;
 use crate::MessageBox;
-use crate::StreamExt;
+use crate::SimpleMessageBox;
 use async_trait::async_trait;
 
 /// Client side handler of requests/responses sent to an actor
@@ -11,16 +11,26 @@ use async_trait::async_trait;
 /// TODO since this is a MessageBox for a client of a service,
 ///      a better name could ClientMessageBox.
 pub struct RequestResponseHandler<Request, Response> {
-    pub(crate) request_sender: DynSender<Request>,
-    pub(crate) response_receiver: mpsc::Receiver<Response>,
+    // Note that this message box sends requests and receive responses.
+    messages: SimpleMessageBox<Response, Request>,
 }
 
 impl<Request: Message, Response: Message> RequestResponseHandler<Request, Response> {
+    pub(crate) fn new(
+        name: &str,
+        response_receiver: mpsc::Receiver<Response>,
+        request_sender: DynSender<Request>,
+    ) -> Self {
+        RequestResponseHandler {
+            messages: SimpleMessageBox::new(name.to_string(), response_receiver, request_sender),
+        }
+    }
+
     /// Send the request and await for a response
     pub async fn await_response(&mut self, request: Request) -> Result<Response, ChannelError> {
-        self.request_sender.send(request).await?;
-        self.response_receiver
-            .next()
+        self.messages.send(request).await?;
+        self.messages
+            .recv()
             .await
             .ok_or(ChannelError::ReceiveError())
     }
@@ -32,24 +42,32 @@ impl<Request: Message, Response: Message> MessageBox for RequestResponseHandler<
     type Output = Request;
 
     async fn recv(&mut self) -> Option<Self::Input> {
-        self.response_receiver.next().await
+        self.messages.recv().await
     }
 
     async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
-        self.request_sender.send(message).await
+        self.messages.send(message).await
     }
 
     fn new_box(
+        name: &str,
         _capacity: usize,
         request_sender: DynSender<Self::Output>,
     ) -> (DynSender<Self::Input>, Self) {
-        let (response_sender, response_receiver) = mpsc::channel(1);
-        (
-            response_sender.into(),
-            Self {
-                request_sender,
-                response_receiver,
-            },
-        )
+        let capacity = 1;
+        let (response_sender, messages) = SimpleMessageBox::new_box(name, capacity, request_sender);
+        (response_sender, Self { messages })
+    }
+
+    fn turn_logging_on(&mut self, on: bool) {
+        self.messages.turn_logging_on(on)
+    }
+
+    fn name(&self) -> &str {
+        self.messages.name()
+    }
+
+    fn logging_is_on(&self) -> bool {
+        self.messages.logging_is_on()
     }
 }

@@ -44,9 +44,11 @@ pub trait ConnectionBuilder<Input: Message, Output: Message, Config, Error: std:
         let (response_sender, response_receiver) = mpsc::channel(1);
 
         let request_sender = self.connect(config, response_sender.into())?;
-        Ok(RequestResponseHandler {
-            request_sender,
+        Ok(RequestResponseHandler::new(
+            "client handle",
+            // FIXME should be named after the client and the service
             response_receiver,
-        })
+            request_sender,
+        ))
     }
 }

@@ -94,12 +94,25 @@ impl MessageBox for C8YHttpProxyMessageBox {
     }
 
     fn new_box(
+        _name: &str,
         _capacity: usize,
         _output: DynSender<Self::Output>,
     ) -> (DynSender<Self::Input>, Self) {
         // FIXME Is this method useful?
         todo!()
         // Similar impl as for ConfigManagerMessageBox
+    }
+
+    fn turn_logging_on(&mut self, _on: bool) {
+        todo!()
+    }
+
+    fn name(&self) -> &str {
+        "C8Y-REST"
+    }
+
+    fn logging_is_on(&self) -> bool {
+        true
     }
 }
 

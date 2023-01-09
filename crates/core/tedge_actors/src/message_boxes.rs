@@ -7,6 +7,8 @@ use crate::SenderVec;
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::StreamExt;
+use log::debug;
+use log::info;
 
 /// A message box used by an actor to collect all its input and forward its output
 ///
@@ -26,8 +28,6 @@ use futures::StreamExt;
 /// - provide helper function that combine internal channels.
 #[async_trait]
 pub trait MessageBox: 'static + Sized + Send + Sync {
-    // TODO add methods to turn on/off logging of input and output messages
-
     /// Type of input messages the actor consumes
     type Input: Message;
 
@@ -47,16 +47,59 @@ pub trait MessageBox: 'static + Sized + Send + Sync {
 
     /// Crate a message box
     ///
-    /// `let (input_sender, message_box) = MessageBoxImpl::new_box(capacity, output_sender)`
+    /// `let (input_sender, message_box) = MessageBoxImpl::new_box(name, capacity, output_sender)`
     /// creates a message_box that sends all output messages to the given `output_sender`
     /// and that consumes all the messages sent on the `input_sender` returned along the box.
-    fn new_box(capacity: usize, output: DynSender<Self::Output>) -> (DynSender<Self::Input>, Self);
+    fn new_box(
+        name: &str,
+        capacity: usize,
+        output: DynSender<Self::Output>,
+    ) -> (DynSender<Self::Input>, Self);
+
+    /// Turn on/off logging of input and output messages
+    fn turn_logging_on(&mut self, on: bool);
+
+    /// Name of the associated actor
+    fn name(&self) -> &str;
+
+    /// Log an input message just after reception, before processing it.
+    fn log_input(&self, message: &Self::Input) {
+        if self.logging_is_on() {
+            info!(target: self.name(), "recv {:?}", message);
+        }
+    }
+
+    /// Log an output message just before sending it.
+    fn log_output(&self, message: &Self::Output) {
+        if self.logging_is_on() {
+            debug!(target: self.name(), "send {:?}", message);
+        }
+    }
+
+    fn logging_is_on(&self) -> bool;
 }
 
 /// The basic message box
 pub struct SimpleMessageBox<Input, Output> {
+    name: String,
     input_receiver: mpsc::Receiver<Input>,
     output_sender: DynSender<Output>,
+    logging_is_on: bool,
+}
+
+impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
+    pub(crate) fn new(
+        name: String,
+        input_receiver: mpsc::Receiver<Input>,
+        output_sender: DynSender<Output>,
+    ) -> Self {
+        SimpleMessageBox {
+            name,
+            input_receiver,
+            output_sender,
+            logging_is_on: true,
+        }
+    }
 }
 
 #[async_trait]
@@ -65,59 +108,49 @@ impl<Input: Message, Output: Message> MessageBox for SimpleMessageBox<Input, Out
     type Output = Output;
 
     async fn recv(&mut self) -> Option<Input> {
-        self.input_receiver.next().await
+        self.input_receiver.next().await.map(|message| {
+            self.log_input(&message);
+            message
+        })
     }
 
     async fn send(&mut self, message: Output) -> Result<(), ChannelError> {
+        self.log_output(&message);
         self.output_sender.send(message).await
     }
 
-    fn new_box(capacity: usize, output_sender: DynSender<Output>) -> (DynSender<Input>, Self) {
+    fn new_box(
+        name: &str,
+        capacity: usize,
+        output_sender: DynSender<Output>,
+    ) -> (DynSender<Input>, Self) {
         let (input_sender, input_receiver) = mpsc::channel(capacity);
-        let message_box = SimpleMessageBox {
-            input_receiver,
-            output_sender,
-        };
+        let message_box = SimpleMessageBox::new(name.to_string(), input_receiver, output_sender);
         (input_sender.into(), message_box)
+    }
+
+    fn turn_logging_on(&mut self, on: bool) {
+        self.logging_is_on = on;
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn logging_is_on(&self) -> bool {
+        self.logging_is_on
     }
 }
 
 /// A message box for a request-response service
-pub struct ServiceMessageBox<Request, Response> {
-    /// Requests received by this actor from its clients
-    requests: mpsc::Receiver<(ClientId, Request)>,
-
-    /// Responses sent by this actor to its clients
-    responses: DynSender<(ClientId, Response)>,
-}
+pub type ServiceMessageBox<Request, Response> =
+    SimpleMessageBox<(ClientId, Request), (ClientId, Response)>;
 
 type ClientId = usize;
 
-#[async_trait]
-impl<Request: Message, Response: Message> MessageBox for ServiceMessageBox<Request, Response> {
-    type Input = (ClientId, Request);
-    type Output = (ClientId, Response);
-
-    async fn recv(&mut self) -> Option<Self::Input> {
-        self.requests.next().await
-    }
-
-    async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
-        self.responses.send(message).await
-    }
-
-    fn new_box(capacity: usize, output: DynSender<Self::Output>) -> (DynSender<Self::Input>, Self) {
-        let (request_sender, input) = mpsc::channel(capacity);
-        let message_box = ServiceMessageBox {
-            requests: input,
-            responses: output,
-        };
-        (request_sender.into(), message_box)
-    }
-}
-
 /// A message box builder for request-response service
 pub struct ServiceMessageBoxBuilder<Request, Response> {
+    service_name: String,
     request_sender: mpsc::Sender<(ClientId, Request)>,
     request_receiver: mpsc::Receiver<(ClientId, Request)>,
     clients: Vec<DynSender<Response>>,
@@ -125,9 +158,10 @@ pub struct ServiceMessageBoxBuilder<Request, Response> {
 
 impl<Request: Message, Response: Message> ServiceMessageBoxBuilder<Request, Response> {
     /// Start to build a new message box for a service
-    pub fn new(capacity: usize) -> Self {
+    pub fn new(service_name: &str, capacity: usize) -> Self {
         let (request_sender, request_receiver) = mpsc::channel(capacity);
         ServiceMessageBoxBuilder {
+            service_name: service_name.to_string(),
             request_sender,
             request_receiver,
             clients: vec![],
@@ -145,15 +179,16 @@ impl<Request: Message, Response: Message> ServiceMessageBoxBuilder<Request, Resp
     }
 
     /// Add a new client, returning a message box to send requests and awaiting responses
-    pub fn add_client(&mut self) -> RequestResponseHandler<Request, Response> {
+    pub fn add_client(&mut self, client_name: &str) -> RequestResponseHandler<Request, Response> {
         // At most one response is expected
         let (response_sender, response_receiver) = mpsc::channel(1);
 
         let request_sender = self.connect(response_sender.into());
-        RequestResponseHandler {
-            request_sender,
+        RequestResponseHandler::new(
+            &format!("{} -> {}", client_name, self.service_name),
             response_receiver,
-        }
+            request_sender,
+        )
     }
 
     /// Build a message box ready to be used by the service actor
@@ -161,9 +196,11 @@ impl<Request: Message, Response: Message> ServiceMessageBoxBuilder<Request, Resp
         let request_receiver = self.request_receiver;
         let response_sender = SenderVec::new_sender(self.clients);
 
-        ServiceMessageBox {
-            requests: request_receiver,
-            responses: response_sender,
+        SimpleMessageBox {
+            input_receiver: request_receiver,
+            output_sender: response_sender,
+            name: self.service_name,
+            logging_is_on: true,
         }
     }
 }

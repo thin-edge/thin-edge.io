@@ -270,7 +270,11 @@ impl MessageBox for ConfigManagerMessageBox {
         }
     }
 
-    fn new_box(capacity: usize, output: DynSender<Self::Output>) -> (DynSender<Self::Input>, Self) {
+    fn new_box(
+        _name: &str,
+        capacity: usize,
+        output: DynSender<Self::Output>,
+    ) -> (DynSender<Self::Input>, Self) {
         let (events_sender, events_receiver) = mpsc::channel(capacity);
         let (http_responses_sender, http_responses_receiver) = mpsc::channel(1);
         let input_sender = FanOutSender {
@@ -284,6 +288,19 @@ impl MessageBox for ConfigManagerMessageBox {
             mqtt_requests: adapt(&output.clone()),
         };
         (input_sender.into(), message_box)
+    }
+
+    fn turn_logging_on(&mut self, _on: bool) {
+        todo!()
+    }
+
+    fn name(&self) -> &str {
+        "C8Y-Config-Manager"
+    }
+
+    fn logging_is_on(&self) -> bool {
+        // FIXME this mailbox recv and send method are not used making logging ineffective.
+        false
     }
 }
 

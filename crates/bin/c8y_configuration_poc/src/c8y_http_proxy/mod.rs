@@ -50,7 +50,7 @@ impl C8YHttpProxyBuilder {
         http: &mut impl HttpConnectionBuilder,
         jwt: &mut impl ConnectionBuilder<(), JwtResult, (), Infallible>,
     ) -> Self {
-        let clients = ServiceMessageBoxBuilder::new(10);
+        let clients = ServiceMessageBoxBuilder::new("C8Y-REST", 10);
         let http = http.new_request_handle(());
         let jwt = jwt.new_request_handle(());
         C8YHttpProxyBuilder {

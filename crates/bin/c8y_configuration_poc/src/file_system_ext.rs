@@ -42,6 +42,7 @@ impl MessageBox for FsWatchMessageBox {
             FsWatchEvent::DirectoryCreated(path) => path,
         };
 
+        self.log_output(&message);
         for (watch_path, sender) in self.watch_dirs.iter_mut() {
             if path.starts_with(watch_path) {
                 sender.send(message.clone()).await?;
@@ -56,10 +57,21 @@ impl MessageBox for FsWatchMessageBox {
     }
 
     fn new_box(
+        _name: &str,
         _capacity: usize,
         _output: DynSender<Self::Output>,
     ) -> (DynSender<Self::Input>, Self) {
         todo!()
+    }
+
+    fn turn_logging_on(&mut self, _on: bool) {}
+
+    fn name(&self) -> &str {
+        "Inotify"
+    }
+
+    fn logging_is_on(&self) -> bool {
+        true
     }
 }
 

@@ -130,10 +130,24 @@ impl MessageBox for HttpMessageBox {
         self.responses.send(message).await
     }
 
-    fn new_box(capacity: usize, output: DynSender<Self::Output>) -> (DynSender<Self::Input>, Self) {
+    fn new_box(
+        _name: &str,
+        capacity: usize,
+        output: DynSender<Self::Output>,
+    ) -> (DynSender<Self::Input>, Self) {
         let max_concurrency = 4;
         let (request_sender, request_receiver) = mpsc::channel(capacity);
         let message_box = HttpMessageBox::new(max_concurrency, request_receiver, output);
         (request_sender.into(), message_box)
+    }
+
+    fn turn_logging_on(&mut self, _on: bool) {}
+
+    fn name(&self) -> &str {
+        "HTTP"
+    }
+
+    fn logging_is_on(&self) -> bool {
+        true
     }
 }

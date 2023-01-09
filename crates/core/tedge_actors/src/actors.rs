@@ -102,10 +102,10 @@ mod tests {
     async fn running_an_actor_without_a_runtime() {
         let actor_output_collector: VecRecipient<String> = VecRecipient::default();
 
-        let (actor_input_sender, message_box) =
-            SimpleMessageBox::new_box(10, actor_output_collector.as_sender());
-
         let actor = Echo;
+        let (actor_input_sender, message_box) =
+            SimpleMessageBox::new_box(actor.name(), 10, actor_output_collector.as_sender());
+
         let actor_task = spawn(actor.run(message_box));
 
         spawn(async move {
@@ -137,7 +137,7 @@ mod tests {
 
         let actor = ActorWithSpecificMessageBox;
         let (actor_input, message_box) =
-            SpecificMessageBox::new_box(10, output_messages.as_sender());
+            SpecificMessageBox::new_box(actor.name(), 10, output_messages.as_sender());
         let actor_task = spawn(actor.run(message_box));
 
         spawn(async move {
@@ -196,6 +196,7 @@ mod tests {
     fan_in_message_type!(DoMsg[DoThis,DoThat] : Clone , Debug , Eq , PartialEq);
 
     pub struct SpecificMessageBox {
+        name: String,
         input: mpsc::Receiver<String>,
         peer_1: DynSender<DoThis>,
         peer_2: DynSender<DoThat>,
@@ -232,6 +233,7 @@ mod tests {
         }
 
         fn new_box(
+            name: &str,
             capacity: usize,
             output: DynSender<Self::Output>,
         ) -> (DynSender<Self::Input>, Self) {
@@ -239,11 +241,22 @@ mod tests {
             let peer_1 = adapt(&output);
             let peer_2 = adapt(&output);
             let message_box = SpecificMessageBox {
+                name: name.to_string(),
                 input,
                 peer_1,
                 peer_2,
             };
             (sender.into(), message_box)
+        }
+
+        fn turn_logging_on(&mut self, _on: bool) {}
+
+        fn name(&self) -> &str {
+            &self.name
+        }
+
+        fn logging_is_on(&self) -> bool {
+            false
         }
     }
 }
