@@ -146,7 +146,7 @@ impl<Input: Message, Output: Message> MessageBox for SimpleMessageBox<Input, Out
 pub type ServiceMessageBox<Request, Response> =
     SimpleMessageBox<(ClientId, Request), (ClientId, Response)>;
 
-type ClientId = usize;
+pub type ClientId = usize;
 
 /// A message box builder for request-response service
 pub struct ServiceMessageBoxBuilder<Request, Response> {
@@ -202,5 +202,119 @@ impl<Request: Message, Response: Message> ServiceMessageBoxBuilder<Request, Resp
             name: self.service_name,
             logging_is_on: true,
         }
+    }
+
+    /// Build a message box aimed to concurrently serve requests
+    pub fn build_concurrent(
+        self,
+        max_concurrency: usize,
+    ) -> ConcurrentServiceMessageBox<Request, Response> {
+        let clients = self.build();
+        ConcurrentServiceMessageBox::new(max_concurrency, clients)
+    }
+}
+
+/// A message box for services that handles requests concurrently
+pub struct ConcurrentServiceMessageBox<Request, Response> {
+    /// Max concurrent requests
+    max_concurrency: usize,
+
+    /// Message box to interact with clients of this service
+    clients: ServiceMessageBox<Request, Response>,
+
+    /// Pending responses
+    pending_responses: futures::stream::FuturesUnordered<PendingResult<(usize, Response)>>,
+}
+
+type PendingResult<R> = tokio::task::JoinHandle<R>;
+
+impl<Request: Message, Response: Message> ConcurrentServiceMessageBox<Request, Response> {
+    pub(crate) fn new(
+        max_concurrency: usize,
+        clients: ServiceMessageBox<Request, Response>,
+    ) -> Self {
+        ConcurrentServiceMessageBox {
+            max_concurrency,
+            clients,
+            pending_responses: futures::stream::FuturesUnordered::new(),
+        }
+    }
+
+    async fn next_request(&mut self) -> Option<(usize, Request)> {
+        self.await_idle_processor().await;
+        loop {
+            tokio::select! {
+                Some(request) = self.clients.recv() => {
+                    return Some(request);
+                }
+                Some(result) = self.pending_responses.next() => {
+                    self.send_result(result).await;
+                }
+                else => {
+                    return None
+                }
+            }
+        }
+    }
+
+    async fn await_idle_processor(&mut self) {
+        if self.pending_responses.len() >= self.max_concurrency {
+            if let Some(result) = self.pending_responses.next().await {
+                self.send_result(result).await;
+            }
+        }
+    }
+
+    pub fn send_response_once_done(&mut self, pending_result: PendingResult<(ClientId, Response)>) {
+        self.pending_responses.push(pending_result);
+    }
+
+    async fn send_result(&mut self, result: Result<(usize, Response), tokio::task::JoinError>) {
+        if let Ok(response) = result {
+            let _ = self.clients.send(response).await;
+        }
+        // TODO handle error cases:
+        // - cancelled task
+        // - task panics
+        // - send fails
+    }
+}
+
+#[async_trait]
+impl<Request: Message, Response: Message> MessageBox
+    for ConcurrentServiceMessageBox<Request, Response>
+{
+    type Input = (ClientId, Request);
+    type Output = (ClientId, Response);
+
+    async fn recv(&mut self) -> Option<Self::Input> {
+        self.next_request().await
+    }
+
+    async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
+        self.clients.send(message).await
+    }
+
+    fn new_box(
+        name: &str,
+        capacity: usize,
+        output_sender: DynSender<Self::Output>,
+    ) -> (DynSender<Self::Input>, Self) {
+        let max_concurrency = 4;
+        let (request_sender, clients) = ServiceMessageBox::new_box(name, capacity, output_sender);
+        let message_box = ConcurrentServiceMessageBox::new(max_concurrency, clients);
+        (request_sender, message_box)
+    }
+
+    fn turn_logging_on(&mut self, on: bool) {
+        self.clients.turn_logging_on(on)
+    }
+
+    fn name(&self) -> &str {
+        self.clients.name()
+    }
+
+    fn logging_is_on(&self) -> bool {
+        self.clients.logging_is_on()
     }
 }
