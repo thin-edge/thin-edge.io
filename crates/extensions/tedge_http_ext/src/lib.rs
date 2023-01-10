@@ -1,20 +1,23 @@
 mod actor;
 mod messages;
 
+#[cfg(test)]
+mod tests;
+
 pub use messages::*;
 use std::convert::Infallible;
 
 use actor::*;
 use async_trait::async_trait;
-use tedge_actors::mpsc;
+use tedge_actors::Actor;
 use tedge_actors::ActorBuilder;
+use tedge_actors::ChannelError;
 use tedge_actors::ConnectionBuilder;
 use tedge_actors::DynSender;
-use tedge_actors::KeyedSender;
 use tedge_actors::RequestResponseHandler;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
-use tedge_actors::SenderVec;
+use tedge_actors::ServiceMessageBoxBuilder;
 
 pub type HttpHandle = RequestResponseHandler<HttpRequest, HttpResult>;
 pub trait HttpConnectionBuilder:
@@ -24,22 +27,23 @@ pub trait HttpConnectionBuilder:
 
 pub struct HttpActorBuilder {
     actor: HttpActor,
-    receiver: mpsc::Receiver<(usize, HttpRequest)>,
-    sender: mpsc::Sender<(usize, HttpRequest)>,
-    clients: Vec<DynSender<Result<HttpResponse, HttpError>>>,
+    pub box_builder: ServiceMessageBoxBuilder<HttpRequest, HttpResult>,
 }
 
 impl HttpActorBuilder {
     pub fn new(config: HttpConfig) -> Result<Self, HttpError> {
         let actor = HttpActor::new(config)?;
-        let (sender, receiver) = mpsc::channel(10);
+        let box_builder = ServiceMessageBoxBuilder::new("HTTP", 16);
 
-        Ok(HttpActorBuilder {
-            actor,
-            receiver,
-            sender,
-            clients: vec![],
-        })
+        Ok(HttpActorBuilder { actor, box_builder })
+    }
+
+    pub async fn run(self) -> Result<(), ChannelError> {
+        let max_concurrency = 4;
+        let actor = self.actor;
+        let messages = self.box_builder.build_concurrent(max_concurrency);
+
+        actor.run(messages).await
     }
 }
 
@@ -47,9 +51,7 @@ impl HttpActorBuilder {
 impl ActorBuilder for HttpActorBuilder {
     async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
         let actor = self.actor;
-        let request_receiver = self.receiver;
-        let response_sender = SenderVec::new_sender(self.clients);
-        let messages = HttpMessageBox::new(4, request_receiver, response_sender);
+        let messages = self.box_builder.build_concurrent(4);
         runtime.run(actor, messages).await
     }
 }
@@ -60,10 +62,7 @@ impl ConnectionBuilder<HttpRequest, HttpResult, (), Infallible> for HttpActorBui
         _config: (),
         client: DynSender<HttpResult>,
     ) -> Result<DynSender<HttpRequest>, Infallible> {
-        let client_idx = self.clients.len();
-        self.clients.push(client);
-
-        Ok(KeyedSender::new_sender(client_idx, self.sender.clone()))
+        Ok(self.box_builder.connect(client))
     }
 }
 
