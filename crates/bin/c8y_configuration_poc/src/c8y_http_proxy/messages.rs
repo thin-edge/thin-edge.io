@@ -3,6 +3,7 @@ use c8y_api::smartrest::error::SMCumulocityMapperError;
 use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::ChannelError;
+use tedge_http_ext::HttpParseError;
 use tedge_utils::file::PermissionEntry;
 
 fan_in_message_type!(C8YRestRequest[C8yCreateEvent, C8yUpdateSoftwareListResponse, UploadLogBinary, UploadConfigFile, DownloadFile]: Debug);
@@ -16,6 +17,9 @@ pub enum C8YRestError {
     // TODO impl a proper C8YRest Error type
     #[error(transparent)]
     FromC8YRest(#[from] SMCumulocityMapperError),
+
+    #[error(transparent)]
+    FromHttpParseError(#[from] HttpParseError),
 
     // FIXME: Consider to replace this error by a panic,
     //        since this can only happens if the actor is buggy

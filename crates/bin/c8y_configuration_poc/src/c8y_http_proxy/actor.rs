@@ -9,13 +9,18 @@ use crate::c8y_http_proxy::messages::EventId;
 use crate::c8y_http_proxy::messages::Unit;
 use crate::c8y_http_proxy::messages::UploadConfigFile;
 use crate::c8y_http_proxy::messages::UploadLogBinary;
+use crate::C8YHttpConfig;
 use async_trait::async_trait;
+use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yManagedObject;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::smartrest::error::SMCumulocityMapperError;
 use c8y_api::OffsetDateTime;
+use log::error;
+use log::info;
 use std::collections::HashMap;
+use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
@@ -27,7 +32,12 @@ use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResult;
 
-pub(crate) struct C8YHttpProxyActor {}
+const RETRY_TIMEOUT_SECS: u64 = 60;
+
+pub(crate) struct C8YHttpProxyActor {
+    end_point: C8yEndPoint,
+    child_devices: HashMap<String, String>,
+}
 
 #[async_trait]
 impl Actor for C8YHttpProxyActor {
@@ -117,10 +127,22 @@ impl MessageBox for C8YHttpProxyMessageBox {
 }
 
 impl C8YHttpProxyActor {
+    pub fn new(config: C8YHttpConfig) -> Self {
+        let unknown_internal_id = "";
+        let end_point = C8yEndPoint::new(&config.c8y_host, &config.device_id, unknown_internal_id);
+        let child_devices = HashMap::default();
+        C8YHttpProxyActor {
+            end_point,
+            child_devices,
+        }
+    }
+
     pub async fn run(mut self, mut messages: C8YHttpProxyMessageBox) -> Result<(), ChannelError> {
         let clients = &mut messages.clients;
         let http = &mut messages.http;
         let jwt = &mut messages.jwt;
+
+        self.init(http, jwt).await;
 
         while let Some((client_id, request)) = clients.recv().await {
             let result = match request {
@@ -154,6 +176,87 @@ impl C8YHttpProxyActor {
         Ok(())
     }
 
+    async fn init(&mut self, http: &mut HttpHandle, jwt: &mut JwtRetriever) {
+        info!(target: self.name(), "start initialisation");
+        while self.end_point.get_c8y_internal_id().is_empty() {
+            if let Err(error) = self.try_get_and_set_internal_id(http, jwt).await {
+                error!(
+                    "An error occurred while retrieving internal Id, operation will retry in {} seconds\n Error: {:?}",
+                    RETRY_TIMEOUT_SECS, error
+                );
+
+                tokio::time::sleep(Duration::from_secs(RETRY_TIMEOUT_SECS)).await;
+                continue;
+            };
+        }
+        info!(target: self.name(), "initialisation done.");
+    }
+
+    async fn try_get_and_set_internal_id(
+        &mut self,
+        http: &mut HttpHandle,
+        jwt: &mut JwtRetriever,
+    ) -> Result<(), C8YRestError> {
+        let internal_id = self.try_get_internal_id(http, jwt, None).await?;
+        self.end_point.set_c8y_internal_id(internal_id);
+        Ok(())
+    }
+
+    async fn get_c8y_internal_child_id(
+        &mut self,
+        http: &mut HttpHandle,
+        jwt: &mut JwtRetriever,
+        child_device_id: String,
+    ) -> Result<String, C8YRestError> {
+        if let Some(c8y_internal_id) = self.child_devices.get(&child_device_id) {
+            Ok(c8y_internal_id.clone())
+        } else {
+            let c8y_internal_id = self
+                .try_get_internal_id(http, jwt, Some(&child_device_id))
+                .await?;
+            self.child_devices
+                .insert(child_device_id, c8y_internal_id.clone());
+            Ok(c8y_internal_id)
+        }
+    }
+
+    async fn try_get_internal_id(
+        &mut self,
+        http: &mut HttpHandle,
+        jwt: &mut JwtRetriever,
+        device_id: Option<&str>,
+    ) -> Result<String, C8YRestError> {
+        let url_get_id = self.end_point.get_url_for_get_id(device_id);
+
+        let request_internal_id = HttpRequestBuilder::get(url_get_id);
+        let internal_id = self.execute(http, jwt, request_internal_id).await?;
+        // TODO add method to extract json from an HttpResult
+        //let internal_id_response = internal_id.body().to_string().json::<InternalIdResponse>().await?;
+        //let internal_id = internal_id_response.id();
+
+        let internal_id = "FIXME".to_string();
+        Ok(internal_id)
+    }
+
+    async fn execute(
+        &mut self,
+        http: &mut HttpHandle,
+        jwt: &mut JwtRetriever,
+        request_builder: HttpRequestBuilder,
+    ) -> Result<HttpResult, C8YRestError> {
+        // Get a JWT token to authenticate the device
+        let request_builder = if let Ok(Some(token)) = jwt.await_response(()).await? {
+            request_builder.bearer_auth(token)
+        } else {
+            request_builder
+        };
+
+        // TODO Add timeout
+        // TODO Manage 403 errors
+        let request = request_builder.build()?;
+        Ok(http.await_response(request).await?)
+    }
+
     async fn create_event(
         &mut self,
         http: &mut HttpHandle,
@@ -162,7 +265,7 @@ impl C8YHttpProxyActor {
     ) -> Result<EventId, C8YRestError> {
         if c8y_event.source.is_none() {
             c8y_event.source = Some(C8yManagedObject {
-                id: "FIXME".to_string(), // self.end_point.c8y_internal_id.clone(),
+                id: self.end_point.get_c8y_internal_id().to_string(),
             });
         }
         self.send_event_internal(http, jwt, c8y_event).await
@@ -197,7 +300,14 @@ impl C8YHttpProxyActor {
             .map_err(|err| <std::io::Error as Into<SMCumulocityMapperError>>::into(err))?;
 
         let config_file_event = self
-            .create_event_request(request.config_type, None, None, request.child_device_id)
+            .create_event_request(
+                http,
+                jwt,
+                request.config_type,
+                None,
+                None,
+                request.child_device_id,
+            )
             .await?;
 
         let event_response_id = self
@@ -232,17 +342,18 @@ impl C8YHttpProxyActor {
 
     async fn create_event_request(
         &mut self,
+        http: &mut HttpHandle,
+        jwt: &mut JwtRetriever,
         event_type: String,
         event_text: Option<String>,
         event_time: Option<OffsetDateTime>,
-        _child_device_id: Option<String>,
-    ) -> Result<C8yCreateEvent, SMCumulocityMapperError> {
-        let device_internal_id = "FIXME".to_string();
-        // let device_internal_id = if let Some(device_id) = child_device_id {
-        //     self.get_c8y_internal_child_id(device_id).await?
-        // } else {
-        //     self.end_point.c8y_internal_id.clone()
-        // };
+        child_device_id: Option<String>,
+    ) -> Result<C8yCreateEvent, C8YRestError> {
+        let device_internal_id = if let Some(device_id) = child_device_id {
+            self.get_c8y_internal_child_id(http, jwt, device_id).await?
+        } else {
+            self.end_point.get_c8y_internal_id().to_string()
+        };
 
         let c8y_managed_object = C8yManagedObject {
             id: device_internal_id,

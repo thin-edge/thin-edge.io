@@ -24,7 +24,8 @@ pub mod messages;
 /// Configuration of C8Y REST API
 #[derive(Default)]
 pub struct C8YHttpConfig {
-    pub c8y_url: String,
+    pub c8y_host: String,
+    pub device_id: String,
 }
 
 /// A proxy to C8Y REST API
@@ -70,7 +71,7 @@ impl C8YHttpProxyBuilder {
 #[async_trait]
 impl ActorBuilder for C8YHttpProxyBuilder {
     async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
-        let actor = C8YHttpProxyActor {};
+        let actor = C8YHttpProxyActor::new(self.config);
         let message_box = C8YHttpProxyMessageBox {
             clients: self.clients.build(),
             http: self.http,
