@@ -5,18 +5,28 @@ use crate::HttpResult;
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::StreamExt;
+use hyper::client::Client;
+use hyper::client::HttpConnector;
+use hyper_rustls::HttpsConnector;
+use hyper_rustls::HttpsConnectorBuilder;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
 
 pub(crate) struct HttpActor {
-    client: hyper::client::Client<hyper::client::connect::HttpConnector, hyper::body::Body>,
+    client: Client<HttpsConnector<HttpConnector>, hyper::body::Body>,
 }
 
 impl HttpActor {
     pub(crate) fn new(_config: HttpConfig) -> Result<Self, HttpError> {
-        let client = hyper::client::Client::builder().build_http();
+        let https = HttpsConnectorBuilder::new()
+            .with_native_roots()
+            .https_or_http()
+            .enable_http1()
+            .enable_http2()
+            .build();
+        let client = Client::builder().build(https);
         Ok(HttpActor { client })
     }
 }

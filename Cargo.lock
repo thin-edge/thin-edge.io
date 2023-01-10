@@ -1436,6 +1436,7 @@ dependencies = [
  "http",
  "hyper",
  "rustls",
+ "rustls-native-certs",
  "tokio",
  "tokio-rustls",
 ]
@@ -3401,6 +3402,7 @@ dependencies = [
  "futures",
  "http",
  "hyper",
+ "hyper-rustls",
  "serde",
  "serde_json",
  "tedge_actors",

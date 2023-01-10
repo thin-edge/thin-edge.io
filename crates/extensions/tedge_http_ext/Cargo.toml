@@ -9,6 +9,7 @@ async-trait = "0.1"
 futures = { version = "0.3" }
 http = "0.2"
 hyper = { version = "0.14", default_features = false, features = ["client", "http1", "http2", "tcp"] }
+hyper-rustls = { version = "0.23", default_features = false, features = ["tokio-runtime", "tls12", "rustls-native-certs", "http1", "http2"] }
 serde = "1.0"
 serde_json = "1.0"
 tedge_actors = { path = "../../core/tedge_actors" }
