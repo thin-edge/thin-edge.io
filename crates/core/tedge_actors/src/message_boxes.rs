@@ -100,6 +100,25 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
             logging_is_on: true,
         }
     }
+
+    /// Create a simple message box along an associated message box
+    ///
+    /// Messages sent from the associated message box are received by the main message box.
+    /// Messages sent by the main message box are received from the associated message box.
+    ///
+    /// TODO Can this method replace MessageBox::new_box that happens to be difficult to impl and use?
+    pub fn new_channel(name: &str) -> (SimpleMessageBox<Output, Input>, Self) {
+        let (input_sender, input_receiver) = mpsc::channel(16);
+        let (output_sender, output_receiver) = mpsc::channel(16);
+        let main_box =
+            SimpleMessageBox::new(name.to_string(), input_receiver, output_sender.into());
+        let associated_box = SimpleMessageBox::new(
+            format!("{}-Client", name),
+            output_receiver,
+            input_sender.into(),
+        );
+        (associated_box, main_box)
+    }
 }
 
 #[async_trait]
@@ -228,6 +247,9 @@ pub struct ConcurrentServiceMessageBox<Request, Response> {
 
 type PendingResult<R> = tokio::task::JoinHandle<R>;
 
+type RawClientMessageBox<Request, Response> =
+    SimpleMessageBox<(ClientId, Response), (ClientId, Request)>;
+
 impl<Request: Message, Response: Message> ConcurrentServiceMessageBox<Request, Response> {
     pub(crate) fn new(
         max_concurrency: usize,
@@ -238,6 +260,19 @@ impl<Request: Message, Response: Message> ConcurrentServiceMessageBox<Request, R
             clients,
             pending_responses: futures::stream::FuturesUnordered::new(),
         }
+    }
+
+    /// Create a service message box alongside an associated box for a test client
+    ///
+    /// In practice the associated box will be used only for tests,
+    /// because all the requests and responses are multiplexed.
+    pub fn new_channel(
+        name: &str,
+        max_concurrency: usize,
+    ) -> (RawClientMessageBox<Request, Response>, Self) {
+        let (clients_box, service_box) = SimpleMessageBox::new_channel(name);
+        let concurrent_service_box = ConcurrentServiceMessageBox::new(max_concurrency, service_box);
+        (clients_box, concurrent_service_box)
     }
 
     async fn next_request(&mut self) -> Option<(usize, Request)> {

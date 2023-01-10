@@ -1,4 +1,5 @@
 use crate::ChannelError;
+use crate::ConcurrentServiceMessageBox;
 use crate::Message;
 use crate::MessageBox;
 use crate::ServiceMessageBox;
@@ -64,6 +65,46 @@ impl<S: Service> Actor for ServiceActor<S> {
             let result = service.handle(request).await;
             messages.send((client_id, result)).await?
         }
+        Ok(())
+    }
+}
+
+/// An actor that wraps a request-response service
+///
+/// Requests are processed concurrently (up to some max concurrency level).
+///
+/// The service must be `Clone` to create a fresh service handle for each request.
+pub struct ConcurrentServiceActor<S: Service + Clone> {
+    service: S,
+}
+
+impl<S: Service + Clone> ConcurrentServiceActor<S> {
+    pub fn new(service: S) -> Self {
+        ConcurrentServiceActor { service }
+    }
+}
+
+#[async_trait]
+impl<S: Service + Clone> Actor for ConcurrentServiceActor<S> {
+    type MessageBox = ConcurrentServiceMessageBox<S::Request, S::Response>;
+
+    fn name(&self) -> &str {
+        self.service.name()
+    }
+
+    async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+        while let Some((client_id, request)) = messages.recv().await {
+            // Spawn the request
+            let mut service = self.service.clone();
+            let pending_result = tokio::spawn(async move {
+                let result = service.handle(request).await;
+                (client_id, result)
+            });
+
+            // Send the response back to the client
+            messages.send_response_once_done(pending_result)
+        }
+
         Ok(())
     }
 }

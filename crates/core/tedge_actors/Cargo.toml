@@ -12,3 +12,4 @@ thiserror = "1.0"
 tokio = { version = "1.22", default_features = false, features = ["sync", "rt", "macros"] }
 
 [dev-dependencies]
+tokio = { version = "1.22", default_features = false, features = ["time"] }
