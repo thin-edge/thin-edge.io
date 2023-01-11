@@ -5,6 +5,7 @@ use mqtt_channel::Connection;
 use mqtt_channel::PubChannel;
 use mqtt_channel::StreamExt;
 use mqtt_channel::Topic;
+use mqtt_channel::TopicFilter;
 use std::convert::Infallible;
 use std::time::Duration;
 use tedge_actors::Actor;
@@ -31,7 +32,9 @@ pub struct C8YJwtRetriever {
 
 impl C8YJwtRetriever {
     pub fn builder(mqtt_config: mqtt_channel::Config) -> JwtRetrieverBuilder<C8YJwtRetriever> {
-        JwtRetrieverBuilder::new(C8YJwtRetriever { mqtt_config })
+        JwtRetrieverBuilder::new(C8YJwtRetriever {
+            mqtt_config: mqtt_config.with_subscriptions(TopicFilter::new_unchecked("c8y/s/dat")),
+        })
     }
 }
 

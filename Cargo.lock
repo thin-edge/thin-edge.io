@@ -510,6 +510,7 @@ dependencies = [
  "csv",
  "download",
  "env_logger 0.10.0",
+ "hyper",
  "log",
  "mqtt_channel",
  "serde",

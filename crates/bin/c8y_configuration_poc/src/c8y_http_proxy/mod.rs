@@ -28,6 +28,14 @@ pub struct C8YHttpConfig {
     pub device_id: String,
 }
 
+impl C8YHttpConfig {
+    pub fn new<S: Into<String>>(c8y_host: S, device_id: S) -> Self {
+        Self {
+            c8y_host: c8y_host.into(),
+            device_id: device_id.into(),
+        }
+    }
+}
 /// A proxy to C8Y REST API
 ///
 /// This is an actor builder.

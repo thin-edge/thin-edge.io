@@ -13,12 +13,16 @@ use crate::C8YHttpConfig;
 use async_trait::async_trait;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
+use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::C8yManagedObject;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
+use c8y_api::json_c8y::InternalIdResponse;
 use c8y_api::smartrest::error::SMCumulocityMapperError;
 use c8y_api::OffsetDateTime;
+use hyper::body;
 use log::error;
 use log::info;
+use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
@@ -229,12 +233,15 @@ impl C8YHttpProxyActor {
         let url_get_id = self.end_point.get_url_for_get_id(device_id);
 
         let request_internal_id = HttpRequestBuilder::get(url_get_id);
-        let internal_id = self.execute(http, jwt, request_internal_id).await?;
-        // TODO add method to extract json from an HttpResult
-        //let internal_id_response = internal_id.body().to_string().json::<InternalIdResponse>().await?;
-        //let internal_id = internal_id_response.id();
+        let res = self.execute(http, jwt, request_internal_id).await?.unwrap();
 
-        let internal_id = "FIXME".to_string();
+        let body_bytes = body::to_bytes(res.into_body()).await.unwrap();
+        let body_string =
+            String::from_utf8(body_bytes.to_vec()).expect("response was not valid utf-8");
+
+        let internal_id_response: InternalIdResponse =
+            serde_json::from_str(body_string.as_str()).expect("FIXME: JSON parsing failed");
+        let internal_id = internal_id_response.id();
         Ok(internal_id)
     }
 
@@ -248,13 +255,25 @@ impl C8YHttpProxyActor {
         let request_builder = if let Ok(Some(token)) = jwt.await_response(()).await? {
             request_builder.bearer_auth(token)
         } else {
-            request_builder
+            return Err(C8YRestError::CustomError("JWT token not available".into()));
         };
 
         // TODO Add timeout
         // TODO Manage 403 errors
         let request = request_builder.build()?;
         Ok(http.await_response(request).await?)
+    }
+
+    //FIXME: Move this into HttpResponse as a trait impl
+    pub async fn response_as_string(res: HttpResult) -> Result<String, C8YRestError> {
+        let body_bytes = body::to_bytes(res.unwrap().into_body()).await?;
+        Ok(String::from_utf8(body_bytes.to_vec()).expect("response was not valid utf-8"))
+    }
+
+    //FIXME: Move this into HttpResponse as a trait impl
+    pub async fn response_as<T: DeserializeOwned>(res: HttpResult) -> Result<T, C8YRestError> {
+        let body_str = Self::response_as_string(res).await?;
+        Ok(serde_json::from_str(body_str.as_str())?)
     }
 
     async fn create_event(
@@ -314,21 +333,20 @@ impl C8YHttpProxyActor {
             .send_event_internal(http, jwt, config_file_event)
             .await?;
 
-        // FIXME
-        let binary_upload_event_url = "https://foo".into();
-        // let binary_upload_event_url = self
-        //    .end_point
-        //    .get_url_for_event_binary_upload(&event_response_id);
-
-        let request = HttpRequestBuilder::post(&binary_upload_event_url)
+        let binary_upload_event_url = self
+            .end_point
+            .get_url_for_event_binary_upload(&event_response_id);
+        let req_builder = HttpRequestBuilder::post(binary_upload_event_url.clone())
             .header("Accept", "application/json")
             .header("Content-Type", "text/plain")
-            .body(config_content.to_string())
-            .build()
-            .unwrap(); // FIXME
+            .body(config_content.to_string());
+        let http_result = self.execute(http, jwt, req_builder).await?.unwrap();
 
-        let _response = http.await_response(request).await?;
-        Ok(binary_upload_event_url)
+        if !http_result.status().is_success() {
+            Err(C8YRestError::CustomError("Upload failed".into()))
+        } else {
+            Ok(binary_upload_event_url)
+        }
     }
 
     async fn download_file(
@@ -371,13 +389,16 @@ impl C8YHttpProxyActor {
     async fn send_event_internal(
         &mut self,
         http: &mut HttpHandle,
-        _jwt: &mut JwtRetriever,
-        _request: C8yCreateEvent,
+        jwt: &mut JwtRetriever,
+        c8y_event: C8yCreateEvent,
     ) -> Result<EventId, C8YRestError> {
-        let http_request = HttpRequestBuilder::get("http://foo.com")
-            .build()
-            .expect("TODO handle actor specific error");
-        let http_result = http.await_response(http_request).await?;
-        Ok("TODO".to_string())
+        let create_event_url = self.end_point.get_url_for_create_event();
+
+        let req_builder = HttpRequestBuilder::post(create_event_url)
+            .json(&c8y_event)
+            .header("Accept", "application/json");
+        let http_result = self.execute(http, jwt, req_builder).await?;
+        let event_response = Self::response_as::<C8yEventResponse>(http_result).await?;
+        Ok(event_response.id)
     }
 }

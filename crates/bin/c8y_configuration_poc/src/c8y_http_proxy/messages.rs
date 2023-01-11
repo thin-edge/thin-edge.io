@@ -1,6 +1,7 @@
 use c8y_api::json_c8y::*;
 use c8y_api::smartrest::error::SMCumulocityMapperError;
 use std::path::PathBuf;
+use std::string::FromUtf8Error;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::ChannelError;
 use tedge_http_ext::HttpParseError;
@@ -26,6 +27,21 @@ pub enum C8YRestError {
     //        e.g. responding to a request A with a response for B.
     #[error("Unexpected response")]
     ProtocolError,
+
+    #[error("JWT token could not be retrieved")]
+    JWTTokenError,
+
+    #[error(transparent)]
+    FromHyperError(#[from] hyper::Error),
+
+    #[error(transparent)]
+    FromUtf8Error(#[from] FromUtf8Error),
+
+    #[error(transparent)]
+    FromSerdeJsonError(#[from] serde_json::Error),
+
+    #[error("Failed with {0}")]
+    CustomError(String),
 }
 
 pub type C8YRestResult = Result<C8YRestResponse, C8YRestError>;

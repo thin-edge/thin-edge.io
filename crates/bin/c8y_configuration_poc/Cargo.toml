@@ -11,6 +11,7 @@ c8y_api = { path = "../../core/c8y_api" }
 csv = "1.1"
 download = { path = "../../common/download" }
 env_logger = "0.10"
+hyper = { version = "0.14", default_features = false }
 log = "0.4"
 mqtt_channel = { path = "../../common/mqtt_channel" }
 serde = { version = "1.0", features = ["derive"] }
