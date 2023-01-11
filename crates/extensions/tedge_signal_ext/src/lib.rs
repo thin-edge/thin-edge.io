@@ -4,7 +4,6 @@ use signal_hook_tokio::Signals;
 use tedge_actors::Actor;
 use tedge_actors::ActorBuilder;
 use tedge_actors::ChannelError;
-use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
 use tedge_actors::RuntimeAction;
 use tedge_actors::RuntimeError;
@@ -72,16 +71,6 @@ impl MessageBox for SignalMessageBox {
     async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
         self.log_output(&message);
         self.runtime.send(message).await
-    }
-
-    fn new_box(
-        _name: &str,
-        _capacity: usize,
-        _output: DynSender<Self::Output>,
-    ) -> (DynSender<Self::Input>, Self) {
-        todo!()
-
-        // FIXME, One needs first impl RuntimeHandle as a regular MessageBox
     }
 
     fn turn_logging_on(&mut self, _on: bool) {

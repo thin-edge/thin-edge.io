@@ -2,6 +2,7 @@ use crate::ChannelError;
 use crate::DynSender;
 use crate::KeyedSender;
 use crate::Message;
+use crate::NullSender;
 use crate::RequestResponseHandler;
 use crate::SenderVec;
 use async_trait::async_trait;
@@ -14,10 +15,12 @@ use log::info;
 ///
 /// This message box can be seen as two streams of messages,
 /// - inputs sent to the actor and stored in the message box awaiting to be processed,
-/// - outputs sent by the actor and forwarded to the message box of other actors.
+/// - outputs sent by the actor and forwarded to the message boxes of other actors.
 ///
 /// ```logical-view
-/// input_sender: DynSender<Input> -----> |||||| Box ----> output_sender: DynSender<Input>
+///                                      +------+
+/// input_sender: DynSender<Input> ----->| Box  |----> output_sender: DynSender<Input>
+///                                      +------+
 /// ```
 ///
 /// Under the hood, a `MessageBox` implementation can use
@@ -44,17 +47,6 @@ pub trait MessageBox: 'static + Sized + Send + Sync {
     ///
     /// Fail if there is no more receiver expecting these messages.
     async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError>;
-
-    /// Crate a message box
-    ///
-    /// `let (input_sender, message_box) = MessageBoxImpl::new_box(name, capacity, output_sender)`
-    /// creates a message_box that sends all output messages to the given `output_sender`
-    /// and that consumes all the messages sent on the `input_sender` returned along the box.
-    fn new_box(
-        name: &str,
-        capacity: usize,
-        output: DynSender<Self::Output>,
-    ) -> (DynSender<Self::Input>, Self);
 
     /// Turn on/off logging of input and output messages
     fn turn_logging_on(&mut self, on: bool);
@@ -119,6 +111,13 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
         );
         (associated_box, main_box)
     }
+
+    /// Close the sending channel of this message box.
+    ///
+    /// This makes the receiving end aware that no more message will be sent.
+    pub fn close_output(&mut self) {
+        self.output_sender = NullSender.into()
+    }
 }
 
 #[async_trait]
@@ -136,16 +135,6 @@ impl<Input: Message, Output: Message> MessageBox for SimpleMessageBox<Input, Out
     async fn send(&mut self, message: Output) -> Result<(), ChannelError> {
         self.log_output(&message);
         self.output_sender.send(message).await
-    }
-
-    fn new_box(
-        name: &str,
-        capacity: usize,
-        output_sender: DynSender<Output>,
-    ) -> (DynSender<Input>, Self) {
-        let (input_sender, input_receiver) = mpsc::channel(capacity);
-        let message_box = SimpleMessageBox::new(name.to_string(), input_receiver, output_sender);
-        (input_sender.into(), message_box)
     }
 
     fn turn_logging_on(&mut self, on: bool) {
@@ -328,17 +317,6 @@ impl<Request: Message, Response: Message> MessageBox
 
     async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
         self.clients.send(message).await
-    }
-
-    fn new_box(
-        name: &str,
-        capacity: usize,
-        output_sender: DynSender<Self::Output>,
-    ) -> (DynSender<Self::Input>, Self) {
-        let max_concurrency = 4;
-        let (request_sender, clients) = ServiceMessageBox::new_box(name, capacity, output_sender);
-        let message_box = ConcurrentServiceMessageBox::new(max_concurrency, clients);
-        (request_sender, message_box)
     }
 
     fn turn_logging_on(&mut self, on: bool) {

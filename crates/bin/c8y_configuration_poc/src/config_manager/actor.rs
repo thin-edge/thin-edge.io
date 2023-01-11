@@ -15,7 +15,6 @@ use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::topic::C8yTopic;
 use mqtt_channel::Message;
 use mqtt_channel::TopicFilter;
-use tedge_actors::adapt;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::mpsc;
 use tedge_actors::Actor;
@@ -268,26 +267,6 @@ impl MessageBox for ConfigManagerMessageBox {
             ConfigOutput::MqttMessage(msg) => self.mqtt_requests.send(msg).await,
             ConfigOutput::C8YRestRequest(msg) => self.http_requests.send(msg).await,
         }
-    }
-
-    fn new_box(
-        _name: &str,
-        capacity: usize,
-        output: DynSender<Self::Output>,
-    ) -> (DynSender<Self::Input>, Self) {
-        let (events_sender, events_receiver) = mpsc::channel(capacity);
-        let (http_responses_sender, http_responses_receiver) = mpsc::channel(1);
-        let input_sender = FanOutSender {
-            events_sender,
-            http_responses_sender,
-        };
-        let message_box = ConfigManagerMessageBox {
-            events: events_receiver,
-            http_responses: http_responses_receiver,
-            http_requests: adapt(&output.clone()),
-            mqtt_requests: adapt(&output.clone()),
-        };
-        (input_sender.into(), message_box)
     }
 
     fn turn_logging_on(&mut self, _on: bool) {

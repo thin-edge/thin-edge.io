@@ -141,35 +141,30 @@ mod tests {
 
     #[tokio::test]
     async fn running_an_actor_without_a_runtime() {
-        let actor_output_collector: VecRecipient<String> = VecRecipient::default();
-
         let actor = Echo;
-        let (actor_input_sender, message_box) =
-            SimpleMessageBox::new_box(actor.name(), 10, actor_output_collector.as_sender());
+        let (mut client_message_box, actor_message_box) = SimpleMessageBox::new_channel("test");
 
-        let actor_task = spawn(actor.run(message_box));
+        let actor_task = spawn(actor.run(actor_message_box));
 
-        spawn(async move {
-            let mut sender: DynSender<&str> = adapt(&actor_input_sender.into());
-            sender
-                .send("Hello")
-                .await
-                .expect("the actor is still running");
-            sender
-                .send("World")
-                .await
-                .expect("the actor is still running");
-        });
+        // Messages sent to the actor
+        assert!(client_message_box.send("Hello".to_string()).await.is_ok());
+        assert!(client_message_box.send("World".to_string()).await.is_ok());
 
+        // Messages received from the actor
+        assert_eq!(client_message_box.recv().await, Some("Hello".to_string()));
+        assert_eq!(client_message_box.recv().await, Some("World".to_string()));
+
+        // When there is no more input message senders
+        client_message_box.close_output();
+
+        // The actor stops
         actor_task
             .await
             .expect("the actor run to completion")
             .expect("the actor returned Ok");
 
-        assert_eq!(
-            actor_output_collector.collect().await,
-            vec!["Hello".to_string(), "World".to_string()]
-        )
+        // And the clients receives an end of stream event
+        assert_eq!(client_message_box.recv().await, None);
     }
 
     #[tokio::test]
@@ -244,6 +239,23 @@ mod tests {
     }
 
     impl SpecificMessageBox {
+        fn new_box(
+            name: &str,
+            capacity: usize,
+            output: DynSender<DoMsg>,
+        ) -> (DynSender<String>, Self) {
+            let (sender, input) = mpsc::channel(capacity);
+            let peer_1 = adapt(&output);
+            let peer_2 = adapt(&output);
+            let message_box = SpecificMessageBox {
+                name: name.to_string(),
+                input,
+                peer_1,
+                peer_2,
+            };
+            (sender.into(), message_box)
+        }
+
         pub async fn next(&mut self) -> Option<String> {
             self.input.next().await
         }
@@ -271,23 +283,6 @@ mod tests {
                 DoMsg::DoThis(message) => self.peer_1.send(message).await,
                 DoMsg::DoThat(message) => self.peer_2.send(message).await,
             }
-        }
-
-        fn new_box(
-            name: &str,
-            capacity: usize,
-            output: DynSender<Self::Output>,
-        ) -> (DynSender<Self::Input>, Self) {
-            let (sender, input) = mpsc::channel(capacity);
-            let peer_1 = adapt(&output);
-            let peer_2 = adapt(&output);
-            let message_box = SpecificMessageBox {
-                name: name.to_string(),
-                input,
-                peer_1,
-                peer_2,
-            };
-            (sender.into(), message_box)
         }
 
         fn turn_logging_on(&mut self, _on: bool) {}

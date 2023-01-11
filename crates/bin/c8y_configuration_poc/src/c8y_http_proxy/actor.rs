@@ -28,7 +28,6 @@ use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
-use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
 use tedge_actors::ServiceMessageBox;
 use tedge_http_ext::HttpHandle;
@@ -105,16 +104,6 @@ impl MessageBox for C8YHttpProxyMessageBox {
             C8YHttpProxyOutput::HttpRequest(message) => self.http.send(message).await,
             C8YHttpProxyOutput::JwtRequest(message) => self.jwt.send(message).await,
         }
-    }
-
-    fn new_box(
-        _name: &str,
-        _capacity: usize,
-        _output: DynSender<Self::Output>,
-    ) -> (DynSender<Self::Input>, Self) {
-        // FIXME Is this method useful?
-        todo!()
-        // Similar impl as for ConfigManagerMessageBox
     }
 
     fn turn_logging_on(&mut self, _on: bool) {

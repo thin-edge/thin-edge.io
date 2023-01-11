@@ -177,17 +177,6 @@ impl MessageBox for MqttMessageBox {
         Ok(())
     }
 
-    fn new_box(
-        _name: &str,
-        _capacity: usize,
-        _output: DynSender<Self::Output>,
-    ) -> (DynSender<Self::Input>, Self) {
-        todo!()
-        // No so obvious to implement.
-        // The Input and Output types of this MessageBox are seen from the inside,
-        // while this `new_box` expect message types as seen by the client.
-    }
-
     fn turn_logging_on(&mut self, _on: bool) {}
 
     fn name(&self) -> &str {

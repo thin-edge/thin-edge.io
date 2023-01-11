@@ -49,16 +49,6 @@ impl<Request: Message, Response: Message> MessageBox for RequestResponseHandler<
         self.messages.send(message).await
     }
 
-    fn new_box(
-        name: &str,
-        _capacity: usize,
-        request_sender: DynSender<Self::Output>,
-    ) -> (DynSender<Self::Input>, Self) {
-        let capacity = 1;
-        let (response_sender, messages) = SimpleMessageBox::new_box(name, capacity, request_sender);
-        (response_sender, Self { messages })
-    }
-
     fn turn_logging_on(&mut self, on: bool) {
         self.messages.turn_logging_on(on)
     }

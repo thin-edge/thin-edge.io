@@ -56,14 +56,6 @@ impl MessageBox for FsWatchMessageBox {
         return None; //As this actor supports no input, yet
     }
 
-    fn new_box(
-        _name: &str,
-        _capacity: usize,
-        _output: DynSender<Self::Output>,
-    ) -> (DynSender<Self::Input>, Self) {
-        todo!()
-    }
-
     fn turn_logging_on(&mut self, _on: bool) {}
 
     fn name(&self) -> &str {

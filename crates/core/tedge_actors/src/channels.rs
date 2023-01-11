@@ -93,6 +93,26 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for Adapter<M> {
     }
 }
 
+/// A sender that sends all messages away
+pub struct NullSender;
+
+#[async_trait]
+impl<M: Message> Sender<M> for NullSender {
+    async fn send(&mut self, _message: M) -> Result<(), ChannelError> {
+        Ok(())
+    }
+
+    fn sender_clone(&self) -> DynSender<M> {
+        Box::new(NullSender)
+    }
+}
+
+impl<M: Message> From<NullSender> for DynSender<M> {
+    fn from(sender: NullSender) -> Self {
+        Box::new(sender)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
