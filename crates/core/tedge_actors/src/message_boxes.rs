@@ -88,7 +88,7 @@ pub struct SimpleMessageBox<Input, Output> {
 }
 
 impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
-    pub(crate) fn new(
+    pub fn new(
         name: String,
         input_receiver: mpsc::Receiver<Input>,
         output_sender: DynSender<Output>,

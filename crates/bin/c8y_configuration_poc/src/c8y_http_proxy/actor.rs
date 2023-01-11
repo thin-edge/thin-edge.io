@@ -175,7 +175,7 @@ impl C8YHttpProxyActor {
                     .await
                     .map(|response| response.into()),
             };
-            clients.send((client_id, result).into()).await?;
+            clients.send((client_id, result)).await?;
         }
         Ok(())
     }
@@ -316,7 +316,7 @@ impl C8YHttpProxyActor {
     ) -> Result<EventId, C8YRestError> {
         // read the config file contents
         let config_content = std::fs::read_to_string(request.config_path)
-            .map_err(|err| <std::io::Error as Into<SMCumulocityMapperError>>::into(err))?;
+            .map_err(<std::io::Error as Into<SMCumulocityMapperError>>::into)?;
 
         let config_file_event = self
             .create_event_request(

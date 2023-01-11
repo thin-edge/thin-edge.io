@@ -37,8 +37,8 @@ pub fn health_status_down_message(daemon_name: &str) -> Message {
         payload: json!({
             "status": "down",
             "pid": process::id()})
-            .to_string()
-            .into(),
+        .to_string()
+        .into(),
         qos: mqtt_channel::QoS::AtLeastOnce,
         retain: true,
     }

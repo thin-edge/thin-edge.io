@@ -519,6 +519,7 @@ dependencies = [
  "tedge_api",
  "tedge_config",
  "tedge_http_ext",
+ "tedge_mqtt_ext",
  "tedge_signal_ext",
  "tedge_utils",
  "thiserror",
@@ -3408,6 +3409,17 @@ dependencies = [
  "serde_json",
  "tedge_actors",
  "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "tedge_mqtt_ext"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "mqtt_channel",
+ "mqtt_tests",
+ "tedge_actors",
  "tokio",
 ]
 

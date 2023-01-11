@@ -1,4 +1,4 @@
-use crate::mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::MqttMessage;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 pub struct LogManagerActor {

@@ -7,7 +7,6 @@ use crate::c8y_http_proxy::handle::C8YHttpProxy;
 use crate::c8y_http_proxy::messages::C8YRestRequest;
 use crate::c8y_http_proxy::messages::C8YRestResult;
 use crate::file_system_ext::FsWatchEvent;
-use crate::mqtt_ext::MqttMessage;
 use anyhow::Result;
 use async_trait::async_trait;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
@@ -26,6 +25,7 @@ use tedge_actors::MessageBox;
 use tedge_actors::StreamExt;
 use tedge_api::health::get_health_status_message;
 use tedge_api::health::health_check_topics;
+use tedge_mqtt_ext::MqttMessage;
 use tedge_utils::paths::PathsError;
 use tracing::error;
 

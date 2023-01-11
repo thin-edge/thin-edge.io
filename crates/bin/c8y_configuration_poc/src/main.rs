@@ -1,16 +1,17 @@
 mod c8y_http_proxy;
 mod config_manager;
 mod file_system_ext;
-mod mqtt_ext;
 
 use crate::c8y_http_proxy::credentials::C8YJwtRetriever;
 use crate::c8y_http_proxy::C8YHttpConfig;
 use crate::c8y_http_proxy::C8YHttpProxyBuilder;
 use crate::config_manager::ConfigManagerBuilder;
 use crate::config_manager::ConfigManagerConfig;
-use crate::mqtt_ext::MqttActorBuilder;
 use file_system_ext::FsWatchActorBuilder;
 use tedge_actors::Runtime;
+use tedge_http_ext::HttpActorBuilder;
+use tedge_http_ext::HttpConfig;
+use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_signal_ext::SignalActor;
 
 #[tokio::main]
@@ -22,8 +23,7 @@ async fn main() -> anyhow::Result<()> {
     // Create actor instances
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_channel::Config::default());
     let mut jwt_actor = C8YJwtRetriever::builder(mqtt_channel::Config::default());
-    let mut http_actor =
-        tedge_http_ext::HttpActorBuilder::new(tedge_http_ext::HttpConfig::default())?;
+    let mut http_actor = HttpActorBuilder::new(HttpConfig::default())?;
     let mut c8y_http_proxy_actor = C8YHttpProxyBuilder::new(
         C8YHttpConfig::new("thin-edge-io.eu-latest.cumulocity.com", "albin-tedge"), //FIXME: Read from tedge config
         &mut http_actor,

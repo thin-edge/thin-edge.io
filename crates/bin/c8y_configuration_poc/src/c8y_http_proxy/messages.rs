@@ -76,7 +76,7 @@ impl From<Option<C8YRestResult>> for C8YRestError {
     fn from(maybe_result: Option<C8YRestResult>) -> Self {
         match maybe_result {
             None => ChannelError::ReceiveError().into(),
-            Some(Err(rest_err)) => rest_err.into(),
+            Some(Err(rest_err)) => rest_err,
             _ => C8YRestError::ProtocolError,
         }
     }

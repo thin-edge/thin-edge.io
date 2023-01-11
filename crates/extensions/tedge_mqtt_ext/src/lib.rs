@@ -1,8 +1,12 @@
+#[cfg(test)]
+mod tests;
+
 use async_trait::async_trait;
 use mqtt_channel::MqttError;
 use mqtt_channel::SinkExt;
 use mqtt_channel::StreamExt;
 use mqtt_channel::TopicFilter;
+use tedge_actors::mpsc;
 use tedge_actors::mpsc::channel;
 use tedge_actors::mpsc::Receiver;
 use tedge_actors::mpsc::Sender;
@@ -14,7 +18,9 @@ use tedge_actors::LinkError;
 use tedge_actors::MessageBox;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
+use tedge_actors::SimpleMessageBox;
 
+pub type MqttConfig = mqtt_channel::Config;
 pub type MqttMessage = mqtt_channel::Message;
 
 #[derive(Debug)]
@@ -58,11 +64,27 @@ impl MqttActorBuilder {
         self.subscriber_addresses.push((subscriptions, peer_sender));
         Ok(self.publish_channel.0.clone().into())
     }
-}
 
-#[async_trait]
-impl ActorBuilder for MqttActorBuilder {
-    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
+    /// Add a new client, returning a message box to pub/sub messages over MQTT
+    pub fn new_client(
+        &mut self,
+        client_name: &str,
+        subscriptions: TopicFilter,
+    ) -> SimpleMessageBox<MqttMessage, MqttMessage> {
+        let (sub_message_sender, sub_message_receiver) = mpsc::channel(16);
+        let pub_message_sender = self
+            .add_client(subscriptions, sub_message_sender.into())
+            .unwrap();
+
+        SimpleMessageBox::new(
+            client_name.to_string(),
+            sub_message_receiver,
+            pub_message_sender,
+        )
+    }
+
+    /// FIXME this method should not be async
+    pub(crate) async fn build(self) -> (MqttActor, MqttMessageBox) {
         let mut combined_topic_filter = TopicFilter::empty();
         for (topic_filter, _) in self.subscriber_addresses.iter() {
             combined_topic_filter.add_all(topic_filter.to_owned());
@@ -77,6 +99,14 @@ impl ActorBuilder for MqttActorBuilder {
         .unwrap(); // Convert MqttError to RuntimeError
 
         let mqtt_actor = MqttActor;
+        (mqtt_actor, mqtt_message_box)
+    }
+}
+
+#[async_trait]
+impl ActorBuilder for MqttActorBuilder {
+    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
+        let (mqtt_actor, mqtt_message_box) = self.build().await;
 
         runtime.run(mqtt_actor, mqtt_message_box).await?;
         Ok(())

@@ -11,7 +11,6 @@ use crate::c8y_http_proxy::messages::C8YRestResult;
 use crate::c8y_http_proxy::C8YConnectionBuilder;
 use crate::c8y_http_proxy::C8YHttpProxyBuilder;
 use crate::file_system_ext::FsWatchActorBuilder;
-use crate::mqtt_ext::*;
 use actor::*;
 use async_trait::async_trait;
 pub use config::*;
@@ -21,6 +20,7 @@ use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
+use tedge_mqtt_ext::*;
 
 /// An instance of the config manager
 ///

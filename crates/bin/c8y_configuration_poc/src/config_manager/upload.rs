@@ -1,7 +1,6 @@
 use super::plugin_config::PluginConfig;
 use super::ConfigManagerConfig;
 use crate::c8y_http_proxy::handle::C8YHttpProxy;
-use crate::mqtt_ext::MqttMessage;
 use anyhow::Result;
 use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
@@ -14,6 +13,7 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use std::path::Path;
 use tedge_actors::DynSender;
+use tedge_mqtt_ext::MqttMessage;
 use tracing::error;
 use tracing::info;
 
