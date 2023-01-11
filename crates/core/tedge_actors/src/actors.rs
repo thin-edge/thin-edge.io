@@ -111,7 +111,6 @@ impl<S: Service + Clone> Actor for ConcurrentServiceActor<S> {
 
 #[cfg(test)]
 mod tests {
-    use crate::test_utils::VecRecipient;
     use crate::*;
     use async_trait::async_trait;
     use futures::channel::mpsc;
@@ -169,15 +168,15 @@ mod tests {
 
     #[tokio::test]
     async fn an_actor_can_send_messages_to_specific_peers() {
-        let output_messages: VecRecipient<DoMsg> = VecRecipient::default();
+        let (output_sender, mut output_receiver) = mpsc::channel(10);
 
         let actor = ActorWithSpecificMessageBox;
-        let (actor_input, message_box) =
-            SpecificMessageBox::new_box(actor.name(), 10, output_messages.as_sender());
+        let (input_sender, message_box) =
+            SpecificMessageBox::new_box(actor.name(), 10, output_sender.into());
         let actor_task = spawn(actor.run(message_box));
 
         spawn(async move {
-            let mut sender: DynSender<&str> = adapt(&actor_input.into());
+            let mut sender: DynSender<&str> = adapt(&input_sender.into());
             sender.send("Do this").await.expect("sent");
             sender.send("Do nothing").await.expect("sent");
             sender.send("Do that and this").await.expect("sent");
@@ -190,14 +189,21 @@ mod tests {
             .expect("the actor returned Ok");
 
         assert_eq!(
-            output_messages.collect().await,
-            vec![
-                DoMsg::DoThis(DoThis("Do this".into())),
-                DoMsg::DoThis(DoThis("Do that and this".into())),
-                DoMsg::DoThat(DoThat("Do that and this".into())),
-                DoMsg::DoThat(DoThat("Do that".into())),
-            ]
-        )
+            output_receiver.next().await,
+            Some(DoMsg::DoThis(DoThis("Do this".into())))
+        );
+        assert_eq!(
+            output_receiver.next().await,
+            Some(DoMsg::DoThis(DoThis("Do that and this".into())))
+        );
+        assert_eq!(
+            output_receiver.next().await,
+            Some(DoMsg::DoThat(DoThat("Do that and this".into())))
+        );
+        assert_eq!(
+            output_receiver.next().await,
+            Some(DoMsg::DoThat(DoThat("Do that".into())))
+        );
     }
 
     pub struct ActorWithSpecificMessageBox;

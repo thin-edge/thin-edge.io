@@ -117,8 +117,7 @@ impl<M: Message> From<NullSender> for DynSender<M> {
 mod tests {
     use super::*;
     use crate::fan_in_message_type;
-    use crate::test_utils::collect;
-    use crate::test_utils::VecRecipient;
+    use futures::StreamExt;
 
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub struct Msg1 {}
@@ -151,7 +150,7 @@ mod tests {
         }
 
         assert_eq!(
-            collect(receiver).await,
+            receiver.collect::<Vec<_>>().await,
             vec![Msg::Msg1(Msg1 {}), Msg::Msg1(Msg1 {}), Msg::Msg2(Msg2 {}),]
         )
     }
@@ -172,16 +171,19 @@ mod tests {
 
     #[tokio::test]
     async fn a_recipient_can_be_adapted_to_accept_sub_messages_from_several_sources() {
-        let messages: VecRecipient<Msg> = VecRecipient::default();
-        let recipient = messages.as_sender();
+        let (sender, mut receiver) = mpsc::channel(10);
 
-        let mut peers = Peers::from(recipient);
-        peers.peer_1.send(Msg1 {}).await.unwrap();
-        peers.peer_2.send(Msg2 {}).await.unwrap();
+        {
+            let dyn_sender: DynSender<Msg> = sender.into();
+            let mut peers = Peers::from(dyn_sender);
+            peers.peer_1.send(Msg1 {}).await.unwrap();
+            peers.peer_2.send(Msg2 {}).await.unwrap();
 
-        assert_eq!(
-            messages.collect().await,
-            vec![Msg::Msg1(Msg1 {}), Msg::Msg2(Msg2 {}),]
-        )
+            // the sender is drop here => the receiver will receive a None for end of stream.
+        }
+
+        assert_eq!(receiver.next().await, Some(Msg::Msg1(Msg1 {})));
+        assert_eq!(receiver.next().await, Some(Msg::Msg2(Msg2 {})));
+        assert_eq!(receiver.next().await, None);
     }
 }
