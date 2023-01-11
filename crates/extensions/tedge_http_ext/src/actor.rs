@@ -7,16 +7,14 @@ use hyper::client::Client;
 use hyper::client::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use hyper_rustls::HttpsConnectorBuilder;
-use tedge_actors::Actor;
-use tedge_actors::ChannelError;
-use tedge_actors::ConcurrentServiceMessageBox;
-use tedge_actors::MessageBox;
+use tedge_actors::Service;
 
-pub(crate) struct HttpActor {
+#[derive(Clone)]
+pub(crate) struct HttpService {
     client: Client<HttpsConnector<HttpConnector>, hyper::body::Body>,
 }
 
-impl HttpActor {
+impl HttpService {
     pub(crate) fn new(_config: HttpConfig) -> Result<Self, HttpError> {
         let https = HttpsConnectorBuilder::new()
             .with_native_roots()
@@ -25,32 +23,20 @@ impl HttpActor {
             .enable_http2()
             .build();
         let client = Client::builder().build(https);
-        Ok(HttpActor { client })
+        Ok(HttpService { client })
     }
 }
 
 #[async_trait]
-impl Actor for HttpActor {
-    type MessageBox = ConcurrentServiceMessageBox<HttpRequest, HttpResult>;
+impl Service for HttpService {
+    type Request = HttpRequest;
+    type Response = HttpResult;
 
     fn name(&self) -> &str {
         "HTTP"
     }
 
-    async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
-        while let Some((client_id, request)) = messages.recv().await {
-            let client = self.client.clone();
-
-            // Spawn the request
-            let pending_result = tokio::spawn(async move {
-                let response = client.request(request).await;
-                (client_id, response)
-            });
-
-            // Send the response back to the client
-            messages.send_response_once_done(pending_result)
-        }
-
-        Ok(())
+    async fn handle(&mut self, request: Self::Request) -> Self::Response {
+        self.client.request(request).await
     }
 }

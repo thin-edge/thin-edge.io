@@ -12,6 +12,7 @@ use async_trait::async_trait;
 use tedge_actors::Actor;
 use tedge_actors::ActorBuilder;
 use tedge_actors::ChannelError;
+use tedge_actors::ConcurrentServiceActor;
 use tedge_actors::ConnectionBuilder;
 use tedge_actors::DynSender;
 use tedge_actors::RequestResponseHandler;
@@ -26,13 +27,14 @@ pub trait HttpConnectionBuilder:
 }
 
 pub struct HttpActorBuilder {
-    actor: HttpActor,
+    actor: ConcurrentServiceActor<HttpService>,
     pub box_builder: ServiceMessageBoxBuilder<HttpRequest, HttpResult>,
 }
 
 impl HttpActorBuilder {
     pub fn new(config: HttpConfig) -> Result<Self, HttpError> {
-        let actor = HttpActor::new(config)?;
+        let service = HttpService::new(config)?;
+        let actor = ConcurrentServiceActor::new(service);
         let box_builder = ServiceMessageBoxBuilder::new("HTTP", 16);
 
         Ok(HttpActorBuilder { actor, box_builder })
