@@ -3,7 +3,6 @@ use crate::ChannelError;
 use crate::DynSender;
 use crate::Message;
 use crate::MessageBoxConnector;
-use crate::NullSender;
 use crate::SimpleMessageBoxBuilder;
 use async_trait::async_trait;
 use futures::channel::mpsc;
@@ -111,7 +110,7 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
     ///
     /// This makes the receiving end aware that no more message will be sent.
     pub fn close_output(&mut self) {
-        self.output_sender = NullSender.into()
+        self.output_sender.close_sender()
     }
 }
 

@@ -29,6 +29,10 @@ impl<K: Message + Clone, M: Message> Sender<M> for KeyedSender<K, M> {
             sender: self.sender.clone(),
         })
     }
+
+    fn close_sender(&mut self) {
+        self.sender.close_channel()
+    }
 }
 
 /// A vector of senders addressed using a sender id attached to each message
@@ -55,5 +59,11 @@ impl<M: Message> Sender<(usize, M)> for SenderVec<M> {
     fn sender_clone(&self) -> DynSender<(usize, M)> {
         let senders = self.senders.iter().map(|r| r.sender_clone()).collect();
         Box::new(SenderVec { senders })
+    }
+
+    fn close_sender(&mut self) {
+        self.senders
+            .iter_mut()
+            .for_each(|s| s.as_mut().close_sender())
     }
 }

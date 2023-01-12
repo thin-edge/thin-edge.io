@@ -18,6 +18,9 @@ pub trait Sender<M>: 'static + Send + Sync {
 
     /// Clone this sender in order to send messages to the same receiver from another actor
     fn sender_clone(&self) -> DynSender<M>;
+
+    /// Closes this channel from the sender side, preventing any new messages.
+    fn close_sender(&mut self);
 }
 
 impl<M: Message> Clone for DynSender<M> {
@@ -41,6 +44,10 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::Sender<M> {
 
     fn sender_clone(&self) -> DynSender<N> {
         Box::new(self.clone())
+    }
+
+    fn close_sender(&mut self) {
+        self.close_channel();
     }
 }
 
@@ -69,6 +76,10 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for DynSender<M> {
     fn sender_clone(&self) -> DynSender<N> {
         Box::new(self.as_ref().sender_clone())
     }
+
+    fn close_sender(&mut self) {
+        self.as_mut().close_sender()
+    }
 }
 
 /// A sender that discards messages instead of sending them
@@ -83,6 +94,8 @@ impl<M: Message> Sender<M> for NullSender {
     fn sender_clone(&self) -> DynSender<M> {
         Box::new(NullSender)
     }
+
+    fn close_sender(&mut self) {}
 }
 
 impl<M: Message> From<NullSender> for DynSender<M> {
