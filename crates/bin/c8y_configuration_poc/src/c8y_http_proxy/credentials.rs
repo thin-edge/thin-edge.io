@@ -20,7 +20,7 @@ use tedge_actors::ServiceActor;
 use tedge_actors::ServiceMessageBoxBuilder;
 
 pub type JwtRequest = ();
-pub type JwtResult = Result<Option<String>, SmartRestDeserializerError>;
+pub type JwtResult = Result<String, SmartRestDeserializerError>;
 
 /// Retrieves JWT tokens authenticating the device
 pub type JwtRetriever = RequestResponseHandler<JwtRequest, JwtResult>;
@@ -71,13 +71,13 @@ impl Service for C8YJwtRetriever {
             };
 
         let token = SmartRestJwtResponse::try_new(&token_smartrest)?;
-        Ok(Some(token.token()))
+        Ok(token.token())
     }
 }
 
 /// A JwtRetriever that simply always returns the same JWT token (possibly none)
 pub struct ConstJwtRetriever {
-    token: Option<String>,
+    token: String,
 }
 
 #[async_trait]

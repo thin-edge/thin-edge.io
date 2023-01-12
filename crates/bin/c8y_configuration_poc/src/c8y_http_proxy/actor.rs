@@ -241,7 +241,7 @@ impl C8YHttpProxyActor {
         request_builder: HttpRequestBuilder,
     ) -> Result<HttpResult, C8YRestError> {
         // Get a JWT token to authenticate the device
-        let request_builder = if let Ok(Some(token)) = jwt.await_response(()).await? {
+        let request_builder = if let Ok(token) = jwt.await_response(()).await? {
             request_builder.bearer_auth(token)
         } else {
             return Err(C8YRestError::CustomError("JWT token not available".into()));
