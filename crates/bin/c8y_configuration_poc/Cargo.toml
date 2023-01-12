@@ -10,7 +10,9 @@ async-trait = "0.1"
 c8y_api = { path = "../../core/c8y_api" }
 csv = "1.1"
 download = { path = "../../common/download" }
+easy_reader = "0.5"
 env_logger = "0.10"
+glob = "0.3"
 hyper = { version = "0.14", default_features = false }
 log = "0.4"
 mqtt_channel = { path = "../../common/mqtt_channel" }

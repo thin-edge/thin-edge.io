@@ -290,11 +290,38 @@ impl C8YHttpProxyActor {
 
     async fn upload_log_binary(
         &mut self,
-        _http: &mut HttpHandle,
-        _jwt: &mut JwtRetriever,
-        _request: UploadLogBinary,
+        http: &mut HttpHandle,
+        jwt: &mut JwtRetriever,
+        request: UploadLogBinary,
     ) -> Result<EventId, C8YRestError> {
-        todo!()
+        let log_file_event = self
+            .create_event_request(
+                http,
+                jwt,
+                request.log_type,
+                None,
+                None,
+                request.child_device_id,
+            )
+            .await?;
+
+        let event_response_id = self.send_event_internal(http, jwt, log_file_event).await?;
+
+        let binary_upload_event_url = self
+            .end_point
+            .get_url_for_event_binary_upload(&event_response_id);
+
+        let req_builder = HttpRequestBuilder::post(binary_upload_event_url.clone())
+            .header("Accept", "application/json")
+            .header("Content-Type", "text/plain")
+            .body(request.log_content);
+        let http_result = self.execute(http, jwt, req_builder).await?.unwrap();
+
+        if !http_result.status().is_success() {
+            Err(C8YRestError::CustomError("Upload failed".into()))
+        } else {
+            Ok(binary_upload_event_url)
+        }
     }
 
     async fn upload_config_file(
