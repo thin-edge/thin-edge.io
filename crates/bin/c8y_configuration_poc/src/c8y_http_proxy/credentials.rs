@@ -6,12 +6,12 @@ use mqtt_channel::PubChannel;
 use mqtt_channel::StreamExt;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
-use std::convert::Infallible;
 use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::ActorBuilder;
-use tedge_actors::ConnectionBuilder;
-use tedge_actors::DynSender;
+use tedge_actors::Builder;
+use tedge_actors::MessageBoxConnector;
+use tedge_actors::MessageBoxPort;
 use tedge_actors::RequestResponseHandler;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
@@ -118,13 +118,9 @@ impl<S: Service<Request = JwtRequest, Response = JwtResult>> ActorBuilder
 }
 
 impl<S: Service<Request = JwtRequest, Response = JwtResult>>
-    ConnectionBuilder<(), JwtResult, (), Infallible> for JwtRetrieverBuilder<S>
+    MessageBoxConnector<JwtRequest, JwtResult, ()> for JwtRetrieverBuilder<S>
 {
-    fn connect(
-        &mut self,
-        _config: (),
-        output_sender: DynSender<JwtResult>,
-    ) -> Result<DynSender<()>, Infallible> {
-        Ok(self.message_box.connect(output_sender))
+    fn connect_with(&mut self, peer: &mut impl MessageBoxPort<JwtRequest, JwtResult>, config: ()) {
+        self.message_box.connect_with(peer, config)
     }
 }

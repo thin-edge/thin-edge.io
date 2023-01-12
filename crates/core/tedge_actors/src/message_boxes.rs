@@ -1,10 +1,7 @@
 use crate::ChannelError;
 use crate::DynSender;
-use crate::KeyedSender;
 use crate::Message;
 use crate::NullSender;
-use crate::RequestResponseHandler;
-use crate::SenderVec;
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::StreamExt;
@@ -155,72 +152,6 @@ pub type ServiceMessageBox<Request, Response> =
     SimpleMessageBox<(ClientId, Request), (ClientId, Response)>;
 
 pub type ClientId = usize;
-
-/// A message box builder for request-response service
-pub struct ServiceMessageBoxBuilder<Request, Response> {
-    service_name: String,
-    request_sender: mpsc::Sender<(ClientId, Request)>,
-    request_receiver: mpsc::Receiver<(ClientId, Request)>,
-    clients: Vec<DynSender<Response>>,
-}
-
-impl<Request: Message, Response: Message> ServiceMessageBoxBuilder<Request, Response> {
-    /// Start to build a new message box for a service
-    pub fn new(service_name: &str, capacity: usize) -> Self {
-        let (request_sender, request_receiver) = mpsc::channel(capacity);
-        ServiceMessageBoxBuilder {
-            service_name: service_name.to_string(),
-            request_sender,
-            request_receiver,
-            clients: vec![],
-        }
-    }
-
-    /// Connect a new client that expects responses on the provided channel
-    ///
-    /// Return a channel to which requests will have to be sent.
-    pub fn connect(&mut self, client: DynSender<Response>) -> DynSender<Request> {
-        let client_id = self.clients.len();
-        self.clients.push(client);
-
-        KeyedSender::new_sender(client_id, self.request_sender.clone())
-    }
-
-    /// Add a new client, returning a message box to send requests and awaiting responses
-    pub fn add_client(&mut self, client_name: &str) -> RequestResponseHandler<Request, Response> {
-        // At most one response is expected
-        let (response_sender, response_receiver) = mpsc::channel(1);
-
-        let request_sender = self.connect(response_sender.into());
-        RequestResponseHandler::new(
-            &format!("{} -> {}", client_name, self.service_name),
-            response_receiver,
-            request_sender,
-        )
-    }
-
-    /// Build a message box ready to be used by the service actor
-    pub fn build(self) -> ServiceMessageBox<Request, Response> {
-        let request_receiver = self.request_receiver;
-        let response_sender = SenderVec::new_sender(self.clients);
-
-        SimpleMessageBox {
-            input_receiver: request_receiver,
-            output_sender: response_sender,
-            name: self.service_name,
-            logging_is_on: true,
-        }
-    }
-
-    /// Build a message box aimed to concurrently serve requests
-    pub fn build_concurrent(
-        self,
-        max_concurrency: usize,
-    ) -> ConcurrentServiceMessageBox<Request, Response> {
-        let clients = self.build();
-        ConcurrentServiceMessageBox::new(max_concurrency, clients)
-    }
-}
 
 /// A message box for services that handles requests concurrently
 pub struct ConcurrentServiceMessageBox<Request, Response> {

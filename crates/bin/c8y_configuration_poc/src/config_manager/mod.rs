@@ -18,8 +18,11 @@ use tedge_actors::mpsc;
 use tedge_actors::ActorBuilder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
+use tedge_actors::MessageBoxConnector;
+use tedge_actors::MessageBoxPort;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
+use tedge_actors::Sender;
 use tedge_mqtt_ext::*;
 
 /// An instance of the config manager
@@ -57,10 +60,9 @@ impl ConfigManagerBuilder {
 
     /// Connect this config manager instance to some http connection provider
     pub fn with_c8y_http_proxy(&mut self, http: &mut C8YHttpProxyBuilder) -> Result<(), LinkError> {
-        let http_requests_sender = http.connect(self.http_responses_sender.clone().into());
-        self.http_requests_sender = Some(http_requests_sender);
-        self.c8y_upload_http_proxy = Some(http.new_handle());
-        self.c8y_download_http_proxy = Some(http.new_handle());
+        http.connect(self);
+        self.c8y_upload_http_proxy = Some(http.new_c8y_handle("UploadManager => C8Y"));
+        self.c8y_download_http_proxy = Some(http.new_c8y_handle("DownloadManager => C8Y"));
         Ok(())
     }
 
@@ -88,6 +90,16 @@ impl ConfigManagerBuilder {
         fs_builder.new_watcher(config_dir, self.events_sender.clone().into());
 
         Ok(())
+    }
+}
+
+impl MessageBoxPort<C8YRestRequest, C8YRestResult> for ConfigManagerBuilder {
+    fn set_request_sender(&mut self, request_sender: DynSender<C8YRestRequest>) {
+        self.http_requests_sender = Some(request_sender)
+    }
+
+    fn get_response_sender(&self) -> DynSender<C8YRestResult> {
+        self.http_responses_sender.sender_clone()
     }
 }
 

@@ -4,14 +4,17 @@ use crate::c8y_http_proxy::messages::C8YRestResponse;
 use crate::c8y_http_proxy::messages::C8YRestResult;
 use crate::c8y_http_proxy::messages::UploadConfigFile;
 use crate::c8y_http_proxy::messages::UploadLogBinary;
-use crate::c8y_http_proxy::C8YConnectionBuilder;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use mqtt_channel::StreamExt;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::mpsc;
+use tedge_actors::Builder;
 use tedge_actors::DynSender;
+use tedge_actors::LinkError;
+use tedge_actors::MessageBoxPort;
+use tedge_actors::Sender;
 use tedge_utils::file::PermissionEntry;
 
 use super::messages::DownloadFile;
@@ -23,20 +26,9 @@ pub struct C8YHttpProxy {
 }
 
 impl C8YHttpProxy {
-    /// Create a new handle to the C8YHttpProxy actor
-    pub fn new(proxy: &mut (impl C8YConnectionBuilder + ?Sized)) -> C8YHttpProxy {
-        // At most one response is expected
-        let (response_sender, response_receiver) = mpsc::channel(1);
-
-        let request_sender = proxy.connect(response_sender.into());
-        C8YHttpProxy {
-            request_sender,
-            response_receiver,
-        }
-    }
-
     pub async fn send_event(&mut self, c8y_event: C8yCreateEvent) -> Result<String, C8YRestError> {
-        self.request_sender.send(c8y_event.into()).await?;
+        let request: C8YRestRequest = c8y_event.into();
+        self.request_sender.send(request).await?;
         match self.response_receiver.next().await {
             Some(Ok(C8YRestResponse::EventId(id))) => Ok(id),
             unexpected => Err(unexpected.into()),
@@ -47,7 +39,8 @@ impl C8YHttpProxy {
         &mut self,
         c8y_software_list: C8yUpdateSoftwareListResponse,
     ) -> Result<(), C8YRestError> {
-        self.request_sender.send(c8y_software_list.into()).await?;
+        let request: C8YRestRequest = c8y_software_list.into();
+        self.request_sender.send(request).await?;
         match self.response_receiver.next().await {
             Some(Ok(C8YRestResponse::Unit(_))) => Ok(()),
             unexpected => Err(unexpected.into()),
@@ -60,12 +53,13 @@ impl C8YHttpProxy {
         log_content: &str,
         child_device_id: Option<String>,
     ) -> Result<String, C8YRestError> {
-        let request = UploadLogBinary {
+        let request: C8YRestRequest = UploadLogBinary {
             log_type: log_type.to_string(),
             log_content: log_content.to_string(),
             child_device_id,
-        };
-        self.request_sender.send(request.into()).await?;
+        }
+        .into();
+        self.request_sender.send(request).await?;
         match self.response_receiver.next().await {
             Some(Ok(C8YRestResponse::EventId(id))) => Ok(id),
             unexpected => Err(unexpected.into()),
@@ -78,12 +72,13 @@ impl C8YHttpProxy {
         config_type: &str,
         child_device_id: Option<String>,
     ) -> Result<String, C8YRestError> {
-        let request = UploadConfigFile {
+        let request: C8YRestRequest = UploadConfigFile {
             config_path: config_path.to_owned(),
             config_type: config_type.to_string(),
             child_device_id,
-        };
-        self.request_sender.send(request.into()).await?;
+        }
+        .into();
+        self.request_sender.send(request).await?;
         match self.response_receiver.next().await {
             Some(Ok(C8YRestResponse::EventId(id))) => Ok(id),
             unexpected => Err(unexpected.into()),
@@ -96,15 +91,61 @@ impl C8YHttpProxy {
         file_path: PathBuf,
         file_permissions: PermissionEntry,
     ) -> Result<(), C8YRestError> {
-        let request = DownloadFile {
+        let request: C8YRestRequest = DownloadFile {
             download_url: download_url.into(),
             file_path,
             file_permissions,
-        };
-        self.request_sender.send(request.into()).await?;
+        }
+        .into();
+        self.request_sender.send(request).await?;
         match self.response_receiver.next().await {
             Some(Ok(C8YRestResponse::Unit(()))) => Ok(()),
             unexpected => Err(unexpected.into()),
+        }
+    }
+}
+
+pub(crate) struct C8YHttpHandleBuilder {
+    name: String,
+    response_sender: mpsc::Sender<C8YRestResult>,
+    response_receiver: mpsc::Receiver<C8YRestResult>,
+    request_sender: Option<DynSender<C8YRestRequest>>,
+}
+
+impl C8YHttpHandleBuilder {
+    pub(crate) fn new(name: &str) -> Self {
+        let (response_sender, response_receiver) = mpsc::channel(1);
+        let request_sender = None;
+        C8YHttpHandleBuilder {
+            name: name.to_string(),
+            response_sender,
+            response_receiver,
+            request_sender,
+        }
+    }
+}
+
+impl MessageBoxPort<C8YRestRequest, C8YRestResult> for C8YHttpHandleBuilder {
+    fn set_request_sender(&mut self, request_sender: DynSender<C8YRestRequest>) {
+        self.request_sender = Some(request_sender)
+    }
+
+    fn get_response_sender(&self) -> DynSender<C8YRestResult> {
+        self.response_sender.sender_clone()
+    }
+}
+
+impl Builder<C8YHttpProxy> for C8YHttpHandleBuilder {
+    type Error = LinkError;
+
+    fn try_build(self) -> Result<C8YHttpProxy, Self::Error> {
+        if let Some(request_sender) = self.request_sender {
+            Ok(C8YHttpProxy {
+                request_sender,
+                response_receiver: self.response_receiver,
+            })
+        } else {
+            Err(LinkError::MissingPeer { role: self.name })
         }
     }
 }

@@ -2,14 +2,15 @@ use crate::c8y_http_proxy::actor::C8YHttpProxyActor;
 use crate::c8y_http_proxy::actor::C8YHttpProxyMessageBox;
 use crate::c8y_http_proxy::credentials::JwtResult;
 use crate::c8y_http_proxy::credentials::JwtRetriever;
+use crate::c8y_http_proxy::handle::C8YHttpHandleBuilder;
 use crate::c8y_http_proxy::handle::C8YHttpProxy;
 use crate::c8y_http_proxy::messages::C8YRestRequest;
 use crate::c8y_http_proxy::messages::C8YRestResult;
 use async_trait::async_trait;
-use std::convert::Infallible;
 use tedge_actors::ActorBuilder;
-use tedge_actors::ConnectionBuilder;
-use tedge_actors::DynSender;
+use tedge_actors::Builder;
+use tedge_actors::MessageBoxConnector;
+use tedge_actors::MessageBoxPort;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
 use tedge_actors::ServiceMessageBoxBuilder;
@@ -36,6 +37,18 @@ impl C8YHttpConfig {
         }
     }
 }
+
+pub trait C8YConnectionBuilder: MessageBoxConnector<C8YRestRequest, C8YRestResult, ()> {
+    fn new_c8y_handle(&mut self, client_name: &str) -> C8YHttpProxy;
+}
+impl C8YConnectionBuilder for C8YHttpProxyBuilder {
+    fn new_c8y_handle(&mut self, client_name: &str) -> C8YHttpProxy {
+        let mut port = C8YHttpHandleBuilder::new(client_name);
+        self.connect(&mut port);
+        port.build()
+    }
+}
+
 /// A proxy to C8Y REST API
 ///
 /// This is an actor builder.
@@ -57,22 +70,17 @@ impl C8YHttpProxyBuilder {
     pub fn new(
         config: C8YHttpConfig,
         http: &mut impl HttpConnectionBuilder,
-        jwt: &mut impl ConnectionBuilder<(), JwtResult, (), Infallible>,
+        jwt: &mut impl MessageBoxConnector<(), JwtResult, ()>,
     ) -> Self {
         let clients = ServiceMessageBoxBuilder::new("C8Y-REST", 10);
-        let http = http.new_request_handle(());
-        let jwt = jwt.new_request_handle(());
+        let http = http.new_handle("C8Y-REST => HTTP");
+        let jwt = jwt.new_handle("C8Y-REST => JWT");
         C8YHttpProxyBuilder {
             config,
             clients,
             http,
             jwt,
         }
-    }
-
-    /// Return a new handle to the actor under construction
-    pub fn handle(&mut self) -> C8YHttpProxy {
-        C8YHttpProxy::new(self)
     }
 }
 
@@ -89,16 +97,12 @@ impl ActorBuilder for C8YHttpProxyBuilder {
     }
 }
 
-pub trait C8YConnectionBuilder {
-    fn connect(&mut self, client: DynSender<C8YRestResult>) -> DynSender<C8YRestRequest>;
-
-    fn new_handle(&mut self) -> C8YHttpProxy {
-        C8YHttpProxy::new(self)
-    }
-}
-
-impl C8YConnectionBuilder for C8YHttpProxyBuilder {
-    fn connect(&mut self, output_sender: DynSender<C8YRestResult>) -> DynSender<C8YRestRequest> {
-        self.clients.connect(output_sender)
+impl MessageBoxConnector<C8YRestRequest, C8YRestResult, ()> for C8YHttpProxyBuilder {
+    fn connect_with(
+        &mut self,
+        peer: &mut impl MessageBoxPort<C8YRestRequest, C8YRestResult>,
+        config: (),
+    ) {
+        self.clients.connect_with(peer, config)
     }
 }
