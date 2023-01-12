@@ -141,7 +141,7 @@ mod tests {
     #[tokio::test]
     async fn running_an_actor_without_a_runtime() {
         let actor = Echo;
-        let (mut client_message_box, actor_message_box) = SimpleMessageBox::new_channel("test");
+        let (mut client_message_box, actor_message_box) = SimpleMessageBox::channel("test", 16);
 
         let actor_task = spawn(actor.run(actor_message_box));
 

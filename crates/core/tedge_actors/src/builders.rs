@@ -141,7 +141,7 @@ impl<Req: Message, Res: Message> Builder<RequestResponseHandler<Req, Res>>
     }
 }
 
-/// A message box builder for request-response service
+/// A message box builder for request-response services
 pub struct ServiceMessageBoxBuilder<Request, Response> {
     service_name: String,
     max_concurrency: usize,
@@ -171,31 +171,8 @@ impl<Request: Message, Response: Message> ServiceMessageBoxBuilder<Request, Resp
         }
     }
 
-    /// Connect a new client that expects responses on the provided channel
-    ///
-    /// Return a channel to which requests will have to be sent.
-    pub fn connect_client(&mut self, client: DynSender<Response>) -> DynSender<Request> {
-        let client_id = self.clients.len();
-        self.clients.push(client);
-
-        KeyedSender::new_sender(client_id, self.request_sender.clone())
-    }
-
-    /// Add a new client, returning a message box to send requests and awaiting responses
-    pub fn add_client(&mut self, client_name: &str) -> RequestResponseHandler<Request, Response> {
-        // At most one response is expected
-        let (response_sender, response_receiver) = mpsc::channel(1);
-
-        let request_sender = self.connect_client(response_sender.into());
-        RequestResponseHandler::new(
-            &format!("{} -> {}", client_name, self.service_name),
-            response_receiver,
-            request_sender,
-        )
-    }
-
     /// Build a message box ready to be used by the service actor
-    pub fn build_service(self) -> ServiceMessageBox<Request, Response> {
+    fn build_service(self) -> ServiceMessageBox<Request, Response> {
         let request_receiver = self.request_receiver;
         let response_sender = SenderVec::new_sender(self.clients);
 
@@ -203,7 +180,7 @@ impl<Request: Message, Response: Message> ServiceMessageBoxBuilder<Request, Resp
     }
 
     /// Build a message box aimed to concurrently serve requests
-    pub fn build_concurrent(self) -> ConcurrentServiceMessageBox<Request, Response> {
+    fn build_concurrent(self) -> ConcurrentServiceMessageBox<Request, Response> {
         let max_concurrency = self.max_concurrency;
         let clients = self.build_service();
         ConcurrentServiceMessageBox::new(max_concurrency, clients)

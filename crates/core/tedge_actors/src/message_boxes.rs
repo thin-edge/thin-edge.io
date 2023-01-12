@@ -1,7 +1,10 @@
+use crate::Builder;
 use crate::ChannelError;
 use crate::DynSender;
 use crate::Message;
+use crate::MessageBoxConnector;
 use crate::NullSender;
+use crate::SimpleMessageBoxBuilder;
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::StreamExt;
@@ -90,23 +93,18 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
         }
     }
 
-    /// Create a simple message box along an associated message box
+    /// Create a message box pair (mostly for testing purpose)
     ///
-    /// Messages sent from the associated message box are received by the main message box.
-    /// Messages sent by the main message box are received from the associated message box.
-    ///
-    /// TODO Can this method replace MessageBox::new_box that happens to be difficult to impl and use?
-    pub fn new_channel(name: &str) -> (SimpleMessageBox<Output, Input>, Self) {
-        let (input_sender, input_receiver) = mpsc::channel(16);
-        let (output_sender, output_receiver) = mpsc::channel(16);
-        let main_box =
-            SimpleMessageBox::new(name.to_string(), input_receiver, output_sender.into());
-        let associated_box = SimpleMessageBox::new(
-            format!("{}-Client", name),
-            output_receiver,
-            input_sender.into(),
-        );
-        (associated_box, main_box)
+    /// - The first message box is used to control and observe the second box.
+    /// - Messages sent from the first message box are received by the second box.
+    /// - Messages sent from the second message box are received by the first box.
+    /// - The first message box is always a SimpleMessageBox.
+    /// - The second message box is of the specific message box type expected by the actor under test.
+    pub fn channel(name: &str, capacity: usize) -> (SimpleMessageBox<Output, Input>, Self) {
+        let mut client_box = SimpleMessageBoxBuilder::new(&format!("{}-Client", name), capacity);
+        let mut service_box = SimpleMessageBoxBuilder::new(&format!("{}-Service", name), capacity);
+        service_box.connect(&mut client_box);
+        (client_box.build(), service_box.build())
     }
 
     /// Close the sending channel of this message box.
@@ -182,17 +180,21 @@ impl<Request: Message, Response: Message> ConcurrentServiceMessageBox<Request, R
         }
     }
 
-    /// Create a service message box alongside an associated box for a test client
+    /// Create a message box pair (mostly for testing purpose)
     ///
-    /// In practice the associated box will be used only for tests,
-    /// because all the requests and responses are multiplexed.
-    pub fn new_channel(
+    /// - The first message box is used to control and observe the second box.
+    /// - Messages sent from the first message box are received by the second box.
+    /// - Messages sent from the second message box are received by the first box.
+    /// - The first message box is always a SimpleMessageBox.
+    /// - The second message box is of the specific message box type expected by the actor under test.
+    pub fn channel(
         name: &str,
+        capacity: usize,
         max_concurrency: usize,
     ) -> (RawClientMessageBox<Request, Response>, Self) {
-        let (clients_box, service_box) = SimpleMessageBox::new_channel(name);
+        let (client_box, service_box) = SimpleMessageBox::channel(name, capacity);
         let concurrent_service_box = ConcurrentServiceMessageBox::new(max_concurrency, service_box);
-        (clients_box, concurrent_service_box)
+        (client_box, concurrent_service_box)
     }
 
     async fn next_request(&mut self) -> Option<(usize, Request)> {
