@@ -3,8 +3,6 @@ use crate::Message;
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::SinkExt;
-use std::fmt::Debug;
-use std::fmt::Formatter;
 
 /// A sender of messages of type `M`
 ///
@@ -20,6 +18,12 @@ pub trait Sender<M>: 'static + Send + Sync {
 
     /// Clone this sender in order to send messages to the same receiver from another actor
     fn sender_clone(&self) -> DynSender<M>;
+}
+
+impl<M: Message> Clone for DynSender<M> {
+    fn clone(&self) -> Self {
+        self.sender_clone()
+    }
 }
 
 /// An `mpsc::Sender<M>` is a `DynSender<N>` provided `N` implements `Into<M>`
@@ -40,18 +44,6 @@ impl<M: Message, N: Message + Into<M>> Sender<N> for mpsc::Sender<M> {
     }
 }
 
-impl<M: Message> Debug for DynSender<M> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str("anonymous sender")
-    }
-}
-
-impl<M: Message> Clone for DynSender<M> {
-    fn clone(&self) -> Self {
-        self.sender_clone()
-    }
-}
-
 /// Make a `DynSender<N>` from a `DynSender<M>`
 ///
 /// This is a workaround to the fact the compiler rejects a From implementation:
@@ -65,35 +57,21 @@ impl<M: Message> Clone for DynSender<M> {
 ///             - impl<T> From<T> for T;
 /// ```
 pub fn adapt<M: Message, N: Message + Into<M>>(sender: &DynSender<M>) -> DynSender<N> {
-    Box::new(Adapter {
-        sender: sender.sender_clone(),
-    })
-}
-
-struct Adapter<M> {
-    sender: DynSender<M>,
-}
-
-impl<M: Message, N: Message + Into<M>> From<Adapter<M>> for DynSender<N> {
-    fn from(adapter: Adapter<M>) -> Self {
-        Box::new(adapter)
-    }
+    Box::new(sender.clone())
 }
 
 #[async_trait]
-impl<M: Message, N: Message + Into<M>> Sender<N> for Adapter<M> {
+impl<M: Message, N: Message + Into<M>> Sender<N> for DynSender<M> {
     async fn send(&mut self, message: N) -> Result<(), ChannelError> {
-        Ok(self.sender.send(message.into()).await?)
+        Ok(self.as_mut().send(message.into()).await?)
     }
 
     fn sender_clone(&self) -> DynSender<N> {
-        Box::new(Adapter {
-            sender: self.sender.sender_clone(),
-        })
+        Box::new(self.as_ref().sender_clone())
     }
 }
 
-/// A sender that sends all messages away
+/// A sender that discards messages instead of sending them
 pub struct NullSender;
 
 #[async_trait]
