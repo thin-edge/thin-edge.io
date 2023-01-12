@@ -282,33 +282,3 @@ impl MessageBox for ConfigManagerMessageBox {
         false
     }
 }
-
-// One should be able to have a macro to generate this fan-out sender type
-#[derive(Clone)]
-struct FanOutSender {
-    events_sender: mpsc::Sender<ConfigInput>,
-    http_responses_sender: mpsc::Sender<C8YRestResult>,
-}
-
-#[async_trait]
-impl tedge_actors::Sender<ConfigInputAndResponse> for FanOutSender {
-    async fn send(&mut self, message: ConfigInputAndResponse) -> Result<(), ChannelError> {
-        match message {
-            ConfigInputAndResponse::MqttMessage(msg) => self.events_sender.send(msg).await,
-            ConfigInputAndResponse::FsWatchEvent(msg) => self.events_sender.send(msg).await,
-            ConfigInputAndResponse::C8YRestResult(msg) => {
-                self.http_responses_sender.send(msg).await
-            }
-        }
-    }
-
-    fn sender_clone(&self) -> DynSender<ConfigInputAndResponse> {
-        Box::new(self.clone())
-    }
-}
-
-impl From<FanOutSender> for tedge_actors::DynSender<ConfigInputAndResponse> {
-    fn from(sender: FanOutSender) -> Self {
-        Box::new(sender)
-    }
-}
