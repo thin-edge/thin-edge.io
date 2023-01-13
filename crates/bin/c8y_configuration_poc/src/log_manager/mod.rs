@@ -41,7 +41,7 @@ impl LogManagerBuilder {
 
     /// Connect this config manager instance to some http connection provider
     pub fn with_c8y_http_proxy(&mut self, http: &mut C8YHttpProxyBuilder) -> Result<(), LinkError> {
-        self.http_proxy = Some(http.new_handle());
+        self.http_proxy = Some(http.new_c8y_handle("LogManager => C8Y"));
         Ok(())
     }
 

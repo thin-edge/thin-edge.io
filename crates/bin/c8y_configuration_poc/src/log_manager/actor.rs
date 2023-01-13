@@ -1,34 +1,42 @@
-use std::{
-    collections::VecDeque,
-    path::{Path, PathBuf},
-};
+use std::collections::VecDeque;
+use std::path::Path;
+use std::path::PathBuf;
 
-use crate::{c8y_http_proxy::handle::C8YHttpProxy, file_system_ext::FsWatchEvent};
+use crate::c8y_http_proxy::handle::C8YHttpProxy;
+use crate::file_system_ext::FsWatchEvent;
 use async_trait::async_trait;
-use c8y_api::{
-    smartrest::{
-        message::get_smartrest_device_id,
-        smartrest_deserializer::{SmartRestLogRequest, SmartRestRequestGeneric},
-        smartrest_serializer::{
-            CumulocitySupportedOperations, SmartRestSerializer, SmartRestSetOperationToExecuting,
-            SmartRestSetOperationToFailed, SmartRestSetOperationToSuccessful,
-            TryIntoOperationStatusMessage,
-        },
-        topic::C8yTopic,
-    },
-    OffsetDateTime,
-};
+use c8y_api::smartrest::message::get_smartrest_device_id;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
+use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
+use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
+use c8y_api::smartrest::topic::C8yTopic;
+use c8y_api::OffsetDateTime;
 use easy_reader::EasyReader;
 use glob::glob;
 use log::error;
 use log::info;
-use mqtt_channel::{Message, StreamExt, TopicFilter};
-use tedge_actors::{fan_in_message_type, mpsc, Actor, ChannelError, DynSender, MessageBox};
-use tedge_api::health::{get_health_status_message, health_check_topics};
+use mqtt_channel::Message;
+use mqtt_channel::StreamExt;
+use mqtt_channel::TopicFilter;
+use tedge_actors::fan_in_message_type;
+use tedge_actors::mpsc;
+use tedge_actors::Actor;
+use tedge_actors::ChannelError;
+use tedge_actors::DynSender;
+use tedge_actors::MessageBox;
+use tedge_api::health::get_health_status_message;
+use tedge_api::health::health_check_topics;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_utils::paths::PathsError;
 
-use super::{error::LogRetrievalError, LogManagerConfig, LogPluginConfig};
+use super::error::LogRetrievalError;
+use super::LogManagerConfig;
+use super::LogPluginConfig;
 
 fan_in_message_type!(LogInput[MqttMessage, FsWatchEvent] : Debug);
 fan_in_message_type!(LogOutput[MqttMessage]: Debug);
