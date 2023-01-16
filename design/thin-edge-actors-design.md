@@ -9,7 +9,7 @@ For that purpose, thin-edge leverages the actor model
 and provides the tools to combine these actors into independent extensions
 and then into full-fledged executables the users can adapt to their use-cases.
 
-This document trace the core decisions toward this design.
+This document outlines the main decisions toward this design.
 
 ## Why actors?
 
@@ -86,6 +86,8 @@ To name just a few:
 * As no message can be sent without being understood by the recipient,
   we need a shared definition of IoT messages.
   * Consumers and producers of telemetry data must agree on what is telemetry data.
+    For that purpose, thin-edge provides an extension which defines core IoT data:
+    measurements, events, alarms ...
 * However, we also expect the system to be extended by independent vendors,
   and thin-edge should not pre-defined all the messages that can be exchanged by actors.
   * A contributor should be able to define its own set of messages usable by others.  
@@ -153,6 +155,8 @@ Robustness is key.
 * Unrecoverable errors may cause the binary to shutdown eventually, but not unexpectedly.
 * The framework must handle SIGTERM and signal a shutdown to all active actors.
 * Shutdown is signalled to all extensions, giving them a possibility to handle such case gracefully.
+  Each actor do a shutdown its own way, ignoring pending messages or not, stopping to send messages or not.
+  After some delay, the runtime aborts any actor that failed to terminate on time.
   However, the robustness of the solution should not always rely on graceful shutdowns
   and should be designed to cope with unexpected crashes or SIGKILLs.
 
@@ -347,11 +351,11 @@ In practice, constructing and deconstructing messages leads to boilerplate code.
 To avoid that, we can wrap the message-based interface behind regular method invocations.
 
 ```rust
-struct ActorHandlerA {
+struct ActorAHandle {
   sender: Sender<AMessage>
 }
 
-impl ActorHandlerA {
+impl ActorAHandle {
   pub async fn do_this(&mut self, arg: ThisArg) {
     let _ = self.sender.send(arg).await;
   }
@@ -361,7 +365,7 @@ impl ActorHandlerA {
   }
 }
 
-struct ActorA { state: AState, messages: Receiver<AMessage>, peer: ActorHandlerB }
+struct ActorA { state: AState, messages: Receiver<AMessage>, peer: ActorBHandle }
 
 #[derive(Clone, Debug)]
 enum AMessage {
@@ -396,11 +400,11 @@ impl A {
   }
 }
 
-struct ActorHandlerB {
+struct ActorBHandler {
   sender: Sender<BMessage>
 }
 
-impl ActorHandlerB {
+impl ActorBHandle {
   pub async fn say(&mut self, arg: &str) {
     let _ = self.sender.send(BMessage::Say(arg.to_string())).await;
   }
@@ -431,7 +435,7 @@ impl B {
 
 These three variants of the same example highlight several points.
 
-* The state is managed the same way in the three cases.
+* State is managed the same way in the three cases.
 * What differs is the interaction with peers.
   * The more salient difference is related to the messages.
   * However, the main difference is the concurrency model.
@@ -462,7 +466,7 @@ These three variants of the same example highlight several points.
 Even if details are missing, this gives us a sketch of the pieces making an actor.
 
 * Along its private state, an actor manipulates
-  * a queue of input messages (often named the actor mailbox),
+  * a queue of input messages (often named the actor mailbox or message box),
   * and handlers to actor peers to which output messages are sent to.
 * The code of an actor is a loop processing input messages in turn,
   interpreting these messages as method invocations,
@@ -478,26 +482,27 @@ Even if details are missing, this gives us a sketch of the pieces making an acto
 Key design ideas:
 
 * All the events, requests and responses that affect the behaviour of an actor (including timeouts and cancellations)
-  are materialized by messages collected in a single mailbox, the actor mailbox.
-  * This mailbox abstracts message gathering and prioritization over independent input channels,
-    and the actor processes messages one after the other.
-  * A typical mailbox encapsulates two channels:
-    one for regular messages, the other one for high-priority messages as cancellations.
-  * An actor implementation can provide a specific mailbox implementation,
-    notably to await the response for a request sent to a peer.
-  * For observability purposes, logging can be turned on/off on a mailbox
-    to trace all the messages just before processing.
-  * For testing purposes, the mailbox of an actor (even if specialized) can be built from a single channel
-    simulating a delivery order of events, possibly interleaved with timeouts and other runtime errors.
-* All the events, requests and responses sent by an actor
-  are materialized by messages going through a single handler, the actor peers handler.
-  * This peers handler abstracts message dispatching of a set of independent out channels.
-  * An actor implementation can provide a specific peers handler implementation,
-    notably to abstract away the message passing interface in favor of regular method calls.
-  * For observability purposes, logging can be turned on/off on a peer handler
-    to trace all the messages just sent.
-  * For testing purposes, the peer handler of an actor (even if specialized) can be built onto a single channel
-    gathering all the output messages in their delivery.
+  are materialized by messages, that are processed one after the other by the actor.
+* All the events, requests and responses that define the effect of an actor
+  are materialized by messages, that are sent to actor peers.
+* All the input and output messages of an actor are going through a single box, the message box of the actor.
+  * This mailbox abstracts message gathering and prioritization over independent input channels.
+  * This same box abstracts message dispatching over independent output channels.
+  * A typical mailbox encapsulates several input and output channels,
+    for regular messages, for high-priority messages as cancellations or to interact with specific peers.
+* An actor implementation can use its own specific mailbox implementation.
+  * These serves two purposes: the ability to use specific synchronization mechanisms between input and output messages
+    and the ability to abstract away the message passing interface behind regular method invocations. 
+  * For instance, an actor can specifically await a response from the peer to which a request has just been sent,
+    postponing all the messages sent by other peers till received the expected response.
+  * Yet another example, is the ability for an actor to process requests concurrently upto some max concurrency level,
+    by pausing the reception of new requests till pending responses are actually sent.
+* For observability purposes, logging can be turned on/off on a mailbox
+  to trace all the input messages just before processing
+  and all the output messages just before sending them.
+* For testing purposes, the mailbox of an actor (even if specialized) can be connected to a test channel
+  * simulating events, possibly interleaved with timeouts and other runtime errors.
+  * observing all the effects triggered by the simulated events.
 * The runtime itself is manipulated via messages as any actor.
   Spawning a new task or a new actor instance
   is done by sending a message to the runtime.
@@ -513,21 +518,17 @@ As they are used to improved observability, they must be `Display`.
 
 ```rust
 /// A message exchanged between two actors
-pub trait Message: Clone + Display + Send + Sync + 'static {}
+pub trait Message: Display + Send + Sync + 'static {}
 
 /// There is no need to tag messages as such
-impl<T: Clone + Display + Send + Sync + 'static> Message for T {}
+impl<T: Display + Send + Sync + 'static> Message for T {}
 ```
 
 Typical examples of thin-edge messages are telemetry data, operation requests and outcomes,
 but also low level messages as MQTT messages, HTTP requests and responses,
 and even system specific messages as file-system events and update requests.
 
-To be discussed:
-* Do the messages need to be `Clone`?
-  This has to be considered along the idea of using `oneshot` channel for the response to a request.
-  It might be better to be explicit
-  and use `Message + Clone` in contexts where messages are broadcast.
+In contexts where messages are broadcast, these messages will need to `Message + Clone`.
 
 ### Channels
 
@@ -619,7 +620,7 @@ to manage message priority, timeout, cancellation and more.
 The receiver part is abstracted by a concrete type: a mailbox for a specific type of messages.
 A key design point is that *all* the interactions with an actor must go through such a mailbox,
 including runtime errors, cancellations and timeouts.
-Doing so simplifies the actor event loops to `while let Some(message) = self.mailbox.next().await { ... }`
+Doing so simplifies the actor event loops to `while let Some(message) = mailbox.recv().await { ... }`
 and gives the flexibility to improve the system with new message delivery mechanisms.
 
 ```rust
