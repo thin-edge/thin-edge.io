@@ -67,8 +67,15 @@ Any malicious access to the broker can hazard **thin-edge** and all connected de
 All telemetry data (**Measurments**, **Events**, **Alarms**) are reflected with MQTT topics, where each has it's specific subtopic (e.g. `tedge/measurements` or `tedge/events`).
 
   * each provider of a **measurement**, **event** or **alarm** sends the occuring data to **thin-edge's** MQTT broker
-  * all processes (e.g. domain-applications or 3rd parties) on the main-device and all child-devices can consume those telemetry data from the MQTT broker
-  * the cloud mapper on the **main-device** picks-up _all_ telemetry data from the MQTT broker and transfer those to the cloud
+    * a provider can be the domain application[^1], other SW components / 3rd parties
+  * all processes (e.g. the domain application[^1], other SW components / 3rd parties) on the main-device and all child-devices can consume those telemetry data from the MQTT broker
+  * the cloud mapper on the **main-device** picks-up _all_ telemetry data from the MQTT broker and transfers those to the cloud
+
+The communication diagram below illustrates that behaviour.
+
+![thin-edge Inventory](images/MQTT-communication.svg)
+
+
 
 #### Measurements
   * topic `tedge/measurements/<type_name>`
