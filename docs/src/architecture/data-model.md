@@ -105,6 +105,11 @@ The communication diagram below illustrates that behaviour.
      "pressure": 98
    }
 ```
+  * MQTT retain flag: A measurement should never be published as retain message.
+                      That is as a single retained measurement might be consumed
+                      and processed more than once by a consuming software
+                      component (e.g. when that software component restarts and
+                      subscribes again).
 
 #### Events
   * topic `tedge/events/<type_name>`
@@ -122,6 +127,12 @@ The communication diagram below illustrates that behaviour.
     "time": "2021-01-01T05:30:45+00:00"
 }
 ```
+  * MQTT retain flag: An event should never be published as retain message.
+                      That is as a single retained event might be consumed
+                      and processed more than once by a consuming software
+                      component (e.g. when that software component restarts
+                      and subscribes again).
+
 
 #### Alarms
   * topic `tedge/alarms/<type_name>`
@@ -139,4 +150,10 @@ The communication diagram below illustrates that behaviour.
     "time": "2021-01-01T05:30:45+00:00"
 }
 ```
+  * MQTT retain flag: All alarms shall be published as retain message to
+                      reflect the alarm's stateful behaviour in the broker.
+                      The retain messages is kept in the MQTT broker as long
+                      as the alarm is raised.
+                      When a raised alarm is gone again, an empty retain message
+                      shall be published to clear the alarm message in the broker.
 
