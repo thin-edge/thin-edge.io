@@ -86,22 +86,16 @@ The communication diagram below illustrates that behaviour.
      "<value1_name>": /* <value1> */,
      "<value2_name>": /* <value2> */,
      /* ... */
-     /* TODO: current implementation allows to group/structure values by max one level */
-
+     
      "time": /* timestamp in ISO 8601 format */
    }
 ```
   * payload example:
 ```javascript
    {
-     "time": "2020-10-15T05:30:47+00:00",
      "temperature": 25,
-     "current": { /* TODO: define grouping concept in section above */
-       "L1": 9.5,
-       "L2": 10.3,
-       "L3": 8.8
-     },
-     "pressure": 98
+     "pressure": 98,
+     "time": "2020-10-15T05:30:47+00:00",
    }
 ```
   * MQTT retain flag: A measurement should never be published as retain message.
