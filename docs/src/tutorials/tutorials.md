@@ -5,3 +5,4 @@
 - [Send Thin Edge Json data](./send-thin-edge-data.md)
 - [Monitor my device](./device-monitoring.md)
 - [Manage my device software](./software-management.md)
+- [Child device config management](./child-device-config-management.md)
