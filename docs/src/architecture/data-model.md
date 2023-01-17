@@ -15,8 +15,7 @@ For all data it defines format and explains behaviour.
     - `type name`, a string that identifies the measurement uniquely in context of a device
     - `samples`, carry a single value or set of values, all taken at a single point in time
       - `values` can be a mix of numbers, strings or booleans
-        - TODO: thin-edge JSON gives each value a name (by a JSON key)
-        - TODO: thin-edge JSON allows to group/structure values by max one level
+        - optionally each value can have a `type name`
       - `timestamp` (conform to ISO 8601), that indicates when values were sampled
     - TODO: not yet supported: list of units per sample's values
     - TODO: not yet supported: source
