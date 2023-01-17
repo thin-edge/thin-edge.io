@@ -55,7 +55,7 @@ async fn main() -> Result<(), anyhow::Error> {
         tracing::Level::TRACE
     } else {
         get_log_level(
-            "tedge_agent",
+            "tedge-agent",
             tedge_config_location.tedge_config_root_path.to_path_buf(),
         )?
     };

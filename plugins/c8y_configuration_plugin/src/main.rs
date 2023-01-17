@@ -96,7 +96,7 @@ async fn main() -> Result<(), anyhow::Error> {
         tracing::Level::TRACE
     } else {
         get_log_level(
-            "c8y_configuration_plugin",
+            "c8y-configuration-plugin",
             tedge_config_location.tedge_config_root_path.to_path_buf(),
         )?
     };
