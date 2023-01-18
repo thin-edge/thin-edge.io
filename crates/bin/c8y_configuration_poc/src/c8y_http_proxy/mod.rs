@@ -34,15 +34,6 @@ pub struct C8YHttpConfig {
     pub device_id: String,
 }
 
-impl C8YHttpConfig {
-    pub fn new<S: Into<String>>(c8y_host: S, device_id: S) -> Self {
-        Self {
-            c8y_host: c8y_host.into(),
-            device_id: device_id.into(),
-        }
-    }
-}
-
 impl TryFrom<TEdgeConfig> for C8YHttpConfig {
     type Error = TEdgeConfigError;
 
@@ -51,7 +42,7 @@ impl TryFrom<TEdgeConfig> for C8YHttpConfig {
         let device_id = tedge_config.query(DeviceIdSetting)?;
         Ok(Self {
             c8y_host: c8y_host.into(),
-            device_id: device_id.into(),
+            device_id,
         })
     }
 }

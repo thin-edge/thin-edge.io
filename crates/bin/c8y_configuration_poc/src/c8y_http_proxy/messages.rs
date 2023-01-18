@@ -27,9 +27,6 @@ pub enum C8YRestError {
     #[error("Unexpected response")]
     ProtocolError,
 
-    #[error("JWT token could not be retrieved")]
-    JWTTokenError,
-
     #[error("Failed with {0}")]
     CustomError(String),
 }

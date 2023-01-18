@@ -43,7 +43,6 @@ fan_in_message_type!(LogOutput[MqttMessage]: Debug);
 
 pub struct LogManagerActor {
     config: LogManagerConfig,
-    c8y_request_topics: TopicFilter,
     health_check_topics: TopicFilter,
     mqtt_publisher: DynSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
@@ -55,12 +54,10 @@ impl LogManagerActor {
         mqtt_publisher: DynSender<MqttMessage>,
         http_proxy: C8YHttpProxy,
     ) -> Self {
-        let c8y_request_topics: TopicFilter = C8yTopic::SmartRestRequest.into();
         let health_check_topics = health_check_topics("c8y-log-plugin");
 
         Self {
             config,
-            c8y_request_topics,
             health_check_topics,
             mqtt_publisher,
             http_proxy,

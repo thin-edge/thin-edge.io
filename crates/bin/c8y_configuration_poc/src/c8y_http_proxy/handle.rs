@@ -4,8 +4,6 @@ use crate::c8y_http_proxy::messages::C8YRestResponse;
 use crate::c8y_http_proxy::messages::C8YRestResult;
 use crate::c8y_http_proxy::messages::UploadConfigFile;
 use crate::c8y_http_proxy::messages::UploadLogBinary;
-use c8y_api::json_c8y::C8yCreateEvent;
-use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use mqtt_channel::StreamExt;
 use std::path::Path;
 use std::path::PathBuf;
@@ -26,6 +24,7 @@ pub struct C8YHttpProxy {
 }
 
 impl C8YHttpProxy {
+    /* Will be used by the mapper
     pub async fn send_event(&mut self, c8y_event: C8yCreateEvent) -> Result<String, C8YRestError> {
         let request: C8YRestRequest = c8y_event.into();
         self.request_sender.send(request).await?;
@@ -33,8 +32,9 @@ impl C8YHttpProxy {
             Some(Ok(C8YRestResponse::EventId(id))) => Ok(id),
             unexpected => Err(unexpected.into()),
         }
-    }
+    } */
 
+    /* Will be used by the mapper
     pub async fn send_software_list_http(
         &mut self,
         c8y_software_list: C8yUpdateSoftwareListResponse,
@@ -45,7 +45,7 @@ impl C8YHttpProxy {
             Some(Ok(C8YRestResponse::Unit(_))) => Ok(()),
             unexpected => Err(unexpected.into()),
         }
-    }
+    } */
 
     pub async fn upload_log_binary(
         &mut self,

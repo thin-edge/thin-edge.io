@@ -24,7 +24,6 @@ use tracing::warn;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-log-plugin.toml";
 pub const DEFAULT_OPERATION_DIR_NAME: &str = "c8y/";
-const C8Y_LOG_PLUGIN: &str = "c8y-log-plugin";
 
 /// Configuration of the Configuration Manager
 #[derive(Clone, Debug)]
