@@ -19,11 +19,9 @@ use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::json_c8y::InternalIdResponse;
 use c8y_api::smartrest::error::SMCumulocityMapperError;
 use c8y_api::OffsetDateTime;
-use hyper::body;
 use log::debug;
 use log::error;
 use log::info;
-use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
@@ -34,7 +32,7 @@ use tedge_actors::ServiceMessageBox;
 use tedge_http_ext::HttpHandle;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
-use tedge_http_ext::HttpResponse;
+use tedge_http_ext::HttpResponseExt;
 use tedge_http_ext::HttpResult;
 
 const RETRY_TIMEOUT_SECS: u64 = 60;
@@ -224,14 +222,10 @@ impl C8YHttpProxyActor {
         let url_get_id = self.end_point.get_url_for_get_id(device_id);
 
         let request_internal_id = HttpRequestBuilder::get(url_get_id);
-        let res = self.execute(http, jwt, request_internal_id).await?.unwrap();
+        let res = self.execute(http, jwt, request_internal_id).await?;
+        let res = res.error_for_status()?;
 
-        let body_bytes = body::to_bytes(res.into_body()).await.unwrap();
-        let body_string =
-            String::from_utf8(body_bytes.to_vec()).expect("response was not valid utf-8");
-
-        let internal_id_response: InternalIdResponse =
-            serde_json::from_str(body_string.as_str()).expect("FIXME: JSON parsing failed");
+        let internal_id_response: InternalIdResponse = res.json().await?;
         let internal_id = internal_id_response.id();
         Ok(internal_id)
     }
@@ -253,24 +247,6 @@ impl C8YHttpProxyActor {
         // TODO Manage 403 errors
         let request = request_builder.build()?;
         Ok(http.await_response(request).await?)
-    }
-
-    //FIXME: Move this into HttpResponse as a trait impl
-    pub async fn response_as_string(res: HttpResponse) -> Result<String, C8YRestError> {
-        let body_bytes = body::to_bytes(res.into_body()).await?;
-        Ok(String::from_utf8(body_bytes.to_vec()).expect("response was not valid utf-8"))
-    }
-
-    //FIXME: Move this into HttpResponse as a trait impl
-    pub async fn response_as<T: DeserializeOwned>(res: HttpResponse) -> Result<T, C8YRestError> {
-        if !res.status().is_success() {
-            return Err(C8YRestError::CustomError(
-                format!("Upload failed with response status {}", res.status()).into(),
-            ));
-        }
-
-        let body_str = Self::response_as_string(res).await?;
-        Ok(serde_json::from_str(body_str.as_str())?)
     }
 
     async fn create_event(
@@ -425,8 +401,9 @@ impl C8YHttpProxyActor {
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
             .json(&c8y_event);
-        let http_result = self.execute(http, jwt, req_builder).await??;
-        let event_response = Self::response_as::<C8yEventResponse>(http_result).await?;
+        let http_result = self.execute(http, jwt, req_builder).await?;
+        let http_response = http_result.error_for_status()?;
+        let event_response: C8yEventResponse = http_response.json().await?;
         Ok(event_response.id)
     }
 }

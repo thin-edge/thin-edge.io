@@ -1,10 +1,9 @@
 use c8y_api::json_c8y::*;
 use c8y_api::smartrest::error::SMCumulocityMapperError;
 use std::path::PathBuf;
-use std::string::FromUtf8Error;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::ChannelError;
-use tedge_http_ext::HttpParseError;
+use tedge_http_ext::HttpError;
 use tedge_utils::file::PermissionEntry;
 
 fan_in_message_type!(C8YRestRequest[C8yCreateEvent, C8yUpdateSoftwareListResponse, UploadLogBinary, UploadConfigFile, DownloadFile]: Debug);
@@ -20,7 +19,7 @@ pub enum C8YRestError {
     FromC8YRest(#[from] SMCumulocityMapperError),
 
     #[error(transparent)]
-    FromHttpParseError(#[from] HttpParseError),
+    FromHttpError(#[from] HttpError),
 
     // FIXME: Consider to replace this error by a panic,
     //        since this can only happens if the actor is buggy
@@ -30,15 +29,6 @@ pub enum C8YRestError {
 
     #[error("JWT token could not be retrieved")]
     JWTTokenError,
-
-    #[error(transparent)]
-    FromHyperError(#[from] hyper::Error),
-
-    #[error(transparent)]
-    FromUtf8Error(#[from] FromUtf8Error),
-
-    #[error(transparent)]
-    FromSerdeJsonError(#[from] serde_json::Error),
 
     #[error("Failed with {0}")]
     CustomError(String),
