@@ -7,7 +7,7 @@ rust-version = "1.63"
 
 [dependencies]
 log = "0.4"
-tokio = { version = "1.8", features = [ "fs", "io-util", "macros", "process", "rt" ] }
+tokio = { version = "1.23", features = [ "fs", "io-util", "macros", "process", "rt" ] }
 
 [dev-dependencies]
 anyhow = "1.0"

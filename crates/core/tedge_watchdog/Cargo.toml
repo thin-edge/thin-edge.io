@@ -38,5 +38,5 @@ tedge_config = { path = "../../common/tedge_config" }
 tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
 thiserror = "1.0.30"
 time = { version = "0.3", features = ["formatting", "serde-well-known"] }
-tokio = { version = "1.12", features = ["sync",  "time", "rt-multi-thread"] }
+tokio = { version = "1.23", features = ["sync",  "time", "rt-multi-thread"] }
 tracing = { version = "0.1", features = ["attributes", "log"] }
