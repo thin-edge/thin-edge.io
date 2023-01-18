@@ -52,7 +52,7 @@ tedge_config = { path = "../../common/tedge_config" }
 tedge_utils = { path = "../../common/tedge_utils", features = ["logging", "fs-notify"] }
 thiserror = "1.0"
 time = "0.3"
-tokio = { version = "1.8", features = ["process", "rt", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1.23", features = ["process", "rt", "rt-multi-thread", "sync", "time"] }
 toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 

@@ -22,7 +22,7 @@ strum_macros = { version = "0.24", optional = true }
 tedge-derive = { path = "../tedge_utils/tedge-derive", optional = true }
 tempfile = "3.2"
 thiserror = "1.0"
-tokio = { version = "1.12", default_features = false, features = [ "fs", "io-util", "macros", "signal", "sync", "time" ] }
+tokio = { version = "1.23", default_features = false, features = [ "fs", "io-util", "macros", "signal", "sync", "time" ] }
 tracing = { version = "0.1", features = [] }
 try-traits = { version = "0.1", optional = true }
 users = "0.11.0"
@@ -31,5 +31,5 @@ users = "0.11.0"
 assert_matches = "1.5"
 maplit = "1.0"
 tedge_test_utils = { path = "../../tests/tedge_test_utils" }
-tokio = { version = "1.12", features = [ "rt-multi-thread"] }
+tokio = { version = "1.23", features = [ "rt-multi-thread"] }
 whoami = "1.2.1"
