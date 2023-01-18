@@ -250,7 +250,7 @@ jobs:
     runs-on: Ubuntu-20.04
     env:
       RUSTFLAGS: -D warnings
-    needs: [cargo-fmt, cargo-clippy, cargo-sort]
+    needs: [cargo-fmt, cargo-clippy]
 
     steps:
       - name: Checkout
@@ -288,7 +288,7 @@ jobs:
     runs-on: Ubuntu-20.04
     env:
       RUSTFLAGS: -D warnings
-    needs: [cargo-fmt, cargo-clippy, cargo-sort]
+    needs: [cargo-fmt, cargo-clippy]
 
     steps:
       - name: Checkout
@@ -319,7 +319,7 @@ jobs:
     runs-on: Ubuntu-20.04
     env:
       RUSTFLAGS: -D warnings
-    needs: [cargo-fmt, cargo-clippy, cargo-sort]
+    needs: [cargo-fmt, cargo-clippy]
 
     steps:
       - name: checkout
@@ -347,7 +347,7 @@ jobs:
     runs-on: Ubuntu-20.04
     env:
       RUSTFLAGS: -D warnings
-    needs: [cargo-fmt, cargo-clippy, cargo-sort]
+    needs: [cargo-fmt, cargo-clippy]
 
     steps:
       - name: checkout
