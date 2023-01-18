@@ -6,19 +6,22 @@ use mqtt_channel::MqttError;
 use mqtt_channel::SinkExt;
 use mqtt_channel::StreamExt;
 use mqtt_channel::TopicFilter;
-use tedge_actors::mpsc;
 use tedge_actors::mpsc::channel;
 use tedge_actors::mpsc::Receiver;
 use tedge_actors::mpsc::Sender;
 use tedge_actors::Actor;
 use tedge_actors::ActorBuilder;
+use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::MessageBox;
+use tedge_actors::MessageBoxConnector;
+use tedge_actors::MessageBoxPort;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
 use tedge_actors::SimpleMessageBox;
+use tedge_actors::SimpleMessageBoxBuilder;
 
 pub type MqttConfig = mqtt_channel::Config;
 pub type MqttMessage = mqtt_channel::Message;
@@ -53,16 +56,9 @@ impl MqttActorBuilder {
         client_name: &str,
         subscriptions: TopicFilter,
     ) -> SimpleMessageBox<MqttMessage, MqttMessage> {
-        let (sub_message_sender, sub_message_receiver) = mpsc::channel(16);
-        let pub_message_sender = self
-            .add_client(subscriptions, sub_message_sender.into())
-            .unwrap();
-
-        SimpleMessageBox::new(
-            client_name.to_string(),
-            sub_message_receiver,
-            pub_message_sender,
-        )
+        let mut client = SimpleMessageBoxBuilder::new(client_name, 16);
+        self.connect_with(&mut client, subscriptions);
+        client.build()
     }
 
     /// FIXME this method should not be async
@@ -72,15 +68,23 @@ impl MqttActorBuilder {
             combined_topic_filter.add_all(topic_filter.to_owned());
         }
         let mqtt_config = self.mqtt_config.with_subscriptions(combined_topic_filter);
-        let mqtt_message_box = MqttMessageBox::new(
-            self.publish_channel.1,
-            self.subscriber_addresses,
-        );
+        let mqtt_message_box =
+            MqttMessageBox::new(self.publish_channel.1, self.subscriber_addresses);
 
-        let mqtt_actor = MqttActor::new(mqtt_config)
-            .await
-            .unwrap(); // Convert MqttError to RuntimeError;
+        let mqtt_actor = MqttActor::new(mqtt_config).await.unwrap(); // Convert MqttError to RuntimeError;
         (mqtt_actor, mqtt_message_box)
+    }
+}
+
+impl MessageBoxConnector<MqttMessage, MqttMessage, TopicFilter> for MqttActorBuilder {
+    fn connect_with(
+        &mut self,
+        peer: &mut impl MessageBoxPort<MqttMessage, MqttMessage>,
+        subscriptions: TopicFilter,
+    ) {
+        self.subscriber_addresses
+            .push((subscriptions, peer.get_response_sender()));
+        peer.set_request_sender(self.publish_channel.0.clone().into())
     }
 }
 
@@ -149,13 +153,9 @@ struct MqttActor {
 }
 
 impl MqttActor {
-    async fn new(
-        mqtt_config: mqtt_channel::Config,
-    ) -> Result<Self, MqttError> {
+    async fn new(mqtt_config: mqtt_channel::Config) -> Result<Self, MqttError> {
         let mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
-        Ok(MqttActor {
-            mqtt_client,
-        })
+        Ok(MqttActor { mqtt_client })
     }
 }
 
