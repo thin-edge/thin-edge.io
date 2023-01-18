@@ -9,7 +9,7 @@ async-trait = "0.1"
 futures = { version = "0.3" }
 log = "0.4"
 thiserror = "1.0"
-tokio = { version = "1.22", default_features = false, features = ["sync", "rt", "macros"] }
+tokio = { version = "1.23", default_features = false, features = ["sync", "rt", "macros"] }
 
 [dev-dependencies]
-tokio = { version = "1.22", default_features = false, features = ["time"] }
+tokio = { version = "1.23", default_features = false, features = ["time"] }

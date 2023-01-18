@@ -8,7 +8,7 @@ edition = "2021"
 async-trait = "0.1"
 mqtt_channel = { path = "../../common/mqtt_channel" }
 tedge_actors = { path = "../../core/tedge_actors" }
-tokio = { version = "1.22", default_features = false, features = ["macros"] }
+tokio = { version = "1.23", default_features = false, features = ["macros"] }
 
 [dev-dependencies]
 mqtt_tests = { path = "../../tests/mqtt_tests" }
