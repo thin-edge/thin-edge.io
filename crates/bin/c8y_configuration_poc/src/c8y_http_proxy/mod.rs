@@ -14,6 +14,11 @@ use tedge_actors::MessageBoxPort;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
 use tedge_actors::ServiceMessageBoxBuilder;
+use tedge_config::C8yUrlSetting;
+use tedge_config::ConfigSettingAccessor;
+use tedge_config::DeviceIdSetting;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigError;
 use tedge_http_ext::HttpConnectionBuilder;
 use tedge_http_ext::HttpHandle;
 
@@ -35,6 +40,19 @@ impl C8YHttpConfig {
             c8y_host: c8y_host.into(),
             device_id: device_id.into(),
         }
+    }
+}
+
+impl TryFrom<TEdgeConfig> for C8YHttpConfig {
+    type Error = TEdgeConfigError;
+
+    fn try_from(tedge_config: TEdgeConfig) -> Result<Self, Self::Error> {
+        let c8y_host = tedge_config.query(C8yUrlSetting)?;
+        let device_id = tedge_config.query(DeviceIdSetting)?;
+        Ok(Self {
+            c8y_host: c8y_host.into(),
+            device_id: device_id.into(),
+        })
     }
 }
 
