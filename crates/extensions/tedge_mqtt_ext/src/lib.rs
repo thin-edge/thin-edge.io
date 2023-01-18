@@ -23,12 +23,6 @@ use tedge_actors::SimpleMessageBox;
 pub type MqttConfig = mqtt_channel::Config;
 pub type MqttMessage = mqtt_channel::Message;
 
-#[derive(Debug)]
-pub enum MqttActorMessage {
-    DirectMessage(mqtt_channel::Message),
-    PeerMessage(mqtt_channel::Message),
-}
-
 pub struct MqttActorBuilder {
     pub mqtt_config: mqtt_channel::Config,
     pub publish_channel: (Sender<MqttMessage>, Receiver<MqttMessage>),
@@ -43,18 +37,6 @@ impl MqttActorBuilder {
             subscriber_addresses: Vec::new(),
         }
     }
-
-    // This method makes explicit this actor can consume MqttMessage and send MqttMessage.
-    // However, returning a Receiver where the peer will receive the messages received from its subscription
-    // put the burden on the receiving peer which has no more freedom on organising its channel.
-    // pub fn register_peer(
-    //     &mut self,
-    //     topics: TopicFilter,
-    // ) -> (Sender<MqttMessage>, Receiver<MqttMessage>) {
-    //     let (sender, receiver) = channel(10);
-    //     self.subscriber_addresses.push((topics, sender.into()));
-    //     (self.publish_channel.0.clone(), receiver)
-    // }
 
     pub fn add_client(
         &mut self,
@@ -91,14 +73,13 @@ impl MqttActorBuilder {
         }
         let mqtt_config = self.mqtt_config.with_subscriptions(combined_topic_filter);
         let mqtt_message_box = MqttMessageBox::new(
-            mqtt_config,
             self.publish_channel.1,
             self.subscriber_addresses,
-        )
-        .await
-        .unwrap(); // Convert MqttError to RuntimeError
+        );
 
-        let mqtt_actor = MqttActor;
+        let mqtt_actor = MqttActor::new(mqtt_config)
+            .await
+            .unwrap(); // Convert MqttError to RuntimeError;
         (mqtt_actor, mqtt_message_box)
     }
 }
@@ -114,64 +95,39 @@ impl ActorBuilder for MqttActorBuilder {
 }
 
 struct MqttMessageBox {
-    mqtt_client: mqtt_channel::Connection,
     peer_receiver: Receiver<MqttMessage>,
     peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
 }
 
 impl MqttMessageBox {
-    async fn new(
-        mqtt_config: mqtt_channel::Config,
+    fn new(
         peer_receiver: Receiver<MqttMessage>,
         peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
-    ) -> Result<Self, MqttError> {
-        let mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
-        Ok(MqttMessageBox {
-            mqtt_client,
+    ) -> Self {
+        MqttMessageBox {
             peer_receiver,
             peer_senders,
-        })
+        }
     }
 }
 
 #[async_trait]
 impl MessageBox for MqttMessageBox {
-    type Input = MqttActorMessage;
-    type Output = MqttActorMessage;
+    type Input = MqttMessage;
+    type Output = MqttMessage;
 
-    async fn recv(&mut self) -> Option<MqttActorMessage> {
-        tokio::select! {
-            Some(message) = self.peer_receiver.next() => {
-                let message = MqttActorMessage::PeerMessage(message);
-                self.log_input(&message);
-                Some(message)
-            },
-            Some(message) = self.mqtt_client.received.next() => {
-                Some(MqttActorMessage::DirectMessage(message))
-            },
-            else => None,
-        }
+    async fn recv(&mut self) -> Option<MqttMessage> {
+        self.peer_receiver.next().await.map(|msg| {
+            self.log_input(&msg);
+            msg
+        })
     }
 
-    async fn send(&mut self, message: MqttActorMessage) -> Result<(), ChannelError> {
-        match message {
-            MqttActorMessage::DirectMessage(message) => {
-                // FIXME one should trace all the sent copies of this message.
-                self.log_output(&MqttActorMessage::DirectMessage(message.clone()));
-
-                for (topic_filter, peer_sender) in self.peer_senders.iter_mut() {
-                    if topic_filter.accept(&message) {
-                        let message = message.clone();
-                        peer_sender.send(message).await?;
-                    }
-                }
-            }
-            MqttActorMessage::PeerMessage(message) => {
-                self.mqtt_client
-                    .published
-                    .send(message)
-                    .await
-                    .expect("TODO catch actor specific errors");
+    async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
+        self.log_output(&message.clone());
+        for (topic_filter, peer_sender) in self.peer_senders.iter_mut() {
+            if topic_filter.accept(&message) {
+                peer_sender.send(message.clone()).await?;
             }
         }
         Ok(())
@@ -188,7 +144,20 @@ impl MessageBox for MqttMessageBox {
     }
 }
 
-struct MqttActor;
+struct MqttActor {
+    mqtt_client: mqtt_channel::Connection,
+}
+
+impl MqttActor {
+    async fn new(
+        mqtt_config: mqtt_channel::Config,
+    ) -> Result<Self, MqttError> {
+        let mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
+        Ok(MqttActor {
+            mqtt_client,
+        })
+    }
+}
 
 #[async_trait]
 impl Actor for MqttActor {
@@ -199,8 +168,20 @@ impl Actor for MqttActor {
     }
 
     async fn run(mut self, mut mailbox: MqttMessageBox) -> Result<(), ChannelError> {
-        while let Some(message) = mailbox.recv().await {
-            mailbox.send(message).await?;
+        loop {
+            tokio::select! {
+                Some(message) = mailbox.recv() => {
+                    self.mqtt_client
+                    .published
+                    .send(message)
+                    .await
+                    .expect("TODO catch actor specific errors");
+                },
+                Some(message) = self.mqtt_client.received.next() => {
+                    mailbox.send(message).await?
+                },
+                else => break,
+            }
         }
         Ok(())
     }
