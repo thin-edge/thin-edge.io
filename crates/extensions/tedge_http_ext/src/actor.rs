@@ -37,6 +37,6 @@ impl Service for HttpService {
     }
 
     async fn handle(&mut self, request: Self::Request) -> Self::Response {
-        self.client.request(request).await
+        Ok(self.client.request(request).await?)
     }
 }
