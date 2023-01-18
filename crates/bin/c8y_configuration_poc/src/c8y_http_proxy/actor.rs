@@ -20,6 +20,7 @@ use c8y_api::json_c8y::InternalIdResponse;
 use c8y_api::smartrest::error::SMCumulocityMapperError;
 use c8y_api::OffsetDateTime;
 use hyper::body;
+use log::debug;
 use log::error;
 use log::info;
 use serde::de::DeserializeOwned;
@@ -33,6 +34,7 @@ use tedge_actors::ServiceMessageBox;
 use tedge_http_ext::HttpHandle;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
+use tedge_http_ext::HttpResponse;
 use tedge_http_ext::HttpResult;
 
 const RETRY_TIMEOUT_SECS: u64 = 60;
@@ -254,13 +256,19 @@ impl C8YHttpProxyActor {
     }
 
     //FIXME: Move this into HttpResponse as a trait impl
-    pub async fn response_as_string(res: HttpResult) -> Result<String, C8YRestError> {
-        let body_bytes = body::to_bytes(res.unwrap().into_body()).await?;
+    pub async fn response_as_string(res: HttpResponse) -> Result<String, C8YRestError> {
+        let body_bytes = body::to_bytes(res.into_body()).await?;
         Ok(String::from_utf8(body_bytes.to_vec()).expect("response was not valid utf-8"))
     }
 
     //FIXME: Move this into HttpResponse as a trait impl
-    pub async fn response_as<T: DeserializeOwned>(res: HttpResult) -> Result<T, C8YRestError> {
+    pub async fn response_as<T: DeserializeOwned>(res: HttpResponse) -> Result<T, C8YRestError> {
+        if !res.status().is_success() {
+            return Err(C8YRestError::CustomError(
+                format!("Upload failed with response status {}", res.status()).into(),
+            ));
+        }
+
         let body_str = Self::response_as_string(res).await?;
         Ok(serde_json::from_str(body_str.as_str())?)
     }
@@ -345,9 +353,11 @@ impl C8YHttpProxyActor {
             )
             .await?;
 
+        debug!(target: self.name(), "Creating config event: {:?}", config_file_event);
         let event_response_id = self
             .send_event_internal(http, jwt, config_file_event)
             .await?;
+        debug!(target: self.name(), "Config event created with id: {:?}", event_response_id);
 
         let binary_upload_event_url = self
             .end_point
@@ -356,6 +366,7 @@ impl C8YHttpProxyActor {
             .header("Accept", "application/json")
             .header("Content-Type", "text/plain")
             .body(config_content.to_string());
+        debug!(target: self.name(), "Uploading config file to URL: {}", binary_upload_event_url);
         let http_result = self.execute(http, jwt, req_builder).await?.unwrap();
 
         if !http_result.status().is_success() {
@@ -411,9 +422,10 @@ impl C8YHttpProxyActor {
         let create_event_url = self.end_point.get_url_for_create_event();
 
         let req_builder = HttpRequestBuilder::post(create_event_url)
-            .json(&c8y_event)
-            .header("Accept", "application/json");
-        let http_result = self.execute(http, jwt, req_builder).await?;
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .json(&c8y_event);
+        let http_result = self.execute(http, jwt, req_builder).await??;
         let event_response = Self::response_as::<C8yEventResponse>(http_result).await?;
         Ok(event_response.id)
     }
