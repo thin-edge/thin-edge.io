@@ -1,13 +1,13 @@
 [package]
 name = "c8y-log-plugin"
-version = "0.8.1"
-authors = ["thin-edge.io team <info@thin-edge.io>"]
-edition = "2021"
-rust-version = "1.63"
-license = "Apache-2.0"
 description = "Thin-edge device log file retriever for Cumulocity"
-homepage = "https://thin-edge.io"
-repository = "https://github.com/thin-edge/thin-edge.io"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [package.metadata.deb]
@@ -16,8 +16,16 @@ conflicts = "c8y_log_plugin (<= 0.8.1)"
 breaks = "c8y_log_plugin (<= 0.8.1)"
 maintainer-scripts = "../../configuration/debian/c8y-log-plugin"
 assets = [
-    ["../../configuration/init/systemd/c8y-log-plugin.service", "/lib/systemd/system/c8y-log-plugin.service", "644"],
-    ["target/release/c8y-log-plugin", "/usr/bin/c8y-log-plugin", "755"],
+    [
+        "../../configuration/init/systemd/c8y-log-plugin.service",
+        "/lib/systemd/system/c8y-log-plugin.service",
+        "644",
+    ],
+    [
+        "target/release/c8y-log-plugin",
+        "/usr/bin/c8y-log-plugin",
+        "755",
+    ],
 ]
 
 # Required for DEBHELPER
@@ -35,10 +43,19 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tedge_api = { path = "../../crates/core/tedge_api" }
 tedge_config = { path = "../../crates/common/tedge_config" }
-tedge_utils = { path = "../../crates/common/tedge_utils", features = ["logging", "fs-notify"] }
+tedge_utils = { path = "../../crates/common/tedge_utils", features = [
+    "logging",
+    "fs-notify",
+] }
 thiserror = "1.0"
 time = { version = "0.3" }
-tokio = { version = "1.23", default_features = false, features = [ "fs", "io-util", "macros", "rt-multi-thread","signal"] }
+tokio = { version = "1.23", default_features = false, features = [
+    "fs",
+    "io-util",
+    "macros",
+    "rt-multi-thread",
+    "signal",
+] }
 toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 

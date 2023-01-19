@@ -1,10 +1,12 @@
 [package]
 name = "c8y_api"
-version = "0.8.1"
-authors = ["thin-edge.io team <info@thin-edge.io>"]
-edition = "2021"
-rust-version = "1.63"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 async-trait = "0.1"
@@ -14,7 +16,10 @@ download = { path = "../../common/download" }
 futures = "0.3"
 mockall = "0.11"
 mqtt_channel = { path = "../../common/mqtt_channel" }
-reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.11", default-features = false, features = [
+    "json",
+    "rustls-tls",
+] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tedge_api = { path = "../tedge_api" }

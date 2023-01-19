@@ -1,10 +1,12 @@
 [package]
 name = "tedge_test_utils"
-version = "0.8.1"
-authors = ["thin-edge.io team <info@thin-edge.io>"]
-edition = "2021"
-rust-version = "1.63"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["anyhow"]

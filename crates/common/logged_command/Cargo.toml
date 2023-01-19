@@ -1,13 +1,22 @@
 [package]
 name = "logged_command"
-version = "0.8.1"
-authors = ["thin-edge.io team <info@thin-edge.io>"]
-edition = "2021"
-rust-version = "1.63"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 log = "0.4"
-tokio = { version = "1.23", features = [ "fs", "io-util", "macros", "process", "rt" ] }
+tokio = { version = "1.23", features = [
+    "fs",
+    "io-util",
+    "macros",
+    "process",
+    "rt",
+] }
 
 [dev-dependencies]
 anyhow = "1.0"
