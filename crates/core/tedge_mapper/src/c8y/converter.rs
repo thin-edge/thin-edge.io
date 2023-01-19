@@ -934,20 +934,17 @@ async fn forward_operation_request(
     operation_logs: &OperationLogs,
     mqtt_publisher: &mpsc::UnboundedSender<Message>,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
-    match operations.matching_smartrest_template(template) {
-        Some(operation) => {
-            if let Some(command) = operation.command() {
-                execute_operation(
-                    payload,
-                    command.as_str(),
-                    &operation.name,
-                    operation_logs,
-                    mqtt_publisher,
-                )
-                .await?;
-            }
+    if let Some(operation) = operations.matching_smartrest_template(template) {
+        if let Some(command) = operation.command() {
+            execute_operation(
+                payload,
+                command.as_str(),
+                &operation.name,
+                operation_logs,
+                mqtt_publisher,
+            )
+            .await?;
         }
-        None => {}
     }
     // MQTT messages will be sent during the operation execution
     Ok(vec![])

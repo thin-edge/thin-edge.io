@@ -108,13 +108,9 @@ impl<B: Batchable> Batcher<B> {
     }
 
     fn find_target_batch(&mut self, event_time: OffsetDateTime) -> Option<&mut Batch<B>> {
-        for batch in &mut self.batches {
-            if batch.batch_start() <= event_time && event_time <= batch.batch_end() {
-                return Some(batch);
-            }
-        }
-
-        None
+        self.batches
+            .iter_mut()
+            .find(|batch| batch.batch_start() <= event_time && event_time <= batch.batch_end())
     }
 
     fn make_new_batch(&self, event: B) -> Batch<B> {

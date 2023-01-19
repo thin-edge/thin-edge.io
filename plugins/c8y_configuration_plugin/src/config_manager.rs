@@ -176,25 +176,21 @@ impl ConfigManager {
                 Some((path, mask)) = self.fs_notification_stream.rx.recv() => {
                     match mask {
                         FsEvent::Modified | FsEvent::FileDeleted | FsEvent::FileCreated => {
-                            match path.file_name() {
-                                Some(file_name) => {
-                                    // this if check is done to avoid matching on temporary files created by editors
-                                    if file_name.eq(DEFAULT_PLUGIN_CONFIG_FILE_NAME) {
-                                        let parent_dir_name = path.parent().and_then(|dir| dir.file_name()).ok_or(PathsError::ParentDirNotFound {path: path.as_os_str().into()})?;
-
-                                        if parent_dir_name.eq("c8y") {
-                                            let plugin_config = PluginConfig::new(&path);
-                                            let message = plugin_config.to_supported_config_types_message()?;
-                                            self.mqtt_client.published.send(message).await?;
-                                        } else {
-                                            // this is a child device
-                                            let plugin_config = PluginConfig::new(&path);
-                                            let message = plugin_config.to_supported_config_types_message_for_child(&parent_dir_name.to_string_lossy())?;
-                                            self.mqtt_client.published.send(message).await?;
-                                        }
+                            if let Some(file_name) = path.file_name() {
+                                // this if check is done to avoid matching on temporary files created by editors
+                                if file_name.eq(DEFAULT_PLUGIN_CONFIG_FILE_NAME) {
+                                    let parent_dir_name = path.parent().and_then(|dir| dir.file_name()).ok_or(PathsError::ParentDirNotFound {path: path.as_os_str().into()})?;
+                                    if parent_dir_name.eq("c8y") {
+                                        let plugin_config = PluginConfig::new(&path);
+                                        let message = plugin_config.to_supported_config_types_message()?;
+                                        self.mqtt_client.published.send(message).await?;
+                                    } else {
+                                        // this is a child device
+                                        let plugin_config = PluginConfig::new(&path);
+                                        let message = plugin_config.to_supported_config_types_message_for_child(&parent_dir_name.to_string_lossy())?;
+                                        self.mqtt_client.published.send(message).await?;
                                     }
-                                },
-                                None => {}
+                                }
                             }
                         },
                         _ => {
