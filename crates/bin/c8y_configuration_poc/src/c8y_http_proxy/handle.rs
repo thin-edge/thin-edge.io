@@ -4,6 +4,7 @@ use crate::c8y_http_proxy::messages::C8YRestResponse;
 use crate::c8y_http_proxy::messages::C8YRestResult;
 use crate::c8y_http_proxy::messages::UploadConfigFile;
 use crate::c8y_http_proxy::messages::UploadLogBinary;
+use crate::c8y_http_proxy::C8YConnectionBuilder;
 use mqtt_channel::StreamExt;
 use std::path::Path;
 use std::path::PathBuf;
@@ -24,6 +25,12 @@ pub struct C8YHttpProxy {
 }
 
 impl C8YHttpProxy {
+    pub fn new(client_name: &str, proxy_builder: &mut impl C8YConnectionBuilder) -> Self {
+        C8YHttpHandleBuilder::new(client_name)
+            .connected_to(proxy_builder, ())
+            .build()
+    }
+
     /* Will be used by the mapper
     pub async fn send_event(&mut self, c8y_event: C8yCreateEvent) -> Result<String, C8YRestError> {
         let request: C8YRestRequest = c8y_event.into();

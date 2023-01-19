@@ -2,8 +2,6 @@ use crate::c8y_http_proxy::actor::C8YHttpProxyActor;
 use crate::c8y_http_proxy::actor::C8YHttpProxyMessageBox;
 use crate::c8y_http_proxy::credentials::JwtResult;
 use crate::c8y_http_proxy::credentials::JwtRetriever;
-use crate::c8y_http_proxy::handle::C8YHttpHandleBuilder;
-use crate::c8y_http_proxy::handle::C8YHttpProxy;
 use crate::c8y_http_proxy::messages::C8YRestRequest;
 use crate::c8y_http_proxy::messages::C8YRestResult;
 use async_trait::async_trait;
@@ -47,16 +45,9 @@ impl TryFrom<TEdgeConfig> for C8YHttpConfig {
     }
 }
 
-pub trait C8YConnectionBuilder: MessageBoxConnector<C8YRestRequest, C8YRestResult, ()> {
-    fn new_c8y_handle(&mut self, client_name: &str) -> C8YHttpProxy;
-}
-impl C8YConnectionBuilder for C8YHttpProxyBuilder {
-    fn new_c8y_handle(&mut self, client_name: &str) -> C8YHttpProxy {
-        let mut port = C8YHttpHandleBuilder::new(client_name);
-        self.connect(&mut port);
-        port.build()
-    }
-}
+pub trait C8YConnectionBuilder: MessageBoxConnector<C8YRestRequest, C8YRestResult, ()> {}
+
+impl C8YConnectionBuilder for C8YHttpProxyBuilder {}
 
 /// A proxy to C8Y REST API
 ///

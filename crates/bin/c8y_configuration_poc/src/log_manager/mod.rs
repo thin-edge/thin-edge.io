@@ -4,7 +4,6 @@ mod error;
 
 use crate::c8y_http_proxy::handle::C8YHttpProxy;
 use crate::c8y_http_proxy::C8YConnectionBuilder;
-use crate::c8y_http_proxy::C8YHttpProxyBuilder;
 use crate::file_system_ext::FsWatchActorBuilder;
 use actor::*;
 use async_trait::async_trait;
@@ -43,8 +42,11 @@ impl LogManagerBuilder {
     }
 
     /// Connect this config manager instance to some http connection provider
-    pub fn with_c8y_http_proxy(&mut self, http: &mut C8YHttpProxyBuilder) -> Result<(), LinkError> {
-        self.http_proxy = Some(http.new_c8y_handle("LogManager => C8Y"));
+    pub fn with_c8y_http_proxy(
+        &mut self,
+        http: &mut impl C8YConnectionBuilder,
+    ) -> Result<(), LinkError> {
+        self.http_proxy = Some(C8YHttpProxy::new("LogManager => C8Y", http));
         Ok(())
     }
 

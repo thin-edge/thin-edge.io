@@ -9,7 +9,6 @@ use crate::c8y_http_proxy::handle::C8YHttpProxy;
 use crate::c8y_http_proxy::messages::C8YRestRequest;
 use crate::c8y_http_proxy::messages::C8YRestResult;
 use crate::c8y_http_proxy::C8YConnectionBuilder;
-use crate::c8y_http_proxy::C8YHttpProxyBuilder;
 use crate::file_system_ext::FsWatchActorBuilder;
 use actor::*;
 use async_trait::async_trait;
@@ -59,10 +58,13 @@ impl ConfigManagerBuilder {
     }
 
     /// Connect this config manager instance to some http connection provider
-    pub fn with_c8y_http_proxy(&mut self, http: &mut C8YHttpProxyBuilder) -> Result<(), LinkError> {
-        http.connect(self);
-        self.c8y_upload_http_proxy = Some(http.new_c8y_handle("UploadManager => C8Y"));
-        self.c8y_download_http_proxy = Some(http.new_c8y_handle("DownloadManager => C8Y"));
+    pub fn with_c8y_http_proxy(
+        &mut self,
+        http: &mut impl C8YConnectionBuilder,
+    ) -> Result<(), LinkError> {
+        self.connect_to(http, ());
+        self.c8y_upload_http_proxy = Some(C8YHttpProxy::new("UploadManager => C8Y", http));
+        self.c8y_download_http_proxy = Some(C8YHttpProxy::new("DownloadManager => C8Y", http));
         Ok(())
     }
 
