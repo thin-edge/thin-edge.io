@@ -5,7 +5,6 @@ use crate::DynSender;
 use crate::KeyedSender;
 use crate::Message;
 use crate::NullSender;
-use crate::RequestResponseHandler;
 use crate::RuntimeError;
 use crate::RuntimeHandle;
 use crate::Sender;
@@ -49,13 +48,6 @@ pub trait MessageBoxConnector<Request: Message, Response: Message, Config: Defau
     fn connect(&mut self, peer: &mut impl MessageBoxPort<Request, Response>) {
         self.connect_with(peer, Config::default())
     }
-
-    /// Return a new request-response handle connected to this message box
-    fn new_handle(&mut self, client_name: &str) -> RequestResponseHandler<Request, Response> {
-        let mut port = RequestResponseHandlerBuilder::new(client_name, 1);
-        self.connect(&mut port);
-        port.build()
-    }
 }
 
 /// A connection port to connect a message box under-connection to another box
@@ -65,6 +57,32 @@ pub trait MessageBoxPort<Request: Message, Response: Message> {
 
     /// Return a sender where the responses to this actor's box have to be sent
     fn get_response_sender(&self) -> DynSender<Response>;
+
+    /// Connect this client message box to the service message box
+    fn connect_to<Config: Default>(
+        &mut self,
+        service: &mut impl MessageBoxConnector<Request, Response, Config>,
+        config: Config,
+    ) where
+        Self: Sized,
+    {
+        service.connect_with(self, config)
+    }
+
+    /// Connect this client message box to the service message box
+    ///
+    /// Return the updated client message box.
+    fn connected_to<Config: Default>(
+        mut self,
+        service: &mut impl MessageBoxConnector<Request, Response, Config>,
+        config: Config,
+    ) -> Self
+    where
+        Self: Sized,
+    {
+        service.connect_with(&mut self, config);
+        self
+    }
 }
 
 /// A builder of SimpleMessageBox
@@ -122,22 +140,6 @@ impl<Req: Message, Res: Message> Builder<SimpleMessageBox<Req, Res>>
 
     fn build(self) -> SimpleMessageBox<Req, Res> {
         SimpleMessageBox::new(self.name, self.input_receiver, self.output_sender)
-    }
-}
-
-pub type RequestResponseHandlerBuilder<Req, Res> = SimpleMessageBoxBuilder<Res, Req>;
-
-impl<Req: Message, Res: Message> Builder<RequestResponseHandler<Req, Res>>
-    for SimpleMessageBoxBuilder<Res, Req>
-{
-    type Error = Infallible;
-
-    fn try_build(self) -> Result<RequestResponseHandler<Req, Res>, Self::Error> {
-        Ok(self.build())
-    }
-
-    fn build(self) -> RequestResponseHandler<Req, Res> {
-        RequestResponseHandler::new(&self.name, self.input_receiver, self.output_sender)
     }
 }
 

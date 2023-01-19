@@ -1,9 +1,11 @@
-use crate::mpsc;
+use crate::Builder;
 use crate::ChannelError;
-use crate::DynSender;
 use crate::Message;
 use crate::MessageBox;
+use crate::MessageBoxConnector;
+use crate::MessageBoxPort;
 use crate::SimpleMessageBox;
+use crate::SimpleMessageBoxBuilder;
 use async_trait::async_trait;
 
 /// Client side handler of requests/responses sent to an actor
@@ -16,14 +18,17 @@ pub struct RequestResponseHandler<Request, Response> {
 }
 
 impl<Request: Message, Response: Message> RequestResponseHandler<Request, Response> {
-    pub(crate) fn new(
-        name: &str,
-        response_receiver: mpsc::Receiver<Response>,
-        request_sender: DynSender<Request>,
+    /// Create a new `RequestResponseHandler` connected to the service with the given config.
+    pub fn new<Config: Default>(
+        client_name: &str,
+        service: &mut impl MessageBoxConnector<Request, Response, Config>,
+        config: Config,
     ) -> Self {
-        RequestResponseHandler {
-            messages: SimpleMessageBox::new(name.to_string(), response_receiver, request_sender),
-        }
+        let capacity = 1; // At most one response is ever expected
+        let messages = SimpleMessageBoxBuilder::new(client_name, capacity)
+            .connected_to(service, config)
+            .build();
+        RequestResponseHandler { messages }
     }
 
     /// Send the request and await for a response
