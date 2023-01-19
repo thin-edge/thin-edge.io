@@ -1,9 +1,12 @@
 [package]
 name = "plugin_sm"
-version = "0.8.1"
-authors = ["thin-edge.io team <info@thin-edge.io>"]
-edition = "2021"
-rust-version = "1.63"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 async-trait = "0.1"
@@ -25,4 +28,3 @@ assert_matches = "1.5"
 serial_test = "0.8"
 tempfile = "3.2"
 test-case = "2.2"
-

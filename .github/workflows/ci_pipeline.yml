@@ -28,7 +28,7 @@ jobs:
           fetch-depth: 0
 
       - name: Enable toolchain via github action
-        uses: dtolnay/rust-toolchain@1.63.0
+        uses: dtolnay/rust-toolchain@1.64.0
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -92,7 +92,7 @@ jobs:
           fetch-depth: 0
 
       - name: Enable toolchain via github action
-        uses: dtolnay/rust-toolchain@1.63.0
+        uses: dtolnay/rust-toolchain@1.64.0
         with:
           targets: ${{ matrix.target }}
 

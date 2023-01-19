@@ -1,11 +1,13 @@
 [package]
 name = "tedge-derive"
-version = "0.8.1"
-authors = ["thin-edge.io team <info@thin-edge.io>"]
-edition = "2021"
-rust-version = "1.63"
-license = "Apache-2.0"
 description = "tedge-derive provides a proc macro for catching unknown fields when deserialising"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
 
 [lib]
 proc-macro = true
@@ -17,5 +19,5 @@ normal = ["serde", "toml"]
 [dependencies]
 toml = "0.5"
 serde = { version = "1.0", features = ["derive"] }
-syn = { version = "1.0", features = [ "full", "extra-traits" ] }
+syn = { version = "1.0", features = ["full", "extra-traits"] }
 quote = "1.0"
