@@ -82,8 +82,8 @@ impl C8YHttpProxyBuilder {
         jwt: &mut impl MessageBoxConnector<(), JwtResult, ()>,
     ) -> Self {
         let clients = ServiceMessageBoxBuilder::new("C8Y-REST", 10);
-        let http = http.new_handle("C8Y-REST => HTTP");
-        let jwt = jwt.new_handle("C8Y-REST => JWT");
+        let http = HttpHandle::new("C8Y-REST => HTTP", http, ());
+        let jwt = JwtRetriever::new("C8Y-REST => JWT", jwt, ());
         C8YHttpProxyBuilder {
             config,
             clients,
