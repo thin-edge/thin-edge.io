@@ -76,9 +76,7 @@ impl ConfigManagerBuilder {
         .try_into()
         .unwrap();
 
-        let mqtt_publisher = mqtt.add_client(subscriptions, self.events_sender.clone().into())?;
-
-        self.mqtt_publisher = Some(mqtt_publisher);
+        mqtt.connect_with(self, subscriptions);
         Ok(())
     }
 
@@ -100,6 +98,16 @@ impl MessageBoxPort<C8YRestRequest, C8YRestResult> for ConfigManagerBuilder {
 
     fn get_response_sender(&self) -> DynSender<C8YRestResult> {
         self.http_responses_sender.sender_clone()
+    }
+}
+
+impl MessageBoxPort<MqttMessage, MqttMessage> for ConfigManagerBuilder {
+    fn set_request_sender(&mut self, mqtt_publisher: DynSender<MqttMessage>) {
+        self.mqtt_publisher = Some(mqtt_publisher);
+    }
+
+    fn get_response_sender(&self) -> DynSender<MqttMessage> {
+        self.events_sender.sender_clone()
     }
 }
 

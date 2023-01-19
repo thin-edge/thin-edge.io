@@ -13,8 +13,11 @@ use tedge_actors::mpsc;
 use tedge_actors::ActorBuilder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
+use tedge_actors::MessageBoxConnector;
+use tedge_actors::MessageBoxPort;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
+use tedge_actors::Sender;
 use tedge_mqtt_ext::*;
 
 /// This is an actor builder.
@@ -48,8 +51,7 @@ impl LogManagerBuilder {
     /// Connect this config manager instance to some mqtt connection provider
     pub fn with_mqtt_connection(&mut self, mqtt: &mut MqttActorBuilder) -> Result<(), LinkError> {
         let subscriptions = vec!["c8y/s/ds"].try_into().unwrap();
-        let mqtt_publisher = mqtt.add_client(subscriptions, self.events_sender.clone().into())?;
-        self.mqtt_publisher = Some(mqtt_publisher);
+        mqtt.connect_with(self, subscriptions);
         Ok(())
     }
 
@@ -61,6 +63,16 @@ impl LogManagerBuilder {
         fs_builder.new_watcher(config_dir, self.events_sender.clone().into());
 
         Ok(())
+    }
+}
+
+impl MessageBoxPort<MqttMessage, MqttMessage> for LogManagerBuilder {
+    fn set_request_sender(&mut self, mqtt_publisher: DynSender<MqttMessage>) {
+        self.mqtt_publisher = Some(mqtt_publisher);
+    }
+
+    fn get_response_sender(&self) -> DynSender<MqttMessage> {
+        self.events_sender.sender_clone()
     }
 }
 
