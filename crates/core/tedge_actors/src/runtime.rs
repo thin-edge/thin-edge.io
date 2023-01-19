@@ -1,10 +1,10 @@
+use crate::internal::RunActor;
+use crate::internal::Task;
 use crate::Actor;
 use crate::ActorBuilder;
 use crate::ChannelError;
 use crate::DynSender;
-use crate::RunActor;
 use crate::RuntimeError;
-use crate::Task;
 use futures::channel::mpsc;
 use futures::SinkExt;
 use futures::StreamExt;
