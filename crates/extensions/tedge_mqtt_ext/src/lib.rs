@@ -11,17 +11,13 @@ use tedge_actors::mpsc::Receiver;
 use tedge_actors::mpsc::Sender;
 use tedge_actors::Actor;
 use tedge_actors::ActorBuilder;
-use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
-use tedge_actors::LinkError;
 use tedge_actors::MessageBox;
 use tedge_actors::MessageBoxConnector;
 use tedge_actors::MessageBoxPort;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
-use tedge_actors::SimpleMessageBox;
-use tedge_actors::SimpleMessageBoxBuilder;
 
 pub type MqttConfig = mqtt_channel::Config;
 pub type MqttMessage = mqtt_channel::Message;
@@ -39,26 +35,6 @@ impl MqttActorBuilder {
             publish_channel: channel(10),
             subscriber_addresses: Vec::new(),
         }
-    }
-
-    pub fn add_client(
-        &mut self,
-        subscriptions: TopicFilter,
-        peer_sender: DynSender<MqttMessage>,
-    ) -> Result<DynSender<MqttMessage>, LinkError> {
-        self.subscriber_addresses.push((subscriptions, peer_sender));
-        Ok(self.publish_channel.0.clone().into())
-    }
-
-    /// Add a new client, returning a message box to pub/sub messages over MQTT
-    pub fn new_client(
-        &mut self,
-        client_name: &str,
-        subscriptions: TopicFilter,
-    ) -> SimpleMessageBox<MqttMessage, MqttMessage> {
-        let mut client = SimpleMessageBoxBuilder::new(client_name, 16);
-        self.connect_with(&mut client, subscriptions);
-        client.build()
     }
 
     /// FIXME this method should not be async

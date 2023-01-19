@@ -1,24 +1,35 @@
 use crate::*;
 use mqtt_channel::Topic;
+use tedge_actors::Builder;
+use tedge_actors::SimpleMessageBox;
+use tedge_actors::SimpleMessageBoxBuilder;
+
+type MqttClient = SimpleMessageBox<MqttMessage, MqttMessage>;
 
 #[tokio::test]
 async fn communicate_over_mqtt() {
     let broker = mqtt_tests::test_mqtt_broker();
     let mqtt_config = MqttConfig::default().with_port(broker.port);
-    let mut mqtt_actor_builder = MqttActorBuilder::new(mqtt_config);
+    let mut mqtt = MqttActorBuilder::new(mqtt_config);
 
     let alice_topic = Topic::new_unchecked("messages/for/alice");
-    let mut alice = mqtt_actor_builder.new_client("Alice", alice_topic.clone().into());
+    let mut alice: MqttClient = SimpleMessageBoxBuilder::new("Alice", 16)
+        .connected_to(&mut mqtt, alice_topic.clone().into())
+        .build();
 
     let bob_topic = Topic::new_unchecked("messages/for/bob");
-    let mut bob = mqtt_actor_builder.new_client("Bob", bob_topic.clone().into());
+    let mut bob: MqttClient = SimpleMessageBoxBuilder::new("Bob", 16)
+        .connected_to(&mut mqtt, bob_topic.clone().into())
+        .build();
 
     let mut all_topics = TopicFilter::empty();
     all_topics.add_all(alice_topic.clone().into());
     all_topics.add_all(bob_topic.clone().into());
-    let mut spy = mqtt_actor_builder.new_client("Spy", all_topics);
+    let mut spy: MqttClient = SimpleMessageBoxBuilder::new("Spy", 16)
+        .connected_to(&mut mqtt, all_topics.clone().into())
+        .build();
 
-    tokio::spawn(mqtt_actor(mqtt_actor_builder));
+    tokio::spawn(mqtt_actor(mqtt));
 
     // Message pub on some topic is received by all subscribers
     assert!(alice
