@@ -102,7 +102,7 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
     pub fn channel(name: &str, capacity: usize) -> (SimpleMessageBox<Output, Input>, Self) {
         let mut client_box = SimpleMessageBoxBuilder::new(&format!("{}-Client", name), capacity);
         let mut service_box = SimpleMessageBoxBuilder::new(&format!("{}-Service", name), capacity);
-        service_box.connect(&mut client_box);
+        service_box.connect_with(&mut client_box, ());
         (client_box.build(), service_box.build())
     }
 

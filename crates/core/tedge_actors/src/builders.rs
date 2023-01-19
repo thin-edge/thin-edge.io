@@ -40,14 +40,9 @@ pub trait Builder<T>: Sized {
 }
 
 /// A trait to connect a message box under-construction to peer messages boxes
-pub trait MessageBoxConnector<Request: Message, Response: Message, Config: Default> {
+pub trait MessageBoxConnector<Request: Message, Response: Message, Config> {
     /// Connect a peer message box to the message box under construction
     fn connect_with(&mut self, peer: &mut impl MessageBoxPort<Request, Response>, config: Config);
-
-    /// Use the default config to connect a peer message box
-    fn connect(&mut self, peer: &mut impl MessageBoxPort<Request, Response>) {
-        self.connect_with(peer, Config::default())
-    }
 }
 
 /// A connection port to connect a message box under-connection to another box
@@ -59,7 +54,7 @@ pub trait MessageBoxPort<Request: Message, Response: Message> {
     fn get_response_sender(&self) -> DynSender<Response>;
 
     /// Connect this client message box to the service message box
-    fn connect_to<Config: Default>(
+    fn connect_to<Config>(
         &mut self,
         service: &mut impl MessageBoxConnector<Request, Response, Config>,
         config: Config,
@@ -110,10 +105,6 @@ impl<Req: Message, Res: Message> MessageBoxConnector<Req, Res, ()>
     for SimpleMessageBoxBuilder<Req, Res>
 {
     fn connect_with(&mut self, peer: &mut impl MessageBoxPort<Req, Res>, _config: ()) {
-        self.connect(peer)
-    }
-
-    fn connect(&mut self, peer: &mut impl MessageBoxPort<Req, Res>) {
         self.output_sender = peer.get_response_sender();
         peer.set_request_sender(self.input_sender.sender_clone());
     }
@@ -193,10 +184,6 @@ impl<Req: Message, Res: Message> MessageBoxConnector<Req, Res, ()>
     for ServiceMessageBoxBuilder<Req, Res>
 {
     fn connect_with(&mut self, peer: &mut impl MessageBoxPort<Req, Res>, _config: ()) {
-        self.connect(peer)
-    }
-
-    fn connect(&mut self, peer: &mut impl MessageBoxPort<Req, Res>) {
         let client_id = self.clients.len();
         let request_sender = KeyedSender::new_sender(client_id, self.request_sender.clone());
 
