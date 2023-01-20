@@ -12,7 +12,7 @@
 //! ```
 //! # use crate::tedge_actors::{Actor, ChannelError, MessageBox, SimpleMessageBox};
 //! # use async_trait::async_trait;
-//!
+//! #
 //! /// State of the calculator actor
 //! #[derive(Default)]
 //! struct Calculator {
@@ -69,14 +69,26 @@
 //!         Ok(())
 //!     }
 //! }
+//! ```
 //!
+//! ## Testing an actor
+//!
+//! To run and test an actor one needs to establish a bidirectional channel to its message box.
+//! The simpler is to use the `Actor::MessageBox::channel()` function that creates two message boxes.
+//! Along a message box ready to be used by the actor,
+//! this function returns a second box connected to the former.
+//! This message box can then be used to:
+//! - send input messages to the actor
+//! - receive output messages sent by the actor.
+//!
+//! ```
+//! # use crate::tedge_actors::{Actor, ChannelError, MessageBox, SimpleMessageBox};
+//! # use crate::tedge_actors::examples::calculator::*;
+//! #
 //! # #[tokio::main]
 //! # async fn main() {
-//!
-//! // To run and test an actor one needs to establish a bidirectional channel to its message box.
-//! // This message box will then be used to:
-//! // - send input messages to the actor
-//! // - receive output messages sent by the actor.
+//! #
+//! // Create a message box for the actor, along a test box ready to communicate with actor
 //! let (mut test_box, actor_box) = SimpleMessageBox::channel("Test", 10);
 //!
 //! // The actor is then spawn in the background with its message box.
@@ -92,7 +104,7 @@
 //! assert_eq!(test_box.recv().await, Some(Update{from:0,to:4}));
 //! assert_eq!(test_box.recv().await, Some(Update{from:4,to:40}));
 //! assert_eq!(test_box.recv().await, Some(Update{from:40,to:42}));
-//!
+//! #
 //! # }
 //! ```
 //!
@@ -107,30 +119,20 @@
 //! Such an actor can be implemented as a `Service`.
 //! Doing so, one can save some message box related code;
 //! but the main benefit is that we can than build actors
-//! that can work with several clients: sending the responses to the requesters.
+//! that can work with several clients (sending the responses to the appropriate requesters).
 //!
 //! ```
 //! # use crate::tedge_actors::{Service, MessageBox, SimpleMessageBox};
 //! # use async_trait::async_trait;
 //!
+//! # use crate::tedge_actors::examples;
+//! # type Operation = examples::calculator::Operation;
+//! # type Update = examples::calculator::Update;
+//!
 //! /// State of the calculator service
 //! #[derive(Default)]
 //! struct Calculator {
 //!     state: i64,
-//! }
-//!
-//! /// Input messages of the calculator service
-//! #[derive(Debug)]
-//! enum Operation {
-//!     Add(i64),
-//!     Multiply(i64),
-//! }
-//!
-//! /// Output messages of the calculator service
-//! #[derive(Debug, Eq, PartialEq)]
-//! struct Update {
-//!     from: i64,
-//!     to: i64,
 //! }
 //!
 //! /// Implementation of the calculator behavior
@@ -159,11 +161,20 @@
 //!         Update{from,to}
 //!     }
 //! }
+//! ```
 //!
-//! # use tedge_actors::{Actor, ServiceActor};
+//! A service can be tested directly through its `handle` method.
+//! One can also build an actor, here a `ServiceActor<Calculator>`,
+//! that uses the service implementation to serve requests.
+//! This actor can then be tested using a test box connected to the actor box.
+//!
+//! ```
+//! # use tedge_actors::{Actor, MessageBox, ServiceActor, SimpleMessageBox};
+//! # use crate::tedge_actors::examples::calculator::*;
+//! #
 //! # #[tokio::main]
 //! # async fn main_test() {
-//!
+//! #
 //! // As for any actor, one needs a bidirectional channel to the message box of the service.
 //!
 //! let (mut test_box, actor_box) = SimpleMessageBox::channel("Test", 10);
@@ -236,3 +247,7 @@ pub use macros::*;
 
 #[cfg(test)]
 pub mod tests;
+
+// FIXME: how to have these examples only available when testing the doc comments?
+// #[cfg(test)]
+pub mod examples;
