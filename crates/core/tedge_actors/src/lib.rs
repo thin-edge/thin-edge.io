@@ -88,7 +88,7 @@
 //! # #[tokio::main]
 //! # async fn main() {
 //! #
-//! // Create a message box for the actor, along a test box ready to communicate with actor
+//! // Create a message box for the actor, along a test box ready to communicate with actor.
 //! let (mut test_box, actor_box) = SimpleMessageBox::channel("Test", 10);
 //!
 //! // The actor is then spawn in the background with its message box.
@@ -176,7 +176,6 @@
 //! # async fn main_test() {
 //! #
 //! // As for any actor, one needs a bidirectional channel to the message box of the service.
-//!
 //! let (mut test_box, actor_box) = SimpleMessageBox::channel("Test", 10);
 //!
 //! // The actor is then spawn in the background with its message box.
@@ -204,6 +203,116 @@
 //! Actors don't work in isolation.
 //! They interact by sending messages and a key step is to connect the actors to each others,
 //! or, more precisely, to connect their message boxes.
+//!
+//! The previous example, showing how to interact with a service using a test box,
+//! only makes sense in the context of a test. One does not want to interact with an actor
+//! through a *single* message box, that furthermore exposes internal details as client identifiers.
+//! One must be free to connect several client actors to the same service actor,
+//! and to connect a given actor to a bunch of peer actors delivering specific features.
+//!
+//! Let's start be implementing a client actor for the calculator service.
+//!
+//! ```
+//! # use async_trait::async_trait;
+//! # use tedge_actors::{Actor, ChannelError, MessageBox, RequestResponseHandler, ServiceActor, SimpleMessageBox};
+//! # use crate::tedge_actors::examples::calculator::*;
+//!
+//! /// An actor that send operations to a calculator service to reach a given target.
+//! struct Player {
+//!     name: String,
+//!     target: i64,
+//! }
+//!
+//! #[async_trait]
+//! impl Actor for Player {
+//!
+//!     /// This actor use a simple message box
+//!     /// to receive `Update` messages and to send `Operation` messages.
+//!     ///
+//!     /// Presumably this actor interacts with a `Calculator`
+//!     /// and will have to send an `Operation` before receiving in return an `Update`
+//!     /// But nothing enforces that. The message box only tell what is sent and received.
+//!     type MessageBox = SimpleMessageBox<Update,Operation>;
+//!
+//!     fn name(&self) -> &str {
+//!         &self.name()
+//!     }
+//!
+//!     async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+//!         // Send a first identity `Operation` to see where we are.
+//!         messages.send(Operation::Add(0)).await?;
+//!
+//!         while let Some(status) = messages.recv().await {
+//!             // Reduce by two the gap to the target
+//!             let delta = self.target - status.to;
+//!             messages.send(Operation::Add(delta / 2)).await?;
+//!         }
+//!
+//!         Ok(())
+//!     }
+//! }
+//! ```
+//!
+//! To connect such an actor to the calculator, one needs message box builders
+//! to establish appropriate connections between the actor message boxes.
+//!
+//! ```
+//! # use tedge_actors::{Actor, Builder, ChannelError, MessageBox, MessageBoxPort, ServiceActor, ServiceMessageBox, ServiceMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder};
+//! # use crate::tedge_actors::examples::calculator::*;
+//! # #[tokio::main]
+//! # async fn main_test() -> Result<(),ChannelError> {
+//! #
+//!
+//! // Building a box to hold 16 pending requests for the calculator service
+//! // Note that a service actor requires a specific type of message box.
+//! let mut service_box_builder = ServiceMessageBoxBuilder::new("Calculator", 16);
+//!
+//! // Building a box to hold one pending message for the player
+//! // This actor never expect more then one message.
+//! let mut player_1_box_builder = SimpleMessageBoxBuilder::new("Player 1", 1);
+//!
+//! // Connecting the two boxes, so the box built by the `player_box_builder`:
+//! // - receives as input the messages sent by the box built by the `service_box_builder`
+//! // - sends its output to the service input box.
+//! player_1_box_builder.connect_to(&mut service_box_builder, ());
+//!
+//! // Its matters that the builder of the service box is a `ServiceMessageBoxBuilder`:
+//! // this builder accept other actors to connect to the same service.
+//! let mut player_2_box_builder = SimpleMessageBoxBuilder::new("Player 2", 1);
+//! player_2_box_builder.connect_to(&mut service_box_builder, ());
+//!
+//! // One can then build the message boxes
+//! let service_box: ServiceMessageBox<Operation,Update> = service_box_builder.build();
+//! let mut player_1_box = player_1_box_builder.build();
+//! let mut player_2_box = player_2_box_builder.build();
+//!
+//! // Then spawn the service
+//! let service = Calculator::default();
+//! tokio::spawn(ServiceActor::new(service).run(service_box));
+//!
+//! // And use the players' boxes to interact with the service.
+//! // Note that, compared to the test above of the calculator service,
+//! // - the players don't have to deal with client identifiers,
+//! // - each player receives the responses to its requests,
+//! // - the service processes the requests in the order they have been received,
+//! // - the responses to a client are affected by the requests sent by the others.
+//! player_1_box.send(Operation::Add(0)).await?;
+//! player_2_box.send(Operation::Add(0)).await?;
+//!
+//! assert_eq!(player_1_box.recv().await, Some(Update{from:0,to:0}));
+//! player_1_box.send(Operation::Add(10)).await?;
+//!
+//! assert_eq!(player_2_box.recv().await, Some(Update{from:0,to:0}));
+//! player_2_box.send(Operation::Add(5)).await?;
+//!
+//! assert_eq!(player_1_box.recv().await, Some(Update{from:0,to:10}));
+//! assert_eq!(player_2_box.recv().await, Some(Update{from:10,to:15}));
+//! #
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Using actor builders
 //!
 //! TODO
 //!

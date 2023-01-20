@@ -78,3 +78,31 @@ impl Service for Calculator {
         Update { from, to }
     }
 }
+
+/// An actor that send operations to a calculator service to reach a given target.
+pub struct Player {
+    name: String,
+    target: i64,
+}
+
+#[async_trait]
+impl Actor for Player {
+    type MessageBox = SimpleMessageBox<Update, Operation>;
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+        // Send a first identity `Operation` to see where we are.
+        messages.send(Operation::Add(0)).await?;
+
+        while let Some(status) = messages.recv().await {
+            // Reduce by two the gap to the target
+            let delta = self.target - status.to;
+            messages.send(Operation::Add(delta / 2)).await?;
+        }
+
+        Ok(())
+    }
+}
