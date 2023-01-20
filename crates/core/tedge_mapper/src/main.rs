@@ -90,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
         tracing::Level::TRACE
     } else {
         get_log_level(
-            "tedge_mapper",
+            "tedge-mapper",
             tedge_config_location.tedge_config_root_path.to_path_buf(),
         )?
     };

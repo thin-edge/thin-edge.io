@@ -82,11 +82,11 @@ level in `system.toml`
 
 The log level can be enabled for a `thin-edge.io` service as below
 
-For example for tedge_mapper:
+For example for tedge-mapper:
 
 ```shell
 
-sudo -u tedge -- tedge_mapper  --debug c8y
+sudo -u tedge -- tedge-mapper  --debug c8y
 
 ```
 > Note: In a similar way it can be set for all the `thin-edge.io` services.
@@ -99,10 +99,10 @@ The supported log levels are `info, warn, error, trace, debug`.
 
 ```shell
 [log]
-tedge_mapper = "trace"
-tedge_agent = "info"
-tedge_watchdog = "debug"
-c8y_log_plugin = "warn"
-c8y_configuration_plugin = "error"
+tedge-mapper = "trace"
+tedge-agent = "info"
+tedge-watchdog = "debug"
+c8y-log-plugin = "warn"
+c8y-configuration-plugin = "error"
 ```
 > Note: The log level strings are case insensitive
