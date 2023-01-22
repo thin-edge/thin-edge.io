@@ -304,7 +304,7 @@ The APT plugin is installed automatically. You can find the other plugins in the
 
 ```
 sudo tedge disconnect c8y
-sudo tedge connect C8Y
+sudo tedge connect c8y
 ```
 
 ## Adding new software into the software repository in Cumulocity IoT
