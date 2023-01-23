@@ -12,14 +12,14 @@ pub struct Calculator {
 }
 
 /// Input messages of the calculator service
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Operation {
     Add(i64),
     Multiply(i64),
 }
 
 /// Output messages of the calculator service
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Update {
     pub from: i64,
     pub to: i64,
@@ -81,8 +81,8 @@ impl Service for Calculator {
 
 /// An actor that send operations to a calculator service to reach a given target.
 pub struct Player {
-    name: String,
-    target: i64,
+    pub name: String,
+    pub target: i64,
 }
 
 #[async_trait]
@@ -102,6 +102,89 @@ impl Actor for Player {
             let delta = self.target - status.to;
             messages.send(Operation::Add(delta / 2)).await?;
         }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::examples::calculator::Calculator;
+    use crate::examples::calculator::Operation;
+    use crate::examples::calculator::Player;
+    use crate::examples::calculator::Update;
+    use crate::test_helpers::MessageBoxPortExt;
+    use crate::test_helpers::Probe;
+    use crate::test_helpers::ProbeEvent::Recv;
+    use crate::test_helpers::ProbeEvent::Send;
+    use crate::Actor;
+    use crate::Builder;
+    use crate::ChannelError;
+    use crate::MessageBoxPort;
+    use crate::ServiceActor;
+    use crate::ServiceMessageBoxBuilder;
+    use crate::SimpleMessageBoxBuilder;
+
+    #[tokio::test]
+    async fn observing_an_actor() -> Result<(), ChannelError> {
+        // Build the actor message boxes
+        let mut service_box_builder = ServiceMessageBoxBuilder::new("Calculator", 16);
+        let mut player_box_builder = SimpleMessageBoxBuilder::new("Player 1", 1);
+
+        // Connect the two actor message boxes interposing a probe.
+        let mut probe = Probe::new();
+        player_box_builder
+            .with_probe(&mut probe)
+            .connect_to(&mut service_box_builder, ());
+
+        // Spawn the actors
+        tokio::spawn(ServiceActor::new(Calculator::default()).run(service_box_builder.build()));
+        tokio::spawn(
+            Player {
+                name: "Player".to_string(),
+                target: 42,
+            }
+            .run(player_box_builder.build()),
+        );
+
+        // Observe the messages sent and received by the player.
+        assert_eq!(probe.observe().await, Some(Send(Operation::Add(0))));
+        assert_eq!(probe.observe().await, Some(Recv(Update { from: 0, to: 0 })));
+        assert_eq!(probe.observe().await, Some(Send(Operation::Add(21))));
+        assert_eq!(
+            probe.observe().await,
+            Some(Recv(Update { from: 0, to: 21 }))
+        );
+        assert_eq!(probe.observe().await, Some(Send(Operation::Add(10))));
+        assert_eq!(
+            probe.observe().await,
+            Some(Recv(Update { from: 21, to: 31 }))
+        );
+        assert_eq!(probe.observe().await, Some(Send(Operation::Add(5))));
+        assert_eq!(
+            probe.observe().await,
+            Some(Recv(Update { from: 31, to: 36 }))
+        );
+        assert_eq!(probe.observe().await, Some(Send(Operation::Add(3))));
+        assert_eq!(
+            probe.observe().await,
+            Some(Recv(Update { from: 36, to: 39 }))
+        );
+        assert_eq!(probe.observe().await, Some(Send(Operation::Add(1))));
+        assert_eq!(
+            probe.observe().await,
+            Some(Recv(Update { from: 39, to: 40 }))
+        );
+        assert_eq!(probe.observe().await, Some(Send(Operation::Add(1))));
+        assert_eq!(
+            probe.observe().await,
+            Some(Recv(Update { from: 40, to: 41 }))
+        );
+        assert_eq!(probe.observe().await, Some(Send(Operation::Add(0))));
+        assert_eq!(
+            probe.observe().await,
+            Some(Recv(Update { from: 41, to: 41 }))
+        );
 
         Ok(())
     }

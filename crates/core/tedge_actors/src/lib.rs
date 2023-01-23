@@ -20,7 +20,7 @@
 //! }
 //!
 //! /// Input messages of the calculator actor
-//! #[derive(Debug)]
+//! #[derive(Debug, Eq, PartialEq)]
 //! enum Operation {
 //!     Add(i64),
 //!     Multiply(i64),
@@ -312,6 +312,55 @@
 //! # }
 //! ```
 //!
+//! The previous example shown how to connect message boxes to an actor,
+//! so one can use these message boxes to simulate actor peers.
+//! However, it would be better to connect real peers
+//! and then observe how the network of actors is behaving.
+//!
+//! Here, we interpose a `Probe` between two actors to observe their interactions.
+//!
+//! ```
+//! # use tedge_actors::{Actor, Builder, ChannelError, MessageBoxPort, ServiceActor, ServiceMessageBoxBuilder, SimpleMessageBoxBuilder};
+//! # use tedge_actors::test_helpers::{MessageBoxPortExt, Probe, ProbeEvent};
+//! # use tedge_actors::test_helpers::ProbeEvent::{Recv, Send};
+//! # use crate::tedge_actors::examples::calculator::*;
+//! # #[tokio::main]
+//! # async fn main_test() -> Result<(),ChannelError> {
+//! #
+//! // Build the actor message boxes
+//! let mut service_box_builder = ServiceMessageBoxBuilder::new("Calculator", 16);
+//! let mut player_box_builder = SimpleMessageBoxBuilder::new("Player 1", 1);
+//!
+//! // Connect the two actor message boxes interposing a probe.
+//! let mut probe = Probe::new();
+//! player_box_builder.with_probe(&mut probe).connect_to(&mut service_box_builder, ());
+//!
+//! // Spawn the actors
+//! tokio::spawn(ServiceActor::new(Calculator::default()).run(service_box_builder.build()));
+//! tokio::spawn(Player { name: "Player".to_string(), target: 42}.run(player_box_builder.build()));
+//!
+//! // Observe the messages sent and received by the player.
+//! assert_eq!(probe.observe().await, Some(Send(Operation::Add(0))));
+//! assert_eq!(probe.observe().await, Some(Recv(Update{from:0, to:0})));
+//! assert_eq!(probe.observe().await, Some(Send(Operation::Add(21))));
+//! assert_eq!(probe.observe().await, Some(Recv(Update{from:0, to:21})));
+//! assert_eq!(probe.observe().await, Some(Send(Operation::Add(10))));
+//! assert_eq!(probe.observe().await, Some(Recv(Update{from:21, to:31})));
+//! assert_eq!(probe.observe().await, Some(Send(Operation::Add(5))));
+//! assert_eq!(probe.observe().await, Some(Recv(Update{from:31, to:36})));
+//! assert_eq!(probe.observe().await, Some(Send(Operation::Add(3))));
+//! assert_eq!(probe.observe().await, Some(Recv(Update{from:36, to:39})));
+//! assert_eq!(probe.observe().await, Some(Send(Operation::Add(1))));
+//! assert_eq!(probe.observe().await, Some(Recv(Update{from:39, to:40})));
+//! assert_eq!(probe.observe().await, Some(Send(Operation::Add(1))));
+//! assert_eq!(probe.observe().await, Some(Recv(Update{from:40, to:41})));
+//! assert_eq!(probe.observe().await, Some(Send(Operation::Add(0))));
+//! assert_eq!(probe.observe().await, Some(Recv(Update{from:41, to:41})));
+//! #
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! ## Using actor builders
 //!
 //! TODO
@@ -360,3 +409,5 @@ pub mod tests;
 // FIXME: how to have these examples only available when testing the doc comments?
 // #[cfg(test)]
 pub mod examples;
+
+pub mod test_helpers;
