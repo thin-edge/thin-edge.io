@@ -1,12 +1,12 @@
 
 # thin-edge Data Model
 
-The **data model** identifies all data send or received from/to **thin-edge** and it's components, to interact with those.
+The **data model** identifies all data send or received from/to **thin-edge** and its components, to interact with those.
 For all data it defines format and explains behaviour.
 
 ## Telemetry Data
 
-**Telemetry Data** are **measurements**, **events** and **alarms**. Each is defined by a set of data-elements and has it specific behaviour.
+**Telemetry Data** consists of **measurements**, **events** and **alarms**. Each is defined by a set of data-elements, each with specific behaviour.
 
 ### Measurements
   * **measurements** carry values from physical **Sensors**[^1] or a device's **Domain Application**[^1];
@@ -21,7 +21,7 @@ For all data it defines format and explains behaviour.
     - TODO: not yet supported: source
   * **behaviour of a measurement:**
     - thin-edge does not store any historical sampled values for measurements
-    - there is no initialization-value for measurements; i.E. a measurement is not visible on thin-edge before the 1st sample was sent to thin-edge
+    - there is no initialization value for measurements; i.e. a measurement is not visible on thin-edge before the 1st sample was sent to thin-edge
 
 ### Events
   * **events** are notifications that something happened on a device's environment or software system;
@@ -46,16 +46,16 @@ For all data it defines format and explains behaviour.
       - must be UTF-8 encoded
     - severity, that is one of  `critical`, `major`, `minor` or `warning`
     - `timestamp` (conform to ISO 8601), that indicates when the alarm has occured
-    - an alarm can optionally contain any custom-specific extra-information
+    - an alarm can optionally contain additional custom information
   * **behaviour of an alarm:**
     - thin-edge does not store any historical occurrences for alarms
-    - **alarms** are stateful; i.E. once raised, an **alarm** is active until it was explicitely cleared by the device's software or the cloud
+    - **alarms** are stateful; i.e. once raised, an **alarm** is active until it was explicitly cleared by the device's software or the cloud
 
 [^1]: details see "Domain Model" appendix [Device Domain](./domain-model.md#device-overview) -->
 
 ## Use of MQTT
 
-**thin-edge** expects the MQTT broker [mosquitto](https://mosquitto.org/) being installed on the device.
+**thin-edge** expects the MQTT broker [mosquitto](https://mosquitto.org/) to be available on the device.
 **thin-edge** uses **mosquitto** to consume and provide telemetry data. All telemetry data are reflected with specific MQTT topics and payload in JSON format.
 
 **thin-edge** assumes **mosquitto** is configured in a secure manner, to avoid any inappropriate access to **thin-edge** topics and payload.
