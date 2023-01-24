@@ -16,7 +16,8 @@ For all data it defines format and explains behaviour.
     - `samples`, carry a single value or set of values, all taken at a single point in time
       - `values` can be a mix of numbers, strings or booleans
         - optionally each value can have a `type name`
-      - `timestamp` (conform to ISO 8601), that indicates when values were sampled
+      - `timestamp` (conform to ISO 8601), that indicates when values were sampled;
+         when not provided, thin-edge.io uses the current system time as the time of the sample
     - TODO: not yet supported: list of units per sample's values
     - TODO: not yet supported: source
   * **behaviour of a measurement:**
@@ -31,7 +32,8 @@ For all data it defines format and explains behaviour.
     - `type name`, a string that identifies the event uniquely in context of a device
     - `event text`, that carries a human readable event-message
       - must be UTF-8 encoded
-    - `timestamp` (conform to ISO 8601), that indicates when the event has occured
+    - `timestamp` (conform to ISO 8601), that indicates when the event has occured;
+      when not provided, thin-edge.io uses the current system time as the time of the event
     - an event can optionally contain any custom-specific extra-information
     - TODO: not yet supported: attachements
   * **behaviour of an event:**
@@ -45,7 +47,8 @@ For all data it defines format and explains behaviour.
     - alarm text, that carries an alarm message
       - must be UTF-8 encoded
     - severity, that is one of  `critical`, `major`, `minor` or `warning`
-    - `timestamp` (conform to ISO 8601), that indicates when the alarm has occured
+    - `timestamp` (conform to ISO 8601), that indicates when the alarm has occured;
+      when not provided, thin-edge.io uses the current system time as the time of the alarm
     - an alarm can optionally contain additional custom information
   * **behaviour of an alarm:**
     - thin-edge does not store any historical occurrences for alarms
