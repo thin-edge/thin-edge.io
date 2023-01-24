@@ -58,7 +58,8 @@ use super::alarm_converter::AlarmConverter;
 use super::error::CumulocityMapperError;
 use super::fragments::C8yAgentFragment;
 use super::fragments::C8yDeviceDataFragment;
-use c8y_api::smartrest::message::get_last_line_for_smartrest;
+use c8y_api::smartrest::message::collect_smartrest_messages;
+use c8y_api::smartrest::message::get_failure_reason_for_smartrest;
 use c8y_api::smartrest::message::get_smartrest_device_id;
 use c8y_api::smartrest::message::get_smartrest_template_id;
 use c8y_api::smartrest::message::sanitize_for_smartrest;
@@ -493,9 +494,9 @@ async fn parse_c8y_topics(
     mqtt_publisher: &mpsc::UnboundedSender<Message>,
 ) -> Result<Vec<Message>, ConversionError> {
     let mut output: Vec<Message> = Vec::new();
-    for smartrest_message in message.payload_str()?.split('\n') {
+    for smartrest_message in collect_smartrest_messages(message.payload_str()?) {
         match process_smartrest(
-            smartrest_message,
+            smartrest_message.as_str(),
             operations,
             http_proxy,
             operation_logs,
@@ -762,11 +763,11 @@ async fn execute_operation(
                                     })
                         }
                         _ => {
-                            let last_line = get_last_line_for_smartrest(
+                            let failure_reason = get_failure_reason_for_smartrest(
                                 output.stderr,
                                 MAX_PAYLOAD_LIMIT_IN_BYTES,
                             );
-                            let failed_str = format!("502,{op_name},\"{last_line}\"");
+                            let failed_str = format!("502,{op_name},\"{failure_reason}\"");
                             mqtt_publisher
                                 .send(Message::new(&topic, failed_str.as_str()))
                                 .await
