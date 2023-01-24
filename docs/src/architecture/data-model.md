@@ -18,8 +18,6 @@ For all data it defines format and explains behaviour.
         - optionally each value can have a `type name`
       - `timestamp` (conform to ISO 8601), that indicates when values were sampled;
          when not provided, thin-edge.io uses the current system time as the time of the sample
-    - TODO: not yet supported: list of units per sample's values
-    - TODO: not yet supported: source
   * **behaviour of a measurement:**
     - thin-edge does not store any historical sampled values for measurements
     - there is no initialization value for measurements; i.e. a measurement is not visible on thin-edge before the 1st sample was sent to thin-edge
@@ -35,7 +33,6 @@ For all data it defines format and explains behaviour.
     - `timestamp` (conform to ISO 8601), that indicates when the event has occured;
       when not provided, thin-edge.io uses the current system time as the time of the event
     - an event can optionally contain any custom-specific extra-information
-    - TODO: not yet supported: attachements
   * **behaviour of an event:**
     - thin-edge does not store any historical occurrences for events
 
