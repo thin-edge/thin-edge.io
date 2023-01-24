@@ -30,7 +30,7 @@ For all data it defines format and explains behaviour.
     - `type name`, a string that identifies the event uniquely in context of a device
     - `event text`, that carries a human readable event-message
       - must be UTF-8 encoded
-    - `timestamp` (conform to ISO 8601), that indicates when the event has occured;
+    - `timestamp` (conform to ISO 8601), that indicates when the event has occurred;
       when not provided, thin-edge.io uses the current system time as the time of the event
     - an event can optionally contain any custom-specific extra-information
   * **behaviour of an event:**
@@ -44,7 +44,7 @@ For all data it defines format and explains behaviour.
     - alarm text, that carries an alarm message
       - must be UTF-8 encoded
     - severity, that is one of  `critical`, `major`, `minor` or `warning`
-    - `timestamp` (conform to ISO 8601), that indicates when the alarm has occured;
+    - `timestamp` (conform to ISO 8601), that indicates when the alarm has occurred;
       when not provided, thin-edge.io uses the current system time as the time of the alarm
     - an alarm can optionally contain additional custom information
   * **behaviour of an alarm:**
@@ -63,9 +63,9 @@ Any malicious access to the broker can hazard **thin-edge** and all connected de
 
 ### Telemetry Data
 
-All telemetry data (**Measurments**, **Events**, **Alarms**) are reflected with MQTT topics, where each has it's specific subtopic (e.g. `tedge/measurements` or `tedge/events`).
+All telemetry data (**Measurements**, **Events**, **Alarms**) are reflected with MQTT topics, where each has it's specific subtopic (e.g. `tedge/measurements` or `tedge/events`).
 
-  * each provider of a **measurement**, **event** or **alarm** sends the occuring data to **thin-edge's** MQTT broker
+  * each provider of a **measurement**, **event** or **alarm** sends the occurring data to **thin-edge's** MQTT broker
     * a provider can be the domain application[^1], other SW components / 3rd parties
   * all processes (e.g. the domain application[^1], other SW components / 3rd parties) on the main-device and all child-devices can consume those telemetry data from the MQTT broker
   * the cloud mapper on the **main-device** picks-up _all_ telemetry data from the MQTT broker and transfers those to the cloud
