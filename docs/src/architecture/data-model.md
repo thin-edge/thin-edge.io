@@ -14,7 +14,7 @@ For all data it defines format and explains behaviour.
   * **elements of a measurement:**
     - `type name`, a string that identifies the measurement uniquely in context of a device
     - `samples`, carry a single value or set of values, all taken at a single point in time
-      - `values` can be a mix of numbers, strings or booleans
+      - `values` must be an integer or floating point number
         - optionally each value can have a `type name`
       - `timestamp` (conform to ISO 8601), that indicates when values were sampled;
          when not provided, thin-edge.io uses the current system time as the time of the sample
@@ -90,10 +90,12 @@ The communication diagram below illustrates that behaviour.
      "time": /* timestamp in ISO 8601 format */
    }
 ```
+  * format of _value_: must be an integer or floating point number (e.g. `1`, `20.34` or `1.0E+2`)
+
   * payload example:
 ```javascript
    {
-     "temperature": 25,
+     "temperature": 25.3,
      "pressure": 98,
      "time": "2020-10-15T05:30:47+00:00",
    }
