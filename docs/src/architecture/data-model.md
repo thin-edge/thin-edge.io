@@ -86,7 +86,7 @@ The communication diagram below illustrates that behaviour.
      "<value1_name>": /* <value1> */,
      "<value2_name>": /* <value2> */,
      /* ... */
-     
+
      "time": /* timestamp in ISO 8601 format */
    }
 ```
@@ -149,4 +149,26 @@ The communication diagram below illustrates that behaviour.
                       as the alarm is raised.
                       When a raised alarm is gone again, an empty retain message
                       shall be published to clear the alarm message in the broker.
+
+### Telemetry Data for Child-Devices
+
+All telemetry data provided to the MQTT bus are associated by **thin-edge** and all consumers with the thin-edge **main-device** or some **child-device** (see more details about **child-devices** in the [domain model](./domain-model.md#child-devices)).
+
+Therefore the `child-id` of the **child-device** is can be appended to the MQTT topic, if the message is meant for a **child-device**;
+or no `child-id` is appended, if the message is meant for the **main-device**.
+
+MQTT topics for the **main-device**:
+```
+tedge/measurements
+tedge/events/<event-type>
+tedge/alarms/<severity>/<alarm-type>
+```
+
+MQTT topics for a **child-device**, including the **child-device's** specific `child-id`:
+```
+tedge/measurements/<child-id>
+tedge/events/<event-type>/<child-id>
+tedge/alarms/<severity>/<alarm-type>/<child-id>
+```
+
 
