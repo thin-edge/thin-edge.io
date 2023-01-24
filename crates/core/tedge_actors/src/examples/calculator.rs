@@ -148,43 +148,22 @@ mod tests {
         );
 
         // Observe the messages sent and received by the player.
-        assert_eq!(probe.observe().await, Some(Send(Operation::Add(0))));
-        assert_eq!(probe.observe().await, Some(Recv(Update { from: 0, to: 0 })));
-        assert_eq!(probe.observe().await, Some(Send(Operation::Add(21))));
-        assert_eq!(
-            probe.observe().await,
-            Some(Recv(Update { from: 0, to: 21 }))
-        );
-        assert_eq!(probe.observe().await, Some(Send(Operation::Add(10))));
-        assert_eq!(
-            probe.observe().await,
-            Some(Recv(Update { from: 21, to: 31 }))
-        );
-        assert_eq!(probe.observe().await, Some(Send(Operation::Add(5))));
-        assert_eq!(
-            probe.observe().await,
-            Some(Recv(Update { from: 31, to: 36 }))
-        );
-        assert_eq!(probe.observe().await, Some(Send(Operation::Add(3))));
-        assert_eq!(
-            probe.observe().await,
-            Some(Recv(Update { from: 36, to: 39 }))
-        );
-        assert_eq!(probe.observe().await, Some(Send(Operation::Add(1))));
-        assert_eq!(
-            probe.observe().await,
-            Some(Recv(Update { from: 39, to: 40 }))
-        );
-        assert_eq!(probe.observe().await, Some(Send(Operation::Add(1))));
-        assert_eq!(
-            probe.observe().await,
-            Some(Recv(Update { from: 40, to: 41 }))
-        );
-        assert_eq!(probe.observe().await, Some(Send(Operation::Add(0))));
-        assert_eq!(
-            probe.observe().await,
-            Some(Recv(Update { from: 41, to: 41 }))
-        );
+        assert_eq!(probe.observe().await, Send(Operation::Add(0)));
+        assert_eq!(probe.observe().await, Recv(Update { from: 0, to: 0 }));
+        assert_eq!(probe.observe().await, Send(Operation::Add(21)));
+        assert_eq!(probe.observe().await, Recv(Update { from: 0, to: 21 }));
+        assert_eq!(probe.observe().await, Send(Operation::Add(10)));
+        assert_eq!(probe.observe().await, Recv(Update { from: 21, to: 31 }));
+        assert_eq!(probe.observe().await, Send(Operation::Add(5)));
+        assert_eq!(probe.observe().await, Recv(Update { from: 31, to: 36 }));
+        assert_eq!(probe.observe().await, Send(Operation::Add(3)));
+        assert_eq!(probe.observe().await, Recv(Update { from: 36, to: 39 }));
+        assert_eq!(probe.observe().await, Send(Operation::Add(1)));
+        assert_eq!(probe.observe().await, Recv(Update { from: 39, to: 40 }));
+        assert_eq!(probe.observe().await, Send(Operation::Add(1)));
+        assert_eq!(probe.observe().await, Recv(Update { from: 40, to: 41 }));
+        assert_eq!(probe.observe().await, Send(Operation::Add(0)));
+        assert_eq!(probe.observe().await, Recv(Update { from: 41, to: 41 }));
 
         Ok(())
     }
