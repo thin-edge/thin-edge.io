@@ -1,4 +1,3 @@
-use crate::c8y_http_proxy::actor::C8YHttpProxyActor;
 use crate::c8y_http_proxy::actor::C8YHttpProxyMessageBox;
 use crate::c8y_http_proxy::credentials::JwtResult;
 use crate::c8y_http_proxy::credentials::JwtRetriever;
@@ -87,7 +86,7 @@ impl C8YHttpProxyBuilder {
 #[async_trait]
 impl ActorBuilder for C8YHttpProxyBuilder {
     async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
-        let actor = C8YHttpProxyActor::new(self.config);
+        let actor = self.config;
         let message_box = C8YHttpProxyMessageBox {
             clients: self.clients.build(),
             http: self.http,
