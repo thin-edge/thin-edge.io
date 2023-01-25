@@ -5,6 +5,7 @@ mod error;
 use crate::c8y_http_proxy::handle::C8YHttpProxy;
 use crate::c8y_http_proxy::C8YConnectionBuilder;
 use crate::file_system_ext::FsWatchActorBuilder;
+use crate::file_system_ext::FsWatchEvent;
 use actor::*;
 use async_trait::async_trait;
 pub use config::*;
@@ -12,8 +13,10 @@ use tedge_actors::mpsc;
 use tedge_actors::ActorBuilder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
-use tedge_actors::MessageBoxConnector;
 use tedge_actors::MessageBoxPort;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
 use tedge_actors::Sender;
@@ -53,7 +56,9 @@ impl LogManagerBuilder {
     /// Connect this config manager instance to some mqtt connection provider
     pub fn with_mqtt_connection(&mut self, mqtt: &mut MqttActorBuilder) -> Result<(), LinkError> {
         let subscriptions = vec!["c8y/s/ds"].try_into().unwrap();
-        mqtt.connect_with(self, subscriptions);
+        //Register peers symmetrically here
+        mqtt.register_peer(subscriptions, self.events_sender.clone().into());
+        self.register_peer(NoConfig {}, mqtt.get_sender());
         Ok(())
     }
 
@@ -62,7 +67,7 @@ impl LogManagerBuilder {
         fs_builder: &mut FsWatchActorBuilder,
     ) -> Result<(), LinkError> {
         let config_dir = self.config.config_dir.clone();
-        fs_builder.new_watcher(config_dir, self.events_sender.clone().into());
+        fs_builder.register_peer(config_dir, self.events_sender.clone().into());
 
         Ok(())
     }
@@ -75,6 +80,24 @@ impl MessageBoxPort<MqttMessage, MqttMessage> for LogManagerBuilder {
 
     fn get_response_sender(&self) -> DynSender<MqttMessage> {
         self.events_sender.sender_clone()
+    }
+}
+
+impl MessageSource<MqttMessage, NoConfig> for LogManagerBuilder {
+    fn register_peer(&mut self, _config: NoConfig, sender: DynSender<MqttMessage>) {
+        self.mqtt_publisher = Some(sender);
+    }
+}
+
+impl MessageSink<MqttMessage> for LogManagerBuilder {
+    fn get_sender(&mut self) -> DynSender<MqttMessage> {
+        self.events_sender.clone().into()
+    }
+}
+
+impl MessageSink<FsWatchEvent> for LogManagerBuilder {
+    fn get_sender(&mut self) -> DynSender<FsWatchEvent> {
+        self.events_sender.clone().into()
     }
 }
 

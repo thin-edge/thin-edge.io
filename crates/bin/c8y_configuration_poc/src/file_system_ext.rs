@@ -5,6 +5,7 @@ use tedge_actors::ActorBuilder;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
+use tedge_actors::MessageSource;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
 use tedge_utils::notify::FsEvent;
@@ -82,6 +83,12 @@ impl FsWatchActorBuilder {
 impl FsWatchActorBuilder {
     pub fn new_watcher(&mut self, watch_path: PathBuf, peer_sender: DynSender<FsWatchEvent>) {
         self.watch_dirs.push((watch_path, peer_sender));
+    }
+}
+
+impl MessageSource<FsWatchEvent, PathBuf> for FsWatchActorBuilder {
+    fn register_peer(&mut self, config: PathBuf, sender: DynSender<FsWatchEvent>) {
+        self.watch_dirs.push((config, sender));
     }
 }
 

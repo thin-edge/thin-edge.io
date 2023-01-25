@@ -16,6 +16,8 @@ use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
 use tedge_actors::MessageBoxConnector;
 use tedge_actors::MessageBoxPort;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
 
@@ -61,6 +63,18 @@ impl MessageBoxConnector<MqttMessage, MqttMessage, TopicFilter> for MqttActorBui
         self.subscriber_addresses
             .push((subscriptions, peer.get_response_sender()));
         peer.set_request_sender(self.publish_channel.0.clone().into())
+    }
+}
+
+impl MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder {
+    fn register_peer(&mut self, subscriptions: TopicFilter, sender: DynSender<MqttMessage>) {
+        self.subscriber_addresses.push((subscriptions, sender));
+    }
+}
+
+impl MessageSink<MqttMessage> for MqttActorBuilder {
+    fn get_sender(&mut self) -> DynSender<MqttMessage> {
+        self.publish_channel.0.clone().into()
     }
 }
 

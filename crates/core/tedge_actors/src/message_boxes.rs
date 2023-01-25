@@ -70,6 +70,19 @@ pub trait MessageBox: 'static + Sized + Send + Sync {
     fn logging_is_on(&self) -> bool;
 }
 
+// A MessageBox must implement this trait for every message type that can be sent to it
+pub trait MessageSink<M: Message> {
+    // Return the sender that can be used by peers to send messages to this actor
+    fn get_sender(&mut self) -> DynSender<M>;
+}
+
+pub struct NoConfig {}
+// A MessageBox must implement this trait for every message type that it can receive from its peers
+pub trait MessageSource<M: Message, Config> {
+    // The message will be sent to the peer using the provided `sender`
+    fn register_peer(&mut self, config: Config, sender: DynSender<M>);
+}
+
 /// The basic message box
 pub struct SimpleMessageBox<Input, Output> {
     name: String,
