@@ -13,8 +13,8 @@ use tedge_actors::ActorBuilder;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::ConcurrentServiceActor;
-use tedge_actors::MessageBoxConnector;
-use tedge_actors::MessageBoxPort;
+use tedge_actors::MessageBoxSocket;
+use tedge_actors::MessageBoxPlug;
 use tedge_actors::NoConfig;
 use tedge_actors::RequestResponseHandler;
 use tedge_actors::RuntimeError;
@@ -22,7 +22,7 @@ use tedge_actors::RuntimeHandle;
 use tedge_actors::ServiceMessageBoxBuilder;
 
 pub type HttpHandle = RequestResponseHandler<HttpRequest, HttpResult>;
-pub trait HttpConnectionBuilder: MessageBoxConnector<HttpRequest, HttpResult, NoConfig> {}
+pub trait HttpConnectionBuilder: MessageBoxSocket<HttpRequest, HttpResult, NoConfig> {}
 impl HttpConnectionBuilder for HttpActorBuilder {}
 
 pub struct HttpActorBuilder {
@@ -56,10 +56,10 @@ impl ActorBuilder for HttpActorBuilder {
     }
 }
 
-impl MessageBoxConnector<HttpRequest, HttpResult, NoConfig> for HttpActorBuilder {
+impl MessageBoxSocket<HttpRequest, HttpResult, NoConfig> for HttpActorBuilder {
     fn connect_with(
         &mut self,
-        peer: &mut impl MessageBoxPort<HttpRequest, HttpResult>,
+        peer: &mut impl MessageBoxPlug<HttpRequest, HttpResult>,
         config: NoConfig,
     ) {
         self.box_builder.connect_with(peer, config)

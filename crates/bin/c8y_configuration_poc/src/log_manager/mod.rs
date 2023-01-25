@@ -13,7 +13,7 @@ use tedge_actors::mpsc;
 use tedge_actors::ActorBuilder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
-use tedge_actors::MessageBoxPort;
+use tedge_actors::MessageBoxPlug;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
@@ -73,7 +73,7 @@ impl LogManagerBuilder {
     }
 }
 
-impl MessageBoxPort<MqttMessage, MqttMessage> for LogManagerBuilder {
+impl MessageBoxPlug<MqttMessage, MqttMessage> for LogManagerBuilder {
     fn set_request_sender(&mut self, mqtt_publisher: DynSender<MqttMessage>) {
         self.mqtt_publisher = Some(mqtt_publisher);
     }

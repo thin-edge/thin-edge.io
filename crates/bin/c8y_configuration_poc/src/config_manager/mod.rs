@@ -17,8 +17,8 @@ use tedge_actors::mpsc;
 use tedge_actors::ActorBuilder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
-use tedge_actors::MessageBoxConnector;
-use tedge_actors::MessageBoxPort;
+use tedge_actors::MessageBoxSocket;
+use tedge_actors::MessageBoxPlug;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
@@ -94,7 +94,7 @@ impl ConfigManagerBuilder {
     }
 }
 
-impl MessageBoxPort<C8YRestRequest, C8YRestResult> for ConfigManagerBuilder {
+impl MessageBoxPlug<C8YRestRequest, C8YRestResult> for ConfigManagerBuilder {
     fn set_request_sender(&mut self, request_sender: DynSender<C8YRestRequest>) {
         self.http_requests_sender = Some(request_sender)
     }
@@ -104,7 +104,7 @@ impl MessageBoxPort<C8YRestRequest, C8YRestResult> for ConfigManagerBuilder {
     }
 }
 
-impl MessageBoxPort<MqttMessage, MqttMessage> for ConfigManagerBuilder {
+impl MessageBoxPlug<MqttMessage, MqttMessage> for ConfigManagerBuilder {
     fn set_request_sender(&mut self, mqtt_publisher: DynSender<MqttMessage>) {
         self.mqtt_publisher = Some(mqtt_publisher);
     }

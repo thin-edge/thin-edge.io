@@ -112,14 +112,14 @@ mod tests {
     use crate::examples::calculator::Operation;
     use crate::examples::calculator::Player;
     use crate::examples::calculator::Update;
-    use crate::test_helpers::MessageBoxPortExt;
+    use crate::test_helpers::MessageBoxPlugExt;
     use crate::test_helpers::Probe;
     use crate::test_helpers::ProbeEvent::Recv;
     use crate::test_helpers::ProbeEvent::Send;
     use crate::Actor;
     use crate::Builder;
     use crate::ChannelError;
-    use crate::MessageBoxPort;
+    use crate::MessageBoxPlug;
     use crate::NoConfig;
     use crate::ServiceActor;
     use crate::ServiceMessageBoxBuilder;

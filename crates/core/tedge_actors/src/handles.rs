@@ -2,8 +2,8 @@ use crate::Builder;
 use crate::ChannelError;
 use crate::Message;
 use crate::MessageBox;
-use crate::MessageBoxConnector;
-use crate::MessageBoxPort;
+use crate::MessageBoxSocket;
+use crate::MessageBoxPlug;
 use crate::SimpleMessageBox;
 use crate::SimpleMessageBoxBuilder;
 
@@ -18,7 +18,7 @@ impl<Request: Message, Response: Message> RequestResponseHandler<Request, Respon
     /// Create a new `RequestResponseHandler` connected to the service with the given config.
     pub fn new<Config>(
         client_name: &str,
-        service: &mut impl MessageBoxConnector<Request, Response, Config>,
+        service: &mut impl MessageBoxSocket<Request, Response, Config>,
         config: Config,
     ) -> Self {
         let capacity = 1; // At most one response is ever expected

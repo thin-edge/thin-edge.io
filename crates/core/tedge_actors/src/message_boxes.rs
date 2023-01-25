@@ -2,7 +2,7 @@ use crate::Builder;
 use crate::ChannelError;
 use crate::DynSender;
 use crate::Message;
-use crate::MessageBoxConnector;
+use crate::MessageBoxSocket;
 use crate::NoConfig;
 use crate::SimpleMessageBoxBuilder;
 use futures::channel::mpsc;

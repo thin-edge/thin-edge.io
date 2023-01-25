@@ -43,13 +43,13 @@ pub trait Builder<T>: Sized {
 pub struct NoConfig;
 
 /// A trait to connect a message box under-construction to peer messages boxes
-pub trait MessageBoxConnector<Request: Message, Response: Message, Config> {
+pub trait MessageBoxSocket<Request: Message, Response: Message, Config> {
     /// Connect a peer message box to the message box under construction
-    fn connect_with(&mut self, peer: &mut impl MessageBoxPort<Request, Response>, config: Config);
+    fn connect_with(&mut self, peer: &mut impl MessageBoxPlug<Request, Response>, config: Config);
 }
 
 /// A connection port to connect a message box under-connection to another box
-pub trait MessageBoxPort<Request: Message, Response: Message> {
+pub trait MessageBoxPlug<Request: Message, Response: Message> {
     /// Set the sender to be used by this actor's box to send requests
     fn set_request_sender(&mut self, request_sender: DynSender<Request>);
 
@@ -59,7 +59,7 @@ pub trait MessageBoxPort<Request: Message, Response: Message> {
     /// Connect this client message box to the service message box
     fn connect_to<Config>(
         &mut self,
-        service: &mut impl MessageBoxConnector<Request, Response, Config>,
+        service: &mut impl MessageBoxSocket<Request, Response, Config>,
         config: Config,
     ) where
         Self: Sized,
@@ -72,7 +72,7 @@ pub trait MessageBoxPort<Request: Message, Response: Message> {
     /// Return the updated client message box.
     fn connected_to<Config>(
         mut self,
-        service: &mut impl MessageBoxConnector<Request, Response, Config>,
+        service: &mut impl MessageBoxSocket<Request, Response, Config>,
         config: Config,
     ) -> Self
     where
@@ -104,16 +104,16 @@ impl<I: Message, O: Message> SimpleMessageBoxBuilder<I, O> {
     }
 }
 
-impl<Req: Message, Res: Message> MessageBoxConnector<Req, Res, NoConfig>
+impl<Req: Message, Res: Message> MessageBoxSocket<Req, Res, NoConfig>
     for SimpleMessageBoxBuilder<Req, Res>
 {
-    fn connect_with(&mut self, peer: &mut impl MessageBoxPort<Req, Res>, _config: NoConfig) {
+    fn connect_with(&mut self, peer: &mut impl MessageBoxPlug<Req, Res>, _config: NoConfig) {
         self.output_sender = peer.get_response_sender();
         peer.set_request_sender(self.input_sender.sender_clone());
     }
 }
 
-impl<Req: Message, Res: Message> MessageBoxPort<Req, Res> for SimpleMessageBoxBuilder<Res, Req> {
+impl<Req: Message, Res: Message> MessageBoxPlug<Req, Res> for SimpleMessageBoxBuilder<Res, Req> {
     fn set_request_sender(&mut self, output_sender: DynSender<Req>) {
         self.output_sender = output_sender;
     }
@@ -183,10 +183,10 @@ impl<Request: Message, Response: Message> ServiceMessageBoxBuilder<Request, Resp
     }
 }
 
-impl<Req: Message, Res: Message> MessageBoxConnector<Req, Res, NoConfig>
+impl<Req: Message, Res: Message> MessageBoxSocket<Req, Res, NoConfig>
     for ServiceMessageBoxBuilder<Req, Res>
 {
-    fn connect_with(&mut self, peer: &mut impl MessageBoxPort<Req, Res>, _config: NoConfig) {
+    fn connect_with(&mut self, peer: &mut impl MessageBoxPlug<Req, Res>, _config: NoConfig) {
         let client_id = self.clients.len();
         let request_sender = KeyedSender::new_sender(client_id, self.request_sender.clone());
 

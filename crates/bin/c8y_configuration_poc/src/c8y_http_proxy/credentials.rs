@@ -10,8 +10,8 @@ use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::ActorBuilder;
 use tedge_actors::Builder;
-use tedge_actors::MessageBoxConnector;
-use tedge_actors::MessageBoxPort;
+use tedge_actors::MessageBoxSocket;
+use tedge_actors::MessageBoxPlug;
 use tedge_actors::NoConfig;
 use tedge_actors::RequestResponseHandler;
 use tedge_actors::RuntimeError;
@@ -119,11 +119,11 @@ impl<S: Service<Request = JwtRequest, Response = JwtResult>> ActorBuilder
 }
 
 impl<S: Service<Request = JwtRequest, Response = JwtResult>>
-    MessageBoxConnector<JwtRequest, JwtResult, NoConfig> for JwtRetrieverBuilder<S>
+    MessageBoxSocket<JwtRequest, JwtResult, NoConfig> for JwtRetrieverBuilder<S>
 {
     fn connect_with(
         &mut self,
-        peer: &mut impl MessageBoxPort<JwtRequest, JwtResult>,
+        peer: &mut impl MessageBoxPlug<JwtRequest, JwtResult>,
         config: NoConfig,
     ) {
         self.message_box.connect_with(peer, config)

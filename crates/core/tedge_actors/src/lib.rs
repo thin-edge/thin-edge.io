@@ -257,7 +257,7 @@
 //! to establish appropriate connections between the actor message boxes.
 //!
 //! ```
-//! # use tedge_actors::{Actor, Builder, ChannelError, MessageBox, MessageBoxPort, NoConfig, ServiceActor, ServiceMessageBox, ServiceMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder};
+//! # use tedge_actors::{Actor, Builder, ChannelError, MessageBox, MessageBoxPlug, NoConfig, ServiceActor, ServiceMessageBox, ServiceMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder};
 //! # use crate::tedge_actors::examples::calculator::*;
 //! # #[tokio::main]
 //! # async fn main_test() -> Result<(),ChannelError> {
@@ -320,8 +320,8 @@
 //! Here, we interpose a `Probe` between two actors to observe their interactions.
 //!
 //! ```
-//! # use tedge_actors::{Actor, Builder, ChannelError, MessageBoxPort, NoConfig, ServiceActor, ServiceMessageBoxBuilder, SimpleMessageBoxBuilder};
-//! # use tedge_actors::test_helpers::{MessageBoxPortExt, Probe, ProbeEvent};
+//! # use tedge_actors::{Actor, Builder, ChannelError, MessageBoxPlug, NoConfig, ServiceActor, ServiceMessageBoxBuilder, SimpleMessageBoxBuilder};
+//! # use tedge_actors::test_helpers::{MessageBoxPlugExt, Probe, ProbeEvent};
 //! # use tedge_actors::test_helpers::ProbeEvent::{Recv, Send};
 //! # use crate::tedge_actors::examples::calculator::*;
 //! # #[tokio::main]

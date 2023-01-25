@@ -14,8 +14,8 @@ use tedge_actors::ActorBuilder;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
-use tedge_actors::MessageBoxConnector;
-use tedge_actors::MessageBoxPort;
+use tedge_actors::MessageBoxSocket;
+use tedge_actors::MessageBoxPlug;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::RuntimeError;
@@ -54,10 +54,10 @@ impl MqttActorBuilder {
     }
 }
 
-impl MessageBoxConnector<MqttMessage, MqttMessage, TopicFilter> for MqttActorBuilder {
+impl MessageBoxSocket<MqttMessage, MqttMessage, TopicFilter> for MqttActorBuilder {
     fn connect_with(
         &mut self,
-        peer: &mut impl MessageBoxPort<MqttMessage, MqttMessage>,
+        peer: &mut impl MessageBoxPlug<MqttMessage, MqttMessage>,
         subscriptions: TopicFilter,
     ) {
         self.subscriber_addresses

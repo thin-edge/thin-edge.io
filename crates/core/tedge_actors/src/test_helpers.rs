@@ -1,7 +1,7 @@
 use crate::mpsc;
 use crate::DynSender;
 use crate::Message;
-use crate::MessageBoxPort;
+use crate::MessageBoxPlug;
 use crate::NullSender;
 use crate::Sender;
 use crate::SinkExt;
@@ -120,16 +120,16 @@ impl<I: MessagePlus, O: MessagePlus> Probe<I, O> {
     }
 }
 
-pub trait MessageBoxPortExt<Request: MessagePlus, Response: MessagePlus> {
+pub trait MessageBoxPlugExt<Request: MessagePlus, Response: MessagePlus> {
     fn with_probe<'a>(
         &'a mut self,
         probe: &'a mut Probe<Response, Request>,
     ) -> &'a mut Probe<Response, Request>;
 }
 
-impl<T, Request: MessagePlus, Response: MessagePlus> MessageBoxPortExt<Request, Response> for T
+impl<T, Request: MessagePlus, Response: MessagePlus> MessageBoxPlugExt<Request, Response> for T
 where
-    T: MessageBoxPort<Request, Response>,
+    T: MessageBoxPlug<Request, Response>,
 {
     fn with_probe<'a>(
         &'a mut self,
@@ -141,7 +141,7 @@ where
     }
 }
 
-impl<I: MessagePlus, O: MessagePlus> MessageBoxPort<O, I> for Probe<I, O> {
+impl<I: MessagePlus, O: MessagePlus> MessageBoxPlug<O, I> for Probe<I, O> {
     fn set_request_sender(&mut self, request_sender: DynSender<O>) {
         self.output_forwarder = request_sender;
     }
