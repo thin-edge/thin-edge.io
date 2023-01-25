@@ -59,11 +59,10 @@ pub type EventId = String;
 pub type Unit = ();
 
 // Transform any unexpected message into an error
-impl From<Option<C8YRestResult>> for C8YRestError {
-    fn from(maybe_result: Option<C8YRestResult>) -> Self {
-        match maybe_result {
-            None => ChannelError::ReceiveError().into(),
-            Some(Err(rest_err)) => rest_err,
+impl From<C8YRestResult> for C8YRestError {
+    fn from(result: C8YRestResult) -> Self {
+        match result {
+            Err(rest_err) => rest_err,
             _ => C8YRestError::ProtocolError,
         }
     }
