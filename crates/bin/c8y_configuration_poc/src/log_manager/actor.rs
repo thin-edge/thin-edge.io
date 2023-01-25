@@ -393,32 +393,9 @@ impl LogManagerMessageBox {
     }
 }
 
-#[async_trait]
 impl MessageBox for LogManagerMessageBox {
     type Input = LogInput;
     type Output = LogOutput;
-
-    async fn recv(&mut self) -> Option<Self::Input> {
-        tokio::select! {
-            Some(message) = self.events.next() => {
-                match message {
-                    LogInput::MqttMessage(message) => {
-                        Some(LogInput::MqttMessage(message))
-                    },
-                    LogInput::FsWatchEvent(message) => {
-                        Some(LogInput::FsWatchEvent(message))
-                    }
-                }
-            },
-            else => None,
-        }
-    }
-
-    async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
-        match message {
-            LogOutput::MqttMessage(msg) => self.mqtt_requests.send(msg).await,
-        }
-    }
 
     fn turn_logging_on(&mut self, _on: bool) {
         todo!()

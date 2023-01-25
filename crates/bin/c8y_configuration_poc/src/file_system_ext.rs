@@ -29,12 +29,8 @@ struct FsWatchMessageBox {
     watch_dirs: Vec<(PathBuf, DynSender<FsWatchEvent>)>,
 }
 
-#[async_trait]
-impl MessageBox for FsWatchMessageBox {
-    type Input = NullInput;
-    type Output = FsWatchEvent;
-
-    async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
+impl FsWatchMessageBox {
+    async fn send(&mut self, message: FsWatchEvent) -> Result<(), ChannelError> {
         let path = match message.clone() {
             FsWatchEvent::Modified(path) => path,
             FsWatchEvent::FileDeleted(path) => path,
@@ -52,10 +48,11 @@ impl MessageBox for FsWatchMessageBox {
 
         Ok(())
     }
+}
 
-    async fn recv(&mut self) -> Option<Self::Input> {
-        return None; //As this actor supports no input, yet
-    }
+impl MessageBox for FsWatchMessageBox {
+    type Input = NullInput;
+    type Output = FsWatchEvent;
 
     fn turn_logging_on(&mut self, _on: bool) {}
 

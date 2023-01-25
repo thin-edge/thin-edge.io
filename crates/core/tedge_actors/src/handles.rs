@@ -6,14 +6,11 @@ use crate::MessageBoxConnector;
 use crate::MessageBoxPort;
 use crate::SimpleMessageBox;
 use crate::SimpleMessageBoxBuilder;
-use async_trait::async_trait;
 
 /// Client side handler of requests/responses sent to an actor
 ///
-/// TODO since this is a MessageBox for a client of a service,
-///      a better name could ClientMessageBox.
+/// Note that this message box sends requests and receive responses.
 pub struct RequestResponseHandler<Request, Response> {
-    // Note that this message box sends requests and receive responses.
     messages: SimpleMessageBox<Response, Request>,
 }
 
@@ -41,18 +38,9 @@ impl<Request: Message, Response: Message> RequestResponseHandler<Request, Respon
     }
 }
 
-#[async_trait]
 impl<Request: Message, Response: Message> MessageBox for RequestResponseHandler<Request, Response> {
     type Input = Response;
     type Output = Request;
-
-    async fn recv(&mut self) -> Option<Self::Input> {
-        self.messages.recv().await
-    }
-
-    async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
-        self.messages.send(message).await
-    }
 
     fn turn_logging_on(&mut self, on: bool) {
         self.messages.turn_logging_on(on)

@@ -1,6 +1,5 @@
 use crate::Actor;
 use crate::ChannelError;
-use crate::MessageBox;
 use crate::Service;
 use crate::SimpleMessageBox;
 use async_trait::async_trait;

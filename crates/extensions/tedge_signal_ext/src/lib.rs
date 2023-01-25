@@ -57,21 +57,21 @@ impl SignalMessageBox {
         let signals = Signals::new(&[SIGTERM, SIGINT, SIGQUIT]).unwrap(); // FIXME
         SignalMessageBox { runtime, signals }
     }
+
+    async fn recv(&mut self) -> Option<i32> {
+        self.signals.next().await
+    }
+
+    async fn send(&mut self, message: RuntimeAction) -> Result<(), ChannelError> {
+        self.log_output(&message);
+        self.runtime.send(message).await
+    }
 }
 
 #[async_trait]
 impl MessageBox for SignalMessageBox {
     type Input = i32;
     type Output = RuntimeAction;
-
-    async fn recv(&mut self) -> Option<Self::Input> {
-        self.signals.next().await
-    }
-
-    async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
-        self.log_output(&message);
-        self.runtime.send(message).await
-    }
 
     fn turn_logging_on(&mut self, _on: bool) {
         todo!()

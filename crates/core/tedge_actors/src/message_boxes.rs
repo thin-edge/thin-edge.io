@@ -5,11 +5,11 @@ use crate::Message;
 use crate::MessageBoxConnector;
 use crate::NoConfig;
 use crate::SimpleMessageBoxBuilder;
-use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::StreamExt;
 use log::debug;
 use log::info;
+use std::fmt::Debug;
 
 /// A message box used by an actor to collect all its input and forward its output
 ///
@@ -19,17 +19,16 @@ use log::info;
 ///
 /// ```logical-view
 ///                                      +------+
-/// input_sender: DynSender<Input> ----->| Box  |----> output_sender: DynSender<Input>
+/// input_sender: DynSender<Input> ----->| Box  |----> output_sender: DynSender<Output>
 ///                                      +------+
 /// ```
 ///
 /// Under the hood, a `MessageBox` implementation can use
 /// - several input channels to await messages from specific peers
 ///   .e.g. awaiting a response from an HTTP actor
-///    and ignoring the kind of events till a response or a timeout has been received.
+///    and ignoring other events till a response or a timeout has been received.
 /// - several output channels to send messages to specific peers.
 /// - provide helper function that combine internal channels.
-#[async_trait]
 pub trait MessageBox: 'static + Sized + Send + Sync {
     /// Type of input messages the actor consumes
     type Input: Message;
@@ -37,16 +36,11 @@ pub trait MessageBox: 'static + Sized + Send + Sync {
     /// Type of output messages the actor produces
     type Output: Message;
 
-    /// Return the next available input message if any
-    ///
-    /// Await for a message if there is not message yet.
-    /// Return `None` if no more message can be received because all the senders have been dropped.
-    async fn recv(&mut self) -> Option<Self::Input>;
-
-    /// Send an output message.
-    ///
-    /// Fail if there is no more receiver expecting these messages.
-    async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError>;
+    // TODO: add a method aimed to build the box for testing purpose
+    //       Without this its hard to relate the Input and Output messages of the box
+    //       Currently we have on interface to a logger not a message box!
+    // Build a message box along 2 channels to send and receive messages to and from the box
+    // fn channel(name: &str, capacity: usize) -> ((DynSender<Self::Input>, DynReceiver<Self::Output>), Self);
 
     /// Turn on/off logging of input and output messages
     fn turn_logging_on(&mut self, on: bool);
@@ -55,14 +49,14 @@ pub trait MessageBox: 'static + Sized + Send + Sync {
     fn name(&self) -> &str;
 
     /// Log an input message just after reception, before processing it.
-    fn log_input(&self, message: &Self::Input) {
+    fn log_input(&self, message: &impl Debug) {
         if self.logging_is_on() {
             info!(target: self.name(), "recv {:?}", message);
         }
     }
 
     /// Log an output message just before sending it.
-    fn log_output(&self, message: &Self::Output) {
+    fn log_output(&self, message: &impl Debug) {
         if self.logging_is_on() {
             debug!(target: self.name(), "send {:?}", message);
         }
@@ -71,15 +65,15 @@ pub trait MessageBox: 'static + Sized + Send + Sync {
     fn logging_is_on(&self) -> bool;
 }
 
-// A MessageBox must implement this trait for every message type that can be sent to it
+/// The builder of a MessageBox must implement this trait for every message type that can be sent to it
 pub trait MessageSink<M: Message> {
-    // Return the sender that can be used by peers to send messages to this actor
+    /// Return the sender that can be used by peers to send messages to this actor
     fn get_sender(&mut self) -> DynSender<M>;
 }
 
-// A MessageBox must implement this trait for every message type that it can receive from its peers
+/// The builder of a MessageBox must implement this trait for every message type that it can receive from its peers
 pub trait MessageSource<M: Message, Config> {
-    // The message will be sent to the peer using the provided `sender`
+    /// The message will be sent to the peer using the provided `sender`
     fn register_peer(&mut self, config: Config, sender: DynSender<M>);
 }
 
@@ -105,6 +99,18 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
         }
     }
 
+    pub async fn recv(&mut self) -> Option<Input> {
+        self.input_receiver.next().await.map(|message| {
+            self.log_input(&message);
+            message
+        })
+    }
+
+    pub async fn send(&mut self, message: Output) -> Result<(), ChannelError> {
+        self.log_output(&message);
+        self.output_sender.send(message).await
+    }
+
     /// Create a message box pair (mostly for testing purpose)
     ///
     /// - The first message box is used to control and observe the second box.
@@ -127,22 +133,9 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
     }
 }
 
-#[async_trait]
 impl<Input: Message, Output: Message> MessageBox for SimpleMessageBox<Input, Output> {
     type Input = Input;
     type Output = Output;
-
-    async fn recv(&mut self) -> Option<Input> {
-        self.input_receiver.next().await.map(|message| {
-            self.log_input(&message);
-            message
-        })
-    }
-
-    async fn send(&mut self, message: Output) -> Result<(), ChannelError> {
-        self.log_output(&message);
-        self.output_sender.send(message).await
-    }
 
     fn turn_logging_on(&mut self, on: bool) {
         self.logging_is_on = on;
@@ -192,13 +185,14 @@ impl<Request: Message, Response: Message> ConcurrentServiceMessageBox<Request, R
         }
     }
 
-    /// Create a message box pair (mostly for testing purpose)
-    ///
-    /// - The first message box is used to control and observe the second box.
-    /// - Messages sent from the first message box are received by the second box.
-    /// - Messages sent from the second message box are received by the first box.
-    /// - The first message box is always a SimpleMessageBox.
-    /// - The second message box is of the specific message box type expected by the actor under test.
+    pub async fn recv(&mut self) -> Option<(ClientId, Request)> {
+        self.next_request().await
+    }
+
+    pub async fn send(&mut self, message: (ClientId, Response)) -> Result<(), ChannelError> {
+        self.clients.send(message).await
+    }
+
     pub fn channel(
         name: &str,
         capacity: usize,
@@ -249,20 +243,11 @@ impl<Request: Message, Response: Message> ConcurrentServiceMessageBox<Request, R
     }
 }
 
-#[async_trait]
 impl<Request: Message, Response: Message> MessageBox
     for ConcurrentServiceMessageBox<Request, Response>
 {
     type Input = (ClientId, Request);
     type Output = (ClientId, Response);
-
-    async fn recv(&mut self) -> Option<Self::Input> {
-        self.next_request().await
-    }
-
-    async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
-        self.clients.send(message).await
-    }
 
     fn turn_logging_on(&mut self, on: bool) {
         self.clients.turn_logging_on(on)

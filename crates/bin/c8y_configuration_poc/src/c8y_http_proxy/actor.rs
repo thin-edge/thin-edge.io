@@ -77,36 +77,10 @@ pub struct C8YRestResponseWithClientId(usize, C8YRestResult);
 fan_in_message_type!(C8YHttpProxyInput[C8YRestRequestWithClientId, HttpResult, JwtResult] : Debug);
 fan_in_message_type!(C8YHttpProxyOutput[C8YRestResponseWithClientId, HttpRequest, JwtRequest] : Debug);
 
-// TODO: Can such a MessageBox implementation be derived from a struct of message boxes?
 #[async_trait]
 impl MessageBox for C8YHttpProxyMessageBox {
     type Input = C8YHttpProxyInput;
     type Output = C8YHttpProxyOutput;
-
-    async fn recv(&mut self) -> Option<Self::Input> {
-        tokio::select! {
-            Some((id,message)) = self.clients.recv() => {
-                Some(C8YHttpProxyInput::C8YRestRequestWithClientId(C8YRestRequestWithClientId (id, message)))
-            },
-            Some(message) = self.http.recv() => {
-                Some(C8YHttpProxyInput::HttpResult(message))
-            },
-            Some(message) = self.jwt.recv() => {
-                Some(C8YHttpProxyInput::JwtResult(message))
-            },
-            else => None,
-        }
-    }
-
-    async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
-        match message {
-            C8YHttpProxyOutput::C8YRestResponseWithClientId(message) => {
-                self.clients.send((message.0, message.1)).await
-            }
-            C8YHttpProxyOutput::HttpRequest(message) => self.http.send(message).await,
-            C8YHttpProxyOutput::JwtRequest(message) => self.jwt.send(message).await,
-        }
-    }
 
     fn turn_logging_on(&mut self, _on: bool) {
         todo!()

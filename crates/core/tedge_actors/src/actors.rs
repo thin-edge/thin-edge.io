@@ -280,17 +280,6 @@ mod tests {
         type Input = String;
         type Output = DoMsg;
 
-        async fn recv(&mut self) -> Option<Self::Input> {
-            self.input.next().await
-        }
-
-        async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
-            match message {
-                DoMsg::DoThis(message) => self.peer_1.send(message).await,
-                DoMsg::DoThat(message) => self.peer_2.send(message).await,
-            }
-        }
-
         fn turn_logging_on(&mut self, _on: bool) {}
 
         fn name(&self) -> &str {

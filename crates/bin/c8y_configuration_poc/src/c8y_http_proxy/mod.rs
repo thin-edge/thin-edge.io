@@ -19,6 +19,7 @@ use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
 use tedge_http_ext::HttpConnectionBuilder;
 use tedge_http_ext::HttpHandle;
+use try_traits::Infallible;
 
 mod actor;
 pub mod credentials;
@@ -107,5 +108,17 @@ impl MessageBoxConnector<C8YRestRequest, C8YRestResult, NoConfig> for C8YHttpPro
         config: NoConfig,
     ) {
         self.clients.connect_with(peer, config)
+    }
+}
+
+impl Builder<C8YHttpProxyMessageBox> for C8YHttpProxyBuilder {
+    type Error = Infallible;
+
+    fn try_build(self) -> Result<C8YHttpProxyMessageBox, Self::Error> {
+        Ok(C8YHttpProxyMessageBox {
+            clients: self.clients.build(),
+            http: self.http,
+            jwt: self.jwt,
+        })
     }
 }

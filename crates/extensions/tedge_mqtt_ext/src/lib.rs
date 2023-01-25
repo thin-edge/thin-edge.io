@@ -103,12 +103,6 @@ impl MqttMessageBox {
             peer_senders,
         }
     }
-}
-
-#[async_trait]
-impl MessageBox for MqttMessageBox {
-    type Input = MqttMessage;
-    type Output = MqttMessage;
 
     async fn recv(&mut self) -> Option<MqttMessage> {
         self.peer_receiver.next().await.map(|msg| {
@@ -126,6 +120,12 @@ impl MessageBox for MqttMessageBox {
         }
         Ok(())
     }
+}
+
+#[async_trait]
+impl MessageBox for MqttMessageBox {
+    type Input = MqttMessage;
+    type Output = MqttMessage;
 
     fn turn_logging_on(&mut self, _on: bool) {}
 

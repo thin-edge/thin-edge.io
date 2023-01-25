@@ -238,36 +238,9 @@ impl ConfigManagerMessageBox {
     }
 }
 
-#[async_trait]
 impl MessageBox for ConfigManagerMessageBox {
     type Input = ConfigInputAndResponse;
     type Output = ConfigOutput;
-
-    async fn recv(&mut self) -> Option<Self::Input> {
-        tokio::select! {
-            Some(message) = self.events.next() => {
-                match message {
-                    ConfigInput::MqttMessage(message) => {
-                        Some(ConfigInputAndResponse::MqttMessage(message))
-                    },
-                    ConfigInput::FsWatchEvent(message) => {
-                        Some(ConfigInputAndResponse::FsWatchEvent(message))
-                    }
-                }
-            },
-            Some(message) = self.http_responses.next() => {
-                Some(ConfigInputAndResponse::C8YRestResult(message))
-            },
-            else => None,
-        }
-    }
-
-    async fn send(&mut self, message: Self::Output) -> Result<(), ChannelError> {
-        match message {
-            ConfigOutput::MqttMessage(msg) => self.mqtt_requests.send(msg).await,
-            ConfigOutput::C8YRestRequest(msg) => self.http_requests.send(msg).await,
-        }
-    }
 
     fn turn_logging_on(&mut self, _on: bool) {
         todo!()
