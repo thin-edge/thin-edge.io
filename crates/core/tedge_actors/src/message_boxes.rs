@@ -3,6 +3,7 @@ use crate::ChannelError;
 use crate::DynSender;
 use crate::Message;
 use crate::MessageBoxConnector;
+use crate::NoConfig;
 use crate::SimpleMessageBoxBuilder;
 use async_trait::async_trait;
 use futures::channel::mpsc;
@@ -76,7 +77,6 @@ pub trait MessageSink<M: Message> {
     fn get_sender(&mut self) -> DynSender<M>;
 }
 
-pub struct NoConfig {}
 // A MessageBox must implement this trait for every message type that it can receive from its peers
 pub trait MessageSource<M: Message, Config> {
     // The message will be sent to the peer using the provided `sender`
@@ -115,7 +115,7 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
     pub fn channel(name: &str, capacity: usize) -> (SimpleMessageBox<Output, Input>, Self) {
         let mut client_box = SimpleMessageBoxBuilder::new(&format!("{}-Client", name), capacity);
         let mut service_box = SimpleMessageBoxBuilder::new(&format!("{}-Service", name), capacity);
-        service_box.connect_with(&mut client_box, ());
+        service_box.connect_with(&mut client_box, NoConfig);
         (client_box.build(), service_box.build())
     }
 

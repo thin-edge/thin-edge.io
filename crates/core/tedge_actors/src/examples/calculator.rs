@@ -121,6 +121,7 @@ mod tests {
     use crate::Builder;
     use crate::ChannelError;
     use crate::MessageBoxPort;
+    use crate::NoConfig;
     use crate::ServiceActor;
     use crate::ServiceMessageBoxBuilder;
     use crate::SimpleMessageBoxBuilder;
@@ -135,7 +136,7 @@ mod tests {
         let mut probe = Probe::new();
         player_box_builder
             .with_probe(&mut probe)
-            .connect_to(&mut service_box_builder, ());
+            .connect_to(&mut service_box_builder, NoConfig);
 
         // Spawn the actors
         tokio::spawn(ServiceActor::new(Calculator::default()).run(service_box_builder.build()));

@@ -39,6 +39,9 @@ pub trait Builder<T>: Sized {
     }
 }
 
+/// Placeholder when no specific config is required by a builder implementation
+pub struct NoConfig;
+
 /// A trait to connect a message box under-construction to peer messages boxes
 pub trait MessageBoxConnector<Request: Message, Response: Message, Config> {
     /// Connect a peer message box to the message box under construction
@@ -67,7 +70,7 @@ pub trait MessageBoxPort<Request: Message, Response: Message> {
     /// Connect this client message box to the service message box
     ///
     /// Return the updated client message box.
-    fn connected_to<Config: Default>(
+    fn connected_to<Config>(
         mut self,
         service: &mut impl MessageBoxConnector<Request, Response, Config>,
         config: Config,
@@ -101,10 +104,10 @@ impl<I: Message, O: Message> SimpleMessageBoxBuilder<I, O> {
     }
 }
 
-impl<Req: Message, Res: Message> MessageBoxConnector<Req, Res, ()>
+impl<Req: Message, Res: Message> MessageBoxConnector<Req, Res, NoConfig>
     for SimpleMessageBoxBuilder<Req, Res>
 {
-    fn connect_with(&mut self, peer: &mut impl MessageBoxPort<Req, Res>, _config: ()) {
+    fn connect_with(&mut self, peer: &mut impl MessageBoxPort<Req, Res>, _config: NoConfig) {
         self.output_sender = peer.get_response_sender();
         peer.set_request_sender(self.input_sender.sender_clone());
     }
@@ -180,10 +183,10 @@ impl<Request: Message, Response: Message> ServiceMessageBoxBuilder<Request, Resp
     }
 }
 
-impl<Req: Message, Res: Message> MessageBoxConnector<Req, Res, ()>
+impl<Req: Message, Res: Message> MessageBoxConnector<Req, Res, NoConfig>
     for ServiceMessageBoxBuilder<Req, Res>
 {
-    fn connect_with(&mut self, peer: &mut impl MessageBoxPort<Req, Res>, _config: ()) {
+    fn connect_with(&mut self, peer: &mut impl MessageBoxPort<Req, Res>, _config: NoConfig) {
         let client_id = self.clients.len();
         let request_sender = KeyedSender::new_sender(client_id, self.request_sender.clone());
 

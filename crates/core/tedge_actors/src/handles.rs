@@ -19,7 +19,7 @@ pub struct RequestResponseHandler<Request, Response> {
 
 impl<Request: Message, Response: Message> RequestResponseHandler<Request, Response> {
     /// Create a new `RequestResponseHandler` connected to the service with the given config.
-    pub fn new<Config: Default>(
+    pub fn new<Config>(
         client_name: &str,
         service: &mut impl MessageBoxConnector<Request, Response, Config>,
         config: Config,

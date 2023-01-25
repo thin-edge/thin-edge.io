@@ -19,6 +19,7 @@ use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::MessageBoxConnector;
 use tedge_actors::MessageBoxPort;
+use tedge_actors::NoConfig;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
 use tedge_actors::Sender;
@@ -62,7 +63,7 @@ impl ConfigManagerBuilder {
         &mut self,
         http: &mut impl C8YConnectionBuilder,
     ) -> Result<(), LinkError> {
-        self.connect_to(http, ());
+        self.connect_to(http, NoConfig);
         self.c8y_upload_http_proxy = Some(C8YHttpProxy::new("UploadManager => C8Y", http));
         self.c8y_download_http_proxy = Some(C8YHttpProxy::new("DownloadManager => C8Y", http));
         Ok(())

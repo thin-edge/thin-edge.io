@@ -12,6 +12,7 @@ use tedge_actors::ActorBuilder;
 use tedge_actors::Builder;
 use tedge_actors::MessageBoxConnector;
 use tedge_actors::MessageBoxPort;
+use tedge_actors::NoConfig;
 use tedge_actors::RequestResponseHandler;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
@@ -118,9 +119,13 @@ impl<S: Service<Request = JwtRequest, Response = JwtResult>> ActorBuilder
 }
 
 impl<S: Service<Request = JwtRequest, Response = JwtResult>>
-    MessageBoxConnector<JwtRequest, JwtResult, ()> for JwtRetrieverBuilder<S>
+    MessageBoxConnector<JwtRequest, JwtResult, NoConfig> for JwtRetrieverBuilder<S>
 {
-    fn connect_with(&mut self, peer: &mut impl MessageBoxPort<JwtRequest, JwtResult>, config: ()) {
+    fn connect_with(
+        &mut self,
+        peer: &mut impl MessageBoxPort<JwtRequest, JwtResult>,
+        config: NoConfig,
+    ) {
         self.message_box.connect_with(peer, config)
     }
 }

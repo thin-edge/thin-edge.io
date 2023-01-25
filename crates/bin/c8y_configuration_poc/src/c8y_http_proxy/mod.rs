@@ -8,6 +8,7 @@ use tedge_actors::ActorBuilder;
 use tedge_actors::Builder;
 use tedge_actors::MessageBoxConnector;
 use tedge_actors::MessageBoxPort;
+use tedge_actors::NoConfig;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
 use tedge_actors::ServiceMessageBoxBuilder;
@@ -44,7 +45,10 @@ impl TryFrom<TEdgeConfig> for C8YHttpConfig {
     }
 }
 
-pub trait C8YConnectionBuilder: MessageBoxConnector<C8YRestRequest, C8YRestResult, ()> {}
+pub trait C8YConnectionBuilder:
+    MessageBoxConnector<C8YRestRequest, C8YRestResult, NoConfig>
+{
+}
 
 impl C8YConnectionBuilder for C8YHttpProxyBuilder {}
 
@@ -69,11 +73,11 @@ impl C8YHttpProxyBuilder {
     pub fn new(
         config: C8YHttpConfig,
         http: &mut impl HttpConnectionBuilder,
-        jwt: &mut impl MessageBoxConnector<(), JwtResult, ()>,
+        jwt: &mut impl MessageBoxConnector<(), JwtResult, NoConfig>,
     ) -> Self {
         let clients = ServiceMessageBoxBuilder::new("C8Y-REST", 10);
-        let http = HttpHandle::new("C8Y-REST => HTTP", http, ());
-        let jwt = JwtRetriever::new("C8Y-REST => JWT", jwt, ());
+        let http = HttpHandle::new("C8Y-REST => HTTP", http, NoConfig);
+        let jwt = JwtRetriever::new("C8Y-REST => JWT", jwt, NoConfig);
         C8YHttpProxyBuilder {
             config,
             clients,
@@ -96,11 +100,11 @@ impl ActorBuilder for C8YHttpProxyBuilder {
     }
 }
 
-impl MessageBoxConnector<C8YRestRequest, C8YRestResult, ()> for C8YHttpProxyBuilder {
+impl MessageBoxConnector<C8YRestRequest, C8YRestResult, NoConfig> for C8YHttpProxyBuilder {
     fn connect_with(
         &mut self,
         peer: &mut impl MessageBoxPort<C8YRestRequest, C8YRestResult>,
-        config: (),
+        config: NoConfig,
     ) {
         self.clients.connect_with(peer, config)
     }

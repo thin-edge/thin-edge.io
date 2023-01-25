@@ -7,6 +7,7 @@ use crate::c8y_http_proxy::messages::UploadLogBinary;
 use crate::c8y_http_proxy::C8YConnectionBuilder;
 use std::path::Path;
 use std::path::PathBuf;
+use tedge_actors::NoConfig;
 use tedge_actors::RequestResponseHandler;
 use tedge_utils::file::PermissionEntry;
 
@@ -19,7 +20,7 @@ pub struct C8YHttpProxy {
 
 impl C8YHttpProxy {
     pub fn new(client_name: &str, proxy_builder: &mut impl C8YConnectionBuilder) -> Self {
-        let c8y = RequestResponseHandler::new(client_name, proxy_builder, ());
+        let c8y = RequestResponseHandler::new(client_name, proxy_builder, NoConfig);
         C8YHttpProxy { c8y }
     }
 

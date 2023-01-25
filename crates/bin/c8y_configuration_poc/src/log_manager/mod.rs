@@ -58,7 +58,7 @@ impl LogManagerBuilder {
         let subscriptions = vec!["c8y/s/ds"].try_into().unwrap();
         //Register peers symmetrically here
         mqtt.register_peer(subscriptions, self.events_sender.clone().into());
-        self.register_peer(NoConfig {}, mqtt.get_sender());
+        self.register_peer(NoConfig, mqtt.get_sender());
         Ok(())
     }
 
