@@ -8,7 +8,7 @@ set -e
 packages=("tedge" "tedge_apt_plugin" "tedge_apama_plugin" "c8y_log_plugin" "c8y_configuration_plugin")
 
 # Package names for version > 0.8.1
-packages+=("tedge-apt-plugin" "tedge-apama-plugin" "c8y-log-plugin" "c8y-configuration-plugin")
+packages+=("tedge-apt-plugin" "tedge-apama-plugin" "c8y-log-plugin" "c8y-configuration-plugin" "c8y-remote-access-plugin")
 
 extension_services=("tedge-watchdog.service" "tedge-mapper-collectd.service" "c8y-log-plugin.service" "c8y-configuration-plugin.service")
 

@@ -186,6 +186,22 @@ fn create_directories(config_dir: &Path) -> Result<(), anyhow::Error> {
         0o644,
         None,
     )?;
+    create_file_with_user_group(
+        format!(
+            "{}/operations/c8y/c8y_RemoteAccessConnect",
+            config_dir.display()
+        ),
+        "tedge",
+        "tedge",
+        0o644,
+        Some(
+            &r#"[exec]
+command = "/usr/bin/c8y-remote-access-plugin"
+topic = "c8y/s/ds"
+on_message = "530"
+"#,
+        ),
+    )?;
     // Create directory for device custom fragments
     create_directory_with_user_group(
         format!("{}/device", config_dir.display()),
