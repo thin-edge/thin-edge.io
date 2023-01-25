@@ -441,6 +441,90 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
+async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
+    let broker = mqtt_tests::test_mqtt_broker();
+
+    let mut messages = broker
+        .messages_published_on("c8y/alarm/alarms/create")
+        .await;
+    let cfg_dir = TempTedgeDir::new();
+    // Start the C8Y Mapper
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
+
+    broker
+        .publish_with_opts(
+            "tedge/alarms/major/temperature_alarm",
+            r#"{ "text": "Temperature high","time":"2023-01-25T18:41:14.776170774Z","customFragment": {"nested":{"value": "extra info"}} }"#,
+            mqtt_channel::QoS::AtLeastOnce,
+            true,
+        )
+        .await
+        .unwrap();
+
+    let expected_msg = json!({"severity":"MAJOR","type":"temperature_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Temperature high","customFragment":{"nested":{"value":"extra info"}}});
+
+    while let Ok(Some(msg)) = messages.next().with_timeout(TEST_TIMEOUT_MS).await {
+        assert_json_include!(actual:serde_json::from_str::<serde_json::Value>(&msg).unwrap(), expected:expected_msg);
+    }
+
+    //Clear the previously published alarm
+    broker
+        .publish_with_opts(
+            "tedge/alarms/major/temperature_alarm",
+            "",
+            mqtt_channel::QoS::AtLeastOnce,
+            true,
+        )
+        .await
+        .unwrap();
+
+    sm_mapper.abort();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
+async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
+    let broker = mqtt_tests::test_mqtt_broker();
+
+    let mut messages = broker
+        .messages_published_on("c8y/alarm/alarms/create")
+        .await;
+    let cfg_dir = TempTedgeDir::new();
+    // Start the C8Y Mapper
+    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
+
+    broker
+        .publish_with_opts(
+            "tedge/alarms/major/temperature_alarm/external_sensor",
+            r#"{ "text":"Temperature high","time":"2023-01-25T18:41:14.776170774Z","customFragment":{"nested":{"value":"extra info"}}}"#,
+            mqtt_channel::QoS::AtLeastOnce,
+            true,
+        )
+        .await
+        .unwrap();
+
+    let expected_msg = json!({"severity":"MAJOR","type":"temperature_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Temperature high","externalSource":{"externalId":"external_sensor","type":"c8y_Serial"},"customFragment":{"nested":{"value":"extra info"}}});
+
+    while let Ok(Some(msg)) = messages.next().with_timeout(TEST_TIMEOUT_MS).await {
+        assert_json_include!(actual:serde_json::from_str::<serde_json::Value>(&msg).unwrap(), expected:expected_msg);
+    }
+
+    //Clear the previously published alarm
+    broker
+        .publish_with_opts(
+            "tedge/alarms/major/temperature_alarm",
+            "",
+            mqtt_channel::QoS::AtLeastOnce,
+            true,
+        )
+        .await
+        .unwrap();
+
+    sm_mapper.abort();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
 async fn c8y_mapper_syncs_pending_alarms_on_startup() {
     let broker = mqtt_tests::test_mqtt_broker();
 

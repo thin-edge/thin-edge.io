@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use tedge_api::alarm::ThinEdgeAlarm;
 use tedge_api::Jsonify;
 use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareModule;
@@ -209,10 +210,113 @@ fn update_the_external_source_event(
     Ok(())
 }
 
+fn make_c8y_source_fragment(source_name: &str) -> Option<SourceInfo> {
+    Some(SourceInfo::new(source_name.into(), "c8y_Serial".into()))
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceInfo {
+    #[serde(rename = "externalId")]
+    pub id: String,
+    #[serde(rename = "type")]
+    pub source_type: String,
+}
+
+impl SourceInfo {
+    pub fn new(id: String, source_type: String) -> Self {
+        Self { id, source_type }
+    }
+}
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct C8yCreateAlarm {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "externalSource")]
+    pub source: Option<SourceInfo>,
+
+    pub severity: String,
+
+    #[serde(rename = "type")]
+    pub alarm_type: String,
+
+    #[serde(with = "time::serde::rfc3339")]
+    pub time: OffsetDateTime,
+
+    pub text: String,
+
+    #[serde(flatten)]
+    pub fragments: HashMap<String, Value>,
+}
+
+impl C8yCreateAlarm {
+    pub fn new(
+        source: Option<SourceInfo>,
+        severity: String,
+        alarm_type: String,
+        time: OffsetDateTime,
+        text: String,
+        fragments: HashMap<String, Value>,
+    ) -> Self {
+        Self {
+            source,
+            severity,
+            alarm_type,
+            time,
+            text,
+            fragments,
+        }
+    }
+}
+
+impl TryFrom<&ThinEdgeAlarm> for C8yCreateAlarm {
+    type Error = SMCumulocityMapperError;
+
+    fn try_from(alarm: &ThinEdgeAlarm) -> Result<Self, SMCumulocityMapperError> {
+        let severity = alarm.severity.to_string();
+        let alarm_type = alarm.name.to_owned();
+        let text;
+        let time;
+        let fragments;
+
+        match &alarm.to_owned().data {
+            None => {
+                text = alarm_type.clone();
+                time = OffsetDateTime::now_utc();
+                fragments = HashMap::new();
+            }
+            Some(data) => {
+                text = data.text.clone().unwrap_or_else(|| alarm_type.clone());
+                time = data.time.unwrap_or_else(OffsetDateTime::now_utc);
+                fragments = data.alarm_data.clone();
+            }
+        }
+
+        let source = if let Some(external_source) = &alarm.source {
+            make_c8y_source_fragment(external_source)
+        } else {
+            None
+        };
+
+        Ok(Self {
+            source,
+            severity,
+            alarm_type,
+            time,
+            text,
+            fragments,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
     use assert_matches::assert_matches;
+    use serde_json::json;
+    use tedge_api::alarm::AlarmSeverity;
+    use tedge_api::alarm::ThinEdgeAlarm;
+    use tedge_api::alarm::ThinEdgeAlarmData;
     use tedge_api::event::ThinEdgeEventData;
     use test_case::test_case;
     use time::macros::datetime;
@@ -245,7 +349,7 @@ mod tests {
         let input_json = r#"{
             "id":"1",
             "status":"successful",
-            "currentSoftwareList":[
+            "currentSoftwareList":[ 
                 {"type":"debian", "modules":[
                     {"name":"a"},
                     {"name":"b","version":"1.0"},
@@ -468,6 +572,80 @@ mod tests {
         assert!(actual_c8y_event.time < OffsetDateTime::now_utc());
         assert_matches!(actual_c8y_event.source, None);
         assert!(actual_c8y_event.extras.is_empty());
+
+        Ok(())
+    }
+
+    #[test_case(
+        ThinEdgeAlarm {
+            name: "temperature alarm".into(),
+            severity: AlarmSeverity::Critical,
+            data: Some(ThinEdgeAlarmData {
+                text: Some("Temperature went high".into()),
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                alarm_data: HashMap::new(),
+            }),
+            source: None,
+        },
+        C8yCreateAlarm {
+            severity: "CRITICAL".to_string(),
+            source: None,
+            alarm_type: "temperature alarm".into(),
+            time: datetime!(2021-04-23 19:00:00 +05:00),
+            text: "Temperature went high".into(),
+            fragments: HashMap::new(),
+        }
+        ;"critical alarm translation"
+    )]
+    #[test_case(
+        ThinEdgeAlarm {
+            name: "temperature alarm".into(),
+            severity: AlarmSeverity::Critical,
+            data: Some(ThinEdgeAlarmData {
+                text: Some("Temperature went high".into()),
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                alarm_data: maplit::hashmap!{"SomeCustomFragment".to_string() => json!({"nested": {"value":"extra info"}})},
+            }),
+            source: None,
+        },
+        C8yCreateAlarm {
+            severity: "CRITICAL".to_string(),
+            source: None,
+            alarm_type: "temperature alarm".into(),
+            time: datetime!(2021-04-23 19:00:00 +05:00),
+            text: "Temperature went high".into(),
+            fragments: maplit::hashmap!{"SomeCustomFragment".to_string() => json!({"nested": {"value":"extra info"}})},
+        }
+        ;"critical alarm translation with custom fragment"
+    )]
+    #[test_case(
+        ThinEdgeAlarm {
+            name: "temperature alarm".into(),
+            severity: AlarmSeverity::Critical,
+            data: Some(ThinEdgeAlarmData {
+                text: Some("Temperature went high".into()),
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                alarm_data: maplit::hashmap!{"SomeCustomFragment".to_string() => json!({"nested": {"value":"extra info"}})},
+            }),
+            source: Some("external_source".into()),
+        },
+        C8yCreateAlarm {
+            severity: "CRITICAL".to_string(),
+            source: Some(SourceInfo::new("external_source".to_string(),"c8y_Serial".to_string())),
+            alarm_type: "temperature alarm".into(),
+            time: datetime!(2021-04-23 19:00:00 +05:00),
+            text: "Temperature went high".into(),
+            fragments: maplit::hashmap!{"SomeCustomFragment".to_string() => json!({"nested": {"value":"extra info"}})},
+        }
+        ;"critical alarm translation of child device with custom fragment"
+    )]
+    fn check_alarm_translation(
+        tedge_alarm: ThinEdgeAlarm,
+        expected_c8y_alarm: C8yCreateAlarm,
+    ) -> Result<()> {
+        let actual_c8y_alarm = C8yCreateAlarm::try_from(&tedge_alarm)?;
+
+        assert_eq!(actual_c8y_alarm, expected_c8y_alarm);
 
         Ok(())
     }

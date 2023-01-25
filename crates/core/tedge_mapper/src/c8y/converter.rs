@@ -76,7 +76,6 @@ const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const TEDGE_EVENTS_TOPIC: &str = "tedge/events/";
 const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "c8y/event/events/create";
 const TEDGE_AGENT_LOG_DIR: &str = "tedge/agent";
-
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
 
 #[derive(Debug)]

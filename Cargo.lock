@@ -443,7 +443,7 @@ dependencies = [
 
 [[package]]
 name = "c8y-remote-access-plugin"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "async-compat",
  "async-tungstenite",
@@ -479,6 +479,7 @@ dependencies = [
  "csv",
  "download",
  "futures",
+ "maplit",
  "mockall",
  "mockito",
  "mqtt_channel",
@@ -3283,6 +3284,7 @@ dependencies = [
  "csv",
  "download",
  "json-writer",
+ "maplit",
  "mockall",
  "mqtt_channel",
  "nanoid",

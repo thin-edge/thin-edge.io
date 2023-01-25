@@ -1,9 +1,8 @@
+use crate::smartrest::error::SmartRestSerializerError;
 use tedge_api::alarm::AlarmSeverity;
 use tedge_api::alarm::ThinEdgeAlarm;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
-
-use crate::smartrest::error::SmartRestSerializerError;
 
 /// Converts from thin-edge alarm to C8Y alarm SmartREST message
 pub fn serialize_alarm(alarm: ThinEdgeAlarm) -> Result<String, SmartRestSerializerError> {
@@ -16,9 +15,7 @@ pub fn serialize_alarm(alarm: ThinEdgeAlarm) -> Result<String, SmartRestSerializ
                 AlarmSeverity::Minor => 303,
                 AlarmSeverity::Warning => 304,
             };
-
             let current_timestamp = OffsetDateTime::now_utc();
-
             let smartrest_message = format!(
                 "{},{},\"{}\",{}",
                 smartrest_code,
@@ -29,7 +26,6 @@ pub fn serialize_alarm(alarm: ThinEdgeAlarm) -> Result<String, SmartRestSerializ
                     |timestamp| timestamp.format(&Rfc3339)
                 )?
             );
-
             Ok(smartrest_message)
         }
     }
@@ -39,6 +35,7 @@ pub fn serialize_alarm(alarm: ThinEdgeAlarm) -> Result<String, SmartRestSerializ
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
+    use maplit::hashmap;
     use serde::Deserialize;
     use tedge_api::alarm::ThinEdgeAlarmData;
     use test_case::test_case;
@@ -51,7 +48,9 @@ mod tests {
             data: Some(ThinEdgeAlarmData {
                 text: Some("I raised it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                alarm_data: hashmap!{},
             }),
+            source: None,
         },
         "301,temperature_alarm,\"I raised it\",2021-04-23T19:00:00+05:00"
         ;"critical alarm translation"
@@ -63,7 +62,9 @@ mod tests {
             data: Some(ThinEdgeAlarmData {
                 text: Some("I raised it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                alarm_data: hashmap!{},
             }),
+            source: None,
         },
         "302,temperature_alarm,\"I raised it\",2021-04-23T19:00:00+05:00"
         ;"major alarm translation"
@@ -75,7 +76,9 @@ mod tests {
             data: Some(ThinEdgeAlarmData {
                 text: None,
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                alarm_data: hashmap!{},
             }),
+            source: None,
         },
         "303,temperature_alarm,\"\",2021-04-23T19:00:00+05:00"
         ;"minor alarm translation without message"
@@ -87,7 +90,9 @@ mod tests {
             data: Some(ThinEdgeAlarmData {
                 text: Some("I, raised, it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                alarm_data: hashmap!{},
             }),
+            source: None,
         },
         "304,temperature_alarm,\"I, raised, it\",2021-04-23T19:00:00+05:00"
         ;"warning alarm translation with commas in message"
@@ -95,11 +100,36 @@ mod tests {
     #[test_case(
         ThinEdgeAlarm {
             name: "temperature_alarm".into(),
+            severity: AlarmSeverity::Warning,
+            data: Some(ThinEdgeAlarmData {
+                text: Some("External sensor raised alarm".into()),
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                alarm_data: hashmap!{},
+            }),
+            source: Some("External_source".to_string()),
+        },
+        "304,temperature_alarm,\"External sensor raised alarm\",2021-04-23T19:00:00+05:00"
+        ;"warning alarm translation by external sensor"
+    )]
+    #[test_case(
+        ThinEdgeAlarm {
+            name: "temperature_alarm".into(),
             severity: AlarmSeverity::Minor,
             data: None,
+            source: None,
         },
         "306,temperature_alarm"
         ;"clear alarm translation"
+    )]
+    #[test_case(
+        ThinEdgeAlarm {
+            name: "temperature_alarm".into(),
+            severity: AlarmSeverity::Minor,
+            data: None,
+            source: Some("external_sensor".to_string()),
+        },
+        "306,temperature_alarm"
+        ;"clear child alarm translation"
     )]
     fn check_alarm_translation(alarm: ThinEdgeAlarm, expected_smartrest_msg: &str) {
         let result = serialize_alarm(alarm);
@@ -123,7 +153,9 @@ mod tests {
             data: Some(ThinEdgeAlarmData {
                 text: Some("I raised it".into()),
                 time: None,
+                alarm_data: hashmap! {},
             }),
+            source: None,
         };
 
         let smartrest_message = serialize_alarm(alarm).unwrap();

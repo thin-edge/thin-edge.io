@@ -1,18 +1,24 @@
 use std::convert::TryFrom;
 use std::convert::TryInto;
+use std::fmt;
 
 use clock::Timestamp;
 use serde::Deserialize;
+use serde::Serialize;
 
+use serde_json::Value;
+use std::collections::HashMap;
 /// In-memory representation of ThinEdge JSON alarm.
-#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ThinEdgeAlarm {
     pub name: String,
     pub severity: AlarmSeverity,
+    #[serde(flatten)]
     pub data: Option<ThinEdgeAlarmData>,
+    pub source: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum AlarmSeverity {
     Critical,
     Major,
@@ -21,13 +27,16 @@ pub enum AlarmSeverity {
 }
 
 /// In-memory representation of ThinEdge JSON alarm payload
-#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ThinEdgeAlarmData {
     pub text: Option<String>,
 
     #[serde(default)]
     #[serde(with = "time::serde::rfc3339::option")]
     pub time: Option<Timestamp>,
+
+    #[serde(flatten)]
+    pub alarm_data: HashMap<String, Value>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -71,6 +80,17 @@ impl TryFrom<&str> for AlarmSeverity {
     }
 }
 
+impl fmt::Display for AlarmSeverity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlarmSeverity::Critical => write!(f, "CRITICAL"),
+            AlarmSeverity::Major => write!(f, "MAJOR"),
+            AlarmSeverity::Minor => write!(f, "MINOR"),
+            AlarmSeverity::Warning => write!(f, "WARNING"),
+        }
+    }
+}
+
 impl ThinEdgeAlarm {
     pub fn try_from(
         mqtt_topic: &str,
@@ -106,10 +126,18 @@ impl ThinEdgeAlarm {
                 Some(serde_json::from_str(mqtt_payload)?)
             };
 
+            // The 4th part of the topic name is the alarm source - if any
+            let external_source = if topic_split.len() == 5 {
+                Some(topic_split[4].to_string())
+            } else {
+                None
+            };
+
             Ok(Self {
                 name: alarm_name.into(),
                 severity: alarm_severity.try_into()?,
                 data: alarm_data,
+                source: external_source,
             })
         } else {
             Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(
@@ -123,6 +151,7 @@ impl ThinEdgeAlarm {
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
+    use maplit::hashmap;
     use serde_json::json;
     use serde_json::Value;
     use test_case::test_case;
@@ -140,7 +169,9 @@ mod tests {
             data: Some(ThinEdgeAlarmData {
                 text: Some("I raised it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                alarm_data: hashmap!{},
             }),
+            source: None,
         };
         "critical alarm parsing"
     )]
@@ -155,7 +186,9 @@ mod tests {
             data: Some(ThinEdgeAlarmData {
                 text: Some("I raised it".into()),
                 time: None,
+                alarm_data: hashmap!{},
             }),
+            source: None,
         };
         "major alarm parsing without timestamp"
     )]
@@ -170,7 +203,9 @@ mod tests {
             data: Some(ThinEdgeAlarmData {
                 text: None,
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                alarm_data: hashmap!{},
             }),
+            source: None,
         };
         "minor alarm parsing without text"
     )]
@@ -183,7 +218,9 @@ mod tests {
             data: Some(ThinEdgeAlarmData {
                 text: None,
                 time: None,
+                alarm_data: hashmap!{},
             }),
+            source: None,
         };
         "warning alarm parsing without text or timestamp"
     )]
@@ -199,7 +236,9 @@ mod tests {
             data: Some(ThinEdgeAlarmData {
                 text: Some("I raised it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                alarm_data: hashmap!{},
             }),
+            source: Some("extern_sensor".to_string()),
         };
         "critical alarm parsing with childId"
     )]
