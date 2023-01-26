@@ -4,6 +4,8 @@ use crate::ConcurrentServiceMessageBox;
 use crate::DynSender;
 use crate::KeyedSender;
 use crate::Message;
+use crate::MessageSink;
+use crate::MessageSource;
 use crate::NullSender;
 use crate::RuntimeError;
 use crate::RuntimeHandle;
@@ -83,6 +85,43 @@ pub trait MessageBoxPlug<Request: Message, Response: Message> {
     }
 }
 
+impl<T, Req, Res> MessageBoxPlug<Req, Res> for T
+where
+    Req: Message,
+    Res: Message,
+    T: MessageSink<Res> + MessageSource<Req, NoConfig>,
+{
+    fn set_request_sender(&mut self, request_sender: DynSender<Req>) {
+        self.register_peer(NoConfig, request_sender)
+    }
+
+    fn get_response_sender(&self) -> DynSender<Res> {
+        self.get_sender()
+    }
+}
+
+// FIXME Why is this implementation conflicting with
+// impl<Req: Message, Res: Message> MessageBoxSocket<Req, Res, NoConfig> for ServiceMessageBoxBuilder<Req, Res>
+// while ServiceMessageBoxBuilder __doesn't__ impl neither MessageSink nor MessageSource?
+//
+// Would be solved by https://github.com/rust-lang/rfcs/pull/1210
+//
+// This is an issue because:
+// - the implementation of MessageBoxSocket for ServiceMessageBox cannot be done from Source & Sink.
+// - but this can be done for any mailbox that doesn't need to correlate outputs to inputs.
+/*
+impl<T, Req, Res, Config> MessageBoxSocket<Req, Res, Config> for T where
+    Req: Message,
+    Res: Message,
+    T: MessageSink<Req> + MessageSource<Res, Config>
+{
+    fn connect_with(&mut self, peer: &mut impl MessageBoxPlug<Req, Res>, config: Config) {
+        self.register_peer(config, peer.get_response_sender());
+        peer.set_request_sender(self.get_sender());
+    }
+}
+*/
+
 /// A builder of SimpleMessageBox
 pub struct SimpleMessageBoxBuilder<I, O> {
     name: String,
@@ -113,12 +152,14 @@ impl<Req: Message, Res: Message> MessageBoxSocket<Req, Res, NoConfig>
     }
 }
 
-impl<Req: Message, Res: Message> MessageBoxPlug<Req, Res> for SimpleMessageBoxBuilder<Res, Req> {
-    fn set_request_sender(&mut self, output_sender: DynSender<Req>) {
-        self.output_sender = output_sender;
+impl<I: Message, O: Message> MessageSource<O, NoConfig> for SimpleMessageBoxBuilder<I, O> {
+    fn register_peer(&mut self, _config: NoConfig, sender: DynSender<O>) {
+        self.output_sender = sender;
     }
+}
 
-    fn get_response_sender(&self) -> DynSender<Res> {
+impl<I: Message, O: Message> MessageSink<I> for SimpleMessageBoxBuilder<I, O> {
+    fn get_sender(&self) -> DynSender<I> {
         self.input_sender.sender_clone()
     }
 }

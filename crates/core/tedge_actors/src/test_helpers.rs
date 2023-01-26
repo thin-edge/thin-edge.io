@@ -2,6 +2,9 @@ use crate::mpsc;
 use crate::DynSender;
 use crate::Message;
 use crate::MessageBoxPlug;
+use crate::MessageSink;
+use crate::MessageSource;
+use crate::NoConfig;
 use crate::NullSender;
 use crate::Sender;
 use crate::SinkExt;
@@ -141,12 +144,14 @@ where
     }
 }
 
-impl<I: MessagePlus, O: MessagePlus> MessageBoxPlug<O, I> for Probe<I, O> {
-    fn set_request_sender(&mut self, request_sender: DynSender<O>) {
-        self.output_forwarder = request_sender;
+impl<I: MessagePlus, O: MessagePlus> MessageSource<O, NoConfig> for Probe<I, O> {
+    fn register_peer(&mut self, _config: NoConfig, sender: DynSender<O>) {
+        self.output_forwarder = sender;
     }
+}
 
-    fn get_response_sender(&self) -> DynSender<I> {
+impl<I: MessagePlus, O: MessagePlus> MessageSink<I> for Probe<I, O> {
+    fn get_sender(&self) -> DynSender<I> {
         self.input_interceptor.clone().into()
     }
 }

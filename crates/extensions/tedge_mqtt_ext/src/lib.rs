@@ -14,8 +14,8 @@ use tedge_actors::ActorBuilder;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
-use tedge_actors::MessageBoxSocket;
 use tedge_actors::MessageBoxPlug;
+use tedge_actors::MessageBoxSocket;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::RuntimeError;
@@ -73,7 +73,7 @@ impl MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder {
 }
 
 impl MessageSink<MqttMessage> for MqttActorBuilder {
-    fn get_sender(&mut self) -> DynSender<MqttMessage> {
+    fn get_sender(&self) -> DynSender<MqttMessage> {
         self.publish_channel.0.clone().into()
     }
 }

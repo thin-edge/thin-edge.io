@@ -13,13 +13,11 @@ use tedge_actors::mpsc;
 use tedge_actors::ActorBuilder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
-use tedge_actors::MessageBoxPlug;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
-use tedge_actors::Sender;
 use tedge_mqtt_ext::*;
 
 /// This is an actor builder.
@@ -73,16 +71,6 @@ impl LogManagerBuilder {
     }
 }
 
-impl MessageBoxPlug<MqttMessage, MqttMessage> for LogManagerBuilder {
-    fn set_request_sender(&mut self, mqtt_publisher: DynSender<MqttMessage>) {
-        self.mqtt_publisher = Some(mqtt_publisher);
-    }
-
-    fn get_response_sender(&self) -> DynSender<MqttMessage> {
-        self.events_sender.sender_clone()
-    }
-}
-
 impl MessageSource<MqttMessage, NoConfig> for LogManagerBuilder {
     fn register_peer(&mut self, _config: NoConfig, sender: DynSender<MqttMessage>) {
         self.mqtt_publisher = Some(sender);
@@ -90,13 +78,13 @@ impl MessageSource<MqttMessage, NoConfig> for LogManagerBuilder {
 }
 
 impl MessageSink<MqttMessage> for LogManagerBuilder {
-    fn get_sender(&mut self) -> DynSender<MqttMessage> {
+    fn get_sender(&self) -> DynSender<MqttMessage> {
         self.events_sender.clone().into()
     }
 }
 
 impl MessageSink<FsWatchEvent> for LogManagerBuilder {
-    fn get_sender(&mut self) -> DynSender<FsWatchEvent> {
+    fn get_sender(&self) -> DynSender<FsWatchEvent> {
         self.events_sender.clone().into()
     }
 }

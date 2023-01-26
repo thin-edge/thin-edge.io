@@ -1,1 +1,2 @@
+//! Examples
 pub mod calculator;

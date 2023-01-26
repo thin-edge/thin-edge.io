@@ -6,8 +6,8 @@ use crate::c8y_http_proxy::messages::C8YRestResult;
 use async_trait::async_trait;
 use tedge_actors::ActorBuilder;
 use tedge_actors::Builder;
-use tedge_actors::MessageBoxSocket;
 use tedge_actors::MessageBoxPlug;
+use tedge_actors::MessageBoxSocket;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
@@ -46,10 +46,7 @@ impl TryFrom<TEdgeConfig> for C8YHttpConfig {
     }
 }
 
-pub trait C8YConnectionBuilder:
-    MessageBoxSocket<C8YRestRequest, C8YRestResult, NoConfig>
-{
-}
+pub trait C8YConnectionBuilder: MessageBoxSocket<C8YRestRequest, C8YRestResult, NoConfig> {}
 
 impl C8YConnectionBuilder for C8YHttpProxyBuilder {}
 
