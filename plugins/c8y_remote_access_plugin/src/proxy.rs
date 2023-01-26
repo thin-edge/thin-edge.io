@@ -3,6 +3,8 @@ use futures::future::join;
 use futures::future::select;
 use futures_util::io::AsyncReadExt;
 use futures_util::io::AsyncWriteExt;
+use miette::Diagnostic;
+use thiserror::Error;
 use tokio::net::TcpStream;
 use tokio::net::ToSocketAddrs;
 
@@ -19,18 +21,22 @@ pub struct WebsocketSocketProxy {
     websocket: Websocket,
 }
 
+#[derive(Diagnostic, Error, Debug)]
+#[error("Failed to connect to TCP socket")]
+struct SocketError(#[from] std::io::Error);
+
 impl WebsocketSocketProxy {
     pub async fn connect<SA: ToSocketAddrs + std::fmt::Debug>(
         url: &Url,
         socket: SA,
         jwt: Jwt,
-    ) -> Result<Self, std::io::Error> {
+    ) -> miette::Result<Self> {
         let socket_future = TcpStream::connect(socket);
         let websocket_future = Websocket::new(url, jwt.authorization_header());
 
         match join(socket_future, websocket_future).await {
-            (Err(socket_error), _) => panic!("{socket_error}"),
-            (_, Err(websocket_error)) => panic!("{websocket_error}"),
+            (Err(socket_error), _) => Err(SocketError(socket_error))?,
+            (_, Err(websocket_error)) => Err(websocket_error),
             (Ok(socket), Ok(websocket)) => Ok(WebsocketSocketProxy { socket, websocket }),
         }
     }

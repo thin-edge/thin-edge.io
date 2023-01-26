@@ -15,20 +15,13 @@ mod input;
 mod proxy;
 
 #[tokio::main]
-async fn main() {
-    if let Err(e) = fallible_main().await {
-        eprintln!("Error: {e:?}");
-        std::process::exit(1);
-    }
-}
-
-async fn fallible_main() -> miette::Result<()> {
-    let config = TedgeConfig::read_from_disk().await?;
+async fn main() -> miette::Result<()> {
+    let config = TedgeConfig::read_from_disk()?;
 
     let command = input::parse_arguments()?;
 
     let url = build_proxy_url(&config.c8y.url, command.key())?;
-    let jwt = Jwt::retrieve(&config.mqtt).await?;
+    let jwt = Jwt::retrieve(&config.mqtt).await.context("Failed when requesting JWT from Cumulocity")?;
 
     let proxy = WebsocketSocketProxy::connect(&url, command.target_address(), jwt)
         .await

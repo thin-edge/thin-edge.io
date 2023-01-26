@@ -21,11 +21,8 @@ impl Jwt {
     }
 
     pub async fn retrieve(config: &TedgeMqttConfig) -> miette::Result<Jwt> {
-        let mqtt_config = mqtt_channel::Config::new(
-            config.bind_address.as_deref().unwrap_or("localhost"),
-            config.port.unwrap_or(1883),
-        )
-        .with_subscriptions(TopicFilter::new_unchecked("c8y/s/dat"));
+        let mqtt_config = mqtt_channel::Config::new(&config.bind_address.to_string(), config.port)
+            .with_subscriptions(TopicFilter::new_unchecked("c8y/s/dat"));
 
         let mut connection = tokio::time::timeout(
             Duration::from_secs(5),
@@ -46,7 +43,7 @@ impl Jwt {
         let mut possible_jwt = None;
         if let Some(message) = wait_for_response(&mut connection.received).await? {
             let (_smartrest_id, jwt): (i32, String) =
-                deserialize_csv_record(std::str::from_utf8(&message.payload).unwrap()).unwrap();
+                deserialize_csv_record(std::str::from_utf8(&message.payload).into_diagnostic()?)?;
             possible_jwt = Some(Jwt(jwt))
         }
 
