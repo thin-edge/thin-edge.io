@@ -238,7 +238,7 @@ checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
 name = "batcher"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "time",
  "tokio",
@@ -328,7 +328,7 @@ checksum = "dfb24e866b15a1af2a1b663f10c6b6b8f397a84aadb828f12e5b289ec23a3a3c"
 
 [[package]]
 name = "c8y-configuration-plugin"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -358,7 +358,7 @@ dependencies = [
 
 [[package]]
 name = "c8y-log-plugin"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -387,7 +387,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_api"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -436,7 +436,7 @@ checksum = "a20104e2335ce8a659d6dd92a51a767a0c062599c73b343fd152cb401e828c3d"
 
 [[package]]
 name = "certificate"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -517,7 +517,7 @@ dependencies = [
 
 [[package]]
 name = "clock"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "mockall",
  "time",
@@ -782,7 +782,7 @@ checksum = "1435fa1053d8b2fbbe9be7e97eca7f33d37b28409959813daefc1446a14247f1"
 
 [[package]]
 name = "download"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "backoff",
@@ -890,7 +890,7 @@ dependencies = [
 
 [[package]]
 name = "flockfile"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "assert_matches",
  "nix",
@@ -1365,7 +1365,7 @@ dependencies = [
 
 [[package]]
 name = "json-writer"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "serde_json",
@@ -1426,7 +1426,7 @@ dependencies = [
 
 [[package]]
 name = "logged_command"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -1567,7 +1567,7 @@ dependencies = [
 
 [[package]]
 name = "mqtt_channel"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1582,7 +1582,7 @@ dependencies = [
 
 [[package]]
 name = "mqtt_tests"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "fastrand",
@@ -1944,7 +1944,7 @@ dependencies = [
 
 [[package]]
 name = "plugin_sm"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2480,7 +2480,7 @@ dependencies = [
 
 [[package]]
 name = "sawtooth-publisher"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "async-log",
  "env_logger 0.9.3",
@@ -2784,7 +2784,7 @@ dependencies = [
 
 [[package]]
 name = "tedge"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2816,7 +2816,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-agent"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -2854,7 +2854,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-apt-plugin"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "clap 3.2.23",
@@ -2870,7 +2870,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-derive"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "quote 1.0.21",
  "serde",
@@ -2880,7 +2880,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-dummy-plugin"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "clap 3.2.23",
  "thiserror",
@@ -2888,7 +2888,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-mapper"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -2931,7 +2931,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-watchdog"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "clap 3.2.23",
@@ -2952,7 +2952,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_api"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2977,7 +2977,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_config"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2997,7 +2997,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_test_utils"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "tempfile",
@@ -3006,7 +3006,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_utils"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "assert_matches",
  "futures",
