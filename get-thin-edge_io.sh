@@ -4,7 +4,7 @@ set -e
 TYPE=full
 TMPDIR=/tmp/tedge
 LOGFILE=/tmp/tedge/install.log
-DEFAULT_VERSION=0.8.1
+DEFAULT_VERSION=0.9.0
 
 # Packages names were changed to confirm to debian naming conventions
 # But we should still care about installing older versions. It will still cause
