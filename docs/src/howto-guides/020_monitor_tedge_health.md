@@ -1,29 +1,52 @@
 # How to monitor health of tedge daemons
 
-The health of tedge daemon processes like `tedge-mapper`, `tedge-agent` etc can be monitored via MQTT.
+The health of tedge daemons like `tedge-mapper`, `tedge-agent` etc can be monitored via MQTT.
 These daemons expose MQTT health endpoints which you can query to check if the process is still active or not.
 
-The health endpoints conform to the following topic scheme, listening for health check requests:
+To get the last known health status of a daemon you can subscribe to the following topic
 
-`tedge/health-check/<tedge-daemon-name>`
-
-expecting empty messages, triggering the health check.
-
-The daemon will then respond back on the topic:
-
-`tedge/health/<tedge-daemon-name>`
-
-with the following payload:
-
-```json
-{ "status": "up", "pid": <process id of the daemon> }
+```
+tedge/health/<tedge-daemon-name>
 ```
 
-All daemons will also respond to health checks sent to the common health check endpoint `tedge/health-check`.
+To refresh the health status of the daemon, publish an empty message on the topic below.
 
-## Supported MQTT topic endpoints
+```
+tedge/health-check/<tedge-daemon-name>
+```
 
-The following endpoints are currently supported by various tedge daemons:
+> Note: if the response is not received then most likely the daemon is down, or not responding
+
+
+For example, `tedge-mapper-c8y` publishes below message on topic `tedge/health/tedge-mapper-c8y` when it starts
+
+```json
+{"pid":290854,"status":"up","time":1674739912}
+```
+
+|Property|Description|
+|--------|-----------|
+|`pid`|Process ID of the daemon|
+|`status`|Daemon status. Possible values are `up` or `down`|
+|`time`|Unix timestamp in seconds|
+
+If the tedge daemon gets stopped or crashed or get killed then a `down` message will be published on health status topic
+and this will be retained till the tedge daemon is re-launched.
+
+E.g the mapper being killed:
+
+```
+tedge mqtt sub 'tedge/health/#'
+
+INFO: Connected
+[tedge/health/mosquitto-c8y-bridge] 1
+[tedge/health/tedge-mapper-c8y] {"pid":51367,"status":"down"}
+[tedge/health/tedge-agent] {"pid":13280,"status":"up","time":1675330667}
+
+```
+## Supported MQTT health endpoint topics
+
+The following endpoints are currently supported:
 
 * `tedge/health/tedge-agent`
 * `tedge/health/tedge-mapper-c8y`
