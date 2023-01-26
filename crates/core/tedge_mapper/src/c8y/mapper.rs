@@ -195,7 +195,7 @@ fn create_directories(config_dir: &Path) -> Result<(), anyhow::Error> {
         "tedge",
         0o644,
         Some(
-            &r#"[exec]
+            r#"[exec]
 command = "/usr/bin/c8y-remote-access-plugin"
 topic = "c8y/s/ds"
 on_message = "530"

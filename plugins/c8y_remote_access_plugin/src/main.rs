@@ -21,7 +21,9 @@ async fn main() -> miette::Result<()> {
     let command = input::parse_arguments()?;
 
     let url = build_proxy_url(&config.c8y.url, command.key())?;
-    let jwt = Jwt::retrieve(&config.mqtt).await.context("Failed when requesting JWT from Cumulocity")?;
+    let jwt = Jwt::retrieve(&config.mqtt)
+        .await
+        .context("Failed when requesting JWT from Cumulocity")?;
 
     let proxy = WebsocketSocketProxy::connect(&url, command.target_address(), jwt)
         .await

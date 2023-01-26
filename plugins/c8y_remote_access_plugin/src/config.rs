@@ -22,11 +22,17 @@ impl TedgeConfig {
         use tedge_config::ConfigSettingAccessor;
         use tedge_config::MqttBindAddressSetting;
         use tedge_config::MqttPortSetting;
-        let config = tedge_config::get_tedge_config().into_diagnostic().context("Reading config")?;
+        let config = tedge_config::get_tedge_config()
+            .into_diagnostic()
+            .context("Reading config")?;
 
         Ok(Self {
             c8y: TedgeC8yConfig {
-                url: config.query(C8yUrlSetting).into_diagnostic()?.as_str().to_owned(),
+                url: config
+                    .query(C8yUrlSetting)
+                    .into_diagnostic()?
+                    .as_str()
+                    .to_owned(),
             },
             mqtt: TedgeMqttConfig {
                 port: config.query(MqttPortSetting).into_diagnostic()?.0,
