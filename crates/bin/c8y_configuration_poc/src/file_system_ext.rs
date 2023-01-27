@@ -77,12 +77,6 @@ impl FsWatchActorBuilder {
     }
 }
 
-impl FsWatchActorBuilder {
-    pub fn new_watcher(&mut self, watch_path: PathBuf, peer_sender: DynSender<FsWatchEvent>) {
-        self.watch_dirs.push((watch_path, peer_sender));
-    }
-}
-
 impl MessageSource<FsWatchEvent, PathBuf> for FsWatchActorBuilder {
     fn register_peer(&mut self, config: PathBuf, sender: DynSender<FsWatchEvent>) {
         self.watch_dirs.push((config, sender));

@@ -1,6 +1,6 @@
+use super::actor::ConfigManagerMessageBox;
 use super::plugin_config::PluginConfig;
 use super::ConfigManagerConfig;
-use crate::c8y_http_proxy::handle::C8YHttpProxy;
 use anyhow::Result;
 use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
@@ -12,50 +12,40 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use std::path::Path;
-use tedge_actors::DynSender;
-use tedge_mqtt_ext::MqttMessage;
 use tracing::error;
 use tracing::info;
 
 pub struct ConfigUploadManager {
     config: ConfigManagerConfig,
-    mqtt_publisher: DynSender<MqttMessage>,
-    c8y_http_proxy: C8YHttpProxy,
 }
 
 impl ConfigUploadManager {
-    pub fn new(
-        config: ConfigManagerConfig,
-        mqtt_publisher: DynSender<MqttMessage>,
-        c8y_http_proxy: C8YHttpProxy,
-    ) -> Self {
-        ConfigUploadManager {
-            config,
-            mqtt_publisher,
-            c8y_http_proxy,
-        }
+    pub fn new(config: ConfigManagerConfig) -> Self {
+        ConfigUploadManager { config }
     }
 
     pub async fn handle_config_upload_request(
         &mut self,
         config_upload_request: SmartRestConfigUploadRequest,
+        message_box: &mut ConfigManagerMessageBox,
     ) -> Result<()> {
         info!(
             "Received c8y_UploadConfigFile request for config type: {} from device: {}",
             config_upload_request.config_type, config_upload_request.device
         );
 
-        self.handle_config_upload_request_tedge_device(config_upload_request)
+        self.handle_config_upload_request_tedge_device(config_upload_request, message_box)
             .await
     }
 
     pub async fn handle_config_upload_request_tedge_device(
         &mut self,
         config_upload_request: SmartRestConfigUploadRequest,
+        message_box: &mut ConfigManagerMessageBox,
     ) -> Result<()> {
         // set config upload request to executing
         let msg = UploadConfigFileStatusMessage::executing()?;
-        self.mqtt_publisher.send(msg).await?;
+        message_box.mqtt_publisher.send(msg).await?;
 
         let plugin_config = PluginConfig::new(&self.config.plugin_config_path);
 
@@ -66,6 +56,7 @@ impl ConfigUploadManager {
                     self.upload_config_file(
                         Path::new(config_file_path.as_str()),
                         &config_upload_request.config_type,
+                        message_box,
                     )
                     .await
                 }
@@ -81,13 +72,13 @@ impl ConfigUploadManager {
 
                 let successful_message =
                     UploadConfigFileStatusMessage::successful(Some(upload_event_url))?;
-                self.mqtt_publisher.send(successful_message).await?;
+                message_box.mqtt_publisher.send(successful_message).await?;
             }
             Err(err) => {
                 error!("The configuration upload for '{target_config_type}' failed.",);
 
                 let failed_message = UploadConfigFileStatusMessage::failed(err.to_string())?;
-                self.mqtt_publisher.send(failed_message).await?;
+                message_box.mqtt_publisher.send(failed_message).await?;
             }
         }
 
@@ -98,8 +89,9 @@ impl ConfigUploadManager {
         &mut self,
         config_file_path: &Path,
         config_type: &str,
+        message_box: &mut ConfigManagerMessageBox,
     ) -> Result<String> {
-        let url = self
+        let url = message_box
             .c8y_http_proxy
             .upload_config_file(config_file_path, config_type, None)
             .await

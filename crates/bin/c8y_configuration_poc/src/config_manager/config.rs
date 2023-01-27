@@ -1,5 +1,8 @@
+use c8y_api::smartrest::topic::C8yTopic;
+use mqtt_channel::TopicFilter;
 use std::path::Path;
 use std::path::PathBuf;
+use tedge_api::health::health_check_topics;
 use tedge_config::*;
 
 use super::plugin_config::PluginConfig;
@@ -21,6 +24,8 @@ pub struct ConfigManagerConfig {
     pub tedge_http_port: u16,
     pub plugin_config_path: PathBuf,
     pub plugin_config: PluginConfig,
+    pub c8y_request_topics: TopicFilter,
+    pub health_check_topics: TopicFilter,
 }
 
 impl ConfigManagerConfig {
@@ -53,6 +58,9 @@ impl ConfigManagerConfig {
 
         let plugin_config = PluginConfig::new(&plugin_config_path);
 
+        let c8y_request_topics: TopicFilter = C8yTopic::SmartRestRequest.into();
+        let health_check_topics = health_check_topics(DEFAULT_PLUGIN_CONFIG_TYPE);
+
         Ok(ConfigManagerConfig {
             config_dir,
             tmp_dir,
@@ -64,6 +72,8 @@ impl ConfigManagerConfig {
             tedge_http_port,
             plugin_config_path,
             plugin_config,
+            c8y_request_topics,
+            health_check_topics,
         })
     }
 }
