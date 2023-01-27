@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
+use tedge_actors::futures::StreamExt;
 use tedge_actors::Actor;
 use tedge_actors::ActorBuilder;
 use tedge_actors::ChannelError;
@@ -8,7 +9,6 @@ use tedge_actors::MessageBox;
 use tedge_actors::RuntimeAction;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
-use tedge_actors::StreamExt;
 
 pub struct SignalActorBuilder;
 
