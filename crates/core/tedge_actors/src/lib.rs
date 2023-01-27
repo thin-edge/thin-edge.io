@@ -372,12 +372,12 @@
 #![forbid(unsafe_code)]
 
 mod actors;
-mod builders;
+pub mod builders;
 mod channels;
 mod errors;
 mod handles;
 mod keyed_messages;
-mod message_boxes;
+pub mod message_boxes;
 mod messages;
 mod runtime;
 mod tasks;
@@ -408,6 +408,7 @@ pub mod tests;
 
 // FIXME: how to have these examples only available when testing the doc comments?
 // #[cfg(test)]
+#[doc(hidden)]
 pub mod examples;
 
 pub mod test_helpers;

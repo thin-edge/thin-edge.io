@@ -1,3 +1,15 @@
+//! Message box builders
+//!
+//! In order to let peer actors connect to a message box with specific channels,
+//! the actor implementation must provide a message box builder that uses the following traits
+//! to list the various connection points.
+//!
+//! - `MessageSource<O,C>`: a trait to declare that a box is a source of `O` messages
+//!    to which one can subscribe using a subscription of type `C`.
+//! - `MessageSink<I>`: a trait to declare that a box can receive `I` messages.
+//! - `MessageBoxSocket<I,O>`: a trait to declare that a box provides a service with `I` inputs and `O` outputs.
+//! - `MessageBoxPlug<I,O>`: a trait to declare that a box must be connected to a service with `I` inputs and `O` outputs.
+//!
 use crate::mpsc;
 use crate::ClientId;
 use crate::ConcurrentServiceMessageBox;

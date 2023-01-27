@@ -1,3 +1,94 @@
+//! Message boxes are the only way for actors to interact with each others.
+//!
+//! When an [Actor](crate::Actor) instance is spawned,
+//! this actor is given a [MessageBox](crate::MessageBox)
+//! to collect its input [Messages](crate::Message) and to forward its output [Messages](crate::Message).
+//!
+//! Conceptually, a message box is a receiver of input messages combined with a sender of output messages.
+//! * The receiver is connected to the senders of peer actors;
+//!   and reciprocally the sender is connected to receivers of peer actors.
+//! * The receivers are [mpsc::Receiver](crate::mpsc::Receiver) that collect messages from several sources,
+//!   and deliver the messages to the actor in the order they have been received.
+//! * The senders are [DynSender](crate::DynSender) that adapt the messages sent to match constraints of the receivers.
+//!
+//! A [SimpleMessageBox<Input, Output>](crate::SimpleMessageBox) implements exactly this conceptual view:
+//!
+//! ```ascii
+//!                    input_senders: DynSender<Input> ...
+//!
+//!                                   │
+//!         ┌─────────────────────────┴───────────────────────────┐
+//!         │                         ▼                           │
+//!         │         input_receiver: mpsc::Receiver<Input>       │
+//!         │                                                     │
+//!         │                         │                           │
+//!         │                         │                           │
+//!         │                         ▼                           │
+//!         │                    actor: Actor                     │
+//!         │                                                     │
+//!         │                         │                           │
+//!         │                         │                           │
+//!         │                         ▼                           │
+//!         │          output_sender: DynSender<Output>           │
+//!         │                                                     │
+//!         └─────────────────────────┬───────────────────────────┘
+//!                                   │
+//!                                   ▼
+//!                output_receivers: mpsc::Receiver<Output> ...
+//! ```
+//!
+//! In practice, a message box can wrap more than a single receiver and sender.
+//! Indeed, collecting all the messages in a single receiver, a single queue,
+//! prevents the actor to process some messages with a higher priority,
+//! something that is required to handle runtime requests
+//! or to await a response from a specific service.
+//!
+//! Here is a typical message box that let the actor
+//! - handles not only regular Input and Output messages
+//! - but also processes runtime requests with a higher priority
+//! - and awaits specifically for responses to its HTTP requests.
+//!
+//! ```ascii
+//!
+//!                     │                                      │
+//! ┌───────────────────┴──────────────────────────────────────┴─────────────────────────┐
+//! │                   ▼                                      ▼                         │
+//! │   input_receiver: mpsc::Receiver<Input>     runtime: Receiver<RuntimeRequest>      │
+//! │                   │                                                                │
+//! │                   │                                                                │
+//! │                   ▼                         http_request: DynSender<HttpRequest> ──┼────►
+//! │              actor: Actor                                                          │
+//! │                   │                        http_response: Receiver<HttpResponse> ◄─┼─────
+//! │                   │                                                                │
+//! │                   ▼                                                                │
+//! │    output_sender: DynSender<Output>                                                │
+//! │                                                                                    │
+//! └───────────────────┬────────────────────────────────────────────────────────────────┘
+//!                     │
+//!                     ▼
+//! ```
+//!
+//! To address this diversity of message priority requirements,
+//! but also to add specific coordination among input and output channels,
+//! each [Actor](crate::Actor) is free to choose its own [MessageBox](crate::MessageBox) implementation:
+//!
+//! ```no_run
+//! # use crate::tedge_actors::MessageBox;
+//! trait Actor {
+//!     /// Type of message box used by this actor
+//!     type MessageBox: MessageBox;
+//! }
+//! ```
+//!
+//! This crates provides several built-in message box implementations:
+//!
+//! - [SimpleMessageBox<I,O>](crate::SimpleMessageBox) for actors that simply process messages in turn,
+//! - [ServiceMessageBox<I,O>](crate::ServiceMessageBox) for actors that deliver a request-response service,
+//! - [ConcurrentServiceMessageBox<I,O>](crate::ConcurrentServiceMessageBox) for service actors that process requests concurrently,
+//! - [RequestResponseHandler<I,O>](crate::RequestResponseHandler) for actors that use a request-response service,
+//!
+//!
+
 use crate::Builder;
 use crate::ChannelError;
 use crate::DynSender;
@@ -11,77 +102,7 @@ use log::debug;
 use log::info;
 use std::fmt::Debug;
 
-/// A message box used by an actor to collect all its input and forward its output
-///
-/// Conceptually, a message box is a `Receiver<Input: Message>`, from where an actor
-/// receives input messages, and a `DynSender<Output: Message>`, through which the actor
-/// sends output messages. The receiver can be connected to the senders of peer actors;
-/// and reciprocally the sender can be connected to several receivers of peer actors.
-/// * The receivers are `mpsc::Receiver` that collect messages from several sources.
-/// * The senders are `DynSender` that adapt the messages sent to match constraints of the receivers.
-///
-/// A `SimpleMessageBox<Input, Output>` implements exactly this conceptual view:
-///
-/// ```ascii
-///                    input_senders: DynSender<Input> ...
-///
-///                                   │
-///         ┌─────────────────────────┴───────────────────────────┐
-///         │                         ▼                           │
-///         │         input_receiver: mpsc::Receiver<Input>       │
-///         │                                                     │
-///         │                         │                           │
-///         │                         │                           │
-///         │                         ▼                           │
-///         │                    actor: Actor                     │
-///         │                                                     │
-///         │                         │                           │
-///         │                         │                           │
-///         │                         ▼                           │
-///         │          output_sender: DynSender<Output>           │
-///         │                                                     │
-///         └─────────────────────────┬───────────────────────────┘
-///                                   │
-///                                   ▼
-///                output_receivers: mpsc::Receiver<Output> ...
-/// ```
-///
-/// However, collecting all the messages in a single receiver prevents
-/// the actor to process messages with a different priority according to their sources.
-/// So, in practice, actors use specific message boxes to match specific needs.
-///
-/// Here is a typical message box that
-/// - handles not only regular Input and Output messages
-/// - but also processes runtime requests with a higher priority
-/// - and awaits for responses for HTTP requests.
-///
-/// ```ascii
-///
-///                     │                                      │
-/// ┌───────────────────┴──────────────────────────────────────┴─────────────────────────┐
-/// │                   ▼                                      ▼                         │
-/// │   input_receiver: mpsc::Receiver<Input>     runtime: Receiver<RuntimeRequest>      │
-/// │                   │                                                                │
-/// │                   │                                                                │
-/// │                   ▼                         http_request: DynSender<HttpRequest> ──┼────►
-/// │              actor: Actor                                                          │
-/// │                   │                        http_response: Receiver<HttpResponse> ◄─┼─────
-/// │                   │                                                                │
-/// │                   ▼                                                                │
-/// │    output_sender: DynSender<Output>                                                │
-/// │                                                                                    │
-/// └───────────────────┬────────────────────────────────────────────────────────────────┘
-///                     │
-///                     ▼
-/// ```
-///
-/// In order to let peer actors to such a message box with specific channels,
-/// the actor implementation must provide a message box builder that implements the following traits:
-///
-/// - `MessageSource`
-/// - `MessageSink`
-/// - `MessageBoxSocket`
-/// - `MessageBoxPlug`
+/// A trait to define the interactions with a message box
 ///
 pub trait MessageBox: 'static + Sized + Send + Sync {
     /// Type of input messages the actor consumes
