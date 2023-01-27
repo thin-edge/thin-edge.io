@@ -230,19 +230,7 @@ impl ConfigManagerMessageBox {
     }
 
     async fn recv(&mut self) -> Option<ConfigInput> {
-        tokio::select! {
-            Some(message) = self.events.next() => {
-                match message {
-                    ConfigInput::MqttMessage(message) => {
-                        Some(ConfigInput::MqttMessage(message))
-                    },
-                    ConfigInput::FsWatchEvent(message) => {
-                        Some(ConfigInput::FsWatchEvent(message))
-                    }
-                }
-            },
-            else => None,
-        }
+        self.events.next().await
     }
 
     async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
