@@ -24,7 +24,7 @@ use mqtt_channel::Message;
 use mqtt_channel::StreamExt;
 use mqtt_channel::TopicFilter;
 use tedge_actors::fan_in_message_type;
-use tedge_actors::mpsc;
+use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;

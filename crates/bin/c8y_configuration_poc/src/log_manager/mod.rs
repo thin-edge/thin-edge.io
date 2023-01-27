@@ -9,7 +9,7 @@ use crate::file_system_ext::FsWatchEvent;
 use actor::*;
 use async_trait::async_trait;
 pub use config::*;
-use tedge_actors::mpsc;
+use tedge_actors::futures::channel::mpsc;
 use tedge_actors::ActorBuilder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
