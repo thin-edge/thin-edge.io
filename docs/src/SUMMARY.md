@@ -46,6 +46,7 @@
     - [How to manage configuration files with Cumulocity](./howto-guides/025_config_management_plugin.md)
     - [How to install thin-edge manually with OpenRC](./howto-guides/026_how_to_install_thin_edge_manually.md)
     - [How to enable configuration management on child devices](./howto-guides/child_device_config_management_agent.md)
+    - [How to connect to your thin-edge.io device with Cumulocity remote access](./howto-guides/027_remote_access_with_cumulocity.md)
 
 - [Developer Documentation](dev_doc.md)
 
