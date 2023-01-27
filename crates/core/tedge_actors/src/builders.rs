@@ -1,14 +1,32 @@
-//! Message box builders
+//! Actor and Message box builders
 //!
-//! In order to let peer actors connect to a message box with specific channels,
-//! the actor implementation must provide a message box builder that uses the following traits
-//! to list the various connection points.
+//! [Actor](crate::Actor) implementations are given the freedom
+//! to choose their own [MessageBox](crate::MessageBox) implementation.
+//! This adds the flexibility to process some messages with a higher priority,
+//! to await a message from a specific source,
+//! or simply to ease the actor code with specific peer handles.
 //!
-//! - `MessageSource<O,C>`: a trait to declare that a box is a source of `O` messages
-//!    to which one can subscribe using a subscription of type `C`.
-//! - `MessageSink<I>`: a trait to declare that a box can receive `I` messages.
-//! - `MessageBoxSocket<I,O>`: a trait to declare that a box provides a service with `I` inputs and `O` outputs.
-//! - `MessageBoxPlug<I,O>`: a trait to declare that a box must be connected to a service with `I` inputs and `O` outputs.
+//! However, only the *internal* structure and usage of a message box is let free to each actor.
+//! The *external* view of a message box is standardized, so actors can be connected to each others,
+//! with no knowledge of their internal organisation.
+//!
+//! In order to let peer actors connect to its message box,
+//! an actor implementation must provide a message box builder
+//! that defines the various connection points using the following traits:
+//!
+//! - [Builder](crate::Builder):
+//!   this trait defines how to build the actor message box once fully connected to its peers.
+//! - [MessageSink](crate::MessageSink):
+//!   declares that the message box under construction can receive input messages.
+//! - [MessageSource](crate::MessageSource):
+//!   declares that the message box under construction is a source of output messages
+//!   to which an actor can subscribe to providing some
+//! - [MessageBoxSocket](crate::MessageBoxSocket)
+//!   declares that the message box under construction is that of a service provider.
+//!   This service expects inputs and returns outputs of a specific type,
+//!   and might requires the consumers to provide subscription config.
+//! - [MessageBoxPlug](crate::MessageBoxPlug):
+//!   declares that the message box under construction is that of a service consumer.
 //!
 use crate::mpsc;
 use crate::ClientId;
