@@ -16,8 +16,6 @@ use crate::ConcurrentServiceMessageBox;
 use crate::DynSender;
 use crate::KeyedSender;
 use crate::Message;
-use crate::MessageSink;
-use crate::MessageSource;
 use crate::NullSender;
 use crate::RuntimeError;
 use crate::RuntimeHandle;
@@ -55,6 +53,18 @@ pub trait Builder<T>: Sized {
 
 /// Placeholder when no specific config is required by a builder implementation
 pub struct NoConfig;
+
+/// The builder of a MessageBox must implement this trait for every message type that can be sent to it
+pub trait MessageSink<M: Message> {
+    /// Return the sender that can be used by peers to send messages to this actor
+    fn get_sender(&self) -> DynSender<M>;
+}
+
+/// The builder of a MessageBox must implement this trait for every message type that it can receive from its peers
+pub trait MessageSource<M: Message, Config> {
+    /// The message will be sent to the peer using the provided `sender`
+    fn register_peer(&mut self, config: Config, sender: DynSender<M>);
+}
 
 /// A trait to connect a message box under-construction to peer messages boxes
 pub trait MessageBoxSocket<Request: Message, Response: Message, Config> {
