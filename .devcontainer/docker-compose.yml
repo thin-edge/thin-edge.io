@@ -1,0 +1,38 @@
+version: '3'
+services:
+  tedge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args: 
+        VARIANT: bullseye
+    environment:
+      - DOCKER_HOST=unix:///opt/run/docker.sock
+
+    # Option 1: Use privileged container (for dev purposes only!)
+    volumes:
+      # Mount docker socket to something other than /var/run as a
+      # a privileged container or with CAP_SYS_ADMIN overwrites this
+      - /var/run/docker.sock:/opt/run/docker.sock
+      - tedge-bashhistory:/commandhistory
+      - device-certs:/etc/tedge/device-certs
+      # Mounts the project folder to '/workspace'. While this file is in .devcontainer,
+      # mounts are relative to the first file in the list, which is a level up.
+      - ..:/workspace:cached
+    privileged: true
+
+    # Option 2: Only mount cgroup as readonly (but requires it to already exist)
+    # privileged: true
+    # volumes:
+    #   # Mount docker socker to something other that /var/run as a
+    #   # a privileged container or with CAP_SYS_ADMIN overwrites this
+    #   - /var/run/docker.sock:/opt/run/docker.sock
+    #   - tedge-bashhistory:/commandhistory
+    #   - device-certs:/etc/tedge/device-certs
+    #   - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    # cap_add:
+    #   - CAP_SYS_ADMIN
+
+volumes:
+  tedge-bashhistory:
+  device-certs:
