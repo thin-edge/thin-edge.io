@@ -7,8 +7,8 @@ use crate::MessageSource;
 use crate::NoConfig;
 use crate::NullSender;
 use crate::Sender;
-use crate::SinkExt;
 use futures::stream::FusedStream;
+use futures::SinkExt;
 use futures::StreamExt;
 use std::fmt::Debug;
 

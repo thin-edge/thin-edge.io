@@ -373,12 +373,12 @@
 
 mod actors;
 pub mod builders;
-mod channels;
+pub mod channels;
 mod errors;
-mod keyed_messages;
+pub mod keyed_messages;
 pub mod message_boxes;
 mod messages;
-mod runtime;
+pub mod runtime;
 mod tasks;
 
 pub mod internal {
@@ -393,9 +393,8 @@ pub use message_boxes::*;
 pub use messages::*;
 pub use runtime::*;
 
-pub use futures::channel::mpsc;
-pub use futures::SinkExt;
-pub use futures::StreamExt;
+pub use futures;
+use futures::channel::mpsc;
 
 #[macro_use]
 mod macros;
