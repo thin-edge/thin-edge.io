@@ -23,7 +23,7 @@ use tedge_actors::ServiceMessageBoxBuilder;
 
 pub type HttpHandle = RequestResponseHandler<HttpRequest, HttpResult>;
 pub trait HttpConnectionBuilder: MessageBoxSocket<HttpRequest, HttpResult, NoConfig> {}
-impl HttpConnectionBuilder for HttpActorBuilder {}
+impl<T> HttpConnectionBuilder for T where T: MessageBoxSocket<HttpRequest, HttpResult, NoConfig> {}
 
 pub struct HttpActorBuilder {
     actor: ConcurrentServiceActor<HttpService>,
