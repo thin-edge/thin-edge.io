@@ -77,8 +77,8 @@ impl Service for C8YJwtRetriever {
 }
 
 /// A JwtRetriever that simply always returns the same JWT token (possibly none)
-pub struct ConstJwtRetriever {
-    token: String,
+pub(crate) struct ConstJwtRetriever {
+    pub token: String,
 }
 
 #[async_trait]

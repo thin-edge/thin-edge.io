@@ -26,6 +26,9 @@ pub mod credentials;
 pub mod handle;
 pub mod messages;
 
+#[cfg(test)]
+mod tests;
+
 /// Configuration of C8Y REST API
 #[derive(Default)]
 pub struct C8YHttpConfig {
@@ -82,6 +85,17 @@ impl C8YHttpProxyBuilder {
             http,
             jwt,
         }
+    }
+
+    #[cfg(test)]
+    async fn run(self) -> Result<(), tedge_actors::ChannelError> {
+        let actor = self.config;
+        let message_box = C8YHttpProxyMessageBox {
+            clients: self.clients.build(),
+            http: self.http,
+            jwt: self.jwt,
+        };
+        tedge_actors::Actor::run(actor, message_box).await
     }
 }
 

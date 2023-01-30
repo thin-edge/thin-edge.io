@@ -29,3 +29,6 @@ tokio = { version = "1.23", features = ["rt", "rt-multi-thread"] }
 toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 try-traits = { version = "0.1" }
+
+[dev-dependencies]
+tedge_http_ext = { path = "../../extensions/tedge_http_ext", features = ["test_helpers"] }

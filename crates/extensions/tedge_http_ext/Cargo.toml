@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+# No features on by default
+default = []
+test_helpers = []
+
 [dependencies]
 async-trait = "0.1"
 futures = { version = "0.3" }

@@ -4,6 +4,9 @@ mod messages;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "test_helpers")]
+pub mod test_helpers;
+
 pub use messages::*;
 
 use actor::*;
