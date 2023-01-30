@@ -41,9 +41,9 @@ A measurement can carry a **single value**, or **multiple values** all taken at 
 |`value`      |the value that was sampled; can be named (especially in context of a multi-value measurement) or unnamed; must be an integer or floating point number|
 |`timestamp`  |optional time that indicates when values were sampled; when not provided, thin-edge.io uses the current system time as the time of the sample; when provided must be conform to ISO 8601|
 
-  * **behaviour of a measurement:**
-    - thin-edge does not store any historical sampled values for measurements
-    - there is no initialization value for measurements; i.e. a measurement is not visible on thin-edge before the 1st sample was sent to thin-edge
+**behaviour of a measurement**
+- thin-edge does not store any historical sampled values for measurements
+- there is no initialization value for measurements; i.e. a measurement is not visible on thin-edge before the 1st sample was sent to thin-edge
 
 ### Events
 **events** are notifications that something happened on a device's environment or software system;
@@ -106,7 +106,7 @@ Any malicious access to the broker can hazard **thin-edge** and all connected de
 
 ### Telemetry Data
 
-All telemetry data (**Measurements**, **Events**, **Alarms**) are reflected with MQTT topics, where each has it's specific subtopic (e.g. `tedge/measurements` or `tedge/events`).
+All telemetry data (**Measurements**, **Events**, **Alarms**) are reflected with MQTT topics, where each has its specific subtopic (e.g. `tedge/measurements`, `tedge/events`, `tedge/alarms` etc.).
 
   * each provider of a **measurement**, **event** or **alarm** sends the occurring data to **thin-edge's** MQTT broker
     * a provider can be the domain application[^1], other SW components / 3rd parties
