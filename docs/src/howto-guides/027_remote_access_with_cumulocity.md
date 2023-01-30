@@ -1,6 +1,6 @@
 # Cumulocity RemoteAcessConnect plugin
 
-To access a device remotely that runs thin-edge.io, a plugin of the operation plugin concept is used. The tedge_agent is checking for cloud remote access operation and is triggering the particular plugin. You can use the remote access tab in device management to access the device via SSH or VNC.
+To access a device remotely that runs thin-edge.io, a plugin of the operation plugin concept is used. The tedge-mapper is checking for cloud remote access operation and is triggering the particular plugin. You can use the remote access tab in device management to access the device via SSH or VNC.
 
 ## Requirements
 
@@ -14,7 +14,6 @@ To access a device remotely that runs thin-edge.io, a plugin of the operation pl
 ## Usage
 
 Make sure thin-edge.io is connected to Cumulocity.
-If installation is done properly according to the steps above, you hae to disconnect and reconnect thin-edge.io. In that way the suppoerted Operations will be updated.
 
 You device within Cumulocity should look similar to this (the "Remote access" tab should be visible in the menu on the left):
 
