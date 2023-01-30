@@ -1,0 +1,76 @@
+// For format details, see https://aka.ms/vscode-remote/devcontainer.json or this file's README at:
+// https://github.com/microsoft/vscode-dev-containers/tree/v0.195.0/containers/rust
+{
+	"name": "thin-edge.io",
+	// Must be set to false, otherwise the cmd (or entrypoint) will not be PID 1 which is required by systemd
+	"overrideCommand": false,
+
+	// Docker Compose
+	// The 'service' property is the name of the service for the container that VS Code should
+	// use. Update this value and .devcontainer/docker-compose.yml to the real service name.
+	"service": "tedge",
+	"dockerComposeFile": "docker-compose.yml",
+	"workspaceFolder": "/workspace",
+
+	// Configure tool-specific properties.
+	"customizations": {
+		// Configure properties specific to VS Code.
+		"vscode": {
+			// Set *default* container specific settings.json values on container create.
+			"settings": {
+				"lldb.executable": "/usr/bin/lldb",
+				// VS Code don't watch files under ./target
+				"files.watcherExclude": {
+					"**/target/**": true
+				},
+				"rust-analyzer.checkOnSave.command": "clippy",
+
+				// python
+				"python.defaultInterpreterPath": "${containerWorkspaceFolder}/tests/RobotFramework/.venv/bin/python",
+				"python.envFile": "${containerWorkspaceFolder}/.env",
+				"python.languageServer": "Default",
+				"python.linting.enabled": true,
+				"python.linting.pylintEnabled": true,
+				"python.formatting.provider": "black",
+				"python.formatting.blackPath": "black",
+				"python.linting.pydocstylePath": "/usr/local/py-utils/bin/pydocstyle",
+				"python.testing.unittestEnabled": false,
+				"python.testing.pytestEnabled": false,
+				"python.linting.pylintPath": "pylint",
+				"robot.codeFormatter": "builtinTidy"
+				// "python.testing.pytestArgs": [
+				// 	"integration",
+				// 	"--log-cli-level=INFO"
+				// ]
+			},
+			
+			// Add the IDs of extensions you want installed when the container is created.
+			"extensions": [
+				"vadimcn.vscode-lldb",
+				"mutantdino.resourcemonitor",
+				"matklad.rust-analyzer",
+				"tamasfe.even-better-toml",
+				"serayuzgur.crates",
+				"usernamehw.errorlens",
+				// Shell script validation
+				"timonwong.shellcheck",
+				// Containers
+				"ms-azuretools.vscode-docker",
+				// SCM
+				"eamodio.gitlens",
+				"github.vscode-pull-request-github",
+				// python
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"njpwerner.autodocstring",
+				// Robot Framework
+				"robocorp.robocorp-code",
+				"robocorp.robotframework-lsp"
+			]
+		}
+	},
+	"postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
+
+	// Use root as there are some issues with cross using the docker commands in some environments (e.g. colima on MacOs)
+	"remoteUser": "root"
+}
