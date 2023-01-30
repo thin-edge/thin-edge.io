@@ -25,9 +25,7 @@ async fn main() -> miette::Result<()> {
         .await
         .context("Failed when requesting JWT from Cumulocity")?;
 
-    let proxy = WebsocketSocketProxy::connect(&url, command.target_address(), jwt)
-        .await
-        .unwrap();
+    let proxy = WebsocketSocketProxy::connect(&url, command.target_address(), jwt).await?;
 
     proxy.run().await;
     Ok(())
@@ -62,11 +60,13 @@ impl Websocket {
             .header("sec-websocket-version", "13")
             .uri(url.to_string())
             .body(())
-            .unwrap();
+            .into_diagnostic()
+            .context("Instantiating Websocket connection")?;
 
         let socket = async_tungstenite::tokio::connect_async(request)
             .await
-            .unwrap()
+            .into_diagnostic()
+            .context("Connecting to Websocket")?
             .0;
         Ok(Websocket {
             socket: WsStream::new(socket),
