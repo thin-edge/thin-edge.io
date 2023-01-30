@@ -526,7 +526,7 @@ sequenceDiagram
    the `c8y-configuration-plugin` notifies the cloud accordingly.
     1. When a success message is received,
        then the configuration plugin transfers to the cloud the content `PUT` by the child-device
-       under `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_snapshop/$TYPE` and
+       under `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_snapshot/$TYPE` and
        finally removes this file when acknowledged by the cloud.
     1. If a notification message is received while none is expected for this type of configuration,
        then this notification message is ignored.
@@ -543,8 +543,8 @@ as if it received a config snapshot request for `c8y-configuration-plugin` type 
 
 1. On start-up, the child-device uploads this file (as well as on update of this file list),
    as if it received a config snapshot request for `c8y-configuration-plugin` type:
-      1. Generate a `c8y-configuration-plugin.toml` with the supported config list in the presribed format.
-      2. Uploads this file to `http://$TEDGE_HTTP/tedge/file-transfer/$CHILD_DEVICE_ID/config_snapshot/c8y-configuration-plugin` with a `PUT` call.
+      1. Generate a `c8y-configuration-plugin.toml` with the supported config list in the prescribed format.
+      2. Uploads this file to `http://$TEDGE_HTTP/tedge/file-transfer/$CHILD_DEVICE_ID/c8y-configuration-plugin` with a `PUT` call.
       3. On success of the upload, the child-device agent
          notifies the `c8y-configuration-plugin` with an MQTT message published on the topic
          `tedge/$CHILD_DEVICE_ID/commands/res/config_snapshot`
@@ -554,7 +554,7 @@ as if it received a config snapshot request for `c8y-configuration-plugin` type 
 
 2. The plugin does the following on receipt of the response with `"type": "c8y-configuration-plugin"`,
    received for the upload on `tedge/$CHILD_DEVICE_ID/commands/res/config_snapshot` topic.
-   1. Take a copy of the transferred file under `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_snapshop/c8y-configuration-plugin`
+   1. Take a copy of the transferred file under `$TEDGE_HTTP_ROOT/$CHILD_DEVICE_ID/config_snapshot/c8y-configuration-plugin`
       and puts this copy under `$TEDGE_CONFIG_DIR/c8y/$CHILD_DEVICE_ID/c8y-configuration-plugin.toml`
    2. Create two empty files `c8y_DownloadConfigFile` and `c8y_UploadConfigFile` under `/etc/tedge/operations/c8y/$CHILD_DEVICE_ID`
       to inform the Cumulocity mapper that this child device supports configuration management.
