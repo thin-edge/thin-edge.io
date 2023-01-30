@@ -13,10 +13,10 @@ For all data it defines format and explains behaviour.
 e.g. voltage and current of an electricity meter, or current state of the manufacturing control process
 
 
-A measurement can carry a **single value**, or **muliple values** all taken at a single point in time.
+A measurement can carry a **single value**, or **multiple values** all taken at a single point in time.
 ```javascript
    {
-     // example for a single-value messurement
+     // example for a single-value measurement
      "temperature":               // 'type_name' of that measurement
                     25.3,         // 'value' of that measurement
      "time": "2020-10-15T05:30:47+00:00",  // optional 'timestamp' of that measurement
@@ -127,7 +127,7 @@ The communication diagram below illustrates that behaviour.
    {
      // example for an MQTT message that contains two measurements
 
-     // first measurement, e.g. single-value messurement
+     // first measurement, e.g. single-value measurement
      "temperature": 25.3,
 
      // second measurement, e.g. multi-value measurement
