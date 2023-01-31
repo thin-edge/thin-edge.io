@@ -179,16 +179,28 @@ Then we need to add the configuration to the file (`/etc/tedge/operations/c8y/c8
 And now the content of our command plugin:
 
 ```shell
-#!/usr/bin/sh
+#!/bin/bash
+# Parse the smart rest message, ignore the first two field, and everything afterwards is the command
+COMMAND="${1#*,*,}"
 
-mosquitto_pub -t c8y/s/us -m 501,c8y_Command
+# Check if command is wrapped with quotes, if so then remove them
+if [[ "$COMMAND" == \"*\" ]]; then
+    COMMAND="${COMMAND:1:-1}"
+fi
 
-OUTPUT=$(echo $1)
+# Execute command
+bash -c "$COMMAND"
+EXIT_CODE=$?
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "Command returned a non-zero exit code. code=$EXIT_CODE" >&2
+fi
 
-mosquitto_pub -t c8y/s/us -m 503,c8y_Command,"$OUTPUT"
+exit "$EXIT_CODE"
 ```
 
-This simple example will execute the command `echo $1` and send the result back to the cloud.
+This simple example will parse the third field of the received SmartREST message and execute the command.
+If it exits with the status code `0`, a successful message with the stdout content will be reported to Cumulocity.
+If it exits with a non-zero code, a failure message with the stderr content will be sent out.
 
 > Note: The command will be executed with tedge-mapper permission level so most of the system level commands will not work.
 
