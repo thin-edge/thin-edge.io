@@ -20,4 +20,5 @@ SUBCOMMANDS:
     disconnect    Remove bridge connection for a provider
     help          Print this message or the help of the given subcommand(s)
     mqtt          Publish a message on a topic and subscribe a topic
+    reconnect     Reconnect command, calls disconnect followed by connect
 ```
