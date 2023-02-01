@@ -5,6 +5,7 @@ members = [
     "crates/tests/*",
     "plugins/c8y_configuration_plugin",
     "plugins/c8y_log_plugin",
+    "plugins/c8y_remote_access_plugin",
     "plugins/tedge_apt_plugin",
     "plugins/tedge_dummy_plugin",
 ]
