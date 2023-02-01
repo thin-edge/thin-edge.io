@@ -2,7 +2,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Stdio;
 
-use futures::future::select;
 use futures::future::try_select;
 use futures::future::Either;
 use miette::Context;
