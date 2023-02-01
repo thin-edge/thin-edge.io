@@ -14,6 +14,8 @@ pub const DEFAULT_LOG_PATH: &str = "/var/log";
 pub const DEFAULT_RUN_PATH: &str = "/run";
 const DEFAULT_DEVICE_TYPE: &str = "thin-edge.io";
 
+pub const DEFAULT_FILE_TRANSFER_ROOT_PATH: &str = "/var/tedge/file-transfer";
+
 /// Stores default values for use by `TEdgeConfig` in case no configuration setting
 /// is available.
 ///

@@ -119,4 +119,7 @@ pub enum SMCumulocityMapperError {
 
     #[error(transparent)]
     FromTimeParse(#[from] time::error::Parse),
+
+    #[error(transparent)]
+    FromDownload(#[from] download::DownloadError),
 }

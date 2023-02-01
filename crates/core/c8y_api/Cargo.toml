@@ -37,6 +37,7 @@ assert-json-diff = "2.0"
 assert_matches = "1.5"
 mockito = "0.31"
 regex = "1.7"
+tedge_test_utils = { path = "../../tests/tedge_test_utils" }
 tempfile = "3.3"
 test-case = "2.2"
 time = { version = "0.3", features = ["macros"] }

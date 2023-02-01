@@ -38,6 +38,9 @@ pub enum FileError {
 
     #[error("Could not save the file {file:?} to disk. Received error: {from:?}.")]
     FailedToSync { file: PathBuf, from: std::io::Error },
+
+    #[error("No write access to {path:?}")]
+    NoWriteAccess { path: PathBuf },
 }
 
 pub fn create_directory_with_user_group(
@@ -245,6 +248,28 @@ pub fn get_metadata(path: &Path) -> Result<fs::Metadata, FileError> {
 pub fn get_filename(path: PathBuf) -> Option<String> {
     let filename = path.file_name()?.to_str()?.to_string();
     Some(filename)
+}
+
+/// Return () if a file of the given file path
+/// - already exists, and has a write permission.
+/// - doesn't exist, but the parent directory has a write permission.
+pub fn has_write_access(path: &Path) -> Result<(), FileError> {
+    let metadata = if path.is_file() {
+        get_metadata(path)?
+    } else {
+        let parent_dir = path.parent().ok_or_else(|| FileError::NoWriteAccess {
+            path: path.to_path_buf(),
+        })?;
+        get_metadata(parent_dir)?
+    };
+
+    if metadata.permissions().readonly() {
+        Err(FileError::NoWriteAccess {
+            path: path.to_path_buf(),
+        })
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

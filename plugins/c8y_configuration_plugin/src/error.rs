@@ -5,9 +5,6 @@ use tedge_utils::file::FileError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigManagementError {
-    #[error("No write access to {path:?}")]
-    NoWriteAccess { path: PathBuf },
-
     #[error("The file name is not found or invalid: {path:?}")]
     FileNameNotFound { path: PathBuf },
 

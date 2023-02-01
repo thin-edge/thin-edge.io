@@ -623,17 +623,23 @@ async fn test_handle_config_update_request_tedge_device() -> anyhow::Result<()> 
 
     let broker = mqtt_tests::test_mqtt_broker();
     let mut c8y_http_client = MockC8YHttpProxy::new();
+
     c8y_http_client
-        .expect_url_is_in_my_tenant_domain()
-        .with(predicate::always())
-        .returning(|_path| false);
+        .expect_download_file()
+        .with(
+            predicate::always(),
+            predicate::always(),
+            predicate::always(),
+            predicate::always(),
+        )
+        .returning(|_, file_name, _, tmp_dir_path| {
+            let downloaded_path = tmp_dir_path.join(file_name);
+            std::fs::File::create(&downloaded_path)?;
+            Ok(downloaded_path)
+        });
 
     // Mock download endpoint for the plugin to download config file update from the cloud
     let config_update_cloud_url_path = "/some/cloud/url";
-    let _download_config_url_mock = mockito::mock("GET", config_update_cloud_url_path)
-        .with_body_from_fn(|w| w.write_all(b"v2"))
-        .with_status(200)
-        .create();
     let local_http_host = mockito::server_url();
     let config_update_download_url = format!("{local_http_host}{config_update_cloud_url_path}");
 
@@ -711,10 +717,20 @@ async fn test_handle_config_update_request_child_device() -> anyhow::Result<()> 
 
     let broker = mqtt_tests::test_mqtt_broker();
     let mut c8y_http_client = MockC8YHttpProxy::new();
+
     c8y_http_client
-        .expect_url_is_in_my_tenant_domain()
-        .with(predicate::always())
-        .return_once(|_path| false);
+        .expect_download_file()
+        .with(
+            predicate::always(),
+            predicate::always(),
+            predicate::always(),
+            predicate::always(),
+        )
+        .returning(|_, file_name, _, tmp_dir_path| {
+            let downloaded_path = tmp_dir_path.join(file_name);
+            std::fs::File::create(&downloaded_path)?;
+            Ok(downloaded_path)
+        });
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,
@@ -739,10 +755,6 @@ async fn test_handle_config_update_request_child_device() -> anyhow::Result<()> 
 
     // Mock download endpoint for the plugin to download config file update from the cloud
     let config_update_cloud_url_path = "/some/cloud/url";
-    let _download_config_url_mock = mockito::mock("GET", config_update_cloud_url_path)
-        .with_body_from_fn(|w| w.write_all(b"v2"))
-        .with_status(200)
-        .create();
     let local_http_host = mockito::server_url();
     let config_update_download_url = format!("{local_http_host}{config_update_cloud_url_path}");
 
@@ -795,10 +807,16 @@ async fn test_c8y_config_download_child_device_fail_on_broken_url() -> anyhow::R
 
     let broker = mqtt_tests::test_mqtt_broker();
     let mut c8y_http_client = MockC8YHttpProxy::new();
+
     c8y_http_client
-        .expect_url_is_in_my_tenant_domain()
-        .with(predicate::always())
-        .return_once(|_path| false);
+        .expect_download_file()
+        .with(
+            predicate::always(),
+            predicate::always(),
+            predicate::always(),
+            predicate::always(),
+        )
+        .returning(|_, _, _, _| Err(SMCumulocityMapperError::RequestTimeout));
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,
@@ -821,10 +839,6 @@ async fn test_c8y_config_download_child_device_fail_on_broken_url() -> anyhow::R
 
     // Mock download endpoint for the plugin which returns bad response
     let config_update_download_url_path = "/some/cloud/url";
-    let _download_config_url_mock = mockito::mock("GET", config_update_download_url_path)
-        .with_status(404)
-        .with_body("Broken URL")
-        .create();
     let local_http_host = mockito::server_url();
     let config_update_download_url = format!("{local_http_host}{config_update_download_url_path}");
 
