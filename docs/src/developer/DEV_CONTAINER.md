@@ -54,7 +54,7 @@ But in both methods it is recommended to fork the project first, then clone from
 
 1. Open a terminal
 
-2. Clone the forked thin-edg.io project
+2. Clone the forked thin-edge.io project
 
     **Example**
 
