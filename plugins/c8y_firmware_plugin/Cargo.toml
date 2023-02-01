@@ -1,0 +1,52 @@
+[package]
+name = "c8y-firmware-plugin"
+description = "Thin-edge device firmware management for Cumulocity"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+anyhow = "1.0"
+c8y_api = { path = "../../crates/core/c8y_api" }
+clap = { version = "3.2", features = ["cargo", "derive"] }
+csv = "1.1"
+download = { path = "../../crates/common/download" }
+futures = "0.3"
+mqtt_channel = { path = "../../crates/common/mqtt_channel" }
+reqwest = { version = "0.11", default-features = false, features = [
+    "rustls-tls",
+] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tedge_api = { path = "../../crates/core/tedge_api" }
+tedge_config = { path = "../../crates/common/tedge_config" }
+tedge_utils = { path = "../../crates/common/tedge_utils", features = [
+    "logging",
+    "fs-notify",
+] }
+thiserror = "1.0"
+tokio = { version = "1.23", default_features = false, features = [
+    "fs",
+    "io-util",
+    "macros",
+    "rt-multi-thread",
+    "signal",
+    "time",
+] }
+toml = "0.5"
+tracing = { version = "0.1", features = ["attributes", "log"] }
+
+[dev-dependencies]
+assert_matches = "1.5"
+mockall = "0.11"
+mockito = "0.31"
+mqtt_tests = { path = "../../crates/tests/mqtt_tests" }
+serial_test = "0.8"
+tedge_test_utils = { path = "../../crates/tests/tedge_test_utils" }
+test-case = "2.2"
+tokio = { version = "1.23", default_features = false, features = ["test-util"] }
+toml = "0.5"

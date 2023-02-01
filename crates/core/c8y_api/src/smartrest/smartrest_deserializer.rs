@@ -272,6 +272,17 @@ pub struct SmartRestConfigDownloadRequest {
 
 impl SmartRestRequestGeneric for SmartRestConfigDownloadRequest {}
 
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
+pub struct SmartRestFirmwareRequest {
+    pub message_id: String,
+    pub device: String,
+    pub name: String,
+    pub version: String,
+    pub url: String,
+}
+
+impl SmartRestRequestGeneric for SmartRestFirmwareRequest {}
+
 type JwtToken = String;
 
 #[derive(Debug, Deserialize, Eq, PartialEq)]
@@ -638,6 +649,20 @@ mod tests {
             device: "deviceId".to_string(),
             url: "https://test.cumulocity.com/inventory/binaries/70208".to_string(),
             config_type: "/etc/tedge/tedge.toml".to_string(),
+        };
+        assert_eq!(request, expected_output);
+    }
+
+    #[test]
+    fn deserialize_smartrest_firmware_request_operation() {
+        let smartrest = "515,DeviceSerial,myFirmware,1.0,http://www.my.url".to_string();
+        let request = SmartRestFirmwareRequest::from_smartrest(&smartrest).unwrap();
+        let expected_output = SmartRestFirmwareRequest {
+            message_id: "515".to_string(),
+            device: "DeviceSerial".to_string(),
+            name: "myFirmware".to_string(),
+            version: "1.0".to_string(),
+            url: "http://www.my.url".to_string(),
         };
         assert_eq!(request, expected_output);
     }
