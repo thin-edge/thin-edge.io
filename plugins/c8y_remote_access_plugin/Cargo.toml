@@ -44,6 +44,7 @@ tokio = { version = "1.0", features = [
     "io-util",
     "fs",
     "time",
+    "process",
 ] }
 tungstenite = "0.17.3"
 url = "2.3.1"

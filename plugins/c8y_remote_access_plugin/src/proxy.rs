@@ -16,6 +16,7 @@ use url::Url;
 use ws_stream_tungstenite::WsStream;
 
 use crate::auth::Jwt;
+use crate::SUCCESS_MESSAGE;
 
 /// This proxy creates a TCP connection to a local socket and creates a websocket. Cumulocity cloud will initiate a
 /// connection to the websocket. Any data received from the socket is sent out via the websocket and any data received
@@ -41,7 +42,10 @@ impl WebsocketSocketProxy {
         match join(socket_future, websocket_future).await {
             (Err(socket_error), _) => Err(SocketError(socket_error))?,
             (_, Err(websocket_error)) => Err(websocket_error),
-            (Ok(socket), Ok(websocket)) => Ok(WebsocketSocketProxy { socket, websocket }),
+            (Ok(socket), Ok(websocket)) => {
+                println!("{SUCCESS_MESSAGE}");
+                Ok(WebsocketSocketProxy { socket, websocket })
+            }
         }
     }
 

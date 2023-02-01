@@ -1,6 +1,10 @@
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Stdio;
 
+use futures::future::select;
+use futures::future::try_select;
+use futures::future::Either;
 use miette::Context;
 use miette::IntoDiagnostic;
 use tedge_config::C8yUrlSetting;
@@ -10,6 +14,8 @@ use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::TEdgeConfigRepository;
 use tedge_utils::file::create_file_with_user_group;
+use tokio::io::AsyncBufReadExt;
+use tokio::io::BufReader;
 use url::Url;
 
 use crate::auth::Jwt;
@@ -36,6 +42,7 @@ async fn main() -> miette::Result<()> {
         Command::Init => declare_supported_operation(config_dir.tedge_config_root_path()),
         Command::Cleanup => remove_supported_operation(config_dir.tedge_config_root_path()),
         Command::Connect(command) => proxy(command, tedge_config).await,
+        Command::SpawnChild(command) => spawn_child(command).await,
     }
 }
 
@@ -62,6 +69,73 @@ fn remove_supported_operation(config_dir: &Path) -> miette::Result<()> {
     std::fs::remove_file(&path)
         .into_diagnostic()
         .with_context(|| format!("Removing supported operation at {}", path.display()))
+}
+
+static SUCCESS_MESSAGE: &str = "CONNECTED";
+
+#[derive(miette::Diagnostic, Debug, thiserror::Error)]
+#[error("Failed while {1}")]
+#[diagnostic(help(
+    "This should never happen. It's very likely a bug in the c8y remote access plugin."
+))]
+struct Unreachable<E: std::error::Error + 'static>(#[source] E, &'static str);
+
+async fn spawn_child(command: String) -> miette::Result<()> {
+    let mut command = tokio::process::Command::new("/usr/bin/c8y-remote-access-plugin")
+        .arg("--child")
+        .arg(command)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .into_diagnostic()
+        .context("Failed to spawn child process")?;
+
+    let mut stdout = BufReader::new(command.stdout.take().unwrap());
+    let mut stderr = BufReader::new(command.stderr.take().unwrap());
+
+    let copy_error_messages = tokio::task::spawn(async move {
+        let mut line = String::new();
+        while let Ok(amount) = stderr.read_line(&mut line).await {
+            if amount == 0 {
+                break;
+            }
+            eprint!("{line}");
+            line.clear();
+        }
+    });
+
+    let wait_for_connection = tokio::task::spawn(async move {
+        let mut line = String::new();
+        while stdout.read_line(&mut line).await.is_ok() {
+            // Copy the output to the parent process stdout to ensure anything we might
+            // print doesn't get lost before we connect
+            print!("{line}");
+            if line.trim() == SUCCESS_MESSAGE {
+                break;
+            }
+            line.clear();
+        }
+    });
+
+    let wait_for_failure = tokio::task::spawn(async move { command.wait().await });
+
+    match try_select(wait_for_connection, wait_for_failure).await {
+        Ok(Either::Left(_)) => Ok(()),
+        Ok(Either::Right((Ok(code), _))) => {
+            copy_error_messages
+                .await
+                .map_err(|e| Unreachable(e, "copying stderr from child process"))?;
+            let code = code.code().unwrap_or(1);
+            std::process::exit(code)
+        }
+        Ok(Either::Right((Err(e), _))) => Err(e)
+            .into_diagnostic()
+            .context("Failed to retrieve exit code from child process"),
+        Err(Either::Left((e, _))) => {
+            Err(Unreachable(e, "waiting for the connection to be established").into())
+        }
+        Err(Either::Right((e, _))) => Err(Unreachable(e, "waiting for the process to exit").into()),
+    }
 }
 
 async fn proxy(command: RemoteAccessConnect, config: TEdgeConfig) -> miette::Result<()> {

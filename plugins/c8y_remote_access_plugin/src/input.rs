@@ -16,7 +16,7 @@ pub struct RemoteAccessConnect {
 }
 
 #[derive(Parser)]
-#[clap(group(ArgGroup::new("install").args(&["init", "cleanup", "connect_string"])))]
+#[clap(group(ArgGroup::new("install").args(&["init", "cleanup", "connect_string", "child"])))]
 #[clap(
 name = clap::crate_name!(),
 version = clap::crate_version!(),
@@ -35,12 +35,16 @@ struct Cli {
     ///
     /// Can only be provided when neither '--init' nor '--cleanup' are provided.
     connect_string: Option<String>,
+
+    #[arg(long)]
+    child: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
     Init,
     Cleanup,
+    SpawnChild(String),
     Connect(RemoteAccessConnect),
 }
 
@@ -56,6 +60,10 @@ impl TryFrom<Cli> for Command {
             Cli { cleanup: true, .. } => Ok(Command::Cleanup),
             Cli {
                 connect_string: Some(message),
+                ..
+            } => Ok(Command::SpawnChild(message)),
+            Cli {
+                child: Some(message),
                 ..
             } => RemoteAccessConnect::deserialize_smartrest(&message).map(Command::Connect),
             _ => Err(miette!(
@@ -94,11 +102,12 @@ mod tests {
     use rstest::*;
 
     #[rstest]
-    #[case::init_and_cleanup(["--init", "--cleanup"])]
-    #[case::init_and_command_string(["--init", "530,jrh-rc-test0,127.0.0.1,22,cd8fc847-f4f2-4712-8dd7-31496aef0a7d"])]
-    #[case::cleanup_and_command_string(["--cleanup", "530,jrh-rc-test0,127.0.0.1,22,cd8fc847-f4f2-4712-8dd7-31496aef0a7d"])]
-    fn arguments_are_mutually_exclusive(#[case] arguments: [&str; 2]) {
-        try_parse_arguments(&arguments).unwrap_err();
+    #[case::init_and_cleanup(&["--init", "--cleanup"])]
+    #[case::init_and_command_string(&["--init", "530,jrh-rc-test0,127.0.0.1,22,cd8fc847-f4f2-4712-8dd7-31496aef0a7d"])]
+    #[case::cleanup_and_command_string(&["--cleanup", "530,jrh-rc-test0,127.0.0.1,22,cd8fc847-f4f2-4712-8dd7-31496aef0a7d"])]
+    #[case::cleanup_and_child_string(&["--cleanup", "--child", "530,jrh-rc-test0,127.0.0.1,22,cd8fc847-f4f2-4712-8dd7-31496aef0a7d"])]
+    fn arguments_are_mutually_exclusive(#[case] arguments: &[&str]) {
+        try_parse_arguments(arguments).unwrap_err();
     }
 
     #[rstest]
@@ -109,10 +118,19 @@ mod tests {
     }
 
     #[test]
-    fn parses_command_string_if_no_flag_is_provided() {
+    fn parses_spawn_child_if_no_flag_is_provided() {
         let input = "530,jrh-rc-test0,127.0.0.1,22,cd8fc847-f4f2-4712-8dd7-31496aef0a7d";
 
         let command = try_parse_arguments(&[input]).unwrap();
+
+        assert_eq!(command, Command::SpawnChild(input.to_owned()))
+    }
+
+    #[test]
+    fn parses_command_string_if_child_flag_is_provided() {
+        let input = "530,jrh-rc-test0,127.0.0.1,22,cd8fc847-f4f2-4712-8dd7-31496aef0a7d";
+
+        let command = try_parse_arguments(&["--child", input]).unwrap();
 
         assert!(matches!(command, Command::Connect(_)))
     }
