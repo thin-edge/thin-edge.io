@@ -1,6 +1,6 @@
 # Setting up Docker (OSS - Variant)
 
-This guide is to assist with the installation of docker and some of the docker. It is not meant to replace other online articles but more of a cheat sheet to getting your setup up and running as fast as possible. If you encounter issues with the setup, please search online for a fix.
+This guide is to assist with the installation of docker and some of the docker cli tools. It is not meant to replace other online articles but more of a cheat sheet to getting your setup up and running as fast as possible. If you encounter issues with the setup, please search online for a fix.
 
 ## Installation
 
