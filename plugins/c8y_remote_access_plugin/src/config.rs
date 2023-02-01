@@ -1,43 +1,40 @@
-use miette::Context;
+use std::path::Path;
+use std::path::PathBuf;
+
 use miette::IntoDiagnostic;
-use std::net::IpAddr;
+use tedge_config::C8yUrlSetting;
+use tedge_config::ConfigSettingAccessor;
+use tedge_config::TEdgeConfig;
 
-pub struct TedgeConfig {
-    pub c8y: TedgeC8yConfig,
-    pub mqtt: TedgeMqttConfig,
+pub struct C8yUrl(pub String);
+
+impl C8yUrl {
+    pub fn retrieve(config: &TEdgeConfig) -> miette::Result<Self> {
+        Ok(Self(
+            config
+                .query(C8yUrlSetting)
+                .into_diagnostic()?
+                .as_str()
+                .to_owned(),
+        ))
+    }
 }
 
-pub struct TedgeC8yConfig {
-    pub url: String,
+pub fn supported_operation_path(config_dir: &Path) -> PathBuf {
+    let mut path = config_dir.to_owned();
+    path.push("operations/c8y/c8y_RemoteAccessConnect");
+    path
 }
 
-pub struct TedgeMqttConfig {
-    pub port: u16,
-    pub bind_address: IpAddr,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-impl TedgeConfig {
-    pub fn read_from_disk() -> miette::Result<Self> {
-        use tedge_config::C8yUrlSetting;
-        use tedge_config::ConfigSettingAccessor;
-        use tedge_config::MqttBindAddressSetting;
-        use tedge_config::MqttPortSetting;
-        let config = tedge_config::get_tedge_config()
-            .into_diagnostic()
-            .context("Reading config")?;
-
-        Ok(Self {
-            c8y: TedgeC8yConfig {
-                url: config
-                    .query(C8yUrlSetting)
-                    .into_diagnostic()?
-                    .as_str()
-                    .to_owned(),
-            },
-            mqtt: TedgeMqttConfig {
-                port: config.query(MqttPortSetting).into_diagnostic()?.0,
-                bind_address: config.query(MqttBindAddressSetting).into_diagnostic()?.0,
-            },
-        })
+    #[test]
+    fn default_supported_operation_path() {
+        assert_eq!(
+            supported_operation_path("/etc/tedge".as_ref()),
+            PathBuf::from("/etc/tedge/operations/c8y/c8y_RemoteAccessConnect")
+        );
     }
 }

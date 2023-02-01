@@ -1,3 +1,5 @@
+use clap::ArgGroup;
+use clap::Parser;
 use miette::ensure;
 use miette::miette;
 use miette::Context;
@@ -5,7 +7,7 @@ use serde::Deserialize;
 
 use crate::csv::deserialize_csv_record;
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Parser, Deserialize, Debug, PartialEq, Eq)]
 pub struct RemoteAccessConnect {
     device_id: String,
     host: String,
@@ -13,12 +15,54 @@ pub struct RemoteAccessConnect {
     key: String,
 }
 
-pub fn parse_arguments() -> miette::Result<RemoteAccessConnect> {
-    let arg_csv = std::env::args()
-        .nth(1)
-        .ok_or_else(|| miette!("Expected one argument to the remote access plugin process"))?;
+#[derive(Parser)]
+#[clap(group(ArgGroup::new("install").args(&["init", "cleanup", "connect_string"])))]
+#[clap(
+name = clap::crate_name!(),
+version = clap::crate_version!(),
+about = clap::crate_description!(),
+)]
+struct Cli {
+    #[arg(long)]
+    /// Complete the installation of c8y-configuration-plugin by declaring the supported operation.
+    init: bool,
 
-    RemoteAccessConnect::deserialize_smartrest(&arg_csv)
+    #[arg(long)]
+    /// Clean up c8y-configuration-plugin, deleting the supported operation from tedge.
+    cleanup: bool,
+
+    /// The SmartREST connect message, forwarded from mosquitto by tedge-mapper.
+    ///
+    /// Can only be provided when neither '--init' nor '--cleanup' are provided.
+    connect_string: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Command {
+    Init,
+    Cleanup,
+    Connect(RemoteAccessConnect),
+}
+
+pub fn parse_arguments() -> miette::Result<Command> {
+    Cli::parse().try_into()
+}
+
+impl TryFrom<Cli> for Command {
+    type Error = miette::Error;
+    fn try_from(arguments: Cli) -> Result<Self, Self::Error> {
+        match arguments {
+            Cli { init: true, .. } => Ok(Command::Init),
+            Cli { cleanup: true, .. } => Ok(Command::Cleanup),
+            Cli {
+                connect_string: Some(message),
+                ..
+            } => RemoteAccessConnect::deserialize_smartrest(&message).map(Command::Connect),
+            _ => Err(miette!(
+                "Expected one argument to the remote access plugin process"
+            )),
+        }
+    }
 }
 
 impl RemoteAccessConnect {
@@ -43,7 +87,41 @@ impl RemoteAccessConnect {
 
 #[cfg(test)]
 mod tests {
+    use std::iter;
+
     use super::*;
+    use miette::IntoDiagnostic;
+    use rstest::*;
+
+    #[rstest]
+    #[case::init_and_cleanup(["--init", "--cleanup"])]
+    #[case::init_and_command_string(["--init", "530,jrh-rc-test0,127.0.0.1,22,cd8fc847-f4f2-4712-8dd7-31496aef0a7d"])]
+    #[case::cleanup_and_command_string(["--cleanup", "530,jrh-rc-test0,127.0.0.1,22,cd8fc847-f4f2-4712-8dd7-31496aef0a7d"])]
+    fn arguments_are_mutually_exclusive(#[case] arguments: [&str; 2]) {
+        try_parse_arguments(&arguments).unwrap_err();
+    }
+
+    #[rstest]
+    #[case::init("--init", Command::Init)]
+    #[case::cleanup("--cleanup", Command::Cleanup)]
+    fn parses_lifecycle_flags(#[case] argument: &str, #[case] expected: Command) {
+        assert_eq!(try_parse_arguments(&[argument]).unwrap(), expected);
+    }
+
+    #[test]
+    fn parses_command_string_if_no_flag_is_provided() {
+        let input = "530,jrh-rc-test0,127.0.0.1,22,cd8fc847-f4f2-4712-8dd7-31496aef0a7d";
+
+        let command = try_parse_arguments(&[input]).unwrap();
+
+        assert!(matches!(command, Command::Connect(_)))
+    }
+
+    fn try_parse_arguments(arguments: &[&str]) -> miette::Result<Command> {
+        Cli::try_parse_from(iter::once(&"c8y-remote-access-plugin").chain(arguments))
+            .into_diagnostic()?
+            .try_into()
+    }
 
     #[test]
     fn parses_command_from_a_530_message() {

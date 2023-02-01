@@ -9,6 +9,7 @@ RELEASE_PACKAGES=(
     tedge-apt-plugin
     c8y-log-plugin
     c8y-configuration-plugin
+    c8y-remote-access-plugin
 )
 export RELEASE_PACKAGES
 
