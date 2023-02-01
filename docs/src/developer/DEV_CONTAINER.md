@@ -16,7 +16,7 @@ Before VSCode Dev container can be used, you need to install a few things.
 
 1. Install VSCode and make sure it is up to date
 
-2. Install the Remote Development extension
+2. Install the [Remote Development extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 
     ```
     ms-vscode-remote.vscode-remote-extensionpack
