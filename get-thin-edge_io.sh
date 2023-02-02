@@ -15,7 +15,6 @@ TEDGE_MAPPER=tedge-mapper
 TEDGE_AGENT=tedge-agent
 TEDGE_WATCHDOG=tedge-watchdog
 TEDGE_APT_PLUGIN=tedge-apt-plugin
-C8Y_REMOTE_ACCESS_PLUGIN=c8y-remote-access-plugin
 C8Y_CONFIGURATION_PLUGIN=c8y-configuration-plugin
 C8Y_LOG_PLUGIN=c8y-log-plugin
 
@@ -225,7 +224,6 @@ install_tedge_plugins() {
     install_artifact "$C8Y_CONFIGURATION_PLUGIN"
     install_artifact "$C8Y_LOG_PLUGIN"
     install_artifact "$TEDGE_WATCHDOG"
-    install_artifact "$C8Y_REMOTE_ACCESS_PLUGIN"
 
     if [ -n "$PURGE_OLD_PACKAGES" ]; then
         remove_package "tedge_apt_plugin"
