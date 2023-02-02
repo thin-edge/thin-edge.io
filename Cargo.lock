@@ -528,6 +528,7 @@ dependencies = [
  "toml",
  "tracing",
  "try-traits",
+ "url",
 ]
 
 [[package]]
@@ -944,6 +945,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "tedge_utils",
  "tempfile",
  "test-case",
  "thiserror",

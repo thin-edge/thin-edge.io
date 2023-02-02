@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::c8y_http_proxy::actor::C8YHttpProxyMessageBox;
 use crate::c8y_http_proxy::credentials::JwtResult;
 use crate::c8y_http_proxy::credentials::JwtRetriever;
@@ -13,6 +15,7 @@ use tedge_config::ConfigSettingAccessor;
 use tedge_config::DeviceIdSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
+use tedge_config::TmpPathSetting;
 use tedge_http_ext::HttpConnectionBuilder;
 use tedge_http_ext::HttpHandle;
 use try_traits::Infallible;
@@ -30,6 +33,7 @@ mod tests;
 pub struct C8YHttpConfig {
     pub c8y_host: String,
     pub device_id: String,
+    pub tmp_dir: PathBuf,
 }
 
 impl TryFrom<TEdgeConfig> for C8YHttpConfig {
@@ -38,9 +42,11 @@ impl TryFrom<TEdgeConfig> for C8YHttpConfig {
     fn try_from(tedge_config: TEdgeConfig) -> Result<Self, Self::Error> {
         let c8y_host = tedge_config.query(C8yUrlSetting)?;
         let device_id = tedge_config.query(DeviceIdSetting)?;
+        let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
         Ok(Self {
             c8y_host: c8y_host.into(),
             device_id,
+            tmp_dir,
         })
     }
 }

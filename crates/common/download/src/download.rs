@@ -11,9 +11,12 @@ use serde::Serialize;
 use std::fs::File;
 use std::io::Write;
 use std::os::unix::prelude::AsRawFd;
+use std::os::unix::prelude::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
+use tedge_utils::file::get_metadata;
+use tedge_utils::file::PermissionEntry;
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -68,6 +71,14 @@ pub struct Downloader {
     target_filename: PathBuf,
 }
 
+impl From<PathBuf> for Downloader {
+    fn from(path: PathBuf) -> Self {
+        Self {
+            target_filename: path,
+        }
+    }
+}
+
 impl Downloader {
     pub fn new(target_path: &Path) -> Self {
         Self {
@@ -88,6 +99,15 @@ impl Downloader {
     }
 
     pub async fn download(&self, url: &DownloadInfo) -> Result<(), DownloadError> {
+        if self.target_filename.exists() {
+            // Confirm that the file has write access before any http request attempt
+            self.has_write_access()?;
+        } else if let Some(file_parent) = self.target_filename.parent() {
+            if !file_parent.exists() {
+                tokio::fs::create_dir_all(file_parent).await?;
+            }
+        }
+
         // Default retry is an exponential retry with a limit of 15 minutes total.
         // Let's set some more reasonable retry policy so we don't block the downloads for too long.
 
@@ -150,18 +170,69 @@ impl Downloader {
         self.target_filename.as_path()
     }
 
-    pub async fn rename(&self, to: impl AsRef<Path>) -> Result<(), DownloadError> {
-        let path_to = to.as_ref();
-        if !path_to.exists() {
-            if let Some(dir_to) = path_to.parent() {
+    fn has_write_access(&self) -> Result<(), DownloadError> {
+        let metadata = if self.target_filename.is_file() {
+            get_metadata(&self.target_filename)?
+        } else {
+            // If the file does not exist before downloading file, check the directory perms
+            let parent_dir =
+                &self
+                    .target_filename
+                    .parent()
+                    .ok_or_else(|| DownloadError::NoWriteAccess {
+                        path: self.target_filename.clone(),
+                    })?;
+            get_metadata(parent_dir)?
+        };
+
+        // Write permission check
+        if metadata.permissions().readonly() {
+            Err(DownloadError::NoWriteAccess {
+                path: self.target_filename.clone(),
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    pub async fn rename(
+        &self,
+        dest_path: impl AsRef<Path>,
+        new_file_permissions: PermissionEntry,
+    ) -> Result<(), DownloadError> {
+        let dest_path = dest_path.as_ref();
+        if !dest_path.exists() {
+            if let Some(dir_to) = dest_path.parent() {
                 tokio::fs::create_dir_all(dir_to).await?;
             } else {
                 return Err(DownloadError::FromIo {
-                    reason: format!("No parent dir for {:?}", path_to),
+                    reason: format!("No parent dir for {:?}", dest_path),
                 });
             }
         }
-        Ok(tokio::fs::rename(self.filename(), path_to).await?)
+
+        let original_permission_mode = match dest_path.is_file() {
+            true => {
+                let metadata = get_metadata(self.filename())?;
+                let mode = metadata.permissions().mode();
+                Some(mode)
+            }
+            false => None,
+        };
+
+        tokio::fs::rename(self.filename(), dest_path).await?;
+
+        let file_permissions = if let Some(mode) = original_permission_mode {
+            // Use the same file permission as the original one
+            PermissionEntry::new(None, None, Some(mode))
+        } else {
+            // Set the user, group, and mode as given for a new file
+            new_file_permissions
+        };
+
+        file_permissions.apply(dest_path)?;
+
+        Ok(())
     }
 
     pub async fn cleanup(&self) -> Result<(), DownloadError> {

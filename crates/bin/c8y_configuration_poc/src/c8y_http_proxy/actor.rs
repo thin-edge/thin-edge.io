@@ -19,10 +19,14 @@ use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::json_c8y::InternalIdResponse;
 use c8y_api::smartrest::error::SMCumulocityMapperError;
 use c8y_api::OffsetDateTime;
+use download::Auth;
+use download::DownloadInfo;
+use download::Downloader;
 use log::debug;
 use log::error;
 use log::info;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
@@ -34,6 +38,7 @@ use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResponseExt;
 use tedge_http_ext::HttpResult;
+use url::Url;
 
 const RETRY_TIMEOUT_SECS: u64 = 60;
 
@@ -41,6 +46,7 @@ struct C8YHttpProxyActor {
     end_point: C8yEndPoint,
     child_devices: HashMap<String, String>,
     peers: C8YHttpProxyMessageBox,
+    tmp_dir: PathBuf,
 }
 
 #[async_trait]
@@ -104,6 +110,7 @@ impl C8YHttpProxyActor {
             end_point,
             child_devices,
             peers,
+            tmp_dir: config.tmp_dir,
         }
     }
 
@@ -160,6 +167,31 @@ impl C8YHttpProxyActor {
             };
         }
         info!(target: self.name(), "initialisation done.");
+    }
+
+    pub fn url_is_in_my_tenant_domain(&self, url: &str) -> bool {
+        // c8y URL may contain either `Tenant Name` or Tenant Id` so they can be one of following options:
+        // * <tenant_name>.<domain> eg: sample.c8y.io
+        // * <tenant_id>.<domain> eg: t12345.c8y.io
+        // These URLs may be both equivalent and point to the same tenant.
+        // We are going to remove that and only check if the domain is the same.
+        let tenant_uri = &self.end_point.c8y_host;
+        let url_host = match Url::parse(url) {
+            Ok(url) => match url.host() {
+                Some(host) => host.to_string(),
+                None => return false,
+            },
+            Err(_err) => {
+                return false;
+            }
+        };
+
+        let url_domain = url_host.splitn(2, '.').collect::<Vec<&str>>();
+        let tenant_domain = tenant_uri.splitn(2, '.').collect::<Vec<&str>>();
+        if url_domain.get(1) == tenant_domain.get(1) {
+            return true;
+        }
+        false
     }
 
     async fn try_get_and_set_internal_id(&mut self) -> Result<(), C8YRestError> {
@@ -293,8 +325,33 @@ impl C8YHttpProxyActor {
         }
     }
 
-    async fn download_file(&mut self, _request: DownloadFile) -> Result<Unit, C8YRestError> {
-        todo!()
+    async fn get_jwt_token(&mut self) -> Result<String, C8YRestError> {
+        if let Ok(token) = self.peers.jwt.await_response(()).await? {
+            Ok(token)
+        } else {
+            Err(C8YRestError::CustomError("JWT token not available".into()))
+        }
+    }
+
+    async fn download_file(&mut self, request: DownloadFile) -> Result<Unit, C8YRestError> {
+        let mut download_info: DownloadInfo = request.download_url.as_str().into();
+        // If the provided url is c8y, add auth
+        if self.url_is_in_my_tenant_domain(download_info.url()) {
+            let token = self.get_jwt_token().await?;
+            download_info.auth = Some(Auth::new_bearer(token.as_str()));
+        }
+
+        // Download a file to tmp dir
+        let file_name = request.file_path.file_name().unwrap().to_str().unwrap();
+        let downloader: Downloader = Downloader::new(file_name, &None, self.tmp_dir.clone());
+        downloader.download(&download_info).await?;
+
+        // Move the downloaded file to the final destination
+        downloader
+            .rename(request.file_path, request.file_permissions)
+            .await?;
+
+        Ok(())
     }
 
     async fn create_event_request(

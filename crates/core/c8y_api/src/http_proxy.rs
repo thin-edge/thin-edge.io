@@ -85,9 +85,9 @@ pub trait C8YHttpProxy: Send + Sync {
 /// Define a C8y endpoint
 #[derive(Debug)]
 pub struct C8yEndPoint {
-    c8y_host: String,
-    device_id: String,
-    c8y_internal_id: String,
+    pub c8y_host: String,
+    pub device_id: String,
+    pub c8y_internal_id: String,
 }
 
 impl C8yEndPoint {
