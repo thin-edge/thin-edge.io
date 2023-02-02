@@ -1,3 +1,4 @@
+use c8y_api::json_c8y::C8yCreateAlarm;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -12,6 +13,7 @@ use crate::core::error::ConversionError;
 
 const TEDGE_ALARMS_TOPIC: &str = "tedge/alarms/";
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
+const C8Y_JSON_MQTT_ALARMS_TOPIC: &str = "c8y/alarm/alarms/create";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AlarmConverter {
@@ -66,12 +68,20 @@ impl AlarmConverter {
                             payload: mqtt_payload.chars().take(50).collect(),
                         }
                     })?;
-                let smartrest_alarm = alarm::serialize_alarm(tedge_alarm)?;
-                let c8y_alarm_topic = Topic::new_unchecked(
-                    self.get_c8y_alarm_topic(input_message.topic.name.as_str())?
-                        .as_str(),
-                );
-                output_messages.push(Message::new(&c8y_alarm_topic, smartrest_alarm));
+                let c8y_alarm = C8yCreateAlarm::try_from(&tedge_alarm)?;
+
+                // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
+                if c8y_alarm.fragments.is_empty() {
+                    let smartrest_alarm = alarm::serialize_alarm(tedge_alarm)?;
+                    let c8y_alarm_topic = Topic::new_unchecked(
+                        &self.get_c8y_alarm_topic(input_message.topic.name.as_str())?,
+                    );
+                    output_messages.push(Message::new(&c8y_alarm_topic, smartrest_alarm));
+                } else {
+                    let cumulocity_alarm_json = serde_json::to_string(&c8y_alarm)?;
+                    let c8y_alarm_topic = Topic::new_unchecked(C8Y_JSON_MQTT_ALARMS_TOPIC);
+                    output_messages.push(Message::new(&c8y_alarm_topic, cumulocity_alarm_json));
+                }
 
                 // Persist a copy of the alarm to an internal topic for reconciliation on next restart
                 let alarm_id = input_message
