@@ -157,6 +157,11 @@ impl Actor for TimerActor {
                 // Wait either for a new request or the current timer to elapse
                 tokio::select! {
                     () = time_elapsed => {
+                        let caller = current_timer.client_id;
+                        let response = Timeout {
+                            event: current_timer.event_id
+                        };
+                        messages.send((caller, response)).await?;
                         self.start_next_timer()
                     },
                     maybe_message = messages.recv() => {

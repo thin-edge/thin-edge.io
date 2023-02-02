@@ -15,3 +15,11 @@ pub struct SetTimeout<T: Message> {
 pub struct Timeout<T: Message> {
     pub event: T,
 }
+
+impl<T: Message + Eq + PartialEq> PartialEq<Self> for Timeout<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.event.eq(&other.event)
+    }
+}
+
+impl<T: Message + Eq + PartialEq> Eq for Timeout<T> {}
