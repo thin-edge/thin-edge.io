@@ -3425,6 +3425,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_script_ext"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "tedge_actors",
+ "tokio",
+]
+
+[[package]]
 name = "tedge_signal_ext"
 version = "0.1.0"
 dependencies = [
