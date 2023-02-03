@@ -58,6 +58,12 @@ impl HttpResponseBuilder {
     }
 }
 
+impl Default for HttpResponseBuilder {
+    fn default() -> Self {
+        HttpResponseBuilder::new()
+    }
+}
+
 /// A message box to mimic the behavior of an HTTP server.
 ///
 /// Messages received by this box are those sent over HTTP to the real server.
