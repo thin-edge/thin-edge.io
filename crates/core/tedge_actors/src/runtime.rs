@@ -27,7 +27,7 @@ pub enum RuntimeRequest {
 }
 
 /// Events published by the runtime
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum RuntimeEvent {
     Error(RuntimeError),
     Started { task: String },

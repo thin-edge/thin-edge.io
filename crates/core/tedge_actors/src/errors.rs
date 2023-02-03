@@ -1,17 +1,20 @@
 use thiserror::Error;
 
 /// Error raised while exchanging messages
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum ChannelError {
     #[error("Fail to send a message: the receiver has been dropped")]
     SendError(#[from] futures::channel::mpsc::SendError),
 
     #[error("Fail to receive a message: the sender has been dropped")]
     ReceiveError(),
+
+    #[error(transparent)]
+    ActorError(#[from] anyhow::Error),
 }
 
 /// Error raised by the runtime
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum RuntimeError {
     #[error("Fail to send a message to the runtime: the runtime has been dropped")]
     RuntimeSendError(#[from] futures::channel::mpsc::SendError),
@@ -30,7 +33,7 @@ pub enum RuntimeError {
 }
 
 /// Error raised while connecting actor instances
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum LinkError {
     #[error("Missing peer for {role}")]
     MissingPeer { role: String },

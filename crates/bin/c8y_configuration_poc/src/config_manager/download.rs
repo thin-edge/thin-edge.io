@@ -110,8 +110,7 @@ impl ConfigDownloadManager {
         message_box
             .c8y_http_proxy
             .download_file(download_url, file_path, file_permissions)
-            .await
-            .unwrap();
+            .await?;
 
         Ok(())
     }

@@ -1,6 +1,8 @@
 use super::download::ConfigDownloadManager;
+use super::download::DownloadConfigFileStatusMessage;
 use super::plugin_config::PluginConfig;
 use super::upload::ConfigUploadManager;
+use super::upload::UploadConfigFileStatusMessage;
 use super::ConfigManagerConfig;
 use super::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
 use crate::c8y_http_proxy::handle::C8YHttpProxy;
@@ -10,6 +12,7 @@ use async_trait::async_trait;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
+use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
 use mqtt_channel::Message;
 use tedge_actors::fan_in_message_type;
@@ -55,60 +58,87 @@ impl ConfigManagerActor {
             message_box.send(message).await?;
             return Ok(());
         } else if self.config.c8y_request_topics.accept(&message) {
-            let payload = message.payload_str()?;
-            for smartrest_message in payload.split('\n') {
-                let result = match smartrest_message.split(',').next().unwrap_or_default() {
-                    "524" => {
-                        let maybe_config_download_request =
-                            SmartRestConfigDownloadRequest::from_smartrest(smartrest_message);
-                        if let Ok(config_download_request) = maybe_config_download_request {
-                            self.config_download_manager
-                                .handle_config_download_request(
-                                    config_download_request,
-                                    message_box,
-                                )
-                                .await
-                                .unwrap();
-                            Ok(())
-                        } else {
-                            error!(
-                                "Incorrect Download SmartREST payload: {}",
-                                smartrest_message
-                            );
-                            Ok(())
-                        }
-                    }
-                    "526" => {
-                        // retrieve config file upload smartrest request from payload
-                        let maybe_config_upload_request =
-                            SmartRestConfigUploadRequest::from_smartrest(smartrest_message);
-
-                        if let Ok(config_upload_request) = maybe_config_upload_request {
-                            // handle the config file upload request
-                            self.config_upload_manager
-                                .handle_config_upload_request(config_upload_request, message_box)
-                                .await
-                        } else {
-                            error!("Incorrect Upload SmartREST payload: {}", smartrest_message);
-                            Ok(())
-                        }
-                    }
-                    _ => {
-                        // Ignore operation messages not meant for this plugin
-                        Ok(())
-                    }
-                };
-
-                if let Err(err) = result {
-                    error!("Handling of operation: '{smartrest_message}' failed with {err}");
-                }
-            }
+            self.process_smartrest_message(message, message_box).await?;
         } else {
             error!(
                 "Received unexpected message on topic: {}",
                 message.topic.name
             );
         }
+        Ok(())
+    }
+
+    pub async fn process_smartrest_message(
+        &mut self,
+        message: Message,
+        message_box: &mut ConfigManagerMessageBox,
+    ) -> Result<(), anyhow::Error> {
+        let payload = message.payload_str()?;
+        for smartrest_message in payload.split('\n') {
+            let result: Result<(), anyhow::Error> = match smartrest_message
+                .split(',')
+                .next()
+                .unwrap_or_default()
+            {
+                "524" => {
+                    let maybe_config_download_request =
+                        SmartRestConfigDownloadRequest::from_smartrest(smartrest_message);
+                    if let Ok(config_download_request) = maybe_config_download_request {
+                        if let Err(err) = self
+                            .config_download_manager
+                            .handle_config_download_request(config_download_request, message_box)
+                            .await
+                        {
+                            self.fail_config_operation_in_c8y(
+                                ConfigOperation::Update,
+                                format!("Failed due to {}", err),
+                                message_box,
+                            )
+                            .await?;
+                        }
+                    } else {
+                        error!(
+                            "Incorrect Download SmartREST payload: {}",
+                            smartrest_message
+                        );
+                    }
+                    Ok(())
+                }
+                "526" => {
+                    // retrieve config file upload smartrest request from payload
+                    let maybe_config_upload_request =
+                        SmartRestConfigUploadRequest::from_smartrest(smartrest_message);
+
+                    if let Ok(config_upload_request) = maybe_config_upload_request {
+                        // handle the config file upload request
+                        if let Err(err) = self
+                            .config_upload_manager
+                            .handle_config_upload_request(config_upload_request, message_box)
+                            .await
+                        {
+                            self.fail_config_operation_in_c8y(
+                                ConfigOperation::Snapshot,
+                                format!("Failed due to {}", err),
+                                message_box,
+                            )
+                            .await?;
+                        }
+                    } else {
+                        error!("Incorrect Upload SmartREST payload: {}", smartrest_message);
+                    }
+                    Ok(())
+                }
+                _ => {
+                    // Ignore operation messages not meant for this plugin
+                    Ok(())
+                }
+            };
+
+            if let Err(err) = result {
+                error!("Handling of operation: '{smartrest_message}' failed with {err}");
+            }
+        }
+
         Ok(())
     }
 
@@ -174,6 +204,33 @@ impl ConfigManagerActor {
         message_box.send(message).await?;
         Ok(())
     }
+
+    pub async fn fail_config_operation_in_c8y(
+        &mut self,
+        config_operation: ConfigOperation,
+        failure_reason: String,
+        message_box: &mut ConfigManagerMessageBox,
+    ) -> Result<(), anyhow::Error> {
+        // Fail the operation in the cloud by sending EXECUTING and FAILED responses back to back
+
+        let (executing_msg, failed_msg) = match config_operation {
+            ConfigOperation::Snapshot => {
+                let executing_msg = UploadConfigFileStatusMessage::executing()?;
+                let failed_msg = UploadConfigFileStatusMessage::failed(failure_reason)?;
+                (executing_msg, failed_msg)
+            }
+            ConfigOperation::Update => {
+                let executing_msg = DownloadConfigFileStatusMessage::executing()?;
+                let failed_msg = UploadConfigFileStatusMessage::failed(failure_reason)?;
+                (executing_msg, failed_msg)
+            }
+        };
+
+        message_box.send(executing_msg).await?;
+        message_box.send(failed_msg).await?;
+
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -186,11 +243,9 @@ impl Actor for ConfigManagerActor {
 
     async fn run(mut self, mut message_box: Self::MessageBox) -> Result<(), ChannelError> {
         self.publish_supported_config_types(&mut message_box)
-            .await
-            .unwrap();
+            .await?;
         self.get_pending_operations_from_cloud(&mut message_box)
-            .await
-            .unwrap();
+            .await?;
 
         while let Some(event) = message_box.recv().await {
             match event {
@@ -254,4 +309,9 @@ impl MessageBox for ConfigManagerMessageBox {
         // FIXME this mailbox recv and send method are not used making logging ineffective.
         false
     }
+}
+
+pub enum ConfigOperation {
+    Snapshot,
+    Update,
 }
