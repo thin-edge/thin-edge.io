@@ -86,7 +86,10 @@ async fn spawn_c8y_http_proxy(
     let proxy = C8YHttpProxy::new("C8Y", &mut c8y_proxy_actor);
 
     tokio::spawn(jwt_actor.run(jwt.build()));
-    tokio::spawn(c8y_proxy_actor.run());
+    tokio::spawn(async move {
+        let (actor, message_box) = c8y_proxy_actor.build();
+        let _ = actor.run(message_box).await;
+    });
 
     (proxy, http.build())
 }

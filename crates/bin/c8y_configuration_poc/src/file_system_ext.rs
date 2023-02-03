@@ -1,17 +1,17 @@
 use async_trait::async_trait;
 use std::path::PathBuf;
 use tedge_actors::Actor;
-use tedge_actors::ActorBuilder;
+use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
 use tedge_actors::MessageSource;
-use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeHandle;
+use tedge_actors::NoMessage;
 use tedge_utils::notify::FsEvent;
 use tedge_utils::notify::NotifyStream;
 use tokio::sync::mpsc::Receiver;
 use try_traits::default::TryDefault;
+use try_traits::Infallible;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FsWatchEvent {
@@ -22,10 +22,7 @@ pub enum FsWatchEvent {
     DirectoryCreated(PathBuf),
 }
 
-#[derive(Debug)]
-enum NullInput {}
-
-struct FsWatchMessageBox {
+pub struct FsWatchMessageBox {
     watch_dirs: Vec<(PathBuf, DynSender<FsWatchEvent>)>,
 }
 
@@ -51,7 +48,7 @@ impl FsWatchMessageBox {
 }
 
 impl MessageBox for FsWatchMessageBox {
-    type Input = NullInput;
+    type Input = NoMessage;
     type Output = FsWatchEvent;
 
     fn turn_logging_on(&mut self, _on: bool) {}
@@ -83,9 +80,14 @@ impl MessageSource<FsWatchEvent, PathBuf> for FsWatchActorBuilder {
     }
 }
 
-#[async_trait]
-impl ActorBuilder for FsWatchActorBuilder {
-    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
+impl Builder<(FsWatchActor, FsWatchMessageBox)> for FsWatchActorBuilder {
+    type Error = Infallible;
+
+    fn try_build(self) -> Result<(FsWatchActor, FsWatchMessageBox), Self::Error> {
+        Ok(self.build())
+    }
+
+    fn build(self) -> (FsWatchActor, FsWatchMessageBox) {
         let mut fs_notify = NotifyStream::try_default().unwrap();
         for (watch_path, _) in self.watch_dirs.iter() {
             fs_notify
@@ -109,12 +111,10 @@ impl ActorBuilder for FsWatchActorBuilder {
             watch_dirs: self.watch_dirs,
         };
 
-        runtime.run(fs_event_actor, mailbox).await?;
-
-        Ok(())
+        (fs_event_actor, mailbox)
     }
 }
-struct FsWatchActor {
+pub struct FsWatchActor {
     fs_notify_receiver: Receiver<(PathBuf, FsEvent)>,
 }
 

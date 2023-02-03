@@ -8,20 +8,18 @@ mod tests;
 pub mod test_helpers;
 
 pub use messages::*;
+use std::convert::Infallible;
 
 use actor::*;
-use async_trait::async_trait;
 use tedge_actors::Actor;
-use tedge_actors::ActorBuilder;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::ConcurrentServiceActor;
+use tedge_actors::ConcurrentServiceMessageBox;
 use tedge_actors::MessageBoxPlug;
 use tedge_actors::MessageBoxSocket;
 use tedge_actors::NoConfig;
 use tedge_actors::RequestResponseHandler;
-use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeHandle;
 use tedge_actors::ServiceMessageBoxBuilder;
 
 pub type HttpHandle = RequestResponseHandler<HttpRequest, HttpResult>;
@@ -50,12 +48,35 @@ impl HttpActorBuilder {
     }
 }
 
-#[async_trait]
-impl ActorBuilder for HttpActorBuilder {
-    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
+impl
+    Builder<(
+        ConcurrentServiceActor<HttpService>,
+        ConcurrentServiceMessageBox<HttpRequest, HttpResult>,
+    )> for HttpActorBuilder
+{
+    type Error = Infallible;
+
+    fn try_build(
+        self,
+    ) -> Result<
+        (
+            ConcurrentServiceActor<HttpService>,
+            ConcurrentServiceMessageBox<HttpRequest, HttpResult>,
+        ),
+        Self::Error,
+    > {
+        Ok(self.build())
+    }
+
+    fn build(
+        self,
+    ) -> (
+        ConcurrentServiceActor<HttpService>,
+        ConcurrentServiceMessageBox<HttpRequest, HttpResult>,
+    ) {
         let actor = self.actor;
-        let messages = self.box_builder.build();
-        runtime.run(actor, messages).await
+        let actor_box = self.box_builder.build();
+        (actor, actor_box)
     }
 }
 

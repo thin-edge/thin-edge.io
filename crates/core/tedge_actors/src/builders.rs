@@ -35,26 +35,11 @@ use crate::DynSender;
 use crate::KeyedSender;
 use crate::Message;
 use crate::NullSender;
-use crate::RuntimeError;
-use crate::RuntimeHandle;
 use crate::Sender;
 use crate::SenderVec;
 use crate::ServiceMessageBox;
 use crate::SimpleMessageBox;
-use async_trait::async_trait;
 use std::convert::Infallible;
-
-/// Materialize an actor instance under construction
-///
-/// Such an instance is:
-/// 1. built from some actor configuration
-/// 2. connected to other peers
-/// 3. eventually spawned into an actor.
-#[async_trait]
-pub trait ActorBuilder {
-    /// Build and spawn the actor
-    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError>;
-}
 
 /// Builder of `T`
 pub trait Builder<T>: Sized {

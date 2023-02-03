@@ -7,17 +7,14 @@ use crate::c8y_http_proxy::C8YConnectionBuilder;
 use crate::file_system_ext::FsWatchActorBuilder;
 use crate::file_system_ext::FsWatchEvent;
 use actor::*;
-use async_trait::async_trait;
 pub use config::*;
 use tedge_actors::futures::channel::mpsc;
-use tedge_actors::ActorBuilder;
+use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
-use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeHandle;
 use tedge_mqtt_ext::*;
 
 /// This is an actor builder.
@@ -89,9 +86,10 @@ impl MessageSink<FsWatchEvent> for LogManagerBuilder {
     }
 }
 
-#[async_trait]
-impl ActorBuilder for LogManagerBuilder {
-    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
+impl Builder<(LogManagerActor, LogManagerMessageBox)> for LogManagerBuilder {
+    type Error = LinkError;
+
+    fn try_build(self) -> Result<(LogManagerActor, LogManagerMessageBox), Self::Error> {
         let mqtt_publisher = self.mqtt_publisher.ok_or_else(|| LinkError::MissingPeer {
             role: "mqtt".to_string(),
         })?;
@@ -104,7 +102,6 @@ impl ActorBuilder for LogManagerBuilder {
 
         let actor = LogManagerActor::new(self.config, mqtt_publisher, http_proxy);
 
-        runtime.run(actor, message_box).await?;
-        Ok(())
+        Ok((actor, message_box))
     }
 }

@@ -1,22 +1,31 @@
 use async_trait::async_trait;
 use signal_hook::consts::signal::*;
 use signal_hook_tokio::Signals;
+use std::convert::Infallible;
 use tedge_actors::futures::StreamExt;
 use tedge_actors::Actor;
-use tedge_actors::ActorBuilder;
+use tedge_actors::Builder;
 use tedge_actors::ChannelError;
-use tedge_actors::MessageBox;
+use tedge_actors::NoMessage;
 use tedge_actors::RuntimeAction;
-use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeHandle;
+use tedge_actors::SimpleMessageBox;
+use tedge_actors::SimpleMessageBoxBuilder;
 
-pub struct SignalActorBuilder;
+pub type SignalMessageBox = SimpleMessageBox<NoMessage, RuntimeAction>;
 
-#[async_trait]
-impl ActorBuilder for SignalActorBuilder {
-    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
-        let message_box = SignalMessageBox::new(runtime.clone());
-        runtime.run(SignalActor, message_box).await
+pub struct SignalActorBuilder {
+    box_builder: SimpleMessageBoxBuilder<NoMessage, RuntimeAction>,
+}
+
+impl Builder<(SignalActor, SignalMessageBox)> for SignalActorBuilder {
+    type Error = Infallible;
+
+    fn try_build(self) -> Result<(SignalActor, SignalMessageBox), Self::Error> {
+        Ok(self.build())
+    }
+
+    fn build(self) -> (SignalActor, SignalMessageBox) {
+        (SignalActor, self.box_builder.build())
     }
 }
 
@@ -24,7 +33,8 @@ pub struct SignalActor;
 
 impl SignalActor {
     pub fn builder() -> SignalActorBuilder {
-        SignalActorBuilder
+        let box_builder = SimpleMessageBoxBuilder::new("Signal-Handler", 1);
+        SignalActorBuilder { box_builder }
     }
 }
 
@@ -37,51 +47,13 @@ impl Actor for SignalActor {
     }
 
     async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
-        while let Some(signal) = messages.recv().await {
+        let mut signals = Signals::new(&[SIGTERM, SIGINT, SIGQUIT]).unwrap(); // FIXME
+        while let Some(signal) = signals.next().await {
             match signal {
                 SIGTERM | SIGINT | SIGQUIT => messages.send(RuntimeAction::Shutdown).await?,
                 _ => unreachable!(),
             }
         }
         Ok(())
-    }
-}
-
-pub struct SignalMessageBox {
-    runtime: RuntimeHandle,
-    signals: Signals,
-}
-
-impl SignalMessageBox {
-    fn new(runtime: RuntimeHandle) -> Self {
-        let signals = Signals::new(&[SIGTERM, SIGINT, SIGQUIT]).unwrap(); // FIXME
-        SignalMessageBox { runtime, signals }
-    }
-
-    async fn recv(&mut self) -> Option<i32> {
-        self.signals.next().await
-    }
-
-    async fn send(&mut self, message: RuntimeAction) -> Result<(), ChannelError> {
-        self.log_output(&message);
-        self.runtime.send(message).await
-    }
-}
-
-#[async_trait]
-impl MessageBox for SignalMessageBox {
-    type Input = i32;
-    type Output = RuntimeAction;
-
-    fn turn_logging_on(&mut self, _on: bool) {
-        todo!()
-    }
-
-    fn name(&self) -> &str {
-        "Signal-Handler"
-    }
-
-    fn logging_is_on(&self) -> bool {
-        true
     }
 }

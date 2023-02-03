@@ -2,15 +2,15 @@
 mod tests;
 
 use async_trait::async_trait;
-use mqtt_channel::MqttError;
 use mqtt_channel::SinkExt;
 use mqtt_channel::StreamExt;
 use mqtt_channel::TopicFilter;
+use std::convert::Infallible;
 use tedge_actors::futures::channel::mpsc::channel;
 use tedge_actors::futures::channel::mpsc::Receiver;
 use tedge_actors::futures::channel::mpsc::Sender;
 use tedge_actors::Actor;
-use tedge_actors::ActorBuilder;
+use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
@@ -18,8 +18,6 @@ use tedge_actors::MessageBoxPlug;
 use tedge_actors::MessageBoxSocket;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
-use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeHandle;
 
 pub type MqttConfig = mqtt_channel::Config;
 pub type MqttMessage = mqtt_channel::Message;
@@ -39,8 +37,7 @@ impl MqttActorBuilder {
         }
     }
 
-    /// FIXME this method should not be async
-    pub(crate) async fn build(self) -> (MqttActor, MqttMessageBox) {
+    pub(crate) fn build_actor_and_box(self) -> (MqttActor, MqttMessageBox) {
         let mut combined_topic_filter = TopicFilter::empty();
         for (topic_filter, _) in self.subscriber_addresses.iter() {
             combined_topic_filter.add_all(topic_filter.to_owned());
@@ -49,7 +46,7 @@ impl MqttActorBuilder {
         let mqtt_message_box =
             MqttMessageBox::new(self.publish_channel.1, self.subscriber_addresses);
 
-        let mqtt_actor = MqttActor::new(mqtt_config).await.unwrap(); // Convert MqttError to RuntimeError;
+        let mqtt_actor = MqttActor::new(mqtt_config);
         (mqtt_actor, mqtt_message_box)
     }
 }
@@ -78,17 +75,19 @@ impl MessageSink<MqttMessage> for MqttActorBuilder {
     }
 }
 
-#[async_trait]
-impl ActorBuilder for MqttActorBuilder {
-    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
-        let (mqtt_actor, mqtt_message_box) = self.build().await;
+impl Builder<(MqttActor, MqttMessageBox)> for MqttActorBuilder {
+    type Error = Infallible;
 
-        runtime.run(mqtt_actor, mqtt_message_box).await?;
-        Ok(())
+    fn try_build(self) -> Result<(MqttActor, MqttMessageBox), Self::Error> {
+        Ok(self.build())
+    }
+
+    fn build(self) -> (MqttActor, MqttMessageBox) {
+        self.build_actor_and_box()
     }
 }
 
-struct MqttMessageBox {
+pub struct MqttMessageBox {
     peer_receiver: Receiver<MqttMessage>,
     peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
 }
@@ -138,14 +137,13 @@ impl MessageBox for MqttMessageBox {
     }
 }
 
-struct MqttActor {
-    mqtt_client: mqtt_channel::Connection,
+pub struct MqttActor {
+    mqtt_config: mqtt_channel::Config,
 }
 
 impl MqttActor {
-    async fn new(mqtt_config: mqtt_channel::Config) -> Result<Self, MqttError> {
-        let mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
-        Ok(MqttActor { mqtt_client })
+    fn new(mqtt_config: mqtt_channel::Config) -> Self {
+        MqttActor { mqtt_config }
     }
 }
 
@@ -157,17 +155,21 @@ impl Actor for MqttActor {
         "MQTT"
     }
 
-    async fn run(mut self, mut mailbox: MqttMessageBox) -> Result<(), ChannelError> {
+    async fn run(self, mut mailbox: MqttMessageBox) -> Result<(), ChannelError> {
+        let mut mqtt_client = mqtt_channel::Connection::new(&self.mqtt_config)
+            .await
+            .unwrap(); // TODO Convert MqttError to RuntimeError;
+
         loop {
             tokio::select! {
                 Some(message) = mailbox.recv() => {
-                    self.mqtt_client
+                    mqtt_client
                     .published
                     .send(message)
                     .await
                     .expect("TODO catch actor specific errors");
                 },
-                Some(message) = self.mqtt_client.received.next() => {
+                Some(message) = mqtt_client.received.next() => {
                     mailbox.send(message).await?
                 },
                 else => break,

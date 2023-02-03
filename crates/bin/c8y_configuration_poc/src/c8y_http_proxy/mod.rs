@@ -3,14 +3,10 @@ use crate::c8y_http_proxy::credentials::JwtResult;
 use crate::c8y_http_proxy::credentials::JwtRetriever;
 use crate::c8y_http_proxy::messages::C8YRestRequest;
 use crate::c8y_http_proxy::messages::C8YRestResult;
-use async_trait::async_trait;
-use tedge_actors::ActorBuilder;
 use tedge_actors::Builder;
 use tedge_actors::MessageBoxPlug;
 use tedge_actors::MessageBoxSocket;
 use tedge_actors::NoConfig;
-use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeHandle;
 use tedge_actors::ServiceMessageBoxBuilder;
 use tedge_config::C8yUrlSetting;
 use tedge_config::ConfigSettingAccessor;
@@ -86,29 +82,23 @@ impl C8YHttpProxyBuilder {
             jwt,
         }
     }
-
-    #[cfg(test)]
-    async fn run(self) -> Result<(), tedge_actors::ChannelError> {
-        let actor = self.config;
-        let message_box = C8YHttpProxyMessageBox {
-            clients: self.clients.build(),
-            http: self.http,
-            jwt: self.jwt,
-        };
-        tedge_actors::Actor::run(actor, message_box).await
-    }
 }
 
-#[async_trait]
-impl ActorBuilder for C8YHttpProxyBuilder {
-    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
+impl Builder<(C8YHttpConfig, C8YHttpProxyMessageBox)> for C8YHttpProxyBuilder {
+    type Error = Infallible;
+
+    fn try_build(self) -> Result<(C8YHttpConfig, C8YHttpProxyMessageBox), Self::Error> {
+        Ok(self.build())
+    }
+
+    fn build(self) -> (C8YHttpConfig, C8YHttpProxyMessageBox) {
         let actor = self.config;
         let message_box = C8YHttpProxyMessageBox {
             clients: self.clients.build(),
             http: self.http,
             jwt: self.jwt,
         };
-        runtime.run(actor, message_box).await
+        (actor, message_box)
     }
 }
 

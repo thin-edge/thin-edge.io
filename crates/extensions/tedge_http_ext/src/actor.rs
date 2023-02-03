@@ -10,7 +10,7 @@ use hyper_rustls::HttpsConnectorBuilder;
 use tedge_actors::Service;
 
 #[derive(Clone)]
-pub(crate) struct HttpService {
+pub struct HttpService {
     client: Client<HttpsConnector<HttpConnector>, hyper::body::Body>,
 }
 

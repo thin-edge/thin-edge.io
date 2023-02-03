@@ -8,17 +8,16 @@ use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use std::time::Duration;
 use tedge_actors::Actor;
-use tedge_actors::ActorBuilder;
 use tedge_actors::Builder;
 use tedge_actors::MessageBoxPlug;
 use tedge_actors::MessageBoxSocket;
 use tedge_actors::NoConfig;
 use tedge_actors::RequestResponseHandler;
-use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeHandle;
 use tedge_actors::Service;
 use tedge_actors::ServiceActor;
+use tedge_actors::ServiceMessageBox;
 use tedge_actors::ServiceMessageBoxBuilder;
+use try_traits::Infallible;
 
 pub type JwtRequest = ();
 pub type JwtResult = Result<String, SmartRestDeserializerError>;
@@ -110,11 +109,17 @@ impl<S: Service<Request = JwtRequest, Response = JwtResult>> JwtRetrieverBuilder
 }
 
 #[async_trait]
-impl<S: Service<Request = JwtRequest, Response = JwtResult>> ActorBuilder
-    for JwtRetrieverBuilder<S>
+impl<S: Service<Request = JwtRequest, Response = JwtResult>>
+    Builder<(ServiceActor<S>, ServiceMessageBox<(), JwtResult>)> for JwtRetrieverBuilder<S>
 {
-    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
-        runtime.run(self.actor, self.message_box.build()).await
+    type Error = Infallible;
+
+    fn try_build(self) -> Result<(ServiceActor<S>, ServiceMessageBox<(), JwtResult>), Self::Error> {
+        Ok(self.build())
+    }
+
+    fn build(self) -> (ServiceActor<S>, ServiceMessageBox<(), JwtResult>) {
+        (self.actor, self.message_box.build())
     }
 }
 

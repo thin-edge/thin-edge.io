@@ -10,17 +10,14 @@ use crate::c8y_http_proxy::C8YConnectionBuilder;
 use crate::file_system_ext::FsWatchActorBuilder;
 use crate::file_system_ext::FsWatchEvent;
 use actor::*;
-use async_trait::async_trait;
 pub use config::*;
 use tedge_actors::futures::channel::mpsc;
-use tedge_actors::ActorBuilder;
+use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
-use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeHandle;
 use tedge_mqtt_ext::*;
 
 /// An instance of the config manager
@@ -103,9 +100,10 @@ impl MessageSink<FsWatchEvent> for ConfigManagerBuilder {
     }
 }
 
-#[async_trait]
-impl ActorBuilder for ConfigManagerBuilder {
-    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
+impl Builder<(ConfigManagerActor, ConfigManagerMessageBox)> for ConfigManagerBuilder {
+    type Error = LinkError;
+
+    fn try_build(self) -> Result<(ConfigManagerActor, ConfigManagerMessageBox), Self::Error> {
         let mqtt_publisher = self.mqtt_publisher.ok_or_else(|| LinkError::MissingPeer {
             role: "mqtt".to_string(),
         })?;
@@ -117,9 +115,8 @@ impl ActorBuilder for ConfigManagerBuilder {
         let peers =
             ConfigManagerMessageBox::new(self.events_receiver, mqtt_publisher, c8y_http_proxy);
 
-        let actor = ConfigManagerActor::new(self.config).await;
+        let actor = ConfigManagerActor::new(self.config);
 
-        runtime.run(actor, peers).await?;
-        Ok(())
+        Ok((actor, peers))
     }
 }

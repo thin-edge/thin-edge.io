@@ -142,7 +142,7 @@ impl<T: Message> GenericTimerCache<T> {
     }
 }
 
-/// A Sender adapter given the caller to send its requests
+/// A Sender adapter given to the caller to send its requests
 struct GenericTimerRequestAdapter<T: Message> {
     request_sender: DynSender<SetTimeout<TimerId>>,
     cache: Arc<Mutex<GenericTimerCache<T>>>,
@@ -170,7 +170,7 @@ impl<T: Message> Sender<SetTimeout<T>> for GenericTimerRequestAdapter<T> {
     }
 }
 
-/// A Sender adapter given the timer actor to send its responses
+/// A Sender adapter given to the timer actor to send its responses
 struct GenericTimerResponseAdapter<T: Message> {
     response_sender: DynSender<Timeout<T>>,
     cache: Arc<Mutex<GenericTimerCache<T>>>,

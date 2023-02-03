@@ -1,12 +1,11 @@
+use std::convert::Infallible;
 use std::process::Output;
 
 use tedge_actors::Actor;
-use tedge_actors::ActorBuilder;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::ConcurrentServiceActor;
-use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeHandle;
+use tedge_actors::ConcurrentServiceMessageBox;
 use tedge_actors::Service;
 use tedge_actors::ServiceMessageBoxBuilder;
 
@@ -47,12 +46,35 @@ pub struct ScriptActorBuilder {
     box_builder: ServiceMessageBoxBuilder<Execute, std::io::Result<Output>>,
 }
 
-#[async_trait::async_trait]
-impl ActorBuilder for ScriptActorBuilder {
-    async fn spawn(self, runtime: &mut RuntimeHandle) -> Result<(), RuntimeError> {
+impl
+    Builder<(
+        ConcurrentServiceActor<ScriptActor>,
+        ConcurrentServiceMessageBox<Execute, std::io::Result<Output>>,
+    )> for ScriptActorBuilder
+{
+    type Error = Infallible;
+
+    fn try_build(
+        self,
+    ) -> Result<
+        (
+            ConcurrentServiceActor<ScriptActor>,
+            ConcurrentServiceMessageBox<Execute, std::io::Result<Output>>,
+        ),
+        Self::Error,
+    > {
+        Ok(self.build())
+    }
+
+    fn build(
+        self,
+    ) -> (
+        ConcurrentServiceActor<ScriptActor>,
+        ConcurrentServiceMessageBox<Execute, std::io::Result<Output>>,
+    ) {
         let actor = self.actor;
         let messages = self.box_builder.build();
-        runtime.run(actor, messages).await
+        (actor, messages)
     }
 }
 

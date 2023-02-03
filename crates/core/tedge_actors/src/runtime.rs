@@ -1,9 +1,10 @@
 use crate::internal::RunActor;
 use crate::internal::Task;
 use crate::Actor;
-use crate::ActorBuilder;
+use crate::Builder;
 use crate::ChannelError;
 use crate::DynSender;
+use crate::MessageSink;
 use crate::RuntimeError;
 use futures::channel::mpsc;
 use futures::SinkExt;
@@ -65,8 +66,13 @@ impl Runtime {
     }
 
     /// Spawn an actor
-    pub async fn spawn(&mut self, actor: impl ActorBuilder) -> Result<(), RuntimeError> {
-        actor.spawn(&mut self.handle).await
+    pub async fn spawn<T, A>(&mut self, actor_builder: T) -> Result<(), RuntimeError>
+    where
+        T: Builder<(A, A::MessageBox)>, // + MessageSink<RuntimeRequest>
+        A: Actor,
+    {
+        let (actor, actor_box) = actor_builder.build();
+        Ok(actor.run(actor_box).await?)
     }
 
     /// Run the runtime up to completion
@@ -132,6 +138,12 @@ impl RuntimeHandle {
         debug!(target: "Runtime", "schedule {:?}", action);
         self.actions_sender.send(action).await?;
         Ok(())
+    }
+}
+
+impl MessageSink<RuntimeAction> for RuntimeHandle {
+    fn get_sender(&self) -> DynSender<RuntimeAction> {
+        self.actions_sender.clone().into()
     }
 }
 

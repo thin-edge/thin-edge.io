@@ -33,7 +33,7 @@ pub struct ConfigManagerActor {
 }
 
 impl ConfigManagerActor {
-    pub async fn new(config: ConfigManagerConfig) -> Self {
+    pub fn new(config: ConfigManagerConfig) -> Self {
         let config_upload_manager = ConfigUploadManager::new(config.clone());
 
         let config_download_manager = ConfigDownloadManager::new(config.clone());
