@@ -327,7 +327,6 @@ impl ConfigDownloadManager {
             .download_file(
                 download_url,
                 config_download_request.file_name.as_str(),
-                &None,
                 self.tmp_dir.as_path(),
             )
             .await?;

@@ -1466,7 +1466,6 @@ impl C8YHttpProxy for FakeC8YHttpProxy {
         &mut self,
         _download_url: &str,
         _file_name: &str,
-        _version: &Option<String>,
         _tmp_dir_path: &Path,
     ) -> Result<PathBuf, SMCumulocityMapperError> {
         Ok(PathBuf::from("fake/path"))

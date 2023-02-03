@@ -78,8 +78,7 @@ pub trait C8YHttpProxy: Send + Sync {
         &mut self,
         download_url: &str,
         file_name: &str,
-        version: &Option<String>,
-        tmp_dir_path: &Path,
+        tmp_dir: &Path,
     ) -> Result<PathBuf, SMCumulocityMapperError>;
 }
 
@@ -498,8 +497,7 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         &mut self,
         download_url: &str,
         file_name: &str,
-        version: &Option<String>,
-        tmp_dir_path: &Path,
+        tmp_dir: &Path,
     ) -> Result<PathBuf, SMCumulocityMapperError> {
         let mut download_info = DownloadInfo::new(download_url);
 
@@ -510,7 +508,8 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         }
 
         // Download a file to tmp dir
-        let downloader = Downloader::new(file_name, version, tmp_dir_path);
+        let target_path = tmp_dir.join(file_name);
+        let downloader = Downloader::new(target_path.as_path());
         downloader.download(&download_info).await?;
 
         Ok(downloader.filename().to_path_buf())
@@ -753,8 +752,7 @@ mod tests {
     #[tokio::test]
     async fn download_file() -> anyhow::Result<()> {
         let device_id = "test-device";
-        let file_name = "file";
-        let version = "1.0.0";
+        let file_name = "file_1.0.0";
         let tmp_dir = TempTedgeDir::new();
         let url = mockito::server_url();
         let test_endpoint = "/some/cloud/url";
@@ -779,7 +777,6 @@ mod tests {
             .download_file(
                 format!("{url}{test_endpoint}").as_str(),
                 file_name,
-                &Some(version.to_string()),
                 tmp_dir.path(),
             )
             .await?;

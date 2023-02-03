@@ -630,9 +630,8 @@ async fn test_handle_config_update_request_tedge_device() -> anyhow::Result<()> 
             predicate::always(),
             predicate::always(),
             predicate::always(),
-            predicate::always(),
         )
-        .returning(|_, file_name, _, tmp_dir_path| {
+        .returning(|_, file_name, tmp_dir_path| {
             let downloaded_path = tmp_dir_path.join(file_name);
             std::fs::File::create(&downloaded_path)?;
             Ok(downloaded_path)
@@ -724,9 +723,8 @@ async fn test_handle_config_update_request_child_device() -> anyhow::Result<()> 
             predicate::always(),
             predicate::always(),
             predicate::always(),
-            predicate::always(),
         )
-        .returning(|_, file_name, _, tmp_dir_path| {
+        .returning(|_, file_name, tmp_dir_path| {
             let downloaded_path = tmp_dir_path.join(file_name);
             std::fs::File::create(&downloaded_path)?;
             Ok(downloaded_path)
@@ -814,9 +812,8 @@ async fn test_c8y_config_download_child_device_fail_on_broken_url() -> anyhow::R
             predicate::always(),
             predicate::always(),
             predicate::always(),
-            predicate::always(),
         )
-        .returning(|_, _, _, _| Err(SMCumulocityMapperError::RequestTimeout));
+        .returning(|_, _, _| Err(SMCumulocityMapperError::RequestTimeout));
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,

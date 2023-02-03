@@ -69,7 +69,13 @@ pub struct Downloader {
 }
 
 impl Downloader {
-    pub fn new(name: &str, version: &Option<String>, target_dir_path: impl AsRef<Path>) -> Self {
+    pub fn new(target_path: &Path) -> Self {
+        Self {
+            target_filename: target_path.to_path_buf(),
+        }
+    }
+
+    pub fn new_sm(name: &str, version: &Option<String>, target_dir_path: impl AsRef<Path>) -> Self {
         let mut filename = name.to_string();
         if let Some(version) = version {
             filename.push('_');
@@ -215,7 +221,7 @@ mod tests {
         let version = Some("test1".to_string());
         let target_dir_path = PathBuf::from("/tmp");
 
-        let downloader = Downloader::new(name, &version, &target_dir_path);
+        let downloader = Downloader::new_sm(name, &version, &target_dir_path);
 
         let expected_path = Path::new("/tmp/test_download_test1");
         assert_eq!(downloader.filename(), expected_path);
@@ -237,7 +243,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(&name, &version, target_dir_path.path());
+        let downloader = Downloader::new_sm(&name, &version, target_dir_path.path());
         downloader.download(&url).await?;
 
         let log_content = std::fs::read(downloader.filename())?;
@@ -266,7 +272,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(&name, &version, target_dir_path.path());
+        let downloader = Downloader::new_sm(&name, &version, target_dir_path.path());
         match downloader.download(&url).await {
             Err(DownloadError::InsufficientSpace) => return Ok(()),
             _ => bail!("failed"),
@@ -291,7 +297,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(&name, &version, target_dir_path.path());
+        let downloader = Downloader::new_sm(&name, &version, target_dir_path.path());
 
         match downloader.download(&url).await {
             Ok(()) => {
@@ -321,7 +327,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(&name, &version, target_dir_path.path());
+        let downloader = Downloader::new_sm(&name, &version, target_dir_path.path());
         downloader.download(&url).await?;
 
         let log_content = std::fs::read(downloader.filename())?;
@@ -344,7 +350,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(&name, &version, target_dir_path.path());
+        let downloader = Downloader::new_sm(&name, &version, target_dir_path.path());
         match downloader.download(&url).await {
             Ok(()) => {
                 assert_eq!("".as_bytes(), std::fs::read(downloader.filename())?);
@@ -454,7 +460,7 @@ mod tests {
             }
         };
 
-        let downloader = Downloader::new(&name, &version, target_dir_path.path());
+        let downloader = Downloader::new_sm(&name, &version, target_dir_path.path());
         match downloader.download(&url).await {
             Ok(_success) => anyhow::bail!("Expected client error."),
             Err(err) => {
