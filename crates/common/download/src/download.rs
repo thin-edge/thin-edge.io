@@ -8,15 +8,13 @@ use nix::fcntl::FallocateFlags;
 use nix::sys::statvfs;
 use serde::Deserialize;
 use serde::Serialize;
+use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::os::unix::prelude::AsRawFd;
-use std::os::unix::prelude::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
-use tedge_utils::file::get_metadata;
-use tedge_utils::file::PermissionEntry;
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -172,7 +170,7 @@ impl Downloader {
 
     fn has_write_access(&self) -> Result<(), DownloadError> {
         let metadata = if self.target_filename.is_file() {
-            get_metadata(&self.target_filename)?
+            fs::metadata(&self.target_filename)?
         } else {
             // If the file does not exist before downloading file, check the directory perms
             let parent_dir =
@@ -182,7 +180,7 @@ impl Downloader {
                     .ok_or_else(|| DownloadError::NoWriteAccess {
                         path: self.target_filename.clone(),
                     })?;
-            get_metadata(parent_dir)?
+            fs::metadata(parent_dir)?
         };
 
         // Write permission check
@@ -193,46 +191,6 @@ impl Downloader {
         } else {
             Ok(())
         }
-    }
-
-    pub async fn rename(
-        &self,
-        dest_path: impl AsRef<Path>,
-        new_file_permissions: PermissionEntry,
-    ) -> Result<(), DownloadError> {
-        let dest_path = dest_path.as_ref();
-        if !dest_path.exists() {
-            if let Some(dir_to) = dest_path.parent() {
-                tokio::fs::create_dir_all(dir_to).await?;
-            } else {
-                return Err(DownloadError::FromIo {
-                    reason: format!("No parent dir for {:?}", dest_path),
-                });
-            }
-        }
-
-        let original_permission_mode = match dest_path.is_file() {
-            true => {
-                let metadata = get_metadata(self.filename())?;
-                let mode = metadata.permissions().mode();
-                Some(mode)
-            }
-            false => None,
-        };
-
-        tokio::fs::rename(self.filename(), dest_path).await?;
-
-        let file_permissions = if let Some(mode) = original_permission_mode {
-            // Use the same file permission as the original one
-            PermissionEntry::new(None, None, Some(mode))
-        } else {
-            // Set the user, group, and mode as given for a new file
-            new_file_permissions
-        };
-
-        file_permissions.apply(dest_path)?;
-
-        Ok(())
     }
 
     pub async fn cleanup(&self) -> Result<(), DownloadError> {

@@ -23,9 +23,6 @@ pub enum DownloadError {
     #[error("Not enough disk space")]
     InsufficientSpace,
 
-    #[error(transparent)]
-    FromFileError(#[from] tedge_utils::file::FileError),
-
     #[error("No write access to {path:?}")]
     NoWriteAccess { path: PathBuf },
 }

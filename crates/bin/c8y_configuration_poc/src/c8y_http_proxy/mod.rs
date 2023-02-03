@@ -1,10 +1,9 @@
-use std::path::PathBuf;
-
 use crate::c8y_http_proxy::actor::C8YHttpProxyMessageBox;
 use crate::c8y_http_proxy::credentials::JwtResult;
 use crate::c8y_http_proxy::credentials::JwtRetriever;
 use crate::c8y_http_proxy::messages::C8YRestRequest;
 use crate::c8y_http_proxy::messages::C8YRestResult;
+use std::path::PathBuf;
 use tedge_actors::Builder;
 use tedge_actors::MessageBoxPlug;
 use tedge_actors::MessageBoxSocket;

@@ -17,10 +17,12 @@ async fn c8y_http_proxy_requests_the_device_internal_id_on_start() {
     let device_id = "device-001";
     let token = "some JWT token";
     let external_id = "external-device-001";
+    let tmp_dir = "/tmp";
 
     let config = C8YHttpConfig {
         c8y_host: c8y_host.to_string(),
         device_id: device_id.to_string(),
+        tmp_dir: tmp_dir.into(),
     };
     let (mut proxy, mut c8y) = spawn_c8y_http_proxy(config, token).await;
 
