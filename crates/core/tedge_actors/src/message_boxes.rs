@@ -175,6 +175,7 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
             }
             Some(RuntimeRequest::Shutdown) = self.signal_receiver.next() => {
                 self.log_input(&RuntimeRequest::Shutdown);
+                // FIXME: not None
                 None
             }
             else => None

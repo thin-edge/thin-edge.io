@@ -13,7 +13,6 @@ use tedge_actors::Message;
 use tedge_actors::MessageBoxPlug;
 use tedge_actors::MessageBoxSocket;
 use tedge_actors::NoConfig;
-use tedge_actors::NullSender;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
@@ -47,8 +46,7 @@ impl Builder<(TimerActor, <TimerActor as Actor>::MessageBox)> for TimerActorBuil
 
 impl RuntimeRequestSink for TimerActorBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
-        // FIXME: this actor should not ignore runtime requests
-        NullSender.into()
+        self.box_builder.get_signal_sender()
     }
 }
 

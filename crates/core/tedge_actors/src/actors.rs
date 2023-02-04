@@ -110,7 +110,7 @@ impl<S: Service + Clone> Actor for ConcurrentServiceActor<S> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use crate::*;
     use async_trait::async_trait;
     use futures::channel::mpsc;
@@ -131,9 +131,12 @@ mod tests {
             mut self,
             mut messages: SimpleMessageBox<String, String>,
         ) -> Result<(), ChannelError> {
+            // FIXME: If I add the RuntimeRequests here and if the channel we use to send messages is dropped then we will get an ChannelError::SendError
+            // FIXME: but I don't think we shouldn't return this error if the message box has a shutdown message for us
             while let Some(message) = messages.recv().await {
                 messages.send(message).await?
             }
+
             Ok(())
         }
     }
@@ -142,7 +145,6 @@ mod tests {
     async fn running_an_actor_without_a_runtime() {
         let actor = Echo;
         let (mut client_message_box, actor_message_box) = SimpleMessageBox::channel("test", 16);
-
         let actor_task = spawn(actor.run(actor_message_box));
 
         // Messages sent to the actor
@@ -176,7 +178,7 @@ mod tests {
         let actor_task = spawn(actor.run(message_box));
 
         spawn(async move {
-            let mut sender: DynSender<&str> = adapt(&input_sender.into());
+            let mut sender: DynSender<&str> = adapt(&input_sender);
             sender.send("Do this").await.expect("sent");
             sender.send("Do nothing").await.expect("sent");
             sender.send("Do that and this").await.expect("sent");

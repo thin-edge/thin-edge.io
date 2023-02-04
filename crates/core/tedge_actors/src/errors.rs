@@ -9,6 +9,8 @@ pub enum ChannelError {
     #[error("Fail to receive a message: the sender has been dropped")]
     ReceiveError(),
 
+    // TODO: Should this lib use anyhow?
+    // FIXME: should be runtime error
     #[error(transparent)]
     ActorError(#[from] anyhow::Error),
 }
@@ -33,7 +35,7 @@ pub enum RuntimeError {
 }
 
 /// Error raised while connecting actor instances
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum LinkError {
     #[error("Missing peer for {role}")]
     MissingPeer { role: String },

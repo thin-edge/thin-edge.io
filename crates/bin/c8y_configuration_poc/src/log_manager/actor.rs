@@ -1,7 +1,3 @@
-use std::collections::VecDeque;
-use std::path::Path;
-use std::path::PathBuf;
-
 use crate::c8y_http_proxy::handle::C8YHttpProxy;
 use crate::file_system_ext::FsWatchEvent;
 use async_trait::async_trait;
@@ -23,12 +19,16 @@ use log::info;
 use mqtt_channel::Message;
 use mqtt_channel::StreamExt;
 use mqtt_channel::TopicFilter;
+use std::collections::VecDeque;
+use std::path::Path;
+use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
+use tedge_actors::RuntimeRequest;
 use tedge_api::health::get_health_status_message;
 use tedge_api::health::health_check_topics;
 use tedge_mqtt_ext::MqttMessage;
@@ -362,7 +362,7 @@ impl Actor for LogManagerActor {
         self.reload_supported_log_types().await.unwrap();
         self.get_pending_operations_from_cloud().await.unwrap();
 
-        while let Some(event) = messages.events.next().await {
+        while let Some(event) = messages.recv().await {
             match event {
                 LogInput::MqttMessage(message) => {
                     self.process_mqtt_message(message).await.unwrap();
@@ -378,18 +378,37 @@ impl Actor for LogManagerActor {
 
 // FIXME: Consider to use a SimpleMessageBox<LogInput,MqttMessage>
 pub struct LogManagerMessageBox {
+    // FIXME: not pub
     pub events: mpsc::Receiver<LogInput>,
     pub mqtt_requests: DynSender<MqttMessage>,
+    signal_receiver: mpsc::Receiver<RuntimeRequest>,
 }
 
 impl LogManagerMessageBox {
     pub fn new(
         events: mpsc::Receiver<LogInput>,
         mqtt_con: DynSender<MqttMessage>,
+        signal_receiver: mpsc::Receiver<RuntimeRequest>,
     ) -> LogManagerMessageBox {
         LogManagerMessageBox {
             events,
             mqtt_requests: mqtt_con,
+            signal_receiver,
+        }
+    }
+
+    pub async fn recv(&mut self) -> Option<LogInput> {
+        tokio::select! {
+            Some(event) = self.events.next() => {
+                self.log_input(&event);
+                Some(event)
+            }
+            Some(RuntimeRequest::Shutdown) = self.signal_receiver.next() => {
+                self.log_input(&RuntimeRequest::Shutdown);
+                // FIXME: not None
+                None
+            }
+            else => None
         }
     }
 }

@@ -62,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
     signal_actor.register_peer(NoConfig, runtime.get_handle().get_sender());
 
     // Run the actors
-    // FIXME having to list all the actors is error prone
+    // FIXME: having to list all the actors is error prone
     runtime.spawn(signal_actor).await?;
     runtime.spawn(mqtt_actor).await?;
     runtime.spawn(jwt_actor).await?;

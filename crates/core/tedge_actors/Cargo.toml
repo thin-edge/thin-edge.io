@@ -14,11 +14,12 @@ tokio = { version = "1.23", default_features = false, features = [
     "sync",
     "rt",
     "macros",
+    "time"
 ] }
 
 [dev-dependencies]
+env_logger = "0.10" # TODO: remove me
 tokio = { version = "1.23", default_features = false, features = [
-    "time",
     "rt-multi-thread",
 ] }
 

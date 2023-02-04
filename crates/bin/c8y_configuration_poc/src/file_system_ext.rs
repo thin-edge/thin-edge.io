@@ -1,5 +1,7 @@
 use async_trait::async_trait;
+use mqtt_channel::StreamExt;
 use std::path::PathBuf;
+use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
@@ -7,7 +9,6 @@ use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
 use tedge_actors::MessageSource;
 use tedge_actors::NoMessage;
-use tedge_actors::NullSender;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_utils::notify::FsEvent;
@@ -27,6 +28,7 @@ pub enum FsWatchEvent {
 
 pub struct FsWatchMessageBox {
     watch_dirs: Vec<(PathBuf, DynSender<FsWatchEvent>)>,
+    signal_receiver: mpsc::Receiver<RuntimeRequest>,
 }
 
 impl FsWatchMessageBox {
@@ -48,6 +50,10 @@ impl FsWatchMessageBox {
 
         Ok(())
     }
+
+    async fn recv(&mut self) -> Option<RuntimeRequest> {
+        self.signal_receiver.next().await
+    }
 }
 
 impl MessageBox for FsWatchMessageBox {
@@ -67,12 +73,17 @@ impl MessageBox for FsWatchMessageBox {
 
 pub struct FsWatchActorBuilder {
     watch_dirs: Vec<(PathBuf, DynSender<FsWatchEvent>)>,
+    signal_sender: mpsc::Sender<RuntimeRequest>,
+    signal_receiver: mpsc::Receiver<RuntimeRequest>,
 }
 
 impl FsWatchActorBuilder {
     pub fn new() -> Self {
+        let (signal_sender, signal_receiver) = mpsc::channel(10);
         Self {
             watch_dirs: Vec::new(),
+            signal_sender,
+            signal_receiver,
         }
     }
 }
@@ -85,8 +96,7 @@ impl MessageSource<FsWatchEvent, PathBuf> for FsWatchActorBuilder {
 
 impl RuntimeRequestSink for FsWatchActorBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
-        // FIXME: this actor should not ignore runtime requests
-        NullSender.into()
+        Box::new(self.signal_sender.clone())
     }
 }
 
@@ -119,6 +129,7 @@ impl Builder<(FsWatchActor, FsWatchMessageBox)> for FsWatchActorBuilder {
 
         let mailbox = FsWatchMessageBox {
             watch_dirs: self.watch_dirs,
+            signal_receiver: self.signal_receiver,
         };
 
         (fs_event_actor, mailbox)
@@ -138,17 +149,19 @@ impl Actor for FsWatchActor {
 
     async fn run(mut self, mut mailbox: Self::MessageBox) -> Result<(), ChannelError> {
         loop {
-            if let Some((path, fs_event)) = self.fs_notify_receiver.recv().await {
-                let output = match fs_event {
-                    FsEvent::Modified => FsWatchEvent::Modified(path),
-                    FsEvent::FileCreated => FsWatchEvent::FileCreated(path),
-                    FsEvent::FileDeleted => FsWatchEvent::FileDeleted(path),
-                    FsEvent::DirectoryCreated => FsWatchEvent::DirectoryCreated(path),
-                    FsEvent::DirectoryDeleted => FsWatchEvent::DirectoryDeleted(path),
-                };
-                mailbox.send(output).await?;
-            } else {
-                return Err(ChannelError::ReceiveError());
+            tokio::select! {
+                Some(RuntimeRequest::Shutdown) = mailbox.recv() => return Err(ChannelError::ReceiveError()),
+                Some((path, fs_event)) = self.fs_notify_receiver.recv() => {
+                    let output = match fs_event {
+                        FsEvent::Modified => FsWatchEvent::Modified(path),
+                        FsEvent::FileCreated => FsWatchEvent::FileCreated(path),
+                        FsEvent::FileDeleted => FsWatchEvent::FileDeleted(path),
+                        FsEvent::DirectoryCreated => FsWatchEvent::DirectoryCreated(path),
+                        FsEvent::DirectoryDeleted => FsWatchEvent::DirectoryDeleted(path),
+                    };
+                    mailbox.send(output).await?;
+                }
+                else => return Err(ChannelError::ReceiveError())
             }
         }
     }

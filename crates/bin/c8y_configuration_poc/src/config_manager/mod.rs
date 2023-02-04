@@ -20,7 +20,6 @@ use tedge_actors::MessageBoxSocket;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
-use tedge_actors::NullSender;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_mqtt_ext::*;
@@ -40,11 +39,14 @@ pub struct ConfigManagerBuilder {
     mqtt_publisher: Option<DynSender<MqttMessage>>,
     c8y_http_proxy: Option<C8YHttpProxy>,
     timer_sender: Option<DynSender<SetTimeout<ChildConfigOperationKey>>>,
+    signal_sender: mpsc::Sender<RuntimeRequest>,
+    signal_receiver: mpsc::Receiver<RuntimeRequest>,
 }
 
 impl ConfigManagerBuilder {
     pub fn new(config: ConfigManagerConfig) -> ConfigManagerBuilder {
         let (events_sender, events_receiver) = mpsc::channel(10);
+        let (signal_sender, signal_receiver) = mpsc::channel(10);
 
         ConfigManagerBuilder {
             config,
@@ -53,6 +55,8 @@ impl ConfigManagerBuilder {
             mqtt_publisher: None,
             c8y_http_proxy: None,
             timer_sender: None,
+            signal_sender,
+            signal_receiver,
         }
     }
 
@@ -135,8 +139,7 @@ impl MessageSink<Timeout<ChildConfigOperationKey>> for ConfigManagerBuilder {
 
 impl RuntimeRequestSink for ConfigManagerBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
-        // FIXME: this actor should not ignore runtime requests
-        NullSender.into()
+        Box::new(self.signal_sender.clone())
     }
 }
 
@@ -161,6 +164,7 @@ impl Builder<(ConfigManagerActor, ConfigManagerMessageBox)> for ConfigManagerBui
             mqtt_publisher,
             c8y_http_proxy,
             timer_sender,
+            self.signal_receiver,
         );
 
         let actor = ConfigManagerActor::new(self.config);

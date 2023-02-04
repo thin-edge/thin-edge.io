@@ -15,7 +15,6 @@ use tedge_actors::LinkError;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
-use tedge_actors::NullSender;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_mqtt_ext::*;
@@ -27,11 +26,14 @@ pub struct LogManagerBuilder {
     events_sender: mpsc::Sender<LogInput>,
     mqtt_publisher: Option<DynSender<MqttMessage>>,
     http_proxy: Option<C8YHttpProxy>,
+    signal_sender: mpsc::Sender<RuntimeRequest>,
+    signal_receiver: mpsc::Receiver<RuntimeRequest>,
 }
 
 impl LogManagerBuilder {
     pub fn new(config: LogManagerConfig) -> Self {
         let (events_sender, events_receiver) = mpsc::channel(10);
+        let (signal_sender, signal_receiver) = mpsc::channel(10);
 
         Self {
             config,
@@ -39,6 +41,8 @@ impl LogManagerBuilder {
             events_sender,
             mqtt_publisher: None,
             http_proxy: None,
+            signal_sender,
+            signal_receiver,
         }
     }
 
@@ -91,8 +95,7 @@ impl MessageSink<FsWatchEvent> for LogManagerBuilder {
 
 impl RuntimeRequestSink for LogManagerBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
-        // FIXME: this actor should not ignore runtime requests
-        NullSender.into()
+        Box::new(self.signal_sender.clone())
     }
 }
 
@@ -108,7 +111,11 @@ impl Builder<(LogManagerActor, LogManagerMessageBox)> for LogManagerBuilder {
             role: "http".to_string(),
         })?;
 
-        let message_box = LogManagerMessageBox::new(self.events_receiver, mqtt_publisher.clone());
+        let message_box = LogManagerMessageBox::new(
+            self.events_receiver,
+            mqtt_publisher.clone(),
+            self.signal_receiver,
+        );
 
         let actor = LogManagerActor::new(self.config, mqtt_publisher, http_proxy);
 

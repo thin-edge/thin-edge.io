@@ -1,3 +1,5 @@
+// TODO: Update examples to handle RuntimeRequests
+
 //! A library to define, compose and run actors
 //!
 //! ## Implementing an actor
@@ -10,7 +12,7 @@
 //! - output messages produced by the actor.
 //!
 //! ```
-//! # use crate::tedge_actors::{Actor, ChannelError, MessageBox, SimpleMessageBox};
+//! # use crate::tedge_actors::{Actor, ChannelError, MessageBox, RuntimeRequest, SimpleMessageBox};
 //! # use async_trait::async_trait;
 //! #
 //! /// State of the calculator actor
@@ -45,7 +47,7 @@
 //!     // However, this actor has no such needs: the input messages
 //!     // are processed independently of their producers
 //!     // and the output messages are sent independently of their consumers.
-//!     type MessageBox = SimpleMessageBox<Operation,Update>;
+//!     type MessageBox = SimpleMessageBox<Operation, Update>;
 //!
 //!     fn name(&self) -> &str {
 //!         "Calculator"
@@ -191,9 +193,9 @@
 //!
 //! // Observing the service behavior,
 //! // note that the responses come back associated to the id of the requester.
-//! assert_eq!(test_box.recv().await, Some((1,Update{from:0,to:4})));
-//! assert_eq!(test_box.recv().await, Some((2,Update{from:4,to:40})));
-//! assert_eq!(test_box.recv().await, Some((1,Update{from:40,to:42})));
+//! assert_eq!(test_box.recv().await, Some((1, Update{from:0,to:4})));
+//! assert_eq!(test_box.recv().await, Some((2, Update{from:4,to:40})));
+//! assert_eq!(test_box.recv().await, Some((1, Update{from:40,to:42})));
 //!
 //! # }
 //! ```

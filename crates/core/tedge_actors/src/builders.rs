@@ -169,6 +169,7 @@ impl<I: Message, O: Message> SimpleMessageBoxBuilder<I, O> {
         let (input_sender, input_receiver) = mpsc::channel(capacity);
         let (signal_sender, signal_receiver) = mpsc::channel(4);
         let output_sender = NullSender.into();
+
         SimpleMessageBoxBuilder {
             name: name.to_string(),
             input_sender,

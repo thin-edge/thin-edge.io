@@ -2,10 +2,12 @@
 mod tests;
 
 use async_trait::async_trait;
+use mqtt_channel::Message;
 use mqtt_channel::SinkExt;
 use mqtt_channel::StreamExt;
 use mqtt_channel::TopicFilter;
 use std::convert::Infallible;
+use tedge_actors::fan_in_message_type;
 use tedge_actors::futures::channel::mpsc::channel;
 use tedge_actors::futures::channel::mpsc::Receiver;
 use tedge_actors::futures::channel::mpsc::Sender;
@@ -18,25 +20,30 @@ use tedge_actors::MessageBoxPlug;
 use tedge_actors::MessageBoxSocket;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
-use tedge_actors::NullSender;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 
 pub type MqttConfig = mqtt_channel::Config;
 pub type MqttMessage = mqtt_channel::Message;
+fan_in_message_type!(MqttRuntimeMessage[Message, RuntimeRequest] : Debug, Clone);
 
 pub struct MqttActorBuilder {
     pub mqtt_config: mqtt_channel::Config,
-    pub publish_channel: (Sender<MqttMessage>, Receiver<MqttMessage>),
+    pub publish_channel: (Sender<MqttRuntimeMessage>, Receiver<MqttRuntimeMessage>),
     pub subscriber_addresses: Vec<(TopicFilter, DynSender<MqttMessage>)>,
+    signal_sender: Sender<RuntimeRequest>,
+    signal_receiver: Receiver<RuntimeRequest>,
 }
 
 impl MqttActorBuilder {
     pub fn new(config: mqtt_channel::Config) -> Self {
+        let (signal_sender, signal_receiver) = channel(10);
         MqttActorBuilder {
             mqtt_config: config,
             publish_channel: channel(10),
             subscriber_addresses: Vec::new(),
+            signal_sender,
+            signal_receiver,
         }
     }
 
@@ -46,8 +53,11 @@ impl MqttActorBuilder {
             combined_topic_filter.add_all(topic_filter.to_owned());
         }
         let mqtt_config = self.mqtt_config.with_subscriptions(combined_topic_filter);
-        let mqtt_message_box =
-            MqttMessageBox::new(self.publish_channel.1, self.subscriber_addresses);
+        let mqtt_message_box = MqttMessageBox::new(
+            self.publish_channel.1,
+            self.subscriber_addresses,
+            self.signal_receiver,
+        );
 
         let mqtt_actor = MqttActor::new(mqtt_config);
         (mqtt_actor, mqtt_message_box)
@@ -80,8 +90,7 @@ impl MessageSink<MqttMessage> for MqttActorBuilder {
 
 impl RuntimeRequestSink for MqttActorBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
-        // FIXME: this actor should not ignore runtime requests
-        NullSender.into()
+        Box::new(self.signal_sender.clone())
     }
 }
 
@@ -98,26 +107,36 @@ impl Builder<(MqttActor, MqttMessageBox)> for MqttActorBuilder {
 }
 
 pub struct MqttMessageBox {
-    peer_receiver: Receiver<MqttMessage>,
+    peer_receiver: Receiver<MqttRuntimeMessage>,
     peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
+    signal_receiver: Receiver<RuntimeRequest>,
 }
 
 impl MqttMessageBox {
     fn new(
-        peer_receiver: Receiver<MqttMessage>,
+        peer_receiver: Receiver<MqttRuntimeMessage>,
         peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
+        signal_receiver: Receiver<RuntimeRequest>,
     ) -> Self {
         MqttMessageBox {
             peer_receiver,
             peer_senders,
+            signal_receiver,
         }
     }
 
-    async fn recv(&mut self) -> Option<MqttMessage> {
-        self.peer_receiver.next().await.map(|msg| {
-            self.log_input(&msg);
-            msg
-        })
+    async fn recv(&mut self) -> Option<MqttRuntimeMessage> {
+        tokio::select! {
+            Some(message) = self.peer_receiver.next() => {
+                self.log_input(&message);
+                Some(message)
+            }
+            Some(runtime_request) = self.signal_receiver.next() => {
+                self.log_input(&runtime_request);
+                Some(MqttRuntimeMessage::RuntimeRequest(runtime_request))
+            }
+            else => None
+        }
     }
 
     async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
@@ -173,11 +192,16 @@ impl Actor for MqttActor {
         loop {
             tokio::select! {
                 Some(message) = mailbox.recv() => {
-                    mqtt_client
-                    .published
-                    .send(message)
-                    .await
-                    .expect("TODO catch actor specific errors");
+                    match message {
+                        MqttRuntimeMessage::Message(message) => {
+                            mqtt_client
+                            .published
+                            .send(message)
+                            .await
+                            .expect("TODO catch actor specific errors");
+                        },
+                        MqttRuntimeMessage::RuntimeRequest(RuntimeRequest::Shutdown) => break,
+                    }
                 },
                 Some(message) = mqtt_client.received.next() => {
                     mailbox.send(message).await?

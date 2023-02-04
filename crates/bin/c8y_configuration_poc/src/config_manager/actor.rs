@@ -28,6 +28,7 @@ use tedge_actors::Actor;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
+use tedge_actors::RuntimeRequest;
 use tedge_api::health::get_health_status_message;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_timer_ext::SetTimeout;
@@ -38,7 +39,7 @@ use tracing::error;
 pub type OperationTimer = SetTimeout<ChildConfigOperationKey>;
 pub type OperationTimeout = Timeout<ChildConfigOperationKey>;
 
-fan_in_message_type!(ConfigInput[MqttMessage, FsWatchEvent, OperationTimeout] : Debug);
+fan_in_message_type!(ConfigInput[MqttMessage, FsWatchEvent, OperationTimeout, RuntimeRequest] : Debug);
 fan_in_message_type!(ConfigOutput[MqttMessage, OperationTimer] : Debug);
 
 pub struct ConfigManagerActor {
@@ -379,6 +380,7 @@ impl Actor for ConfigManagerActor {
                     self.process_operation_timeout(timeout, &mut message_box)
                         .await?;
                 }
+                ConfigInput::RuntimeRequest(RuntimeRequest::Shutdown) => break,
             }
         }
         Ok(())
@@ -390,6 +392,7 @@ pub struct ConfigManagerMessageBox {
     pub mqtt_publisher: DynSender<MqttMessage>,
     pub c8y_http_proxy: C8YHttpProxy,
     timer_sender: DynSender<SetTimeout<ChildConfigOperationKey>>,
+    signal_receiver: mpsc::Receiver<RuntimeRequest>,
 }
 
 impl ConfigManagerMessageBox {
@@ -398,17 +401,29 @@ impl ConfigManagerMessageBox {
         mqtt_publisher: DynSender<MqttMessage>,
         c8y_http_proxy: C8YHttpProxy,
         timer_sender: DynSender<SetTimeout<ChildConfigOperationKey>>,
+        signal_receiver: mpsc::Receiver<RuntimeRequest>,
     ) -> ConfigManagerMessageBox {
         ConfigManagerMessageBox {
             events,
             mqtt_publisher,
             c8y_http_proxy,
             timer_sender,
+            signal_receiver,
         }
     }
 
     pub async fn recv(&mut self) -> Option<ConfigInput> {
-        self.events.next().await
+        tokio::select! {
+            Some(event) = self.events.next() => {
+                self.log_input(&event);
+                Some(event)
+            }
+            Some(runtime_request) = self.signal_receiver.next() => {
+                self.log_input(&runtime_request);
+                Some(ConfigInput::RuntimeRequest(runtime_request))
+            }
+            else => None
+        }
     }
 
     pub async fn send(&mut self, message: ConfigOutput) -> Result<(), ChannelError> {
