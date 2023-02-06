@@ -11,38 +11,32 @@ Usage:
     $0
 
 Flags:
-    --url <string>              JFrog repository URL, e.g. https://myrepo.jfrog.io/artifactory
-    --token <string>            JFrog access token used to authenticate the commands
+    --token <string>            Debian access token used to authenticate the commands
+    --owner <string>            Debian repository owner, e.g. thinedge
     --repo <string>             Name of the debian repository to publish to, e.g. buster, or stable
     --distribution <string>     Name of the debian distribution to publish to, e.g. stable, raspbian. Defaults to stable
-    --component <string>        Name of the debian component to publish to, e.g. main, unstable etc. Defaults to main
-    --group <string>            Group name used to group the artifacts in a specific pool (this has no affect on the package itself)
-    --path <string>             Path where the debian (.deb) files are located, e.g. ./target/debian
+    --component <string>        Currently not supported, waiting for cloudsmith api to support it! Name of the debian component to publish to, e.g. main, unstable etc. Defaults to main.
     --help|-h                   Show this help
 
 Optional Environment variables (instead of flags)
 
-PUBLISH_URL              Equivalent to --url flag
 PUBLISH_TOKEN            Equivalent to --token flag
+PUBLISH_OWNER            Equivalent to --owner flag
 PUBLISH_REPO             Equivalent to --repo flag
 PUBLISH_DISTRIBUTION     Equivalent to --distribution flag
 PUBLISH_COMPONENT        Equivalent to --component flag
-PUBLISH_POOL_GROUP       Equivalent to --group flag
 
 Examples:
     $0 \\
-        --url https://myrepo.jfrog.io/artifactory \\
         --token "mywonderfultoken" \\
-        --repo "stable" \\
-        --distribution "stable" \\
+        --repo "tedge-main" \\
         --path ./target/debian
 
-    \$ Publish all debian packages found under ./target/debian to the given Jfrog repo
+    \$ Publish all debian packages found under ./target/debian to the given repo
 
 
     $0 \\
-        --path ./target/armv7-unknown-linux-gnueabihf/debian/ \\
-        --group 0.8.1-105-g6a5fdeee/armv7
+        --path ./target/armv7-unknown-linux-gnueabihf/debian/
 
     \$ Publish all debian packages under ./target/debian but group them in the debian pool, so they are easier to manage
 EOF
@@ -53,22 +47,27 @@ LOCAL_TOOLS_PATH="$HOME/.local/bin"
 export PATH="$LOCAL_TOOLS_PATH:$PATH"
 
 # Install tooling if missing
-if ! [ -x "$(command -v jfrog)" ]; then
-    echo 'Install jfrog cli' >&2
-    curl -fL https://getcli.jfrog.io/v2 | sh
-    mkdir -p "$LOCAL_TOOLS_PATH"
-    mv jfrog "$LOCAL_TOOLS_PATH/"
+if ! [ -x "$(command -v cloudsmith)" ]; then
+    echo 'Install cloudsmith cli' >&2
+    if command -v pip3 &>/dev/null; then
+        pip3 install --upgrade cloudsmith-cli
+    elif command -v pip &>/dev/null; then
+        pip install --upgrade cloudsmith-cli
+    else
+        echo "Could not install cloudsmith cli. Reason: pip3/pip is not installed"
+        exit 2
+    fi
 fi
 
-# Disable jfrog prompting
+# Disable prompting
 export CI=true
 
 # Enable setting values via env variables (easier for CI for secrets)
-PUBLISH_URL="${PUBLISH_URL:-}"
 PUBLISH_TOKEN="${PUBLISH_TOKEN:-}"
+PUBLISH_OWNER="${PUBLISH_OWNER:-thinedge}"
 PUBLISH_REPO="${PUBLISH_REPO:-}"
-PUBLISH_DISTRIBUTION="${PUBLISH_DISTRIBUTION:-stable}"
-PUBLISH_POOL_GROUP="${PUBLISH_POOL_GROUP:-}"
+PUBLISH_DISTRIBUTION="${PUBLISH_DISTRIBUTION:-any-distro}"
+PUBLISH_DISTRIBUTION_VERSION="${PUBLISH_DISTRIBUTION_VERSION:-any-version}"
 PUBLISH_COMPONENT="${PUBLISH_COMPONENT:-main}"
 
 #
@@ -78,12 +77,13 @@ POSITIONAL=()
 while [[ $# -gt 0 ]]
 do
     case "$1" in
-        # Jfrog url
-        --url)
-            PUBLISH_URL="$2"
+        # Repository owner
+        --owner)
+            PUBLISH_OWNER="$2"
+            shift
             ;;
 
-        # Token used to authenticate jfrog commands
+        # Token used to authenticate publishing commands
         --token)
             PUBLISH_TOKEN="$2"
             shift
@@ -95,13 +95,7 @@ do
             shift
             ;;
 
-        # Extra path 
-        --group)
-            PUBLISH_POOL_GROUP="$2"
-            shift
-            ;;
-
-        # Which jfrog repo to publish to (under the given jfrog url)
+        # Which debian repo to publish to (under the given host url)
         --repo)
             PUBLISH_REPO="$2"
             shift
@@ -110,6 +104,11 @@ do
         # Which Debian distribution to publish to
         --distribution)
             PUBLISH_DISTRIBUTION="$2"
+            shift
+            ;;
+
+        --distribution-version)
+            PUBLISH_DISTRIBUTION_VERSION="$2"
             shift
             ;;
 
@@ -138,13 +137,6 @@ do
 done
 set -- "${POSITIONAL[@]}"
 
-# Normalize pool group name (to prevent url errors)
-PUBLISH_POOL_GROUP="${PUBLISH_POOL_GROUP//[^A-Za-z0-9-\/]/_}"
-# trim any trailing slashes (if defined) to prevent double slash problems
-if [ -n "$PUBLISH_POOL_GROUP" ]; then
-    PUBLISH_POOL_GROUP="${PUBLISH_POOL_GROUP%/}/"
-fi
-
 RUST_TUPLE="arm-unknown-linux-gnueabihf"
 
 case "$RUST_TUPLE" in
@@ -154,13 +146,13 @@ case "$RUST_TUPLE" in
 esac
 
 
-echo "---------------details----------------------"
-echo "PUBLISH_URL:             $PUBLISH_URL"
-echo "PUBLISH_REPO:            $PUBLISH_REPO"
-echo "PUBLISH_DISTRIBUTION:    $PUBLISH_DISTRIBUTION"
-echo "PUBLISH_COMPONENT:       $PUBLISH_COMPONENT"
-echo "PUBLISH_POOL_GROUP:      $PUBLISH_POOL_GROUP"
-echo "--------------------------------------------"
+echo "---------------details-------------------------------"
+echo "PUBLISH_OWNER:                   $PUBLISH_OWNER"
+echo "PUBLISH_REPO:                    $PUBLISH_REPO"
+echo "PUBLISH_DISTRIBUTION:            $PUBLISH_DISTRIBUTION"
+echo "PUBLISH_DISTRIBUTION_VERSION:    $PUBLISH_DISTRIBUTION_VERSION"
+echo "PUBLISH_COMPONENT:               $PUBLISH_COMPONENT"
+echo "-----------------------------------------------------"
 
 ARCHITECTURES=(
     amd64
@@ -182,6 +174,8 @@ publish() {
 
     local distribution="$1"
     shift
+    local distribution_version="$1"
+    shift
     local pattern="$1"
     shift
     local arch="$1"
@@ -197,27 +191,31 @@ publish() {
         exit 1
     fi
 
-    jfrog rt upload \
-        --url "${PUBLISH_URL}/${PUBLISH_REPO}" \
-        --access-token "${PUBLISH_TOKEN}" \
-        --deb "${distribution}/${PUBLISH_COMPONENT}/${arch}" \
-        --flat \
-        "${SOURCE_PATH}/${pattern}_${arch}.deb" \
-        "/pool/${distribution}/${PUBLISH_POOL_GROUP}"
+    # Notes: Currently Cloudsmith does not support the following (this might change in the future)
+    #  * distrubtion and distribution_version must be selected from values in the list. use `cloudsmith list distros` to get the list
+    #  * The component can not be set and is currently fixed to 'main'
+    find "${SOURCE_PATH}" -name "${pattern}_${arch}.deb" -print0 | while read -r -d $'\0' file
+    do
+        cloudsmith upload deb "${PUBLISH_OWNER}/${PUBLISH_REPO}/${distribution}/${distribution_version}" "$file" \
+            --no-wait-for-sync \
+            --api-key "${PUBLISH_TOKEN}"
+    done
 }
 
 publish_for_distribution() {
     # Publish debian packages for all given architectures to a specific repository distribution
     # Usage:
-    #   publish_for_distribution <distribution> <arch> [arch...]
+    #   publish_for_distribution <distribution> <distribution_version> <arch> [arch...]
     #
     local distribution="$1"
+    shift
+    local distribution_version="$1"
     shift
     for arch in "$@"
     do
         echo "[distribution=$distribution, arch=$arch] Publishing packages"
-        publish "$distribution" "**" "$arch"
+        publish "$distribution" "$distribution_version" "**" "$arch"
     done
 }
 
-publish_for_distribution "$PUBLISH_DISTRIBUTION" "${ARCHITECTURES[@]}" "all"
+publish_for_distribution "$PUBLISH_DISTRIBUTION" "$PUBLISH_DISTRIBUTION_VERSION" "${ARCHITECTURES[@]}" "all"
