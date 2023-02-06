@@ -15,7 +15,7 @@ Alternatively, if you would like to set a custom version (for development/testin
 the 'GIT_SEMVER' environment variable before calling this script.
 
 Usage:
-    $0 [ARCH] [--use-cross]
+    $0 [ARCH]
 
 Args:
     ARCH     RUST target architecture which can be a value listed from the command 'rustc --print target-list'
@@ -23,16 +23,21 @@ Args:
 
     Example ARCH (target) values:
 
+        MUSL variants
+        * x86_64-unknown-linux-musl
+        * aarch64-unknown-linux-musl
+        * armv7-unknown-linux-musleabihf
+        * arm-unknown-linux-musleabihf
+
+        GNU variants
         * x86_64-unknown-linux-gnu
         * aarch64-unknown-linux-gnu
-        * aarch64-unknown-linux-musl
-        * arm-unknown-linux-gnueabihf
         * armv7-unknown-linux-gnueabihf
-        * armv7-unknown-linux-musleabihf
+        * arm-unknown-linux-gnueabihf
 
 Flags:
-    --use-cross     Force to use cross to build the packages
-    --install-gcc   Install latest available gcc packages (for your operating system)
+    --help|-h   Show this help
+    --version   Print the automatic version which will be used (this does not build the project)
 
 Env:
     GIT_SEMVER      Use a custom version when building the packages. Only use for dev/testing purposes!
@@ -50,34 +55,21 @@ Examples:
     $0 armv7-unknown-linux-gnueabihf
     # Build for armv7 (armhf) linux (gnu lib)
 
-    $0 armv7-unknown-linux-gnueabihf --install-gcc
-    # Build for armv7 (armhf) linux (gnu lib) and install gcc automatically
-
-    $0 --use-cross
-    # Force to use cross when building for the current architecture
-
     export GIT_SEMVER=0.9.0-experiment-0.1
-    $0 --use-cross
+    $0
+    # Build using an manual version
 EOF
 }
 
 ARCH=
-INSTALL_GCC=0
 SHOW_VERSION=0
 TARGET=()
+BUILD_OPTIONS=()
 
 REST_ARGS=()
 while [ $# -gt 0 ]
 do
     case "$1" in
-        -c|--use-cross)
-            USE_CROSS=1
-            ;;
-
-        --install-gcc)
-            INSTALL_GCC=1
-            ;;
-
         --version)
             SHOW_VERSION=1
             ;;
@@ -86,7 +78,7 @@ do
             help
             exit 0
             ;;
-        
+
         *)
             REST_ARGS+=("$1")
             ;;
@@ -101,63 +93,32 @@ fi
 
 # Install required cargo crates
 # cargo-deb >=1.41.3, the debian package names are automatically converted to a debian-conform name
-cargo install cargo-deb --version 1.41.3
-
-# Detect current host, and use cross to build if the target does not match the current host arch (triple)
-HOST_ARCH=$(rustc -vV | sed -n 's|host: ||p')
-USE_CROSS=${USE_CROSS:-}
-
-if [ -z "$USE_CROSS" ]; then
-    if [[ -n "$ARCH" && "$HOST_ARCH" != "$ARCH" ]]; then
-        USE_CROSS=1
-    else
-        USE_CROSS=0
-    fi
+if ! cargo deb --help &>/dev/null; then
+    cargo install cargo-deb --version 1.41.3
 fi
 
-BUILD_CMD=cargo
-if [ "$USE_CROSS" == "1" ]; then
-    cargo install cross
-    echo "Using cross to compile binaries"
-    BUILD_CMD=cross
+# Use zig to build as it is provides better cross compiling support
+if ! cargo zigbuild --help &>/dev/null; then
+    cargo install cargo-zigbuild
+fi
+
+if ! python3 -c 'import ziglang' &>/dev/null; then
+    pip3 install ziglang
 fi
 
 if [ -n "$ARCH" ]; then
     TARGET+=("--target=$ARCH")
+    rustup target add "$ARCH"
 fi
 
-# Optionally install libc/libgcc dependencies for cross compiling and building the deb package
-if [ "$INSTALL_GCC" == "1" ]; then
-    case "$ARCH" in
-        # e.g. armv5
-        arm-unknown-linux-gnueabi)
-            sudo apt-get -y update
-            sudo apt-get -y install gcc-arm-linux-gnueabi
-            ;;
-
-        # e.g. armv6 (Raspberry Pi Zero)
-        arm-unknown-linux-gnueabihf)
-            sudo apt-get -y update
-            sudo apt-get -y install -qq gcc-arm-linux-gnueabihf libc6-armhf-cross libc6-dev-armhf-cross
-            ;;
-
-        armv7-unknown-linux-gnueabihf)
-            sudo apt-get -y update
-            sudo apt-get -y install gcc-arm-linux-gnueabihf
-            ;;
-
-        aarch64-unknown-linux-gnu)
-            sudo apt-get -y update
-            sudo apt-get -y install gcc-aarch64-linux-gnu
-            ;;
-
-        x86_64-unknown-linux-*)
-            sudo apt-get -y update
-            sudo apt-get -y install gcc-x86-64-linux-gnu
-            ;;
-    esac
-fi
-
+# Custom options for different targets
+case "$ARCH" in
+    *)
+        BUILD_OPTIONS+=(
+            --release
+        )
+        ;;
+esac
 
 # Load the release package list as $RELEASE_PACKAGES and $TEST_PACKAGES
 # shellcheck disable=SC1091
@@ -192,7 +153,7 @@ fi
 
 # build release for target
 # GIT_SEMVER should be referenced in the build.rs scripts
-"$BUILD_CMD" build --release "${TARGET[@]}"
+cargo zigbuild "${TARGET[@]}" "${BUILD_OPTIONS[@]}"
 
 # set cargo deb options
 DEB_OPTIONS=()
@@ -211,6 +172,6 @@ done
 # Strip and build for test artifacts
 for PACKAGE in "${TEST_PACKAGES[@]}"
 do
-    "$BUILD_CMD" build --release -p "$PACKAGE" "${TARGET[@]}"
+    cargo zigbuild --release -p "$PACKAGE" "${TARGET[@]}"
     cargo deb -p "$PACKAGE" --no-strip --no-build "${DEB_OPTIONS[@]}" "${TARGET[@]}"
 done
