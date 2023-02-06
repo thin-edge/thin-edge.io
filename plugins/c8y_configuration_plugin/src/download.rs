@@ -23,9 +23,6 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
-use download::Auth;
-use download::DownloadInfo;
-use download::Downloader;
 use mqtt_channel::Message;
 use mqtt_channel::SinkExt;
 use mqtt_channel::Topic;
@@ -40,6 +37,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tedge_utils::file::get_filename;
 use tedge_utils::file::get_metadata;
+use tedge_utils::file::has_write_access;
 use tedge_utils::file::PermissionEntry;
 use tedge_utils::timers::Timers;
 use tokio::sync::Mutex;
@@ -306,7 +304,7 @@ impl ConfigDownloadManager {
         file_permissions: PermissionEntry,
     ) -> Result<(), anyhow::Error> {
         // Convert smartrest request to config download request struct
-        let mut config_download_request = ConfigDownloadRequest::try_new(
+        let config_download_request = ConfigDownloadRequest::try_new(
             download_url,
             file_path.clone(),
             self.tmp_dir.clone(),
@@ -315,28 +313,22 @@ impl ConfigDownloadManager {
 
         if file_path.exists() {
             // Confirm that the file has write access before any http request attempt
-            config_download_request.has_write_access()?;
+            has_write_access(file_path.as_path())?;
         } else if let Some(file_parent) = file_path.parent() {
             if !file_parent.exists() {
                 fs::create_dir_all(file_parent)?;
             }
         }
 
-        // If the provided url is c8y, add auth
-        if self
+        let _downloaded_path = self
             .http_client
             .lock()
             .await
-            .url_is_in_my_tenant_domain(config_download_request.download_info.url())
-        {
-            let token = self.http_client.lock().await.get_jwt_token().await?;
-            config_download_request.download_info.auth = Some(Auth::new_bearer(&token.token()));
-        }
-
-        // Download a file to tmp dir
-        let downloader = config_download_request.create_downloader();
-        downloader
-            .download(&config_download_request.download_info)
+            .download_file(
+                download_url,
+                config_download_request.file_name.as_str(),
+                self.tmp_dir.as_path(),
+            )
             .await?;
 
         // Move the downloaded file to the final destination
@@ -348,7 +340,7 @@ impl ConfigDownloadManager {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ConfigDownloadRequest {
-    pub download_info: DownloadInfo,
+    pub download_url: String,
     pub file_path: PathBuf,
     pub tmp_dir: PathBuf,
     pub file_permissions: PermissionEntry,
@@ -369,43 +361,12 @@ impl ConfigDownloadRequest {
         })?;
 
         Ok(Self {
-            download_info: DownloadInfo {
-                url: download_url.into(),
-                auth: None,
-            },
+            download_url: download_url.to_string(),
             file_path,
             tmp_dir,
             file_permissions,
             file_name,
         })
-    }
-
-    fn has_write_access(&self) -> Result<(), ConfigManagementError> {
-        let metadata =
-            if self.file_path.is_file() {
-                get_metadata(&self.file_path)?
-            } else {
-                // If the file does not exist before downloading file, check the directory perms
-                let parent_dir = &self.file_path.parent().ok_or_else(|| {
-                    ConfigManagementError::NoWriteAccess {
-                        path: self.file_path.clone(),
-                    }
-                })?;
-                get_metadata(parent_dir)?
-            };
-
-        // Write permission check
-        if metadata.permissions().readonly() {
-            Err(ConfigManagementError::NoWriteAccess {
-                path: self.file_path.clone(),
-            })
-        } else {
-            Ok(())
-        }
-    }
-
-    fn create_downloader(&self) -> Downloader {
-        Downloader::new(&self.file_name, &None, &self.tmp_dir)
     }
 
     fn move_file(&self) -> Result<(), ConfigManagementError> {
@@ -497,10 +458,7 @@ mod tests {
         assert_eq!(
             config_download_request,
             ConfigDownloadRequest {
-                download_info: DownloadInfo {
-                    url: "https://test.cumulocity.com/inventory/binaries/70208".to_string(),
-                    auth: None
-                },
+                download_url: "https://test.cumulocity.com/inventory/binaries/70208".to_string(),
                 file_path: PathBuf::from("/etc/tedge/tedge.toml"),
                 tmp_dir: PathBuf::from("/tmp"),
                 file_permissions: PermissionEntry::new(None, None, None),

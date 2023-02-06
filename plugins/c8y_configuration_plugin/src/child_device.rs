@@ -9,11 +9,13 @@ use tracing::error;
 use crate::config::FileEntry;
 use crate::error::ChildDeviceConfigManagementError;
 
-// FIXME move this to tedge config
+#[cfg(not(test))]
+use tedge_config::DEFAULT_FILE_TRANSFER_ROOT_PATH;
+#[cfg(not(test))]
+pub const FILE_TRANSFER_ROOT_PATH: &str = DEFAULT_FILE_TRANSFER_ROOT_PATH;
+
 #[cfg(test)]
 pub const FILE_TRANSFER_ROOT_PATH: &str = "/tmp";
-#[cfg(not(test))]
-pub const FILE_TRANSFER_ROOT_PATH: &str = "/var/tedge/file-transfer";
 
 pub trait ConfigOperationMessage {
     fn http_file_repository_relative_path(&self) -> String;

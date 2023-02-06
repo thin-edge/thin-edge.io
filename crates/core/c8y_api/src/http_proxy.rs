@@ -19,6 +19,7 @@ use reqwest::StatusCode;
 use reqwest::Url;
 use std::collections::HashMap;
 use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
 use tedge_config::C8yRootCertPathSetting;
 use tedge_config::C8yUrlSetting;
@@ -30,6 +31,9 @@ use tedge_config::MqttPortSetting;
 use tedge_config::TEdgeConfig;
 use time::OffsetDateTime;
 
+use download::Auth;
+use download::DownloadInfo;
+use download::Downloader;
 use tracing::error;
 use tracing::info;
 use tracing::instrument;
@@ -69,6 +73,13 @@ pub trait C8YHttpProxy: Send + Sync {
         config_type: &str,
         child_device_id: Option<String>,
     ) -> Result<String, SMCumulocityMapperError>;
+
+    async fn download_file(
+        &mut self,
+        download_url: &str,
+        file_name: &str,
+        tmp_dir: &Path,
+    ) -> Result<PathBuf, SMCumulocityMapperError>;
 }
 
 /// Define a C8y endpoint
@@ -481,17 +492,41 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
         let _response = self.execute(request).await?;
         Ok(binary_upload_event_url)
     }
+
+    async fn download_file(
+        &mut self,
+        download_url: &str,
+        file_name: &str,
+        tmp_dir: &Path,
+    ) -> Result<PathBuf, SMCumulocityMapperError> {
+        let mut download_info = DownloadInfo::new(download_url);
+
+        // If the provided url is c8y, add auth
+        if self.url_is_in_my_tenant_domain(download_url) {
+            let token = self.get_jwt_token().await?;
+            download_info.auth = Some(Auth::new_bearer(&token.token()));
+        }
+
+        // Download a file to tmp dir
+        let target_path = tmp_dir.join(file_name);
+        let downloader = Downloader::new(target_path.as_path());
+        downloader.download(&download_info).await?;
+
+        Ok(downloader.filename().to_path_buf())
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
-
     use super::*;
     use anyhow::Result;
     use mockito::mock;
     use mockito::Matcher;
     use serde_json::json;
+    use std::fs::File;
+    use std::io::Read;
+    use std::io::Write;
+    use tedge_test_utils::fs::TempTedgeDir;
     use tempfile::NamedTempFile;
     use test_case::test_case;
 
@@ -712,5 +747,46 @@ mod tests {
         file.write_all(content.as_bytes())?;
 
         Ok(file)
+    }
+
+    #[tokio::test]
+    async fn download_file() -> anyhow::Result<()> {
+        let device_id = "test-device";
+        let file_name = "file_1.0.0";
+        let tmp_dir = TempTedgeDir::new();
+        let url = mockito::server_url();
+        let test_endpoint = "/some/cloud/url";
+
+        let _mock = mock("GET", test_endpoint)
+            .with_status(200)
+            .with_header("content-type", "text/plain")
+            .with_body("hello world")
+            .create();
+
+        // An JwtAuthHttpProxy ...
+        let mut jwt_token_retriever = Box::new(MockC8yJwtTokenRetriever::new());
+        jwt_token_retriever
+            .expect_get_jwt_token()
+            .returning(|| Ok(SmartRestJwtResponse::default()));
+
+        let http_client = reqwest::ClientBuilder::new().build().unwrap();
+        let mut http_proxy =
+            JwtAuthHttpProxy::new(jwt_token_retriever, http_client, url.as_str(), device_id);
+
+        let downloaded_path = http_proxy
+            .download_file(
+                format!("{url}{test_endpoint}").as_str(),
+                file_name,
+                tmp_dir.path(),
+            )
+            .await?;
+
+        // Validation
+        let mut file = File::open(downloaded_path.as_path())?;
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)?;
+        assert_eq!(contents, "hello world");
+
+        Ok(())
     }
 }

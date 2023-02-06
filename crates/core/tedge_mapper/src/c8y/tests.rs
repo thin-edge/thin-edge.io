@@ -24,6 +24,7 @@ use mqtt_tests::with_timeout::WithTimeout;
 use serde_json::json;
 use serial_test::serial;
 use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
 use tedge_test_utils::fs::TempTedgeDir;
 use test_case::test_case;
@@ -1543,6 +1544,15 @@ impl C8YHttpProxy for FakeC8YHttpProxy {
         _child_device_id: Option<String>,
     ) -> Result<String, SMCumulocityMapperError> {
         Ok("fake/upload/url".into())
+    }
+
+    async fn download_file(
+        &mut self,
+        _download_url: &str,
+        _file_name: &str,
+        _tmp_dir_path: &Path,
+    ) -> Result<PathBuf, SMCumulocityMapperError> {
+        Ok(PathBuf::from("fake/path"))
     }
 }
 
