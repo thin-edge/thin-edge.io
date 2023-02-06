@@ -20,17 +20,16 @@ env:
 
 jobs:
   build:
-    name: Build and publish for ${{ matrix.job.target }}
+    name: Build ${{ matrix.job.target }}
     runs-on: Ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
         job:
-          - { target: x86_64-unknown-linux-musl,      repo: tedge-main,          component: main, cache: true }
-          - { target: aarch64-unknown-linux-musl,     repo: tedge-main,          component: main, cache: true }
-          # Keep arm-unknown-linux-gnueabihf in separate repo due to armhf conflict between raspbian and debian
-          - { target: arm-unknown-linux-musleabihf,   repo: tedge-main-armv6,    component: main, cache: true }
-          - { target: armv7-unknown-linux-musleabihf, repo: tedge-main,          component: main, cache: true }
+          - { target: x86_64-unknown-linux-musl, cache: true }
+          - { target: aarch64-unknown-linux-musl, cache: true }
+          - { target: arm-unknown-linux-musleabihf, cache: true }
+          - { target: armv7-unknown-linux-musleabihf, cache: true }
 
     steps:
       - name: Checkout
@@ -57,6 +56,30 @@ jobs:
         with:
           name: debian-packages-${{ matrix.job.target }}
           path: target/${{ matrix.job.target }}/debian/*.deb
+
+  publish:
+    name: Publish ${{ matrix.job.target }}
+    runs-on: Ubuntu-20.04
+    needs: [build]
+    strategy:
+      matrix:
+        job:
+          - { target: x86_64-unknown-linux-musl,      repo: tedge-main,          component: main }
+          - { target: aarch64-unknown-linux-musl,     repo: tedge-main,          component: main }
+          # Keep arm-unknown-linux-gnueabihf in separate repo due to armhf conflict between raspbian and debian
+          - { target: arm-unknown-linux-musleabihf,   repo: tedge-main-armv6,    component: main }
+          - { target: armv7-unknown-linux-musleabihf, repo: tedge-main,          component: main }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v3
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: debian-packages-${{ matrix.job.target }}
+          path: target/${{ matrix.job.target }}/debian/
 
       - name: Publish debian packages
         env:
