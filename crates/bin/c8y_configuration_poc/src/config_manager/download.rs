@@ -1,7 +1,14 @@
+use super::actor::ActiveOperationState;
 use super::actor::ConfigManagerMessageBox;
+use super::child_device::try_cleanup_config_file_from_file_transfer_repositoy;
+use super::child_device::ConfigOperationMessage;
+use super::child_device::ConfigOperationRequest;
+use super::child_device::ConfigOperationResponse;
+use super::error::ConfigManagementError;
 use super::plugin_config::FileEntry;
 use super::plugin_config::PluginConfig;
 use super::ConfigManagerConfig;
+use super::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
 use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
@@ -11,10 +18,14 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
+use c8y_api::smartrest::topic::C8yTopic;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 use serde_json::json;
+use std::collections::HashMap;
+use std::path::Path;
 use std::path::PathBuf;
+use tedge_api::OperationStatus;
 use tedge_utils::file::PermissionEntry;
 use tracing::error;
 use tracing::info;
@@ -24,11 +35,16 @@ pub const CONFIG_CHANGE_TOPIC: &str = "tedge/configuration_change";
 
 pub struct ConfigDownloadManager {
     config: ConfigManagerConfig,
+    active_child_ops: HashMap<(String, String), ActiveOperationState>,
 }
 
 impl ConfigDownloadManager {
     pub fn new(config: ConfigManagerConfig) -> Self {
-        ConfigDownloadManager { config }
+        let active_child_ops = HashMap::new();
+        ConfigDownloadManager {
+            config,
+            active_child_ops,
+        }
     }
 
     pub async fn handle_config_download_request(
@@ -41,8 +57,13 @@ impl ConfigDownloadManager {
             smartrest_request.config_type, smartrest_request.device
         );
 
-        self.handle_config_download_request_tedge_device(smartrest_request, message_box)
-            .await
+        if smartrest_request.device == self.config.device_id {
+            self.handle_config_download_request_tedge_device(smartrest_request, message_box)
+                .await
+        } else {
+            self.handle_config_download_request_child_device(smartrest_request, message_box)
+                .await
+        }
     }
 
     pub async fn handle_config_download_request_tedge_device(
@@ -113,6 +134,153 @@ impl ConfigDownloadManager {
             .await?;
 
         Ok(())
+    }
+
+    /// Map the c8y_DownloadConfigFile request into a tedge/commands/req/config_update command for the child device.
+    /// The config file update is shared with the child device via the file transfer service.
+    /// The configuration update is downloaded from Cumulocity and is uploaded to the file transfer service,
+    /// so that it can be shared with a child device.
+    /// A unique URL path for this config file, from the file transfer service, is shared with the child device in the command.
+    /// The child device can use this URL to download the config file update from the file transfer service.
+    pub async fn handle_config_download_request_child_device(
+        &mut self,
+        smartrest_request: SmartRestConfigDownloadRequest,
+        message_box: &mut ConfigManagerMessageBox,
+    ) -> Result<(), anyhow::Error> {
+        let child_id = smartrest_request.device;
+        let config_type = smartrest_request.config_type;
+
+        let plugin_config = PluginConfig::new(Path::new(&format!(
+            "{}/c8y/{child_id}/{DEFAULT_PLUGIN_CONFIG_FILE_NAME}",
+            self.config.config_dir.display(),
+        )));
+
+        match plugin_config.get_file_entry_from_type(&config_type) {
+            Ok(file_entry) => {
+                let config_management = ConfigOperationRequest::Update {
+                    child_id: child_id.clone(),
+                    file_entry,
+                };
+
+                if let Err(err) = self
+                    .download_config_file(
+                        smartrest_request.url.as_str(),
+                        config_management
+                            .file_transfer_repository_full_path()
+                            .into(),
+                        PermissionEntry::new(None, None, None), //no need to change ownership of downloaded file
+                        message_box,
+                    )
+                    .await
+                {
+                    // Fail the operation in the cloud if the file download itself fails
+                    // by sending EXECUTING and FAILED responses back to back
+
+                    let c8y_child_topic = Topic::new_unchecked(
+                        &C8yTopic::ChildSmartRestResponse(child_id).to_string(),
+                    );
+
+                    let executing_msg = Message::new(
+                        &c8y_child_topic,
+                        DownloadConfigFileStatusMessage::status_executing()?,
+                    );
+                    message_box.send(executing_msg).await?;
+
+                    let failure_reason = format!(
+                        "Downloading the config file update from {} failed with {}",
+                        smartrest_request.url, err
+                    );
+                    let failed_msg = Message::new(
+                        &c8y_child_topic,
+                        DownloadConfigFileStatusMessage::status_failed(failure_reason)?,
+                    );
+                    message_box.send(failed_msg).await?;
+                } else {
+                    let config_update_req_msg = Message::new(
+                        &config_management.operation_request_topic(),
+                        config_management
+                            .operation_request_payload(&self.config.tedge_http_host)?,
+                    );
+                    message_box.send(config_update_req_msg).await?;
+                    info!("Config update request for config type: {config_type} sent to child device: {child_id}");
+
+                    self.active_child_ops
+                        .insert((child_id, config_type), ActiveOperationState::Pending);
+                }
+            }
+            Err(ConfigManagementError::InvalidRequestedConfigType { config_type }) => {
+                warn!(
+                    "Ignoring the config operation request for unknown config type: {config_type}"
+                );
+            }
+            Err(err) => return Err(err)?,
+        }
+
+        Ok(())
+    }
+
+    pub fn handle_child_device_config_update_response(
+        &mut self,
+        config_response: &ConfigOperationResponse,
+    ) -> Result<Vec<Message>, ConfigManagementError> {
+        let c8y_child_topic = Topic::new_unchecked(&config_response.get_child_topic());
+        let child_device_payload = config_response.get_payload();
+        let child_id = config_response.get_child_id();
+        let config_type = config_response.get_config_type();
+
+        info!("Config update response received for type: {config_type} from child: {child_id}");
+
+        let mut mapped_responses = vec![];
+        if let Some(operation_status) = child_device_payload.status {
+            let current_operation_state = self.active_child_ops.get(&(child_id, config_type));
+            if current_operation_state != Some(&ActiveOperationState::Executing) {
+                let executing_status_payload = DownloadConfigFileStatusMessage::status_executing()?;
+                mapped_responses.push(Message::new(&c8y_child_topic, executing_status_payload));
+            }
+
+            match operation_status {
+                OperationStatus::Successful => {
+                    // self.operation_timer.stop_timer(operation_key);
+
+                    // Cleanup the downloaded file after the operation completes
+                    try_cleanup_config_file_from_file_transfer_repositoy(config_response);
+                    let successful_status_payload =
+                        DownloadConfigFileStatusMessage::status_successful(None)?;
+                    mapped_responses
+                        .push(Message::new(&c8y_child_topic, successful_status_payload));
+                }
+                OperationStatus::Failed => {
+                    // self.operation_timer.stop_timer(operation_key);
+
+                    // Cleanup the downloaded file after the operation completes
+                    try_cleanup_config_file_from_file_transfer_repositoy(config_response);
+                    if let Some(error_message) = &child_device_payload.reason {
+                        let failed_status_payload =
+                            DownloadConfigFileStatusMessage::status_failed(error_message.clone())?;
+                        mapped_responses
+                            .push(Message::new(&c8y_child_topic, failed_status_payload));
+                    } else {
+                        let default_error_message =
+                            String::from("No fail reason provided by child device.");
+                        let failed_status_payload =
+                            DownloadConfigFileStatusMessage::status_failed(default_error_message)?;
+                        mapped_responses
+                            .push(Message::new(&c8y_child_topic, failed_status_payload));
+                    }
+                }
+                OperationStatus::Executing => {
+                    // self.operation_timer.start_timer(
+                    //     operation_key,
+                    //     ActiveOperationState::Executing,
+                    //     DEFAULT_OPERATION_TIMEOUT,
+                    // );
+                }
+            }
+
+            Ok(mapped_responses)
+        } else {
+            Err(ConfigManagementError::EmptyOperationStatus(c8y_child_topic))
+        }
     }
 }
 

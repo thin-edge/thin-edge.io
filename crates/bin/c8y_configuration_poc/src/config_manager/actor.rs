@@ -1,5 +1,9 @@
+use super::child_device::get_child_id_from_child_topic;
+use super::child_device::get_operation_name_from_child_topic;
+use super::child_device::ConfigOperationResponse;
 use super::download::ConfigDownloadManager;
 use super::download::DownloadConfigFileStatusMessage;
+use super::error::ConfigManagementError;
 use super::plugin_config::PluginConfig;
 use super::upload::ConfigUploadManager;
 use super::upload::UploadConfigFileStatusMessage;
@@ -15,6 +19,7 @@ use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
 use mqtt_channel::Message;
+use mqtt_channel::Topic;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::futures::StreamExt;
@@ -57,6 +62,12 @@ impl ConfigManagerActor {
             let message = get_health_status_message("c8y-configuration-plugin").await;
             message_box.send(message).await?;
             return Ok(());
+        } else if self.config.config_snapshot_response_topics.accept(&message) {
+            self.handle_child_device_config_operation_response(&message, message_box)
+                .await?;
+        } else if self.config.config_update_response_topics.accept(&message) {
+            self.handle_child_device_config_operation_response(&message, message_box)
+                .await?;
         } else if self.config.c8y_request_topics.accept(&message) {
             self.process_smartrest_message(message, message_box).await?;
         } else {
@@ -91,6 +102,8 @@ impl ConfigManagerActor {
                         {
                             self.fail_config_operation_in_c8y(
                                 ConfigOperation::Update,
+                                None,
+                                ActiveOperationState::Pending,
                                 format!("Failed due to {}", err),
                                 message_box,
                             )
@@ -118,6 +131,8 @@ impl ConfigManagerActor {
                         {
                             self.fail_config_operation_in_c8y(
                                 ConfigOperation::Snapshot,
+                                None,
+                                ActiveOperationState::Pending,
                                 format!("Failed due to {}", err),
                                 message_box,
                             )
@@ -140,6 +155,49 @@ impl ConfigManagerActor {
         }
 
         Ok(())
+    }
+
+    pub async fn handle_child_device_config_operation_response(
+        &mut self,
+        message: &Message,
+        message_box: &mut ConfigManagerMessageBox,
+    ) -> Result<(), anyhow::Error> {
+        match ConfigOperationResponse::try_from(message) {
+            Ok(config_response) => {
+                let smartrest_responses = match &config_response {
+                    ConfigOperationResponse::Update { .. } => self
+                        .config_download_manager
+                        .handle_child_device_config_update_response(&config_response)?,
+                    ConfigOperationResponse::Snapshot { .. } => {
+                        self.config_upload_manager
+                            .handle_child_device_config_snapshot_response(
+                                &config_response,
+                                message_box,
+                            )
+                            .await?
+                    }
+                };
+
+                for smartrest_response in smartrest_responses {
+                    message_box.send(smartrest_response).await?
+                }
+
+                Ok(())
+            }
+            Err(err) => {
+                let config_operation = message.try_into()?;
+                let child_id = get_child_id_from_child_topic(&message.topic.name)?;
+
+                self.fail_config_operation_in_c8y(
+                    config_operation,
+                    Some(child_id),
+                    ActiveOperationState::Pending,
+                    err.to_string(),
+                    message_box,
+                )
+                .await
+            }
+        }
     }
 
     pub async fn process_file_watch_events(
@@ -208,25 +266,57 @@ impl ConfigManagerActor {
     pub async fn fail_config_operation_in_c8y(
         &mut self,
         config_operation: ConfigOperation,
+        child_id: Option<String>,
+        op_state: ActiveOperationState,
         failure_reason: String,
         message_box: &mut ConfigManagerMessageBox,
     ) -> Result<(), anyhow::Error> {
         // Fail the operation in the cloud by sending EXECUTING and FAILED responses back to back
+        let executing_msg;
+        let failed_msg;
 
-        let (executing_msg, failed_msg) = match config_operation {
-            ConfigOperation::Snapshot => {
-                let executing_msg = UploadConfigFileStatusMessage::executing()?;
-                let failed_msg = UploadConfigFileStatusMessage::failed(failure_reason)?;
-                (executing_msg, failed_msg)
-            }
-            ConfigOperation::Update => {
-                let executing_msg = DownloadConfigFileStatusMessage::executing()?;
-                let failed_msg = UploadConfigFileStatusMessage::failed(failure_reason)?;
-                (executing_msg, failed_msg)
-            }
-        };
+        if let Some(child_id) = child_id {
+            let c8y_child_topic =
+                Topic::new_unchecked(&C8yTopic::ChildSmartRestResponse(child_id).to_string());
 
-        message_box.send(executing_msg).await?;
+            match config_operation {
+                ConfigOperation::Snapshot => {
+                    executing_msg = Message::new(
+                        &c8y_child_topic,
+                        UploadConfigFileStatusMessage::status_executing()?,
+                    );
+                    failed_msg = Message::new(
+                        &c8y_child_topic,
+                        UploadConfigFileStatusMessage::status_failed(failure_reason)?,
+                    );
+                }
+                ConfigOperation::Update => {
+                    executing_msg = Message::new(
+                        &c8y_child_topic,
+                        DownloadConfigFileStatusMessage::status_executing()?,
+                    );
+                    failed_msg = Message::new(
+                        &c8y_child_topic,
+                        DownloadConfigFileStatusMessage::status_failed(failure_reason)?,
+                    );
+                }
+            }
+        } else {
+            match config_operation {
+                ConfigOperation::Snapshot => {
+                    executing_msg = UploadConfigFileStatusMessage::executing()?;
+                    failed_msg = UploadConfigFileStatusMessage::failed(failure_reason)?;
+                }
+                ConfigOperation::Update => {
+                    executing_msg = DownloadConfigFileStatusMessage::executing()?;
+                    failed_msg = UploadConfigFileStatusMessage::failed(failure_reason)?;
+                }
+            };
+        }
+
+        if op_state == ActiveOperationState::Pending {
+            message_box.send(executing_msg).await?;
+        }
         message_box.send(failed_msg).await?;
 
         Ok(())
@@ -284,11 +374,11 @@ impl ConfigManagerMessageBox {
         }
     }
 
-    async fn recv(&mut self) -> Option<ConfigInput> {
+    pub async fn recv(&mut self) -> Option<ConfigInput> {
         self.events.next().await
     }
 
-    async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
+    pub async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
         self.mqtt_publisher.send(message).await
     }
 }
@@ -314,4 +404,28 @@ impl MessageBox for ConfigManagerMessageBox {
 pub enum ConfigOperation {
     Snapshot,
     Update,
+}
+
+impl TryFrom<&Message> for ConfigOperation {
+    type Error = ConfigManagementError;
+
+    fn try_from(message: &Message) -> Result<Self, Self::Error> {
+        let operation_name = get_operation_name_from_child_topic(&message.topic.name)?;
+
+        if operation_name == "config_snapshot" {
+            Ok(Self::Snapshot)
+        } else if operation_name == "config_update" {
+            Ok(Self::Update)
+        } else {
+            Err(ConfigManagementError::InvalidChildDeviceTopic {
+                topic: message.topic.name.clone(),
+            })
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum ActiveOperationState {
+    Pending,
+    Executing,
 }

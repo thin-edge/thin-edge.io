@@ -1,4 +1,5 @@
 mod actor;
+mod child_device;
 mod config;
 mod download;
 mod error;

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use tedge_api::health::health_check_topics;
 use tedge_config::*;
 
+use super::child_device::ConfigOperationResponseTopic;
 use super::plugin_config::PluginConfig;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-configuration-plugin.toml";
@@ -20,12 +21,13 @@ pub struct ConfigManagerConfig {
     pub mqtt_host: IpAddress,
     pub mqtt_port: u16,
     pub c8y_url: ConnectUrl,
-    pub tedge_http_host: IpAddress,
-    pub tedge_http_port: u16,
+    pub tedge_http_host: String,
     pub plugin_config_path: PathBuf,
     pub plugin_config: PluginConfig,
     pub c8y_request_topics: TopicFilter,
     pub health_check_topics: TopicFilter,
+    pub config_snapshot_response_topics: TopicFilter,
+    pub config_update_response_topics: TopicFilter,
 }
 
 impl ConfigManagerConfig {
@@ -49,8 +51,9 @@ impl ConfigManagerConfig {
 
         let c8y_url = tedge_config.query(C8yUrlSetting)?;
 
-        let tedge_http_host = tedge_config.query(HttpBindAddressSetting)?;
+        let tedge_http_address = tedge_config.query(HttpBindAddressSetting)?;
         let tedge_http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
+        let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port);
 
         let plugin_config_path = config_dir
             .join(DEFAULT_OPERATION_DIR_NAME)
@@ -60,6 +63,10 @@ impl ConfigManagerConfig {
 
         let c8y_request_topics: TopicFilter = C8yTopic::SmartRestRequest.into();
         let health_check_topics = health_check_topics(DEFAULT_PLUGIN_CONFIG_TYPE);
+        let config_snapshot_response_topics: TopicFilter =
+            ConfigOperationResponseTopic::SnapshotResponse.into();
+        let config_update_response_topics: TopicFilter =
+            ConfigOperationResponseTopic::UpdateResponse.into();
 
         Ok(ConfigManagerConfig {
             config_dir,
@@ -69,11 +76,12 @@ impl ConfigManagerConfig {
             mqtt_port,
             c8y_url,
             tedge_http_host,
-            tedge_http_port,
             plugin_config_path,
             plugin_config,
             c8y_request_topics,
             health_check_topics,
+            config_snapshot_response_topics,
+            config_update_response_topics,
         })
     }
 }
