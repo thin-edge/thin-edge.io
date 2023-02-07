@@ -141,7 +141,6 @@ mod tests {
     struct SmartRestAlarm {
         pub code: i32,
         pub name: String,
-        pub message: Option<String>,
         pub time: Option<OffsetDateTime>,
     }
 
@@ -164,7 +163,6 @@ mod tests {
             let smartrest_alarm: SmartRestAlarm = result.unwrap();
             assert_eq!(smartrest_alarm.code, 301);
             assert_eq!(smartrest_alarm.name, "empty_alarm".to_string());
-            assert_eq!(smartrest_alarm.message, None);
             assert_matches!(smartrest_alarm.time, Some(_))
         }
     }
