@@ -1,0 +1,15 @@
+[Unit]
+Description=Dependent service
+After=mosquitto.service
+#Requires=mosquitto.service
+
+[Service]
+Environment=MQTT_HOST=localhost
+Environment=MQTT_PORT=1883
+EnvironmentFile=-/etc/mosquitto-logger/env
+ExecStart=mosquitto_sub -h "$MQTT_HOST" -p "$MQTT_PORT" -t '#' -F '{"timestamp":%%U,"message":%%j,"payload_hex":"%%x"}'
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy = multi-user.target

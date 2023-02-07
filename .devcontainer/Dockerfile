@@ -34,7 +34,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
 
 # Update python deps
 RUN pip3 install --upgrade pip \
-    && pip3 install pipenv
+    && curl -sSL https://install.python-poetry.org | python3 -
 
 # Delete the dummy systemctl command added by the base image
 RUN rm -f /usr/local/bin/systemctl

@@ -1,0 +1,23 @@
+version: '3'
+services:
+  tedge:
+    build:
+      context: .
+      dockerfile: debian-systemd.dockerfile
+    env_file:
+      # The .env. files should contain the following env variables:
+      # DEVICE_ID=my-tedge-01
+      # C8Y_BASEURL=mytenant.cumulocity.com
+      # C8Y_USER=myusername@something.com
+      # C8Y_PASSWORD="mypassword"
+      - .env
+    volumes:
+      # Persist the device certificates in a volume so when the container is destroyed it does not delete the cert
+      - device-certs:/etc/tedge/device-certs
+    tmpfs:
+      - /run
+      - /tmp
+    privileged: true
+
+volumes:
+  device-certs:

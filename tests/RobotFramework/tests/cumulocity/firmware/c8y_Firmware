@@ -1,0 +1,4 @@
+[exec]
+topic = "c8y/s/ds"
+on_message = "515"
+command = "/etc/tedge/operations/firmware_handler.sh"

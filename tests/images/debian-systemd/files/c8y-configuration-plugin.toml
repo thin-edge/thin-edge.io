@@ -1,0 +1,4 @@
+files = [
+    { path = '/etc/tedge/tedge.toml', user = 'tedge', group = 'tedge', mode = 0o444 },
+    { path = '/etc/tedge/system.toml', type = 'system.toml', user = 'tedge', group = 'tedge', mode = 0o444 },
+]
