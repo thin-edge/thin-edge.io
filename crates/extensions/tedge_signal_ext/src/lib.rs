@@ -7,6 +7,8 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
+use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
 use tedge_actors::NoMessage;
 use tedge_actors::RuntimeAction;
 use tedge_actors::RuntimeRequest;
@@ -35,6 +37,12 @@ impl Builder<(SignalActor, SignalMessageBox)> for SignalActorBuilder {
 impl RuntimeRequestSink for SignalActorBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.box_builder.get_signal_sender()
+    }
+}
+
+impl MessageSource<RuntimeAction, NoConfig> for SignalActorBuilder {
+    fn register_peer(&mut self, config: NoConfig, sender: DynSender<RuntimeAction>) {
+        self.box_builder.register_peer(config, sender)
     }
 }
 

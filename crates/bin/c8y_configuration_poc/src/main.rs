@@ -11,6 +11,9 @@ use crate::config_manager::ConfigManagerConfig;
 use file_system_ext::FsWatchActorBuilder;
 use log_manager::LogManagerBuilder;
 use log_manager::LogManagerConfig;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
 use tedge_config::get_tedge_config;
 use tedge_http_ext::HttpActorBuilder;
@@ -33,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
     let mut c8y_http_proxy_actor =
         C8YHttpProxyBuilder::new(tedge_config.try_into()?, &mut http_actor, &mut jwt_actor);
     let mut fs_watch_actor = FsWatchActorBuilder::new();
-    let signal_actor = SignalActor::builder();
+    let mut signal_actor = SignalActor::builder();
 
     //Instantiate config manager actor
     let mut config_actor =
@@ -51,6 +54,9 @@ async fn main() -> anyhow::Result<()> {
     log_actor.with_fs_connection(&mut fs_watch_actor)?;
     log_actor.with_c8y_http_proxy(&mut c8y_http_proxy_actor)?;
     log_actor.with_mqtt_connection(&mut mqtt_actor)?;
+
+    // Shutdown on SIGINT
+    signal_actor.register_peer(NoConfig, runtime.get_handle().get_sender());
 
     // Run the actors
     // FIXME having to list all the actors is error prone
