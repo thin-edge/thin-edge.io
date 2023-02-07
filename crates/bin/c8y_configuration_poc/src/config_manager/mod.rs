@@ -18,6 +18,9 @@ use tedge_actors::LinkError;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
+use tedge_actors::NullSender;
+use tedge_actors::RuntimeRequest;
+use tedge_actors::RuntimeRequestSink;
 use tedge_mqtt_ext::*;
 
 /// An instance of the config manager
@@ -97,6 +100,13 @@ impl MessageSink<MqttMessage> for ConfigManagerBuilder {
 impl MessageSink<FsWatchEvent> for ConfigManagerBuilder {
     fn get_sender(&self) -> DynSender<FsWatchEvent> {
         self.events_sender.clone().into()
+    }
+}
+
+impl RuntimeRequestSink for ConfigManagerBuilder {
+    fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
+        // FIXME: this actor should not ignore runtime requests
+        NullSender.into()
     }
 }
 

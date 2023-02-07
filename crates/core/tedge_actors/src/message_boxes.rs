@@ -96,6 +96,7 @@ use crate::Message;
 use crate::MessageBoxPlug;
 use crate::MessageBoxSocket;
 use crate::NoConfig;
+use crate::RuntimeRequest;
 use crate::SimpleMessageBoxBuilder;
 use futures::channel::mpsc;
 use futures::StreamExt;
@@ -145,6 +146,7 @@ pub trait MessageBox: 'static + Sized + Send + Sync {
 pub struct SimpleMessageBox<Input, Output> {
     name: String,
     input_receiver: mpsc::Receiver<Input>,
+    signal_receiver: mpsc::Receiver<RuntimeRequest>,
     output_sender: DynSender<Output>,
     logging_is_on: bool,
 }
@@ -153,21 +155,30 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
     pub fn new(
         name: String,
         input_receiver: mpsc::Receiver<Input>,
+        signal_receiver: mpsc::Receiver<RuntimeRequest>,
         output_sender: DynSender<Output>,
     ) -> Self {
         SimpleMessageBox {
             name,
             input_receiver,
+            signal_receiver,
             output_sender,
             logging_is_on: true,
         }
     }
 
     pub async fn recv(&mut self) -> Option<Input> {
-        self.input_receiver.next().await.map(|message| {
-            self.log_input(&message);
-            message
-        })
+        tokio::select! {
+            Some(message) = self.input_receiver.next() => {
+                self.log_input(&message);
+                Some(message)
+            }
+            Some(RuntimeRequest::Shutdown) = self.signal_receiver.next() => {
+                self.log_input(&RuntimeRequest::Shutdown);
+                None
+            }
+            else => None
+        }
     }
 
     pub async fn send(&mut self, message: Output) -> Result<(), ChannelError> {

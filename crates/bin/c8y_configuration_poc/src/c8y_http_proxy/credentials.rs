@@ -9,10 +9,13 @@ use mqtt_channel::TopicFilter;
 use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::DynSender;
 use tedge_actors::MessageBoxPlug;
 use tedge_actors::MessageBoxSocket;
 use tedge_actors::NoConfig;
 use tedge_actors::RequestResponseHandler;
+use tedge_actors::RuntimeRequest;
+use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_actors::ServiceActor;
 use tedge_actors::ServiceMessageBox;
@@ -108,7 +111,6 @@ impl<S: Service<Request = JwtRequest, Response = JwtResult>> JwtRetrieverBuilder
     }
 }
 
-#[async_trait]
 impl<S: Service<Request = JwtRequest, Response = JwtResult>>
     Builder<(ServiceActor<S>, ServiceMessageBox<(), JwtResult>)> for JwtRetrieverBuilder<S>
 {
@@ -132,5 +134,13 @@ impl<S: Service<Request = JwtRequest, Response = JwtResult>>
         config: NoConfig,
     ) {
         self.message_box.connect_with(peer, config)
+    }
+}
+
+impl<S: Service<Request = JwtRequest, Response = JwtResult>> RuntimeRequestSink
+    for JwtRetrieverBuilder<S>
+{
+    fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
+        self.message_box.get_signal_sender()
     }
 }

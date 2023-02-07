@@ -5,9 +5,12 @@ use crate::c8y_http_proxy::messages::C8YRestRequest;
 use crate::c8y_http_proxy::messages::C8YRestResult;
 use std::path::PathBuf;
 use tedge_actors::Builder;
+use tedge_actors::DynSender;
 use tedge_actors::MessageBoxPlug;
 use tedge_actors::MessageBoxSocket;
 use tedge_actors::NoConfig;
+use tedge_actors::RuntimeRequest;
+use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceMessageBoxBuilder;
 use tedge_config::C8yUrlSetting;
 use tedge_config::ConfigSettingAccessor;
@@ -114,6 +117,12 @@ impl MessageBoxSocket<C8YRestRequest, C8YRestResult, NoConfig> for C8YHttpProxyB
         config: NoConfig,
     ) {
         self.clients.connect_with(peer, config)
+    }
+}
+
+impl RuntimeRequestSink for C8YHttpProxyBuilder {
+    fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
+        self.clients.get_signal_sender()
     }
 }
 

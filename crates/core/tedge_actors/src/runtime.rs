@@ -6,6 +6,7 @@ use crate::ChannelError;
 use crate::DynSender;
 use crate::MessageSink;
 use crate::RuntimeError;
+use crate::RuntimeRequestSink;
 use futures::channel::mpsc;
 use futures::SinkExt;
 use futures::StreamExt;
@@ -68,7 +69,7 @@ impl Runtime {
     /// Spawn an actor
     pub async fn spawn<T, A>(&mut self, actor_builder: T) -> Result<(), RuntimeError>
     where
-        T: Builder<(A, A::MessageBox)>, // + MessageSink<RuntimeRequest>
+        T: Builder<(A, A::MessageBox)> + RuntimeRequestSink,
         A: Actor,
     {
         let (actor, actor_box) = actor_builder.build();

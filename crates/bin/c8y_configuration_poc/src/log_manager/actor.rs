@@ -376,6 +376,7 @@ impl Actor for LogManagerActor {
     }
 }
 
+// FIXME: Consider to use a SimpleMessageBox<LogInput,MqttMessage>
 pub struct LogManagerMessageBox {
     pub events: mpsc::Receiver<LogInput>,
     pub mqtt_requests: DynSender<MqttMessage>,

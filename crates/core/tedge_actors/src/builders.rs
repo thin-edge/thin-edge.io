@@ -35,6 +35,7 @@ use crate::DynSender;
 use crate::KeyedSender;
 use crate::Message;
 use crate::NullSender;
+use crate::RuntimeRequest;
 use crate::Sender;
 use crate::SenderVec;
 use crate::ServiceMessageBox;
@@ -67,6 +68,12 @@ pub trait MessageSink<M: Message> {
 pub trait MessageSource<M: Message, Config> {
     /// The message will be sent to the peer using the provided `sender`
     fn register_peer(&mut self, config: Config, sender: DynSender<M>);
+}
+
+/// The builder of a MessageBox must implement this trait to receive requests from the runtime
+pub trait RuntimeRequestSink {
+    /// Return the sender that can be used by the runtime to send requests to this actor
+    fn get_signal_sender(&self) -> DynSender<RuntimeRequest>;
 }
 
 /// A trait to connect a message box under-construction to peer messages boxes
@@ -152,17 +159,22 @@ pub struct SimpleMessageBoxBuilder<I, O> {
     name: String,
     input_sender: mpsc::Sender<I>,
     input_receiver: mpsc::Receiver<I>,
+    signal_sender: mpsc::Sender<RuntimeRequest>,
+    signal_receiver: mpsc::Receiver<RuntimeRequest>,
     output_sender: DynSender<O>,
 }
 
 impl<I: Message, O: Message> SimpleMessageBoxBuilder<I, O> {
     pub fn new(name: &str, capacity: usize) -> Self {
         let (input_sender, input_receiver) = mpsc::channel(capacity);
+        let (signal_sender, signal_receiver) = mpsc::channel(4);
         let output_sender = NullSender.into();
         SimpleMessageBoxBuilder {
             name: name.to_string(),
             input_sender,
             input_receiver,
+            signal_sender,
+            signal_receiver,
             output_sender,
         }
     }
@@ -189,6 +201,12 @@ impl<I: Message, O: Message> MessageSink<I> for SimpleMessageBoxBuilder<I, O> {
     }
 }
 
+impl<I: Message, O: Message> RuntimeRequestSink for SimpleMessageBoxBuilder<I, O> {
+    fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
+        self.signal_sender.sender_clone()
+    }
+}
+
 impl<Req: Message, Res: Message> Builder<SimpleMessageBox<Req, Res>>
     for SimpleMessageBoxBuilder<Req, Res>
 {
@@ -199,7 +217,12 @@ impl<Req: Message, Res: Message> Builder<SimpleMessageBox<Req, Res>>
     }
 
     fn build(self) -> SimpleMessageBox<Req, Res> {
-        SimpleMessageBox::new(self.name, self.input_receiver, self.output_sender)
+        SimpleMessageBox::new(
+            self.name,
+            self.input_receiver,
+            self.signal_receiver,
+            self.output_sender,
+        )
     }
 }
 
@@ -209,6 +232,8 @@ pub struct ServiceMessageBoxBuilder<Request, Response> {
     max_concurrency: usize,
     request_sender: mpsc::Sender<(ClientId, Request)>,
     request_receiver: mpsc::Receiver<(ClientId, Request)>,
+    signal_sender: mpsc::Sender<RuntimeRequest>,
+    signal_receiver: mpsc::Receiver<RuntimeRequest>,
     clients: Vec<DynSender<Response>>,
 }
 
@@ -217,11 +242,14 @@ impl<Request: Message, Response: Message> ServiceMessageBoxBuilder<Request, Resp
     pub fn new(service_name: &str, capacity: usize) -> Self {
         let max_concurrency = 1;
         let (request_sender, request_receiver) = mpsc::channel(capacity);
+        let (signal_sender, signal_receiver) = mpsc::channel(4);
         ServiceMessageBoxBuilder {
             service_name: service_name.to_string(),
             max_concurrency,
             request_sender,
             request_receiver,
+            signal_sender,
+            signal_receiver,
             clients: vec![],
         }
     }
@@ -236,9 +264,15 @@ impl<Request: Message, Response: Message> ServiceMessageBoxBuilder<Request, Resp
     /// Build a message box ready to be used by the service actor
     fn build_service(self) -> ServiceMessageBox<Request, Response> {
         let request_receiver = self.request_receiver;
+        let signal_receiver = self.signal_receiver;
         let response_sender = SenderVec::new_sender(self.clients);
 
-        SimpleMessageBox::new(self.service_name, request_receiver, response_sender)
+        SimpleMessageBox::new(
+            self.service_name,
+            request_receiver,
+            signal_receiver,
+            response_sender,
+        )
     }
 
     /// Build a message box aimed to concurrently serve requests
@@ -246,6 +280,12 @@ impl<Request: Message, Response: Message> ServiceMessageBoxBuilder<Request, Resp
         let max_concurrency = self.max_concurrency;
         let clients = self.build_service();
         ConcurrentServiceMessageBox::new(max_concurrency, clients)
+    }
+}
+
+impl<Req: Message, Res: Message> RuntimeRequestSink for ServiceMessageBoxBuilder<Req, Res> {
+    fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
+        self.signal_sender.sender_clone()
     }
 }
 

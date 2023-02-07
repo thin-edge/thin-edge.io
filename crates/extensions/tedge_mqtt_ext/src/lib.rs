@@ -18,6 +18,9 @@ use tedge_actors::MessageBoxPlug;
 use tedge_actors::MessageBoxSocket;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
+use tedge_actors::NullSender;
+use tedge_actors::RuntimeRequest;
+use tedge_actors::RuntimeRequestSink;
 
 pub type MqttConfig = mqtt_channel::Config;
 pub type MqttMessage = mqtt_channel::Message;
@@ -72,6 +75,13 @@ impl MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder {
 impl MessageSink<MqttMessage> for MqttActorBuilder {
     fn get_sender(&self) -> DynSender<MqttMessage> {
         self.publish_channel.0.clone().into()
+    }
+}
+
+impl RuntimeRequestSink for MqttActorBuilder {
+    fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
+        // FIXME: this actor should not ignore runtime requests
+        NullSender.into()
     }
 }
 

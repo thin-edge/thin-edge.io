@@ -7,6 +7,9 @@ use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
 use tedge_actors::MessageSource;
 use tedge_actors::NoMessage;
+use tedge_actors::NullSender;
+use tedge_actors::RuntimeRequest;
+use tedge_actors::RuntimeRequestSink;
 use tedge_utils::notify::FsEvent;
 use tedge_utils::notify::NotifyStream;
 use tokio::sync::mpsc::Receiver;
@@ -77,6 +80,13 @@ impl FsWatchActorBuilder {
 impl MessageSource<FsWatchEvent, PathBuf> for FsWatchActorBuilder {
     fn register_peer(&mut self, config: PathBuf, sender: DynSender<FsWatchEvent>) {
         self.watch_dirs.push((config, sender));
+    }
+}
+
+impl RuntimeRequestSink for FsWatchActorBuilder {
+    fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
+        // FIXME: this actor should not ignore runtime requests
+        NullSender.into()
     }
 }
 

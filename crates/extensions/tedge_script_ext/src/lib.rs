@@ -6,6 +6,9 @@ use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::ConcurrentServiceActor;
 use tedge_actors::ConcurrentServiceMessageBox;
+use tedge_actors::DynSender;
+use tedge_actors::RuntimeRequest;
+use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_actors::ServiceMessageBoxBuilder;
 
@@ -75,6 +78,12 @@ impl
         let actor = self.actor;
         let messages = self.box_builder.build();
         (actor, messages)
+    }
+}
+
+impl RuntimeRequestSink for ScriptActorBuilder {
+    fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
+        self.box_builder.get_signal_sender()
     }
 }
 

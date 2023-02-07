@@ -6,8 +6,11 @@ use tedge_actors::futures::StreamExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
+use tedge_actors::DynSender;
 use tedge_actors::NoMessage;
 use tedge_actors::RuntimeAction;
+use tedge_actors::RuntimeRequest;
+use tedge_actors::RuntimeRequestSink;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 
@@ -26,6 +29,12 @@ impl Builder<(SignalActor, SignalMessageBox)> for SignalActorBuilder {
 
     fn build(self) -> (SignalActor, SignalMessageBox) {
         (SignalActor, self.box_builder.build())
+    }
+}
+
+impl RuntimeRequestSink for SignalActorBuilder {
+    fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
+        self.box_builder.get_signal_sender()
     }
 }
 
