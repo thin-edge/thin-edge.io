@@ -46,14 +46,20 @@ Examples:
     $0
     # Build for the current CPU architecture
 
+    $0 aarch64-unknown-linux-musl
+    # Build for arm64 linux (musl)
+
     $0 aarch64-unknown-linux-gnu
     # Build for arm64 linux (gnu lib)
 
-    $0 x86_64-unknown-linux-gnu
-    # Build for x86_64 linux (gnu lib)
+    $0 x86_64-unknown-linux-musl
+    # Build for x86_64 linux (musl)
 
-    $0 armv7-unknown-linux-gnueabihf
-    # Build for armv7 (armhf) linux (gnu lib)
+    $0 armv7-unknown-linux-musleabihf
+    # Build for armv7 (armhf) linux (musl)
+
+    $0 arm-unknown-linux-musleabihf
+    # Build for armv6 (armhf) linux (musl)
 
     export GIT_SEMVER=0.9.0-experiment-0.1
     $0
