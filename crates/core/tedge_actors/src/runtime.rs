@@ -73,7 +73,7 @@ impl Runtime {
         A: Actor,
     {
         let (actor, actor_box) = actor_builder.build();
-        Ok(actor.run(actor_box).await?)
+        self.handle.run(actor, actor_box).await
     }
 
     /// Run the runtime up to completion
@@ -83,18 +83,7 @@ impl Runtime {
     /// - Or, all the runtime handler clones have been dropped
     ///       and all the running tasks have reach completion (successfully or not).
     pub async fn run_to_completion(self) -> Result<(), RuntimeError> {
-        // FIXME Dropping the handler terminates the runtime too soon
-        //       because the actors have currently no sender connected to the runtime.
-        let bg_task = self.drop_runtime_handle();
-        Runtime::wait_for_completion(bg_task).await
-    }
-
-    /// Drop the runtime handle,
-    ///
-    /// Tell the runtime that no more actions will be sent from this handle
-    /// and that new tasks and actors can only be created by already launched actors.
-    fn drop_runtime_handle(self) -> JoinHandle<()> {
-        self.bg_task
+        Runtime::wait_for_completion(self.bg_task).await
     }
 
     async fn wait_for_completion(bg_task: JoinHandle<()>) -> Result<(), RuntimeError> {
