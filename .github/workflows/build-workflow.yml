@@ -2,67 +2,34 @@ name: build-workflow
 
 on:
   push:
-    branches: [ main, 'release-*' ]
+    branches: [ main ]
+    tags:
+      - "*"
+
   workflow_dispatch:
+    inputs:
+      disable_cache:
+        description: Disable rust caching
+        type: boolean
+        required: false
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
 
 jobs:
-  build-amd64:
-    name: Build and publish for amd64
-    runs-on: Ubuntu-20.04
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Enable toolchain via github action
-        uses: dtolnay/rust-toolchain@1.64.0
-
-      - name: Enable cache
-        # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build packages for amd64
-        run: bash -x ./ci/build_scripts/build.sh
-
-      - name: Upload artifacts as zip
-        # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: debian-packages-amd64
-          path: target/debian/*.deb
-
-      - name: Publish debian packages (for internal use)
-        env:
-          PUBLISH_URL: ${{ secrets.PUBLISH_URL }}
-          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
-          PUBLISH_REPO: ${{ secrets.PUBLISH_REPO }}
-          PUBLISH_DISTRIBUTION: ${{ secrets.PUBLISH_DISTRIBUTION }}
-        run: |
-          VERSION=$(./ci/build_scripts/build.sh --version | tail -1)
-          bash -x ./ci/build_scripts/publish_debian.sh \
-            --path target/debian/ \
-            --distribution "tedge-main" \
-            --component "main" \
-            --group "main/$VERSION/amd64"
-
-  build-arm-matrix:
-    name: Build and publish for ${{ matrix.job.target }}
+  build:
+    name: Build ${{ matrix.job.target }}
     runs-on: Ubuntu-20.04
     strategy:
+      fail-fast: false
       matrix:
         job:
-          - { target: aarch64-unknown-linux-gnu,      distribution: tedge-main,          component: main }
-          - { target: aarch64-unknown-linux-musl,     distribution: tedge-main,          component: musl }
-          # Keep arm-unknown-linux-gnueabihf in separate distribution due to armhf conflict between raspbian and debian
-          - { target: arm-unknown-linux-gnueabihf,    distribution: tedge-main-armv6,    component: main }
-          - { target: armv7-unknown-linux-gnueabihf,  distribution: tedge-main,          component: main }
-          - { target: armv7-unknown-linux-musleabihf, distribution: tedge-main,          component: musl }
+          - { target: x86_64-unknown-linux-musl, cache: true }
+          - { target: aarch64-unknown-linux-musl, cache: true }
+          - { target: arm-unknown-linux-musleabihf, cache: true }
+          - { target: armv7-unknown-linux-musleabihf, cache: true }
 
     steps:
       - name: Checkout
@@ -75,6 +42,11 @@ jobs:
         with:
           targets: ${{ matrix.job.target }}
 
+      - name: Enable cache
+        if: ${{ matrix.job.cache && !inputs.disable_cache }}
+        # https://github.com/marketplace/actions/rust-cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Build for ${{ matrix.job.target }}
         run: bash -x ./ci/build_scripts/build.sh ${{ matrix.job.target }}
 
@@ -85,31 +57,39 @@ jobs:
           name: debian-packages-${{ matrix.job.target }}
           path: target/${{ matrix.job.target }}/debian/*.deb
 
-      - name: Upload sawtooth publisher as zip
-        # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: sawtooth-publisher_${{ matrix.job.target }}
-          path: target/${{ matrix.job.target }}/release/sawtooth-publisher
+  publish:
+    name: Publish ${{ matrix.job.target }}
+    runs-on: Ubuntu-20.04
+    needs: [build]
+    strategy:
+      matrix:
+        job:
+          - { target: x86_64-unknown-linux-musl,      repo: tedge-main,          component: main }
+          - { target: aarch64-unknown-linux-musl,     repo: tedge-main,          component: main }
+          # Keep arm-unknown-linux-musleabihf in separate repo due to armhf conflict between raspbian and debian
+          - { target: arm-unknown-linux-musleabihf,   repo: tedge-main-armv6,    component: main }
+          - { target: armv7-unknown-linux-musleabihf, repo: tedge-main,          component: main }
 
-      - name: Upload dummy-plugin as zip
-        # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: tedge-dummy-plugin_${{ matrix.job.target }}
-          path: target/${{ matrix.job.target }}/release/tedge-dummy-plugin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
 
-      - name: Publish debian packages (for internal use)
+      - name: Download release artifacts
+        uses: actions/download-artifact@v3
+        # https://github.com/marketplace/actions/download-a-build-artifact
+        with:
+          name: debian-packages-${{ matrix.job.target }}
+          path: target/${{ matrix.job.target }}/debian/
+
+      - name: Publish debian packages
         env:
-          PUBLISH_URL: ${{ secrets.PUBLISH_URL }}
+          PUBLISH_OWNER: ${{ secrets.PUBLISH_OWNER }}
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
-          PUBLISH_REPO: ${{ secrets.PUBLISH_REPO }}
         run: |
           VERSION=$(./ci/build_scripts/build.sh --version | tail -1)
           ARCH=$(echo "${{ matrix.job.target }}" | cut -d- -f1)
           bash -x \
             ./ci/build_scripts/publish_debian.sh \
             --path "target/${{ matrix.job.target }}/debian/" \
-            --distribution "${{ matrix.job.distribution }}" \
-            --component "${{ matrix.job.component }}" \
-            --group "${{ matrix.job.component }}/$VERSION/$ARCH"
+            --repo "${{ matrix.job.repo }}" \
+            --component "${{ matrix.job.component }}"
