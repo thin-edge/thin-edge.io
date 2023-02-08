@@ -86,8 +86,6 @@ jobs:
           PUBLISH_OWNER: ${{ secrets.PUBLISH_OWNER }}
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
         run: |
-          VERSION=$(./ci/build_scripts/build.sh --version | tail -1)
-          ARCH=$(echo "${{ matrix.job.target }}" | cut -d- -f1)
           bash -x \
             ./ci/build_scripts/publish_debian.sh \
             --path "target/${{ matrix.job.target }}/debian/" \

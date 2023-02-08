@@ -192,7 +192,7 @@ publish() {
     fi
 
     # Notes: Currently Cloudsmith does not support the following (this might change in the future)
-    #  * distrubtion and distribution_version must be selected from values in the list. use `cloudsmith list distros` to get the list
+    #  * distribution and distribution_version must be selected from values in the list. use `cloudsmith list distros` to get the list
     #  * The component can not be set and is currently fixed to 'main'
     find "${SOURCE_PATH}" -name "${pattern}_${arch}.deb" -print0 | while read -r -d $'\0' file
     do
