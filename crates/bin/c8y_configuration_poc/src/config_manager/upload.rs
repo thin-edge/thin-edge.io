@@ -1,8 +1,13 @@
 use crate::config_manager::child_device::try_cleanup_config_file_from_file_transfer_repositoy;
+use crate::config_manager::child_device::ChildConfigOperationKey;
 use crate::config_manager::child_device::ConfigOperationMessage;
+use crate::config_manager::child_device::DEFAULT_OPERATION_TIMEOUT;
 
 use super::actor::ActiveOperationState;
+use super::actor::ConfigManagerActor;
 use super::actor::ConfigManagerMessageBox;
+use super::actor::ConfigOperation;
+use super::actor::OperationTimeout;
 use super::child_device::ConfigOperationRequest;
 use super::child_device::ConfigOperationResponse;
 use super::error::ConfigManagementError;
@@ -24,6 +29,7 @@ use mqtt_channel::Topic;
 use std::collections::HashMap;
 use std::path::Path;
 use tedge_api::OperationStatus;
+use tedge_timer_ext::SetTimeout;
 use tedge_utils::file::create_directory_with_user_group;
 use tedge_utils::file::create_file_with_user_group;
 use tracing::error;
@@ -31,7 +37,7 @@ use tracing::info;
 
 pub struct ConfigUploadManager {
     config: ConfigManagerConfig,
-    active_child_ops: HashMap<(String, String), ActiveOperationState>,
+    active_child_ops: HashMap<ChildConfigOperationKey, ActiveOperationState>,
 }
 
 impl ConfigUploadManager {
@@ -121,6 +127,11 @@ impl ConfigUploadManager {
     ) -> Result<()> {
         let child_id = config_upload_request.device;
         let config_type = config_upload_request.config_type;
+        let operation_key = ChildConfigOperationKey {
+            child_id: child_id.clone(),
+            operation_type: ConfigOperation::Snapshot,
+            config_type: config_type.clone(),
+        };
 
         let plugin_config = PluginConfig::new(Path::new(&format!(
             "{}/c8y/{child_id}/c8y-configuration-plugin.toml",
@@ -138,11 +149,16 @@ impl ConfigUploadManager {
                     &config_management.operation_request_topic(),
                     config_management.operation_request_payload(&self.config.tedge_http_host)?,
                 );
-                message_box.send(msg).await?;
+                message_box.send(msg.into()).await?;
                 info!("Config snapshot request for config type: {config_type} sent to child device: {child_id}");
 
                 self.active_child_ops
-                    .insert((child_id, config_type), ActiveOperationState::Pending);
+                    .insert(operation_key.clone(), ActiveOperationState::Pending);
+
+                // Start the timer for operation timeout
+                message_box
+                    .send(SetTimeout::new(DEFAULT_OPERATION_TIMEOUT, operation_key).into())
+                    .await?;
             }
             Err(ConfigManagementError::InvalidRequestedConfigType { config_type }) => {
                 warn!(
@@ -165,12 +181,17 @@ impl ConfigUploadManager {
         let config_dir = self.config.config_dir.display();
         let child_id = config_response.get_child_id();
         let config_type = config_response.get_config_type();
+        let operation_key = ChildConfigOperationKey {
+            child_id: child_id.clone(),
+            operation_type: ConfigOperation::Snapshot,
+            config_type: config_type.clone(),
+        };
 
         info!("Config snapshot response received for type: {config_type} from child: {child_id}");
 
         let mut mapped_responses = vec![];
         if let Some(operation_status) = payload.status {
-            let current_operation_state = self.active_child_ops.get(&(child_id, config_type));
+            let current_operation_state = self.active_child_ops.get(&operation_key);
             if current_operation_state != Some(&ActiveOperationState::Executing) {
                 let executing_status_payload = UploadConfigFileStatusMessage::status_executing()?;
                 mapped_responses.push(Message::new(&c8y_child_topic, executing_status_payload));
@@ -178,7 +199,7 @@ impl ConfigUploadManager {
 
             match operation_status {
                 OperationStatus::Successful => {
-                    // self.operation_timer.stop_timer(operation_key);
+                    self.active_child_ops.remove(&operation_key);
 
                     match self
                         .handle_child_device_successful_config_snapshot_response(
@@ -197,7 +218,7 @@ impl ConfigUploadManager {
                     }
                 }
                 OperationStatus::Failed => {
-                    // self.operation_timer.stop_timer(operation_key);
+                    self.active_child_ops.remove(&operation_key);
 
                     if let Some(error_message) = &payload.reason {
                         let failed_status_payload = UploadConfigFileStatusMessage::status_failed(
@@ -215,11 +236,13 @@ impl ConfigUploadManager {
                     }
                 }
                 OperationStatus::Executing => {
-                    // self.operation_timer.start_timer(
-                    //     operation_key,
-                    //     ActiveOperationState::Executing,
-                    //     DEFAULT_OPERATION_TIMEOUT,
-                    // );
+                    self.active_child_ops
+                        .insert(operation_key.clone(), ActiveOperationState::Executing);
+
+                    // Reset the timer
+                    message_box
+                        .send(SetTimeout::new(DEFAULT_OPERATION_TIMEOUT, operation_key).into())
+                        .await?;
                 }
             }
             Ok(mapped_responses)
@@ -333,6 +356,33 @@ impl ConfigUploadManager {
             .upload_config_file(config_file_path, config_type, child_device_id)
             .await?;
         Ok(url)
+    }
+
+    pub async fn process_operation_timeout(
+        &mut self,
+        timeout: OperationTimeout,
+        message_box: &mut ConfigManagerMessageBox,
+    ) -> Result<(), anyhow::Error> {
+        let child_id = timeout.event.child_id;
+        let config_type = timeout.event.config_type;
+        let operation_key = ChildConfigOperationKey {
+            child_id: child_id.clone(),
+            operation_type: ConfigOperation::Snapshot,
+            config_type: config_type.clone(),
+        };
+
+        if let Some(operation_state) = self.active_child_ops.remove(&operation_key) {
+            ConfigManagerActor::fail_config_operation_in_c8y(
+                ConfigOperation::Snapshot,
+                Some(child_id.clone()),
+                operation_state,
+                format!("Timeout due to lack of response from child device: {child_id} for config type: {config_type}"),
+                message_box,
+            ).await
+        } else {
+            // Ignore the timeout as the operation has already completed.
+            Ok(())
+        }
     }
 }
 

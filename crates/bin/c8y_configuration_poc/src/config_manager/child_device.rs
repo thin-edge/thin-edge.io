@@ -1,3 +1,4 @@
+use super::actor::ConfigOperation;
 use super::error::ConfigManagementError;
 use super::plugin_config::FileEntry;
 use c8y_api::smartrest::topic::C8yTopic;
@@ -5,14 +6,15 @@ use mqtt_channel::Message;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use std::fs;
+use std::time::Duration;
 use tedge_api::OperationStatus;
 use tracing::error;
 
-// FIXME move this to tedge config
 #[cfg(test)]
 pub const FILE_TRANSFER_ROOT_PATH: &str = "/tmp";
 #[cfg(not(test))]
 pub const FILE_TRANSFER_ROOT_PATH: &str = "/var/tedge/file-transfer";
+pub const DEFAULT_OPERATION_TIMEOUT: Duration = Duration::from_secs(60); //TODO: Make this configurable?
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ConfigOperationResponseTopic {
@@ -284,4 +286,11 @@ pub struct ChildDeviceRequestPayload {
     pub path: String,
     #[serde(rename = "type")]
     pub config_type: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct ChildConfigOperationKey {
+    pub child_id: String,
+    pub operation_type: ConfigOperation,
+    pub config_type: String,
 }

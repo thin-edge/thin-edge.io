@@ -16,6 +16,7 @@ use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
+use tedge_actors::MessageBoxSocket;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
@@ -23,6 +24,11 @@ use tedge_actors::NullSender;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_mqtt_ext::*;
+use tedge_timer_ext::SetTimeout;
+use tedge_timer_ext::Timeout;
+use tedge_timer_ext::TimerActorBuilder;
+
+use self::child_device::ChildConfigOperationKey;
 
 /// An instance of the config manager
 ///
@@ -33,6 +39,7 @@ pub struct ConfigManagerBuilder {
     events_sender: mpsc::Sender<ConfigInput>,
     mqtt_publisher: Option<DynSender<MqttMessage>>,
     c8y_http_proxy: Option<C8YHttpProxy>,
+    timer_sender: Option<DynSender<SetTimeout<ChildConfigOperationKey>>>,
 }
 
 impl ConfigManagerBuilder {
@@ -45,6 +52,7 @@ impl ConfigManagerBuilder {
             events_sender,
             mqtt_publisher: None,
             c8y_http_proxy: None,
+            timer_sender: None,
         }
     }
 
@@ -84,11 +92,26 @@ impl ConfigManagerBuilder {
 
         Ok(())
     }
+
+    pub fn with_timer(&mut self, timer_builder: &mut TimerActorBuilder) -> Result<(), LinkError> {
+        timer_builder.connect_with(self, NoConfig);
+        Ok(())
+    }
 }
 
 impl MessageSource<MqttMessage, NoConfig> for ConfigManagerBuilder {
     fn register_peer(&mut self, _config: NoConfig, sender: DynSender<MqttMessage>) {
         self.mqtt_publisher = Some(sender);
+    }
+}
+
+impl MessageSource<SetTimeout<ChildConfigOperationKey>, NoConfig> for ConfigManagerBuilder {
+    fn register_peer(
+        &mut self,
+        _config: NoConfig,
+        sender: DynSender<SetTimeout<ChildConfigOperationKey>>,
+    ) {
+        self.timer_sender = Some(sender);
     }
 }
 
@@ -100,6 +123,12 @@ impl MessageSink<MqttMessage> for ConfigManagerBuilder {
 
 impl MessageSink<FsWatchEvent> for ConfigManagerBuilder {
     fn get_sender(&self) -> DynSender<FsWatchEvent> {
+        self.events_sender.clone().into()
+    }
+}
+
+impl MessageSink<Timeout<ChildConfigOperationKey>> for ConfigManagerBuilder {
+    fn get_sender(&self) -> DynSender<Timeout<ChildConfigOperationKey>> {
         self.events_sender.clone().into()
     }
 }
@@ -123,8 +152,16 @@ impl Builder<(ConfigManagerActor, ConfigManagerMessageBox)> for ConfigManagerBui
             role: "c8y-http".to_string(),
         })?;
 
-        let peers =
-            ConfigManagerMessageBox::new(self.events_receiver, mqtt_publisher, c8y_http_proxy);
+        let timer_sender = self.timer_sender.ok_or_else(|| LinkError::MissingPeer {
+            role: "timer".to_string(),
+        })?;
+
+        let peers = ConfigManagerMessageBox::new(
+            self.events_receiver,
+            mqtt_publisher,
+            c8y_http_proxy,
+            timer_sender,
+        );
 
         let actor = ConfigManagerActor::new(self.config);
 

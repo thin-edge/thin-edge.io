@@ -20,6 +20,7 @@ use tedge_http_ext::HttpActorBuilder;
 use tedge_http_ext::HttpConfig;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_signal_ext::SignalActor;
+use tedge_timer_ext::TimerActor;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -37,6 +38,7 @@ async fn main() -> anyhow::Result<()> {
         C8YHttpProxyBuilder::new(tedge_config.try_into()?, &mut http_actor, &mut jwt_actor);
     let mut fs_watch_actor = FsWatchActorBuilder::new();
     let mut signal_actor = SignalActor::builder();
+    let mut timer_actor = TimerActor::builder();
 
     //Instantiate config manager actor
     let mut config_actor =
@@ -46,6 +48,7 @@ async fn main() -> anyhow::Result<()> {
     config_actor.with_fs_connection(&mut fs_watch_actor)?;
     config_actor.with_c8y_http_proxy(&mut c8y_http_proxy_actor)?;
     config_actor.with_mqtt_connection(&mut mqtt_actor)?;
+    config_actor.with_timer(&mut timer_actor)?;
 
     //Instantiate log manager actor
     let mut log_actor = LogManagerBuilder::new(LogManagerConfig::from_default_tedge_config()?);
@@ -68,6 +71,7 @@ async fn main() -> anyhow::Result<()> {
     runtime.spawn(fs_watch_actor).await?;
     runtime.spawn(config_actor).await?;
     runtime.spawn(log_actor).await?;
+    runtime.spawn(timer_actor).await?;
 
     runtime.run_to_completion().await?;
     Ok(())

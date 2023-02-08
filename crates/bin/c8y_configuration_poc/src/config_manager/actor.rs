@@ -1,5 +1,6 @@
 use super::child_device::get_child_id_from_child_topic;
 use super::child_device::get_operation_name_from_child_topic;
+use super::child_device::ChildConfigOperationKey;
 use super::child_device::ConfigOperationResponse;
 use super::download::ConfigDownloadManager;
 use super::download::DownloadConfigFileStatusMessage;
@@ -29,10 +30,16 @@ use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
 use tedge_api::health::get_health_status_message;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_timer_ext::SetTimeout;
+use tedge_timer_ext::Timeout;
 use tedge_utils::paths::PathsError;
 use tracing::error;
 
-fan_in_message_type!(ConfigInput[MqttMessage, FsWatchEvent] : Debug);
+pub type OperationTimer = SetTimeout<ChildConfigOperationKey>;
+pub type OperationTimeout = Timeout<ChildConfigOperationKey>;
+
+fan_in_message_type!(ConfigInput[MqttMessage, FsWatchEvent, OperationTimeout] : Debug);
+fan_in_message_type!(ConfigOutput[MqttMessage, OperationTimer] : Debug);
 
 pub struct ConfigManagerActor {
     config: ConfigManagerConfig,
@@ -60,7 +67,7 @@ impl ConfigManagerActor {
     ) -> Result<(), anyhow::Error> {
         if self.config.health_check_topics.accept(&message) {
             let message = get_health_status_message("c8y-configuration-plugin").await;
-            message_box.send(message).await?;
+            message_box.send(message.into()).await?;
             return Ok(());
         } else if self.config.config_snapshot_response_topics.accept(&message) {
             self.handle_child_device_config_operation_response(&message, message_box)
@@ -100,7 +107,7 @@ impl ConfigManagerActor {
                             .handle_config_download_request(config_download_request, message_box)
                             .await
                         {
-                            self.fail_config_operation_in_c8y(
+                            Self::fail_config_operation_in_c8y(
                                 ConfigOperation::Update,
                                 None,
                                 ActiveOperationState::Pending,
@@ -129,7 +136,7 @@ impl ConfigManagerActor {
                             .handle_config_upload_request(config_upload_request, message_box)
                             .await
                         {
-                            self.fail_config_operation_in_c8y(
+                            Self::fail_config_operation_in_c8y(
                                 ConfigOperation::Snapshot,
                                 None,
                                 ActiveOperationState::Pending,
@@ -165,9 +172,14 @@ impl ConfigManagerActor {
         match ConfigOperationResponse::try_from(message) {
             Ok(config_response) => {
                 let smartrest_responses = match &config_response {
-                    ConfigOperationResponse::Update { .. } => self
-                        .config_download_manager
-                        .handle_child_device_config_update_response(&config_response)?,
+                    ConfigOperationResponse::Update { .. } => {
+                        self.config_download_manager
+                            .handle_child_device_config_update_response(
+                                &config_response,
+                                message_box,
+                            )
+                            .await?
+                    }
                     ConfigOperationResponse::Snapshot { .. } => {
                         self.config_upload_manager
                             .handle_child_device_config_snapshot_response(
@@ -179,7 +191,7 @@ impl ConfigManagerActor {
                 };
 
                 for smartrest_response in smartrest_responses {
-                    message_box.send(smartrest_response).await?
+                    message_box.send(smartrest_response.into()).await?
                 }
 
                 Ok(())
@@ -188,7 +200,7 @@ impl ConfigManagerActor {
                 let config_operation = message.try_into()?;
                 let child_id = get_child_id_from_child_topic(&message.topic.name)?;
 
-                self.fail_config_operation_in_c8y(
+                Self::fail_config_operation_in_c8y(
                     config_operation,
                     Some(child_id),
                     ActiveOperationState::Pending,
@@ -225,19 +237,38 @@ impl ConfigManagerActor {
                 if parent_dir_name.eq("c8y") {
                     let plugin_config = PluginConfig::new(&path);
                     let message = plugin_config.to_supported_config_types_message()?;
-                    message_box.send(message).await?;
+                    message_box.send(message.into()).await?;
                 } else {
                     // this is a child device
                     let plugin_config = PluginConfig::new(&path);
                     let message = plugin_config.to_supported_config_types_message_for_child(
                         &parent_dir_name.to_string_lossy(),
                     )?;
-                    message_box.send(message).await?;
+                    message_box.send(message.into()).await?;
                 }
             }
         }
 
         Ok(())
+    }
+
+    pub async fn process_operation_timeout(
+        &mut self,
+        timeout: OperationTimeout,
+        message_box: &mut ConfigManagerMessageBox,
+    ) -> Result<(), anyhow::Error> {
+        match timeout.event.operation_type {
+            ConfigOperation::Snapshot => {
+                self.config_upload_manager
+                    .process_operation_timeout(timeout, message_box)
+                    .await
+            }
+            ConfigOperation::Update => {
+                self.config_download_manager
+                    .process_operation_timeout(timeout, message_box)
+                    .await
+            }
+        }
     }
 
     async fn publish_supported_config_types(
@@ -247,9 +278,8 @@ impl ConfigManagerActor {
         let message = self
             .config
             .plugin_config
-            .to_supported_config_types_message()
-            .unwrap();
-        message_box.send(message).await.unwrap();
+            .to_supported_config_types_message()?;
+        message_box.send(message.into()).await.unwrap();
         Ok(())
     }
 
@@ -259,12 +289,11 @@ impl ConfigManagerActor {
     ) -> Result<(), anyhow::Error> {
         // Get pending operations
         let message = Message::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
-        message_box.send(message).await?;
+        message_box.send(message.into()).await?;
         Ok(())
     }
 
     pub async fn fail_config_operation_in_c8y(
-        &mut self,
         config_operation: ConfigOperation,
         child_id: Option<String>,
         op_state: ActiveOperationState,
@@ -315,9 +344,9 @@ impl ConfigManagerActor {
         }
 
         if op_state == ActiveOperationState::Pending {
-            message_box.send(executing_msg).await?;
+            message_box.send(executing_msg.into()).await?;
         }
-        message_box.send(failed_msg).await?;
+        message_box.send(failed_msg.into()).await?;
 
         Ok(())
     }
@@ -340,14 +369,15 @@ impl Actor for ConfigManagerActor {
         while let Some(event) = message_box.recv().await {
             match event {
                 ConfigInput::MqttMessage(message) => {
-                    self.process_mqtt_message(message, &mut message_box)
-                        .await
-                        .unwrap();
+                    self.process_mqtt_message(message, &mut message_box).await?;
                 }
                 ConfigInput::FsWatchEvent(event) => {
                     self.process_file_watch_events(event, &mut message_box)
-                        .await
-                        .unwrap();
+                        .await?;
+                }
+                ConfigInput::OperationTimeout(timeout) => {
+                    self.process_operation_timeout(timeout, &mut message_box)
+                        .await?;
                 }
             }
         }
@@ -359,6 +389,7 @@ pub struct ConfigManagerMessageBox {
     pub events: mpsc::Receiver<ConfigInput>,
     pub mqtt_publisher: DynSender<MqttMessage>,
     pub c8y_http_proxy: C8YHttpProxy,
+    timer_sender: DynSender<SetTimeout<ChildConfigOperationKey>>,
 }
 
 impl ConfigManagerMessageBox {
@@ -366,11 +397,13 @@ impl ConfigManagerMessageBox {
         events: mpsc::Receiver<ConfigInput>,
         mqtt_publisher: DynSender<MqttMessage>,
         c8y_http_proxy: C8YHttpProxy,
+        timer_sender: DynSender<SetTimeout<ChildConfigOperationKey>>,
     ) -> ConfigManagerMessageBox {
         ConfigManagerMessageBox {
             events,
             mqtt_publisher,
             c8y_http_proxy,
+            timer_sender,
         }
     }
 
@@ -378,8 +411,11 @@ impl ConfigManagerMessageBox {
         self.events.next().await
     }
 
-    pub async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
-        self.mqtt_publisher.send(message).await
+    pub async fn send(&mut self, message: ConfigOutput) -> Result<(), ChannelError> {
+        match message {
+            ConfigOutput::MqttMessage(message) => self.mqtt_publisher.send(message).await,
+            ConfigOutput::OperationTimer(message) => self.timer_sender.send(message).await,
+        }
     }
 }
 
@@ -401,6 +437,7 @@ impl MessageBox for ConfigManagerMessageBox {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum ConfigOperation {
     Snapshot,
     Update,

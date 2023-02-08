@@ -10,6 +10,12 @@ pub struct SetTimeout<T: Message> {
     pub event: T,
 }
 
+impl<T: Message> SetTimeout<T> {
+    pub fn new(duration: Duration, event: T) -> Self {
+        Self { duration, event }
+    }
+}
+
 /// Timeout event sent by the timer back to the caller
 #[derive(Debug)]
 pub struct Timeout<T: Message> {

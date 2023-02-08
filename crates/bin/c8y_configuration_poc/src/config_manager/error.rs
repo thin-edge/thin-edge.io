@@ -35,4 +35,7 @@ pub enum ConfigManagementError {
 
     #[error("Failed to parse response from child device with: {0}")]
     FromSerdeJsonError(#[from] serde_json::Error),
+
+    #[error(transparent)]
+    FromChannelError(#[from] tedge_actors::ChannelError),
 }
