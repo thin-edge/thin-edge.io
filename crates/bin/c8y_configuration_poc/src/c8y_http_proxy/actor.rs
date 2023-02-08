@@ -321,7 +321,7 @@ impl C8YHttpProxyActor {
 
         // Download a file to tmp dir
         let file_name = request.file_path.file_name().unwrap().to_str().unwrap();
-        let downloader: Downloader = Downloader::new(file_name, &None, self.tmp_dir.clone());
+        let downloader: Downloader = Downloader::new_sm(file_name, &None, self.tmp_dir.clone());
         downloader.download(&download_info).await?;
 
         // Move the downloaded file to the final destination
