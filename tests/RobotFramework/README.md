@@ -1,266 +1,197 @@
-# How to access and use the Robotframework Tests
-
-## 1. Connecting with OpenVPN
-### 1.1. Installing OpenVPN Client
-#### 1.1.1. Windows
-1. [Installation guide for OpenVPN Connect Client on Windows](https://openvpn.net/vpn-server-resources/installation-guide-for-openvpn-connect-client-on-windows/)
-
-
-#### 1.1.2. Linux (Debian and Ubuntu)
-
-1. Type the following command into the Terminal: `sudo apt install apt-transport-https`. This is done to ensure that your apt supports the https transport. Enter the root password as prompted
-
-2. Type the following command into the Terminal: `sudo wget https://swupdate.openvpn.net/repos/openvpn-repo-pkg-key.pub`. This will install the OpenVPN repository key used by the OpenVPN 3 Linux packages
-3. Type the following command into the Terminal: `sudo apt-key add openvpn-repo-pkg-key.pub`
-4. Type the following command into the Terminal: `sudo wget -O /etc/apt/sources.list.d/openvpn3.list https://swupdate.openvpn.net/community/openvpn3/repos/openvpn3-$DISTRO.list`. This will install the proper repository. Replace $DISTRO with the release name depending on your Debian/Ubuntu distribution (the table of release names for each distribution can be found below). In this case, focal is chosen since Ubuntu 20.04 is used
-5. Type the following command into the Terminal: `sudo apt update`
-6. Type the following command into the Terminal: `sudo apt install openvpn3`. This will finally install the OpenVPN 3 package
-
-#### 1.1.3. MacOS
-1. [Installation guide for OpenVPN Connect Client on macOS](https://openvpn.net/vpn-server-resources/installation-guide-for-openvpn-connect-client-on-macos/)
-
-### 1.2. Add OpenVPN Profile
-1. Request a Profile file (*.ovpn)
-2. Open the OpenVPN Connect app and click plus.
-3. Click **Browse** and locate the previously downloaded OpenVPN profile.
-4. Select the profile in the file directory click **Open** in the file explorer.
-5. Click **Add** to import the OpenVPN profile.
-
-## 2. List of Devices available
-
-1. Raspberry Pi 4 - 192.168.1.4	(user: pass:) to be used only for executing
-2. Raspberry Pi 4 - 192.168.1.110 (user:pi pass:thinedge)
-2. Raspberry Pi 3 - 192.168.1.120 (user:pi pass:thinedge)
-3. Raspberry Pi 4 - 192.168.1.130 (user:pi pass:thinedge)
-4. Raspberry Zero - 192.168.1.140 (user:zero pass:thinedge)
-5. Raspberry PI 4 - 192.168.1.200 (user:pi pass:thinedge) - for NonFunctional tests
-
-## 3. Run an .robot file
-
-
-To run an robot file ssh to 192.168.1.4 and use the following command structure:
-
-**PLEASE NOTE: This is example command**
-
-`robot -d \results --timestampoutputs --log build_install_rpi.html --report NONE --variable BUILD:844 --variable HOST:192.168.1.130 /thin-edge.io-fork/tests/RobotFramework/tasks/build_install_rpi.robot`
-
-
-## 4. List of Robot files
-### 4.1. Task Automations
-### **Installing specific SW Build**
+# Integration testing
 
-File name: `build_install_rpi.robot`
-What is this task automation doing:
-1. Defining the Device ID, structure is (ST'timestamp') (eg. ST01092022091654)
-2. Checking the architecture in order to download the right SW
-3. Setting the file name for download
-4. Checking if thinedge is already installed on device
-	1. if not the selected build version will be downloaded and installed in following order
-		1. Install Mosquitto
-		2. Install Libmosquitto1
-		3. Install Collectd-core
-		4. thin-edge.io installation
-		5. Install Tedge mapper
-		6. Install Tedge agent
-		7. Install tedge apt plugin
-		8. Install Install c8y log plugin
-		9. Install c8y configuration plugin
-		10. Install Tedge watchdog
-		11. Create self-signed certificate
-		12. Set c8y URL
-		13. Upload certificate
-		14. Connect to c8y
+## Overview
 
-	2. if yes than thin-edge.io will be uninstalled using the uninstallation script to purge it and than steps from 4.1 will take place
+The testing framework is written to support running on multiple targets either using docker container or using an SSH enabled device. The framework offers a simple way to setup a test using the desired adapter (e.g. `docker` or `ssh`). These adapters is called a `device adapter`. They are written to be device agnostic so they allow for maximum flexibility to write your tests to adapter to your needs.
 
-Example command to run the task:
-robot -d \results --timestampoutputs --log health_tedge_mapper.html --report NONE --variable HOST:192.168.1.110 health_tedge_mapper.robot
+The default device adapter is `docker`, and the primary support will be for `docker` at first, and the agnostic testing interface will be extended gradually. The `docker` device adapter was chosen as the primary adapter as for the following reasons:
 
-## 5. Needed installation if own device is used
-Following installation is needed in order to run the robot files on own device:
+* No hardware dependencies (you can spawn a container pretty much anywhere even in CI/CD)
+* Supports complex testing of network interruptions as you can disconnect the device from the network but still control it via the docker API
+* Have a fresh container each time (reduce side-effects from unrelated tests)
 
-1. Python with PiP
-	1. 	[https://www.python.org/downloads/](https://www.python.org/downloads/)
-2. Robot Framework
-	3. `pip install robotframework`
-4. Browser Library
-	1. Install node.js
-		1. `sudo su`
-		2. `curl -fsSL https://deb.nodesource.com/setup_17.x | bash -`
-		3. `sudo apt-get install -y nodejs`
-	2. Update pip `pip install -U pip` to ensure latest version is used
-	3. Install robotframework-browser from the commandline: `pip install robotframework-browser`
-	4. Install the node dependencies: run `rfbrowser init` in your shell
-		1. if rfbrowser is not found, try `python -m Browser.entry init` or `python3 -m Browser.entry init`
-10. SSHLibrary
-	`pip install --upgrade robotframework-sshlibrary`
-12. CryptoLibrary
-	`pip install --upgrade robotframework-crypto`
-14. MQTTLibrary
-	`pip install robotframework-mqttlibrary`
-16. Metrics
-	`pip install robotframework-metrics==3.3.3`
+There are obvious drawbacks to the points above, however once the other adapters (`ssh`) are ready it will also supporting running 90% of the same tests on a different target with zero code changes.
 
-## 6. Command line options for test execution
+## Device adapters
 
-`-N, --name <name>`
-	Sets the name of the top-level test suite.
+### Docker adapter
 
-`-D, --doc <document>`
-	Sets the documentation of the top-level test suite.
+The docker adapter will spawn a new container on demand which can be used to run the tests on. The container provides a simple/clean device to run all of the tests, and can be destroyed afterwards. This makes it very convenient to run your tests as it does not require an external hardware.
 
-`-M, --metadata <name:value>`
-	Sets free metadata for the top level test suite.
+The general test suite flow is as follows:
 
-`-G, --settag <tag>`
-	Sets the tag(s) to all executed test cases.
+1. Create a device
+2. Bootstrap the device (register it with the cloud)
+3. Run tests (including assertions)
+4. Collect device diagnostics (logs, cloud digital twin etc. for post analysis)
+5. Cleanup device artifacts (e.g. delete uploaded certificate, cloud digital twin etc.)
+6. Destroy the device
 
-`-t, --test <name>`
-	Selects the test cases by name.
+### SSH adapter
 
-`-s, --suite <name>`
-	Selects the test suites by name.
+The ssh adapter uses an existing device and uses a SSH connect to run the test suite against it. In this setup, you are responsible for providing a device, container, server before the test can start.
 
-`-R, --rerunfailed <file>`
-	Selects failed tests from an earlier output file to be re-executed.
+The general test suit flow is very similar to the above [Docker adapter](./SETUP.md#docker-adapter) flow, however the device creation and destroy steps are skipped.
 
-`--runfailed <file>`
-	Deprecated. Use --rerunfailed instead.
+The core thin-edge.io team uses some physical devices setup in a test lab to facilitate testing on real hardware. These devices are not available for public use, however make up part of the automated and exploratory testing.
 
-`-i, --include <tag>`
-	Selects the test cases by tag.
+The list of test hardware devices can be found [here](./TEST_DEVICES.md).
 
-`-e, --exclude <tag>`
-	Selects the test cases by tag.
+# Setup
 
-`-c, --critical <tag>`
-	Tests that have the given tag are considered critical.
+## Pre-requisites
 
-`-n, --noncritical <tag>`
-	Tests that have the given tag are not critical.
+Before you can run the tests you need to install the pre-requisites:
 
-`-v, --variable <name:value>`
-	Sets individual variables.
+* docker
+* python3 (>=3.10)
+* pip3
 
-`-V, --variablefile <path:args>`
-	Sets variables using variable files.
+It is assumed that you are running on either MacOS or Linux. If you are a Windows users then use WSL 2 and follow the **Debian/Ubuntu** instructions, or just use the dev container option (which requires docker which again can be run under WSL 2).
 
-`-d, --outputdir <dir>`
-	Defines where to create output files.
+### Option 1: Installing the dependencies yourself
 
-`-o, --output <file>`
-	Sets the path to the generated output file.
+1. Install python3 (>= 3.8)
+    
+    Follow the [python instructions](https://www.python.org/downloads/), or
 
-`-l, --log <file>`
-	Sets the path to the generated log file.
+    **MacOS (using homebrew)**
 
-`-r, --report <file>`
-	Sets the path to the generated report file.
+    ```sh
+    brew install python@3.10
+    ```
 
-`-x, --xunit <file>`
-	Sets the path to the generated xUnit compatible result file.
+    **Debian/Ubuntu**
 
-`--xunitfile <file>`
-	Deprecated. Use --xunit instead.
+    ```sh
+    sudo apt-get install python3 python3-pip
+    ```
 
-`--xunitskipnoncritical`
-	Mark non-critical tests on xUnit compatible result file as skipped.
+3. Install docker and docker-compose using [this guide](../../docs/src/developer/INSTALLING_DOCKER.md)
 
-`-b, --debugfile <file>`
-	A debug file that is written during execution.
+### Option 2: Using the project's dev container
 
-`-T, --timestampoutputs`
-	Adds a timestamp to all output files.
+Checkout the [dev container instructions](../../docs/src/developer/DEV_CONTAINER.md) for more details.
 
-`--splitlog`
-	Split log file into smaller pieces that open in browser transparently.
+## Running the tests
 
-`--logtitle <title>`
-	Sets a title for the generated test log.
+1. Navigate to the Robot Framework folder
 
-`--reporttitle <title>`
-	Sets a title for the generated test report.
+    ```sh
+    cd tests/RobotFramework
+    ```
 
-`--reportbackground <colors>`
-	Sets background colors of the generated report.
+2. Run the setup script which will create the python virtual environment and install the dependencies. This only needs to be run once.
 
-`-L, --loglevel <level>`
-	Sets the threshold level for logging. Optionally the default visible log level can be given separated with a colon (:).
+    ```sh
+    ./bin/setup.sh
+    ```
 
-`--suitestatlevel <level>`
-	Defines how many levels to show in the Statistics by Suite table in outputs.
+3. Follow the console instructions and edit the `.env` file which was created by the `./bin/setup.sh` script
 
-`--tagstatinclude <tag>`
-	Includes only these tags in the Statistics by Tag table.
+4. Switch to the new python interpreter (the one with `.venv` in the name)
 
-`--tagstatexclude <tag>`
-	Excludes these tags from the Statistics by Tag table.
+    **Note: VSCode users**
+    
+    Open the `tasks.py` file, then select the python interpreter in the bottom right hand corner. Then enter the following location of python:
 
-`--tagstatcombine <tags:title>`
-	Creates combined statistics based on tags.
+    ```sh
+    tests/RobotFramework/.venv/bin/python3
+    ```
 
-`--tagdoc <pattern:doc>`
-	Adds documentation to the specified tags.
+    If you are not using a devcontainer then add the following to your workspace settings `.vscode/settings.json` file.
 
-`--tagstatlink <pattern:link:title>`
-	Adds external links to the Statistics by Tag table.
+    ```json
+    {
+        "python.defaultInterpreterPath": "${workspaceFolder}/tests/RobotFramework/.venv/bin/python3",
+        "robot.language-server.python": "${workspaceFolder}/tests/RobotFramework/.venv/bin/python3",
+        "robot.python.executable": "${workspaceFolder}/tests/RobotFramework/.venv/bin/python3",
+        "python.envFile": "${workspaceFolder}/.env"
+    }
+    ```
 
-`--removekeywords <all|passed|name:pattern|for|wuks>`
-	Removes keyword data from the generated log file.
+    Afterwards it is worthwhile reloading some of the VSCode extension via the Command Pallet
 
-`--flattenkeywords <name:pattern>`
-	Flattens keywords in the generated log file.
+    * `Python: Restart Language Server`
+    * `Robot Framework: Clear caches and restart Robot Framework`
 
-`--listener <name:args>`
-	Sets a listener for monitoring test execution.
+5. On the console, activate the environment (if it is not already activated)
 
-`--warnonskippedfiles`
-	Show a warning when an invalid file is skipped.
+    ```sh
+    poetry shell
+    ```
 
-`--nostatusrc`
-	Sets the return code to zero regardless of failures in test cases. Error codes are returned normally.
+6. Run the tests
 
-`--runemptysuite`
-	Executes tests also if the selected test suites are empty.
+    ```sh
+    invoke test
+    ```
 
-`--dryrun`
-	In the dry run mode tests are run without executing keywords originating from test libraries. Useful for validating test data syntax.
+    Or you can run robot directly
 
-`--exitonfailure`
-	Stops test execution if any critical test fails.
+    ```sh
+    robot --outputdir output ./tests
+    ```
 
-`--exitonerror`
-	Stops test execution if any error occurs when parsing test data, importing libraries, and so on.
+### Using custom built binaries for the tests
 
-`--skipteardownonexit`
-	Skips teardowns is test execution is prematurely stopped.
+If you would like to run the tests using some custom built tedge packages, then run the following steps:
 
-`--randomize <all|suites|tests|none>`
-	Randomizes test execution order.
+1. Open the terminal and navigate to the project root folder (not the RobotFramework root folder)
 
-`--runmode <mode>`
-	Deprecated in Robot Framework 2.8. Use separate --dryrun, --exitonfailure, --skipteardownonexit and --randomize options instead.
+2. Create a symlink to the folder containing the built debian packages (this assumes you have already built tedge components)
 
-`-W, --monitorwidth <chars>`
-	Sets the width of the console output.
+    ```sh
+    ln -s "$(pwd)/target/debian" "$(pwd)tests/images/deb/custom"
+    ```
 
-`-C, --monitorcolors <on|off|force>`
-	Specifies are colors used on the console.
+    You don't have to create a symlink if you don't want to, you can also just place the `*.deb` packages into the following folder.
 
-`-K, --monitormarkers <on|off|force>`
- 	Specifies are console markers (. and F) used.
+    ```sh
+    tests/images/deb/
+    ```
 
-`-P, --pythonpath <path>`
-	Additional locations where to search test libraries from when they are imported.
+3. Rebuild the docker image
 
-`-E, --escape <what:with>`
-	Escapes characters that are problematic in the console.
+    ```sh
+    cd tests/RobotFramework
+    poetry shell
+    invoke build
+    ```
 
-`-A, --argumentfile <path>`
-	A text file to read more arguments from.
+4. Run the tests
 
-`-h, --help`
-	Prints usage instructions.
+    ```sh
+    invoke test
+    ```
 
-`--version`
-	Prints the version information.
+    Or if you are using VSCode you can navigate to a `*.robot` file and run an individual test case/suite in the text editor.
+
+
+**What is happening?**
+
+When building the docker image it will automatically add all the files/folders under the `tests/images/deb` path to the built image. These files are then used by the test bootstrapping script (`bootstrap.sh`) which is also part of the docker image. The bootstrapping process is smart enough to detect if there are debian packages there, and if will install the tedge related packages. If no packages are found then it will revert to installing the latest official tedge version via the `get-thin-edge_io.sh` script.
+
+## Viewing the test reports and logs
+
+The reports and logs are best viewed using a web browser. This can be easily done setting up a quick local web server using the following instructions.
+
+1. Change to the robot framework directory (if you have not already done so)
+
+    ```sh
+    cd tests/RobotFramework
+    ```
+
+2. Open a console from the root folder of the project, then execute
+
+    ```sh
+    python -m http.server 9000 --directory output
+    ```
+
+    Or using the task
+
+    ```sh
+    invoke reports
+    ```
+
+3. Then open up [http://localhost:9000/tests/RobotFramework/output/log.html](http://localhost:9000/tests/RobotFramework/output/log.html) in your browser
