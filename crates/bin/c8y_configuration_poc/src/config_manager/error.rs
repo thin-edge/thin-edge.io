@@ -2,6 +2,7 @@ use mqtt_channel::Topic;
 use std::io;
 use tedge_utils::file::FileError;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigManagementError {
     #[error(
