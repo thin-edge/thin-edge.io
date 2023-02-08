@@ -97,6 +97,35 @@ if [ $# -eq 1 ]; then
     ARCH="$1"
 fi
 
+export GIT_SEMVER="${GIT_SEMVER:-}"
+
+# Set version from scm
+# Run before installing any dependencies so that it
+# can be called from other tools without requiring cargo
+if [ -z "$GIT_SEMVER" ]; then
+    if command -v git >/dev/null 2>&1; then
+        GIT_DESCRIBE=$(git describe --always --tags --abbrev=8 2>/dev/null || true)
+
+        # only match if it looks like a semver version
+        if [[ "$GIT_DESCRIBE" =~ ^[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+            GIT_SEMVER="$GIT_DESCRIBE"
+            echo "Using version set from git: $GIT_SEMVER"
+        else
+            echo "git version does not match. got=$GIT_DESCRIBE, expected=^[0-9]+\.[0-9]+\.[0-9]+.*$"
+        fi
+    else
+        echo "git is not present on system. version will be handled by cargo directly"
+    fi
+else
+    echo "Using version set by user: $GIT_SEMVER"
+fi
+
+# Only show version (for usage with other tooling)
+if [ "$SHOW_VERSION" == "1" ]; then
+    echo "$GIT_SEMVER"
+    exit 0
+fi
+
 # Install required cargo crates
 # cargo-deb >=1.41.3, the debian package names are automatically converted to a debian-conform name
 if ! cargo deb --help &>/dev/null; then
@@ -129,33 +158,6 @@ esac
 # Load the release package list as $RELEASE_PACKAGES and $TEST_PACKAGES
 # shellcheck disable=SC1091
 source ./ci/package_list.sh
-
-export GIT_SEMVER="${GIT_SEMVER:-}"
-
-# Set version from scm
-if [ -z "$GIT_SEMVER" ]; then
-    if command -v git >/dev/null 2>&1; then
-        GIT_DESCRIBE=$(git describe --always --tags --abbrev=8 2>/dev/null || true)
-
-        # only match if it looks like a semver version
-        if [[ "$GIT_DESCRIBE" =~ ^[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
-            GIT_SEMVER="$GIT_DESCRIBE"
-            echo "Using version set from git: $GIT_SEMVER"
-        else
-            echo "git version does not match. got=$GIT_DESCRIBE, expected=^[0-9]+\.[0-9]+\.[0-9]+.*$"
-        fi
-    else
-        echo "git is not present on system. version will be handled by cargo directly"
-    fi
-else
-    echo "Using version set by user: $GIT_SEMVER"
-fi
-
-# Only show version (for usage with other tooling)
-if [ "$SHOW_VERSION" == "1" ]; then
-    echo "$GIT_SEMVER"
-    exit 0
-fi
 
 # build release for target
 # GIT_SEMVER should be referenced in the build.rs scripts
