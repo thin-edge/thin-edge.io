@@ -1,3 +1,4 @@
+use crate::seconds::Seconds;
 use crate::*;
 use certificate::CertificateError;
 use certificate::PemCertificate;
@@ -651,6 +652,31 @@ impl ConfigSettingAccessor<RunPathSetting> for TEdgeConfig {
 
     fn unset(&mut self, _setting: RunPathSetting) -> ConfigSettingResult<()> {
         self.data.run.dir_path = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<FirmwareTimeoutSetting> for TEdgeConfig {
+    fn query(&self, _setting: FirmwareTimeoutSetting) -> ConfigSettingResult<Seconds> {
+        Ok(self
+            .data
+            .firmware
+            .timeout
+            .map(Seconds)
+            .unwrap_or(self.config_defaults.default_firmware_timeout))
+    }
+
+    fn update(
+        &mut self,
+        _setting: FirmwareTimeoutSetting,
+        value: Seconds,
+    ) -> ConfigSettingResult<()> {
+        self.data.firmware.timeout = Some(value.into());
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: FirmwareTimeoutSetting) -> ConfigSettingResult<()> {
+        self.data.firmware.timeout = Some(self.config_defaults.default_firmware_timeout.into());
         Ok(())
     }
 }

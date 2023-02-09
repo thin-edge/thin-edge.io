@@ -25,7 +25,6 @@ use tracing::error;
 use tracing::info;
 
 pub const PLUGIN_SERVICE_NAME: &str = "c8y-firmware-plugin";
-pub const DEFAULT_OPERATION_TIMEOUT: Duration = Duration::from_secs(10); //TODO: Make this configurable in the first drop
 const FIRMWARE_UPDATE_RESPONSE_TOPICS: &str = "tedge/+/commands/res/firmware_update";
 
 pub struct FirmwareManager {
@@ -43,6 +42,7 @@ impl FirmwareManager {
         http_client: Arc<Mutex<dyn C8YHttpProxy>>,
         local_http_host: String,
         tmp_dir: PathBuf,
+        timeout_sec: Duration,
     ) -> Result<Self, anyhow::Error> {
         let mqtt_client = Self::create_mqtt_client(mqtt_port).await?;
 
@@ -57,6 +57,7 @@ impl FirmwareManager {
             http_client.clone(),
             local_http_host,
             tmp_dir,
+            timeout_sec,
         );
 
         Ok(FirmwareManager {

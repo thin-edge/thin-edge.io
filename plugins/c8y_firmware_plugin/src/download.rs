@@ -4,7 +4,6 @@ use crate::common::mark_pending_firmware_operation_failed;
 use crate::common::ActiveOperationState;
 use crate::common::FirmwareEntry;
 use crate::error::FirmwareManagementError;
-use crate::firmware_manager::DEFAULT_OPERATION_TIMEOUT;
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestFirmwareRequest;
@@ -27,6 +26,7 @@ use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tedge_api::OperationStatus;
 use tedge_utils::timers::Timers;
 use tokio::sync::Mutex;
@@ -54,6 +54,7 @@ pub struct FirmwareDownloadManager {
     tmp_dir: PathBuf,
     pub operation_timer: Timers<(String, String), ActiveOperationState>,
     pub url_map: HashMap<String, String>,
+    timeout_sec: Duration,
 }
 
 impl FirmwareDownloadManager {
@@ -63,6 +64,7 @@ impl FirmwareDownloadManager {
         http_client: Arc<Mutex<dyn C8YHttpProxy>>,
         local_http_host: String,
         tmp_dir: PathBuf,
+        timeout_sec: Duration,
     ) -> Self {
         FirmwareDownloadManager {
             tedge_device_id,
@@ -72,6 +74,7 @@ impl FirmwareDownloadManager {
             tmp_dir,
             operation_timer: Timers::new(),
             url_map: HashMap::new(),
+            timeout_sec,
         }
     }
 
@@ -202,7 +205,7 @@ impl FirmwareDownloadManager {
         self.operation_timer.start_timer(
             (child_id.to_string(), operation_hash),
             ActiveOperationState::Pending,
-            DEFAULT_OPERATION_TIMEOUT,
+            self.timeout_sec,
         );
 
         Ok(())
@@ -278,7 +281,7 @@ impl FirmwareDownloadManager {
                 self.operation_timer.start_timer(
                     (child_id, operation_hash),
                     ActiveOperationState::Executing,
-                    DEFAULT_OPERATION_TIMEOUT,
+                    self.timeout_sec,
                 );
             }
         }

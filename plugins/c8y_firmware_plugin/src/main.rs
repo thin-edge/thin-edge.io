@@ -10,11 +10,13 @@ use c8y_api::http_proxy::JwtAuthHttpProxy;
 use clap::Parser;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::DeviceIdSetting;
+use tedge_config::FirmwareTimeoutSetting;
 use tedge_config::HttpBindAddressSetting;
 use tedge_config::HttpPortSetting;
 use tedge_config::MqttPortSetting;
@@ -85,6 +87,9 @@ async fn main() -> Result<(), anyhow::Error> {
     let local_http_host = format!("{}:{}", http_address, http_port);
 
     let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
+    let timeout_sec = Duration::from_secs(tedge_config.query(FirmwareTimeoutSetting)?.into());
+
+    dbg!(&timeout_sec);
 
     let mut firmware_manager = FirmwareManager::new(
         tedge_device_id,
@@ -92,6 +97,7 @@ async fn main() -> Result<(), anyhow::Error> {
         http_client,
         local_http_host,
         tmp_dir,
+        timeout_sec,
     )
     .await?;
 
