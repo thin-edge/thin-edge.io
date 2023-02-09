@@ -1,7 +1,8 @@
+mod child_device;
 mod download;
-mod entry;
 mod error;
 mod firmware_manager;
+mod timers;
 
 use crate::firmware_manager::FirmwareManager;
 use c8y_api::http_proxy::C8YHttpProxy;

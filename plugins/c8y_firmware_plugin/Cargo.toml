@@ -39,6 +39,7 @@ tokio = { version = "1.23", default_features = false, features = [
 ] }
 toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
+sha256 = "1.1"
 
 [dev-dependencies]
 assert_matches = "1.5"
