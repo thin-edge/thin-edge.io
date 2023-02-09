@@ -2,8 +2,10 @@ use crate::builder::TimerActorBuilder;
 use crate::SetTimeout;
 use crate::Timeout;
 use async_trait::async_trait;
+use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
+use std::fmt::Debug;
 use std::pin::Pin;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
@@ -29,7 +31,7 @@ impl TimerActor {
     ///
     /// Update the current timer if this request is for an earlier deadline.
     /// Simply store the request for later otherwise.
-    fn push(&mut self, timer_request: (ClientId, SetTimeout<TimerId>)) {
+    fn push(&mut self, timer_request: (ClientId, SetTimeout<AnyPayload>)) {
         let new_timer = self.new_entry(timer_request);
 
         // Check if the new timer is more urgent
@@ -53,7 +55,7 @@ impl TimerActor {
     }
 
     /// Create a new timer entry to which a fresh id has been assigned.
-    fn new_entry(&mut self, timer_request: (ClientId, SetTimeout<TimerId>)) -> TimerEntry {
+    fn new_entry(&mut self, timer_request: (ClientId, SetTimeout<AnyPayload>)) -> TimerEntry {
         self.next_timer_id += 1;
 
         let (client_id, timer) = timer_request;
@@ -102,7 +104,14 @@ impl TimerActor {
 
 pub type TimerId = usize;
 
-#[derive(Debug, Eq, PartialEq)]
+/// Opaque type used by the timer actor to hold generic payloads provided by its peers
+///
+/// The conversions from `SetTimeout<T>` into `SetTimeout<AnyPayload>`,
+/// as well as from `Timeout<AnyPayload>` into `Timeout<T>`,
+/// are managed under the hood by the `TimerActor::builder()`.
+pub type AnyPayload = Box<dyn Any + Send + Sync + 'static>;
+
+#[derive(Debug)]
 struct TimerEntry {
     /// The deadline to raise this timer
     deadline: Instant,
@@ -114,7 +123,7 @@ struct TimerEntry {
     client_id: ClientId,
 
     /// Event id to be returned to the caller when the timer is raised
-    event_id: TimerId,
+    event_id: AnyPayload,
 }
 
 /// Sort timer entries along the time line.
@@ -135,6 +144,13 @@ impl PartialOrd for TimerEntry {
     }
 }
 
+impl Eq for TimerEntry {}
+impl PartialEq for TimerEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.deadline.eq(&other.deadline) && self.timer_id.eq(&other.timer_id)
+    }
+}
+
 /// A pending timer along a future that will awake when the requested time elapses
 struct SleepHandle {
     timer: TimerEntry,
@@ -143,7 +159,7 @@ struct SleepHandle {
 
 #[async_trait]
 impl Actor for TimerActor {
-    type MessageBox = ServiceMessageBox<SetTimeout<TimerId>, Timeout<TimerId>>;
+    type MessageBox = ServiceMessageBox<SetTimeout<AnyPayload>, Timeout<AnyPayload>>;
 
     fn name(&self) -> &str {
         "Timer"
