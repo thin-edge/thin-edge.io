@@ -1,5 +1,5 @@
+use crate::common::FirmwareEntry;
 use crate::error::FirmwareManagementError;
-use crate::firmware_manager::FirmwareEntry;
 use c8y_api::smartrest::topic::C8yTopic;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;

@@ -1,3 +1,4 @@
+#[allow(clippy::large_enum_variant)]
 #[derive(thiserror::Error, Debug)]
 pub enum FirmwareManagementError {
     #[error("Invalid topic received from child device: {topic}")]
@@ -8,6 +9,9 @@ pub enum FirmwareManagementError {
         src: std::path::PathBuf,
         dest: std::path::PathBuf,
     },
+
+    #[error("No corresponding server URL is found with the local URL.")]
+    InvalidLocalURL { url: String },
 
     #[error(transparent)]
     FromMqttError(#[from] mqtt_channel::MqttError),

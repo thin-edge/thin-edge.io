@@ -1,21 +1,19 @@
 use crate::child_device::get_child_id_from_child_topic;
 use crate::child_device::FirmwareOperationResponse;
-use crate::download::DownloadFirmwareStatusMessage;
+use crate::common::mark_pending_firmware_operation_failed;
+use crate::common::ActiveOperationState;
 use crate::download::FirmwareDownloadManager;
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::smartrest::message::collect_smartrest_messages;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestFirmwareRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
-use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
 use mqtt_channel::Connection;
 use mqtt_channel::Message;
 use mqtt_channel::MqttError;
 use mqtt_channel::SinkExt;
 use mqtt_channel::StreamExt;
-use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
-use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -30,32 +28,6 @@ pub const PLUGIN_SERVICE_NAME: &str = "c8y-firmware-plugin";
 pub const DEFAULT_OPERATION_TIMEOUT: Duration = Duration::from_secs(10); //TODO: Make this configurable in the first drop
 const FIRMWARE_UPDATE_RESPONSE_TOPICS: &str = "tedge/+/commands/res/firmware_update";
 
-#[derive(Debug, Eq, PartialEq, Default, Clone, Deserialize, Hash)]
-#[serde(deny_unknown_fields)]
-pub struct FirmwareEntry {
-    pub name: String,
-    pub version: String,
-    pub url: String,
-    pub sha256: String,
-}
-
-impl FirmwareEntry {
-    pub fn new(name: &str, version: &str, url: &str, sha256: &str) -> Self {
-        Self {
-            name: name.to_string(),
-            version: version.to_string(),
-            url: url.to_string(),
-            sha256: sha256.to_string(),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum ActiveOperationState {
-    Pending,
-    Executing,
-}
-
 pub struct FirmwareManager {
     mqtt_client: Connection,
     c8y_request_topics: TopicFilter,
@@ -66,12 +38,11 @@ pub struct FirmwareManager {
 
 impl FirmwareManager {
     pub async fn new(
-        tedge_device_id: impl ToString,
+        tedge_device_id: String,
         mqtt_port: u16,
         http_client: Arc<Mutex<dyn C8YHttpProxy>>,
-        local_http_host: impl ToString,
+        local_http_host: String,
         tmp_dir: PathBuf,
-        config_dir: PathBuf, // /etc/tedge
     ) -> Result<Self, anyhow::Error> {
         let mqtt_client = Self::create_mqtt_client(mqtt_port).await?;
 
@@ -81,12 +52,11 @@ impl FirmwareManager {
             TopicFilter::new_unchecked(FIRMWARE_UPDATE_RESPONSE_TOPICS);
 
         let firmware_download_manager = FirmwareDownloadManager::new(
-            tedge_device_id.to_string(),
+            tedge_device_id,
             mqtt_client.published.clone(),
             http_client.clone(),
-            local_http_host.to_string(),
-            config_dir.clone(),
-            tmp_dir.clone(),
+            local_http_host,
+            tmp_dir,
         );
 
         Ok(FirmwareManager {
@@ -123,10 +93,9 @@ impl FirmwareManager {
                 }
                 Some(((child_id, hash), op_state)) = self.firmware_download_manager.operation_timer.next_timed_out_entry() => {
                     info!("Child device did not response with the timeout period of 10s. firmware hash: {hash}");
-                    self.fail_pending_firmware_operation_in_c8y(child_id.clone(), op_state,
-                        format!("Timeout due to lack of response from child device: {child_id} for hash: {hash}")).await?;
+                    let failure_reason = format!("Timeout due to lack of response from child device: {child_id} for hash: {hash}");
+                    mark_pending_firmware_operation_failed(self.mqtt_client.published.clone(), &child_id, op_state,failure_reason).await?;
                 }
-                // No inotify
             }
         }
     }
@@ -142,15 +111,16 @@ impl FirmwareManager {
             for smartrest_message in collect_smartrest_messages(message.payload_str()?) {
                 let result = match smartrest_message.split(',').next().unwrap_or_default() {
                     "515" => {
-                        if let Ok(firmware_request) =
-                            SmartRestFirmwareRequest::from_smartrest(smartrest_message.as_str())
-                        {
-                            self.firmware_download_manager
-                                .handle_firmware_download_request(firmware_request)
-                                .await
-                        } else {
-                            error!("Incorrect SmartREST payload: {smartrest_message}");
-                            Ok(())
+                        match SmartRestFirmwareRequest::from_smartrest(smartrest_message.as_str()) {
+                            Ok(firmware_request) => {
+                                self.firmware_download_manager
+                                    .handle_firmware_download_request(firmware_request)
+                                    .await
+                            }
+                            Err(_) => {
+                                error!("Incorrect SmartREST payload: {smartrest_message}");
+                                Ok(())
+                            }
                         }
                     }
                     _ => {
@@ -191,7 +161,8 @@ impl FirmwareManager {
             Err(err) => {
                 let child_id = get_child_id_from_child_topic(&message.topic.name)?;
 
-                self.fail_pending_firmware_operation_in_c8y(
+                mark_pending_firmware_operation_failed(
+                    self.mqtt_client.published.clone(),
                     child_id,
                     ActiveOperationState::Pending,
                     err.to_string(),
@@ -199,33 +170,6 @@ impl FirmwareManager {
                 .await
             }
         }
-    }
-
-    async fn fail_pending_firmware_operation_in_c8y(
-        &mut self,
-        child_id: String,
-        op_state: ActiveOperationState,
-        failure_reason: String,
-    ) -> Result<(), anyhow::Error> {
-        let c8y_child_topic =
-            Topic::new_unchecked(&C8yTopic::ChildSmartRestResponse(child_id).to_string());
-
-        let executing_msg = Message::new(
-            &c8y_child_topic,
-            DownloadFirmwareStatusMessage::status_executing()?,
-        );
-        let failed_msg = Message::new(
-            &c8y_child_topic,
-            DownloadFirmwareStatusMessage::status_failed(failure_reason)?,
-        );
-
-        if op_state == ActiveOperationState::Pending {
-            self.mqtt_client.published.send(executing_msg).await?;
-        }
-
-        self.mqtt_client.published.send(failed_msg).await?;
-
-        Ok(())
     }
 
     async fn create_mqtt_client(mqtt_port: u16) -> Result<Connection, anyhow::Error> {

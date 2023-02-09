@@ -22,6 +22,7 @@ reqwest = { version = "0.11", default-features = false, features = [
 ] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+sha256 = "1.1"
 tedge_api = { path = "../../crates/core/tedge_api" }
 tedge_config = { path = "../../crates/common/tedge_config" }
 tedge_utils = { path = "../../crates/common/tedge_utils", features = [
@@ -39,7 +40,6 @@ tokio = { version = "1.23", default_features = false, features = [
 ] }
 toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
-sha256 = "1.1"
 
 [dev-dependencies]
 assert_matches = "1.5"

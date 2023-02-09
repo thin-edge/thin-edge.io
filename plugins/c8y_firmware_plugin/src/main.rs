@@ -1,8 +1,8 @@
 mod child_device;
+mod common;
 mod download;
 mod error;
 mod firmware_manager;
-mod timers;
 
 use crate::firmware_manager::FirmwareManager;
 use c8y_api::http_proxy::C8YHttpProxy;
@@ -23,6 +23,7 @@ use tedge_config::TmpPathSetting;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tokio::sync::Mutex;
 
+// FIXME!: Think of good text
 const AFTER_HELP_TEXT: &str = r#"We will write later!"#;
 
 #[derive(Debug, clap::Parser)]
@@ -91,7 +92,6 @@ async fn main() -> Result<(), anyhow::Error> {
         http_client,
         local_http_host,
         tmp_dir,
-        fw_plugin_opt.config_dir,
     )
     .await?;
 
