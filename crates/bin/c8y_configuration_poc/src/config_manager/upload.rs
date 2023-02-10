@@ -414,10 +414,3 @@ impl TryIntoOperationStatusMessage for UploadConfigFileStatusMessage {
         .to_smartrest()
     }
 }
-
-#[cfg(test)]
-mod tests {
-
-    #[test]
-    fn test() {}
-}

@@ -7,7 +7,6 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_config::C8yUrlSetting;
-use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::ConnectUrl;
 use tedge_config::DeviceIdSetting;
@@ -16,9 +15,9 @@ use tedge_config::HttpPortSetting;
 use tedge_config::IpAddress;
 use tedge_config::MqttBindAddressSetting;
 use tedge_config::MqttPortSetting;
+use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
 use tedge_config::TmpPathSetting;
-use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tracing::info;
 use tracing::warn;
 
@@ -41,16 +40,11 @@ pub struct LogManagerConfig {
 }
 
 impl LogManagerConfig {
-    pub fn from_default_tedge_config() -> Result<Self, TEdgeConfigError> {
-        LogManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH)
-    }
-
-    pub fn from_tedge_config(config_dir: impl AsRef<Path>) -> Result<Self, TEdgeConfigError> {
+    pub fn from_tedge_config(
+        config_dir: impl AsRef<Path>,
+        tedge_config: &TEdgeConfig,
+    ) -> Result<Self, TEdgeConfigError> {
         let config_dir: PathBuf = config_dir.as_ref().into();
-        let config_location =
-            tedge_config::TEdgeConfigLocation::from_custom_root(config_dir.clone());
-        let config_repository = tedge_config::TEdgeConfigRepository::new(config_location);
-        let tedge_config = config_repository.load()?;
 
         let device_id = tedge_config.query(DeviceIdSetting)?;
         let tmp_dir = tedge_config.query(TmpPathSetting)?.into();

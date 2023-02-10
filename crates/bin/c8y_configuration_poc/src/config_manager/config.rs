@@ -31,28 +31,17 @@ pub struct ConfigManagerConfig {
 }
 
 impl ConfigManagerConfig {
-    pub fn from_default_tedge_config() -> Result<ConfigManagerConfig, TEdgeConfigError> {
-        ConfigManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH)
-    }
-
-    pub fn from_tedge_config(
-        config_dir: impl AsRef<Path>,
-    ) -> Result<ConfigManagerConfig, TEdgeConfigError> {
-        let config_dir: PathBuf = config_dir.as_ref().into();
-        let config_location =
-            tedge_config::TEdgeConfigLocation::from_custom_root(config_dir.clone());
-        let config_repository = tedge_config::TEdgeConfigRepository::new(config_location);
-        let tedge_config = config_repository.load()?;
-
-        let device_id = tedge_config.query(DeviceIdSetting)?;
-        let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
-        let mqtt_host = tedge_config.query(MqttBindAddressSetting)?;
-        let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
-
-        let c8y_url = tedge_config.query(C8yUrlSetting)?;
-
-        let tedge_http_address = tedge_config.query(HttpBindAddressSetting)?;
-        let tedge_http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        config_dir: PathBuf,
+        tmp_dir: PathBuf,
+        device_id: String,
+        mqtt_host: IpAddress,
+        mqtt_port: u16,
+        c8y_url: ConnectUrl,
+        tedge_http_address: IpAddress,
+        tedge_http_port: u16,
+    ) -> Self {
         let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port);
 
         let plugin_config_path = config_dir
@@ -68,7 +57,7 @@ impl ConfigManagerConfig {
         let config_update_response_topics: TopicFilter =
             ConfigOperationResponseTopic::UpdateResponse.into();
 
-        Ok(ConfigManagerConfig {
+        ConfigManagerConfig {
             config_dir,
             tmp_dir,
             device_id,
@@ -82,6 +71,31 @@ impl ConfigManagerConfig {
             health_check_topics,
             config_snapshot_response_topics,
             config_update_response_topics,
-        })
+        }
+    }
+
+    pub fn from_tedge_config(
+        config_dir: impl AsRef<Path>,
+        tedge_config: &TEdgeConfig,
+    ) -> Result<ConfigManagerConfig, TEdgeConfigError> {
+        let config_dir: PathBuf = config_dir.as_ref().into();
+        let device_id = tedge_config.query(DeviceIdSetting)?;
+        let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
+        let mqtt_host = tedge_config.query(MqttBindAddressSetting)?;
+        let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
+        let c8y_url = tedge_config.query(C8yUrlSetting)?;
+        let tedge_http_address = tedge_config.query(HttpBindAddressSetting)?;
+        let tedge_http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
+
+        Ok(ConfigManagerConfig::new(
+            config_dir,
+            tmp_dir,
+            device_id,
+            mqtt_host,
+            mqtt_port,
+            c8y_url,
+            tedge_http_address,
+            tedge_http_port,
+        ))
     }
 }

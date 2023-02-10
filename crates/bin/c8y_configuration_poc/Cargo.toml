@@ -35,3 +35,5 @@ try-traits = { version = "0.1" }
 tedge_http_ext = { path = "../../extensions/tedge_http_ext", features = [
     "test_helpers",
 ] }
+tedge_test_utils = { path = "../../tests/tedge_test_utils" }
+tokio = { version = "1.23", features = ["time"] }

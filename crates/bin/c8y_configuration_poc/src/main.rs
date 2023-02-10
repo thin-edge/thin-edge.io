@@ -16,6 +16,7 @@ use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
 use tedge_config::get_tedge_config;
+use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_http_ext::HttpActorBuilder;
 use tedge_http_ext::HttpConfig;
 use tedge_mqtt_ext::MqttActorBuilder;
@@ -35,14 +36,16 @@ async fn main() -> anyhow::Result<()> {
     let mut jwt_actor = C8YJwtRetriever::builder(mqtt_channel::Config::default());
     let mut http_actor = HttpActorBuilder::new(HttpConfig::default())?;
     let mut c8y_http_proxy_actor =
-        C8YHttpProxyBuilder::new(tedge_config.try_into()?, &mut http_actor, &mut jwt_actor);
+        C8YHttpProxyBuilder::new((&tedge_config).try_into()?, &mut http_actor, &mut jwt_actor);
     let mut fs_watch_actor = FsWatchActorBuilder::new();
     let mut signal_actor = SignalActor::builder();
     let mut timer_actor = TimerActor::builder();
 
     //Instantiate config manager actor
-    let mut config_actor =
-        ConfigManagerBuilder::new(ConfigManagerConfig::from_default_tedge_config()?);
+    let mut config_actor = ConfigManagerBuilder::new(ConfigManagerConfig::from_tedge_config(
+        DEFAULT_TEDGE_CONFIG_PATH,
+        &tedge_config,
+    )?);
 
     // Connect other actor instances to config manager actor
     config_actor.with_fs_connection(&mut fs_watch_actor)?;
@@ -51,7 +54,10 @@ async fn main() -> anyhow::Result<()> {
     config_actor.with_timer(&mut timer_actor)?;
 
     //Instantiate log manager actor
-    let mut log_actor = LogManagerBuilder::new(LogManagerConfig::from_default_tedge_config()?);
+    let mut log_actor = LogManagerBuilder::new(LogManagerConfig::from_tedge_config(
+        DEFAULT_TEDGE_CONFIG_PATH,
+        &tedge_config,
+    )?);
 
     // Connect other actor instances to log manager actor
     log_actor.with_fs_connection(&mut fs_watch_actor)?;

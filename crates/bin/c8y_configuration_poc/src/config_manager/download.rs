@@ -362,10 +362,3 @@ impl TryIntoOperationStatusMessage for DownloadConfigFileStatusMessage {
         .to_smartrest()
     }
 }
-
-#[cfg(test)]
-mod tests {
-
-    #[test]
-    fn test() {}
-}

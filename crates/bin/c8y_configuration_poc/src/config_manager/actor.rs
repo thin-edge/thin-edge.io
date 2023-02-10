@@ -388,7 +388,7 @@ impl Actor for ConfigManagerActor {
 }
 
 pub struct ConfigManagerMessageBox {
-    pub events: mpsc::Receiver<ConfigInput>,
+    pub input_receiver: mpsc::Receiver<ConfigInput>,
     pub mqtt_publisher: DynSender<MqttMessage>,
     pub c8y_http_proxy: C8YHttpProxy,
     timer_sender: DynSender<SetTimeout<ChildConfigOperationKey>>,
@@ -404,7 +404,7 @@ impl ConfigManagerMessageBox {
         signal_receiver: mpsc::Receiver<RuntimeRequest>,
     ) -> ConfigManagerMessageBox {
         ConfigManagerMessageBox {
-            events,
+            input_receiver: events,
             mqtt_publisher,
             c8y_http_proxy,
             timer_sender,
@@ -414,7 +414,7 @@ impl ConfigManagerMessageBox {
 
     pub async fn recv(&mut self) -> Option<ConfigInput> {
         tokio::select! {
-            Some(event) = self.events.next() => {
+            Some(event) = self.input_receiver.next() => {
                 self.log_input(&event);
                 Some(event)
             }

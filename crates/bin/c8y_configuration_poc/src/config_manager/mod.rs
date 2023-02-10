@@ -6,12 +6,18 @@ mod error;
 mod plugin_config;
 mod upload;
 
+#[cfg(test)]
+mod tests;
+
+use std::path::PathBuf;
+
 use crate::c8y_http_proxy::handle::C8YHttpProxy;
-use crate::c8y_http_proxy::C8YConnectionBuilder;
-use crate::file_system_ext::FsWatchActorBuilder;
+use crate::c8y_http_proxy::messages::C8YRestRequest;
+use crate::c8y_http_proxy::messages::C8YRestResult;
 use crate::file_system_ext::FsWatchEvent;
 use actor::*;
 pub use config::*;
+use mqtt_channel::TopicFilter;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
@@ -25,7 +31,6 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_mqtt_ext::*;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
-use tedge_timer_ext::TimerActorBuilder;
 
 use self::child_device::ChildConfigOperationKey;
 
@@ -63,7 +68,7 @@ impl ConfigManagerBuilder {
     /// Connect this config manager instance to some http connection provider
     pub fn with_c8y_http_proxy(
         &mut self,
-        http: &mut impl C8YConnectionBuilder,
+        http: &mut impl MessageBoxSocket<C8YRestRequest, C8YRestResult, NoConfig>,
     ) -> Result<(), LinkError> {
         // self.connect_to(http, ());
         self.c8y_http_proxy = Some(C8YHttpProxy::new("ConfigManager => C8Y", http));
@@ -71,7 +76,10 @@ impl ConfigManagerBuilder {
     }
 
     /// Connect this config manager instance to some mqtt connection provider
-    pub fn with_mqtt_connection(&mut self, mqtt: &mut MqttActorBuilder) -> Result<(), LinkError> {
+    pub fn with_mqtt_connection<T>(&mut self, mqtt: &mut T) -> Result<(), LinkError>
+    where
+        T: MessageBoxSocket<MqttMessage, MqttMessage, TopicFilter>,
+    {
         let subscriptions = vec![
             "c8y/s/ds",
             "tedge/+/commands/res/config_snapshot",
@@ -79,25 +87,25 @@ impl ConfigManagerBuilder {
         ]
         .try_into()
         .unwrap();
-
-        //Register peers symmetrically here
-        mqtt.register_peer(subscriptions, self.events_sender.clone().into());
-        self.register_peer(NoConfig, mqtt.get_sender());
+        mqtt.connect_with(self, subscriptions);
 
         Ok(())
     }
 
-    pub fn with_fs_connection(
-        &mut self,
-        fs_builder: &mut FsWatchActorBuilder,
-    ) -> Result<(), LinkError> {
+    pub fn with_fs_connection<T>(&mut self, fs_builder: &mut T) -> Result<(), LinkError>
+    where
+        T: MessageSource<FsWatchEvent, PathBuf>,
+    {
         let config_dir = self.config.config_dir.clone();
         fs_builder.register_peer(config_dir, self.events_sender.clone().into());
 
         Ok(())
     }
 
-    pub fn with_timer(&mut self, timer_builder: &mut TimerActorBuilder) -> Result<(), LinkError> {
+    pub fn with_timer(
+        &mut self,
+        timer_builder: &mut impl MessageBoxSocket<OperationTimer, OperationTimeout, NoConfig>,
+    ) -> Result<(), LinkError> {
         timer_builder.connect_with(self, NoConfig);
         Ok(())
     }

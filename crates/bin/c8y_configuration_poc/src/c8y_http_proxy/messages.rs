@@ -6,7 +6,7 @@ use tedge_actors::ChannelError;
 use tedge_http_ext::HttpError;
 use tedge_utils::file::PermissionEntry;
 
-fan_in_message_type!(C8YRestRequest[C8yCreateEvent, C8yUpdateSoftwareListResponse, UploadLogBinary, UploadConfigFile, DownloadFile]: Debug);
+fan_in_message_type!(C8YRestRequest[C8yCreateEvent, C8yUpdateSoftwareListResponse, UploadLogBinary, UploadConfigFile, DownloadFile]: Debug, PartialEq, Eq);
 fan_in_message_type!(C8YRestResponse[EventId, Unit]: Debug);
 
 #[derive(thiserror::Error, Debug)]
@@ -39,14 +39,14 @@ pub enum C8YRestError {
 
 pub type C8YRestResult = Result<C8YRestResponse, C8YRestError>;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct UploadLogBinary {
     pub log_type: String,
     pub log_content: String,
     pub child_device_id: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct UploadConfigFile {
     pub config_path: PathBuf,
     pub config_type: String,

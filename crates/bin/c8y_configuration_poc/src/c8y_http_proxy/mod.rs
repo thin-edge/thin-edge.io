@@ -38,10 +38,10 @@ pub struct C8YHttpConfig {
     pub tmp_dir: PathBuf,
 }
 
-impl TryFrom<TEdgeConfig> for C8YHttpConfig {
+impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
     type Error = TEdgeConfigError;
 
-    fn try_from(tedge_config: TEdgeConfig) -> Result<Self, Self::Error> {
+    fn try_from(tedge_config: &TEdgeConfig) -> Result<Self, Self::Error> {
         let c8y_host = tedge_config.query(C8yUrlSetting)?;
         let device_id = tedge_config.query(DeviceIdSetting)?;
         let tmp_dir = tedge_config.query(TmpPathSetting)?.into();

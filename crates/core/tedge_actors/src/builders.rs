@@ -181,17 +181,17 @@ impl<I: Message, O: Message> SimpleMessageBoxBuilder<I, O> {
     }
 }
 
-impl<Req: Message, Res: Message> MessageBoxSocket<Req, Res, NoConfig>
+impl<Req: Message, Res: Message, Config> MessageBoxSocket<Req, Res, Config>
     for SimpleMessageBoxBuilder<Req, Res>
 {
-    fn connect_with(&mut self, peer: &mut impl MessageBoxPlug<Req, Res>, _config: NoConfig) {
+    fn connect_with(&mut self, peer: &mut impl MessageBoxPlug<Req, Res>, _config: Config) {
         self.output_sender = peer.get_response_sender();
         peer.set_request_sender(self.input_sender.sender_clone());
     }
 }
 
-impl<I: Message, O: Message> MessageSource<O, NoConfig> for SimpleMessageBoxBuilder<I, O> {
-    fn register_peer(&mut self, _config: NoConfig, sender: DynSender<O>) {
+impl<I: Message, O: Message, C> MessageSource<O, C> for SimpleMessageBoxBuilder<I, O> {
+    fn register_peer(&mut self, _config: C, sender: DynSender<O>) {
         self.output_sender = sender;
     }
 }
