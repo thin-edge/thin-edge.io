@@ -1,0 +1,12 @@
+#!/bin/sh
+
+set -e
+
+# Stop the service only if systemctl is available
+if command -v systemctl >/dev/null; then
+    if systemctl is-active --quiet c8y-firmware-plugin.service; then
+         systemctl stop c8y-firmware-plugin.service
+    fi
+fi
+
+#DEBHELPER#

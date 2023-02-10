@@ -10,6 +10,7 @@ RELEASE_PACKAGES=(
     c8y-log-plugin
     c8y-configuration-plugin
     c8y-remote-access-plugin
+    c8y-firmware-plugin
 )
 export RELEASE_PACKAGES
 

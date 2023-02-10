@@ -1,0 +1,12 @@
+[Unit]
+Description=Thin-edge device firmware management for Cumulocity
+After=syslog.target network.target mosquitto.service
+
+[Service]
+User=tedge
+ExecStart=/usr/bin/c8y-firmware-plugin
+Restart=on-failure
+RestartPreventExitStatus=255
+
+[Install]
+WantedBy=multi-user.target

@@ -9,6 +9,24 @@ license = { workspace = true }
 homepage = { workspace = true }
 repository = { workspace = true }
 
+[package.metadata.deb]
+maintainer-scripts = "../../configuration/debian/c8y-firmware-plugin"
+assets = [
+    [
+        "../../configuration/init/systemd/c8y-firmware-plugin.service",
+        "/lib/systemd/system/c8y-firmware-plugin.service",
+        "644",
+    ],
+    [
+        "target/release/c8y-firmware-plugin",
+        "/usr/bin/c8y-firmware-plugin",
+        "755",
+    ],
+]
+
+# Required for DEBHELPER
+[package.metadata.deb.systemd-units]
+
 [dependencies]
 anyhow = "1.0"
 c8y_api = { path = "../../crates/core/c8y_api" }
