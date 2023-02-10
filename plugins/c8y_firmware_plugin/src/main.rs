@@ -43,6 +43,10 @@ pub struct FirmwarePluginOpt {
     #[clap(long)]
     pub debug: bool,
 
+    /// Do nothing as of now
+    #[clap(short, long)]
+    pub init: bool,
+
     #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
     pub config_dir: PathBuf,
 }
@@ -58,6 +62,11 @@ pub async fn create_http_client(
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let fw_plugin_opt = FirmwarePluginOpt::parse();
+
+    if fw_plugin_opt.init {
+        // Placeholder for the future enhancement
+        return Ok(());
+    }
 
     // Load tedge config from the provided location
     let tedge_config_location =
@@ -88,8 +97,6 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
     let timeout_sec = Duration::from_secs(tedge_config.query(FirmwareTimeoutSetting)?.into());
-
-    dbg!(&timeout_sec);
 
     let mut firmware_manager = FirmwareManager::new(
         tedge_device_id,

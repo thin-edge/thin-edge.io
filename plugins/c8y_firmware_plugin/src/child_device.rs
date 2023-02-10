@@ -5,17 +5,19 @@ use mqtt_channel::Message;
 use mqtt_channel::Topic;
 use tedge_api::OperationStatus;
 
+#[derive(Debug)]
 pub struct FirmwareOperationRequest {
     child_id: String,
     firmware_entry: FirmwareEntry,
 }
 
+#[derive(Debug)]
 pub struct FirmwareOperationResponse {
     child_id: String,
     payload: ChildDeviceResponsePayload,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct ChildDeviceRequestPayload {
     pub name: String,
     pub version: String,
@@ -23,7 +25,7 @@ pub struct ChildDeviceRequestPayload {
     pub url: String,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct ChildDeviceResponsePayload {
     pub status: OperationStatus,
     pub name: String,

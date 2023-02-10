@@ -93,8 +93,9 @@ impl FirmwareManager {
                     }
                 }
                 Some(((child_id, hash), op_state)) = self.firmware_download_manager.operation_timer.next_timed_out_entry() => {
-                    info!("Child device did not response with the timeout period of 10s. firmware hash: {hash}");
-                    let failure_reason = format!("Timeout due to lack of response from child device: {child_id} for hash: {hash}");
+                    let failure_reason = format!("Child device {child_id} did not respond within the timeout interval of {}sec. Timer ID={hash}",
+                        self.firmware_download_manager.timeout_sec.as_secs());
+                    info!(failure_reason);
                     mark_pending_firmware_operation_failed(self.mqtt_client.published.clone(), &child_id, op_state,failure_reason).await?;
                 }
             }
