@@ -164,12 +164,24 @@ Use uninstall script as shown below just to `remove` the `thin-edge.io` packages
 ```
 > Note: Removes just the thin-edge.io packages and does not remove the `configuration` files.
 
+The same thing can also be executed using a one-liner to download and run the script.
+
+```shell
+curl -sSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh | sudo sh -s remove
+```
+
 ### `Purge` thin-edge.io
 Use uninstall script as shown below to remove the thin-edge.io as well as to remove the `configuration` files that are 
 associated with these thin-edge.io packages.
 
 ```shell
 ./uninstall-thin-edge_io.sh purge
+```
+
+The same thing can also be executed using a one-liner to download and run the script.
+
+```shell
+curl -sSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh | sudo sh -s purge
 ```
 
 ## Next steps
