@@ -33,8 +33,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs
 
 # Update python deps
-RUN pip3 install --upgrade pip \
-    && curl -sSL https://install.python-poetry.org | python3 -
+RUN pip3 install --upgrade pip
 
 # Delete the dummy systemctl command added by the base image
 RUN rm -f /usr/local/bin/systemctl

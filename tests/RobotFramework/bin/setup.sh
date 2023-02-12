@@ -17,19 +17,56 @@ export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
 # Setup python virtual environment and install dependencies
 #
 # Add local bin to path
-export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
-if ! command -v poetry >/dev/null 2>&1; then
-    curl -sSL https://install.python-poetry.org | python3 -
+# Install dependences (including develop)
+if [ ! -d .venv ]; then
+    python3 -m venv .venv
 fi
 
-# Install all dependences (including develop)
-poetry install
-poetry run pip3 install --upgrade pip
-poetry run python3 bin/appendpath.py
+echo "Activating virtual environment"
+source .venv/bin/activate
+pip3 install --upgrade pip
 
-# install poetry plugin to load dotenv files automatically
-poetry run pip install poetry-dotenv-plugin
+REQUIREMENTS=(
+    -r
+    "requirements/requirements.txt"
+    -r
+    "requirements/requirements.dev.txt"
+)
+
+# Support installing only selected device adapters to minimize
+# dependencies for specific test runners
+if [ $# -gt 0 ]; then
+    while [ $# -gt 0 ]; do
+        ADAPTER="$1"
+        case "$ADAPTER" in
+            local|docker|ssh)
+                if [ -f "requirements.adapter-${1}.txt" ]; then
+                    echo "Install device test adapter: $1"
+                    REQUIREMENTS+=(
+                        -r
+                        "requirements/requirements.adapter-${ADAPTER}.txt"
+                    )
+                fi
+                ;;
+            *)
+                echo "Invalid device test adapter. Only 'local', 'docker' or 'ssh' are supported"
+                exit 1
+                ;;
+        esac
+        shift
+    done
+else
+    # include all adapters
+    REQUIREMENTS+=(
+        -r
+        "requirements/requirements.adapter.txt"
+    )
+fi
+
+pip3 install "${REQUIREMENTS[@]}"
+python3 bin/appendpath.py
 
 
 #
@@ -80,13 +117,6 @@ if [ ! -f .env ]; then
         echo "Creating symlink to project .env file"
         ln -s "$DOTENV_FILE" ".env"
     fi
-fi
-
-#
-# Build docker images (required for container devices)
-#
-if ! poetry run invoke build >/dev/null 2>&1; then
-    echo "Failed to build container image. Please try running 'invoke build' manually to debug the output"
 fi
 
 popd >/dev/null || exit 1

@@ -3,6 +3,7 @@
 from pathlib import Path
 import os
 import sys
+import shlex
 from invoke import task
 
 from dotenv import load_dotenv
@@ -13,7 +14,7 @@ project_dotenv = project_dir.joinpath(".env")
 
 for item in [project_dotenv, ".env"]:
     if os.path.exists(item):
-        load_dotenv(item)
+        load_dotenv(item, override=True)
 
 # pylint: disable=invalid-name
 
@@ -66,12 +67,15 @@ def build(c, name="debian-systemd"):
         "file": ("Robot file or directory to run"),
         "outputdir": ("Output directory where the reports will be saved to"),
         "processes": ("Number of processes to use when running tests"),
-        "include": ("Only run tests which match the given tag"),
+        "suite": ("Only run suites matching the given text"),
+        "test": ("Only run tests matching the given text"),
+        "include": ("Only run tests matching the given tag"),
+        "exclude": ("Don't run tests matching the given tag"),
         "retries": ("Max global retries to execute on failed tests. Defaults to 0"),
         "adapter": ("Default device adapter to use to run tests. e.g. docker, ssh or local"),
-    }
+    },
 )
-def test(c, file="tests", adapter="docker", retries=0, outputdir=None, processes=None, include=""):
+def test(c, file="tests", suite="", test="", adapter="docker", retries=0, outputdir=None, processes=None, include="", exclude=""):
     """Run tests
 
     Examples
@@ -90,7 +94,8 @@ def test(c, file="tests", adapter="docker", retries=0, outputdir=None, processes
 
     env_file = ".env"
     if env_file:
-        load_dotenv(env_file)
+        print(f"loading .env file. path={env_file}")
+        load_dotenv(env_file, verbose=True, override=True)
 
     if adapter:
         os.environ[ENV_DEVICE_ADAPTER] = adapter
@@ -118,13 +123,37 @@ def test(c, file="tests", adapter="docker", retries=0, outputdir=None, processes
         f"RetryFailed:{retries}",
     ]
 
+    # include tags
     if include:
         command.extend(
             [
                 "--include",
-                str(include),
+                shlex.quote(include),
             ]
         )
+
+    # exclude tags
+    if exclude:
+        command.extend(
+            [
+                "--exclude",
+                shlex.quote(exclude),
+            ]
+        )
+
+    # suite filter
+    if suite:
+        command.extend([
+            "--suite",
+            shlex.quote(suite),
+        ])
+
+    # test filter
+    if test:
+        command.extend([
+            "--test",
+            shlex.quote(test),
+        ])
 
     if not is_ci():
         command.extend(

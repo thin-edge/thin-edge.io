@@ -6,9 +6,9 @@ on:
   # When in doubt, do not approve the test run.
   # Reference: https://dev.to/petrsvihlik/using-environment-protection-rules-to-secure-secrets-when-building-external-forks-with-pullrequesttarget-hci
   pull_request_target:
-    branches: [ main, add-robot-libraries ]
+    branches: [ main, add-robot-libraries, robot-deps ]
   push:
-    branches: [ main, add-robot-libraries ]
+    branches: [ main, add-robot-libraries, robot-deps ]
   workflow_dispatch:
     inputs:
       environment:
@@ -130,32 +130,32 @@ jobs:
           echo 'C8Y_USER="${{ secrets.C8Y_USER }}"' >> .env
           echo 'C8Y_PASSWORD="${{ secrets.C8Y_PASSWORD }}"' >> .env
 
-      # Install before setting up python, otherwise caching fails
-      - run: pipx install poetry
       - uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-          cache: 'poetry'
+          cache: 'pip'
+          cache-dependency-path: |
+            **/requirements/requirements*.txt
 
       - name: Install dependencies
         run: |
-          poetry install
-          poetry run pip install poetry-dotenv-plugin
-          poetry run python3 bin/appendpath.py
+          ./bin/setup.sh
         working-directory: tests/RobotFramework
 
       - name: Build images
         working-directory: tests/RobotFramework
-        run: poetry run invoke build
+        run: |
+          source .venv/bin/activate
+          invoke build
 
       - name: Run tests
         working-directory: tests/RobotFramework
         run: |
-          poetry run \
-            invoke test \
-              --processes "${{ inputs.processes || '' }}" \
-              --include "${{ inputs.include || '' }}" \
-              --outputdir output
+          source .venv/bin/activate
+          invoke test \
+            --processes "${{ inputs.processes || '' }}" \
+            --include "${{ inputs.include || '' }}" \
+            --outputdir output
 
       - name: Upload test results
         uses: actions/upload-artifact@v1

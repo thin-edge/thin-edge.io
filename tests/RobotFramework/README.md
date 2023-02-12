@@ -87,6 +87,16 @@ Checkout the [dev container instructions](../../docs/src/developer/DEV_CONTAINER
     ./bin/setup.sh
     ```
 
+	Or if you only want to install the dependencies for a specific adapter than a list of adapter can be provided.
+
+	```sh
+	# only local adapter
+	./bin/setup.sh "local"
+
+	# multiple adapters
+	./bin/setup.sh "local" "ssh"
+	```
+
 3. Follow the console instructions and edit the `.env` file which was created by the `./bin/setup.sh` script
 
 4. Switch to the new python interpreter (the one with `.venv` in the name)
@@ -118,7 +128,7 @@ Checkout the [dev container instructions](../../docs/src/developer/DEV_CONTAINER
 5. On the console, activate the environment (if it is not already activated)
 
     ```sh
-    poetry shell
+    source .venv/bin/activate
     ```
 
 6. Run the tests
@@ -155,7 +165,7 @@ If you would like to run the tests using some custom built tedge packages, then 
 
     ```sh
     cd tests/RobotFramework
-    poetry shell
+    source .venv/bin/activate
     invoke build
     ```
 

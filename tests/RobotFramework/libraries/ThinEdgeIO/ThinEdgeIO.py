@@ -61,7 +61,9 @@ class ThinEdgeIO(DeviceLibrary):
         bootstrap_script: str = DeviceLibrary.DEFAULT_BOOTSTRAP_SCRIPT,
         **kwargs,
     ):
-        super().__init__(image=image, adapter=adapter, bootstrap_script=bootstrap_script, **kwargs)
+        super().__init__(
+            image=image, adapter=adapter, bootstrap_script=bootstrap_script, **kwargs
+        )
 
         # Configure retries
         retry.configure_retry_on_members(self, "^_assert_")
@@ -373,7 +375,9 @@ class ThinEdgeIO(DeviceLibrary):
         **kwargs,
     ) -> List[Dict[str, Any]]:
         # log.info("Checking mqtt messages for topic: %s", topic)
-        items = self.mqtt_match_messages(topic=topic, date_from=date_from, date_to=date_to, **kwargs)
+        items = self.mqtt_match_messages(
+            topic=topic, date_from=date_from, date_to=date_to, **kwargs
+        )
 
         messages = [
             bytes.fromhex(item["payload_hex"]).decode("utf8")
