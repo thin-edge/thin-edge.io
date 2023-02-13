@@ -6,6 +6,7 @@ mod fragments;
 pub mod json;
 pub mod mapper;
 mod serializer;
+pub mod service_monitor;
 
 #[cfg(test)]
 mod tests;

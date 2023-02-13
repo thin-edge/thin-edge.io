@@ -1776,6 +1776,60 @@ async fn mapper_updating_the_inventory_fragments_from_file() {
     sm_mapper.abort();
 }
 
+#[tokio::test]
+async fn translate_service_monitor_message_for_child_device() {
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
+
+    let in_topic = "tedge/health/child1/child-service-c8y";
+    let in_payload = r#"{"pid":"1234","status":"up","time":"2021-11-16T17:45:40.571760714+01:00","type":"thin-edge.io"}"#;
+    let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+
+    let expected_child_create_smart_rest_message = Message::new(
+        &Topic::new_unchecked("c8y/s/us"),
+        "101,child1,child1,thin-edge.io-child",
+    );
+
+    let expected_service_monitor_smart_rest_message = Message::new(
+        &Topic::new_unchecked("c8y/s/us/child1"),
+        r#"102,test-device_child1_child-service-c8y,thin-edge.io,child-service-c8y,up"#,
+    );
+
+    // Test the first output messages contains SmartREST and C8Y JSON.
+    let out_first_messages = converter.convert(&in_message).await;
+
+    assert_eq!(
+        out_first_messages,
+        vec![
+            expected_child_create_smart_rest_message,
+            expected_service_monitor_smart_rest_message.clone()
+        ]
+    );
+}
+
+#[tokio::test]
+async fn translate_service_monitor_message_for_thin_edge_device() {
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
+
+    let in_topic = "tedge/health/test-tedge-mapper-c8y";
+    let in_payload = r#"{"pid":"1234","status":"up","time":"2021-11-16T17:45:40.571760714+01:00","type":"thin-edge.io"}"#;
+    let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+
+    let expected_service_monitor_smart_rest_message = Message::new(
+        &Topic::new_unchecked("c8y/s/us"),
+        r#"102,test-device_test-tedge-mapper-c8y,thin-edge.io,test-tedge-mapper-c8y,up"#,
+    );
+
+    // Test the output messages contains SmartREST and C8Y JSON.
+    let out_messages = converter.convert(&in_message).await;
+
+    assert_eq!(
+        out_messages,
+        vec![expected_service_monitor_smart_rest_message]
+    );
+}
+
 fn create_inventroy_json_file_with_content(cfg_dir: &TempTedgeDir, content: &str) {
     let file = cfg_dir.dir("device").file("inventory.json");
     file.with_raw_content(content);
