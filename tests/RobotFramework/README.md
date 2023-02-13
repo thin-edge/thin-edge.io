@@ -44,7 +44,7 @@ The list of test hardware devices can be found [here](./TEST_DEVICES.md).
 Before you can run the tests you need to install the pre-requisites:
 
 * docker
-* python3 (>=3.10)
+* python3 (>=3.7)
 * pip3
 
 It is assumed that you are running on either MacOS or Linux. If you are a Windows users then use WSL 2 and follow the **Debian/Ubuntu** instructions, or just use the dev container option (which requires docker which again can be run under WSL 2).
