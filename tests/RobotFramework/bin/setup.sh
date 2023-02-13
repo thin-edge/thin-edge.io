@@ -25,6 +25,7 @@ if [ ! -d .venv ]; then
 fi
 
 echo "Activating virtual environment"
+# shellcheck disable=SC1091
 source .venv/bin/activate
 pip3 install --upgrade pip
 
