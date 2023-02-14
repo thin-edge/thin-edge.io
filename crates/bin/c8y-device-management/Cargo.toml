@@ -13,6 +13,7 @@ repository = { workspace = true }
 anyhow = "1.0"
 async-trait = "0.1"
 c8y_api = { path = "../../core/c8y_api" }
+c8y_http_proxy = { path = "../../extensions/c8y_http_proxy" }
 csv = "1.1"
 download = { path = "../../common/download" }
 easy_reader = "0.5"
@@ -37,8 +38,5 @@ toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 
 [dev-dependencies]
-tedge_http_ext = { path = "../../extensions/tedge_http_ext", features = [
-    "test_helpers",
-] }
 tedge_test_utils = { path = "../../tests/tedge_test_utils" }
 tokio = { version = "1.23", features = ["time"] }

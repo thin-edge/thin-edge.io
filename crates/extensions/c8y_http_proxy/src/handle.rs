@@ -1,9 +1,9 @@
-use crate::c8y_http_proxy::messages::C8YRestError;
-use crate::c8y_http_proxy::messages::C8YRestRequest;
-use crate::c8y_http_proxy::messages::C8YRestResponse;
-use crate::c8y_http_proxy::messages::C8YRestResult;
-use crate::c8y_http_proxy::messages::UploadConfigFile;
-use crate::c8y_http_proxy::messages::UploadLogBinary;
+use crate::messages::C8YRestError;
+use crate::messages::C8YRestRequest;
+use crate::messages::C8YRestResponse;
+use crate::messages::C8YRestResult;
+use crate::messages::UploadConfigFile;
+use crate::messages::UploadLogBinary;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::MessageBoxSocket;

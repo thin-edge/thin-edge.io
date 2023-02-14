@@ -1,5 +1,5 @@
-use crate::c8y_http_proxy::credentials::ConstJwtRetriever;
-use crate::c8y_http_proxy::handle::C8YHttpProxy;
+use crate::credentials::ConstJwtRetriever;
+use crate::handle::C8YHttpProxy;
 use crate::C8YHttpConfig;
 use crate::C8YHttpProxyBuilder;
 use c8y_api::json_c8y::InternalIdResponse;

@@ -2,9 +2,9 @@ mod actor;
 mod config;
 mod error;
 
-use crate::c8y_http_proxy::handle::C8YHttpProxy;
-use crate::c8y_http_proxy::C8YConnectionBuilder;
 use actor::*;
+use c8y_http_proxy::handle::C8YHttpProxy;
+use c8y_http_proxy::C8YConnectionBuilder;
 pub use config::*;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;

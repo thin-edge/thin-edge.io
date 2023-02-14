@@ -9,14 +9,13 @@ mod upload;
 #[cfg(test)]
 mod tests;
 
-use std::path::PathBuf;
-
-use crate::c8y_http_proxy::handle::C8YHttpProxy;
-use crate::c8y_http_proxy::messages::C8YRestRequest;
-use crate::c8y_http_proxy::messages::C8YRestResult;
 use actor::*;
+use c8y_http_proxy::handle::C8YHttpProxy;
+use c8y_http_proxy::messages::C8YRestRequest;
+use c8y_http_proxy::messages::C8YRestResult;
 pub use config::*;
 use mqtt_channel::TopicFilter;
+use std::path::PathBuf;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;

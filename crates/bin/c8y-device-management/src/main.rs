@@ -1,12 +1,10 @@
-mod c8y_http_proxy;
 mod config_manager;
 mod log_manager;
 
-use crate::c8y_http_proxy::credentials::C8YJwtRetriever;
-use crate::c8y_http_proxy::C8YHttpConfig;
-use crate::c8y_http_proxy::C8YHttpProxyBuilder;
 use crate::config_manager::ConfigManagerBuilder;
 use crate::config_manager::ConfigManagerConfig;
+use c8y_http_proxy::credentials::C8YJwtRetriever;
+use c8y_http_proxy::C8YHttpProxyBuilder;
 use log_manager::LogManagerBuilder;
 use log_manager::LogManagerConfig;
 use tedge_actors::MessageSink;

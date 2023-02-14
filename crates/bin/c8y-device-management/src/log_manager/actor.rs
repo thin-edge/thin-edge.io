@@ -1,4 +1,3 @@
-use crate::c8y_http_proxy::handle::C8YHttpProxy;
 use async_trait::async_trait;
 use c8y_api::smartrest::message::get_smartrest_device_id;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
@@ -11,6 +10,7 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_api::OffsetDateTime;
+use c8y_http_proxy::handle::C8YHttpProxy;
 use easy_reader::EasyReader;
 use glob::glob;
 use log::error;
