@@ -1,5 +1,5 @@
-use crate::config_manager::child_device::ChildConfigOperationKey;
-use crate::config_manager::child_device::DEFAULT_OPERATION_TIMEOUT;
+use crate::child_device::ChildConfigOperationKey;
+use crate::child_device::DEFAULT_OPERATION_TIMEOUT;
 
 use super::actor::ActiveOperationState;
 use super::actor::ConfigManagerActor;
@@ -24,6 +24,9 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
+use log::error;
+use log::info;
+use log::warn;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 use serde_json::json;
@@ -33,9 +36,6 @@ use std::path::PathBuf;
 use tedge_api::OperationStatus;
 use tedge_timer_ext::SetTimeout;
 use tedge_utils::file::PermissionEntry;
-use tracing::error;
-use tracing::info;
-use tracing::warn;
 
 pub const CONFIG_CHANGE_TOPIC: &str = "tedge/configuration_change";
 

@@ -1,7 +1,5 @@
-mod config_manager;
-
-use crate::config_manager::ConfigManagerBuilder;
-use crate::config_manager::ConfigManagerConfig;
+use c8y_config_manager::ConfigManagerBuilder;
+use c8y_config_manager::ConfigManagerConfig;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use c8y_log_manager::LogManagerBuilder;

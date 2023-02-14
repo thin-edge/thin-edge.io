@@ -2,13 +2,13 @@ use super::actor::ConfigOperation;
 use super::error::ConfigManagementError;
 use super::plugin_config::FileEntry;
 use c8y_api::smartrest::topic::C8yTopic;
+use log::error;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use std::fs;
 use std::time::Duration;
 use tedge_api::OperationStatus;
-use tracing::error;
 
 #[cfg(test)]
 pub const FILE_TRANSFER_ROOT_PATH: &str = "/tmp";

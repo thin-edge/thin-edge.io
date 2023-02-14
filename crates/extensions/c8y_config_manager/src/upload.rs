@@ -1,7 +1,7 @@
-use crate::config_manager::child_device::try_cleanup_config_file_from_file_transfer_repositoy;
-use crate::config_manager::child_device::ChildConfigOperationKey;
-use crate::config_manager::child_device::ConfigOperationMessage;
-use crate::config_manager::child_device::DEFAULT_OPERATION_TIMEOUT;
+use crate::child_device::try_cleanup_config_file_from_file_transfer_repositoy;
+use crate::child_device::ChildConfigOperationKey;
+use crate::child_device::ConfigOperationMessage;
+use crate::child_device::DEFAULT_OPERATION_TIMEOUT;
 
 use super::actor::ActiveOperationState;
 use super::actor::ConfigManagerActor;
@@ -23,6 +23,8 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
+use log::error;
+use log::info;
 use log::warn;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
@@ -32,8 +34,6 @@ use tedge_api::OperationStatus;
 use tedge_timer_ext::SetTimeout;
 use tedge_utils::file::create_directory_with_user_group;
 use tedge_utils::file::create_file_with_user_group;
-use tracing::error;
-use tracing::info;
 
 pub struct ConfigUploadManager {
     config: ConfigManagerConfig,

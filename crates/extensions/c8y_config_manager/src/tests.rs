@@ -1,7 +1,7 @@
-use crate::config_manager::actor::OperationTimeout;
-use crate::config_manager::actor::OperationTimer;
-use crate::config_manager::ConfigManagerBuilder;
-use crate::config_manager::ConfigManagerConfig;
+use crate::actor::OperationTimeout;
+use crate::actor::OperationTimer;
+use crate::ConfigManagerBuilder;
+use crate::ConfigManagerConfig;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResponse;

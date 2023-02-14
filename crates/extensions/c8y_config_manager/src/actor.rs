@@ -18,6 +18,7 @@ use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::handle::C8YHttpProxy;
+use log::error;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 use tedge_actors::fan_in_message_type;
@@ -34,7 +35,6 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
 use tedge_utils::paths::PathsError;
-use tracing::error;
 
 pub type OperationTimer = SetTimeout<ChildConfigOperationKey>;
 pub type OperationTimeout = Timeout<ChildConfigOperationKey>;

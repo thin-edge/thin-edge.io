@@ -1,6 +1,8 @@
 use super::error::ConfigManagementError;
 use super::DEFAULT_PLUGIN_CONFIG_TYPE;
 use c8y_api::smartrest::topic::C8yTopic;
+use log::error;
+use log::info;
 use mqtt_channel::Message;
 use mqtt_channel::MqttError;
 use mqtt_channel::Topic;
@@ -12,8 +14,6 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::path::Path;
 use tedge_utils::file::PermissionEntry;
-use tracing::error;
-use tracing::info;
 
 #[derive(Deserialize, Debug, Default)]
 #[serde(deny_unknown_fields)]

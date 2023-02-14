@@ -417,31 +417,20 @@ name = "c8y-device-management"
 version = "0.9.0"
 dependencies = [
  "anyhow",
- "async-trait",
- "c8y_api",
+ "c8y_config_manager",
  "c8y_http_proxy",
  "c8y_log_manager",
- "csv",
- "download",
  "env_logger 0.10.0",
  "log",
  "mqtt_channel",
- "serde",
- "serde_json",
  "tedge_actors",
- "tedge_api",
  "tedge_config",
  "tedge_file_system_ext",
  "tedge_http_ext",
  "tedge_mqtt_ext",
  "tedge_signal_ext",
- "tedge_test_utils",
  "tedge_timer_ext",
- "tedge_utils",
- "thiserror",
  "tokio",
- "toml",
- "tracing",
 ]
 
 [[package]]
@@ -530,6 +519,31 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
+]
+
+[[package]]
+name = "c8y_config_manager"
+version = "0.9.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "c8y_api",
+ "c8y_http_proxy",
+ "log",
+ "mqtt_channel",
+ "serde",
+ "serde_json",
+ "tedge_actors",
+ "tedge_api",
+ "tedge_config",
+ "tedge_file_system_ext",
+ "tedge_mqtt_ext",
+ "tedge_test_utils",
+ "tedge_timer_ext",
+ "tedge_utils",
+ "thiserror",
+ "tokio",
+ "toml",
 ]
 
 [[package]]
