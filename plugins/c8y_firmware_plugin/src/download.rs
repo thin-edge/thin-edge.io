@@ -1,8 +1,10 @@
 use crate::child_device::FirmwareOperationRequest;
 use crate::child_device::FirmwareOperationResponse;
+use crate::common::create_parent_dirs;
 use crate::common::mark_pending_firmware_operation_failed;
 use crate::common::ActiveOperationState;
-use crate::common::FirmwareEntry;
+use crate::common::FirmwareOperationEntry;
+use crate::common::PersistentStore;
 use crate::error::FirmwareManagementError;
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::smartrest::error::SmartRestSerializerError;
@@ -18,9 +20,9 @@ use mqtt_channel::Message;
 use mqtt_channel::SinkExt;
 use mqtt_channel::Topic;
 use mqtt_channel::UnboundedSender;
+use nanoid::nanoid;
 use sha256::digest;
 use sha256::try_digest;
-use std::collections::HashMap;
 use std::fs;
 use std::os::unix::fs as unix_fs;
 use std::path::Path;
@@ -36,15 +38,14 @@ use tracing::warn;
 
 #[cfg(not(test))]
 use tedge_config::DEFAULT_FILE_TRANSFER_ROOT_PATH;
-
 #[cfg(not(test))]
 pub const FILE_TRANSFER_ROOT_PATH: &str = DEFAULT_FILE_TRANSFER_ROOT_PATH;
-#[cfg(not(test))]
-pub const FILE_TRANSFER_CACHE_PATH: &str = "/var/tedge/cache";
 #[cfg(test)]
 pub const FILE_TRANSFER_ROOT_PATH: &str = "/tmp/file-transfer";
+#[cfg(not(test))]
+pub const FILE_CACHE_DIR_PATH: &str = "/var/tedge/cache";
 #[cfg(test)]
-pub const FILE_TRANSFER_CACHE_PATH: &str = "/tmp/cache";
+pub const FILE_CACHE_DIR_PATH: &str = "/tmp/cache";
 
 pub struct FirmwareDownloadManager {
     tedge_device_id: String,
@@ -53,7 +54,6 @@ pub struct FirmwareDownloadManager {
     local_http_host: String,
     tmp_dir: PathBuf,
     pub operation_timer: Timers<(String, String), ActiveOperationState>,
-    pub url_map: HashMap<String, String>,
     pub timeout_sec: Duration,
 }
 
@@ -73,7 +73,6 @@ impl FirmwareDownloadManager {
             local_http_host,
             tmp_dir,
             operation_timer: Timers::new(),
-            url_map: HashMap::new(),
             timeout_sec,
         }
     }
@@ -102,12 +101,11 @@ impl FirmwareDownloadManager {
             {
                 Ok(_) => Ok(()),
                 Err(err) => {
-                    let failed_reason = format!("{err}");
                     mark_pending_firmware_operation_failed(
                         self.mqtt_publisher.clone(),
                         child_id,
                         ActiveOperationState::Pending,
-                        failed_reason,
+                        format!("{err}"),
                     )
                     .await
                     .unwrap_or_else(|_| {
@@ -130,8 +128,8 @@ impl FirmwareDownloadManager {
         let file_cache_key = digest(firmware_url);
 
         // <tedge-cache-root>/<file_cache_key>
-        let cache_dest = PathBuf::from(FILE_TRANSFER_CACHE_PATH).join(&file_cache_key);
-        let cache_dest_str = format!("{FILE_TRANSFER_CACHE_PATH}/{file_cache_key}");
+        let cache_dest = PathBuf::from(FILE_CACHE_DIR_PATH).join(&file_cache_key);
+        let cache_dest_str = format!("{FILE_CACHE_DIR_PATH}/{file_cache_key}");
 
         // <tedge-file-transfer-root>/<child-id>/firmware_update/<file_cache_key>
         let transfer_dest = PathBuf::from(FILE_TRANSFER_ROOT_PATH)
@@ -174,33 +172,30 @@ impl FirmwareDownloadManager {
             unix_fs::symlink(&cache_dest, &transfer_dest)?;
         }
 
-        // Add a pair of local url and external url to the hashmap.
-        self.url_map
-            .insert(file_transfer_url.clone(), firmware_url.to_string());
-
+        // Create an operation status file
+        let operation_id = nanoid!();
         let file_sha256 = try_digest(transfer_dest.as_path())?;
-        let firmware_entry =
-            FirmwareEntry::new(firmware_name, firmware_version, firmware_url, &file_sha256);
-        let firmware_op_req = FirmwareOperationRequest::new(child_id, firmware_entry);
-        let firmware_update_req_msg = Message::new(
-            &firmware_op_req.operation_request_topic(),
-            firmware_op_req.operation_request_payload(file_transfer_url.as_ref())?,
-        );
 
-        self.mqtt_publisher.send(firmware_update_req_msg).await?;
-        info!(
-            "Firmware update request is sent to child device. \
-            Details: child={child_id}, name={firmware_name}, version={firmware_version}, url={file_transfer_url}"
-        );
+        let operation_entry = FirmwareOperationEntry {
+            operation_id: operation_id.clone(),
+            child_id: child_id.to_string(),
+            name: firmware_name.to_string(),
+            version: firmware_version.to_string(),
+            server_url: firmware_url.to_string(),
+            file_transfer_url: file_transfer_url.clone(),
+            sha256: file_sha256.to_string(),
+            attempt: 1,
+        };
+        operation_entry.create_file()?;
 
-        // A unique ID for timer. Once operation ID is possible to use, better to replace it.
-        let timer_id = digest(format!(
-            "{child_id}{firmware_name}{firmware_version}{firmware_url}"
-        ));
+        let request = FirmwareOperationRequest::new(operation_entry);
+        let message = Message::new(&request.get_topic(), request.get_json_payload()?);
 
-        info!("Timer ID={timer_id}");
+        self.mqtt_publisher.send(message).await?;
+        info!("Firmware update request is sent. operation_id={operation_id}, child={child_id}");
+
         self.operation_timer.start_timer(
-            (child_id.to_string(), timer_id),
+            (child_id.to_string(), operation_id),
             ActiveOperationState::Pending,
             self.timeout_sec,
         );
@@ -215,29 +210,23 @@ impl FirmwareDownloadManager {
         let c8y_child_topic = Topic::new_unchecked(&response.get_child_topic());
         let child_device_payload = response.get_payload();
         let child_id = response.get_child_id();
+        let operation_id = child_device_payload.operation_id.as_str();
         let status = child_device_payload.status;
-        let firmware_name = child_device_payload.name.as_str();
-        let firmware_version = child_device_payload.version.as_str();
-        let file_transfer_url = child_device_payload.url.as_str();
-        info!("Firmware update response received. \
-        Details: status={status:?}, child={child_id}, name={firmware_name}, version={firmware_version}, url={file_transfer_url}");
+        info!("Firmware update response received. Details: id={operation_id}, child={child_id}, status={status:?}");
 
-        // TODO! Change it to a persistent way
-        let firmware_url = self.url_map.get(file_transfer_url).ok_or(
-            FirmwareManagementError::InvalidLocalURL {
-                url: file_transfer_url.to_string(),
-            },
-        )?;
+        let status_file_path = PersistentStore::get_file_path(operation_id);
+        if let Err(err) = PersistentStore::has_expected_permission(operation_id) {
+            warn!("{err}");
+            return Ok(vec![]);
+        }
 
-        let timer_id = digest(format!(
-            "{child_id}{firmware_name}{firmware_version}{firmware_url}"
-        ));
+        let operation_entry = FirmwareOperationEntry::read_from_file(status_file_path.as_path())?;
 
-        let mut mapped_responses = vec![];
         let current_operation_state = self
             .operation_timer
-            .current_value(&(child_id.to_string(), timer_id.clone()));
+            .current_value(&(child_id.to_string(), operation_id.to_string()));
 
+        let mut mapped_responses = vec![];
         match current_operation_state {
             Some(&ActiveOperationState::Executing) => {}
             Some(&ActiveOperationState::Pending) => {
@@ -252,10 +241,14 @@ impl FirmwareDownloadManager {
 
         match status {
             OperationStatus::Successful => {
-                self.operation_timer.stop_timer((child_id, timer_id));
+                self.operation_timer
+                    .stop_timer((child_id, operation_id.to_string()));
+                fs::remove_file(status_file_path)?;
 
-                let update_firmware_state_message =
-                    format!("115,{firmware_name},{firmware_version},{firmware_url}");
+                let update_firmware_state_message = format!(
+                    "115,{},{},{}",
+                    operation_entry.name, operation_entry.version, operation_entry.server_url
+                );
                 mapped_responses.push(Message::new(
                     &c8y_child_topic,
                     update_firmware_state_message,
@@ -266,7 +259,9 @@ impl FirmwareDownloadManager {
                 mapped_responses.push(Message::new(&c8y_child_topic, successful_status_payload));
             }
             OperationStatus::Failed => {
-                self.operation_timer.stop_timer((child_id, timer_id));
+                self.operation_timer
+                    .stop_timer((child_id, operation_id.to_string()));
+                fs::remove_file(status_file_path)?;
 
                 if let Some(error_message) = &child_device_payload.reason {
                     let failed_status_payload =
@@ -282,7 +277,7 @@ impl FirmwareDownloadManager {
             }
             OperationStatus::Executing => {
                 self.operation_timer.start_timer(
-                    (child_id, timer_id),
+                    (child_id, operation_id.to_string()),
                     ActiveOperationState::Executing,
                     self.timeout_sec,
                 );
@@ -299,15 +294,6 @@ fn move_file(src: &Path, dest: &Path) -> Result<(), FirmwareManagementError> {
         dest: dest.to_path_buf(),
     })?;
 
-    Ok(())
-}
-
-fn create_parent_dirs(path: &Path) -> Result<(), FirmwareManagementError> {
-    if let Some(dest_dir) = path.parent() {
-        if !dest_dir.exists() {
-            fs::create_dir_all(dest_dir)?;
-        }
-    }
     Ok(())
 }
 

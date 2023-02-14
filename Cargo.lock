@@ -426,6 +426,7 @@ name = "c8y-firmware-plugin"
 version = "0.9.0"
 dependencies = [
  "anyhow",
+ "assert-json-diff",
  "assert_matches",
  "c8y_api",
  "clap 3.2.23",
@@ -436,6 +437,7 @@ dependencies = [
  "mockito",
  "mqtt_channel",
  "mqtt_tests",
+ "nanoid",
  "reqwest",
  "serde",
  "serde_json",

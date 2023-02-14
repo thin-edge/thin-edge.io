@@ -108,5 +108,6 @@ async fn main() -> Result<(), anyhow::Error> {
     )
     .await?;
 
+    firmware_manager.startup().await?;
     firmware_manager.run().await
 }

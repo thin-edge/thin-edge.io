@@ -10,8 +10,11 @@ pub enum FirmwareManagementError {
         dest: std::path::PathBuf,
     },
 
-    #[error("No corresponding server URL is found with the local URL.")]
-    InvalidLocalURL { url: String },
+    #[error("Operation status file must have mode 644 and owned by tedge or root. Ignore operation={id}.")]
+    InvalidFilePermission { id: String },
+
+    #[error("Persistent file is invalid. File path={path}")]
+    PersistentStoreError { path: std::path::PathBuf },
 
     #[error(transparent)]
     FromMqttError(#[from] mqtt_channel::MqttError),
@@ -24,4 +27,7 @@ pub enum FirmwareManagementError {
 
     #[error(transparent)]
     FromIoError(#[from] std::io::Error),
+
+    #[error(transparent)]
+    FromFileError(#[from] tedge_utils::file::FileError),
 }
