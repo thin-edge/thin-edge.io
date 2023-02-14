@@ -27,13 +27,13 @@ use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use log::error;
 use log::info;
 use log::warn;
-use mqtt_channel::Message;
-use mqtt_channel::Topic;
 use serde_json::json;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_api::OperationStatus;
+use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 use tedge_timer_ext::SetTimeout;
 use tedge_utils::file::PermissionEntry;
 
@@ -201,7 +201,7 @@ impl ConfigDownloadManager {
                     )
                     .await?;
                 } else {
-                    let config_update_req_msg = Message::new(
+                    let config_update_req_msg = MqttMessage::new(
                         &config_management.operation_request_topic(),
                         config_management
                             .operation_request_payload(&self.config.tedge_http_host)?,
@@ -233,7 +233,7 @@ impl ConfigDownloadManager {
         &mut self,
         config_response: &ConfigOperationResponse,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<Vec<Message>, ConfigManagementError> {
+    ) -> Result<Vec<MqttMessage>, ConfigManagementError> {
         let c8y_child_topic = Topic::new_unchecked(&config_response.get_child_topic());
         let child_device_payload = config_response.get_payload();
         let child_id = config_response.get_child_id();
@@ -251,7 +251,7 @@ impl ConfigDownloadManager {
             let current_operation_state = self.active_child_ops.get(&operation_key);
             if current_operation_state != Some(&ActiveOperationState::Executing) {
                 let executing_status_payload = DownloadConfigFileStatusMessage::status_executing()?;
-                mapped_responses.push(Message::new(&c8y_child_topic, executing_status_payload));
+                mapped_responses.push(MqttMessage::new(&c8y_child_topic, executing_status_payload));
             }
 
             match operation_status {
@@ -262,8 +262,10 @@ impl ConfigDownloadManager {
                     try_cleanup_config_file_from_file_transfer_repositoy(config_response);
                     let successful_status_payload =
                         DownloadConfigFileStatusMessage::status_successful(None)?;
-                    mapped_responses
-                        .push(Message::new(&c8y_child_topic, successful_status_payload));
+                    mapped_responses.push(MqttMessage::new(
+                        &c8y_child_topic,
+                        successful_status_payload,
+                    ));
                 }
                 OperationStatus::Failed => {
                     self.active_child_ops.remove(&operation_key);
@@ -274,14 +276,14 @@ impl ConfigDownloadManager {
                         let failed_status_payload =
                             DownloadConfigFileStatusMessage::status_failed(error_message.clone())?;
                         mapped_responses
-                            .push(Message::new(&c8y_child_topic, failed_status_payload));
+                            .push(MqttMessage::new(&c8y_child_topic, failed_status_payload));
                     } else {
                         let default_error_message =
                             String::from("No fail reason provided by child device.");
                         let failed_status_payload =
                             DownloadConfigFileStatusMessage::status_failed(default_error_message)?;
                         mapped_responses
-                            .push(Message::new(&c8y_child_topic, failed_status_payload));
+                            .push(MqttMessage::new(&c8y_child_topic, failed_status_payload));
                     }
                 }
                 OperationStatus::Executing => {
@@ -329,14 +331,14 @@ impl ConfigDownloadManager {
     }
 }
 
-pub fn get_file_change_notification_message(file_path: &str, config_type: &str) -> Message {
+pub fn get_file_change_notification_message(file_path: &str, config_type: &str) -> MqttMessage {
     let notification = json!({ "path": file_path }).to_string();
     let topic = Topic::new(format!("{CONFIG_CHANGE_TOPIC}/{config_type}").as_str())
         .unwrap_or_else(|_err| {
             warn!("The type cannot be used as a part of the topic name. Using {CONFIG_CHANGE_TOPIC} instead.");
             Topic::new_unchecked(CONFIG_CHANGE_TOPIC)
         });
-    Message::new(&topic, notification)
+    MqttMessage::new(&topic, notification)
 }
 
 pub struct DownloadConfigFileStatusMessage {}

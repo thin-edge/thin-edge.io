@@ -3,12 +3,12 @@ use super::error::ConfigManagementError;
 use super::plugin_config::FileEntry;
 use c8y_api::smartrest::topic::C8yTopic;
 use log::error;
-use mqtt_channel::Message;
-use mqtt_channel::Topic;
-use mqtt_channel::TopicFilter;
 use std::fs;
 use std::time::Duration;
 use tedge_api::OperationStatus;
+use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
+use tedge_mqtt_ext::TopicFilter;
 
 #[cfg(test)]
 pub const FILE_TRANSFER_ROOT_PATH: &str = "/tmp";
@@ -165,10 +165,10 @@ pub fn get_operation_name_from_child_topic(topic: &str) -> Result<String, Config
             })?;
     Ok(operation_name.to_string())
 }
-impl TryFrom<&Message> for ConfigOperationResponse {
+impl TryFrom<&MqttMessage> for ConfigOperationResponse {
     type Error = ConfigManagementError;
 
-    fn try_from(message: &Message) -> Result<Self, Self::Error> {
+    fn try_from(message: &MqttMessage) -> Result<Self, Self::Error> {
         let topic = &message.topic.name;
         let child_id = get_child_id_from_child_topic(topic)?;
         let operation_name = get_operation_name_from_child_topic(topic)?;

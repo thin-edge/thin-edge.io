@@ -14,7 +14,6 @@ use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
 pub use config::*;
-use mqtt_channel::TopicFilter;
 use std::path::PathBuf;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;

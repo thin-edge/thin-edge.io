@@ -3,9 +3,6 @@ use super::DEFAULT_PLUGIN_CONFIG_TYPE;
 use c8y_api::smartrest::topic::C8yTopic;
 use log::error;
 use log::info;
-use mqtt_channel::Message;
-use mqtt_channel::MqttError;
-use mqtt_channel::Topic;
 use serde::Deserialize;
 use std::borrow::Borrow;
 use std::collections::HashSet;
@@ -13,6 +10,9 @@ use std::fs;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::path::Path;
+use tedge_mqtt_ext::MqttError;
+use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 use tedge_utils::file::PermissionEntry;
 
 #[derive(Deserialize, Debug, Default)]
@@ -148,18 +148,18 @@ impl PluginConfig {
         self
     }
 
-    pub fn to_supported_config_types_message(&self) -> Result<Message, MqttError> {
+    pub fn to_supported_config_types_message(&self) -> Result<MqttMessage, MqttError> {
         let topic = C8yTopic::SmartRestResponse.to_topic()?;
-        Ok(Message::new(&topic, self.to_smartrest_payload()))
+        Ok(MqttMessage::new(&topic, self.to_smartrest_payload()))
     }
 
     pub fn to_supported_config_types_message_for_child(
         &self,
         child_id: &str,
-    ) -> Result<Message, MqttError> {
+    ) -> Result<MqttMessage, MqttError> {
         let topic_str = &format!("c8y/s/us/{child_id}");
         let topic = Topic::new(topic_str)?;
-        Ok(Message::new(&topic, self.to_smartrest_payload()))
+        Ok(MqttMessage::new(&topic, self.to_smartrest_payload()))
     }
 
     pub fn get_all_file_types(&self) -> Vec<String> {

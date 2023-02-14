@@ -1,5 +1,5 @@
-use mqtt_channel::Topic;
 use std::io;
+use tedge_mqtt_ext::Topic;
 use tedge_utils::file::FileError;
 
 #[allow(clippy::large_enum_variant)]
@@ -29,7 +29,7 @@ pub enum ConfigManagementError {
     FromIoError(#[from] io::Error),
 
     #[error(transparent)]
-    FromMqttError(#[from] mqtt_channel::MqttError),
+    FromMqttError(#[from] tedge_mqtt_ext::MqttError),
 
     #[error(transparent)]
     FromSmartRestSerializerError(#[from] c8y_api::smartrest::error::SmartRestSerializerError),

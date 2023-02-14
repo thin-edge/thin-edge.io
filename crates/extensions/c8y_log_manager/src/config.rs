@@ -1,7 +1,6 @@
 use c8y_api::smartrest::topic::C8yTopic;
 use log::info;
 use log::warn;
-use mqtt_channel::Message;
 use serde::Deserialize;
 use std::borrow::Borrow;
 use std::collections::HashSet;
@@ -20,6 +19,7 @@ use tedge_config::MqttPortSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
 use tedge_config::TmpPathSetting;
+use tedge_mqtt_ext::MqttMessage;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-log-plugin.toml";
 pub const DEFAULT_OPERATION_DIR_NAME: &str = "c8y/";
@@ -129,9 +129,9 @@ impl LogPluginConfig {
         }
     }
 
-    pub fn to_supported_config_types_message(&self) -> Result<Message, anyhow::Error> {
+    pub fn to_supported_config_types_message(&self) -> Result<MqttMessage, anyhow::Error> {
         let topic = C8yTopic::SmartRestResponse.to_topic()?;
-        Ok(Message::new(&topic, self.to_smartrest_payload()))
+        Ok(MqttMessage::new(&topic, self.to_smartrest_payload()))
     }
 
     pub fn get_all_file_types(&self) -> Vec<String> {

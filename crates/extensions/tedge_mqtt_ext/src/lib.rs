@@ -2,10 +2,8 @@
 mod tests;
 
 use async_trait::async_trait;
-use mqtt_channel::Message;
 use mqtt_channel::SinkExt;
 use mqtt_channel::StreamExt;
-use mqtt_channel::TopicFilter;
 use std::convert::Infallible;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::futures::channel::mpsc::channel;
@@ -25,7 +23,10 @@ use tedge_actors::RuntimeRequestSink;
 
 pub type MqttConfig = mqtt_channel::Config;
 pub type MqttMessage = mqtt_channel::Message;
-fan_in_message_type!(MqttRuntimeMessage[Message, RuntimeRequest] : Debug, Clone);
+pub use mqtt_channel::MqttError;
+pub use mqtt_channel::Topic;
+pub use mqtt_channel::TopicFilter;
+fan_in_message_type!(MqttRuntimeMessage[MqttMessage, RuntimeRequest] : Debug, Clone);
 
 pub struct MqttActorBuilder {
     pub mqtt_config: mqtt_channel::Config,
@@ -193,7 +194,7 @@ impl Actor for MqttActor {
             tokio::select! {
                 Some(message) = mailbox.recv() => {
                     match message {
-                        MqttRuntimeMessage::Message(message) => {
+                        MqttRuntimeMessage::MqttMessage(message) => {
                             mqtt_client
                             .published
                             .send(message)

@@ -15,14 +15,12 @@ use easy_reader::EasyReader;
 use glob::glob;
 use log::error;
 use log::info;
-use mqtt_channel::Message;
-use mqtt_channel::StreamExt;
-use mqtt_channel::TopicFilter;
 use std::collections::VecDeque;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::futures::channel::mpsc;
+use tedge_actors::futures::StreamExt;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
@@ -32,6 +30,7 @@ use tedge_api::health::get_health_status_message;
 use tedge_api::health::health_check_topics;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::paths::PathsError;
 
 use super::error::LogRetrievalError;
@@ -338,7 +337,7 @@ impl LogManagerActor {
 
     async fn get_pending_operations_from_cloud(&mut self) -> Result<(), anyhow::Error> {
         // Get pending operations
-        let msg = Message::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
+        let msg = MqttMessage::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
         self.mqtt_publisher.send(msg).await?;
         Ok(())
     }

@@ -1,9 +1,9 @@
 use c8y_api::smartrest::topic::C8yTopic;
-use mqtt_channel::TopicFilter;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_api::health::health_check_topics;
 use tedge_config::*;
+use tedge_mqtt_ext::TopicFilter;
 
 use super::child_device::ConfigOperationResponseTopic;
 use super::plugin_config::PluginConfig;

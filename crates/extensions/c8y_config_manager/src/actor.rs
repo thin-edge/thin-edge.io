@@ -19,8 +19,6 @@ use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use log::error;
-use mqtt_channel::Message;
-use mqtt_channel::Topic;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::futures::StreamExt;
@@ -32,6 +30,7 @@ use tedge_actors::RuntimeRequest;
 use tedge_api::health::get_health_status_message;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
 use tedge_utils::paths::PathsError;
@@ -63,7 +62,7 @@ impl ConfigManagerActor {
 
     pub async fn process_mqtt_message(
         &mut self,
-        message: Message,
+        message: MqttMessage,
         message_box: &mut ConfigManagerMessageBox,
     ) -> Result<(), anyhow::Error> {
         if self.config.health_check_topics.accept(&message) {
@@ -89,7 +88,7 @@ impl ConfigManagerActor {
 
     pub async fn process_smartrest_message(
         &mut self,
-        message: Message,
+        message: MqttMessage,
         message_box: &mut ConfigManagerMessageBox,
     ) -> Result<(), anyhow::Error> {
         let payload = message.payload_str()?;
@@ -167,7 +166,7 @@ impl ConfigManagerActor {
 
     pub async fn handle_child_device_config_operation_response(
         &mut self,
-        message: &Message,
+        message: &MqttMessage,
         message_box: &mut ConfigManagerMessageBox,
     ) -> Result<(), anyhow::Error> {
         match ConfigOperationResponse::try_from(message) {
@@ -289,7 +288,7 @@ impl ConfigManagerActor {
         message_box: &mut ConfigManagerMessageBox,
     ) -> Result<(), anyhow::Error> {
         // Get pending operations
-        let message = Message::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
+        let message = MqttMessage::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
         message_box.send(message.into()).await?;
         Ok(())
     }
@@ -311,21 +310,21 @@ impl ConfigManagerActor {
 
             match config_operation {
                 ConfigOperation::Snapshot => {
-                    executing_msg = Message::new(
+                    executing_msg = MqttMessage::new(
                         &c8y_child_topic,
                         UploadConfigFileStatusMessage::status_executing()?,
                     );
-                    failed_msg = Message::new(
+                    failed_msg = MqttMessage::new(
                         &c8y_child_topic,
                         UploadConfigFileStatusMessage::status_failed(failure_reason)?,
                     );
                 }
                 ConfigOperation::Update => {
-                    executing_msg = Message::new(
+                    executing_msg = MqttMessage::new(
                         &c8y_child_topic,
                         DownloadConfigFileStatusMessage::status_executing()?,
                     );
-                    failed_msg = Message::new(
+                    failed_msg = MqttMessage::new(
                         &c8y_child_topic,
                         DownloadConfigFileStatusMessage::status_failed(failure_reason)?,
                     );
@@ -458,10 +457,10 @@ pub enum ConfigOperation {
     Update,
 }
 
-impl TryFrom<&Message> for ConfigOperation {
+impl TryFrom<&MqttMessage> for ConfigOperation {
     type Error = ConfigManagementError;
 
-    fn try_from(message: &Message) -> Result<Self, Self::Error> {
+    fn try_from(message: &MqttMessage) -> Result<Self, Self::Error> {
         let operation_name = get_operation_name_from_child_topic(&message.topic.name)?;
 
         if operation_name == "config_snapshot" {

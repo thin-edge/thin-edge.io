@@ -26,11 +26,11 @@ use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use log::error;
 use log::info;
 use log::warn;
-use mqtt_channel::Message;
-use mqtt_channel::Topic;
 use std::collections::HashMap;
 use std::path::Path;
 use tedge_api::OperationStatus;
+use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 use tedge_timer_ext::SetTimeout;
 use tedge_utils::file::create_directory_with_user_group;
 use tedge_utils::file::create_file_with_user_group;
@@ -145,7 +145,7 @@ impl ConfigUploadManager {
                     file_entry: file_entry.clone(),
                 };
 
-                let msg = Message::new(
+                let msg = MqttMessage::new(
                     &config_management.operation_request_topic(),
                     config_management.operation_request_payload(&self.config.tedge_http_host)?,
                 );
@@ -175,7 +175,7 @@ impl ConfigUploadManager {
         &mut self,
         config_response: &ConfigOperationResponse,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<Vec<Message>, ConfigManagementError> {
+    ) -> Result<Vec<MqttMessage>, ConfigManagementError> {
         let payload = config_response.get_payload();
         let c8y_child_topic = Topic::new_unchecked(&config_response.get_child_topic());
         let config_dir = self.config.config_dir.display();
@@ -194,7 +194,7 @@ impl ConfigUploadManager {
             let current_operation_state = self.active_child_ops.get(&operation_key);
             if current_operation_state != Some(&ActiveOperationState::Executing) {
                 let executing_status_payload = UploadConfigFileStatusMessage::status_executing()?;
-                mapped_responses.push(Message::new(&c8y_child_topic, executing_status_payload));
+                mapped_responses.push(MqttMessage::new(&c8y_child_topic, executing_status_payload));
             }
 
             match operation_status {
@@ -213,7 +213,7 @@ impl ConfigUploadManager {
                             let failed_status_payload =
                                 UploadConfigFileStatusMessage::status_failed(err.to_string())?;
                             mapped_responses
-                                .push(Message::new(&c8y_child_topic, failed_status_payload));
+                                .push(MqttMessage::new(&c8y_child_topic, failed_status_payload));
                         }
                     }
                 }
@@ -225,14 +225,14 @@ impl ConfigUploadManager {
                             error_message.to_string(),
                         )?;
                         mapped_responses
-                            .push(Message::new(&c8y_child_topic, failed_status_payload));
+                            .push(MqttMessage::new(&c8y_child_topic, failed_status_payload));
                     } else {
                         let default_error_message =
                             String::from("No failure reason provided by child device.");
                         let failed_status_payload =
                             UploadConfigFileStatusMessage::status_failed(default_error_message)?;
                         mapped_responses
-                            .push(Message::new(&c8y_child_topic, failed_status_payload));
+                            .push(MqttMessage::new(&c8y_child_topic, failed_status_payload));
                     }
                 }
                 OperationStatus::Executing => {
@@ -319,7 +319,7 @@ impl ConfigUploadManager {
         &mut self,
         config_response: &ConfigOperationResponse,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<Message, anyhow::Error> {
+    ) -> Result<MqttMessage, anyhow::Error> {
         let c8y_child_topic = Topic::new_unchecked(&config_response.get_child_topic());
 
         let uploaded_config_file_path = config_response.file_transfer_repository_full_path();
@@ -339,7 +339,7 @@ impl ConfigUploadManager {
         info!("Marking the c8y_UploadConfigFile operation as successful with the Cumulocity URL for the uploaded file: {c8y_upload_event_url}");
         let successful_status_payload =
             UploadConfigFileStatusMessage::status_successful(Some(c8y_upload_event_url))?;
-        let message = Message::new(&c8y_child_topic, successful_status_payload);
+        let message = MqttMessage::new(&c8y_child_topic, successful_status_payload);
 
         Ok(message)
     }
