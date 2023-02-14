@@ -104,7 +104,7 @@ async fn test_config_upload_tedge_device() -> anyhow::Result<()> {
         .send(Ok(C8YRestResponse::EventId("test-url".to_string())))
         .await?;
 
-    // Assert SUCCESFUL SmartREST MQTT message
+    // Assert SUCCESSFUL SmartREST MQTT message
     let expected_message = MqttMessage::new(
         &C8yTopic::SmartRestResponse.to_topic().unwrap(),
         "503,c8y_UploadConfigFile,test-url\n",
@@ -171,7 +171,7 @@ async fn test_config_download_tedge_device() -> anyhow::Result<()> {
         .send(Ok(C8YRestResponse::Unit(())))
         .await?;
 
-    // Assert SUCCESFUL SmartREST MQTT message
+    // Assert SUCCESSFUL SmartREST MQTT message
     let expected_message = MqttMessage::new(
         &C8yTopic::SmartRestResponse.to_topic().unwrap(),
         "503,c8y_DownloadConfigFile,\n",
