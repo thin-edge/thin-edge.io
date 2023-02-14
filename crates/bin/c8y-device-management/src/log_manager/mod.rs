@@ -4,8 +4,6 @@ mod error;
 
 use crate::c8y_http_proxy::handle::C8YHttpProxy;
 use crate::c8y_http_proxy::C8YConnectionBuilder;
-use crate::file_system_ext::FsWatchActorBuilder;
-use crate::file_system_ext::FsWatchEvent;
 use actor::*;
 pub use config::*;
 use tedge_actors::futures::channel::mpsc;
@@ -17,6 +15,8 @@ use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_file_system_ext::FsWatchActorBuilder;
+use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
 
 /// This is an actor builder.

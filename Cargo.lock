@@ -431,6 +431,7 @@ dependencies = [
  "tedge_actors",
  "tedge_api",
  "tedge_config",
+ "tedge_file_system_ext",
  "tedge_http_ext",
  "tedge_mqtt_ext",
  "tedge_signal_ext",
@@ -3399,6 +3400,17 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+]
+
+[[package]]
+name = "tedge_file_system_ext"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "tedge_actors",
+ "tedge_utils",
+ "tokio",
+ "try-traits",
 ]
 
 [[package]]

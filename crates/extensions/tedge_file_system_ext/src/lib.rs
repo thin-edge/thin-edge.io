@@ -1,7 +1,7 @@
 use async_trait::async_trait;
-use mqtt_channel::StreamExt;
 use std::path::PathBuf;
 use tedge_actors::futures::channel::mpsc;
+use tedge_actors::futures::StreamExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
@@ -85,6 +85,12 @@ impl FsWatchActorBuilder {
             signal_sender,
             signal_receiver,
         }
+    }
+}
+
+impl Default for FsWatchActorBuilder {
+    fn default() -> Self {
+        FsWatchActorBuilder::new()
     }
 }
 

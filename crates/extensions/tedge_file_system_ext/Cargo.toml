@@ -1,0 +1,13 @@
+[package]
+name = "tedge_file_system_ext"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1"
+tedge_actors = { path = "../../core/tedge_actors" }
+tedge_utils = { path = "../../common/tedge_utils", features = ["fs-notify"] }
+tokio = { version = "1.23", features = ["macros"] }
+try-traits = { version = "0.1" }

@@ -1,6 +1,5 @@
 mod c8y_http_proxy;
 mod config_manager;
-mod file_system_ext;
 mod log_manager;
 
 use crate::c8y_http_proxy::credentials::C8YJwtRetriever;
@@ -8,7 +7,6 @@ use crate::c8y_http_proxy::C8YHttpConfig;
 use crate::c8y_http_proxy::C8YHttpProxyBuilder;
 use crate::config_manager::ConfigManagerBuilder;
 use crate::config_manager::ConfigManagerConfig;
-use file_system_ext::FsWatchActorBuilder;
 use log_manager::LogManagerBuilder;
 use log_manager::LogManagerConfig;
 use tedge_actors::MessageSink;
@@ -17,6 +15,7 @@ use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
 use tedge_config::get_tedge_config;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
+use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActorBuilder;
 use tedge_http_ext::HttpConfig;
 use tedge_mqtt_ext::MqttActorBuilder;
