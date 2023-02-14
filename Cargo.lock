@@ -3508,6 +3508,7 @@ dependencies = [
  "signal-hook",
  "signal-hook-tokio",
  "tedge_actors",
+ "tokio",
 ]
 
 [[package]]

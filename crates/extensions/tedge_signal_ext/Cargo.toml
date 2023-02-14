@@ -14,3 +14,4 @@ async-trait = "0.1"
 signal-hook = "0.3"
 signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
 tedge_actors = { path = "../../core/tedge_actors" }
+tokio = { version = "1.23", features = ["macros"] }
