@@ -51,7 +51,7 @@ It is assumed that you are running on either MacOS or Linux. If you are a Window
 
 ### Option 1: Installing the dependencies yourself
 
-1. Install python3 (>= 3.8)
+1. Install python3 (>= 3.7)
     
     Follow the [python instructions](https://www.python.org/downloads/), or
 
@@ -149,16 +149,14 @@ If you would like to run the tests using some custom built tedge packages, then 
 
 1. Open the terminal and navigate to the project root folder (not the RobotFramework root folder)
 
-2. Create a symlink to the folder containing the built debian packages (this assumes you have already built tedge components)
+2. Copy the debian files that you would like to use in your tests by copying them to a specific folder used by the tests.
 
     ```sh
-    ln -s "$(pwd)/target/debian" "$(pwd)tests/images/deb/custom"
-    ```
+    # Remove any existing deb files in the cache
+    rm tests/images/debian-systemd/files/deb/*.deb
 
-    You don't have to create a symlink if you don't want to, you can also just place the `*.deb` packages into the following folder.
-
-    ```sh
-    tests/images/deb/
+    # Copy from the target output folder
+    cp "target/debian"/*.deb "tests/images/debian-systemd/files/deb/"
     ```
 
 3. Rebuild the docker image
