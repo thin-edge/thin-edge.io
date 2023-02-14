@@ -237,7 +237,7 @@
 //!     type MessageBox = SimpleMessageBox<Update,Operation>;
 //!
 //!     fn name(&self) -> &str {
-//!         &self.name()
+//!         &self.name
 //!     }
 //!
 //!     async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {

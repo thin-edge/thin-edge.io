@@ -151,10 +151,7 @@ struct RuntimeActor {
     actions: mpsc::Receiver<RuntimeAction>,
     events: Option<DynSender<RuntimeEvent>>,
     cleanup_duration: Duration,
-    // TODO: maybe group these two things in own struct
-    // TODO: sort the type out
-    #[allow(clippy::type_complexity)]
-    futures: FuturesUnordered<JoinHandle<Result<(String, String), (String, String, RuntimeError)>>>,
+    futures: FuturesUnordered<JoinHandle<Result<String, (String, RuntimeError)>>>,
     running_actors: HashMap<String, DynSender<RuntimeRequest>>,
 }
 
@@ -183,19 +180,18 @@ impl RuntimeActor {
                         Some(action) => {
                             match action {
                                 RuntimeAction::Spawn(actor) => {
-                                    info!(target: "Runtime", "Running {}", actor.name());
+                                    let running_name = format!("{}-{}", actor.name(), actors_count);
+                                    info!(target: "Runtime", "Running {running_name}");
                                     self.send_event(RuntimeEvent::Started {
-                                        task: actor.name().into(),
+                                        task: running_name.clone(),
                                     })
                                     .await;
-                                    // TODO: Nicer to read keys - keys that are numbered by actor type maybe
-                                    let running_name = format!("{}-{}", actor.name(), actors_count);
                                     self.running_actors.insert(running_name.clone(), actor.runtime_request_sender());
                                     self.futures.push(tokio::spawn(run_task(actor, running_name)));
                                     actors_count += 1;
                                }
                                RuntimeAction::Shutdown => {
-                                    info!(target: "Runtime", "Shuting down");
+                                    info!(target: "Runtime", "Shutting down");
                                     shutdown_actors(&mut self.running_actors).await;
                                     break;
                                }
@@ -226,23 +222,22 @@ impl RuntimeActor {
         }
     }
 
-    // TODO: fix type
-    #[allow(clippy::type_complexity)]
     async fn handle_actor_finishing(
         &mut self,
-        finished_actor: Result<Result<(String, String), (String, String, RuntimeError)>, JoinError>,
+        finished_actor: Result<Result<String, (String, RuntimeError)>, JoinError>,
     ) {
         match finished_actor {
             Err(e) => info!(target: "Runtime", "Failed to execute actor: {e}"), //FIXME: this happens on panic in actor
-            Ok(Ok((task, running_as))) => {
-                self.running_actors.remove(&running_as);
-                info!(target: "Runtime", "Actor has finished: {task}");
-                self.send_event(RuntimeEvent::Stopped { task }).await;
+            Ok(Ok(actor)) => {
+                self.running_actors.remove(&actor);
+                info!(target: "Runtime", "Actor has finished: {actor}");
+                self.send_event(RuntimeEvent::Stopped { task: actor }).await;
             }
-            Ok(Err((task, running_as, error))) => {
-                self.running_actors.remove(&running_as);
-                error!(target: "Runtime", "Actor has finished unsuccessfully: {task}");
-                self.send_event(RuntimeEvent::Aborted { task, error }).await;
+            Ok(Err((actor, error))) => {
+                self.running_actors.remove(&actor);
+                error!(target: "Runtime", "Actor has finished unsuccessfully: {actor}");
+                self.send_event(RuntimeEvent::Aborted { task: actor, error })
+                    .await;
             }
         }
     }
@@ -272,17 +267,13 @@ where
     }
 }
 
-// TODO: maybe I don't care about returning the actors names now - because I can work out the names from the running_name
 async fn run_task(
     task: Box<dyn Task>,
     running_name: String,
-) -> Result<(String, String), (String, String, RuntimeError)> {
-    let name = task.name().to_string();
-    task.run()
-        .await
-        .map_err(|e| (name.clone(), running_name.clone(), e))?;
+) -> Result<String, (String, RuntimeError)> {
+    task.run().await.map_err(|e| (running_name.clone(), e))?;
 
-    Ok((name, running_name))
+    Ok(running_name)
 }
 
 #[cfg(test)]
