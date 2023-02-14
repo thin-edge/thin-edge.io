@@ -14,7 +14,6 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_utils::notify::FsEvent;
 use tedge_utils::notify::NotifyStream;
 use tokio::sync::mpsc::Receiver;
-use try_traits::default::TryDefault;
 use try_traits::Infallible;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

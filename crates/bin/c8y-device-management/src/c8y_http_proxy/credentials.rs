@@ -6,6 +6,7 @@ use mqtt_channel::PubChannel;
 use mqtt_channel::StreamExt;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
+use std::convert::Infallible;
 use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
@@ -20,7 +21,6 @@ use tedge_actors::Service;
 use tedge_actors::ServiceActor;
 use tedge_actors::ServiceMessageBox;
 use tedge_actors::ServiceMessageBoxBuilder;
-use try_traits::Infallible;
 
 pub type JwtRequest = ();
 pub type JwtResult = Result<String, SmartRestDeserializerError>;

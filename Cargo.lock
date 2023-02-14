@@ -442,7 +442,6 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
- "try-traits",
 ]
 
 [[package]]
@@ -3493,7 +3492,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "try-traits",
  "users",
  "whoami",
 ]
