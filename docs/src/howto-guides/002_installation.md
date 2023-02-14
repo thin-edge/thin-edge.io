@@ -137,6 +137,8 @@ dpkg -i tedge-mapper_0.9.0_armhf.deb
 The `thin-edge.io` can be uninstalled using a script, that can be downloaded
 from below mentioned location. 
 
+Whether you are just removing the `thin-edge.io` packages or wanting to purge everything (removing the packages and configuration), there is a convenient one-liner provided under each section.
+
 ```shell
 wget https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh
 chmod a+x uninstall-thin-edge_io.sh
