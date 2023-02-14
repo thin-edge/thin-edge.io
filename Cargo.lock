@@ -413,6 +413,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "c8y-device-management"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "c8y_api",
+ "csv",
+ "download",
+ "easy_reader",
+ "env_logger 0.10.0",
+ "glob",
+ "log",
+ "mqtt_channel",
+ "serde",
+ "serde_json",
+ "tedge_actors",
+ "tedge_api",
+ "tedge_config",
+ "tedge_http_ext",
+ "tedge_mqtt_ext",
+ "tedge_signal_ext",
+ "tedge_test_utils",
+ "tedge_timer_ext",
+ "tedge_utils",
+ "thiserror",
+ "tokio",
+ "toml",
+ "tracing",
+ "try-traits",
+]
+
+[[package]]
 name = "c8y-log-plugin"
 version = "0.9.0"
 dependencies = [
@@ -498,38 +530,6 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
-]
-
-[[package]]
-name = "c8y_configuration_poc"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "c8y_api",
- "csv",
- "download",
- "easy_reader",
- "env_logger 0.10.0",
- "glob",
- "log",
- "mqtt_channel",
- "serde",
- "serde_json",
- "tedge_actors",
- "tedge_api",
- "tedge_config",
- "tedge_http_ext",
- "tedge_mqtt_ext",
- "tedge_signal_ext",
- "tedge_test_utils",
- "tedge_timer_ext",
- "tedge_utils",
- "thiserror",
- "tokio",
- "toml",
- "tracing",
- "try-traits",
 ]
 
 [[package]]
