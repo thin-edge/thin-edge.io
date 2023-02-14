@@ -414,7 +414,7 @@ dependencies = [
 
 [[package]]
 name = "c8y-device-management"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3345,7 +3345,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_actors"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3404,7 +3404,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_file_system_ext"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "async-trait",
  "tedge_actors",
@@ -3415,7 +3415,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_http_ext"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "async-trait",
  "futures",
@@ -3431,7 +3431,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_mqtt_ext"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "async-trait",
  "mqtt_channel",
@@ -3442,7 +3442,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_script_ext"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "async-trait",
  "tedge_actors",
@@ -3451,7 +3451,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_signal_ext"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "async-trait",
  "signal-hook",
@@ -3470,7 +3470,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_timer_ext"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "async-trait",
  "tedge_actors",
