@@ -420,11 +420,10 @@ dependencies = [
  "async-trait",
  "c8y_api",
  "c8y_http_proxy",
+ "c8y_log_manager",
  "csv",
  "download",
- "easy_reader",
  "env_logger 0.10.0",
- "glob",
  "log",
  "mqtt_channel",
  "serde",
@@ -548,6 +547,30 @@ dependencies = [
  "tedge_utils",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "c8y_log_manager"
+version = "0.9.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "c8y_api",
+ "c8y_http_proxy",
+ "easy_reader",
+ "glob",
+ "log",
+ "mqtt_channel",
+ "serde",
+ "tedge_actors",
+ "tedge_api",
+ "tedge_config",
+ "tedge_file_system_ext",
+ "tedge_mqtt_ext",
+ "tedge_utils",
+ "thiserror",
+ "tokio",
+ "toml",
 ]
 
 [[package]]

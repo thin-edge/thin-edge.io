@@ -1,4 +1,6 @@
 use c8y_api::smartrest::topic::C8yTopic;
+use log::info;
+use log::warn;
 use mqtt_channel::Message;
 use serde::Deserialize;
 use std::borrow::Borrow;
@@ -18,8 +20,6 @@ use tedge_config::MqttPortSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
 use tedge_config::TmpPathSetting;
-use tracing::info;
-use tracing::warn;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-log-plugin.toml";
 pub const DEFAULT_OPERATION_DIR_NAME: &str = "c8y/";

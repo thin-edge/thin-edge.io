@@ -1,12 +1,11 @@
 mod config_manager;
-mod log_manager;
 
 use crate::config_manager::ConfigManagerBuilder;
 use crate::config_manager::ConfigManagerConfig;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
-use log_manager::LogManagerBuilder;
-use log_manager::LogManagerConfig;
+use c8y_log_manager::LogManagerBuilder;
+use c8y_log_manager::LogManagerConfig;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;

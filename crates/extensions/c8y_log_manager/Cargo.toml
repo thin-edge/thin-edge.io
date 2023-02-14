@@ -1,6 +1,6 @@
 [package]
-name = "c8y-device-management"
-description = "thin-edge Cumulocity plugin for device management"
+name = "c8y_log_manager"
+description = "thin-edge Cumulocity extension adding support for log management"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
@@ -14,28 +14,17 @@ anyhow = "1.0"
 async-trait = "0.1"
 c8y_api = { path = "../../core/c8y_api" }
 c8y_http_proxy = { path = "../../extensions/c8y_http_proxy" }
-c8y_log_manager = { path = "../../extensions/c8y_log_manager" }
-csv = "1.1"
-download = { path = "../../common/download" }
-env_logger = "0.10"
+easy_reader = "0.5"
+glob = "0.3"
 log = "0.4"
 mqtt_channel = { path = "../../common/mqtt_channel" }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 tedge_actors = { path = "../../core/tedge_actors" }
 tedge_api = { path = "../../core/tedge_api" }
 tedge_config = { path = "../../common/tedge_config" }
 tedge_file_system_ext = { path = "../../extensions/tedge_file_system_ext" }
-tedge_http_ext = { path = "../../extensions/tedge_http_ext" }
 tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
-tedge_signal_ext = { path = "../../extensions/tedge_signal_ext" }
-tedge_timer_ext = { path = "../../extensions/tedge_timer_ext" }
 tedge_utils = { path = "../../common/tedge_utils" }
 thiserror = "1.0"
-tokio = { version = "1.23", features = ["rt", "rt-multi-thread"] }
 toml = "0.5"
-tracing = { version = "0.1", features = ["attributes", "log"] }
-
-[dev-dependencies]
-tedge_test_utils = { path = "../../tests/tedge_test_utils" }
-tokio = { version = "1.23", features = ["time"] }
+tokio = { version = "1.23", features = ["macros"] }
