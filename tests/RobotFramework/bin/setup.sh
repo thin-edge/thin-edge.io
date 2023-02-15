@@ -19,10 +19,8 @@ export PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
 # Add local bin to path
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
-# Install dependences (including develop)
-if [ ! -d .venv ]; then
-    python3 -m venv .venv
-fi
+# Create virtual environment
+python3 -m venv .venv
 
 echo "Activating virtual environment"
 # shellcheck disable=SC1091
@@ -67,8 +65,14 @@ else
 fi
 
 pip3 install "${REQUIREMENTS[@]}"
-python3 bin/appendpath.py
 
+SITE_PACKAGES=$(find .venv -type d -name "site-packages" | head -1)
+if [ -d "$SITE_PACKAGES" ]; then
+    echo "$(pwd)/libraries" > "$SITE_PACKAGES/workspace.pth"
+else
+    echo "Could not add libraries path to site-packages. Reaons: failed to find site-packages folder"
+    exit 1
+fi
 
 #
 # Setup dotenv file
