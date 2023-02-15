@@ -18,6 +18,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         docker \
         python3 \
         python3-pip \
+        python3-venv \
         # tedge dependencies
         mosquitto
 
