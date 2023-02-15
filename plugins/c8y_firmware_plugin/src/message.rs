@@ -24,30 +24,40 @@ pub struct RequestPayload {
 }
 
 impl FirmwareOperationRequest {
-    // TODO! Change it to "from"
-    pub fn new(operation_entry: FirmwareOperationEntry) -> Self {
-        Self {
-            child_id: operation_entry.child_id.to_string(),
-            payload: RequestPayload {
-                operation_id: operation_entry.operation_id.to_string(),
-                attempt: operation_entry.attempt,
-                name: operation_entry.name.to_string(),
-                version: operation_entry.version.to_string(),
-                sha256: operation_entry.sha256.to_string(),
-                file_transfer_url: operation_entry.file_transfer_url,
-            },
-        }
-    }
-
-    pub fn get_topic(&self) -> Topic {
+    fn get_topic(&self) -> Topic {
         Topic::new_unchecked(&format!(
             "tedge/{}/commands/req/firmware_update",
             self.child_id
         ))
     }
 
-    pub fn get_json_payload(&self) -> Result<String, serde_json::Error> {
+    fn get_json_payload(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string(&self.payload)
+    }
+}
+
+impl From<FirmwareOperationEntry> for FirmwareOperationRequest {
+    fn from(entry: FirmwareOperationEntry) -> Self {
+        Self {
+            child_id: entry.child_id.to_string(),
+            payload: RequestPayload {
+                operation_id: entry.operation_id.to_string(),
+                attempt: entry.attempt,
+                name: entry.name.to_string(),
+                version: entry.version.to_string(),
+                sha256: entry.sha256.to_string(),
+                file_transfer_url: entry.file_transfer_url,
+            },
+        }
+    }
+}
+
+impl TryInto<Message> for FirmwareOperationRequest {
+    type Error = FirmwareManagementError;
+
+    fn try_into(self) -> Result<Message, Self::Error> {
+        let message = Message::new(&self.get_topic(), self.get_json_payload()?);
+        Ok(message)
     }
 }
 
@@ -146,15 +156,14 @@ mod tests {
             sha256: "abcd1234".to_string(),
             attempt: 1,
         };
-        let firmware_operation_request = FirmwareOperationRequest::new(operation_entry);
+        let firmware_operation_request = FirmwareOperationRequest::from(operation_entry);
 
-        let topic_to_publish = firmware_operation_request.get_topic();
+        let message: Message = firmware_operation_request.try_into().unwrap();
         assert_eq!(
-            topic_to_publish,
+            message.topic,
             Topic::new_unchecked("tedge/child-id/commands/req/firmware_update")
         );
 
-        let json_request_payload = firmware_operation_request.get_json_payload().unwrap();
         let expected_json = json!({
             "id": "op-id",
             "name": "fw-name",
@@ -164,7 +173,7 @@ mod tests {
             "attempt": 1
         });
         assert_json_eq!(
-            serde_json::from_str::<serde_json::Value>(&json_request_payload).unwrap(),
+            serde_json::from_str::<serde_json::Value>(&message.payload_str().unwrap()).unwrap(),
             expected_json
         );
     }

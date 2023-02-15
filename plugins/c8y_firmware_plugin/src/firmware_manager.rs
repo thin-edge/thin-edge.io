@@ -142,7 +142,7 @@ impl FirmwareManager {
                     let failure_reason = format!("Child device {child_id} did not respond within the timeout interval of {}sec. Operation ID={op_id}",
                         self.timeout_sec.as_secs());
                     info!(failure_reason);
-                    self.fail_pending_operation_in_cloud(&child_id, Some(&op_id), op_state,failure_reason).await?;
+                    self.fail_operation_in_cloud(&child_id, Some(&op_id), op_state,failure_reason).await?;
                 }
             }
         }
@@ -197,7 +197,7 @@ impl FirmwareManager {
         Ok(())
     }
 
-    pub async fn handle_firmware_download_request(
+    async fn handle_firmware_download_request(
         &mut self,
         smartrest_request: SmartRestFirmwareRequest,
     ) -> Result<(), anyhow::Error> {
@@ -214,16 +214,23 @@ impl FirmwareManager {
             Please define a custom operation handler for the c8y_Firmware operation.");
             Ok(())
         } else {
-            let child_id = smartrest_request.device.clone();
+            if let Err(err) = request_is_already_addressed(smartrest_request.clone()) {
+                warn!("Skip the received c8y_Firmware operation. Error={err}");
+                return Ok(());
+            }
+            let op_id = nanoid!();
             match self
-                .handle_firmware_download_request_child_device(smartrest_request)
+                .handle_firmware_download_request_child_device(
+                    smartrest_request.clone(),
+                    op_id.clone(),
+                )
                 .await
             {
                 Ok(_) => Ok(()),
                 Err(err) => {
-                    self.fail_pending_operation_in_cloud(
-                        child_id,
-                        None,
+                    self.fail_operation_in_cloud(
+                        smartrest_request.device,
+                        Some(&op_id),
                         ActiveOperationState::Pending,
                         format!("{err}"),
                     )
@@ -231,15 +238,17 @@ impl FirmwareManager {
                     .unwrap_or_else(|_| {
                         error!("Failed to publish the operation update status message.")
                     });
+                    error!("{err}");
                     Err(err)
                 }
             }
         }
     }
 
-    pub async fn handle_firmware_download_request_child_device(
+    async fn handle_firmware_download_request_child_device(
         &mut self,
         smartrest_request: SmartRestFirmwareRequest,
+        operation_id: String,
     ) -> Result<(), anyhow::Error> {
         let child_id = smartrest_request.device.as_str();
         let firmware_name = smartrest_request.name.as_str();
@@ -293,9 +302,7 @@ impl FirmwareManager {
         }
 
         // Create an operation status file
-        let operation_id = nanoid!();
         let file_sha256 = try_digest(transfer_dest.as_path())?;
-
         let operation_entry = FirmwareOperationEntry {
             operation_id: operation_id.clone(),
             child_id: child_id.to_string(),
@@ -308,10 +315,8 @@ impl FirmwareManager {
         };
         operation_entry.create_file()?;
 
-        let request = FirmwareOperationRequest::new(operation_entry);
-        // TODO! Change it to "let message = request.try_into()";
-        let message = Message::new(&request.get_topic(), request.get_json_payload()?);
-        self.mqtt_client.published.send(message).await?;
+        let request = FirmwareOperationRequest::from(operation_entry);
+        self.mqtt_client.published.send(request.try_into()?).await?;
         info!("Firmware update request is sent. operation_id={operation_id}, child={child_id}");
 
         self.operation_timer.start_timer(
@@ -323,7 +328,7 @@ impl FirmwareManager {
         Ok(())
     }
 
-    pub fn handle_child_device_firmware_update_response(
+    fn handle_child_device_firmware_update_response(
         &mut self,
         response: &FirmwareOperationResponse,
     ) -> Result<Vec<Message>, FirmwareManagementError> {
@@ -354,7 +359,7 @@ impl FirmwareManager {
                 mapped_responses.push(Message::new(&c8y_child_topic, executing_status_payload));
             }
             None => {
-                info!("Received a response with mismatched info. Ignore this response.");
+                info!("Received a response from {child_id} for unknown request {operation_id}.");
                 return Ok(mapped_responses);
             }
         }
@@ -383,17 +388,15 @@ impl FirmwareManager {
                     .stop_timer((child_id, operation_id.to_string()));
                 fs::remove_file(status_file_path)?;
 
-                if let Some(error_message) = &child_device_payload.reason {
-                    let failed_status_payload =
-                        DownloadFirmwareStatusMessage::status_failed(error_message.clone())?;
-                    mapped_responses.push(Message::new(&c8y_child_topic, failed_status_payload));
-                } else {
-                    let default_error_message =
-                        String::from("No fail reason provided by child device.");
-                    let failed_status_payload =
-                        DownloadFirmwareStatusMessage::status_failed(default_error_message)?;
-                    mapped_responses.push(Message::new(&c8y_child_topic, failed_status_payload));
-                }
+                let text = "No fail reason provided by child device.".to_string();
+                let failed_status_payload = DownloadFirmwareStatusMessage::status_failed(
+                    child_device_payload
+                        .reason
+                        .as_ref()
+                        .unwrap_or_else(|| &text)
+                        .into(),
+                )?;
+                mapped_responses.push(Message::new(&c8y_child_topic, failed_status_payload));
             }
             OperationStatus::Executing => {
                 self.operation_timer.start_timer(
@@ -407,7 +410,7 @@ impl FirmwareManager {
         Ok(mapped_responses)
     }
 
-    pub async fn handle_child_device_firmware_operation_response(
+    async fn handle_child_device_firmware_operation_response(
         &mut self,
         message: &Message,
     ) -> Result<(), anyhow::Error> {
@@ -423,10 +426,11 @@ impl FirmwareManager {
                 Ok(())
             }
             Err(err) => {
-                // TODO: Why we need to send failure message to c8y in this case? Shouldn't we just ignore this response?
                 let child_id = get_child_id_from_child_topic(&message.topic.name)?;
 
-                self.fail_pending_operation_in_cloud(
+                // TODO! If deserialize fails, no way to get an operation ID.
+                // which means that the plugin cannot remove a status file, although making c8y operation to fail.
+                self.fail_operation_in_cloud(
                     child_id,
                     None,
                     ActiveOperationState::Pending,
@@ -462,9 +466,8 @@ impl FirmwareManager {
                     FirmwareOperationEntry::read_from_file(&file_path)?.increment_attempt();
                 operation_entry.overwrite_file()?;
 
-                let request = FirmwareOperationRequest::new(operation_entry.clone());
-                let message = Message::new(&request.get_topic(), request.get_json_payload()?);
-                self.mqtt_client.published.send(message).await?;
+                let request = FirmwareOperationRequest::from(operation_entry.clone());
+                self.mqtt_client.published.send(request.try_into()?).await?;
                 info!(
                     "Firmware update request is resent. operation_id={}, child={}",
                     operation_entry.operation_id, operation_entry.child_id
@@ -501,7 +504,7 @@ impl FirmwareManager {
         Ok(())
     }
 
-    pub async fn fail_pending_operation_in_cloud(
+    async fn fail_operation_in_cloud(
         &mut self,
         child_id: impl ToString,
         op_id: Option<&str>,
@@ -539,23 +542,23 @@ impl FirmwareManager {
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum ActiveOperationState {
+enum ActiveOperationState {
     Pending,
     Executing,
 }
 
-pub struct PersistentStore;
+struct PersistentStore;
 impl PersistentStore {
-    pub fn get_dir_path() -> PathBuf {
+    fn get_dir_path() -> PathBuf {
         PathBuf::from(FIRMWARE_OPERATION_DIR_PATH)
     }
 
-    pub fn get_file_path(op_id: &str) -> PathBuf {
+    fn get_file_path(op_id: &str) -> PathBuf {
         PathBuf::from(FIRMWARE_OPERATION_DIR_PATH).join(op_id)
     }
 
     // TODO: Candidate to move to file.rs
-    pub fn has_expected_permission(op_id: &str) -> Result<(), FirmwareManagementError> {
+    fn has_expected_permission(op_id: &str) -> Result<(), FirmwareManagementError> {
         let path = Self::get_file_path(op_id);
 
         let metadata = get_metadata(path.as_path())?;
@@ -593,7 +596,7 @@ pub struct FirmwareOperationEntry {
 }
 
 impl FirmwareOperationEntry {
-    pub fn create_file(&self) -> Result<(), FirmwareManagementError> {
+    fn create_file(&self) -> Result<(), FirmwareManagementError> {
         let path = PersistentStore::get_file_path(&self.operation_id);
         create_parent_dirs(&path)?;
         let content = serde_json::to_string(self)?;
@@ -601,26 +604,26 @@ impl FirmwareOperationEntry {
             .map_err(FirmwareManagementError::FromFileError)
     }
 
-    pub fn overwrite_file(&self) -> Result<(), FirmwareManagementError> {
+    fn overwrite_file(&self) -> Result<(), FirmwareManagementError> {
         let path = PersistentStore::get_file_path(&self.operation_id);
         let content = serde_json::to_string(self)?;
         overwrite_file(&path, &content).map_err(FirmwareManagementError::FromFileError)
     }
 
-    pub fn increment_attempt(self) -> Self {
+    fn increment_attempt(self) -> Self {
         Self {
             attempt: self.attempt + 1,
             ..self
         }
     }
 
-    pub fn read_from_file(path: &Path) -> Result<Self, FirmwareManagementError> {
+    fn read_from_file(path: &Path) -> Result<Self, FirmwareManagementError> {
         let bytes = fs::read(path)?;
         serde_json::from_slice(&bytes).map_err(FirmwareManagementError::FromSerdeJsonError)
     }
 }
 
-pub struct DownloadFirmwareStatusMessage {}
+struct DownloadFirmwareStatusMessage {}
 
 impl TryIntoOperationStatusMessage for DownloadFirmwareStatusMessage {
     fn status_executing() -> Result<SmartRest, SmartRestSerializerError> {
@@ -644,8 +647,32 @@ impl TryIntoOperationStatusMessage for DownloadFirmwareStatusMessage {
     }
 }
 
+// This function can be removed once we start using operation ID from c8y.
+fn request_is_already_addressed(
+    smartrest_request: SmartRestFirmwareRequest,
+) -> Result<(), FirmwareManagementError> {
+    let dir_path = PersistentStore::get_dir_path();
+    if !dir_path.is_dir() {
+        // Do nothing if the persistent store directory does not exist yet.
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(dir_path)? {
+        let file_path = entry?.path();
+        let recorded_entry = FirmwareOperationEntry::read_from_file(&file_path)?;
+        if recorded_entry.child_id == smartrest_request.device
+            && recorded_entry.name == smartrest_request.name
+            && recorded_entry.version == smartrest_request.version
+            && recorded_entry.server_url == smartrest_request.url
+        {
+            return Err(FirmwareManagementError::RequestAlreadyAddressed);
+        }
+    }
+    Ok(())
+}
+
 // TODO! Move to common crate
-pub fn create_parent_dirs(path: &Path) -> Result<(), FirmwareManagementError> {
+fn create_parent_dirs(path: &Path) -> Result<(), FirmwareManagementError> {
     if let Some(dest_dir) = path.parent() {
         if !dest_dir.exists() {
             fs::create_dir_all(dest_dir)?;

@@ -16,6 +16,9 @@ pub enum FirmwareManagementError {
     #[error("Persistent file is invalid. File path={path}")]
     PersistentStoreError { path: std::path::PathBuf },
 
+    #[error("The received SmartREST request is duplicated with already addressed operation. Ignore this request.")]
+    RequestAlreadyAddressed,
+
     #[error(transparent)]
     FromMqttError(#[from] mqtt_channel::MqttError),
 
