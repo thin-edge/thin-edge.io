@@ -67,9 +67,9 @@ Here is the table of the commands that you can use in a plugin.
 |list| - | lines with tab separated values |Returns the list of software modules that have been installed with this plugin.|
 |prepare| - | - |Executes the provided actions before a sequence of install and remove commands.|
 |finalize| - | - |Executes the provided actions after a sequence of install and remove commands.|
-|install| NAME [--version VERSION] [--file FILE] | - |Executes the action of installation.|
-|remove| NAME [--version VERSION] | - |Executes the action of uninstallation.|
-|update-list| COMMAND NAME [--version VERSION] [--file FILE] | - |Executes the list of `install` and `remove` commands.|
+|install| NAME [--module-version VERSION] [--file FILE] | - |Executes the action of installation.|
+|remove| NAME [--module-version VERSION] | - |Executes the action of uninstallation.|
+|update-list| COMMAND NAME [--module-version VERSION] [--file FILE] | - |Executes the list of `install` and `remove` commands.|
 
 The order of the commands invoked by the Software Management Agent is:
 `prepare` -> `update-list` or [`install`, `remove`] ->`finalize`

@@ -1,7 +1,6 @@
 # Software Management Plugin API
 
-Thin-edge uses plugins to delegate to the appropriate package managers and installers
-all the software management operations: installation of packages, uninstallations and queries.
+Thin-edge uses plugins to delegate software management operations to the appropriate package manager/installer. The plugins are responsible for: installation of packages, uninstalls and queries.
 
 * A package manager plugin acts as a facade for a specific package manager.
 * A plugin is an executable that follows the [plugin API](#plugin-api).
@@ -10,7 +9,7 @@ all the software management operations: installation of packages, uninstallation
 * All the actions on a software module are directed to the plugin bearing the name that matches the module type name.
 * The plugins are loaded and invoked by the sm-agent in a systematic order (in practice the alphanumerical order of their names in the file system).
 * The software modules to be installed/removed are also passed to the plugins in a consistent order.
-* Among all the plugins, one can be marked as the default plugin using `tedge config` cli.
+* Among all the plugins, one can be marked as the default plugin using the `tedge config` cli.
 * The default plugin is invoked when an incoming software module in the cloud request doesn't contain any explicit type annotation.
 * Several plugins can co-exist for a given package manager as long as they are given different names.
   Each can implement a specific software management policy.
@@ -18,16 +17,18 @@ all the software management operations: installation of packages, uninstallation
 
 ## Plugin repository
 
-* To be used by thin-edge, a plugin has to stored in the directory `/etc/tedge/sm-plugins`.
+* To be used by thin-edge, a plugin has to be stored in the directory `/etc/tedge/sm-plugins`.
 * A plugin must be named after the software module type as specified in the cloud request.
   That is, a plugin named `apt` handles software modules that are defined with type `apt` in the cloud request.
   Consequently a plugin to handle software module defined for `docker` must be named `docker`.
 * The same plugin can be given different names, using virtual links.
 * When there are multiple plugins on a device, one can be marked as the default plugin using the command
-  `tedge config set software.plugin.default <plugin-name>`
-* If there's one and only one plugin available on a device, that's treated as the default, even without an explicit configuration.
+  ```sh
+  tedge config set software.plugin.default <plugin-name>
+  ```
+* If there's only one plugin available on a device, it is selected by default, even without an explicit configuration.
 
-On start-up and sighup, the sm-agent registers the plugins as follow:
+On start-up, the sm-agent registers the plugins as follows:
 1. Iterate over the executable file of the directory `/etc/tedge/sm-plugins`.
 2. Check the executable is indeed a plugin, calling the [`list`](#the-list-command) command.
 
@@ -35,22 +36,22 @@ On start-up and sighup, the sm-agent registers the plugins as follow:
 
 * A plugin must implement all the commands used by the sm-agent of thin-edge,
   and support all the options for these commands.
-* A plugin should not support extra command or option.
+* A plugin should not support extra commands or options.
 * A plugin might have a configuration file.
   * It can be a list of remote repositories, or a list of software modules to be excluded.
-  * These configuration files can be managed from the cloud via the sm-agent (TODO: how).
+  * These configuration files can be managed from the cloud via the configuration management feature.
 
 ### Input, Output and Errors
 
 * The plugins are called by the sm-agent using a child process for each action.
-* Beside command `update-list` there is no input beyond the command arguments, and a plugin that does not
-  implement `update-list` can close its `stdin`.
+* Besides the `update-list` command, there is no input beyond the command arguments, and a plugin that does not
+implement `update-list` can close its `stdin`.
 * The `stdout` and `stderr` of the process running a plugin command are captured by the sm-agent.
   * These streams don't have to be the streams returned by the underlying package manager.
     It can be a one sentence summary of the error, redirecting the administrator to the package manager logs.
 * A plugin must return the appropriate exit status after each command.
-  * In no cases, the error status of the underlying package manager should be reported.
-* The exit status are interpreted by sm-agent as follows:
+  * It is important that under no circumstances should the error status of the underlying package manager should be reported, instead return one of the exit codes mentioned in the next section.
+* The exit status are interpreted by the sm-agent as follows:
   * __`0`__: success.
   * __`1`__: usage. The command arguments cannot be interpreted, and the command has not been launched.
   * __`2`__: failure. The command failed and there is no point to retry.
@@ -137,7 +138,7 @@ Contract:
     from the sm-agent viewpoint this is no more than a string.
   * If no version is provided the plugin is free to install the more appropriate version.
 * An optional file path can be provided.
-  * When the device administrator provides an url,
+  * When the device administrator provides a url,
     the sm-agent downloads the software module on the device,
     then invoke the install command with a path to that file.
   * If no file is provided, the plugin has to derive the appropriate location from its repository
@@ -155,7 +156,7 @@ Contract:
   * This is not an error to run this command twice or when the module is already installed.
 * An error must be reported if:
   * The module name is unknown.
-  * There is no version for the module that matches the constraint provided by the `--version` option.
+  * There is no version for the module that matches the constraint provided by the `--module-version` option.
   * The file content provided by `--file` option:
     * is not in the expected format,
     * doesn't correspond to the software module name,
@@ -178,7 +179,7 @@ Contract:
 * An optional version string can be provided.
   * This version string is meaningful only to the plugin
     and is transmitted unchanged from the cloud to the plugin.
-* The command uninstall the requested module and possibly any dependencies that are no more required.
+* The command uninstalls the requested module and possibly any dependencies that are no more required.
   * If a version is provided, only the module of that version is removed.
     This is in-practice useful only for a package manager that is able to install concurrent versions of a module.
   * After a successful sequence `prepare; remove foo; finalize` the module `foo` must no more be reported by the `list` command.
@@ -195,7 +196,7 @@ Contract:
 The `update-list` command accepts a list of software modules and associated operations as `install` or `remove`.
 
 This basically achieves same purpose as original commands `install` and `remove`, but gets passed all software modules to be processed in one command.
-This can be needed when order of processing software modules is relevant - e.g. when dependencies between packages inside the software list do occur.
+This can be necessary when the processing order of software modules is relevant - e.g. when dependencies between packages inside the software list do occur.
 
 ```shell
 # building list of software modules and operations, 
@@ -212,12 +213,11 @@ echo '\
 
 Contract:
 * This command is optional for a plugin. It can be implemented alternatively to original commands `install` and `remove` as both are specified above.
-  * If a plugin does not implement this command it must return exit status `1`. In that case sm-agent will call the plugin again
-    package-by-package using original commands `install` and `remove`.
-  * If a plugin implements this command sm-agent uses it instead of original commands `install` and `remove`.
-* This command takes no commandline arguments, but expects a software list sent from sm-agent to plugin's `stdin`.
-* In the software list each software module is represented by exactly one line, using tab separated values.
-* The position of each argument in the argument list has it's defined meaning:
+  * If a plugin does not implement this command it must return exit status `1`. In that case, the sm-agent will call the plugin again, calling it package-by-package using the `install` and `remove` commands.
+  * If a plugin implements this command, the sm-agent uses it instead of original commands `install` and `remove`.
+* This command takes no command line arguments, but expects a software list sent from the sm-agent to the plugin's `stdin`.
+* In the software list, each software module is represented by exactly one line, using tab separated values.
+* The position of each argument in the argument list has its defined meaning:
   * 1st argument: Is the operation and can be `install` or `remove`
   * 2nd argument: Is the software module's name.
   * 3rd argument: Is the software module's version. That argument is optional and can be empty (then empty string "" is used).
@@ -227,7 +227,7 @@ Contract:
   * For details about `exitstatus` see according specification of original command `install` or `remove`.
 * An overall error must be reported (via process's exit status) when at least one software module operation has failed.
 
-Example how to invoke that plugin command `update-list`. Note that each argument is tab separated:
+Example how to invoke a plugin's `update-list` command. Note that each argument is tab separated:
 
 ```shell
 plugin update-list <<EOF
@@ -242,14 +242,13 @@ That is equivalent to use of original commands (`install` and `remove`):
 
 ```shell
 plugin install name1 --module-version version1
-plugin install name2 --module-path path2
+plugin install name2 --file path2
 plugin remove "name 3" --module-version version3
 plugin remove name4
 ```
 
-Exemplary implementation of a shell script for parsing software list from `stdin`:
+Below shows an example implementation (in `bash`) to parse the software list from `stdin`:
 
-Note that this example works only in bash.
 ```shell
 #!/bin/bash
 
