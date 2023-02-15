@@ -43,6 +43,9 @@ pub enum SmartRestDeserializerError {
 
     #[error("Empty request")]
     EmptyRequest,
+
+    #[error("No response")]
+    NoResponse,
 }
 
 #[allow(clippy::large_enum_variant)]

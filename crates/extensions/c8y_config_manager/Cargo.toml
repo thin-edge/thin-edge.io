@@ -1,0 +1,33 @@
+[package]
+name = "c8y_config_manager"
+description = "thin-edge Cumulocity extension adding support for configuration management"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+c8y_api = { path = "../../core/c8y_api" }
+c8y_http_proxy = { path = "../../extensions/c8y_http_proxy" }
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tedge_actors = { path = "../../core/tedge_actors" }
+tedge_api = { path = "../../core/tedge_api" }
+tedge_config = { path = "../../common/tedge_config" }
+tedge_file_system_ext = { path = "../../extensions/tedge_file_system_ext" }
+tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
+tedge_timer_ext = { path = "../../extensions/tedge_timer_ext" }
+tedge_utils = { path = "../../common/tedge_utils" }
+thiserror = "1.0"
+tokio = { version = "1.23", features = ["macros"] }
+toml = "0.5"
+
+[dev-dependencies]
+tedge_test_utils = { path = "../../tests/tedge_test_utils" }
+tokio = { version = "1.23", features = ["time"] }

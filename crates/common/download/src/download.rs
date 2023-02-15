@@ -8,6 +8,7 @@ use nix::fcntl::FallocateFlags;
 use nix::sys::statvfs;
 use serde::Deserialize;
 use serde::Serialize;
+use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::os::unix::prelude::AsRawFd;
@@ -68,6 +69,14 @@ pub struct Downloader {
     target_filename: PathBuf,
 }
 
+impl From<PathBuf> for Downloader {
+    fn from(path: PathBuf) -> Self {
+        Self {
+            target_filename: path,
+        }
+    }
+}
+
 impl Downloader {
     pub fn new(target_path: &Path) -> Self {
         Self {
@@ -88,6 +97,15 @@ impl Downloader {
     }
 
     pub async fn download(&self, url: &DownloadInfo) -> Result<(), DownloadError> {
+        if self.target_filename.exists() {
+            // Confirm that the file has write access before any http request attempt
+            self.has_write_access()?;
+        } else if let Some(file_parent) = self.target_filename.parent() {
+            if !file_parent.exists() {
+                tokio::fs::create_dir_all(file_parent).await?;
+            }
+        }
+
         // Default retry is an exponential retry with a limit of 15 minutes total.
         // Let's set some more reasonable retry policy so we don't block the downloads for too long.
 
@@ -150,18 +168,29 @@ impl Downloader {
         self.target_filename.as_path()
     }
 
-    pub async fn rename(&self, to: impl AsRef<Path>) -> Result<(), DownloadError> {
-        let path_to = to.as_ref();
-        if !path_to.exists() {
-            if let Some(dir_to) = path_to.parent() {
-                tokio::fs::create_dir_all(dir_to).await?;
-            } else {
-                return Err(DownloadError::FromIo {
-                    reason: format!("No parent dir for {:?}", path_to),
-                });
-            }
+    fn has_write_access(&self) -> Result<(), DownloadError> {
+        let metadata = if self.target_filename.is_file() {
+            fs::metadata(&self.target_filename)?
+        } else {
+            // If the file does not exist before downloading file, check the directory perms
+            let parent_dir =
+                &self
+                    .target_filename
+                    .parent()
+                    .ok_or_else(|| DownloadError::NoWriteAccess {
+                        path: self.target_filename.clone(),
+                    })?;
+            fs::metadata(parent_dir)?
+        };
+
+        // Write permission check
+        if metadata.permissions().readonly() {
+            Err(DownloadError::NoWriteAccess {
+                path: self.target_filename.clone(),
+            })
+        } else {
+            Ok(())
         }
-        Ok(tokio::fs::rename(self.filename(), path_to).await?)
     }
 
     pub async fn cleanup(&self) -> Result<(), DownloadError> {

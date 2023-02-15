@@ -39,6 +39,12 @@ pub enum FileError {
     #[error("Could not save the file {file:?} to disk. Received error: {from:?}.")]
     FailedToSync { file: PathBuf, from: std::io::Error },
 
+    #[error("No parent dir for {:?}", path)]
+    NoParentDir { path: PathBuf },
+
+    #[error(transparent)]
+    FromIoError(#[from] std::io::Error),
+
     #[error("No write access to {path:?}")]
     NoWriteAccess { path: PathBuf },
 }
@@ -67,6 +73,47 @@ pub fn create_file_with_user_group(
 ) -> Result<(), FileError> {
     let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
     perm_entry.create_file(file.as_ref(), default_content)
+}
+
+pub async fn move_file(
+    src_path: impl AsRef<Path>,
+    dest_path: impl AsRef<Path>,
+    new_file_permissions: PermissionEntry,
+) -> Result<(), FileError> {
+    let src_path = src_path.as_ref();
+    let dest_path = dest_path.as_ref();
+    if !dest_path.exists() {
+        if let Some(dir_to) = dest_path.parent() {
+            tokio::fs::create_dir_all(dir_to).await?;
+        } else {
+            return Err(FileError::NoParentDir {
+                path: dest_path.to_path_buf(),
+            });
+        }
+    }
+
+    let original_permission_mode = match dest_path.is_file() {
+        true => {
+            let metadata = get_metadata(src_path)?;
+            let mode = metadata.permissions().mode();
+            Some(mode)
+        }
+        false => None,
+    };
+
+    tokio::fs::rename(src_path, dest_path).await?;
+
+    let file_permissions = if let Some(mode) = original_permission_mode {
+        // Use the same file permission as the original one
+        PermissionEntry::new(None, None, Some(mode))
+    } else {
+        // Set the user, group, and mode as given for a new file
+        new_file_permissions
+    };
+
+    file_permissions.apply(dest_path)?;
+
+    Ok(())
 }
 
 #[derive(Debug, PartialEq, Eq, Default, Clone)]

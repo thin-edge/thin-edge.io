@@ -1,0 +1,26 @@
+[package]
+name = "c8y-device-management"
+description = "thin-edge Cumulocity plugin for device management"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+anyhow = "1.0"
+c8y_config_manager = { path = "../../extensions/c8y_config_manager" }
+c8y_http_proxy = { path = "../../extensions/c8y_http_proxy" }
+c8y_log_manager = { path = "../../extensions/c8y_log_manager" }
+env_logger = "0.10"
+log = "0.4"
+tedge_actors = { path = "../../core/tedge_actors" }
+tedge_config = { path = "../../common/tedge_config" }
+tedge_file_system_ext = { path = "../../extensions/tedge_file_system_ext" }
+tedge_http_ext = { path = "../../extensions/tedge_http_ext" }
+tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
+tedge_signal_ext = { path = "../../extensions/tedge_signal_ext" }
+tedge_timer_ext = { path = "../../extensions/tedge_timer_ext" }
+tokio = { version = "1.23", features = ["rt", "rt-multi-thread"] }

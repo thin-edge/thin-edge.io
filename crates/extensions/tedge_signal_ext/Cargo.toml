@@ -1,0 +1,17 @@
+[package]
+name = "tedge_signal_ext"
+description = "thin-edge extension adding unix signal handling"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+async-trait = "0.1"
+signal-hook = "0.3"
+signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
+tedge_actors = { path = "../../core/tedge_actors" }
+tokio = { version = "1.23", features = ["macros"] }
