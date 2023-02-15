@@ -1,5 +1,5 @@
-use crate::common::FirmwareOperationEntry;
 use crate::error::FirmwareManagementError;
+use crate::firmware_manager::FirmwareOperationEntry;
 use c8y_api::smartrest::topic::C8yTopic;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
@@ -8,11 +8,11 @@ use tedge_api::OperationStatus;
 #[derive(Debug)]
 pub struct FirmwareOperationRequest {
     child_id: String,
-    payload: ChildDeviceRequestPayload,
+    payload: RequestPayload,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
-pub struct ChildDeviceRequestPayload {
+pub struct RequestPayload {
     #[serde(rename = "id")]
     pub operation_id: String,
     pub attempt: usize,
@@ -24,10 +24,11 @@ pub struct ChildDeviceRequestPayload {
 }
 
 impl FirmwareOperationRequest {
+    // TODO! Change it to "from"
     pub fn new(operation_entry: FirmwareOperationEntry) -> Self {
         Self {
             child_id: operation_entry.child_id.to_string(),
-            payload: ChildDeviceRequestPayload {
+            payload: RequestPayload {
                 operation_id: operation_entry.operation_id.to_string(),
                 attempt: operation_entry.attempt,
                 name: operation_entry.name.to_string(),
@@ -53,11 +54,11 @@ impl FirmwareOperationRequest {
 #[derive(Debug, PartialEq, Eq)]
 pub struct FirmwareOperationResponse {
     child_id: String,
-    payload: ChildDeviceResponsePayload,
+    payload: ResponsePayload,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
-pub struct ChildDeviceResponsePayload {
+pub struct ResponsePayload {
     #[serde(rename = "id")]
     pub operation_id: String,
     pub status: OperationStatus,
@@ -73,7 +74,7 @@ impl FirmwareOperationResponse {
         C8yTopic::ChildSmartRestResponse(self.child_id.clone()).to_string()
     }
 
-    pub fn get_payload(&self) -> &ChildDeviceResponsePayload {
+    pub fn get_payload(&self) -> &ResponsePayload {
         &self.payload
     }
 }
@@ -86,8 +87,7 @@ impl TryFrom<&Message> for FirmwareOperationResponse {
         let child_id = get_child_id_from_child_topic(topic)?;
         let operation_name = get_operation_name_from_child_topic(topic)?;
 
-        let request_payload: ChildDeviceResponsePayload =
-            serde_json::from_str(message.payload_str()?)?;
+        let request_payload: ResponsePayload = serde_json::from_str(message.payload_str()?)?;
 
         if operation_name == "firmware_update" {
             Ok(Self {
@@ -183,7 +183,7 @@ mod tests {
         );
         let firmware_response = FirmwareOperationResponse::try_from(&message).unwrap();
 
-        let expected_payload = ChildDeviceResponsePayload {
+        let expected_payload = ResponsePayload {
             operation_id: "op-id".to_string(),
             status: OperationStatus::Executing,
             reason: None,

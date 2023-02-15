@@ -1,8 +1,6 @@
-mod child_device;
-mod common;
-mod download;
 mod error;
 mod firmware_manager;
+mod message;
 
 use crate::firmware_manager::FirmwareManager;
 use c8y_api::http_proxy::C8YHttpProxy;
@@ -108,6 +106,6 @@ async fn main() -> Result<(), anyhow::Error> {
     )
     .await?;
 
-    firmware_manager.startup().await?;
+    firmware_manager.init().await?;
     firmware_manager.run().await
 }
