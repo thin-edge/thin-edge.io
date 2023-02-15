@@ -104,6 +104,7 @@ impl FirmwareDownloadManager {
                     mark_pending_firmware_operation_failed(
                         self.mqtt_publisher.clone(),
                         child_id,
+                        None,
                         ActiveOperationState::Pending,
                         format!("{err}"),
                     )

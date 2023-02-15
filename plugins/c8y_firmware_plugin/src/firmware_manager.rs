@@ -106,7 +106,7 @@ impl FirmwareManager {
                     let failure_reason = format!("Child device {child_id} did not respond within the timeout interval of {}sec. Operation ID={op_id}",
                         self.firmware_download_manager.timeout_sec.as_secs());
                     info!(failure_reason);
-                    mark_pending_firmware_operation_failed(self.mqtt_client.published.clone(), &child_id, op_state,failure_reason).await?;
+                    mark_pending_firmware_operation_failed(self.mqtt_client.published.clone(), &child_id, Some(&op_id), op_state,failure_reason).await?;
                 }
             }
         }
@@ -173,11 +173,13 @@ impl FirmwareManager {
                 Ok(())
             }
             Err(err) => {
+                // TODO: Why we need to send failure message to c8y in this case? Shouldn't we just ignore this response?
                 let child_id = get_child_id_from_child_topic(&message.topic.name)?;
 
                 mark_pending_firmware_operation_failed(
                     self.mqtt_client.published.clone(),
                     child_id,
+                    None,
                     ActiveOperationState::Pending,
                     err.to_string(),
                 )

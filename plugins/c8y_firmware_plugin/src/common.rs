@@ -108,9 +108,17 @@ pub enum ActiveOperationState {
 pub async fn mark_pending_firmware_operation_failed(
     mut mqtt_publisher: UnboundedSender<Message>,
     child_id: impl ToString,
+    op_id: Option<&str>,
     op_state: ActiveOperationState,
     failure_reason: impl ToString,
 ) -> Result<(), anyhow::Error> {
+    if let Some(operation_id) = op_id {
+        let status_file_path = PersistentStore::get_file_path(operation_id);
+        if status_file_path.exists() {
+            fs::remove_file(status_file_path)?;
+        }
+    }
+
     let c8y_child_topic =
         Topic::new_unchecked(&C8yTopic::ChildSmartRestResponse(child_id.to_string()).to_string());
 
