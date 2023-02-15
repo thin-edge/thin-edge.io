@@ -68,7 +68,13 @@ Thin-edge.io doesn't keep any history of all alarms raised on an alarm topic.
 
 An already raised alarm can be cleared by sending an empty message with retained flag enabled to the same alarm topic on which the original alarm was raised.
 
-> Note: Using the retained flag is a must while clearing the alarm as well, without which the alarm won't be cleared properly.
+For example `temperature_alarm` will be cleared by publishing an empty payload message as below:
+```
+tedge mqtt pub tedge/alarms/critical/temperature_alarm "" -q 2 -r
+
+```
+
+> Note: Using the retained (-r) flag is a must while clearing the alarm as well, without which the alarm won't be cleared properly.
 
 If alarms of different severities exist for a given alarm type, they must all be cleared separately as they're all treated as independent alarms.
 
@@ -77,6 +83,52 @@ If alarms of different severities exist for a given alarm type, they must all be
 Alarms for child devices can be raised by publishing the alarm payload to `tedge/alarms/<severity>/<alarm-type>/<child-device-id>` topic,
 where the `child-device-id` is the unique device id of the child device.
 The alarm payload structure is the same, as described in the previous section.
+
+### Raising an alarm with custom fragment
+
+Thin-edge supports the creation of alarms using custom (user-defined) fragments.
+Custom fragments are supported for both the main and child devices.
+The custom fragments can be a simple json value or a complex json value.
+
+For example, an alarm with simple custom fragment field named `details`:
+
+Payload:
+```json
+{
+    "text": "Temperature is very high",
+    "time": "2021-01-01T05:30:45+00:00",
+    "details": "A custom alarm info"
+}
+```
+
+For example, an alarm with complex custom fragments
+
+Payload:
+```json
+{
+    "text": "Temperature is very high",
+    "time": "2021-01-01T05:30:45+00:00",
+    "someOtherCustomFragment": {
+        "nested": {
+            "value": "extra info"
+        }
+    }
+}
+```
+
+> Note: Other than `text` and `time` fields, all the other fields are considered as custom fragments.
+
+### Raising an alarm with empty json payload
+
+Alarms can also be raised with an `empty json object` as payload as follows:
+
+Payload:
+```json
+{}
+```
+> Note: The `default` value for the `time` fragment will be the timestamp in utc time that is added by the `tedge-mapper-c8y`
+while alarm message being translated to cumulocity format.
+The default value for the `text` fragment will be derived from the `alarm-type` of the topic.
 
 ## Cloud data mapping
 
@@ -100,6 +152,50 @@ For example the `temperature_high` alarm with `critical` severity described in t
 
 If the alarm is raised from a child device, the payload is published to `c8y/s/us/<child-device-id>` topic instead.
 
+If an alarm contains a `custom fragment` then, the alarm message will be converted to `cumulocity json`
+format and then will be published on to `c8y/alarm/alarms/create` topic.
+
+An example of the translated custom message for `thin-edge` device will be as below
+
+```json
+{
+    "severity":"MAJOR",
+    "type":"temperature_high",
+    "time":"2023-01-25T18:41:14.776170774Z",
+    "text":"Temperature High",
+    "someOtherCustomFragment":
+        {
+            "nested":
+            {
+                "value": "extra info"
+            }
+        }
+}
+```
+
+An example of the translated `cumulocity` alarm message for a `child` device with a `custom` fragment will be as below
+
+```json
+{
+    "severity":"MAJOR",
+    "type":"pressure_alarm",
+    "time":"2023-01-25T18:41:14.776170774Z",
+    "text":"Pressure alarm",
+    "someOtherCustomFragment":
+        {
+            "nested":
+            {
+                "value": "extra info"
+            }
+        }
+    "externalSource":
+        {
+            "externalId":"child_device_id",
+            "type":"c8y_Serial"
+        }
+}
+
+```
 Find more information about SmartREST representations for alarms in Cumulocity [here](https://cumulocity.com/guides/10.11.0/reference/smartrest-two/#alarm-templates)
 
 Find more information about alarms data model in Cumulocity [here](https://cumulocity.com/guides/concepts/domain-model/#events)
