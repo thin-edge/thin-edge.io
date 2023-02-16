@@ -39,11 +39,6 @@ RUN pip3 install --upgrade pip
 # Delete the dummy systemctl command added by the base image
 RUN rm -f /usr/local/bin/systemctl
 
-# Install cargo packages under non-root user
-USER vscode
-RUN cargo install cargo-deb --version 1.41.3 \
-    && cargo install cross
-
 # Persist bash history
 USER root
 RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
