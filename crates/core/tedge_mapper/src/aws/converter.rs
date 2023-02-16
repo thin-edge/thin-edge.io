@@ -19,7 +19,7 @@ impl AwsConverter {
     pub fn new(add_timestamp: bool, clock: Box<dyn Clock>, size_threshold: SizeThreshold) -> Self {
         let mapper_config = MapperConfig {
             in_topic_filter: Self::in_topic_filter(),
-            out_topic: make_valid_topic_or_panic("aws/messages/monitoring"),
+            out_topic: make_valid_topic_or_panic("aws/td"),
             errors_topic: make_valid_topic_or_panic("tedge/errors"),
         };
         AwsConverter {

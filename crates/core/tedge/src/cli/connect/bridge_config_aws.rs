@@ -27,22 +27,22 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
 
         let address = format!("{}:{}", connect_url.as_str(), mqtt_tls_port);
         let user_name = remote_clientid.to_string();
-        let pub_msg_topic = format!(
-            "messages/# out 1 aws/ thinedge/devices/{}/",
-            remote_clientid
-        );
-        let sub_msg_topic = format!(
-            "messages/devicebound/# in 1 aws/ thinedge/devices/{}/",
-            remote_clientid
-        );
+
+        // telemetry/command topics for use by the user
+        let pub_msg_topic = format!("td/# out 1 aws/ thinedge/{remote_clientid}/");
+        let sub_msg_topic = format!("cmd/# in 1 aws/ thinedge/{remote_clientid}/");
+
+        // topic to interact with the shadow of the device
+        let shadow_topic = format!("shadow/# both 1 aws/ $aws/things/{remote_clientid}/");
+
+        // echo topic mapping to check the connection
         let connection_check_pub_msg_topic = format!(
-            r#""" out 1 aws/test-connection thinedge/devices/{}/test-connection"#,
-            remote_clientid
+            r#""" out 1 aws/test-connection thinedge/devices/{remote_clientid}/test-connection"#
         );
         let connection_check_sub_msg_topic = format!(
-            r#""" in 1 aws/connection-success thinedge/devices/{}/test-connection"#,
-            remote_clientid
+            r#""" in 1 aws/connection-success thinedge/devices/{remote_clientid}/test-connection"#
         );
+
         Self {
             cloud_name: "aws".into(),
             config_file,
@@ -66,6 +66,7 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
             topics: vec![
                 pub_msg_topic,
                 sub_msg_topic,
+                shadow_topic,
                 connection_check_pub_msg_topic,
                 connection_check_sub_msg_topic,
             ],
@@ -103,8 +104,9 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
         use_mapper: true,
         use_agent: false,
         topics: vec![
-            r#"messages/# out 1 aws/ thinedge/devices/alpha/"#.into(),
-            r##"messages/devicebound/# in 1 aws/ thinedge/devices/alpha/"##.into(),
+            "td/# out 1 aws/ thinedge/alpha/".into(),
+            "cmd/# in 1 aws/ thinedge/alpha/".into(),
+            "shadow/# both 1 aws/ $aws/things/alpha/".into(),
             r#""" out 1 aws/test-connection thinedge/devices/alpha/test-connection"#.into(),
             r#""" in 1 aws/connection-success thinedge/devices/alpha/test-connection"#.into(),
         ],
