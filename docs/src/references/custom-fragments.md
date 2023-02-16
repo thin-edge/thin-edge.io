@@ -15,7 +15,7 @@ All **custom-fragments** are provided and consumed via MQTT.
 #### Topics
 
 ```cjson
-/tedge/inventory/<device-id>/<identifider>
+tedge/inventory/<device-id>/<identifider>
 ```
 
 |Reference     | Description|
