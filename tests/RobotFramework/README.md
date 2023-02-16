@@ -46,6 +46,7 @@ Before you can run the tests you need to install the pre-requisites:
 * docker
 * python3 (>=3.7)
 * pip3
+* venv (python package)
 
 It is assumed that you are running on either MacOS or Linux. If you are a Windows users then use WSL 2 and follow the **Debian/Ubuntu** instructions, or just use the dev container option (which requires docker which again can be run under WSL 2).
 
@@ -64,7 +65,7 @@ It is assumed that you are running on either MacOS or Linux. If you are a Window
     **Debian/Ubuntu**
 
     ```sh
-    sudo apt-get install python3 python3-pip
+    sudo apt-get install python3 python3-pip python3-venv
     ```
 
 3. Install docker and docker-compose using [this guide](../../docs/src/developer/INSTALLING_DOCKER.md)
