@@ -63,7 +63,6 @@
 
   - [Write my own software management plugin](./tutorials/write-my-software-management-plugin.md)
   - [Device Configuration Management using Cumulocity](./references/c8y-configuration-management.md)
-  - [Custom Fragments](./references/custom-fragments.md)
 
   - [APIs](api.md)
 
