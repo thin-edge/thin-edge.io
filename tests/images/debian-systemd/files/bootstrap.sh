@@ -224,7 +224,7 @@ if [ "$INSTALL" == 1 ]; then
 fi
 
 echo ----------------------------------------------------------
-echo Bootstraping device
+echo Bootstrapping device
 echo ----------------------------------------------------------
 echo
 
@@ -272,7 +272,7 @@ C8Y_HOST=$(echo "$C8Y_HOST" | sed -E 's|^.*://||g' | sed -E 's|/$||g')
 
 # Check if tedge is installed before trying to bootstrap
 if ! command -v tedge &>/dev/null; then
-    echo "Skipping bootstraping as tedge is not installed"
+    echo "Skipping bootstrapping as tedge is not installed"
     exit 0
 fi
 

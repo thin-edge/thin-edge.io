@@ -35,7 +35,7 @@ call tedge -h
     Should Contain    ${output}    SUBCOMMANDS:
 
 call tedge -h -V
-    ${output}=    Execute Command    tedge -h -V   # Excute command to call help and check the version at same time
+    ${output}=    Execute Command    tedge -h -V   # Execute command to call help and check the version at same time
     Should Contain    ${output}    ${version}    # Check that the output of tedge -V returns the version which was installed
     Should Contain    ${output}    USAGE:
     Should Contain    ${output}    OPTIONS:

@@ -70,7 +70,7 @@ SITE_PACKAGES=$(find .venv -type d -name "site-packages" | head -1)
 if [ -d "$SITE_PACKAGES" ]; then
     echo "$(pwd)/libraries" > "$SITE_PACKAGES/workspace.pth"
 else
-    echo "Could not add libraries path to site-packages. Reaons: failed to find site-packages folder"
+    echo "Could not add libraries path to site-packages. Reason: failed to find site-packages folder"
     exit 1
 fi
 
