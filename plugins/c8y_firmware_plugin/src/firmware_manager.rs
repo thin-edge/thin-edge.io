@@ -2,6 +2,10 @@ use crate::error::FirmwareManagementError;
 use crate::message::get_child_id_from_child_topic;
 use crate::message::FirmwareOperationRequest;
 use crate::message::FirmwareOperationResponse;
+use crate::FirmwareManagementError::DirectoryNotFound;
+use crate::CACHE_DIR_NAME;
+use crate::FILE_TRANSFER_DIR_NAME;
+use crate::PERSISTENT_STORE_DIR_NAME;
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_api::smartrest::message::collect_smartrest_messages;
@@ -30,8 +34,6 @@ use sha256::digest;
 use sha256::try_digest;
 use std::fs;
 use std::os::unix::fs as unix_fs;
-use std::os::unix::fs::MetadataExt;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -40,11 +42,7 @@ use tedge_api::health::health_check_topics;
 use tedge_api::health::health_status_down_message;
 use tedge_api::health::send_health_status;
 use tedge_api::OperationStatus;
-use tedge_utils::file::create_file_with_user_group;
-use tedge_utils::file::get_filename;
-use tedge_utils::file::get_gid_by_name;
-use tedge_utils::file::get_metadata;
-use tedge_utils::file::get_uid_by_name;
+use tedge_utils::file::create_file_with_mode;
 use tedge_utils::file::overwrite_file;
 use tedge_utils::timers::Timers;
 use tokio::sync::Mutex;
@@ -52,23 +50,8 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-pub const PLUGIN_SERVICE_NAME: &str = "c8y-firmware-plugin";
+const PLUGIN_SERVICE_NAME: &str = "c8y-firmware-plugin";
 const FIRMWARE_UPDATE_RESPONSE_TOPICS: &str = "tedge/+/commands/res/firmware_update";
-
-#[cfg(not(test))]
-use tedge_config::DEFAULT_FILE_TRANSFER_ROOT_PATH;
-#[cfg(not(test))]
-pub const FILE_TRANSFER_ROOT_PATH: &str = DEFAULT_FILE_TRANSFER_ROOT_PATH;
-#[cfg(test)]
-pub const FILE_TRANSFER_ROOT_PATH: &str = "/tmp/file-transfer";
-#[cfg(not(test))]
-pub const FILE_CACHE_DIR_PATH: &str = "/var/tedge/cache";
-#[cfg(test)]
-pub const FILE_CACHE_DIR_PATH: &str = "/tmp/cache";
-#[cfg(not(test))]
-pub const FIRMWARE_OPERATION_DIR_PATH: &str = "/var/tedge/firmware";
-#[cfg(test)]
-pub const FIRMWARE_OPERATION_DIR_PATH: &str = "/tmp/firmware";
 
 pub struct FirmwareManager {
     mqtt_client: Connection,
@@ -78,6 +61,7 @@ pub struct FirmwareManager {
     tedge_device_id: String,
     http_client: Arc<Mutex<dyn C8YHttpProxy>>,
     local_http_host: String,
+    persistent_dir: PathBuf,
     tmp_dir: PathBuf,
     operation_timer: Timers<(String, String), ActiveOperationState>,
     timeout_sec: Duration,
@@ -89,9 +73,10 @@ impl FirmwareManager {
         mqtt_port: u16,
         http_client: Arc<Mutex<dyn C8YHttpProxy>>,
         local_http_host: String,
+        persistent_dir: PathBuf,
         tmp_dir: PathBuf,
         timeout_sec: Duration,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> Result<Self, FirmwareManagementError> {
         let mqtt_client = Self::create_mqtt_client(mqtt_port).await?;
 
         let c8y_request_topics = C8yTopic::SmartRestRequest.into();
@@ -107,20 +92,21 @@ impl FirmwareManager {
             tedge_device_id,
             http_client,
             local_http_host,
+            persistent_dir,
             tmp_dir,
             operation_timer: Timers::new(),
             timeout_sec,
         })
     }
 
-    pub async fn init(&mut self) -> Result<(), anyhow::Error> {
+    pub async fn init(&mut self) -> Result<(), FirmwareManagementError> {
         self.resend_operations_to_child_device().await?;
         self.get_pending_operations_from_cloud().await?;
         send_health_status(&mut self.mqtt_client.published, PLUGIN_SERVICE_NAME).await;
         Ok(())
     }
 
-    pub async fn run(&mut self) -> Result<(), anyhow::Error> {
+    pub async fn run(&mut self) -> Result<(), FirmwareManagementError> {
         info!("Ready to serve the firmware request.");
         loop {
             tokio::select! {
@@ -148,7 +134,10 @@ impl FirmwareManager {
         }
     }
 
-    async fn process_mqtt_message(&mut self, message: Message) -> Result<(), anyhow::Error> {
+    async fn process_mqtt_message(
+        &mut self,
+        message: Message,
+    ) -> Result<(), FirmwareManagementError> {
         if self.health_check_topics.accept(&message) {
             send_health_status(&mut self.mqtt_client.published, PLUGIN_SERVICE_NAME).await;
             return Ok(());
@@ -170,7 +159,7 @@ impl FirmwareManager {
     async fn handle_firmware_update_smartrest_request(
         &mut self,
         message: &Message,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), FirmwareManagementError> {
         for smartrest_message in collect_smartrest_messages(message.payload_str()?) {
             let result = match get_smartrest_template_id(smartrest_message.as_str()).as_str() {
                 "515" => {
@@ -200,7 +189,7 @@ impl FirmwareManager {
     async fn handle_firmware_download_request(
         &mut self,
         smartrest_request: SmartRestFirmwareRequest,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), FirmwareManagementError> {
         info!(
             "Handling c8y_Firmware operation: device={}, name={}, version={}, url={}",
             smartrest_request.device,
@@ -214,7 +203,7 @@ impl FirmwareManager {
             Please define a custom operation handler for the c8y_Firmware operation.");
             Ok(())
         } else {
-            if let Err(err) = request_is_already_addressed(smartrest_request.clone()) {
+            if let Err(err) = self.request_is_already_addressed(smartrest_request.clone()) {
                 warn!("Skip the received c8y_Firmware operation. Error={err}");
                 return Ok(());
             }
@@ -249,7 +238,7 @@ impl FirmwareManager {
         &mut self,
         smartrest_request: SmartRestFirmwareRequest,
         operation_id: String,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), FirmwareManagementError> {
         let child_id = smartrest_request.device.as_str();
         let firmware_name = smartrest_request.name.as_str();
         let firmware_version = smartrest_request.version.as_str();
@@ -257,11 +246,15 @@ impl FirmwareManager {
         let file_cache_key = digest(firmware_url);
 
         // <tedge-cache-root>/<file_cache_key>
-        let cache_dest = PathBuf::from(FILE_CACHE_DIR_PATH).join(&file_cache_key);
-        let cache_dest_str = format!("{FILE_CACHE_DIR_PATH}/{file_cache_key}");
+        let cache_dest = self
+            .persistent_dir
+            .join(CACHE_DIR_NAME)
+            .join(&file_cache_key);
 
         // <tedge-file-transfer-root>/<child-id>/firmware_update/<file_cache_key>
-        let transfer_dest = PathBuf::from(FILE_TRANSFER_ROOT_PATH)
+        let transfer_dest = self
+            .persistent_dir
+            .join(FILE_TRANSFER_DIR_NAME)
             .join(child_id)
             .join("firmware_update")
             .join(&file_cache_key);
@@ -271,12 +264,11 @@ impl FirmwareManager {
             &self.local_http_host
         );
 
-        // If dir already exists, these calls do nothing.
-        create_parent_dirs(&transfer_dest)?;
-        create_parent_dirs(&cache_dest)?;
-
         if cache_dest.is_file() {
-            info!("Hit the file cache={cache_dest_str}. File download is skipped.");
+            info!(
+                "Hit the file cache={}. File download is skipped.",
+                cache_dest.display()
+            );
         } else {
             match self
                 .http_client
@@ -297,7 +289,8 @@ impl FirmwareManager {
         }
 
         // Create a symlink if it doesn't exist yet.
-        if !transfer_dest.is_file() {
+        if !transfer_dest.is_symlink() {
+            create_parent_dirs(&transfer_dest)?;
             unix_fs::symlink(&cache_dest, &transfer_dest)?;
         }
 
@@ -313,10 +306,15 @@ impl FirmwareManager {
             sha256: file_sha256.to_string(),
             attempt: 1,
         };
-        operation_entry.create_file()?;
+        let persistent_store = PersistentStore::from(self.persistent_dir.clone());
+        operation_entry.create_file(persistent_store)?;
 
         let request = FirmwareOperationRequest::from(operation_entry);
-        self.mqtt_client.published.send(request.try_into()?).await?;
+        self.mqtt_client
+            .published
+            .send(request.try_into()?)
+            .await
+            .map_err(MqttError::from)?;
         info!("Firmware update request is sent. operation_id={operation_id}, child={child_id}");
 
         self.operation_timer.start_timer(
@@ -339,12 +337,8 @@ impl FirmwareManager {
         let status = child_device_payload.status;
         info!("Firmware update response received. Details: id={operation_id}, child={child_id}, status={status:?}");
 
-        let status_file_path = PersistentStore::get_file_path(operation_id);
-        if let Err(err) = PersistentStore::has_expected_permission(operation_id) {
-            warn!("{err}");
-            return Ok(vec![]);
-        }
-
+        let persistent_store = PersistentStore::from(self.persistent_dir.clone());
+        let status_file_path = persistent_store.get_file_path(operation_id);
         let operation_entry = FirmwareOperationEntry::read_from_file(status_file_path.as_path())?;
 
         let current_operation_state = self
@@ -390,11 +384,7 @@ impl FirmwareManager {
 
                 let text = "No fail reason provided by child device.".to_string();
                 let failed_status_payload = DownloadFirmwareStatusMessage::status_failed(
-                    child_device_payload
-                        .reason
-                        .as_ref()
-                        .unwrap_or_else(|| &text)
-                        .into(),
+                    child_device_payload.reason.as_ref().unwrap_or(&text).into(),
                 )?;
                 mapped_responses.push(Message::new(&c8y_child_topic, failed_status_payload));
             }
@@ -413,14 +403,18 @@ impl FirmwareManager {
     async fn handle_child_device_firmware_operation_response(
         &mut self,
         message: &Message,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), FirmwareManagementError> {
         match FirmwareOperationResponse::try_from(message) {
             Ok(response) => {
                 let smartrest_responses =
                     self.handle_child_device_firmware_update_response(&response)?;
 
                 for smartrest_response in smartrest_responses {
-                    self.mqtt_client.published.send(smartrest_response).await?
+                    self.mqtt_client
+                        .published
+                        .send(smartrest_response)
+                        .await
+                        .map_err(MqttError::from)?
                 }
 
                 Ok(())
@@ -441,8 +435,9 @@ impl FirmwareManager {
         }
     }
 
-    async fn resend_operations_to_child_device(&mut self) -> Result<(), anyhow::Error> {
-        let dir_path = PersistentStore::get_dir_path();
+    async fn resend_operations_to_child_device(&mut self) -> Result<(), FirmwareManagementError> {
+        let persistent_store = PersistentStore::from(self.persistent_dir.clone());
+        let dir_path = persistent_store.clone().get_dir_path();
         if !dir_path.is_dir() {
             // Do nothing if the persistent store directory does not exist yet.
             return Ok(());
@@ -450,24 +445,17 @@ impl FirmwareManager {
 
         for entry in fs::read_dir(dir_path)? {
             let file_path = entry?.path();
-            let operation_id = get_filename(file_path.clone()).ok_or(
-                FirmwareManagementError::PersistentStoreError {
-                    path: file_path.clone(),
-                },
-            )?;
-
             if file_path.is_file() {
-                if let Err(err) = PersistentStore::has_expected_permission(operation_id.as_str()) {
-                    warn!("{err}");
-                    continue;
-                }
-
                 let operation_entry =
                     FirmwareOperationEntry::read_from_file(&file_path)?.increment_attempt();
-                operation_entry.overwrite_file()?;
+                operation_entry.overwrite_file(persistent_store.clone())?;
 
                 let request = FirmwareOperationRequest::from(operation_entry.clone());
-                self.mqtt_client.published.send(request.try_into()?).await?;
+                self.mqtt_client
+                    .published
+                    .send(request.try_into()?)
+                    .await
+                    .map_err(MqttError::from)?;
                 info!(
                     "Firmware update request is resent. operation_id={}, child={}",
                     operation_entry.operation_id, operation_entry.child_id
@@ -483,7 +471,7 @@ impl FirmwareManager {
         Ok(())
     }
 
-    async fn create_mqtt_client(mqtt_port: u16) -> Result<Connection, anyhow::Error> {
+    async fn create_mqtt_client(mqtt_port: u16) -> Result<Connection, MqttError> {
         let mut topic_filter = TopicFilter::new_unchecked(&C8yTopic::SmartRestRequest.to_string());
         topic_filter.add_all(health_check_topics(PLUGIN_SERVICE_NAME));
         topic_filter.add_all(TopicFilter::new_unchecked(FIRMWARE_UPDATE_RESPONSE_TOPICS));
@@ -510,9 +498,10 @@ impl FirmwareManager {
         op_id: Option<&str>,
         op_state: ActiveOperationState,
         failure_reason: impl ToString,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), FirmwareManagementError> {
         if let Some(operation_id) = op_id {
-            let status_file_path = PersistentStore::get_file_path(operation_id);
+            let persistent_store: PersistentStore = self.persistent_dir.clone().into();
+            let status_file_path = persistent_store.get_file_path(operation_id);
             if status_file_path.exists() {
                 fs::remove_file(status_file_path)?;
             }
@@ -532,11 +521,45 @@ impl FirmwareManager {
         );
 
         if op_state == ActiveOperationState::Pending {
-            self.mqtt_client.published.send(executing_msg).await?;
+            self.mqtt_client
+                .published
+                .send(executing_msg)
+                .await
+                .map_err(MqttError::from)?;
         }
 
-        self.mqtt_client.published.send(failed_msg).await?;
+        self.mqtt_client
+            .published
+            .send(failed_msg)
+            .await
+            .map_err(MqttError::from)?;
 
+        Ok(())
+    }
+
+    // This function can be removed once we start using operation ID from c8y.
+    fn request_is_already_addressed(
+        &self,
+        smartrest_request: SmartRestFirmwareRequest,
+    ) -> Result<(), FirmwareManagementError> {
+        let persistent_store_dir_path = self.persistent_dir.join(PERSISTENT_STORE_DIR_NAME);
+        if !persistent_store_dir_path.exists() {
+            return Err(DirectoryNotFound {
+                path: persistent_store_dir_path,
+            });
+        }
+
+        for entry in fs::read_dir(persistent_store_dir_path)? {
+            let file_path = entry?.path();
+            let recorded_entry = FirmwareOperationEntry::read_from_file(&file_path)?;
+            if recorded_entry.child_id == smartrest_request.device
+                && recorded_entry.name == smartrest_request.name
+                && recorded_entry.version == smartrest_request.version
+                && recorded_entry.server_url == smartrest_request.url
+            {
+                return Err(FirmwareManagementError::RequestAlreadyAddressed);
+            }
+        }
         Ok(())
     }
 }
@@ -547,38 +570,26 @@ enum ActiveOperationState {
     Executing,
 }
 
-struct PersistentStore;
-impl PersistentStore {
-    fn get_dir_path() -> PathBuf {
-        PathBuf::from(FIRMWARE_OPERATION_DIR_PATH)
-    }
+#[derive(Debug, PartialEq, Eq, Clone)]
+struct PersistentStore {
+    persistent_dir: PathBuf,
+}
 
-    fn get_file_path(op_id: &str) -> PathBuf {
-        PathBuf::from(FIRMWARE_OPERATION_DIR_PATH).join(op_id)
-    }
-
-    // TODO: Candidate to move to file.rs
-    fn has_expected_permission(op_id: &str) -> Result<(), FirmwareManagementError> {
-        let path = Self::get_file_path(op_id);
-
-        let metadata = get_metadata(path.as_path())?;
-        let file_uid = metadata.uid();
-        let file_gid = metadata.gid();
-        let tedge_uid = get_uid_by_name("tedge")?;
-        let tedge_gid = get_gid_by_name("tedge")?;
-        let root_uid = get_uid_by_name("root")?;
-        let root_gid = get_gid_by_name("root")?;
-
-        if (file_uid == tedge_uid || file_uid == root_uid)
-            && (file_gid == tedge_gid || file_gid == root_gid)
-            && format!("{:o}", metadata.permissions().mode()).contains("644")
-        {
-            Ok(())
-        } else {
-            Err(FirmwareManagementError::InvalidFilePermission {
-                id: op_id.to_string(),
-            })
+impl From<PathBuf> for PersistentStore {
+    fn from(path: PathBuf) -> Self {
+        Self {
+            persistent_dir: path,
         }
+    }
+}
+
+impl PersistentStore {
+    fn get_dir_path(&self) -> PathBuf {
+        self.persistent_dir.join(PERSISTENT_STORE_DIR_NAME)
+    }
+
+    fn get_file_path(&self, op_id: &str) -> PathBuf {
+        self.get_dir_path().join(op_id)
     }
 }
 
@@ -596,16 +607,22 @@ pub struct FirmwareOperationEntry {
 }
 
 impl FirmwareOperationEntry {
-    fn create_file(&self) -> Result<(), FirmwareManagementError> {
-        let path = PersistentStore::get_file_path(&self.operation_id);
+    fn create_file(
+        &self,
+        persistent_store: PersistentStore,
+    ) -> Result<(), FirmwareManagementError> {
+        let path = persistent_store.get_file_path(&self.operation_id);
         create_parent_dirs(&path)?;
         let content = serde_json::to_string(self)?;
-        create_file_with_user_group(path, "tedge", "tedge", 0o644, Some(content.as_str()))
+        create_file_with_mode(path, Some(content.as_str()), 0o644)
             .map_err(FirmwareManagementError::FromFileError)
     }
 
-    fn overwrite_file(&self) -> Result<(), FirmwareManagementError> {
-        let path = PersistentStore::get_file_path(&self.operation_id);
+    fn overwrite_file(
+        &self,
+        persistent_store: PersistentStore,
+    ) -> Result<(), FirmwareManagementError> {
+        let path = persistent_store.get_file_path(&self.operation_id);
         let content = serde_json::to_string(self)?;
         overwrite_file(&path, &content).map_err(FirmwareManagementError::FromFileError)
     }
@@ -645,30 +662,6 @@ impl TryIntoOperationStatusMessage for DownloadFirmwareStatusMessage {
         )
         .to_smartrest()
     }
-}
-
-// This function can be removed once we start using operation ID from c8y.
-fn request_is_already_addressed(
-    smartrest_request: SmartRestFirmwareRequest,
-) -> Result<(), FirmwareManagementError> {
-    let dir_path = PersistentStore::get_dir_path();
-    if !dir_path.is_dir() {
-        // Do nothing if the persistent store directory does not exist yet.
-        return Ok(());
-    }
-
-    for entry in fs::read_dir(dir_path)? {
-        let file_path = entry?.path();
-        let recorded_entry = FirmwareOperationEntry::read_from_file(&file_path)?;
-        if recorded_entry.child_id == smartrest_request.device
-            && recorded_entry.name == smartrest_request.name
-            && recorded_entry.version == smartrest_request.version
-            && recorded_entry.server_url == smartrest_request.url
-        {
-            return Err(FirmwareManagementError::RequestAlreadyAddressed);
-        }
-    }
-    Ok(())
 }
 
 // TODO! Move to common crate
@@ -728,5 +721,18 @@ mod tests {
             attempt: 1,
         };
         assert_eq!(entry, expected_entry);
+    }
+
+    #[test]
+    fn persistent_store_path() {
+        let persistent_store = PersistentStore::from(PathBuf::from("/some/dir"));
+        assert_eq!(
+            persistent_store.get_dir_path().to_str().unwrap(),
+            "/some/dir/firmware"
+        );
+        assert_eq!(
+            persistent_store.get_file_path("op-id").to_str().unwrap(),
+            "/some/dir/firmware/op-id"
+        )
     }
 }

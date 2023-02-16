@@ -58,6 +58,15 @@ pub fn create_directory_with_mode(dir: impl AsRef<Path>, mode: u32) -> Result<()
     perm_entry.create_directory(dir.as_ref())
 }
 
+pub fn create_file_with_mode(
+    file: impl AsRef<Path>,
+    content: Option<&str>,
+    mode: u32,
+) -> Result<(), FileError> {
+    let perm_entry = PermissionEntry::new(None, None, Some(mode));
+    perm_entry.create_file(file.as_ref(), content)
+}
+
 pub fn create_file_with_user_group(
     file: impl AsRef<Path>,
     user: &str,

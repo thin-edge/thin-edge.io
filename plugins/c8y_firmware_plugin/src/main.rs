@@ -2,10 +2,15 @@ mod error;
 mod firmware_manager;
 mod message;
 
+#[cfg(test)]
+mod tests;
+
+use crate::error::FirmwareManagementError;
 use crate::firmware_manager::FirmwareManager;
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::http_proxy::JwtAuthHttpProxy;
 use clap::Parser;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -21,7 +26,16 @@ use tedge_config::MqttPortSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::TmpPathSetting;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
+use tedge_utils::file::create_directory_with_user_group;
 use tokio::sync::Mutex;
+use tracing::info;
+
+// TODO! We should make it configurable by tedge config later.
+const PERSISTENT_DIR_PATH: &str = "/var/tedge";
+
+pub const CACHE_DIR_NAME: &str = "cache";
+pub const FILE_TRANSFER_DIR_NAME: &str = "file-transfer";
+pub const PERSISTENT_STORE_DIR_NAME: &str = "firmware";
 
 // FIXME!: Think of good text
 const AFTER_HELP_TEXT: &str = r#"We will write later!"#;
@@ -41,7 +55,7 @@ pub struct FirmwarePluginOpt {
     #[clap(long)]
     pub debug: bool,
 
-    /// Do nothing as of now
+    /// Create required directories
     #[clap(short, long)]
     pub init: bool,
 
@@ -49,20 +63,12 @@ pub struct FirmwarePluginOpt {
     pub config_dir: PathBuf,
 }
 
-pub async fn create_http_client(
-    tedge_config: &TEdgeConfig,
-) -> Result<JwtAuthHttpProxy, anyhow::Error> {
-    let mut http_proxy = JwtAuthHttpProxy::try_new(tedge_config).await?;
-    http_proxy.init().await?;
-    Ok(http_proxy)
-}
-
 #[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
+async fn main() -> Result<(), FirmwareManagementError> {
     let fw_plugin_opt = FirmwarePluginOpt::parse();
 
     if fw_plugin_opt.init {
-        // Placeholder for the future enhancement
+        init(Path::new(PERSISTENT_DIR_PATH))?;
         return Ok(());
     }
 
@@ -101,11 +107,51 @@ async fn main() -> Result<(), anyhow::Error> {
         mqtt_port,
         http_client,
         local_http_host,
+        PathBuf::from(PERSISTENT_DIR_PATH),
         tmp_dir,
         timeout_sec,
     )
     .await?;
 
     firmware_manager.init().await?;
-    firmware_manager.run().await
+    firmware_manager.run().await?;
+
+    Ok(())
+}
+
+pub async fn create_http_client(
+    tedge_config: &TEdgeConfig,
+) -> Result<JwtAuthHttpProxy, FirmwareManagementError> {
+    let mut http_proxy = JwtAuthHttpProxy::try_new(tedge_config).await?;
+    http_proxy.init().await?;
+    Ok(http_proxy)
+}
+
+fn init(cfg_dir: &Path) -> Result<(), FirmwareManagementError> {
+    info!("Creating required directories for c8y-firmware-plugin.");
+    create_directories(cfg_dir)?;
+    Ok(())
+}
+
+fn create_directories(persistent_dir: &Path) -> Result<(), FirmwareManagementError> {
+    // TODO! Check the mode of these directories.
+    create_directory_with_user_group(
+        format!("{}/{}", persistent_dir.display(), CACHE_DIR_NAME),
+        "tedge",
+        "tedge",
+        0o755,
+    )?;
+    create_directory_with_user_group(
+        format!("{}/{}", persistent_dir.display(), FILE_TRANSFER_DIR_NAME),
+        "tedge",
+        "tedge",
+        0o755,
+    )?;
+    create_directory_with_user_group(
+        format!("{}/{}", persistent_dir.display(), PERSISTENT_STORE_DIR_NAME),
+        "tedge",
+        "tedge",
+        0o755,
+    )?;
+    Ok(())
 }

@@ -10,11 +10,10 @@ pub enum FirmwareManagementError {
         dest: std::path::PathBuf,
     },
 
-    #[error("Operation status file must have mode 644 and owned by tedge or root. Ignore operation={id}.")]
-    InvalidFilePermission { id: String },
-
-    #[error("Persistent file is invalid. File path={path}")]
-    PersistentStoreError { path: std::path::PathBuf },
+    #[error(
+        "Directory {path} is not found. Run 'c8y-firmware-plugin --init' to create the directory."
+    )]
+    DirectoryNotFound { path: std::path::PathBuf },
 
     #[error("The received SmartREST request is duplicated with already addressed operation. Ignore this request.")]
     RequestAlreadyAddressed,
@@ -33,4 +32,16 @@ pub enum FirmwareManagementError {
 
     #[error(transparent)]
     FromFileError(#[from] tedge_utils::file::FileError),
+
+    #[error(transparent)]
+    FromSMCumulocityMapperError(#[from] c8y_api::smartrest::error::SMCumulocityMapperError),
+
+    #[error(transparent)]
+    FromSystemServiceError(#[from] tedge_config::system_services::SystemServiceError),
+
+    #[error(transparent)]
+    TEdgeConfigError(#[from] tedge_config::TEdgeConfigError),
+
+    #[error(transparent)]
+    ConfigSettingError(#[from] tedge_config::ConfigSettingError),
 }
