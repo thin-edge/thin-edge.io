@@ -97,6 +97,16 @@ Checkout the [dev container instructions](../../docs/src/developer/DEV_CONTAINER
 	./bin/setup.sh "local" "ssh"
 	```
 
+    **Still does not work?**
+
+    Try deleting the python virtual environment and then running the `setup.sh` script again.
+
+    ```sh
+    rm -rf .venv
+
+    ./bin/setup.sh
+    ```
+
 3. Follow the console instructions and edit the `.env` file which was created by the `./bin/setup.sh` script
 
 4. Switch to the new python interpreter (the one with `.venv` in the name)
