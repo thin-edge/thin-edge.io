@@ -18,6 +18,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         docker \
         python3 \
         python3-pip \
+        python3-venv \
         # tedge dependencies
         mosquitto
 
@@ -33,16 +34,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs
 
 # Update python deps
-RUN pip3 install --upgrade pip \
-    && pip3 install pipenv
+RUN pip3 install --upgrade pip
 
 # Delete the dummy systemctl command added by the base image
 RUN rm -f /usr/local/bin/systemctl
-
-# Install cargo packages under non-root user
-USER vscode
-RUN cargo install cargo-deb --version 1.41.3 \
-    && cargo install cross
 
 # Persist bash history
 USER root
