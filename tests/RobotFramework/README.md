@@ -142,7 +142,13 @@ Checkout the [dev container instructions](../../docs/src/developer/DEV_CONTAINER
     source .venv/bin/activate
     ```
 
-6. Run the tests
+6. Build the container image used by the default `docker` test adapter
+
+    ```sh
+    invoke build
+    ```
+
+7. Run the tests
 
     ```sh
     invoke test
