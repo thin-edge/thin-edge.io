@@ -4,7 +4,7 @@ pub enum FirmwareManagementError {
     #[error("Invalid topic received from child device: {topic}")]
     InvalidTopicFromChildOperation { topic: String },
 
-    #[error("Failed to copy a file from {src:?} to {dest:?}")]
+    #[error("Failed to copy a file from {src} to {dest}")]
     FileCopyFailed {
         src: std::path::PathBuf,
         dest: std::path::PathBuf,
@@ -14,6 +14,9 @@ pub enum FirmwareManagementError {
         "Directory {path} is not found. Run 'c8y-firmware-plugin --init' to create the directory."
     )]
     DirectoryNotFound { path: std::path::PathBuf },
+
+    #[error("Received invalid operation status for operation={op_id}")]
+    InvalidOperationStatus { op_id: String },
 
     #[error("The received SmartREST request is duplicated with already addressed operation. Ignore this request.")]
     RequestAlreadyAddressed,
@@ -44,4 +47,7 @@ pub enum FirmwareManagementError {
 
     #[error(transparent)]
     ConfigSettingError(#[from] tedge_config::ConfigSettingError),
+
+    #[error(transparent)]
+    FromSendError(#[from] futures::channel::mpsc::SendError),
 }

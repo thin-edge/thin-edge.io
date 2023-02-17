@@ -3,6 +3,8 @@ use crate::firmware_manager::FirmwareOperationEntry;
 use c8y_api::smartrest::topic::C8yTopic;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
+use serde::Deserialize;
+use serde::Deserializer;
 use tedge_api::OperationStatus;
 
 #[derive(Debug)]
@@ -71,8 +73,17 @@ pub struct FirmwareOperationResponse {
 pub struct ResponsePayload {
     #[serde(rename = "id")]
     pub operation_id: String,
-    pub status: OperationStatus,
+    #[serde(default, deserialize_with = "treat_error_as_none")]
+    pub status: Option<OperationStatus>,
     pub reason: Option<String>,
+}
+
+fn treat_error_as_none<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    Ok(Option::deserialize(deserializer).unwrap_or(None))
 }
 
 impl FirmwareOperationResponse {
@@ -95,20 +106,18 @@ impl TryFrom<&Message> for FirmwareOperationResponse {
     fn try_from(message: &Message) -> Result<Self, Self::Error> {
         let topic = &message.topic.name;
         let child_id = get_child_id_from_child_topic(topic)?;
-        let operation_name = get_operation_name_from_child_topic(topic)?;
-
         let request_payload: ResponsePayload = serde_json::from_str(message.payload_str()?)?;
 
-        if operation_name == "firmware_update" {
-            Ok(Self {
-                child_id,
-                payload: request_payload,
-            })
-        } else {
-            Err(FirmwareManagementError::InvalidTopicFromChildOperation {
-                topic: topic.to_string(),
-            })
+        if request_payload.status.is_none() {
+            return Err(FirmwareManagementError::InvalidOperationStatus {
+                op_id: request_payload.operation_id,
+            });
         }
+
+        Ok(Self {
+            child_id,
+            payload: request_payload,
+        })
     }
 }
 
@@ -123,18 +132,6 @@ pub fn get_child_id_from_child_topic(topic: &str) -> Result<String, FirmwareMana
                 topic: topic.into(),
             })?;
     Ok(child_id.to_string())
-}
-
-// FIXME: Duplicated with config plugin
-pub fn get_operation_name_from_child_topic(topic: &str) -> Result<String, FirmwareManagementError> {
-    let topic_split = topic.split('/');
-    let operation_name =
-        topic_split
-            .last()
-            .ok_or(FirmwareManagementError::InvalidTopicFromChildOperation {
-                topic: topic.into(),
-            })?;
-    Ok(operation_name.to_string())
 }
 
 #[cfg(test)]
@@ -194,7 +191,7 @@ mod tests {
 
         let expected_payload = ResponsePayload {
             operation_id: "op-id".to_string(),
-            status: OperationStatus::Executing,
+            status: Some(OperationStatus::Executing),
             reason: None,
         };
 
@@ -208,5 +205,64 @@ mod tests {
                 payload: expected_payload
             }
         );
+    }
+
+    #[test]
+    fn deserialize_response_payload() {
+        let payload = json!({
+            "status": "failed",
+            "id": "op-id",
+            "reason": "aaa"
+        })
+        .to_string();
+        let request_payload: ResponsePayload = serde_json::from_str(&payload).unwrap();
+        let expected_response_payload = ResponsePayload {
+            operation_id: "op-id".to_string(),
+            status: Some(OperationStatus::Failed),
+            reason: Some("aaa".to_string()),
+        };
+        assert_eq!(request_payload, expected_response_payload);
+    }
+
+    #[test]
+    fn deserialize_response_payload_with_only_operation_id() {
+        let payload = json!({
+            "id": "op-id",
+        })
+        .to_string();
+        let request_payload: ResponsePayload = serde_json::from_str(&payload).unwrap();
+        let expected_response_payload = ResponsePayload {
+            operation_id: "op-id".to_string(),
+            status: None,
+            reason: None,
+        };
+        assert_eq!(request_payload, expected_response_payload);
+    }
+
+    #[test]
+    fn deserialize_response_payload_with_invalid_operation_status() {
+        let payload = json!({
+            "status": "invalid",
+            "id": "op-id",
+        })
+        .to_string();
+        let request_payload: ResponsePayload = serde_json::from_str(&payload).unwrap();
+        let expected_response_payload = ResponsePayload {
+            operation_id: "op-id".to_string(),
+            status: None,
+            reason: None,
+        };
+        assert_eq!(request_payload, expected_response_payload);
+    }
+
+    #[test]
+    fn deserialize_response_payload_without_operation_id() {
+        let payload = json!({
+            "status": "executing",
+            "reason": "aaa"
+        })
+        .to_string();
+        let result = serde_json::from_str::<ResponsePayload>(&payload);
+        assert!(result.is_err())
     }
 }
