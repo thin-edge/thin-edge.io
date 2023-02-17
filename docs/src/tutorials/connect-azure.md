@@ -8,6 +8,7 @@ The very first step to enable **thin-edge.io** is to connect your device to the 
 
 The focus is here on connecting the device to Azure IoT.
 See this [tutorial](connect-c8y.md), if you want to connect Cumulocity IoT instead.
+See this [tutorial](connect-aws.md), if you want to connect AWS IoT instead.
 
 Before you try to connect your device to Azure IoT, you need:
 * Create a Azure **IoT Hub** in Azure portal as described [here](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-create-through-portal).

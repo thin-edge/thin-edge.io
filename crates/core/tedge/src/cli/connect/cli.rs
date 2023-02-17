@@ -25,6 +25,15 @@ pub enum TEdgeConnectOpt {
         #[clap(long = "test")]
         is_test_connection: bool,
     },
+
+    /// Create connection to AWS
+    ///
+    /// The command will create config and start edge relay from the device to AWS instance
+    Aws {
+        /// Test connection to AWS
+        #[clap(long = "test")]
+        is_test_connection: bool,
+    },
 }
 
 impl BuildCommand for TEdgeConnectOpt {
@@ -42,6 +51,14 @@ impl BuildCommand for TEdgeConnectOpt {
                 config_location: context.config_location.clone(),
                 config_repository: context.config_repository,
                 cloud: Cloud::Azure,
+                common_mosquitto_config: CommonMosquittoConfig::default(),
+                is_test_connection,
+                service_manager: service_manager(context.config_location.tedge_config_root_path)?,
+            },
+            TEdgeConnectOpt::Aws { is_test_connection } => ConnectCommand {
+                config_location: context.config_location.clone(),
+                config_repository: context.config_repository,
+                cloud: Cloud::Aws,
                 common_mosquitto_config: CommonMosquittoConfig::default(),
                 is_test_connection,
                 service_manager: service_manager(context.config_location.tedge_config_root_path)?,

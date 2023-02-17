@@ -1,6 +1,7 @@
 use std::fmt;
 use std::path::PathBuf;
 
+use crate::aws::mapper::AwsMapper;
 use crate::az::mapper::AzureMapper;
 use crate::c8y::mapper::CumulocityMapper;
 use crate::collectd::mapper::CollectdMapper;
@@ -12,6 +13,7 @@ use tedge_config::system_services::set_log_level;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_config::*;
 
+mod aws;
 mod az;
 mod c8y;
 mod collectd;
@@ -20,6 +22,7 @@ mod core;
 fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     match component_name {
         MapperName::Az => Box::new(AzureMapper::new()),
+        MapperName::Aws => Box::new(AwsMapper),
         MapperName::Collectd => Box::new(CollectdMapper::new()),
         MapperName::C8y => Box::new(CumulocityMapper::new()),
     }
@@ -62,6 +65,7 @@ pub struct MapperOpt {
 #[derive(Debug, clap::Subcommand)]
 pub enum MapperName {
     Az,
+    Aws,
     C8y,
     Collectd,
 }
@@ -70,6 +74,7 @@ impl fmt::Display for MapperName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             MapperName::Az => write!(f, "tedge-mapper-az"),
+            MapperName::Aws => write!(f, "tedge-mapper-aws"),
             MapperName::C8y => write!(f, "tedge-mapper-c8y"),
             MapperName::Collectd => write!(f, "tedge-mapper-collectd"),
         }

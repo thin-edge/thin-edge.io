@@ -24,6 +24,14 @@ cloud can be accessed as below.
 
 > Note: Run `tedge-mapper --debug az` to log more debug messages
 
+#### Tedge AWS mapper
+The log messages of the AWS mapper component that sends the measurement data from the thin-edge device to the AWS
+cloud can be accessed as below.
+
+`journalctl -u tedge-mapper-aws.service`
+
+> Note: Run `tedge_mapper --debug aws` to log more debug messages
+
 ### Device monitoring logs
 The thin-edge device monitoring component logs can be found as below
 

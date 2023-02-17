@@ -137,6 +137,7 @@ bind_address = "0.0.0.0"
     let config_defaults = TEdgeConfigDefaults {
         default_c8y_root_cert_path: FilePath::from("default_c8y_root_cert_path"),
         default_azure_root_cert_path: FilePath::from("default_azure_root_cert_path"),
+        default_aws_root_cert_path: FilePath::from("default_aws_root_cert_path"),
         ..dummy_tedge_config_defaults()
     };
 
@@ -873,6 +874,7 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_device_key_path: FilePath::from("/dev/null"),
         default_c8y_root_cert_path: FilePath::from("/dev/null"),
         default_azure_root_cert_path: FilePath::from("/dev/null"),
+        default_aws_root_cert_path: FilePath::from("/dev/null"),
         default_mapper_timestamp: Flag(true),
         default_mqtt_port: Port(1883),
         default_http_port: Port(8000),

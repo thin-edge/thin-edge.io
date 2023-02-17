@@ -51,6 +51,7 @@ The following endpoints are currently supported:
 * `tedge/health/tedge-agent`
 * `tedge/health/tedge-mapper-c8y`
 * `tedge/health/tedge-mapper-az`
+* `tedge/health/tedge-mapper-aws`
 * `tedge/health/tedge-mapper-collectd`
 * `tedge/health/c8y-log-plugin`
 * `tedge/health/c8y-configuration-plugin`
@@ -68,6 +69,7 @@ Here are the health endpoints of currently supported clouds, bridged with mosqui
 | ---------- | ----------------------------------- |
 | Cumulocity | `tedge/health/mosquitto-c8y-bridge` |
 | Azure      | `tedge/health/mosquitto-az-bridge`  |
+| AWS        | `tedge/health/mosquitto-aws-bridge` |
 
 Explicit health check requests via `tedge/health-check` topics is not supported by these bridge clients.
 Since the health status messages are sent as retained messages, just subscribing to these health topics is sufficient to get the latest status.

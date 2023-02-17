@@ -23,6 +23,7 @@ use which::which;
 const WAIT_FOR_CHECK_SECONDS: u64 = 2;
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
+const AWS_CONFIG_FILENAME: &str = "aws-bridge.conf";
 pub(crate) const RESPONSE_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const CONNECTION_TIMEOUT: Duration = Duration::from_secs(60);
 const MOSQUITTO_RESTART_TIMEOUT_SECONDS: u64 = 5;
@@ -82,6 +83,7 @@ impl Command for ConnectCommand {
         // XXX: Do we really need to persist the defaults?
         match self.cloud {
             Cloud::Azure => assign_default(&mut config, AzureRootCertPathSetting)?,
+            Cloud::Aws => assign_default(&mut config, AwsRootCertPathSetting)?,
             Cloud::C8y => assign_default(&mut config, C8yRootCertPathSetting)?,
         }
         let bridge_config = self.bridge_config(&config)?;
@@ -177,6 +179,19 @@ impl ConnectCommand {
 
                 Ok(BridgeConfig::from(params))
             }
+            Cloud::Aws => {
+                let params = BridgeConfigAwsParams {
+                    connect_url: config.query(AwsUrlSetting)?,
+                    mqtt_tls_port: MQTT_TLS_PORT,
+                    config_file: AWS_CONFIG_FILENAME.into(),
+                    bridge_root_cert_path: config.query(AwsRootCertPathSetting)?,
+                    remote_clientid: config.query(DeviceIdSetting)?,
+                    bridge_certfile: config.query(DeviceCertPathSetting)?,
+                    bridge_keyfile: config.query(DeviceKeyPathSetting)?,
+                };
+
+                Ok(BridgeConfig::from(params))
+            }
             Cloud::C8y => {
                 let params = BridgeConfigC8yParams {
                     connect_url: config.query(C8yUrlSetting)?,
@@ -204,6 +219,7 @@ impl ConnectCommand {
         );
         match self.cloud {
             Cloud::Azure => check_device_status_azure(port, host),
+            Cloud::Aws => check_device_status_aws(port, host),
             Cloud::C8y => check_device_status_c8y(config),
         }
     }
@@ -341,6 +357,70 @@ fn check_device_status_azure(port: u16, host: String) -> Result<DeviceStatus, Co
                 } else {
                     break;
                 }
+            }
+            Ok(Event::Outgoing(Outgoing::PingReq)) => {
+                // No messages have been received for a while
+                eprintln!("ERROR: Local MQTT publish has timed out.");
+                break;
+            }
+            Ok(Event::Incoming(Incoming::Disconnect)) => {
+                eprintln!("ERROR: Disconnected");
+                break;
+            }
+            Err(err) => {
+                eprintln!("ERROR: {:?}", err);
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    if acknowledged {
+        // The request has been sent but without a response
+        Ok(DeviceStatus::Unknown)
+    } else {
+        // The request has not even been sent
+        println!("Make sure mosquitto is running.");
+        Err(ConnectError::TimeoutElapsedError)
+    }
+}
+
+fn check_device_status_aws(port: u16, host: String) -> Result<DeviceStatus, ConnectError> {
+    const AWS_TOPIC_PUB_CHECK_CONNECTION: &str = r#"aws/test-connection"#;
+    const AWS_TOPIC_SUB_CHECK_CONNECTION: &str = r#"aws/connection-success"#;
+    const CLIENT_ID: &str = "check_connection_aws";
+    const REGISTRATION_PAYLOAD: &[u8] = b"";
+
+    let mut options = MqttOptions::new(CLIENT_ID, host, port);
+    options.set_keep_alive(RESPONSE_TIMEOUT);
+
+    let (mut client, mut connection) = rumqttc::Client::new(options, 10);
+    let mut acknowledged = false;
+
+    client.subscribe(AWS_TOPIC_SUB_CHECK_CONNECTION, AtLeastOnce)?;
+
+    for event in connection.iter() {
+        match event {
+            Ok(Event::Incoming(Packet::SubAck(_))) => {
+                // We are ready to get the response, hence send the request
+                client.publish(
+                    AWS_TOPIC_PUB_CHECK_CONNECTION,
+                    AtLeastOnce,
+                    false,
+                    REGISTRATION_PAYLOAD,
+                )?;
+            }
+            Ok(Event::Incoming(Packet::PubAck(_))) => {
+                // The request has been sent
+                acknowledged = true;
+            }
+            Ok(Event::Incoming(Packet::Publish(response))) => {
+                // We got a response
+                println!(
+                    "Received expected response on topic {}, connection check is successful.",
+                    response.topic
+                );
+                return Ok(DeviceStatus::AlreadyExists);
             }
             Ok(Event::Outgoing(Outgoing::PingReq)) => {
                 // No messages have been received for a while

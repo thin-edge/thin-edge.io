@@ -35,6 +35,25 @@ OPTIONS:
             Test connection to Azure
 ```
 
+## AWS
+
+```
+tedge-connect-aws
+Create connection to AWS
+
+The command will create config and start edge relay from the device to aws instance
+
+USAGE:
+    tedge connect aws [OPTIONS]
+
+OPTIONS:
+    -h, --help
+            Print help information
+
+        --test
+            Test connection to AWS
+```
+
 ## Cumulocity
 
 ```
