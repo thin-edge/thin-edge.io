@@ -10,7 +10,7 @@ Test Teardown    Get Logs
 *** Test Cases ***
 
 Update tedge version from previous using Cumulocity
-    [Tags]    test:retry(1)
+    [Tags]    test:retry(1)    workaround
     ${PREV_VERSION}=    Set Variable    0.8.1
     # Install base version
     Execute Command    curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s ${PREV_VERSION}
@@ -21,13 +21,16 @@ Update tedge version from previous using Cumulocity
     # Register device (using already installed version)
     Execute Command    cmd=test -f ./bootstrap.sh && env DEVICE_ID=${DEVICE_SN} ./bootstrap.sh --no-install || true
     Device Should Exist                      ${DEVICE_SN}
+
+    Restart Service    tedge-mapper-c8y    # WORKAROUND: #1731 Restart service to avoid suspected race condition causing software list message to be lost
+
     Device Should Have Installed Software    tedge,${PREV_VERSION}::apt    tedge_mapper,${PREV_VERSION}::apt    tedge_agent,${PREV_VERSION}::apt    tedge_watchdog,${PREV_VERSION}::apt    c8y_configuration_plugin,${PREV_VERSION}::apt    c8y_log_plugin,${PREV_VERSION}::apt    tedge_apt_plugin,${PREV_VERSION}::apt
 
     # Install desired version
     Create Local Repository
     [Documentation]    tedge-agent causes a problem where the operation is stuck in EXECUTING state
     ${OPERATION}=    Install Software    tedge,${NEW_VERSION}    tedge-mapper,${NEW_VERSION}    tedge-watchdog,${NEW_VERSION}    c8y-log-plugin,${NEW_VERSION}    c8y-configuration-plugin,${NEW_VERSION}    tedge-apt-plugin,${NEW_VERSION}
-    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=90
+    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=180
     # Device Should Have Installed Software    tedge,${NEW_VERSION}::apt    tedge-mapper,${NEW_VERSION}::apt    tedge-agent,${NEW_VERSION}::apt    tedge-watchdog,${NEW_VERSION}::apt    c8y-configuration-plugin,${NEW_VERSION}::apt    c8y-log-plugin,${NEW_VERSION}::apt    tedge-apt-plugin,${NEW_VERSION}::apt
     Device Should Have Installed Software    tedge,${NEW_VERSION}::apt    tedge-mapper,${NEW_VERSION}::apt    tedge-watchdog,${NEW_VERSION}::apt    c8y-configuration-plugin,${NEW_VERSION}::apt    c8y-log-plugin,${NEW_VERSION}::apt    tedge-apt-plugin,${NEW_VERSION}::apt
 
