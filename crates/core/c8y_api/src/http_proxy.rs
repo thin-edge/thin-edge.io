@@ -85,19 +85,26 @@ pub trait C8YHttpProxy: Send + Sync {
 /// Define a C8y endpoint
 #[derive(Debug)]
 pub struct C8yEndPoint {
-    c8y_host: String,
-    device_id: String,
-    c8y_internal_id: String,
+    pub c8y_host: String,
+    pub device_id: String,
+    pub c8y_internal_id: String,
 }
 
 impl C8yEndPoint {
-    #[cfg(test)]
-    fn new(c8y_host: &str, device_id: &str, c8y_internal_id: &str) -> C8yEndPoint {
+    pub fn new(c8y_host: &str, device_id: &str, c8y_internal_id: &str) -> C8yEndPoint {
         C8yEndPoint {
             c8y_host: c8y_host.into(),
             device_id: device_id.into(),
             c8y_internal_id: c8y_internal_id.into(),
         }
+    }
+
+    pub fn get_c8y_internal_id(&self) -> &str {
+        &self.c8y_internal_id
+    }
+
+    pub fn set_c8y_internal_id(&mut self, id: String) {
+        self.c8y_internal_id = id;
     }
 
     fn get_base_url(&self) -> String {
@@ -110,7 +117,7 @@ impl C8yEndPoint {
         url_get_id
     }
 
-    fn get_url_for_sw_list(&self) -> String {
+    pub fn get_url_for_sw_list(&self) -> String {
         let mut url_update_swlist = self.get_base_url();
         url_update_swlist.push_str("/inventory/managedObjects/");
         url_update_swlist.push_str(&self.c8y_internal_id);
@@ -118,7 +125,7 @@ impl C8yEndPoint {
         url_update_swlist
     }
 
-    fn get_url_for_get_id(&self, device_id: Option<&str>) -> String {
+    pub fn get_url_for_get_id(&self, device_id: Option<&str>) -> String {
         let mut url_get_id = self.get_base_url();
         url_get_id.push_str("/identity/externalIds/c8y_Serial/");
         url_get_id.push_str(device_id.unwrap_or(&self.device_id));
@@ -126,14 +133,14 @@ impl C8yEndPoint {
         url_get_id
     }
 
-    fn get_url_for_create_event(&self) -> String {
+    pub fn get_url_for_create_event(&self) -> String {
         let mut url_create_event = self.get_base_url();
         url_create_event.push_str("/event/events/");
 
         url_create_event
     }
 
-    fn get_url_for_event_binary_upload(&self, event_id: &str) -> String {
+    pub fn get_url_for_event_binary_upload(&self, event_id: &str) -> String {
         let mut url_event_binary = self.get_url_for_create_event();
         url_event_binary.push_str(event_id);
         url_event_binary.push_str("/binaries");
@@ -141,7 +148,7 @@ impl C8yEndPoint {
         url_event_binary
     }
 
-    fn url_is_in_my_tenant_domain(&self, url: &str) -> bool {
+    pub fn url_is_in_my_tenant_domain(&self, url: &str) -> bool {
         // c8y URL may contain either `Tenant Name` or Tenant Id` so they can be one of following options:
         // * <tenant_name>.<domain> eg: sample.c8y.io
         // * <tenant_id>.<domain> eg: t12345.c8y.io

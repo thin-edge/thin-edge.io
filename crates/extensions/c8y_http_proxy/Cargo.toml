@@ -1,0 +1,28 @@
+[package]
+name = "c8y_http_proxy"
+description = "thin-edge Cumulocity extension adding REST API support"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+async-trait = "0.1"
+c8y_api = { path = "../../core/c8y_api" }
+download = { path = "../../common/download" }
+log = "0.4"
+mqtt_channel = { path = "../../common/mqtt_channel" }
+tedge_actors = { path = "../../core/tedge_actors" }
+tedge_config = { path = "../../common/tedge_config" }
+tedge_http_ext = { path = "../../extensions/tedge_http_ext" }
+tedge_utils = { path = "../../common/tedge_utils" }
+thiserror = "1.0"
+tokio = { version = "1.23", features = ["macros"] }
+
+[dev-dependencies]
+tedge_http_ext = { path = "../../extensions/tedge_http_ext", features = [
+    "test_helpers",
+] }

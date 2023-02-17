@@ -222,7 +222,7 @@ mod tests {
             }),
             source: None,
         };
-        "warning alarm parsing without text or timestamp"
+        "warning alarm parsing with empty json payload"
     )]
     #[test_case(
         "tedge/alarms/critical/temperature_alarm/extern_sensor",
@@ -241,6 +241,43 @@ mod tests {
             source: Some("extern_sensor".to_string()),
         };
         "critical alarm parsing with childId"
+    )]
+    #[test_case(
+        "tedge/alarms/critical/temperature_alarm/extern_sensor",
+        json!({
+            "text": "I raised it",
+            "message": "Raised alarm with a message",
+            "time": "2021-04-23T19:00:00+05:00",
+        }),
+        ThinEdgeAlarm {
+            name: "temperature_alarm".into(),
+            severity: AlarmSeverity::Critical,
+            data: Some(ThinEdgeAlarmData {
+                text: Some("I raised it".into()),
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                alarm_data:hashmap!{"message".to_string() => json!("Raised alarm with a message".to_string())},
+            }),
+            source: Some("extern_sensor".to_string()),
+        };
+        "critical alarm parsing with text and custom message with childid"
+    )]
+    #[test_case(
+        "tedge/alarms/critical/temperature_alarm/extern_sensor",
+        json!({
+            "message": "Raised alarm with a message",
+            "time": "2021-04-23T19:00:00+05:00",
+        }),
+        ThinEdgeAlarm {
+            name: "temperature_alarm".into(),
+            severity: AlarmSeverity::Critical,
+            data: Some(ThinEdgeAlarmData {
+                text: None,
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                alarm_data: hashmap!{"message".to_string() => json!("Raised alarm with a message".to_string())},
+            }),
+            source: Some("extern_sensor".to_string()),
+        };
+        "critical alarm parsing for child no text and with custom message"
     )]
     fn parse_thin_edge_alarm_json(
         alarm_topic: &str,

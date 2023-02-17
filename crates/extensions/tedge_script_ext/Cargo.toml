@@ -1,0 +1,21 @@
+[package]
+name = "tedge_script_ext"
+description = "thin-edge extension adding script support"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+async-trait = "0.1"
+tedge_actors = { path = "../../core/tedge_actors" }
+tokio = { version = "1.23", default_features = false, features = ["process"] }
+
+[dev-dependencies]
+tokio = { version = "1.23", default_features = false, features = [
+    "macros",
+    "rt-multi-thread",
+] }

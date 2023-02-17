@@ -1,0 +1,17 @@
+[package]
+name = "tedge_file_system_ext"
+description = "thin-edge extension adding file system events notitification"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+async-trait = "0.1"
+tedge_actors = { path = "../../core/tedge_actors" }
+tedge_utils = { path = "../../common/tedge_utils", features = ["fs-notify"] }
+tokio = { version = "1.23", features = ["macros"] }
+try-traits = { version = "0.1" }

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 #[derive(Debug, thiserror::Error)]
 pub enum DownloadError {
     #[error(transparent)]
@@ -20,6 +22,9 @@ pub enum DownloadError {
 
     #[error("Not enough disk space")]
     InsufficientSpace,
+
+    #[error("No write access to {path:?}")]
+    NoWriteAccess { path: PathBuf },
 }
 
 impl From<reqwest::Error> for DownloadError {

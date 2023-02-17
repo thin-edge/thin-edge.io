@@ -1,0 +1,2 @@
+//! Examples
+pub mod calculator;

@@ -56,6 +56,13 @@ pub struct InternalIdResponse {
 }
 
 impl InternalIdResponse {
+    pub fn new(id: &str, external_id: &str) -> Self {
+        InternalIdResponse {
+            managed_object: C8yManagedObject { id: id.to_string() },
+            external_id: external_id.to_string(),
+        }
+    }
+
     pub fn id(&self) -> String {
         self.managed_object.id.clone()
     }

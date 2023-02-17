@@ -1,0 +1,9 @@
+[Unit]
+Description=Boot notifier
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /usr/bin/on_startup.sh
+
+[Install]
+WantedBy=multi-user.target

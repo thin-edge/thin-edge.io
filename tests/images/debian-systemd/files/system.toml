@@ -1,0 +1,12 @@
+# [init] system is mandatory in <= 0.8.1
+[init]
+name = "systemd"
+is_available = ["/bin/systemctl", "--version"]
+restart = ["/bin/systemctl", "restart", "{}"]
+stop =  ["/bin/systemctl", "stop", "{}"]
+enable =  ["/bin/systemctl", "enable", "{}"]
+disable =  ["/bin/systemctl", "disable", "{}"]
+is_active = ["/bin/systemctl", "is-active", "{}"]
+
+[system]
+reboot = ["shutdown", "-r", "now"]

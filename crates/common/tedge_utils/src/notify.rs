@@ -16,11 +16,9 @@ use notify::INotifyWatcher;
 use notify::RecommendedWatcher;
 use notify::RecursiveMode;
 use notify::Watcher;
+use strum_macros::Display;
 use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::Receiver;
-use try_traits::default::TryDefault;
-
-use strum_macros::Display;
 
 #[derive(Debug, Display, PartialEq, Eq, Clone, Hash, PartialOrd, Ord, Copy)]
 pub enum FsEvent {
@@ -62,10 +60,8 @@ pub struct NotifyStream {
     metadata: Metadata,
 }
 
-impl TryDefault for NotifyStream {
-    type Error = NotifyStreamError;
-
-    fn try_default() -> Result<Self, Self::Error> {
+impl NotifyStream {
+    pub fn try_default() -> Result<Self, NotifyStreamError> {
         let (tx, rx) = channel(1024);
 
         // Automatically select the best implementation for your platform.
@@ -119,9 +115,7 @@ impl TryDefault for NotifyStream {
             metadata: HashMap::new(),
         })
     }
-}
 
-impl NotifyStream {
     #[cfg(test)]
     fn get_metadata(&self) -> &Metadata {
         &self.metadata
@@ -130,7 +124,7 @@ impl NotifyStream {
         &mut self.metadata
     }
 
-    fn add_watcher(
+    pub fn add_watcher(
         &mut self,
         dir_path: &Path,
         file: Option<String>,
@@ -171,7 +165,6 @@ mod notify_tests {
 
     use maplit::hashmap;
     use tedge_test_utils::fs::TempTedgeDir;
-    use try_traits::default::TryDefault;
 
     use crate::notify::FsEvent;
 

@@ -43,6 +43,12 @@ pub struct TopicFilter {
     pub qos: QoS,
 }
 
+impl Default for TopicFilter {
+    fn default() -> Self {
+        TopicFilter::empty()
+    }
+}
+
 impl TopicFilter {
     /// Check if the pattern is valid and build a new topic filter.
     pub fn new(pattern: &str) -> Result<TopicFilter, MqttError> {

@@ -1,0 +1,3 @@
+-r requirements.adapter-local.txt
+-r requirements.adapter-ssh.txt
+-r requirements.adapter-docker.txt
