@@ -47,7 +47,7 @@ impl ListenerConfig {
         writeln!(writer, "{} {}", key, value)
     }
     pub fn write(&self, writer: &mut dyn std::io::Write) -> std::io::Result<()> {
-        let bind_address = self.bind_address.clone().unwrap_or_else(|| "".to_string());
+        let bind_address = self.bind_address.clone().unwrap_or_default();
         let maybe_listener = self
             .port
             .as_ref()

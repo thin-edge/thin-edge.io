@@ -1,6 +1,6 @@
 use std::num::FpCategory;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct JsonWriter {
     buffer: Vec<u8>,
     needs_separator: bool,
@@ -19,16 +19,6 @@ pub enum JsonWriterError {
 
     #[error("Invalid f64 value {value:?}")]
     InvalidF64Value { value: f64 },
-}
-
-#[cfg(test)]
-impl Default for JsonWriter {
-    fn default() -> Self {
-        Self {
-            buffer: Vec::new(),
-            needs_separator: false,
-        }
-    }
 }
 
 impl JsonWriter {

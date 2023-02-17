@@ -236,7 +236,7 @@ mod tests {
         mock.expect_visit_start_group().never();
         mock.expect_visit_end_group().never();
 
-        let _ = group.accept(&mut mock)?;
+        group.accept(&mut mock)?;
 
         Ok(())
     }

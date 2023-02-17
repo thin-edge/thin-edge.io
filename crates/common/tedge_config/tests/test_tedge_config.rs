@@ -655,7 +655,7 @@ port = "1883"
     match result {
         Err(TEdgeConfigError::FromTOMLParse(err)) => assert_eq!(err.to_string(), expected_err),
 
-        _ => assert!(false, "Expected the parsing to fail with TOMLParseError"),
+        _ => panic!("Expected the parsing to fail with TOMLParseError"),
     }
 
     Ok(())
@@ -833,8 +833,8 @@ cert_path = "/path/to/cert"
             assert_eq!(key, "device.id");
             assert_eq!(cause, "PEM file format error");
         }
-        Err(_) => assert!(false, "unexpected error"),
-        Ok(_) => assert!(false, "unexpected ok result"),
+        Err(_) => panic!("unexpected error"),
+        Ok(_) => panic!("unexpected ok result"),
     }
     Ok(())
 }

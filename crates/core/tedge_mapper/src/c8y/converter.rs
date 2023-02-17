@@ -792,7 +792,7 @@ async fn execute_operation(
 pub fn get_local_child_devices_list(
     path: &Path,
 ) -> Result<std::collections::HashSet<String>, CumulocityMapperError> {
-    Ok(fs::read_dir(&path)
+    Ok(fs::read_dir(path)
         .map_err(|_| CumulocityMapperError::ReadDirError {
             dir: PathBuf::from(&path),
         })?

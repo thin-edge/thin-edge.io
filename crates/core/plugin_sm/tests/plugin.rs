@@ -48,23 +48,18 @@ mod tests {
     #[test_case("abc",None  ; "without version")]
     fn desrialize_plugin_result(module_name: &str, version: Option<&str>) {
         let mut data = String::from(module_name);
-        match version {
-            Some(v) => {
-                data.push_str("\t");
-                data.push_str(v)
-            }
-            None => {}
+        if let Some(v) = version {
+            data.push('\t');
+            data.push_str(v);
         }
 
-        let mut expected_software_list = Vec::new();
-
-        expected_software_list.push(SoftwareModule {
+        let expected_software_list = vec![SoftwareModule {
             name: module_name.into(),
             version: version.map(|s| s.to_string()),
             module_type: Some("test".into()),
             file_path: None,
             url: None,
-        });
+        }];
 
         let software_list = deserialize_module_info("test".into(), data.as_bytes()).unwrap();
         assert_eq!(expected_software_list, software_list);
@@ -74,15 +69,13 @@ mod tests {
     fn desrialize_plugin_result_with_trailing_tab() {
         let data = "abc\t";
 
-        let mut expected_software_list = Vec::new();
-
-        expected_software_list.push(SoftwareModule {
+        let expected_software_list = vec![SoftwareModule {
             name: "abc".into(),
             version: None,
             module_type: Some("test".into()),
             file_path: None,
             url: None,
-        });
+        }];
 
         let software_list = deserialize_module_info("test".into(), data.as_bytes()).unwrap();
         assert_eq!(expected_software_list, software_list);
@@ -102,7 +95,7 @@ mod tests {
 
         // Add content of the expected stdout to the dummy plugin.
         let content = "abc\t1.0";
-        let _a = file.write_all(content.as_bytes()).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
 
         // Create expected response.
         let module = SoftwareModule {
@@ -137,7 +130,7 @@ mod tests {
 
         // Add content of the expected stdout to the dummy plugin.
         let content = "abc";
-        let _a = file.write_all(content.as_bytes()).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
 
         // Create expected response.
         let module = SoftwareModule {
@@ -172,7 +165,7 @@ mod tests {
 
         // Add content of the expected stdout to the dummy plugin.
         let content = "abc\t1.0";
-        let _a = file.write_all(content.as_bytes()).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
 
         // Create module to perform plugin install API call containing valid input.
         let module = SoftwareModule {
@@ -205,7 +198,7 @@ mod tests {
 
         // Add content of the expected stdout to the dummy plugin.
         let content = "abc\t1.0";
-        let _a = file.write_all(content.as_bytes()).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
 
         // Create module to perform plugin install API call containing valid input.
         let module = SoftwareModule {
@@ -237,7 +230,7 @@ mod tests {
     #[serial]
     fn plugin_check_module_type_both_same() {
         let dummy_plugin_path = get_dummy_plugin_path();
-        let plugin = ExternalPluginCommand::new("test", &dummy_plugin_path);
+        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path);
         let module = SoftwareModule {
             module_type: Some("test".into()),
             name: "test".into(),
@@ -260,7 +253,7 @@ mod tests {
         let dummy_plugin_path = get_dummy_plugin_path();
 
         // Create new plugin in the registry with name `test`.
-        let plugin = ExternalPluginCommand::new("test", &dummy_plugin_path);
+        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path);
 
         // Create test module with name `test2`.
         let module = SoftwareModule {
@@ -290,7 +283,7 @@ mod tests {
         // Create dummy plugin.
         let dummy_plugin_path = get_dummy_plugin_path();
 
-        let plugin = ExternalPluginCommand::new("test", &dummy_plugin_path);
+        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path);
 
         // Create software module without an explicit type.
         let module = SoftwareModule {

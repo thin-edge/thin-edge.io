@@ -184,7 +184,7 @@ mod tests {
                 let req = msg.payload_str().expect("utf8 payload");
                 let res = req.to_uppercase();
                 let msg = Message::new(&out_topic, res.as_bytes());
-                if let Err(_) = output.send(msg).await {
+                if output.send(msg).await.is_err() {
                     // the connection has been closed
                     break;
                 }
@@ -257,7 +257,7 @@ mod tests {
                 let req = msg.payload_str().expect("utf8 payload");
                 let res = req.to_uppercase();
                 let msg = Message::new(&out_topic, res.as_bytes());
-                if let Err(_) = output.send(msg).await {
+                if output.send(msg).await.is_err() {
                     break;
                 }
             }

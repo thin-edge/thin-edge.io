@@ -199,6 +199,7 @@ impl Downloader {
     }
 }
 
+#[allow(clippy::unnecessary_cast)]
 fn create_file_and_try_pre_allocate_space(
     file_path: &Path,
     file_len: u64,
@@ -222,7 +223,7 @@ fn create_file_and_try_pre_allocate_space(
                 file.as_raw_fd(),
                 FallocateFlags::empty(),
                 0,
-                file_len as nix::libc::off_t,
+                file_len.try_into().expect("file too large to fit in i64"),
             );
         }
     }
@@ -250,7 +251,7 @@ mod tests {
         let version = Some("test1".to_string());
         let target_dir_path = PathBuf::from("/tmp");
 
-        let downloader = Downloader::new_sm(name, &version, &target_dir_path);
+        let downloader = Downloader::new_sm(name, &version, target_dir_path);
 
         let expected_path = Path::new("/tmp/test_download_test1");
         assert_eq!(downloader.filename(), expected_path);
@@ -272,7 +273,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new_sm(&name, &version, target_dir_path.path());
+        let downloader = Downloader::new_sm(name, &version, target_dir_path.path());
         downloader.download(&url).await?;
 
         let log_content = std::fs::read(downloader.filename())?;
@@ -287,7 +288,7 @@ mod tests {
     async fn downloader_download_with_content_length_larger_than_usable_disk_space(
     ) -> anyhow::Result<()> {
         let tmpstats = statvfs::statvfs("/tmp")?;
-        let usable_disk_space = tmpstats.blocks_free() as u64 * tmpstats.block_size() as u64;
+        let usable_disk_space = tmpstats.blocks_free() * tmpstats.block_size();
         let _mock1 = mock("GET", "/some_file.txt")
             .with_header("content-length", &(usable_disk_space.to_string()))
             .create();
@@ -301,9 +302,9 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new_sm(&name, &version, target_dir_path.path());
+        let downloader = Downloader::new_sm(name, &version, target_dir_path.path());
         match downloader.download(&url).await {
-            Err(DownloadError::InsufficientSpace) => return Ok(()),
+            Err(DownloadError::InsufficientSpace) => Ok(()),
             _ => bail!("failed"),
         }
     }
@@ -326,14 +327,14 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new_sm(&name, &version, target_dir_path.path());
+        let downloader = Downloader::new_sm(name, &version, target_dir_path.path());
 
         match downloader.download(&url).await {
             Ok(()) => {
                 let log_content = std::fs::read(downloader.filename())?;
                 let expected_content = std::fs::read(file_path)?;
                 assert_eq!(log_content, expected_content);
-                return Ok(());
+                Ok(())
             }
             _ => bail!("failed"),
         }
@@ -356,7 +357,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new_sm(&name, &version, target_dir_path.path());
+        let downloader = Downloader::new_sm(name, &version, target_dir_path.path());
         downloader.download(&url).await?;
 
         let log_content = std::fs::read(downloader.filename())?;
@@ -379,11 +380,11 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new_sm(&name, &version, target_dir_path.path());
+        let downloader = Downloader::new_sm(name, &version, target_dir_path.path());
         match downloader.download(&url).await {
             Ok(()) => {
                 assert_eq!("".as_bytes(), std::fs::read(downloader.filename())?);
-                return Ok(());
+                Ok(())
             }
             _ => {
                 bail!("failed")
@@ -472,7 +473,7 @@ mod tests {
         // url/no url setup
         let url = {
             if let Some(url) = url {
-                DownloadInfo::new(&url)
+                DownloadInfo::new(url)
             } else {
                 let mut target_url = mockito::server_url();
                 target_url.push_str("/some_file.txt");
@@ -489,7 +490,7 @@ mod tests {
             }
         };
 
-        let downloader = Downloader::new_sm(&name, &version, target_dir_path.path());
+        let downloader = Downloader::new_sm(name, &version, target_dir_path.path());
         match downloader.download(&url).await {
             Ok(_success) => anyhow::bail!("Expected client error."),
             Err(err) => {

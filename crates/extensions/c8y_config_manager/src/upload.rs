@@ -400,7 +400,7 @@ impl TryIntoOperationStatusMessage for UploadConfigFileStatusMessage {
     // example message: '503,c8y_UploadConfigFile,https://{c8y.url}/etc...'
     fn status_successful(parameter: Option<String>) -> Result<SmartRest, SmartRestSerializerError> {
         SmartRestSetOperationToSuccessful::new(CumulocitySupportedOperations::C8yUploadConfigFile)
-            .with_response_parameter(parameter.unwrap_or_else(|| "".to_string()).as_str())
+            .with_response_parameter(parameter.unwrap_or_default().as_str())
             .to_smartrest()
     }
 

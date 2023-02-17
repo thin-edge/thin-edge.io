@@ -13,7 +13,7 @@ use tedge_actors::SimpleMessageBoxBuilder;
 #[tokio::test]
 async fn timeout_requests_lead_to_chronological_timeout_responses() {
     let mut client_box_builder = SimpleMessageBoxBuilder::new("Test timers", 16);
-    let _ = spawn_timer_actor(&mut client_box_builder).await;
+    spawn_timer_actor(&mut client_box_builder).await;
     let mut client_box = client_box_builder.build();
 
     client_box

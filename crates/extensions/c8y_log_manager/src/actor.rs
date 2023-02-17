@@ -118,7 +118,7 @@ impl LogManagerActor {
             Err(LogRetrievalError::MaxLines)
         } else {
             let mut file_content_as_vec = VecDeque::new();
-            let file = std::fs::File::open(&logfile)?;
+            let file = std::fs::File::open(logfile)?;
             let file_name = format!(
                 "filename: {}\n",
                 logfile.file_name().unwrap().to_str().unwrap() // never fails because we check file exists
@@ -226,7 +226,7 @@ impl LogManagerActor {
         let mut out = vec![];
 
         logs_path_vec.sort_by_key(|pathbuf| {
-            if let Ok(metadata) = std::fs::metadata(&pathbuf) {
+            if let Ok(metadata) = std::fs::metadata(pathbuf) {
                 if let Ok(file_modified_time) = metadata.modified() {
                     return OffsetDateTime::from(file_modified_time);
                 }

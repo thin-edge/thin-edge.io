@@ -66,11 +66,7 @@ impl<B: Batchable> Batch<B> {
 
         // Go over all the events in this batch plus the new event and allocate them,
         // either the existing batch or the new batch.
-        for event in all_events
-            .into_iter()
-            .map(|(_key, event)| event)
-            .chain(once(event))
-        {
+        for event in all_events.into_values().chain(once(event)) {
             let event_time = event.event_time();
 
             if event_time < split_point {
@@ -88,7 +84,7 @@ impl<B: Batchable> Batch<B> {
     }
 
     pub fn into_vec(self) -> Vec<B> {
-        self.events.into_iter().map(|(_k, v)| v).collect()
+        self.events.into_values().collect()
     }
 }
 

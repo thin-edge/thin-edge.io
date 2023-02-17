@@ -31,7 +31,7 @@ pub async fn messages_published_on(mqtt_port: u16, topic: &str) -> UnboundedRece
             }
             Err(err) => {
                 let msg = format!("Error: {:?}", err);
-                let _ = sender.send(msg);
+                sender.send(msg).await.unwrap();
                 return recv;
             }
         }

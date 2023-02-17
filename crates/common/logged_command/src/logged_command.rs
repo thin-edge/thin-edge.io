@@ -195,7 +195,7 @@ EOF
         let _ = command.execute(&mut logger).await;
 
         // On expect the errors to be logged
-        let log_content = String::from_utf8(std::fs::read(&log_file_path)?)?;
+        let log_content = String::from_utf8(std::fs::read(log_file_path)?)?;
         assert_eq!(
             log_content,
             r#"----- $ ls "dummy-file"
@@ -228,7 +228,7 @@ EOF
         let _ = command.execute(&mut logger).await;
 
         // The fact that the command cannot be executed must be logged
-        let log_content = String::from_utf8(std::fs::read(&log_file_path)?)?;
+        let log_content = String::from_utf8(std::fs::read(log_file_path)?)?;
         assert_eq!(
             log_content,
             r#"----- $ dummy-command
