@@ -14,7 +14,7 @@ pub const DEFAULT_TMP_PATH: &str = "/tmp";
 pub const DEFAULT_LOG_PATH: &str = "/var/log";
 pub const DEFAULT_RUN_PATH: &str = "/run";
 const DEFAULT_DEVICE_TYPE: &str = "thin-edge.io";
-const DEFAULT_FIRMWARE_OPERATION_TIMEOUT_SEC: u64 = 3600;
+const DEFAULT_FIRMWARE_CHILD_UPDATE_TIMEOUT_SEC: u64 = 3600;
 
 pub const DEFAULT_FILE_TRANSFER_ROOT_PATH: &str = "/var/tedge/file-transfer";
 
@@ -74,8 +74,8 @@ pub struct TEdgeConfigDefaults {
     /// Default http bind address
     pub default_http_bind_address: IpAddress,
 
-    /// Default firmware operation timeout in seconds
-    pub default_firmware_timeout: Seconds,
+    /// Default firmware child device operation timeout in seconds
+    pub default_firmware_child_update_timeout: Seconds,
 }
 
 impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
@@ -107,7 +107,9 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
             default_mqtt_bind_address: IpAddress::default(),
             default_http_bind_address: IpAddress::default(),
             default_c8y_smartrest_templates: TemplatesSet::default(),
-            default_firmware_timeout: Seconds(DEFAULT_FIRMWARE_OPERATION_TIMEOUT_SEC),
+            default_firmware_child_update_timeout: Seconds(
+                DEFAULT_FIRMWARE_CHILD_UPDATE_TIMEOUT_SEC,
+            ),
         }
     }
 }
@@ -138,7 +140,9 @@ fn test_from_tedge_config_location() {
             default_mqtt_bind_address: IpAddress::default(),
             default_http_bind_address: IpAddress::default(),
             default_c8y_smartrest_templates: TemplatesSet::default(),
-            default_firmware_timeout: Seconds(DEFAULT_FIRMWARE_OPERATION_TIMEOUT_SEC)
+            default_firmware_child_update_timeout: Seconds(
+                DEFAULT_FIRMWARE_CHILD_UPDATE_TIMEOUT_SEC
+            )
         }
     );
 }

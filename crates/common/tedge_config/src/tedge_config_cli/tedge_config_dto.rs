@@ -130,5 +130,5 @@ pub(crate) struct PathConfigDto {
 #[tedge_derive::serde_other]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct FirmwareConfigDto {
-    pub(crate) timeout: Option<u64>,
+    pub(crate) child_update_timeout: Option<u64>,
 }

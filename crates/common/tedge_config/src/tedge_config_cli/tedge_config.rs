@@ -656,27 +656,31 @@ impl ConfigSettingAccessor<RunPathSetting> for TEdgeConfig {
     }
 }
 
-impl ConfigSettingAccessor<FirmwareTimeoutSetting> for TEdgeConfig {
-    fn query(&self, _setting: FirmwareTimeoutSetting) -> ConfigSettingResult<Seconds> {
+impl ConfigSettingAccessor<FirmwareChildUpdateTimeoutSetting> for TEdgeConfig {
+    fn query(&self, _setting: FirmwareChildUpdateTimeoutSetting) -> ConfigSettingResult<Seconds> {
         Ok(self
             .data
             .firmware
-            .timeout
+            .child_update_timeout
             .map(Seconds)
-            .unwrap_or(self.config_defaults.default_firmware_timeout))
+            .unwrap_or(self.config_defaults.default_firmware_child_update_timeout))
     }
 
     fn update(
         &mut self,
-        _setting: FirmwareTimeoutSetting,
+        _setting: FirmwareChildUpdateTimeoutSetting,
         value: Seconds,
     ) -> ConfigSettingResult<()> {
-        self.data.firmware.timeout = Some(value.into());
+        self.data.firmware.child_update_timeout = Some(value.into());
         Ok(())
     }
 
-    fn unset(&mut self, _setting: FirmwareTimeoutSetting) -> ConfigSettingResult<()> {
-        self.data.firmware.timeout = Some(self.config_defaults.default_firmware_timeout.into());
+    fn unset(&mut self, _setting: FirmwareChildUpdateTimeoutSetting) -> ConfigSettingResult<()> {
+        self.data.firmware.child_update_timeout = Some(
+            self.config_defaults
+                .default_firmware_child_update_timeout
+                .into(),
+        );
         Ok(())
     }
 }

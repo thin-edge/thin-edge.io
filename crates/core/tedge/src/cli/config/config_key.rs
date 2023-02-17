@@ -63,7 +63,7 @@ impl ConfigKey {
             config_key!(TmpPathSetting),
             config_key!(LogPathSetting),
             config_key!(RunPathSetting),
-            config_key!(FirmwareTimeoutSetting),
+            config_key!(FirmwareChildUpdateTimeoutSetting),
         ]
     }
 }
