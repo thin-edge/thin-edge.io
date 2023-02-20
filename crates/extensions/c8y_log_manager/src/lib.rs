@@ -9,6 +9,7 @@ use c8y_http_proxy::messages::C8YRestResult;
 pub use config::*;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
+use tedge_actors::CombinedReceiver;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::MessageSink;
@@ -24,27 +25,27 @@ use tedge_mqtt_ext::*;
 /// This is an actor builder.
 pub struct LogManagerBuilder {
     config: LogManagerConfig,
-    events_receiver: mpsc::Receiver<LogInput>,
+    input_receiver: CombinedReceiver<LogInput>,
     events_sender: mpsc::Sender<LogInput>,
     mqtt_publisher: Option<DynSender<MqttMessage>>,
     http_proxy: Option<C8YHttpProxy>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
-    signal_receiver: mpsc::Receiver<RuntimeRequest>,
 }
 
 impl LogManagerBuilder {
     pub fn new(config: LogManagerConfig) -> Self {
         let (events_sender, events_receiver) = mpsc::channel(10);
         let (signal_sender, signal_receiver) = mpsc::channel(10);
+        let input_receiver =
+            CombinedReceiver::new("LogManager".into(), events_receiver, signal_receiver);
 
         Self {
             config,
-            events_receiver,
+            input_receiver,
             events_sender,
             mqtt_publisher: None,
             http_proxy: None,
             signal_sender,
-            signal_receiver,
         }
     }
 
@@ -113,11 +114,7 @@ impl Builder<(LogManagerActor, LogManagerMessageBox)> for LogManagerBuilder {
             role: "http".to_string(),
         })?;
 
-        let message_box = LogManagerMessageBox::new(
-            self.events_receiver,
-            mqtt_publisher.clone(),
-            self.signal_receiver,
-        );
+        let message_box = LogManagerMessageBox::new(self.input_receiver, mqtt_publisher.clone());
 
         let actor = LogManagerActor::new(self.config, mqtt_publisher, http_proxy);
 

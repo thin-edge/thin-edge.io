@@ -19,13 +19,14 @@ use std::collections::VecDeque;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
-use tedge_actors::futures::channel::mpsc;
-use tedge_actors::futures::StreamExt;
 use tedge_actors::Actor;
+use tedge_actors::CombinedReceiver;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
 use tedge_actors::RuntimeError;
+use tedge_actors::ReceiveMessages;
 use tedge_actors::RuntimeRequest;
+use tedge_actors::WrappedInput;
 use tedge_api::health::get_health_status_message;
 use tedge_api::health::health_check_topics;
 use tedge_file_system_ext::FsWatchEvent;
@@ -377,38 +378,24 @@ impl Actor for LogManagerActor {
 
 // FIXME: Consider to use a SimpleMessageBox<LogInput,MqttMessage>
 pub struct LogManagerMessageBox {
-    // FIXME: not pub
-    pub events: mpsc::Receiver<LogInput>,
-    pub mqtt_requests: DynSender<MqttMessage>,
-    signal_receiver: mpsc::Receiver<RuntimeRequest>,
+    input_receiver: CombinedReceiver<LogInput>,
+    #[allow(dead_code)]
+    mqtt_requests: DynSender<MqttMessage>,
 }
 
 impl LogManagerMessageBox {
     pub fn new(
-        events: mpsc::Receiver<LogInput>,
+        input_receiver: CombinedReceiver<LogInput>,
         mqtt_con: DynSender<MqttMessage>,
-        signal_receiver: mpsc::Receiver<RuntimeRequest>,
     ) -> LogManagerMessageBox {
         LogManagerMessageBox {
-            events,
+            input_receiver,
             mqtt_requests: mqtt_con,
-            signal_receiver,
         }
     }
 
     pub async fn recv(&mut self) -> Option<LogInput> {
-        tokio::select! {
-            Some(event) = self.events.next() => {
-                self.log_input(&event);
-                Some(event)
-            }
-            Some(RuntimeRequest::Shutdown) = self.signal_receiver.next() => {
-                self.log_input(&RuntimeRequest::Shutdown);
-                // FIXME: not None
-                None
-            }
-            else => None
-        }
+        self.input_receiver.recv().await
     }
 }
 
@@ -427,6 +414,21 @@ impl MessageBox for LogManagerMessageBox {
     fn logging_is_on(&self) -> bool {
         // FIXME this mailbox recv and send method are not used making logging ineffective.
         false
+    }
+}
+
+#[async_trait]
+impl ReceiveMessages<LogInput> for LogManagerMessageBox {
+    async fn try_recv(&mut self) -> Result<Option<LogInput>, RuntimeRequest> {
+        self.input_receiver.try_recv().await
+    }
+
+    async fn recv_message(&mut self) -> Option<WrappedInput<LogInput>> {
+        self.input_receiver.recv_message().await
+    }
+
+    async fn recv(&mut self) -> Option<LogInput> {
+        self.input_receiver.recv().await
     }
 }
 

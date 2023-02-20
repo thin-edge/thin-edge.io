@@ -7,20 +7,22 @@ use mqtt_channel::StreamExt;
 use std::convert::Infallible;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::futures::channel::mpsc::channel;
-use tedge_actors::futures::channel::mpsc::Receiver;
 use tedge_actors::futures::channel::mpsc::Sender;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
+use tedge_actors::CombinedReceiver;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::RuntimeError;
+use tedge_actors::ReceiveMessages;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
+use tedge_actors::WrappedInput;
 
 pub type MqttConfig = mqtt_channel::Config;
 pub type MqttMessage = mqtt_channel::Message;
@@ -31,21 +33,25 @@ fan_in_message_type!(MqttRuntimeMessage[MqttMessage, RuntimeRequest] : Debug, Cl
 
 pub struct MqttActorBuilder {
     pub mqtt_config: mqtt_channel::Config,
-    pub publish_channel: (Sender<MqttRuntimeMessage>, Receiver<MqttRuntimeMessage>),
+    input_receiver: CombinedReceiver<MqttRuntimeMessage>,
+    publish_sender: Sender<MqttRuntimeMessage>,
     pub subscriber_addresses: Vec<(TopicFilter, DynSender<MqttMessage>)>,
     signal_sender: Sender<RuntimeRequest>,
-    signal_receiver: Receiver<RuntimeRequest>,
 }
 
 impl MqttActorBuilder {
     pub fn new(config: mqtt_channel::Config) -> Self {
+        let (publish_sender, publish_receiver) = channel(10);
         let (signal_sender, signal_receiver) = channel(10);
+        let input_receiver =
+            CombinedReceiver::new("MQTT".into(), publish_receiver, signal_receiver);
+
         MqttActorBuilder {
             mqtt_config: config,
-            publish_channel: channel(10),
+            input_receiver,
+            publish_sender,
             subscriber_addresses: Vec::new(),
             signal_sender,
-            signal_receiver,
         }
     }
 
@@ -55,11 +61,7 @@ impl MqttActorBuilder {
             combined_topic_filter.add_all(topic_filter.to_owned());
         }
         let mqtt_config = self.mqtt_config.with_subscriptions(combined_topic_filter);
-        let mqtt_message_box = MqttMessageBox::new(
-            self.publish_channel.1,
-            self.subscriber_addresses,
-            self.signal_receiver,
-        );
+        let mqtt_message_box = MqttMessageBox::new(self.input_receiver, self.subscriber_addresses);
 
         let mqtt_actor = MqttActor::new(mqtt_config);
         (mqtt_actor, mqtt_message_box)
@@ -74,7 +76,7 @@ impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter> for MqttActorBuilder
     ) {
         self.subscriber_addresses
             .push((subscriptions, peer.get_response_sender()));
-        peer.set_request_sender(self.publish_channel.0.clone().into())
+        peer.set_request_sender(self.publish_sender.clone().into())
     }
 }
 
@@ -86,7 +88,7 @@ impl MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder {
 
 impl MessageSink<MqttMessage> for MqttActorBuilder {
     fn get_sender(&self) -> DynSender<MqttMessage> {
-        self.publish_channel.0.clone().into()
+        self.publish_sender.clone().into()
     }
 }
 
@@ -109,35 +111,18 @@ impl Builder<(MqttActor, MqttMessageBox)> for MqttActorBuilder {
 }
 
 pub struct MqttMessageBox {
-    peer_receiver: Receiver<MqttRuntimeMessage>,
+    input_receiver: CombinedReceiver<MqttRuntimeMessage>,
     peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
-    signal_receiver: Receiver<RuntimeRequest>,
 }
 
 impl MqttMessageBox {
     fn new(
-        peer_receiver: Receiver<MqttRuntimeMessage>,
+        input_receiver: CombinedReceiver<MqttRuntimeMessage>,
         peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
-        signal_receiver: Receiver<RuntimeRequest>,
     ) -> Self {
         MqttMessageBox {
-            peer_receiver,
+            input_receiver,
             peer_senders,
-            signal_receiver,
-        }
-    }
-
-    async fn recv(&mut self) -> Option<MqttRuntimeMessage> {
-        tokio::select! {
-            Some(message) = self.peer_receiver.next() => {
-                self.log_input(&message);
-                Some(message)
-            }
-            Some(runtime_request) = self.signal_receiver.next() => {
-                self.log_input(&runtime_request);
-                Some(MqttRuntimeMessage::RuntimeRequest(runtime_request))
-            }
-            else => None
         }
     }
 
@@ -149,6 +134,21 @@ impl MqttMessageBox {
             }
         }
         Ok(())
+    }
+}
+
+#[async_trait]
+impl ReceiveMessages<MqttRuntimeMessage> for MqttMessageBox {
+    async fn try_recv(&mut self) -> Result<Option<MqttRuntimeMessage>, RuntimeRequest> {
+        self.input_receiver.try_recv().await
+    }
+
+    async fn recv_message(&mut self) -> Option<WrappedInput<MqttRuntimeMessage>> {
+        self.input_receiver.recv_message().await
+    }
+
+    async fn recv(&mut self) -> Option<MqttRuntimeMessage> {
+        self.input_receiver.recv().await
     }
 }
 
