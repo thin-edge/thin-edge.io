@@ -19,7 +19,7 @@ impl AwsConverter {
     pub fn new(add_timestamp: bool, clock: Box<dyn Clock>, size_threshold: SizeThreshold) -> Self {
         let mapper_config = MapperConfig {
             in_topic_filter: Self::in_topic_filter(),
-            out_topic: make_valid_topic_or_panic("aws/td"),
+            out_topic: make_valid_topic_or_panic("aws/td/measurements"),
             errors_topic: make_valid_topic_or_panic("tedge/errors"),
         };
         AwsConverter {
@@ -44,10 +44,10 @@ impl Converter for AwsConverter {
     }
 
     async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
-        let () = self.size_threshold.validate(input)?;
+        self.size_threshold.validate(input)?;
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
         let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
-        let () = tedge_api::parser::parse_str(input.payload_str()?, &mut serializer)?;
+        tedge_api::parser::parse_str(input.payload_str()?, &mut serializer)?;
 
         let payload = serializer.into_string()?;
         Ok(vec![(Message::new(&self.mapper_config.out_topic, payload))])
