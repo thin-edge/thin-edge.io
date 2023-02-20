@@ -7,6 +7,7 @@ use super::command::ReconnectBridgeCommand;
 
 const C8Y_CONFIG_FILENAME: &str = "c8y-bridge.conf";
 const AZURE_CONFIG_FILENAME: &str = "az-bridge.conf";
+const AWS_CONFIG_FILENAME: &str = "aws-bridge.conf";
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeReconnectCli {
@@ -14,6 +15,8 @@ pub enum TEdgeReconnectCli {
     C8y,
     /// Remove bridge connection to Azure.
     Az,
+    /// Remove bridge connection to AWS.
+    Aws,
 }
 
 impl BuildCommand for TEdgeReconnectCli {
@@ -41,6 +44,16 @@ impl BuildCommand for TEdgeReconnectCli {
                 common_mosquitto_config,
                 config_file: AZURE_CONFIG_FILENAME.into(),
                 cloud: Cloud::Azure,
+                use_mapper: true,
+                use_agent: false,
+            },
+            TEdgeReconnectCli::Aws => ReconnectBridgeCommand {
+                config_location,
+                config_repository,
+                service_manager,
+                common_mosquitto_config,
+                config_file: AWS_CONFIG_FILENAME.into(),
+                cloud: Cloud::Aws,
                 use_mapper: true,
                 use_agent: false,
             },
