@@ -15,9 +15,6 @@ pub enum FirmwareManagementError {
     )]
     DirectoryNotFound { path: std::path::PathBuf },
 
-    #[error("Received invalid operation status for operation={op_id}")]
-    InvalidOperationStatus { op_id: String },
-
     #[error("The received SmartREST request is duplicated with already addressed operation. Ignore this request.")]
     RequestAlreadyAddressed,
 
@@ -43,10 +40,10 @@ pub enum FirmwareManagementError {
     FromSystemServiceError(#[from] tedge_config::system_services::SystemServiceError),
 
     #[error(transparent)]
-    TEdgeConfigError(#[from] tedge_config::TEdgeConfigError),
+    FromTEdgeConfigError(#[from] tedge_config::TEdgeConfigError),
 
     #[error(transparent)]
-    ConfigSettingError(#[from] tedge_config::ConfigSettingError),
+    FromConfigSettingError(#[from] tedge_config::ConfigSettingError),
 
     #[error(transparent)]
     FromSendError(#[from] futures::channel::mpsc::SendError),

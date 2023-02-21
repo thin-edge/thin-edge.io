@@ -3,8 +3,6 @@ use crate::firmware_manager::FirmwareOperationEntry;
 use c8y_api::smartrest::topic::C8yTopic;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
-use serde::Deserialize;
-use serde::Deserializer;
 use tedge_api::OperationStatus;
 
 #[derive(Debug)]
@@ -73,17 +71,8 @@ pub struct FirmwareOperationResponse {
 pub struct ResponsePayload {
     #[serde(rename = "id")]
     pub operation_id: String,
-    #[serde(default, deserialize_with = "treat_error_as_none")]
-    pub status: Option<OperationStatus>,
+    pub status: OperationStatus,
     pub reason: Option<String>,
-}
-
-fn treat_error_as_none<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    T: Deserialize<'de>,
-    D: Deserializer<'de>,
-{
-    Ok(Option::deserialize(deserializer).unwrap_or(None))
 }
 
 impl FirmwareOperationResponse {
@@ -107,12 +96,6 @@ impl TryFrom<&Message> for FirmwareOperationResponse {
         let topic = &message.topic.name;
         let child_id = get_child_id_from_child_topic(topic)?;
         let request_payload: ResponsePayload = serde_json::from_str(message.payload_str()?)?;
-
-        if request_payload.status.is_none() {
-            return Err(FirmwareManagementError::InvalidOperationStatus {
-                op_id: request_payload.operation_id,
-            });
-        }
 
         Ok(Self {
             child_id,
@@ -139,6 +122,7 @@ mod tests {
     use super::*;
 
     use assert_json_diff::assert_json_eq;
+    use assert_matches::assert_matches;
     use serde_json::json;
 
     #[test]
@@ -177,21 +161,21 @@ mod tests {
 
     #[test]
     fn create_firmware_operation_response() {
-        let coming_payload = json!({
+        let incoming_payload = json!({
             "status": "executing",
             "id": "op-id",
             "reason": null
         })
         .to_string();
-        let message = Message::new(
+        let incoming_message = Message::new(
             &Topic::new_unchecked("tedge/child-id/commands/res/firmware_update"),
-            coming_payload,
+            incoming_payload,
         );
-        let firmware_response = FirmwareOperationResponse::try_from(&message).unwrap();
+        let firmware_response = FirmwareOperationResponse::try_from(&incoming_message).unwrap();
 
         let expected_payload = ResponsePayload {
             operation_id: "op-id".to_string(),
-            status: Some(OperationStatus::Executing),
+            status: OperationStatus::Executing,
             reason: None,
         };
 
@@ -209,60 +193,93 @@ mod tests {
 
     #[test]
     fn deserialize_response_payload() {
-        let payload = json!({
+        let incoming_payload = json!({
             "status": "failed",
             "id": "op-id",
             "reason": "aaa"
         })
         .to_string();
-        let request_payload: ResponsePayload = serde_json::from_str(&payload).unwrap();
+        let message = Message::new(
+            &Topic::new_unchecked("tedge/child-id/commands/res/firmware_update"),
+            incoming_payload,
+        );
+        let firmware_response = FirmwareOperationResponse::try_from(&message).unwrap();
         let expected_response_payload = ResponsePayload {
             operation_id: "op-id".to_string(),
-            status: Some(OperationStatus::Failed),
+            status: OperationStatus::Failed,
             reason: Some("aaa".to_string()),
         };
-        assert_eq!(request_payload, expected_response_payload);
+        assert_eq!(firmware_response.payload, expected_response_payload);
     }
 
     #[test]
     fn deserialize_response_payload_with_only_operation_id() {
-        let payload = json!({
+        let incoming_payload = json!({
             "id": "op-id",
         })
         .to_string();
-        let request_payload: ResponsePayload = serde_json::from_str(&payload).unwrap();
-        let expected_response_payload = ResponsePayload {
-            operation_id: "op-id".to_string(),
-            status: None,
-            reason: None,
-        };
-        assert_eq!(request_payload, expected_response_payload);
+        let message = Message::new(
+            &Topic::new_unchecked("tedge/child-id/commands/res/firmware_update"),
+            incoming_payload,
+        );
+        let result = FirmwareOperationResponse::try_from(&message);
+        assert_matches!(
+            result.unwrap_err(),
+            FirmwareManagementError::FromSerdeJsonError { .. }
+        );
     }
 
     #[test]
     fn deserialize_response_payload_with_invalid_operation_status() {
-        let payload = json!({
+        let incoming_payload = json!({
             "status": "invalid",
             "id": "op-id",
         })
         .to_string();
-        let request_payload: ResponsePayload = serde_json::from_str(&payload).unwrap();
-        let expected_response_payload = ResponsePayload {
-            operation_id: "op-id".to_string(),
-            status: None,
-            reason: None,
-        };
-        assert_eq!(request_payload, expected_response_payload);
+        let message = Message::new(
+            &Topic::new_unchecked("tedge/child-id/commands/res/firmware_update"),
+            incoming_payload,
+        );
+        let result = FirmwareOperationResponse::try_from(&message);
+        assert_matches!(
+            result.unwrap_err(),
+            FirmwareManagementError::FromSerdeJsonError { .. }
+        );
+    }
+
+    #[test]
+    fn deserialize_response_payload_with_invalid_reason() {
+        let incoming_payload = json!({
+            "reason": 00,
+            "id": "op-id",
+        })
+        .to_string();
+        let message = Message::new(
+            &Topic::new_unchecked("tedge/child-id/commands/res/firmware_update"),
+            incoming_payload,
+        );
+        let result = FirmwareOperationResponse::try_from(&message);
+        assert_matches!(
+            result.unwrap_err(),
+            FirmwareManagementError::FromSerdeJsonError { .. }
+        );
     }
 
     #[test]
     fn deserialize_response_payload_without_operation_id() {
-        let payload = json!({
+        let incoming_payload = json!({
             "status": "executing",
             "reason": "aaa"
         })
         .to_string();
-        let result = serde_json::from_str::<ResponsePayload>(&payload);
-        assert!(result.is_err())
+        let message = Message::new(
+            &Topic::new_unchecked("tedge/child-id/commands/res/firmware_update"),
+            incoming_payload,
+        );
+        let result = FirmwareOperationResponse::try_from(&message);
+        assert_matches!(
+            result.unwrap_err(),
+            FirmwareManagementError::FromSerdeJsonError { .. }
+        );
     }
 }

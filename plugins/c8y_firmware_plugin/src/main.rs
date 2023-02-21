@@ -12,7 +12,6 @@ use c8y_api::http_proxy::JwtAuthHttpProxy;
 use clap::Parser;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
@@ -27,7 +26,6 @@ use tedge_config::TEdgeConfig;
 use tedge_config::TmpPathSetting;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_utils::file::create_directory_with_user_group;
-use tokio::sync::Mutex;
 use tracing::info;
 
 // TODO! We should make it configurable by tedge config later.
@@ -93,7 +91,7 @@ async fn main() -> Result<(), FirmwareManagementError> {
     let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
 
     let http_client = create_http_client(&tedge_config).await?;
-    let http_client: Arc<Mutex<dyn C8YHttpProxy>> = Arc::new(Mutex::new(http_client));
+    let http_client = Box::new(http_client);
 
     let http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
     let http_address = tedge_config.query(HttpBindAddressSetting)?.to_string();
@@ -138,7 +136,6 @@ fn init(cfg_dir: &Path) -> Result<(), FirmwareManagementError> {
 }
 
 fn create_directories(persistent_dir: &Path) -> Result<(), FirmwareManagementError> {
-    // TODO! Check the mode of these directories.
     create_directory_with_user_group(
         format!("{}/{}", persistent_dir.display(), CACHE_DIR_NAME),
         "tedge",

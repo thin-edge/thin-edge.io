@@ -8,7 +8,6 @@ use mqtt_tests::with_timeout::WithTimeout;
 use mqtt_tests::StreamExt;
 use serde_json::json;
 use sha256::digest;
-use std::sync::Arc;
 use tedge_test_utils::fs::TempTedgeDir;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
@@ -135,10 +134,11 @@ async fn handle_request_file_download_failed() -> anyhow::Result<()> {
         .await?;
 
     // Assert the c8y_Firmware operation status mapping to EXECUTING(501) and FAILED(502)
+    // The failure reason depends on what the mocked http client's download_file() returns.
     mqtt_tests::assert_received_all_expected(
         &mut smartrest_messages,
         TEST_TIMEOUT_MS,
-        &["501,c8y_Firmware", "502,c8y_Firmware"],
+        &["501,c8y_Firmware", "502,c8y_Firmware,\"Request timed out\""],
     )
     .await;
 
@@ -196,10 +196,15 @@ async fn handle_request_dir_cache_not_found() -> anyhow::Result<()> {
         .await?;
 
     // Assert the c8y_Firmware operation status mapping to EXECUTING(501) and FAILED(502)
+    let expected_failure_text =
+        format!("Directory {}/cache is not found. Run 'c8y-firmware-plugin --init' to create the directory.", tmp_dir.path().display());
     mqtt_tests::assert_received_all_expected(
         &mut smartrest_messages,
         TEST_TIMEOUT_MS,
-        &["501,c8y_Firmware", "502,c8y_Firmware"],
+        &[
+            "501,c8y_Firmware",
+            &format!("502,c8y_Firmware,\"{}\"", expected_failure_text),
+        ],
     )
     .await;
 
@@ -257,10 +262,15 @@ async fn handle_request_dir_file_transfer_not_found() -> anyhow::Result<()> {
         .await?;
 
     // Assert the c8y_Firmware operation status mapping to EXECUTING(501) and FAILED(502)
+    let expected_failure_text =
+        format!("Directory {}/file-transfer is not found. Run 'c8y-firmware-plugin --init' to create the directory.", tmp_dir.path().display());
     mqtt_tests::assert_received_all_expected(
         &mut smartrest_messages,
         TEST_TIMEOUT_MS,
-        &["501,c8y_Firmware", "502,c8y_Firmware"],
+        &[
+            "501,c8y_Firmware",
+            &format!("502,c8y_Firmware,\"{}\"", expected_failure_text),
+        ],
     )
     .await;
 
@@ -318,10 +328,15 @@ async fn handle_request_dir_firmware_not_found() -> anyhow::Result<()> {
         .await?;
 
     // Assert the c8y_Firmware operation status mapping to EXECUTING(501) and FAILED(502)
+    let expected_failure_text =
+        format!("Directory {}/firmware is not found. Run 'c8y-firmware-plugin --init' to create the directory.", tmp_dir.path().display());
     mqtt_tests::assert_received_all_expected(
         &mut smartrest_messages,
         TEST_TIMEOUT_MS,
-        &["501,c8y_Firmware", "502,c8y_Firmware"],
+        &[
+            "501,c8y_Firmware",
+            &format!("502,c8y_Firmware,\"{}\"", expected_failure_text),
+        ],
     )
     .await;
 
@@ -366,6 +381,13 @@ async fn handle_request_timeout_child_device() -> anyhow::Result<()> {
         .messages_published_on(format!("c8y/s/us/{CHILD_DEVICE_ID}").as_str())
         .await;
 
+    // Subscribe tedge request endpoint for firmware update
+    let mut tedge_command_messages = broker
+        .messages_published_on(&format!(
+            "tedge/{CHILD_DEVICE_ID}/commands/req/firmware_update"
+        ))
+        .await;
+
     // Publish a c8y_Firmware operation to the plugin
     broker
         .publish(
@@ -377,11 +399,25 @@ async fn handle_request_timeout_child_device() -> anyhow::Result<()> {
         )
         .await?;
 
+    // Firmware update REQUEST should be received.
+    let received_message = tedge_command_messages
+        .next()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await?
+        .expect("No message received.");
+    let received_json: serde_json::Value = serde_json::from_str(&received_message)?;
+    let operation_id = received_json.get("id").unwrap().as_str().unwrap();
+
     // Assert the c8y_Firmware operation status mapping to EXECUTING(501) and FAILED(502)
+    let expected_failure_text =
+        format!("Child device child-device did not respond within the timeout interval of 1sec. Operation ID={operation_id}");
     mqtt_tests::assert_received_all_expected(
         &mut smartrest_messages,
         TEST_TIMEOUT_MS,
-        &["501,c8y_Firmware", "502,c8y_Firmware"],
+        &[
+            "501,c8y_Firmware",
+            &format!("502,c8y_Firmware,\"{}\"", expected_failure_text),
+        ],
     )
     .await;
 
@@ -460,7 +496,6 @@ async fn handle_response_successful_child_device() -> anyhow::Result<()> {
             &json!({
                 "status": "successful",
                 "id": operation_id,
-                "reason": null
             })
             .to_string(),
         )
@@ -558,6 +593,14 @@ async fn handle_response_executing_and_failed_child_device() -> anyhow::Result<(
         )
         .await?;
 
+    // Assert the c8y_Firmware operation status mapping to EXECUTING(501)
+    mqtt_tests::assert_received_all_expected(
+        &mut smartrest_messages,
+        TEST_TIMEOUT_MS,
+        &["501,c8y_Firmware"],
+    )
+    .await;
+
     // Publish a failed RESPONSE from child device
     broker
         .publish(
@@ -571,20 +614,21 @@ async fn handle_response_executing_and_failed_child_device() -> anyhow::Result<(
         )
         .await?;
 
-    // Assert the c8y_Firmware operation status mapping to EXECUTING(501), SUCCESSFUL(503), and Set Firmware(115)
+    // Assert the c8y_Firmware operation status mapping to FAILED(502)
     mqtt_tests::assert_received_all_expected(
         &mut smartrest_messages,
         TEST_TIMEOUT_MS,
-        &["501,c8y_Firmware", "502,c8y_Firmware,\"failure reason\""],
+        &["502,c8y_Firmware,\"failure reason\""],
     )
     .await;
 
     Ok(())
 }
 
+// TODO: This test behaviour should be reconsidered once we get an operation ID from c8y.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[serial_test::serial]
-async fn handle_response_with_invalid_status_child_device() -> anyhow::Result<()> {
+async fn ignore_response_with_invalid_status_child_device() -> anyhow::Result<()> {
     let mut tmp_dir = TempTedgeDir::new();
     create_required_directories(&mut tmp_dir);
 
@@ -654,19 +698,17 @@ async fn handle_response_with_invalid_status_child_device() -> anyhow::Result<()
             &json!({
                 "status": "invalid",
                 "id": operation_id,
-                "reason": null
             })
             .to_string(),
         )
         .await?;
 
-    // Assert the c8y_Firmware operation status mapping to EXECUTING(501), SUCCESSFUL(503), and Set Firmware(115)
-    mqtt_tests::assert_received_all_expected(
-        &mut smartrest_messages,
-        TEST_TIMEOUT_MS,
-        &["501,c8y_Firmware", "502,c8y_Firmware"],
-    )
-    .await;
+    // No message is expected since the invalid status is reported as response.
+    let result = smartrest_messages
+        .next()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await;
+    assert!(result.is_err());
 
     Ok(())
 }
@@ -727,17 +769,19 @@ async fn handle_response_with_invalid_operation_id_child_device() -> anyhow::Res
             &json!({
                 "status": "successful",
                 "id": "invalid_op_id",
-                "reason": null
             })
             .to_string(),
         )
         .await?;
 
-    // Assert the c8y_Firmware operation status mapping to EXECUTING(501), SUCCESSFUL(503), and Set Firmware(115)
+    // Assert the c8y_Firmware operation status mapping to EXECUTING(501) and FAILED(502)
     mqtt_tests::assert_received_all_expected(
         &mut smartrest_messages,
         TEST_TIMEOUT_MS,
-        &["501,c8y_Firmware", "502,c8y_Firmware"],
+        &[
+            "501,c8y_Firmware",
+            "502,c8y_Firmware,\"No such file or directory (os error 2)\"",
+        ],
     )
     .await;
 
@@ -753,7 +797,7 @@ async fn start_firmware_manager(
     let mut firmware_manager = FirmwareManager::new(
         "tedge_device_id".to_string(),
         port,
-        Arc::new(Mutex::new(http_client)),
+        Box::new(http_client),
         mockito::server_address().to_string(),
         tmp_dir.to_path_buf(),
         tmp_dir.to_path_buf(),

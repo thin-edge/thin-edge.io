@@ -3,7 +3,6 @@ use crate::message::get_child_id_from_child_topic;
 use crate::message::FirmwareOperationRequest;
 use crate::message::FirmwareOperationResponse;
 use crate::FirmwareManagementError::DirectoryNotFound;
-use crate::FirmwareManagementError::InvalidOperationStatus;
 use crate::CACHE_DIR_NAME;
 use crate::FILE_TRANSFER_DIR_NAME;
 use crate::PERSISTENT_STORE_DIR_NAME;
@@ -37,7 +36,6 @@ use std::fs;
 use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 use tedge_api::health::health_check_topics;
 use tedge_api::health::health_status_down_message;
@@ -46,7 +44,6 @@ use tedge_api::OperationStatus;
 use tedge_utils::file::create_file_with_mode;
 use tedge_utils::file::overwrite_file;
 use tedge_utils::timers::Timers;
-use tokio::sync::Mutex;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
@@ -60,7 +57,7 @@ pub struct FirmwareManager {
     health_check_topics: TopicFilter,
     firmware_update_response_topics: TopicFilter,
     tedge_device_id: String,
-    http_client: Arc<Mutex<dyn C8YHttpProxy>>,
+    http_client: Box<dyn C8YHttpProxy>,
     local_http_host: String,
     persistent_dir: PathBuf,
     tmp_dir: PathBuf,
@@ -72,7 +69,7 @@ impl FirmwareManager {
     pub async fn new(
         tedge_device_id: String,
         mqtt_port: u16,
-        http_client: Arc<Mutex<dyn C8YHttpProxy>>,
+        http_client: Box<dyn C8YHttpProxy>,
         local_http_host: String,
         persistent_dir: PathBuf,
         tmp_dir: PathBuf,
@@ -199,20 +196,21 @@ impl FirmwareManager {
             smartrest_request.url,
         );
 
-        let child_id = smartrest_request.device.as_str();
-        if child_id == self.tedge_device_id {
+        if smartrest_request.device == self.tedge_device_id {
             warn!("c8y-firmware-plugin does not support firmware operation for the main tedge device. \
             Please define a custom operation handler for the c8y_Firmware operation.");
             return Ok(());
         }
 
+        let child_id = smartrest_request.device.as_str();
+
         if let Err(err) = self
-            .is_same_request_in_progress(smartrest_request.clone())
+            .validate_same_request_in_progress(smartrest_request.clone())
             .await
         {
             return match err {
                 FirmwareManagementError::RequestAlreadyAddressed => {
-                    warn!("Skip the received c8y_Firmware operation.");
+                    warn!("Skip the received c8y_Firmware operation as the same operation is already in progress.");
                     Ok(())
                 }
                 _ => {
@@ -241,85 +239,38 @@ impl FirmwareManager {
         operation_id: String,
     ) -> Result<(), FirmwareManagementError> {
         let child_id = smartrest_request.device.as_str();
-        let firmware_name = smartrest_request.name.as_str();
-        let firmware_version = smartrest_request.version.as_str();
         let firmware_url = smartrest_request.url.as_str();
         let file_cache_key = digest(firmware_url);
-
-        // <tedge-persistent-root>/cache/<file_cache_key>
-        let cache_dir_path = self.persistent_dir.join(CACHE_DIR_NAME);
-        if !cache_dir_path.exists() {
-            return Err(DirectoryNotFound {
-                path: cache_dir_path,
-            });
-        }
-        let cache_dest = cache_dir_path.join(&file_cache_key);
-
-        // <tedge-persistent-root>/file-transfer
-        let file_transfer_dir_path = self.persistent_dir.join(FILE_TRANSFER_DIR_NAME);
-        // <tedge-persistent-root>/file-transfer/<child-id>/firmware_update/<file_cache_key>
-        let transfer_dest = file_transfer_dir_path
-            .join(child_id)
-            .join("firmware_update")
-            .join(&file_cache_key);
-
         let file_transfer_url = format!(
             "http://{}/tedge/file-transfer/{child_id}/firmware_update/{file_cache_key}",
             &self.local_http_host
         );
 
-        if cache_dest.is_file() {
-            info!(
-                "Hit the file cache={}. File download is skipped.",
-                cache_dest.display()
-            );
-        } else {
-            match self
-                .http_client
-                .lock()
-                .await
-                .download_file(firmware_url, &file_cache_key, &self.tmp_dir)
-                .await
-            {
-                Ok(tmp_file_path) => {
-                    info!("Successfully downloaded from {firmware_url}");
-                    move_file(&tmp_file_path, &cache_dest)?;
-                }
-                Err(err) => {
-                    error!("Failed to download from {firmware_url}");
-                    return Err(err.into());
-                }
-            }
-        }
+        // <tedge-persistent-root>/cache/<file_cache_key>
+        let cache_dest_path = self.get_cache_file_path(&file_cache_key)?;
 
-        // Create a symlink if it doesn't exist yet.
-        if !transfer_dest.is_symlink() {
-            create_parent_dirs_under_file_transfer(&file_transfer_dir_path, child_id)?;
-            unix_fs::symlink(&cache_dest, &transfer_dest)?;
-        }
+        self.download_new_file(&cache_dest_path, firmware_url)
+            .await?;
 
-        // Create an operation status file
-        let file_sha256 = try_digest(transfer_dest.as_path())?;
+        // <tedge-persistent-root>/file-transfer/<child-id>/firmware_update/<file_cache_key>
+        let file_transfer_dest_path =
+            self.create_file_transfer_symlink(child_id, &file_cache_key, &cache_dest_path)?;
+
+        let file_sha256 = try_digest(file_transfer_dest_path.as_path())?;
         let operation_entry = FirmwareOperationEntry {
             operation_id: operation_id.clone(),
             child_id: child_id.to_string(),
-            name: firmware_name.to_string(),
-            version: firmware_version.to_string(),
+            name: smartrest_request.name.to_string(),
+            version: smartrest_request.version.to_string(),
             server_url: firmware_url.to_string(),
             file_transfer_url: file_transfer_url.clone(),
             sha256: file_sha256.to_string(),
             attempt: 1,
         };
-        let persistent_store = PersistentStore::from(self.persistent_dir.clone());
-        operation_entry.create_file(persistent_store)?;
 
-        let request = FirmwareOperationRequest::from(operation_entry);
-        self.mqtt_client
-            .published
-            .send(request.try_into()?)
-            .await
-            .map_err(MqttError::from)?;
-        info!("Firmware update request is sent. operation_id={operation_id}, child={child_id}");
+        self.create_operation_status_file(operation_entry.clone())?;
+
+        self.send_firmware_update_request(operation_entry).await?;
 
         self.operation_timer.start_timer(
             (child_id.to_string(), operation_id),
@@ -330,10 +281,10 @@ impl FirmwareManager {
         Ok(())
     }
 
-    fn handle_child_device_firmware_update_response(
+    async fn handle_child_device_firmware_update_response(
         &mut self,
         response: &FirmwareOperationResponse,
-    ) -> Result<Vec<Message>, FirmwareManagementError> {
+    ) -> Result<(), FirmwareManagementError> {
         let c8y_child_topic = Topic::new_unchecked(&response.get_child_topic());
         let child_device_payload = response.get_payload();
         let child_id = response.get_child_id();
@@ -349,21 +300,23 @@ impl FirmwareManager {
             .operation_timer
             .current_value(&(child_id.to_string(), operation_id.to_string()));
 
-        let mut mapped_responses = vec![];
         match current_operation_state {
             Some(&ActiveOperationState::Executing) => {}
             Some(&ActiveOperationState::Pending) => {
                 let executing_status_payload = DownloadFirmwareStatusMessage::status_executing()?;
-                mapped_responses.push(Message::new(&c8y_child_topic, executing_status_payload));
+                self.mqtt_client
+                    .published
+                    .send(Message::new(&c8y_child_topic, executing_status_payload))
+                    .await?;
             }
             None => {
                 info!("Received a response from {child_id} for unknown request {operation_id}.");
-                return Ok(mapped_responses);
+                return Ok(());
             }
         }
 
         match status {
-            Some(OperationStatus::Successful) => {
+            OperationStatus::Successful => {
                 self.operation_timer
                     .stop_timer((child_id, operation_id.to_string()));
                 fs::remove_file(status_file_path)?;
@@ -372,16 +325,22 @@ impl FirmwareManager {
                     "115,{},{},{}",
                     operation_entry.name, operation_entry.version, operation_entry.server_url
                 );
-                mapped_responses.push(Message::new(
-                    &c8y_child_topic,
-                    update_firmware_state_message,
-                ));
+                self.mqtt_client
+                    .published
+                    .send(Message::new(
+                        &c8y_child_topic,
+                        update_firmware_state_message,
+                    ))
+                    .await?;
 
                 let successful_status_payload =
                     DownloadFirmwareStatusMessage::status_successful(None)?;
-                mapped_responses.push(Message::new(&c8y_child_topic, successful_status_payload));
+                self.mqtt_client
+                    .published
+                    .send(Message::new(&c8y_child_topic, successful_status_payload))
+                    .await?;
             }
-            Some(OperationStatus::Failed) => {
+            OperationStatus::Failed => {
                 self.operation_timer
                     .stop_timer((child_id, operation_id.to_string()));
                 fs::remove_file(status_file_path)?;
@@ -390,19 +349,21 @@ impl FirmwareManager {
                 let failed_status_payload = DownloadFirmwareStatusMessage::status_failed(
                     child_device_payload.reason.as_ref().unwrap_or(&text).into(),
                 )?;
-                mapped_responses.push(Message::new(&c8y_child_topic, failed_status_payload));
+                self.mqtt_client
+                    .published
+                    .send(Message::new(&c8y_child_topic, failed_status_payload))
+                    .await?;
             }
-            Some(OperationStatus::Executing) => {
+            OperationStatus::Executing => {
                 self.operation_timer.start_timer(
                     (child_id, operation_id.to_string()),
                     ActiveOperationState::Executing,
                     self.timeout_sec,
                 );
             }
-            None => {}
         }
 
-        Ok(mapped_responses)
+        Ok(())
     }
 
     async fn handle_child_device_firmware_operation_response(
@@ -412,13 +373,11 @@ impl FirmwareManager {
         let child_id = get_child_id_from_child_topic(&message.topic.name)?;
 
         match FirmwareOperationResponse::try_from(message) {
-            Ok(response) => match self.handle_child_device_firmware_update_response(&response) {
-                Ok(smartrest_responses) => {
-                    for smartrest_response in smartrest_responses {
-                        self.mqtt_client.published.send(smartrest_response).await?
-                    }
-                }
-                Err(err) => {
+            Ok(response) => {
+                if let Err(err) = self
+                    .handle_child_device_firmware_update_response(&response)
+                    .await
+                {
                     self.fail_operation_in_cloud(
                         child_id,
                         Some(response.get_payload().operation_id.as_str()),
@@ -426,19 +385,11 @@ impl FirmwareManager {
                     )
                     .await?;
                 }
-            },
-            Err(err) => match err {
-                InvalidOperationStatus {
-                    op_id: ref operation_id,
-                } => {
-                    self.fail_operation_in_cloud(child_id, Some(operation_id), err.to_string())
-                        .await?;
-                }
-                _ => {
-                    self.fail_operation_in_cloud(child_id, None, err.to_string())
-                        .await?;
-                }
-            },
+            }
+            Err(err) => {
+                // Ignore bad responses. Eventually, timeout will fail an operation.
+                error!("Received a firmware update response with invalid payload for child {child_id}. Error: {err}");
+            }
         }
         Ok(())
     }
@@ -459,11 +410,7 @@ impl FirmwareManager {
                 operation_entry.overwrite_file(persistent_store.clone())?;
 
                 let request = FirmwareOperationRequest::from(operation_entry.clone());
-                self.mqtt_client
-                    .published
-                    .send(request.try_into()?)
-                    .await
-                    .map_err(MqttError::from)?;
+                self.mqtt_client.published.send(request.try_into()?).await?;
                 info!(
                     "Firmware update request is resent. operation_id={}, child={}",
                     operation_entry.operation_id, operation_entry.child_id
@@ -533,45 +480,132 @@ impl FirmwareManager {
         );
 
         if op_state == ActiveOperationState::Pending {
-            self.mqtt_client
-                .published
-                .send(executing_msg)
-                .await
-                .map_err(MqttError::from)?;
+            self.mqtt_client.published.send(executing_msg).await?;
         }
 
-        self.mqtt_client
-            .published
-            .send(failed_msg)
-            .await
-            .map_err(MqttError::from)?;
+        self.mqtt_client.published.send(failed_msg).await?;
 
         Ok(())
     }
 
     // This function can be removed once we start using operation ID from c8y.
-    async fn is_same_request_in_progress(
+    async fn validate_same_request_in_progress(
         &mut self,
         smartrest_request: SmartRestFirmwareRequest,
     ) -> Result<(), FirmwareManagementError> {
         let persistent_store_dir_path = self.persistent_dir.join(PERSISTENT_STORE_DIR_NAME);
-        if !persistent_store_dir_path.exists() {
-            return Err(DirectoryNotFound {
-                path: persistent_store_dir_path,
-            });
-        }
+        validate_dir_exists(&persistent_store_dir_path)?;
 
-        for entry in fs::read_dir(persistent_store_dir_path)? {
-            let file_path = entry?.path();
-            let recorded_entry = FirmwareOperationEntry::read_from_file(&file_path)?;
-            if recorded_entry.child_id == smartrest_request.device
-                && recorded_entry.name == smartrest_request.name
-                && recorded_entry.version == smartrest_request.version
-                && recorded_entry.server_url == smartrest_request.url
-            {
-                return Err(FirmwareManagementError::RequestAlreadyAddressed);
+        for entry in fs::read_dir(persistent_store_dir_path.clone())? {
+            match entry {
+                Ok(file_path) => match FirmwareOperationEntry::read_from_file(&file_path.path()) {
+                    Ok(recorded_entry) => {
+                        if recorded_entry.child_id == smartrest_request.device
+                            && recorded_entry.name == smartrest_request.name
+                            && recorded_entry.version == smartrest_request.version
+                            && recorded_entry.server_url == smartrest_request.url
+                        {
+                            return Err(FirmwareManagementError::RequestAlreadyAddressed);
+                        }
+                    }
+                    Err(err) => {
+                        warn!("Error: {err} while reading the contents of persistent store directory {}", persistent_store_dir_path.display());
+                        continue;
+                    }
+                },
+                Err(err) => {
+                    warn!(
+                        "Error: {err} while reading the contents of persistent store directory {}",
+                        persistent_store_dir_path.display()
+                    );
+                    continue;
+                }
             }
         }
+        Ok(())
+    }
+
+    fn get_cache_file_path(
+        &self,
+        file_cache_key: &str,
+    ) -> Result<PathBuf, FirmwareManagementError> {
+        let cache_dir_path = self.persistent_dir.join(CACHE_DIR_NAME);
+        validate_dir_exists(&cache_dir_path)?;
+        Ok(cache_dir_path.join(file_cache_key))
+    }
+
+    fn create_file_transfer_symlink(
+        &self,
+        child_id: &str,
+        file_cache_key: &str,
+        original_path: &Path,
+    ) -> Result<PathBuf, FirmwareManagementError> {
+        let file_transfer_dir_path = self.persistent_dir.join(FILE_TRANSFER_DIR_NAME);
+        validate_dir_exists(&file_transfer_dir_path)?;
+
+        let symlink_dir_path = file_transfer_dir_path
+            .join(child_id)
+            .join("firmware_update");
+        let symlink_path = symlink_dir_path.join(file_cache_key);
+
+        if !symlink_path.is_symlink() {
+            fs::create_dir_all(symlink_dir_path)?;
+            unix_fs::symlink(original_path, &symlink_path)?;
+        }
+        Ok(symlink_path)
+    }
+
+    async fn download_new_file(
+        &mut self,
+        cache_dest: &Path,
+        firmware_url: &str,
+    ) -> Result<(), FirmwareManagementError> {
+        let file_cache_key = digest(firmware_url);
+
+        if cache_dest.is_file() {
+            info!(
+                "Hit the file cache={}. File download is skipped.",
+                cache_dest.display()
+            );
+        } else {
+            match self
+                .http_client
+                .download_file(firmware_url, &file_cache_key, &self.tmp_dir)
+                .await
+            {
+                Ok(tmp_file_path) => {
+                    info!("Successfully downloaded from {firmware_url}");
+                    move_file(&tmp_file_path, cache_dest)?;
+                }
+                Err(err) => {
+                    error!("Failed to download from {firmware_url}");
+                    return Err(err.into());
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn create_operation_status_file(
+        &self,
+        operation_entry: FirmwareOperationEntry,
+    ) -> Result<(), FirmwareManagementError> {
+        let persistent_store = PersistentStore::from(self.persistent_dir.clone());
+        operation_entry.create_file(persistent_store)?;
+        Ok(())
+    }
+
+    async fn send_firmware_update_request(
+        &mut self,
+        operation_entry: FirmwareOperationEntry,
+    ) -> Result<(), FirmwareManagementError> {
+        let request = FirmwareOperationRequest::from(operation_entry.clone());
+        self.mqtt_client.published.send(request.try_into()?).await?;
+        info!(
+            "Firmware update request is sent. operation_id={}, child={}",
+            operation_entry.operation_id, operation_entry.child_id
+        );
         Ok(())
     }
 }
@@ -675,23 +709,14 @@ impl TryIntoOperationStatusMessage for DownloadFirmwareStatusMessage {
     }
 }
 
-// Create <tedge-persistent-root>/file-transfer/<child-id>/firmware_update directory.
-// Return error if <tedge-persistent-root>/file-transfer does not exist.
-fn create_parent_dirs_under_file_transfer(
-    file_transfer_dir_path: &Path,
-    child_id: &str,
-) -> Result<(), FirmwareManagementError> {
-    if !file_transfer_dir_path.exists() {
-        return Err(DirectoryNotFound {
-            path: file_transfer_dir_path.to_path_buf(),
-        });
+fn validate_dir_exists(dir_path: &Path) -> Result<(), FirmwareManagementError> {
+    if dir_path.exists() {
+        Ok(())
+    } else {
+        Err(DirectoryNotFound {
+            path: dir_path.to_path_buf(),
+        })
     }
-    fs::create_dir_all(
-        file_transfer_dir_path
-            .join(child_id)
-            .join("firmware_update"),
-    )?;
-    Ok(())
 }
 
 // TODO! Remove it and use tedge_utils/move_file instead.
