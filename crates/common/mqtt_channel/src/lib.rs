@@ -37,6 +37,7 @@ mod messages;
 mod session;
 mod topics;
 
+#[cfg(test)]
 mod tests;
 
 pub use channel::*;
