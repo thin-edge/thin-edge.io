@@ -76,11 +76,7 @@ impl Runtime {
         T: Builder<(A, A::MessageBox)> + RuntimeRequestSink,
         A: Actor,
     {
-        let runtime_request_sender: DynSender<RuntimeRequest> = actor_builder.get_signal_sender();
-        let (actor, actor_box) = actor_builder.build();
-        let run_actor = RunActor::new(actor, actor_box, runtime_request_sender);
-        self.handle.spawn(run_actor).await?;
-        Ok(())
+        self.handle.spawn(actor_builder).await
     }
 
     /// Run the runtime up to completion
@@ -116,24 +112,18 @@ impl RuntimeHandle {
         Ok(self.send(RuntimeAction::Shutdown).await?)
     }
 
-    /// Launch a task in the background
-    pub async fn spawn(&mut self, task: impl Task) -> Result<(), RuntimeError> {
+    /// Spawn an actor
+    pub async fn spawn<T, A>(&mut self, actor_builder: T) -> Result<(), RuntimeError>
+    where
+        T: Builder<(A, A::MessageBox)> + RuntimeRequestSink,
+        A: Actor,
+    {
+        let task = RunActor::try_new(actor_builder)?;
         Ok(self.send(RuntimeAction::Spawn(Box::new(task))).await?)
     }
 
-    /// Launch an actor instance
-    pub async fn run<A: Actor>(
-        &mut self,
-        actor: A,
-        messages: A::MessageBox,
-        runtime_request_sender: DynSender<RuntimeRequest>,
-    ) -> Result<(), RuntimeError> {
-        self.spawn(RunActor::new(actor, messages, runtime_request_sender))
-            .await
-    }
-
     /// Send an action to the runtime
-    pub async fn send(&mut self, action: RuntimeAction) -> Result<(), ChannelError> {
+    async fn send(&mut self, action: RuntimeAction) -> Result<(), ChannelError> {
         debug!(target: "Runtime", "schedule {:?}", action);
         self.actions_sender.send(action).await?;
         Ok(())
