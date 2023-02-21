@@ -46,7 +46,7 @@ mod tests {
 
     #[test_case("abc", Some("1.0")  ; "with version")]
     #[test_case("abc",None  ; "without version")]
-    fn desrialize_plugin_result(module_name: &str, version: Option<&str>) {
+    fn deserialize_plugin_result(module_name: &str, version: Option<&str>) {
         let mut data = String::from(module_name);
         if let Some(v) = version {
             data.push('\t');
@@ -66,7 +66,7 @@ mod tests {
     }
 
     #[test]
-    fn desrialize_plugin_result_with_trailing_tab() {
+    fn deserialize_plugin_result_with_trailing_tab() {
         let data = "abc\t";
 
         let expected_software_list = vec![SoftwareModule {
