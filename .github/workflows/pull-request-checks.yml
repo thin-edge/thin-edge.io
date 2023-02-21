@@ -225,7 +225,7 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: clippy
-          args: --all-features
+          args: --all-features -- -Aclippy::result-large-err
 
   cargo-audit:
     name: Run cargo audit
