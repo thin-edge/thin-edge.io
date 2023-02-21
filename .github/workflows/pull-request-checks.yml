@@ -217,7 +217,6 @@ jobs:
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
-          toolchain: 1.64.0
           command: clippy
           args: --version
 
@@ -225,7 +224,6 @@ jobs:
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
-          toolchain: 1.64.0
           command: clippy
           args: --all-features
 
