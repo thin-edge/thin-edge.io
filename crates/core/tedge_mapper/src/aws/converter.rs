@@ -5,7 +5,10 @@ use crate::core::size_threshold::SizeThreshold;
 use async_trait::async_trait;
 use clock::Clock;
 use mqtt_channel::Message;
+use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
+use serde_json::Map;
+use serde_json::Value;
 use tedge_api::serialize::ThinEdgeJsonSerializer;
 
 pub struct AwsConverter {
@@ -31,7 +34,16 @@ impl AwsConverter {
     }
 
     pub fn in_topic_filter() -> TopicFilter {
-        make_valid_topic_filter_or_panic("tedge/measurements")
+        vec![
+            "tedge/measurements",
+            "tedge/measurements/+",
+            "tedge/events/+",
+            "tedge/events/+/+",
+            "tedge/alarms/+/+",
+            "tedge/alarms/+/+/+",
+        ]
+        .try_into()
+        .unwrap()
     }
 }
 
@@ -46,11 +58,39 @@ impl Converter for AwsConverter {
     async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
         self.size_threshold.validate(input)?;
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
-        let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
-        tedge_api::parser::parse_str(input.payload_str()?, &mut serializer)?;
 
-        let payload = serializer.into_string()?;
-        Ok(vec![(Message::new(&self.mapper_config.out_topic, payload))])
+        // serialize with ThinEdgeJson for measurements, for alarms and events just add the timestamp
+        let payload = if input.topic.name.starts_with("tedge/measurements") {
+            let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
+            tedge_api::parser::parse_str(input.payload_str()?, &mut serializer)?;
+
+            serializer.into_string()?
+        } else if input.topic.name.starts_with("tedge/events")
+            || input.topic.name.starts_with("tedge/alarms")
+        {
+            let mut payload_json: Map<String, Value> = serde_json::from_slice(&input.payload)?;
+
+            if let Some(timestamp) = default_timestamp {
+                let timestamp = timestamp
+                    .format(&time::format_description::well_known::Rfc3339)?
+                    .as_str()
+                    .into();
+                payload_json.entry("time").or_insert(timestamp);
+            }
+
+            serde_json::to_string(&payload_json)?
+        } else {
+            return Ok(vec![]);
+        };
+
+        let topic_suffix = match input.topic.name.split_once('/') {
+            Some((_, topic_suffix)) => topic_suffix,
+            None => return Ok(vec![]),
+        };
+
+        let out_topic = Topic::new(&format!("aws/td/{topic_suffix}"))?;
+
+        Ok(vec![(Message::new(&out_topic, payload))])
     }
 }
 
