@@ -4,6 +4,7 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::fs::{self};
 use std::io;
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::path::PathBuf;
@@ -16,7 +17,7 @@ const LOCK_CHILD_DIRECTORY: &str = "lock/";
 
 #[derive(thiserror::Error, Debug)]
 pub enum FlockfileError {
-    #[error("Couldn't acquire file lock.")]
+    #[error("Couldn't create file lock.")]
     FromIo {
         path: PathBuf,
         #[source]
@@ -38,6 +39,15 @@ impl FlockfileError {
             FlockfileError::FromNix { path, .. } => path,
         }
     }
+
+    /// Is the error due to concurrent accesses on the lock file?
+    /// Or to some unrelated issue as a permission denied error opening the file?
+    fn non_exclusive_access(&self) -> bool {
+        match self {
+            FlockfileError::FromIo { .. } => false,
+            FlockfileError::FromNix { .. } => true,
+        }
+    }
 }
 
 /// flockfile creates a lockfile in the filesystem under `/run/lock` and then creates a filelock using system fcntl with flock.
@@ -50,23 +60,28 @@ pub struct Flockfile {
 }
 
 impl Flockfile {
-    /// Create new lockfile in `/run/lock` with specific name:
-    ///
-    /// #Example
-    ///
-    /// let _lockfile = match flockfile::Flockfile::new_lock("app")).unwrap();
-    ///
+    /// Create an exclusive lock file with the given path (usually in in `/run/lock`)
     pub fn new_lock(path: impl AsRef<Path>) -> Result<Flockfile, FlockfileError> {
+        // Ensure the lock file exists, ignoring errors at this stage.
+        // This lock file is made world writable so different users can acquire in turn the lock;
+        // even when the lock file has not been properly remove by a defunct process.
+        // This doesn't prevent effective locking as this is ensured by the `flock` system call
+        // and not by the existence of the lock file.
         let path = PathBuf::new().join(path);
-        let file = OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .open(&path)
-            .map_err(|err| FlockfileError::FromIo {
-                path: path.clone(),
-                source: err,
-            })?;
+        let _ = Flockfile::create_world_writable_lock_file(&path);
+
+        // Open the lock file __without__ the `O_CREAT` option
+        // that would prevent on recent Unix systems a user, that is not the owner of the file,
+        // to open it with write access despite rw access.
+        // see https://github.com/thin-edge/thin-edge.io/issues/1726
+        let file =
+            OpenOptions::new()
+                .write(true)
+                .open(&path)
+                .map_err(|err| FlockfileError::FromIo {
+                    path: path.clone(),
+                    source: err,
+                })?;
 
         flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock).map_err(|err| {
             FlockfileError::FromNix {
@@ -88,6 +103,15 @@ impl Flockfile {
         self.handle.take().expect("handle dropped");
         fs::remove_file(&self.path)?;
         Ok(())
+    }
+
+    /// Create the lock file if it does not exist,
+    /// making sure any user can use this file as a lock.
+    fn create_world_writable_lock_file(path: &PathBuf) -> Result<(), io::Error> {
+        let file = File::create(path)?;
+        let permissions = fs::Permissions::from_mode(0o666);
+
+        file.set_permissions(permissions)
     }
 }
 
@@ -125,7 +149,9 @@ pub fn check_another_instance_is_not_running(
     let lock_path = run_dir.join(format!("{}{}.lock", LOCK_CHILD_DIRECTORY, app_name));
 
     Flockfile::new_lock(lock_path.as_path()).map_err(|err| {
-        error!("Another instance of {} is running.", app_name);
+        if err.non_exclusive_access() {
+            error!("Another instance of {} is running.", app_name);
+        }
         error!("Lock file path: {}", err.path().to_str().unwrap());
         err
     })
