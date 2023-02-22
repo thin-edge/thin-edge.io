@@ -29,6 +29,8 @@ use tracing::info;
 use tracing::info_span;
 use tracing::Instrument;
 
+use super::service_monitor::service_monitor_status_message;
+
 const CUMULOCITY_MAPPER_NAME: &str = "tedge-mapper-c8y";
 const MQTT_MESSAGE_SIZE_THRESHOLD: usize = 16184;
 
@@ -91,6 +93,15 @@ impl TEdgeComponent for CumulocityMapper {
         )
         .await?;
 
+        // Dedicated mqtt client just for sending a will message, when the mapper goes down
+        let _mqtt_client_wm = create_mqtt_client_will_message(
+            &device_name,
+            CUMULOCITY_MAPPER_NAME,
+            mqtt_host.clone(),
+            mqtt_port,
+        )
+        .await?;
+
         let device_info = CumulocityDeviceInfo {
             device_name,
             device_type,
@@ -136,6 +147,8 @@ pub fn create_mapper_config(operations: &Operations) -> MapperConfig {
         "c8y-internal/alarms/+/+/+",
         "tedge/events/+",
         "tedge/events/+/+",
+        "tedge/health/+",
+        "tedge/health/+/+",
     ]
     .try_into()
     .expect("topics that mapper should subscribe to");
@@ -161,6 +174,27 @@ pub async fn create_mqtt_client(
 
     let mqtt_client =
         Connection::new(&mqtt_config(app_name, &mqtt_host, mqtt_port, topic_filter)?).await?;
+
+    Ok(mqtt_client)
+}
+
+pub async fn create_mqtt_client_will_message(
+    device_name: &str,
+    app_name: &str,
+    mqtt_host: String,
+    mqtt_port: u16,
+) -> Result<Connection, anyhow::Error> {
+    let mqtt_config = mqtt_channel::Config::default()
+        .with_host(mqtt_host)
+        .with_port(mqtt_port)
+        .with_last_will_message(service_monitor_status_message(
+            device_name,
+            app_name,
+            "down",
+            "thin-edge.io",
+            None,
+        ));
+    let mqtt_client = Connection::new(&mqtt_config).await?;
 
     Ok(mqtt_client)
 }
