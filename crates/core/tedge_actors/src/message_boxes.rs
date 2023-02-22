@@ -11,7 +11,7 @@
 //!   and deliver the messages to the actor in the order they have been received.
 //! * The senders are [DynSender](crate::DynSender) that adapt the messages sent to match constraints of the receivers.
 //!
-//! A [SimpleMessageBox<Input, Output>](crate::SimpleMessageBox) implements exactly this conceptual view:
+//! A [SimpleMessageBox](crate::SimpleMessageBox) implements exactly this conceptual view:
 //!
 //! ```ascii
 //!                    input_senders: DynSender<Input> ...
@@ -82,10 +82,10 @@
 //!
 //! This crates provides several built-in message box implementations:
 //!
-//! - [SimpleMessageBox<I,O>](crate::SimpleMessageBox) for actors that simply process messages in turn,
-//! - [ServerMessageBox<I,O>](crate::ServerMessageBox) for actors that deliver a request-response server,
-//! - [ConcurrentServerMessageBox<I,O>](crate::ConcurrentServerMessageBox) for server actors that process requests concurrently,
-//! - [ClientMessageBox<I,O>](crate::ClientMessageBox) for actors that use a request-response service,
+//! - [SimpleMessageBox](crate::SimpleMessageBox) for actors that simply process messages in turn,
+//! - [ServerMessageBox](crate::ServerMessageBox) for actors that deliver a request-response service,
+//! - [ConcurrentServerMessageBox](crate::ConcurrentServerMessageBox) for service actors that process requests concurrently,
+//! - [ClientMessageBox](crate::ClientMessageBox) for actors that use a request-response service,
 //!
 //!
 
@@ -288,6 +288,7 @@ impl<Input: Message, Output: Message> MessageBox for SimpleMessageBox<Input, Out
 pub type ServerMessageBox<Request, Response> =
     SimpleMessageBox<(ClientId, Request), (ClientId, Response)>;
 
+/// Internal id assigned to a client actor of service actor
 pub type ClientId = usize;
 
 /// A message box for services that handles requests concurrently
