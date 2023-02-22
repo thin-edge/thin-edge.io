@@ -1,7 +1,9 @@
 use crate::Actor;
+use crate::Builder;
 use crate::DynSender;
 use crate::RuntimeError;
 use crate::RuntimeRequest;
+use crate::RuntimeRequestSink;
 use async_trait::async_trait;
 use std::fmt::Formatter;
 
@@ -30,7 +32,7 @@ pub struct RunActor<A: Actor> {
 }
 
 impl<A: Actor> RunActor<A> {
-    pub fn new(
+    pub(crate) fn new(
         actor: A,
         messages: A::MessageBox,
         runtime_request_sender: DynSender<RuntimeRequest>,
@@ -42,6 +44,16 @@ impl<A: Actor> RunActor<A> {
             messages,
             runtime_request_sender,
         }
+    }
+
+    pub fn try_new<T>(actor_builder: T) -> Result<Self, RuntimeError>
+    where
+        T: Builder<(A, A::MessageBox)> + RuntimeRequestSink,
+    {
+        let runtime_request_sender: DynSender<RuntimeRequest> = actor_builder.get_signal_sender();
+        let (actor, actor_box) = actor_builder.build();
+        let run_actor = RunActor::new(actor, actor_box, runtime_request_sender);
+        Ok(run_actor)
     }
 }
 
