@@ -35,8 +35,15 @@ pub const CACHE_DIR_NAME: &str = "cache";
 pub const FILE_TRANSFER_DIR_NAME: &str = "file-transfer";
 pub const PERSISTENT_STORE_DIR_NAME: &str = "firmware";
 
-// FIXME!: Think of good text
-const AFTER_HELP_TEXT: &str = r#"We will write later!"#;
+const AFTER_HELP_TEXT: &str = r#"`c8y-firmware-plugin` subscribes to `c8y/s/ds` listening for firmware operation requests (message `515`).
+Notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
+During a successful operation, `c8y-firmware-plugin` updates the installed firmware info in Cumulocity tenant with SmartREST message `115`.
+
+The thin-edge `CONFIG_DIR` is used to find where:
+  * to store temporary files on download: `tedge config get tmp.path`,
+  * to log operation errors and progress: `tedge config get log.path`,
+  * to connect the MQTT bus: `tedge config get mqtt.port`,
+  * to timeout pending operations: `tedge config get firmware.child.update.timeout"#;
 
 #[derive(Debug, clap::Parser)]
 #[clap(
