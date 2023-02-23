@@ -189,7 +189,7 @@ impl SmartRestSetOperationToFailed {
         match &response.status() {
             OperationStatus::Failed => Ok(Self::new(
                 CumulocitySupportedOperations::C8ySoftwareUpdate,
-                response.error().unwrap_or_else(|| "".to_string()),
+                response.error().unwrap_or_default(),
             )),
             _ => Err(SmartRestSerializerError::UnsupportedOperationStatus { response }),
         }

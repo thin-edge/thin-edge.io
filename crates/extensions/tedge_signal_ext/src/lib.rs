@@ -64,7 +64,7 @@ impl Actor for SignalActor {
     }
 
     async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
-        let mut signals = Signals::new(&[SIGTERM, SIGINT, SIGQUIT]).unwrap(); // FIXME
+        let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT]).unwrap(); // FIXME
         loop {
             tokio::select! {
                 None = messages.recv() => return Ok(()),

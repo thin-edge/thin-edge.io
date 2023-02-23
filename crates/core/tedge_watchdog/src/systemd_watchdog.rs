@@ -77,6 +77,7 @@ async fn start_watchdog_for_tedge_services(tedge_config_dir: PathBuf) {
     let tedge_services = vec![
         "tedge-mapper-c8y",
         "tedge-mapper-az",
+        "tedge-mapper-aws",
         "tedge-mapper-collectd",
         "tedge-agent",
         "c8y-log-plugin",

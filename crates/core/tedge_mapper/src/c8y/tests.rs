@@ -1363,21 +1363,11 @@ async fn test_convert_big_measurement() {
     );
     let result = converter.convert(&big_measurement_message).await;
 
-    assert!(result.clone()
-        .into_iter()
-        .nth(0)
-        .unwrap()
-        .payload_str()
-        .unwrap()
-        .contains("The payload {\"temperature0\":0,\"temperature1\":1,\"temperature10\" received on tedge/measurements after translation is"));
-
-    assert!(result
-        .into_iter()
-        .nth(0)
-        .unwrap()
-        .payload_str()
-        .unwrap()
-        .contains("greater than the threshold size of 16384."));
+    let payload = result[0].payload_str().unwrap();
+    assert!(payload.starts_with(
+        r#"The payload {"temperature0":0,"temperature1":1,"temperature10" received on tedge/measurements after translation is"#
+    ));
+    assert!(payload.ends_with("greater than the threshold size of 16384."));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1394,15 +1384,9 @@ async fn test_convert_small_measurement() {
 
     let result = converter.convert(&big_measurement_message).await;
 
-    assert!(result
-        .into_iter()
-        .nth(0)
-        .unwrap()
-        .payload_str()
-        .unwrap()
-        .contains(
-            "{\"type\":\"ThinEdgeMeasurement\",\"temperature0\":{\"temperature0\":{\"value\":0.0}}"
-        ));
+    assert!(result[0].payload_str().unwrap().contains(
+        r#"{"type":"ThinEdgeMeasurement","temperature0":{"temperature0":{"value":0.0}}"#
+    ));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1419,21 +1403,11 @@ async fn test_convert_big_measurement_for_child_device() {
 
     let result = converter.convert(&big_measurement_message).await;
 
-    assert!(result.clone()
-        .into_iter()
-        .nth(0)
-        .unwrap()
-        .payload_str()
-        .unwrap()
-        .contains("The payload {\"temperature0\":0,\"temperature1\":1,\"temperature10\" received on tedge/measurements/child1 after translation is"));
-
-    assert!(result
-        .into_iter()
-        .nth(0)
-        .unwrap()
-        .payload_str()
-        .unwrap()
-        .contains("greater than the threshold size of 16384."));
+    let payload = result[0].payload_str().unwrap();
+    assert!(payload.starts_with(
+        r#"The payload {"temperature0":0,"temperature1":1,"temperature10" received on tedge/measurements/child1 after translation is"#
+    ));
+    assert!(payload.ends_with("greater than the threshold size of 16384."));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1449,24 +1423,13 @@ async fn test_convert_small_measurement_for_child_device() {
     let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
     let result = converter.convert(&big_measurement_message).await;
 
-    assert!(result
-        .clone()
-        .into_iter()
-        .nth(0)
-        .unwrap()
-        .payload_str()
-        .unwrap()
-        .contains("101,child1,child1,thin-edge.io-child"));
+    let payload1 = &result[0].payload_str().unwrap();
+    let payload2 = &result[1].payload_str().unwrap();
 
-    assert!(result.clone()
-        .into_iter()
-        .nth(1)
-        .unwrap()
-        .payload_str()
-        .unwrap()
-        .contains(
-            "{\"type\":\"ThinEdgeMeasurement\",\"externalSource\":{\"externalId\":\"child1\",\"type\":\"c8y_Serial\"},\"temperature0\":{\"temperature0\":{\"value\":0.0}},"
-        ));
+    assert!(payload1.contains("101,child1,child1,thin-edge.io-child"));
+    assert!(payload2 .contains(
+        r#"{"type":"ThinEdgeMeasurement","externalSource":{"externalId":"child1","type":"c8y_Serial"},"temperature0":{"temperature0":{"value":0.0}},"#
+    ));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1479,7 +1442,7 @@ async fn mapper_handles_multiline_sm_requests() {
     let (_tmp_dir, c8y_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     // Prepare and publish multiline software update smartrest requests on `c8y/s/ds`.
-    let smartrest = format!("528,external_id,nodered,1.0.0::debian,,install\n528,external_id,nodered,1.0.0::debian,,install");
+    let smartrest = "528,external_id,nodered,1.0.0::debian,,install\n528,external_id,nodered,1.0.0::debian,,install".to_string();
     broker.publish("c8y/s/ds", &smartrest).await.unwrap();
     publish_a_fake_jwt_token(broker).await;
 
@@ -1776,6 +1739,60 @@ async fn mapper_updating_the_inventory_fragments_from_file() {
     sm_mapper.abort();
 }
 
+#[tokio::test]
+async fn translate_service_monitor_message_for_child_device() {
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
+
+    let in_topic = "tedge/health/child1/child-service-c8y";
+    let in_payload = r#"{"pid":"1234","status":"up","time":"2021-11-16T17:45:40.571760714+01:00","type":"thin-edge.io"}"#;
+    let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+
+    let expected_child_create_smart_rest_message = Message::new(
+        &Topic::new_unchecked("c8y/s/us"),
+        "101,child1,child1,thin-edge.io-child",
+    );
+
+    let expected_service_monitor_smart_rest_message = Message::new(
+        &Topic::new_unchecked("c8y/s/us/child1"),
+        r#"102,test-device_child1_child-service-c8y,thin-edge.io,child-service-c8y,up"#,
+    );
+
+    // Test the first output messages contains SmartREST and C8Y JSON.
+    let out_first_messages = converter.convert(&in_message).await;
+
+    assert_eq!(
+        out_first_messages,
+        vec![
+            expected_child_create_smart_rest_message,
+            expected_service_monitor_smart_rest_message.clone()
+        ]
+    );
+}
+
+#[tokio::test]
+async fn translate_service_monitor_message_for_thin_edge_device() {
+    let cfg_dir = TempTedgeDir::new();
+    let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
+
+    let in_topic = "tedge/health/test-tedge-mapper-c8y";
+    let in_payload = r#"{"pid":"1234","status":"up","time":"2021-11-16T17:45:40.571760714+01:00","type":"thin-edge.io"}"#;
+    let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+
+    let expected_service_monitor_smart_rest_message = Message::new(
+        &Topic::new_unchecked("c8y/s/us"),
+        r#"102,test-device_test-tedge-mapper-c8y,thin-edge.io,test-tedge-mapper-c8y,up"#,
+    );
+
+    // Test the output messages contains SmartREST and C8Y JSON.
+    let out_messages = converter.convert(&in_message).await;
+
+    assert_eq!(
+        out_messages,
+        vec![expected_service_monitor_smart_rest_message]
+    );
+}
+
 fn create_inventroy_json_file_with_content(cfg_dir: &TempTedgeDir, content: &str) {
     let file = cfg_dir.dir("device").file("inventory.json");
     file.with_raw_content(content);
@@ -1902,7 +1919,7 @@ async fn create_c8y_converter(
         tmp_dir.path().to_path_buf(),
         ops_dir.path().to_path_buf(),
         mapper_config,
-        mqtt_client.published.clone(),
+        mqtt_client.published,
     )
     .unwrap();
     (tmp_dir, converter)
@@ -1941,7 +1958,7 @@ pub async fn create_test_mqtt_client(mapper_config: &MapperConfig) -> Connection
         "c8y-mapper-test-client",
         MQTT_HOST.to_string(),
         broker.port,
-        &mapper_config,
+        mapper_config,
     )
     .await
     .unwrap()

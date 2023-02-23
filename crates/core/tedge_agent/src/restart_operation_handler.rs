@@ -26,7 +26,7 @@ pub mod restart_operation {
             .create(true)
             .read(true)
             .write(true)
-            .open(&path)
+            .open(path)
         {
             Ok(file) => file,
             Err(err) => {
@@ -45,7 +45,7 @@ pub mod restart_operation {
 
     /// returns the datetime of `SLASH_RUN_PATH_TEDGE_AGENT_RESTART` "modified at".
     fn get_restart_file_datetime(run_dir: &Path) -> Result<time::OffsetDateTime, AgentError> {
-        let mut file = File::open(&run_dir.join(TEDGE_AGENT_RESTART))?;
+        let mut file = File::open(run_dir.join(TEDGE_AGENT_RESTART))?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
 

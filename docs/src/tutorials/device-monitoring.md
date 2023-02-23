@@ -167,6 +167,7 @@ tedge mqtt sub 'c8y/#'
 If your device is not connected yet see:
 * [Connect my device to Cumulocity IoT](./connect-c8y.md)
 * [Connect my device to Azure IoT](./connect-azure.md)
+* [Connect my device to AWS IoT](./connect-aws.md)
 
 ## Trouble shooting
 

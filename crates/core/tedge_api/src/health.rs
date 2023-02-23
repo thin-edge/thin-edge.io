@@ -27,7 +27,7 @@ pub async fn send_health_status(responses: &mut impl PubChannel, daemon_name: &s
     })
     .to_string();
 
-    let health_message = Message::new(&response_topic_health, health_status);
+    let health_message = Message::new(&response_topic_health, health_status).with_retain();
     let _ = responses.send(health_message).await;
 }
 

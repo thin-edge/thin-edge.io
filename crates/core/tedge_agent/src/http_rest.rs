@@ -276,9 +276,8 @@ mod test {
         assert_eq!(actual_file_name, expected_file_name);
     }
 
-    const VALID_TEST_URI: &'static str =
-        "http://127.0.0.1:3000/tedge/file-transfer/another/dir/test-file";
-    const INVALID_TEST_URI: &'static str = "http://127.0.0.1:3000/wrong/place/test-file";
+    const VALID_TEST_URI: &str = "http://127.0.0.1:3000/tedge/file-transfer/another/dir/test-file";
+    const INVALID_TEST_URI: &str = "http://127.0.0.1:3000/wrong/place/test-file";
 
     #[test_case(hyper::Method::GET, VALID_TEST_URI, hyper::StatusCode::OK)]
     #[test_case(hyper::Method::GET, INVALID_TEST_URI, hyper::StatusCode::NOT_FOUND)]
@@ -331,8 +330,8 @@ mod test {
                 .uri(uri)
                 .body(Body::from(string.clone()))
                 .expect("request builder");
-            let response = client.request(req).await.unwrap();
-            response
+
+            client.request(req).await.unwrap()
         });
 
         let (_ttd, server) = server();
@@ -362,7 +361,7 @@ mod test {
     // canonicalised client PUT request to create a file in `VALID_TEST_URI`
     // this is to be used to test the GET and DELETE methods.
     async fn client_put_request() -> tokio::task::JoinHandle<hyper::Response<Body>> {
-        let handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             let client = hyper::Client::new();
 
             let string = String::from("file transfer server");
@@ -373,8 +372,7 @@ mod test {
                 .body(Body::from(string.clone()))
                 .expect("request builder");
             client.request(req).await.unwrap()
-        });
-        handle
+        })
     }
 
     #[test_case(String::from("/tedge/file-transfer/../../../bin/sh"), false)]

@@ -12,7 +12,7 @@ packages="$packages tedge-apt-plugin tedge-apama-plugin c8y-log-plugin c8y-confi
 
 extension_services="tedge-watchdog.service tedge-mapper-collectd.service c8y-log-plugin.service c8y-configuration-plugin.service"
 
-clouds="c8y az"
+clouds="c8y az aws"
 
 usage() {
     cat <<EOF

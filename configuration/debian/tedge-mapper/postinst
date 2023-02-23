@@ -10,6 +10,7 @@ fi
 ### Initialize the mapper
 sudo -u tedge -- tedge-mapper --init c8y
 sudo -u tedge -- tedge-mapper --init az
+sudo -u tedge -- tedge-mapper --init aws
 
 #DEBHELPER#
 
@@ -24,6 +25,11 @@ if command -v systemctl >/dev/null; then
     if [ -f "/etc/tedge/mosquitto-conf/az-bridge.conf" ]; then
         systemctl start tedge-mapper-az.service
         systemctl enable tedge-mapper-az.service
+    fi
+    ### Enable the service if the device is connected to aws cloud
+    if [ -f "/etc/tedge/mosquitto-conf/aws-bridge.conf" ]; then
+        systemctl start tedge-mapper-aws.service
+        systemctl enable tedge-mapper-aws.service
     fi
     ### Enable the service if the collectd is running on the device
     if systemctl is-active --quiet collectd.service; then

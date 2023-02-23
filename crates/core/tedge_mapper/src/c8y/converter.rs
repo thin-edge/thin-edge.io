@@ -27,7 +27,9 @@ use logged_command::LoggedCommand;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 use plugin_sm::operation_logs::OperationLogs;
+use service_monitor::convert_health_status_message;
 use std::collections::HashMap;
+
 use std::fs;
 use std::fs::File;
 use std::io::Read;
@@ -58,6 +60,7 @@ use super::alarm_converter::AlarmConverter;
 use super::error::CumulocityMapperError;
 use super::fragments::C8yAgentFragment;
 use super::fragments::C8yDeviceDataFragment;
+use super::service_monitor;
 use c8y_api::smartrest::message::collect_smartrest_messages;
 use c8y_api::smartrest::message::get_failure_reason_for_smartrest;
 use c8y_api::smartrest::message::get_smartrest_device_id;
@@ -308,6 +311,29 @@ where
         }
     }
 
+    pub async fn process_health_status_message(
+        &mut self,
+        message: &Message,
+    ) -> Result<Vec<Message>, ConversionError> {
+        let mut mqtt_messages: Vec<Message> = Vec::new();
+
+        // When there is some messages to be sent on behalf of a child device,
+        // this child device must be declared first, if not done yet
+        let topic_split: Vec<&str> = message.topic.name.split('/').collect();
+        if topic_split.len() == 4 {
+            let child_id = topic_split[2];
+            add_external_device_registration_message(
+                child_id.to_string(),
+                &mut self.children,
+                &mut mqtt_messages,
+            );
+        }
+
+        let mut message = convert_health_status_message(message, self.device_name.clone());
+        mqtt_messages.append(&mut message);
+        Ok(mqtt_messages)
+    }
+
     fn serialize_to_smartrest(c8y_event: &C8yCreateEvent) -> Result<String, ConversionError> {
         Ok(format!(
             "{},{},\"{}\",{}",
@@ -347,6 +373,9 @@ where
             }
             topic if topic.name.starts_with(TEDGE_EVENTS_TOPIC) => {
                 self.try_convert_event(message).await
+            }
+            topic if topic.name.starts_with("tedge/health") => {
+                self.process_health_status_message(message).await
             }
             topic => match topic.clone().try_into() {
                 Ok(MapperSubscribeTopic::ResponseTopic(ResponseTopic::SoftwareListResponse)) => {
@@ -792,7 +821,7 @@ async fn execute_operation(
 pub fn get_local_child_devices_list(
     path: &Path,
 ) -> Result<std::collections::HashSet<String>, CumulocityMapperError> {
-    Ok(fs::read_dir(&path)
+    Ok(fs::read_dir(path)
         .map_err(|_| CumulocityMapperError::ReadDirError {
             dir: PathBuf::from(&path),
         })?

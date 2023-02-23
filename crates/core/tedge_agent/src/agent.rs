@@ -293,10 +293,10 @@ impl SmAgent {
     pub async fn init(&mut self, config_dir: PathBuf) -> Result<(), anyhow::Error> {
         // `config_dir` by default is `/etc/tedge` (or whatever the user sets with --config-dir)
         let config_dir = config_dir.display();
-        create_directory_with_user_group(&format!("{config_dir}/.agent"), "tedge", "tedge", 0o775)?;
+        create_directory_with_user_group(format!("{config_dir}/.agent"), "tedge", "tedge", 0o775)?;
         create_directory_with_user_group(self.config.log_dir.clone(), "tedge", "tedge", 0o775)?;
         create_directory_with_user_group(
-            &self.config.http_config.file_transfer_dir_as_string(),
+            self.config.http_config.file_transfer_dir_as_string(),
             "tedge",
             "tedge",
             0o775,
@@ -932,8 +932,8 @@ mod tests {
 
         // to check for the error, we assert that handle_one is still running
         // while handle_two is finished.
-        assert_eq!(handle_one.is_finished(), false);
-        assert_eq!(handle_two.is_finished(), true);
+        assert!(!handle_one.is_finished());
+        assert!(handle_two.is_finished());
 
         Ok(())
     }

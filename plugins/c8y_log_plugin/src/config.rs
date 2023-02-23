@@ -96,7 +96,7 @@ fn test_no_duplicated_file_types() {
             config_type: "type_one".to_string(),
         },
     ];
-    let logs_config = LogPluginConfig { files: files };
+    let logs_config = LogPluginConfig { files };
     assert_eq!(
         logs_config.get_all_file_types(),
         vec!["type_one".to_string()]

@@ -501,14 +501,13 @@ mod tests {
         let thin_edge_json = smartrest_obj.to_thin_edge_json_with_id("123").unwrap();
 
         let mut expected_thin_edge_json = SoftwareUpdateRequest::new_with_id("123");
-        let () =
-            expected_thin_edge_json.add_update(SoftwareModuleUpdate::install(SoftwareModule {
-                module_type: Some("debian".to_string()),
-                name: "software1".to_string(),
-                version: Some("version1".to_string()),
-                url: Some("url1".into()),
-                file_path: None,
-            }));
+        expected_thin_edge_json.add_update(SoftwareModuleUpdate::install(SoftwareModule {
+            module_type: Some("debian".to_string()),
+            name: "software1".to_string(),
+            version: Some("version1".to_string()),
+            url: Some("url1".into()),
+            file_path: None,
+        }));
         expected_thin_edge_json.add_update(SoftwareModuleUpdate::remove(SoftwareModule {
             module_type: Some("".to_string()),
             name: "software2".to_string(),
@@ -617,7 +616,7 @@ mod tests {
 
     #[test]
     fn deserialize_smartrest_restart_request_operation() {
-        let smartrest = String::from(&format!("510,user"));
+        let smartrest = "510,user".to_string();
         let log = SmartRestRestartRequest::from_smartrest(&smartrest);
         assert!(log.is_ok());
     }

@@ -176,7 +176,7 @@ mod tests {
         assert!(Path::new(&file_path).exists());
 
         let mut file_content = String::new();
-        let mut file = std::fs::File::open(&file_path).unwrap();
+        let mut file = std::fs::File::open(file_path).unwrap();
         file.read_to_string(&mut file_content).unwrap();
 
         let as_toml: toml::Value = toml::from_str(&file_content).unwrap();

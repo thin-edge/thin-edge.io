@@ -8,6 +8,7 @@ The very first step to enable `thin-edge.io` is to connect your device to the cl
 
 The focus is here on connecting to [Cumulocity IoT](https://www.cumulocity.com/guides/concepts/introduction/).
 See this [tutorial](connect-azure.md), if you want to connect Azure IoT instead.
+See this [tutorial](connect-aws.md), if you want to connect AWS IoT instead.
 
 Before you try to connect your device to Cumulocity IoT, you need:
 * The url of the endpoint to connect (e.g. `eu-latest.cumulocity.com`).

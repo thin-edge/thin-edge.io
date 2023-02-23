@@ -15,6 +15,10 @@ if command -v systemctl >/dev/null; then
     if systemctl is-active --quiet tedge-mapper-az; then
         systemctl stop tedge-mapper-az.service
     fi
+
+    if systemctl is-active --quiet tedge-mapper-aws; then
+        systemctl stop tedge-mapper-aws.service
+    fi
 fi
 
 # Deprecate: Remove symlink in 1.x release
