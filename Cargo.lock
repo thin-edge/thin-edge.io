@@ -554,7 +554,6 @@ dependencies = [
 name = "c8y_config_manager"
 version = "0.9.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "c8y_api",
  "c8y_http_proxy",
@@ -3479,7 +3478,6 @@ dependencies = [
 name = "tedge_actors"
 version = "0.9.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "env_logger 0.10.0",
  "futures",

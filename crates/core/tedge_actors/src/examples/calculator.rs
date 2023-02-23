@@ -1,6 +1,6 @@
 // TODO: make examples respond to RuntimeRequests
 use crate::Actor;
-use crate::ChannelError;
+use crate::RuntimeError;
 use crate::Server;
 use crate::SimpleMessageBox;
 use async_trait::async_trait;
@@ -34,7 +34,7 @@ impl Actor for Calculator {
         "Calculator"
     }
 
-    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
         while let Some(op) = messages.recv().await {
             // Process in turn each input message
             let from = self.state;
@@ -93,7 +93,7 @@ impl Actor for Player {
         &self.name
     }
 
-    async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+    async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
         // Send a first identity `Operation` to see where we are.
         messages.send(Operation::Add(0)).await?;
 

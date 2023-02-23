@@ -13,12 +13,12 @@ use std::convert::Infallible;
 use actor::*;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
-use tedge_actors::ChannelError;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::ConcurrentServerActor;
 use tedge_actors::ConcurrentServerMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::NoConfig;
+use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServerMessageBoxBuilder;
@@ -43,7 +43,7 @@ impl HttpActorBuilder {
         Ok(HttpActorBuilder { actor, box_builder })
     }
 
-    pub async fn run(self) -> Result<(), ChannelError> {
+    pub async fn run(self) -> Result<(), RuntimeError> {
         let actor = self.actor;
         let messages = self.box_builder.build();
 
