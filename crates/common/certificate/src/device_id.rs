@@ -52,24 +52,19 @@ mod test {
     use assert_matches::*;
 
     #[test]
-    fn valid_device_id_with_alphabets() -> anyhow::Result<()> {
-        assert_eq!((), is_valid_device_id("ThinEdgeDevice", 64)?);
-        Ok(())
+    fn valid_device_id_with_alphabets() {
+        assert!(is_valid_device_id("ThinEdgeDevice", 64).is_ok());
     }
 
     #[test]
-    fn valid_device_id_with_digits() -> anyhow::Result<()> {
-        assert_eq!((), is_valid_device_id("123ThinEdgeDevice", 64)?);
-        Ok(())
+    fn valid_device_id_with_digits() {
+        assert!(is_valid_device_id("123ThinEdgeDevice", 64).is_ok());
     }
     #[test]
-    fn valid_device_id_with_special_chars() -> anyhow::Result<()> {
-        assert_eq!(
-            (),
-            is_valid_device_id("'?=()*@!%,-.123ThinEdgeDevice-id", 64)?
-        );
-        Ok(())
+    fn valid_device_id_with_special_chars() {
+        assert!(is_valid_device_id("'?=()*@!%,-.123ThinEdgeDevice-id", 64).is_ok());
     }
+
     #[test]
     fn invalid_device_ids() -> anyhow::Result<()> {
         for id in vec![

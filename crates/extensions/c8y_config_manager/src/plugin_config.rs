@@ -125,7 +125,7 @@ impl PluginConfig {
                 .config_type
                 .unwrap_or_else(|| raw_entry.path.clone());
 
-            if config_type.contains(&['+', '#']) {
+            if config_type.contains(['+', '#']) {
                 error!(
                     "The config type '{}' contains the forbidden characters, '+' or '#'.",
                     config_type

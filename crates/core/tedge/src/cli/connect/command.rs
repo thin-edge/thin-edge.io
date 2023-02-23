@@ -553,7 +553,7 @@ fn clean_up(
     bridge_config: &BridgeConfig,
 ) -> Result<(), ConnectError> {
     let path = get_bridge_config_file_path(config_location, bridge_config);
-    std::fs::remove_file(&path).or_else(ok_if_not_found)?;
+    std::fs::remove_file(path).or_else(ok_if_not_found)?;
     Ok(())
 }
 
@@ -580,11 +580,11 @@ fn write_bridge_config_to_file(
         .join(TEDGE_BRIDGE_CONF_DIR_PATH);
 
     // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
-    create_directories(&dir_path)?;
+    create_directories(dir_path)?;
 
     let common_config_path =
         get_common_mosquitto_config_file_path(config_location, common_mosquitto_config);
-    let mut common_draft = DraftFile::new(&common_config_path)?;
+    let mut common_draft = DraftFile::new(common_config_path)?;
     common_mosquitto_config.serialize(&mut common_draft)?;
     common_draft.persist()?;
 

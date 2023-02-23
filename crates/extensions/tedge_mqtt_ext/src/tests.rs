@@ -26,7 +26,7 @@ async fn communicate_over_mqtt() {
     all_topics.add_all(alice_topic.clone().into());
     all_topics.add_all(bob_topic.clone().into());
     let mut spy: MqttClient = SimpleMessageBoxBuilder::new("Spy", 16)
-        .connected_to(&mut mqtt, all_topics.clone().into())
+        .connected_to(&mut mqtt, all_topics.clone())
         .build();
 
     tokio::spawn(mqtt_actor(mqtt));

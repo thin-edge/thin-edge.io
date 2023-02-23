@@ -70,7 +70,7 @@ fn read_log_content(
         Err(LogRetrievalError::MaxLines)
     } else {
         let mut file_content_as_vec = VecDeque::new();
-        let file = std::fs::File::open(&logfile)?;
+        let file = std::fs::File::open(logfile)?;
         let file_name = format!(
             "filename: {}\n",
             logfile.file_name().unwrap().to_str().unwrap() // never fails because we check file exists
@@ -178,7 +178,7 @@ fn filter_logs_path_on_metadata(
     let mut out = vec![];
 
     logs_path_vec.sort_by_key(|pathbuf| {
-        if let Ok(metadata) = std::fs::metadata(&pathbuf) {
+        if let Ok(metadata) = std::fs::metadata(pathbuf) {
             if let Ok(file_modified_time) = metadata.modified() {
                 return OffsetDateTime::from(file_modified_time);
             }
@@ -310,19 +310,19 @@ mod tests {
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("temp dir not created"))?;
 
-        std::fs::File::create(&format!("{tempdir_path}/file_a"))?;
-        std::fs::File::create(&format!("{tempdir_path}/file_b"))?;
-        std::fs::File::create(&format!("{tempdir_path}/file_c"))?;
-        std::fs::File::create(&format!("{tempdir_path}/file_d"))?;
+        std::fs::File::create(format!("{tempdir_path}/file_a"))?;
+        std::fs::File::create(format!("{tempdir_path}/file_b"))?;
+        std::fs::File::create(format!("{tempdir_path}/file_c"))?;
+        std::fs::File::create(format!("{tempdir_path}/file_d"))?;
 
         let new_mtime = FileTime::from_unix_time(2, 0);
-        set_file_mtime(&format!("{tempdir_path}/file_a"), new_mtime).unwrap();
+        set_file_mtime(format!("{tempdir_path}/file_a"), new_mtime).unwrap();
 
         let new_mtime = FileTime::from_unix_time(3, 0);
-        set_file_mtime(&format!("{tempdir_path}/file_b"), new_mtime).unwrap();
+        set_file_mtime(format!("{tempdir_path}/file_b"), new_mtime).unwrap();
 
         let new_mtime = FileTime::from_unix_time(11, 0);
-        set_file_mtime(&format!("{tempdir_path}/file_c"), new_mtime).unwrap();
+        set_file_mtime(format!("{tempdir_path}/file_c"), new_mtime).unwrap();
 
         let files = vec![
             FileEntry {
@@ -342,7 +342,7 @@ mod tests {
                 config_type: "type_one".to_string(),
             },
         ];
-        let logs_config = LogPluginConfig { files: files };
+        let logs_config = LogPluginConfig { files };
         Ok((tempdir, logs_config))
     }
 
@@ -354,11 +354,11 @@ mod tests {
         SmartRestLogRequest {
             message_id: "522".to_string(),
             device: "device".to_string(),
-            log_type: log_type,
+            log_type,
             date_from: datetime!(1970-01-01 00:00:03 +00:00),
             date_to: datetime!(1970-01-01 00:00:00 +00:00), // not used
-            needle: needle,
-            lines: lines,
+            needle,
+            lines,
         }
     }
 

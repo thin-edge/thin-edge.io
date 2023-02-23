@@ -153,15 +153,13 @@ mod tests {
     #[test_case(""; "empty payload")]
     #[test_case("106"; "106 but no child devices")]
     fn extract_smartrest_template(payload: &str) {
-        match get_smartrest_template_id(payload) {
-            id if id.contains("cds50223434")
-                || id.contains("5000000000000000000000000000000000000000000000000")
-                || id.contains("106")
-                || id.contains("") =>
-            {
-                assert!(true)
-            }
-            _ => assert!(false),
+        let id = get_smartrest_template_id(payload);
+        if !(id.contains("cds50223434")
+            || id.contains("5000000000000000000000000000000000000000000000000")
+            || id.contains("106")
+            || id.contains(""))
+        {
+            panic!("invalid id");
         }
     }
 
@@ -174,7 +172,7 @@ mod tests {
 
     #[test]
     fn control_chars_are_removed() {
-        let input = generate_test_vec_u8();
+        let input: Vec<u8> = (0x00..0xff).collect();
         let sanitized = sanitize_for_smartrest(input, MAX_PAYLOAD_LIMIT_IN_BYTES);
         let re = Regex::new(r"[^\x20-\x7E\xA0-\xFF\t\n\r]").unwrap();
         assert!(!re.is_match(&sanitized));
@@ -225,14 +223,6 @@ mod tests {
         let vec_u8 = input.as_bytes().to_vec();
         let last_line = get_failure_reason_for_smartrest(vec_u8, 10);
         assert_eq!(last_line.as_str(), expected_output);
-    }
-
-    fn generate_test_vec_u8() -> Vec<u8> {
-        let mut vec: Vec<u8> = Vec::new();
-        for i in 0x00..0xff {
-            vec.push(u8::from(i))
-        }
-        vec
     }
 
     #[test]
