@@ -4,9 +4,6 @@ use http::header::HeaderValue;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 
-#[derive(Clone, Debug, Default)]
-pub struct HttpConfig {}
-
 #[derive(Error, Debug)]
 pub enum HttpError {
     #[error(transparent)]
