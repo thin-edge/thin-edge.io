@@ -9,6 +9,11 @@ use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
 use tedge_config::get_tedge_config;
+use tedge_config::ConfigSettingAccessor;
+use tedge_config::MqttBindAddressSetting;
+use tedge_config::MqttPortSetting;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigError;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActorBuilder;
@@ -17,6 +22,8 @@ use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_signal_ext::SignalActor;
 use tedge_timer_ext::TimerActor;
+
+pub const PLUGIN_NAME: &str = "c8y-device-management";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -27,8 +34,9 @@ async fn main() -> anyhow::Result<()> {
     let tedge_config = get_tedge_config()?;
 
     // Create actor instances
-    let mut mqtt_actor = MqttActorBuilder::new(MqttConfig::default());
-    let mut jwt_actor = C8YJwtRetriever::builder(MqttConfig::default());
+    let mqtt_config = mqtt_config(&tedge_config)?;
+    let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
+    let mut jwt_actor = C8YJwtRetriever::builder(mqtt_config);
     let mut http_actor = HttpActorBuilder::new(HttpConfig::default())?;
     let mut c8y_http_proxy_actor =
         C8YHttpProxyBuilder::new((&tedge_config).try_into()?, &mut http_actor, &mut jwt_actor);
@@ -76,4 +84,13 @@ async fn main() -> anyhow::Result<()> {
 
     runtime.run_to_completion().await?;
     Ok(())
+}
+
+fn mqtt_config(tedge_config: &TEdgeConfig) -> Result<MqttConfig, TEdgeConfigError> {
+    let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
+    let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
+    let config = MqttConfig::default()
+        .with_host(mqtt_host)
+        .with_port(mqtt_port);
+    Ok(config)
 }
