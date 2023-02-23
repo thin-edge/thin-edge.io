@@ -121,15 +121,15 @@ mod tests {
     use crate::Builder;
     use crate::ChannelError;
     use crate::NoConfig;
+    use crate::ServerMessageBoxBuilder;
     use crate::ServiceActor;
     use crate::ServiceConsumer;
-    use crate::ServiceMessageBoxBuilder;
     use crate::SimpleMessageBoxBuilder;
 
     #[tokio::test]
     async fn observing_an_actor() -> Result<(), ChannelError> {
         // Build the actor message boxes
-        let mut service_box_builder = ServiceMessageBoxBuilder::new("Calculator", 16);
+        let mut service_box_builder = ServerMessageBoxBuilder::new("Calculator", 16);
         let mut player_box_builder = SimpleMessageBoxBuilder::new("Player 1", 1);
 
         // Connect the two actor message boxes interposing a probe.

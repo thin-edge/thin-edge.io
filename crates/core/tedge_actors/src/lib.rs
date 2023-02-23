@@ -216,7 +216,7 @@
 //!
 //! ```
 //! # use async_trait::async_trait;
-//! # use tedge_actors::{Actor, ChannelError, MessageBox, RequestResponseHandler, ServiceActor, SimpleMessageBox};
+//! # use tedge_actors::{Actor, ChannelError, MessageBox, ClientMessageBox, ServiceActor, SimpleMessageBox};
 //! # use crate::tedge_actors::examples::calculator::*;
 //!
 //! /// An actor that send operations to a calculator service to reach a given target.
@@ -259,7 +259,7 @@
 //! to establish appropriate connections between the actor message boxes.
 //!
 //! ```
-//! # use tedge_actors::{Actor, Builder, ChannelError, MessageBox, ServiceConsumer, NoConfig, ServiceActor, ServiceMessageBox, ServiceMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder};
+//! # use tedge_actors::{Actor, Builder, ChannelError, MessageBox, ServiceConsumer, NoConfig, ServiceActor, ServerMessageBox, ServerMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder};
 //! # use crate::tedge_actors::examples::calculator::*;
 //! # #[tokio::main]
 //! # async fn main_test() -> Result<(),ChannelError> {
@@ -267,7 +267,7 @@
 //!
 //! // Building a box to hold 16 pending requests for the calculator service
 //! // Note that a service actor requires a specific type of message box.
-//! let mut service_box_builder = ServiceMessageBoxBuilder::new("Calculator", 16);
+//! let mut service_box_builder = ServerMessageBoxBuilder::new("Calculator", 16);
 //!
 //! // Building a box to hold one pending message for the player
 //! // This actor never expect more then one message.
@@ -278,13 +278,13 @@
 //! // - sends its output to the service input box.
 //! player_1_box_builder.connect_to(&mut service_box_builder, NoConfig);
 //!
-//! // Its matters that the builder of the service box is a `ServiceMessageBoxBuilder`:
+//! // Its matters that the builder of the service box is a `ServerMessageBoxBuilder`:
 //! // this builder accept other actors to connect to the same service.
 //! let mut player_2_box_builder = SimpleMessageBoxBuilder::new("Player 2", 1);
 //! player_2_box_builder.connect_to(&mut service_box_builder, NoConfig);
 //!
 //! // One can then build the message boxes
-//! let service_box: ServiceMessageBox<Operation,Update> = service_box_builder.build();
+//! let service_box: ServerMessageBox<Operation,Update> = service_box_builder.build();
 //! let mut player_1_box = player_1_box_builder.build();
 //! let mut player_2_box = player_2_box_builder.build();
 //!
@@ -322,7 +322,7 @@
 //! Here, we interpose a `Probe` between two actors to observe their interactions.
 //!
 //! ```
-//! # use tedge_actors::{Actor, Builder, ChannelError, ServiceConsumer, NoConfig, ServiceActor, ServiceMessageBoxBuilder, SimpleMessageBoxBuilder};
+//! # use tedge_actors::{Actor, Builder, ChannelError, ServiceConsumer, NoConfig, ServiceActor, ServerMessageBoxBuilder, SimpleMessageBoxBuilder};
 //! # use tedge_actors::test_helpers::{ServiceConsumerExt, Probe, ProbeEvent};
 //! # use tedge_actors::test_helpers::ProbeEvent::{Recv, Send};
 //! # use crate::tedge_actors::examples::calculator::*;
@@ -330,7 +330,7 @@
 //! # async fn main_test() -> Result<(),ChannelError> {
 //! #
 //! // Build the actor message boxes
-//! let mut service_box_builder = ServiceMessageBoxBuilder::new("Calculator", 16);
+//! let mut service_box_builder = ServerMessageBoxBuilder::new("Calculator", 16);
 //! let mut player_box_builder = SimpleMessageBoxBuilder::new("Player 1", 1);
 //!
 //! // Connect the two actor message boxes interposing a probe.

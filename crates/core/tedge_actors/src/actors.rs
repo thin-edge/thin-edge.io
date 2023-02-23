@@ -1,8 +1,8 @@
 use crate::ChannelError;
-use crate::ConcurrentServiceMessageBox;
+use crate::ConcurrentServerMessageBox;
 use crate::Message;
 use crate::MessageBox;
-use crate::ServiceMessageBox;
+use crate::ServerMessageBox;
 use async_trait::async_trait;
 
 /// Enable a struct to be used as an actor.
@@ -53,7 +53,7 @@ pub trait Service: 'static + Sized + Send + Sync {
 
 #[async_trait]
 impl<S: Service> Actor for ServiceActor<S> {
-    type MessageBox = ServiceMessageBox<S::Request, S::Response>;
+    type MessageBox = ServerMessageBox<S::Request, S::Response>;
 
     fn name(&self) -> &str {
         self.service.name()
@@ -86,7 +86,7 @@ impl<S: Service + Clone> ConcurrentServiceActor<S> {
 
 #[async_trait]
 impl<S: Service + Clone> Actor for ConcurrentServiceActor<S> {
-    type MessageBox = ConcurrentServiceMessageBox<S::Request, S::Response>;
+    type MessageBox = ConcurrentServerMessageBox<S::Request, S::Response>;
 
     fn name(&self) -> &str {
         self.service.name()

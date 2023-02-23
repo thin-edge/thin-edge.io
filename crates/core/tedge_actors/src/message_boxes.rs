@@ -83,9 +83,9 @@
 //! This crates provides several built-in message box implementations:
 //!
 //! - [SimpleMessageBox<I,O>](crate::SimpleMessageBox) for actors that simply process messages in turn,
-//! - [ServiceMessageBox<I,O>](crate::ServiceMessageBox) for actors that deliver a request-response service,
-//! - [ConcurrentServiceMessageBox<I,O>](crate::ConcurrentServiceMessageBox) for service actors that process requests concurrently,
-//! - [RequestResponseHandler<I,O>](crate::RequestResponseHandler) for actors that use a request-response service,
+//! - [ServerMessageBox<I,O>](crate::ServerMessageBox) for actors that deliver a request-response server,
+//! - [ConcurrentServerMessageBox<I,O>](crate::ConcurrentServerMessageBox) for server actors that process requests concurrently,
+//! - [ClientMessageBox<I,O>](crate::ClientMessageBox) for actors that use a request-response service,
 //!
 //!
 
@@ -226,19 +226,19 @@ impl<Input: Message, Output: Message> MessageBox for SimpleMessageBox<Input, Out
     }
 }
 
-/// A message box for a request-response service
-pub type ServiceMessageBox<Request, Response> =
+/// A message box for a request-response server
+pub type ServerMessageBox<Request, Response> =
     SimpleMessageBox<(ClientId, Request), (ClientId, Response)>;
 
 pub type ClientId = usize;
 
 /// A message box for services that handles requests concurrently
-pub struct ConcurrentServiceMessageBox<Request, Response> {
+pub struct ConcurrentServerMessageBox<Request, Response> {
     /// Max concurrent requests
     max_concurrency: usize,
 
     /// Message box to interact with clients of this service
-    clients: ServiceMessageBox<Request, Response>,
+    clients: ServerMessageBox<Request, Response>,
 
     /// Pending responses
     pending_responses: futures::stream::FuturesUnordered<PendingResult<(usize, Response)>>,
@@ -249,12 +249,12 @@ type PendingResult<R> = tokio::task::JoinHandle<R>;
 type RawClientMessageBox<Request, Response> =
     SimpleMessageBox<(ClientId, Response), (ClientId, Request)>;
 
-impl<Request: Message, Response: Message> ConcurrentServiceMessageBox<Request, Response> {
+impl<Request: Message, Response: Message> ConcurrentServerMessageBox<Request, Response> {
     pub(crate) fn new(
         max_concurrency: usize,
-        clients: ServiceMessageBox<Request, Response>,
+        clients: ServerMessageBox<Request, Response>,
     ) -> Self {
-        ConcurrentServiceMessageBox {
+        ConcurrentServerMessageBox {
             max_concurrency,
             clients,
             pending_responses: futures::stream::FuturesUnordered::new(),
@@ -275,7 +275,7 @@ impl<Request: Message, Response: Message> ConcurrentServiceMessageBox<Request, R
         max_concurrency: usize,
     ) -> (RawClientMessageBox<Request, Response>, Self) {
         let (client_box, service_box) = SimpleMessageBox::channel(name, capacity);
-        let concurrent_service_box = ConcurrentServiceMessageBox::new(max_concurrency, service_box);
+        let concurrent_service_box = ConcurrentServerMessageBox::new(max_concurrency, service_box);
         (client_box, concurrent_service_box)
     }
 
@@ -320,7 +320,7 @@ impl<Request: Message, Response: Message> ConcurrentServiceMessageBox<Request, R
 }
 
 impl<Request: Message, Response: Message> MessageBox
-    for ConcurrentServiceMessageBox<Request, Response>
+    for ConcurrentServerMessageBox<Request, Response>
 {
     type Input = (ClientId, Request);
     type Output = (ClientId, Response);
@@ -341,12 +341,12 @@ impl<Request: Message, Response: Message> MessageBox
 /// Client side handler of requests/responses sent to an actor
 ///
 /// Note that this message box sends requests and receive responses.
-pub struct RequestResponseHandler<Request, Response> {
+pub struct ClientMessageBox<Request, Response> {
     messages: SimpleMessageBox<Response, Request>,
 }
 
-impl<Request: Message, Response: Message> RequestResponseHandler<Request, Response> {
-    /// Create a new `RequestResponseHandler` connected to the service with the given config.
+impl<Request: Message, Response: Message> ClientMessageBox<Request, Response> {
+    /// Create a new `ClientMessageBox` connected to the service with the given config.
     pub fn new<Config>(
         client_name: &str,
         service: &mut impl ServiceProvider<Request, Response, Config>,
@@ -356,7 +356,7 @@ impl<Request: Message, Response: Message> RequestResponseHandler<Request, Respon
         let messages = SimpleMessageBoxBuilder::new(client_name, capacity)
             .connected_to(service, config)
             .build();
-        RequestResponseHandler { messages }
+        ClientMessageBox { messages }
     }
 
     /// Send the request and await for a response
@@ -369,7 +369,7 @@ impl<Request: Message, Response: Message> RequestResponseHandler<Request, Respon
     }
 }
 
-impl<Request: Message, Response: Message> MessageBox for RequestResponseHandler<Request, Response> {
+impl<Request: Message, Response: Message> MessageBox for ClientMessageBox<Request, Response> {
     type Input = Response;
     type Output = Request;
 

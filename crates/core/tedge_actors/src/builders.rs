@@ -30,7 +30,7 @@
 //!
 use crate::mpsc;
 use crate::ClientId;
-use crate::ConcurrentServiceMessageBox;
+use crate::ConcurrentServerMessageBox;
 use crate::DynSender;
 use crate::KeyedSender;
 use crate::Message;
@@ -38,7 +38,7 @@ use crate::NullSender;
 use crate::RuntimeRequest;
 use crate::Sender;
 use crate::SenderVec;
-use crate::ServiceMessageBox;
+use crate::ServerMessageBox;
 use crate::SimpleMessageBox;
 use std::convert::Infallible;
 
@@ -133,13 +133,13 @@ where
 }
 
 // FIXME Why is this implementation conflicting with
-// impl<Req: Message, Res: Message> ServiceProvider<Req, Res, NoConfig> for ServiceMessageBoxBuilder<Req, Res>
-// while ServiceMessageBoxBuilder __doesn't__ impl neither MessageSink nor MessageSource?
+// impl<Req: Message, Res: Message> ServiceProvider<Req, Res, NoConfig> for ServerMessageBoxBuilder<Req, Res>
+// while ServerMessageBoxBuilder __doesn't__ impl neither MessageSink nor MessageSource?
 //
 // Would be solved by https://github.com/rust-lang/rfcs/pull/1210
 //
 // This is an issue because:
-// - the implementation of ServiceProvider for ServiceMessageBox cannot be done from Source & Sink.
+// - the implementation of ServiceProvider for ServerMessageBox cannot be done from Source & Sink.
 // - but this can be done for any mailbox that doesn't need to correlate outputs to inputs.
 /*
 impl<T, Req, Res, Config> ServiceProvider<Req, Res, Config> for T where
@@ -228,7 +228,7 @@ impl<Req: Message, Res: Message> Builder<SimpleMessageBox<Req, Res>>
 }
 
 /// A message box builder for request-response services
-pub struct ServiceMessageBoxBuilder<Request, Response> {
+pub struct ServerMessageBoxBuilder<Request, Response> {
     service_name: String,
     max_concurrency: usize,
     request_sender: mpsc::Sender<(ClientId, Request)>,
@@ -238,13 +238,13 @@ pub struct ServiceMessageBoxBuilder<Request, Response> {
     clients: Vec<DynSender<Response>>,
 }
 
-impl<Request: Message, Response: Message> ServiceMessageBoxBuilder<Request, Response> {
+impl<Request: Message, Response: Message> ServerMessageBoxBuilder<Request, Response> {
     /// Start to build a new message box for a service
     pub fn new(service_name: &str, capacity: usize) -> Self {
         let max_concurrency = 1;
         let (request_sender, request_receiver) = mpsc::channel(capacity);
         let (signal_sender, signal_receiver) = mpsc::channel(4);
-        ServiceMessageBoxBuilder {
+        ServerMessageBoxBuilder {
             service_name: service_name.to_string(),
             max_concurrency,
             request_sender,
@@ -263,7 +263,7 @@ impl<Request: Message, Response: Message> ServiceMessageBoxBuilder<Request, Resp
     }
 
     /// Build a message box ready to be used by the service actor
-    fn build_service(self) -> ServiceMessageBox<Request, Response> {
+    fn build_service(self) -> ServerMessageBox<Request, Response> {
         let request_receiver = self.request_receiver;
         let signal_receiver = self.signal_receiver;
         let response_sender = SenderVec::new_sender(self.clients);
@@ -277,21 +277,21 @@ impl<Request: Message, Response: Message> ServiceMessageBoxBuilder<Request, Resp
     }
 
     /// Build a message box aimed to concurrently serve requests
-    fn build_concurrent(self) -> ConcurrentServiceMessageBox<Request, Response> {
+    fn build_concurrent(self) -> ConcurrentServerMessageBox<Request, Response> {
         let max_concurrency = self.max_concurrency;
         let clients = self.build_service();
-        ConcurrentServiceMessageBox::new(max_concurrency, clients)
+        ConcurrentServerMessageBox::new(max_concurrency, clients)
     }
 }
 
-impl<Req: Message, Res: Message> RuntimeRequestSink for ServiceMessageBoxBuilder<Req, Res> {
+impl<Req: Message, Res: Message> RuntimeRequestSink for ServerMessageBoxBuilder<Req, Res> {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.signal_sender.sender_clone()
     }
 }
 
 impl<Req: Message, Res: Message> ServiceProvider<Req, Res, NoConfig>
-    for ServiceMessageBoxBuilder<Req, Res>
+    for ServerMessageBoxBuilder<Req, Res>
 {
     fn connect_with(&mut self, peer: &mut impl ServiceConsumer<Req, Res>, _config: NoConfig) {
         let client_id = self.clients.len();
@@ -302,30 +302,30 @@ impl<Req: Message, Res: Message> ServiceProvider<Req, Res, NoConfig>
     }
 }
 
-impl<Req: Message, Res: Message> Builder<ServiceMessageBox<Req, Res>>
-    for ServiceMessageBoxBuilder<Req, Res>
+impl<Req: Message, Res: Message> Builder<ServerMessageBox<Req, Res>>
+    for ServerMessageBoxBuilder<Req, Res>
 {
     type Error = Infallible;
 
-    fn try_build(self) -> Result<ServiceMessageBox<Req, Res>, Self::Error> {
+    fn try_build(self) -> Result<ServerMessageBox<Req, Res>, Self::Error> {
         Ok(self.build())
     }
 
-    fn build(self) -> ServiceMessageBox<Req, Res> {
+    fn build(self) -> ServerMessageBox<Req, Res> {
         self.build_service()
     }
 }
 
-impl<Req: Message, Res: Message> Builder<ConcurrentServiceMessageBox<Req, Res>>
-    for ServiceMessageBoxBuilder<Req, Res>
+impl<Req: Message, Res: Message> Builder<ConcurrentServerMessageBox<Req, Res>>
+    for ServerMessageBoxBuilder<Req, Res>
 {
     type Error = Infallible;
 
-    fn try_build(self) -> Result<ConcurrentServiceMessageBox<Req, Res>, Self::Error> {
+    fn try_build(self) -> Result<ConcurrentServerMessageBox<Req, Res>, Self::Error> {
         Ok(self.build())
     }
 
-    fn build(self) -> ConcurrentServiceMessageBox<Req, Res> {
+    fn build(self) -> ConcurrentServerMessageBox<Req, Res> {
         self.build_concurrent()
     }
 }

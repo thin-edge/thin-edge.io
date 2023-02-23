@@ -5,8 +5,8 @@ use crate::C8YHttpProxyBuilder;
 use c8y_api::json_c8y::InternalIdResponse;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::ServerMessageBoxBuilder;
 use tedge_actors::ServiceActor;
-use tedge_actors::ServiceMessageBoxBuilder;
 use tedge_http_ext::test_helpers::FakeHttpServerBox;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
 use tedge_http_ext::HttpRequestBuilder;
@@ -69,7 +69,7 @@ async fn c8y_http_proxy_requests_the_device_internal_id_on_start() {
 /// Spawn an `C8YHttpProxyActor` instance
 /// Return two handles:
 /// - one `C8YHttpProxy` to send requests to the actor
-/// - one `ServiceMessageBoxBuilder<HttpRequest,HttpResponse> to fake the behavior of C8Y REST.
+/// - one `ServerMessageBoxBuilder<HttpRequest,HttpResponse> to fake the behavior of C8Y REST.
 ///
 /// This also spawns an actor to generate fake JWT tokens.
 /// The tests will only check that the http requests include this token.
@@ -80,7 +80,7 @@ async fn spawn_c8y_http_proxy(
     let jwt_actor = ServiceActor::new(ConstJwtRetriever {
         token: token.to_string(),
     });
-    let mut jwt = ServiceMessageBoxBuilder::new("JWT Actor", 16);
+    let mut jwt = ServerMessageBoxBuilder::new("JWT Actor", 16);
 
     let mut http = FakeHttpServerBox::builder();
 

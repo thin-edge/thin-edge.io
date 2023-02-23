@@ -32,7 +32,7 @@ use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
 use tedge_actors::MessageBox;
-use tedge_actors::ServiceMessageBox;
+use tedge_actors::ServerMessageBox;
 use tedge_http_ext::HttpHandle;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
@@ -65,7 +65,7 @@ impl Actor for C8YHttpConfig {
 
 pub struct C8YHttpProxyMessageBox {
     /// Connection to the clients
-    pub(crate) clients: ServiceMessageBox<C8YRestRequest, C8YRestResult>,
+    pub(crate) clients: ServerMessageBox<C8YRestRequest, C8YRestResult>,
 
     /// Connection to an HTTP actor
     pub(crate) http: HttpHandle,

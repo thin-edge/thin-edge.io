@@ -41,8 +41,7 @@ async fn spawn_concurrent_sleep_service(
 ) -> SimpleMessageBox<(ClientId, u64), (ClientId, u64)> {
     let service = SleepService;
     let actor = ConcurrentServiceActor::new(service);
-    let (handle, messages) =
-        ConcurrentServiceMessageBox::channel(actor.name(), 16, max_concurrency);
+    let (handle, messages) = ConcurrentServerMessageBox::channel(actor.name(), 16, max_concurrency);
 
     tokio::spawn(actor.run(messages));
 

@@ -14,18 +14,18 @@ use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
+use tedge_actors::ServerMessageBoxBuilder;
 use tedge_actors::ServiceConsumer;
-use tedge_actors::ServiceMessageBoxBuilder;
 use tedge_actors::ServiceProvider;
 
 pub struct TimerActorBuilder {
-    box_builder: ServiceMessageBoxBuilder<SetTimeout<AnyPayload>, Timeout<AnyPayload>>,
+    box_builder: ServerMessageBoxBuilder<SetTimeout<AnyPayload>, Timeout<AnyPayload>>,
 }
 
 impl Default for TimerActorBuilder {
     fn default() -> Self {
         TimerActorBuilder {
-            box_builder: ServiceMessageBoxBuilder::new("Timer", 16),
+            box_builder: ServerMessageBoxBuilder::new("Timer", 16),
         }
     }
 }

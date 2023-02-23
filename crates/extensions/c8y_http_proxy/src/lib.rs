@@ -10,8 +10,8 @@ use tedge_actors::DynSender;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::ServerMessageBoxBuilder;
 use tedge_actors::ServiceConsumer;
-use tedge_actors::ServiceMessageBoxBuilder;
 use tedge_actors::ServiceProvider;
 use tedge_config::C8yUrlSetting;
 use tedge_config::ConfigSettingAccessor;
@@ -65,7 +65,7 @@ pub struct C8YHttpProxyBuilder {
     config: C8YHttpConfig,
 
     /// Message box for client requests and responses
-    clients: ServiceMessageBoxBuilder<C8YRestRequest, C8YRestResult>,
+    clients: ServerMessageBoxBuilder<C8YRestRequest, C8YRestResult>,
 
     /// Connection to an HTTP actor
     http: HttpHandle,
@@ -80,7 +80,7 @@ impl C8YHttpProxyBuilder {
         http: &mut impl HttpConnectionBuilder,
         jwt: &mut impl ServiceProvider<(), JwtResult, NoConfig>,
     ) -> Self {
-        let clients = ServiceMessageBoxBuilder::new("C8Y-REST", 10);
+        let clients = ServerMessageBoxBuilder::new("C8Y-REST", 10);
         let http = HttpHandle::new("C8Y-REST => HTTP", http, NoConfig);
         let jwt = JwtRetriever::new("C8Y-REST => JWT", jwt, NoConfig);
         C8YHttpProxyBuilder {

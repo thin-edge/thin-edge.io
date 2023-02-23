@@ -10,23 +10,23 @@ use std::convert::Infallible;
 use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::NoConfig;
-use tedge_actors::RequestResponseHandler;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::ServerMessageBox;
+use tedge_actors::ServerMessageBoxBuilder;
 use tedge_actors::Service;
 use tedge_actors::ServiceActor;
 use tedge_actors::ServiceConsumer;
-use tedge_actors::ServiceMessageBox;
-use tedge_actors::ServiceMessageBoxBuilder;
 use tedge_actors::ServiceProvider;
 
 pub type JwtRequest = ();
 pub type JwtResult = Result<String, SmartRestDeserializerError>;
 
 /// Retrieves JWT tokens authenticating the device
-pub type JwtRetriever = RequestResponseHandler<JwtRequest, JwtResult>;
+pub type JwtRetriever = ClientMessageBox<JwtRequest, JwtResult>;
 
 /// A JwtRetriever that gets JWT tokens from C8Y over MQTT
 pub struct C8YJwtRetriever {
@@ -100,27 +100,27 @@ impl Service for ConstJwtRetriever {
 /// Build an actor from a JwtRetriever service
 pub struct JwtRetrieverBuilder<S: Service<Request = JwtRequest, Response = JwtResult>> {
     actor: ServiceActor<S>,
-    message_box: ServiceMessageBoxBuilder<(), JwtResult>,
+    message_box: ServerMessageBoxBuilder<(), JwtResult>,
 }
 
 impl<S: Service<Request = JwtRequest, Response = JwtResult>> JwtRetrieverBuilder<S> {
     pub fn new(service: S) -> Self {
         let actor = ServiceActor::new(service);
-        let message_box = ServiceMessageBoxBuilder::new(actor.name(), 10);
+        let message_box = ServerMessageBoxBuilder::new(actor.name(), 10);
         JwtRetrieverBuilder { actor, message_box }
     }
 }
 
 impl<S: Service<Request = JwtRequest, Response = JwtResult>>
-    Builder<(ServiceActor<S>, ServiceMessageBox<(), JwtResult>)> for JwtRetrieverBuilder<S>
+    Builder<(ServiceActor<S>, ServerMessageBox<(), JwtResult>)> for JwtRetrieverBuilder<S>
 {
     type Error = Infallible;
 
-    fn try_build(self) -> Result<(ServiceActor<S>, ServiceMessageBox<(), JwtResult>), Self::Error> {
+    fn try_build(self) -> Result<(ServiceActor<S>, ServerMessageBox<(), JwtResult>), Self::Error> {
         Ok(self.build())
     }
 
-    fn build(self) -> (ServiceActor<S>, ServiceMessageBox<(), JwtResult>) {
+    fn build(self) -> (ServiceActor<S>, ServerMessageBox<(), JwtResult>) {
         (self.actor, self.message_box.build())
     }
 }
