@@ -11,16 +11,16 @@ use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
-use tedge_actors::MessageBoxPlug;
-use tedge_actors::MessageBoxSocket;
 use tedge_actors::NoConfig;
 use tedge_actors::RequestResponseHandler;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_actors::ServiceActor;
+use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceMessageBox;
 use tedge_actors::ServiceMessageBoxBuilder;
+use tedge_actors::ServiceProvider;
 
 pub type JwtRequest = ();
 pub type JwtResult = Result<String, SmartRestDeserializerError>;
@@ -126,11 +126,11 @@ impl<S: Service<Request = JwtRequest, Response = JwtResult>>
 }
 
 impl<S: Service<Request = JwtRequest, Response = JwtResult>>
-    MessageBoxSocket<JwtRequest, JwtResult, NoConfig> for JwtRetrieverBuilder<S>
+    ServiceProvider<JwtRequest, JwtResult, NoConfig> for JwtRetrieverBuilder<S>
 {
     fn connect_with(
         &mut self,
-        peer: &mut impl MessageBoxPlug<JwtRequest, JwtResult>,
+        peer: &mut impl ServiceConsumer<JwtRequest, JwtResult>,
         config: NoConfig,
     ) {
         self.message_box.connect_with(peer, config)

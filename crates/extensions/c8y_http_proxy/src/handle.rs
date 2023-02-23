@@ -6,9 +6,9 @@ use crate::messages::UploadConfigFile;
 use crate::messages::UploadLogBinary;
 use std::path::Path;
 use std::path::PathBuf;
-use tedge_actors::MessageBoxSocket;
 use tedge_actors::NoConfig;
 use tedge_actors::RequestResponseHandler;
+use tedge_actors::ServiceProvider;
 use tedge_utils::file::PermissionEntry;
 
 use super::messages::DownloadFile;
@@ -21,7 +21,7 @@ pub struct C8YHttpProxy {
 impl C8YHttpProxy {
     pub fn new(
         client_name: &str,
-        proxy_builder: &mut impl MessageBoxSocket<C8YRestRequest, C8YRestResult, NoConfig>,
+        proxy_builder: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
     ) -> Self {
         let c8y = RequestResponseHandler::new(client_name, proxy_builder, NoConfig);
         C8YHttpProxy { c8y }

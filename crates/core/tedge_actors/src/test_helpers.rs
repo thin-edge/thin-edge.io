@@ -1,12 +1,12 @@
 use crate::mpsc;
 use crate::DynSender;
 use crate::Message;
-use crate::MessageBoxPlug;
 use crate::MessageSink;
 use crate::MessageSource;
 use crate::NoConfig;
 use crate::NullSender;
 use crate::Sender;
+use crate::ServiceConsumer;
 use futures::stream::FusedStream;
 use futures::SinkExt;
 use futures::StreamExt;
@@ -123,16 +123,16 @@ impl<I: MessagePlus, O: MessagePlus> Probe<I, O> {
     }
 }
 
-pub trait MessageBoxPlugExt<Request: MessagePlus, Response: MessagePlus> {
+pub trait ServiceConsumerExt<Request: MessagePlus, Response: MessagePlus> {
     fn with_probe<'a>(
         &'a mut self,
         probe: &'a mut Probe<Response, Request>,
     ) -> &'a mut Probe<Response, Request>;
 }
 
-impl<T, Request: MessagePlus, Response: MessagePlus> MessageBoxPlugExt<Request, Response> for T
+impl<T, Request: MessagePlus, Response: MessagePlus> ServiceConsumerExt<Request, Response> for T
 where
-    T: MessageBoxPlug<Request, Response>,
+    T: ServiceConsumer<Request, Response>,
 {
     fn with_probe<'a>(
         &'a mut self,

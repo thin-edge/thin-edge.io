@@ -93,10 +93,10 @@ use crate::Builder;
 use crate::ChannelError;
 use crate::DynSender;
 use crate::Message;
-use crate::MessageBoxPlug;
-use crate::MessageBoxSocket;
 use crate::NoConfig;
 use crate::RuntimeRequest;
+use crate::ServiceConsumer;
+use crate::ServiceProvider;
 use crate::SimpleMessageBoxBuilder;
 use futures::channel::mpsc;
 use futures::StreamExt;
@@ -349,7 +349,7 @@ impl<Request: Message, Response: Message> RequestResponseHandler<Request, Respon
     /// Create a new `RequestResponseHandler` connected to the service with the given config.
     pub fn new<Config>(
         client_name: &str,
-        service: &mut impl MessageBoxSocket<Request, Response, Config>,
+        service: &mut impl ServiceProvider<Request, Response, Config>,
         config: Config,
     ) -> Self {
         let capacity = 1; // At most one response is ever expected

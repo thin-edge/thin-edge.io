@@ -10,13 +10,13 @@ use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::Message;
-use tedge_actors::MessageBoxPlug;
-use tedge_actors::MessageBoxSocket;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
+use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceMessageBoxBuilder;
+use tedge_actors::ServiceProvider;
 
 pub struct TimerActorBuilder {
     box_builder: ServiceMessageBoxBuilder<SetTimeout<AnyPayload>, Timeout<AnyPayload>>,
@@ -50,10 +50,10 @@ impl RuntimeRequestSink for TimerActorBuilder {
     }
 }
 
-impl<T: Message> MessageBoxSocket<SetTimeout<T>, Timeout<T>, NoConfig> for TimerActorBuilder {
+impl<T: Message> ServiceProvider<SetTimeout<T>, Timeout<T>, NoConfig> for TimerActorBuilder {
     fn connect_with(
         &mut self,
-        peer: &mut impl MessageBoxPlug<SetTimeout<T>, Timeout<T>>,
+        peer: &mut impl ServiceConsumer<SetTimeout<T>, Timeout<T>>,
         config: NoConfig,
     ) {
         let mut adapter = AnyTimerAdapter::new(peer);
@@ -64,12 +64,14 @@ impl<T: Message> MessageBoxSocket<SetTimeout<T>, Timeout<T>, NoConfig> for Timer
 /// A message adapter used by actors to send timer requests with a generic payload `SetTimeout<T>`
 /// and to receive accordingly timer responses with a generic payload `Timeout<T>`,
 /// while the timer actor only handles opaque payloads of type `Box<dyn Any>`.
-struct AnyTimerAdapter<'a, T: Message, Plug: MessageBoxPlug<SetTimeout<T>, Timeout<T>>> {
+struct AnyTimerAdapter<'a, T: Message, Plug: ServiceConsumer<SetTimeout<T>, Timeout<T>>> {
     inner: &'a mut Plug,
     _phantom: PhantomData<T>,
 }
 
-impl<'a, T: Message, Plug: MessageBoxPlug<SetTimeout<T>, Timeout<T>>> AnyTimerAdapter<'a, T, Plug> {
+impl<'a, T: Message, Plug: ServiceConsumer<SetTimeout<T>, Timeout<T>>>
+    AnyTimerAdapter<'a, T, Plug>
+{
     fn new(inner: &'a mut Plug) -> Self {
         Self {
             inner,
@@ -78,11 +80,11 @@ impl<'a, T: Message, Plug: MessageBoxPlug<SetTimeout<T>, Timeout<T>>> AnyTimerAd
     }
 }
 
-impl<'a, T, Plug> MessageBoxPlug<SetTimeout<AnyPayload>, Timeout<AnyPayload>>
+impl<'a, T, Plug> ServiceConsumer<SetTimeout<AnyPayload>, Timeout<AnyPayload>>
     for AnyTimerAdapter<'a, T, Plug>
 where
     T: Message,
-    Plug: MessageBoxPlug<SetTimeout<T>, Timeout<T>>,
+    Plug: ServiceConsumer<SetTimeout<T>, Timeout<T>>,
 {
     fn set_request_sender(&mut self, request_sender: DynSender<SetTimeout<AnyPayload>>) {
         self.inner.set_request_sender(Box::new(SetTimeoutSender {

@@ -5,9 +5,9 @@ use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::Message;
-use tedge_actors::MessageBoxPlug;
-use tedge_actors::MessageBoxSocket;
 use tedge_actors::NoConfig;
+use tedge_actors::ServiceConsumer;
+use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
 
 #[tokio::test]
@@ -60,7 +60,7 @@ async fn timeout_requests_lead_to_chronological_timeout_responses() {
     );
 }
 
-async fn spawn_timer_actor<T: Message>(peer: &mut impl MessageBoxPlug<SetTimeout<T>, Timeout<T>>) {
+async fn spawn_timer_actor<T: Message>(peer: &mut impl ServiceConsumer<SetTimeout<T>, Timeout<T>>) {
     let mut builder = TimerActor::builder();
     builder.connect_with(peer, NoConfig);
 
