@@ -39,6 +39,9 @@ pub(crate) struct TEdgeConfigDto {
 
     #[serde(default)]
     pub(crate) run: PathConfigDto,
+
+    #[serde(default)]
+    pub(crate) firmware: FirmwareConfigDto,
 }
 
 /// Represents the device specific configurations defined in the [device] section
@@ -136,4 +139,10 @@ pub(crate) struct SoftwareConfigDto {
 pub(crate) struct PathConfigDto {
     #[serde(rename = "path")]
     pub(crate) dir_path: Option<FilePath>,
+}
+
+#[tedge_derive::serde_other]
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub(crate) struct FirmwareConfigDto {
+    pub(crate) child_update_timeout: Option<u64>,
 }

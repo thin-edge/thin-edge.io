@@ -44,8 +44,10 @@ where
             .insert(key, (value, timer_start));
     }
 
-    pub fn stop_timer(&mut self, key: K) {
-        self.unfinished_child_op_status_map.remove(&key);
+    pub fn stop_timer(&mut self, key: K) -> Option<V> {
+        self.unfinished_child_op_status_map
+            .remove(&key)
+            .map(|tuple| tuple.0)
     }
 
     pub fn current_value(&self, key: &K) -> Option<&V> {

@@ -64,6 +64,15 @@ pub fn create_directory_with_mode(dir: impl AsRef<Path>, mode: u32) -> Result<()
     perm_entry.create_directory(dir.as_ref())
 }
 
+pub fn create_file_with_mode(
+    file: impl AsRef<Path>,
+    content: Option<&str>,
+    mode: u32,
+) -> Result<(), FileError> {
+    let perm_entry = PermissionEntry::new(None, None, Some(mode));
+    perm_entry.create_file(file.as_ref(), content)
+}
+
 pub fn create_file_with_user_group(
     file: impl AsRef<Path>,
     user: &str,
@@ -213,6 +222,28 @@ impl PermissionEntry {
     }
 }
 
+/// Overwrite the content of existing file. The file permissions will be kept.
+pub fn overwrite_file(file: &Path, content: &str) -> Result<(), FileError> {
+    match fs::OpenOptions::new().write(true).truncate(true).open(file) {
+        Ok(mut f) => {
+            f.sync_all().map_err(|from| FileError::FailedToSync {
+                file: file.to_path_buf(),
+                from,
+            })?;
+            f.write(content.as_bytes())
+                .map_err(|e| FileError::WriteContentFailed {
+                    file: file.display().to_string(),
+                    from: e,
+                })?;
+            Ok(())
+        }
+        Err(e) => Err(FileError::FileCreateFailed {
+            file: file.display().to_string(),
+            from: e,
+        }),
+    }
+}
+
 pub fn change_user_and_group(file: &Path, user: &str, group: &str) -> Result<(), FileError> {
     debug!(
         "Changing ownership of file: {:?} with user: {} and group: {}",
@@ -295,6 +326,24 @@ pub fn get_metadata(path: &Path) -> Result<fs::Metadata, FileError> {
 pub fn get_filename(path: PathBuf) -> Option<String> {
     let filename = path.file_name()?.to_str()?.to_string();
     Some(filename)
+}
+
+/// Get uid from the user name
+pub fn get_uid_by_name(user: &str) -> Result<u32, FileError> {
+    let ud = get_user_by_name(user)
+        .map(|u| u.uid())
+        .ok_or_else(|| FileError::UserNotFound { user: user.into() })?;
+    Ok(ud)
+}
+
+/// Get gid from the group name
+pub fn get_gid_by_name(group: &str) -> Result<u32, FileError> {
+    let gd = get_group_by_name(group)
+        .map(|g| g.gid())
+        .ok_or_else(|| FileError::GroupNotFound {
+            group: group.into(),
+        })?;
+    Ok(gd)
 }
 
 /// Return () if a file of the given file path
@@ -448,5 +497,34 @@ mod tests {
             Some("file.txt".to_string())
         );
         assert_eq!(get_filename(PathBuf::from("/")), None);
+    }
+
+    #[test]
+    fn overwrite_file_content() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("file");
+        let user = whoami::username();
+        create_file_with_user_group(&file_path.display().to_string(), &user, &user, 0o775, None)
+            .unwrap();
+
+        let new_content = "abc";
+        overwrite_file(file_path.as_path(), new_content).unwrap();
+
+        let actual_content = fs::read(file_path).unwrap();
+        assert_eq!(actual_content, new_content.as_bytes());
+    }
+
+    #[test]
+    fn get_uid_of_users() {
+        assert_eq!(get_uid_by_name("root").unwrap(), 0);
+        let err = get_uid_by_name("test").unwrap_err();
+        assert!(err.to_string().contains("User not found"));
+    }
+
+    #[test]
+    fn get_gid_of_groups() {
+        assert_eq!(get_gid_by_name("root").unwrap(), 0);
+        let err = get_gid_by_name("test").unwrap_err();
+        assert!(err.to_string().contains("Group not found"));
     }
 }

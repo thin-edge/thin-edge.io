@@ -428,3 +428,16 @@ impl ConfigSetting for RunPathSetting {
 
     type Value = FilePath;
 }
+
+pub struct FirmwareChildUpdateTimeoutSetting;
+
+impl ConfigSetting for FirmwareChildUpdateTimeoutSetting {
+    const KEY: &'static str = "firmware.child.update.timeout";
+
+    const DESCRIPTION: &'static str = concat!(
+        "The timeout limit in seconds for firmware update operations on child devices",
+        "Example: 3600"
+    );
+
+    type Value = Seconds;
+}

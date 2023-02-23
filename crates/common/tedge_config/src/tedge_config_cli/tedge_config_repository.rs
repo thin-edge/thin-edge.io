@@ -121,6 +121,7 @@ impl TEdgeConfigRepository {
                 display_unknown_for!(data.tmp, path, "tmp");
                 display_unknown_for!(data.logs, path, "logs");
                 display_unknown_for!(data.run, path, "run");
+                display_unknown_for!(data.firmware, path, "firmware");
 
                 self.make_tedge_config(data)
             }
