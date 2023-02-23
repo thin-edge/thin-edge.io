@@ -1,4 +1,3 @@
-use crate::HttpConfig;
 use crate::HttpError;
 use crate::HttpRequest;
 use crate::HttpResult;
@@ -15,7 +14,7 @@ pub struct HttpService {
 }
 
 impl HttpService {
-    pub(crate) fn new(_config: HttpConfig) -> Result<Self, HttpError> {
+    pub(crate) fn new() -> Result<Self, HttpError> {
         let https = HttpsConnectorBuilder::new()
             .with_native_roots()
             .https_or_http()

@@ -35,8 +35,8 @@ pub struct HttpActorBuilder {
 }
 
 impl HttpActorBuilder {
-    pub fn new(config: HttpConfig) -> Result<Self, HttpError> {
-        let service = HttpService::new(config)?;
+    pub fn new() -> Result<Self, HttpError> {
+        let service = HttpService::new()?;
         let actor = ConcurrentServiceActor::new(service);
         let box_builder = ServiceMessageBoxBuilder::new("HTTP", 16).with_max_concurrency(4);
 

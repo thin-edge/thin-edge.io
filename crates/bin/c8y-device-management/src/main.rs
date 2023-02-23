@@ -17,7 +17,6 @@ use tedge_config::TEdgeConfigError;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActorBuilder;
-use tedge_http_ext::HttpConfig;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_signal_ext::SignalActor;
@@ -36,19 +35,21 @@ async fn main() -> anyhow::Result<()> {
     // Create actor instances
     let mqtt_config = mqtt_config(&tedge_config)?;
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
+
     let mut jwt_actor = C8YJwtRetriever::builder(mqtt_config);
-    let mut http_actor = HttpActorBuilder::new(HttpConfig::default())?;
+    let mut http_actor = HttpActorBuilder::new()?;
+    let c8y_http_config = (&tedge_config).try_into()?;
     let mut c8y_http_proxy_actor =
-        C8YHttpProxyBuilder::new((&tedge_config).try_into()?, &mut http_actor, &mut jwt_actor);
+        C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);
+
     let mut fs_watch_actor = FsWatchActorBuilder::new();
     let mut signal_actor = SignalActor::builder();
     let mut timer_actor = TimerActor::builder();
 
     //Instantiate config manager actor
-    let mut config_actor = ConfigManagerBuilder::new(ConfigManagerConfig::from_tedge_config(
-        DEFAULT_TEDGE_CONFIG_PATH,
-        &tedge_config,
-    )?);
+    let config_manager_config =
+        ConfigManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH, &tedge_config)?;
+    let mut config_actor = ConfigManagerBuilder::new(config_manager_config);
 
     // Connect other actor instances to config manager actor
     config_actor.with_fs_connection(&mut fs_watch_actor)?;
@@ -57,10 +58,9 @@ async fn main() -> anyhow::Result<()> {
     config_actor.with_timer(&mut timer_actor)?;
 
     //Instantiate log manager actor
-    let mut log_actor = LogManagerBuilder::new(LogManagerConfig::from_tedge_config(
-        DEFAULT_TEDGE_CONFIG_PATH,
-        &tedge_config,
-    )?);
+    let log_manager_config =
+        LogManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH, &tedge_config)?;
+    let mut log_actor = LogManagerBuilder::new(log_manager_config);
 
     // Connect other actor instances to log manager actor
     log_actor.with_fs_connection(&mut fs_watch_actor)?;
