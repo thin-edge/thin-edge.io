@@ -4,13 +4,13 @@ use std::process::Output;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
+use tedge_actors::ConcurrentServerActor;
 use tedge_actors::ConcurrentServerMessageBox;
-use tedge_actors::ConcurrentServiceActor;
 use tedge_actors::DynSender;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::Server;
 use tedge_actors::ServerMessageBoxBuilder;
-use tedge_actors::Service;
 
 #[derive(Clone)]
 pub struct ScriptActor;
@@ -22,7 +22,7 @@ pub struct Execute {
 }
 
 #[async_trait::async_trait]
-impl Service for ScriptActor {
+impl Server for ScriptActor {
     type Request = Execute;
     type Response = std::io::Result<Output>;
 
@@ -45,13 +45,13 @@ impl ScriptActorBuilder {
 }
 
 pub struct ScriptActorBuilder {
-    actor: ConcurrentServiceActor<ScriptActor>,
+    actor: ConcurrentServerActor<ScriptActor>,
     box_builder: ServerMessageBoxBuilder<Execute, std::io::Result<Output>>,
 }
 
 impl
     Builder<(
-        ConcurrentServiceActor<ScriptActor>,
+        ConcurrentServerActor<ScriptActor>,
         ConcurrentServerMessageBox<Execute, std::io::Result<Output>>,
     )> for ScriptActorBuilder
 {
@@ -61,7 +61,7 @@ impl
         self,
     ) -> Result<
         (
-            ConcurrentServiceActor<ScriptActor>,
+            ConcurrentServerActor<ScriptActor>,
             ConcurrentServerMessageBox<Execute, std::io::Result<Output>>,
         ),
         Self::Error,
@@ -72,7 +72,7 @@ impl
     fn build(
         self,
     ) -> (
-        ConcurrentServiceActor<ScriptActor>,
+        ConcurrentServerActor<ScriptActor>,
         ConcurrentServerMessageBox<Execute, std::io::Result<Output>>,
     ) {
         let actor = self.actor;
@@ -96,7 +96,7 @@ mod tests {
 
     #[tokio::test]
     async fn script() {
-        let csa = ConcurrentServiceActor::new(ScriptActor);
+        let csa = ConcurrentServerActor::new(ScriptActor);
         let mut builder = ScriptActorBuilder {
             actor: csa,
             box_builder: ServerMessageBoxBuilder::new("Script", 100),

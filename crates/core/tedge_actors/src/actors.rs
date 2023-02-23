@@ -24,80 +24,80 @@ pub trait Actor: 'static + Sized + Send + Sync {
     async fn run(self, messages: Self::MessageBox) -> Result<(), ChannelError>;
 }
 
-/// An actor that wraps a request-response service
+/// An actor that wraps a request-response server
 ///
 /// Requests are processed in turn, leading either to a response or an error.
-pub struct ServiceActor<S: Service> {
-    service: S,
+pub struct ServerActor<S: Server> {
+    server: S,
 }
 
-impl<S: Service> ServiceActor<S> {
-    pub fn new(service: S) -> Self {
-        ServiceActor { service }
+impl<S: Server> ServerActor<S> {
+    pub fn new(server: S) -> Self {
+        ServerActor { server }
     }
 }
 
 #[async_trait]
-pub trait Service: 'static + Sized + Send + Sync {
+pub trait Server: 'static + Sized + Send + Sync {
     type Request: Message;
     type Response: Message;
 
-    /// Return the service name
+    /// Return the server name
     fn name(&self) -> &str;
 
     /// Handle the request returning the response when done
     ///
-    /// For such a service to return errors, the response type must be a `Result`.
+    /// For such a server to return errors, the response type must be a `Result`.
     async fn handle(&mut self, request: Self::Request) -> Self::Response;
 }
 
 #[async_trait]
-impl<S: Service> Actor for ServiceActor<S> {
+impl<S: Server> Actor for ServerActor<S> {
     type MessageBox = ServerMessageBox<S::Request, S::Response>;
 
     fn name(&self) -> &str {
-        self.service.name()
+        self.server.name()
     }
 
     async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
-        let mut service = self.service;
+        let mut server = self.server;
         while let Some((client_id, request)) = messages.recv().await {
-            let result = service.handle(request).await;
+            let result = server.handle(request).await;
             messages.send((client_id, result)).await?
         }
         Ok(())
     }
 }
 
-/// An actor that wraps a request-response service
+/// An actor that wraps a request-response protocol
 ///
 /// Requests are processed concurrently (up to some max concurrency level).
 ///
-/// The service must be `Clone` to create a fresh service handle for each request.
-pub struct ConcurrentServiceActor<S: Service + Clone> {
-    service: S,
+/// The server must be `Clone` to create a fresh server handle for each request.
+pub struct ConcurrentServerActor<S: Server + Clone> {
+    server: S,
 }
 
-impl<S: Service + Clone> ConcurrentServiceActor<S> {
-    pub fn new(service: S) -> Self {
-        ConcurrentServiceActor { service }
+impl<S: Server + Clone> ConcurrentServerActor<S> {
+    pub fn new(server: S) -> Self {
+        ConcurrentServerActor { server }
     }
 }
 
 #[async_trait]
-impl<S: Service + Clone> Actor for ConcurrentServiceActor<S> {
+impl<S: Server + Clone> Actor for ConcurrentServerActor<S> {
     type MessageBox = ConcurrentServerMessageBox<S::Request, S::Response>;
 
     fn name(&self) -> &str {
-        self.service.name()
+        self.server.name()
     }
 
     async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
         while let Some((client_id, request)) = messages.recv().await {
             // Spawn the request
-            let mut service = self.service.clone();
+            let mut server = self.server.clone();
             let pending_result = tokio::spawn(async move {
-                let result = service.handle(request).await;
+                let result = server.handle(request).await;
                 (client_id, result)
             });
 

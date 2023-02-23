@@ -15,10 +15,10 @@ use tedge_actors::DynSender;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::Server;
+use tedge_actors::ServerActor;
 use tedge_actors::ServerMessageBox;
 use tedge_actors::ServerMessageBoxBuilder;
-use tedge_actors::Service;
-use tedge_actors::ServiceActor;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
 
@@ -42,7 +42,7 @@ impl C8YJwtRetriever {
 }
 
 #[async_trait]
-impl Service for C8YJwtRetriever {
+impl Server for C8YJwtRetriever {
     type Request = JwtRequest;
     type Response = JwtResult;
 
@@ -84,7 +84,7 @@ pub(crate) struct ConstJwtRetriever {
 }
 
 #[async_trait]
-impl Service for ConstJwtRetriever {
+impl Server for ConstJwtRetriever {
     type Request = JwtRequest;
     type Response = JwtResult;
 
@@ -98,34 +98,34 @@ impl Service for ConstJwtRetriever {
 }
 
 /// Build an actor from a JwtRetriever service
-pub struct JwtRetrieverBuilder<S: Service<Request = JwtRequest, Response = JwtResult>> {
-    actor: ServiceActor<S>,
+pub struct JwtRetrieverBuilder<S: Server<Request = JwtRequest, Response = JwtResult>> {
+    actor: ServerActor<S>,
     message_box: ServerMessageBoxBuilder<(), JwtResult>,
 }
 
-impl<S: Service<Request = JwtRequest, Response = JwtResult>> JwtRetrieverBuilder<S> {
+impl<S: Server<Request = JwtRequest, Response = JwtResult>> JwtRetrieverBuilder<S> {
     pub fn new(service: S) -> Self {
-        let actor = ServiceActor::new(service);
+        let actor = ServerActor::new(service);
         let message_box = ServerMessageBoxBuilder::new(actor.name(), 10);
         JwtRetrieverBuilder { actor, message_box }
     }
 }
 
-impl<S: Service<Request = JwtRequest, Response = JwtResult>>
-    Builder<(ServiceActor<S>, ServerMessageBox<(), JwtResult>)> for JwtRetrieverBuilder<S>
+impl<S: Server<Request = JwtRequest, Response = JwtResult>>
+    Builder<(ServerActor<S>, ServerMessageBox<(), JwtResult>)> for JwtRetrieverBuilder<S>
 {
     type Error = Infallible;
 
-    fn try_build(self) -> Result<(ServiceActor<S>, ServerMessageBox<(), JwtResult>), Self::Error> {
+    fn try_build(self) -> Result<(ServerActor<S>, ServerMessageBox<(), JwtResult>), Self::Error> {
         Ok(self.build())
     }
 
-    fn build(self) -> (ServiceActor<S>, ServerMessageBox<(), JwtResult>) {
+    fn build(self) -> (ServerActor<S>, ServerMessageBox<(), JwtResult>) {
         (self.actor, self.message_box.build())
     }
 }
 
-impl<S: Service<Request = JwtRequest, Response = JwtResult>>
+impl<S: Server<Request = JwtRequest, Response = JwtResult>>
     ServiceProvider<JwtRequest, JwtResult, NoConfig> for JwtRetrieverBuilder<S>
 {
     fn connect_with(
@@ -137,7 +137,7 @@ impl<S: Service<Request = JwtRequest, Response = JwtResult>>
     }
 }
 
-impl<S: Service<Request = JwtRequest, Response = JwtResult>> RuntimeRequestSink
+impl<S: Server<Request = JwtRequest, Response = JwtResult>> RuntimeRequestSink
     for JwtRetrieverBuilder<S>
 {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {

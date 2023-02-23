@@ -5,8 +5,8 @@ use crate::C8YHttpProxyBuilder;
 use c8y_api::json_c8y::InternalIdResponse;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::ServerActor;
 use tedge_actors::ServerMessageBoxBuilder;
-use tedge_actors::ServiceActor;
 use tedge_http_ext::test_helpers::FakeHttpServerBox;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
 use tedge_http_ext::HttpRequestBuilder;
@@ -77,7 +77,7 @@ async fn spawn_c8y_http_proxy(
     config: C8YHttpConfig,
     token: &str,
 ) -> (C8YHttpProxy, FakeHttpServerBox) {
-    let jwt_actor = ServiceActor::new(ConstJwtRetriever {
+    let jwt_actor = ServerActor::new(ConstJwtRetriever {
         token: token.to_string(),
     });
     let mut jwt = ServerMessageBoxBuilder::new("JWT Actor", 16);

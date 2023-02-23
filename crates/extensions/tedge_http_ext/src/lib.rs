@@ -15,8 +15,8 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::ClientMessageBox;
+use tedge_actors::ConcurrentServerActor;
 use tedge_actors::ConcurrentServerMessageBox;
-use tedge_actors::ConcurrentServiceActor;
 use tedge_actors::DynSender;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
@@ -30,14 +30,14 @@ pub trait HttpConnectionBuilder: ServiceProvider<HttpRequest, HttpResult, NoConf
 impl<T> HttpConnectionBuilder for T where T: ServiceProvider<HttpRequest, HttpResult, NoConfig> {}
 
 pub struct HttpActorBuilder {
-    actor: ConcurrentServiceActor<HttpService>,
+    actor: ConcurrentServerActor<HttpService>,
     pub box_builder: ServerMessageBoxBuilder<HttpRequest, HttpResult>,
 }
 
 impl HttpActorBuilder {
     pub fn new() -> Result<Self, HttpError> {
         let service = HttpService::new()?;
-        let actor = ConcurrentServiceActor::new(service);
+        let actor = ConcurrentServerActor::new(service);
         let box_builder = ServerMessageBoxBuilder::new("HTTP", 16).with_max_concurrency(4);
 
         Ok(HttpActorBuilder { actor, box_builder })
@@ -53,7 +53,7 @@ impl HttpActorBuilder {
 
 impl
     Builder<(
-        ConcurrentServiceActor<HttpService>,
+        ConcurrentServerActor<HttpService>,
         ConcurrentServerMessageBox<HttpRequest, HttpResult>,
     )> for HttpActorBuilder
 {
@@ -63,7 +63,7 @@ impl
         self,
     ) -> Result<
         (
-            ConcurrentServiceActor<HttpService>,
+            ConcurrentServerActor<HttpService>,
             ConcurrentServerMessageBox<HttpRequest, HttpResult>,
         ),
         Self::Error,
@@ -74,7 +74,7 @@ impl
     fn build(
         self,
     ) -> (
-        ConcurrentServiceActor<HttpService>,
+        ConcurrentServerActor<HttpService>,
         ConcurrentServerMessageBox<HttpRequest, HttpResult>,
     ) {
         let actor = self.actor;

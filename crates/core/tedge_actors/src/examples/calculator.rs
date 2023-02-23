@@ -1,7 +1,7 @@
 // TODO: make examples respond to RuntimeRequests
 use crate::Actor;
 use crate::ChannelError;
-use crate::Service;
+use crate::Server;
 use crate::SimpleMessageBox;
 use async_trait::async_trait;
 
@@ -55,7 +55,7 @@ impl Actor for Calculator {
 
 /// Implementation of the calculator behavior as a service
 #[async_trait]
-impl Service for Calculator {
+impl Server for Calculator {
     type Request = Operation;
     type Response = Update;
 
@@ -121,8 +121,8 @@ mod tests {
     use crate::Builder;
     use crate::ChannelError;
     use crate::NoConfig;
+    use crate::ServerActor;
     use crate::ServerMessageBoxBuilder;
-    use crate::ServiceActor;
     use crate::ServiceConsumer;
     use crate::SimpleMessageBoxBuilder;
 
@@ -139,7 +139,7 @@ mod tests {
             .connect_to(&mut service_box_builder, NoConfig);
 
         // Spawn the actors
-        tokio::spawn(ServiceActor::new(Calculator::default()).run(service_box_builder.build()));
+        tokio::spawn(ServerActor::new(Calculator::default()).run(service_box_builder.build()));
         tokio::spawn(
             Player {
                 name: "Player".to_string(),
