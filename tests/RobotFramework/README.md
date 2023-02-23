@@ -43,7 +43,7 @@ The list of test hardware devices can be found [here](./TEST_DEVICES.md).
 
 Before you can run the tests you need to install the pre-requisites:
 
-* docker
+* docker (or podman)
 * python3 (>=3.7)
 * pip3
 * venv (python package)
@@ -246,3 +246,23 @@ The reports and logs are best viewed using a web browser. This can be easily don
     ```
 
 3. Then open up [http://localhost:9000/tests/RobotFramework/output/log.html](http://localhost:9000/tests/RobotFramework/output/log.html) in your browser
+
+## Using podman instead of docker
+
+The tests can be run using docker podman instead of docker by simply setting the `DOCKER_HOST` variable in the `.env` file.
+
+**Example**
+
+```sh
+DOCKER_HOST=unix:///Users/username/.local/share/containers/podman/machine/podman-machine-default/podman.sock
+```
+
+Checkout the official podman documentation on how to get the socket for your installation.
+
+**Tips: MacOS (M1)**
+
+Assuming you have already stated the podman virtual machine via `podman machine start`, you can view the socket path using:
+
+```sh
+podman machine inspect --format "{{ .ConnectionInfo.PodmanSocket.Path }}"
+```
