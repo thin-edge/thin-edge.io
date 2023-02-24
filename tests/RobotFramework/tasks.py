@@ -285,7 +285,7 @@ def test(
     adapter="docker",
     retries=0,
     outputdir=None,
-    processes=0,
+    processes=None,
     include="",
     exclude="",
 ):
