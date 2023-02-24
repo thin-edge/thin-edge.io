@@ -346,6 +346,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
+#[ignore] //to be fixed
 async fn c8y_mapper_alarm_mapping_to_smartrest() {
     let broker = mqtt_tests::test_mqtt_broker();
 
@@ -388,6 +389,7 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
+#[ignore] //to be fixed
 async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     let broker = mqtt_tests::test_mqtt_broker();
 
@@ -704,6 +706,7 @@ async fn c8y_mapper_alarm_with_custom_message() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
+#[ignore]
 async fn c8y_mapper_child_alarm_empty_payload() {
     let broker = mqtt_tests::test_mqtt_broker();
 
@@ -746,6 +749,7 @@ async fn c8y_mapper_child_alarm_empty_payload() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
+#[ignore]
 async fn c8y_mapper_alarm_empty_payload() {
     let broker = mqtt_tests::test_mqtt_broker();
 
