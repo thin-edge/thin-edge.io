@@ -30,8 +30,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
-use tedge_actors::ChannelError;
 use tedge_actors::MessageBox;
+use tedge_actors::RuntimeError;
 use tedge_actors::ServerMessageBox;
 use tedge_http_ext::HttpHandle;
 use tedge_http_ext::HttpRequest;
@@ -57,7 +57,7 @@ impl Actor for C8YHttpConfig {
         "C8YHttpProxy"
     }
 
-    async fn run(self, messages: Self::MessageBox) -> Result<(), ChannelError> {
+    async fn run(self, messages: Self::MessageBox) -> Result<(), RuntimeError> {
         let actor = C8YHttpProxyActor::new(self, messages);
         actor.run().await
     }
@@ -114,7 +114,7 @@ impl C8YHttpProxyActor {
         }
     }
 
-    pub async fn run(mut self) -> Result<(), ChannelError> {
+    pub async fn run(mut self) -> Result<(), RuntimeError> {
         self.init().await;
 
         while let Some((client_id, request)) = self.peers.clients.recv().await {

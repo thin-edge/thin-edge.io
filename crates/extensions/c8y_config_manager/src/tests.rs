@@ -11,6 +11,7 @@ use c8y_http_proxy::messages::UploadConfigFile;
 use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::DynError;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_mqtt_ext::MqttMessage;
@@ -22,7 +23,7 @@ use tokio::time::timeout;
 const TEST_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[tokio::test]
-async fn test_config_plugin_init() -> anyhow::Result<()> {
+async fn test_config_plugin_init() -> Result<(), DynError> {
     let device_id = "tedge-device".to_string();
     let test_config_type = "test-config";
     let test_config_path = "/some/test/config";
@@ -56,7 +57,7 @@ async fn test_config_plugin_init() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn test_config_upload_tedge_device() -> anyhow::Result<()> {
+async fn test_config_upload_tedge_device() -> Result<(), DynError> {
     let device_id = "tedge-device".to_string();
     let test_config_type = "test-config";
     let test_config_path = "/some/test/config";
@@ -116,7 +117,7 @@ async fn test_config_upload_tedge_device() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn test_config_download_tedge_device() -> anyhow::Result<()> {
+async fn test_config_download_tedge_device() -> Result<(), DynError> {
     let device_id = "tedge-device".to_string();
     let test_config_type = "test-config";
     let test_config_path = "/some/test/config";
@@ -185,11 +186,14 @@ async fn test_config_download_tedge_device() -> anyhow::Result<()> {
 async fn spawn_config_manager(
     device_id: &str,
     tedge_temp_dir: &TempTedgeDir,
-) -> anyhow::Result<(
-    SimpleMessageBox<MqttMessage, MqttMessage>,
-    SimpleMessageBox<C8YRestRequest, C8YRestResult>,
-    SimpleMessageBox<OperationTimer, OperationTimeout>,
-)> {
+) -> Result<
+    (
+        SimpleMessageBox<MqttMessage, MqttMessage>,
+        SimpleMessageBox<C8YRestRequest, C8YRestResult>,
+        SimpleMessageBox<OperationTimer, OperationTimeout>,
+    ),
+    DynError,
+> {
     let tedge_host = "127.0.0.1";
     let c8y_host = "test.c8y.io";
     let mqtt_port = 1234;

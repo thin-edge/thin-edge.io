@@ -57,7 +57,7 @@ impl ConfigDownloadManager {
         &mut self,
         smartrest_request: SmartRestConfigDownloadRequest,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), ConfigManagementError> {
         info!(
             "Received c8y_DownloadConfigFile request for config type: {} from device: {}",
             smartrest_request.config_type, smartrest_request.device
@@ -76,7 +76,7 @@ impl ConfigDownloadManager {
         &mut self,
         smartrest_request: SmartRestConfigDownloadRequest,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), ConfigManagementError> {
         let executing_message = DownloadConfigFileStatusMessage::executing()?;
         message_box.mqtt_publisher.send(executing_message).await?;
 
@@ -96,7 +96,7 @@ impl ConfigDownloadManager {
                     )
                     .await
                 }
-                Err(err) => Err(err.into()),
+                Err(err) => Err(err),
             }
         };
 
@@ -133,7 +133,7 @@ impl ConfigDownloadManager {
         file_path: PathBuf,
         file_permissions: PermissionEntry,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), ConfigManagementError> {
         message_box
             .c8y_http_proxy
             .download_file(download_url, file_path, file_permissions)
@@ -152,7 +152,7 @@ impl ConfigDownloadManager {
         &mut self,
         smartrest_request: SmartRestConfigDownloadRequest,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), ConfigManagementError> {
         let child_id = smartrest_request.device;
         let config_type = smartrest_request.config_type;
 
@@ -307,7 +307,7 @@ impl ConfigDownloadManager {
         &mut self,
         timeout: OperationTimeout,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), ConfigManagementError> {
         let child_id = timeout.event.child_id;
         let config_type = timeout.event.config_type;
         let operation_key = ChildConfigOperationKey {

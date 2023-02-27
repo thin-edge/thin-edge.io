@@ -13,7 +13,6 @@ use super::child_device::ConfigOperationResponse;
 use super::error::ConfigManagementError;
 use super::plugin_config::PluginConfig;
 use super::ConfigManagerConfig;
-use anyhow::Result;
 use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
@@ -53,7 +52,7 @@ impl ConfigUploadManager {
         &mut self,
         config_upload_request: SmartRestConfigUploadRequest,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<()> {
+    ) -> Result<(), ConfigManagementError> {
         info!(
             "Received c8y_UploadConfigFile request for config type: {} from device: {}",
             config_upload_request.config_type, config_upload_request.device
@@ -72,7 +71,7 @@ impl ConfigUploadManager {
         &mut self,
         config_upload_request: SmartRestConfigUploadRequest,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<()> {
+    ) -> Result<(), ConfigManagementError> {
         // set config upload request to executing
         let msg = UploadConfigFileStatusMessage::executing()?;
         message_box.mqtt_publisher.send(msg).await?;
@@ -91,7 +90,7 @@ impl ConfigUploadManager {
                     )
                     .await
                 }
-                Err(err) => Err(err.into()),
+                Err(err) => Err(err),
             }
         };
 
@@ -124,7 +123,7 @@ impl ConfigUploadManager {
         &mut self,
         config_upload_request: SmartRestConfigUploadRequest,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<()> {
+    ) -> Result<(), ConfigManagementError> {
         let child_id = config_upload_request.device;
         let config_type = config_upload_request.config_type;
         let operation_key = ChildConfigOperationKey {
@@ -319,7 +318,7 @@ impl ConfigUploadManager {
         &mut self,
         config_response: &ConfigOperationResponse,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<MqttMessage, anyhow::Error> {
+    ) -> Result<MqttMessage, ConfigManagementError> {
         let c8y_child_topic = Topic::new_unchecked(&config_response.get_child_topic());
 
         let uploaded_config_file_path = config_response.file_transfer_repository_full_path();
@@ -350,7 +349,7 @@ impl ConfigUploadManager {
         config_type: &str,
         child_device_id: Option<String>,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<String> {
+    ) -> Result<String, ConfigManagementError> {
         let url = message_box
             .c8y_http_proxy
             .upload_config_file(config_file_path, config_type, child_device_id)
@@ -362,7 +361,7 @@ impl ConfigUploadManager {
         &mut self,
         timeout: OperationTimeout,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), ConfigManagementError> {
         let child_id = timeout.event.child_id;
         let config_type = timeout.event.config_type;
         let operation_key = ChildConfigOperationKey {

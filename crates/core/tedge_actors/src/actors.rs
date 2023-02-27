@@ -1,7 +1,7 @@
-use crate::ChannelError;
 use crate::ConcurrentServerMessageBox;
 use crate::Message;
 use crate::MessageBox;
+use crate::RuntimeError;
 use crate::ServerMessageBox;
 use async_trait::async_trait;
 
@@ -21,7 +21,7 @@ pub trait Actor: 'static + Sized + Send + Sync {
     /// Processing input messages,
     /// updating internal state,
     /// and sending messages to peers.
-    async fn run(self, messages: Self::MessageBox) -> Result<(), ChannelError>;
+    async fn run(self, messages: Self::MessageBox) -> Result<(), RuntimeError>;
 }
 
 /// An actor that wraps a request-response server
@@ -59,7 +59,7 @@ impl<S: Server> Actor for ServerActor<S> {
         self.server.name()
     }
 
-    async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+    async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
         let mut server = self.server;
         while let Some((client_id, request)) = messages.recv().await {
             let result = server.handle(request).await;
@@ -92,7 +92,7 @@ impl<S: Server + Clone> Actor for ConcurrentServerActor<S> {
         self.server.name()
     }
 
-    async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+    async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
         while let Some((client_id, request)) = messages.recv().await {
             // Spawn the request
             let mut server = self.server.clone();
@@ -127,10 +127,7 @@ pub mod tests {
             "Echo"
         }
 
-        async fn run(
-            mut self,
-            mut messages: SimpleMessageBox<String, String>,
-        ) -> Result<(), ChannelError> {
+        async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
             // FIXME: If I add the RuntimeRequests here and if the channel we use to send messages is dropped then we will get an ChannelError::SendError
             // FIXME: but I don't think we shouldn't return this error if the message box has a shutdown message for us
             while let Some(message) = messages.recv().await {
@@ -218,7 +215,7 @@ pub mod tests {
             "ActorWithSpecificMessageBox"
         }
 
-        async fn run(self, mut messages: SpecificMessageBox) -> Result<(), ChannelError> {
+        async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
             while let Some(message) = messages.next().await {
                 if message.contains("this") {
                     messages.do_this(message.to_string()).await?

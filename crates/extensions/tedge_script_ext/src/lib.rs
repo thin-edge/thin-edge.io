@@ -3,10 +3,10 @@ use std::process::Output;
 
 use tedge_actors::Actor;
 use tedge_actors::Builder;
-use tedge_actors::ChannelError;
 use tedge_actors::ConcurrentServerActor;
 use tedge_actors::ConcurrentServerMessageBox;
 use tedge_actors::DynSender;
+use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Server;
@@ -39,7 +39,7 @@ impl Server for ScriptActor {
 }
 
 impl ScriptActorBuilder {
-    pub async fn run(self) -> Result<(), ChannelError> {
+    pub async fn run(self) -> Result<(), RuntimeError> {
         self.actor.run(self.box_builder.build()).await
     }
 }

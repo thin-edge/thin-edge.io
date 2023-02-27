@@ -22,9 +22,9 @@ use tedge_actors::fan_in_message_type;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::futures::StreamExt;
 use tedge_actors::Actor;
-use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
+use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_api::health::get_health_status_message;
 use tedge_api::health::health_check_topics;
@@ -357,7 +357,7 @@ impl Actor for LogManagerActor {
         "LogManager"
     }
 
-    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
         self.reload_supported_log_types().await.unwrap();
         self.get_pending_operations_from_cloud().await.unwrap();
 

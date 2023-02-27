@@ -8,8 +8,8 @@ use std::collections::BinaryHeap;
 use std::fmt::Debug;
 use std::pin::Pin;
 use tedge_actors::Actor;
-use tedge_actors::ChannelError;
 use tedge_actors::ClientId;
+use tedge_actors::RuntimeError;
 use tedge_actors::ServerMessageBox;
 use tokio::time::sleep_until;
 use tokio::time::Instant;
@@ -165,7 +165,7 @@ impl Actor for TimerActor {
         "Timer"
     }
 
-    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
         loop {
             if let Some(current) = self.current_timer.take() {
                 let time_elapsed = current.sleep;

@@ -12,7 +12,7 @@
 //! - output messages produced by the actor.
 //!
 //! ```
-//! # use crate::tedge_actors::{Actor, ChannelError, MessageBox, RuntimeRequest, SimpleMessageBox};
+//! # use crate::tedge_actors::{Actor, RuntimeError, MessageBox, RuntimeRequest, SimpleMessageBox};
 //! # use async_trait::async_trait;
 //! #
 //! /// State of the calculator actor
@@ -53,7 +53,7 @@
 //!         "Calculator"
 //!     }
 //!
-//!     async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+//!     async fn run(mut self, mut messages: Self::MessageBox)-> Result<(), RuntimeError>  {
 //!         while let Some(op) = messages.recv().await {
 //!             // Process in turn each input message
 //!             let from = self.state;
@@ -216,7 +216,7 @@
 //!
 //! ```
 //! # use async_trait::async_trait;
-//! # use tedge_actors::{Actor, ChannelError, MessageBox, ClientMessageBox, ServerActor, SimpleMessageBox};
+//! # use tedge_actors::{Actor, RuntimeError, MessageBox, ClientMessageBox, ServerActor, SimpleMessageBox};
 //! # use crate::tedge_actors::examples::calculator::*;
 //!
 //! /// An actor that send operations to a calculator service to reach a given target.
@@ -240,7 +240,7 @@
 //!         &self.name
 //!     }
 //!
-//!     async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+//!     async fn run(self, mut messages: Self::MessageBox)-> Result<(), RuntimeError>  {
 //!         // Send a first identity `Operation` to see where we are.
 //!         messages.send(Operation::Add(0)).await?;
 //!

@@ -175,6 +175,7 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: reports
+        path: reports
     - name: Send report to commit
       uses: joonvena/robotframework-reporter-action@v2.1
       with:
