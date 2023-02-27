@@ -37,6 +37,8 @@ impl AwsConverter {
         vec![
             "tedge/measurements",
             "tedge/measurements/+",
+            "tedge/health",
+            "tedge/health/+",
             "tedge/events/+",
             "tedge/events/+/+",
             "tedge/alarms/+/+",
@@ -67,6 +69,7 @@ impl Converter for AwsConverter {
             serializer.into_string()?
         } else if input.topic.name.starts_with("tedge/events")
             || input.topic.name.starts_with("tedge/alarms")
+            || input.topic.name.starts_with("tedge/health")
         {
             let mut payload_json: Map<String, Value> = serde_json::from_slice(&input.payload)?;
 
