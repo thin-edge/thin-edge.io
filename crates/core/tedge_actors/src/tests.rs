@@ -11,7 +11,7 @@ use tokio::time::sleep;
 struct SleepService;
 
 #[async_trait]
-impl Service for SleepService {
+impl Server for SleepService {
     type Request = u64;
     // A number a milli seconds to wait before returning a response
     type Response = u64; // An echo of the request
@@ -28,7 +28,7 @@ impl Service for SleepService {
 
 async fn spawn_sleep_service() -> SimpleMessageBox<(ClientId, u64), (ClientId, u64)> {
     let service = SleepService;
-    let actor = ServiceActor::new(service);
+    let actor = ServerActor::new(service);
     let (handle, messages) = SimpleMessageBox::channel(actor.name(), 16);
 
     tokio::spawn(actor.run(messages));
@@ -40,9 +40,8 @@ async fn spawn_concurrent_sleep_service(
     max_concurrency: usize,
 ) -> SimpleMessageBox<(ClientId, u64), (ClientId, u64)> {
     let service = SleepService;
-    let actor = ConcurrentServiceActor::new(service);
-    let (handle, messages) =
-        ConcurrentServiceMessageBox::channel(actor.name(), 16, max_concurrency);
+    let actor = ConcurrentServerActor::new(service);
+    let (handle, messages) = ConcurrentServerMessageBox::channel(actor.name(), 16, max_concurrency);
 
     tokio::spawn(actor.run(messages));
 

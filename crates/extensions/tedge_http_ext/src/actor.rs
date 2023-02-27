@@ -6,7 +6,7 @@ use hyper::client::Client;
 use hyper::client::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use hyper_rustls::HttpsConnectorBuilder;
-use tedge_actors::Service;
+use tedge_actors::Server;
 
 #[derive(Clone)]
 pub struct HttpService {
@@ -27,7 +27,7 @@ impl HttpService {
 }
 
 #[async_trait]
-impl Service for HttpService {
+impl Server for HttpService {
     type Request = HttpRequest;
     type Response = HttpResult;
 

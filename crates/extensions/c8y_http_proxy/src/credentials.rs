@@ -10,23 +10,23 @@ use std::convert::Infallible;
 use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
-use tedge_actors::MessageBoxPlug;
-use tedge_actors::MessageBoxSocket;
 use tedge_actors::NoConfig;
-use tedge_actors::RequestResponseHandler;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
-use tedge_actors::Service;
-use tedge_actors::ServiceActor;
-use tedge_actors::ServiceMessageBox;
-use tedge_actors::ServiceMessageBoxBuilder;
+use tedge_actors::Server;
+use tedge_actors::ServerActor;
+use tedge_actors::ServerMessageBox;
+use tedge_actors::ServerMessageBoxBuilder;
+use tedge_actors::ServiceConsumer;
+use tedge_actors::ServiceProvider;
 
 pub type JwtRequest = ();
 pub type JwtResult = Result<String, SmartRestDeserializerError>;
 
 /// Retrieves JWT tokens authenticating the device
-pub type JwtRetriever = RequestResponseHandler<JwtRequest, JwtResult>;
+pub type JwtRetriever = ClientMessageBox<JwtRequest, JwtResult>;
 
 /// A JwtRetriever that gets JWT tokens from C8Y over MQTT
 pub struct C8YJwtRetriever {
@@ -42,7 +42,7 @@ impl C8YJwtRetriever {
 }
 
 #[async_trait]
-impl Service for C8YJwtRetriever {
+impl Server for C8YJwtRetriever {
     type Request = JwtRequest;
     type Response = JwtResult;
 
@@ -84,7 +84,7 @@ pub(crate) struct ConstJwtRetriever {
 }
 
 #[async_trait]
-impl Service for ConstJwtRetriever {
+impl Server for ConstJwtRetriever {
     type Request = JwtRequest;
     type Response = JwtResult;
 
@@ -98,46 +98,46 @@ impl Service for ConstJwtRetriever {
 }
 
 /// Build an actor from a JwtRetriever service
-pub struct JwtRetrieverBuilder<S: Service<Request = JwtRequest, Response = JwtResult>> {
-    actor: ServiceActor<S>,
-    message_box: ServiceMessageBoxBuilder<(), JwtResult>,
+pub struct JwtRetrieverBuilder<S: Server<Request = JwtRequest, Response = JwtResult>> {
+    actor: ServerActor<S>,
+    message_box: ServerMessageBoxBuilder<(), JwtResult>,
 }
 
-impl<S: Service<Request = JwtRequest, Response = JwtResult>> JwtRetrieverBuilder<S> {
+impl<S: Server<Request = JwtRequest, Response = JwtResult>> JwtRetrieverBuilder<S> {
     pub fn new(service: S) -> Self {
-        let actor = ServiceActor::new(service);
-        let message_box = ServiceMessageBoxBuilder::new(actor.name(), 10);
+        let actor = ServerActor::new(service);
+        let message_box = ServerMessageBoxBuilder::new(actor.name(), 10);
         JwtRetrieverBuilder { actor, message_box }
     }
 }
 
-impl<S: Service<Request = JwtRequest, Response = JwtResult>>
-    Builder<(ServiceActor<S>, ServiceMessageBox<(), JwtResult>)> for JwtRetrieverBuilder<S>
+impl<S: Server<Request = JwtRequest, Response = JwtResult>>
+    Builder<(ServerActor<S>, ServerMessageBox<(), JwtResult>)> for JwtRetrieverBuilder<S>
 {
     type Error = Infallible;
 
-    fn try_build(self) -> Result<(ServiceActor<S>, ServiceMessageBox<(), JwtResult>), Self::Error> {
+    fn try_build(self) -> Result<(ServerActor<S>, ServerMessageBox<(), JwtResult>), Self::Error> {
         Ok(self.build())
     }
 
-    fn build(self) -> (ServiceActor<S>, ServiceMessageBox<(), JwtResult>) {
+    fn build(self) -> (ServerActor<S>, ServerMessageBox<(), JwtResult>) {
         (self.actor, self.message_box.build())
     }
 }
 
-impl<S: Service<Request = JwtRequest, Response = JwtResult>>
-    MessageBoxSocket<JwtRequest, JwtResult, NoConfig> for JwtRetrieverBuilder<S>
+impl<S: Server<Request = JwtRequest, Response = JwtResult>>
+    ServiceProvider<JwtRequest, JwtResult, NoConfig> for JwtRetrieverBuilder<S>
 {
     fn connect_with(
         &mut self,
-        peer: &mut impl MessageBoxPlug<JwtRequest, JwtResult>,
+        peer: &mut impl ServiceConsumer<JwtRequest, JwtResult>,
         config: NoConfig,
     ) {
         self.message_box.connect_with(peer, config)
     }
 }
 
-impl<S: Service<Request = JwtRequest, Response = JwtResult>> RuntimeRequestSink
+impl<S: Server<Request = JwtRequest, Response = JwtResult>> RuntimeRequestSink
     for JwtRetrieverBuilder<S>
 {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {

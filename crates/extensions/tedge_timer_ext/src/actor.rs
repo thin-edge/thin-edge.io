@@ -10,7 +10,7 @@ use std::pin::Pin;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
 use tedge_actors::ClientId;
-use tedge_actors::ServiceMessageBox;
+use tedge_actors::ServerMessageBox;
 use tokio::time::sleep_until;
 use tokio::time::Instant;
 
@@ -159,7 +159,7 @@ struct SleepHandle {
 
 #[async_trait]
 impl Actor for TimerActor {
-    type MessageBox = ServiceMessageBox<SetTimeout<AnyPayload>, Timeout<AnyPayload>>;
+    type MessageBox = ServerMessageBox<SetTimeout<AnyPayload>, Timeout<AnyPayload>>;
 
     fn name(&self) -> &str {
         "Timer"

@@ -7,12 +7,12 @@ use std::convert::Infallible;
 use std::path::PathBuf;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
-use tedge_actors::MessageBoxPlug;
-use tedge_actors::MessageBoxSocket;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
-use tedge_actors::ServiceMessageBoxBuilder;
+use tedge_actors::ServerMessageBoxBuilder;
+use tedge_actors::ServiceConsumer;
+use tedge_actors::ServiceProvider;
 use tedge_config::C8yUrlSetting;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::DeviceIdSetting;
@@ -53,7 +53,7 @@ impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
     }
 }
 
-pub trait C8YConnectionBuilder: MessageBoxSocket<C8YRestRequest, C8YRestResult, NoConfig> {}
+pub trait C8YConnectionBuilder: ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig> {}
 
 impl C8YConnectionBuilder for C8YHttpProxyBuilder {}
 
@@ -65,7 +65,7 @@ pub struct C8YHttpProxyBuilder {
     config: C8YHttpConfig,
 
     /// Message box for client requests and responses
-    clients: ServiceMessageBoxBuilder<C8YRestRequest, C8YRestResult>,
+    clients: ServerMessageBoxBuilder<C8YRestRequest, C8YRestResult>,
 
     /// Connection to an HTTP actor
     http: HttpHandle,
@@ -78,9 +78,9 @@ impl C8YHttpProxyBuilder {
     pub fn new(
         config: C8YHttpConfig,
         http: &mut impl HttpConnectionBuilder,
-        jwt: &mut impl MessageBoxSocket<(), JwtResult, NoConfig>,
+        jwt: &mut impl ServiceProvider<(), JwtResult, NoConfig>,
     ) -> Self {
-        let clients = ServiceMessageBoxBuilder::new("C8Y-REST", 10);
+        let clients = ServerMessageBoxBuilder::new("C8Y-REST", 10);
         let http = HttpHandle::new("C8Y-REST => HTTP", http, NoConfig);
         let jwt = JwtRetriever::new("C8Y-REST => JWT", jwt, NoConfig);
         C8YHttpProxyBuilder {
@@ -110,10 +110,10 @@ impl Builder<(C8YHttpConfig, C8YHttpProxyMessageBox)> for C8YHttpProxyBuilder {
     }
 }
 
-impl MessageBoxSocket<C8YRestRequest, C8YRestResult, NoConfig> for C8YHttpProxyBuilder {
+impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig> for C8YHttpProxyBuilder {
     fn connect_with(
         &mut self,
-        peer: &mut impl MessageBoxPlug<C8YRestRequest, C8YRestResult>,
+        peer: &mut impl ServiceConsumer<C8YRestRequest, C8YRestResult>,
         config: NoConfig,
     ) {
         self.clients.connect_with(peer, config)
