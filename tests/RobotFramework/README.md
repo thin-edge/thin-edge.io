@@ -201,7 +201,7 @@ If you are looking to use packages that you locally built, then just use `invoke
     invoke clean
     ```
 
-2. Copy the debian files that you would like to use in your tests by copying them to a specific folder used by the tests.
+3. Copy the debian files that you would like to use in your tests by copying them to a specific folder used by the tests.
 
     For example, assume I have already downloaded the packages from GitHub and placed them under my home folder under `Downloads`.
 
@@ -209,13 +209,13 @@ If you are looking to use packages that you locally built, then just use `invoke
     cp "$HOME/Downloads/"*.deb "tests/images/debian-systemd/files/deb/"
     ```
 
-3. Rebuild the docker image
+4. Rebuild the docker image
 
     ```sh
     invoke build
     ```
 
-4. Run the tests
+5. Run the tests
 
     ```sh
     invoke test
