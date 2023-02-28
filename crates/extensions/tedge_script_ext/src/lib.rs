@@ -90,7 +90,6 @@ impl RuntimeRequestSink for ScriptActorBuilder {
 #[cfg(test)]
 mod tests {
     use tedge_actors::ClientMessageBox;
-    use tedge_actors::NoConfig;
 
     use super::*;
 
@@ -101,7 +100,7 @@ mod tests {
             actor: csa,
             box_builder: ServerMessageBoxBuilder::new("Script", 100),
         };
-        let mut handle = ClientMessageBox::new("Tester", &mut builder.box_builder, NoConfig);
+        let mut handle = ClientMessageBox::new("Tester", &mut builder.box_builder);
 
         tokio::spawn(builder.run());
 

@@ -8,6 +8,7 @@ use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
+use tedge_actors::ServiceConsumer;
 use tedge_config::get_tedge_config;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::MqttBindAddressSetting;
@@ -54,8 +55,8 @@ async fn main() -> anyhow::Result<()> {
     // Connect other actor instances to config manager actor
     config_actor.with_fs_connection(&mut fs_watch_actor)?;
     config_actor.with_c8y_http_proxy(&mut c8y_http_proxy_actor)?;
-    config_actor.with_mqtt_connection(&mut mqtt_actor)?;
-    config_actor.with_timer(&mut timer_actor)?;
+    config_actor.connect_to(&mut mqtt_actor);
+    config_actor.connect_to(&mut timer_actor);
 
     //Instantiate log manager actor
     let log_manager_config =

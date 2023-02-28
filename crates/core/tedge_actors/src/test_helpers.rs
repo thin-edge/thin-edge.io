@@ -132,7 +132,7 @@ pub trait ServiceConsumerExt<Request: MessagePlus, Response: MessagePlus> {
 
 impl<T, Request: MessagePlus, Response: MessagePlus> ServiceConsumerExt<Request, Response> for T
 where
-    T: ServiceConsumer<Request, Response>,
+    T: ServiceConsumer<Request, Response, NoConfig>,
 {
     fn with_probe<'a>(
         &'a mut self,

@@ -202,7 +202,7 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
     pub fn channel(name: &str, capacity: usize) -> (SimpleMessageBox<Output, Input>, Self) {
         let mut client_box = SimpleMessageBoxBuilder::new(&format!("{}-Client", name), capacity);
         let mut service_box = SimpleMessageBoxBuilder::new(&format!("{}-Service", name), capacity);
-        service_box.connect_with(&mut client_box, NoConfig);
+        service_box.connect_with(&mut client_box);
         (client_box.build(), service_box.build())
     }
 
@@ -418,15 +418,14 @@ pub struct ClientMessageBox<Request, Response> {
 }
 
 impl<Request: Message, Response: Message> ClientMessageBox<Request, Response> {
-    /// Create a new `ClientMessageBox` connected to the service with the given config.
-    pub fn new<Config>(
+    /// Create a new `ClientMessageBox` connected to the service.
+    pub fn new(
         client_name: &str,
-        service: &mut impl ServiceProvider<Request, Response, Config>,
-        config: Config,
+        service: &mut impl ServiceProvider<Request, Response, NoConfig>,
     ) -> Self {
         let capacity = 1; // At most one response is ever expected
         let messages = SimpleMessageBoxBuilder::new(client_name, capacity)
-            .connected_to(service, config)
+            .connected_to(service)
             .build();
         ClientMessageBox { messages }
     }

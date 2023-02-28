@@ -80,11 +80,14 @@ pub trait RuntimeRequestSink {
 /// A trait to connect a message box under-construction to peer messages boxes
 pub trait ServiceProvider<Request: Message, Response: Message, Config> {
     /// Connect a peer message box to the message box under construction
-    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<Request, Response>, config: Config);
+    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<Request, Response, Config>);
 }
 
 /// A connection port to connect a message box under-connection to another box
-pub trait ServiceConsumer<Request: Message, Response: Message> {
+pub trait ServiceConsumer<Request: Message, Response: Message, Config> {
+    /// Return the config used by this actor to connect the service provider
+    fn get_config(&self) -> Config;
+
     /// Set the sender to be used by this actor's box to send requests
     fn set_request_sender(&mut self, request_sender: DynSender<Request>);
 
@@ -92,68 +95,43 @@ pub trait ServiceConsumer<Request: Message, Response: Message> {
     fn get_response_sender(&self) -> DynSender<Response>;
 
     /// Connect this client message box to the service message box
-    fn connect_to<Config>(
-        &mut self,
-        service: &mut impl ServiceProvider<Request, Response, Config>,
-        config: Config,
-    ) where
+    fn connect_to(&mut self, service: &mut impl ServiceProvider<Request, Response, Config>)
+    where
         Self: Sized,
     {
-        service.connect_with(self, config)
+        service.connect_with(self)
     }
 
     /// Connect this client message box to the service message box
     ///
     /// Return the updated client message box.
-    fn connected_to<Config>(
-        mut self,
-        service: &mut impl ServiceProvider<Request, Response, Config>,
-        config: Config,
-    ) -> Self
+    fn connected_to(mut self, service: &mut impl ServiceProvider<Request, Response, Config>) -> Self
     where
         Self: Sized,
     {
-        service.connect_with(&mut self, config);
+        service.connect_with(&mut self);
         self
     }
 }
 
-impl<T, Req, Res> ServiceConsumer<Req, Res> for T
+impl<T, Req, Res> ServiceConsumer<Req, Res, NoConfig> for T
 where
     Req: Message,
     Res: Message,
     T: MessageSink<Res> + MessageSource<Req, NoConfig>,
 {
+    fn get_config(&self) -> NoConfig {
+        NoConfig
+    }
+
     fn set_request_sender(&mut self, request_sender: DynSender<Req>) {
-        self.register_peer(NoConfig, request_sender)
+        self.register_peer(self.get_config(), request_sender)
     }
 
     fn get_response_sender(&self) -> DynSender<Res> {
         self.get_sender()
     }
 }
-
-// FIXME Why is this implementation conflicting with
-// impl<Req: Message, Res: Message> ServiceProvider<Req, Res, NoConfig> for ServerMessageBoxBuilder<Req, Res>
-// while ServerMessageBoxBuilder __doesn't__ impl neither MessageSink nor MessageSource?
-//
-// Would be solved by https://github.com/rust-lang/rfcs/pull/1210
-//
-// This is an issue because:
-// - the implementation of ServiceProvider for ServerMessageBox cannot be done from Source & Sink.
-// - but this can be done for any mailbox that doesn't need to correlate outputs to inputs.
-/*
-impl<T, Req, Res, Config> ServiceProvider<Req, Res, Config> for T where
-    Req: Message,
-    Res: Message,
-    T: MessageSink<Req> + MessageSource<Res, Config>
-{
-    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<Req, Res>, config: Config) {
-        self.register_peer(config, peer.get_response_sender());
-        peer.set_request_sender(self.get_sender());
-    }
-}
-*/
 
 /// A builder of SimpleMessageBox
 pub struct SimpleMessageBoxBuilder<I, O> {
@@ -184,7 +162,7 @@ impl<I: Message, O: Message> SimpleMessageBoxBuilder<I, O> {
 impl<Req: Message, Res: Message, Config> ServiceProvider<Req, Res, Config>
     for SimpleMessageBoxBuilder<Req, Res>
 {
-    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<Req, Res>, _config: Config) {
+    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<Req, Res, Config>) {
         self.output_sender = peer.get_response_sender();
         peer.set_request_sender(self.input_sender.sender_clone());
     }
@@ -281,7 +259,7 @@ impl<Req: Message, Res: Message> RuntimeRequestSink for ServerMessageBoxBuilder<
 impl<Req: Message, Res: Message> ServiceProvider<Req, Res, NoConfig>
     for ServerMessageBoxBuilder<Req, Res>
 {
-    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<Req, Res>, _config: NoConfig) {
+    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<Req, Res, NoConfig>) {
         let client_id = self.clients.len();
         let request_sender = KeyedSender::new_sender(client_id, self.request_sender.clone());
 

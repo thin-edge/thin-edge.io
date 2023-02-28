@@ -23,7 +23,7 @@ impl C8YHttpProxy {
         client_name: &str,
         proxy_builder: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
     ) -> Self {
-        let c8y = ClientMessageBox::new(client_name, proxy_builder, NoConfig);
+        let c8y = ClientMessageBox::new(client_name, proxy_builder);
         C8YHttpProxy { c8y }
     }
 

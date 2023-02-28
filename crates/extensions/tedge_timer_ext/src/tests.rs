@@ -61,9 +61,11 @@ async fn timeout_requests_lead_to_chronological_timeout_responses() {
     );
 }
 
-async fn spawn_timer_actor<T: Message>(peer: &mut impl ServiceConsumer<SetTimeout<T>, Timeout<T>>) {
+async fn spawn_timer_actor<T: Message>(
+    peer: &mut impl ServiceConsumer<SetTimeout<T>, Timeout<T>, NoConfig>,
+) {
     let mut builder = TimerActor::builder();
-    builder.connect_with(peer, NoConfig);
+    builder.connect_with(peer);
 
     tokio::spawn(async move {
         let (actor, actor_box) = builder.build();

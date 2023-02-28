@@ -79,12 +79,8 @@ impl
 }
 
 impl ServiceProvider<HttpRequest, HttpResult, NoConfig> for HttpActorBuilder {
-    fn connect_with(
-        &mut self,
-        peer: &mut impl ServiceConsumer<HttpRequest, HttpResult>,
-        config: NoConfig,
-    ) {
-        self.box_builder.connect_with(peer, config)
+    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<HttpRequest, HttpResult, NoConfig>) {
+        self.box_builder.connect_with(peer)
     }
 }
 

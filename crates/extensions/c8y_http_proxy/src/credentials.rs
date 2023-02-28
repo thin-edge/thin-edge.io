@@ -128,12 +128,8 @@ impl<S: Server<Request = JwtRequest, Response = JwtResult>>
 impl<S: Server<Request = JwtRequest, Response = JwtResult>>
     ServiceProvider<JwtRequest, JwtResult, NoConfig> for JwtRetrieverBuilder<S>
 {
-    fn connect_with(
-        &mut self,
-        peer: &mut impl ServiceConsumer<JwtRequest, JwtResult>,
-        config: NoConfig,
-    ) {
-        self.message_box.connect_with(peer, config)
+    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<JwtRequest, JwtResult, NoConfig>) {
+        self.message_box.connect_with(peer)
     }
 }
 

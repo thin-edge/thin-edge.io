@@ -70,9 +70,9 @@ impl MqttActorBuilder {
 impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter> for MqttActorBuilder {
     fn connect_with(
         &mut self,
-        peer: &mut impl ServiceConsumer<MqttMessage, MqttMessage>,
-        subscriptions: TopicFilter,
+        peer: &mut impl ServiceConsumer<MqttMessage, MqttMessage, TopicFilter>,
     ) {
+        let subscriptions = peer.get_config();
         self.subscriber_addresses
             .push((subscriptions, peer.get_response_sender()));
         peer.set_request_sender(self.publish_sender.clone().into())

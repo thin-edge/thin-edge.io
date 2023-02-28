@@ -53,23 +53,22 @@ impl RuntimeRequestSink for TimerActorBuilder {
 impl<T: Message> ServiceProvider<SetTimeout<T>, Timeout<T>, NoConfig> for TimerActorBuilder {
     fn connect_with(
         &mut self,
-        peer: &mut impl ServiceConsumer<SetTimeout<T>, Timeout<T>>,
-        config: NoConfig,
+        peer: &mut impl ServiceConsumer<SetTimeout<T>, Timeout<T>, NoConfig>,
     ) {
         let mut adapter = AnyTimerAdapter::new(peer);
-        self.box_builder.connect_with(&mut adapter, config);
+        self.box_builder.connect_with(&mut adapter);
     }
 }
 
 /// A message adapter used by actors to send timer requests with a generic payload `SetTimeout<T>`
 /// and to receive accordingly timer responses with a generic payload `Timeout<T>`,
 /// while the timer actor only handles opaque payloads of type `Box<dyn Any>`.
-struct AnyTimerAdapter<'a, T: Message, Plug: ServiceConsumer<SetTimeout<T>, Timeout<T>>> {
+struct AnyTimerAdapter<'a, T: Message, Plug: ServiceConsumer<SetTimeout<T>, Timeout<T>, NoConfig>> {
     inner: &'a mut Plug,
     _phantom: PhantomData<T>,
 }
 
-impl<'a, T: Message, Plug: ServiceConsumer<SetTimeout<T>, Timeout<T>>>
+impl<'a, T: Message, Plug: ServiceConsumer<SetTimeout<T>, Timeout<T>, NoConfig>>
     AnyTimerAdapter<'a, T, Plug>
 {
     fn new(inner: &'a mut Plug) -> Self {
@@ -80,12 +79,16 @@ impl<'a, T: Message, Plug: ServiceConsumer<SetTimeout<T>, Timeout<T>>>
     }
 }
 
-impl<'a, T, Plug> ServiceConsumer<SetTimeout<AnyPayload>, Timeout<AnyPayload>>
+impl<'a, T, Plug> ServiceConsumer<SetTimeout<AnyPayload>, Timeout<AnyPayload>, NoConfig>
     for AnyTimerAdapter<'a, T, Plug>
 where
     T: Message,
-    Plug: ServiceConsumer<SetTimeout<T>, Timeout<T>>,
+    Plug: ServiceConsumer<SetTimeout<T>, Timeout<T>, NoConfig>,
 {
+    fn get_config(&self) -> NoConfig {
+        NoConfig
+    }
+
     fn set_request_sender(&mut self, request_sender: DynSender<SetTimeout<AnyPayload>>) {
         self.inner.set_request_sender(Box::new(SetTimeoutSender {
             inner: request_sender,
