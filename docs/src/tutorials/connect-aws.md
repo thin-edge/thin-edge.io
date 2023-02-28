@@ -57,25 +57,22 @@ see the reference guide of [`tedge cert`](../references/tedge-cert.md).
 
 ## Register the device on AWS IoT Hub
 
-For a device to be trusted by AWS, one needs to add the self-signed certificate to the AWS IoT Core (generated when
-using the `tedge cert create` command). In the AWS IoT Core, navigate to "Security"->"Certificates" then click on "Add
-certificate"->"Register certificates". Select the option "CA is not registered with AWS IoT" as we are using a self
-signed certificate. Click "Upload" and select either the device certificate or certificate signing request, then click
-"Register". If you navigate to "Security"->"Certificates" you should now see the certificate listed. Click on the new
-certificate, then under the "Actions" dropdown click "Activate".
-
-A policy needs to be attached to the device certificate in AWS IoT Core. AWS IoT Core policies determine what an
+For a device to be trusted by AWS, one needs to generate it by using the `tedge cert create` command.
+Also a policy needs to be attached to the device certificate in AWS IoT Core. AWS IoT Core policies determine what an
 authenticated identity can do (here the authenticated identity is the device being connected). More info on AWS IoT Core
 policies can be found [here](https://docs.aws.amazon.com/iot/latest/developerguide/iot-policies.html).
 
-An example policy template for connecting a device running thin-edge can be found [here](./aws-example-policy.json).
-To create a new policy, head over to the AWS IoT Core and navigate to "Security"->"Policies" then click "Create policy".
-Give the policy a name, then under "Policy document" click "JSON", paste in the entire contents of the example policy
-and click "Create". Be sure to replace `<region>`, `<account-id>`, etc. with correct values for your tenant.
+To create a new policy, head over to the AWS IoT Core and navigate to ***Security -> Policies -> Create policy -> Policy properties -> Policy name -> Enter the name of your policy (e.g.tedge)***
 
-The final step is to attach the policy to the certificate. Navigate to "Security"->"Certificates"
-and click on the certificate that was uploaded previously. Click on "Attach policies" then select the policy that you
-created and click "Attach policies".
+On the Policy statements tab Click on ***JSON*** and enter the policy in the ***Policy document*** (Example policy can be found [here](./aws-example-policy.json)) then click ***Create***
+
+In the AWS IoT Core, navigate to ***Manage -> All devices -> Things -> Create things -> Create Single thing -> Next*** Enter Thing name which can be obtain from the device with: `tedge config get device.id`
+
+In the Device Shadow section which allow connected devices to sync states with AWS choose ***Unnamed shadow (classic)*** and click ***Next*** and ***Configure device certificate - optional*** page opens
+
+At ***Device certificate*** choose ***Use my certificate -> CA is not registered with AWS IoT*** then ***Choose file*** snd select your tedge-certificate.pem file, click on ***Open -> Next***
+
+Last step needed is to attach previously created policy to your certificate, ***Attach policies to certificate -optional*** -> Select your created policy ***-> Create thing***
 
 ## Configure the device
 
