@@ -191,7 +191,7 @@ pub async fn create_mqtt_client_will_message(
             device_name,
             app_name,
             "down",
-            "thin-edge.io",
+            "service",
             None,
         ));
     let mqtt_client = Connection::new(&mqtt_config).await?;
