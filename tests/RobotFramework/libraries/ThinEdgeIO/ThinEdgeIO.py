@@ -217,7 +217,7 @@ class ThinEdgeIO(DeviceLibrary):
 
     @keyword("Download From GitHub")
     def download_from_github(self, *run_id: str, arch: str = "aarch64"):
-        """Dowload artifacts from a GitHub Run
+        """Download artifacts from a GitHub Run
 
         Args:
             *run_id (str): Run ids of the artifacts to download

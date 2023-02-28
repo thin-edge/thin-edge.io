@@ -1,16 +1,52 @@
 """Project tasks"""
 
 from pathlib import Path
+import logging
 import os
+import platform
 import sys
 import shlex
-from invoke import task
+import shutil
 
+from invoke import task
 from dotenv import load_dotenv
+
+
+class ColourFormatter(logging.Formatter):
+    grey = "\x1b[38;20m"
+    yellow = "\x1b[33;20m"
+    red = "\x1b[31;20m"
+    bold_red = "\x1b[31;1m"
+    reset = "\x1b[0m"
+    format = "%(levelname)-8s %(message)s (%(filename)s:%(lineno)d)"
+
+    FORMATS = {
+        logging.DEBUG: grey + format + reset,
+        logging.INFO: grey + format + reset,
+        logging.WARNING: yellow + format + reset,
+        logging.ERROR: red + format + reset,
+        logging.CRITICAL: bold_red + format + reset,
+    }
+
+    def format(self, record):
+        log_fmt = self.FORMATS.get(record.levelno)
+        formatter = logging.Formatter(log_fmt)
+        return formatter.format(record)
+
 
 output_path = Path(__file__).parent / "output"
 project_dir = Path(__file__).parent.parent.parent
 project_dotenv = project_dir.joinpath(".env")
+test_image_file_dir = project_dir / "tests/images/debian-systemd/files/deb"
+
+# LOG settings
+log = logging.getLogger("invoke")
+log.setLevel(logging.INFO)
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+ch.setFormatter(ColourFormatter())
+log.addHandler(ch)
+
 
 for item in [project_dotenv, ".env"]:
     if os.path.exists(item):
@@ -24,6 +60,27 @@ ENV_DEVICE_ADAPTER = "DEVICE_ADAPTER"
 ADAPTER_DOCKER = "docker"
 ADAPTER_LOCAL = "local"
 ADAPTER_SSH = "ssh"
+
+
+def detect_container_cli():
+    """Detect the container cli (e.g. docker, podman, nerdctl)"""
+    container_cli_options = ["docker", "podman", "nerdctl"]
+
+    # Check which ones are actually available
+    available = [cli for cli in container_cli_options if shutil.which(cli)]
+
+    if not available:
+        raise FileNotFoundError(
+            f"No container cli found. The following clis were checked: {container_cli_options}"
+        )
+
+    # Check if the DOCKER_HOST is configured, as this will control which endpoint is actually being used
+    for cli in available:
+        if cli in os.getenv("DOCKER_HOST", ""):
+            return cli
+
+    # Otherwise, use first available container cli
+    return cli[0]
 
 
 def is_ci():
@@ -55,16 +112,160 @@ def start_server(c, port=9000):
     c.run(f"{sys.executable} -m http.server {port} --directory '{path}'")
 
 
-@task(name="build")
-def build(c, name="debian-systemd"):
-    """Build the docker integration test image"""
-    context = "../images/debian-systemd"
-    c.run(f"docker build -t {name} -f {context}/debian-systemd.dockerfile {context}", echo=True)
+def detect_target():
+    uname = str(platform.uname()[4]).casefold()
+    arch = None
+    if "arm64" in uname:
+        arch = "aarch64-unknown-linux"
+    elif "armv7" in uname:
+        arch = "armv7-unknown-linux"
+    elif "armv6" in uname:
+        arch = "arm-unknown-linux"
+    elif "x86_64" in uname or "amd64" in uname:
+        arch = "x86_64-unknown-linux"
+
+    return arch
+
+
+@task
+def clean(c):
+    """Remove any debian files"""
+    log.info(
+        "Removing any existing files from %s",
+        test_image_file_dir.relative_to(project_dir),
+    )
+    for filename in os.listdir(test_image_file_dir):
+        # ignore hidden files
+        if filename.startswith("."):
+            continue
+
+        file_path = os.path.join(test_image_file_dir, filename)
+        if os.path.isfile(file_path) or os.path.islink(file_path):
+            os.unlink(file_path)
+        elif os.path.isdir(file_path):
+            shutil.rmtree(file_path)
+
+
+@task(pre=[clean])
+def use_local(c, arch="", package_type="deb"):
+    """Copy locally built packages to the location which is used by the test container image
+
+    It will automatically delete any existing files in the destination directory
+
+    Examples:
+        invoke use-local
+        # Copy any debian files from the locally built on your host's target architecture
+
+        invoke use-local --arch "aarch"
+        # Copy any debian files from the locally built *aarch* target folder
+
+        invoke use-local --arch "aarch*musl"
+        # Copy any debian files from aarch*musl target files
+    """
+    source_dir = project_dir / "target"
+    dest_dir = test_image_file_dir
+
+    if not arch:
+        arch = detect_target()
+        if not arch:
+            log.error(
+                "Could not detect your architecture. Please manually specify it using the --arch <value> flag"
+            )
+            sys.exit(1)
+        log.info("Using auto detected target: %s", arch)
+
+    source_files = []
+    for path in source_dir.glob(f"*{arch}*"):
+        source_files = list(path.rglob(f"*.{package_type}"))
+        if path.is_dir() and len(source_files):
+            source_dir = path
+            break
+
+    if not source_files:
+        log.error(
+            "Did not find any %s files under %s",
+            arch,
+            source_dir.relative_to(project_dir),
+        )
+        sys.exit(1)
+
+    log.info(
+        "Copying *.%s file/s from %s to %s%s",
+        package_type,
+        source_dir.relative_to(project_dir),
+        dest_dir.relative_to(project_dir),
+        os.path.sep,
+    )
+    for file in source_files:
+        shutil.copy(file, dest_dir)
 
 
 @task(
+    name="build",
     help={
-        "file": ("Robot file or directory to run"),
+        "name": ("Output image name"),
+        "cache": ("Don't use docker cache"),
+        "local": ("Use a locally built packages for the current host target"),
+        "binary": (
+            "Binary to be used to build the container image. e.g. docker, podman. Defaults to docker"
+        ),
+        "build_options": (
+            "Additional build options which will be passed directly to the binary building the image"
+        ),
+    },
+)
+def build(
+    c, name="debian-systemd", cache=True, local=False, binary=None, build_options=""
+):
+    """Build the container integration test image
+
+    Docker is used by default, unless if the DOCKER_HOST variable is pointing to podman
+    and podman is installed.
+
+    Examples:
+
+        invoke build
+        # Build the test container image (it will use any debian files that have already been copied to the files dir)
+
+        invoke clean build
+        # Build the test container image but remove any existing files
+
+        invoke build --local
+        # Build the test container image using the locally build version (auto detecting your host's architecture)
+
+        invoke use-local --arch "aarch64" build
+        # Build the test container image using the locally build version (auto detecting your)
+
+        invoke use-local --arch "x86_64" build
+        # Use locally built x86_64 images then build container image
+
+    """
+
+    if local:
+        use_local(c)
+
+    # Support podman, and automatically switch if the DOCKER_HOST is set
+    binary = binary or "docker"
+    if shutil.which("podman") and "podman" in os.getenv("DOCKER_HOST", ""):
+        binary = "podman"
+
+    options = ""
+    if not cache:
+        options += " --no-cache"
+
+    if build_options:
+        options += f" {build_options}"
+
+    context = "../images/debian-systemd"
+    c.run(
+        f"{binary} build -t {name} -f {context}/debian-systemd.dockerfile {options} {context}",
+        echo=True,
+    )
+
+
+@task(
+    aliases=["tests"],
+    help={
         "outputdir": ("Output directory where the reports will be saved to"),
         "processes": ("Number of processes to use when running tests"),
         "suite": ("Only run suites matching the given text"),
@@ -72,56 +273,94 @@ def build(c, name="debian-systemd"):
         "include": ("Only run tests matching the given tag"),
         "exclude": ("Don't run tests matching the given tag"),
         "retries": ("Max global retries to execute on failed tests. Defaults to 0"),
-        "adapter": ("Default device adapter to use to run tests. e.g. docker, ssh or local"),
+        "adapter": (
+            "Default device adapter to use to run tests. e.g. docker, ssh or local"
+        ),
     },
 )
-def test(c, file="tests", suite="", test="", adapter="docker", retries=0, outputdir=None, processes=None, include="", exclude=""):
+def test(
+    c,
+    suite="",
+    test="",
+    adapter="docker",
+    retries=0,
+    outputdir=None,
+    processes=None,
+    include="",
+    exclude="",
+):
     """Run tests
 
     Examples
 
-        # run all tests
         invoke test
+        # run all tests
 
-        # Run only tests defined in tests/myfile.robot
         invoke test --file=tests/myfile.robot
+        # Run only tests defined in tests/myfile.robot
+
+        invoke test --test "Successful shell command with output" --processes 1
+        # Run any test cases matching a give string
+
+        invoke test --suite "shell_operation" --processes 1
+        # Run suites matching a specific name
+
+        invoke test --include "theme:troubleshooting AND theme:c8y" --processes 10
+        # Run tests which includes specific tags
     """
-    if not processes:
-        processes = 10
+    processes = int(processes or 10)
 
     if not outputdir:
         outputdir = output_path
 
     env_file = ".env"
     if env_file:
-        print(f"loading .env file. path={env_file}")
+        log.info("loading .env file. path=%s", env_file)
         load_dotenv(env_file, verbose=True, override=True)
 
     if adapter:
         os.environ[ENV_DEVICE_ADAPTER] = adapter
 
     if adapter == ADAPTER_DOCKER:
+        container_cli = detect_container_cli()
+
         # create docker network that is used by each container
         # Create before launching tests otherwise there will be a race condition
         # which causes multiple networks with the same name to be created.
-        c.run("command -v docker &>/dev/null && (docker network create inttest-network --driver bridge || true) || true")
+        c.run(
+            f"command -v {container_cli} &>/dev/null && ({container_cli} network create inttest-network --driver bridge || true) || true"
+        )
     elif adapter in [ADAPTER_SSH, ADAPTER_LOCAL]:
         # Parallel processing is not supported when using ssh or local
         # as the same device is being used for each test
         processes = 1
 
-    command = [
-        sys.executable,
-        "-m",
-        "pabot.pabot",
-        "--processes",
-        str(processes),
-        "--outputdir",
-        str(outputdir),
-        # Support optional retry on failed (for tests with specific Tags, e.g. "test:retry(2)")
-        "--listener",
-        f"RetryFailed:{retries}",
-    ]
+    if processes == 1:
+        # Use robot rather than pabot if only 1 process is being used
+        command = [
+            sys.executable,
+            "-m",
+            "robot.run",
+            "--outputdir",
+            str(outputdir),
+            # Support optional retry on failed (for tests with specific Tags, e.g. "test:retry(2)")
+            "--listener",
+            f"RetryFailed:{retries}",
+        ]
+    else:
+        # Use pabot to handle multiple processes
+        command = [
+            sys.executable,
+            "-m",
+            "pabot.pabot",
+            "--processes",
+            str(processes),
+            "--outputdir",
+            str(outputdir),
+            # Support optional retry on failed (for tests with specific Tags, e.g. "test:retry(2)")
+            "--listener",
+            f"RetryFailed:{retries}",
+        ]
 
     # include tags
     if include:
@@ -143,17 +382,21 @@ def test(c, file="tests", suite="", test="", adapter="docker", retries=0, output
 
     # suite filter
     if suite:
-        command.extend([
-            "--suite",
-            shlex.quote(suite),
-        ])
+        command.extend(
+            [
+                "--suite",
+                shlex.quote(suite),
+            ]
+        )
 
     # test filter
     if test:
-        command.extend([
-            "--test",
-            shlex.quote(test),
-        ])
+        command.extend(
+            [
+                "--test",
+                shlex.quote(test),
+            ]
+        )
 
     if not is_ci():
         command.extend(
@@ -165,8 +408,7 @@ def test(c, file="tests", suite="", test="", adapter="docker", retries=0, output
             ]
         )
 
-    if file:
-        command.append(file)
+    command.append("tests")
 
-    print(" ".join(command))
+    log.info(" ".join(command))
     c.run(" ".join(command))
