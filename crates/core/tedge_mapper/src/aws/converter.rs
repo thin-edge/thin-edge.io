@@ -58,7 +58,6 @@ impl Converter for AwsConverter {
     }
 
     async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
-        self.size_threshold.validate(input)?;
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
 
         // serialize with ThinEdgeJson for measurements, for alarms and events just add the timestamp
@@ -93,7 +92,9 @@ impl Converter for AwsConverter {
 
         let out_topic = Topic::new(&format!("aws/td/{topic_suffix}"))?;
 
-        Ok(vec![(Message::new(&out_topic, payload))])
+        let output = Message::new(&out_topic, payload);
+        self.size_threshold.validate(&output)?;
+        Ok(vec![(output)])
     }
 }
 
@@ -123,7 +124,7 @@ mod tests {
     #[tokio::test]
     async fn converting_invalid_json_is_invalid() {
         let mut converter =
-            AwsConverter::new(false, Box::new(TestClock), SizeThreshold(255 * 1024));
+            AwsConverter::new(false, Box::new(TestClock), SizeThreshold(128 * 1024));
 
         let input = "This is not Thin Edge JSON";
         let result = converter.try_convert(&new_tedge_message(input)).await;
@@ -143,7 +144,7 @@ mod tests {
     async fn converting_input_without_timestamp_produces_output_without_timestamp_given_add_timestamp_is_false(
     ) {
         let mut converter =
-            AwsConverter::new(false, Box::new(TestClock), SizeThreshold(255 * 1024));
+            AwsConverter::new(false, Box::new(TestClock), SizeThreshold(128 * 1024));
 
         let input = r#"{
             "temperature": 23.0
@@ -166,7 +167,7 @@ mod tests {
     async fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_false(
     ) {
         let mut converter =
-            AwsConverter::new(false, Box::new(TestClock), SizeThreshold(255 * 1024));
+            AwsConverter::new(false, Box::new(TestClock), SizeThreshold(128 * 1024));
 
         let input = r#"{
             "time" : "2013-06-22T17:03:14.000+02:00",
@@ -190,7 +191,7 @@ mod tests {
     #[tokio::test]
     async fn converting_input_with_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true(
     ) {
-        let mut converter = AwsConverter::new(true, Box::new(TestClock), SizeThreshold(255 * 1024));
+        let mut converter = AwsConverter::new(true, Box::new(TestClock), SizeThreshold(128 * 1024));
 
         let input = r#"{
             "time" : "2013-06-22T17:03:14.000+02:00",
@@ -214,7 +215,7 @@ mod tests {
     #[tokio::test]
     async fn converting_input_without_timestamp_produces_output_with_timestamp_given_add_timestamp_is_true(
     ) {
-        let mut converter = AwsConverter::new(true, Box::new(TestClock), SizeThreshold(255 * 1024));
+        let mut converter = AwsConverter::new(true, Box::new(TestClock), SizeThreshold(128 * 1024));
 
         let input = r#"{
             "temperature": 23.0
@@ -239,14 +240,15 @@ mod tests {
         let mut converter = AwsConverter::new(false, Box::new(TestClock), SizeThreshold(1));
 
         let _topic = "tedge/measurements".to_string();
-        let input = "ABC";
+        let input = r#"{"temperature": 21.3}"#;
+        let _input_size = input.len();
         let result = converter.try_convert(&new_tedge_message(input)).await;
 
         assert_matches!(
             result,
             Err(ConversionError::SizeThresholdExceeded {
                 topic: _topic,
-                actual_size: 3,
+                actual_size: _input_size,
                 threshold: 1
             })
         );
