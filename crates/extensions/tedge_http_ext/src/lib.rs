@@ -13,7 +13,6 @@ use std::convert::Infallible;
 use actor::*;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
-use tedge_actors::ClientMessageBox;
 use tedge_actors::ConcurrentServerActor;
 use tedge_actors::ConcurrentServerMessageBox;
 use tedge_actors::DynSender;
@@ -24,10 +23,6 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServerMessageBoxBuilder;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
-
-pub type HttpHandle = ClientMessageBox<HttpRequest, HttpResult>;
-pub trait HttpConnectionBuilder: ServiceProvider<HttpRequest, HttpResult, NoConfig> {}
-impl<T> HttpConnectionBuilder for T where T: ServiceProvider<HttpRequest, HttpResult, NoConfig> {}
 
 pub struct HttpActorBuilder {
     actor: ConcurrentServerActor<HttpService>,
