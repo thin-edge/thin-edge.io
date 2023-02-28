@@ -20,13 +20,13 @@ impl Command for GetConfigCommand {
                 println!("{}", value);
             }
             Err(tedge_config::ConfigSettingError::ConfigNotSet { .. }) => {
-                println!(
+                eprintln!(
                     "The provided config key: '{}' is not set",
                     self.config_key.key
                 );
             }
             Err(tedge_config::ConfigSettingError::SettingIsNotConfigurable { .. }) => {
-                println!(
+                eprintln!(
                     "The provided config key: '{}' is not configurable",
                     self.config_key.key
                 );
