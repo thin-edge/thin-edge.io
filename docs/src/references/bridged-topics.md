@@ -78,12 +78,13 @@ MQTT clients on Thin Edge device must use the below topics to communicate with t
 The AWS topics are prefixed by `aws/`.
 
 * `aws/td/#` - Use this topic to send the messages from device to cloud. The messages are forwarded to the AWS topic
- named `thinedge/{device_id}/td/` where {device_id} is the Thin Edge device id.
+ named `thinedge/{device_id}/td` where {device_id} is the Thin Edge device id.
 
 * `aws/cmd/#` - Use this topic to subscribe for the messages that were sent from cloud to device. Any message published
  by AWS on one the subtopics of `thinedge/{device_id}/cmd/#` is republished here.
 
-* `aws/shadow/#` Use this topic to interact with unnamed and named shadows of the device. It's mapped to `$aws/things/{device_id}/shadow`.
+* `aws/shadow/#` Use this topic to interact with unnamed and named shadows of the device. It's mapped to
+  `$aws/things/{device_id}/shadow`.
 
 ## Collectd topics
 
