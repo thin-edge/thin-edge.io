@@ -14,8 +14,11 @@ use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
 pub use config::*;
+use error::ConfigManagementError;
+use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::futures::channel::mpsc;
+use tedge_actors::ActorBuilder;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
@@ -29,6 +32,8 @@ use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
+use tedge_utils::file::create_directory_with_user_group;
+use tedge_utils::file::create_file_with_user_group;
 
 use self::child_device::ChildConfigOperationKey;
 
@@ -177,4 +182,66 @@ impl Builder<(ConfigManagerActor, ConfigManagerMessageBox)> for ConfigManagerBui
 
         Ok((actor, peers))
     }
+}
+
+impl ActorBuilder for ConfigManagerBuilder {
+    type Error = ConfigManagementError;
+
+    fn init(config_dir: &Path) -> Result<(), Self::Error> {
+        create_operation_files(config_dir)
+    }
+}
+
+fn create_operation_files(config_dir: &Path) -> Result<(), ConfigManagementError> {
+    create_directory_with_user_group(
+        format!("{}/c8y", config_dir.display()),
+        "root",
+        "root",
+        0o1777,
+    )?;
+    let example_config = r#"# Add the configurations to be managed by c8y-configuration-plugin
+
+files = [
+#    { path = '/etc/tedge/tedge.toml' },
+#    { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge.conf' },
+#    { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf', type = 'tedge-mosquitto.conf' },
+#    { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto.conf' },
+#    { path = '/etc/tedge/c8y/example.txt', type = 'example', user = 'tedge', group = 'tedge', mode = 0o444 }
+]"#;
+
+    create_file_with_user_group(
+        format!("{}/c8y/c8y-configuration-plugin.toml", config_dir.display()),
+        "root",
+        "root",
+        0o644,
+        Some(example_config),
+    )?;
+
+    create_directory_with_user_group(
+        format!("{}/operations/c8y", config_dir.display()),
+        "tedge",
+        "tedge",
+        0o775,
+    )?;
+    create_file_with_user_group(
+        format!(
+            "{}/operations/c8y/c8y_UploadConfigFile",
+            config_dir.display()
+        ),
+        "tedge",
+        "tedge",
+        0o644,
+        None,
+    )?;
+    create_file_with_user_group(
+        format!(
+            "{}/operations/c8y/c8y_DownloadConfigFile",
+            config_dir.display()
+        ),
+        "tedge",
+        "tedge",
+        0o644,
+        None,
+    )?;
+    Ok(())
 }

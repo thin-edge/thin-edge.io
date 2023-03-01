@@ -1,9 +1,13 @@
+use std::path::PathBuf;
+
 use c8y_config_manager::ConfigManagerBuilder;
 use c8y_config_manager::ConfigManagerConfig;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use c8y_log_manager::LogManagerBuilder;
 use c8y_log_manager::LogManagerConfig;
+use clap::Parser;
+use tedge_actors::ActorBuilder;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
@@ -24,11 +28,40 @@ use tedge_timer_ext::TimerActor;
 
 pub const PLUGIN_NAME: &str = "c8y-device-management";
 
+#[derive(Debug, Parser)]
+#[clap(
+    name = clap::crate_name!(),
+    version = clap::crate_version!(),
+    about = clap::crate_description!()
+)]
+pub struct PluginOpt {
+    /// Prepare the initial state of the agent by creating all the necessary files, directories etc
+    /// This option is typically invoked only once during the installation of this plugin.
+    /// But it is not guaranteed that it will only be called once.
+    /// So, any action taken as part of this call must be idemopotent.
+    #[clap(short, long)]
+    pub init: bool,
+
+    #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
+    pub config_dir: PathBuf,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
     let runtime_events_logger = None;
     let mut runtime = Runtime::try_new(runtime_events_logger).await?;
+
+    let plugin_opt = PluginOpt::parse();
+    let config_dir = plugin_opt.config_dir;
+
+    if plugin_opt.init {
+        ConfigManagerBuilder::init(config_dir.as_path())?;
+        LogManagerBuilder::init(config_dir.as_path())?;
+
+        // Init all other actors needing an initialization
+        return Ok(());
+    }
 
     let tedge_config = get_tedge_config()?;
 

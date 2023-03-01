@@ -2,11 +2,15 @@ mod actor;
 mod config;
 mod error;
 
+use std::path::Path;
+
 use actor::*;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::C8YConnectionBuilder;
 pub use config::*;
+use error::LogRetrievalError;
 use tedge_actors::futures::channel::mpsc;
+use tedge_actors::ActorBuilder;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
@@ -120,5 +124,14 @@ impl Builder<(LogManagerActor, LogManagerMessageBox)> for LogManagerBuilder {
         let actor = LogManagerActor::new(self.config, mqtt_publisher, http_proxy);
 
         Ok((actor, message_box))
+    }
+}
+
+impl ActorBuilder for LogManagerBuilder {
+    type Error = LogRetrievalError;
+
+    fn init(_config_dir: &Path) -> Result<(), Self::Error> {
+        //TODO: Initialize properly
+        Ok(())
     }
 }

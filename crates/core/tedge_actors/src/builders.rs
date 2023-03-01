@@ -41,6 +41,7 @@ use crate::SenderVec;
 use crate::ServerMessageBox;
 use crate::SimpleMessageBox;
 use std::convert::Infallible;
+use std::path::Path;
 
 /// Builder of `T`
 pub trait Builder<T>: Sized {
@@ -53,6 +54,16 @@ pub trait Builder<T>: Sized {
     fn build(self) -> T {
         self.try_build().unwrap()
     }
+}
+
+pub trait ActorBuilder {
+    type Error: std::error::Error;
+
+    /// Prepare any initial state for the actor before the actor is spawned.
+    /// For e.g, creating initial state files/directories etc
+    /// The actions performed in this function must be idempotent as it may be called multiple times,
+    /// although typically it is only called once before the actor is spawned.
+    fn init(config_dir: &Path) -> Result<(), Self::Error>;
 }
 
 /// Placeholder when no specific config is required by a builder implementation
