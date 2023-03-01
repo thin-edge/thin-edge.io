@@ -16,15 +16,6 @@ pub trait Actor: 'static + Sized + Send + Sync {
     /// Return the actor instance name
     fn name(&self) -> &str;
 
-    /// Prepare the initial state for the actor if needed.
-    /// This hook can be used to initialize any initial state before the actor is spawned.
-    /// For e.g, creating initial state files/directories, creating persistent sessions with the MQTT broker etc
-    /// The actions performed in this function must be idempotent as it may be called multiple times,
-    /// although typically it is only called once before the actor is spawned.
-    async fn init(self) -> Result<(), RuntimeError> {
-        Ok(())
-    }
-
     /// Run the actor
     ///
     /// Processing input messages,
