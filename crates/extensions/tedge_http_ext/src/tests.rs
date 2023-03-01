@@ -1,4 +1,5 @@
 use crate::*;
+use tedge_actors::ClientMessageBox;
 
 #[tokio::test]
 async fn get_over_https() {

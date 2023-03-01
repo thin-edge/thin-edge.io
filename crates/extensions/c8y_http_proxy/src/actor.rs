@@ -30,10 +30,10 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::MessageBox;
 use tedge_actors::RuntimeError;
 use tedge_actors::ServerMessageBox;
-use tedge_http_ext::HttpHandle;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResponseExt;
@@ -68,7 +68,7 @@ pub struct C8YHttpProxyMessageBox {
     pub(crate) clients: ServerMessageBox<C8YRestRequest, C8YRestResult>,
 
     /// Connection to an HTTP actor
-    pub(crate) http: HttpHandle,
+    pub(crate) http: ClientMessageBox<HttpRequest, HttpResult>,
 
     /// Connection to a JWT token retriever
     pub(crate) jwt: JwtRetriever,

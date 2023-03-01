@@ -6,6 +6,7 @@ use crate::messages::C8YRestResult;
 use std::convert::Infallible;
 use std::path::PathBuf;
 use tedge_actors::Builder;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
@@ -19,8 +20,8 @@ use tedge_config::DeviceIdSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
 use tedge_config::TmpPathSetting;
-use tedge_http_ext::HttpConnectionBuilder;
-use tedge_http_ext::HttpHandle;
+use tedge_http_ext::HttpRequest;
+use tedge_http_ext::HttpResult;
 
 mod actor;
 pub mod credentials;
@@ -53,13 +54,10 @@ impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
     }
 }
 
-pub trait C8YConnectionBuilder: ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig> {}
-
-impl C8YConnectionBuilder for C8YHttpProxyBuilder {}
-
 /// A proxy to C8Y REST API
 ///
 /// This is an actor builder.
+/// - `impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>`
 pub struct C8YHttpProxyBuilder {
     /// Config
     config: C8YHttpConfig,
@@ -68,7 +66,7 @@ pub struct C8YHttpProxyBuilder {
     clients: ServerMessageBoxBuilder<C8YRestRequest, C8YRestResult>,
 
     /// Connection to an HTTP actor
-    http: HttpHandle,
+    http: ClientMessageBox<HttpRequest, HttpResult>,
 
     /// Connection to a JWT token retriever
     jwt: JwtRetriever,
@@ -77,11 +75,11 @@ pub struct C8YHttpProxyBuilder {
 impl C8YHttpProxyBuilder {
     pub fn new(
         config: C8YHttpConfig,
-        http: &mut impl HttpConnectionBuilder,
+        http: &mut impl ServiceProvider<HttpRequest, HttpResult, NoConfig>,
         jwt: &mut impl ServiceProvider<(), JwtResult, NoConfig>,
     ) -> Self {
         let clients = ServerMessageBoxBuilder::new("C8Y-REST", 10);
-        let http = HttpHandle::new("C8Y-REST => HTTP", http, NoConfig);
+        let http = ClientMessageBox::new("C8Y-REST => HTTP", http, NoConfig);
         let jwt = JwtRetriever::new("C8Y-REST => JWT", jwt, NoConfig);
         C8YHttpProxyBuilder {
             config,
