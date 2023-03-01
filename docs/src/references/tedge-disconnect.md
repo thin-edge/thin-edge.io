@@ -11,8 +11,8 @@ OPTIONS:
     -h, --help    Print help information
 
 SUBCOMMANDS:
-    az      Remove bridge connection to Azure
     aws     Remove bridge connection to AWS
+    az      Remove bridge connection to Azure
     c8y     Remove bridge connection to Cumulocity
     help    Print this message or the help of the given subcommand(s)
 ```
@@ -25,18 +25,6 @@ Remove bridge connection to Azure
 
 USAGE:
     tedge disconnect az
-
-OPTIONS:
-    -h, --help    Print help information
-```
-## AWS
-
-```
-tedge-disconnect-aws
-Remove bridge connection to AWS
-
-USAGE:
-    tedge disconnect aws
 
 OPTIONS:
     -h, --help    Print help information
