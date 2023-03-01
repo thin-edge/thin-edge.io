@@ -187,6 +187,7 @@ pub async fn create_mqtt_client_will_message(
     let mqtt_config = mqtt_channel::Config::default()
         .with_host(mqtt_host)
         .with_port(mqtt_port)
+        .with_session_name("last_will_c8y_mapper")
         .with_last_will_message(service_monitor_status_message(
             device_name,
             app_name,

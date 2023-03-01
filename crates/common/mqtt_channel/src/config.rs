@@ -1,6 +1,9 @@
 use crate::Message;
 use crate::TopicFilter;
 use rumqttc::LastWill;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::sync::Arc;
 
 /// Configuration of an MQTT connection
 #[derive(Debug, Clone)]
@@ -48,6 +51,34 @@ pub struct Config {
     ///
     /// Default: None
     pub last_will_message: Option<Message>,
+
+    /// With first message on connection
+    ///
+    /// Default: None
+    pub initial_message: Option<InitMessageFn>,
+}
+
+#[derive(Clone)]
+pub struct InitMessageFn {
+    initfn: Arc<Box<dyn Fn() -> Message + Send + Sync>>,
+}
+
+impl InitMessageFn {
+    pub fn new(call_back: impl Fn() -> Message + Sync + Send + 'static) -> InitMessageFn {
+        InitMessageFn {
+            initfn: Arc::new(Box::new(call_back)),
+        }
+    }
+
+    pub fn new_init_message(&self) -> Message {
+        (*self.initfn)()
+    }
+}
+
+impl Debug for InitMessageFn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Init message creation function")
+    }
 }
 
 /// By default a client connects the local MQTT broker.
@@ -62,6 +93,7 @@ impl Default for Config {
             queue_capacity: 1024,
             max_packet_size: 1024 * 1024,
             last_will_message: None,
+            initial_message: None,
         }
     }
 }
@@ -132,6 +164,17 @@ impl Config {
     pub fn with_last_will_message(self, lwm: Message) -> Self {
         Self {
             last_will_message: Some(lwm),
+            ..self
+        }
+    }
+
+    /// Set the initial message
+    pub fn with_initial_message(
+        self,
+        initial_message: impl Fn() -> Message + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            initial_message: Some(InitMessageFn::new(initial_message)),
             ..self
         }
     }

@@ -21,6 +21,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_api::health::health_check_topics;
 use tedge_api::health::health_status_down_message;
+use tedge_api::health::health_status_up_message;
 use tedge_api::health::send_health_status;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
@@ -94,6 +95,7 @@ async fn create_mqtt_client(
         .with_host(mqtt_host)
         .with_port(mqtt_port)
         .with_subscriptions(topics)
+        .with_initial_message(|| health_status_up_message(C8Y_LOG_PLUGIN))
         .with_last_will_message(health_status_down_message(C8Y_LOG_PLUGIN));
 
     let mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;

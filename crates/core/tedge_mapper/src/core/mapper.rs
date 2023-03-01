@@ -11,6 +11,7 @@ use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use mqtt_channel::UnboundedReceiver;
 use mqtt_channel::UnboundedSender;
+use tedge_api::health::health_status_up_message;
 
 use std::path::Path;
 use std::time::Duration;
@@ -57,12 +58,14 @@ pub fn mqtt_config(
     port: u16,
     topic_filter: TopicFilter,
 ) -> Result<mqtt_channel::Config, anyhow::Error> {
+    let name_str = name.to_string();
     Ok(mqtt_channel::Config::default()
         .with_host(host)
         .with_port(port)
         .with_session_name(name)
         .with_subscriptions(topic_filter)
         .with_max_packet_size(10 * 1024 * 1024)
+        .with_initial_message(move || health_status_up_message(&name_str))
         .with_last_will_message(health_status_down_message(name)))
 }
 

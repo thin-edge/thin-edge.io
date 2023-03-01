@@ -39,6 +39,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tedge_api::health::health_check_topics;
 use tedge_api::health::health_status_down_message;
+use tedge_api::health::health_status_up_message;
 use tedge_api::health::send_health_status;
 use tedge_api::OperationStatus;
 use tedge_utils::file::create_file_with_mode;
@@ -442,6 +443,7 @@ impl FirmwareManager {
             .with_host(mqtt_host)
             .with_port(mqtt_port)
             .with_subscriptions(topic_filter)
+            .with_initial_message(|| health_status_up_message(PLUGIN_SERVICE_NAME))
             .with_last_will_message(health_status_down_message(PLUGIN_SERVICE_NAME));
 
         let mqtt_client = Connection::new(&mqtt_config).await?;
