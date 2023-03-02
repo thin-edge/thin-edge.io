@@ -1,16 +1,8 @@
-use std::convert::Infallible;
 use std::process::Output;
-
-use tedge_actors::Actor;
-use tedge_actors::Builder;
-use tedge_actors::ConcurrentServerActor;
-use tedge_actors::ConcurrentServerMessageBox;
-use tedge_actors::DynSender;
-use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeRequest;
-use tedge_actors::RuntimeRequestSink;
+use tedge_actors::Concurrent;
 use tedge_actors::Server;
-use tedge_actors::ServerMessageBoxBuilder;
+use tedge_actors::ServerActorBuilder;
+use tedge_actors::ServerConfig;
 
 #[derive(Clone)]
 pub struct ScriptActor;
@@ -38,52 +30,9 @@ impl Server for ScriptActor {
     }
 }
 
-impl ScriptActorBuilder {
-    pub async fn run(self) -> Result<(), RuntimeError> {
-        self.actor.run(self.box_builder.build()).await
-    }
-}
-
-pub struct ScriptActorBuilder {
-    actor: ConcurrentServerActor<ScriptActor>,
-    box_builder: ServerMessageBoxBuilder<Execute, std::io::Result<Output>>,
-}
-
-impl
-    Builder<(
-        ConcurrentServerActor<ScriptActor>,
-        ConcurrentServerMessageBox<Execute, std::io::Result<Output>>,
-    )> for ScriptActorBuilder
-{
-    type Error = Infallible;
-
-    fn try_build(
-        self,
-    ) -> Result<
-        (
-            ConcurrentServerActor<ScriptActor>,
-            ConcurrentServerMessageBox<Execute, std::io::Result<Output>>,
-        ),
-        Self::Error,
-    > {
-        Ok(self.build())
-    }
-
-    fn build(
-        self,
-    ) -> (
-        ConcurrentServerActor<ScriptActor>,
-        ConcurrentServerMessageBox<Execute, std::io::Result<Output>>,
-    ) {
-        let actor = self.actor;
-        let messages = self.box_builder.build();
-        (actor, messages)
-    }
-}
-
-impl RuntimeRequestSink for ScriptActorBuilder {
-    fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
-        self.box_builder.get_signal_sender()
+impl ScriptActor {
+    pub fn builder() -> ServerActorBuilder<ScriptActor, Concurrent> {
+        ServerActorBuilder::new(ScriptActor, &ServerConfig::default(), Concurrent)
     }
 }
 
@@ -95,14 +44,10 @@ mod tests {
 
     #[tokio::test]
     async fn script() {
-        let csa = ConcurrentServerActor::new(ScriptActor);
-        let mut builder = ScriptActorBuilder {
-            actor: csa,
-            box_builder: ServerMessageBoxBuilder::new("Script", 100),
-        };
-        let mut handle = ClientMessageBox::new("Tester", &mut builder.box_builder);
+        let mut actor = ScriptActor::builder();
+        let mut handle = ClientMessageBox::new("Tester", &mut actor);
 
-        tokio::spawn(builder.run());
+        tokio::spawn(actor.run());
 
         let output = handle
             .await_response(Execute {

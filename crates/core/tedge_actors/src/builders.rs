@@ -29,16 +29,21 @@
 //!   declares that the message box under construction is that of a service consumer.
 //!
 use crate::mpsc;
+use crate::Actor;
 use crate::ClientId;
-use crate::CombinedReceiver;
+use crate::ConcurrentServerActor;
 use crate::ConcurrentServerMessageBox;
+use crate::CombinedReceiver;
 use crate::DynSender;
 use crate::KeyedSender;
 use crate::Message;
 use crate::NullSender;
+use crate::RuntimeError;
 use crate::RuntimeRequest;
 use crate::Sender;
 use crate::SenderVec;
+use crate::Server;
+use crate::ServerActor;
 use crate::ServerMessageBox;
 use crate::SimpleMessageBox;
 use std::convert::Infallible;
@@ -291,5 +296,143 @@ impl<Req: Message, Res: Message> Builder<ConcurrentServerMessageBox<Req, Res>>
 
     fn build(self) -> ConcurrentServerMessageBox<Req, Res> {
         self.build_concurrent()
+    }
+}
+
+pub struct Concurrent;
+pub struct Sequential;
+
+/// A Server Actor builder
+///
+/// The type K is the kind of concurrency: Sequential or Concurrent
+pub struct ServerActorBuilder<S: Server, K> {
+    _kind: K,
+    server: S,
+    box_builder: ServerMessageBoxBuilder<S::Request, S::Response>,
+}
+
+impl<S: Server, K> ServerActorBuilder<S, K> {
+    pub fn new(server: S, config: &ServerConfig, kind: K) -> Self {
+        let service_name = server.name().to_string();
+        let box_builder = ServerMessageBoxBuilder::new(&service_name, config.capacity)
+            .with_max_concurrency(config.max_concurrency);
+
+        ServerActorBuilder {
+            _kind: kind,
+            server,
+            box_builder,
+        }
+    }
+}
+
+impl<S: Server> ServerActorBuilder<S, Sequential> {
+    pub async fn run(self) -> Result<(), RuntimeError> {
+        let actor = ServerActor::new(self.server);
+        let messages = self.box_builder.build();
+
+        actor.run(messages).await
+    }
+}
+
+impl<S: Server + Clone> ServerActorBuilder<S, Concurrent> {
+    pub async fn run(self) -> Result<(), RuntimeError> {
+        let actor = ConcurrentServerActor::new(self.server);
+        let messages = self.box_builder.build();
+
+        actor.run(messages).await
+    }
+}
+
+impl<S: Server> Builder<(ServerActor<S>, ServerMessageBox<S::Request, S::Response>)>
+    for ServerActorBuilder<S, Sequential>
+{
+    type Error = Infallible;
+
+    fn try_build(
+        self,
+    ) -> Result<(ServerActor<S>, ServerMessageBox<S::Request, S::Response>), Self::Error> {
+        Ok(self.build())
+    }
+
+    fn build(self) -> (ServerActor<S>, ServerMessageBox<S::Request, S::Response>) {
+        let actor = ServerActor::new(self.server);
+        let actor_box = self.box_builder.build();
+        (actor, actor_box)
+    }
+}
+
+impl<S: Server + Clone>
+    Builder<(
+        ConcurrentServerActor<S>,
+        ConcurrentServerMessageBox<S::Request, S::Response>,
+    )> for ServerActorBuilder<S, Concurrent>
+{
+    type Error = Infallible;
+
+    fn try_build(
+        self,
+    ) -> Result<
+        (
+            ConcurrentServerActor<S>,
+            ConcurrentServerMessageBox<S::Request, S::Response>,
+        ),
+        Self::Error,
+    > {
+        Ok(self.build())
+    }
+
+    fn build(
+        self,
+    ) -> (
+        ConcurrentServerActor<S>,
+        ConcurrentServerMessageBox<S::Request, S::Response>,
+    ) {
+        let actor = ConcurrentServerActor::new(self.server);
+        let actor_box = self.box_builder.build();
+        (actor, actor_box)
+    }
+}
+
+impl<S: Server, K> ServiceProvider<S::Request, S::Response, NoConfig> for ServerActorBuilder<S, K> {
+    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<S::Request, S::Response, NoConfig>) {
+        self.box_builder.connect_with(peer)
+    }
+}
+
+impl<S: Server, K> RuntimeRequestSink for ServerActorBuilder<S, K> {
+    fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
+        self.box_builder.get_signal_sender()
+    }
+}
+
+#[derive(Debug)]
+pub struct ServerConfig {
+    pub capacity: usize,
+    pub max_concurrency: usize,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        ServerConfig {
+            capacity: 16,
+            max_concurrency: 4,
+        }
+    }
+}
+
+impl ServerConfig {
+    pub fn new() -> Self {
+        ServerConfig::default()
+    }
+
+    pub fn with_capacity(self, capacity: usize) -> Self {
+        Self { capacity, ..self }
+    }
+
+    pub fn with_max_concurrency(self, max_concurrency: usize) -> Self {
+        Self {
+            max_concurrency,
+            ..self
+        }
     }
 }

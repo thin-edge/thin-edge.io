@@ -15,8 +15,8 @@ async fn get_over_https() {
 }
 
 async fn spawn_http_actor() -> ClientMessageBox<HttpRequest, HttpResult> {
-    let mut builder = HttpActorBuilder::new().unwrap();
-    let handle = ClientMessageBox::new("Tester", &mut builder.box_builder);
+    let mut builder = HttpActor::new().builder();
+    let handle = ClientMessageBox::new("Tester", &mut builder);
 
     tokio::spawn(builder.run());
 

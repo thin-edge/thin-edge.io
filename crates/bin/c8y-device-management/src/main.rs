@@ -17,7 +17,7 @@ use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_file_system_ext::FsWatchActorBuilder;
-use tedge_http_ext::HttpActorBuilder;
+use tedge_http_ext::HttpActor;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_signal_ext::SignalActor;
@@ -38,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
 
     let mut jwt_actor = C8YJwtRetriever::builder(mqtt_config);
-    let mut http_actor = HttpActorBuilder::new()?;
+    let mut http_actor = HttpActor::new().builder();
     let c8y_http_config = (&tedge_config).try_into()?;
     let mut c8y_http_proxy_actor =
         C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);

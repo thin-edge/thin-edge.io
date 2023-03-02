@@ -1,4 +1,3 @@
-use crate::HttpError;
 use crate::HttpRequest;
 use crate::HttpResult;
 use async_trait::async_trait;
@@ -14,7 +13,7 @@ pub struct HttpService {
 }
 
 impl HttpService {
-    pub(crate) fn new() -> Result<Self, HttpError> {
+    pub(crate) fn new() -> Self {
         let https = HttpsConnectorBuilder::new()
             .with_native_roots()
             .https_or_http()
@@ -22,7 +21,7 @@ impl HttpService {
             .enable_http2()
             .build();
         let client = Client::builder().build(https);
-        Ok(HttpService { client })
+        HttpService { client }
     }
 }
 
