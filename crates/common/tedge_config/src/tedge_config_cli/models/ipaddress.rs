@@ -27,6 +27,19 @@ impl Default for IpAddress {
     }
 }
 
+impl TryFrom<&str> for IpAddress {
+    type Error = InvalidIpAddress;
+
+    fn try_from(input: &str) -> Result<Self, Self::Error> {
+        input
+            .parse::<IpAddr>()
+            .map_err(|_| InvalidIpAddress {
+                input: input.to_string(),
+            })
+            .map(IpAddress)
+    }
+}
+
 impl TryFrom<String> for IpAddress {
     type Error = InvalidIpAddress;
 
@@ -63,22 +76,19 @@ mod tests {
 
     #[test]
     fn conversion_from_valid_ipv4_succeeds() {
-        let _loh: IpAddress = IpAddress::try_from("127.0.0.1".to_string()).unwrap();
+        let _loh: IpAddress = IpAddress::try_from("127.0.0.1").unwrap();
         assert_matches!(Ipv4Addr::LOCALHOST, _loh);
     }
 
     #[test]
     fn conversion_from_valid_ipv6_succeeds() {
-        let _loh: IpAddress = IpAddress::try_from("::1".to_string()).unwrap();
+        let _loh: IpAddress = IpAddress::try_from("::1").unwrap();
         assert_matches!(Ipv6Addr::LOCALHOST, _loh);
     }
 
     #[test]
     fn conversion_from_longer_integer_fails() {
-        assert_matches!(
-            IpAddress::try_from("66000".to_string()),
-            Err(InvalidIpAddress { .. })
-        );
+        assert_matches!(IpAddress::try_from("66000"), Err(InvalidIpAddress { .. }));
     }
 
     #[test]
