@@ -7,6 +7,7 @@ import platform
 import sys
 import shlex
 import shutil
+import subprocess
 
 from invoke import task
 from dotenv import load_dotenv
@@ -80,7 +81,35 @@ def detect_container_cli():
             return cli
 
     # Otherwise, use first available container cli
-    return cli[0]
+    return available[0]
+
+
+def remove_duplicate_container_networks(cli: str, name: str):
+    """Remove any networks with a duplicated network name.
+
+    If duplicates are found, keep the first one and delete the others.
+
+    Duplicate networks can sometimes occur due to some race conditions, see references:
+        * https://github.com/moby/moby/issues/20648
+        * https://github.com/moby/moby/issues/33561
+    """
+    network_ids = subprocess.check_output(
+        [cli, "network", "ls", "--filter", f"name={name}", "-q"], text=True
+    ).splitlines()
+
+    if len(network_ids) > 1:
+        log.warning(
+            f"More than 1 network detected. Keep the first network and removing the rest"
+        )
+        for network_id in network_ids[1:]:
+            try:
+                log.info("Removing container network id: %s", network_id)
+                subprocess.check_call([cli, "network", "rm", network_id.strip()])
+            except subprocess.CalledProcessError as ex:
+                log.warning(
+                    "Could not delete container network. Trying to proceed anyway. error=%s",
+                    ex,
+                )
 
 
 def is_ci():
@@ -323,13 +352,19 @@ def test(
 
     if adapter == ADAPTER_DOCKER:
         container_cli = detect_container_cli()
+        network_name = "inttest-network"
 
         # create docker network that is used by each container
         # Create before launching tests otherwise there will be a race condition
         # which causes multiple networks with the same name to be created.
+        log.info("Creating a container network")
         c.run(
-            f"command -v {container_cli} &>/dev/null && ({container_cli} network create inttest-network --driver bridge || true) || true"
+            f"command -v {container_cli} &>/dev/null && ({container_cli} network create {network_name} --driver bridge || true) || true"
         )
+
+        # Required because of docker race condition which leads to duplicate networks
+        remove_duplicate_container_networks(container_cli, network_name)
+
     elif adapter in [ADAPTER_SSH, ADAPTER_LOCAL]:
         # Parallel processing is not supported when using ssh or local
         # as the same device is being used for each test
