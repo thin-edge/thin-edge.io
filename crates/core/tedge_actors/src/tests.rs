@@ -1,3 +1,4 @@
+use crate::test_helpers::ServiceProviderExt;
 use crate::*;
 use async_trait::async_trait;
 use std::time::Duration;
@@ -29,7 +30,9 @@ impl Server for SleepService {
 async fn spawn_sleep_service() -> SimpleMessageBox<(ClientId, u64), (ClientId, u64)> {
     let service = SleepService;
     let actor = ServerActor::new(service);
-    let (handle, messages) = SimpleMessageBox::channel(actor.name(), 16);
+    let mut box_builder = SimpleMessageBoxBuilder::new("test", 16);
+    let handle = box_builder.new_client_box(NoConfig);
+    let messages = box_builder.build();
 
     tokio::spawn(actor.run(messages));
 
@@ -41,7 +44,12 @@ async fn spawn_concurrent_sleep_service(
 ) -> SimpleMessageBox<(ClientId, u64), (ClientId, u64)> {
     let service = SleepService;
     let actor = ConcurrentServerActor::new(service);
-    let (handle, messages) = ConcurrentServerMessageBox::channel(actor.name(), 16, max_concurrency);
+    let mut box_builder = SimpleMessageBoxBuilder::new(actor.name(), 16);
+    let mut handle_builder = SimpleMessageBoxBuilder::new("handle", 16);
+    box_builder.connect_with(&mut handle_builder);
+
+    let handle = handle_builder.build();
+    let messages = ConcurrentServerMessageBox::new(max_concurrency, box_builder.build());
 
     tokio::spawn(actor.run(messages));
 

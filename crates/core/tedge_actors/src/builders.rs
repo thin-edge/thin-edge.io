@@ -57,6 +57,7 @@ pub trait Builder<T>: Sized {
 }
 
 /// Placeholder when no specific config is required by a builder implementation
+#[derive(Clone)]
 pub struct NoConfig;
 
 /// The builder of a MessageBox must implement this trait for every message type that can be sent to it
@@ -114,25 +115,6 @@ pub trait ServiceConsumer<Request: Message, Response: Message, Config> {
     }
 }
 
-impl<T, Req, Res> ServiceConsumer<Req, Res, NoConfig> for T
-where
-    Req: Message,
-    Res: Message,
-    T: MessageSink<Res> + MessageSource<Req, NoConfig>,
-{
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
-    fn set_request_sender(&mut self, request_sender: DynSender<Req>) {
-        self.register_peer(self.get_config(), request_sender)
-    }
-
-    fn get_response_sender(&self) -> DynSender<Res> {
-        self.get_sender()
-    }
-}
-
 /// A builder of SimpleMessageBox
 pub struct SimpleMessageBoxBuilder<I, O> {
     name: String,
@@ -165,6 +147,22 @@ impl<Req: Message, Res: Message, Config> ServiceProvider<Req, Res, Config>
     fn connect_with(&mut self, peer: &mut impl ServiceConsumer<Req, Res, Config>) {
         self.output_sender = peer.get_response_sender();
         peer.set_request_sender(self.input_sender.sender_clone());
+    }
+}
+
+impl<Req: Message, Res: Message> ServiceConsumer<Req, Res, NoConfig>
+    for SimpleMessageBoxBuilder<Res, Req>
+{
+    fn get_config(&self) -> NoConfig {
+        NoConfig
+    }
+
+    fn set_request_sender(&mut self, request_sender: DynSender<Req>) {
+        self.output_sender = request_sender;
+    }
+
+    fn get_response_sender(&self) -> DynSender<Res> {
+        self.input_sender.sender_clone()
     }
 }
 

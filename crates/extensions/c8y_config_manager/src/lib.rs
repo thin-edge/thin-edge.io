@@ -101,24 +101,25 @@ impl ConfigManagerBuilder {
     }
 }
 
-impl MessageSource<SetTimeout<ChildConfigOperationKey>, NoConfig> for ConfigManagerBuilder {
-    fn register_peer(
-        &mut self,
-        _config: NoConfig,
-        sender: DynSender<SetTimeout<ChildConfigOperationKey>>,
-    ) {
-        self.timer_sender = Some(sender);
-    }
-}
-
 impl MessageSink<FsWatchEvent> for ConfigManagerBuilder {
     fn get_sender(&self) -> DynSender<FsWatchEvent> {
         self.events_sender.clone().into()
     }
 }
 
-impl MessageSink<Timeout<ChildConfigOperationKey>> for ConfigManagerBuilder {
-    fn get_sender(&self) -> DynSender<Timeout<ChildConfigOperationKey>> {
+impl
+    ServiceConsumer<SetTimeout<ChildConfigOperationKey>, Timeout<ChildConfigOperationKey>, NoConfig>
+    for ConfigManagerBuilder
+{
+    fn get_config(&self) -> NoConfig {
+        NoConfig
+    }
+
+    fn set_request_sender(&mut self, sender: DynSender<SetTimeout<ChildConfigOperationKey>>) {
+        self.timer_sender = Some(sender);
+    }
+
+    fn get_response_sender(&self) -> DynSender<Timeout<ChildConfigOperationKey>> {
         self.events_sender.clone().into()
     }
 }

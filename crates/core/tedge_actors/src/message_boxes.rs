@@ -192,20 +192,6 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
         self.output_sender.send(message).await
     }
 
-    /// Create a message box pair (mostly for testing purpose)
-    ///
-    /// - The first message box is used to control and observe the second box.
-    /// - Messages sent from the first message box are received by the second box.
-    /// - Messages sent from the second message box are received by the first box.
-    /// - The first message box is always a SimpleMessageBox.
-    /// - The second message box is of the specific message box type expected by the actor under test.
-    pub fn channel(name: &str, capacity: usize) -> (SimpleMessageBox<Output, Input>, Self) {
-        let mut client_box = SimpleMessageBoxBuilder::new(&format!("{}-Client", name), capacity);
-        let mut service_box = SimpleMessageBoxBuilder::new(&format!("{}-Service", name), capacity);
-        service_box.connect_with(&mut client_box);
-        (client_box.build(), service_box.build())
-    }
-
     /// Close the sending channel of this message box.
     ///
     /// This makes the receiving end aware that no more message will be sent.
@@ -318,9 +304,6 @@ pub struct ConcurrentServerMessageBox<Request, Response> {
 
 type PendingResult<R> = tokio::task::JoinHandle<R>;
 
-type RawClientMessageBox<Request, Response> =
-    SimpleMessageBox<(ClientId, Response), (ClientId, Request)>;
-
 impl<Request: Message, Response: Message> ConcurrentServerMessageBox<Request, Response> {
     pub(crate) fn new(
         max_concurrency: usize,
@@ -339,16 +322,6 @@ impl<Request: Message, Response: Message> ConcurrentServerMessageBox<Request, Re
 
     pub async fn send(&mut self, message: (ClientId, Response)) -> Result<(), ChannelError> {
         self.clients.send(message).await
-    }
-
-    pub fn channel(
-        name: &str,
-        capacity: usize,
-        max_concurrency: usize,
-    ) -> (RawClientMessageBox<Request, Response>, Self) {
-        let (client_box, service_box) = SimpleMessageBox::channel(name, capacity);
-        let concurrent_service_box = ConcurrentServerMessageBox::new(max_concurrency, service_box);
-        (client_box, concurrent_service_box)
     }
 
     async fn next_request(&mut self) -> Option<(usize, Request)> {
