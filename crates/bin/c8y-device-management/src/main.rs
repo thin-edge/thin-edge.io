@@ -10,8 +10,8 @@ use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
 use tedge_config::get_tedge_config;
 use tedge_config::ConfigSettingAccessor;
-use tedge_config::MqttBindAddressSetting;
-use tedge_config::MqttPortSetting;
+use tedge_config::MqttClientHostSetting;
+use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
@@ -87,8 +87,8 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn mqtt_config(tedge_config: &TEdgeConfig) -> Result<MqttConfig, TEdgeConfigError> {
-    let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
-    let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
+    let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
+    let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
     let config = MqttConfig::default()
         .with_host(mqtt_host)
         .with_port(mqtt_port);

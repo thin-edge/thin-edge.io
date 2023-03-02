@@ -72,4 +72,7 @@ pub enum ConfigSettingError {
         key: &'static str,
         message: &'static str,
     },
+
+    #[error("An error occurred: {msg}")]
+    Other { msg: &'static str },
 }

@@ -16,7 +16,7 @@ mod tests {
 
     fn make_config(port: u16) -> Result<tempfile::TempDir, anyhow::Error> {
         let dir = tempfile::TempDir::new().unwrap();
-        let toml_conf = &format!("[mqtt]\nport = {port}");
+        let toml_conf = &format!("[mqtt]\nclient_port = {port}");
 
         let config_location = TEdgeConfigLocation::from_custom_root(dir.path());
         let mut file = std::fs::File::create(config_location.tedge_config_file_path())?;

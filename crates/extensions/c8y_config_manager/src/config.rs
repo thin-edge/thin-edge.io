@@ -1,4 +1,5 @@
 use c8y_api::smartrest::topic::C8yTopic;
+
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_api::health::health_check_topics;
@@ -18,7 +19,7 @@ pub struct ConfigManagerConfig {
     pub config_dir: PathBuf,
     pub tmp_dir: PathBuf,
     pub device_id: String,
-    pub mqtt_host: IpAddress,
+    pub mqtt_host: String,
     pub mqtt_port: u16,
     pub c8y_url: ConnectUrl,
     pub tedge_http_host: String,
@@ -36,7 +37,7 @@ impl ConfigManagerConfig {
         config_dir: PathBuf,
         tmp_dir: PathBuf,
         device_id: String,
-        mqtt_host: IpAddress,
+        mqtt_host: String,
         mqtt_port: u16,
         c8y_url: ConnectUrl,
         tedge_http_address: IpAddress,
@@ -81,8 +82,8 @@ impl ConfigManagerConfig {
         let config_dir: PathBuf = config_dir.as_ref().into();
         let device_id = tedge_config.query(DeviceIdSetting)?;
         let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
-        let mqtt_host = tedge_config.query(MqttBindAddressSetting)?;
-        let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
+        let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
+        let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
         let c8y_url = tedge_config.query(C8yUrlSetting)?;
         let tedge_http_address = tedge_config.query(HttpBindAddressSetting)?;
         let tedge_http_port: u16 = tedge_config.query(HttpPortSetting)?.into();

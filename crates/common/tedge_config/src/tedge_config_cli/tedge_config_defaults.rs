@@ -74,6 +74,9 @@ pub struct TEdgeConfigDefaults {
     /// Default mqtt bind address
     pub default_mqtt_bind_address: IpAddress,
 
+    /// Default mqtt broker host used by mqtt clients
+    pub default_mqtt_client_host: String,
+
     /// Default http bind address
     pub default_http_bind_address: IpAddress,
 
@@ -108,6 +111,7 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
             default_logs_path: logs_path.into(),
             default_run_path: run_path.into(),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
+            default_mqtt_client_host: "localhost".into(),
             default_mqtt_bind_address: IpAddress::default(),
             default_http_bind_address: IpAddress::default(),
             default_c8y_smartrest_templates: TemplatesSet::default(),
@@ -142,6 +146,7 @@ fn test_from_tedge_config_location() {
             default_logs_path: FilePath::from("/var/log"),
             default_run_path: FilePath::from("/run"),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
+            default_mqtt_client_host: "localhost".to_string(),
             default_mqtt_bind_address: IpAddress::default(),
             default_http_bind_address: IpAddress::default(),
             default_c8y_smartrest_templates: TemplatesSet::default(),

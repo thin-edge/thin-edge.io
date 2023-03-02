@@ -28,7 +28,7 @@ use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::DeviceIdSetting;
 use tedge_config::LogPathSetting;
-use tedge_config::MqttPortSetting;
+use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
@@ -80,7 +80,7 @@ pub struct LogfileRequestPluginOpt {
 async fn create_mqtt_client(
     tedge_config: &TEdgeConfig,
 ) -> Result<mqtt_channel::Connection, anyhow::Error> {
-    let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
+    let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
     let mut topics: TopicFilter = health_check_topics(C8Y_LOG_PLUGIN);
 
     topics.add_unchecked(&C8yTopic::SmartRestRequest.to_string());

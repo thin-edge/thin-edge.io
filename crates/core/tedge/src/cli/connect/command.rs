@@ -153,8 +153,8 @@ impl Command for ConnectCommand {
         if let Cloud::C8y = self.cloud {
             check_connected_c8y_tenant_as_configured(
                 &config.query_string(C8yUrlSetting)?,
-                config.query(MqttPortSetting)?.into(),
-                config.query(MqttBindAddressSetting)?.to_string(),
+                config.query(MqttClientPortSetting)?.into(),
+                config.query(MqttClientHostSetting)?,
             );
             enable_software_management(&bridge_config, self.service_manager.as_ref());
         }
@@ -210,8 +210,8 @@ impl ConnectCommand {
     }
 
     fn check_connection(&self, config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
-        let port = config.query(MqttPortSetting)?.into();
-        let host = config.query(MqttBindAddressSetting)?.to_string();
+        let port = config.query(MqttClientPortSetting)?.into();
+        let host = config.query(MqttClientHostSetting)?;
 
         println!(
             "Sending packets to check connection. This may take up to {} seconds.\n",
@@ -257,8 +257,8 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
 
     let mut options = MqttOptions::new(
         CLIENT_ID,
-        tedge_config.query(MqttBindAddressSetting)?.to_string(),
-        tedge_config.query(MqttPortSetting)?.into(),
+        tedge_config.query(MqttClientHostSetting)?,
+        tedge_config.query(MqttClientPortSetting)?.into(),
     );
 
     options.set_keep_alive(RESPONSE_TIMEOUT);

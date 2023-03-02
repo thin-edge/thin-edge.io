@@ -882,6 +882,7 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_logs_path: FilePath::from("/var/log"),
         default_run_path: FilePath::from("/run"),
         default_device_type: String::from("test"),
+        default_mqtt_client_host: "localhost".to_string(),
         default_mqtt_bind_address: IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST)),
         default_http_bind_address: IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST)),
         default_c8y_smartrest_templates: TemplatesSet::default(),

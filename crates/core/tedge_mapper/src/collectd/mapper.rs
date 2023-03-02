@@ -6,8 +6,8 @@ use crate::core::component::TEdgeComponent;
 use async_trait::async_trait;
 use mqtt_channel::TopicFilter;
 use tedge_config::ConfigSettingAccessor;
-use tedge_config::MqttBindAddressSetting;
-use tedge_config::MqttPortSetting;
+use tedge_config::MqttClientHostSetting;
+use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
 use tracing::info;
 use tracing::info_span;
@@ -43,8 +43,8 @@ impl TEdgeComponent for CollectdMapper {
         tedge_config: TEdgeConfig,
         _config_dir: &Path,
     ) -> Result<(), anyhow::Error> {
-        let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
-        let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
+        let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
+        let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
 
         let device_monitor_config = DeviceMonitorConfig::default()
             .with_port(mqtt_port)

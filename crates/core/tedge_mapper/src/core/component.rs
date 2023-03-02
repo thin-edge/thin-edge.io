@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use mqtt_channel::TopicFilter;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
-use tedge_config::MqttBindAddressSetting;
-use tedge_config::MqttPortSetting;
+use tedge_config::MqttClientHostSetting;
+use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
 use tracing::info;
 
@@ -32,8 +32,8 @@ pub trait TEdgeComponent: Sync + Send {
         let tedge_config = config_repository.load()?;
 
         let mqtt_config = mqtt_channel::Config::default()
-            .with_host(tedge_config.query(MqttBindAddressSetting)?.to_string())
-            .with_port(tedge_config.query(MqttPortSetting)?.into())
+            .with_host(tedge_config.query(MqttClientHostSetting)?)
+            .with_port(tedge_config.query(MqttClientPortSetting)?.into())
             .with_session_name(self.session_name())
             .with_clean_session(false);
 
