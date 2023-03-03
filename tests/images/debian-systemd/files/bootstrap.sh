@@ -279,7 +279,7 @@ fi
 echo "Setting c8y.url to $C8Y_HOST"
 tedge config set c8y.url "$C8Y_HOST"
 
-CURRENT_DEVICE_ID=$( tedge config get device.id | grep -v "tedge_config::")
+CURRENT_DEVICE_ID=$( tedge config get device.id 2>/dev/null | grep -v "tedge_config::" || true)
 EXPECTED_CERT_COMMON_NAME=$(get_device_id)
 DEVICE_ID="$EXPECTED_CERT_COMMON_NAME"
 
