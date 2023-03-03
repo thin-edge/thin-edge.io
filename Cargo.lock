@@ -3469,16 +3469,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tedge-derive"
-version = "0.9.0"
-dependencies = [
- "quote 1.0.23",
- "serde",
- "syn 1.0.107",
- "toml",
-]
-
-[[package]]
 name = "tedge-dummy-plugin"
 version = "0.9.0"
 dependencies = [
@@ -3696,7 +3686,6 @@ dependencies = [
  "nix",
  "notify",
  "strum_macros",
- "tedge-derive",
  "tedge_test_utils",
  "tempfile",
  "thiserror",
