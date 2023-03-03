@@ -1,3 +1,4 @@
+mod download;
 mod error;
 mod firmware_manager;
 mod message;
@@ -5,11 +6,19 @@ mod message;
 #[cfg(test)]
 mod tests;
 
+use crate::download::DownloadManager;
+use crate::download::DownloadRequest;
+use crate::download::DownloadResponse;
 use crate::error::FirmwareManagementError;
 use crate::firmware_manager::FirmwareManager;
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::http_proxy::JwtAuthHttpProxy;
 use clap::Parser;
+use firmware_manager::CACHE_DIR_NAME;
+use firmware_manager::FILE_TRANSFER_DIR_NAME;
+use firmware_manager::PERSISTENT_DIR_PATH;
+use firmware_manager::PERSISTENT_STORE_DIR_NAME;
+use futures::channel::mpsc;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -27,13 +36,6 @@ use tedge_config::TmpPathSetting;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_utils::file::create_directory_with_user_group;
 use tracing::info;
-
-// TODO! We should make it configurable by tedge config later.
-const PERSISTENT_DIR_PATH: &str = "/var/tedge";
-
-pub const CACHE_DIR_NAME: &str = "cache";
-pub const FILE_TRANSFER_DIR_NAME: &str = "file-transfer";
-pub const PERSISTENT_STORE_DIR_NAME: &str = "firmware";
 
 const AFTER_HELP_TEXT: &str = r#"`c8y-firmware-plugin` subscribes to `c8y/s/ds` listening for firmware operation requests (message `515`).
 Notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
@@ -104,23 +106,29 @@ async fn main() -> Result<(), FirmwareManagementError> {
     let http_address = tedge_config.query(HttpBindAddressSetting)?.to_string();
     let local_http_host = format!("{}:{}", http_address, http_port);
 
-    let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
+    let tmp_dir: PathBuf = tedge_config.query(TmpPathSetting)?.into();
     let timeout_sec = Duration::from_secs(
         tedge_config
             .query(FirmwareChildUpdateTimeoutSetting)?
             .into(),
     );
 
+    let (req_sndr, req_rcvr) = mpsc::unbounded::<DownloadRequest>();
+    let (res_sndr, res_rcvr) = mpsc::unbounded::<DownloadResponse>();
+    let mut download_manager = DownloadManager::new(http_client, tmp_dir, req_rcvr, res_sndr);
+
     let mut firmware_manager = FirmwareManager::new(
         tedge_device_id,
         mqtt_port,
-        http_client,
+        req_sndr,
+        res_rcvr,
         local_http_host,
         PathBuf::from(PERSISTENT_DIR_PATH),
-        tmp_dir,
         timeout_sec,
     )
     .await?;
+
+    tokio::spawn(async move { download_manager.run().await });
 
     firmware_manager.init().await?;
     firmware_manager.run().await?;
