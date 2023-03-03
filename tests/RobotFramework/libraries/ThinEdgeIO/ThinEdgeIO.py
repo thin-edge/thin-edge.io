@@ -428,7 +428,8 @@ class ThinEdgeIO(DeviceLibrary):
 def to_date(value: relativetime_) -> datetime:
     if isinstance(value, datetime):
         return value
-
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value)
     return dateparser.parse(value)
 
 
