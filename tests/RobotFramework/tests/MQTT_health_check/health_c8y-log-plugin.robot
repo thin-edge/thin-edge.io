@@ -32,7 +32,7 @@ Check PID of c8y-log-plugin
     Set Suite Variable    ${pid}
 
 Kill the PID
-    Execute Command    sudo kill -9 ${pid}
+    Kill Process    ${pid}
 
 Recheck PID of c8y-log-plugin
     ${pid1}=    Execute Command    pgrep -f c8y-log-plugin        strip=True
