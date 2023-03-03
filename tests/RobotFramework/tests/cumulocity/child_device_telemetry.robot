@@ -64,11 +64,11 @@ Child devices support sending inventory data via c8y topic
 
 
 Main device support sending inventory data via c8y topic
-    Execute Command    tedge mqtt pub "c8y/inventory/managedObjects/update/${DEVICE_SN}" '{"parentInfo":{"nested":{"name":"complex"}},"type":"customType"}'
+    Execute Command    tedge mqtt pub "c8y/inventory/managedObjects/update/${DEVICE_SN}" '{"parentInfo":{"nested":{"name":"complex"}},"subType":"customType"}'
     Cumulocity.Set Device    ${DEVICE_SN}
     ${mo}=    Device Should Have Fragments    parentInfo    type
     Should Be Equal    ${mo["parentInfo"]["nested"]["name"]}    complex
-    Should Be Equal    ${mo["type"]}    customType
+    Should Be Equal    ${mo["subType"]}    customType
 
 *** Keywords ***
 
