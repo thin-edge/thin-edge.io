@@ -22,6 +22,7 @@ pub fn get_log_level(
 /// Reports all the log events sent either with the `log` crate or the `tracing` crate.
 pub fn set_log_level(log_level: tracing::Level) {
     tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
         .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339())
         .with_max_level(log_level)
         .init();
