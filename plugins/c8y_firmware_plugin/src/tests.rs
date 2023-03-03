@@ -796,6 +796,7 @@ async fn start_firmware_manager(
 ) -> anyhow::Result<()> {
     let mut firmware_manager = FirmwareManager::new(
         "tedge_device_id".to_string(),
+        "localhost".to_string(),
         port,
         Box::new(http_client),
         mockito::server_address().to_string(),
