@@ -1,4 +1,3 @@
-use assert_matches::assert_matches;
 use std::convert::TryFrom;
 use std::io::Write;
 use std::net::IpAddr;
@@ -647,15 +646,18 @@ port = "1883"
 "#;
 
     let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let toml_path = config_location
+        .tedge_config_file_path()
+        .display()
+        .to_string();
     let result = TEdgeConfigRepository::new(config_location).load();
 
-    let expected_err =
-        "invalid type: string \"1883\", expected u16 for key `mqtt.port` at line 3 column 8";
+    let expected_err = format!("invalid type: found string \"1883\", expected u16 for key \"mqtt.port\" in {toml_path} TOML file");
 
     match result {
-        Err(TEdgeConfigError::FromTOMLParse(err)) => assert_eq!(err.to_string(), expected_err),
+        Err(error @ TEdgeConfigError::Figment(_)) => assert_eq!(error.to_string(), expected_err),
 
-        _ => panic!("Expected the parsing to fail with TOMLParseError"),
+        _ => panic!("Expected the parsing to fail with Figment error"),
     }
 
     Ok(())
@@ -668,13 +670,25 @@ fn test_parse_invalid_toml_file() -> Result<(), TEdgeConfigError> {
         "#;
 
     let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let toml_path = config_location
+        .tedge_config_file_path()
+        .display()
+        .to_string();
     let result = TEdgeConfigRepository::new(config_location).load();
 
-    assert_matches!(
-        result,
-        Err(TEdgeConfigError::FromTOMLParse(_)),
-        "Expected the parsing to fail with TOMLParseError"
-    );
+    match result {
+        Err(error @ TEdgeConfigError::Figment(_)) => {
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "unexpected character found: `<` at line 2 column 9 in {toml_path} TOML file"
+                )
+            )
+        }
+
+        _ => panic!("Expected the parsing to fail with Figment error"),
+    }
+
     Ok(())
 }
 

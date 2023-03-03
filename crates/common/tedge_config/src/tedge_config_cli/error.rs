@@ -20,4 +20,45 @@ pub enum TEdgeConfigError {
 
     #[error("Home directory is not found.")]
     HomeDirNotFound,
+
+    #[error(transparent)]
+    Figment(#[from] figment::Error),
+
+    #[error(transparent)]
+    Multi(#[from] Multi),
+}
+
+impl TEdgeConfigError {
+    pub fn multiple_errors(mut errors: Vec<Self>) -> Self {
+        match errors.len() {
+            1 => errors.remove(0),
+            _ => Self::Multi(Multi(errors)),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Multi(Vec<TEdgeConfigError>);
+
+impl std::fmt::Display for Multi {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut first = true;
+        for error in &self.0 {
+            if !first {
+                writeln!(f)?;
+            }
+
+            write!(f, "{error}")?;
+
+            first = false;
+        }
+
+        Ok(())
+    }
+}
+
+impl std::error::Error for Multi {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.0.first()?.source()
+    }
 }
