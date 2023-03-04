@@ -4,7 +4,7 @@ Library    Cumulocity
 Library    ThinEdgeIO
 
 Test Tags    theme:c8y    theme:telemetry
-Test Setup    Custom Setup
+Suite Setup    Custom Setup
 Test Teardown    Get Logs
 
 *** Test Cases ***
@@ -21,8 +21,8 @@ Child devices support sending custom measurements
 
 
 Child devices support sending custom events
-    Execute Command    tedge mqtt pub tedge/events/myCustomType/${CHILD_SN} '{ "text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
-    ${events}=    Device Should Have Event/s    expected_text=Some test event    with_attachment=False    minimum=1    maximum=1    type=myCustomType    fragment=someOtherCustomFragment
+    Execute Command    tedge mqtt pub tedge/events/myCustomType1/${CHILD_SN} '{ "text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
+    ${events}=    Device Should Have Event/s    expected_text=Some test event    with_attachment=False    minimum=1    maximum=1    type=myCustomType1    fragment=someOtherCustomFragment
     Log    ${events}
 
 
@@ -80,3 +80,5 @@ Custom Setup
     Restart Service    tedge-mapper-c8y
     Device Should Exist                      ${DEVICE_SN}
     Device Should Exist                      ${CHILD_SN}
+
+    Service Health Status Should Be Up    tedge-mapper-c8y

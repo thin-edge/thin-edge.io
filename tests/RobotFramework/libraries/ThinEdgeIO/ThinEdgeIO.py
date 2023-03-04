@@ -365,6 +365,47 @@ class ThinEdgeIO(DeviceLibrary):
         ]
         return matching
 
+    #
+    # Service Health Status
+    #
+    @keyword("Service Health Status Should Be Up")
+    def assert_service_health_status_up(self, service: str) -> Dict[str, Any]:
+        return self._assert_health_status(service, status="up")
+
+    @keyword("Service Health Status Should Be Down")
+    def assert_service_health_status_down(self, service: str) -> Dict[str, Any]:
+        return self._assert_health_status(service, status="down")
+
+    @keyword("Service Health Status Should Be Equal")
+    def assert_service_health_status_equal(self, service: str, status: str) -> Dict[str, Any]:
+        return self._assert_health_status(service, status=status)
+
+    def _assert_health_status(self, service: str, status: str) -> Dict[str, Any]:
+        message = self.execute_command(f"mosquitto_sub -t 'tedge/health/{service}' --retained-only -C 1 -W 5")
+        current_status = ""
+        try:
+            health = json.loads(message)
+            current_status = health.get("status", "")
+        except Exception as ex:
+            log.debug("Detected non json health message. json_error=%s, message=%s", ex, message)
+            current_status = message
+        assert current_status == status
+        return health
+
+    @keyword("Setup")
+    def setup(
+        self,
+        skip_bootstrap: bool = None,
+        cleanup: bool = None,
+        adapter: str = None,
+        wait_for_healthy: bool = True,
+    ) -> str:
+        serial_sn = super().setup(skip_bootstrap, cleanup, adapter)
+
+        if not skip_bootstrap and wait_for_healthy:
+            self.assert_service_health_status_up("tedge-mapper-c8y")
+        return serial_sn
+
     def _assert_mqtt_topic_messages(
         self,
         topic: str,
@@ -372,11 +413,16 @@ class ThinEdgeIO(DeviceLibrary):
         date_to: relativetime_ = None,
         minimum: int = 1,
         maximum: int = None,
+        message_pattern: str = None,
         **kwargs,
     ) -> List[Dict[str, Any]]:
         # log.info("Checking mqtt messages for topic: %s", topic)
         items = self.mqtt_match_messages(
-            topic=topic, date_from=date_from, date_to=date_to, **kwargs
+            topic=topic,
+            date_from=date_from,
+            date_to=date_to,
+            message_pattern=message_pattern,
+            **kwargs,
         )
 
         messages = [
