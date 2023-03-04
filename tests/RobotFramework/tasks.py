@@ -8,7 +8,10 @@ import sys
 import shlex
 import shutil
 import subprocess
+import time
+import datetime
 
+import invoke
 from invoke import task
 from dotenv import load_dotenv
 
@@ -271,6 +274,7 @@ def build(
     """
 
     if local:
+        clean(c)
         use_local(c)
 
     # Support podman, and automatically switch if the DOCKER_HOST is set
@@ -291,6 +295,41 @@ def build(
         echo=True,
     )
 
+@task(
+    help={
+        "iterations": ("Number of test iterations to run"),
+        "output": ("Output folder to store the logs. Defaults to 'output_flake_finder'"),
+    }
+)
+def flake_finder(c, iterations=2, output="output_flake_finder"):
+    """Run tests multiple times to find any flakey tests
+    """
+    passed = []
+    failed = []
+    duration_start = time.time()
+    for i in range(1, iterations+1):
+        iteration_output = Path(output) / f"iteration-{i}"
+        os.makedirs(iteration_output)
+        try:
+            test(c, outputdir=iteration_output)
+            passed.append(i)
+        except invoke.exceptions.Failure as ex:
+            failed.append(i)
+
+    duration_sec = time.time() - duration_start
+    
+    print("\n\n" + "-"*30)
+
+    overall_result = "PASSED"
+    if failed:
+        overall_result = "FAILED"
+
+    print(f"Overall: {overall_result}")
+    print(f"Results: {iterations} iterations, {len(passed)} passed, {len(failed)} failed")
+    print(f"Elapsed time: {datetime.timedelta(seconds=duration_sec)}")
+
+    if failed:
+        print(f"Failed iterations: {failed}")
 
 @task(
     aliases=["tests"],
