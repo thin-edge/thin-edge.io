@@ -1,7 +1,7 @@
 // TODO: make examples respond to RuntimeRequests
 use crate::Actor;
-use crate::ChannelError;
-use crate::Service;
+use crate::RuntimeError;
+use crate::Server;
 use crate::SimpleMessageBox;
 use async_trait::async_trait;
 
@@ -34,7 +34,7 @@ impl Actor for Calculator {
         "Calculator"
     }
 
-    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
         while let Some(op) = messages.recv().await {
             // Process in turn each input message
             let from = self.state;
@@ -55,7 +55,7 @@ impl Actor for Calculator {
 
 /// Implementation of the calculator behavior as a service
 #[async_trait]
-impl Service for Calculator {
+impl Server for Calculator {
     type Request = Operation;
     type Response = Update;
 
@@ -93,7 +93,7 @@ impl Actor for Player {
         &self.name
     }
 
-    async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+    async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
         // Send a first identity `Operation` to see where we are.
         messages.send(Operation::Add(0)).await?;
 
@@ -113,23 +113,23 @@ mod tests {
     use crate::examples::calculator::Operation;
     use crate::examples::calculator::Player;
     use crate::examples::calculator::Update;
-    use crate::test_helpers::MessageBoxPlugExt;
     use crate::test_helpers::Probe;
     use crate::test_helpers::ProbeEvent::Recv;
     use crate::test_helpers::ProbeEvent::Send;
+    use crate::test_helpers::ServiceConsumerExt;
     use crate::Actor;
     use crate::Builder;
     use crate::ChannelError;
-    use crate::MessageBoxPlug;
     use crate::NoConfig;
-    use crate::ServiceActor;
-    use crate::ServiceMessageBoxBuilder;
+    use crate::ServerActor;
+    use crate::ServerMessageBoxBuilder;
+    use crate::ServiceConsumer;
     use crate::SimpleMessageBoxBuilder;
 
     #[tokio::test]
     async fn observing_an_actor() -> Result<(), ChannelError> {
         // Build the actor message boxes
-        let mut service_box_builder = ServiceMessageBoxBuilder::new("Calculator", 16);
+        let mut service_box_builder = ServerMessageBoxBuilder::new("Calculator", 16);
         let mut player_box_builder = SimpleMessageBoxBuilder::new("Player 1", 1);
 
         // Connect the two actor message boxes interposing a probe.
@@ -139,7 +139,7 @@ mod tests {
             .connect_to(&mut service_box_builder, NoConfig);
 
         // Spawn the actors
-        tokio::spawn(ServiceActor::new(Calculator::default()).run(service_box_builder.build()));
+        tokio::spawn(ServerActor::new(Calculator::default()).run(service_box_builder.build()));
         tokio::spawn(
             Player {
                 name: "Player".to_string(),

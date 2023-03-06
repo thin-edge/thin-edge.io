@@ -14,12 +14,13 @@ use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
-use tedge_actors::MessageBoxPlug;
-use tedge_actors::MessageBoxSocket;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
+use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::ServiceConsumer;
+use tedge_actors::ServiceProvider;
 
 pub type MqttConfig = mqtt_channel::Config;
 pub type MqttMessage = mqtt_channel::Message;
@@ -65,10 +66,10 @@ impl MqttActorBuilder {
     }
 }
 
-impl MessageBoxSocket<MqttMessage, MqttMessage, TopicFilter> for MqttActorBuilder {
+impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter> for MqttActorBuilder {
     fn connect_with(
         &mut self,
-        peer: &mut impl MessageBoxPlug<MqttMessage, MqttMessage>,
+        peer: &mut impl ServiceConsumer<MqttMessage, MqttMessage>,
         subscriptions: TopicFilter,
     ) {
         self.subscriber_addresses
@@ -185,14 +186,14 @@ impl Actor for MqttActor {
         "MQTT"
     }
 
-    async fn run(self, mut mailbox: MqttMessageBox) -> Result<(), ChannelError> {
+    async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
         let mut mqtt_client = mqtt_channel::Connection::new(&self.mqtt_config)
             .await
             .unwrap(); // TODO Convert MqttError to RuntimeError;
 
         loop {
             tokio::select! {
-                Some(message) = mailbox.recv() => {
+                Some(message) = messages.recv() => {
                     match message {
                         MqttRuntimeMessage::MqttMessage(message) => {
                             mqtt_client
@@ -205,7 +206,7 @@ impl Actor for MqttActor {
                     }
                 },
                 Some(message) = mqtt_client.received.next() => {
-                    mailbox.send(message).await?
+                    messages.send(message).await?
                 },
                 else => break,
             }

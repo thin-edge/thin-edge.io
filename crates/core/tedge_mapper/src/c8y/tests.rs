@@ -346,11 +346,11 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
-#[ignore] //to be fixed
 async fn c8y_mapper_alarm_mapping_to_smartrest() {
     let broker = mqtt_tests::test_mqtt_broker();
 
     let mut messages = broker.messages_published_on("c8y/s/us").await;
+
     let cfg_dir = TempTedgeDir::new();
     // Start the C8Y Mapper
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
@@ -373,7 +373,7 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
     )
     .await;
 
-    //Clear the previously published alarm
+    // Clear the previously published alarm
     broker
         .publish_with_opts(
             "tedge/alarms/major/temperature_alarm",
@@ -389,7 +389,6 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
-#[ignore] //to be fixed
 async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     let broker = mqtt_tests::test_mqtt_broker();
 
@@ -456,7 +455,7 @@ async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
 
     broker
         .publish_with_opts(
-            "tedge/alarms/major/temperature_alarm",
+            "tedge/alarms/major/custom_temperature_alarm",
             r#"{ "text": "Temperature high","time":"2023-01-25T18:41:14.776170774Z","customFragment": {"nested":{"value": "extra info"}} }"#,
             mqtt_channel::QoS::AtLeastOnce,
             true,
@@ -464,16 +463,14 @@ async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
         .await
         .unwrap();
 
-    let expected_msg = json!({"severity":"MAJOR","type":"temperature_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Temperature high","customFragment":{"nested":{"value":"extra info"}}});
+    let expected_msg = r#"{"severity":"MAJOR","type":"custom_temperature_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Temperature high","customFragment":{"nested":{"value":"extra info"}}}"#;
 
-    while let Ok(Some(msg)) = messages.next().with_timeout(TEST_TIMEOUT_MS).await {
-        assert_json_include!(actual:serde_json::from_str::<serde_json::Value>(&msg).unwrap(), expected:expected_msg);
-    }
-
+    // Expect converted temperature alarm message
+    mqtt_tests::assert_received_all_expected(&mut messages, TEST_TIMEOUT_MS, &[expected_msg]).await;
     //Clear the previously published alarm
     broker
         .publish_with_opts(
-            "tedge/alarms/major/temperature_alarm",
+            "tedge/alarms/major/custom_temperature_alarm",
             "",
             mqtt_channel::QoS::AtLeastOnce,
             true,
@@ -506,16 +503,13 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
         .await
         .unwrap();
 
-    let expected_msg = json!({"severity":"MAJOR","type":"temperature_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Temperature high","externalSource":{"externalId":"external_sensor","type":"c8y_Serial"},"customFragment":{"nested":{"value":"extra info"}}});
-
-    while let Ok(Some(msg)) = messages.next().with_timeout(TEST_TIMEOUT_MS).await {
-        assert_json_include!(actual:serde_json::from_str::<serde_json::Value>(&msg).unwrap(), expected:expected_msg);
-    }
-
+    let expected_msg = r#"{"externalSource":{"externalId":"external_sensor","type":"c8y_Serial"},"severity":"MAJOR","type":"temperature_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Temperature high","customFragment":{"nested":{"value":"extra info"}}}"#;
+    // Expect converted temperature alarm message
+    mqtt_tests::assert_received_all_expected(&mut messages, TEST_TIMEOUT_MS, &[expected_msg]).await;
     //Clear the previously published alarm
     broker
         .publish_with_opts(
-            "tedge/alarms/major/temperature_alarm",
+            "tedge/alarms/major/temperature_alarm/external_sensor",
             "",
             mqtt_channel::QoS::AtLeastOnce,
             true,
@@ -548,20 +542,9 @@ async fn c8y_mapper_alarm_with_message_as_custom_fragment_mapping_to_c8y_json() 
         .await
         .unwrap();
 
-    let expected_msg = json!(
-        {
-            "severity":"MAJOR",
-            "type":"custom_msg_pressure_alarm",
-            "time":"2023-01-25T18:41:14.776170774Z",
-            "text":"Pressure high",
-            "message":"custom message"
-        }
-    );
+    let expected_msg = r#"{"severity":"MAJOR","type":"custom_msg_pressure_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Pressure high","message":"custom message"}"#;
 
-    while let Ok(Some(msg)) = messages.next().with_timeout(TEST_TIMEOUT_MS).await {
-        assert_json_include!(actual:serde_json::from_str::<serde_json::Value>(&msg).unwrap(), expected:expected_msg);
-    }
-
+    mqtt_tests::assert_received_all_expected(&mut messages, TEST_TIMEOUT_MS, &[expected_msg]).await;
     //Clear the previously published alarm
     broker
         .publish_with_opts(
@@ -598,12 +581,9 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
         .await
         .unwrap();
 
-    let expected_msg = json!({"severity":"MAJOR","type":"child_custom_msg_pressure_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Pressure high","externalSource":{"externalId":"external_sensor","type":"c8y_Serial"},"message":"custom message"});
+    let expected_msg = r#"{"externalSource":{"externalId":"external_sensor","type":"c8y_Serial"},"severity":"MAJOR","type":"child_custom_msg_pressure_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Pressure high","message":"custom message"}"#;
 
-    while let Ok(Some(msg)) = messages.next().with_timeout(TEST_TIMEOUT_MS).await {
-        assert_json_include!(actual:serde_json::from_str::<serde_json::Value>(&msg).unwrap(), expected:expected_msg);
-    }
-
+    mqtt_tests::assert_received_all_expected(&mut messages, TEST_TIMEOUT_MS, &[expected_msg]).await;
     //Clear the previously published alarm
     broker
         .publish_with_opts(
@@ -640,12 +620,9 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
         .await
         .unwrap();
 
-    let expected_msg = json!({"severity":"MAJOR","type":"child_msg_to_text_pressure_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"child_msg_to_text_pressure_alarm","message":"Pressure high", "externalSource":{"externalId":"external_sensor","type":"c8y_Serial"}});
+    let expected_msg = r#"{"externalSource":{"externalId":"external_sensor","type":"c8y_Serial"},"severity":"MAJOR","type":"child_msg_to_text_pressure_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"child_msg_to_text_pressure_alarm","message":"Pressure high"}"#;
 
-    while let Ok(Some(msg)) = messages.next().with_timeout(TEST_TIMEOUT_MS).await {
-        assert_json_include!(actual:serde_json::from_str::<serde_json::Value>(&msg).unwrap(), expected:expected_msg);
-    }
-
+    mqtt_tests::assert_received_all_expected(&mut messages, TEST_TIMEOUT_MS, &[expected_msg]).await;
     //Clear the previously published alarm
     broker
         .publish_with_opts(
@@ -682,13 +659,9 @@ async fn c8y_mapper_alarm_with_custom_message() {
         .await
         .unwrap();
 
+    let expected_msg = r#"{"severity":"MAJOR","type":"msg_to_text_pressure_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"msg_to_text_pressure_alarm","message":"Pressure high"}"#;
     // Expect converted temperature alarm message
-    mqtt_tests::assert_received_all_expected(
-        &mut messages,
-        TEST_TIMEOUT_MS,
-        &["{\"severity\":\"MAJOR\",\"type\":\"msg_to_text_pressure_alarm\",\"time\":\"2023-01-25T18:41:14.776170774Z\",\"text\":\"msg_to_text_pressure_alarm\",\"message\":\"Pressure high\"}"],
-    )
-    .await;
+    mqtt_tests::assert_received_all_expected(&mut messages, TEST_TIMEOUT_MS, &[expected_msg]).await;
 
     //Clear the previously published alarm
     broker
@@ -706,7 +679,6 @@ async fn c8y_mapper_alarm_with_custom_message() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
-#[ignore]
 async fn c8y_mapper_child_alarm_empty_payload() {
     let broker = mqtt_tests::test_mqtt_broker();
 
@@ -729,9 +701,8 @@ async fn c8y_mapper_child_alarm_empty_payload() {
 
     let expected_msg = r#"302,empty_temperature_alarm"#;
 
-    while let Ok(Some(msg)) = messages.next().with_timeout(TEST_TIMEOUT_MS).await {
-        assert!(msg.contains(expected_msg));
-    }
+    // Expect converted temperature alarm message
+    mqtt_tests::assert_received_all_expected(&mut messages, TEST_TIMEOUT_MS, &[expected_msg]).await;
 
     //Clear the previously published alarm
     broker
@@ -749,7 +720,6 @@ async fn c8y_mapper_child_alarm_empty_payload() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
-#[ignore]
 async fn c8y_mapper_alarm_empty_payload() {
     let broker = mqtt_tests::test_mqtt_broker();
 
@@ -768,7 +738,7 @@ async fn c8y_mapper_alarm_empty_payload() {
         .await
         .unwrap();
 
-    // Expect converted temperature alarm message
+    // Expect converted empty alarm message
     mqtt_tests::assert_received_all_expected(
         &mut messages,
         TEST_TIMEOUT_MS,
@@ -776,7 +746,7 @@ async fn c8y_mapper_alarm_empty_payload() {
     )
     .await;
 
-    //Clear the previously published alarm
+    // Clear the previously published alarm
     broker
         .publish_with_opts(
             "tedge/alarms/major/empty_pres_alarm",
@@ -810,7 +780,7 @@ async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
         .await
         .unwrap();
 
-    // Expect converted temperature alarm message
+    // Expect converted complex text alarm message
     mqtt_tests::assert_received_all_expected(
         &mut messages,
         TEST_TIMEOUT_MS,
@@ -821,7 +791,7 @@ async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
     //Clear the previously published alarm
     broker
         .publish_with_opts(
-            "tedge/alarms/major/empty_pres_alarm",
+            "tedge/alarms/major/complex_text_alarm",
             "",
             mqtt_channel::QoS::AtLeastOnce,
             true,
@@ -1274,6 +1244,7 @@ fn extract_child_id(in_topic: &str, expected_child_id: Option<String>) {
 }
 
 #[tokio::test]
+#[serial]
 async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
     let cfg_dir = TempTedgeDir::new();
     let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
@@ -1295,6 +1266,7 @@ async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
 async fn convert_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
     let cfg_dir = TempTedgeDir::new();
     let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
@@ -1316,6 +1288,7 @@ async fn convert_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
 async fn convert_event_with_extra_fields_to_c8y_json() -> Result<()> {
     let cfg_dir = TempTedgeDir::new();
     let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
@@ -1342,6 +1315,7 @@ async fn convert_event_with_extra_fields_to_c8y_json() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
 async fn test_convert_big_event() {
     let cfg_dir = TempTedgeDir::new();
     let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
@@ -1355,6 +1329,7 @@ async fn test_convert_big_event() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
 async fn test_convert_big_measurement() {
     let cfg_dir = TempTedgeDir::new();
     let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
@@ -1375,6 +1350,7 @@ async fn test_convert_big_measurement() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
 async fn test_convert_small_measurement() {
     let cfg_dir = TempTedgeDir::new();
     let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
@@ -1394,6 +1370,7 @@ async fn test_convert_small_measurement() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
 async fn test_convert_big_measurement_for_child_device() {
     let cfg_dir = TempTedgeDir::new();
     let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
@@ -1415,6 +1392,7 @@ async fn test_convert_big_measurement_for_child_device() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[serial]
 async fn test_convert_small_measurement_for_child_device() {
     let measurement_topic = "tedge/measurements/child1";
     let big_measurement_payload = create_thin_edge_measurement(20); // Measurement payload size is 20 bytes
@@ -1604,6 +1582,7 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
 
     publish_a_fake_jwt_token(broker).await;
+
     // Wait for the mapper to start properly and start the wacher for the directories
     while let Ok(Some(msg)) = health_message.next().with_timeout(TEST_TIMEOUT_MS).await {
         if msg.contains(r#"status":"up"#) {
@@ -1647,6 +1626,7 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
             break;
         }
     }
+
     // Add a new operation for the child device
     cfg_dir
         .dir("operations")
@@ -1744,6 +1724,7 @@ async fn mapper_updating_the_inventory_fragments_from_file() {
 }
 
 #[tokio::test]
+#[serial]
 async fn translate_service_monitor_message_for_child_device() {
     let cfg_dir = TempTedgeDir::new();
     let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;
@@ -1775,6 +1756,7 @@ async fn translate_service_monitor_message_for_child_device() {
 }
 
 #[tokio::test]
+#[serial]
 async fn translate_service_monitor_message_for_thin_edge_device() {
     let cfg_dir = TempTedgeDir::new();
     let (_temp_dir, mut converter) = create_c8y_converter(&cfg_dir).await;

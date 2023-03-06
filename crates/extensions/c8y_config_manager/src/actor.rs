@@ -10,7 +10,6 @@ use super::upload::ConfigUploadManager;
 use super::upload::UploadConfigFileStatusMessage;
 use super::ConfigManagerConfig;
 use super::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
-use anyhow::Result;
 use async_trait::async_trait;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
@@ -26,6 +25,7 @@ use tedge_actors::Actor;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
+use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_api::health::get_health_status_message;
 use tedge_file_system_ext::FsWatchEvent;
@@ -64,7 +64,7 @@ impl ConfigManagerActor {
         &mut self,
         message: MqttMessage,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), ConfigManagementError> {
         if self.config.health_check_topics.accept(&message) {
             let message = get_health_status_message("c8y-configuration-plugin").await;
             message_box.send(message.into()).await?;
@@ -90,10 +90,10 @@ impl ConfigManagerActor {
         &mut self,
         message: MqttMessage,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), ConfigManagementError> {
         let payload = message.payload_str()?;
         for smartrest_message in payload.split('\n') {
-            let result: Result<(), anyhow::Error> = match smartrest_message
+            let result: Result<(), ConfigManagementError> = match smartrest_message
                 .split(',')
                 .next()
                 .unwrap_or_default()
@@ -168,7 +168,7 @@ impl ConfigManagerActor {
         &mut self,
         message: &MqttMessage,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), ConfigManagementError> {
         match ConfigOperationResponse::try_from(message) {
             Ok(config_response) => {
                 let smartrest_responses = match &config_response {
@@ -216,7 +216,7 @@ impl ConfigManagerActor {
         &mut self,
         event: FsWatchEvent,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), ConfigManagementError> {
         let path = match event {
             FsWatchEvent::Modified(path) => path,
             FsWatchEvent::FileDeleted(path) => path,
@@ -256,7 +256,7 @@ impl ConfigManagerActor {
         &mut self,
         timeout: OperationTimeout,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), ConfigManagementError> {
         match timeout.event.operation_type {
             ConfigOperation::Snapshot => {
                 self.config_upload_manager
@@ -274,7 +274,7 @@ impl ConfigManagerActor {
     async fn publish_supported_config_types(
         &mut self,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), ConfigManagementError> {
         let message = self
             .config
             .plugin_config
@@ -286,7 +286,7 @@ impl ConfigManagerActor {
     async fn get_pending_operations_from_cloud(
         &mut self,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), ConfigManagementError> {
         // Get pending operations
         let message = MqttMessage::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
         message_box.send(message.into()).await?;
@@ -299,7 +299,7 @@ impl ConfigManagerActor {
         op_state: ActiveOperationState,
         failure_reason: String,
         message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), ConfigManagementError> {
         // Fail the operation in the cloud by sending EXECUTING and FAILED responses back to back
         let executing_msg;
         let failed_msg;
@@ -360,23 +360,21 @@ impl Actor for ConfigManagerActor {
         "ConfigManager"
     }
 
-    async fn run(mut self, mut message_box: Self::MessageBox) -> Result<(), ChannelError> {
-        self.publish_supported_config_types(&mut message_box)
-            .await?;
-        self.get_pending_operations_from_cloud(&mut message_box)
+    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
+        self.publish_supported_config_types(&mut messages).await?;
+        self.get_pending_operations_from_cloud(&mut messages)
             .await?;
 
-        while let Some(event) = message_box.recv().await {
+        while let Some(event) = messages.recv().await {
             match event {
                 ConfigInput::MqttMessage(message) => {
-                    self.process_mqtt_message(message, &mut message_box).await?;
+                    self.process_mqtt_message(message, &mut messages).await?;
                 }
                 ConfigInput::FsWatchEvent(event) => {
-                    self.process_file_watch_events(event, &mut message_box)
-                        .await?;
+                    self.process_file_watch_events(event, &mut messages).await?;
                 }
                 ConfigInput::OperationTimeout(timeout) => {
-                    self.process_operation_timeout(timeout, &mut message_box)
+                    self.process_operation_timeout(timeout, &mut messages)
                         .await?;
                 }
                 ConfigInput::RuntimeRequest(RuntimeRequest::Shutdown) => break,

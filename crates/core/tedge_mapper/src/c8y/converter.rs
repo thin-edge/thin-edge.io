@@ -1044,6 +1044,7 @@ mod tests {
     use rand::prelude::Distribution;
     use rand::seq::SliceRandom;
     use rand::SeedableRng;
+    use serial_test::serial;
     use std::collections::HashMap;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
@@ -1058,6 +1059,7 @@ mod tests {
     const EXPECTED_CHILD_DEVICES: &[&str] = &["child-0", "child-1", "child-2", "child-3"];
 
     #[tokio::test]
+    #[serial]
     async fn test_execute_operation_is_not_blocked() {
         let log_dir = TempTedgeDir::new();
         let operation_logs = OperationLogs::try_new(log_dir.path().to_path_buf()).unwrap();
@@ -1090,6 +1092,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn ignore_operations_for_child_device() {
         let mqtt_client = create_test_mqtt_client_with_empty_operations().await;
         let output = super::process_smartrest(

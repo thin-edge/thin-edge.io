@@ -1,8 +1,8 @@
-use crate::ChannelError;
-use crate::ConcurrentServiceMessageBox;
+use crate::ConcurrentServerMessageBox;
 use crate::Message;
 use crate::MessageBox;
-use crate::ServiceMessageBox;
+use crate::RuntimeError;
+use crate::ServerMessageBox;
 use async_trait::async_trait;
 
 /// Enable a struct to be used as an actor.
@@ -21,83 +21,83 @@ pub trait Actor: 'static + Sized + Send + Sync {
     /// Processing input messages,
     /// updating internal state,
     /// and sending messages to peers.
-    async fn run(self, messages: Self::MessageBox) -> Result<(), ChannelError>;
+    async fn run(self, messages: Self::MessageBox) -> Result<(), RuntimeError>;
 }
 
-/// An actor that wraps a request-response service
+/// An actor that wraps a request-response server
 ///
 /// Requests are processed in turn, leading either to a response or an error.
-pub struct ServiceActor<S: Service> {
-    service: S,
+pub struct ServerActor<S: Server> {
+    server: S,
 }
 
-impl<S: Service> ServiceActor<S> {
-    pub fn new(service: S) -> Self {
-        ServiceActor { service }
+impl<S: Server> ServerActor<S> {
+    pub fn new(server: S) -> Self {
+        ServerActor { server }
     }
 }
 
 #[async_trait]
-pub trait Service: 'static + Sized + Send + Sync {
+pub trait Server: 'static + Sized + Send + Sync {
     type Request: Message;
     type Response: Message;
 
-    /// Return the service name
+    /// Return the server name
     fn name(&self) -> &str;
 
     /// Handle the request returning the response when done
     ///
-    /// For such a service to return errors, the response type must be a `Result`.
+    /// For such a server to return errors, the response type must be a `Result`.
     async fn handle(&mut self, request: Self::Request) -> Self::Response;
 }
 
 #[async_trait]
-impl<S: Service> Actor for ServiceActor<S> {
-    type MessageBox = ServiceMessageBox<S::Request, S::Response>;
+impl<S: Server> Actor for ServerActor<S> {
+    type MessageBox = ServerMessageBox<S::Request, S::Response>;
 
     fn name(&self) -> &str {
-        self.service.name()
+        self.server.name()
     }
 
-    async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
-        let mut service = self.service;
+    async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
+        let mut server = self.server;
         while let Some((client_id, request)) = messages.recv().await {
-            let result = service.handle(request).await;
+            let result = server.handle(request).await;
             messages.send((client_id, result)).await?
         }
         Ok(())
     }
 }
 
-/// An actor that wraps a request-response service
+/// An actor that wraps a request-response protocol
 ///
 /// Requests are processed concurrently (up to some max concurrency level).
 ///
-/// The service must be `Clone` to create a fresh service handle for each request.
-pub struct ConcurrentServiceActor<S: Service + Clone> {
-    service: S,
+/// The server must be `Clone` to create a fresh server handle for each request.
+pub struct ConcurrentServerActor<S: Server + Clone> {
+    server: S,
 }
 
-impl<S: Service + Clone> ConcurrentServiceActor<S> {
-    pub fn new(service: S) -> Self {
-        ConcurrentServiceActor { service }
+impl<S: Server + Clone> ConcurrentServerActor<S> {
+    pub fn new(server: S) -> Self {
+        ConcurrentServerActor { server }
     }
 }
 
 #[async_trait]
-impl<S: Service + Clone> Actor for ConcurrentServiceActor<S> {
-    type MessageBox = ConcurrentServiceMessageBox<S::Request, S::Response>;
+impl<S: Server + Clone> Actor for ConcurrentServerActor<S> {
+    type MessageBox = ConcurrentServerMessageBox<S::Request, S::Response>;
 
     fn name(&self) -> &str {
-        self.service.name()
+        self.server.name()
     }
 
-    async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+    async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
         while let Some((client_id, request)) = messages.recv().await {
             // Spawn the request
-            let mut service = self.service.clone();
+            let mut server = self.server.clone();
             let pending_result = tokio::spawn(async move {
-                let result = service.handle(request).await;
+                let result = server.handle(request).await;
                 (client_id, result)
             });
 
@@ -127,10 +127,7 @@ pub mod tests {
             "Echo"
         }
 
-        async fn run(
-            mut self,
-            mut messages: SimpleMessageBox<String, String>,
-        ) -> Result<(), ChannelError> {
+        async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
             // FIXME: If I add the RuntimeRequests here and if the channel we use to send messages is dropped then we will get an ChannelError::SendError
             // FIXME: but I don't think we shouldn't return this error if the message box has a shutdown message for us
             while let Some(message) = messages.recv().await {
@@ -218,7 +215,7 @@ pub mod tests {
             "ActorWithSpecificMessageBox"
         }
 
-        async fn run(self, mut messages: SpecificMessageBox) -> Result<(), ChannelError> {
+        async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
             while let Some(message) = messages.next().await {
                 if message.contains("this") {
                     messages.do_this(message.to_string()).await?

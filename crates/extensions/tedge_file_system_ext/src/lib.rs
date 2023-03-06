@@ -9,6 +9,7 @@ use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
 use tedge_actors::MessageSource;
 use tedge_actors::NoMessage;
+use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_utils::notify::FsEvent;
@@ -152,10 +153,10 @@ impl Actor for FsWatchActor {
         "FsWatcher"
     }
 
-    async fn run(mut self, mut mailbox: Self::MessageBox) -> Result<(), ChannelError> {
+    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
         loop {
             tokio::select! {
-                Some(RuntimeRequest::Shutdown) = mailbox.recv() => return Err(ChannelError::ReceiveError()),
+                Some(RuntimeRequest::Shutdown) = messages.recv() => return Err(ChannelError::ReceiveError().into()),
                 Some((path, fs_event)) = self.fs_notify_receiver.recv() => {
                     let output = match fs_event {
                         FsEvent::Modified => FsWatchEvent::Modified(path),
@@ -164,9 +165,9 @@ impl Actor for FsWatchActor {
                         FsEvent::DirectoryCreated => FsWatchEvent::DirectoryCreated(path),
                         FsEvent::DirectoryDeleted => FsWatchEvent::DirectoryDeleted(path),
                     };
-                    mailbox.send(output).await?;
+                    messages.send(output).await?;
                 }
-                else => return Err(ChannelError::ReceiveError())
+                else => return Err(ChannelError::ReceiveError().into())
             }
         }
     }

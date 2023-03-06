@@ -147,12 +147,16 @@ tedge-mapper-aws service successfully started and enabled!
 
 ## Sending your first telemetry data
 
-Sending data to AWS is done using MQTT over topics prefixed with `aws`.
-Any messages sent on the topic will be forwarded to AWS.
-Here, we use `tedge mqtt pub aws/messages/` a message to be understood as a temperature of 20 Degree.
+Using the AWS mapper, you can publish measurement telemetry data to AWS by publishing on the `tedge/measurements` topic:
 
 ```shell
-tedge mqtt pub aws/messages/ '{"temperature": 20}'
+tedge mqtt pub tedge/measurements '{"temperature": 21.3}'
+```
+
+Alternatively, post your own custom messages on `aws/td/#` topic:
+
+```shell
+tedge mqtt pub aws/td '{"text": "My message"}'
 ```
 
 To view the messages that were sent from the device to the cloud, follow this

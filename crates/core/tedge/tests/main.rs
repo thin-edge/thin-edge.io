@@ -88,7 +88,7 @@ mod tests {
         get_device_id_cmd
             .assert()
             .success()
-            .stdout(predicate::str::contains("device.id"));
+            .stderr(predicate::str::contains("'device.id' is not configurable"));
 
         // The create command created a certificate
         create_cmd.assert().success();
@@ -124,7 +124,7 @@ mod tests {
         get_device_id_cmd
             .assert()
             .success()
-            .stdout(predicate::str::contains("device.id"));
+            .stderr(predicate::str::contains("device.id"));
 
         // The a new certificate can then be created.
         create_cmd.assert().success();
@@ -152,7 +152,7 @@ mod tests {
         get_device_id_cmd
             .assert()
             .success()
-            .stdout(predicate::str::contains("device.id"));
+            .stderr(predicate::str::contains("device.id"));
 
         // forbidden to set read-only key by CLI
         let mut set_device_id_cmd = tedge_command_with_test_home([
@@ -184,13 +184,15 @@ mod tests {
     #[test_case(
         "c8y.url",
         "mytenant.cumulocity.com",
-        "The provided config key: \'c8y.url\' is not set\n"
+        "The provided config key: \'c8y.url\' is not set\n",
+        false
     )]
-    #[test_case("mqtt.port", "8880", "1883")]
+    #[test_case("mqtt.port", "8880", "1883", true)]
     fn run_config_set_get_unset_read_write_key(
         config_key: &str,
         config_value: &str,
         default_value_or_error_message: &str,
+        is_default: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let temp_dir = tempfile::tempdir().unwrap();
         let temp_dir_path = temp_dir.path();
@@ -204,10 +206,13 @@ mod tests {
             config_key,
         ])?;
 
-        get_config_command
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(default_value_or_error_message));
+        let get_config_command = get_config_command.assert().success();
+
+        if is_default {
+            get_config_command.stdout(predicate::str::contains(default_value_or_error_message));
+        } else {
+            get_config_command.stderr(predicate::str::contains(default_value_or_error_message));
+        }
 
         let mut set_config_command = tedge_command_with_test_home([
             "--config-dir",
@@ -251,10 +256,13 @@ mod tests {
             config_key,
         ])?;
 
-        get_config_command
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(default_value_or_error_message));
+        let get_config_command = get_config_command.assert().success();
+
+        if is_default {
+            get_config_command.stdout(predicate::str::contains(default_value_or_error_message));
+        } else {
+            get_config_command.stderr(predicate::str::contains(default_value_or_error_message));
+        }
 
         Ok(())
     }
@@ -279,7 +287,7 @@ mod tests {
         get_device_id_cmd
             .assert()
             .success()
-            .stdout(predicate::str::contains("device.id"));
+            .stderr(predicate::str::contains("device.id"));
 
         let mut get_cert_path_cmd = tedge_command_with_test_home([
             "--config-dir",
@@ -318,7 +326,7 @@ mod tests {
         get_c8y_url_cmd
             .assert()
             .success()
-            .stdout(predicate::str::contains(
+            .stderr(predicate::str::contains(
                 "The provided config key: 'c8y.url' is not set",
             ));
 

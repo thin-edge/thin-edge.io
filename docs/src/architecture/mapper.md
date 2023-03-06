@@ -17,7 +17,7 @@ The mapper verifies whether the arrived messages are correctly formatted,
 in case the verification fails, the mapper publishes a corresponded error message
 on the topic `tedge/errors` with the QoS level 1 (at least once).
 
-When the mapper receives a correctly formatted message, 
+When the mapper receives a correctly formatted message,
 the message will be translated into a cloud-specific format.
 
 ## Cumulocity mapper
@@ -49,6 +49,7 @@ Translated into JSON via MQTT by the Cumulocity mapper:
 ```
 
 You can see the Cumulocity mapper added the three things which are not defined before translation.
+
 1. `type` is added.
 2. `time` is added.
 3. Another hierarchy level is added, as required by the cumulocity data model.
@@ -80,7 +81,6 @@ The mapper works in the following steps.
    The child device is named after the `<child-id>` topic name, and the type is `thin-edge.io-child`.
 2. Publish corresponded Cumulocity JSON measurements messages over MQTT.
 3. The child device is created on receipt of the very first measurement for that child device.
-
 
 If the incoming Thin Edge JSON message (published on `tedge/measurements/child1`) is as follows,
 
@@ -160,7 +160,7 @@ sudo systemctl restart tedge-mapper-az.service
 
 The AWS mapper takes messages formatted in the [Thin Edge JSON](thin-edge-json.md) as input.
 It validates if the incoming message is correctly formatted Thin Edge JSON, then outputs the message.
-The validated messages are published on the topic `aws/messages/` from where they are forwarded to AWS.
+The validated messages are published on the topic `aws/td/#` from where they are forwarded to AWS.
 This mapper is launched by the `tedge connect aws` command, and stopped by the `tedge disconnect aws` command.
 
 ## Error cases

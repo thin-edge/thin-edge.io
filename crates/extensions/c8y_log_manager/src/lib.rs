@@ -4,7 +4,8 @@ mod error;
 
 use actor::*;
 use c8y_http_proxy::handle::C8YHttpProxy;
-use c8y_http_proxy::C8YConnectionBuilder;
+use c8y_http_proxy::messages::C8YRestRequest;
+use c8y_http_proxy::messages::C8YRestResult;
 pub use config::*;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
@@ -15,6 +16,7 @@ use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::ServiceProvider;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
@@ -49,7 +51,7 @@ impl LogManagerBuilder {
     /// Connect this config manager instance to some http connection provider
     pub fn with_c8y_http_proxy(
         &mut self,
-        http: &mut impl C8YConnectionBuilder,
+        http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
     ) -> Result<(), LinkError> {
         self.http_proxy = Some(C8YHttpProxy::new("LogManager => C8Y", http));
         Ok(())

@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+pub type DynError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
 /// Error raised while exchanging messages
 #[derive(Error, Debug)]
 pub enum ChannelError {
@@ -8,16 +10,14 @@ pub enum ChannelError {
 
     #[error("Fail to receive a message: the sender has been dropped")]
     ReceiveError(),
-
-    // TODO: Should this lib use anyhow?
-    // FIXME: should be runtime error
-    #[error(transparent)]
-    ActorError(#[from] anyhow::Error),
 }
 
-/// Error raised by the runtime
+/// Error raised during runtime by actors as well as the runtime
 #[derive(Error, Debug)]
 pub enum RuntimeError {
+    #[error(transparent)]
+    ActorError(#[from] DynError),
+
     #[error("Fail to send a message to the runtime: the runtime has been dropped")]
     RuntimeSendError(#[from] futures::channel::mpsc::SendError),
 
@@ -32,6 +32,15 @@ pub enum RuntimeError {
 
     #[error(transparent)]
     LinkError(#[from] LinkError),
+}
+
+impl<T> From<Box<T>> for RuntimeError
+where
+    T: std::error::Error + Send + Sync + 'static,
+{
+    fn from(error: Box<T>) -> Self {
+        RuntimeError::ActorError(error)
+    }
 }
 
 /// Error raised while connecting actor instances

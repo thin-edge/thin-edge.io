@@ -205,7 +205,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: enable toolchain via github action
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
 
@@ -224,6 +224,7 @@ jobs:
         uses: actions-rs/cargo@v1
         # https://github.com/marketplace/actions/rust-cargo
         with:
+          toolchain: stable
           command: clippy
           args: --all-features -- -Aclippy::result-large-err
 
@@ -285,7 +286,7 @@ jobs:
     name: Shellcheck
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Run ShellCheck
       uses: ludeeus/action-shellcheck@master
 
@@ -293,7 +294,7 @@ jobs:
     name: Spell Check with Typos
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: crate-ci/typos@v1.13.12
       continue-on-error: true
     - run: exit 0

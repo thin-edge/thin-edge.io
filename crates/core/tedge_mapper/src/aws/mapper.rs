@@ -42,7 +42,8 @@ impl TEdgeComponent for AwsMapper {
         let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
         let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
         let clock = Box::new(WallClock);
-        let size_threshold = SizeThreshold(255 * 1024);
+        // Quotas at: https://docs.aws.amazon.com/general/latest/gr/iot-core.html#limits_iot
+        let size_threshold = SizeThreshold(128 * 1024);
 
         let converter = Box::new(AwsConverter::new(add_timestamp, clock, size_threshold));
 

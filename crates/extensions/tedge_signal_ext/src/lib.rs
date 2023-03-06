@@ -5,12 +5,12 @@ use std::convert::Infallible;
 use tedge_actors::futures::StreamExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
-use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::NoMessage;
 use tedge_actors::RuntimeAction;
+use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::SimpleMessageBox;
@@ -63,7 +63,7 @@ impl Actor for SignalActor {
         "Signal-Handler"
     }
 
-    async fn run(self, mut messages: Self::MessageBox) -> Result<(), ChannelError> {
+    async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
         let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT]).unwrap(); // FIXME
         loop {
             tokio::select! {

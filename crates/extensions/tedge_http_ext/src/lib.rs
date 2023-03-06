@@ -13,37 +13,32 @@ use std::convert::Infallible;
 use actor::*;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
-use tedge_actors::ChannelError;
-use tedge_actors::ConcurrentServiceActor;
-use tedge_actors::ConcurrentServiceMessageBox;
+use tedge_actors::ConcurrentServerActor;
+use tedge_actors::ConcurrentServerMessageBox;
 use tedge_actors::DynSender;
-use tedge_actors::MessageBoxPlug;
-use tedge_actors::MessageBoxSocket;
 use tedge_actors::NoConfig;
-use tedge_actors::RequestResponseHandler;
+use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
-use tedge_actors::ServiceMessageBoxBuilder;
-
-pub type HttpHandle = RequestResponseHandler<HttpRequest, HttpResult>;
-pub trait HttpConnectionBuilder: MessageBoxSocket<HttpRequest, HttpResult, NoConfig> {}
-impl<T> HttpConnectionBuilder for T where T: MessageBoxSocket<HttpRequest, HttpResult, NoConfig> {}
+use tedge_actors::ServerMessageBoxBuilder;
+use tedge_actors::ServiceConsumer;
+use tedge_actors::ServiceProvider;
 
 pub struct HttpActorBuilder {
-    actor: ConcurrentServiceActor<HttpService>,
-    pub box_builder: ServiceMessageBoxBuilder<HttpRequest, HttpResult>,
+    actor: ConcurrentServerActor<HttpService>,
+    pub box_builder: ServerMessageBoxBuilder<HttpRequest, HttpResult>,
 }
 
 impl HttpActorBuilder {
     pub fn new() -> Result<Self, HttpError> {
         let service = HttpService::new()?;
-        let actor = ConcurrentServiceActor::new(service);
-        let box_builder = ServiceMessageBoxBuilder::new("HTTP", 16).with_max_concurrency(4);
+        let actor = ConcurrentServerActor::new(service);
+        let box_builder = ServerMessageBoxBuilder::new("HTTP", 16).with_max_concurrency(4);
 
         Ok(HttpActorBuilder { actor, box_builder })
     }
 
-    pub async fn run(self) -> Result<(), ChannelError> {
+    pub async fn run(self) -> Result<(), RuntimeError> {
         let actor = self.actor;
         let messages = self.box_builder.build();
 
@@ -53,8 +48,8 @@ impl HttpActorBuilder {
 
 impl
     Builder<(
-        ConcurrentServiceActor<HttpService>,
-        ConcurrentServiceMessageBox<HttpRequest, HttpResult>,
+        ConcurrentServerActor<HttpService>,
+        ConcurrentServerMessageBox<HttpRequest, HttpResult>,
     )> for HttpActorBuilder
 {
     type Error = Infallible;
@@ -63,8 +58,8 @@ impl
         self,
     ) -> Result<
         (
-            ConcurrentServiceActor<HttpService>,
-            ConcurrentServiceMessageBox<HttpRequest, HttpResult>,
+            ConcurrentServerActor<HttpService>,
+            ConcurrentServerMessageBox<HttpRequest, HttpResult>,
         ),
         Self::Error,
     > {
@@ -74,8 +69,8 @@ impl
     fn build(
         self,
     ) -> (
-        ConcurrentServiceActor<HttpService>,
-        ConcurrentServiceMessageBox<HttpRequest, HttpResult>,
+        ConcurrentServerActor<HttpService>,
+        ConcurrentServerMessageBox<HttpRequest, HttpResult>,
     ) {
         let actor = self.actor;
         let actor_box = self.box_builder.build();
@@ -83,10 +78,10 @@ impl
     }
 }
 
-impl MessageBoxSocket<HttpRequest, HttpResult, NoConfig> for HttpActorBuilder {
+impl ServiceProvider<HttpRequest, HttpResult, NoConfig> for HttpActorBuilder {
     fn connect_with(
         &mut self,
-        peer: &mut impl MessageBoxPlug<HttpRequest, HttpResult>,
+        peer: &mut impl ServiceConsumer<HttpRequest, HttpResult>,
         config: NoConfig,
     ) {
         self.box_builder.connect_with(peer, config)

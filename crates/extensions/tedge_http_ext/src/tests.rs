@@ -1,4 +1,5 @@
 use crate::*;
+use tedge_actors::ClientMessageBox;
 
 #[tokio::test]
 async fn get_over_https() {
@@ -13,9 +14,9 @@ async fn get_over_https() {
     assert_eq!(response.unwrap().status(), 200);
 }
 
-async fn spawn_http_actor() -> RequestResponseHandler<HttpRequest, HttpResult> {
+async fn spawn_http_actor() -> ClientMessageBox<HttpRequest, HttpResult> {
     let mut builder = HttpActorBuilder::new().unwrap();
-    let handle = RequestResponseHandler::new("Tester", &mut builder.box_builder, NoConfig);
+    let handle = ClientMessageBox::new("Tester", &mut builder.box_builder, NoConfig);
 
     tokio::spawn(builder.run());
 

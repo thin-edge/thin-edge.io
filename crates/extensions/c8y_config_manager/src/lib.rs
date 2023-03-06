@@ -19,12 +19,12 @@ use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
-use tedge_actors::MessageBoxSocket;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::ServiceProvider;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
 use tedge_timer_ext::SetTimeout;
@@ -66,7 +66,7 @@ impl ConfigManagerBuilder {
     /// Connect this config manager instance to some http connection provider
     pub fn with_c8y_http_proxy(
         &mut self,
-        http: &mut impl MessageBoxSocket<C8YRestRequest, C8YRestResult, NoConfig>,
+        http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
     ) -> Result<(), LinkError> {
         // self.connect_to(http, ());
         self.c8y_http_proxy = Some(C8YHttpProxy::new("ConfigManager => C8Y", http));
@@ -76,7 +76,7 @@ impl ConfigManagerBuilder {
     /// Connect this config manager instance to some mqtt connection provider
     pub fn with_mqtt_connection<T>(&mut self, mqtt: &mut T) -> Result<(), LinkError>
     where
-        T: MessageBoxSocket<MqttMessage, MqttMessage, TopicFilter>,
+        T: ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
     {
         let subscriptions = vec![
             "c8y/s/ds",
@@ -102,7 +102,7 @@ impl ConfigManagerBuilder {
 
     pub fn with_timer(
         &mut self,
-        timer_builder: &mut impl MessageBoxSocket<OperationTimer, OperationTimeout, NoConfig>,
+        timer_builder: &mut impl ServiceProvider<OperationTimer, OperationTimeout, NoConfig>,
     ) -> Result<(), LinkError> {
         timer_builder.connect_with(self, NoConfig);
         Ok(())

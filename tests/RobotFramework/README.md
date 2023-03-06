@@ -43,7 +43,7 @@ The list of test hardware devices can be found [here](./TEST_DEVICES.md).
 
 Before you can run the tests you need to install the pre-requisites:
 
-* docker
+* docker (or podman)
 * python3 (>=3.7)
 * pip3
 * venv (python package)
@@ -142,10 +142,32 @@ Checkout the [dev container instructions](../../docs/src/developer/DEV_CONTAINER
     source .venv/bin/activate
     ```
 
-6. Build the container image used by the default `docker` test adapter
+    You can also activate tab completion in your current shell by running one of the following statements (based on what shell you are in)
+
+    **zsh**
 
     ```sh
-    invoke build
+    source <(invoke --print-completion-script=zsh)
+    ```
+
+    **bash**
+
+    ```sh
+    source <(invoke --print-completion-script=bash)
+    ```
+
+6. Build the container image used by the default `docker` test adapter
+
+    The following command will use the debian packages built using the latest packages from the main branch (provided by Cloudsmith.io)
+
+    ```sh
+    invoke clean build
+    ```
+
+    Or you can use the locally built debian packages (assuming you have already built them)
+
+    ```sh
+    invoke build --local
     ```
 
 7. Run the tests
@@ -160,31 +182,40 @@ Checkout the [dev container instructions](../../docs/src/developer/DEV_CONTAINER
     robot --outputdir output ./tests
     ```
 
-### Using custom built binaries for the tests
+### Using externally built built packages in tests
 
-If you would like to run the tests using some custom built tedge packages, then run the following steps:
+For very specific cases where you want to deploy externally built packages (e.g. stuff you downloaded from the GitHub release page), you can manually copy the debian packages into the special folder which is included when building the test container image.
 
-1. Open the terminal and navigate to the project root folder (not the RobotFramework root folder)
+If you are looking to use packages that you locally built, then just use `invoke build --local` instead (it is much easier).
 
-2. Copy the debian files that you would like to use in your tests by copying them to a specific folder used by the tests.
+1. Open the terminal and navigate to the RobotFramework folder
 
-    ```sh
-    # Remove any existing deb files in the cache
-    rm tests/images/debian-systemd/files/deb/*.deb
-
-    # Copy from the target output folder
-    cp "target/debian"/*.deb "tests/images/debian-systemd/files/deb/"
     ```
-
-3. Rebuild the docker image
-
-    ```sh
     cd tests/RobotFramework
     source .venv/bin/activate
+    ```
+
+2. Remove any existing packages which may have been used in previous tests
+
+    ```sh
+    invoke clean
+    ```
+
+3. Copy the debian files that you would like to use in your tests by copying them to a specific folder used by the tests.
+
+    For example, assume I have already downloaded the packages from GitHub and placed them under my home folder under `Downloads`.
+
+    ```sh
+    cp "$HOME/Downloads/"*.deb "tests/images/debian-systemd/files/deb/"
+    ```
+
+4. Rebuild the docker image
+
+    ```sh
     invoke build
     ```
 
-4. Run the tests
+5. Run the tests
 
     ```sh
     invoke test
@@ -201,22 +232,37 @@ When building the docker image it will automatically add all the files/folders u
 
 The reports and logs are best viewed using a web browser. This can be easily done setting up a quick local web server using the following instructions.
 
-1. Change to the robot framework directory (if you have not already done so)
+1. Change to the robot framework directory and activate the virtual environment
 
     ```sh
     cd tests/RobotFramework
+    source .venv/bin/activate
     ```
 
 2. Open a console from the root folder of the project, then execute
-
-    ```sh
-    python -m http.server 9000 --directory output
-    ```
-
-    Or using the task
 
     ```sh
     invoke reports
     ```
 
 3. Then open up [http://localhost:9000/tests/RobotFramework/output/log.html](http://localhost:9000/tests/RobotFramework/output/log.html) in your browser
+
+## Using podman instead of docker
+
+The tests can be run using docker podman instead of docker by simply setting the `DOCKER_HOST` variable in the `.env` file.
+
+**Example**
+
+```sh
+DOCKER_HOST=unix:///Users/username/.local/share/containers/podman/machine/podman-machine-default/podman.sock
+```
+
+Checkout the official podman documentation on how to get the socket for your installation.
+
+**Tips: MacOS (M1)**
+
+Assuming you have already stated the podman virtual machine via `podman machine start`, you can view the socket path using:
+
+```sh
+podman machine inspect --format "{{ .ConnectionInfo.PodmanSocket.Path }}"
+```

@@ -1,6 +1,8 @@
 use std::io;
+use tedge_actors::RuntimeError;
 use tedge_mqtt_ext::Topic;
 use tedge_utils::file::FileError;
+use tedge_utils::paths::PathsError;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(thiserror::Error, Debug)]
@@ -39,4 +41,16 @@ pub enum ConfigManagementError {
 
     #[error(transparent)]
     FromChannelError(#[from] tedge_actors::ChannelError),
+
+    #[error(transparent)]
+    FromC8YRestError(#[from] c8y_http_proxy::messages::C8YRestError),
+
+    #[error(transparent)]
+    FromPathsError(#[from] PathsError),
+}
+
+impl From<ConfigManagementError> for RuntimeError {
+    fn from(error: ConfigManagementError) -> Self {
+        RuntimeError::ActorError(Box::new(error))
+    }
 }

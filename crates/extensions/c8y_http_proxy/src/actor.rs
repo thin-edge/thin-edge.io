@@ -30,10 +30,10 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
-use tedge_actors::ChannelError;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::MessageBox;
-use tedge_actors::ServiceMessageBox;
-use tedge_http_ext::HttpHandle;
+use tedge_actors::RuntimeError;
+use tedge_actors::ServerMessageBox;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResponseExt;
@@ -57,7 +57,7 @@ impl Actor for C8YHttpConfig {
         "C8YHttpProxy"
     }
 
-    async fn run(self, messages: Self::MessageBox) -> Result<(), ChannelError> {
+    async fn run(self, messages: Self::MessageBox) -> Result<(), RuntimeError> {
         let actor = C8YHttpProxyActor::new(self, messages);
         actor.run().await
     }
@@ -65,10 +65,10 @@ impl Actor for C8YHttpConfig {
 
 pub struct C8YHttpProxyMessageBox {
     /// Connection to the clients
-    pub(crate) clients: ServiceMessageBox<C8YRestRequest, C8YRestResult>,
+    pub(crate) clients: ServerMessageBox<C8YRestRequest, C8YRestResult>,
 
     /// Connection to an HTTP actor
-    pub(crate) http: HttpHandle,
+    pub(crate) http: ClientMessageBox<HttpRequest, HttpResult>,
 
     /// Connection to a JWT token retriever
     pub(crate) jwt: JwtRetriever,
@@ -114,7 +114,7 @@ impl C8YHttpProxyActor {
         }
     }
 
-    pub async fn run(mut self) -> Result<(), ChannelError> {
+    pub async fn run(mut self) -> Result<(), RuntimeError> {
         self.init().await;
 
         while let Some((client_id, request)) = self.peers.clients.recv().await {
