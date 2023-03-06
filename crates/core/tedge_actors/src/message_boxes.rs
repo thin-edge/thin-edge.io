@@ -150,7 +150,7 @@ pub enum WrappedInput<Input> {
 }
 
 #[async_trait]
-pub trait ReceiveMessages<Input: Debug> {
+pub trait ReceiveMessages<Input> {
     /// Return the next received message if any, returning [RuntimeRequest]'s as errors.
     /// Returning [RuntimeRequest] takes priority over messages.
     async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest>;
@@ -160,15 +160,15 @@ pub trait ReceiveMessages<Input: Debug> {
     async fn recv_message(&mut self) -> Option<WrappedInput<Input>>;
 
     /// Returns [Some] message the next time a message is received. Returns [None] if
-    /// either of the underlying channels are closed.
-    /// Returning [RuntimeRequest] takes priority over messages.
+    /// both of the underlying channels are closed or if a [RuntimeRequest] is received.
+    /// Handling [RuntimeRequest]'s by returning [None] takes priority over messages.
     async fn recv(&mut self) -> Option<Input>;
 }
 
 /// The basic message box
 pub struct SimpleMessageBox<Input, Output> {
     name: String,
-    receiver: CombinedReceiver<Input>,
+    input_receiver: CombinedReceiver<Input>,
     output_sender: DynSender<Output>,
     logging_is_on: bool,
 }
@@ -176,20 +176,15 @@ pub struct SimpleMessageBox<Input, Output> {
 impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
     pub fn new(
         name: String,
-        receiver: CombinedReceiver<Input>,
+        input_receiver: CombinedReceiver<Input>,
         output_sender: DynSender<Output>,
     ) -> Self {
         SimpleMessageBox {
             name,
-            receiver,
+            input_receiver,
             output_sender,
             logging_is_on: true,
         }
-    }
-
-    // TODO: Should be removed
-    pub async fn recv(&mut self) -> Option<Input> {
-        self.receiver.recv().await
     }
 
     pub async fn send(&mut self, message: Output) -> Result<(), ChannelError> {
@@ -220,50 +215,42 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
 }
 
 #[async_trait]
-impl<Input: Send + Debug, Output> ReceiveMessages<Input> for SimpleMessageBox<Input, Output> {
+impl<Input: Message, Output: Message> ReceiveMessages<Input> for SimpleMessageBox<Input, Output> {
     async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
-        self.receiver.try_recv().await
+        self.input_receiver.try_recv().await
     }
 
     async fn recv_message(&mut self) -> Option<WrappedInput<Input>> {
-        self.receiver.recv_message().await
+        self.input_receiver.recv_message().await
     }
 
     async fn recv(&mut self) -> Option<Input> {
-        self.receiver.recv().await
+        self.input_receiver.recv().await.map(|message| {
+            self.log_input(&message);
+            message
+        })
     }
 }
 
 pub struct CombinedReceiver<Input> {
-    name: String,
-    logging_is_on: bool,
     input_receiver: mpsc::Receiver<Input>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
 }
 
 impl<Input> CombinedReceiver<Input> {
     pub fn new(
-        name: String,
         input_receiver: mpsc::Receiver<Input>,
         signal_receiver: mpsc::Receiver<RuntimeRequest>,
     ) -> Self {
         Self {
-            name,
-            logging_is_on: true,
             input_receiver,
             signal_receiver,
-        }
-    }
-
-    fn log(&self, message: &impl Debug) {
-        if self.logging_is_on {
-            info!(target: &self.name, "recv {:?}", message);
         }
     }
 }
 
 #[async_trait]
-impl<Input: Send + Debug> ReceiveMessages<Input> for CombinedReceiver<Input> {
+impl<Input: Send> ReceiveMessages<Input> for CombinedReceiver<Input> {
     async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
         match self.recv_message().await {
             Some(WrappedInput::Message(message)) => Ok(Some(message)),
@@ -277,11 +264,9 @@ impl<Input: Send + Debug> ReceiveMessages<Input> for CombinedReceiver<Input> {
             biased;
 
             Some(runtime_request) = self.signal_receiver.next() => {
-                self.log(&runtime_request);
                 Some(WrappedInput::RuntimeRequest(runtime_request))
             }
             Some(message) = self.input_receiver.next() => {
-                self.log(&message);
                 Some(WrappedInput::Message(message))
             }
             else => None
@@ -302,7 +287,6 @@ impl<Input: Message, Output: Message> MessageBox for SimpleMessageBox<Input, Out
 
     fn turn_logging_on(&mut self, on: bool) {
         self.logging_is_on = on;
-        self.receiver.logging_is_on = on;
     }
 
     fn name(&self) -> &str {

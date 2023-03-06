@@ -50,8 +50,7 @@ impl ConfigManagerBuilder {
     pub fn new(config: ConfigManagerConfig) -> ConfigManagerBuilder {
         let (events_sender, events_receiver) = mpsc::channel(10);
         let (signal_sender, signal_receiver) = mpsc::channel(10);
-        let receiver =
-            CombinedReceiver::new("ConfigManager".into(), events_receiver, signal_receiver);
+        let receiver = CombinedReceiver::new(events_receiver, signal_receiver);
 
         ConfigManagerBuilder {
             config,

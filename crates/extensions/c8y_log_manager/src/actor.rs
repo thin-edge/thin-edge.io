@@ -23,8 +23,8 @@ use tedge_actors::Actor;
 use tedge_actors::CombinedReceiver;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
-use tedge_actors::RuntimeError;
 use tedge_actors::ReceiveMessages;
+use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::WrappedInput;
 use tedge_api::health::get_health_status_message;
@@ -393,10 +393,6 @@ impl LogManagerMessageBox {
             mqtt_requests: mqtt_con,
         }
     }
-
-    pub async fn recv(&mut self) -> Option<LogInput> {
-        self.input_receiver.recv().await
-    }
 }
 
 impl MessageBox for LogManagerMessageBox {
@@ -428,7 +424,10 @@ impl ReceiveMessages<LogInput> for LogManagerMessageBox {
     }
 
     async fn recv(&mut self) -> Option<LogInput> {
-        self.input_receiver.recv().await
+        self.input_receiver.recv().await.map(|message| {
+            self.log_input(&message);
+            message
+        })
     }
 }
 

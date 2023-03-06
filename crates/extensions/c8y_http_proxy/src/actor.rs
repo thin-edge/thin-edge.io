@@ -32,6 +32,7 @@ use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::MessageBox;
+use tedge_actors::ReceiveMessages;
 use tedge_actors::RuntimeError;
 use tedge_actors::ServerMessageBox;
 use tedge_http_ext::HttpRequest;

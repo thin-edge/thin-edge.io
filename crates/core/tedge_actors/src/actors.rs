@@ -1,3 +1,4 @@
+use crate::message_boxes::ReceiveMessages;
 use crate::ConcurrentServerMessageBox;
 use crate::Message;
 use crate::MessageBox;

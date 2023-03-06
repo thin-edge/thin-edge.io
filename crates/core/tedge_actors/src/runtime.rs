@@ -270,6 +270,7 @@ async fn run_task(
 mod tests {
     use super::*;
     use crate::fan_in_message_type;
+    use crate::message_boxes::ReceiveMessages;
     use crate::CombinedReceiver;
     use crate::Message;
     use crate::SimpleMessageBox;
@@ -345,7 +346,7 @@ mod tests {
         let (input_sender, input_receiver) = mpsc::channel(16);
         let (_, signal_receiver) = mpsc::channel(16);
         let (output_sender, output_receiver) = mpsc::channel(16);
-        let receiver = CombinedReceiver::new("Echo".into(), input_receiver, signal_receiver);
+        let receiver = CombinedReceiver::new(input_receiver, signal_receiver);
         let actor = RunActor::new(
             actor,
             SimpleMessageBox::new("actor".into(), receiver, Box::new(output_sender)),

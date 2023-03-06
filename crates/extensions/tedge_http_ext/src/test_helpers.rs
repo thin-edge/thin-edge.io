@@ -5,6 +5,7 @@ use http::StatusCode;
 use std::convert::Infallible;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
+use tedge_actors::ReceiveMessages;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 

@@ -169,7 +169,7 @@ impl<I: Message, O: Message> SimpleMessageBoxBuilder<I, O> {
         let (input_sender, input_receiver) = mpsc::channel(capacity);
         let (signal_sender, signal_receiver) = mpsc::channel(4);
         let output_sender = NullSender.into();
-        let input_receiver = CombinedReceiver::new(name.into(), input_receiver, signal_receiver);
+        let input_receiver = CombinedReceiver::new(input_receiver, signal_receiver);
 
         SimpleMessageBoxBuilder {
             name: name.to_string(),
@@ -238,11 +238,7 @@ impl<Request: Message, Response: Message> ServerMessageBoxBuilder<Request, Respo
         let max_concurrency = 1;
         let (request_sender, request_receiver) = mpsc::channel(capacity);
         let (signal_sender, signal_receiver) = mpsc::channel(4);
-        let input_receiver = CombinedReceiver::new(
-            service_name.clone().to_string(),
-            request_receiver,
-            signal_receiver,
-        );
+        let input_receiver = CombinedReceiver::new(request_receiver, signal_receiver);
 
         ServerMessageBoxBuilder {
             service_name: service_name.to_string(),

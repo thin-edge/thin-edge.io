@@ -36,8 +36,7 @@ impl LogManagerBuilder {
     pub fn new(config: LogManagerConfig) -> Self {
         let (events_sender, events_receiver) = mpsc::channel(10);
         let (signal_sender, signal_receiver) = mpsc::channel(10);
-        let input_receiver =
-            CombinedReceiver::new("LogManager".into(), events_receiver, signal_receiver);
+        let input_receiver = CombinedReceiver::new(events_receiver, signal_receiver);
 
         Self {
             config,

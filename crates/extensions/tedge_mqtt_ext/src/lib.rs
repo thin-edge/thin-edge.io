@@ -16,8 +16,8 @@ use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
-use tedge_actors::RuntimeError;
 use tedge_actors::ReceiveMessages;
+use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceConsumer;
@@ -43,8 +43,7 @@ impl MqttActorBuilder {
     pub fn new(config: mqtt_channel::Config) -> Self {
         let (publish_sender, publish_receiver) = channel(10);
         let (signal_sender, signal_receiver) = channel(10);
-        let input_receiver =
-            CombinedReceiver::new("MQTT".into(), publish_receiver, signal_receiver);
+        let input_receiver = CombinedReceiver::new(publish_receiver, signal_receiver);
 
         MqttActorBuilder {
             mqtt_config: config,
@@ -148,7 +147,10 @@ impl ReceiveMessages<MqttRuntimeMessage> for MqttMessageBox {
     }
 
     async fn recv(&mut self) -> Option<MqttRuntimeMessage> {
-        self.input_receiver.recv().await
+        self.input_receiver.recv().await.map(|message| {
+            self.log_input(&message);
+            message
+        })
     }
 }
 
