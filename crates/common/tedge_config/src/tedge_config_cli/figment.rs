@@ -12,10 +12,7 @@ use serde::de::DeserializeOwned;
 use crate::TEdgeConfigError;
 
 pub trait ConfigSources {
-    fn include_enviroment(&self) -> bool;
-    fn new() -> Self
-    where
-        Self: Sized;
+    const INCLUDE_ENVIRONMENT: bool;
 }
 
 #[derive(Clone, Debug)]
@@ -24,40 +21,21 @@ pub struct FileAndEnvironment;
 pub struct FileOnly;
 
 impl ConfigSources for FileAndEnvironment {
-    fn include_enviroment(&self) -> bool {
-        true
-    }
-
-    fn new() -> Self
-    where
-        Self: Sized,
-    {
-        Self
-    }
+    const INCLUDE_ENVIRONMENT: bool = true;
 }
 
 impl ConfigSources for FileOnly {
-    fn include_enviroment(&self) -> bool {
-        false
-    }
-
-    fn new() -> Self
-    where
-        Self: Sized,
-    {
-        Self
-    }
+    const INCLUDE_ENVIRONMENT: bool = false;
 }
 
 /// Extract the configuration data from the provided TOML path and `TEDGE_` prefixed environment variables
-pub fn extract_data<T: DeserializeOwned>(
+pub fn extract_data<T: DeserializeOwned, Sources: ConfigSources>(
     path: impl AsRef<Path>,
-    sources: &dyn ConfigSources,
 ) -> Result<T, TEdgeConfigError> {
     let env = TEdgeEnv::default();
     let figment = Figment::new().merge(Toml::file(path));
 
-    let figment = if sources.include_enviroment() {
+    let figment = if Sources::INCLUDE_ENVIRONMENT {
         figment.merge(env.provider())
     } else {
         figment
@@ -230,7 +208,7 @@ mod tests {
             jail.set_env("TEDGE_C8Y__URL", "override.c8y.io");
 
             assert_eq!(
-                extract_data::<Config>(&PathBuf::from("tedge.toml"), &FileAndEnvironment)
+                extract_data::<Config, FileAndEnvironment>(&PathBuf::from("tedge.toml"))
                     .unwrap()
                     .c8y
                     .url,
@@ -298,7 +276,7 @@ mod tests {
             let variable_name = "TEDGE_VALUE";
             jail.set_env(variable_name, "123");
 
-            let errors = extract_data::<Config>("tedge.toml", &FileAndEnvironment).unwrap_err();
+            let errors = extract_data::<Config, FileAndEnvironment>("tedge.toml").unwrap_err();
             assert!(dbg!(errors.to_string()).contains(variable_name));
             Ok(())
         })
@@ -317,7 +295,7 @@ mod tests {
             let variable_name = "TEDGE_VALUE";
             jail.set_env(variable_name, "environment");
 
-            let data = extract_data::<Config>("tedge.toml", &FileOnly).unwrap();
+            let data = extract_data::<Config, FileOnly>("tedge.toml").unwrap();
             assert_eq!(data.value, "config");
             Ok(())
         })

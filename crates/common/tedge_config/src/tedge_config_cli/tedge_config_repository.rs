@@ -96,7 +96,7 @@ impl<Sources: ConfigSources> TEdgeConfigRepository<Sources> {
     }
 
     fn read_file_or_default(&self, path: PathBuf) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let data: TEdgeConfigDto = super::figment::extract_data(path, &Sources::new())?;
+        let data: TEdgeConfigDto = super::figment::extract_data::<_, Sources>(path)?;
 
         self.make_tedge_config(data)
     }
