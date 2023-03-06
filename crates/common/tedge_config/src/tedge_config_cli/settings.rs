@@ -233,6 +233,34 @@ impl ConfigSetting for AwsRootCertPathSetting {
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct MqttClientHostSetting;
+
+impl ConfigSetting for MqttClientHostSetting {
+    const KEY: &'static str = "mqtt.client.host";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Mqtt broker address, which is used by the mqtt clients to publish or subscribe.",
+        "Example: 127.0.0.1"
+    );
+
+    type Value = String;
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct MqttClientPortSetting;
+
+impl ConfigSetting for MqttClientPortSetting {
+    const KEY: &'static str = "mqtt.client.port";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Mqtt broker port, which is used by the mqtt clients to publish or subscribe.",
+        "Example: 1883"
+    );
+
+    type Value = Port;
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct MqttPortSetting;
 
 impl ConfigSetting for MqttPortSetting {

@@ -9,8 +9,8 @@ use async_trait::async_trait;
 use clock::WallClock;
 use tedge_config::AzureMapperTimestamp;
 use tedge_config::ConfigSettingAccessor;
-use tedge_config::MqttBindAddressSetting;
-use tedge_config::MqttPortSetting;
+use tedge_config::MqttClientHostSetting;
+use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file::create_directory_with_user_group;
 use tracing::info;
@@ -52,8 +52,8 @@ impl TEdgeComponent for AzureMapper {
         config_dir: &Path,
     ) -> Result<(), anyhow::Error> {
         let add_timestamp = tedge_config.query(AzureMapperTimestamp)?.is_set();
-        let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
-        let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
+        let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
+        let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
         let clock = Box::new(WallClock);
         let size_threshold = SizeThreshold(255 * 1024);
 

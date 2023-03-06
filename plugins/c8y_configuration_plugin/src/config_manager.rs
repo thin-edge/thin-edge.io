@@ -65,6 +65,7 @@ pub enum ActiveOperationState {
 impl ConfigManager {
     pub async fn new(
         tedge_device_id: impl ToString,
+        mqtt_host: String,
         mqtt_port: u16,
         http_client: Arc<Mutex<dyn C8YHttpProxy>>,
         local_http_host: impl ToString,
@@ -76,7 +77,7 @@ impl ConfigManager {
         let plugin_config =
             PluginConfig::new(&config_file_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME));
 
-        let mqtt_client = Self::create_mqtt_client(mqtt_port).await?;
+        let mqtt_client = Self::create_mqtt_client(mqtt_host, mqtt_port).await?;
 
         let c8y_request_topics: TopicFilter = C8yTopic::SmartRestRequest.into();
         let health_check_topics = health_check_topics(DEFAULT_PLUGIN_CONFIG_TYPE);
@@ -203,7 +204,10 @@ impl ConfigManager {
         }
     }
 
-    async fn create_mqtt_client(mqtt_port: u16) -> Result<mqtt_channel::Connection, anyhow::Error> {
+    async fn create_mqtt_client(
+        mqtt_host: String,
+        mqtt_port: u16,
+    ) -> Result<mqtt_channel::Connection, anyhow::Error> {
         let mut topic_filter =
             mqtt_channel::TopicFilter::new_unchecked(&C8yTopic::SmartRestRequest.to_string());
         topic_filter.add_all(health_check_topics(DEFAULT_PLUGIN_CONFIG_TYPE));
@@ -213,6 +217,7 @@ impl ConfigManager {
 
         let mqtt_config = mqtt_channel::Config::default()
             .with_session_name(DEFAULT_PLUGIN_CONFIG_TYPE)
+            .with_host(mqtt_host)
             .with_port(mqtt_port)
             .with_subscriptions(topic_filter)
             .with_last_will_message(health_status_down_message(DEFAULT_PLUGIN_CONFIG_TYPE));

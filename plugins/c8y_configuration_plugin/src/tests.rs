@@ -56,6 +56,7 @@ async fn test_handle_config_upload_request_tedge_device() -> anyhow::Result<()> 
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,
+        "localhost".to_string(),
         broker.port,
         Arc::new(Mutex::new(c8y_http_client)),
         mockito::server_address().to_string(),
@@ -144,6 +145,7 @@ async fn test_handle_config_upload_request_child_device() -> anyhow::Result<()> 
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,
+        "localhost".to_string(),
         broker.port,
         Arc::new(Mutex::new(c8y_http_client)),
         mockito::server_address().to_string(),
@@ -215,6 +217,7 @@ async fn test_handle_config_upload_executing_response_child_device() -> anyhow::
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,
+        "localhost".to_string(),
         broker.port,
         Arc::new(Mutex::new(c8y_http_client)),
         mockito::server_address().to_string(),
@@ -282,6 +285,7 @@ async fn test_handle_config_upload_failed_response_child_device() -> anyhow::Res
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,
+        "localhost".to_string(),
         broker.port,
         Arc::new(Mutex::new(c8y_http_client)),
         mockito::server_address().to_string(),
@@ -339,6 +343,7 @@ async fn test_invalid_config_snapshot_response_child_device() -> anyhow::Result<
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,
+        "localhost".to_string(),
         broker.port,
         Arc::new(Mutex::new(c8y_http_client)),
         mockito::server_address().to_string(),
@@ -403,6 +408,7 @@ async fn test_no_config_snapshot_response_child_device() -> anyhow::Result<()> {
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,
+        "localhost".to_string(),
         broker.port,
         Arc::new(Mutex::new(c8y_http_client)),
         mockito::server_address().to_string(),
@@ -485,6 +491,7 @@ async fn test_handle_config_upload_successful_response_child_device() -> anyhow:
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,
+        "localhost".to_string(),
         broker.port,
         Arc::new(Mutex::new(c8y_http_client)),
         mockito::server_address().to_string(),
@@ -559,6 +566,7 @@ async fn test_child_config_upload_successful_response_mapped_to_failed_without_u
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,
+        "localhost".to_string(),
         broker.port,
         Arc::new(Mutex::new(c8y_http_client)),
         mockito::server_address().to_string(),
@@ -644,6 +652,7 @@ async fn test_handle_config_update_request_tedge_device() -> anyhow::Result<()> 
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,
+        "localhost".to_string(),
         broker.port,
         Arc::new(Mutex::new(c8y_http_client)),
         mockito::server_address().to_string(),
@@ -732,6 +741,7 @@ async fn test_handle_config_update_request_child_device() -> anyhow::Result<()> 
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,
+        "localhost".to_string(),
         broker.port,
         Arc::new(Mutex::new(c8y_http_client)),
         mockito::server_address().to_string(),
@@ -817,6 +827,7 @@ async fn test_c8y_config_download_child_device_fail_on_broken_url() -> anyhow::R
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,
+        "localhost".to_string(),
         broker.port,
         Arc::new(Mutex::new(c8y_http_client)),
         mockito::server_address().to_string(),
@@ -881,6 +892,7 @@ async fn test_handle_config_update_successful_response_child_device() -> anyhow:
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,
+        "localhost".to_string(),
         broker.port,
         Arc::new(Mutex::new(c8y_http_client)),
         mockito::server_address().to_string(),
@@ -938,6 +950,7 @@ async fn test_invalid_config_update_response_child_device() -> anyhow::Result<()
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,
+        "localhost".to_string(),
         broker.port,
         Arc::new(Mutex::new(c8y_http_client)),
         mockito::server_address().to_string(),
@@ -998,6 +1011,7 @@ async fn test_handle_multiline_config_upload_requests() -> anyhow::Result<()> {
 
     let mut config_manager = ConfigManager::new(
         tedge_device_id,
+        "localhost".to_string(),
         broker.port,
         Arc::new(Mutex::new(c8y_http_client)),
         mockito::server_address().to_string(),

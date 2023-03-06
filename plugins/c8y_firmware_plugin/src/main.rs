@@ -21,7 +21,8 @@ use tedge_config::DeviceIdSetting;
 use tedge_config::FirmwareChildUpdateTimeoutSetting;
 use tedge_config::HttpBindAddressSetting;
 use tedge_config::HttpPortSetting;
-use tedge_config::MqttPortSetting;
+use tedge_config::MqttClientHostSetting;
+use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::TmpPathSetting;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
@@ -95,7 +96,8 @@ async fn main() -> Result<(), FirmwareManagementError> {
     let tedge_config = config_repository.load()?;
 
     let tedge_device_id = tedge_config.query(DeviceIdSetting)?;
-    let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
+    let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
+    let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
 
     let http_client = create_http_client(&tedge_config).await?;
     let http_client = Box::new(http_client);
@@ -113,6 +115,7 @@ async fn main() -> Result<(), FirmwareManagementError> {
 
     let mut firmware_manager = FirmwareManager::new(
         tedge_device_id,
+        mqtt_host,
         mqtt_port,
         http_client,
         local_http_host,

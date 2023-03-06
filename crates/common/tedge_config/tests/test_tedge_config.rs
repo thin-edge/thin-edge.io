@@ -79,7 +79,7 @@ path = "/some/value"
 
     assert_eq!(
         config.query(MqttExternalBindAddressSetting)?,
-        IpAddress::try_from("0.0.0.0".to_string()).unwrap()
+        IpAddress::try_from("0.0.0.0").unwrap()
     );
 
     assert_eq!(
@@ -106,7 +106,7 @@ path = "/some/value"
 
     assert_eq!(
         config.query(MqttBindAddressSetting)?,
-        IpAddress::try_from("0.0.0.0".to_string()).unwrap()
+        IpAddress::try_from("0.0.0.0").unwrap()
     );
 
     Ok(())
@@ -323,7 +323,7 @@ fn test_parse_config_with_only_device_configuration() -> Result<(), TEdgeConfigE
     assert_eq!(config.query(MqttPortSetting)?, Port(1883));
     assert_eq!(
         config.query(MqttBindAddressSetting)?,
-        IpAddress::try_from("127.0.0.1".to_string()).unwrap()
+        IpAddress::try_from("127.0.0.1").unwrap()
     );
     Ok(())
 }
@@ -477,7 +477,7 @@ bind_address = "1.2.3.4"
     assert_eq!(config.query(MqttPortSetting)?, Port(2222));
     assert_eq!(
         config.query(MqttBindAddressSetting)?,
-        IpAddress::try_from("1.2.3.4".to_string()).unwrap()
+        IpAddress::try_from("1.2.3.4").unwrap()
     );
     Ok(())
 }
@@ -882,6 +882,7 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_logs_path: FilePath::from("/var/log"),
         default_run_path: FilePath::from("/run"),
         default_device_type: String::from("test"),
+        default_mqtt_client_host: "localhost".to_string(),
         default_mqtt_bind_address: IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST)),
         default_http_bind_address: IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST)),
         default_c8y_smartrest_templates: TemplatesSet::default(),

@@ -9,8 +9,8 @@ use async_trait::async_trait;
 use clock::WallClock;
 use tedge_config::AwsMapperTimestamp;
 use tedge_config::ConfigSettingAccessor;
-use tedge_config::MqttBindAddressSetting;
-use tedge_config::MqttPortSetting;
+use tedge_config::MqttClientHostSetting;
+use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
 use tracing::info;
 use tracing::info_span;
@@ -39,8 +39,8 @@ impl TEdgeComponent for AwsMapper {
         _config_dir: &Path,
     ) -> Result<(), anyhow::Error> {
         let add_timestamp = tedge_config.query(AwsMapperTimestamp)?.is_set();
-        let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
-        let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
+        let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
+        let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
         let clock = Box::new(WallClock);
         // Quotas at: https://docs.aws.amazon.com/general/latest/gr/iot-core.html#limits_iot
         let size_threshold = SizeThreshold(128 * 1024);

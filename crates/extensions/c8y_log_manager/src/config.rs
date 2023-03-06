@@ -14,8 +14,8 @@ use tedge_config::DeviceIdSetting;
 use tedge_config::HttpBindAddressSetting;
 use tedge_config::HttpPortSetting;
 use tedge_config::IpAddress;
-use tedge_config::MqttBindAddressSetting;
-use tedge_config::MqttPortSetting;
+use tedge_config::MqttClientHostSetting;
+use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
 use tedge_config::TmpPathSetting;
@@ -30,7 +30,7 @@ pub struct LogManagerConfig {
     pub config_dir: PathBuf,
     pub tmp_dir: PathBuf,
     pub device_id: String,
-    pub mqtt_host: IpAddress,
+    pub mqtt_host: String,
     pub mqtt_port: u16,
     pub c8y_url: ConnectUrl,
     pub tedge_http_host: IpAddress,
@@ -48,8 +48,8 @@ impl LogManagerConfig {
 
         let device_id = tedge_config.query(DeviceIdSetting)?;
         let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
-        let mqtt_host = tedge_config.query(MqttBindAddressSetting)?;
-        let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
+        let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
+        let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
 
         let c8y_url = tedge_config.query(C8yUrlSetting)?;
 

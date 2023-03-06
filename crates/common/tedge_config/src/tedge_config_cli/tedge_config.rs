@@ -4,6 +4,7 @@ use certificate::CertificateError;
 use certificate::PemCertificate;
 use std::convert::TryFrom;
 use std::convert::TryInto;
+use std::num::NonZeroU16;
 
 /// loads tedge config from system default
 pub fn get_tedge_config() -> Result<TEdgeConfig, TEdgeConfigError> {
@@ -360,6 +361,56 @@ impl ConfigSettingAccessor<C8yRootCertPathSetting> for TEdgeConfig {
 
     fn unset(&mut self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<()> {
         self.data.c8y.root_cert_path = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<MqttClientHostSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttClientHostSetting) -> ConfigSettingResult<String> {
+        Ok(self
+            .data
+            .mqtt
+            .client_host
+            .clone()
+            .unwrap_or(self.config_defaults.default_mqtt_client_host.clone()))
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttClientHostSetting,
+        value: String,
+    ) -> ConfigSettingResult<()> {
+        self.data.mqtt.client_host = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttClientHostSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.client_host = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<MqttClientPortSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttClientPortSetting) -> ConfigSettingResult<Port> {
+        Ok(self
+            .data
+            .mqtt
+            .client_port
+            .map(|p| Port(p.into()))
+            .unwrap_or_else(|| self.config_defaults.default_mqtt_port))
+    }
+
+    fn update(&mut self, _setting: MqttClientPortSetting, value: Port) -> ConfigSettingResult<()> {
+        let port: u16 = value.into();
+        let port: NonZeroU16 = port.try_into().map_err(|_| ConfigSettingError::Other {
+            msg: "Can't use 0 for a client port",
+        })?;
+        self.data.mqtt.client_port = Some(port);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttClientPortSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.client_port = None;
         Ok(())
     }
 }

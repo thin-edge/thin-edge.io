@@ -51,8 +51,8 @@ use tedge_config::ConfigSettingAccessorStringExt;
 use tedge_config::HttpBindAddressSetting;
 use tedge_config::HttpPortSetting;
 use tedge_config::LogPathSetting;
-use tedge_config::MqttBindAddressSetting;
-use tedge_config::MqttPortSetting;
+use tedge_config::MqttClientHostSetting;
+use tedge_config::MqttClientPortSetting;
 use tedge_config::RunPathSetting;
 use tedge_config::SoftwarePluginDefaultSetting;
 use tedge_config::TEdgeConfigLocation;
@@ -179,8 +179,8 @@ impl SmAgentConfig {
         let tedge_config = config_repository.load()?;
 
         let mqtt_config = mqtt_channel::Config::default()
-            .with_host(tedge_config.query(MqttBindAddressSetting)?.to_string())
-            .with_port(tedge_config.query(MqttPortSetting)?.into())
+            .with_host(tedge_config.query(MqttClientHostSetting)?)
+            .with_port(tedge_config.query(MqttClientPortSetting)?.into())
             .with_max_packet_size(10 * 1024 * 1024)
             .with_session_name(TEDGE_AGENT)
             .with_last_will_message(health_status_down_message(TEDGE_AGENT));

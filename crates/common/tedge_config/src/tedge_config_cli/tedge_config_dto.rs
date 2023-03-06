@@ -1,5 +1,7 @@
 //! Crate-private plain-old data-type used for serialization.
 
+use std::num::NonZeroU16;
+
 use crate::*;
 use serde::Deserialize;
 use serde::Serialize;
@@ -112,6 +114,17 @@ pub(crate) struct AwsConfigDto {
 #[serde(deny_unknown_fields)]
 pub(crate) struct MqttConfigDto {
     pub(crate) port: Option<u16>,
+
+    pub(crate) client_host: Option<String>,
+
+    // When connecting to a host, port 0 is invalid. When binding, however, port 0 is accepted and
+    // understood by the system to dynamically assign any free port to the process. The process then
+    // needs to take notice of what port it received, which I'm not sure if we're doing. If we don't
+    // want to allow binding to port 0, then we can also use `NonZeroU16` there as well, which
+    // because it can never be 0, can make the `Option` completely free, because Option can use 0x0000
+    // value for the `None` variant.
+    pub(crate) client_port: Option<NonZeroU16>,
+
     pub(crate) bind_address: Option<IpAddress>,
     pub(crate) external_port: Option<u16>,
     pub(crate) external_bind_address: Option<IpAddress>,

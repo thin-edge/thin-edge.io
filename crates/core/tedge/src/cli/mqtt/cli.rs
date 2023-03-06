@@ -43,11 +43,14 @@ pub enum TEdgeMqttCli {
 
 impl BuildCommand for TEdgeMqttCli {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
-        let port = context.config_repository.load()?.query(MqttPortSetting)?;
+        let port = context
+            .config_repository
+            .load()?
+            .query(MqttClientPortSetting)?;
         let host = context
             .config_repository
             .load()?
-            .query(MqttBindAddressSetting)?;
+            .query(MqttClientHostSetting)?;
         let cmd = {
             match self {
                 TEdgeMqttCli::Pub {
@@ -56,7 +59,7 @@ impl BuildCommand for TEdgeMqttCli {
                     qos,
                     retain,
                 } => MqttPublishCommand {
-                    host: host.to_string(),
+                    host,
                     port: port.into(),
                     topic,
                     message,
@@ -71,7 +74,7 @@ impl BuildCommand for TEdgeMqttCli {
                     qos,
                     hide_topic,
                 } => MqttSubscribeCommand {
-                    host: host.to_string(),
+                    host,
                     port: port.into(),
                     topic,
                     qos,

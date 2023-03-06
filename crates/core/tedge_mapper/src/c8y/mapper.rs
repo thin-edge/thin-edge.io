@@ -21,8 +21,8 @@ use tedge_api::topic::ResponseTopic;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::DeviceIdSetting;
 use tedge_config::DeviceTypeSetting;
-use tedge_config::MqttBindAddressSetting;
-use tedge_config::MqttPortSetting;
+use tedge_config::MqttClientHostSetting;
+use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file::*;
 use tracing::info;
@@ -80,8 +80,8 @@ impl TEdgeComponent for CumulocityMapper {
         http_proxy.init().await?;
         let device_name = tedge_config.query(DeviceIdSetting)?;
         let device_type = tedge_config.query(DeviceTypeSetting)?;
-        let mqtt_port = tedge_config.query(MqttPortSetting)?.into();
-        let mqtt_host = tedge_config.query(MqttBindAddressSetting)?.to_string();
+        let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
+        let mqtt_host = tedge_config.query(MqttClientHostSetting)?.to_string();
 
         let mapper_config = create_mapper_config(&operations);
 

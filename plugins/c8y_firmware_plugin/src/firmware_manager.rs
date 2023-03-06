@@ -66,8 +66,11 @@ pub struct FirmwareManager {
 }
 
 impl FirmwareManager {
+    // TODO: merge some of the function arguments
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         tedge_device_id: String,
+        mqtt_host: String,
         mqtt_port: u16,
         http_client: Box<dyn C8YHttpProxy>,
         local_http_host: String,
@@ -75,7 +78,7 @@ impl FirmwareManager {
         tmp_dir: PathBuf,
         timeout_sec: Duration,
     ) -> Result<Self, FirmwareManagementError> {
-        let mqtt_client = Self::create_mqtt_client(mqtt_port).await?;
+        let mqtt_client = Self::create_mqtt_client(mqtt_host, mqtt_port).await?;
 
         let c8y_request_topics = C8yTopic::SmartRestRequest.into();
         let health_check_topics = health_check_topics(PLUGIN_SERVICE_NAME);
@@ -426,13 +429,17 @@ impl FirmwareManager {
         Ok(())
     }
 
-    async fn create_mqtt_client(mqtt_port: u16) -> Result<Connection, MqttError> {
+    async fn create_mqtt_client(
+        mqtt_host: String,
+        mqtt_port: u16,
+    ) -> Result<Connection, MqttError> {
         let mut topic_filter = TopicFilter::new_unchecked(&C8yTopic::SmartRestRequest.to_string());
         topic_filter.add_all(health_check_topics(PLUGIN_SERVICE_NAME));
         topic_filter.add_all(TopicFilter::new_unchecked(FIRMWARE_UPDATE_RESPONSE_TOPICS));
 
         let mqtt_config = mqtt_channel::Config::default()
             .with_session_name(PLUGIN_SERVICE_NAME)
+            .with_host(mqtt_host)
             .with_port(mqtt_port)
             .with_subscriptions(topic_filter)
             .with_last_will_message(health_status_down_message(PLUGIN_SERVICE_NAME));

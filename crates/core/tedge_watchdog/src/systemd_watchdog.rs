@@ -20,8 +20,8 @@ use tedge_api::health::health_status_down_message;
 use tedge_api::health::send_health_status;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
-use tedge_config::MqttBindAddressSetting;
-use tedge_config::MqttPortSetting;
+use tedge_config::MqttClientHostSetting;
+use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfigLocation;
 use time::OffsetDateTime;
 use tracing::debug;
@@ -204,8 +204,8 @@ fn get_mqtt_config(
     let tedge_config = config_repository.load()?;
     let mqtt_config = Config::default()
         .with_session_name(client_id)
-        .with_host(tedge_config.query(MqttBindAddressSetting)?.to_string())
-        .with_port(tedge_config.query(MqttPortSetting)?.into());
+        .with_host(tedge_config.query(MqttClientHostSetting)?)
+        .with_port(tedge_config.query(MqttClientPortSetting)?.into());
     Ok(mqtt_config)
 }
 
