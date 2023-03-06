@@ -93,7 +93,6 @@ pub(crate) struct AzureConfigDto {
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
 pub(crate) struct AwsConfigDto {
     pub(crate) connect: Option<String>,
     pub(crate) url: Option<ConnectUrl>,
@@ -102,7 +101,6 @@ pub(crate) struct AwsConfigDto {
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
 pub(crate) struct MqttConfigDto {
     pub(crate) port: Option<u16>,
     pub(crate) bind_address: Option<IpAddress>,
