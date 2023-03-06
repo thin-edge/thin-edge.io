@@ -4,7 +4,7 @@ use tedge_config::*;
 
 pub struct UnsetConfigCommand {
     pub config_key: ConfigKey,
-    pub config_repository: ReadWriteTEdgeConfigRepository,
+    pub config_repository: TEdgeConfigRepository,
 }
 
 impl Command for UnsetConfigCommand {
@@ -16,9 +16,7 @@ impl Command for UnsetConfigCommand {
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        let mut config = self.config_repository.load()?;
-        (self.config_key.unset)(&mut config)?;
-        self.config_repository.store(&config)?;
+        self.config_repository.update_toml(&self.config_key.unset)?;
         Ok(())
     }
 }

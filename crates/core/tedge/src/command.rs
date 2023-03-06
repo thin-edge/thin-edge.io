@@ -146,6 +146,6 @@ pub trait BuildCommand {
 /// The context for `BuildCommand`
 ///
 pub struct BuildContext {
-    pub config_repository: tedge_config::ReadOnlyTEdgeConfigRepository,
+    pub config_repository: tedge_config::TEdgeConfigRepository,
     pub config_location: tedge_config::TEdgeConfigLocation,
 }

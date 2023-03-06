@@ -140,8 +140,7 @@ bind_address = "0.0.0.0"
         ..dummy_tedge_config_defaults()
     };
 
-    let config_repo = TEdgeConfigRepository::new_with_defaults(config_location, config_defaults)
-        .skip_environment_variables();
+    let config_repo = TEdgeConfigRepository::new_with_defaults(config_location, config_defaults);
 
     let updated_c8y_url = "other-tenant.cumulocity.com";
     let updated_azure_url = "OtherAzure.azure-devices.net";
@@ -154,8 +153,7 @@ bind_address = "0.0.0.0"
     let updated_mqtt_external_keyfile = "key.pem";
     let updated_mqtt_bind_address = IpAddress(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST));
 
-    {
-        let mut config = config_repo.load()?;
+    config_repo.update_toml(&|config| {
         assert!(config.query_optional(DeviceIdSetting).is_err());
         assert_eq!(
             config.query(DeviceKeyPathSetting)?,
@@ -187,9 +185,15 @@ bind_address = "0.0.0.0"
 
         assert_eq!(config.query(MqttPortSetting)?, Port(1883));
 
-        config.update(C8yUrlSetting, ConnectUrl::try_from(updated_c8y_url)?)?;
+        config.update(
+            C8yUrlSetting,
+            ConnectUrl::try_from(updated_c8y_url).unwrap(),
+        )?;
         config.unset(C8yRootCertPathSetting)?;
-        config.update(AzureUrlSetting, ConnectUrl::try_from(updated_azure_url)?)?;
+        config.update(
+            AzureUrlSetting,
+            ConnectUrl::try_from(updated_azure_url).unwrap(),
+        )?;
         config.unset(AzureRootCertPathSetting)?;
         config.unset(AzureMapperTimestamp)?;
         config.update(MqttPortSetting, updated_mqtt_port)?;
@@ -216,8 +220,8 @@ bind_address = "0.0.0.0"
             FilePath::from(updated_mqtt_external_keyfile),
         )?;
         config.update(MqttBindAddressSetting, updated_mqtt_bind_address.clone())?;
-        config_repo.store(&config)?;
-    }
+        Ok(())
+    })?;
 
     {
         let config = config_repo.load()?;
@@ -521,13 +525,10 @@ fn set_az_keys_from_old_version_config() -> Result<(), TEdgeConfigError> {
         default_azure_root_cert_path: FilePath::from("default_azure_root_cert_path"),
         ..dummy_tedge_config_defaults()
     };
-    let config_repo = TEdgeConfigRepository::new_with_defaults(config_location, config_defaults)
-        .skip_environment_variables();
+    let config_repo = TEdgeConfigRepository::new_with_defaults(config_location, config_defaults);
     let updated_azure_url = "OtherAzure.azure-devices.net";
 
-    {
-        let mut config = config_repo.load()?;
-
+    config_repo.update_toml(&|config| {
         assert!(config.query_optional(AzureUrlSetting)?.is_none());
         assert_eq!(
             config.query(AzureRootCertPathSetting)?,
@@ -535,11 +536,15 @@ fn set_az_keys_from_old_version_config() -> Result<(), TEdgeConfigError> {
         );
         assert_eq!(config.query(AzureMapperTimestamp)?, Flag(true));
 
-        config.update(AzureUrlSetting, ConnectUrl::try_from(updated_azure_url)?)?;
+        config.update(
+            AzureUrlSetting,
+            ConnectUrl::try_from(updated_azure_url).unwrap(),
+        )?;
         config.unset(AzureRootCertPathSetting)?;
         config.unset(AzureMapperTimestamp)?;
-        config_repo.store(&config)?;
-    }
+
+        Ok(())
+    })?;
 
     {
         let config = config_repo.load()?;

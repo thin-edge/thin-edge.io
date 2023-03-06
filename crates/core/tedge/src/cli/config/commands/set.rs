@@ -5,7 +5,7 @@ use tedge_config::*;
 pub struct SetConfigCommand {
     pub config_key: ConfigKey,
     pub value: String,
-    pub config_repository: ReadWriteTEdgeConfigRepository,
+    pub config_repository: TEdgeConfigRepository,
 }
 
 impl Command for SetConfigCommand {
@@ -17,9 +17,8 @@ impl Command for SetConfigCommand {
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        let mut config = self.config_repository.load()?;
-        (self.config_key.set)(&mut config, self.value.to_string())?;
-        self.config_repository.store(&config)?;
+        self.config_repository
+            .update_toml(&|config| (self.config_key.set)(config, self.value.to_string()))?;
         Ok(())
     }
 }
