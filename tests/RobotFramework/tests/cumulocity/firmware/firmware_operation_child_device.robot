@@ -3,10 +3,7 @@ Resource    ../../../resources/common.resource
 Library    Cumulocity
 Library    ThinEdgeIO
 Library    JSONLibrary
-Library    DebugLibrary
-Library    ../../../.venv/lib/python3.9/site-packages/robot/libraries/String.py
-Library    ../../../.venv/lib/python3.9/site-packages/robot/libraries/OperatingSystem.py
-Library    ../../../.venv/lib/python3.9/site-packages/robot/libraries/DateTime.py
+Library    String
 
 Suite Setup    Custom Setup
 Test Teardown    Get Logs
@@ -94,11 +91,14 @@ Child device delete firmware file
     Execute Command    sudo rm -f firmware1
 
 Create child device
-    [Documentation]    FIXME: Due to the initialization bug, child device not being registered, we need to restart mapper. See the bug report XXX
+    [Documentation]    FIXME: Without the first sleep after "Set Device Context", the device didn't get created.
+    ...    The second sleep ensures that first 101 (creating child device object) is sent, then next 114 (declaring supported operation).
+    ...    If the order is opposite, the child device name will start with "MQTT Device".
     Set Device Context    ${PARENT_SN}
+    Sleep    3s
     Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_SN}
+    Sleep    3s
     ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y_Firmware    /etc/tedge/operations/c8y/${CHILD_SN}/
-    ThinEdgeIO.Restart Service    tedge-mapper-c8y
     Cumulocity.Device Should Exist    ${CHILD_SN}
 
 Validate child Name
