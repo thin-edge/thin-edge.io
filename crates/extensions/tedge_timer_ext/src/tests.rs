@@ -6,6 +6,7 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::Message;
 use tedge_actors::NoConfig;
+use tedge_actors::ReceiveMessages;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;

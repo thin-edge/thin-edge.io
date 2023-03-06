@@ -270,6 +270,8 @@ async fn run_task(
 mod tests {
     use super::*;
     use crate::fan_in_message_type;
+    use crate::message_boxes::ReceiveMessages;
+    use crate::CombinedReceiver;
     use crate::Message;
     use crate::SimpleMessageBox;
     use async_trait::async_trait;
@@ -290,8 +292,6 @@ mod tests {
         }
 
         async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
-            // FIXME: If the channel we use to send messages is dropped then we will get an ChannelError::SendError
-            // FIXME: but I don't think we shouldn't return this error if the message box has a shutdown message for us
             while let Some(message) = messages.recv().await {
                 match message {
                     EchoMessage::String(message) => {
@@ -346,14 +346,10 @@ mod tests {
         let (input_sender, input_receiver) = mpsc::channel(16);
         let (_, signal_receiver) = mpsc::channel(16);
         let (output_sender, output_receiver) = mpsc::channel(16);
+        let receiver = CombinedReceiver::new(input_receiver, signal_receiver);
         let actor = RunActor::new(
             actor,
-            SimpleMessageBox::new(
-                "actor".into(),
-                input_receiver,
-                signal_receiver,
-                Box::new(output_sender),
-            ),
+            SimpleMessageBox::new("actor".into(), receiver, Box::new(output_sender)),
             Box::new(input_sender.clone()),
         );
 

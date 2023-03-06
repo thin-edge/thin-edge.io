@@ -17,6 +17,7 @@ pub use config::*;
 use std::path::PathBuf;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
+use tedge_actors::CombinedReceiver;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::MessageSink;
@@ -37,29 +38,28 @@ use self::child_device::ChildConfigOperationKey;
 /// This is an actor builder.
 pub struct ConfigManagerBuilder {
     config: ConfigManagerConfig,
-    events_receiver: mpsc::Receiver<ConfigInput>,
+    receiver: CombinedReceiver<ConfigInput>,
     events_sender: mpsc::Sender<ConfigInput>,
     mqtt_publisher: Option<DynSender<MqttMessage>>,
     c8y_http_proxy: Option<C8YHttpProxy>,
     timer_sender: Option<DynSender<SetTimeout<ChildConfigOperationKey>>>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
-    signal_receiver: mpsc::Receiver<RuntimeRequest>,
 }
 
 impl ConfigManagerBuilder {
     pub fn new(config: ConfigManagerConfig) -> ConfigManagerBuilder {
         let (events_sender, events_receiver) = mpsc::channel(10);
         let (signal_sender, signal_receiver) = mpsc::channel(10);
+        let receiver = CombinedReceiver::new(events_receiver, signal_receiver);
 
         ConfigManagerBuilder {
             config,
-            events_receiver,
+            receiver,
             events_sender,
             mqtt_publisher: None,
             c8y_http_proxy: None,
             timer_sender: None,
             signal_sender,
-            signal_receiver,
         }
     }
 
@@ -166,11 +166,10 @@ impl Builder<(ConfigManagerActor, ConfigManagerMessageBox)> for ConfigManagerBui
         })?;
 
         let peers = ConfigManagerMessageBox::new(
-            self.events_receiver,
+            self.receiver,
             mqtt_publisher,
             c8y_http_proxy,
             timer_sender,
-            self.signal_receiver,
         );
 
         let actor = ConfigManagerActor::new(self.config);

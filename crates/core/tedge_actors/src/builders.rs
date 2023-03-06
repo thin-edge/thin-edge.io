@@ -30,6 +30,7 @@
 //!
 use crate::mpsc;
 use crate::ClientId;
+use crate::CombinedReceiver;
 use crate::ConcurrentServerMessageBox;
 use crate::DynSender;
 use crate::KeyedSender;
@@ -158,10 +159,9 @@ impl<T, Req, Res, Config> ServiceProvider<Req, Res, Config> for T where
 pub struct SimpleMessageBoxBuilder<I, O> {
     name: String,
     input_sender: mpsc::Sender<I>,
-    input_receiver: mpsc::Receiver<I>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
-    signal_receiver: mpsc::Receiver<RuntimeRequest>,
     output_sender: DynSender<O>,
+    input_receiver: CombinedReceiver<I>,
 }
 
 impl<I: Message, O: Message> SimpleMessageBoxBuilder<I, O> {
@@ -169,14 +169,14 @@ impl<I: Message, O: Message> SimpleMessageBoxBuilder<I, O> {
         let (input_sender, input_receiver) = mpsc::channel(capacity);
         let (signal_sender, signal_receiver) = mpsc::channel(4);
         let output_sender = NullSender.into();
+        let input_receiver = CombinedReceiver::new(input_receiver, signal_receiver);
 
         SimpleMessageBoxBuilder {
             name: name.to_string(),
             input_sender,
-            input_receiver,
             signal_sender,
-            signal_receiver,
             output_sender,
+            input_receiver,
         }
     }
 }
@@ -218,12 +218,7 @@ impl<Req: Message, Res: Message> Builder<SimpleMessageBox<Req, Res>>
     }
 
     fn build(self) -> SimpleMessageBox<Req, Res> {
-        SimpleMessageBox::new(
-            self.name,
-            self.input_receiver,
-            self.signal_receiver,
-            self.output_sender,
-        )
+        SimpleMessageBox::new(self.name, self.input_receiver, self.output_sender)
     }
 }
 
@@ -232,9 +227,8 @@ pub struct ServerMessageBoxBuilder<Request, Response> {
     service_name: String,
     max_concurrency: usize,
     request_sender: mpsc::Sender<(ClientId, Request)>,
-    request_receiver: mpsc::Receiver<(ClientId, Request)>,
+    input_receiver: CombinedReceiver<(ClientId, Request)>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
-    signal_receiver: mpsc::Receiver<RuntimeRequest>,
     clients: Vec<DynSender<Response>>,
 }
 
@@ -244,13 +238,14 @@ impl<Request: Message, Response: Message> ServerMessageBoxBuilder<Request, Respo
         let max_concurrency = 1;
         let (request_sender, request_receiver) = mpsc::channel(capacity);
         let (signal_sender, signal_receiver) = mpsc::channel(4);
+        let input_receiver = CombinedReceiver::new(request_receiver, signal_receiver);
+
         ServerMessageBoxBuilder {
             service_name: service_name.to_string(),
             max_concurrency,
             request_sender,
-            request_receiver,
+            input_receiver,
             signal_sender,
-            signal_receiver,
             clients: vec![],
         }
     }
@@ -264,16 +259,9 @@ impl<Request: Message, Response: Message> ServerMessageBoxBuilder<Request, Respo
 
     /// Build a message box ready to be used by the service actor
     fn build_service(self) -> ServerMessageBox<Request, Response> {
-        let request_receiver = self.request_receiver;
-        let signal_receiver = self.signal_receiver;
         let response_sender = SenderVec::new_sender(self.clients);
 
-        SimpleMessageBox::new(
-            self.service_name,
-            request_receiver,
-            signal_receiver,
-            response_sender,
-        )
+        SimpleMessageBox::new(self.service_name, self.input_receiver, response_sender)
     }
 
     /// Build a message box aimed to concurrently serve requests

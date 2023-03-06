@@ -12,7 +12,7 @@
 //! - output messages produced by the actor.
 //!
 //! ```
-//! # use crate::tedge_actors::{Actor, RuntimeError, MessageBox, RuntimeRequest, SimpleMessageBox};
+//! # use crate::tedge_actors::{Actor, RuntimeError, MessageBox, ReceiveMessages, RuntimeRequest, SimpleMessageBox};
 //! # use async_trait::async_trait;
 //! #
 //! /// State of the calculator actor
@@ -84,7 +84,7 @@
 //! - receive output messages sent by the actor.
 //!
 //! ```
-//! # use crate::tedge_actors::{Actor, ChannelError, MessageBox, SimpleMessageBox};
+//! # use crate::tedge_actors::{Actor, ChannelError, MessageBox, ReceiveMessages, SimpleMessageBox};
 //! # use crate::tedge_actors::examples::calculator::*;
 //! #
 //! # #[tokio::main]
@@ -171,7 +171,7 @@
 //! This actor can then be tested using a test box connected to the actor box.
 //!
 //! ```
-//! # use tedge_actors::{Actor, MessageBox, ServerActor, SimpleMessageBox};
+//! # use tedge_actors::{Actor, MessageBox, ReceiveMessages, ServerActor, SimpleMessageBox};
 //! # use crate::tedge_actors::examples::calculator::*;
 //! #
 //! # #[tokio::main]
@@ -216,7 +216,7 @@
 //!
 //! ```
 //! # use async_trait::async_trait;
-//! # use tedge_actors::{Actor, RuntimeError, MessageBox, ClientMessageBox, ServerActor, SimpleMessageBox};
+//! # use tedge_actors::{Actor, RuntimeError, MessageBox, ClientMessageBox, ReceiveMessages, ServerActor, SimpleMessageBox};
 //! # use crate::tedge_actors::examples::calculator::*;
 //!
 //! /// An actor that send operations to a calculator service to reach a given target.
@@ -259,7 +259,7 @@
 //! to establish appropriate connections between the actor message boxes.
 //!
 //! ```
-//! # use tedge_actors::{Actor, Builder, ChannelError, MessageBox, ServiceConsumer, NoConfig, ServerActor, ServerMessageBox, ServerMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder};
+//! # use tedge_actors::{Actor, Builder, ChannelError, MessageBox, ServiceConsumer, NoConfig, ReceiveMessages, ServerActor, ServerMessageBox, ServerMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder};
 //! # use crate::tedge_actors::examples::calculator::*;
 //! # #[tokio::main]
 //! # async fn main_test() -> Result<(),ChannelError> {

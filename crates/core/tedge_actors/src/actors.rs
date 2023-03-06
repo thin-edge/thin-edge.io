@@ -1,3 +1,4 @@
+use crate::message_boxes::ReceiveMessages;
 use crate::ConcurrentServerMessageBox;
 use crate::Message;
 use crate::MessageBox;
@@ -128,8 +129,6 @@ pub mod tests {
         }
 
         async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
-            // FIXME: If I add the RuntimeRequests here and if the channel we use to send messages is dropped then we will get an ChannelError::SendError
-            // FIXME: but I don't think we shouldn't return this error if the message box has a shutdown message for us
             while let Some(message) = messages.recv().await {
                 messages.send(message).await?
             }

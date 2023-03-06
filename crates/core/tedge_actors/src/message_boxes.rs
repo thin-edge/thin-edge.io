@@ -98,6 +98,7 @@ use crate::RuntimeRequest;
 use crate::ServiceConsumer;
 use crate::ServiceProvider;
 use crate::SimpleMessageBoxBuilder;
+use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::StreamExt;
 use log::debug;
@@ -142,11 +143,32 @@ pub trait MessageBox: 'static + Sized + Send + Sync {
     fn logging_is_on(&self) -> bool;
 }
 
+/// Either a message or a [RuntimeRequest]
+pub enum WrappedInput<Input> {
+    Message(Input),
+    RuntimeRequest(RuntimeRequest),
+}
+
+#[async_trait]
+pub trait ReceiveMessages<Input> {
+    /// Return the next received message if any, returning [RuntimeRequest]'s as errors.
+    /// Returning [RuntimeRequest] takes priority over messages.
+    async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest>;
+
+    /// Returns [Some] [WrappedInput] the next time a message is received. Returns [None] if
+    /// the underlying channels are closed. Returning [RuntimeRequest] takes priority over messages.
+    async fn recv_message(&mut self) -> Option<WrappedInput<Input>>;
+
+    /// Returns [Some] message the next time a message is received. Returns [None] if
+    /// both of the underlying channels are closed or if a [RuntimeRequest] is received.
+    /// Handling [RuntimeRequest]'s by returning [None] takes priority over messages.
+    async fn recv(&mut self) -> Option<Input>;
+}
+
 /// The basic message box
 pub struct SimpleMessageBox<Input, Output> {
     name: String,
-    input_receiver: mpsc::Receiver<Input>,
-    signal_receiver: mpsc::Receiver<RuntimeRequest>,
+    input_receiver: CombinedReceiver<Input>,
     output_sender: DynSender<Output>,
     logging_is_on: bool,
 }
@@ -154,31 +176,14 @@ pub struct SimpleMessageBox<Input, Output> {
 impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
     pub fn new(
         name: String,
-        input_receiver: mpsc::Receiver<Input>,
-        signal_receiver: mpsc::Receiver<RuntimeRequest>,
+        input_receiver: CombinedReceiver<Input>,
         output_sender: DynSender<Output>,
     ) -> Self {
         SimpleMessageBox {
             name,
             input_receiver,
-            signal_receiver,
             output_sender,
             logging_is_on: true,
-        }
-    }
-
-    pub async fn recv(&mut self) -> Option<Input> {
-        tokio::select! {
-            Some(message) = self.input_receiver.next() => {
-                self.log_input(&message);
-                Some(message)
-            }
-            Some(RuntimeRequest::Shutdown) = self.signal_receiver.next() => {
-                self.log_input(&RuntimeRequest::Shutdown);
-                // FIXME: not None
-                None
-            }
-            else => None
         }
     }
 
@@ -206,6 +211,73 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
     /// This makes the receiving end aware that no more message will be sent.
     pub fn close_output(&mut self) {
         self.output_sender.close_sender()
+    }
+}
+
+#[async_trait]
+impl<Input: Message, Output: Message> ReceiveMessages<Input> for SimpleMessageBox<Input, Output> {
+    async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
+        self.input_receiver.try_recv().await
+    }
+
+    async fn recv_message(&mut self) -> Option<WrappedInput<Input>> {
+        self.input_receiver.recv_message().await
+    }
+
+    async fn recv(&mut self) -> Option<Input> {
+        self.input_receiver.recv().await.map(|message| {
+            self.log_input(&message);
+            message
+        })
+    }
+}
+
+pub struct CombinedReceiver<Input> {
+    input_receiver: mpsc::Receiver<Input>,
+    signal_receiver: mpsc::Receiver<RuntimeRequest>,
+}
+
+impl<Input> CombinedReceiver<Input> {
+    pub fn new(
+        input_receiver: mpsc::Receiver<Input>,
+        signal_receiver: mpsc::Receiver<RuntimeRequest>,
+    ) -> Self {
+        Self {
+            input_receiver,
+            signal_receiver,
+        }
+    }
+}
+
+#[async_trait]
+impl<Input: Send> ReceiveMessages<Input> for CombinedReceiver<Input> {
+    async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
+        match self.recv_message().await {
+            Some(WrappedInput::Message(message)) => Ok(Some(message)),
+            Some(WrappedInput::RuntimeRequest(runtime_request)) => Err(runtime_request),
+            None => Ok(None),
+        }
+    }
+
+    async fn recv_message(&mut self) -> Option<WrappedInput<Input>> {
+        tokio::select! {
+            biased;
+
+            Some(runtime_request) = self.signal_receiver.next() => {
+                Some(WrappedInput::RuntimeRequest(runtime_request))
+            }
+            Some(message) = self.input_receiver.next() => {
+                Some(WrappedInput::Message(message))
+            }
+            else => None
+        }
+    }
+
+    async fn recv(&mut self) -> Option<Input> {
+        match self.recv_message().await {
+            Some(WrappedInput::Message(message)) => Some(message),
+            _ => None,
+        }
     }
 }
 

@@ -19,14 +19,15 @@ use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use log::error;
 use tedge_actors::fan_in_message_type;
-use tedge_actors::futures::channel::mpsc;
-use tedge_actors::futures::StreamExt;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
+use tedge_actors::CombinedReceiver;
 use tedge_actors::DynSender;
 use tedge_actors::MessageBox;
+use tedge_actors::ReceiveMessages;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
+use tedge_actors::WrappedInput;
 use tedge_api::health::get_health_status_message;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
@@ -38,7 +39,7 @@ use tedge_utils::paths::PathsError;
 pub type OperationTimer = SetTimeout<ChildConfigOperationKey>;
 pub type OperationTimeout = Timeout<ChildConfigOperationKey>;
 
-fan_in_message_type!(ConfigInput[MqttMessage, FsWatchEvent, OperationTimeout, RuntimeRequest] : Debug);
+fan_in_message_type!(ConfigInput[MqttMessage, FsWatchEvent, OperationTimeout] : Debug);
 fan_in_message_type!(ConfigOutput[MqttMessage, OperationTimer] : Debug);
 
 pub struct ConfigManagerActor {
@@ -377,49 +378,32 @@ impl Actor for ConfigManagerActor {
                     self.process_operation_timeout(timeout, &mut messages)
                         .await?;
                 }
-                ConfigInput::RuntimeRequest(RuntimeRequest::Shutdown) => break,
             }
         }
+
         Ok(())
     }
 }
 
 pub struct ConfigManagerMessageBox {
-    pub input_receiver: mpsc::Receiver<ConfigInput>,
+    input_receiver: CombinedReceiver<ConfigInput>,
     pub mqtt_publisher: DynSender<MqttMessage>,
     pub c8y_http_proxy: C8YHttpProxy,
     timer_sender: DynSender<SetTimeout<ChildConfigOperationKey>>,
-    signal_receiver: mpsc::Receiver<RuntimeRequest>,
 }
 
 impl ConfigManagerMessageBox {
     pub fn new(
-        events: mpsc::Receiver<ConfigInput>,
+        input_receiver: CombinedReceiver<ConfigInput>,
         mqtt_publisher: DynSender<MqttMessage>,
         c8y_http_proxy: C8YHttpProxy,
         timer_sender: DynSender<SetTimeout<ChildConfigOperationKey>>,
-        signal_receiver: mpsc::Receiver<RuntimeRequest>,
     ) -> ConfigManagerMessageBox {
         ConfigManagerMessageBox {
-            input_receiver: events,
+            input_receiver,
             mqtt_publisher,
             c8y_http_proxy,
             timer_sender,
-            signal_receiver,
-        }
-    }
-
-    pub async fn recv(&mut self) -> Option<ConfigInput> {
-        tokio::select! {
-            Some(event) = self.input_receiver.next() => {
-                self.log_input(&event);
-                Some(event)
-            }
-            Some(runtime_request) = self.signal_receiver.next() => {
-                self.log_input(&runtime_request);
-                Some(ConfigInput::RuntimeRequest(runtime_request))
-            }
-            else => None
         }
     }
 
@@ -428,6 +412,24 @@ impl ConfigManagerMessageBox {
             ConfigOutput::MqttMessage(message) => self.mqtt_publisher.send(message).await,
             ConfigOutput::OperationTimer(message) => self.timer_sender.send(message).await,
         }
+    }
+}
+
+#[async_trait]
+impl ReceiveMessages<ConfigInput> for ConfigManagerMessageBox {
+    async fn try_recv(&mut self) -> Result<Option<ConfigInput>, RuntimeRequest> {
+        self.input_receiver.try_recv().await
+    }
+
+    async fn recv_message(&mut self) -> Option<WrappedInput<ConfigInput>> {
+        self.input_receiver.recv_message().await
+    }
+
+    async fn recv(&mut self) -> Option<ConfigInput> {
+        self.input_receiver.recv().await.map(|message| {
+            self.log_input(&message);
+            message
+        })
     }
 }
 
