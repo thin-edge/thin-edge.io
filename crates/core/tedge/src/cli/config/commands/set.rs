@@ -5,7 +5,7 @@ use tedge_config::*;
 pub struct SetConfigCommand {
     pub config_key: ConfigKey,
     pub value: String,
-    pub config_repository: TEdgeConfigRepository,
+    pub config_repository: ReadWriteTEdgeConfigRepository,
 }
 
 impl Command for SetConfigCommand {

@@ -4,7 +4,7 @@ use tedge_config::*;
 
 pub struct UnsetConfigCommand {
     pub config_key: ConfigKey,
-    pub config_repository: TEdgeConfigRepository,
+    pub config_repository: ReadWriteTEdgeConfigRepository,
 }
 
 impl Command for UnsetConfigCommand {

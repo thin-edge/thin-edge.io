@@ -53,12 +53,12 @@ impl BuildCommand for ConfigCmd {
             ConfigCmd::Set { key, value } => Ok(SetConfigCommand {
                 config_key: key,
                 value,
-                config_repository,
+                config_repository: config_repository.skip_environment_variables(),
             }
             .into_boxed()),
             ConfigCmd::Unset { key } => Ok(UnsetConfigCommand {
                 config_key: key,
-                config_repository,
+                config_repository: config_repository.skip_environment_variables(),
             }
             .into_boxed()),
             ConfigCmd::List { is_all, is_doc } => Ok(ListConfigCommand {

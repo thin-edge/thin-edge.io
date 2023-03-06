@@ -140,7 +140,8 @@ bind_address = "0.0.0.0"
         ..dummy_tedge_config_defaults()
     };
 
-    let config_repo = TEdgeConfigRepository::new_with_defaults(config_location, config_defaults);
+    let config_repo = TEdgeConfigRepository::new_with_defaults(config_location, config_defaults)
+        .skip_environment_variables();
 
     let updated_c8y_url = "other-tenant.cumulocity.com";
     let updated_azure_url = "OtherAzure.azure-devices.net";
@@ -520,7 +521,8 @@ fn set_az_keys_from_old_version_config() -> Result<(), TEdgeConfigError> {
         default_azure_root_cert_path: FilePath::from("default_azure_root_cert_path"),
         ..dummy_tedge_config_defaults()
     };
-    let config_repo = TEdgeConfigRepository::new_with_defaults(config_location, config_defaults);
+    let config_repo = TEdgeConfigRepository::new_with_defaults(config_location, config_defaults)
+        .skip_environment_variables();
     let updated_azure_url = "OtherAzure.azure-devices.net";
 
     {

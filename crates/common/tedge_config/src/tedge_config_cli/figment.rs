@@ -11,10 +11,57 @@ use serde::de::DeserializeOwned;
 
 use crate::TEdgeConfigError;
 
+pub trait ConfigSources {
+    fn include_enviroment(&self) -> bool;
+    fn new() -> Self
+    where
+        Self: Sized;
+}
+
+#[derive(Clone, Debug)]
+pub struct FileAndEnvironment;
+#[derive(Clone, Debug)]
+pub struct FileOnly;
+
+impl ConfigSources for FileAndEnvironment {
+    fn include_enviroment(&self) -> bool {
+        true
+    }
+
+    fn new() -> Self
+    where
+        Self: Sized,
+    {
+        Self
+    }
+}
+
+impl ConfigSources for FileOnly {
+    fn include_enviroment(&self) -> bool {
+        false
+    }
+
+    fn new() -> Self
+    where
+        Self: Sized,
+    {
+        Self
+    }
+}
+
 /// Extract the configuration data from the provided TOML path and `TEDGE_` prefixed environment variables
-pub fn extract_data<T: DeserializeOwned>(path: impl AsRef<Path>) -> Result<T, TEdgeConfigError> {
+pub fn extract_data<T: DeserializeOwned>(
+    path: impl AsRef<Path>,
+    sources: &dyn ConfigSources,
+) -> Result<T, TEdgeConfigError> {
     let env = TEdgeEnv::default();
-    let figment = Figment::new().merge(Toml::file(path)).merge(env.provider());
+    let figment = Figment::new().merge(Toml::file(path));
+
+    let figment = if sources.include_enviroment() {
+        figment.merge(env.provider())
+    } else {
+        figment
+    };
 
     let data = extract_exact(&figment, &env);
 
@@ -34,13 +81,9 @@ fn unused_value_warnings<T: DeserializeOwned>(
 ) -> Result<Vec<String>, TEdgeConfigError> {
     let mut warnings = Vec::new();
 
-    let value = extract_exact::<toml::Value>(figment, env)?;
+    let de = extract_exact::<figment::value::Value>(figment, env)?;
 
-    // Serializing and deserializing again is the only way I could find to use serde_ignored
-    let ser = toml::to_string(&value).map_err(TEdgeConfigError::FromInvalidTOML)?;
-    let de = &mut toml::de::Deserializer::new(&ser);
-
-    let _: T = serde_ignored::deserialize(de, |path| {
+    let _: T = serde_ignored::deserialize(&de, |path| {
         let serde_path = path.to_string();
 
         let source = figment
@@ -55,7 +98,7 @@ fn unused_value_warnings<T: DeserializeOwned>(
             warnings.push(format!("Unknown configuration field {serde_path:?}"));
         }
     })
-    .map_err(TEdgeConfigError::FromTOMLParse)?;
+    .map_err(TEdgeConfigError::Figment)?;
 
     Ok(warnings)
 }
@@ -187,7 +230,7 @@ mod tests {
             jail.set_env("TEDGE_C8Y__URL", "override.c8y.io");
 
             assert_eq!(
-                extract_data::<Config>(&PathBuf::from("tedge.toml"))
+                extract_data::<Config>(&PathBuf::from("tedge.toml"), &FileAndEnvironment)
                     .unwrap()
                     .c8y
                     .url,
@@ -255,8 +298,27 @@ mod tests {
             let variable_name = "TEDGE_VALUE";
             jail.set_env(variable_name, "123");
 
-            let errors = extract_data::<Config>("tedge.toml").unwrap_err();
+            let errors = extract_data::<Config>("tedge.toml", &FileAndEnvironment).unwrap_err();
             assert!(dbg!(errors.to_string()).contains(variable_name));
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn ignores_environment_variable_if_in_file_only_mode() {
+        #[derive(Deserialize, Debug)]
+        #[allow(unused)]
+        struct Config {
+            value: String,
+        }
+
+        figment::Jail::expect_with(|jail| {
+            jail.create_file("tedge.toml", "value = \"config\"")?;
+            let variable_name = "TEDGE_VALUE";
+            jail.set_env(variable_name, "environment");
+
+            let data = extract_data::<Config>("tedge.toml", &FileOnly).unwrap();
+            assert_eq!(data.value, "config");
             Ok(())
         })
     }

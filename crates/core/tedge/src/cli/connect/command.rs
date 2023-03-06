@@ -32,7 +32,7 @@ const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
 
 pub struct ConnectCommand {
     pub config_location: TEdgeConfigLocation,
-    pub config_repository: TEdgeConfigRepository,
+    pub config_repository: ReadWriteTEdgeConfigRepository,
     pub cloud: Cloud,
     pub common_mosquitto_config: CommonMosquittoConfig,
     pub is_test_connection: bool,
