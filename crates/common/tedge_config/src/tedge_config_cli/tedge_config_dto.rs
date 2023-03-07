@@ -42,6 +42,9 @@ pub(crate) struct TEdgeConfigDto {
 
     #[serde(default)]
     pub(crate) firmware: FirmwareConfigDto,
+
+    #[serde(default)]
+    pub(crate) service: ServiceTypeConfigDto,
 }
 
 /// Represents the device specific configurations defined in the [device] section
@@ -145,4 +148,10 @@ pub(crate) struct PathConfigDto {
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct FirmwareConfigDto {
     pub(crate) child_update_timeout: Option<u64>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub(crate) struct ServiceTypeConfigDto {
+    #[serde(rename = "type")]
+    pub(crate) service_type: Option<String>,
 }

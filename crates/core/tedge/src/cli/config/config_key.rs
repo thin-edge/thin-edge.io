@@ -69,6 +69,7 @@ impl ConfigKey {
             config_key!(LogPathSetting),
             config_key!(RunPathSetting),
             config_key!(FirmwareChildUpdateTimeoutSetting),
+            config_key!(ServiceTypeSetting),
         ]
     }
 }

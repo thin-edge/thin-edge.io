@@ -1,8 +1,12 @@
+use c8y_api::smartrest::message::sanitize_for_smartrest;
+use c8y_api::smartrest::message::MAX_PAYLOAD_LIMIT_IN_BYTES;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 use serde::Deserialize;
 use serde::Serialize;
+
+const DEFAULT_SERVICE_TYPE: &str = "service";
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct HealthStatus {
@@ -13,12 +17,12 @@ pub struct HealthStatus {
     pub status: String,
 }
 
-fn default_type() -> String {
-    "service".to_string()
-}
-
 fn default_status() -> String {
     "unknown".to_string()
+}
+
+fn default_type() -> String {
+    "".to_string()
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -50,20 +54,23 @@ impl TopicInfo {
     }
 }
 
-pub fn convert_health_status_message(message: &Message, device_name: String) -> Vec<Message> {
+pub fn convert_health_status_message(
+    message: &Message,
+    device_name: String,
+    default_service_type: String,
+) -> Vec<Message> {
     let mut mqtt_messages: Vec<Message> = Vec::new();
     let topic = message.topic.name.to_owned();
     let topic_info = TopicInfo::parse_topic_info(&topic);
+    let default_health_status = format!("\"type\":{default_service_type},\"status\":\"unknown\"");
 
     // If not Bridge health status
     if !topic_info.service_name.contains("bridge") {
-        let payload_str = message
-            .payload_str()
-            .unwrap_or(r#""type":"service","status":"unknown""#);
+        let payload_str = message.payload_str().unwrap_or(&default_health_status);
 
         let mut health_status =
             serde_json::from_str(payload_str).unwrap_or_else(|_| HealthStatus {
-                service_type: "service".to_string(),
+                service_type: default_service_type.clone(),
                 status: "unknown".to_string(),
             });
 
@@ -72,7 +79,11 @@ pub fn convert_health_status_message(message: &Message, device_name: String) -> 
         }
 
         if health_status.service_type.is_empty() {
-            health_status.service_type = "service".into();
+            health_status.service_type = if default_service_type.is_empty() {
+                DEFAULT_SERVICE_TYPE.to_string()
+            } else {
+                default_service_type
+            };
         }
 
         let status_message = service_monitor_status_message(
@@ -96,11 +107,13 @@ pub fn service_monitor_status_message(
     service_type: &str,
     child_id: Option<String>,
 ) -> Message {
+    let sanitized_status = sanitize_for_smartrest(status.into(), MAX_PAYLOAD_LIMIT_IN_BYTES);
+    let sanitized_type = sanitize_for_smartrest(service_type.into(), MAX_PAYLOAD_LIMIT_IN_BYTES);
     match child_id {
         Some(cid) => Message {
             topic: Topic::new_unchecked(&format!("{SMARTREST_PUBLISH_TOPIC}/{cid}")),
             payload: format!(
-                "102,{device_name}_{cid}_{daemon_name},{service_type},{daemon_name},{status}"
+                "102,{device_name}_{cid}_{daemon_name},\"{sanitized_type}\",{daemon_name},\"{sanitized_status}\""
             )
             .into_bytes(),
             qos: mqtt_channel::QoS::AtLeastOnce,
@@ -109,7 +122,7 @@ pub fn service_monitor_status_message(
         None => Message {
             topic: Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
             payload: format!(
-                "102,{device_name}_{daemon_name},{service_type},{daemon_name},{status}"
+                "102,{device_name}_{daemon_name},\"{sanitized_type}\",{daemon_name},\"{sanitized_status}\""
             )
             .into_bytes(),
             qos: mqtt_channel::QoS::AtLeastOnce,
@@ -127,7 +140,7 @@ mod tests {
         "tedge/health/tedge-mapper-c8y",
         r#"{"pid":"1234","type":"systemd","status":"up"}"#,
         "c8y/s/us",
-        r#"102,test_device_tedge-mapper-c8y,systemd,tedge-mapper-c8y,up"#;        
+        r#"102,test_device_tedge-mapper-c8y,"systemd",tedge-mapper-c8y,"up""#;  
         "service-monitoring-thin-edge-device"
     )]
     #[test_case(
@@ -135,7 +148,7 @@ mod tests {
         "tedge/health/child/tedge-mapper-c8y",
         r#"{"pid":"1234","type":"systemd","status":"up"}"#,
         "c8y/s/us/child",
-        r#"102,test_device_child_tedge-mapper-c8y,systemd,tedge-mapper-c8y,up"#;
+        r#"102,test_device_child_tedge-mapper-c8y,"systemd",tedge-mapper-c8y,"up""#;
         "service-monitoring-thin-edge-child-device"
     )]
     #[test_case(
@@ -143,7 +156,7 @@ mod tests {
         "tedge/health/tedge-mapper-c8y",
         r#"{"pid":"123456","type":"systemd"}"#,
         "c8y/s/us",
-        r#"102,test_device_tedge-mapper-c8y,systemd,tedge-mapper-c8y,unknown"#;
+        r#"102,test_device_tedge-mapper-c8y,"systemd",tedge-mapper-c8y,"unknown""#;
         "service-monitoring-thin-edge-no-status"
     )]
     #[test_case(
@@ -151,7 +164,7 @@ mod tests {
         "tedge/health/tedge-mapper-c8y",
         r#"{"type":"systemd"}"#,
         "c8y/s/us",
-        r#"102,test_device_tedge-mapper-c8y,systemd,tedge-mapper-c8y,unknown"#;
+        r#"102,test_device_tedge-mapper-c8y,"systemd",tedge-mapper-c8y,"unknown""#;
         "service-monitoring-thin-edge-no-status-no-pid"
     )]
     #[test_case(
@@ -159,7 +172,7 @@ mod tests {
         "tedge/health/tedge-mapper-c8y",
         r#"{"type":"", "status":""}"#,
         "c8y/s/us",
-        r#"102,test_device_tedge-mapper-c8y,service,tedge-mapper-c8y,unknown"#;
+        r#"102,test_device_tedge-mapper-c8y,"service",tedge-mapper-c8y,"unknown""#;
         "service-monitoring-empty-status-and-type"
     )]
     #[test_case(
@@ -167,8 +180,24 @@ mod tests {
         "tedge/health/tedge-mapper-c8y",
         "{}",
         "c8y/s/us",
-        r#"102,test_device_tedge-mapper-c8y,service,tedge-mapper-c8y,unknown"#;
+        r#"102,test_device_tedge-mapper-c8y,"service",tedge-mapper-c8y,"unknown""#;
         "service-monitoring-empty-health-message"
+    )]
+    #[test_case(
+        "test_device",
+        "tedge/health/tedge-mapper-c8y",
+        r#"{"type":"thin,edge","status":"up,down"}"#,
+        "c8y/s/us",
+        r#"102,test_device_tedge-mapper-c8y,"thin,edge",tedge-mapper-c8y,"up,down""#;
+        "service-monitoring-type-with-comma-health-message"
+    )]
+    #[test_case(
+        "test_device",
+        "tedge/health/tedge-mapper-c8y",
+        r#"{"type":"thin\"\"edge","status":"up\"down"}"#,
+        "c8y/s/us",
+        r#"102,test_device_tedge-mapper-c8y,"thin""""edge",tedge-mapper-c8y,"up""down""#;
+        "service-monitoring-double-quotes-health-message"
     )]
     fn translate_health_status_to_c8y_service_monitoring_message(
         device_name: &str,
@@ -184,10 +213,8 @@ mod tests {
             c8y_monitor_payload.as_bytes(),
         );
 
-        let msg = convert_health_status_message(&health_message, device_name.into());
-        dbg!(msg[0].payload_str().unwrap());
-        dbg!(expected_message.payload_str().unwrap());
-
+        let msg =
+            convert_health_status_message(&health_message, device_name.into(), "service".into());
         assert_eq!(msg[0], expected_message);
     }
 }

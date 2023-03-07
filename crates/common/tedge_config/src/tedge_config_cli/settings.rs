@@ -469,3 +469,16 @@ impl ConfigSetting for FirmwareChildUpdateTimeoutSetting {
 
     type Value = Seconds;
 }
+
+pub struct ServiceTypeSetting;
+
+impl ConfigSetting for ServiceTypeSetting {
+    const KEY: &'static str = "service.type";
+
+    const DESCRIPTION: &'static str = concat!(
+        "The thin-edge.io service's service type",
+        "Example: systemd"
+    );
+
+    type Value = String;
+}

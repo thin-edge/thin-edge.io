@@ -52,6 +52,27 @@ In case of child device `<device-name>_<child-id>_<service-name>`.
 
 > Note: `102` is the `smartrest` template number for the service monitoring message.
 
+## Configuring the default service type
+
+The `default service type` can be configured using the `tedge` cli.
+
+The example below shows how one can set the default service type to `systemd`.
+
+```
+tedge config set service.type systemd
+
+```
+> Note: When the `service type` was not sent with the `health status` message, then the configured default value will be used by
+the mapper while translating the `health status` message to `service status` message.
+
+To clear the configured default service type one can use the command below.
+This will set the `service.type` to `service`.
+
+```
+tedge config unset service.type
+
+```
+
 # References
 
 More info about the service monitoring can be found in the below link

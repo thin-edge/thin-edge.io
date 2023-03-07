@@ -108,6 +108,8 @@ path = "/some/value"
         IpAddress::try_from("0.0.0.0").unwrap()
     );
 
+    assert_eq!(config.query(ServiceTypeSetting)?, "service");
+
     Ok(())
 }
 
@@ -152,6 +154,7 @@ bind_address = "0.0.0.0"
     let updated_mqtt_external_certfile = "cert.pem";
     let updated_mqtt_external_keyfile = "key.pem";
     let updated_mqtt_bind_address = IpAddress(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST));
+    let updated_service_type = "systemd".to_string();
 
     config_repo.update_toml(&|config| {
         assert!(config.query_optional(DeviceIdSetting).is_err());
@@ -184,6 +187,8 @@ bind_address = "0.0.0.0"
         assert_eq!(config.query(AzureMapperTimestamp)?, Flag(false));
 
         assert_eq!(config.query(MqttPortSetting)?, Port(1883));
+
+        assert_eq!(config.query(ServiceTypeSetting)?, "service");
 
         config.update(
             C8yUrlSetting,
@@ -220,6 +225,8 @@ bind_address = "0.0.0.0"
             FilePath::from(updated_mqtt_external_keyfile),
         )?;
         config.update(MqttBindAddressSetting, updated_mqtt_bind_address.clone())?;
+
+        config.update(ServiceTypeSetting, updated_service_type.clone())?;
         Ok(())
     })?;
 
@@ -278,6 +285,7 @@ bind_address = "0.0.0.0"
             config.query(MqttBindAddressSetting)?,
             updated_mqtt_bind_address
         );
+        assert_eq!(config.query(ServiceTypeSetting)?, updated_service_type);
     }
 
     Ok(())
@@ -606,6 +614,12 @@ fn test_parse_config_empty_file() -> Result<(), TEdgeConfigError> {
         config.query(MqttBindAddressSetting)?,
         IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST))
     );
+    assert_eq!(
+        config.query(FirmwareChildUpdateTimeoutSetting)?,
+        Seconds(3600)
+    );
+    assert_eq!(config.query(ServiceTypeSetting)?, "service".to_string());
+
     Ok(())
 }
 
@@ -908,6 +922,7 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_http_bind_address: IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST)),
         default_c8y_smartrest_templates: TemplatesSet::default(),
         default_firmware_child_update_timeout: Seconds(3600),
+        default_service_type: String::from("service"),
     }
 }
 
