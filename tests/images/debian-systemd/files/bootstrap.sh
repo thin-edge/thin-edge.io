@@ -135,6 +135,7 @@ install_via_apt() {
         c8y-configuration-plugin \
         c8y-log-plugin \
         tedge-watchdog
+    apt-get install -y c8y-firmware-plugin
 }
 
 install_via_script() {
@@ -165,6 +166,7 @@ install_via_local_files() {
     find_then_install_deb "$INSTALL_SOURCEDIR" "tedge[_-]apt[_-]plugin_*_$ARCH.deb"
     find_then_install_deb "$INSTALL_SOURCEDIR" "c8y[_-]configuration[_-]plugin_*_$ARCH.deb"
     find_then_install_deb "$INSTALL_SOURCEDIR" "c8y[_-]log[_-]plugin_*_$ARCH.deb"
+    find_then_install_deb "$INSTALL_SOURCEDIR" "c8y-firmware-plugin_*_$ARCH.deb"
     find_then_install_deb "$INSTALL_SOURCEDIR" "tedge[_-]watchdog_*_$ARCH.deb"
 }
 
