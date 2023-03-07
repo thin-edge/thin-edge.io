@@ -18,13 +18,19 @@ Test Teardown    Get Logs
 
 *** Test Cases ***
 
-Test health status of all c8y service
-    [Documentation]    Loops over list of c8y thin-edge services
+Test if all c8y services are up
+    [Template]     Check if a service is up
+    tedge-mapper-c8y
+    tedge-agent
+    c8y-configuration-plugin
+    c8y-log-plugin
 
-    FOR    ${service}    IN  @{SERVICES}     
-        Check if a service is up    ${service}
-        Check if a service is down    ${service}
-    END
+Test if all c8y services are down
+    [Template]     Check if a service is down
+    tedge-mapper-c8y
+    tedge-agent
+    c8y-configuration-plugin
+    c8y-log-plugin
 
 Check health status of tedge-mapper-c8y service on broker restart
     [Documentation]    Test tedge-mapper-c8y on mqtt broker restart
