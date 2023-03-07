@@ -1,7 +1,6 @@
 *** Settings ***
 
 Resource    ../../../resources/common.resource
-Resource    ../../tedge/http_file_transfer_api.robot
 Library     Cumulocity
 Library     ThinEdgeIO
 Library     DebugLibrary
@@ -104,7 +103,8 @@ Check if a service is up
 Check if a service is down
     [Arguments]    ${service_name}
     Custom Test Setup
-    ThinEdgeIO.Start Service    ${service_name}   
+    ThinEdgeIO.Start Service    ${service_name}
+    Device Should Exist                      ${DEVICE_SN}_${service_name}    show_info=False 
     ThinEdgeIO.Stop Service    ${service_name}   
     ThinEdgeIO.Service Should Be Stopped  ${service_name}
        
@@ -112,7 +112,6 @@ Check if a service is down
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=down
     
     Should Be Equal    ${SERVICE["name"]}    ${service_name}
-    Log    "service type" ${SERVICE["serviceType"]}
     Should Be Equal    ${SERVICE["serviceType"]}    service
     Should Be Equal    ${SERVICE["status"]}    down
     Should Be Equal    ${SERVICE["type"]}    c8y_Service
