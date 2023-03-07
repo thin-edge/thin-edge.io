@@ -54,19 +54,19 @@ async fn communicate_over_mqtt() {
 
     let alice_topic = Topic::new_unchecked("messages/for/alice");
     let mut alice: MqttClient = MqttClientBuilder::new("Alice", &alice_topic)
-        .connected_to(&mut mqtt)
+        .with_connection(&mut mqtt)
         .build();
 
     let bob_topic = Topic::new_unchecked("messages/for/bob");
     let mut bob: MqttClient = MqttClientBuilder::new("Bob", &bob_topic)
-        .connected_to(&mut mqtt)
+        .with_connection(&mut mqtt)
         .build();
 
     let mut all_topics = TopicFilter::empty();
     all_topics.add_all(alice_topic.clone().into());
     all_topics.add_all(bob_topic.clone().into());
     let mut spy: MqttClient = MqttClientBuilder::new("Spy", &all_topics)
-        .connected_to(&mut mqtt)
+        .with_connection(&mut mqtt)
         .build();
 
     tokio::spawn(mqtt_actor(mqtt));

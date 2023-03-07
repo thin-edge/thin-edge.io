@@ -398,7 +398,7 @@ impl<Request: Message, Response: Message> ClientMessageBox<Request, Response> {
     ) -> Self {
         let capacity = 1; // At most one response is ever expected
         let messages = SimpleMessageBoxBuilder::new(client_name, capacity)
-            .connected_to(service)
+            .with_connection(service)
             .build();
         ClientMessageBox { messages }
     }

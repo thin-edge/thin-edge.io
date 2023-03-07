@@ -31,9 +31,9 @@
 use crate::mpsc;
 use crate::Actor;
 use crate::ClientId;
+use crate::CombinedReceiver;
 use crate::ConcurrentServerActor;
 use crate::ConcurrentServerMessageBox;
-use crate::CombinedReceiver;
 use crate::DynSender;
 use crate::KeyedSender;
 use crate::Message;
@@ -86,7 +86,7 @@ pub trait RuntimeRequestSink {
 /// A trait to connect a message box under-construction to peer messages boxes
 pub trait ServiceProvider<Request: Message, Response: Message, Config> {
     /// Connect a peer message box to the message box under construction
-    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<Request, Response, Config>);
+    fn add_peer(&mut self, peer: &mut impl ServiceConsumer<Request, Response, Config>);
 }
 
 /// A connection port to connect a message box under-connection to another box
@@ -101,21 +101,29 @@ pub trait ServiceConsumer<Request: Message, Response: Message, Config> {
     fn get_response_sender(&self) -> DynSender<Response>;
 
     /// Connect this client message box to the service message box
-    fn connect_to(&mut self, service: &mut impl ServiceProvider<Request, Response, Config>)
+    fn set_connection(
+        &mut self,
+        service: &mut impl ServiceProvider<Request, Response, Config>,
+    ) -> &mut Self
     where
         Self: Sized,
     {
-        service.connect_with(self)
+        service.add_peer(self);
+        self
     }
 
     /// Connect this client message box to the service message box
     ///
     /// Return the updated client message box.
-    fn connected_to(mut self, service: &mut impl ServiceProvider<Request, Response, Config>) -> Self
+    #[must_use]
+    fn with_connection(
+        mut self,
+        service: &mut impl ServiceProvider<Request, Response, Config>,
+    ) -> Self
     where
         Self: Sized,
     {
-        service.connect_with(&mut self);
+        service.add_peer(&mut self);
         self
     }
 }
@@ -149,7 +157,7 @@ impl<I: Message, O: Message> SimpleMessageBoxBuilder<I, O> {
 impl<Req: Message, Res: Message, Config> ServiceProvider<Req, Res, Config>
     for SimpleMessageBoxBuilder<Req, Res>
 {
-    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<Req, Res, Config>) {
+    fn add_peer(&mut self, peer: &mut impl ServiceConsumer<Req, Res, Config>) {
         self.output_sender = peer.get_response_sender();
         peer.set_request_sender(self.input_sender.sender_clone());
     }
@@ -262,7 +270,7 @@ impl<Req: Message, Res: Message> RuntimeRequestSink for ServerMessageBoxBuilder<
 impl<Req: Message, Res: Message> ServiceProvider<Req, Res, NoConfig>
     for ServerMessageBoxBuilder<Req, Res>
 {
-    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<Req, Res, NoConfig>) {
+    fn add_peer(&mut self, peer: &mut impl ServiceConsumer<Req, Res, NoConfig>) {
         let client_id = self.clients.len();
         let request_sender = KeyedSender::new_sender(client_id, self.request_sender.clone());
 
@@ -394,8 +402,8 @@ impl<S: Server + Clone>
 }
 
 impl<S: Server, K> ServiceProvider<S::Request, S::Response, NoConfig> for ServerActorBuilder<S, K> {
-    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<S::Request, S::Response, NoConfig>) {
-        self.box_builder.connect_with(peer)
+    fn add_peer(&mut self, peer: &mut impl ServiceConsumer<S::Request, S::Response, NoConfig>) {
+        self.box_builder.add_peer(peer)
     }
 }
 

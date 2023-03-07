@@ -46,7 +46,7 @@ async fn spawn_concurrent_sleep_service(
     let actor = ConcurrentServerActor::new(service);
     let mut box_builder = SimpleMessageBoxBuilder::new(actor.name(), 16);
     let mut handle_builder = SimpleMessageBoxBuilder::new("handle", 16);
-    box_builder.connect_with(&mut handle_builder);
+    box_builder.add_peer(&mut handle_builder);
 
     let handle = handle_builder.build();
     let messages = ConcurrentServerMessageBox::new(max_concurrency, box_builder.build());

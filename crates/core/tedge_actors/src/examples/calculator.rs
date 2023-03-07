@@ -136,7 +136,7 @@ mod tests {
         let mut probe = Probe::new();
         player_box_builder
             .with_probe(&mut probe)
-            .connect_to(&mut service_box_builder);
+            .set_connection(&mut service_box_builder);
 
         // Spawn the actors
         tokio::spawn(ServerActor::new(Calculator::default()).run(service_box_builder.build()));

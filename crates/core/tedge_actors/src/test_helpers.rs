@@ -190,7 +190,7 @@ where
         let name = "client-box";
         let capacity = 16;
         let mut client_box = ConsumerBoxBuilder::new(name, capacity, config);
-        self.connect_with(&mut client_box);
+        self.add_peer(&mut client_box);
         client_box.build()
     }
 }

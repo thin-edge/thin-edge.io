@@ -55,8 +55,8 @@ async fn main() -> anyhow::Result<()> {
     // Connect other actor instances to config manager actor
     config_actor.with_fs_connection(&mut fs_watch_actor)?;
     config_actor.with_c8y_http_proxy(&mut c8y_http_proxy_actor)?;
-    config_actor.connect_to(&mut mqtt_actor);
-    config_actor.connect_to(&mut timer_actor);
+    config_actor.set_connection(&mut mqtt_actor);
+    config_actor.set_connection(&mut timer_actor);
 
     //Instantiate log manager actor
     let log_manager_config =

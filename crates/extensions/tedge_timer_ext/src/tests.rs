@@ -65,7 +65,7 @@ async fn spawn_timer_actor<T: Message>(
     peer: &mut impl ServiceConsumer<SetTimeout<T>, Timeout<T>, NoConfig>,
 ) {
     let mut builder = TimerActor::builder();
-    builder.connect_with(peer);
+    builder.add_peer(peer);
 
     tokio::spawn(async move {
         let (actor, actor_box) = builder.build();

@@ -109,11 +109,11 @@ impl Builder<(C8YHttpConfig, C8YHttpProxyMessageBox)> for C8YHttpProxyBuilder {
 }
 
 impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig> for C8YHttpProxyBuilder {
-    fn connect_with(
+    fn add_peer(
         &mut self,
         peer: &mut impl ServiceConsumer<C8YRestRequest, C8YRestResult, NoConfig>,
     ) {
-        self.clients.connect_with(peer)
+        self.clients.add_peer(peer)
     }
 }
 

@@ -78,7 +78,7 @@ impl ConfigManagerBuilder {
     where
         T: ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
     {
-        mqtt.connect_with(self);
+        mqtt.add_peer(self);
         Ok(())
     }
 
@@ -96,7 +96,7 @@ impl ConfigManagerBuilder {
         &mut self,
         timer_builder: &mut impl ServiceProvider<OperationTimer, OperationTimeout, NoConfig>,
     ) -> Result<(), LinkError> {
-        timer_builder.connect_with(self);
+        timer_builder.add_peer(self);
         Ok(())
     }
 }

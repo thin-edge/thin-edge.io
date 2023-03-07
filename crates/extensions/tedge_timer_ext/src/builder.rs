@@ -51,12 +51,9 @@ impl RuntimeRequestSink for TimerActorBuilder {
 }
 
 impl<T: Message> ServiceProvider<SetTimeout<T>, Timeout<T>, NoConfig> for TimerActorBuilder {
-    fn connect_with(
-        &mut self,
-        peer: &mut impl ServiceConsumer<SetTimeout<T>, Timeout<T>, NoConfig>,
-    ) {
+    fn add_peer(&mut self, peer: &mut impl ServiceConsumer<SetTimeout<T>, Timeout<T>, NoConfig>) {
         let mut adapter = AnyTimerAdapter::new(peer);
-        self.box_builder.connect_with(&mut adapter);
+        self.box_builder.add_peer(&mut adapter);
     }
 }
 

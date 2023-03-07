@@ -280,12 +280,12 @@
 //! // Connecting the two boxes, so the box built by the `player_box_builder`:
 //! // - receives as input the messages sent by the box built by the `service_box_builder`
 //! // - sends its output to the service input box.
-//! player_1_box_builder.connect_to(&mut service_box_builder);
+//! player_1_box_builder.set_connection(&mut service_box_builder);
 //!
 //! // Its matters that the builder of the service box is a `ServerMessageBoxBuilder`:
 //! // this builder accept other actors to connect to the same service.
 //! let mut player_2_box_builder = SimpleMessageBoxBuilder::new("Player 2", 1);
-//! player_2_box_builder.connect_to(&mut service_box_builder);
+//! player_2_box_builder.set_connection(&mut service_box_builder);
 //!
 //! // One can then build the message boxes
 //! let service_box: ServerMessageBox<Operation,Update> = service_box_builder.build();
@@ -339,7 +339,7 @@
 //!
 //! // Connect the two actor message boxes interposing a probe.
 //! let mut probe = Probe::new();
-//! player_box_builder.with_probe(&mut probe).connect_to(&mut service_box_builder);
+//! player_box_builder.with_probe(&mut probe).set_connection(&mut service_box_builder);
 //!
 //! // Spawn the actors
 //! tokio::spawn(ServerActor::new(Calculator::default()).run(service_box_builder.build()));
