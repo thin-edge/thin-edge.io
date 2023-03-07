@@ -5,9 +5,7 @@ use std::num::NonZeroU16;
 use crate::*;
 use serde::Deserialize;
 use serde::Serialize;
-use tedge_utils::tedge_derive;
 
-#[tedge_derive::serde_other]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct TEdgeConfigDto {
     /// Captures the device specific configurations
@@ -48,7 +46,6 @@ pub(crate) struct TEdgeConfigDto {
 
 /// Represents the device specific configurations defined in the [device] section
 /// of the thin edge configuration TOML file
-#[tedge_derive::serde_other]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct DeviceConfigDto {
     /// The unique id of the device (DEPRECATED)
@@ -70,7 +67,6 @@ pub(crate) struct DeviceConfigDto {
 
 /// Represents the Cumulocity specific configurations defined in the
 /// [c8y] section of the thin edge configuration TOML file
-#[tedge_derive::serde_other]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct CumulocityConfigDto {
     /// Preserves the current status of the connection
@@ -90,7 +86,6 @@ pub(crate) struct CumulocityConfigDto {
     pub(crate) smartrest_templates: Option<TemplatesSet>,
 }
 
-#[tedge_derive::serde_other]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct AzureConfigDto {
     pub(crate) connect: Option<String>,
@@ -99,9 +94,7 @@ pub(crate) struct AzureConfigDto {
     pub(crate) mapper_timestamp: Option<bool>,
 }
 
-#[tedge_derive::serde_other]
 #[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
 pub(crate) struct AwsConfigDto {
     pub(crate) connect: Option<String>,
     pub(crate) url: Option<ConnectUrl>,
@@ -109,9 +102,7 @@ pub(crate) struct AwsConfigDto {
     pub(crate) mapper_timestamp: Option<bool>,
 }
 
-#[tedge_derive::serde_other]
 #[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
 pub(crate) struct MqttConfigDto {
     pub(crate) port: Option<u16>,
 
@@ -134,27 +125,23 @@ pub(crate) struct MqttConfigDto {
     pub(crate) external_keyfile: Option<FilePath>,
 }
 
-#[tedge_derive::serde_other]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct HttpConfigDto {
     pub(crate) port: Option<u16>,
     pub(crate) bind_address: Option<IpAddress>,
 }
 
-#[tedge_derive::serde_other]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct SoftwareConfigDto {
     pub(crate) default_plugin_type: Option<String>,
 }
 
-#[tedge_derive::serde_other]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct PathConfigDto {
     #[serde(rename = "path")]
     pub(crate) dir_path: Option<FilePath>,
 }
 
-#[tedge_derive::serde_other]
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct FirmwareConfigDto {
     pub(crate) child_update_timeout: Option<u64>,

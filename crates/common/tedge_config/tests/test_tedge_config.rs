@@ -1,4 +1,3 @@
-use assert_matches::assert_matches;
 use std::convert::TryFrom;
 use std::io::Write;
 use std::net::IpAddr;
@@ -154,8 +153,7 @@ bind_address = "0.0.0.0"
     let updated_mqtt_external_keyfile = "key.pem";
     let updated_mqtt_bind_address = IpAddress(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST));
 
-    {
-        let mut config = config_repo.load()?;
+    config_repo.update_toml(&|config| {
         assert!(config.query_optional(DeviceIdSetting).is_err());
         assert_eq!(
             config.query(DeviceKeyPathSetting)?,
@@ -187,9 +185,15 @@ bind_address = "0.0.0.0"
 
         assert_eq!(config.query(MqttPortSetting)?, Port(1883));
 
-        config.update(C8yUrlSetting, ConnectUrl::try_from(updated_c8y_url)?)?;
+        config.update(
+            C8yUrlSetting,
+            ConnectUrl::try_from(updated_c8y_url).unwrap(),
+        )?;
         config.unset(C8yRootCertPathSetting)?;
-        config.update(AzureUrlSetting, ConnectUrl::try_from(updated_azure_url)?)?;
+        config.update(
+            AzureUrlSetting,
+            ConnectUrl::try_from(updated_azure_url).unwrap(),
+        )?;
         config.unset(AzureRootCertPathSetting)?;
         config.unset(AzureMapperTimestamp)?;
         config.update(MqttPortSetting, updated_mqtt_port)?;
@@ -216,8 +220,8 @@ bind_address = "0.0.0.0"
             FilePath::from(updated_mqtt_external_keyfile),
         )?;
         config.update(MqttBindAddressSetting, updated_mqtt_bind_address.clone())?;
-        config_repo.store(&config)?;
-    }
+        Ok(())
+    })?;
 
     {
         let config = config_repo.load()?;
@@ -524,9 +528,7 @@ fn set_az_keys_from_old_version_config() -> Result<(), TEdgeConfigError> {
     let config_repo = TEdgeConfigRepository::new_with_defaults(config_location, config_defaults);
     let updated_azure_url = "OtherAzure.azure-devices.net";
 
-    {
-        let mut config = config_repo.load()?;
-
+    config_repo.update_toml(&|config| {
         assert!(config.query_optional(AzureUrlSetting)?.is_none());
         assert_eq!(
             config.query(AzureRootCertPathSetting)?,
@@ -534,11 +536,15 @@ fn set_az_keys_from_old_version_config() -> Result<(), TEdgeConfigError> {
         );
         assert_eq!(config.query(AzureMapperTimestamp)?, Flag(true));
 
-        config.update(AzureUrlSetting, ConnectUrl::try_from(updated_azure_url)?)?;
+        config.update(
+            AzureUrlSetting,
+            ConnectUrl::try_from(updated_azure_url).unwrap(),
+        )?;
         config.unset(AzureRootCertPathSetting)?;
         config.unset(AzureMapperTimestamp)?;
-        config_repo.store(&config)?;
-    }
+
+        Ok(())
+    })?;
 
     {
         let config = config_repo.load()?;
@@ -647,15 +653,18 @@ port = "1883"
 "#;
 
     let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let toml_path = config_location
+        .tedge_config_file_path()
+        .display()
+        .to_string();
     let result = TEdgeConfigRepository::new(config_location).load();
 
-    let expected_err =
-        "invalid type: string \"1883\", expected u16 for key `mqtt.port` at line 3 column 8";
+    let expected_err = format!("invalid type: found string \"1883\", expected u16 for key \"mqtt.port\" in {toml_path} TOML file");
 
     match result {
-        Err(TEdgeConfigError::FromTOMLParse(err)) => assert_eq!(err.to_string(), expected_err),
+        Err(error @ TEdgeConfigError::Figment(_)) => assert_eq!(error.to_string(), expected_err),
 
-        _ => panic!("Expected the parsing to fail with TOMLParseError"),
+        _ => panic!("Expected the parsing to fail with Figment error"),
     }
 
     Ok(())
@@ -668,13 +677,25 @@ fn test_parse_invalid_toml_file() -> Result<(), TEdgeConfigError> {
         "#;
 
     let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
+    let toml_path = config_location
+        .tedge_config_file_path()
+        .display()
+        .to_string();
     let result = TEdgeConfigRepository::new(config_location).load();
 
-    assert_matches!(
-        result,
-        Err(TEdgeConfigError::FromTOMLParse(_)),
-        "Expected the parsing to fail with TOMLParseError"
-    );
+    match result {
+        Err(error @ TEdgeConfigError::Figment(_)) => {
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "unexpected character found: `<` at line 2 column 9 in {toml_path} TOML file"
+                )
+            )
+        }
+
+        _ => panic!("Expected the parsing to fail with Figment error"),
+    }
+
     Ok(())
 }
 

@@ -54,7 +54,7 @@ impl Command for ConnectCommand {
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        let mut config = self.config_repository.load()?;
+        let config = self.config_repository.load()?;
         if self.is_test_connection {
             let br_config = self.bridge_config(&config)?;
             if self.check_if_bridge_exists(&br_config) {
@@ -80,12 +80,6 @@ impl Command for ConnectCommand {
             }
         }
 
-        // XXX: Do we really need to persist the defaults?
-        match self.cloud {
-            Cloud::Azure => assign_default(&mut config, AzureRootCertPathSetting)?,
-            Cloud::Aws => assign_default(&mut config, AwsRootCertPathSetting)?,
-            Cloud::C8y => assign_default(&mut config, C8yRootCertPathSetting)?,
-        }
         let bridge_config = self.bridge_config(&config)?;
         let updated_mosquitto_config = self
             .common_mosquitto_config
@@ -114,7 +108,6 @@ impl Command for ConnectCommand {
                     .ok()
                     .map(|x| x.to_string()),
             );
-        self.config_repository.store(&config)?;
 
         let device_type = config.query(DeviceTypeSetting)?;
 
@@ -233,19 +226,6 @@ impl ConnectCommand {
 
         Path::new(&bridge_conf_path).exists()
     }
-}
-
-// XXX: Improve naming
-fn assign_default<T: ConfigSetting + Copy>(
-    config: &mut TEdgeConfig,
-    setting: T,
-) -> Result<(), ConfigError>
-where
-    TEdgeConfig: ConfigSettingAccessor<T>,
-{
-    let value = config.query(setting)?;
-    config.update(setting, value)?;
-    Ok(())
 }
 
 // Check the connection by using the jwt token retrieval over the mqtt.

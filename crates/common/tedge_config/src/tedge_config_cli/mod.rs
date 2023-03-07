@@ -7,4 +7,5 @@ pub mod tedge_config_dto;
 pub mod tedge_config_location;
 pub mod tedge_config_repository;
 
+mod figment;
 pub mod models;
