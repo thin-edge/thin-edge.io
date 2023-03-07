@@ -79,8 +79,8 @@ impl C8YHttpProxyBuilder {
         jwt: &mut impl ServiceProvider<(), JwtResult, NoConfig>,
     ) -> Self {
         let clients = ServerMessageBoxBuilder::new("C8Y-REST", 10);
-        let http = ClientMessageBox::new("C8Y-REST => HTTP", http, NoConfig);
-        let jwt = JwtRetriever::new("C8Y-REST => JWT", jwt, NoConfig);
+        let http = ClientMessageBox::new("C8Y-REST => HTTP", http);
+        let jwt = JwtRetriever::new("C8Y-REST => JWT", jwt);
         C8YHttpProxyBuilder {
             config,
             clients,
@@ -109,12 +109,11 @@ impl Builder<(C8YHttpConfig, C8YHttpProxyMessageBox)> for C8YHttpProxyBuilder {
 }
 
 impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig> for C8YHttpProxyBuilder {
-    fn connect_with(
+    fn add_peer(
         &mut self,
-        peer: &mut impl ServiceConsumer<C8YRestRequest, C8YRestResult>,
-        config: NoConfig,
+        peer: &mut impl ServiceConsumer<C8YRestRequest, C8YRestResult, NoConfig>,
     ) {
-        self.clients.connect_with(peer, config)
+        self.clients.add_peer(peer)
     }
 }
 

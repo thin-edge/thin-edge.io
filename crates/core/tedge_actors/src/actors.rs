@@ -112,6 +112,7 @@ impl<S: Server + Clone> Actor for ConcurrentServerActor<S> {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::test_helpers::ServiceProviderExt;
     use crate::*;
     use async_trait::async_trait;
     use futures::channel::mpsc;
@@ -140,7 +141,9 @@ pub mod tests {
     #[tokio::test]
     async fn running_an_actor_without_a_runtime() {
         let actor = Echo;
-        let (mut client_message_box, actor_message_box) = SimpleMessageBox::channel("test", 16);
+        let mut box_builder = SimpleMessageBoxBuilder::new("test", 16);
+        let mut client_message_box = box_builder.new_client_box(NoConfig);
+        let actor_message_box = box_builder.build();
         let actor_task = spawn(actor.run(actor_message_box));
 
         // Messages sent to the actor

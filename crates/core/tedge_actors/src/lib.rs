@@ -75,11 +75,8 @@
 //!
 //! ## Testing an actor
 //!
-//! To run and test an actor one needs to establish a bidirectional channel to its message box.
-//! The simpler is to use the `Actor::MessageBox::channel()` function that creates two message boxes.
-//! Along a message box ready to be used by the actor,
-//! this function returns a second box connected to the former.
-//! This message box can then be used to:
+//! To run and test an actor one needs to create a test message box connected to the actor message box.
+//! This test box can then be used to:
 //! - send input messages to the actor
 //! - receive output messages sent by the actor.
 //!
@@ -90,8 +87,12 @@
 //! # #[tokio::main]
 //! # async fn main() {
 //! #
-//! // Create a message box for the actor, along a test box ready to communicate with actor.
-//! let (mut test_box, actor_box) = SimpleMessageBox::channel("Test", 10);
+//! // Create a message box for the actor, along a test box ready to communicate with the actor.
+//! use tedge_actors::{Builder, NoConfig, SimpleMessageBoxBuilder};
+//! use tedge_actors::test_helpers::ServiceProviderExt;
+//! let mut actor_box_builder = SimpleMessageBoxBuilder::new("Actor", 10);
+//! let mut test_box = actor_box_builder.new_client_box(NoConfig);
+//! let actor_box = actor_box_builder.build();
 //!
 //! // The actor is then spawn in the background with its message box.
 //! let actor = Calculator::default();
@@ -171,14 +172,17 @@
 //! This actor can then be tested using a test box connected to the actor box.
 //!
 //! ```
-//! # use tedge_actors::{Actor, MessageBox, ReceiveMessages, ServerActor, SimpleMessageBox};
+//! # use tedge_actors::{Actor, Builder, MessageBox, NoConfig, ReceiveMessages, ServerActor, SimpleMessageBox, SimpleMessageBoxBuilder};
+//! # use tedge_actors::test_helpers::ServiceProviderExt;
 //! # use crate::tedge_actors::examples::calculator::*;
 //! #
 //! # #[tokio::main]
 //! # async fn main_test() {
 //! #
 //! // As for any actor, one needs a bidirectional channel to the message box of the service.
-//! let (mut test_box, actor_box) = SimpleMessageBox::channel("Test", 10);
+//! let mut actor_box_builder = SimpleMessageBoxBuilder::new("Actor", 10);
+//! let mut test_box = actor_box_builder.new_client_box(NoConfig);
+//! let actor_box = actor_box_builder.build();
 //!
 //! // The actor is then spawn in the background with its message box.
 //! let service = Calculator::default();
@@ -259,7 +263,7 @@
 //! to establish appropriate connections between the actor message boxes.
 //!
 //! ```
-//! # use tedge_actors::{Actor, Builder, ChannelError, MessageBox, ServiceConsumer, NoConfig, ReceiveMessages, ServerActor, ServerMessageBox, ServerMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder};
+//! # use tedge_actors::{Actor, Builder, ChannelError, MessageBox, ReceiveMessages, ServiceConsumer, ServerActor, ServerMessageBox, ServerMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder};
 //! # use crate::tedge_actors::examples::calculator::*;
 //! # #[tokio::main]
 //! # async fn main_test() -> Result<(),ChannelError> {
@@ -276,12 +280,12 @@
 //! // Connecting the two boxes, so the box built by the `player_box_builder`:
 //! // - receives as input the messages sent by the box built by the `service_box_builder`
 //! // - sends its output to the service input box.
-//! player_1_box_builder.connect_to(&mut service_box_builder, NoConfig);
+//! player_1_box_builder.set_connection(&mut service_box_builder);
 //!
 //! // Its matters that the builder of the service box is a `ServerMessageBoxBuilder`:
 //! // this builder accept other actors to connect to the same service.
 //! let mut player_2_box_builder = SimpleMessageBoxBuilder::new("Player 2", 1);
-//! player_2_box_builder.connect_to(&mut service_box_builder, NoConfig);
+//! player_2_box_builder.set_connection(&mut service_box_builder);
 //!
 //! // One can then build the message boxes
 //! let service_box: ServerMessageBox<Operation,Update> = service_box_builder.build();
@@ -322,7 +326,7 @@
 //! Here, we interpose a `Probe` between two actors to observe their interactions.
 //!
 //! ```
-//! # use tedge_actors::{Actor, Builder, ChannelError, ServiceConsumer, NoConfig, ServerActor, ServerMessageBoxBuilder, SimpleMessageBoxBuilder};
+//! # use tedge_actors::{Actor, Builder, ChannelError, ServiceConsumer, ServerActor, ServerMessageBoxBuilder, SimpleMessageBoxBuilder};
 //! # use tedge_actors::test_helpers::{ServiceConsumerExt, Probe, ProbeEvent};
 //! # use tedge_actors::test_helpers::ProbeEvent::{Recv, Send};
 //! # use crate::tedge_actors::examples::calculator::*;
@@ -335,7 +339,7 @@
 //!
 //! // Connect the two actor message boxes interposing a probe.
 //! let mut probe = Probe::new();
-//! player_box_builder.with_probe(&mut probe).connect_to(&mut service_box_builder, NoConfig);
+//! player_box_builder.with_probe(&mut probe).set_connection(&mut service_box_builder);
 //!
 //! // Spawn the actors
 //! tokio::spawn(ServerActor::new(Calculator::default()).run(service_box_builder.build()));

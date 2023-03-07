@@ -25,6 +25,7 @@ use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
@@ -68,7 +69,6 @@ impl ConfigManagerBuilder {
         &mut self,
         http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
     ) -> Result<(), LinkError> {
-        // self.connect_to(http, ());
         self.c8y_http_proxy = Some(C8YHttpProxy::new("ConfigManager => C8Y", http));
         Ok(())
     }
@@ -78,15 +78,7 @@ impl ConfigManagerBuilder {
     where
         T: ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
     {
-        let subscriptions = vec![
-            "c8y/s/ds",
-            "tedge/+/commands/res/config_snapshot",
-            "tedge/+/commands/res/config_update",
-        ]
-        .try_into()
-        .unwrap();
-        mqtt.connect_with(self, subscriptions);
-
+        mqtt.add_peer(self);
         Ok(())
     }
 
@@ -104,30 +96,8 @@ impl ConfigManagerBuilder {
         &mut self,
         timer_builder: &mut impl ServiceProvider<OperationTimer, OperationTimeout, NoConfig>,
     ) -> Result<(), LinkError> {
-        timer_builder.connect_with(self, NoConfig);
+        timer_builder.add_peer(self);
         Ok(())
-    }
-}
-
-impl MessageSource<MqttMessage, NoConfig> for ConfigManagerBuilder {
-    fn register_peer(&mut self, _config: NoConfig, sender: DynSender<MqttMessage>) {
-        self.mqtt_publisher = Some(sender);
-    }
-}
-
-impl MessageSource<SetTimeout<ChildConfigOperationKey>, NoConfig> for ConfigManagerBuilder {
-    fn register_peer(
-        &mut self,
-        _config: NoConfig,
-        sender: DynSender<SetTimeout<ChildConfigOperationKey>>,
-    ) {
-        self.timer_sender = Some(sender);
-    }
-}
-
-impl MessageSink<MqttMessage> for ConfigManagerBuilder {
-    fn get_sender(&self) -> DynSender<MqttMessage> {
-        self.events_sender.clone().into()
     }
 }
 
@@ -137,8 +107,39 @@ impl MessageSink<FsWatchEvent> for ConfigManagerBuilder {
     }
 }
 
-impl MessageSink<Timeout<ChildConfigOperationKey>> for ConfigManagerBuilder {
-    fn get_sender(&self) -> DynSender<Timeout<ChildConfigOperationKey>> {
+impl
+    ServiceConsumer<SetTimeout<ChildConfigOperationKey>, Timeout<ChildConfigOperationKey>, NoConfig>
+    for ConfigManagerBuilder
+{
+    fn get_config(&self) -> NoConfig {
+        NoConfig
+    }
+
+    fn set_request_sender(&mut self, sender: DynSender<SetTimeout<ChildConfigOperationKey>>) {
+        self.timer_sender = Some(sender);
+    }
+
+    fn get_response_sender(&self) -> DynSender<Timeout<ChildConfigOperationKey>> {
+        self.events_sender.clone().into()
+    }
+}
+
+impl ServiceConsumer<MqttMessage, MqttMessage, TopicFilter> for ConfigManagerBuilder {
+    fn get_config(&self) -> TopicFilter {
+        vec![
+            "c8y/s/ds",
+            "tedge/+/commands/res/config_snapshot",
+            "tedge/+/commands/res/config_update",
+        ]
+        .try_into()
+        .unwrap()
+    }
+
+    fn set_request_sender(&mut self, request_sender: DynSender<MqttMessage>) {
+        self.mqtt_publisher = Some(request_sender)
+    }
+
+    fn get_response_sender(&self) -> DynSender<MqttMessage> {
         self.events_sender.clone().into()
     }
 }

@@ -1,4 +1,5 @@
 use crate::mpsc;
+use crate::Builder;
 use crate::DynSender;
 use crate::Message;
 use crate::MessageSink;
@@ -7,6 +8,9 @@ use crate::NoConfig;
 use crate::NullSender;
 use crate::Sender;
 use crate::ServiceConsumer;
+use crate::ServiceProvider;
+use crate::SimpleMessageBox;
+use crate::SimpleMessageBoxBuilder;
 use futures::stream::FusedStream;
 use futures::SinkExt;
 use futures::StreamExt;
@@ -132,7 +136,7 @@ pub trait ServiceConsumerExt<Request: MessagePlus, Response: MessagePlus> {
 
 impl<T, Request: MessagePlus, Response: MessagePlus> ServiceConsumerExt<Request, Response> for T
 where
-    T: ServiceConsumer<Request, Response>,
+    T: ServiceConsumer<Request, Response, NoConfig>,
 {
     fn with_probe<'a>(
         &'a mut self,
@@ -141,6 +145,20 @@ where
         probe.input_forwarder = self.get_response_sender();
         self.set_request_sender(probe.output_interceptor.clone().into());
         probe
+    }
+}
+
+impl<I: MessagePlus, O: MessagePlus> ServiceConsumer<O, I, NoConfig> for Probe<I, O> {
+    fn get_config(&self) -> NoConfig {
+        NoConfig
+    }
+
+    fn set_request_sender(&mut self, sender: DynSender<O>) {
+        self.output_forwarder = sender;
+    }
+
+    fn get_response_sender(&self) -> DynSender<I> {
+        self.input_interceptor.clone().into()
     }
 }
 
@@ -153,5 +171,58 @@ impl<I: MessagePlus, O: MessagePlus> MessageSource<O, NoConfig> for Probe<I, O> 
 impl<I: MessagePlus, O: MessagePlus> MessageSink<I> for Probe<I, O> {
     fn get_sender(&self) -> DynSender<I> {
         self.input_interceptor.clone().into()
+    }
+}
+
+pub trait ServiceProviderExt<I: Message, O: Message, C> {
+    /// Create a simple message box connected to a box under construction.
+    fn new_client_box(&mut self, config: C) -> SimpleMessageBox<O, I>;
+}
+
+impl<I, O, C, T> ServiceProviderExt<I, O, C> for T
+where
+    I: Message,
+    O: Message,
+    C: Clone,
+    T: ServiceProvider<I, O, C>,
+{
+    fn new_client_box(&mut self, config: C) -> SimpleMessageBox<O, I> {
+        let name = "client-box";
+        let capacity = 16;
+        let mut client_box = ConsumerBoxBuilder::new(name, capacity, config);
+        self.add_peer(&mut client_box);
+        client_box.build()
+    }
+}
+
+struct ConsumerBoxBuilder<I, O, C> {
+    config: C,
+    box_builder: SimpleMessageBoxBuilder<O, I>,
+}
+
+impl<I: Message, O: Message, C> ConsumerBoxBuilder<I, O, C> {
+    fn new(name: &str, capacity: usize, config: C) -> Self {
+        ConsumerBoxBuilder {
+            config,
+            box_builder: SimpleMessageBoxBuilder::new(name, capacity),
+        }
+    }
+
+    fn build(self) -> SimpleMessageBox<O, I> {
+        self.box_builder.build()
+    }
+}
+
+impl<I: Message, O: Message, C: Clone> ServiceConsumer<I, O, C> for ConsumerBoxBuilder<I, O, C> {
+    fn get_config(&self) -> C {
+        self.config.clone()
+    }
+
+    fn set_request_sender(&mut self, request_sender: DynSender<I>) {
+        self.box_builder.set_request_sender(request_sender)
+    }
+
+    fn get_response_sender(&self) -> DynSender<O> {
+        self.box_builder.get_response_sender()
     }
 }

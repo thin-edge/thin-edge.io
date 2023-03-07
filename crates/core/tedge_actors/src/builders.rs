@@ -29,16 +29,21 @@
 //!   declares that the message box under construction is that of a service consumer.
 //!
 use crate::mpsc;
+use crate::Actor;
 use crate::ClientId;
 use crate::CombinedReceiver;
+use crate::ConcurrentServerActor;
 use crate::ConcurrentServerMessageBox;
 use crate::DynSender;
 use crate::KeyedSender;
 use crate::Message;
 use crate::NullSender;
+use crate::RuntimeError;
 use crate::RuntimeRequest;
 use crate::Sender;
 use crate::SenderVec;
+use crate::Server;
+use crate::ServerActor;
 use crate::ServerMessageBox;
 use crate::SimpleMessageBox;
 use std::convert::Infallible;
@@ -57,6 +62,7 @@ pub trait Builder<T>: Sized {
 }
 
 /// Placeholder when no specific config is required by a builder implementation
+#[derive(Clone)]
 pub struct NoConfig;
 
 /// The builder of a MessageBox must implement this trait for every message type that can be sent to it
@@ -80,11 +86,14 @@ pub trait RuntimeRequestSink {
 /// A trait to connect a message box under-construction to peer messages boxes
 pub trait ServiceProvider<Request: Message, Response: Message, Config> {
     /// Connect a peer message box to the message box under construction
-    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<Request, Response>, config: Config);
+    fn add_peer(&mut self, peer: &mut impl ServiceConsumer<Request, Response, Config>);
 }
 
 /// A connection port to connect a message box under-connection to another box
-pub trait ServiceConsumer<Request: Message, Response: Message> {
+pub trait ServiceConsumer<Request: Message, Response: Message, Config> {
+    /// Return the config used by this actor to connect the service provider
+    fn get_config(&self) -> Config;
+
     /// Set the sender to be used by this actor's box to send requests
     fn set_request_sender(&mut self, request_sender: DynSender<Request>);
 
@@ -92,68 +101,32 @@ pub trait ServiceConsumer<Request: Message, Response: Message> {
     fn get_response_sender(&self) -> DynSender<Response>;
 
     /// Connect this client message box to the service message box
-    fn connect_to<Config>(
+    fn set_connection(
         &mut self,
         service: &mut impl ServiceProvider<Request, Response, Config>,
-        config: Config,
-    ) where
+    ) -> &mut Self
+    where
         Self: Sized,
     {
-        service.connect_with(self, config)
+        service.add_peer(self);
+        self
     }
 
     /// Connect this client message box to the service message box
     ///
     /// Return the updated client message box.
-    fn connected_to<Config>(
+    #[must_use]
+    fn with_connection(
         mut self,
         service: &mut impl ServiceProvider<Request, Response, Config>,
-        config: Config,
     ) -> Self
     where
         Self: Sized,
     {
-        service.connect_with(&mut self, config);
+        service.add_peer(&mut self);
         self
     }
 }
-
-impl<T, Req, Res> ServiceConsumer<Req, Res> for T
-where
-    Req: Message,
-    Res: Message,
-    T: MessageSink<Res> + MessageSource<Req, NoConfig>,
-{
-    fn set_request_sender(&mut self, request_sender: DynSender<Req>) {
-        self.register_peer(NoConfig, request_sender)
-    }
-
-    fn get_response_sender(&self) -> DynSender<Res> {
-        self.get_sender()
-    }
-}
-
-// FIXME Why is this implementation conflicting with
-// impl<Req: Message, Res: Message> ServiceProvider<Req, Res, NoConfig> for ServerMessageBoxBuilder<Req, Res>
-// while ServerMessageBoxBuilder __doesn't__ impl neither MessageSink nor MessageSource?
-//
-// Would be solved by https://github.com/rust-lang/rfcs/pull/1210
-//
-// This is an issue because:
-// - the implementation of ServiceProvider for ServerMessageBox cannot be done from Source & Sink.
-// - but this can be done for any mailbox that doesn't need to correlate outputs to inputs.
-/*
-impl<T, Req, Res, Config> ServiceProvider<Req, Res, Config> for T where
-    Req: Message,
-    Res: Message,
-    T: MessageSink<Req> + MessageSource<Res, Config>
-{
-    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<Req, Res>, config: Config) {
-        self.register_peer(config, peer.get_response_sender());
-        peer.set_request_sender(self.get_sender());
-    }
-}
-*/
 
 /// A builder of SimpleMessageBox
 pub struct SimpleMessageBoxBuilder<I, O> {
@@ -184,9 +157,25 @@ impl<I: Message, O: Message> SimpleMessageBoxBuilder<I, O> {
 impl<Req: Message, Res: Message, Config> ServiceProvider<Req, Res, Config>
     for SimpleMessageBoxBuilder<Req, Res>
 {
-    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<Req, Res>, _config: Config) {
+    fn add_peer(&mut self, peer: &mut impl ServiceConsumer<Req, Res, Config>) {
         self.output_sender = peer.get_response_sender();
         peer.set_request_sender(self.input_sender.sender_clone());
+    }
+}
+
+impl<Req: Message, Res: Message> ServiceConsumer<Req, Res, NoConfig>
+    for SimpleMessageBoxBuilder<Res, Req>
+{
+    fn get_config(&self) -> NoConfig {
+        NoConfig
+    }
+
+    fn set_request_sender(&mut self, request_sender: DynSender<Req>) {
+        self.output_sender = request_sender;
+    }
+
+    fn get_response_sender(&self) -> DynSender<Res> {
+        self.input_sender.sender_clone()
     }
 }
 
@@ -281,7 +270,7 @@ impl<Req: Message, Res: Message> RuntimeRequestSink for ServerMessageBoxBuilder<
 impl<Req: Message, Res: Message> ServiceProvider<Req, Res, NoConfig>
     for ServerMessageBoxBuilder<Req, Res>
 {
-    fn connect_with(&mut self, peer: &mut impl ServiceConsumer<Req, Res>, _config: NoConfig) {
+    fn add_peer(&mut self, peer: &mut impl ServiceConsumer<Req, Res, NoConfig>) {
         let client_id = self.clients.len();
         let request_sender = KeyedSender::new_sender(client_id, self.request_sender.clone());
 
@@ -315,5 +304,143 @@ impl<Req: Message, Res: Message> Builder<ConcurrentServerMessageBox<Req, Res>>
 
     fn build(self) -> ConcurrentServerMessageBox<Req, Res> {
         self.build_concurrent()
+    }
+}
+
+pub struct Concurrent;
+pub struct Sequential;
+
+/// A Server Actor builder
+///
+/// The type K is the kind of concurrency: Sequential or Concurrent
+pub struct ServerActorBuilder<S: Server, K> {
+    _kind: K,
+    server: S,
+    box_builder: ServerMessageBoxBuilder<S::Request, S::Response>,
+}
+
+impl<S: Server, K> ServerActorBuilder<S, K> {
+    pub fn new(server: S, config: &ServerConfig, kind: K) -> Self {
+        let service_name = server.name().to_string();
+        let box_builder = ServerMessageBoxBuilder::new(&service_name, config.capacity)
+            .with_max_concurrency(config.max_concurrency);
+
+        ServerActorBuilder {
+            _kind: kind,
+            server,
+            box_builder,
+        }
+    }
+}
+
+impl<S: Server> ServerActorBuilder<S, Sequential> {
+    pub async fn run(self) -> Result<(), RuntimeError> {
+        let actor = ServerActor::new(self.server);
+        let messages = self.box_builder.build();
+
+        actor.run(messages).await
+    }
+}
+
+impl<S: Server + Clone> ServerActorBuilder<S, Concurrent> {
+    pub async fn run(self) -> Result<(), RuntimeError> {
+        let actor = ConcurrentServerActor::new(self.server);
+        let messages = self.box_builder.build();
+
+        actor.run(messages).await
+    }
+}
+
+impl<S: Server> Builder<(ServerActor<S>, ServerMessageBox<S::Request, S::Response>)>
+    for ServerActorBuilder<S, Sequential>
+{
+    type Error = Infallible;
+
+    fn try_build(
+        self,
+    ) -> Result<(ServerActor<S>, ServerMessageBox<S::Request, S::Response>), Self::Error> {
+        Ok(self.build())
+    }
+
+    fn build(self) -> (ServerActor<S>, ServerMessageBox<S::Request, S::Response>) {
+        let actor = ServerActor::new(self.server);
+        let actor_box = self.box_builder.build();
+        (actor, actor_box)
+    }
+}
+
+impl<S: Server + Clone>
+    Builder<(
+        ConcurrentServerActor<S>,
+        ConcurrentServerMessageBox<S::Request, S::Response>,
+    )> for ServerActorBuilder<S, Concurrent>
+{
+    type Error = Infallible;
+
+    fn try_build(
+        self,
+    ) -> Result<
+        (
+            ConcurrentServerActor<S>,
+            ConcurrentServerMessageBox<S::Request, S::Response>,
+        ),
+        Self::Error,
+    > {
+        Ok(self.build())
+    }
+
+    fn build(
+        self,
+    ) -> (
+        ConcurrentServerActor<S>,
+        ConcurrentServerMessageBox<S::Request, S::Response>,
+    ) {
+        let actor = ConcurrentServerActor::new(self.server);
+        let actor_box = self.box_builder.build();
+        (actor, actor_box)
+    }
+}
+
+impl<S: Server, K> ServiceProvider<S::Request, S::Response, NoConfig> for ServerActorBuilder<S, K> {
+    fn add_peer(&mut self, peer: &mut impl ServiceConsumer<S::Request, S::Response, NoConfig>) {
+        self.box_builder.add_peer(peer)
+    }
+}
+
+impl<S: Server, K> RuntimeRequestSink for ServerActorBuilder<S, K> {
+    fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
+        self.box_builder.get_signal_sender()
+    }
+}
+
+#[derive(Debug)]
+pub struct ServerConfig {
+    pub capacity: usize,
+    pub max_concurrency: usize,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        ServerConfig {
+            capacity: 16,
+            max_concurrency: 4,
+        }
+    }
+}
+
+impl ServerConfig {
+    pub fn new() -> Self {
+        ServerConfig::default()
+    }
+
+    pub fn with_capacity(self, capacity: usize) -> Self {
+        Self { capacity, ..self }
+    }
+
+    pub fn with_max_concurrency(self, max_concurrency: usize) -> Self {
+        Self {
+            max_concurrency,
+            ..self
+        }
     }
 }
