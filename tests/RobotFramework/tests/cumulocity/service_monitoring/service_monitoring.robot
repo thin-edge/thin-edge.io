@@ -22,8 +22,8 @@ Test health status of all c8y service
     [Documentation]    Loops over list of c8y thin-edge services
 
     FOR    ${service}    IN  @{SERVICES}     
-        Check up health status of a service    ${service}
-        Check down health status of a service    ${service}
+        Check if a service is up    ${service}
+        Check if a service is down    ${service}
     END
 
 Check health status of tedge-mapper-c8y service on broker restart
@@ -78,7 +78,7 @@ Custom Test Teardown
     ThinEdgeIO.Stop Service    tedge-mapper-c8y
     ThinEdgeIO.Service Should Be Stopped    tedge-mapper-c8y
 
-Check up health status of a service
+Check if a service is up
     [Arguments]    ${service_name}
     Custom Test Setup
     ThinEdgeIO.Start Service    ${service_name}
@@ -95,7 +95,7 @@ Check up health status of a service
     Custom Test Teardown
     
 
-Check down health status of a service
+Check if a service is down
     [Arguments]    ${service_name}
     Custom Test Setup
     ThinEdgeIO.Start Service    ${service_name}   
