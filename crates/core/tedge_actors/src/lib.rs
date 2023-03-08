@@ -1,5 +1,3 @@
-// TODO: Update examples to handle RuntimeRequests
-
 //! A library to define, compose and run actors
 //!
 //! ## Implementing an actor
@@ -7,9 +5,10 @@
 //! Actors are processing units that interact using asynchronous messages.
 //!
 //! The behavior of an actor is defined by:
-//! - a state freely defined and updated by the actor,
-//! - input messages that the actor processes in turn,
-//! - output messages produced by the actor.
+//! - the state owned and freely updated by the actor,
+//! - a message box connected to peer actors,
+//! - input messages that the actor receives from its peers and processes in turn,
+//! - output messages that the actor produces and sends to its peers.
 //!
 //! ```
 //! # use crate::tedge_actors::{Actor, RuntimeError, MessageBox, ReceiveMessages, RuntimeRequest, SimpleMessageBox};
@@ -73,6 +72,20 @@
 //! }
 //! ```
 //!
+//! The `Actor` trait provides the flexibility to:
+//!
+//! - use a specific [MessageBox](crate::MessageBox) implementation
+//!   to address specific communication needs
+//!   (pub/sub, request/response, message priority, concurrent message processing, ...)
+//! - freely interleave message reception and emission in its [Actor::run()](crate::Actor::run) event loop,
+//!   reacting to peer messages as well as internal events,
+//!   sending responses for requests, possibly deferring some responses,
+//!   acting as a source of messages ...
+//!
+//! This crate also provides specific `Actor` implementations:
+//! - The [ServerActor](crate::ServerActor) wraps a [Server](crate::Server),
+//!   to implement a request-response communication pattern with a set of connected client actors.
+//!
 //! ## Testing an actor
 //!
 //! To run and test an actor one needs to create a test message box connected to the actor message box.
@@ -111,263 +124,76 @@
 //! # }
 //! ```
 //!
-//! ## Deriving simple actors
+//! See the [test_helpers](crate::test_helpers) module for various ways
+//! to observe and interact with running actors.
 //!
-//! The `Actor` trait provides more flexibility than required by numerous actors.
-//! This is notably the case for all actors that
-//! - await for some input message, interpreted as a request,
-//! - do something with that input, updating their state and possibly performing side effects,
-//! - send back a single output message, interpreted as a response.
-//!
-//! Such an actor can be implemented as a `Service`.
-//! Doing so, one can save some message box related code;
-//! but the main benefit is that we can than build actors
-//! that can work with several clients (sending the responses to the appropriate requesters).
-//!
-//! ```
-//! # use crate::tedge_actors::{Server, MessageBox, SimpleMessageBox};
-//! # use async_trait::async_trait;
-//!
-//! # use crate::tedge_actors::examples;
-//! # type Operation = examples::calculator::Operation;
-//! # type Update = examples::calculator::Update;
-//!
-//! /// State of the calculator service
-//! #[derive(Default)]
-//! struct Calculator {
-//!     state: i64,
-//! }
-//!
-//! /// Implementation of the calculator behavior
-//! #[async_trait]
-//! impl Server for Calculator {
-//!
-//!     type Request = Operation;
-//!     type Response = Update;
-//!
-//!     fn name(&self) -> &str {
-//!         "Calculator"
-//!     }
-//!
-//!     async fn handle(&mut self, request: Self::Request) -> Self::Response {
-//!         // Act accordingly to the request
-//!         let from = self.state;
-//!         let to = match request {
-//!            Operation::Add(x) => from + x,
-//!            Operation::Multiply(x) => from * x,
-//!         };
-//!
-//!         // Update the service state
-//!         self.state = to;
-//!
-//!         // Return the response
-//!         Update{from,to}
-//!     }
-//! }
-//! ```
-//!
-//! A service can be tested directly through its `handle` method.
-//! One can also build an actor, here a `ServerActor<Calculator>`,
-//! that uses the service implementation to serve requests.
-//! This actor can then be tested using a test box connected to the actor box.
-//!
-//! ```
-//! # use tedge_actors::{Actor, Builder, MessageBox, NoConfig, ReceiveMessages, ServerActor, SimpleMessageBox, SimpleMessageBoxBuilder};
-//! # use tedge_actors::test_helpers::ServiceProviderExt;
-//! # use crate::tedge_actors::examples::calculator::*;
-//! #
-//! # #[tokio::main]
-//! # async fn main_test() {
-//! #
-//! // As for any actor, one needs a bidirectional channel to the message box of the service.
-//! let mut actor_box_builder = SimpleMessageBoxBuilder::new("Actor", 10);
-//! let mut test_box = actor_box_builder.new_client_box(NoConfig);
-//! let actor_box = actor_box_builder.build();
-//!
-//! // The actor is then spawn in the background with its message box.
-//! let service = Calculator::default();
-//! let actor = ServerActor::new(service);
-//! tokio::spawn(actor.run(actor_box));
-//!
-//! // One can then interact with the actor
-//! // Note that now each request is prefixed by a number: the id of the requester
-//! test_box.send((1,Operation::Add(4))).await.expect("message sent");
-//! test_box.send((2,Operation::Multiply(10))).await.expect("message sent");
-//! test_box.send((1,Operation::Add(2))).await.expect("message sent");
-//!
-//! // Observing the service behavior,
-//! // note that the responses come back associated to the id of the requester.
-//! assert_eq!(test_box.recv().await, Some((1, Update{from:0,to:4})));
-//! assert_eq!(test_box.recv().await, Some((2, Update{from:4,to:40})));
-//! assert_eq!(test_box.recv().await, Some((1, Update{from:40,to:42})));
-//!
-//! # }
-//! ```
+//! - A [Probe](crate::test_helpers::Probe) can be interleaved between two actors
+//!   to observe their interactions.
 //!
 //! ## Connecting actors
 //!
 //! Actors don't work in isolation.
-//! They interact by sending messages and a key step is to connect the actors to each others,
-//! or, more precisely, to connect their message boxes.
+//! They interact by sending messages and a key step is to connect the actors with each other.
 //!
-//! The previous example, showing how to interact with a service using a test box,
-//! only makes sense in the context of a test. One does not want to interact with an actor
-//! through a *single* message box, that furthermore exposes internal details as client identifiers.
-//! One must be free to connect several client actors to the same service actor,
-//! and to connect a given actor to a bunch of peer actors delivering specific features.
+//! Connection between actors are established using [actor and message box builders](crate::builders).
+//! These builders implement connector traits
+//! that define the services provided and consumed by the actors under construction.
 //!
-//! Let's start be implementing a client actor for the calculator service.
+//! The connection builder traits work as pairs:
+//! - An actor that provides some service makes this service available
+//!   with
+//! an actor builder that implements the [ServiceProvider](crate::ServiceProvider) trait.
+//! - In a symmetrical way, an actor that requires another service to provide its own feature,
+//!   implements the [ServiceConsumer](crate::ServiceConsumer) trait
+//!   to connect itself to the [ServiceProvider](crate::ServiceProvider)
+//! - These two traits define the types of the messages sent in both directions
+//!   and how to connect the message boxes of the actors under construction,
+//!   possibly using some configuration.
+//! - Two actor builders, a `consumer: ServiceConsumer<I,O,C>` and a `producer: ServiceProvider<I,O,C>`
+//!   can then be connected to each other : `consumer.set_connection(producer)`
 //!
-//! ```
-//! # use async_trait::async_trait;
-//! # use tedge_actors::{Actor, RuntimeError, MessageBox, ClientMessageBox, ReceiveMessages, ServerActor, SimpleMessageBox};
-//! # use crate::tedge_actors::examples::calculator::*;
-//!
-//! /// An actor that send operations to a calculator service to reach a given target.
-//! struct Player {
-//!     name: String,
-//!     target: i64,
-//! }
-//!
-//! #[async_trait]
-//! impl Actor for Player {
-//!
-//!     /// This actor use a simple message box
-//!     /// to receive `Update` messages and to send `Operation` messages.
-//!     ///
-//!     /// Presumably this actor interacts with a `Calculator`
-//!     /// and will have to send an `Operation` before receiving in return an `Update`
-//!     /// But nothing enforces that. The message box only tell what is sent and received.
-//!     type MessageBox = SimpleMessageBox<Update,Operation>;
-//!
-//!     fn name(&self) -> &str {
-//!         &self.name
-//!     }
-//!
-//!     async fn run(self, mut messages: Self::MessageBox)-> Result<(), RuntimeError>  {
-//!         // Send a first identity `Operation` to see where we are.
-//!         messages.send(Operation::Add(0)).await?;
-//!
-//!         while let Some(status) = messages.recv().await {
-//!             // Reduce by two the gap to the target
-//!             let delta = self.target - status.to;
-//!             messages.send(Operation::Add(delta / 2)).await?;
-//!         }
-//!
-//!         Ok(())
-//!     }
-//! }
-//! ```
-//!
-//! To connect such an actor to the calculator, one needs message box builders
-//! to establish appropriate connections between the actor message boxes.
-//!
-//! ```
-//! # use tedge_actors::{Actor, Builder, ChannelError, MessageBox, ReceiveMessages, ServiceConsumer, ServerActor, ServerMessageBox, ServerMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder};
-//! # use crate::tedge_actors::examples::calculator::*;
-//! # #[tokio::main]
-//! # async fn main_test() -> Result<(),ChannelError> {
-//! #
-//!
-//! // Building a box to hold 16 pending requests for the calculator service
-//! // Note that a service actor requires a specific type of message box.
-//! let mut service_box_builder = ServerMessageBoxBuilder::new("Calculator", 16);
-//!
-//! // Building a box to hold one pending message for the player
-//! // This actor never expect more then one message.
-//! let mut player_1_box_builder = SimpleMessageBoxBuilder::new("Player 1", 1);
-//!
-//! // Connecting the two boxes, so the box built by the `player_box_builder`:
-//! // - receives as input the messages sent by the box built by the `service_box_builder`
-//! // - sends its output to the service input box.
-//! player_1_box_builder.set_connection(&mut service_box_builder);
-//!
-//! // Its matters that the builder of the service box is a `ServerMessageBoxBuilder`:
-//! // this builder accept other actors to connect to the same service.
-//! let mut player_2_box_builder = SimpleMessageBoxBuilder::new("Player 2", 1);
-//! player_2_box_builder.set_connection(&mut service_box_builder);
-//!
-//! // One can then build the message boxes
-//! let service_box: ServerMessageBox<Operation,Update> = service_box_builder.build();
-//! let mut player_1_box = player_1_box_builder.build();
-//! let mut player_2_box = player_2_box_builder.build();
-//!
-//! // Then spawn the service
-//! let service = Calculator::default();
-//! tokio::spawn(ServerActor::new(service).run(service_box));
-//!
-//! // And use the players' boxes to interact with the service.
-//! // Note that, compared to the test above of the calculator service,
-//! // - the players don't have to deal with client identifiers,
-//! // - each player receives the responses to its requests,
-//! // - the service processes the requests in the order they have been received,
-//! // - the responses to a client are affected by the requests sent by the others.
-//! player_1_box.send(Operation::Add(0)).await?;
-//! player_2_box.send(Operation::Add(0)).await?;
-//!
-//! assert_eq!(player_1_box.recv().await, Some(Update{from:0,to:0}));
-//! player_1_box.send(Operation::Add(10)).await?;
-//!
-//! assert_eq!(player_2_box.recv().await, Some(Update{from:0,to:0}));
-//! player_2_box.send(Operation::Add(5)).await?;
-//!
-//! assert_eq!(player_1_box.recv().await, Some(Update{from:0,to:10}));
-//! assert_eq!(player_2_box.recv().await, Some(Update{from:10,to:15}));
-//! #
-//! # Ok(())
+//! ```no_run
+//! # use tedge_actors::{DynSender, NoConfig, ServiceConsumer, ServiceProvider};
+//! # #[derive(Default)]
+//! # struct SomeActorBuilder;
+//! # #[derive(Default)]
+//! # struct SomeOtherActorBuilder;
+//! # impl ServiceProvider<(),(),NoConfig> for SomeActorBuilder {
+//! #     fn add_peer(&mut self, peer: &mut impl ServiceConsumer<(), (), NoConfig>) {
+//! #         todo!()
+//! #     }
 //! # }
-//! ```
-//!
-//! The previous example shown how to connect message boxes to an actor,
-//! so one can use these message boxes to simulate actor peers.
-//! However, it would be better to connect real peers
-//! and then observe how the network of actors is behaving.
-//!
-//! Here, we interpose a `Probe` between two actors to observe their interactions.
-//!
-//! ```
-//! # use tedge_actors::{Actor, Builder, ChannelError, ServiceConsumer, ServerActor, ServerMessageBoxBuilder, SimpleMessageBoxBuilder};
-//! # use tedge_actors::test_helpers::{ServiceConsumerExt, Probe, ProbeEvent};
-//! # use tedge_actors::test_helpers::ProbeEvent::{Recv, Send};
-//! # use crate::tedge_actors::examples::calculator::*;
-//! # #[tokio::main]
-//! # async fn main_test() -> Result<(),ChannelError> {
 //! #
-//! // Build the actor message boxes
-//! let mut service_box_builder = ServerMessageBoxBuilder::new("Calculator", 16);
-//! let mut player_box_builder = SimpleMessageBoxBuilder::new("Player 1", 1);
-//!
-//! // Connect the two actor message boxes interposing a probe.
-//! let mut probe = Probe::new();
-//! player_box_builder.with_probe(&mut probe).set_connection(&mut service_box_builder);
-//!
-//! // Spawn the actors
-//! tokio::spawn(ServerActor::new(Calculator::default()).run(service_box_builder.build()));
-//! tokio::spawn(Player { name: "Player".to_string(), target: 42}.run(player_box_builder.build()));
-//!
-//! // Observe the messages sent and received by the player.
-//! assert_eq!(probe.observe().await, Send(Operation::Add(0)));
-//! assert_eq!(probe.observe().await, Recv(Update{from:0, to:0}));
-//! assert_eq!(probe.observe().await, Send(Operation::Add(21)));
-//! assert_eq!(probe.observe().await, Recv(Update{from:0, to:21}));
-//! assert_eq!(probe.observe().await, Send(Operation::Add(10)));
-//! assert_eq!(probe.observe().await, Recv(Update{from:21, to:31}));
-//! assert_eq!(probe.observe().await, Send(Operation::Add(5)));
-//! assert_eq!(probe.observe().await, Recv(Update{from:31, to:36}));
-//! assert_eq!(probe.observe().await, Send(Operation::Add(3)));
-//! assert_eq!(probe.observe().await, Recv(Update{from:36, to:39}));
-//! assert_eq!(probe.observe().await, Send(Operation::Add(1)));
-//! assert_eq!(probe.observe().await, Recv(Update{from:39, to:40}));
-//! assert_eq!(probe.observe().await, Send(Operation::Add(1)));
-//! assert_eq!(probe.observe().await, Recv(Update{from:40, to:41}));
-//! assert_eq!(probe.observe().await, Send(Operation::Add(0)));
-//! assert_eq!(probe.observe().await, Recv(Update{from:41, to:41}));
-//! #
-//! # Ok(())
+//! # impl ServiceConsumer<(),(),NoConfig> for SomeOtherActorBuilder {
+//! #     fn get_config(&self) -> NoConfig {
+//! #        todo!()
+//! #     }
+//! #     fn set_request_sender(&mut self, request_sender: DynSender<()>) {
+//! #         todo!()
+//! #     }
+//! #     fn get_response_sender(&self) -> DynSender<()> {
+//! #         todo!()
+//! #     }
 //! # }
+//!
+//! // An actor builder declares that it provides a service
+//! // by implementing the `ServiceProvider` trait for the appropriate input, output and config types.
+//! //
+//! // Here, `SomeActorBuilder: ServiceProvider<SomeInput, SomeOutput, SomeConfig>`
+//! let mut producer = SomeActorBuilder::default();
+//!
+//! // An actor builder also declares that it is a consumer of other services required by it. This is done
+//! // by implementing the `ServiceConsumer` trait for the appropriate input, output and config types.
+//! //
+//! // Here, `SomeOtherActorBuilder: ServiceConsumer<SomeInput, SomeOutput, SomeConfig>`
+//! let mut consumer = SomeOtherActorBuilder::default();
+//!
+//! // These two actors having compatible expectations along input, output and config types,
+//! // can then be connected to each other.
+//! consumer.set_connection(&mut producer);
 //! ```
 //!
-//! ## Using actor builders
+//! ## Running actors
 //!
 //! TODO
 //!
