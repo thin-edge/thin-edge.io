@@ -142,8 +142,8 @@ impl<I: MessagePlus, O: MessagePlus> Probe<I, O> {
     ///
     /// Note that calling `observe()` is mandatory for the actors to make progress.
     /// Indeed the observed channels are blocked on each action till the event is actually observed.
-    /// Hence a probe also control at which pace the input/output messages are sent
-    /// between the two actors which connection is observed.
+    /// Hence a probe also controls the pace at which input/output messages are sent
+    /// over the observed connection between the two actors
     pub async fn observe(&mut self) -> ProbeEvent<I, O> {
         // Ensure that input/output can only be sent by the observed actors
         let _ = self.input_interceptor.close().await;
@@ -208,10 +208,10 @@ impl<I: MessagePlus, O: MessagePlus> Probe<I, O> {
 
 /// Extend any [ServiceConsumer] with a `with_probe` method.
 pub trait ServiceConsumerExt<Request: MessagePlus, Response: MessagePlus> {
-    /// Add a probe to `self` that is a [ServiceConsumer](crate::ServiceConsumer) of a first actor.
+    /// Add a probe to an actor `self` that is a [ServiceConsumer](crate::ServiceConsumer).
     ///
     /// Return a [ServiceConsumer](crate::ServiceConsumer)
-    /// ready to be plug into a [ServiceProvider](crate::ServiceProvider) of a second actor.
+    /// that can be plugged into another actor which is a [ServiceProvider](crate::ServiceProvider).
     ///
     /// The added `Probe` is then interposed between the two actors,
     /// observing all the [ProbeEvent](crate::test_helpers::ProbeEvent) exchanged between them.

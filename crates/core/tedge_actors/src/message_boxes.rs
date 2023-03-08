@@ -83,9 +83,9 @@
 //! This crates provides several built-in message box implementations:
 //!
 //! - [SimpleMessageBox](crate::SimpleMessageBox) for actors that simply process messages in turn,
-//! - [ServerMessageBox](crate::ServerMessageBox) for actors that deliver a request-response service,
-//! - [ConcurrentServerMessageBox](crate::ConcurrentServerMessageBox) for service actors that process requests concurrently,
-//! - [ClientMessageBox](crate::ClientMessageBox) for actors that use a request-response service,
+//! - [ServerMessageBox](crate::ServerMessageBox) for server actors that deliver a request-response service,
+//! - [ConcurrentServerMessageBox](crate::ConcurrentServerMessageBox) for server actors that process requests concurrently,
+//! - [ClientMessageBox](crate::ClientMessageBox) for client actors that use a request-response service from a server actor,
 //!
 //!
 
@@ -288,7 +288,7 @@ impl<Input: Message, Output: Message> MessageBox for SimpleMessageBox<Input, Out
 pub type ServerMessageBox<Request, Response> =
     SimpleMessageBox<(ClientId, Request), (ClientId, Response)>;
 
-/// Internal id assigned to a client actor of service actor
+/// Internal id assigned to a client actor of a server actor
 pub type ClientId = usize;
 
 /// A message box for services that handles requests concurrently

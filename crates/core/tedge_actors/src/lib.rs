@@ -5,7 +5,7 @@
 //! Actors are processing units that interact using asynchronous messages.
 //!
 //! The behavior of an actor is defined by:
-//! - a state owned and freely updated by the actor,
+//! - the state owned and freely updated by the actor,
 //! - a message box connected to peer actors,
 //! - input messages that the actor receives from its peers and processes in turn,
 //! - output messages that the actor produces and sends to its peers.
@@ -78,11 +78,11 @@
 //!   to address specific communication needs
 //!   (pub/sub, request/response, message priority, concurrent message processing, ...)
 //! - freely interleave message reception and emission in its [Actor::run()](crate::Actor::run) event loop,
-//!   reacting to peer messages as well internal events,
+//!   reacting to peer messages as well as internal events,
 //!   sending responses for requests, possibly deferring some responses,
 //!   acting as a source of messages ...
 //!
-//! This crate provides specific `Actor` implementations:
+//! This crate also provides specific `Actor` implementations:
 //! - The [ServerActor](crate::ServerActor) wraps a [Server](crate::Server),
 //!   to implement a request-response communication pattern with a set of connected client actors.
 //!
@@ -144,12 +144,12 @@
 //!   with
 //! an actor builder that implements the [ServiceProvider](crate::ServiceProvider) trait.
 //! - In a symmetrical way, an actor that requires another service to provide its own feature,
-//!   makes the connection feasible with a connection builder
-//!   that implements the [ServiceConsumer](crate::ServiceConsumer) trait.
+//!   implements the [ServiceConsumer](crate::ServiceConsumer) trait
+//!   to connect itself to the [ServiceProvider](crate::ServiceProvider)
 //! - These two traits define the types of the messages sent in both directions
 //!   and how to connect the message boxes of the actors under construction,
 //!   possibly using some configuration.
-//! - Two actor builders, a `consumer: ServiceConsumer<I,O>` and a `producer: ServiceProvider<I,O,C>`
+//! - Two actor builders, a `consumer: ServiceConsumer<I,O,C>` and a `producer: ServiceProvider<I,O,C>`
 //!   can then be connected to each other : `consumer.set_connection(producer)`
 //!
 //! ```no_run
@@ -176,16 +176,16 @@
 //! #     }
 //! # }
 //!
-//! // An actor builder defines the service provided by that actor
+//! // An actor builder declares that it provides a service
 //! // by implementing the `ServiceProvider` trait for the appropriate input, output and config types.
 //! //
 //! // Here, `SomeActorBuilder: ServiceProvider<SomeInput, SomeOutput, SomeConfig>`
 //! let mut producer = SomeActorBuilder::default();
 //!
-//! // An actor builder also defines the services required by the actor. This is done
+//! // An actor builder also declares that it is a consumer of other services required by it. This is done
 //! // by implementing the `ServiceConsumer` trait for the appropriate input, output and config types.
 //! //
-//! // Here, `SomeOtherActorBuilder: ServiceConsumer<SomeInput, SomeOutput>`
+//! // Here, `SomeOtherActorBuilder: ServiceConsumer<SomeInput, SomeOutput, SomeConfig>`
 //! let mut consumer = SomeOtherActorBuilder::default();
 //!
 //! // These two actors having compatible expectations along input, output and config types,

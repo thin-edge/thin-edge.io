@@ -1,4 +1,4 @@
-//! Let's start be implementing a client actor for the calculator server actor.
+//! Let's start by implementing a client actor for the calculator server actor.
 //!
 //! ```
 //! # use async_trait::async_trait;
@@ -60,12 +60,12 @@
 //! let mut player_1_box_builder = SimpleMessageBoxBuilder::new("Player 1", 1);
 //!
 //! // Connecting the two boxes, so the box built by the `player_box_builder`:
-//! // - receives as input the messages sent by the box built by the `server_box_builder`
-//! // - sends its output to the server actor input box.
+//! // - receives as input, the output messages sent from the server message box 
+//! // - sends output messages to the server message box as its input.
 //! player_1_box_builder.set_connection(&mut server_box_builder);
 //!
-//! // Its matters that the builder of the server box is a `ServerMessageBoxBuilder`:
-//! // this builder accept other actors to connect to the same server.
+//! // It matters that the builder of the server box is a `ServerMessageBoxBuilder`:
+//! // as this builder accepts multiple client actors to connect to the same server.
 //! let mut player_2_box_builder = SimpleMessageBoxBuilder::new("Player 2", 1);
 //! player_2_box_builder.set_connection(&mut server_box_builder);
 //!
