@@ -60,7 +60,7 @@
 //! let mut player_1_box_builder = SimpleMessageBoxBuilder::new("Player 1", 1);
 //!
 //! // Connecting the two boxes, so the box built by the `player_box_builder`:
-//! // - receives as input, the output messages sent from the server message box 
+//! // - receives as input, the output messages sent from the server message box
 //! // - sends output messages to the server message box as its input.
 //! player_1_box_builder.set_connection(&mut server_box_builder);
 //!
