@@ -1,1 +1,1 @@
-robotframework-devicelibrary[local] @ git+https://github.com/reubenmiller/robotframework-devicelibrary.git@0.28.0
+robotframework-devicelibrary[local] @ git+https://github.com/reubenmiller/robotframework-devicelibrary.git@0.28.2

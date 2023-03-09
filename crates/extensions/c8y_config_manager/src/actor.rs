@@ -28,7 +28,7 @@ use tedge_actors::ReceiveMessages;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::WrappedInput;
-use tedge_api::health::get_health_status_message;
+use tedge_api::health::health_status_up_message;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -67,7 +67,7 @@ impl ConfigManagerActor {
         message_box: &mut ConfigManagerMessageBox,
     ) -> Result<(), ConfigManagementError> {
         if self.config.health_check_topics.accept(&message) {
-            let message = get_health_status_message("c8y-configuration-plugin").await;
+            let message = health_status_up_message("c8y-configuration-plugin");
             message_box.send(message.into()).await?;
             return Ok(());
         } else if self.config.config_snapshot_response_topics.accept(&message) {

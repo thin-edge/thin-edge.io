@@ -15,6 +15,7 @@ use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use tedge_api::health::health_check_topics;
 use tedge_api::health::health_status_down_message;
+use tedge_api::health::health_status_up_message;
 use tedge_api::health::send_health_status;
 use tracing::error;
 use tracing::info;
@@ -93,6 +94,7 @@ impl DeviceMonitor {
         )
         .with_session_name(self.device_monitor_config.mqtt_client_id)
         .with_subscriptions(input_topic)
+        .with_initial_message(|| health_status_up_message(COLLECTD_MAPPER_NAME))
         .with_last_will_message(health_status_down_message(COLLECTD_MAPPER_NAME));
 
         let mqtt_client = Connection::new(&mqtt_config).await?;

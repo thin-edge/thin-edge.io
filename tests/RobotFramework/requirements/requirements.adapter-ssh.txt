@@ -1,2 +1,2 @@
-robotframework-devicelibrary[ssh] @ git+https://github.com/reubenmiller/robotframework-devicelibrary.git@0.28.0
+robotframework-devicelibrary[ssh] @ git+https://github.com/reubenmiller/robotframework-devicelibrary.git@0.28.2
 robotframework-sshlibrary~=3.8.0

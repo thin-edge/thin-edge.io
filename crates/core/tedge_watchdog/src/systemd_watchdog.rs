@@ -17,6 +17,7 @@ use std::process::Stdio;
 use std::process::{self};
 use std::time::Instant;
 use tedge_api::health::health_status_down_message;
+use tedge_api::health::health_status_up_message;
 use tedge_api::health::send_health_status;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
@@ -125,6 +126,7 @@ async fn monitor_tedge_service(
     let client_id: &str = &format!("{}_{}", name, nanoid!());
     let mqtt_config = get_mqtt_config(tedge_config_location, client_id)?
         .with_subscriptions(res_topic.try_into()?)
+        .with_initial_message(|| health_status_up_message("tedge-watchdog"))
         .with_last_will_message(health_status_down_message("tedge-watchdog"));
     let client = mqtt_channel::Connection::new(&mqtt_config).await?;
     let mut received = client.received;

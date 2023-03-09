@@ -23,6 +23,7 @@ use mqtt_channel::StreamExt;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use tedge_api::health::health_status_down_message;
+use tedge_api::health::health_status_up_message;
 use tokio::sync::Mutex;
 
 use std::path::PathBuf;
@@ -220,6 +221,7 @@ impl ConfigManager {
             .with_host(mqtt_host)
             .with_port(mqtt_port)
             .with_subscriptions(topic_filter)
+            .with_initial_message(|| health_status_up_message(DEFAULT_PLUGIN_CONFIG_TYPE))
             .with_last_will_message(health_status_down_message(DEFAULT_PLUGIN_CONFIG_TYPE));
 
         let mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
