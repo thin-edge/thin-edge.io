@@ -2,7 +2,6 @@
 Resource    ../../../resources/common.resource
 Library    Cumulocity
 Library    ThinEdgeIO 
-Library    DateTime
 
 Test Tags    theme:c8y    theme:tokens
 Test Setup    Custom Setup
