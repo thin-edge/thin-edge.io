@@ -1,9 +1,10 @@
 use super::*;
 use crate::FirmwareManager;
 use assert_json_diff::assert_json_include;
-use c8y_api::http_proxy::MockC8YHttpProxy;
 use c8y_api::smartrest::error::SMCumulocityMapperError;
-use mockall::predicate;
+use futures::channel::mpsc::UnboundedReceiver;
+use futures::channel::mpsc::UnboundedSender;
+use futures::SinkExt;
 use mqtt_tests::with_timeout::WithTimeout;
 use mqtt_tests::StreamExt;
 use serde_json::json;
@@ -21,28 +22,14 @@ const FIRMWARE_VERSION: &str = "fw-version";
 #[serial_test::serial]
 async fn handle_request_child_device() -> anyhow::Result<()> {
     let mut tmp_dir = TempTedgeDir::new();
-    create_required_directories(&mut tmp_dir);
-
     let broker = mqtt_tests::test_mqtt_broker();
-    let mut c8y_http_client = MockC8YHttpProxy::new();
-    c8y_http_client
-        .expect_download_file()
-        .with(
-            predicate::always(),
-            predicate::always(),
-            predicate::always(),
-        )
-        .returning(|_, file_name, tmp_dir_path| {
-            let downloaded_path = tmp_dir_path.join(file_name);
-            std::fs::File::create(&downloaded_path)?;
-            Ok(downloaded_path)
-        });
 
     start_firmware_manager(
         &mut tmp_dir,
         broker.port,
-        c8y_http_client,
         DEFAULT_REQUEST_TIMEOUT_SEC,
+        true,
+        None,
     )
     .await?;
 
@@ -91,25 +78,26 @@ async fn handle_request_child_device() -> anyhow::Result<()> {
 #[serial_test::serial]
 async fn handle_request_file_download_failed() -> anyhow::Result<()> {
     let mut tmp_dir = TempTedgeDir::new();
-    create_required_directories(&mut tmp_dir);
-
     let broker = mqtt_tests::test_mqtt_broker();
-    let mut c8y_http_client = MockC8YHttpProxy::new();
-    // Key: Download will return Err to imitate downloading failure.
-    c8y_http_client
-        .expect_download_file()
-        .with(
-            predicate::always(),
-            predicate::always(),
-            predicate::always(),
-        )
-        .returning(|_, _, _| Err(SMCumulocityMapperError::RequestTimeout));
+
+    // Mock DownloadManager sending timeout response
+    let (req_sndr, mut req_rcvr) = mpsc::unbounded::<DownloadRequest>();
+    let (mut res_sndr, res_rcvr) = mpsc::unbounded::<DownloadResponse>();
+    tokio::spawn(async move {
+        if let Some(req) = req_rcvr.next().await {
+            let response =
+                DownloadResponse::new(&req.id, Err(SMCumulocityMapperError::RequestTimeout));
+
+            let _ = res_sndr.send(response).await;
+        }
+    });
 
     start_firmware_manager(
         &mut tmp_dir,
         broker.port,
-        c8y_http_client,
         DEFAULT_REQUEST_TIMEOUT_SEC,
+        true,
+        Some((req_sndr, res_rcvr)),
     )
     .await?;
 
@@ -138,7 +126,12 @@ async fn handle_request_file_download_failed() -> anyhow::Result<()> {
     mqtt_tests::assert_received_all_expected(
         &mut smartrest_messages,
         TEST_TIMEOUT_MS,
-        &["501,c8y_Firmware", "502,c8y_Firmware,\"Request timed out\""],
+        &[
+            "501,c8y_Firmware",
+            &format!(
+                "502,c8y_Firmware,\"Download from {cloud_firmware_url} failed with Request timed out\"",
+            ),
+        ],
     )
     .await;
 
@@ -153,25 +146,13 @@ async fn handle_request_dir_cache_not_found() -> anyhow::Result<()> {
     tmp_dir.dir("firmware");
 
     let broker = mqtt_tests::test_mqtt_broker();
-    let mut c8y_http_client = MockC8YHttpProxy::new();
-    c8y_http_client
-        .expect_download_file()
-        .with(
-            predicate::always(),
-            predicate::always(),
-            predicate::always(),
-        )
-        .returning(|_, file_name, tmp_dir_path| {
-            let downloaded_path = tmp_dir_path.join(file_name);
-            std::fs::File::create(&downloaded_path)?;
-            Ok(downloaded_path)
-        });
 
     start_firmware_manager(
         &mut tmp_dir,
         broker.port,
-        c8y_http_client,
         DEFAULT_REQUEST_TIMEOUT_SEC,
+        false,
+        None,
     )
     .await?;
 
@@ -219,25 +200,13 @@ async fn handle_request_dir_file_transfer_not_found() -> anyhow::Result<()> {
     tmp_dir.dir("firmware");
 
     let broker = mqtt_tests::test_mqtt_broker();
-    let mut c8y_http_client = MockC8YHttpProxy::new();
-    c8y_http_client
-        .expect_download_file()
-        .with(
-            predicate::always(),
-            predicate::always(),
-            predicate::always(),
-        )
-        .returning(|_, file_name, tmp_dir_path| {
-            let downloaded_path = tmp_dir_path.join(file_name);
-            std::fs::File::create(&downloaded_path)?;
-            Ok(downloaded_path)
-        });
 
     start_firmware_manager(
         &mut tmp_dir,
         broker.port,
-        c8y_http_client,
         DEFAULT_REQUEST_TIMEOUT_SEC,
+        false,
+        None,
     )
     .await?;
 
@@ -285,25 +254,13 @@ async fn handle_request_dir_firmware_not_found() -> anyhow::Result<()> {
     tmp_dir.dir("file-transfer");
 
     let broker = mqtt_tests::test_mqtt_broker();
-    let mut c8y_http_client = MockC8YHttpProxy::new();
-    c8y_http_client
-        .expect_download_file()
-        .with(
-            predicate::always(),
-            predicate::always(),
-            predicate::always(),
-        )
-        .returning(|_, file_name, tmp_dir_path| {
-            let downloaded_path = tmp_dir_path.join(file_name);
-            std::fs::File::create(&downloaded_path)?;
-            Ok(downloaded_path)
-        });
 
     start_firmware_manager(
         &mut tmp_dir,
         broker.port,
-        c8y_http_client,
         DEFAULT_REQUEST_TIMEOUT_SEC,
+        false,
+        None,
     )
     .await?;
 
@@ -347,28 +304,14 @@ async fn handle_request_dir_firmware_not_found() -> anyhow::Result<()> {
 #[serial_test::serial]
 async fn handle_request_timeout_child_device() -> anyhow::Result<()> {
     let mut tmp_dir = TempTedgeDir::new();
-    create_required_directories(&mut tmp_dir);
-
     let broker = mqtt_tests::test_mqtt_broker();
-    let mut c8y_http_client = MockC8YHttpProxy::new();
-    c8y_http_client
-        .expect_download_file()
-        .with(
-            predicate::always(),
-            predicate::always(),
-            predicate::always(),
-        )
-        .returning(|_, file_name, tmp_dir_path| {
-            let downloaded_path = tmp_dir_path.join(file_name);
-            std::fs::File::create(&downloaded_path)?;
-            Ok(downloaded_path)
-        });
 
     start_firmware_manager(
         &mut tmp_dir,
         broker.port,
-        c8y_http_client,
         Duration::from_secs(1),
+        true,
+        None,
     )
     .await?;
 
@@ -428,28 +371,14 @@ async fn handle_request_timeout_child_device() -> anyhow::Result<()> {
 #[serial_test::serial]
 async fn handle_response_successful_child_device() -> anyhow::Result<()> {
     let mut tmp_dir = TempTedgeDir::new();
-    create_required_directories(&mut tmp_dir);
-
     let broker = mqtt_tests::test_mqtt_broker();
-    let mut c8y_http_client = MockC8YHttpProxy::new();
-    c8y_http_client
-        .expect_download_file()
-        .with(
-            predicate::always(),
-            predicate::always(),
-            predicate::always(),
-        )
-        .returning(|_, file_name, tmp_dir_path| {
-            let downloaded_path = tmp_dir_path.join(file_name);
-            std::fs::File::create(&downloaded_path)?;
-            Ok(downloaded_path)
-        });
 
     start_firmware_manager(
         &mut tmp_dir,
         broker.port,
-        c8y_http_client,
         DEFAULT_REQUEST_TIMEOUT_SEC,
+        true,
+        None,
     )
     .await?;
 
@@ -520,28 +449,14 @@ async fn handle_response_successful_child_device() -> anyhow::Result<()> {
 #[serial_test::serial]
 async fn handle_response_executing_and_failed_child_device() -> anyhow::Result<()> {
     let mut tmp_dir = TempTedgeDir::new();
-    create_required_directories(&mut tmp_dir);
-
     let broker = mqtt_tests::test_mqtt_broker();
-    let mut c8y_http_client = MockC8YHttpProxy::new();
-    c8y_http_client
-        .expect_download_file()
-        .with(
-            predicate::always(),
-            predicate::always(),
-            predicate::always(),
-        )
-        .returning(|_, file_name, tmp_dir_path| {
-            let downloaded_path = tmp_dir_path.join(file_name);
-            std::fs::File::create(&downloaded_path)?;
-            Ok(downloaded_path)
-        });
 
     start_firmware_manager(
         &mut tmp_dir,
         broker.port,
-        c8y_http_client,
         DEFAULT_REQUEST_TIMEOUT_SEC,
+        true,
+        None,
     )
     .await?;
 
@@ -630,28 +545,14 @@ async fn handle_response_executing_and_failed_child_device() -> anyhow::Result<(
 #[serial_test::serial]
 async fn ignore_response_with_invalid_status_child_device() -> anyhow::Result<()> {
     let mut tmp_dir = TempTedgeDir::new();
-    create_required_directories(&mut tmp_dir);
-
     let broker = mqtt_tests::test_mqtt_broker();
-    let mut c8y_http_client = MockC8YHttpProxy::new();
-    c8y_http_client
-        .expect_download_file()
-        .with(
-            predicate::always(),
-            predicate::always(),
-            predicate::always(),
-        )
-        .returning(|_, file_name, tmp_dir_path| {
-            let downloaded_path = tmp_dir_path.join(file_name);
-            std::fs::File::create(&downloaded_path)?;
-            Ok(downloaded_path)
-        });
 
     start_firmware_manager(
         &mut tmp_dir,
         broker.port,
-        c8y_http_client,
         DEFAULT_REQUEST_TIMEOUT_SEC,
+        true,
+        None,
     )
     .await?;
 
@@ -717,28 +618,14 @@ async fn ignore_response_with_invalid_status_child_device() -> anyhow::Result<()
 #[serial_test::serial]
 async fn handle_response_with_invalid_operation_id_child_device() -> anyhow::Result<()> {
     let mut tmp_dir = TempTedgeDir::new();
-    create_required_directories(&mut tmp_dir);
-
     let broker = mqtt_tests::test_mqtt_broker();
-    let mut c8y_http_client = MockC8YHttpProxy::new();
-    c8y_http_client
-        .expect_download_file()
-        .with(
-            predicate::always(),
-            predicate::always(),
-            predicate::always(),
-        )
-        .returning(|_, file_name, tmp_dir_path| {
-            let downloaded_path = tmp_dir_path.join(file_name);
-            std::fs::File::create(&downloaded_path)?;
-            Ok(downloaded_path)
-        });
 
     start_firmware_manager(
         &mut tmp_dir,
         broker.port,
-        c8y_http_client,
         DEFAULT_REQUEST_TIMEOUT_SEC,
+        true,
+        None,
     )
     .await?;
 
@@ -762,7 +649,7 @@ async fn handle_response_with_invalid_operation_id_child_device() -> anyhow::Res
         .messages_published_on(format!("c8y/s/us/{CHILD_DEVICE_ID}").as_str())
         .await;
 
-    // Publish an invalid RESPONSE from child device
+    // Publish a response with invalid operation_id from the child device
     broker
         .publish(
             &format!("tedge/{CHILD_DEVICE_ID}/commands/res/firmware_update"),
@@ -774,14 +661,121 @@ async fn handle_response_with_invalid_operation_id_child_device() -> anyhow::Res
         )
         .await?;
 
-    // Assert the c8y_Firmware operation status mapping to EXECUTING(501) and FAILED(502)
+    // No message is expected since the response with invalid operation_id is ignored.
+    let result = smartrest_messages
+        .next()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await;
+    assert!(result.is_err());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::serial]
+async fn handle_child_response_while_busy_downloading() -> anyhow::Result<()> {
+    let mut tmp_dir = TempTedgeDir::new();
+    let broker = mqtt_tests::test_mqtt_broker();
+
+    // Mock download endpoint for the plugin to download a firmware from the cloud
+    let child1 = "child1";
+    let child2 = "child2";
+    let mock_http_server_host = mockito::server_url();
+    let child1_firmware_url = format!("{mock_http_server_host}/{child1}/cloud/url");
+    let child2_firmware_url = format!("{mock_http_server_host}/{child2}/cloud/url");
+
+    // Mock DownloadManager that does not complete download for child 2
+    let (req_sndr, mut req_rcvr) = mpsc::unbounded::<DownloadRequest>();
+    let (mut res_sndr, res_rcvr) = mpsc::unbounded::<DownloadResponse>();
+    let tmp_dir_clone = tmp_dir.clone();
+    let child2_firmware_url_clone = child2_firmware_url.clone();
+    let (mut child2_download_signal_sndr, mut child2_download_signal_rcvr) = mpsc::channel(1);
+    tokio::spawn(async move {
+        while let Some(req) = req_rcvr.next().await {
+            if req.url == child2_firmware_url_clone {
+                // Do not finish the download for child 2 but send a signal that download started
+                child2_download_signal_sndr.send(()).await.unwrap();
+            } else {
+                // Finish the download for other child devices
+                let downloaded_firmware = tmp_dir_clone.file(&req.file_name);
+                let response = DownloadResponse {
+                    id: req.id,
+                    result: Ok(downloaded_firmware.file_path),
+                };
+
+                let _ = res_sndr.send(response).await;
+            }
+        }
+    });
+
+    start_firmware_manager(
+        &mut tmp_dir,
+        broker.port,
+        DEFAULT_REQUEST_TIMEOUT_SEC,
+        true,
+        Some((req_sndr, res_rcvr)),
+    )
+    .await?;
+
+    // Subscribe to tedge firmware_update requests for child 1
+    let mut tedge_command_messages = broker
+        .messages_published_on(&format!("tedge/{child1}/commands/req/firmware_update"))
+        .await;
+
+    // Publish a c8y_Firmware operation for child 1
+    broker
+        .publish(
+            "c8y/s/ds",
+            &format!("515,{child1},{FIRMWARE_NAME},{FIRMWARE_VERSION},{child1_firmware_url}"),
+        )
+        .await?;
+
+    // Wait till tedge firmware_update command is published for child 1
+    let received_message = tedge_command_messages
+        .next()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await?
+        .expect("No message received.");
+    let received_json: serde_json::Value = serde_json::from_str(&received_message)?;
+    let child1_op_id = received_json.get("id").unwrap().as_str().unwrap();
+
+    // Publish a c8y_Firmware operation for child 2
+    broker
+        .publish(
+            "c8y/s/ds",
+            &format!("515,{child2},{FIRMWARE_NAME},{FIRMWARE_VERSION},{child2_firmware_url}"),
+        )
+        .await?;
+
+    // Wait till download starts for child 2
+    let result = child2_download_signal_rcvr
+        .next()
+        .with_timeout(Duration::from_secs(60))
+        .await;
+    assert!(result.is_ok(), "Firmware download did not start");
+
+    // Subscribe to SmartREST responses of child 1
+    let mut smartrest_messages = broker
+        .messages_published_on(format!("c8y/s/us/{child1}").as_str())
+        .await;
+
+    // Publish an executing response from child 1 when the download for child 2 is still in progress
+    broker
+        .publish(
+            &format!("tedge/{child1}/commands/res/firmware_update"),
+            &json!({
+                "status": "executing",
+                "id": child1_op_id,
+            })
+            .to_string(),
+        )
+        .await?;
+
+    // Assert that the EXECUTING response from child 1 is mapped even when the download for child 2 is still in progress
     mqtt_tests::assert_received_all_expected(
         &mut smartrest_messages,
         TEST_TIMEOUT_MS,
-        &[
-            "501,c8y_Firmware",
-            "502,c8y_Firmware,\"No such file or directory (os error 2)\"",
-        ],
+        &["501,c8y_Firmware"],
     )
     .await;
 
@@ -791,16 +785,44 @@ async fn handle_response_with_invalid_operation_id_child_device() -> anyhow::Res
 async fn start_firmware_manager(
     tmp_dir: &mut TempTedgeDir,
     port: u16,
-    http_client: MockC8YHttpProxy,
     timeout_sec: Duration,
+    init: bool,
+    download_handle: Option<(
+        UnboundedSender<DownloadRequest>,
+        UnboundedReceiver<DownloadResponse>,
+    )>,
 ) -> anyhow::Result<()> {
-    let mut firmware_manager = FirmwareManager::new(
+    if init {
+        create_required_directories(tmp_dir);
+    }
+
+    let (req_sndr, res_rcvr) = if let Some(handle) = download_handle {
+        (handle.0, handle.1)
+    } else {
+        let (req_sndr, mut req_rcvr) = mpsc::unbounded::<DownloadRequest>();
+        let (mut res_sndr, res_rcvr) = mpsc::unbounded::<DownloadResponse>();
+        let tmp_dir_clone = tmp_dir.clone();
+        tokio::spawn(async move {
+            if let Some(req) = req_rcvr.next().await {
+                let downloaded_firmware = tmp_dir_clone.file(&req.file_name);
+                let response = DownloadResponse {
+                    id: req.id,
+                    result: Ok(downloaded_firmware.file_path),
+                };
+                let _ = res_sndr.send(response).await;
+            }
+        });
+
+        (req_sndr, res_rcvr)
+    };
+
+    let firmware_manager = FirmwareManager::new(
         "tedge_device_id".to_string(),
         "localhost".to_string(),
         port,
-        Box::new(http_client),
+        req_sndr,
+        res_rcvr,
         mockito::server_address().to_string(),
-        tmp_dir.to_path_buf(),
         tmp_dir.to_path_buf(),
         timeout_sec,
     )
