@@ -144,7 +144,7 @@ def start_server(c, port=9000):
 def detect_target():
     uname = str(platform.uname()[4]).casefold()
     arch = None
-    if "arm64" in uname:
+    if "arm64" in uname or "aarch64" in uname:
         arch = "aarch64-unknown-linux"
     elif "armv7" in uname:
         arch = "armv7-unknown-linux"
