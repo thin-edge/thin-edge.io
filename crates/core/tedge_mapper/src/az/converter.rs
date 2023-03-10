@@ -5,6 +5,7 @@ use crate::core::size_threshold::SizeThreshold;
 use async_trait::async_trait;
 use clock::Clock;
 use mqtt_channel::Message;
+use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use tedge_api::serialize::ThinEdgeJsonSerializer;
 
@@ -31,7 +32,9 @@ impl AzureConverter {
     }
 
     pub fn in_topic_filter() -> TopicFilter {
-        make_valid_topic_filter_or_panic("tedge/measurements")
+        vec!["tedge/measurements", "tedge/measurements/+"]
+            .try_into()
+            .unwrap()
     }
 }
 
@@ -44,13 +47,29 @@ impl Converter for AzureConverter {
     }
 
     async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
+        let maybe_child_id = get_child_id_from_measurement_topic(&input.topic.name)?;
+
+        let az_out_topic = match maybe_child_id {
+            Some(child_id) => Topic::new_unchecked(&format!("az/messages/events/$.sub={child_id}")),
+            None => self.mapper_config.out_topic.clone(),
+        };
+
         self.size_threshold.validate(input)?;
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
         let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
         tedge_api::parser::parse_str(input.payload_str()?, &mut serializer)?;
 
         let payload = serializer.into_string()?;
-        Ok(vec![(Message::new(&self.mapper_config.out_topic, payload))])
+        Ok(vec![(Message::new(&az_out_topic, payload))])
+    }
+}
+
+pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>, ConversionError> {
+    match topic.strip_prefix("tedge/measurements/").map(String::from) {
+        Some(maybe_id) if maybe_id.is_empty() => {
+            Err(ConversionError::InvalidChildId { id: maybe_id })
+        }
+        option => Ok(option),
     }
 }
 
