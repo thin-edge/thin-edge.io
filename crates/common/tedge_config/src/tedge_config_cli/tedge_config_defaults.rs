@@ -18,7 +18,7 @@ const DEFAULT_DEVICE_TYPE: &str = "thin-edge.io";
 const DEFAULT_FIRMWARE_CHILD_UPDATE_TIMEOUT_SEC: u64 = 3600;
 const DEFAULT_SERVICE_TYPE: &str = "service";
 
-pub const DEFAULT_FILE_TRANSFER_ROOT_PATH: &str = "/var/tedge/file-transfer";
+pub const DEFAULT_FILE_TRANSFER_DIR_NAME: &str = "file-transfer";
 
 /// Stores default values for use by `TEdgeConfig` in case no configuration setting
 /// is available.
