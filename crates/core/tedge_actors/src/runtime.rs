@@ -27,7 +27,7 @@ pub enum RuntimeAction {
 }
 
 /// Requests sent by the runtime to actors
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum RuntimeRequest {
     Shutdown,
 }
@@ -217,7 +217,7 @@ impl RuntimeActor {
         finished_actor: Result<Result<String, (String, RuntimeError)>, JoinError>,
     ) {
         match finished_actor {
-            Err(e) => info!(target: "Runtime", "Failed to execute actor: {e}"), //FIXME: this happens on panic in actor
+            Err(e) => error!(target: "Runtime", "Failed to execute actor: {e}"),
             Ok(Ok(actor)) => {
                 self.running_actors.remove(&actor);
                 info!(target: "Runtime", "Actor has finished: {actor}");
@@ -225,7 +225,7 @@ impl RuntimeActor {
             }
             Ok(Err((actor, error))) => {
                 self.running_actors.remove(&actor);
-                error!(target: "Runtime", "Actor has finished unsuccessfully: {actor}");
+                error!(target: "Runtime", "Actor {actor} has finished unsuccessfully: {error:?}");
                 self.send_event(RuntimeEvent::Aborted { task: actor, error })
                     .await;
             }
@@ -261,9 +261,12 @@ async fn run_task(
     task: Box<dyn Task>,
     running_name: String,
 ) -> Result<String, (String, RuntimeError)> {
-    task.run().await.map_err(|e| (running_name.clone(), e))?;
-
-    Ok(running_name)
+    match tokio::spawn(task.run()).await {
+        Ok(r) => r
+            .map(|_| running_name.clone())
+            .map_err(|e| (running_name, e)),
+        Err(e) => Err((running_name.clone(), e.into())),
+    }
 }
 
 #[cfg(test)]
@@ -279,7 +282,7 @@ mod tests {
     use futures::channel::mpsc::Sender;
     use std::time::Duration;
 
-    fan_in_message_type!(EchoMessage[String, RuntimeRequest] : Debug);
+    fan_in_message_type!(EchoMessage[String, RuntimeRequest] : Debug, PartialEq);
 
     pub struct Echo;
 
@@ -320,20 +323,20 @@ mod tests {
         }
     }
 
-    // struct Panic;
+    struct Panic;
 
-    // #[async_trait]
-    // impl Actor for Panic {
-    //     type MessageBox = SimpleMessageBox<(), ()>;
+    #[async_trait]
+    impl Actor for Panic {
+        type MessageBox = SimpleMessageBox<RuntimeRequest, ()>;
 
-    //     fn name(&self) -> &str {
-    //         "Panic"
-    //     }
+        fn name(&self) -> &str {
+            "Panic"
+        }
 
-    //     async fn run(mut self, _: SimpleMessageBox<(), ()>) -> Result<(), ChannelError> {
-    //         panic!("Oh dear");
-    //     }
-    // }
+        async fn run(mut self, _: Self::MessageBox) -> Result<(), RuntimeError> {
+            panic!("Oh dear");
+        }
+    }
 
     fn create_actor<A, Input, Output>(
         actor: A,
@@ -493,30 +496,45 @@ mod tests {
         );
     }
 
-    // TODO: An actor panic doesn't print the way I want
-    // #[tokio::test]
-    // async fn actor_panics() {
-    //     let (mut actions_sender, mut events_receiver, runtime_request_sender, ra) = init();
-    //     let (mut input_sender, mut output_receiver, actor) =
-    //         create_actor(Panic {}, &runtime_request_sender);
+    #[tokio::test]
+    async fn actor_panics() {
+        let (mut actions_sender, mut events_receiver, ra) = init();
+        let (_, _, panic_actor) = create_actor(Panic);
+        let (mut sender, mut receiver, echo_actor) = create_actor(Echo);
 
-    //     actions_sender
-    //         .send(RuntimeAction::Spawn(Box::new(actor)))
-    //         .await
-    //         .unwrap();
+        actions_sender
+            .send(RuntimeAction::Spawn(Box::new(panic_actor)))
+            .await
+            .unwrap();
 
-    //     let wait_for_messages = async {
-    //         output_receiver.next().await;
+        actions_sender
+            .send(RuntimeAction::Spawn(Box::new(echo_actor)))
+            .await
+            .unwrap();
 
-    //         while let Some(event) = events_receiver.next().await {
-    //             dbg!(&event);
-    //         }
-    //         true
-    //     };
+        let wait_for_actor_to_panic = async {
+            while let Some(event) = events_receiver.next().await {
+                if matches!(event, RuntimeEvent::Aborted { task, .. } if task == "actor 'Panic'-0")
+                {
+                    break;
+                }
+            }
+        };
 
-    //     tokio::select! {
-    //         spawned_actor_event_received = wait_for_messages => assert!(spawned_actor_event_received, "The actor was not spawned"),
-    //         _ = ra.run() => panic!("The runtime actor finished unexpectedly")
-    //     };
-    // }
+        tokio::spawn(ra.run());
+
+        tokio::time::timeout(Duration::from_secs(1), wait_for_actor_to_panic)
+            .await
+            .expect("Actor to panic in time");
+
+        sender
+            .send(EchoMessage::String("hello".into()))
+            .await
+            .expect("Expected the echo actor to be running and to receive a message");
+
+        assert_eq!(
+            receiver.next().await.unwrap(),
+            EchoMessage::String("hello".into())
+        );
+    }
 }

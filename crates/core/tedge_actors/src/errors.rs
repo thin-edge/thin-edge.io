@@ -1,4 +1,5 @@
 use thiserror::Error;
+use tokio::task::JoinError;
 
 pub type DynError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
@@ -29,6 +30,9 @@ pub enum RuntimeError {
 
     #[error("The runtime panicked")]
     RuntimePanic,
+
+    #[error(transparent)]
+    JoinError(#[from] JoinError),
 
     #[error(transparent)]
     LinkError(#[from] LinkError),
