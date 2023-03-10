@@ -775,6 +775,27 @@ impl ConfigSettingAccessor<RunPathSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<DataPathSetting> for TEdgeConfig {
+    fn query(&self, _setting: DataPathSetting) -> ConfigSettingResult<FilePath> {
+        Ok(self
+            .data
+            .data
+            .dir_path
+            .clone()
+            .unwrap_or_else(|| self.config_defaults.default_data_path.clone()))
+    }
+
+    fn update(&mut self, _setting: DataPathSetting, value: FilePath) -> ConfigSettingResult<()> {
+        self.data.data.dir_path = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: DataPathSetting) -> ConfigSettingResult<()> {
+        self.data.data.dir_path = None;
+        Ok(())
+    }
+}
+
 impl ConfigSettingAccessor<LockFilesSetting> for TEdgeConfig {
     fn query(&self, _setting: LockFilesSetting) -> ConfigSettingResult<Flag> {
         Ok(self

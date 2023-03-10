@@ -457,6 +457,19 @@ impl ConfigSetting for RunPathSetting {
     type Value = FilePath;
 }
 
+pub struct DataPathSetting;
+
+impl ConfigSetting for DataPathSetting {
+    const KEY: &'static str = "data.path";
+
+    const DESCRIPTION: &'static str = concat!(
+        "The directory path to be used to store all persistent/volatile data like cached files, runtime metadata etc",
+        "Example: /var/tedge"
+    );
+
+    type Value = FilePath;
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct LockFilesSetting;
 

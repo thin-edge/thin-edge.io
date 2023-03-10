@@ -41,6 +41,9 @@ pub(crate) struct TEdgeConfigDto {
     pub(crate) run: PathConfigDto,
 
     #[serde(default)]
+    pub(crate) data: PathConfigDto,
+
+    #[serde(default)]
     pub(crate) firmware: FirmwareConfigDto,
 
     #[serde(default)]
