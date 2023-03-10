@@ -50,9 +50,6 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-// TODO! We should make it configurable by tedge config later.
-pub const PERSISTENT_DIR_PATH: &str = "/var/tedge";
-
 pub const CACHE_DIR_NAME: &str = "cache";
 pub const FILE_TRANSFER_DIR_NAME: &str = "file-transfer";
 pub const PERSISTENT_STORE_DIR_NAME: &str = "firmware";

@@ -16,7 +16,6 @@ use c8y_api::http_proxy::JwtAuthHttpProxy;
 use clap::Parser;
 use firmware_manager::CACHE_DIR_NAME;
 use firmware_manager::FILE_TRANSFER_DIR_NAME;
-use firmware_manager::PERSISTENT_DIR_PATH;
 use firmware_manager::PERSISTENT_STORE_DIR_NAME;
 use futures::channel::mpsc;
 use std::path::Path;
@@ -26,6 +25,7 @@ use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
+use tedge_config::DataPathSetting;
 use tedge_config::DeviceIdSetting;
 use tedge_config::FirmwareChildUpdateTimeoutSetting;
 use tedge_config::HttpBindAddressSetting;
@@ -34,6 +34,7 @@ use tedge_config::MqttClientHostSetting;
 use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::TmpPathSetting;
+use tedge_config::DEFAULT_DATA_PATH;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_utils::file::create_directory_with_user_group;
 use tracing::info;
@@ -76,7 +77,7 @@ async fn main() -> Result<(), FirmwareManagementError> {
     let fw_plugin_opt = FirmwarePluginOpt::parse();
 
     if fw_plugin_opt.init {
-        init(Path::new(PERSISTENT_DIR_PATH))?;
+        init(Path::new(DEFAULT_DATA_PATH))?;
         return Ok(());
     }
 
@@ -109,6 +110,8 @@ async fn main() -> Result<(), FirmwareManagementError> {
     let local_http_host = format!("{}:{}", http_address, http_port);
 
     let tmp_dir: PathBuf = tedge_config.query(TmpPathSetting)?.into();
+    let data_dir: PathBuf = tedge_config.query(DataPathSetting)?.into();
+
     let timeout_sec = Duration::from_secs(
         tedge_config
             .query(FirmwareChildUpdateTimeoutSetting)?
@@ -126,7 +129,7 @@ async fn main() -> Result<(), FirmwareManagementError> {
         req_sndr,
         res_rcvr,
         local_http_host,
-        PathBuf::from(PERSISTENT_DIR_PATH),
+        data_dir,
         timeout_sec,
     )
     .await?;

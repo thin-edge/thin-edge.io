@@ -71,6 +71,31 @@ async fn handle_request_child_device() -> anyhow::Result<()> {
     });
 
     assert_json_include!(actual: received_json, expected: expected_request_payload);
+
+    // Assert that the downloaded file is present in the cache
+    assert!(tmp_dir
+        .to_path_buf()
+        .join("cache")
+        .join(&file_cache_key)
+        .exists());
+
+    // Assert that the downloaded file is present in the file-transfer repo
+    assert!(tmp_dir
+        .to_path_buf()
+        .join("file-transfer")
+        .join(CHILD_DEVICE_ID)
+        .join("firmware_update")
+        .join(&file_cache_key)
+        .exists());
+
+    // Assert that the operation file is created in persistence store
+    assert!(tmp_dir
+        .to_path_buf()
+        .join("firmware")
+        .read_dir()?
+        .next()
+        .is_some());
+
     Ok(())
 }
 
