@@ -1,56 +1,23 @@
 # The `tedge disconnect` command
 
+```console
+<!-- cmdrun tedge disconnect --help -->
 ```
-tedge-disconnect 
-Remove bridge connection for a provider
 
-USAGE:
-    tedge disconnect <SUBCOMMAND>
+## AWS
 
-OPTIONS:
-    -h, --help    Print help information
-
-SUBCOMMANDS:
-    az      Remove bridge connection to Azure
-    aws     Remove bridge connection to AWS
-    c8y     Remove bridge connection to Cumulocity
-    help    Print this message or the help of the given subcommand(s)
+```console
+<!-- cmdrun tedge disconnect aws --help -->
 ```
 
 ## Azure
 
-```
-tedge-disconnect-az 
-Remove bridge connection to Azure
-
-USAGE:
-    tedge disconnect az
-
-OPTIONS:
-    -h, --help    Print help information
-```
-## AWS
-
-```
-tedge-disconnect-aws
-Remove bridge connection to AWS
-
-USAGE:
-    tedge disconnect aws
-
-OPTIONS:
-    -h, --help    Print help information
+```console
+<!-- cmdrun tedge disconnect az --help -->
 ```
 
 ## Cumulocity
 
-```
-tedge-disconnect-c8y 
-Remove bridge connection to Cumulocity
-
-USAGE:
-    tedge disconnect c8y
-
-OPTIONS:
-    -h, --help    Print help information
+```console
+<!-- cmdrun tedge disconnect c8y --help -->
 ```

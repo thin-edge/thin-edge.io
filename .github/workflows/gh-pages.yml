@@ -33,6 +33,11 @@ jobs:
           crate: mdbook-admonish
           version: latest
 
+      - uses: actions-rs/install@v0.1
+        with:
+          crate: mdbook-cmdrun
+          version: latest
+
       - run: |
           ls -l
           cd docs
