@@ -11,6 +11,7 @@ use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
+use tedge_config::DEFAULT_DATA_PATH;
 
 use tedge_utils::paths::create_directories;
 use tokio::io::AsyncReadExt;
@@ -24,7 +25,7 @@ const HTTP_FILE_TRANSFER_PORT: u16 = 8000;
 pub struct HttpConfig {
     pub bind_address: SocketAddr,
     pub file_transfer_uri: String,
-    pub file_transfer_dir: PathBuf,
+    pub data_dir: PathBuf,
 }
 
 impl Default for HttpConfig {
@@ -32,7 +33,7 @@ impl Default for HttpConfig {
         HttpConfig {
             bind_address: ([127, 0, 0, 1], HTTP_FILE_TRANSFER_PORT).into(),
             file_transfer_uri: "/tedge/".into(),
-            file_transfer_dir: "/var/tedge/".into(),
+            data_dir: DEFAULT_DATA_PATH.into(),
         }
     }
 }
@@ -45,12 +46,8 @@ impl HttpConfig {
         }
     }
 
-    #[cfg(test)]
-    pub fn with_file_transfer_dir(self, file_transfer_dir: PathBuf) -> HttpConfig {
-        Self {
-            file_transfer_dir,
-            ..self
-        }
+    pub fn with_data_dir(self, data_dir: PathBuf) -> HttpConfig {
+        Self { data_dir, ..self }
     }
 
     pub fn with_port(self, port: u16) -> HttpConfig {
@@ -67,7 +64,7 @@ impl HttpConfig {
     }
 
     pub fn file_transfer_dir_as_string(&self) -> String {
-        self.file_transfer_dir
+        self.data_dir
             .to_str()
             .expect("Non UTF8 http root path")
             .into()
@@ -87,12 +84,12 @@ impl HttpConfig {
             .ok_or(FileTransferError::InvalidURI { value: ref_uri })?;
 
         // This path is relative to the file transfer dir
-        let full_path = self.file_transfer_dir.join(path);
+        let full_path = self.data_dir.join(path);
 
         // One must check that once normalized (i.e. any `..` removed)
         // the path is still under the file transfer dir
         let clean_path = full_path.clean();
-        if clean_path.starts_with(&self.file_transfer_dir) {
+        if clean_path.starts_with(&self.data_dir) {
             Ok(clean_path)
         } else {
             Err(FileTransferError::InvalidURI {
@@ -119,7 +116,7 @@ async fn put(
     let mut response = Response::new(Body::empty());
 
     if let Some((relative_path, file_name)) = separate_path_and_file_name(full_path) {
-        let root_path = file_transfer.file_transfer_dir.clone();
+        let root_path = file_transfer.data_dir.clone();
         let directories_path = root_path.join(relative_path);
 
         if let Err(_err) = create_directories(&directories_path) {
@@ -352,7 +349,7 @@ mod test {
         let ttd = TempTedgeDir::new();
         let tempdir_path = ttd.path().to_owned();
         let http_config = HttpConfig::default()
-            .with_file_transfer_dir(tempdir_path)
+            .with_data_dir(tempdir_path)
             .with_port(3000);
         let server = http_file_transfer_server(&http_config).unwrap();
         (ttd, server)

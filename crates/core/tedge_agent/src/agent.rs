@@ -35,6 +35,8 @@ use plugin_sm::operation_logs::LogKind;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::plugin_manager::ExternalPlugins;
 use plugin_sm::plugin_manager::Plugins;
+use tedge_config::DataPathSetting;
+use tedge_config::DEFAULT_DATA_PATH;
 
 use crate::http_rest::HttpConfig;
 use std::convert::TryInto;
@@ -149,11 +151,15 @@ impl Default for SmAgentConfig {
 
         let tmp_dir = PathBuf::from(DEFAULT_TMP_PATH);
 
+        let data_dir = PathBuf::from(DEFAULT_DATA_PATH);
+
         let config_location = TEdgeConfigLocation::default();
 
         let download_dir = PathBuf::from(DEFAULT_TMP_PATH);
 
         let use_lock = Flag(true);
+
+        let http_config = HttpConfig::default().with_data_dir(data_dir);
 
         Self {
             errors_topic,
@@ -173,7 +179,7 @@ impl Default for SmAgentConfig {
             tmp_dir,
             config_location,
             download_dir,
-            http_config: HttpConfig::default(),
+            http_config,
             use_lock,
         }
     }
@@ -204,8 +210,9 @@ impl SmAgentConfig {
         let tedge_log_dir = PathBuf::from(&format!("{tedge_log_dir}/{AGENT_LOG_PATH}"));
         let tedge_run_dir = tedge_config.query_string(RunPathSetting)?.into();
         let tedge_tmp_dir = tedge_config.query_string(TmpPathSetting)?.into();
+        let tedge_data_dir = tedge_config.query_string(DataPathSetting)?.into();
 
-        let mut http_config = HttpConfig::default();
+        let mut http_config = HttpConfig::default().with_data_dir(tedge_data_dir);
 
         let http_bind_address = tedge_config.query(HttpBindAddressSetting)?;
         http_config = http_config
