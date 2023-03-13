@@ -7,11 +7,10 @@ The documentation is generated using [`mdbook`](https://lib.rs/crates/mdbook).
 
 To generate the documentation from [source](https://github.com/thin-edge/thin-edge.io/tree/main/docs/src),
 you will have to run:
-1) `cargo install mdbook mdbook-linkcheck mdbook-mermaid mdbook-admonish`
+1) `cargo install mdbook mdbook-linkcheck mdbook-mermaid mdbook-admonish mdbook-cmdrun`
 2) `git clone https://github.com/thin-edge/thin-edge.io`
-3) `cd thin-edge.io`
-4) `docs/gen-ref-docs.sh`   (to generate the reference doc from the tedge command)
-5) `mdbook serve docs`
+3) `cd thin-edge.io/docs`
+5) `mdbook serve`
 
 The documentation is then published on `http://localhost:3000/`.
 

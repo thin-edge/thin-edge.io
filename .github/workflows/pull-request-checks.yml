@@ -130,6 +130,12 @@ jobs:
           crate: mdbook-admonish
           version: latest
 
+      - name: Install mdbook-cmdrun
+        uses: actions-rs/install@v0.1
+        with:
+          crate: mdbook-cmdrun
+          version: latest
+
       - name: Run mdbook build
         run: |
           ls -l
