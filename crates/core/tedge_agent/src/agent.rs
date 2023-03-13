@@ -1,5 +1,6 @@
 use crate::error::AgentError;
 use crate::http_rest;
+use crate::http_rest::HttpConfig;
 use crate::restart_operation_handler::restart_operation;
 use crate::state::AgentStateRepository;
 use crate::state::RestartOperationStatus;
@@ -9,8 +10,28 @@ use crate::state::StateRepository;
 use crate::state::StateStatus;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
+use mqtt_channel::Connection;
+use mqtt_channel::Message;
+use mqtt_channel::PubChannel;
+use mqtt_channel::StreamExt;
+use mqtt_channel::SubChannel;
+use mqtt_channel::Topic;
+use mqtt_channel::TopicFilter;
+use plugin_sm::operation_logs::LogKind;
+use plugin_sm::operation_logs::OperationLogs;
+use plugin_sm::plugin_manager::ExternalPlugins;
+use plugin_sm::plugin_manager::Plugins;
+use std::convert::TryInto;
+use std::fmt::Debug;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
+use std::sync::Arc;
 use tedge_api::control_filter_topic;
+use tedge_api::health::health_check_topics;
+use tedge_api::health::health_status_down_message;
 use tedge_api::health::health_status_up_message;
+use tedge_api::health::send_health_status;
 use tedge_api::software_filter_topic;
 use tedge_api::Jsonify;
 use tedge_api::OperationStatus;
@@ -23,34 +44,11 @@ use tedge_api::SoftwareRequestResponse;
 use tedge_api::SoftwareType;
 use tedge_api::SoftwareUpdateRequest;
 use tedge_api::SoftwareUpdateResponse;
-
-use mqtt_channel::Connection;
-use mqtt_channel::Message;
-use mqtt_channel::PubChannel;
-use mqtt_channel::StreamExt;
-use mqtt_channel::SubChannel;
-use mqtt_channel::Topic;
-use mqtt_channel::TopicFilter;
-use plugin_sm::operation_logs::LogKind;
-use plugin_sm::operation_logs::OperationLogs;
-use plugin_sm::plugin_manager::ExternalPlugins;
-use plugin_sm::plugin_manager::Plugins;
-use tedge_config::DataPathSetting;
-use tedge_config::DEFAULT_DATA_PATH;
-
-use crate::http_rest::HttpConfig;
-use std::convert::TryInto;
-use std::fmt::Debug;
-use std::path::PathBuf;
-use std::process::Command;
-use std::sync::Arc;
-use tedge_api::health::health_check_topics;
-use tedge_api::health::health_status_down_message;
-use tedge_api::health::send_health_status;
 use tedge_config::system_services::SystemConfig;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::ConfigSettingAccessorStringExt;
+use tedge_config::DataPathSetting;
 use tedge_config::Flag;
 use tedge_config::HttpBindAddressSetting;
 use tedge_config::HttpPortSetting;
@@ -62,6 +60,7 @@ use tedge_config::RunPathSetting;
 use tedge_config::SoftwarePluginDefaultSetting;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::TmpPathSetting;
+use tedge_config::DEFAULT_DATA_PATH;
 use tedge_config::DEFAULT_LOG_PATH;
 use tedge_config::DEFAULT_RUN_PATH;
 use tedge_config::DEFAULT_TMP_PATH;
@@ -72,8 +71,6 @@ use tracing::error;
 use tracing::info;
 use tracing::instrument;
 use tracing::warn;
-
-use std::path::Path;
 
 const SYNC: &str = "sync";
 const SM_PLUGINS: &str = "sm-plugins";
@@ -151,13 +148,13 @@ impl Default for SmAgentConfig {
 
         let tmp_dir = PathBuf::from(DEFAULT_TMP_PATH);
 
-        let data_dir = PathBuf::from(DEFAULT_DATA_PATH);
-
         let config_location = TEdgeConfigLocation::default();
 
         let download_dir = PathBuf::from(DEFAULT_TMP_PATH);
 
         let use_lock = Flag(true);
+
+        let data_dir = PathBuf::from(DEFAULT_DATA_PATH);
 
         let http_config = HttpConfig::default().with_data_dir(data_dir);
 

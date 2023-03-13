@@ -1,3 +1,4 @@
+use crate::error::FileTransferError;
 use futures::StreamExt;
 use hyper::server::conn::AddrIncoming;
 use hyper::Body;
@@ -12,12 +13,9 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_config::DEFAULT_DATA_PATH;
-
 use tedge_utils::paths::create_directories;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
-
-use crate::error::FileTransferError;
 
 const HTTP_FILE_TRANSFER_PORT: u16 = 8000;
 

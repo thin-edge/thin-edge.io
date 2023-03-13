@@ -4,16 +4,13 @@ use super::plugin_config::FileEntry;
 use c8y_api::smartrest::topic::C8yTopic;
 use log::error;
 use std::fs;
+use std::path::PathBuf;
 use std::time::Duration;
 use tedge_api::OperationStatus;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 
-#[cfg(test)]
-pub const FILE_TRANSFER_ROOT_PATH: &str = "/tmp";
-#[cfg(not(test))]
-pub const FILE_TRANSFER_ROOT_PATH: &str = "/var/tedge/file-transfer";
 pub const DEFAULT_OPERATION_TIMEOUT: Duration = Duration::from_secs(60); //TODO: Make this configurable?
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -40,11 +37,8 @@ impl Into<TopicFilter> for ConfigOperationResponseTopic {
 pub trait ConfigOperationMessage {
     fn http_file_repository_relative_path(&self) -> String;
 
-    fn file_transfer_repository_full_path(&self) -> String {
-        format!(
-            "{FILE_TRANSFER_ROOT_PATH}/{}",
-            self.http_file_repository_relative_path()
-        )
+    fn file_transfer_repository_full_path(&self, file_transfer_dir: PathBuf) -> PathBuf {
+        file_transfer_dir.join(self.http_file_repository_relative_path())
     }
 }
 
@@ -131,12 +125,13 @@ impl ConfigOperationMessage for ConfigOperationResponse {
 }
 
 pub fn try_cleanup_config_file_from_file_transfer_repositoy(
+    file_transfer_dir: PathBuf,
     config_response: &ConfigOperationResponse,
 ) {
-    let config_file_path = config_response.file_transfer_repository_full_path();
+    let config_file_path = config_response.file_transfer_repository_full_path(file_transfer_dir);
     if let Err(err) = fs::remove_file(&config_file_path) {
         error!(
-            "Failed to remove config file file copy at {} with {}",
+            "Failed to remove config file copy at {:?} with {}",
             config_file_path, err
         );
     }
