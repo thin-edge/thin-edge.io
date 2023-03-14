@@ -1,5 +1,9 @@
 use crate::cli::mqtt::MqttError;
 use crate::command::Command;
+use camino::Utf8PathBuf;
+use certificate::parse_root_certificate;
+use rumqttc::tokio_rustls::rustls::ClientConfig;
+use rumqttc::tokio_rustls::rustls::RootCertStore;
 use rumqttc::Event;
 use rumqttc::Incoming;
 use rumqttc::MqttOptions;
@@ -21,6 +25,8 @@ pub struct MqttPublishCommand {
     pub client_id: String,
     pub disconnect_timeout: Duration,
     pub retain: bool,
+    pub ca_file: Option<Utf8PathBuf>,
+    pub ca_path: Option<Utf8PathBuf>,
 }
 
 impl Command for MqttPublishCommand {
@@ -39,6 +45,35 @@ impl Command for MqttPublishCommand {
 fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
     let mut options = MqttOptions::new(cmd.client_id.as_str(), &cmd.host, cmd.port);
     options.set_clean_session(true);
+
+    if cmd.ca_file.is_some() || cmd.ca_path.is_some() {
+        let mut root_store = RootCertStore::empty();
+
+        if let Some(ca_file) = cmd.ca_file.clone() {
+            parse_root_certificate::add_certs_from_file(&mut root_store, ca_file)?;
+        }
+
+        if let Some(ca_path) = cmd.ca_path.clone() {
+            parse_root_certificate::add_certs_from_directory(&mut root_store, ca_path)?;
+        }
+
+        const INSECURE_MQTT_PORT: u16 = 1883;
+        const SECURE_MQTT_PORT: u16 = 8883;
+
+        if cmd.port == INSECURE_MQTT_PORT && !root_store.is_empty() {
+            eprintln!("Warning: Connecting on port 1883 for insecure MQTT using a TLS connection");
+        }
+        if cmd.port == SECURE_MQTT_PORT && root_store.is_empty() {
+            eprintln!("Warning: Connecting on port 8883 for secure MQTT with no CA certificates");
+        }
+
+        let tls_config = ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
+
+        options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
+    }
 
     let payload = cmd.message.as_bytes();
 
@@ -75,7 +110,7 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
                 break;
             }
             Err(err) => {
-                any_error = Some(MqttError::ServerConnection(err.to_string()));
+                any_error = Some(err.into());
                 break;
             }
             _ => {}

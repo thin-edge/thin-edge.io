@@ -262,6 +262,35 @@ impl ConfigSetting for MqttClientPortSetting {
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct MqttClientCafileSetting;
+
+impl ConfigSetting for MqttClientCafileSetting {
+    const KEY: &'static str = "mqtt.client.ca_file";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Path to the CA certificate used by MQTT clients to use when ",
+        "authenticating the MQTT broker."
+    );
+
+    type Value = Utf8PathBuf;
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct MqttClientCapathSetting;
+
+impl ConfigSetting for MqttClientCapathSetting {
+    const KEY: &'static str = "mqtt.client.ca_path";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Path to the directory containing CA certificate used by MQTT clients ",
+        "to use when authenticating the MQTT broker. For a certificate to be ",
+        "used, it needs to have one of the following extensions: .pem/.crt/.cer"
+    );
+
+    type Value = Utf8PathBuf;
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct MqttPortSetting;
 
 impl ConfigSetting for MqttPortSetting {

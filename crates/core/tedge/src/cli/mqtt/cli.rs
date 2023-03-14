@@ -51,6 +51,17 @@ impl BuildCommand for TEdgeMqttCli {
             .config_repository
             .load()?
             .query(MqttClientHostSetting)?;
+        let ca_file = context
+            .config_repository
+            .load()?
+            .query(MqttClientCafileSetting)
+            .ok();
+        let ca_path = context
+            .config_repository
+            .load()?
+            .query(MqttClientCapathSetting)
+            .ok();
+
         let cmd = {
             match self {
                 TEdgeMqttCli::Pub {
@@ -67,6 +78,8 @@ impl BuildCommand for TEdgeMqttCli {
                     client_id: format!("{}-{}", PUB_CLIENT_PREFIX, std::process::id()),
                     disconnect_timeout: DISCONNECT_TIMEOUT,
                     retain,
+                    ca_file,
+                    ca_path,
                 }
                 .into_boxed(),
                 TEdgeMqttCli::Sub {
@@ -80,6 +93,8 @@ impl BuildCommand for TEdgeMqttCli {
                     qos,
                     hide_topic,
                     client_id: format!("{}-{}", SUB_CLIENT_PREFIX, std::process::id()),
+                    ca_file,
+                    ca_path,
                 }
                 .into_boxed(),
             }

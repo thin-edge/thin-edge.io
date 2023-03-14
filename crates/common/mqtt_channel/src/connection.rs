@@ -120,6 +120,16 @@ impl Connection {
         mut message_sender: mpsc::UnboundedSender<Message>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
     ) -> Result<(AsyncClient, EventLoop), MqttError> {
+        const INSECURE_MQTT_PORT: u16 = 1883;
+        const SECURE_MQTT_PORT: u16 = 8883;
+
+        if config.port == INSECURE_MQTT_PORT && config.cert_store.is_some() {
+            eprintln!("WARNING: Connecting on port 1883 for insecure MQTT using a TLS connection");
+        }
+        if config.port == SECURE_MQTT_PORT && config.cert_store.is_none() {
+            eprintln!("WARNING: Connecting on port 8883 for secure MQTT without a CA file");
+        }
+
         let mqtt_options = config.mqtt_options();
         let (mqtt_client, mut event_loop) = AsyncClient::new(mqtt_options, config.queue_capacity);
 

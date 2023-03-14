@@ -10,6 +10,7 @@ repository = { workspace = true }
 
 [dependencies]
 async-trait = "0.1"
+certificate = { path = "../certificate" }
 fastrand = "1.8"
 futures = "0.3"
 rumqttc = "0.18"

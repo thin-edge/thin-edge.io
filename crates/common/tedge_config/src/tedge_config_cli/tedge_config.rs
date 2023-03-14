@@ -416,6 +416,58 @@ impl ConfigSettingAccessor<MqttClientPortSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<MqttClientCafileSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttClientCafileSetting) -> ConfigSettingResult<Utf8PathBuf> {
+        self.data
+            .mqtt
+            .client_ca_file
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: "mqtt.client.ca_file",
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttClientCafileSetting,
+        ca_file: Utf8PathBuf,
+    ) -> ConfigSettingResult<()> {
+        self.data.mqtt.client_ca_file = Some(ca_file);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttClientCafileSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.client_ca_file = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<MqttClientCapathSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttClientCapathSetting) -> ConfigSettingResult<Utf8PathBuf> {
+        self.data
+            .mqtt
+            .client_ca_path
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: "mqtt.client.ca_path",
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttClientCapathSetting,
+        cafile: Utf8PathBuf,
+    ) -> ConfigSettingResult<()> {
+        self.data.mqtt.client_ca_path = Some(cafile);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttClientCapathSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.client_ca_path = None;
+        Ok(())
+    }
+}
+
 impl ConfigSettingAccessor<MqttPortSetting> for TEdgeConfig {
     fn query(&self, _setting: MqttPortSetting) -> ConfigSettingResult<Port> {
         Ok(self
