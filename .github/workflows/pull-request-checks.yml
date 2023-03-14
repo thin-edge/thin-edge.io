@@ -136,9 +136,19 @@ jobs:
           crate: mdbook-cmdrun
           version: latest
 
+      - name: Cargo build tedge cli
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: -p tedge
+
+      - name: Update PATH
+        run: echo "$PWD/target/debug" >> $GITHUB_PATH
+
       - name: Run mdbook build
+        shell: bash
         run: |
-          ls -l
+          echo "generating doc for $(tedge --version)"
           cd docs
           mdbook build
 
