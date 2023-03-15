@@ -1,9 +1,9 @@
 use std::path::Path;
 
-use crate::collectd::monitor::DeviceMonitor;
-use crate::collectd::monitor::DeviceMonitorConfig;
 use crate::core::component::TEdgeComponent;
 use async_trait::async_trait;
+use collectd_ext::monitor::DeviceMonitor;
+use collectd_ext::monitor::DeviceMonitorConfig;
 use mqtt_channel::TopicFilter;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::MqttClientHostSetting;

@@ -807,6 +807,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "collectd_ext"
+version = "0.10.0"
+dependencies = [
+ "anyhow",
+ "assert_matches",
+ "batcher",
+ "clock",
+ "mqtt_channel",
+ "tedge_api",
+ "thiserror",
+ "time",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "colored"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3627,10 +3643,10 @@ dependencies = [
  "async-trait",
  "aws_mapper_ext",
  "az_mapper_ext",
- "batcher",
  "c8y_api",
  "clap 3.2.23",
  "clock",
+ "collectd_ext",
  "csv",
  "download",
  "flockfile",

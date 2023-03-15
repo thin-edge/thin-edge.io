@@ -7,7 +7,7 @@ pub enum DeviceMonitorError {
     FromMqttClient(#[from] mqtt_channel::MqttError),
 
     #[error(transparent)]
-    FromInvalidCollectdMeasurement(#[from] crate::collectd::collectd::CollectdError),
+    FromInvalidCollectdMeasurement(#[from] crate::collectd::CollectdError),
 
     #[error(transparent)]
     FromInvalidThinEdgeJson(#[from] tedge_api::group::MeasurementGrouperError),
