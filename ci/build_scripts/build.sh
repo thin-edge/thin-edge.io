@@ -20,7 +20,7 @@ Usage:
 Args:
     ARCH     RUST target architecture which can be a value listed from the command 'rustc --print target-list'
              If left blank then the TARGET will be set to the linux musl variant appropriate for your machine.
-             For example, if building on MacOS M1, you 'aarch64-unknown-linux-musl' will be selected, for linux x86_64,
+             For example, if building on MacOS M1, 'aarch64-unknown-linux-musl' will be selected, for linux x86_64,
              'x86_64-unknown-linux-musl' will be selected.
 
     Example ARCH (target) values:
