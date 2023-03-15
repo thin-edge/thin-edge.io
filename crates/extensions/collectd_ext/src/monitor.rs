@@ -21,18 +21,9 @@ use tracing::error;
 use tracing::info;
 use tracing::instrument;
 
-const DEFAULT_HOST: &str = "localhost";
-const DEFAULT_PORT: u16 = 1883;
-const DEFAULT_MQTT_CLIENT_ID: &str = "collectd-mapper";
-const DEFAULT_BATCHING_WINDOW: u32 = 500;
-const DEFAULT_MAXIMUM_MESSAGE_DELAY: u32 = 400; // Heuristic delay that should work out well on an Rpi
-const DEFAULT_MESSAGE_LEAP_LIMIT: u32 = 0;
-const DEFAULT_MQTT_SOURCE_TOPIC: &str = "collectd/#";
-const DEFAULT_MQTT_TARGET_TOPIC: &str = "tedge/measurements";
-const COLLECTD_MAPPER_NAME: &str = "tedge-mapper-collectd";
-
 #[derive(Debug)]
 pub struct DeviceMonitorConfig {
+    mapper_name: &'static str,
     host: String,
     port: u16,
     mqtt_client_id: &'static str,
@@ -46,14 +37,15 @@ pub struct DeviceMonitorConfig {
 impl Default for DeviceMonitorConfig {
     fn default() -> Self {
         Self {
-            host: DEFAULT_HOST.to_string(),
-            port: DEFAULT_PORT,
-            mqtt_client_id: DEFAULT_MQTT_CLIENT_ID,
-            mqtt_source_topic: DEFAULT_MQTT_SOURCE_TOPIC,
-            mqtt_target_topic: DEFAULT_MQTT_TARGET_TOPIC,
-            batching_window: DEFAULT_BATCHING_WINDOW,
-            maximum_message_delay: DEFAULT_MAXIMUM_MESSAGE_DELAY,
-            message_leap_limit: DEFAULT_MESSAGE_LEAP_LIMIT,
+            mapper_name: "tedge-mapper-collectd",
+            host: "localhost".to_string(),
+            port: 1883,
+            mqtt_client_id: "collectd-mapper",
+            mqtt_source_topic: "collectd/#",
+            mqtt_target_topic: "tedge/measurements",
+            batching_window: 500,
+            maximum_message_delay: 400, // Heuristic delay that should work out well on an Rpi
+            message_leap_limit: 0,
         }
     }
 }
@@ -70,39 +62,34 @@ impl DeviceMonitorConfig {
 
 #[derive(Debug)]
 pub struct DeviceMonitor {
-    device_monitor_config: DeviceMonitorConfig,
+    config: DeviceMonitorConfig,
 }
 
 impl DeviceMonitor {
-    pub fn new(device_monitor_config: DeviceMonitorConfig) -> Self {
-        Self {
-            device_monitor_config,
-        }
+    pub fn new(config: DeviceMonitorConfig) -> Self {
+        Self { config }
     }
 
     #[instrument(skip(self), name = "monitor")]
     pub async fn run(&self) -> Result<(), DeviceMonitorError> {
-        let health_check_topics: TopicFilter = health_check_topics(COLLECTD_MAPPER_NAME);
+        let health_check_topics: TopicFilter = health_check_topics(self.config.mapper_name);
 
-        let mut input_topic = TopicFilter::new(self.device_monitor_config.mqtt_source_topic)?
-            .with_qos(QoS::AtMostOnce);
+        let mut input_topic =
+            TopicFilter::new(self.config.mqtt_source_topic)?.with_qos(QoS::AtMostOnce);
         input_topic.add_all(health_check_topics.clone());
 
-        let mqtt_config = mqtt_channel::Config::new(
-            self.device_monitor_config.host.to_string(),
-            self.device_monitor_config.port,
-        )
-        .with_session_name(self.device_monitor_config.mqtt_client_id)
-        .with_subscriptions(input_topic)
-        .with_initial_message(|| health_status_up_message(COLLECTD_MAPPER_NAME))
-        .with_last_will_message(health_status_down_message(COLLECTD_MAPPER_NAME));
+        let mqtt_config = mqtt_channel::Config::new(self.config.host.to_string(), self.config.port)
+            .with_session_name(self.config.mqtt_client_id)
+            .with_subscriptions(input_topic)
+            .with_initial_message(|| health_status_up_message(self.config.mapper_name))
+            .with_last_will_message(health_status_down_message(self.config.mapper_name));
 
         let mqtt_client = Connection::new(&mqtt_config).await?;
 
         let batch_config = BatchConfigBuilder::new()
-            .event_jitter(self.device_monitor_config.batching_window)
-            .delivery_jitter(self.device_monitor_config.maximum_message_delay)
-            .message_leap_limit(self.device_monitor_config.message_leap_limit)
+            .event_jitter(self.config.batching_window)
+            .delivery_jitter(self.config.maximum_message_delay)
+            .message_leap_limit(self.config.message_leap_limit)
             .build();
         let (msg_send, msg_recv) = tokio::sync::mpsc::channel(100);
         let (batch_send, mut batch_recv) = tokio::sync::mpsc::channel(100);
@@ -118,7 +105,7 @@ impl DeviceMonitor {
         let mut output_messages = mqtt_client.published.clone();
 
         // Send health status to confirm the mapper initialization is completed
-        send_health_status(&mut output_messages, COLLECTD_MAPPER_NAME).await;
+        send_health_status(&mut output_messages, self.config.mapper_name).await;
 
         let input_join_handle = tokio::task::spawn(async move {
             while let Some(message) = collectd_messages.next().await {
@@ -147,7 +134,7 @@ impl DeviceMonitor {
             msg_send.send(eof).await
         });
 
-        let output_topic = Topic::new(self.device_monitor_config.mqtt_target_topic)?;
+        let output_topic = Topic::new(self.config.mqtt_target_topic)?;
         let mut output_messages = mqtt_client.published;
         let output_join_handle = tokio::task::spawn(async move {
             loop {

@@ -15,13 +15,7 @@ use tracing::Instrument;
 
 const COLLECTD_MAPPER_NAME: &str = "tedge-mapper-collectd";
 
-pub struct CollectdMapper {}
-
-impl CollectdMapper {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
+pub struct CollectdMapper;
 
 #[async_trait]
 impl TEdgeComponent for CollectdMapper {
