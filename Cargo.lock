@@ -424,6 +424,7 @@ version = "0.9.0"
 dependencies = [
  "anyhow",
  "c8y_config_manager",
+ "c8y_firmware_manager",
  "c8y_http_proxy",
  "c8y_log_manager",
  "env_logger 0.10.0",
@@ -580,6 +581,38 @@ dependencies = [
  "thiserror",
  "tokio",
  "toml",
+]
+
+[[package]]
+name = "c8y_firmware_manager"
+version = "0.9.0"
+dependencies = [
+ "assert-json-diff",
+ "assert_matches",
+ "async-trait",
+ "c8y_api",
+ "c8y_http_proxy",
+ "csv",
+ "download",
+ "futures",
+ "mockall",
+ "mqtt_channel",
+ "nanoid",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha256",
+ "tedge_actors",
+ "tedge_api",
+ "tedge_config",
+ "tedge_mqtt_ext",
+ "tedge_test_utils",
+ "tedge_timer_ext",
+ "tedge_utils",
+ "thiserror",
+ "tokio",
+ "toml",
+ "tracing",
 ]
 
 [[package]]
