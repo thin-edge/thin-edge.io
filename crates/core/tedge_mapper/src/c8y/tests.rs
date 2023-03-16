@@ -1740,7 +1740,7 @@ async fn translate_service_monitor_message_for_child_device() {
 
     let expected_service_monitor_smart_rest_message = Message::new(
         &Topic::new_unchecked("c8y/s/us/child1"),
-        r#"102,test-device_child1_child-service-c8y,thin-edge.io,child-service-c8y,up"#,
+        r#"102,test-device_child1_child-service-c8y,"thin-edge.io",child-service-c8y,"up""#,
     );
 
     // Test the first output messages contains SmartREST and C8Y JSON.
@@ -1767,7 +1767,7 @@ async fn translate_service_monitor_message_for_thin_edge_device() {
 
     let expected_service_monitor_smart_rest_message = Message::new(
         &Topic::new_unchecked("c8y/s/us"),
-        r#"102,test-device_test-tedge-mapper-c8y,thin-edge.io,test-tedge-mapper-c8y,up"#,
+        r#"102,test-device_test-tedge-mapper-c8y,"thin-edge.io",test-tedge-mapper-c8y,"up""#,
     );
 
     // Test the output messages contains SmartREST and C8Y JSON.
@@ -1890,6 +1890,7 @@ async fn create_c8y_converter(
     let device_type = "test-device-type".into();
     let operations = Operations::default();
     let http_proxy = FakeC8YHttpProxy {};
+    let service_type = "service".into();
 
     let tmp_dir = TempTedgeDir::new();
 
@@ -1906,6 +1907,7 @@ async fn create_c8y_converter(
         ops_dir.path().to_path_buf(),
         mapper_config,
         mqtt_client.published,
+        service_type,
     )
     .unwrap();
     (tmp_dir, converter)

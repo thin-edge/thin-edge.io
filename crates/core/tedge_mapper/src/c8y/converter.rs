@@ -86,6 +86,7 @@ pub struct CumulocityDeviceInfo {
     pub device_name: String,
     pub device_type: String,
     pub operations: Operations,
+    pub service_type: String,
 }
 
 #[derive(Debug)]
@@ -104,6 +105,7 @@ where
     pub cfg_dir: PathBuf,
     pub children: HashMap<String, Operations>,
     mqtt_publisher: mpsc::UnboundedSender<Message>,
+    pub service_type: String,
 }
 
 impl<Proxy> CumulocityConverter<Proxy>
@@ -131,6 +133,7 @@ where
         let device_name = device_info.device_name;
         let device_type = device_info.device_type;
         let operations = device_info.operations;
+        let service_type = device_info.service_type;
 
         Ok(CumulocityConverter {
             size_threshold,
@@ -144,6 +147,7 @@ where
             cfg_dir: cfg_dir.to_path_buf(),
             children,
             mqtt_publisher,
+            service_type,
         })
     }
 
@@ -158,6 +162,7 @@ where
         cfg_dir: PathBuf,
         mapper_config: MapperConfig,
         mqtt_publisher: mpsc::UnboundedSender<Message>,
+        service_type: String,
     ) -> Result<Self, CumulocityMapperError> {
         let alarm_converter = AlarmConverter::new();
 
@@ -181,6 +186,7 @@ where
             cfg_dir,
             children,
             mqtt_publisher,
+            service_type,
         })
     }
 
@@ -329,7 +335,11 @@ where
             );
         }
 
-        let mut message = convert_health_status_message(message, self.device_name.clone());
+        let mut message = convert_health_status_message(
+            message,
+            self.device_name.clone(),
+            self.service_type.clone(),
+        );
         mqtt_messages.append(&mut message);
         Ok(mqtt_messages)
     }

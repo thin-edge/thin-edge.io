@@ -23,6 +23,7 @@ use tedge_config::DeviceIdSetting;
 use tedge_config::DeviceTypeSetting;
 use tedge_config::MqttClientHostSetting;
 use tedge_config::MqttClientPortSetting;
+use tedge_config::ServiceTypeSetting;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file::*;
 use tracing::info;
@@ -82,6 +83,7 @@ impl TEdgeComponent for CumulocityMapper {
         let device_type = tedge_config.query(DeviceTypeSetting)?;
         let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
         let mqtt_host = tedge_config.query(MqttClientHostSetting)?.to_string();
+        let service_type = tedge_config.query(ServiceTypeSetting)?.to_string();
 
         let mapper_config = create_mapper_config(&operations);
 
@@ -97,6 +99,7 @@ impl TEdgeComponent for CumulocityMapper {
         let _mqtt_client_wm = create_mqtt_client_will_message(
             &device_name,
             CUMULOCITY_MAPPER_NAME,
+            &service_type,
             mqtt_host.clone(),
             mqtt_port,
         )
@@ -106,6 +109,7 @@ impl TEdgeComponent for CumulocityMapper {
             device_name,
             device_type,
             operations,
+            service_type,
         };
 
         let converter = Box::new(CumulocityConverter::new(
@@ -181,6 +185,7 @@ pub async fn create_mqtt_client(
 pub async fn create_mqtt_client_will_message(
     device_name: &str,
     app_name: &str,
+    service_type: &str,
     mqtt_host: String,
     mqtt_port: u16,
 ) -> Result<Connection, anyhow::Error> {
@@ -192,7 +197,7 @@ pub async fn create_mqtt_client_will_message(
             device_name,
             app_name,
             "down",
-            "service",
+            service_type,
             None,
         ));
     let mqtt_client = Connection::new(&mqtt_config).await?;
@@ -253,6 +258,7 @@ mod tests {
     const DEVICE_NAME: &str = "test-user";
     const DEVICE_TYPE: &str = "test-thin-edge.io";
     const MQTT_HOST: &str = "127.0.0.1";
+    const SERVICE_TYPE: &str = "service";
 
     /// `test_tedge_mapper_with_mqtt_pub` will start tedge mapper and run the following tests:
     ///
@@ -316,6 +322,7 @@ mod tests {
                 tmp_dir.path().to_path_buf(),
                 mapper_config,
                 mqtt_client.published.clone(),
+                SERVICE_TYPE.into(),
             )
             .unwrap(),
         );

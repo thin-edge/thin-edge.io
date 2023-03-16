@@ -803,3 +803,24 @@ impl ConfigSettingAccessor<FirmwareChildUpdateTimeoutSetting> for TEdgeConfig {
         Ok(())
     }
 }
+
+impl ConfigSettingAccessor<ServiceTypeSetting> for TEdgeConfig {
+    fn query(&self, _setting: ServiceTypeSetting) -> ConfigSettingResult<String> {
+        Ok(self
+            .data
+            .service
+            .service_type
+            .clone()
+            .unwrap_or_else(|| self.config_defaults.default_service_type.clone()))
+    }
+
+    fn update(&mut self, _setting: ServiceTypeSetting, value: String) -> ConfigSettingResult<()> {
+        self.data.service.service_type = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: ServiceTypeSetting) -> ConfigSettingResult<()> {
+        self.data.service.service_type = Some(self.config_defaults.default_service_type.clone());
+        Ok(())
+    }
+}
