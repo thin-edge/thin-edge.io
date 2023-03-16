@@ -97,10 +97,10 @@ impl<B: Batchable> Batcher<B> {
         batch.batch_end() + self.config.delivery_jitter() > time
     }
 
-    pub(crate) fn flush(self) -> Vec<Vec<B>> {
+    pub(crate) fn flush(&mut self) -> Vec<Vec<B>> {
         let mut batches = Vec::with_capacity(self.batches.len());
 
-        for batch in self.batches {
+        while let Some(batch) = self.batches.pop() {
             batches.push(batch.into_vec())
         }
 

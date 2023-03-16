@@ -1,6 +1,6 @@
 use batcher::Batchable;
-use mqtt_channel::Message;
 use tedge_api::measurement::MeasurementVisitor;
+use tedge_mqtt_ext::MqttMessage;
 use time::Duration;
 use time::OffsetDateTime;
 
@@ -54,7 +54,7 @@ impl CollectdMessage {
         }
     }
 
-    pub fn parse_from(mqtt_message: &Message) -> Result<Vec<Self>, CollectdError> {
+    pub fn parse_from(mqtt_message: &MqttMessage) -> Result<Vec<Self>, CollectdError> {
         let topic = mqtt_message.topic.name.as_str();
         let collectd_topic = match CollectdTopic::from_str(topic) {
             Ok(collectd_topic) => collectd_topic,
@@ -190,8 +190,9 @@ impl Batchable for CollectdMessage {
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
-    use mqtt_channel::Topic;
     use std::ops::Index;
+    use tedge_mqtt_ext::MqttMessage;
+    use tedge_mqtt_ext::Topic;
     use time::macros::datetime;
 
     use super::*;
@@ -199,7 +200,7 @@ mod tests {
     #[test]
     fn collectd_message_parsing() {
         let topic = Topic::new_unchecked("collectd/localhost/temperature/value");
-        let mqtt_message = Message::new(&topic, "123456789:32.5");
+        let mqtt_message = MqttMessage::new(&topic, "123456789:32.5");
 
         let collectd_message = CollectdMessage::parse_from(&mqtt_message).unwrap();
 
@@ -219,7 +220,7 @@ mod tests {
     #[test]
     fn collectd_message_parsing_multi_valued_measurement() {
         let topic = Topic::new("collectd/localhost/temperature/value").unwrap();
-        let mqtt_message = Message::new(&topic, "123456789:32.5:45.2");
+        let mqtt_message = MqttMessage::new(&topic, "123456789:32.5:45.2");
 
         let collectd_message = CollectdMessage::parse_from(&mqtt_message).unwrap();
 
@@ -250,7 +251,7 @@ mod tests {
     #[test]
     fn collectd_null_terminated_message_parsing() {
         let topic = Topic::new("collectd/localhost/temperature/value").unwrap();
-        let mqtt_message = Message::new(&topic, "123456789.125:32.5\u{0}");
+        let mqtt_message = MqttMessage::new(&topic, "123456789.125:32.5\u{0}");
 
         let collectd_message = CollectdMessage::parse_from(&mqtt_message).unwrap();
 
@@ -270,7 +271,7 @@ mod tests {
     #[test]
     fn invalid_collectd_message_topic() {
         let topic = Topic::new("collectd/less/level").unwrap();
-        let mqtt_message = Message::new(&topic, "123456789:32.5");
+        let mqtt_message = MqttMessage::new(&topic, "123456789:32.5");
 
         let result = CollectdMessage::parse_from(&mqtt_message);
 
@@ -280,7 +281,7 @@ mod tests {
     #[test]
     fn invalid_collectd_message_payload() {
         let topic = Topic::new("collectd/host/group/key").unwrap();
-        let invalid_collectd_message = Message::new(&topic, "123456789");
+        let invalid_collectd_message = MqttMessage::new(&topic, "123456789");
 
         let result = CollectdMessage::parse_from(&invalid_collectd_message);
 

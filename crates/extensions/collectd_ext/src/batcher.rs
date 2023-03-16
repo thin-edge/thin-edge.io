@@ -1,10 +1,11 @@
 use clock::Timestamp;
-use mqtt_channel::Payload;
 use tedge_api::group::MeasurementGroup;
 use tedge_api::group::MeasurementGrouper;
 use tedge_api::group::MeasurementGrouperError;
 use tedge_api::measurement::MeasurementVisitor;
 use tedge_api::serialize::ThinEdgeJsonSerializer;
+use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 
 use super::collectd::CollectdMessage;
 use super::error::DeviceMonitorError;
@@ -15,9 +16,10 @@ pub struct MessageBatch {
 }
 
 impl MessageBatch {
-    pub fn thin_edge_json_bytes(
+    pub fn thin_edge_json(
+        output_topic: &Topic,
         messages: Vec<CollectdMessage>,
-    ) -> Result<Payload, DeviceMonitorError> {
+    ) -> Result<MqttMessage, DeviceMonitorError> {
         let mut messages = messages.into_iter();
 
         if let Some(first_message) = messages.next() {
@@ -32,7 +34,7 @@ impl MessageBatch {
             measurements.accept(&mut tedge_json_serializer)?;
 
             let payload = tedge_json_serializer.bytes()?;
-            Ok(payload)
+            Ok(MqttMessage::new(output_topic, payload))
         } else {
             Err(DeviceMonitorError::FromInvalidThinEdgeJson(
                 MeasurementGrouperError::UnexpectedEnd,

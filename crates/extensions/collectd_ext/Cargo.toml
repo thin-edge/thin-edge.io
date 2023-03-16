@@ -8,14 +8,17 @@ rust-version = { workspace = true }
 license = { workspace = true }
 homepage = { workspace = true }
 repository = { workspace = true }
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+async-trait = "0.1"
 batcher = { path = "../../common/batcher" }
 clock = { path = "../../common/clock" }
-mqtt_channel = { path = "../../common/mqtt_channel" }
+tedge_actors = { path = "../../core/tedge_actors" }
 tedge_api = { path = "../../core/tedge_api" }
+tedge_health_ext = { path = "../../extensions/tedge_health_ext" }
+tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
+tedge_signal_ext = { path = "../../extensions/tedge_signal_ext" }
 thiserror = "1.0"
 time = "0.3"
 tokio = { version = "1.23", features = [

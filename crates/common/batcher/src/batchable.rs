@@ -6,8 +6,8 @@ use time::OffsetDateTime;
 /// No items with the same key will go in the same batch.
 /// The event_time of the item will determine how items are grouped,
 /// dependent on how the batcher is configured.
-pub trait Batchable {
-    type Key: Eq + Hash + Debug;
+pub trait Batchable: 'static + Debug + Send + Sync {
+    type Key: Eq + Hash + Debug + Send + Sync;
 
     /// Define the uniqueness within a batch.
     fn key(&self) -> Self::Key;
