@@ -5,7 +5,6 @@ use async_trait::async_trait;
 use mqtt_channel::SinkExt;
 use mqtt_channel::StreamExt;
 use std::convert::Infallible;
-use tedge_actors::fan_in_message_type;
 use tedge_actors::futures::channel::mpsc::channel;
 use tedge_actors::futures::channel::mpsc::Sender;
 use tedge_actors::Actor;
@@ -29,12 +28,11 @@ pub type MqttMessage = mqtt_channel::Message;
 pub use mqtt_channel::MqttError;
 pub use mqtt_channel::Topic;
 pub use mqtt_channel::TopicFilter;
-fan_in_message_type!(MqttRuntimeMessage[MqttMessage, RuntimeRequest] : Debug, Clone);
 
 pub struct MqttActorBuilder {
     pub mqtt_config: mqtt_channel::Config,
-    input_receiver: CombinedReceiver<MqttRuntimeMessage>,
-    publish_sender: Sender<MqttRuntimeMessage>,
+    input_receiver: CombinedReceiver<MqttMessage>,
+    publish_sender: Sender<MqttMessage>,
     pub subscriber_addresses: Vec<(TopicFilter, DynSender<MqttMessage>)>,
     signal_sender: Sender<RuntimeRequest>,
 }
@@ -107,13 +105,13 @@ impl Builder<(MqttActor, MqttMessageBox)> for MqttActorBuilder {
 }
 
 pub struct MqttMessageBox {
-    input_receiver: CombinedReceiver<MqttRuntimeMessage>,
+    input_receiver: CombinedReceiver<MqttMessage>,
     peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
 }
 
 impl MqttMessageBox {
     fn new(
-        input_receiver: CombinedReceiver<MqttRuntimeMessage>,
+        input_receiver: CombinedReceiver<MqttMessage>,
         peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
     ) -> Self {
         MqttMessageBox {
@@ -134,16 +132,16 @@ impl MqttMessageBox {
 }
 
 #[async_trait]
-impl ReceiveMessages<MqttRuntimeMessage> for MqttMessageBox {
-    async fn try_recv(&mut self) -> Result<Option<MqttRuntimeMessage>, RuntimeRequest> {
+impl ReceiveMessages<MqttMessage> for MqttMessageBox {
+    async fn try_recv(&mut self) -> Result<Option<MqttMessage>, RuntimeRequest> {
         self.input_receiver.try_recv().await
     }
 
-    async fn recv_message(&mut self) -> Option<WrappedInput<MqttRuntimeMessage>> {
+    async fn recv_message(&mut self) -> Option<WrappedInput<MqttMessage>> {
         self.input_receiver.recv_message().await
     }
 
-    async fn recv(&mut self) -> Option<MqttRuntimeMessage> {
+    async fn recv(&mut self) -> Option<MqttMessage> {
         self.input_receiver.recv().await.map(|message| {
             self.log_input(&message);
             message
@@ -193,17 +191,12 @@ impl Actor for MqttActor {
         loop {
             tokio::select! {
                 Some(message) = messages.recv() => {
-                    match message {
-                        MqttRuntimeMessage::MqttMessage(message) => {
-                            mqtt_client
+                    mqtt_client
                             .published
                             .send(message)
                             .await
                             .expect("TODO catch actor specific errors");
-                        },
-                        MqttRuntimeMessage::RuntimeRequest(RuntimeRequest::Shutdown) => break,
                     }
-                },
                 Some(message) = mqtt_client.received.next() => {
                     messages.send(message).await?
                 },
