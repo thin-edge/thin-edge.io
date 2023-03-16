@@ -16,7 +16,7 @@
 14. [How to install thin-edge.io on any Linux OS (no deb support)?](./015_installation_without_deb_support.md)
 15. [How to restart your thin-edge.io device](./016_restart_device_operation.md)
 16. [How to manage apama software artefatcs with apama plugin?](./017_apama_software_management_plugin.md)
-17. [How to change temp path](./018_change_temp_path.md)
+17. [How to change temp path](./018_update_config_paths.md)
 18. [How to use thin-edge.io with your preferred init system](./019_how_to_use_preferred_init_system.md)
 19. [How to monitor health of tedge daemons](./020_monitor_tedge_health.md)
 20. [How to enable watchdog using systemd?](./021_enable_tedge_watchdog_using_systemd.md)

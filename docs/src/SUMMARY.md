@@ -37,7 +37,7 @@
   - [How to install thin-edge.io on any Linux OS (no deb support)?](./howto-guides/015_installation_without_deb_support.md)
   - [How to restart your thin-edge.io device](./howto-guides/016_restart_device_operation.md)
   - [How to use apama software management plugin](./howto-guides/017_apama_software_management_plugin.md)
-  - [How to change temp path](./howto-guides/018_change_temp_path.md)
+  - [How to change tedge config paths](./howto-guides/018_update_config_paths.md)
   - [How to use thin-edge.io with your preferred init system](./howto-guides/019_how_to_use_preferred_init_system.md)
   - [How to monitor health of tedge daemons](./howto-guides/020_monitor_tedge_health.md)
   - [How to enable systemd watchdog monitoring for tedge services?](./howto-guides/021_enable_tedge_watchdog_using_systemd.md)

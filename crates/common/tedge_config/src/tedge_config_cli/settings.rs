@@ -463,7 +463,7 @@ impl ConfigSetting for DataPathSetting {
     const KEY: &'static str = "data.path";
 
     const DESCRIPTION: &'static str = concat!(
-        "The directory path to be used to store all persistent/volatile data like cached files, runtime metadata etc",
+        "The directory path to be used to store data like cached files, runtime metadata etc.",
         "Example: /var/tedge"
     );
 
