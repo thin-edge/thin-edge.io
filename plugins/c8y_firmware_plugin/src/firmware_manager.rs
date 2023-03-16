@@ -43,6 +43,8 @@ use tedge_api::health::health_status_down_message;
 use tedge_api::health::health_status_up_message;
 use tedge_api::health::send_health_status;
 use tedge_api::OperationStatus;
+use tedge_config::DEFAULT_FILE_TRANSFER_DIR_NAME;
+use tedge_utils::file::create_directory_with_user_group;
 use tedge_utils::file::create_file_with_mode;
 use tedge_utils::file::overwrite_file;
 use tedge_utils::timers::Timers;
@@ -51,11 +53,28 @@ use tracing::info;
 use tracing::warn;
 
 pub const CACHE_DIR_NAME: &str = "cache";
-pub const FILE_TRANSFER_DIR_NAME: &str = "file-transfer";
 pub const PERSISTENT_STORE_DIR_NAME: &str = "firmware";
 
 const PLUGIN_SERVICE_NAME: &str = "c8y-firmware-plugin";
 const FIRMWARE_UPDATE_RESPONSE_TOPICS: &str = "tedge/+/commands/res/firmware_update";
+
+pub fn create_directories(data_dir: PathBuf) -> Result<(), FirmwareManagementError> {
+    info!("Creating required directories for c8y-firmware-plugin.");
+    create_directory_with_user_group(data_dir.join(CACHE_DIR_NAME), "tedge", "tedge", 0o755)?;
+    create_directory_with_user_group(
+        data_dir.join(DEFAULT_FILE_TRANSFER_DIR_NAME),
+        "tedge",
+        "tedge",
+        0o755,
+    )?;
+    create_directory_with_user_group(
+        data_dir.join(PERSISTENT_STORE_DIR_NAME),
+        "tedge",
+        "tedge",
+        0o755,
+    )?;
+    Ok(())
+}
 
 pub struct FirmwareManager {
     mqtt_client: Connection,
@@ -624,7 +643,7 @@ impl FirmwareManager {
         file_cache_key: &str,
         original_path: &Path,
     ) -> Result<PathBuf, FirmwareManagementError> {
-        let file_transfer_dir_path = self.persistent_dir.join(FILE_TRANSFER_DIR_NAME);
+        let file_transfer_dir_path = self.persistent_dir.join(DEFAULT_FILE_TRANSFER_DIR_NAME);
         validate_dir_exists(&file_transfer_dir_path)?;
 
         let symlink_dir_path = file_transfer_dir_path

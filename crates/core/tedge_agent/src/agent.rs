@@ -100,6 +100,7 @@ pub struct SmAgentConfig {
     pub log_dir: PathBuf,
     pub run_dir: PathBuf,
     pub tmp_dir: PathBuf,
+    pub data_dir: PathBuf,
     pub config_location: TEdgeConfigLocation,
     pub download_dir: PathBuf,
     pub http_config: HttpConfig,
@@ -156,7 +157,7 @@ impl Default for SmAgentConfig {
 
         let data_dir = PathBuf::from(DEFAULT_DATA_PATH);
 
-        let http_config = HttpConfig::default().with_data_dir(data_dir);
+        let http_config = HttpConfig::default().with_data_dir(data_dir.clone());
 
         Self {
             errors_topic,
@@ -174,6 +175,7 @@ impl Default for SmAgentConfig {
             log_dir,
             run_dir,
             tmp_dir,
+            data_dir,
             config_location,
             download_dir,
             http_config,
@@ -207,9 +209,9 @@ impl SmAgentConfig {
         let tedge_log_dir = PathBuf::from(&format!("{tedge_log_dir}/{AGENT_LOG_PATH}"));
         let tedge_run_dir = tedge_config.query_string(RunPathSetting)?.into();
         let tedge_tmp_dir = tedge_config.query_string(TmpPathSetting)?.into();
-        let tedge_data_dir = tedge_config.query_string(DataPathSetting)?.into();
+        let tedge_data_dir: PathBuf = tedge_config.query_string(DataPathSetting)?.into();
 
-        let mut http_config = HttpConfig::default().with_data_dir(tedge_data_dir);
+        let mut http_config = HttpConfig::default().with_data_dir(tedge_data_dir.clone());
 
         let http_bind_address = tedge_config.query(HttpBindAddressSetting)?;
         http_config = http_config
@@ -226,6 +228,7 @@ impl SmAgentConfig {
             .with_log_directory(tedge_log_dir)
             .with_run_directory(tedge_run_dir)
             .with_tmp_directory(tedge_tmp_dir)
+            .with_data_directory(tedge_data_dir)
             .with_http_config(http_config)
             .with_use_lock(use_lock))
     }
@@ -265,6 +268,10 @@ impl SmAgentConfig {
 
     pub fn with_tmp_directory(self, tmp_dir: PathBuf) -> Self {
         Self { tmp_dir, ..self }
+    }
+
+    pub fn with_data_directory(self, data_dir: PathBuf) -> Self {
+        Self { data_dir, ..self }
     }
 
     pub fn with_http_config(self, http_config: HttpConfig) -> Self {
@@ -321,6 +328,7 @@ impl SmAgent {
         let config_dir = config_dir.display();
         create_directory_with_user_group(format!("{config_dir}/.agent"), "tedge", "tedge", 0o775)?;
         create_directory_with_user_group(self.config.log_dir.clone(), "tedge", "tedge", 0o775)?;
+        create_directory_with_user_group(self.config.data_dir.clone(), "tedge", "tedge", 0o775)?;
         create_directory_with_user_group(
             self.config.http_config.file_transfer_dir_as_string(),
             "tedge",

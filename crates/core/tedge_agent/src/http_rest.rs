@@ -13,6 +13,7 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_config::DEFAULT_DATA_PATH;
+use tedge_config::DEFAULT_FILE_TRANSFER_DIR_NAME;
 use tedge_utils::paths::create_directories;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
@@ -61,11 +62,8 @@ impl HttpConfig {
         format!("{}file-transfer/*", self.file_transfer_uri)
     }
 
-    pub fn file_transfer_dir_as_string(&self) -> String {
-        self.data_dir
-            .to_str()
-            .expect("Non UTF8 http root path")
-            .into()
+    pub fn file_transfer_dir_as_string(&self) -> PathBuf {
+        self.data_dir.join(DEFAULT_FILE_TRANSFER_DIR_NAME)
     }
 
     /// Return the path of the file associated to the given `uri`
