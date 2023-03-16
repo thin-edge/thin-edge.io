@@ -923,6 +923,7 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_c8y_smartrest_templates: TemplatesSet::default(),
         default_firmware_child_update_timeout: Seconds(3600),
         default_service_type: String::from("service"),
+        default_lock_files: Flag(true),
     }
 }
 

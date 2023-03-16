@@ -775,6 +775,27 @@ impl ConfigSettingAccessor<RunPathSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<LockFilesSetting> for TEdgeConfig {
+    fn query(&self, _setting: LockFilesSetting) -> ConfigSettingResult<Flag> {
+        Ok(self
+            .data
+            .run
+            .lock_files
+            .map(Flag)
+            .unwrap_or_else(|| self.config_defaults.default_lock_files.clone()))
+    }
+
+    fn update(&mut self, _setting: LockFilesSetting, value: Flag) -> ConfigSettingResult<()> {
+        self.data.run.lock_files = Some(value.into());
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: LockFilesSetting) -> ConfigSettingResult<()> {
+        self.data.run.lock_files = None;
+        Ok(())
+    }
+}
+
 impl ConfigSettingAccessor<FirmwareChildUpdateTimeoutSetting> for TEdgeConfig {
     fn query(&self, _setting: FirmwareChildUpdateTimeoutSetting) -> ConfigSettingResult<Seconds> {
         Ok(self

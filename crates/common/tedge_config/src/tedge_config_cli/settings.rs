@@ -457,6 +457,20 @@ impl ConfigSetting for RunPathSetting {
     type Value = FilePath;
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct LockFilesSetting;
+
+impl ConfigSetting for LockFilesSetting {
+    const KEY: &'static str = "run.lock_files";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Boolean whether lock files should be created or not.",
+        "Example: true"
+    );
+
+    type Value = Flag;
+}
+
 pub struct FirmwareChildUpdateTimeoutSetting;
 
 impl ConfigSetting for FirmwareChildUpdateTimeoutSetting {

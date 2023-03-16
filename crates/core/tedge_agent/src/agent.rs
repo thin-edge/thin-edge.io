@@ -49,8 +49,10 @@ use tedge_config::system_services::SystemConfig;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::ConfigSettingAccessorStringExt;
+use tedge_config::Flag;
 use tedge_config::HttpBindAddressSetting;
 use tedge_config::HttpPortSetting;
+use tedge_config::LockFilesSetting;
 use tedge_config::LogPathSetting;
 use tedge_config::MqttClientHostSetting;
 use tedge_config::MqttClientPortSetting;
@@ -102,6 +104,7 @@ pub struct SmAgentConfig {
     pub config_location: TEdgeConfigLocation,
     pub download_dir: PathBuf,
     pub http_config: HttpConfig,
+    pub use_lock: Flag,
 }
 
 impl Default for SmAgentConfig {
@@ -150,6 +153,8 @@ impl Default for SmAgentConfig {
 
         let download_dir = PathBuf::from(DEFAULT_TMP_PATH);
 
+        let use_lock = Flag(true);
+
         Self {
             errors_topic,
             mqtt_config,
@@ -169,6 +174,7 @@ impl Default for SmAgentConfig {
             config_location,
             download_dir,
             http_config: HttpConfig::default(),
+            use_lock,
         }
     }
 }
@@ -206,6 +212,8 @@ impl SmAgentConfig {
             .with_port(tedge_config.query(HttpPortSetting)?.0)
             .with_ip_address(http_bind_address.into());
 
+        let use_lock = tedge_config.query(LockFilesSetting)?;
+
         Ok(SmAgentConfig::default()
             .with_sm_home(tedge_config_path)
             .with_mqtt_config(mqtt_config)
@@ -214,7 +222,8 @@ impl SmAgentConfig {
             .with_log_directory(tedge_log_dir)
             .with_run_directory(tedge_run_dir)
             .with_tmp_directory(tedge_tmp_dir)
-            .with_http_config(http_config))
+            .with_http_config(http_config)
+            .with_use_lock(use_lock))
     }
 
     pub fn with_sm_home(self, sm_home: PathBuf) -> Self {
@@ -260,6 +269,10 @@ impl SmAgentConfig {
             ..self
         }
     }
+
+    pub fn with_use_lock(self, use_lock: Flag) -> Self {
+        Self { use_lock, ..self }
+    }
 }
 
 #[derive(Debug)]
@@ -267,12 +280,19 @@ pub struct SmAgent {
     config: SmAgentConfig,
     operation_logs: OperationLogs,
     persistence_store: AgentStateRepository,
-    _flock: Flockfile,
+    _flock: Option<Flockfile>,
 }
 
 impl SmAgent {
     pub fn try_new(name: &str, mut config: SmAgentConfig) -> Result<Self, AgentError> {
-        let flock = check_another_instance_is_not_running(name, &config.run_dir)?;
+        let mut flock = None;
+        if config.use_lock.is_set() {
+            flock = Some(check_another_instance_is_not_running(
+                name,
+                &config.run_dir,
+            )?);
+        }
+
         info!("{} starting", &name);
 
         let persistence_store = AgentStateRepository::new(config.sm_home.clone());
