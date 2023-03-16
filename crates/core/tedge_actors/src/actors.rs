@@ -369,14 +369,8 @@ pub mod tests {
         type Input = String;
         type Output = DoMsg;
 
-        fn turn_logging_on(&mut self, _on: bool) {}
-
         fn name(&self) -> &str {
             &self.name
-        }
-
-        fn logging_is_on(&self) -> bool {
-            false
         }
     }
 }

@@ -89,16 +89,8 @@ impl MessageBox for C8YHttpProxyMessageBox {
     type Input = C8YHttpProxyInput;
     type Output = C8YHttpProxyOutput;
 
-    fn turn_logging_on(&mut self, _on: bool) {
-        todo!()
-    }
-
     fn name(&self) -> &str {
         "C8Y-REST"
-    }
-
-    fn logging_is_on(&self) -> bool {
-        true
     }
 }
 

@@ -21,8 +21,8 @@ use log::error;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
-use tedge_actors::CombinedReceiver;
 use tedge_actors::DynSender;
+use tedge_actors::LoggingReceiver;
 use tedge_actors::MessageBox;
 use tedge_actors::ReceiveMessages;
 use tedge_actors::RuntimeError;
@@ -386,7 +386,7 @@ impl Actor for ConfigManagerActor {
 }
 
 pub struct ConfigManagerMessageBox {
-    input_receiver: CombinedReceiver<ConfigInput>,
+    input_receiver: LoggingReceiver<ConfigInput>,
     pub mqtt_publisher: DynSender<MqttMessage>,
     pub c8y_http_proxy: C8YHttpProxy,
     timer_sender: DynSender<SetTimeout<ChildConfigOperationKey>>,
@@ -394,7 +394,7 @@ pub struct ConfigManagerMessageBox {
 
 impl ConfigManagerMessageBox {
     pub fn new(
-        input_receiver: CombinedReceiver<ConfigInput>,
+        input_receiver: LoggingReceiver<ConfigInput>,
         mqtt_publisher: DynSender<MqttMessage>,
         c8y_http_proxy: C8YHttpProxy,
         timer_sender: DynSender<SetTimeout<ChildConfigOperationKey>>,
@@ -426,10 +426,7 @@ impl ReceiveMessages<ConfigInput> for ConfigManagerMessageBox {
     }
 
     async fn recv(&mut self) -> Option<ConfigInput> {
-        self.input_receiver.recv().await.map(|message| {
-            self.log_input(&message);
-            message
-        })
+        self.input_receiver.recv().await
     }
 }
 
@@ -437,17 +434,8 @@ impl MessageBox for ConfigManagerMessageBox {
     type Input = ConfigInput;
     type Output = MqttMessage;
 
-    fn turn_logging_on(&mut self, _on: bool) {
-        todo!()
-    }
-
     fn name(&self) -> &str {
         "C8Y-Config-Manager"
-    }
-
-    fn logging_is_on(&self) -> bool {
-        // FIXME this mailbox recv and send method are not used making logging ineffective.
-        false
     }
 }
 

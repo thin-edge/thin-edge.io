@@ -298,7 +298,7 @@ where
     }
 }
 
-struct ConsumerBoxBuilder<I, O, C> {
+struct ConsumerBoxBuilder<I, O: Debug, C> {
     config: C,
     box_builder: SimpleMessageBoxBuilder<O, I>,
 }
