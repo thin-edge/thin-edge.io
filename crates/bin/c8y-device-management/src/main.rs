@@ -17,12 +17,12 @@ use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_file_system_ext::FsWatchActorBuilder;
+use tedge_health_ext::HealthMonitorBuilder;
 use tedge_http_ext::HttpActor;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_signal_ext::SignalActor;
 use tedge_timer_ext::TimerActor;
-
 pub const PLUGIN_NAME: &str = "c8y-device-management";
 
 #[tokio::main]
@@ -35,6 +35,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Create actor instances
     let mqtt_config = mqtt_config(&tedge_config)?;
+
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
 
     let mut jwt_actor = C8YJwtRetriever::builder(mqtt_config);
@@ -68,6 +69,11 @@ async fn main() -> anyhow::Result<()> {
     log_actor.with_c8y_http_proxy(&mut c8y_http_proxy_actor)?;
     log_actor.with_mqtt_connection(&mut mqtt_actor)?;
 
+    //Instantiate health monitor actor
+    let health_actor = HealthMonitorBuilder::new(PLUGIN_NAME);
+    mqtt_actor.mqtt_config = health_actor.set_init_and_last_will(mqtt_actor.mqtt_config);
+    let health_actor = health_actor.with_connection(&mut mqtt_actor);
+
     // Shutdown on SIGINT
     signal_actor.register_peer(NoConfig, runtime.get_handle().get_sender());
 
@@ -82,8 +88,10 @@ async fn main() -> anyhow::Result<()> {
     runtime.spawn(config_actor).await?;
     runtime.spawn(log_actor).await?;
     runtime.spawn(timer_actor).await?;
+    runtime.spawn(health_actor).await?;
 
     runtime.run_to_completion().await?;
+
     Ok(())
 }
 
