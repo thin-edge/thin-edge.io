@@ -2,13 +2,13 @@ use std::path::Path;
 
 use crate::collectd::monitor::DeviceMonitor;
 use crate::collectd::monitor::DeviceMonitorConfig;
-use crate::core::component::TEdgeComponent;
 use async_trait::async_trait;
 use mqtt_channel::TopicFilter;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::MqttClientHostSetting;
 use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
+use tedge_mapper_core::component::TEdgeComponent;
 use tracing::info;
 use tracing::info_span;
 use tracing::Instrument;

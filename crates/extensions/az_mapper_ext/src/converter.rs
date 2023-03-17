@@ -1,6 +1,6 @@
-use crate::core::converter::*;
-use crate::core::error::*;
-use crate::core::size_threshold::SizeThreshold;
+use tedge_mapper_core::converter::*;
+use tedge_mapper_core::error::*;
+use tedge_mapper_core::size_threshold::SizeThreshold;
 
 use async_trait::async_trait;
 use clock::Clock;
@@ -67,10 +67,10 @@ impl Converter for AzureConverter {
 
 #[cfg(test)]
 mod tests {
-    use crate::az::converter::AzureConverter;
-    use crate::core::converter::*;
-    use crate::core::error::ConversionError;
-    use crate::core::size_threshold::SizeThreshold;
+    use crate::converter::AzureConverter;
+    use tedge_mapper_core::converter::*;
+    use tedge_mapper_core::error::ConversionError;
+    use tedge_mapper_core::size_threshold::SizeThreshold;
 
     use assert_json_diff::*;
     use assert_matches::*;

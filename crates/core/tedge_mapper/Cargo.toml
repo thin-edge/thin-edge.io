@@ -59,6 +59,7 @@ stop-on-upgrade = false
 anyhow = "1.0"
 assert_cmd = "2.0"
 async-trait = "0.1"
+az_mapper_ext = { path = "../../extensions/az_mapper_ext" }
 batcher = { path = "../../common/batcher" }
 c8y_api = { path = "../c8y_api" }
 clap = { version = "3.2", features = ["cargo", "derive"] }
@@ -80,6 +81,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tedge_api = { path = "../tedge_api" }
 tedge_config = { path = "../../common/tedge_config" }
+tedge_mapper_core =  { path = "../../extensions/tedge_mapper_core" }
 tedge_utils = { path = "../../common/tedge_utils", features = [
     "logging",
     "fs-notify",
@@ -99,6 +101,7 @@ tracing = { version = "0.1", features = ["attributes", "log"] }
 [dev-dependencies]
 assert-json-diff = "2.0"
 assert_matches = "1.5"
+az_mapper_ext = { path = "../../extensions/az_mapper_ext" }
 mockito = "0.31"
 mqtt_tests = { path = "../../tests/mqtt_tests" }
 proptest = "1.0"

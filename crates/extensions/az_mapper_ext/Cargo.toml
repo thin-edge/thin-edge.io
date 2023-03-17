@@ -1,0 +1,49 @@
+[package]
+name = "az_mapper_ext"
+description = "thin-edge Azure extension adding support for az data model"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+anyhow = "1.0.6"
+async-trait = "0.1"
+c8y_api = { path = "../../core/c8y_api" }
+clock = { path = "../../common/clock" }
+log = "0.4"
+mqtt_channel = { path = "../../common/mqtt_channel" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tedge_actors = { path = "../../core/tedge_actors" }
+tedge_api = { path = "../../core/tedge_api" }
+tedge_config = { path = "../../common/tedge_config" }
+tedge_health_ext = { path = "../../extensions/tedge_health_ext" }
+tedge_mapper_core = { path = "../tedge_mapper_core" }
+tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
+tedge_utils = { path = "../../common/tedge_utils" }
+thiserror = "1.0"
+tokio = { version = "1.23", features = ["macros"] }
+toml = "0.5"
+tracing = { version = "0.1", features = ["attributes", "log"] }
+
+[dev-dependencies]
+anyhow = "1.0.6"
+assert-json-diff = "2.0"
+assert_matches = "1.5"
+mockito = "0.31"
+mqtt_tests = { path = "../../tests/mqtt_tests" }
+proptest = "1.0"
+rand = "0.8"
+serde = "1.0"
+serde_json = "1.0"
+serial_test = "0.8"
+tedge_test_utils = { path = "../../tests/tedge_test_utils" }
+test-case = "2.2"
+time = { version = "0.3", features = ["macros"] }
+tokio = { version = "1.23", features = ["time"] }
+tokio-test = "0.4"
+

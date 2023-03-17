@@ -1,9 +1,9 @@
 use std::path::Path;
 
 use crate::aws::converter::AwsConverter;
-use crate::core::component::TEdgeComponent;
 use crate::core::mapper::create_mapper;
 use crate::core::size_threshold::SizeThreshold;
+use tedge_mapper_core::component::TEdgeComponent;
 
 use async_trait::async_trait;
 use clock::WallClock;

@@ -261,6 +261,42 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
+name = "az_mapper_ext"
+version = "0.9.0"
+dependencies = [
+ "anyhow",
+ "assert-json-diff",
+ "assert_matches",
+ "async-trait",
+ "c8y_api",
+ "clock",
+ "log",
+ "mockito",
+ "mqtt_channel",
+ "mqtt_tests",
+ "proptest",
+ "rand",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tedge_actors",
+ "tedge_api",
+ "tedge_config",
+ "tedge_health_ext",
+ "tedge_mapper_core",
+ "tedge_mqtt_ext",
+ "tedge_test_utils",
+ "tedge_utils",
+ "test-case",
+ "thiserror",
+ "time",
+ "tokio",
+ "tokio-test",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "backoff"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3477,6 +3513,7 @@ dependencies = [
  "assert_cmd",
  "assert_matches",
  "async-trait",
+ "az_mapper_ext",
  "batcher",
  "c8y_api",
  "clap 3.2.23",
@@ -3500,6 +3537,7 @@ dependencies = [
  "serial_test",
  "tedge_api",
  "tedge_config",
+ "tedge_mapper_core",
  "tedge_test_utils",
  "tedge_utils",
  "test-case",
@@ -3550,6 +3588,7 @@ version = "0.10.0"
 dependencies = [
  "anyhow",
  "assert_matches",
+ "async-trait",
  "clock",
  "criterion",
  "csv",
@@ -3567,6 +3606,7 @@ dependencies = [
  "test-case",
  "thiserror",
  "time",
+ "tracing",
  "walkdir",
 ]
 
@@ -3633,6 +3673,47 @@ dependencies = [
  "tedge_actors",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "tedge_mapper_core"
+version = "0.9.0"
+dependencies = [
+ "anyhow",
+ "assert-json-diff",
+ "assert_matches",
+ "async-trait",
+ "az_mapper_ext",
+ "c8y_api",
+ "clock",
+ "csv",
+ "download",
+ "flockfile",
+ "futures",
+ "json-writer",
+ "logged_command",
+ "mockall",
+ "mockito",
+ "mqtt_channel",
+ "mqtt_tests",
+ "plugin_sm",
+ "proptest",
+ "rand",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tedge_api",
+ "tedge_config",
+ "tedge_test_utils",
+ "tedge_utils",
+ "test-case",
+ "thiserror",
+ "time",
+ "tokio",
+ "tokio-test",
+ "toml",
+ "tracing",
 ]
 
 [[package]]

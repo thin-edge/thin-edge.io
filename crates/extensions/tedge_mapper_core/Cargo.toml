@@ -1,0 +1,67 @@
+[package]
+name = "tedge_mapper_core"
+description = "tedge-mapper-core is the mapper that translates thin-edge.io data model to c8y/az data model."
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+c8y_api = { path = "../../core/c8y_api" }
+clock = { path = "../../common/clock" }
+csv = "1.1"
+download = { path = "../../common/download" }
+flockfile = { path = "../../common/flockfile" }
+futures = "0.3"
+json-writer = { path = "../../common/json_writer" }
+logged_command = { path = "../../common/logged_command" }
+mockall = "0.11"
+mqtt_channel = { path = "../../common/mqtt_channel" }
+plugin_sm = { path = "../../core/plugin_sm" }
+reqwest = { version = "0.11", default-features = false, features = [
+    "json",
+    "rustls-tls",
+] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tedge_api = { path = "../../core/tedge_api" }
+tedge_config = { path = "../../common/tedge_config" }
+tedge_utils = { path = "../../common/tedge_utils", features = [
+    "logging",
+    "fs-notify",
+] }
+thiserror = "1.0"
+time = "0.3"
+tokio = { version = "1.23", features = [
+    "process",
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
+toml = "0.5"
+tracing = { version = "0.1", features = ["attributes", "log"] }
+
+[dev-dependencies]
+assert-json-diff = "2.0"
+assert_matches = "1.5"
+az_mapper_ext = { path = "../../extensions/az_mapper_ext" }
+mockito = "0.31"
+mqtt_tests = { path = "../../tests/mqtt_tests" }
+proptest = "1.0"
+rand = "0.8"
+serde = "1.0"
+serde_json = "1.0"
+serial_test = "0.8"
+tedge_test_utils = { path = "../../tests/tedge_test_utils" }
+test-case = "2.2"
+time = { version = "0.3", features = ["macros"] }
+tokio-test = "0.4"
+
+[features]
+integration-test = []
