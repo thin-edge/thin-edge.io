@@ -3,7 +3,7 @@
 # version by adding it to their PATH variable.
 
 # Note: Don't use the -u option (for undefined variables), as the handling
-# of empty arrays across bash versions is very inconsitent (e.g. Bash v3),
+# of empty arrays across bash versions is very inconsistent (e.g. Bash v3),
 # and we rely on this to add optional arguments in this script. Bash v3 is still
 # the default for some reason on MacOS as of 13.2.1 (Ventura).
 # References: https://stackoverflow.com/questions/7577052/bash-empty-array-expansion-with-set-u
