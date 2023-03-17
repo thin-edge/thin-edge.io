@@ -60,7 +60,10 @@ impl LogManagerBuilder {
     }
 
     /// Connect this config manager instance to some mqtt connection provider
-    pub fn with_mqtt_connection(&mut self, mqtt: &mut MqttActorBuilder) -> Result<(), LinkError> {
+    pub fn with_mqtt_connection(
+        &mut self,
+        mqtt: &mut (impl MessageSink<MqttMessage> + MessageSource<MqttMessage, TopicFilter>),
+    ) -> Result<(), LinkError> {
         let subscriptions = vec!["c8y/s/ds"].try_into().unwrap();
         //Register peers symmetrically here
         mqtt.register_peer(subscriptions, self.events_sender.clone().into());
