@@ -72,8 +72,8 @@ Check health status of child device service
     # Create the child device by sending the service status on tedge/health/<child-id>/<service-id
     # Verify if the service status is updated
     Set Device    ${DEVICE_SN}
-    Set Suite Variable    $CHILD_SN    external-sensor    
-    Execute Command    tedge mqtt pub 'tedge/health/external-sensor/childservice' '{"type":"systemd","status":"unknown"}'
+    Set Suite Variable    $CHILD_SN    ${DEVICE_SN}_external-sensor
+    Execute Command    tedge mqtt pub 'tedge/health/${CHILD_SN}/childservice' '{"type":"systemd","status":"unknown"}'
 
     Should Be A Child Device Of Device    ${CHILD_SN}
      
