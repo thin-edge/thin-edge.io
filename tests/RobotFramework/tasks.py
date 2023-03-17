@@ -295,19 +295,21 @@ def build(
         echo=True,
     )
 
+
 @task(
     help={
         "iterations": ("Number of test iterations to run"),
-        "output": ("Output folder to store the logs. Defaults to 'output_flake_finder'"),
+        "output": (
+            "Output folder to store the logs. Defaults to 'output_flake_finder'"
+        ),
     }
 )
 def flake_finder(c, iterations=2, output="output_flake_finder"):
-    """Run tests multiple times to find any flakey tests
-    """
+    """Run tests multiple times to find any flakey tests"""
     passed = []
     failed = []
     duration_start = time.time()
-    for i in range(1, iterations+1):
+    for i in range(1, iterations + 1):
         iteration_output = Path(output) / f"iteration-{i}"
         os.makedirs(iteration_output)
         try:
@@ -317,19 +319,22 @@ def flake_finder(c, iterations=2, output="output_flake_finder"):
             failed.append(i)
 
     duration_sec = time.time() - duration_start
-    
-    print("\n\n" + "-"*30)
+
+    print("\n\n" + "-" * 30)
 
     overall_result = "PASSED"
     if failed:
         overall_result = "FAILED"
 
     print(f"Overall: {overall_result}")
-    print(f"Results: {iterations} iterations, {len(passed)} passed, {len(failed)} failed")
+    print(
+        f"Results: {iterations} iterations, {len(passed)} passed, {len(failed)} failed"
+    )
     print(f"Elapsed time: {datetime.timedelta(seconds=duration_sec)}")
 
     if failed:
         print(f"Failed iterations: {failed}")
+
 
 @task(
     aliases=["tests"],
