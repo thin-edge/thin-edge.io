@@ -39,6 +39,7 @@ clap = { version = "3.2", features = ["cargo", "derive"] }
 tedge_actors = { path = "../../crates/core/tedge_actors" }
 tedge_config = { path = "../../crates/common/tedge_config" }
 tedge_file_system_ext = { path = "../../crates/extensions/tedge_file_system_ext" }
+tedge_health_ext = { path = "../../crates/extensions/tedge_health_ext" }
 tedge_http_ext = { path = "../../crates/extensions/tedge_http_ext" }
 tedge_mqtt_ext = { path = "../../crates/extensions/tedge_mqtt_ext" }
 tedge_signal_ext = { path = "../../crates/extensions/tedge_signal_ext" }

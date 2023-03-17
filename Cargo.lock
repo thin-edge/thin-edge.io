@@ -483,6 +483,7 @@ dependencies = [
  "tedge_actors",
  "tedge_config",
  "tedge_file_system_ext",
+ "tedge_health_ext",
  "tedge_http_ext",
  "tedge_mqtt_ext",
  "tedge_signal_ext",
