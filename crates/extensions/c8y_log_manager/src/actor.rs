@@ -20,14 +20,12 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
-use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
-use tedge_actors::MessageBox;
+use tedge_actors::NoMessage;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
-use tedge_actors::WrappedInput;
+use tedge_actors::SimpleMessageBox;
 use tedge_api::health::health_check_topics;
 use tedge_api::health::health_status_up_message;
 use tedge_file_system_ext::FsWatchEvent;
@@ -353,7 +351,7 @@ impl LogManagerActor {
 
 #[async_trait]
 impl Actor for LogManagerActor {
-    type MessageBox = LogManagerMessageBox;
+    type MessageBox = SimpleMessageBox<LogInput, NoMessage>;
 
     fn name(&self) -> &str {
         "LogManager"
@@ -374,45 +372,6 @@ impl Actor for LogManagerActor {
             }
         }
         Ok(())
-    }
-}
-
-// FIXME: Consider to use a SimpleMessageBox<LogInput,MqttMessage>
-pub struct LogManagerMessageBox {
-    input_receiver: LoggingReceiver<LogInput>,
-    #[allow(dead_code)]
-    mqtt_requests: LoggingSender<MqttMessage>,
-}
-
-impl LogManagerMessageBox {
-    pub fn new(
-        input_receiver: LoggingReceiver<LogInput>,
-        mqtt_con: LoggingSender<MqttMessage>,
-    ) -> LogManagerMessageBox {
-        LogManagerMessageBox {
-            input_receiver,
-            mqtt_requests: mqtt_con,
-        }
-    }
-}
-
-impl MessageBox for LogManagerMessageBox {
-    type Input = LogInput;
-    type Output = LogOutput;
-}
-
-#[async_trait]
-impl MessageReceiver<LogInput> for LogManagerMessageBox {
-    async fn try_recv(&mut self) -> Result<Option<LogInput>, RuntimeRequest> {
-        self.input_receiver.try_recv().await
-    }
-
-    async fn recv_message(&mut self) -> Option<WrappedInput<LogInput>> {
-        self.input_receiver.recv_message().await
-    }
-
-    async fn recv(&mut self) -> Option<LogInput> {
-        self.input_receiver.recv().await
     }
 }
 

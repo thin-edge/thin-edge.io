@@ -7,18 +7,19 @@ use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
 pub use config::*;
-use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
-use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
+use tedge_actors::NoMessage;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
+use tedge_actors::SimpleMessageBox;
+use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
@@ -26,27 +27,20 @@ use tedge_mqtt_ext::*;
 /// This is an actor builder.
 pub struct LogManagerBuilder {
     config: LogManagerConfig,
-    input_receiver: LoggingReceiver<LogInput>,
-    events_sender: mpsc::Sender<LogInput>,
+    box_builder: SimpleMessageBoxBuilder<LogInput, NoMessage>,
     mqtt_publisher: Option<DynSender<MqttMessage>>,
     http_proxy: Option<C8YHttpProxy>,
-    signal_sender: mpsc::Sender<RuntimeRequest>,
 }
 
 impl LogManagerBuilder {
     pub fn new(config: LogManagerConfig) -> Self {
-        let (events_sender, events_receiver) = mpsc::channel(10);
-        let (signal_sender, signal_receiver) = mpsc::channel(10);
-        let input_receiver =
-            LoggingReceiver::new("C8Y-Log-Manager".into(), events_receiver, signal_receiver);
+        let box_builder = SimpleMessageBoxBuilder::new("C8Y Log Manager", 16);
 
         Self {
             config,
-            input_receiver,
-            events_sender,
+            box_builder,
             mqtt_publisher: None,
             http_proxy: None,
-            signal_sender,
         }
     }
 
@@ -66,7 +60,10 @@ impl LogManagerBuilder {
     ) -> Result<(), LinkError> {
         let subscriptions = vec!["c8y/s/ds"].try_into().unwrap();
         //Register peers symmetrically here
-        mqtt.register_peer(subscriptions, self.events_sender.clone().into());
+        mqtt.register_peer(
+            subscriptions,
+            tedge_actors::adapt(&self.box_builder.get_sender()),
+        );
         self.register_peer(NoConfig, mqtt.get_sender());
         Ok(())
     }
@@ -76,7 +73,10 @@ impl LogManagerBuilder {
         fs_builder: &mut FsWatchActorBuilder,
     ) -> Result<(), LinkError> {
         let config_dir = self.config.config_dir.clone();
-        fs_builder.register_peer(config_dir, self.events_sender.clone().into());
+        fs_builder.register_peer(
+            config_dir,
+            tedge_actors::adapt(&self.box_builder.get_sender()),
+        );
 
         Ok(())
     }
@@ -90,26 +90,28 @@ impl MessageSource<MqttMessage, NoConfig> for LogManagerBuilder {
 
 impl MessageSink<MqttMessage> for LogManagerBuilder {
     fn get_sender(&self) -> DynSender<MqttMessage> {
-        self.events_sender.clone().into()
+        tedge_actors::adapt(&self.box_builder.get_sender())
     }
 }
 
 impl MessageSink<FsWatchEvent> for LogManagerBuilder {
     fn get_sender(&self) -> DynSender<FsWatchEvent> {
-        self.events_sender.clone().into()
+        tedge_actors::adapt(&self.box_builder.get_sender())
     }
 }
 
 impl RuntimeRequestSink for LogManagerBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
-        Box::new(self.signal_sender.clone())
+        self.box_builder.get_signal_sender()
     }
 }
 
-impl Builder<(LogManagerActor, LogManagerMessageBox)> for LogManagerBuilder {
+impl Builder<(LogManagerActor, SimpleMessageBox<LogInput, NoMessage>)> for LogManagerBuilder {
     type Error = LinkError;
 
-    fn try_build(self) -> Result<(LogManagerActor, LogManagerMessageBox), Self::Error> {
+    fn try_build(
+        self,
+    ) -> Result<(LogManagerActor, SimpleMessageBox<LogInput, NoMessage>), Self::Error> {
         let mqtt_publisher = self
             .mqtt_publisher
             .ok_or_else(|| LinkError::MissingPeer {
@@ -121,7 +123,7 @@ impl Builder<(LogManagerActor, LogManagerMessageBox)> for LogManagerBuilder {
             role: "http".to_string(),
         })?;
 
-        let message_box = LogManagerMessageBox::new(self.input_receiver, mqtt_publisher.clone());
+        let message_box = self.box_builder.build();
 
         let actor = LogManagerActor::new(self.config, mqtt_publisher, http_proxy);
 
