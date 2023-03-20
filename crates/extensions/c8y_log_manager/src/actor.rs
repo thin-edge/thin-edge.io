@@ -414,17 +414,20 @@ mod tests {
     use c8y_http_proxy::messages::C8YRestResult;
     use filetime::set_file_mtime;
     use filetime::FileTime;
+    use tedge_actors::Actor;
     use tedge_actors::Builder;
+    use tedge_actors::ReceiveMessages;
+    use tedge_actors::SimpleMessageBox;
     use tedge_actors::SimpleMessageBoxBuilder;
     use tedge_mqtt_ext::MqttMessage;
-    use tempfile::TempDir;
+    use tedge_test_utils::fs::TempTedgeDir;
     use time::macros::datetime;
 
     use super::LogManagerActor;
-    use crate::config::FileEntry;
     use crate::config::LogPluginConfig;
     use crate::LogManagerBuilder;
     use crate::LogManagerConfig;
+    use crate::Topic;
 
     /// Preparing a temp directory containing four files, with
     /// two types { type_one, type_two }:
@@ -439,8 +442,8 @@ mod tests {
     ///     file_b has timestamp: 1970/01/01 00:00:03
     ///     file_c has timestamp: 1970/01/01 00:00:11
     ///     file_d has timestamp: (current, not modified)
-    fn prepare() -> Result<(TempDir, LogPluginConfig), anyhow::Error> {
-        let tempdir = TempDir::new()?;
+    fn prepare() -> Result<(TempTedgeDir, LogPluginConfig), anyhow::Error> {
+        let tempdir = TempTedgeDir::new();
         let tempdir_path = tempdir
             .path()
             .to_str()
@@ -460,25 +463,19 @@ mod tests {
         let new_mtime = FileTime::from_unix_time(11, 0);
         set_file_mtime(format!("{tempdir_path}/file_c"), new_mtime).unwrap();
 
-        let files = vec![
-            FileEntry {
-                path: format!("{tempdir_path}/file_a"),
-                config_type: "type_one".to_string(),
-            },
-            FileEntry {
-                path: format!("{tempdir_path}/file_b"),
-                config_type: "type_one".to_string(),
-            },
-            FileEntry {
-                path: format!("{tempdir_path}/file_c"),
-                config_type: "type_two".to_string(),
-            },
-            FileEntry {
-                path: format!("{tempdir_path}/file_d"),
-                config_type: "type_one".to_string(),
-            },
-        ];
-        let logs_config = LogPluginConfig { files };
+        tempdir
+            .file("c8y-log-plugin.toml")
+            .with_raw_content(&format!(
+                r#"files = [
+            {{ type = "type_one", path = "{tempdir_path}/file_a" }},
+            {{ type = "type_one", path = "{tempdir_path}/file_b" }},
+            {{ type = "type_two", path = "{tempdir_path}/file_c" }},
+            {{ type = "type_one", path = "{tempdir_path}/file_d" }},
+        ]"#
+            ));
+
+        let logs_config = LogPluginConfig::new(&tempdir.path().join("c8y-log-plugin.toml"));
+
         Ok((tempdir, logs_config))
     }
 
@@ -498,8 +495,16 @@ mod tests {
         }
     }
 
-    /// Create a log manager actor ready for testing
-    fn new_log_manager_actor(temp_dir: &Path, log_config: LogPluginConfig) -> LogManagerActor {
+    /// Create a log manager actor builder
+    /// along two boxes to exchange MQTT and HTTP messages with the log actor
+    fn new_log_manager_builder(
+        temp_dir: &Path,
+        log_config: LogPluginConfig,
+    ) -> (
+        LogManagerBuilder,
+        SimpleMessageBox<MqttMessage, MqttMessage>,
+        SimpleMessageBox<C8YRestRequest, C8YRestResult>,
+    ) {
         let config = LogManagerConfig {
             config_dir: temp_dir.to_path_buf(),
             tmp_dir: temp_dir.to_path_buf(),
@@ -509,7 +514,7 @@ mod tests {
             c8y_url: "mytenant.c8y.com".try_into().unwrap(),
             tedge_http_host: "127.0.0.1".try_into().unwrap(),
             tedge_http_port: 80,
-            plugin_config_path: temp_dir.to_path_buf(),
+            plugin_config_path: temp_dir.join("c8y-log-plugin.toml"),
             plugin_config: log_config,
         };
 
@@ -525,8 +530,28 @@ mod tests {
             .with_c8y_http_proxy(&mut c8y_proxy_builder)
             .unwrap();
 
-        let (actor, _box) = log_builder.build();
+        (log_builder, mqtt_builder.build(), c8y_proxy_builder.build())
+    }
+
+    /// Create a log manager actor ready for testing
+    fn new_log_manager_actor(temp_dir: &Path, log_config: LogPluginConfig) -> LogManagerActor {
+        let (actor_builder, _, _) = new_log_manager_builder(temp_dir, log_config);
+        let (actor, _box) = actor_builder.build();
         actor
+    }
+
+    /// Spawn a log manager actor and return 2 boxes to exchange MQTT and HTTP messages with it
+    fn spawn_log_manager_actor(
+        temp_dir: &Path,
+        log_config: LogPluginConfig,
+    ) -> (
+        SimpleMessageBox<MqttMessage, MqttMessage>,
+        SimpleMessageBox<C8YRestRequest, C8YRestResult>,
+    ) {
+        let (actor_builder, mqtt, http) = new_log_manager_builder(temp_dir, log_config);
+        let (actor, message_box) = actor_builder.build();
+        tokio::spawn(actor.run(message_box));
+        (mqtt, http)
     }
 
     #[test]
@@ -680,5 +705,29 @@ mod tests {
 
         let result = actor.new_read_logs(&smartrest_obj).unwrap();
         assert_eq!(result, String::from("filename: file_d\nthis is the first line of file_d.\nthis is the second line of file_d.\nthis is the third line of file_d.\nthis is the forth line of file_d.\nthis is the fifth line of file_d.\nfilename: file_b\nthis is the forth line of file_b.\nthis is the fifth line of file_b.\n"))
+    }
+
+    #[tokio::test]
+    async fn log_manager_send_log_types_on_start_and_bridge_up() -> Result<(), anyhow::Error> {
+        let (tempdir, logs_config) = prepare()?;
+        let (mut mqtt, mut _http) = spawn_log_manager_actor(tempdir.path(), logs_config);
+
+        let c8y_s_us = Topic::new_unchecked("c8y/s/us");
+        let bridge = Topic::new_unchecked("tedge/health/mosquitto-c8y-bridge");
+
+        assert_eq!(
+            mqtt.recv().await,
+            Some(MqttMessage::new(&c8y_s_us, "118,type_one,type_two"))
+        );
+        assert_eq!(mqtt.recv().await, Some(MqttMessage::new(&c8y_s_us, "500")));
+
+        mqtt.send(MqttMessage::new(&bridge, "1")).await?;
+        assert_eq!(
+            mqtt.recv().await,
+            Some(MqttMessage::new(&c8y_s_us, "118,type_one,type_two"))
+        );
+        assert_eq!(mqtt.recv().await, Some(MqttMessage::new(&c8y_s_us, "500")));
+
+        Ok(())
     }
 }
