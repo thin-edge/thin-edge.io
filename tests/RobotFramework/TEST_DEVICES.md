@@ -6,14 +6,15 @@ The core thin-edge.io team conducts tests on real hardware to verify the functio
 
 The following table details the test devices which are available for use by the core team. These devices are only reachable via a OpenVPN connection, and instructions on setting the VPN connection up can be found in the following section.
 
-|Hardware|IP|Username|Password|Comments|
-|--------|--|--------|--------|--------|
-| Raspberry Pi 4 | 192.168.1.4	 | `-` | `-` | Used only for executing tests |
-| Raspberry Pi 4 | 192.168.1.110 | `pi`| `thinedge` | |
-| Raspberry Pi 3 | 192.168.1.120 | `pi`| `thinedge` | |
-| Raspberry Pi 4 | 192.168.1.130 | `pi`| `thinedge` | |
-| Raspberry Zero | 192.168.1.140 | `zero`| `thinedge` | |
-| Raspberry PI 4 | 192.168.1.200 | `pi`| `thinedge`| For NonFunctional tests |
+|Hardware|IP|Username|Password|LSB|Arch|Comments|
+|--------|--|--------|--------|---|---|--------|
+| Raspberry Pi 4 | 192.168.1.1	 | `-` | `-` | Debian GNU/Linux 11 (bullseye) | aarch64 | Hosting Gateway and VPN Connection |
+| Raspberry Pi 4 | 192.168.1.110 | `pi`| `thinedge` | Debian GNU/Linux 11 (bullseye) | aarch64 |
+| Raspberry Pi 3 | 192.168.1.120 | `pi`| `thinedge` | Raspbian GNU/Linux 11 (bullseye)| armv71 |
+| Raspberry Pi 4 | 192.168.1.130 | `pi`| `thinedge` | Raspbian GNU/Linux 11 (bullseye) | armv71 |
+| Raspberry Zero | 192.168.1.140 | `zero`| `thinedge` | Raspbian GNU/Linux 11 (bullseye) | armv6l |
+| Raspberry Pi 4 | 192.168.1.150 | `pi`| `thinedge` | Debian GNU/Linux 11 (bullseye) | aarch64 |
+| Raspberry PI 4 | 192.168.1.200 | `pi`| `thinedge`| Debian GNU/Linux 11 (bullseye)| aarch64 | For NonFunctional tests |
 
 ## Connecting with OpenVPN
 
