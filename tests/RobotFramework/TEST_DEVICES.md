@@ -13,7 +13,7 @@ The following table details the test devices which are available for use by the 
 | Raspberry Pi 3 | 192.168.1.120 | `pi`| `thinedge` | Raspbian GNU/Linux 11 (bullseye)| armv71 |
 | Raspberry Pi 4 | 192.168.1.130 | `pi`| `thinedge` | Raspbian GNU/Linux 11 (bullseye) | armv71 |
 | Raspberry Zero | 192.168.1.140 | `zero`| `thinedge` | Raspbian GNU/Linux 11 (bullseye) | armv6l |
-| Raspberry Pi 4 | 192.168.1.150 | `pi`| `thinedge` | Debian GNU/Linux 11 (bullseye) | aarch64 |
+| Raspberry Pi 3 | 192.168.1.150 | `pi`| `thinedge` | Debian GNU/Linux 11 (bullseye) | aarch64 |
 | Raspberry PI 4 | 192.168.1.200 | `pi`| `thinedge`| Debian GNU/Linux 11 (bullseye)| aarch64 | For NonFunctional tests |
 
 ## Connecting with OpenVPN
