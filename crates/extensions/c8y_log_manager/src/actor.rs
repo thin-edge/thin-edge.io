@@ -20,8 +20,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
-use tedge_actors::CombinedReceiver;
 use tedge_actors::DynSender;
+use tedge_actors::LoggingReceiver;
 use tedge_actors::MessageBox;
 use tedge_actors::ReceiveMessages;
 use tedge_actors::RuntimeError;
@@ -378,14 +378,14 @@ impl Actor for LogManagerActor {
 
 // FIXME: Consider to use a SimpleMessageBox<LogInput,MqttMessage>
 pub struct LogManagerMessageBox {
-    input_receiver: CombinedReceiver<LogInput>,
+    input_receiver: LoggingReceiver<LogInput>,
     #[allow(dead_code)]
     mqtt_requests: DynSender<MqttMessage>,
 }
 
 impl LogManagerMessageBox {
     pub fn new(
-        input_receiver: CombinedReceiver<LogInput>,
+        input_receiver: LoggingReceiver<LogInput>,
         mqtt_con: DynSender<MqttMessage>,
     ) -> LogManagerMessageBox {
         LogManagerMessageBox {
@@ -399,17 +399,8 @@ impl MessageBox for LogManagerMessageBox {
     type Input = LogInput;
     type Output = LogOutput;
 
-    fn turn_logging_on(&mut self, _on: bool) {
-        todo!()
-    }
-
     fn name(&self) -> &str {
         "C8Y-Log-Manager"
-    }
-
-    fn logging_is_on(&self) -> bool {
-        // FIXME this mailbox recv and send method are not used making logging ineffective.
-        false
     }
 }
 
@@ -424,10 +415,7 @@ impl ReceiveMessages<LogInput> for LogManagerMessageBox {
     }
 
     async fn recv(&mut self) -> Option<LogInput> {
-        self.input_receiver.recv().await.map(|message| {
-            self.log_input(&message);
-            message
-        })
+        self.input_receiver.recv().await
     }
 }
 

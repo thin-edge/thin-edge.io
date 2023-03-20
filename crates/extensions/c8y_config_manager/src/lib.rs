@@ -17,9 +17,9 @@ pub use config::*;
 use std::path::PathBuf;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
-use tedge_actors::CombinedReceiver;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
+use tedge_actors::LoggingReceiver;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
@@ -39,7 +39,7 @@ use self::child_device::ChildConfigOperationKey;
 /// This is an actor builder.
 pub struct ConfigManagerBuilder {
     config: ConfigManagerConfig,
-    receiver: CombinedReceiver<ConfigInput>,
+    receiver: LoggingReceiver<ConfigInput>,
     events_sender: mpsc::Sender<ConfigInput>,
     mqtt_publisher: Option<DynSender<MqttMessage>>,
     c8y_http_proxy: Option<C8YHttpProxy>,
@@ -51,7 +51,11 @@ impl ConfigManagerBuilder {
     pub fn new(config: ConfigManagerConfig) -> ConfigManagerBuilder {
         let (events_sender, events_receiver) = mpsc::channel(10);
         let (signal_sender, signal_receiver) = mpsc::channel(10);
-        let receiver = CombinedReceiver::new(events_receiver, signal_receiver);
+        let receiver = LoggingReceiver::new(
+            "C8Y-Config-Manager".into(),
+            events_receiver,
+            signal_receiver,
+        );
 
         ConfigManagerBuilder {
             config,

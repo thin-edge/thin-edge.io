@@ -31,11 +31,11 @@
 use crate::mpsc;
 use crate::Actor;
 use crate::ClientId;
-use crate::CombinedReceiver;
 use crate::ConcurrentServerActor;
 use crate::ConcurrentServerMessageBox;
 use crate::DynSender;
 use crate::KeyedSender;
+use crate::LoggingReceiver;
 use crate::Message;
 use crate::NullSender;
 use crate::RuntimeError;
@@ -47,6 +47,7 @@ use crate::ServerActor;
 use crate::ServerMessageBox;
 use crate::SimpleMessageBox;
 use std::convert::Infallible;
+use std::fmt::Debug;
 
 /// Builder of `T`
 pub trait Builder<T>: Sized {
@@ -129,12 +130,12 @@ pub trait ServiceConsumer<Request: Message, Response: Message, Config> {
 }
 
 /// A builder of SimpleMessageBox
-pub struct SimpleMessageBoxBuilder<I, O> {
+pub struct SimpleMessageBoxBuilder<I: Debug, O> {
     name: String,
     input_sender: mpsc::Sender<I>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
     output_sender: DynSender<O>,
-    input_receiver: CombinedReceiver<I>,
+    input_receiver: LoggingReceiver<I>,
 }
 
 impl<I: Message, O: Message> SimpleMessageBoxBuilder<I, O> {
@@ -142,7 +143,8 @@ impl<I: Message, O: Message> SimpleMessageBoxBuilder<I, O> {
         let (input_sender, input_receiver) = mpsc::channel(capacity);
         let (signal_sender, signal_receiver) = mpsc::channel(4);
         let output_sender = NullSender.into();
-        let input_receiver = CombinedReceiver::new(input_receiver, signal_receiver);
+        let input_receiver =
+            LoggingReceiver::new(name.to_string(), input_receiver, signal_receiver);
 
         SimpleMessageBoxBuilder {
             name: name.to_string(),
@@ -212,11 +214,11 @@ impl<Req: Message, Res: Message> Builder<SimpleMessageBox<Req, Res>>
 }
 
 /// A message box builder for request-response services
-pub struct ServerMessageBoxBuilder<Request, Response> {
+pub struct ServerMessageBoxBuilder<Request: Debug, Response> {
     service_name: String,
     max_concurrency: usize,
     request_sender: mpsc::Sender<(ClientId, Request)>,
-    input_receiver: CombinedReceiver<(ClientId, Request)>,
+    input_receiver: LoggingReceiver<(ClientId, Request)>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
     clients: Vec<DynSender<Response>>,
 }
@@ -227,7 +229,8 @@ impl<Request: Message, Response: Message> ServerMessageBoxBuilder<Request, Respo
         let max_concurrency = 1;
         let (request_sender, request_receiver) = mpsc::channel(capacity);
         let (signal_sender, signal_receiver) = mpsc::channel(4);
-        let input_receiver = CombinedReceiver::new(request_receiver, signal_receiver);
+        let input_receiver =
+            LoggingReceiver::new(service_name.to_string(), request_receiver, signal_receiver);
 
         ServerMessageBoxBuilder {
             service_name: service_name.to_string(),

@@ -60,14 +60,8 @@ impl MessageBox for FsWatchMessageBox {
     type Input = NoMessage;
     type Output = FsWatchEvent;
 
-    fn turn_logging_on(&mut self, _on: bool) {}
-
     fn name(&self) -> &str {
         "Inotify"
-    }
-
-    fn logging_is_on(&self) -> bool {
-        true
     }
 }
 

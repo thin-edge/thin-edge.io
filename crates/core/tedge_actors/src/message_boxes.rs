@@ -120,33 +120,31 @@ pub trait MessageBox: 'static + Sized + Send + Sync {
     // Build a message box along 2 channels to send and receive messages to and from the box
     // fn channel(name: &str, capacity: usize) -> ((DynSender<Self::Input>, DynReceiver<Self::Output>), Self);
 
-    /// Turn on/off logging of input and output messages
-    fn turn_logging_on(&mut self, on: bool);
-
     /// Name of the associated actor
     fn name(&self) -> &str;
 
-    /// Log an input message just after reception, before processing it.
-    fn log_input(&self, message: &impl Debug) {
-        if self.logging_is_on() {
-            info!(target: self.name(), "recv {:?}", message);
-        }
-    }
-
     /// Log an output message just before sending it.
     fn log_output(&self, message: &impl Debug) {
-        if self.logging_is_on() {
-            debug!(target: self.name(), "send {:?}", message);
-        }
+        debug!(target: self.name(), "send {:?}", message);
     }
-
-    fn logging_is_on(&self) -> bool;
 }
 
 /// Either a message or a [RuntimeRequest]
 pub enum WrappedInput<Input> {
     Message(Input),
     RuntimeRequest(RuntimeRequest),
+}
+
+impl<Input: Debug> Debug for WrappedInput<Input> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Message(input) => f.debug_tuple("Message").field(input).finish(),
+            Self::RuntimeRequest(runtime_request) => f
+                .debug_tuple("RuntimeRequest")
+                .field(runtime_request)
+                .finish(),
+        }
+    }
 }
 
 #[async_trait]
@@ -165,25 +163,60 @@ pub trait ReceiveMessages<Input> {
     async fn recv(&mut self) -> Option<Input>;
 }
 
-/// The basic message box
-pub struct SimpleMessageBox<Input, Output> {
+pub struct LoggingReceiver<Input: Debug> {
     name: String,
-    input_receiver: CombinedReceiver<Input>,
+    receiver: CombinedReceiver<Input>,
+}
+
+impl<Input: Debug> LoggingReceiver<Input> {
+    pub fn new(
+        name: String,
+        input_receiver: mpsc::Receiver<Input>,
+        signal_receiver: mpsc::Receiver<RuntimeRequest>,
+    ) -> Self {
+        let receiver = CombinedReceiver::new(input_receiver, signal_receiver);
+        Self { name, receiver }
+    }
+}
+
+#[async_trait]
+impl<Input: Send + Debug> ReceiveMessages<Input> for LoggingReceiver<Input> {
+    async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
+        let message = self.receiver.try_recv().await;
+        info!(target: &self.name, "recv {:?}", message);
+        message
+    }
+
+    async fn recv_message(&mut self) -> Option<WrappedInput<Input>> {
+        let message = self.receiver.recv_message().await;
+        info!(target: &self.name, "recv {:?}", message);
+        message
+    }
+
+    async fn recv(&mut self) -> Option<Input> {
+        let message = self.receiver.recv().await;
+        info!(target: &self.name, "recv {:?}", message);
+        message
+    }
+}
+
+/// The basic message box
+pub struct SimpleMessageBox<Input: Debug, Output> {
+    name: String,
+    input_receiver: LoggingReceiver<Input>,
     output_sender: DynSender<Output>,
-    logging_is_on: bool,
 }
 
 impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
     pub fn new(
         name: String,
-        input_receiver: CombinedReceiver<Input>,
+        input_receiver: LoggingReceiver<Input>,
         output_sender: DynSender<Output>,
     ) -> Self {
         SimpleMessageBox {
             name,
             input_receiver,
             output_sender,
-            logging_is_on: true,
         }
     }
 
@@ -211,10 +244,7 @@ impl<Input: Message, Output: Message> ReceiveMessages<Input> for SimpleMessageBo
     }
 
     async fn recv(&mut self) -> Option<Input> {
-        self.input_receiver.recv().await.map(|message| {
-            self.log_input(&message);
-            message
-        })
+        self.input_receiver.recv().await
     }
 }
 
@@ -271,16 +301,8 @@ impl<Input: Message, Output: Message> MessageBox for SimpleMessageBox<Input, Out
     type Input = Input;
     type Output = Output;
 
-    fn turn_logging_on(&mut self, on: bool) {
-        self.logging_is_on = on;
-    }
-
     fn name(&self) -> &str {
         &self.name
-    }
-
-    fn logging_is_on(&self) -> bool {
-        self.logging_is_on
     }
 }
 
@@ -292,7 +314,7 @@ pub type ServerMessageBox<Request, Response> =
 pub type ClientId = usize;
 
 /// A message box for services that handles requests concurrently
-pub struct ConcurrentServerMessageBox<Request, Response> {
+pub struct ConcurrentServerMessageBox<Request: Debug, Response> {
     /// Max concurrent requests
     max_concurrency: usize,
 
@@ -371,23 +393,15 @@ impl<Request: Message, Response: Message> MessageBox
     type Input = (ClientId, Request);
     type Output = (ClientId, Response);
 
-    fn turn_logging_on(&mut self, on: bool) {
-        self.clients.turn_logging_on(on)
-    }
-
     fn name(&self) -> &str {
         self.clients.name()
-    }
-
-    fn logging_is_on(&self) -> bool {
-        self.clients.logging_is_on()
     }
 }
 
 /// Client side handler of requests/responses sent to an actor
 ///
 /// Note that this message box sends requests and receive responses.
-pub struct ClientMessageBox<Request, Response> {
+pub struct ClientMessageBox<Request, Response: Debug> {
     messages: SimpleMessageBox<Response, Request>,
 }
 
@@ -418,15 +432,7 @@ impl<Request: Message, Response: Message> MessageBox for ClientMessageBox<Reques
     type Input = Response;
     type Output = Request;
 
-    fn turn_logging_on(&mut self, on: bool) {
-        self.messages.turn_logging_on(on)
-    }
-
     fn name(&self) -> &str {
         self.messages.name()
-    }
-
-    fn logging_is_on(&self) -> bool {
-        self.messages.logging_is_on()
     }
 }

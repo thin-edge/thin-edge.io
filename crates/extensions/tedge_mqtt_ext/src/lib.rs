@@ -10,8 +10,8 @@ use tedge_actors::futures::channel::mpsc::Sender;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
-use tedge_actors::CombinedReceiver;
 use tedge_actors::DynSender;
+use tedge_actors::LoggingReceiver;
 use tedge_actors::MessageBox;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
@@ -31,7 +31,7 @@ pub use mqtt_channel::TopicFilter;
 
 pub struct MqttActorBuilder {
     pub mqtt_config: mqtt_channel::Config,
-    input_receiver: CombinedReceiver<MqttMessage>,
+    input_receiver: LoggingReceiver<MqttMessage>,
     publish_sender: Sender<MqttMessage>,
     pub subscriber_addresses: Vec<(TopicFilter, DynSender<MqttMessage>)>,
     signal_sender: Sender<RuntimeRequest>,
@@ -41,7 +41,7 @@ impl MqttActorBuilder {
     pub fn new(config: mqtt_channel::Config) -> Self {
         let (publish_sender, publish_receiver) = channel(10);
         let (signal_sender, signal_receiver) = channel(10);
-        let input_receiver = CombinedReceiver::new(publish_receiver, signal_receiver);
+        let input_receiver = LoggingReceiver::new("MQTT".into(), publish_receiver, signal_receiver);
 
         MqttActorBuilder {
             mqtt_config: config,
@@ -105,13 +105,13 @@ impl Builder<(MqttActor, MqttMessageBox)> for MqttActorBuilder {
 }
 
 pub struct MqttMessageBox {
-    input_receiver: CombinedReceiver<MqttMessage>,
+    input_receiver: LoggingReceiver<MqttMessage>,
     peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
 }
 
 impl MqttMessageBox {
     fn new(
-        input_receiver: CombinedReceiver<MqttMessage>,
+        input_receiver: LoggingReceiver<MqttMessage>,
         peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
     ) -> Self {
         MqttMessageBox {
@@ -142,10 +142,7 @@ impl ReceiveMessages<MqttMessage> for MqttMessageBox {
     }
 
     async fn recv(&mut self) -> Option<MqttMessage> {
-        self.input_receiver.recv().await.map(|message| {
-            self.log_input(&message);
-            message
-        })
+        self.input_receiver.recv().await
     }
 }
 
@@ -154,14 +151,8 @@ impl MessageBox for MqttMessageBox {
     type Input = MqttMessage;
     type Output = MqttMessage;
 
-    fn turn_logging_on(&mut self, _on: bool) {}
-
     fn name(&self) -> &str {
         "MQTT"
-    }
-
-    fn logging_is_on(&self) -> bool {
-        true
     }
 }
 
