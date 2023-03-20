@@ -6,7 +6,7 @@ Library    JSONLibrary
 Library    String
 
 Suite Setup    Custom Setup
-Test Teardown    Get Logs
+Test Teardown    Get Logs    name=${PARENT_SN}
 
 Force Tags    theme:firmware    theme:childdevices
 

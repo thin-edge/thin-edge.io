@@ -11,7 +11,7 @@ Library    Collections
 
 Test Tags    theme:configuration    theme:childdevices
 Suite Setup    Custom Setup
-Suite Teardown    Get Logs
+Suite Teardown    Get Logs    name=${PARENT_SN}
 
 *** Variables ***
 
