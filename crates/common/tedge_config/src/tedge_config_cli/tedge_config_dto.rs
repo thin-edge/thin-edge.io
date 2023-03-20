@@ -143,6 +143,9 @@ pub(crate) struct SoftwareConfigDto {
 pub(crate) struct PathConfigDto {
     #[serde(rename = "path")]
     pub(crate) dir_path: Option<FilePath>,
+
+    /// Boolean whether create lock file or not.
+    pub(crate) lock_files: Option<bool>,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]

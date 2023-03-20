@@ -86,6 +86,8 @@ pub struct TEdgeConfigDefaults {
 
     /// Default service type
     pub default_service_type: String,
+    /// Default lock files bool
+    pub default_lock_files: Flag,
 }
 
 impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
@@ -123,6 +125,7 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
                 DEFAULT_FIRMWARE_CHILD_UPDATE_TIMEOUT_SEC,
             ),
             default_service_type: DEFAULT_SERVICE_TYPE.into(),
+            default_lock_files: Flag(true),
         }
     }
 }
@@ -159,6 +162,7 @@ fn test_from_tedge_config_location() {
                 DEFAULT_FIRMWARE_CHILD_UPDATE_TIMEOUT_SEC
             ),
             default_service_type: DEFAULT_SERVICE_TYPE.into(),
+            default_lock_files: Flag(true),
         }
     );
 }

@@ -70,6 +70,7 @@ impl ConfigKey {
             config_key!(RunPathSetting),
             config_key!(FirmwareChildUpdateTimeoutSetting),
             config_key!(ServiceTypeSetting),
+            config_key!(LockFilesSetting),
         ]
     }
 }

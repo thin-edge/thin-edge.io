@@ -101,9 +101,15 @@ async fn main() -> anyhow::Result<()> {
     };
     set_log_level(log_level);
 
-    // Run only one instance of a mapper
-    let run_dir: PathBuf = config.query(RunPathSetting)?.into();
-    let _flock = check_another_instance_is_not_running(&mapper_opt.name.to_string(), &run_dir)?;
+    // Run only one instance of a mapper (if enabled)
+    let mut _flock = None;
+    if config.query(LockFilesSetting)?.is_set() {
+        let run_dir: PathBuf = config.query(RunPathSetting)?.into();
+        _flock = Some(check_another_instance_is_not_running(
+            &mapper_opt.name.to_string(),
+            &run_dir,
+        )?);
+    }
 
     if mapper_opt.init {
         component.init(&mapper_opt.config_dir).await
