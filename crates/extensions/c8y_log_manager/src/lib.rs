@@ -3,10 +3,13 @@ mod config;
 mod error;
 
 use actor::*;
+use c8y_api::smartrest::topic::C8yTopic;
+use c8y_api::utils::bridge::C8Y_BRIDGE_HEALTH_TOPIC;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
 pub use config::*;
+use tedge_actors::adapt;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
@@ -17,6 +20,7 @@ use tedge_actors::NoConfig;
 use tedge_actors::NoMessage;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
@@ -56,15 +60,9 @@ impl LogManagerBuilder {
     /// Connect this config manager instance to some mqtt connection provider
     pub fn with_mqtt_connection(
         &mut self,
-        mqtt: &mut (impl MessageSink<MqttMessage> + MessageSource<MqttMessage, TopicFilter>),
+        mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
     ) -> Result<(), LinkError> {
-        let subscriptions = vec!["c8y/s/ds"].try_into().unwrap();
-        //Register peers symmetrically here
-        mqtt.register_peer(
-            subscriptions,
-            tedge_actors::adapt(&self.box_builder.get_sender()),
-        );
-        self.register_peer(NoConfig, mqtt.get_sender());
+        self.set_connection(mqtt);
         Ok(())
     }
 
@@ -80,17 +78,31 @@ impl LogManagerBuilder {
 
         Ok(())
     }
-}
 
-impl MessageSource<MqttMessage, NoConfig> for LogManagerBuilder {
-    fn register_peer(&mut self, _config: NoConfig, sender: DynSender<MqttMessage>) {
-        self.mqtt_publisher = Some(sender);
+    /// List of MQTT topic filters the log actor has to subscribe to
+    fn subscriptions() -> TopicFilter {
+        vec![
+            // subscribing to c8y smartrest requests
+            C8yTopic::SmartRestRequest.to_string().as_ref(),
+            // subscribing also to c8y bridge health topic to know when the bridge is up
+            C8Y_BRIDGE_HEALTH_TOPIC,
+        ]
+        .try_into()
+        .expect("Well-formed topic filters")
     }
 }
 
-impl MessageSink<MqttMessage> for LogManagerBuilder {
-    fn get_sender(&self) -> DynSender<MqttMessage> {
-        tedge_actors::adapt(&self.box_builder.get_sender())
+impl ServiceConsumer<MqttMessage, MqttMessage, TopicFilter> for LogManagerBuilder {
+    fn get_config(&self) -> TopicFilter {
+        LogManagerBuilder::subscriptions()
+    }
+
+    fn set_request_sender(&mut self, sender: DynSender<MqttMessage>) {
+        self.mqtt_publisher = Some(sender);
+    }
+
+    fn get_response_sender(&self) -> DynSender<MqttMessage> {
+        adapt(&self.box_builder.get_sender())
     }
 }
 

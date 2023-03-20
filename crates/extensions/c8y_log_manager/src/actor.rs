@@ -9,6 +9,7 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
+use c8y_api::utils::bridge::is_c8y_bridge_up;
 use c8y_api::OffsetDateTime;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use easy_reader::EasyReader;
@@ -26,11 +27,8 @@ use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
-use tedge_api::health::health_check_topics;
-use tedge_api::health::health_status_up_message;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::paths::PathsError;
 
 use super::error::LogRetrievalError;
@@ -42,7 +40,6 @@ fan_in_message_type!(LogOutput[MqttMessage]: Debug);
 
 pub struct LogManagerActor {
     config: LogManagerConfig,
-    health_check_topics: TopicFilter,
     mqtt_publisher: LoggingSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
 }
@@ -53,11 +50,8 @@ impl LogManagerActor {
         mqtt_publisher: LoggingSender<MqttMessage>,
         http_proxy: C8YHttpProxy,
     ) -> Self {
-        let health_check_topics = health_check_topics("c8y-log-plugin");
-
         Self {
             config,
-            health_check_topics,
             mqtt_publisher,
             http_proxy,
         }
@@ -67,8 +61,9 @@ impl LogManagerActor {
         &mut self,
         message: MqttMessage,
     ) -> Result<(), anyhow::Error> {
-        if self.health_check_topics.accept(&message) {
-            self.send_health_status().await?;
+        if is_c8y_bridge_up(&message) {
+            self.reload_supported_log_types().await?;
+            self.get_pending_operations_from_cloud().await?;
         } else if let Ok(payload) = message.payload_str() {
             for smartrest_message in payload.split('\n') {
                 let result = match smartrest_message.split(',').next().unwrap_or_default() {
@@ -339,12 +334,6 @@ impl LogManagerActor {
         // Get pending operations
         let msg = MqttMessage::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
         self.mqtt_publisher.send(msg).await?;
-        Ok(())
-    }
-
-    async fn send_health_status(&mut self) -> Result<(), anyhow::Error> {
-        let message = health_status_up_message("c8y-log-plugin");
-        self.mqtt_publisher.send(message).await?;
         Ok(())
     }
 }
