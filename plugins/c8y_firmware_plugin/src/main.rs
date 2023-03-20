@@ -10,22 +10,19 @@ use crate::download::DownloadManager;
 use crate::download::DownloadRequest;
 use crate::download::DownloadResponse;
 use crate::error::FirmwareManagementError;
+use crate::firmware_manager::create_directories;
 use crate::firmware_manager::FirmwareManager;
 use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::http_proxy::JwtAuthHttpProxy;
 use clap::Parser;
-use firmware_manager::CACHE_DIR_NAME;
-use firmware_manager::FILE_TRANSFER_DIR_NAME;
-use firmware_manager::PERSISTENT_DIR_PATH;
-use firmware_manager::PERSISTENT_STORE_DIR_NAME;
 use futures::channel::mpsc;
-use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
+use tedge_config::DataPathSetting;
 use tedge_config::DeviceIdSetting;
 use tedge_config::FirmwareChildUpdateTimeoutSetting;
 use tedge_config::HttpBindAddressSetting;
@@ -35,8 +32,6 @@ use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::TmpPathSetting;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
-use tedge_utils::file::create_directory_with_user_group;
-use tracing::info;
 
 const AFTER_HELP_TEXT: &str = r#"`c8y-firmware-plugin` subscribes to `c8y/s/ds` listening for firmware operation requests (message `515`).
 Notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
@@ -75,15 +70,16 @@ pub struct FirmwarePluginOpt {
 async fn main() -> Result<(), FirmwareManagementError> {
     let fw_plugin_opt = FirmwarePluginOpt::parse();
 
-    if fw_plugin_opt.init {
-        init(Path::new(PERSISTENT_DIR_PATH))?;
-        return Ok(());
-    }
-
     // Load tedge config from the provided location
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(&fw_plugin_opt.config_dir);
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
+    let tedge_config = config_repository.load()?;
+
+    if fw_plugin_opt.init {
+        init(&tedge_config)?;
+        return Ok(());
+    }
 
     let log_level = if fw_plugin_opt.debug {
         tracing::Level::TRACE
@@ -94,8 +90,6 @@ async fn main() -> Result<(), FirmwareManagementError> {
         )?
     };
     set_log_level(log_level);
-
-    let tedge_config = config_repository.load()?;
 
     let tedge_device_id = tedge_config.query(DeviceIdSetting)?;
     let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
@@ -109,6 +103,8 @@ async fn main() -> Result<(), FirmwareManagementError> {
     let local_http_host = format!("{}:{}", http_address, http_port);
 
     let tmp_dir: PathBuf = tedge_config.query(TmpPathSetting)?.into();
+    let data_dir: PathBuf = tedge_config.query(DataPathSetting)?.into();
+
     let timeout_sec = Duration::from_secs(
         tedge_config
             .query(FirmwareChildUpdateTimeoutSetting)?
@@ -126,7 +122,7 @@ async fn main() -> Result<(), FirmwareManagementError> {
         req_sndr,
         res_rcvr,
         local_http_host,
-        PathBuf::from(PERSISTENT_DIR_PATH),
+        data_dir,
         timeout_sec,
     )
     .await?;
@@ -147,30 +143,8 @@ pub async fn create_http_client(
     Ok(http_proxy)
 }
 
-fn init(cfg_dir: &Path) -> Result<(), FirmwareManagementError> {
-    info!("Creating required directories for c8y-firmware-plugin.");
-    create_directories(cfg_dir)?;
-    Ok(())
-}
-
-fn create_directories(persistent_dir: &Path) -> Result<(), FirmwareManagementError> {
-    create_directory_with_user_group(
-        format!("{}/{}", persistent_dir.display(), CACHE_DIR_NAME),
-        "tedge",
-        "tedge",
-        0o755,
-    )?;
-    create_directory_with_user_group(
-        format!("{}/{}", persistent_dir.display(), FILE_TRANSFER_DIR_NAME),
-        "tedge",
-        "tedge",
-        0o755,
-    )?;
-    create_directory_with_user_group(
-        format!("{}/{}", persistent_dir.display(), PERSISTENT_STORE_DIR_NAME),
-        "tedge",
-        "tedge",
-        0o755,
-    )?;
+fn init(tedge_config: &TEdgeConfig) -> Result<(), FirmwareManagementError> {
+    let data_dir: PathBuf = tedge_config.query(DataPathSetting)?.into();
+    create_directories(data_dir)?;
     Ok(())
 }

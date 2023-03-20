@@ -18,6 +18,7 @@ pub const DEFAULT_PLUGIN_CONFIG_TYPE: &str = "c8y-configuration-plugin";
 pub struct ConfigManagerConfig {
     pub config_dir: PathBuf,
     pub tmp_dir: PathBuf,
+    pub file_transfer_dir: PathBuf,
     pub device_id: String,
     pub mqtt_host: String,
     pub mqtt_port: u16,
@@ -36,6 +37,7 @@ impl ConfigManagerConfig {
     pub fn new(
         config_dir: PathBuf,
         tmp_dir: PathBuf,
+        data_dir: PathBuf,
         device_id: String,
         mqtt_host: String,
         mqtt_port: u16,
@@ -51,6 +53,8 @@ impl ConfigManagerConfig {
 
         let plugin_config = PluginConfig::new(&plugin_config_path);
 
+        let file_transfer_dir = data_dir.join(DEFAULT_FILE_TRANSFER_DIR_NAME);
+
         let c8y_request_topics: TopicFilter = C8yTopic::SmartRestRequest.into();
         let health_check_topics = health_check_topics(DEFAULT_PLUGIN_CONFIG_TYPE);
         let config_snapshot_response_topics: TopicFilter =
@@ -61,6 +65,7 @@ impl ConfigManagerConfig {
         ConfigManagerConfig {
             config_dir,
             tmp_dir,
+            file_transfer_dir,
             device_id,
             mqtt_host,
             mqtt_port,
@@ -82,6 +87,7 @@ impl ConfigManagerConfig {
         let config_dir: PathBuf = config_dir.as_ref().into();
         let device_id = tedge_config.query(DeviceIdSetting)?;
         let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
+        let data_dir: PathBuf = tedge_config.query(DataPathSetting)?.into();
         let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
         let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
         let c8y_url = tedge_config.query(C8yUrlSetting)?;
@@ -91,6 +97,7 @@ impl ConfigManagerConfig {
         Ok(ConfigManagerConfig::new(
             config_dir,
             tmp_dir,
+            data_dir,
             device_id,
             mqtt_host,
             mqtt_port,

@@ -177,9 +177,9 @@ impl ConfigDownloadManager {
                 if let Err(err) = self
                     .download_config_file(
                         smartrest_request.url.as_str(),
-                        config_management
-                            .file_transfer_repository_full_path()
-                            .into(),
+                        config_management.file_transfer_repository_full_path(
+                            self.config.file_transfer_dir.clone(),
+                        ),
                         PermissionEntry::new(None, None, None), //no need to change ownership of downloaded file
                         message_box,
                     )
@@ -259,7 +259,10 @@ impl ConfigDownloadManager {
                     self.active_child_ops.remove(&operation_key);
 
                     // Cleanup the downloaded file after the operation completes
-                    try_cleanup_config_file_from_file_transfer_repositoy(config_response);
+                    try_cleanup_config_file_from_file_transfer_repositoy(
+                        self.config.file_transfer_dir.clone(),
+                        config_response,
+                    );
                     let successful_status_payload =
                         DownloadConfigFileStatusMessage::status_successful(None)?;
                     mapped_responses.push(MqttMessage::new(
@@ -271,7 +274,10 @@ impl ConfigDownloadManager {
                     self.active_child_ops.remove(&operation_key);
 
                     // Cleanup the downloaded file after the operation completes
-                    try_cleanup_config_file_from_file_transfer_repositoy(config_response);
+                    try_cleanup_config_file_from_file_transfer_repositoy(
+                        self.config.file_transfer_dir.clone(),
+                        config_response,
+                    );
                     if let Some(error_message) = &child_device_payload.reason {
                         let failed_status_payload =
                             DownloadConfigFileStatusMessage::status_failed(error_message.clone())?;

@@ -6,6 +6,7 @@ use crate::config_manager::ActiveOperationState;
 use crate::config_manager::DEFAULT_OPERATION_DIR_NAME;
 use crate::config_manager::DEFAULT_OPERATION_TIMEOUT;
 use crate::config_manager::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
+use crate::config_manager::DEFAULT_PLUGIN_CONFIG_TYPE;
 use crate::error::ChildDeviceConfigManagementError;
 use crate::error::ConfigManagementError;
 use crate::PluginConfig;
@@ -73,6 +74,7 @@ pub struct ConfigUploadManager {
     http_client: Arc<Mutex<dyn C8YHttpProxy>>,
     local_http_host: String,
     config_dir: PathBuf,
+    file_transfer_dir: PathBuf,
     pub operation_timer: Timers<(String, String), ActiveOperationState>,
 }
 
@@ -83,6 +85,7 @@ impl ConfigUploadManager {
         http_client: Arc<Mutex<dyn C8YHttpProxy>>,
         local_http_host: String,
         config_dir: PathBuf,
+        file_transfer_dir: PathBuf,
     ) -> Self {
         ConfigUploadManager {
             tedge_device_id,
@@ -90,6 +93,7 @@ impl ConfigUploadManager {
             http_client,
             local_http_host,
             config_dir,
+            file_transfer_dir,
             operation_timer: Timers::new(),
         }
     }
@@ -291,6 +295,12 @@ impl ConfigUploadManager {
             }
             Ok(mapped_responses)
         } else {
+            let child_config_path = self
+                .config_dir
+                .join(DEFAULT_OPERATION_DIR_NAME)
+                .join(config_response.get_child_id())
+                .join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
+
             if &config_response.get_config_type() == "c8y-configuration-plugin" {
                 // create directories
                 create_directory_with_user_group(
@@ -332,25 +342,14 @@ impl ConfigUploadManager {
                     None,
                 )?;
                 // copy to /etc/c8y
-                let path_from = &format!(
-                    "/var/tedge/file-transfer/{}/c8y-configuration-plugin",
-                    config_response.get_child_id()
-                );
-                let path_from = Path::new(path_from);
-                let path_to = &format!(
-                    "{}/c8y/{}/c8y-configuration-plugin.toml",
-                    config_dir,
-                    config_response.get_child_id()
-                );
-                let path_to = Path::new(path_to);
-                std::fs::rename(path_from, path_to)?;
+                let path_from = self
+                    .file_transfer_dir
+                    .join(config_response.get_child_id())
+                    .join(DEFAULT_PLUGIN_CONFIG_TYPE);
+                std::fs::rename(path_from, &child_config_path)?;
             }
             // send 119
-            let child_plugin_config = PluginConfig::new(Path::new(&format!(
-                "{}/c8y/{}/c8y-configuration-plugin.toml",
-                config_dir,
-                config_response.get_child_id()
-            )));
+            let child_plugin_config = PluginConfig::new(&child_config_path);
 
             // Publish supported configuration types for child devices
             let message = child_plugin_config
@@ -365,7 +364,8 @@ impl ConfigUploadManager {
     ) -> Result<Message, anyhow::Error> {
         let c8y_child_topic = Topic::new_unchecked(&config_response.get_child_topic());
 
-        let uploaded_config_file_path = config_response.file_transfer_repository_full_path();
+        let uploaded_config_file_path =
+            config_response.file_transfer_repository_full_path(self.file_transfer_dir.clone());
 
         let c8y_upload_event_url = self
             .http_client
@@ -379,7 +379,10 @@ impl ConfigUploadManager {
             .await?;
 
         // Cleanup the child uploaded file after uploading it to cloud
-        try_cleanup_config_file_from_file_transfer_repositoy(config_response);
+        try_cleanup_config_file_from_file_transfer_repositoy(
+            self.file_transfer_dir.clone(),
+            config_response,
+        );
 
         info!("Marking the c8y_UploadConfigFile operation as successful with the Cumulocity URL for the uploaded file: {c8y_upload_event_url}");
         let successful_status_payload =

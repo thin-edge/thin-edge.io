@@ -19,6 +19,8 @@ use clap::Parser;
 use config_manager::ConfigManager;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
+use tedge_config::DataPathSetting;
+use tedge_config::DEFAULT_FILE_TRANSFER_DIR_NAME;
 use tokio::sync::Mutex;
 
 use std::path::Path;
@@ -112,6 +114,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let http_client = create_http_client(&tedge_config).await?;
     let http_client: Arc<Mutex<dyn C8YHttpProxy>> = Arc::new(Mutex::new(http_client));
     let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
+    let data_dir: PathBuf = tedge_config.query(DataPathSetting)?.into();
 
     let http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
     let http_address = tedge_config.query(HttpBindAddressSetting)?.to_string();
@@ -125,6 +128,7 @@ async fn main() -> Result<(), anyhow::Error> {
         local_http_host,
         tmp_dir,
         config_plugin_opt.config_dir,
+        data_dir.join(DEFAULT_FILE_TRANSFER_DIR_NAME),
     )
     .await?;
 

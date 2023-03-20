@@ -13,11 +13,12 @@ const DEFAULT_HTTP_PORT: u16 = 8000;
 pub const DEFAULT_TMP_PATH: &str = "/tmp";
 pub const DEFAULT_LOG_PATH: &str = "/var/log";
 pub const DEFAULT_RUN_PATH: &str = "/run";
+pub const DEFAULT_DATA_PATH: &str = "/var/tedge";
 const DEFAULT_DEVICE_TYPE: &str = "thin-edge.io";
 const DEFAULT_FIRMWARE_CHILD_UPDATE_TIMEOUT_SEC: u64 = 3600;
 const DEFAULT_SERVICE_TYPE: &str = "service";
 
-pub const DEFAULT_FILE_TRANSFER_ROOT_PATH: &str = "/var/tedge/file-transfer";
+pub const DEFAULT_FILE_TRANSFER_DIR_NAME: &str = "file-transfer";
 
 /// Stores default values for use by `TEdgeConfig` in case no configuration setting
 /// is available.
@@ -69,6 +70,9 @@ pub struct TEdgeConfigDefaults {
     /// Default run path
     pub default_run_path: FilePath,
 
+    /// Default run path
+    pub default_data_path: FilePath,
+
     /// Default device type
     pub default_device_type: String,
 
@@ -96,6 +100,7 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
         let tmp_path = Path::new(DEFAULT_TMP_PATH);
         let logs_path = Path::new(DEFAULT_LOG_PATH);
         let run_path = Path::new(DEFAULT_RUN_PATH);
+        let data_path = Path::new(DEFAULT_DATA_PATH);
         Self {
             default_device_cert_path: config_location
                 .tedge_config_root_path()
@@ -116,6 +121,7 @@ impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
             default_tmp_path: tmp_path.into(),
             default_logs_path: logs_path.into(),
             default_run_path: run_path.into(),
+            default_data_path: data_path.into(),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
             default_mqtt_client_host: "localhost".into(),
             default_mqtt_bind_address: IpAddress::default(),
@@ -153,6 +159,7 @@ fn test_from_tedge_config_location() {
             default_tmp_path: FilePath::from("/tmp"),
             default_logs_path: FilePath::from("/var/log"),
             default_run_path: FilePath::from("/run"),
+            default_data_path: FilePath::from("/var/tedge"),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
             default_mqtt_client_host: "localhost".to_string(),
             default_mqtt_bind_address: IpAddress::default(),

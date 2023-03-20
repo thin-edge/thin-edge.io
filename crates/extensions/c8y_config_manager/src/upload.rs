@@ -321,7 +321,8 @@ impl ConfigUploadManager {
     ) -> Result<MqttMessage, ConfigManagementError> {
         let c8y_child_topic = Topic::new_unchecked(&config_response.get_child_topic());
 
-        let uploaded_config_file_path = config_response.file_transfer_repository_full_path();
+        let uploaded_config_file_path = config_response
+            .file_transfer_repository_full_path(self.config.file_transfer_dir.clone());
 
         let c8y_upload_event_url = self
             .upload_config_file(
@@ -333,7 +334,10 @@ impl ConfigUploadManager {
             .await?;
 
         // Cleanup the child uploaded file after uploading it to cloud
-        try_cleanup_config_file_from_file_transfer_repositoy(config_response);
+        try_cleanup_config_file_from_file_transfer_repositoy(
+            self.config.file_transfer_dir.clone(),
+            config_response,
+        );
 
         info!("Marking the c8y_UploadConfigFile operation as successful with the Cumulocity URL for the uploaded file: {c8y_upload_event_url}");
         let successful_status_payload =
