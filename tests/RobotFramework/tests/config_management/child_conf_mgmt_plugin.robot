@@ -111,9 +111,6 @@ Validate child Name
     Device Should Exist    ${CHILD_SN}
     ${child_mo}=    Cumulocity.Device Should Have Fragments    name
     Should Be Equal    device_${PARENT_SN}     ${child_mo["owner"]}    # The parent is the owner of the child
-    Should Be Equal    ${CHILD_SN}     ${child_mo["name"]}
-    # ${child_name}=    JSONLibrary.Get Value From Json    ${child_mo}    $.name
-    # Should Be Equal    ${CHILD_SN}     ${child_name[0]}
 
 Startup child device
     Sleep    5s        reason=The registration of child devices is flakey

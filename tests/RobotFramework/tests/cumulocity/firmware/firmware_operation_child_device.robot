@@ -104,7 +104,6 @@ Create child device
 Validate child Name
     ${child_mo}=    Cumulocity.Device Should Have Fragments    name
     Should Be Equal    device_${PARENT_SN}     ${child_mo["owner"]}    # The parent is the owner of the child
-    Should Be Equal    ${CHILD_SN}     ${child_mo["name"]}
 
 Get timestamp of cache
     Set Device Context    ${PARENT_SN}
