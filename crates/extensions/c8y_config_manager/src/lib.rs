@@ -20,6 +20,7 @@ use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingReceiver;
+use tedge_actors::LoggingSender;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
@@ -158,17 +159,25 @@ impl Builder<(ConfigManagerActor, ConfigManagerMessageBox)> for ConfigManagerBui
     type Error = LinkError;
 
     fn try_build(self) -> Result<(ConfigManagerActor, ConfigManagerMessageBox), Self::Error> {
-        let mqtt_publisher = self.mqtt_publisher.ok_or_else(|| LinkError::MissingPeer {
-            role: "mqtt".to_string(),
-        })?;
+        let mqtt_publisher = self
+            .mqtt_publisher
+            .ok_or_else(|| LinkError::MissingPeer {
+                role: "mqtt".to_string(),
+            })
+            .map(|mqtt_publisher| {
+                LoggingSender::new("ConfigManager MQTT publisher".into(), mqtt_publisher)
+            })?;
 
         let c8y_http_proxy = self.c8y_http_proxy.ok_or_else(|| LinkError::MissingPeer {
             role: "c8y-http".to_string(),
         })?;
 
-        let timer_sender = self.timer_sender.ok_or_else(|| LinkError::MissingPeer {
-            role: "timer".to_string(),
-        })?;
+        let timer_sender = self
+            .timer_sender
+            .ok_or_else(|| LinkError::MissingPeer {
+                role: "timer".to_string(),
+            })
+            .map(|timer_sender| LoggingSender::new("ConfigManager timer".into(), timer_sender))?;
 
         let peers = ConfigManagerMessageBox::new(
             self.receiver,

@@ -12,6 +12,7 @@ use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingReceiver;
+use tedge_actors::LoggingSender;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
@@ -106,9 +107,12 @@ impl Builder<(LogManagerActor, LogManagerMessageBox)> for LogManagerBuilder {
     type Error = LinkError;
 
     fn try_build(self) -> Result<(LogManagerActor, LogManagerMessageBox), Self::Error> {
-        let mqtt_publisher = self.mqtt_publisher.ok_or_else(|| LinkError::MissingPeer {
-            role: "mqtt".to_string(),
-        })?;
+        let mqtt_publisher = self
+            .mqtt_publisher
+            .ok_or_else(|| LinkError::MissingPeer {
+                role: "mqtt".into(),
+            })
+            .map(|mqtt_publisher| LoggingSender::new("C8Y-Log-Manager".into(), mqtt_publisher))?;
 
         let http_proxy = self.http_proxy.ok_or_else(|| LinkError::MissingPeer {
             role: "http".to_string(),
