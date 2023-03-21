@@ -57,10 +57,18 @@ impl RequestTopic {
     }
 }
 
+pub fn get_child_id_from_measurement_topic(topic: &str) -> Option<String> {
+    match topic.strip_prefix("tedge/measurements/").map(String::from) {
+        Some(maybe_id) if maybe_id.is_empty() => None,
+        option => option,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::convert::TryInto;
+    use test_case::test_case;
 
     #[test]
     fn convert_response_topic_to_str() {
@@ -94,6 +102,17 @@ mod tests {
         assert_eq!(
             RequestTopic::SoftwareUpdateRequest.as_str(),
             "tedge/commands/req/software/update"
+        );
+    }
+
+    #[test_case("tedge/measurements/test", Some("test"); "valid child id")]
+    #[test_case("tedge/measurements/", None; "invalid child id (empty value)")]
+    #[test_case("tedge/measurements", None; "invalid child id (parent topic)")]
+    #[test_case("foo/bar", None; "invalid child id (invalid topic)")]
+    fn extract_child_id(in_topic: &str, expected_child_id: Option<&str>) {
+        assert_eq!(
+            get_child_id_from_measurement_topic(in_topic),
+            expected_child_id.map(|s| s.to_string())
         );
     }
 }
