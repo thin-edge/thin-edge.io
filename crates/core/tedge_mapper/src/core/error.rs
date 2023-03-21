@@ -70,9 +70,6 @@ pub enum ConversionError {
         threshold: usize,
     },
 
-    #[error("The given Child ID '{id}' is invalid.")]
-    InvalidChildId { id: String },
-
     #[error(transparent)]
     FromMqttClient(#[from] MqttError),
 

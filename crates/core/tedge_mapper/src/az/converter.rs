@@ -8,6 +8,7 @@ use mqtt_channel::Message;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use tedge_api::serialize::ThinEdgeJsonSerializer;
+use tedge_api::topic::get_child_id_from_measurement_topic;
 
 pub struct AzureConverter {
     pub(crate) add_timestamp: bool,
@@ -47,7 +48,7 @@ impl Converter for AzureConverter {
     }
 
     async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
-        let maybe_child_id = get_child_id_from_measurement_topic(&input.topic.name)?;
+        let maybe_child_id = get_child_id_from_measurement_topic(&input.topic.name);
 
         let az_out_topic = match maybe_child_id {
             Some(child_id) => Topic::new_unchecked(&format!("az/messages/events/$.sub={child_id}")),
@@ -61,15 +62,6 @@ impl Converter for AzureConverter {
 
         let payload = serializer.into_string()?;
         Ok(vec![(Message::new(&az_out_topic, payload))])
-    }
-}
-
-pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>, ConversionError> {
-    match topic.strip_prefix("tedge/measurements/").map(String::from) {
-        Some(maybe_id) if maybe_id.is_empty() => {
-            Err(ConversionError::InvalidChildId { id: maybe_id })
-        }
-        option => Ok(option),
     }
 }
 

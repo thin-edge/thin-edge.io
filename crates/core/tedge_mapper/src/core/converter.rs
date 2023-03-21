@@ -94,7 +94,3 @@ pub trait Converter: Send + Sync {
 pub fn make_valid_topic_or_panic(topic_name: &str) -> Topic {
     Topic::new(topic_name).expect("Invalid topic name")
 }
-
-pub fn make_valid_topic_filter_or_panic(filter_name: &str) -> TopicFilter {
-    TopicFilter::new(filter_name).expect("Invalid topic filter name")
-}
