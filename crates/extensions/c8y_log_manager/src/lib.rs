@@ -9,6 +9,7 @@ use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
 pub use config::*;
+use std::path::PathBuf;
 use tedge_actors::adapt;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
@@ -24,7 +25,6 @@ use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
-use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
 
@@ -68,7 +68,7 @@ impl LogManagerBuilder {
 
     pub fn with_fs_connection(
         &mut self,
-        fs_builder: &mut FsWatchActorBuilder,
+        fs_builder: &mut impl MessageSource<FsWatchEvent, PathBuf>,
     ) -> Result<(), LinkError> {
         let config_dir = self.config.config_dir.clone();
         fs_builder.register_peer(

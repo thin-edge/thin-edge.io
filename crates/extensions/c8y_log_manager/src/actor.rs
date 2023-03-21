@@ -310,7 +310,9 @@ impl LogManagerActor {
                 path: path.as_os_str().into(),
             })?
             .eq("c8y-log-plugin.toml")
-        {}
+        {
+            self.reload_supported_log_types().await?;
+        }
 
         Ok(())
     }
@@ -416,9 +418,11 @@ mod tests {
     use filetime::FileTime;
     use tedge_actors::Actor;
     use tedge_actors::Builder;
+    use tedge_actors::NoMessage;
     use tedge_actors::ReceiveMessages;
     use tedge_actors::SimpleMessageBox;
     use tedge_actors::SimpleMessageBoxBuilder;
+    use tedge_file_system_ext::FsWatchEvent;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_test_utils::fs::TempTedgeDir;
     use time::macros::datetime;
@@ -504,6 +508,7 @@ mod tests {
         LogManagerBuilder,
         SimpleMessageBox<MqttMessage, MqttMessage>,
         SimpleMessageBox<C8YRestRequest, C8YRestResult>,
+        SimpleMessageBox<NoMessage, FsWatchEvent>,
     ) {
         let config = LogManagerConfig {
             config_dir: temp_dir.to_path_buf(),
@@ -524,18 +529,28 @@ mod tests {
             SimpleMessageBoxBuilder::new("MQTT", 5);
         let mut c8y_proxy_builder: SimpleMessageBoxBuilder<C8YRestRequest, C8YRestResult> =
             SimpleMessageBoxBuilder::new("C8Y", 1);
+        let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
+            SimpleMessageBoxBuilder::new("FS", 5);
 
         log_builder.with_mqtt_connection(&mut mqtt_builder).unwrap();
         log_builder
             .with_c8y_http_proxy(&mut c8y_proxy_builder)
             .unwrap();
+        log_builder
+            .with_fs_connection(&mut fs_watcher_builder)
+            .unwrap();
 
-        (log_builder, mqtt_builder.build(), c8y_proxy_builder.build())
+        (
+            log_builder,
+            mqtt_builder.build(),
+            c8y_proxy_builder.build(),
+            fs_watcher_builder.build(),
+        )
     }
 
     /// Create a log manager actor ready for testing
     fn new_log_manager_actor(temp_dir: &Path, log_config: LogPluginConfig) -> LogManagerActor {
-        let (actor_builder, _, _) = new_log_manager_builder(temp_dir, log_config);
+        let (actor_builder, _, _, _) = new_log_manager_builder(temp_dir, log_config);
         let (actor, _box) = actor_builder.build();
         actor
     }
@@ -547,11 +562,12 @@ mod tests {
     ) -> (
         SimpleMessageBox<MqttMessage, MqttMessage>,
         SimpleMessageBox<C8YRestRequest, C8YRestResult>,
+        SimpleMessageBox<NoMessage, FsWatchEvent>,
     ) {
-        let (actor_builder, mqtt, http) = new_log_manager_builder(temp_dir, log_config);
+        let (actor_builder, mqtt, http, fs) = new_log_manager_builder(temp_dir, log_config);
         let (actor, message_box) = actor_builder.build();
         tokio::spawn(actor.run(message_box));
-        (mqtt, http)
+        (mqtt, http, fs)
     }
 
     #[test]
@@ -708,9 +724,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn log_manager_send_log_types_on_start_and_bridge_up() -> Result<(), anyhow::Error> {
+    async fn log_manager_send_log_types_on_start_and_bridge_up_and_config_update(
+    ) -> Result<(), anyhow::Error> {
         let (tempdir, logs_config) = prepare()?;
-        let (mut mqtt, mut _http) = spawn_log_manager_actor(tempdir.path(), logs_config);
+        let (mut mqtt, _http, mut fs) = spawn_log_manager_actor(tempdir.path(), logs_config);
 
         let c8y_s_us = Topic::new_unchecked("c8y/s/us");
         let bridge = Topic::new_unchecked("tedge/health/mosquitto-c8y-bridge");
@@ -727,6 +744,15 @@ mod tests {
             Some(MqttMessage::new(&c8y_s_us, "118,type_one,type_two"))
         );
         assert_eq!(mqtt.recv().await, Some(MqttMessage::new(&c8y_s_us, "500")));
+
+        fs.send(FsWatchEvent::Modified(
+            tempdir.path().join("c8y-log-plugin.toml"),
+        ))
+        .await?;
+        assert_eq!(
+            mqtt.recv().await,
+            Some(MqttMessage::new(&c8y_s_us, "118,type_one,type_two"))
+        );
 
         Ok(())
     }
