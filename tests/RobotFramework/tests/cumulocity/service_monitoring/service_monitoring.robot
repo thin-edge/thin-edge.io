@@ -142,7 +142,7 @@ Check if a service using configured service type
     Custom Test Setup
     ThinEdgeIO.Start Service    ${service_name}
     Device Should Exist                      ${DEVICE_SN}_${service_name}    show_info=False
-    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up    serviceType\=thinedge
 
     Should Be Equal    ${SERVICE["name"]}    ${service_name}
     Should Be Equal    ${SERVICE["serviceType"]}    thinedge
@@ -157,7 +157,7 @@ Check if a service using configured service type as empty
     Custom Test Setup
     ThinEdgeIO.Start Service    ${service_name}
     Device Should Exist                      ${DEVICE_SN}_${service_name}    show_info=False
-    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up        serviceType\=service
 
     Should Be Equal    ${SERVICE["name"]}    ${service_name}
     Should Be Equal    ${SERVICE["serviceType"]}    service
