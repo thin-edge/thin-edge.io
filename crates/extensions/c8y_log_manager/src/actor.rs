@@ -22,8 +22,8 @@ use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::LoggingSender;
-use tedge_actors::NoMessage;
 use tedge_actors::MessageReceiver;
+use tedge_actors::NoMessage;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
@@ -413,13 +413,15 @@ mod tests {
 
     use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
     use c8y_http_proxy::messages::C8YRestRequest;
+    use c8y_http_proxy::messages::C8YRestResponse;
     use c8y_http_proxy::messages::C8YRestResult;
+    use c8y_http_proxy::messages::UploadLogBinary;
     use filetime::set_file_mtime;
     use filetime::FileTime;
     use tedge_actors::Actor;
     use tedge_actors::Builder;
+    use tedge_actors::MessageReceiver;
     use tedge_actors::NoMessage;
-    use tedge_actors::ReceiveMessages;
     use tedge_actors::SimpleMessageBox;
     use tedge_actors::SimpleMessageBoxBuilder;
     use tedge_file_system_ext::FsWatchEvent;
@@ -455,7 +457,7 @@ mod tests {
 
         std::fs::File::create(format!("{tempdir_path}/file_a"))?;
         std::fs::File::create(format!("{tempdir_path}/file_b"))?;
-        std::fs::File::create(format!("{tempdir_path}/file_c"))?;
+        tempdir.file("file_c").with_raw_content("Some content");
         std::fs::File::create(format!("{tempdir_path}/file_d"))?;
 
         let new_mtime = FileTime::from_unix_time(2, 0);
@@ -752,6 +754,55 @@ mod tests {
         assert_eq!(
             mqtt.recv().await,
             Some(MqttMessage::new(&c8y_s_us, "118,type_one,type_two"))
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn log_manager_upload_log_files_on_request() -> Result<(), anyhow::Error> {
+        let (tempdir, logs_config) = prepare()?;
+        let (mut mqtt, mut http, _fs) = spawn_log_manager_actor(tempdir.path(), logs_config);
+
+        let c8y_s_ds = Topic::new_unchecked("c8y/s/ds");
+        let c8y_s_us = Topic::new_unchecked("c8y/s/us");
+
+        // Let's ignore the 2 init messages sent on start
+        assert!(mqtt.recv().await.is_some());
+        assert!(mqtt.recv().await.is_some());
+
+        // When a log request is received
+        let log_request =
+            "522,SUT,type_two,1970-01-01T00:00:00+0000,1970-01-01T00:00:30+0000,,1000";
+        mqtt.send(MqttMessage::new(&c8y_s_ds, log_request)).await?;
+
+        // The log manager notifies C8Y that the request has been received and is processed
+        assert_eq!(
+            mqtt.recv().await,
+            Some(MqttMessage::new(&c8y_s_us, "501,c8y_LogfileRequest\n"))
+        );
+
+        // Then uploads the requested content over HTTP
+        assert_eq!(
+            http.recv().await,
+            Some(C8YRestRequest::UploadLogBinary(UploadLogBinary {
+                log_type: "type_two".to_string(),
+                log_content: "filename: file_c\nSome content\n".to_string(),
+                child_device_id: None
+            }))
+        );
+
+        // C8Y responds with an event id
+        http.send(Ok(C8YRestResponse::EventId("12345".to_string())))
+            .await?;
+
+        // Finally, the log manager uses the event id to notify C8Y that the request has been fully processed
+        assert_eq!(
+            mqtt.recv().await,
+            Some(MqttMessage::new(
+                &c8y_s_us,
+                "503,c8y_LogfileRequest,12345\n"
+            ))
         );
 
         Ok(())
