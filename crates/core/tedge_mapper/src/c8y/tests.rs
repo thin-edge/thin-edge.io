@@ -27,10 +27,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_test_utils::fs::TempTedgeDir;
-use test_case::test_case;
 use tokio::task::JoinHandle;
 
-use super::converter::get_child_id_from_measurement_topic;
 use super::converter::CumulocityConverter;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
@@ -1225,22 +1223,6 @@ async fn convert_two_thin_edge_json_messages_given_different_child_id() {
             expected_second_c8y_json_message
         ]
     );
-}
-
-#[test_case("tedge/measurements/test", Some("test".to_string()); "valid child id")]
-#[test_case("tedge/measurements/", None; "returns an error (empty value)")]
-#[test_case("tedge/measurements", None; "invalid child id (parent topic)")]
-#[test_case("foo/bar", None; "invalid child id (invalid topic)")]
-fn extract_child_id(in_topic: &str, expected_child_id: Option<String>) {
-    match get_child_id_from_measurement_topic(in_topic) {
-        Ok(maybe_id) => assert_eq!(maybe_id, expected_child_id),
-        Err(crate::core::error::ConversionError::InvalidChildId { id }) => {
-            assert_eq!(id, "".to_string())
-        }
-        _ => {
-            panic!("Unexpected error type")
-        }
-    }
 }
 
 #[tokio::test]

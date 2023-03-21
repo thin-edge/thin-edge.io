@@ -37,6 +37,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
+use tedge_api::topic::get_child_id_from_measurement_topic;
 use tedge_api::topic::RequestTopic;
 use tedge_api::topic::ResponseTopic;
 use tedge_api::Auth;
@@ -196,7 +197,7 @@ where
     ) -> Result<Vec<Message>, ConversionError> {
         let mut mqtt_messages: Vec<Message> = Vec::new();
 
-        let maybe_child_id = get_child_id_from_measurement_topic(&input.topic.name)?;
+        let maybe_child_id = get_child_id_from_measurement_topic(&input.topic.name);
         let c8y_json_payload = match maybe_child_id {
             Some(child_id) => {
                 // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
@@ -1033,15 +1034,6 @@ fn get_inventory_fragments(
             Ok(json_fragment)
         }
         Err(_) => Ok(json_fragment),
-    }
-}
-
-pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>, ConversionError> {
-    match topic.strip_prefix("tedge/measurements/").map(String::from) {
-        Some(maybe_id) if maybe_id.is_empty() => {
-            Err(ConversionError::InvalidChildId { id: maybe_id })
-        }
-        option => Ok(option),
     }
 }
 
