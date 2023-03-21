@@ -1,45 +1,35 @@
-mod child_device;
-mod config;
-mod config_manager;
-mod download;
-mod error;
-mod operation;
-mod topic;
-mod upload;
-
-#[cfg(test)]
-mod tests;
-
-use crate::config::PluginConfig;
-
-use anyhow::Result;
-use c8y_api::http_proxy::C8YHttpProxy;
-use c8y_api::http_proxy::JwtAuthHttpProxy;
+// #[cfg(test)]
+// mod tests;
+use c8y_config_manager::ConfigManagerBuilder;
+use c8y_config_manager::ConfigManagerConfig;
+use c8y_http_proxy::credentials::C8YJwtRetriever;
+use c8y_http_proxy::C8YHttpProxyBuilder;
 use clap::Parser;
-use config_manager::ConfigManager;
+use std::path::PathBuf;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
+use tedge_actors::Runtime;
+use tedge_actors::ServiceConsumer;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
-use tedge_config::DataPathSetting;
-use tedge_config::DEFAULT_FILE_TRANSFER_DIR_NAME;
-use tokio::sync::Mutex;
-
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::Arc;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
-use tedge_config::DeviceIdSetting;
-use tedge_config::HttpBindAddressSetting;
-use tedge_config::HttpPortSetting;
 use tedge_config::MqttClientHostSetting;
 use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
-use tedge_config::TmpPathSetting;
+use tedge_config::TEdgeConfigError;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
-use tedge_utils::file::create_directory_with_user_group;
-use tedge_utils::file::create_file_with_user_group;
-use tracing::error;
+use tedge_file_system_ext::FsWatchActorBuilder;
+use tedge_health_ext::HealthMonitorBuilder;
+use tedge_http_ext::HttpActor;
+use tedge_mqtt_ext::MqttActorBuilder;
+use tedge_mqtt_ext::MqttConfig;
+use tedge_signal_ext::SignalActor;
+use tedge_timer_ext::TimerActor;
 use tracing::info;
+
+const PLUGIN_NAME: &str = "c8y-configuration-plugin";
 
 const AFTER_HELP_TEXT: &str = r#"On start, `c8y-configuration-plugin` notifies the cloud tenant of the managed configuration files, listed in the `CONFIG_FILE`, sending this list with a `119` on `c8y/s/us`.
 `c8y-configuration-plugin` subscribes then to `c8y/s/ds` listening for configuration operation requests (messages `524` and `526`).
@@ -73,124 +63,99 @@ pub struct ConfigPluginOpt {
     pub config_dir: PathBuf,
 }
 
-pub async fn create_http_client(
-    tedge_config: &TEdgeConfig,
-) -> Result<JwtAuthHttpProxy, anyhow::Error> {
-    let mut http_proxy = JwtAuthHttpProxy::try_new(tedge_config).await?;
-    http_proxy.init().await?;
-    Ok(http_proxy)
-}
-
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let config_plugin_opt = ConfigPluginOpt::parse();
 
-    if config_plugin_opt.init {
-        init(config_plugin_opt.config_dir)?;
-        return Ok(());
-    }
-
     // Load tedge config from the provided location
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(&config_plugin_opt.config_dir);
-    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
-
     let log_level = if config_plugin_opt.debug {
         tracing::Level::TRACE
     } else {
         get_log_level(
-            "c8y-configuration-plugin",
+            "c8y-log-plugin",
             tedge_config_location.tedge_config_root_path.to_path_buf(),
         )?
     };
+
     set_log_level(log_level);
 
+    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
     let tedge_config = config_repository.load()?;
 
-    let tedge_device_id = tedge_config.query(DeviceIdSetting)?;
+    if config_plugin_opt.init {
+        init(config_plugin_opt.config_dir)
+    } else {
+        run(tedge_config).await
+    }
+}
 
-    let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
-    let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
-    let http_client = create_http_client(&tedge_config).await?;
-    let http_client: Arc<Mutex<dyn C8YHttpProxy>> = Arc::new(Mutex::new(http_client));
-    let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
-    let data_dir: PathBuf = tedge_config.query(DataPathSetting)?.into();
+async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
+    let runtime_events_logger = None;
+    let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
-    let http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
-    let http_address = tedge_config.query(HttpBindAddressSetting)?.to_string();
-    let local_http_host = format!("{}:{}", http_address, http_port);
+    // Create actor instances
+    let mqtt_config = mqtt_config(&tedge_config)?;
+    let mut jwt_actor = C8YJwtRetriever::builder(mqtt_config.clone());
+    let mut http_actor = HttpActor::new().builder();
+    let c8y_http_config = (&tedge_config).try_into()?;
+    let mut c8y_http_proxy_actor =
+        C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);
 
-    let mut config_manager = ConfigManager::new(
-        tedge_device_id,
-        mqtt_host,
-        mqtt_port,
-        http_client,
-        local_http_host,
-        tmp_dir,
-        config_plugin_opt.config_dir,
-        data_dir.join(DEFAULT_FILE_TRANSFER_DIR_NAME),
-    )
-    .await?;
+    let mut fs_watch_actor = FsWatchActorBuilder::new();
+    let mut signal_actor = SignalActor::builder();
+    let mut timer_actor = TimerActor::builder();
 
-    config_manager.run().await
+    //Instantiate health monitor actor
+    let mut health_actor = HealthMonitorBuilder::new(PLUGIN_NAME);
+    let mqtt_config = health_actor.set_init_and_last_will(mqtt_config);
+    let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
+
+    health_actor.set_connection(&mut mqtt_actor);
+
+    //Instantiate config manager actor
+    let config_manager_config =
+        ConfigManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH, &tedge_config)?;
+    let mut config_actor = ConfigManagerBuilder::new(config_manager_config);
+
+    // Connect other actor instances to config manager actor
+    config_actor.with_fs_connection(&mut fs_watch_actor)?;
+    config_actor.with_c8y_http_proxy(&mut c8y_http_proxy_actor)?;
+    config_actor.set_connection(&mut mqtt_actor);
+    config_actor.set_connection(&mut timer_actor);
+
+    // Shutdown on SIGINT
+    signal_actor.register_peer(NoConfig, runtime.get_handle().get_sender());
+
+    // Run the actors
+    // FIXME: having to list all the actors is error prone
+    runtime.spawn(signal_actor).await?;
+    runtime.spawn(mqtt_actor).await?;
+    runtime.spawn(jwt_actor).await?;
+    runtime.spawn(http_actor).await?;
+    runtime.spawn(c8y_http_proxy_actor).await?;
+    runtime.spawn(fs_watch_actor).await?;
+    runtime.spawn(config_actor).await?;
+    runtime.spawn(timer_actor).await?;
+    runtime.spawn(health_actor).await?;
+
+    runtime.run_to_completion().await?;
+
+    Ok(())
 }
 
 fn init(cfg_dir: PathBuf) -> Result<(), anyhow::Error> {
     info!("Creating supported operation files");
-    create_operation_files(&cfg_dir)?;
+    c8y_config_manager::init(&cfg_dir)?;
     Ok(())
 }
 
-fn create_operation_files(config_dir: &Path) -> Result<(), anyhow::Error> {
-    create_directory_with_user_group(
-        format!("{}/c8y", config_dir.display()),
-        "root",
-        "root",
-        0o1777,
-    )?;
-    let example_config = r#"# Add the configurations to be managed by c8y-configuration-plugin
-
-files = [
-#    { path = '/etc/tedge/tedge.toml' },
-#    { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge.conf' },
-#    { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf', type = 'tedge-mosquitto.conf' },
-#    { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto.conf' },
-#    { path = '/etc/tedge/c8y/example.txt', type = 'example', user = 'tedge', group = 'tedge', mode = 0o444 }
-]"#;
-
-    create_file_with_user_group(
-        format!("{}/c8y/c8y-configuration-plugin.toml", config_dir.display()),
-        "root",
-        "root",
-        0o644,
-        Some(example_config),
-    )?;
-
-    create_directory_with_user_group(
-        format!("{}/operations/c8y", config_dir.display()),
-        "tedge",
-        "tedge",
-        0o775,
-    )?;
-    create_file_with_user_group(
-        format!(
-            "{}/operations/c8y/c8y_UploadConfigFile",
-            config_dir.display()
-        ),
-        "tedge",
-        "tedge",
-        0o644,
-        None,
-    )?;
-    create_file_with_user_group(
-        format!(
-            "{}/operations/c8y/c8y_DownloadConfigFile",
-            config_dir.display()
-        ),
-        "tedge",
-        "tedge",
-        0o644,
-        None,
-    )?;
-    Ok(())
+fn mqtt_config(tedge_config: &TEdgeConfig) -> Result<MqttConfig, TEdgeConfigError> {
+    let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
+    let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
+    let config = MqttConfig::default()
+        .with_host(mqtt_host)
+        .with_port(mqtt_port);
+    Ok(config)
 }
