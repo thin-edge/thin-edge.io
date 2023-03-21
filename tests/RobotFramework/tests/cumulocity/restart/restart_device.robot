@@ -11,8 +11,9 @@ Test Teardown    Get Logs
 *** Test Cases ***
 
 Supports restarting the device
+    [Documentation]    Use a longer timeout period to allow the device time to restart and allow the initial token fetching process to fail at least one (due to the 60 seconds retry window)
     ${operation}=    Cumulocity.Restart Device
-    Operation Should Be SUCCESSFUL    ${operation}
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=180
 
 *** Keywords ***
 
