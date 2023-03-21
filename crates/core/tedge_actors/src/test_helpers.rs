@@ -6,6 +6,7 @@ use crate::MessageSink;
 use crate::MessageSource;
 use crate::NoConfig;
 use crate::NullSender;
+use crate::ReceiveMessages;
 use crate::Sender;
 use crate::ServiceConsumer;
 use crate::ServiceProvider;
@@ -14,7 +15,123 @@ use crate::SimpleMessageBoxBuilder;
 use futures::stream::FusedStream;
 use futures::SinkExt;
 use futures::StreamExt;
+use std::collections::HashSet;
 use std::fmt::Debug;
+use std::hash::Hash;
+use std::time::Duration;
+
+/// Check that all messages are received in the given order without any interleaved messages.
+///
+/// Returns early on `timeout` while waiting for the next message.
+///
+/// ```rust
+/// use crate::tedge_actors::{Builder, NoMessage, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
+///
+/// #[derive(Debug,Eq,PartialEq,Hash)]
+/// enum MyMessage {
+///    Foo(u32),
+///    Bar(u32),
+/// }
+///
+/// # #[tokio::main]
+/// # async fn main() -> Result<(),RuntimeError> {
+///
+/// use std::time::Duration;
+/// let mut receiver_builder = SimpleMessageBoxBuilder::new("Recv", 16);
+/// let sender_builder = SimpleMessageBoxBuilder::new("Send", 16).with_connection(&mut receiver_builder);
+/// let mut sender = sender_builder.build();
+/// let mut receiver: SimpleMessageBox<MyMessage,NoMessage> = receiver_builder.build();
+///
+/// sender.send(MyMessage::Foo(1)).await?;
+/// sender.send(MyMessage::Bar(2)).await?;
+/// sender.send(MyMessage::Foo(3)).await?;
+///
+/// test_helpers::assert_received(&mut receiver, Duration::from_millis(100), [
+///     MyMessage::Foo(1),
+///     MyMessage::Bar(2),
+///     MyMessage::Foo(3),
+/// ]);
+///
+/// # Ok(())
+/// # }
+///
+/// ```
+pub async fn assert_received<T, U>(
+    messages: &mut impl ReceiveMessages<U>,
+    timeout: Duration,
+    expected: T,
+) where
+    T: IntoIterator,
+    U: From<T::Item>,
+    U: Debug + Eq,
+{
+    for expected_msg in expected.into_iter().map(|msg| msg.into()) {
+        let actual_msg = tokio::time::timeout(timeout, messages.recv()).await;
+        assert_eq!(actual_msg, Ok(Some(expected_msg)));
+    }
+}
+
+/// Check that all messages are received possibly in a different order or with interleaved messages.
+///
+/// Returns early on `timeout` while waiting for the next message.
+///
+/// ```rust
+/// use crate::tedge_actors::{Builder, NoMessage, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
+///
+/// #[derive(Debug,Eq,PartialEq,Hash)]
+/// enum MyMessage {
+///    Foo(u32),
+///    Bar(u32),
+/// }
+///
+/// # #[tokio::main]
+/// # async fn main() -> Result<(),RuntimeError> {
+///
+/// use std::time::Duration;
+/// let mut receiver_builder = SimpleMessageBoxBuilder::new("Recv", 16);
+/// let sender_builder = SimpleMessageBoxBuilder::new("Send", 16).with_connection(&mut receiver_builder);
+/// let mut sender = sender_builder.build();
+/// let mut receiver: SimpleMessageBox<MyMessage,NoMessage> = receiver_builder.build();
+///
+/// sender.send(MyMessage::Foo(1)).await?;
+/// sender.send(MyMessage::Bar(2)).await?;
+/// sender.send(MyMessage::Foo(3)).await?;
+///
+/// test_helpers::assert_received_unordered(&mut receiver, Duration::from_millis(100), [
+///     MyMessage::Foo(3),
+///     MyMessage::Bar(2),
+/// ]);
+///
+/// # Ok(())
+/// # }
+///
+/// ```
+pub async fn assert_received_unordered<T, U>(
+    messages: &mut impl ReceiveMessages<U>,
+    timeout: Duration,
+    expected: T,
+) where
+    T: IntoIterator,
+    U: From<T::Item>,
+    U: Debug + Eq + Hash,
+{
+    let mut expected: HashSet<U> = expected.into_iter().map(|s| s.into()).collect();
+
+    let mut received = Vec::new();
+
+    while let Ok(Some(msg)) = tokio::time::timeout(timeout, messages.recv()).await {
+        expected.remove(&msg);
+        received.push(msg);
+        if expected.is_empty() {
+            return;
+        }
+    }
+
+    assert!(
+        expected.is_empty(),
+        "Didn't receive all expected messages: {expected:?}\n Received: {received:?}",
+    );
+}
 
 /// A message that can be broadcast
 pub trait MessagePlus: Message + Clone + Eq {}
