@@ -88,10 +88,6 @@ fan_in_message_type!(C8YHttpProxyOutput[C8YRestResponseWithClientId, HttpRequest
 impl MessageBox for C8YHttpProxyMessageBox {
     type Input = C8YHttpProxyInput;
     type Output = C8YHttpProxyOutput;
-
-    fn name(&self) -> &str {
-        "C8Y-REST"
-    }
 }
 
 impl C8YHttpProxyActor {
@@ -143,7 +139,7 @@ impl C8YHttpProxyActor {
     }
 
     fn name(&self) -> &str {
-        self.peers.name()
+        "C8Y-REST"
     }
 
     async fn init(&mut self) {

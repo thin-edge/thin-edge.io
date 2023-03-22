@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use std::path::PathBuf;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::futures::StreamExt;
+use tedge_actors::message_boxes::log_message_sent;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
@@ -41,7 +42,8 @@ impl FsWatchMessageBox {
             FsWatchEvent::DirectoryCreated(path) => path,
         };
 
-        self.log_output(&message);
+        log_message_sent("Inotify", &message);
+
         for (watch_path, sender) in self.watch_dirs.iter_mut() {
             if path.starts_with(watch_path) {
                 sender.send(message.clone()).await?;
@@ -59,10 +61,6 @@ impl FsWatchMessageBox {
 impl MessageBox for FsWatchMessageBox {
     type Input = NoMessage;
     type Output = FsWatchEvent;
-
-    fn name(&self) -> &str {
-        "Inotify"
-    }
 }
 
 pub struct FsWatchActorBuilder {

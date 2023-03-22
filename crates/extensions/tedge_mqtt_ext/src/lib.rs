@@ -5,13 +5,13 @@ use async_trait::async_trait;
 use mqtt_channel::SinkExt;
 use mqtt_channel::StreamExt;
 use std::convert::Infallible;
-use tedge_actors::futures::channel::mpsc::channel;
-use tedge_actors::futures::channel::mpsc::Sender;
+use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::LoggingReceiver;
+use tedge_actors::LoggingSender;
 use tedge_actors::MessageBox;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
@@ -19,6 +19,7 @@ use tedge_actors::ReceiveMessages;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::Sender;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
 use tedge_actors::WrappedInput;
@@ -32,15 +33,15 @@ pub use mqtt_channel::TopicFilter;
 pub struct MqttActorBuilder {
     pub mqtt_config: mqtt_channel::Config,
     input_receiver: LoggingReceiver<MqttMessage>,
-    publish_sender: Sender<MqttMessage>,
-    pub subscriber_addresses: Vec<(TopicFilter, DynSender<MqttMessage>)>,
-    signal_sender: Sender<RuntimeRequest>,
+    publish_sender: mpsc::Sender<MqttMessage>,
+    pub subscriber_addresses: Vec<(TopicFilter, LoggingSender<MqttMessage>)>,
+    signal_sender: mpsc::Sender<RuntimeRequest>,
 }
 
 impl MqttActorBuilder {
     pub fn new(config: mqtt_channel::Config) -> Self {
-        let (publish_sender, publish_receiver) = channel(10);
-        let (signal_sender, signal_receiver) = channel(10);
+        let (publish_sender, publish_receiver) = mpsc::channel(10);
+        let (signal_sender, signal_receiver) = mpsc::channel(10);
         let input_receiver = LoggingReceiver::new("MQTT".into(), publish_receiver, signal_receiver);
 
         MqttActorBuilder {
@@ -68,14 +69,15 @@ impl MqttActorBuilder {
 impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter> for MqttActorBuilder {
     fn add_peer(&mut self, peer: &mut impl ServiceConsumer<MqttMessage, MqttMessage, TopicFilter>) {
         let subscriptions = peer.get_config();
-        self.subscriber_addresses
-            .push((subscriptions, peer.get_response_sender()));
+        let sender = LoggingSender::new("MQTT".into(), peer.get_response_sender());
+        self.subscriber_addresses.push((subscriptions, sender));
         peer.set_request_sender(self.publish_sender.clone().into())
     }
 }
 
 impl MessageSource<MqttMessage, TopicFilter> for MqttActorBuilder {
     fn register_peer(&mut self, subscriptions: TopicFilter, sender: DynSender<MqttMessage>) {
+        let sender = LoggingSender::new("MQTT".into(), sender);
         self.subscriber_addresses.push((subscriptions, sender));
     }
 }
@@ -106,13 +108,13 @@ impl Builder<(MqttActor, MqttMessageBox)> for MqttActorBuilder {
 
 pub struct MqttMessageBox {
     input_receiver: LoggingReceiver<MqttMessage>,
-    peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
+    peer_senders: Vec<(TopicFilter, LoggingSender<MqttMessage>)>,
 }
 
 impl MqttMessageBox {
     fn new(
         input_receiver: LoggingReceiver<MqttMessage>,
-        peer_senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
+        peer_senders: Vec<(TopicFilter, LoggingSender<MqttMessage>)>,
     ) -> Self {
         MqttMessageBox {
             input_receiver,
@@ -121,7 +123,6 @@ impl MqttMessageBox {
     }
 
     async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
-        self.log_output(&message.clone());
         for (topic_filter, peer_sender) in self.peer_senders.iter_mut() {
             if topic_filter.accept(&message) {
                 peer_sender.send(message.clone()).await?;
@@ -150,10 +151,6 @@ impl ReceiveMessages<MqttMessage> for MqttMessageBox {
 impl MessageBox for MqttMessageBox {
     type Input = MqttMessage;
     type Output = MqttMessage;
-
-    fn name(&self) -> &str {
-        "MQTT"
-    }
 }
 
 pub struct MqttActor {

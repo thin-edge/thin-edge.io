@@ -20,12 +20,13 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
-use tedge_actors::DynSender;
 use tedge_actors::LoggingReceiver;
+use tedge_actors::LoggingSender;
 use tedge_actors::MessageBox;
 use tedge_actors::ReceiveMessages;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
+use tedge_actors::Sender;
 use tedge_actors::WrappedInput;
 use tedge_api::health::health_check_topics;
 use tedge_api::health::health_status_up_message;
@@ -44,14 +45,14 @@ fan_in_message_type!(LogOutput[MqttMessage]: Debug);
 pub struct LogManagerActor {
     config: LogManagerConfig,
     health_check_topics: TopicFilter,
-    mqtt_publisher: DynSender<MqttMessage>,
+    mqtt_publisher: LoggingSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
 }
 
 impl LogManagerActor {
     pub fn new(
         config: LogManagerConfig,
-        mqtt_publisher: DynSender<MqttMessage>,
+        mqtt_publisher: LoggingSender<MqttMessage>,
         http_proxy: C8YHttpProxy,
     ) -> Self {
         let health_check_topics = health_check_topics("c8y-log-plugin");
@@ -380,13 +381,13 @@ impl Actor for LogManagerActor {
 pub struct LogManagerMessageBox {
     input_receiver: LoggingReceiver<LogInput>,
     #[allow(dead_code)]
-    mqtt_requests: DynSender<MqttMessage>,
+    mqtt_requests: LoggingSender<MqttMessage>,
 }
 
 impl LogManagerMessageBox {
     pub fn new(
         input_receiver: LoggingReceiver<LogInput>,
-        mqtt_con: DynSender<MqttMessage>,
+        mqtt_con: LoggingSender<MqttMessage>,
     ) -> LogManagerMessageBox {
         LogManagerMessageBox {
             input_receiver,
@@ -398,10 +399,6 @@ impl LogManagerMessageBox {
 impl MessageBox for LogManagerMessageBox {
     type Input = LogInput;
     type Output = LogOutput;
-
-    fn name(&self) -> &str {
-        "C8Y-Log-Manager"
-    }
 }
 
 #[async_trait]
