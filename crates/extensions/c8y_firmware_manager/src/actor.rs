@@ -19,8 +19,8 @@ use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
-use tedge_actors::CombinedReceiver;
 use tedge_actors::DynSender;
+use tedge_actors::LoggingReceiver;
 use tedge_actors::MessageBox;
 use tedge_actors::ReceiveMessages;
 use tedge_actors::RuntimeError;
@@ -669,7 +669,7 @@ impl FirmwareManagerActor {
 }
 
 pub struct FirmwareManagerMessageBox {
-    input_receiver: CombinedReceiver<FirmwareInput>,
+    input_receiver: LoggingReceiver<FirmwareInput>,
     mqtt_publisher: DynSender<MqttMessage>,
     c8y_http_proxy: C8YHttpProxy,
     timer_sender: DynSender<SetTimeout<OperationKey>>,
@@ -677,7 +677,7 @@ pub struct FirmwareManagerMessageBox {
 
 impl FirmwareManagerMessageBox {
     pub fn new(
-        input_receiver: CombinedReceiver<FirmwareInput>,
+        input_receiver: LoggingReceiver<FirmwareInput>,
         mqtt_publisher: DynSender<MqttMessage>,
         c8y_http_proxy: C8YHttpProxy,
         timer_sender: DynSender<SetTimeout<OperationKey>>,
@@ -709,10 +709,7 @@ impl ReceiveMessages<FirmwareInput> for FirmwareManagerMessageBox {
     }
 
     async fn recv(&mut self) -> Option<FirmwareInput> {
-        self.input_receiver.recv().await.map(|message| {
-            self.log_input(&message);
-            message
-        })
+        self.input_receiver.recv().await
     }
 }
 
@@ -720,17 +717,8 @@ impl MessageBox for FirmwareManagerMessageBox {
     type Input = FirmwareInput;
     type Output = MqttMessage;
 
-    fn turn_logging_on(&mut self, _on: bool) {
-        todo!()
-    }
-
     fn name(&self) -> &str {
         "C8Y-Firmware-Manager"
-    }
-
-    fn logging_is_on(&self) -> bool {
-        // FIXME this mailbox recv and send method are not used making logging ineffective.
-        false
     }
 }
 

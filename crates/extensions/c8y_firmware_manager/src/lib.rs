@@ -20,9 +20,9 @@ pub use config::*;
 use mqtt_channel::TopicFilter;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
-use tedge_actors::CombinedReceiver;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
+use tedge_actors::LoggingReceiver;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
@@ -34,7 +34,7 @@ use tedge_timer_ext::Timeout;
 
 pub struct FirmwareManagerBuilder {
     config: FirmwareManagerConfig,
-    receiver: CombinedReceiver<FirmwareInput>,
+    receiver: LoggingReceiver<FirmwareInput>,
     events_sender: mpsc::Sender<FirmwareInput>,
     mqtt_publisher: Option<DynSender<MqttMessage>>,
     c8y_http_proxy: Option<C8YHttpProxy>,
@@ -46,7 +46,11 @@ impl FirmwareManagerBuilder {
     pub fn new(config: FirmwareManagerConfig) -> FirmwareManagerBuilder {
         let (events_sender, events_receiver) = mpsc::channel(10);
         let (signal_sender, signal_receiver) = mpsc::channel(10);
-        let receiver = CombinedReceiver::new(events_receiver, signal_receiver);
+        let receiver = LoggingReceiver::new(
+            "C8Y-Firmware-Manager".into(),
+            events_receiver,
+            signal_receiver,
+        );
 
         Self {
             config,
