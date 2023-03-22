@@ -15,9 +15,7 @@ use crate::SimpleMessageBoxBuilder;
 use futures::stream::FusedStream;
 use futures::SinkExt;
 use futures::StreamExt;
-use std::collections::HashSet;
 use std::fmt::Debug;
-use std::hash::Hash;
 use std::time::Duration;
 
 /// Check that all messages are received in the given order without any interleaved messages.
@@ -50,7 +48,7 @@ use std::time::Duration;
 ///     MyMessage::Foo(1),
 ///     MyMessage::Bar(2),
 ///     MyMessage::Foo(3),
-/// ]);
+/// ]).await;
 ///
 /// # Ok(())
 /// # }
@@ -78,7 +76,7 @@ pub async fn assert_received<T, U>(
 /// ```rust
 /// use crate::tedge_actors::{Builder, NoMessage, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
 ///
-/// #[derive(Debug,Eq,PartialEq,Hash)]
+/// #[derive(Debug,Eq,PartialEq)]
 /// enum MyMessage {
 ///    Foo(u32),
 ///    Bar(u32),
@@ -100,7 +98,7 @@ pub async fn assert_received<T, U>(
 /// test_helpers::assert_received_unordered(&mut receiver, Duration::from_millis(100), [
 ///     MyMessage::Foo(3),
 ///     MyMessage::Bar(2),
-/// ]);
+/// ]).await;
 ///
 /// # Ok(())
 /// # }
@@ -112,15 +110,82 @@ pub async fn assert_received_unordered<T, U>(
     expected: T,
 ) where
     T: IntoIterator,
-    U: From<T::Item>,
-    U: Debug + Eq + Hash,
+    T::Item: Debug + PartialEq<U>,
+    U: Debug + Eq,
 {
-    let mut expected: HashSet<U> = expected.into_iter().map(|s| s.into()).collect();
+    assert_received_matching(
+        messages,
+        |pat: &T::Item, msg: &U| pat == msg,
+        timeout,
+        expected,
+    )
+    .await
+}
+
+/// Check that at least one matching message is received for each pattern.
+///
+/// The messages can possibly be received in a different order or with interleaved messages.
+/// Returns early on `timeout` while waiting for the next message.
+///
+/// ```rust
+/// use crate::tedge_actors::{Builder, NoMessage, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
+///
+/// #[derive(Debug,Eq,PartialEq)]
+/// enum MyMessage {
+///    Foo(u32),
+///    Bar(u32),
+/// }
+///
+/// impl MyMessage {
+///     pub fn count(&self) -> u32 {
+///         match self {
+///             MyMessage::Foo(n) => *n,
+///             MyMessage::Bar(n) => *n,
+///         }
+///     }
+/// }
+///
+/// # #[tokio::main]
+/// # async fn main() -> Result<(),RuntimeError> {
+///
+/// use std::time::Duration;
+/// let mut receiver_builder = SimpleMessageBoxBuilder::new("Recv", 16);
+/// let sender_builder = SimpleMessageBoxBuilder::new("Send", 16).with_connection(&mut receiver_builder);
+/// let mut sender = sender_builder.build();
+/// let mut receiver: SimpleMessageBox<MyMessage,NoMessage> = receiver_builder.build();
+///
+/// sender.send(MyMessage::Foo(1)).await?;
+/// sender.send(MyMessage::Bar(2)).await?;
+/// sender.send(MyMessage::Foo(3)).await?;
+///
+/// test_helpers::assert_received_matching(
+///     &mut receiver,
+///     |pat:&u32,msg:&MyMessage| msg.count() == *pat,
+///     Duration::from_millis(100),
+///     [3,2],
+/// ).await;
+///
+/// # Ok(())
+/// # }
+///
+/// ```
+pub async fn assert_received_matching<T, U, F>(
+    messages: &mut impl ReceiveMessages<U>,
+    matching: F,
+    timeout: Duration,
+    expected: T,
+) where
+    T: IntoIterator,
+    F: Fn(&T::Item, &U) -> bool,
+    T::Item: Debug,
+    U: Debug,
+{
+    let mut expected: Vec<T::Item> = expected.into_iter().collect();
 
     let mut received = Vec::new();
 
     while let Ok(Some(msg)) = tokio::time::timeout(timeout, messages.recv()).await {
-        expected.remove(&msg);
+        expected.retain(|pat| !matching(pat, &msg));
         received.push(msg);
         if expected.is_empty() {
             return;
@@ -129,7 +194,7 @@ pub async fn assert_received_unordered<T, U>(
 
     assert!(
         expected.is_empty(),
-        "Didn't receive all expected messages: {expected:?}\n Received: {received:?}",
+        "Didn't receive all expected messages:\n\tMissing a match for: {expected:?}\n\tReceived: {received:?}",
     );
 }
 
