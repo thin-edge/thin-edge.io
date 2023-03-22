@@ -48,6 +48,31 @@ Test if all c8y services using default service type when service type configured
     c8y-log-plugin
     c8y-firmware-plugin
 
+Check health status of tedge-mapper-c8y service on broker stop start
+    Custom Test Setup
+     
+    Device Should Exist                      ${DEVICE_SN}_tedge-mapper-c8y    show_info=False 
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up
+    Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
+    Should Be Equal    ${SERVICE["status"]}    up
+     
+    ThinEdgeIO.Stop Service    mosquitto.service
+    ThinEdgeIO.Service Should Be Stopped  mosquitto.service
+
+    Device Should Exist                      ${DEVICE_SN}_tedge-mapper-c8y    show_info=False
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=down
+    Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
+    Should Be Equal    ${SERVICE["status"]}    down
+
+    ThinEdgeIO.Start Service    mosquitto.service
+    ThinEdgeIO.Service Should Be Running  mosquitto.service
+
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up
+    Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
+    Should Be Equal    ${SERVICE["status"]}    up
+
+    Custom Test Teardown
+
 Check health status of tedge-mapper-c8y service on broker restart
     [Documentation]    Test tedge-mapper-c8y on mqtt broker restart
     Custom Test Setup
@@ -60,10 +85,11 @@ Check health status of tedge-mapper-c8y service on broker restart
     ThinEdgeIO.Restart Service    mosquitto.service
     ThinEdgeIO.Service Should Be Running  mosquitto.service
 
+    Sleep    5s    reason=Wait for any potential status changes to be sent to Cumulocity IoT
     Device Should Exist                      ${DEVICE_SN}_tedge-mapper-c8y    show_info=False
-    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=down 
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up
     Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
-    Should Be Equal    ${SERVICE["status"]}    down
+    Should Be Equal    ${SERVICE["status"]}    up
 
     Custom Test Teardown
         
@@ -94,6 +120,7 @@ Custom Setup
     Device Should Exist                      ${DEVICE_SN}
 
 Custom Test Setup
+    ThinEdgeIO.Start Service    mosquitto
     ThinEdgeIO.Restart Service    tedge-mapper-c8y
     ThinEdgeIO.Service Should Be Running    tedge-mapper-c8y
 
