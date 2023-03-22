@@ -7,24 +7,133 @@ use crate::MessageSource;
 use crate::NoConfig;
 use crate::NullSender;
 use crate::ReceiveMessages;
+use crate::RuntimeRequest;
 use crate::Sender;
 use crate::ServiceConsumer;
 use crate::ServiceProvider;
 use crate::SimpleMessageBox;
 use crate::SimpleMessageBoxBuilder;
+use crate::WrappedInput;
+use async_trait::async_trait;
 use futures::stream::FusedStream;
 use futures::SinkExt;
 use futures::StreamExt;
 use std::fmt::Debug;
 use std::time::Duration;
 
+/// A test helper that extends a message box with various way to check received messages.
+#[async_trait]
+pub trait MessageReceiverExt<M: Message> {
+    /// Return a new receiver which returns None if no message is received after the given timeout
+    ///
+    /// ```
+    /// # use tedge_actors::{Builder, NoMessage, ReceiveMessages, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder};
+    /// # use std::time::Duration;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(),RuntimeError> {
+    ///
+    /// let mut receiver_builder = SimpleMessageBoxBuilder::new("Recv", 16);
+    /// let sender_builder = SimpleMessageBoxBuilder::new("Send", 16).with_connection(&mut receiver_builder);
+    /// let mut sender = sender_builder.build();
+    /// let receiver: SimpleMessageBox<&str,NoMessage> = receiver_builder.build();
+    ///
+    /// use tedge_actors::test_helpers::MessageReceiverExt;
+    /// let mut receiver = receiver.with_timeout(Duration::from_millis(100));
+    ///
+    /// sender.send("Hello").await?;
+    /// sender.send("World").await?;
+    ///
+    /// assert_eq!(receiver.recv().await, Some("Hello"));
+    /// assert_eq!(receiver.recv().await, Some("World"));
+    /// assert_eq!(receiver.recv().await, None);
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+    fn with_timeout(self, timeout: Duration) -> TimedBoxReceiver<M>;
+
+    /// Skip the given number of messages
+    ///
+    /// ```
+    /// # use tedge_actors::{Builder, NoMessage, ReceiveMessages, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder};
+    /// # use std::time::Duration;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(),RuntimeError> {
+    ///
+    /// let mut receiver_builder = SimpleMessageBoxBuilder::new("Recv", 16);
+    /// let sender_builder = SimpleMessageBoxBuilder::new("Send", 16).with_connection(&mut receiver_builder);
+    /// let mut sender = sender_builder.build();
+    /// let mut receiver: SimpleMessageBox<&str,NoMessage> = receiver_builder.build();
+    ///
+    /// sender.send("Boring message").await?;
+    /// sender.send("Boring message").await?;
+    /// sender.send("Hello World").await?;
+    ///
+    /// use tedge_actors::test_helpers::MessageReceiverExt;
+    /// receiver.skip(2).await;
+    /// assert_eq!(receiver.recv().await, Some("Hello World"));
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+    async fn skip(&mut self, count: usize);
+}
+
+#[async_trait]
+impl<T, M> MessageReceiverExt<M> for T
+where
+    T: ReceiveMessages<M> + Send + Sync + 'static,
+    M: Message,
+{
+    fn with_timeout(self, timeout: Duration) -> TimedBoxReceiver<M> {
+        TimedBoxReceiver {
+            timeout,
+            inner: Box::new(self),
+        }
+    }
+
+    async fn skip(&mut self, count: usize) {
+        for _ in 0..count {
+            let _ = self.recv().await;
+        }
+    }
+}
+
+/// A receiver that behaves as if the channel has been closed,
+/// returning None, when no message is received after a given duration.
+pub struct TimedBoxReceiver<M: Message> {
+    timeout: Duration,
+    inner: Box<dyn ReceiveMessages<M> + Send + Sync + 'static>,
+}
+
+#[async_trait]
+impl<M: Message> ReceiveMessages<M> for TimedBoxReceiver<M> {
+    async fn try_recv(&mut self) -> Result<Option<M>, RuntimeRequest> {
+        tokio::time::timeout(self.timeout, self.inner.try_recv())
+            .await
+            .unwrap_or(Ok(None))
+    }
+
+    async fn recv_message(&mut self) -> Option<WrappedInput<M>> {
+        tokio::time::timeout(self.timeout, self.inner.recv_message())
+            .await
+            .unwrap_or(None)
+    }
+
+    async fn recv(&mut self) -> Option<M> {
+        tokio::time::timeout(self.timeout, self.inner.recv())
+            .await
+            .unwrap_or(None)
+    }
+}
+
 /// Check that all messages are received in the given order without any interleaved messages.
 ///
 /// Returns early on `timeout` while waiting for the next message.
 ///
 /// ```rust
-/// use crate::tedge_actors::{Builder, NoMessage, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
-///
+/// # use crate::tedge_actors::{Builder, NoMessage, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
+/// # use std::time::Duration;
 /// #[derive(Debug,Eq,PartialEq,Hash)]
 /// enum MyMessage {
 ///    Foo(u32),
@@ -34,7 +143,6 @@ use std::time::Duration;
 /// # #[tokio::main]
 /// # async fn main() -> Result<(),RuntimeError> {
 ///
-/// use std::time::Duration;
 /// let mut receiver_builder = SimpleMessageBoxBuilder::new("Recv", 16);
 /// let sender_builder = SimpleMessageBoxBuilder::new("Send", 16).with_connection(&mut receiver_builder);
 /// let mut sender = sender_builder.build();
