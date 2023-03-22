@@ -9,9 +9,9 @@ use c8y_http_proxy::messages::C8YRestResult;
 pub use config::*;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
-use tedge_actors::CombinedReceiver;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
+use tedge_actors::LoggingReceiver;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
@@ -25,7 +25,7 @@ use tedge_mqtt_ext::*;
 /// This is an actor builder.
 pub struct LogManagerBuilder {
     config: LogManagerConfig,
-    input_receiver: CombinedReceiver<LogInput>,
+    input_receiver: LoggingReceiver<LogInput>,
     events_sender: mpsc::Sender<LogInput>,
     mqtt_publisher: Option<DynSender<MqttMessage>>,
     http_proxy: Option<C8YHttpProxy>,
@@ -36,7 +36,8 @@ impl LogManagerBuilder {
     pub fn new(config: LogManagerConfig) -> Self {
         let (events_sender, events_receiver) = mpsc::channel(10);
         let (signal_sender, signal_receiver) = mpsc::channel(10);
-        let input_receiver = CombinedReceiver::new(events_receiver, signal_receiver);
+        let input_receiver =
+            LoggingReceiver::new("C8Y-Log-Manager".into(), events_receiver, signal_receiver);
 
         Self {
             config,

@@ -1,30 +1,18 @@
-use std::fs;
-
+use crate::config::FileEntry;
+use crate::error::ChildDeviceConfigManagementError;
 use c8y_api::smartrest::topic::C8yTopic;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
+use std::fs;
+use std::path::PathBuf;
 use tedge_api::OperationStatus;
 use tracing::error;
-
-use crate::config::FileEntry;
-use crate::error::ChildDeviceConfigManagementError;
-
-#[cfg(not(test))]
-use tedge_config::DEFAULT_FILE_TRANSFER_ROOT_PATH;
-#[cfg(not(test))]
-pub const FILE_TRANSFER_ROOT_PATH: &str = DEFAULT_FILE_TRANSFER_ROOT_PATH;
-
-#[cfg(test)]
-pub const FILE_TRANSFER_ROOT_PATH: &str = "/tmp";
 
 pub trait ConfigOperationMessage {
     fn http_file_repository_relative_path(&self) -> String;
 
-    fn file_transfer_repository_full_path(&self) -> String {
-        format!(
-            "{FILE_TRANSFER_ROOT_PATH}/{}",
-            self.http_file_repository_relative_path()
-        )
+    fn file_transfer_repository_full_path(&self, file_transfer_dir: PathBuf) -> PathBuf {
+        file_transfer_dir.join(self.http_file_repository_relative_path())
     }
 }
 
@@ -111,12 +99,13 @@ impl ConfigOperationMessage for ConfigOperationResponse {
 }
 
 pub fn try_cleanup_config_file_from_file_transfer_repositoy(
+    file_transfer_dir: PathBuf,
     config_response: &ConfigOperationResponse,
 ) {
-    let config_file_path = config_response.file_transfer_repository_full_path();
+    let config_file_path = config_response.file_transfer_repository_full_path(file_transfer_dir);
     if let Err(err) = fs::remove_file(&config_file_path) {
         error!(
-            "Failed to remove config file file copy at {} with {}",
+            "Failed to remove config file copy at {:?} with {}",
             config_file_path, err
         );
     }

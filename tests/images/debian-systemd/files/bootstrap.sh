@@ -134,8 +134,8 @@ install_via_apt() {
         tedge-apt-plugin \
         c8y-configuration-plugin \
         c8y-log-plugin \
+        c8y-firmware-plugin \
         tedge-watchdog
-    apt-get install -y c8y-firmware-plugin
 }
 
 install_via_script() {

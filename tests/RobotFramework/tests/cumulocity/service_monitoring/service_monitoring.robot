@@ -12,8 +12,6 @@ Test Teardown    Get Logs
 
 *** Variables ***
 
-@{SERVICES}    tedge-mapper-c8y    tedge-agent    c8y-configuration-plugin    c8y-log-plugin
-
 
 *** Test Cases ***
 
@@ -23,6 +21,7 @@ Test if all c8y services are up
     tedge-agent
     c8y-configuration-plugin
     c8y-log-plugin
+    c8y-firmware-plugin
 
 Test if all c8y services are down
     [Template]     Check if a service is down
@@ -30,6 +29,24 @@ Test if all c8y services are down
     tedge-agent
     c8y-configuration-plugin
     c8y-log-plugin
+    c8y-firmware-plugin
+
+
+Test if all c8y services are using configured service type
+    [Template]     Check if a service using configured service type
+    tedge-mapper-c8y
+    tedge-agent
+    c8y-configuration-plugin
+    c8y-log-plugin
+    c8y-firmware-plugin
+
+Test if all c8y services using default service type when service type configured as empty
+    [Template]     Check if a service using configured service type as empty
+    tedge-mapper-c8y
+    tedge-agent
+    c8y-configuration-plugin
+    c8y-log-plugin
+    c8y-firmware-plugin
 
 Check health status of tedge-mapper-c8y service on broker restart
     [Documentation]    Test tedge-mapper-c8y on mqtt broker restart
@@ -55,8 +72,8 @@ Check health status of child device service
     # Create the child device by sending the service status on tedge/health/<child-id>/<service-id
     # Verify if the service status is updated
     Set Device    ${DEVICE_SN}
-    Set Suite Variable    $CHILD_SN    external-sensor    
-    Execute Command    tedge mqtt pub 'tedge/health/external-sensor/childservice' '{"type":"systemd","status":"unknown"}'
+    Set Suite Variable    $CHILD_SN    ${DEVICE_SN}_external-sensor
+    Execute Command    tedge mqtt pub 'tedge/health/${CHILD_SN}/childservice' '{"type":"systemd","status":"unknown"}'
 
     Should Be A Child Device Of Device    ${CHILD_SN}
      
@@ -68,6 +85,7 @@ Check health status of child device service
     Should Be Equal    ${SERVICE["status"]}    unknown
     Should Be Equal    ${SERVICE["type"]}    c8y_Service
 
+
 *** Keywords ***
 
 Custom Setup
@@ -76,7 +94,7 @@ Custom Setup
     Device Should Exist                      ${DEVICE_SN}
 
 Custom Test Setup
-    ThinEdgeIO.Start Service    tedge-mapper-c8y
+    ThinEdgeIO.Restart Service    tedge-mapper-c8y
     ThinEdgeIO.Service Should Be Running    tedge-mapper-c8y
 
 Custom Test Teardown
@@ -117,4 +135,33 @@ Check if a service is down
     Should Be Equal    ${SERVICE["type"]}    c8y_Service
    
     Custom Test Teardown
-    
+
+Check if a service using configured service type
+    [Arguments]    ${service_name}
+    Execute Command    tedge config set service.type thinedge
+    Custom Test Setup
+    ThinEdgeIO.Start Service    ${service_name}
+    Device Should Exist                      ${DEVICE_SN}_${service_name}    show_info=False
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up
+
+    Should Be Equal    ${SERVICE["name"]}    ${service_name}
+    Should Be Equal    ${SERVICE["serviceType"]}    thinedge
+    Should Be Equal    ${SERVICE["status"]}    up
+    Should Be Equal    ${SERVICE["type"]}    c8y_Service
+
+    Custom Test Teardown
+
+Check if a service using configured service type as empty
+    [Arguments]    ${service_name}
+    Execute Command    tedge config set service.type ""
+    Custom Test Setup
+    ThinEdgeIO.Start Service    ${service_name}
+    Device Should Exist                      ${DEVICE_SN}_${service_name}    show_info=False
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up
+
+    Should Be Equal    ${SERVICE["name"]}    ${service_name}
+    Should Be Equal    ${SERVICE["serviceType"]}    service
+    Should Be Equal    ${SERVICE["status"]}    up
+    Should Be Equal    ${SERVICE["type"]}    c8y_Service
+
+    Custom Test Teardown    

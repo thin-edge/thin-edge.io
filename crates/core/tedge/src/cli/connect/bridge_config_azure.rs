@@ -31,7 +31,7 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             connect_url.as_str(),
             remote_clientid
         );
-        let pub_msg_topic = format!("messages/events/ out 1 az/ devices/{}/", remote_clientid);
+        let pub_msg_topic = format!("messages/events/# out 1 az/ devices/{}/", remote_clientid);
         let sub_msg_topic = format!(
             "messages/devicebound/# out 1 az/ devices/{}/",
             remote_clientid
@@ -96,7 +96,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         use_mapper: true,
         use_agent: false,
         topics: vec![
-            r#"messages/events/ out 1 az/ devices/alpha/"#.into(),
+            r#"messages/events/# out 1 az/ devices/alpha/"#.into(),
             r##"messages/devicebound/# out 1 az/ devices/alpha/"##.into(),
             r##"twin/res/# in 1 az/ $iothub/"##.into(),
             r#"twin/GET/?$rid=1 out 1 az/ $iothub/"#.into(),

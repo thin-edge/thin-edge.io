@@ -1,5 +1,6 @@
 use crate::error::AgentError;
 use crate::http_rest;
+use crate::http_rest::HttpConfig;
 use crate::restart_operation_handler::restart_operation;
 use crate::state::AgentStateRepository;
 use crate::state::RestartOperationStatus;
@@ -9,8 +10,28 @@ use crate::state::StateRepository;
 use crate::state::StateStatus;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
+use mqtt_channel::Connection;
+use mqtt_channel::Message;
+use mqtt_channel::PubChannel;
+use mqtt_channel::StreamExt;
+use mqtt_channel::SubChannel;
+use mqtt_channel::Topic;
+use mqtt_channel::TopicFilter;
+use plugin_sm::operation_logs::LogKind;
+use plugin_sm::operation_logs::OperationLogs;
+use plugin_sm::plugin_manager::ExternalPlugins;
+use plugin_sm::plugin_manager::Plugins;
+use std::convert::TryInto;
+use std::fmt::Debug;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
+use std::sync::Arc;
 use tedge_api::control_filter_topic;
+use tedge_api::health::health_check_topics;
+use tedge_api::health::health_status_down_message;
 use tedge_api::health::health_status_up_message;
+use tedge_api::health::send_health_status;
 use tedge_api::software_filter_topic;
 use tedge_api::Jsonify;
 use tedge_api::OperationStatus;
@@ -23,34 +44,15 @@ use tedge_api::SoftwareRequestResponse;
 use tedge_api::SoftwareType;
 use tedge_api::SoftwareUpdateRequest;
 use tedge_api::SoftwareUpdateResponse;
-
-use mqtt_channel::Connection;
-use mqtt_channel::Message;
-use mqtt_channel::PubChannel;
-use mqtt_channel::StreamExt;
-use mqtt_channel::SubChannel;
-use mqtt_channel::Topic;
-use mqtt_channel::TopicFilter;
-use plugin_sm::operation_logs::LogKind;
-use plugin_sm::operation_logs::OperationLogs;
-use plugin_sm::plugin_manager::ExternalPlugins;
-use plugin_sm::plugin_manager::Plugins;
-
-use crate::http_rest::HttpConfig;
-use std::convert::TryInto;
-use std::fmt::Debug;
-use std::path::PathBuf;
-use std::process::Command;
-use std::sync::Arc;
-use tedge_api::health::health_check_topics;
-use tedge_api::health::health_status_down_message;
-use tedge_api::health::send_health_status;
 use tedge_config::system_services::SystemConfig;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::ConfigSettingAccessorStringExt;
+use tedge_config::DataPathSetting;
+use tedge_config::Flag;
 use tedge_config::HttpBindAddressSetting;
 use tedge_config::HttpPortSetting;
+use tedge_config::LockFilesSetting;
 use tedge_config::LogPathSetting;
 use tedge_config::MqttClientHostSetting;
 use tedge_config::MqttClientPortSetting;
@@ -58,6 +60,7 @@ use tedge_config::RunPathSetting;
 use tedge_config::SoftwarePluginDefaultSetting;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::TmpPathSetting;
+use tedge_config::DEFAULT_DATA_PATH;
 use tedge_config::DEFAULT_LOG_PATH;
 use tedge_config::DEFAULT_RUN_PATH;
 use tedge_config::DEFAULT_TMP_PATH;
@@ -68,8 +71,6 @@ use tracing::error;
 use tracing::info;
 use tracing::instrument;
 use tracing::warn;
-
-use std::path::Path;
 
 const SYNC: &str = "sync";
 const SM_PLUGINS: &str = "sm-plugins";
@@ -99,9 +100,11 @@ pub struct SmAgentConfig {
     pub log_dir: PathBuf,
     pub run_dir: PathBuf,
     pub tmp_dir: PathBuf,
+    pub data_dir: PathBuf,
     pub config_location: TEdgeConfigLocation,
     pub download_dir: PathBuf,
     pub http_config: HttpConfig,
+    pub use_lock: Flag,
 }
 
 impl Default for SmAgentConfig {
@@ -150,6 +153,12 @@ impl Default for SmAgentConfig {
 
         let download_dir = PathBuf::from(DEFAULT_TMP_PATH);
 
+        let use_lock = Flag(true);
+
+        let data_dir = PathBuf::from(DEFAULT_DATA_PATH);
+
+        let http_config = HttpConfig::default().with_data_dir(data_dir.clone());
+
         Self {
             errors_topic,
             mqtt_config,
@@ -166,9 +175,11 @@ impl Default for SmAgentConfig {
             log_dir,
             run_dir,
             tmp_dir,
+            data_dir,
             config_location,
             download_dir,
-            http_config: HttpConfig::default(),
+            http_config,
+            use_lock,
         }
     }
 }
@@ -198,13 +209,16 @@ impl SmAgentConfig {
         let tedge_log_dir = PathBuf::from(&format!("{tedge_log_dir}/{AGENT_LOG_PATH}"));
         let tedge_run_dir = tedge_config.query_string(RunPathSetting)?.into();
         let tedge_tmp_dir = tedge_config.query_string(TmpPathSetting)?.into();
+        let tedge_data_dir: PathBuf = tedge_config.query_string(DataPathSetting)?.into();
 
-        let mut http_config = HttpConfig::default();
+        let mut http_config = HttpConfig::default().with_data_dir(tedge_data_dir.clone());
 
         let http_bind_address = tedge_config.query(HttpBindAddressSetting)?;
         http_config = http_config
             .with_port(tedge_config.query(HttpPortSetting)?.0)
             .with_ip_address(http_bind_address.into());
+
+        let use_lock = tedge_config.query(LockFilesSetting)?;
 
         Ok(SmAgentConfig::default()
             .with_sm_home(tedge_config_path)
@@ -214,7 +228,9 @@ impl SmAgentConfig {
             .with_log_directory(tedge_log_dir)
             .with_run_directory(tedge_run_dir)
             .with_tmp_directory(tedge_tmp_dir)
-            .with_http_config(http_config))
+            .with_data_directory(tedge_data_dir)
+            .with_http_config(http_config)
+            .with_use_lock(use_lock))
     }
 
     pub fn with_sm_home(self, sm_home: PathBuf) -> Self {
@@ -254,11 +270,19 @@ impl SmAgentConfig {
         Self { tmp_dir, ..self }
     }
 
+    pub fn with_data_directory(self, data_dir: PathBuf) -> Self {
+        Self { data_dir, ..self }
+    }
+
     pub fn with_http_config(self, http_config: HttpConfig) -> Self {
         Self {
             http_config,
             ..self
         }
+    }
+
+    pub fn with_use_lock(self, use_lock: Flag) -> Self {
+        Self { use_lock, ..self }
     }
 }
 
@@ -267,12 +291,19 @@ pub struct SmAgent {
     config: SmAgentConfig,
     operation_logs: OperationLogs,
     persistence_store: AgentStateRepository,
-    _flock: Flockfile,
+    _flock: Option<Flockfile>,
 }
 
 impl SmAgent {
     pub fn try_new(name: &str, mut config: SmAgentConfig) -> Result<Self, AgentError> {
-        let flock = check_another_instance_is_not_running(name, &config.run_dir)?;
+        let mut flock = None;
+        if config.use_lock.is_set() {
+            flock = Some(check_another_instance_is_not_running(
+                name,
+                &config.run_dir,
+            )?);
+        }
+
         info!("{} starting", &name);
 
         let persistence_store = AgentStateRepository::new(config.sm_home.clone());
@@ -297,6 +328,7 @@ impl SmAgent {
         let config_dir = config_dir.display();
         create_directory_with_user_group(format!("{config_dir}/.agent"), "tedge", "tedge", 0o775)?;
         create_directory_with_user_group(self.config.log_dir.clone(), "tedge", "tedge", 0o775)?;
+        create_directory_with_user_group(self.config.data_dir.clone(), "tedge", "tedge", 0o775)?;
         create_directory_with_user_group(
             self.config.http_config.file_transfer_dir_as_string(),
             "tedge",

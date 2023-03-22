@@ -34,7 +34,17 @@ external_keyfile = "key.pem"
 bind_address = "0.0.0.0"
 
 [tmp]
-path = "/some/value"
+path = "/some/tmp/path"
+
+[logs]
+path = "/some/log/path"
+
+[run]
+path = "/some/run/path"
+
+[data]
+path = "/some/data/path"
+
 "#;
 
     let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
@@ -101,11 +111,27 @@ path = "/some/value"
         FilePath::from("key.pem")
     );
 
-    assert_eq!(config.query(TmpPathSetting)?, FilePath::from("/some/value"));
-
     assert_eq!(
         config.query(MqttBindAddressSetting)?,
         IpAddress::try_from("0.0.0.0").unwrap()
+    );
+
+    assert_eq!(config.query(ServiceTypeSetting)?, "service");
+    assert_eq!(
+        config.query(TmpPathSetting)?,
+        FilePath::from("/some/tmp/path")
+    );
+    assert_eq!(
+        config.query(LogPathSetting)?,
+        FilePath::from("/some/log/path")
+    );
+    assert_eq!(
+        config.query(RunPathSetting)?,
+        FilePath::from("/some/run/path")
+    );
+    assert_eq!(
+        config.query(DataPathSetting)?,
+        FilePath::from("/some/data/path")
     );
 
     Ok(())
@@ -144,6 +170,7 @@ bind_address = "0.0.0.0"
 
     let updated_c8y_url = "other-tenant.cumulocity.com";
     let updated_azure_url = "OtherAzure.azure-devices.net";
+
     let updated_mqtt_port = Port(2345);
     let updated_mqtt_external_port = Port(3456);
     let updated_mqtt_external_bind_address = IpAddress::default();
@@ -152,6 +179,12 @@ bind_address = "0.0.0.0"
     let updated_mqtt_external_certfile = "cert.pem";
     let updated_mqtt_external_keyfile = "key.pem";
     let updated_mqtt_bind_address = IpAddress(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST));
+    let updated_service_type = "systemd".to_string();
+
+    let updated_tmp_path = FilePath::from("some/tmp/path");
+    let updated_log_path = FilePath::from("some/log/path");
+    let updated_run_path = FilePath::from("some/run/path");
+    let updated_data_path = FilePath::from("some/data/path");
 
     config_repo.update_toml(&|config| {
         assert!(config.query_optional(DeviceIdSetting).is_err());
@@ -184,6 +217,8 @@ bind_address = "0.0.0.0"
         assert_eq!(config.query(AzureMapperTimestamp)?, Flag(false));
 
         assert_eq!(config.query(MqttPortSetting)?, Port(1883));
+
+        assert_eq!(config.query(ServiceTypeSetting)?, "service");
 
         config.update(
             C8yUrlSetting,
@@ -220,6 +255,12 @@ bind_address = "0.0.0.0"
             FilePath::from(updated_mqtt_external_keyfile),
         )?;
         config.update(MqttBindAddressSetting, updated_mqtt_bind_address.clone())?;
+        config.update(ServiceTypeSetting, updated_service_type.clone())?;
+        config.update(TmpPathSetting, updated_tmp_path.clone())?;
+        config.update(LogPathSetting, updated_log_path.clone())?;
+        config.update(RunPathSetting, updated_run_path.clone())?;
+        config.update(DataPathSetting, updated_data_path.clone())?;
+
         Ok(())
     })?;
 
@@ -278,6 +319,11 @@ bind_address = "0.0.0.0"
             config.query(MqttBindAddressSetting)?,
             updated_mqtt_bind_address
         );
+        assert_eq!(config.query(ServiceTypeSetting)?, updated_service_type);
+        assert_eq!(config.query(TmpPathSetting)?, updated_tmp_path);
+        assert_eq!(config.query(LogPathSetting)?, updated_log_path);
+        assert_eq!(config.query(RunPathSetting)?, updated_run_path);
+        assert_eq!(config.query(DataPathSetting)?, updated_data_path);
     }
 
     Ok(())
@@ -606,6 +652,16 @@ fn test_parse_config_empty_file() -> Result<(), TEdgeConfigError> {
         config.query(MqttBindAddressSetting)?,
         IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST))
     );
+    assert_eq!(
+        config.query(FirmwareChildUpdateTimeoutSetting)?,
+        Seconds(3600)
+    );
+    assert_eq!(config.query(ServiceTypeSetting)?, "service".to_string());
+    assert_eq!(config.query(TmpPathSetting)?, FilePath::from("/tmp"));
+    assert_eq!(config.query(LogPathSetting)?, FilePath::from("/var/log"));
+    assert_eq!(config.query(RunPathSetting)?, FilePath::from("/run"));
+    assert_eq!(config.query(DataPathSetting)?, FilePath::from("/var/tedge"));
+
     Ok(())
 }
 
@@ -902,12 +958,15 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_tmp_path: FilePath::from("/tmp"),
         default_logs_path: FilePath::from("/var/log"),
         default_run_path: FilePath::from("/run"),
+        default_data_path: FilePath::from("/var/tedge"),
         default_device_type: String::from("test"),
         default_mqtt_client_host: "localhost".to_string(),
         default_mqtt_bind_address: IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST)),
         default_http_bind_address: IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST)),
         default_c8y_smartrest_templates: TemplatesSet::default(),
         default_firmware_child_update_timeout: Seconds(3600),
+        default_service_type: String::from("service"),
+        default_lock_files: Flag(true),
     }
 }
 

@@ -41,7 +41,13 @@ pub(crate) struct TEdgeConfigDto {
     pub(crate) run: PathConfigDto,
 
     #[serde(default)]
+    pub(crate) data: PathConfigDto,
+
+    #[serde(default)]
     pub(crate) firmware: FirmwareConfigDto,
+
+    #[serde(default)]
+    pub(crate) service: ServiceTypeConfigDto,
 }
 
 /// Represents the device specific configurations defined in the [device] section
@@ -140,9 +146,18 @@ pub(crate) struct SoftwareConfigDto {
 pub(crate) struct PathConfigDto {
     #[serde(rename = "path")]
     pub(crate) dir_path: Option<FilePath>,
+
+    /// Boolean whether create lock file or not.
+    pub(crate) lock_files: Option<bool>,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub(crate) struct FirmwareConfigDto {
     pub(crate) child_update_timeout: Option<u64>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub(crate) struct ServiceTypeConfigDto {
+    #[serde(rename = "type")]
+    pub(crate) service_type: Option<String>,
 }

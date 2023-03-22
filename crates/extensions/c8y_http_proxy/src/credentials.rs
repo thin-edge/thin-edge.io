@@ -5,6 +5,7 @@ use mqtt_channel::Connection;
 use mqtt_channel::PubChannel;
 use mqtt_channel::StreamExt;
 use mqtt_channel::Topic;
+use mqtt_channel::TopicFilter;
 use std::time::Duration;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::Sequential;
@@ -27,7 +28,9 @@ impl C8YJwtRetriever {
     pub fn builder(
         mqtt_config: mqtt_channel::Config,
     ) -> ServerActorBuilder<C8YJwtRetriever, Sequential> {
-        let server = C8YJwtRetriever { mqtt_config };
+        let server = C8YJwtRetriever {
+            mqtt_config: mqtt_config.with_subscriptions(TopicFilter::new_unchecked("c8y/s/dat")),
+        };
         ServerActorBuilder::new(server, &ServerConfig::default(), Sequential)
     }
 }

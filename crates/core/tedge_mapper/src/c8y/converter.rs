@@ -37,6 +37,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
+use tedge_api::topic::get_child_id_from_measurement_topic;
 use tedge_api::topic::RequestTopic;
 use tedge_api::topic::ResponseTopic;
 use tedge_api::Auth;
@@ -86,6 +87,7 @@ pub struct CumulocityDeviceInfo {
     pub device_name: String,
     pub device_type: String,
     pub operations: Operations,
+    pub service_type: String,
 }
 
 #[derive(Debug)]
@@ -104,6 +106,7 @@ where
     pub cfg_dir: PathBuf,
     pub children: HashMap<String, Operations>,
     mqtt_publisher: mpsc::UnboundedSender<Message>,
+    pub service_type: String,
 }
 
 impl<Proxy> CumulocityConverter<Proxy>
@@ -131,6 +134,7 @@ where
         let device_name = device_info.device_name;
         let device_type = device_info.device_type;
         let operations = device_info.operations;
+        let service_type = device_info.service_type;
 
         Ok(CumulocityConverter {
             size_threshold,
@@ -144,6 +148,7 @@ where
             cfg_dir: cfg_dir.to_path_buf(),
             children,
             mqtt_publisher,
+            service_type,
         })
     }
 
@@ -158,6 +163,7 @@ where
         cfg_dir: PathBuf,
         mapper_config: MapperConfig,
         mqtt_publisher: mpsc::UnboundedSender<Message>,
+        service_type: String,
     ) -> Result<Self, CumulocityMapperError> {
         let alarm_converter = AlarmConverter::new();
 
@@ -181,6 +187,7 @@ where
             cfg_dir,
             children,
             mqtt_publisher,
+            service_type,
         })
     }
 
@@ -190,7 +197,7 @@ where
     ) -> Result<Vec<Message>, ConversionError> {
         let mut mqtt_messages: Vec<Message> = Vec::new();
 
-        let maybe_child_id = get_child_id_from_measurement_topic(&input.topic.name)?;
+        let maybe_child_id = get_child_id_from_measurement_topic(&input.topic.name);
         let c8y_json_payload = match maybe_child_id {
             Some(child_id) => {
                 // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
@@ -329,7 +336,11 @@ where
             );
         }
 
-        let mut message = convert_health_status_message(message, self.device_name.clone());
+        let mut message = convert_health_status_message(
+            message,
+            self.device_name.clone(),
+            self.service_type.clone(),
+        );
         mqtt_messages.append(&mut message);
         Ok(mqtt_messages)
     }
@@ -1023,15 +1034,6 @@ fn get_inventory_fragments(
             Ok(json_fragment)
         }
         Err(_) => Ok(json_fragment),
-    }
-}
-
-pub fn get_child_id_from_measurement_topic(topic: &str) -> Result<Option<String>, ConversionError> {
-    match topic.strip_prefix("tedge/measurements/").map(String::from) {
-        Some(maybe_id) if maybe_id.is_empty() => {
-            Err(ConversionError::InvalidChildId { id: maybe_id })
-        }
-        option => Ok(option),
     }
 }
 

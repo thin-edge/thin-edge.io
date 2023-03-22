@@ -27,10 +27,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_test_utils::fs::TempTedgeDir;
-use test_case::test_case;
 use tokio::task::JoinHandle;
 
-use super::converter::get_child_id_from_measurement_topic;
 use super::converter::CumulocityConverter;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
@@ -1227,22 +1225,6 @@ async fn convert_two_thin_edge_json_messages_given_different_child_id() {
     );
 }
 
-#[test_case("tedge/measurements/test", Some("test".to_string()); "valid child id")]
-#[test_case("tedge/measurements/", None; "returns an error (empty value)")]
-#[test_case("tedge/measurements", None; "invalid child id (parent topic)")]
-#[test_case("foo/bar", None; "invalid child id (invalid topic)")]
-fn extract_child_id(in_topic: &str, expected_child_id: Option<String>) {
-    match get_child_id_from_measurement_topic(in_topic) {
-        Ok(maybe_id) => assert_eq!(maybe_id, expected_child_id),
-        Err(crate::core::error::ConversionError::InvalidChildId { id }) => {
-            assert_eq!(id, "".to_string())
-        }
-        _ => {
-            panic!("Unexpected error type")
-        }
-    }
-}
-
 #[tokio::test]
 #[serial]
 async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
@@ -1740,7 +1722,7 @@ async fn translate_service_monitor_message_for_child_device() {
 
     let expected_service_monitor_smart_rest_message = Message::new(
         &Topic::new_unchecked("c8y/s/us/child1"),
-        r#"102,test-device_child1_child-service-c8y,thin-edge.io,child-service-c8y,up"#,
+        r#"102,test-device_child1_child-service-c8y,"thin-edge.io",child-service-c8y,"up""#,
     );
 
     // Test the first output messages contains SmartREST and C8Y JSON.
@@ -1767,7 +1749,7 @@ async fn translate_service_monitor_message_for_thin_edge_device() {
 
     let expected_service_monitor_smart_rest_message = Message::new(
         &Topic::new_unchecked("c8y/s/us"),
-        r#"102,test-device_test-tedge-mapper-c8y,thin-edge.io,test-tedge-mapper-c8y,up"#,
+        r#"102,test-device_test-tedge-mapper-c8y,"thin-edge.io",test-tedge-mapper-c8y,"up""#,
     );
 
     // Test the output messages contains SmartREST and C8Y JSON.
@@ -1890,6 +1872,7 @@ async fn create_c8y_converter(
     let device_type = "test-device-type".into();
     let operations = Operations::default();
     let http_proxy = FakeC8YHttpProxy {};
+    let service_type = "service".into();
 
     let tmp_dir = TempTedgeDir::new();
 
@@ -1906,6 +1889,7 @@ async fn create_c8y_converter(
         ops_dir.path().to_path_buf(),
         mapper_config,
         mqtt_client.published,
+        service_type,
     )
     .unwrap();
     (tmp_dir, converter)

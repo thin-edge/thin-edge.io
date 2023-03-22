@@ -1,6 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Allow user to use a more modern (locally) installed bash
+# version by adding it to their PATH variable.
 
-set -euo pipefail
+# Note: Don't use the -u option (for undefined variables), as the handling
+# of empty arrays across bash versions is very inconsistent (e.g. Bash v3),
+# and we rely on this to add optional arguments in this script. Bash v3 is still
+# the default for some reason on MacOS as of 13.2.1 (Ventura).
+# References: https://stackoverflow.com/questions/7577052/bash-empty-array-expansion-with-set-u
+set -eo pipefail
 
 help() {
   cat <<EOF
@@ -19,7 +26,9 @@ Usage:
 
 Args:
     ARCH     RUST target architecture which can be a value listed from the command 'rustc --print target-list'
-             If left blank then the TARGET will be set to that of the machine building the packages.
+             If left blank then the TARGET will be set to the linux musl variant appropriate for your machine.
+             For example, if building on MacOS M1, 'aarch64-unknown-linux-musl' will be selected, for linux x86_64,
+             'x86_64-unknown-linux-musl' will be selected.
 
     Example ARCH (target) values:
 
@@ -44,13 +53,10 @@ Env:
 
 Examples:
     $0
-    # Build for the current CPU architecture
+    # Build for the linux/musl target appropriate for the current CPU architecture
 
     $0 aarch64-unknown-linux-musl
     # Build for arm64 linux (musl)
-
-    $0 aarch64-unknown-linux-gnu
-    # Build for arm64 linux (gnu lib)
 
     $0 x86_64-unknown-linux-musl
     # Build for x86_64 linux (musl)
@@ -60,6 +66,9 @@ Examples:
 
     $0 arm-unknown-linux-musleabihf
     # Build for armv6 (armhf) linux (musl)
+
+    $0 aarch64-unknown-linux-gnu
+    # Build for arm64 linux (gnu lib)
 
     export GIT_SEMVER=0.9.0-experiment-0.1
     $0
@@ -91,7 +100,11 @@ do
     esac
     shift
 done
-set -- "${REST_ARGS[@]}"
+
+# Only set if rest arguments are defined
+if [ ${#REST_ARGS[@]} -gt 0 ]; then
+    set -- "${REST_ARGS[@]}"
+fi
 
 if [ $# -eq 1 ]; then
     ARCH="$1"
@@ -141,9 +154,37 @@ if ! python3 -c 'import ziglang' &>/dev/null; then
     pip3 install ziglang
 fi
 
+if [ -z "$ARCH" ]; then
+    # If no target has been given, choose the target triple based on the
+    # host's architecture, however use the musl builds by default!
+    HOST_ARCH="$(uname -m || true)"
+    case "$HOST_ARCH" in
+        x86_64*|amd64*)
+            ARCH=x86_64-unknown-linux-musl
+            ;;
+
+        aarch64|arm64)
+            ARCH=aarch64-unknown-linux-musl
+            ;;
+
+        armv7*)
+            ARCH=armv7-unknown-linux-musleabihf
+            ;;
+
+        armv6*)
+            ARCH=arm-unknown-linux-musleabihf
+            ;;
+    esac
+fi
+
 if [ -n "$ARCH" ]; then
+    echo "Using target: $ARCH"
     TARGET+=("--target=$ARCH")
     rustup target add "$ARCH"
+else
+    # Note: This will build the artifacts under target/release and not target/<triple>/release !
+    HOST_TARGET=$(rustc --version --verbose | grep host: | cut -d' ' -f2)
+    echo "Using host target: $HOST_TARGET"
 fi
 
 # Custom options for different targets

@@ -51,6 +51,7 @@ pub struct ConfigDownloadManager {
     local_http_host: String,
     config_dir: PathBuf,
     tmp_dir: PathBuf,
+    file_transfer_dir: PathBuf,
     pub operation_timer: Timers<(String, String), ActiveOperationState>,
 }
 
@@ -62,6 +63,7 @@ impl ConfigDownloadManager {
         local_http_host: String,
         config_dir: PathBuf,
         tmp_dir: PathBuf,
+        file_transfer_dir: PathBuf,
     ) -> Self {
         ConfigDownloadManager {
             tedge_device_id,
@@ -70,6 +72,7 @@ impl ConfigDownloadManager {
             local_http_host,
             config_dir,
             tmp_dir,
+            file_transfer_dir,
             operation_timer: Timers::new(),
         }
     }
@@ -175,8 +178,7 @@ impl ConfigDownloadManager {
                     .download_config_file(
                         smartrest_request.url.as_str(),
                         config_management
-                            .file_transfer_repository_full_path()
-                            .into(),
+                            .file_transfer_repository_full_path(self.file_transfer_dir.clone()),
                         PermissionEntry::new(None, None, None), //no need to change ownership of downloaded file
                     )
                     .await
@@ -255,7 +257,10 @@ impl ConfigDownloadManager {
                     self.operation_timer.stop_timer(operation_key);
 
                     // Cleanup the downloaded file after the operation completes
-                    try_cleanup_config_file_from_file_transfer_repositoy(config_response);
+                    try_cleanup_config_file_from_file_transfer_repositoy(
+                        self.file_transfer_dir.clone(),
+                        config_response,
+                    );
                     let successful_status_payload =
                         DownloadConfigFileStatusMessage::status_successful(None)?;
                     mapped_responses
@@ -265,7 +270,10 @@ impl ConfigDownloadManager {
                     self.operation_timer.stop_timer(operation_key);
 
                     // Cleanup the downloaded file after the operation completes
-                    try_cleanup_config_file_from_file_transfer_repositoy(config_response);
+                    try_cleanup_config_file_from_file_transfer_repositoy(
+                        self.file_transfer_dir.clone(),
+                        config_response,
+                    );
                     if let Some(error_message) = &child_device_payload.reason {
                         let failed_status_payload =
                             DownloadConfigFileStatusMessage::status_failed(error_message.clone())?;

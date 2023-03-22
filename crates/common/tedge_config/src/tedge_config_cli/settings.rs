@@ -457,6 +457,33 @@ impl ConfigSetting for RunPathSetting {
     type Value = FilePath;
 }
 
+pub struct DataPathSetting;
+
+impl ConfigSetting for DataPathSetting {
+    const KEY: &'static str = "data.path";
+
+    const DESCRIPTION: &'static str = concat!(
+        "The directory path to be used to store data like cached files, runtime metadata etc.",
+        "Example: /var/tedge"
+    );
+
+    type Value = FilePath;
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct LockFilesSetting;
+
+impl ConfigSetting for LockFilesSetting {
+    const KEY: &'static str = "run.lock_files";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Boolean whether lock files should be created or not.",
+        "Example: true"
+    );
+
+    type Value = Flag;
+}
+
 pub struct FirmwareChildUpdateTimeoutSetting;
 
 impl ConfigSetting for FirmwareChildUpdateTimeoutSetting {
@@ -468,4 +495,17 @@ impl ConfigSetting for FirmwareChildUpdateTimeoutSetting {
     );
 
     type Value = Seconds;
+}
+
+pub struct ServiceTypeSetting;
+
+impl ConfigSetting for ServiceTypeSetting {
+    const KEY: &'static str = "service.type";
+
+    const DESCRIPTION: &'static str = concat!(
+        "The thin-edge.io service's service type",
+        "Example: systemd"
+    );
+
+    type Value = String;
 }

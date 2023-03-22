@@ -203,8 +203,9 @@ async fn spawn_config_manager(
     let config = ConfigManagerConfig::new(
         tedge_temp_dir.to_path_buf(),
         tedge_temp_dir.to_path_buf(),
+        tedge_temp_dir.to_path_buf(),
         device_id.to_string(),
-        tedge_host.to_string().try_into().unwrap(),
+        tedge_host.to_string(),
         mqtt_port,
         c8y_host.to_string().try_into().unwrap(),
         tedge_host.to_string().try_into().unwrap(),

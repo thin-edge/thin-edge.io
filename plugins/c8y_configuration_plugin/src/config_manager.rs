@@ -40,7 +40,7 @@ use tracing::error;
 use tracing::info;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-configuration-plugin.toml";
-pub const DEFAULT_OPERATION_DIR_NAME: &str = "c8y/";
+pub const DEFAULT_OPERATION_DIR_NAME: &str = "c8y";
 pub const DEFAULT_PLUGIN_CONFIG_TYPE: &str = "c8y-configuration-plugin";
 pub const CONFIG_CHANGE_TOPIC: &str = "tedge/configuration_change";
 pub const DEFAULT_OPERATION_TIMEOUT: Duration = Duration::from_secs(10); //TODO: Make this configurable?
@@ -64,6 +64,7 @@ pub enum ActiveOperationState {
 }
 
 impl ConfigManager {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         tedge_device_id: impl ToString,
         mqtt_host: String,
@@ -72,6 +73,7 @@ impl ConfigManager {
         local_http_host: impl ToString,
         tmp_dir: PathBuf,
         config_dir: PathBuf,
+        file_transfer_dir: PathBuf,
     ) -> Result<Self, anyhow::Error> {
         // `config_file_dir` expands to: /etc/tedge/c8y or `config-dir`/c8y
         let config_file_dir = config_dir.join(DEFAULT_OPERATION_DIR_NAME);
@@ -104,6 +106,7 @@ impl ConfigManager {
             http_client.clone(),
             local_http_host.to_string(),
             config_dir.clone(),
+            file_transfer_dir.clone(),
         );
 
         let config_download_manager = ConfigDownloadManager::new(
@@ -113,6 +116,7 @@ impl ConfigManager {
             local_http_host.to_string(),
             config_dir.clone(),
             tmp_dir.clone(),
+            file_transfer_dir.clone(),
         );
 
         let mut config_manager = ConfigManager {

@@ -432,6 +432,7 @@ dependencies = [
  "tedge_actors",
  "tedge_config",
  "tedge_file_system_ext",
+ "tedge_health_ext",
  "tedge_http_ext",
  "tedge_mqtt_ext",
  "tedge_signal_ext",
@@ -3633,6 +3634,22 @@ dependencies = [
  "tedge_utils",
  "tokio",
  "try-traits",
+]
+
+[[package]]
+name = "tedge_health_ext"
+version = "0.9.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "log",
+ "serde",
+ "serde_json",
+ "tedge_actors",
+ "tedge_api",
+ "tedge_mqtt_ext",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]

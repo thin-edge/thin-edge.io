@@ -775,6 +775,48 @@ impl ConfigSettingAccessor<RunPathSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<DataPathSetting> for TEdgeConfig {
+    fn query(&self, _setting: DataPathSetting) -> ConfigSettingResult<FilePath> {
+        Ok(self
+            .data
+            .data
+            .dir_path
+            .clone()
+            .unwrap_or_else(|| self.config_defaults.default_data_path.clone()))
+    }
+
+    fn update(&mut self, _setting: DataPathSetting, value: FilePath) -> ConfigSettingResult<()> {
+        self.data.data.dir_path = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: DataPathSetting) -> ConfigSettingResult<()> {
+        self.data.data.dir_path = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<LockFilesSetting> for TEdgeConfig {
+    fn query(&self, _setting: LockFilesSetting) -> ConfigSettingResult<Flag> {
+        Ok(self
+            .data
+            .run
+            .lock_files
+            .map(Flag)
+            .unwrap_or_else(|| self.config_defaults.default_lock_files.clone()))
+    }
+
+    fn update(&mut self, _setting: LockFilesSetting, value: Flag) -> ConfigSettingResult<()> {
+        self.data.run.lock_files = Some(value.into());
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: LockFilesSetting) -> ConfigSettingResult<()> {
+        self.data.run.lock_files = None;
+        Ok(())
+    }
+}
+
 impl ConfigSettingAccessor<FirmwareChildUpdateTimeoutSetting> for TEdgeConfig {
     fn query(&self, _setting: FirmwareChildUpdateTimeoutSetting) -> ConfigSettingResult<Seconds> {
         Ok(self
@@ -800,6 +842,27 @@ impl ConfigSettingAccessor<FirmwareChildUpdateTimeoutSetting> for TEdgeConfig {
                 .default_firmware_child_update_timeout
                 .into(),
         );
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<ServiceTypeSetting> for TEdgeConfig {
+    fn query(&self, _setting: ServiceTypeSetting) -> ConfigSettingResult<String> {
+        Ok(self
+            .data
+            .service
+            .service_type
+            .clone()
+            .unwrap_or_else(|| self.config_defaults.default_service_type.clone()))
+    }
+
+    fn update(&mut self, _setting: ServiceTypeSetting, value: String) -> ConfigSettingResult<()> {
+        self.data.service.service_type = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: ServiceTypeSetting) -> ConfigSettingResult<()> {
+        self.data.service.service_type = Some(self.config_defaults.default_service_type.clone());
         Ok(())
     }
 }

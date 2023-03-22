@@ -31,6 +31,8 @@ warning-policy = "warn"
 
 [preprocessor]
 
+[preprocessor.cmdrun]
+
 [preprocessor.mermaid]
 command = "mdbook-mermaid"
 
