@@ -77,9 +77,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Connect other actor instances to firmware manager actor
     firmware_actor.with_c8y_http_proxy(&mut c8y_http_proxy_actor)?;
-    // TODO: Question. What's the difference?
     firmware_actor.set_connection(&mut mqtt_actor);
-    // firmware_actor.with_mqtt_connection(&mut mqtt_actor)?;
     firmware_actor.set_connection(&mut timer_actor);
 
     //Instantiate health monitor actor

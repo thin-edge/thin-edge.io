@@ -11,8 +11,8 @@ use crate::operation::OperationKey;
 use actor::FirmwareInput;
 use actor::FirmwareManagerActor;
 use actor::FirmwareManagerMessageBox;
+use actor::OperationSetTimeout;
 use actor::OperationTimeout;
-use actor::OperationTimer;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
@@ -69,23 +69,6 @@ impl FirmwareManagerBuilder {
         http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
     ) -> Result<(), LinkError> {
         self.c8y_http_proxy = Some(C8YHttpProxy::new("FirmwareManager => C8Y", http));
-        Ok(())
-    }
-
-    /// Connect this config manager instance to some mqtt connection provider
-    pub fn with_mqtt_connection<T>(&mut self, mqtt: &mut T) -> Result<(), LinkError>
-    where
-        T: ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
-    {
-        mqtt.add_peer(self);
-        Ok(())
-    }
-
-    pub fn with_timer(
-        &mut self,
-        timer_builder: &mut impl ServiceProvider<OperationTimer, OperationTimeout, NoConfig>,
-    ) -> Result<(), LinkError> {
-        timer_builder.add_peer(self);
         Ok(())
     }
 }

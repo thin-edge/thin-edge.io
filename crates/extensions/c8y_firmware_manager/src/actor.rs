@@ -45,11 +45,11 @@ use crate::operation::ActiveOperationState;
 use crate::operation::FirmwareOperationEntry;
 use crate::operation::OperationKey;
 
-pub type OperationTimer = SetTimeout<OperationKey>;
+pub type OperationSetTimeout = SetTimeout<OperationKey>;
 pub type OperationTimeout = Timeout<OperationKey>;
 
 fan_in_message_type!(FirmwareInput[MqttMessage, OperationTimeout] : Debug);
-fan_in_message_type!(FirmwareOutput[MqttMessage, OperationTimer] : Debug);
+fan_in_message_type!(FirmwareOutput[MqttMessage, OperationSetTimeout] : Debug);
 
 pub struct FirmwareManagerActor {
     config: FirmwareManagerConfig,
@@ -70,7 +70,6 @@ impl Actor for FirmwareManagerActor {
         // TODO: Do we really need to send 500 from each actor?
         self.get_pending_operations_from_cloud(&mut message_box)
             .await?;
-        self.send_health_status_message(&mut message_box).await?;
 
         info!("Ready to serve the firmware request.");
 
@@ -293,9 +292,13 @@ impl FirmwareManagerActor {
             .await?;
 
         let operation_key = OperationKey::new(child_id, operation_id);
-        self.register_new_entry_to_active_operations(operation_key.clone());
+        self.active_child_ops
+            .insert(operation_key.clone(), ActiveOperationState::Pending);
 
-        self.start_timer(operation_key, message_box).await?;
+        // Start timer
+        message_box
+            .send(SetTimeout::new(self.config.timeout_sec, operation_key).into())
+            .await?;
 
         Ok(())
     }
@@ -388,7 +391,9 @@ impl FirmwareManagerActor {
             }
             OperationStatus::Executing => {
                 // Starting timer again means extending the timer.
-                self.start_timer(operation_key, message_box).await?;
+                message_box
+                    .send(SetTimeout::new(self.config.timeout_sec, operation_key).into())
+                    .await?;
             }
         }
 
@@ -502,8 +507,13 @@ impl FirmwareManagerActor {
                 operation_entry.overwrite_file(&firmware_dir_path)?;
                 self.publish_firmware_update_request(operation_entry, message_box)
                     .await?;
-                self.register_new_entry_to_active_operations(operation_key.clone());
-                self.start_timer(operation_key, message_box).await?
+                // Add operation to hashmap
+                self.active_child_ops
+                    .insert(operation_key.clone(), ActiveOperationState::Pending);
+                // Start timer
+                message_box
+                    .send(SetTimeout::new(self.config.timeout_sec, operation_key).into())
+                    .await?;
             }
         }
         Ok(())
@@ -602,11 +612,6 @@ impl FirmwareManagerActor {
         Ok(())
     }
 
-    fn register_new_entry_to_active_operations(&mut self, operation_key: OperationKey) {
-        self.active_child_ops
-            .insert(operation_key, ActiveOperationState::Pending);
-    }
-
     fn remove_entry_from_active_operations(
         &mut self,
         operation_key: &OperationKey,
@@ -616,34 +621,6 @@ impl FirmwareManagerActor {
         } else {
             ActiveOperationState::Pending
         }
-    }
-
-    async fn start_timer(
-        &mut self,
-        operation_key: OperationKey,
-        message_box: &mut FirmwareManagerMessageBox,
-    ) -> Result<(), ChannelError> {
-        message_box
-            .send(SetTimeout::new(self.config.timeout_sec, operation_key).into())
-            .await
-    }
-
-    async fn get_pending_operations_from_cloud(
-        &mut self,
-        message_box: &mut FirmwareManagerMessageBox,
-    ) -> Result<(), FirmwareManagementError> {
-        let message = MqttMessage::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
-        message_box.send(message.into()).await?;
-        Ok(())
-    }
-
-    async fn send_health_status_message(
-        &mut self,
-        message_box: &mut FirmwareManagerMessageBox,
-    ) -> Result<(), FirmwareManagementError> {
-        let message = health_status_up_message("c8y-firmware-plugin"); // Question: isn't it just one process?
-        message_box.send(message.into()).await?;
-        Ok(())
     }
 
     /// The symlink path should be <tedge-data-dir>/file-transfer/<child-id>/firmware_update/<file_cache_key>
@@ -665,6 +642,26 @@ impl FirmwareManagerActor {
             unix_fs::symlink(original_file_path, &symlink_path)?;
         }
         Ok(symlink_path)
+    }
+
+    // TODO: I don't know if it is required still.
+    async fn send_health_status_message(
+        &mut self,
+        message_box: &mut FirmwareManagerMessageBox,
+    ) -> Result<(), FirmwareManagementError> {
+        let message = health_status_up_message("c8y-firmware-plugin"); // Question: isn't it just one process?
+        message_box.send(message.into()).await?;
+        Ok(())
+    }
+
+    // Candidate to be removed since another actor should be in charge of this.
+    async fn get_pending_operations_from_cloud(
+        &mut self,
+        message_box: &mut FirmwareManagerMessageBox,
+    ) -> Result<(), FirmwareManagementError> {
+        let message = MqttMessage::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
+        message_box.send(message.into()).await?;
+        Ok(())
     }
 }
 
@@ -693,7 +690,7 @@ impl FirmwareManagerMessageBox {
     async fn send(&mut self, message: FirmwareOutput) -> Result<(), ChannelError> {
         match message {
             FirmwareOutput::MqttMessage(message) => self.mqtt_publisher.send(message).await,
-            FirmwareOutput::OperationTimer(message) => self.timer_sender.send(message).await,
+            FirmwareOutput::OperationSetTimeout(message) => self.timer_sender.send(message).await,
         }
     }
 }
@@ -715,7 +712,7 @@ impl ReceiveMessages<FirmwareInput> for FirmwareManagerMessageBox {
 
 impl MessageBox for FirmwareManagerMessageBox {
     type Input = FirmwareInput;
-    type Output = MqttMessage;
+    type Output = FirmwareOutput;
 
     fn name(&self) -> &str {
         "C8Y-Firmware-Manager"

@@ -65,3 +65,43 @@ pub enum ActiveOperationState {
     Pending,
     Executing,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use tedge_test_utils::fs::TempTedgeDir;
+
+    #[test]
+    fn read_entry_from_file() {
+        let op_id = "op-id";
+        let content = json!({
+          "operation_id": op_id,
+          "child_id": "child-id",
+          "name": "fw-name",
+          "version": "fw-version",
+          "server_url": "server-url",
+          "file_transfer_url": "file-transfer-url",
+          "sha256": "abcd1234",
+          "attempt": 1
+        })
+        .to_string();
+
+        let ttd = TempTedgeDir::new();
+        ttd.dir("firmware").file(op_id).with_raw_content(&content);
+        let file_path = ttd.path().join("firmware").join(op_id);
+
+        let entry = FirmwareOperationEntry::read_from_file(&file_path).unwrap();
+        let expected_entry = FirmwareOperationEntry {
+            operation_id: "op-id".to_string(),
+            child_id: "child-id".to_string(),
+            name: "fw-name".to_string(),
+            version: "fw-version".to_string(),
+            server_url: "server-url".to_string(),
+            file_transfer_url: "file-transfer-url".to_string(),
+            sha256: "abcd1234".to_string(),
+            attempt: 1,
+        };
+        assert_eq!(entry, expected_entry);
+    }
+}
