@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use crate::c8y::converter::CumulocityConverter;
 use crate::c8y::converter::CumulocityDeviceInfo;
-use crate::core::component::TEdgeComponent;
+use tedge_mapper_core::component::TEdgeComponent;
 use crate::core::converter::make_valid_topic_or_panic;
 use crate::core::converter::MapperConfig;
 use crate::core::mapper::mqtt_config;

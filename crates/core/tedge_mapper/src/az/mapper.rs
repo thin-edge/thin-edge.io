@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::az::converter::AzureConverter;
-use crate::core::component::TEdgeComponent;
+use tedge_mapper_core::component::TEdgeComponent;
 use crate::core::mapper::create_mapper;
 use crate::core::size_threshold::SizeThreshold;
 

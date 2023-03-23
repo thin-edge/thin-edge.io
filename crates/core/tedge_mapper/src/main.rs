@@ -1,19 +1,18 @@
 use std::fmt;
 use std::path::PathBuf;
 
-use crate::aws::mapper::AwsMapper;
 use crate::az::mapper::AzureMapper;
 use crate::c8y::mapper::CumulocityMapper;
 use crate::collectd::mapper::CollectdMapper;
-use crate::core::component::TEdgeComponent;
+use tedge_mapper_core::component::TEdgeComponent;
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_config::*;
+use aws_mapper_ext::mapper::AwsMapper;
 
-mod aws;
 mod az;
 mod c8y;
 mod collectd;
@@ -22,7 +21,7 @@ mod core;
 fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     match component_name {
         MapperName::Az => Box::new(AzureMapper::new()),
-        MapperName::Aws => Box::new(AwsMapper),
+        MapperName::Aws => Box::new(AwsMapper::new()),
         MapperName::Collectd => Box::new(CollectdMapper::new()),
         MapperName::C8y => Box::new(CumulocityMapper::new()),
     }
