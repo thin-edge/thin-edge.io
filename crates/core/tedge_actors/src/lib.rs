@@ -11,13 +11,13 @@
 //! - output messages that the actor produces and sends to its peers.
 //!
 //! ```
-//! # use crate::tedge_actors::{Actor, RuntimeError, MessageBox, MessageReceiver, RuntimeRequest, SimpleMessageBox};
+//! # use crate::tedge_actors::{Actor, RuntimeError, MessageReceiver, RuntimeRequest, SimpleMessageBox};
 //! # use async_trait::async_trait;
 //! #
 //! /// State of the calculator actor
-//! #[derive(Default)]
 //! struct Calculator {
 //!     state: i64,
+//!     messages: SimpleMessageBox<Operation, Update>,
 //! }
 //!
 //! /// Input messages of the calculator actor
@@ -46,14 +46,13 @@
 //!     // However, this actor has no such needs: the input messages
 //!     // are processed independently of their producers
 //!     // and the output messages are sent independently of their consumers.
-//!     type MessageBox = SimpleMessageBox<Operation, Update>;
 //!
 //!     fn name(&self) -> &str {
 //!         "Calculator"
 //!     }
 //!
-//!     async fn run(mut self, mut messages: Self::MessageBox)-> Result<(), RuntimeError>  {
-//!         while let Some(op) = messages.recv().await {
+//!     async fn run(mut self)-> Result<(), RuntimeError>  {
+//!         while let Some(op) = self.messages.recv().await {
 //!             // Process in turn each input message
 //!             let from = self.state;
 //!             let to = match op {
@@ -65,7 +64,7 @@
 //!             self.state = to;
 //!
 //!             // Send output messages
-//!             messages.send(Update{from,to}).await?
+//!             self.messages.send(Update{from,to}).await?
 //!         }
 //!         Ok(())
 //!     }
@@ -94,7 +93,7 @@
 //! - receive output messages sent by the actor.
 //!
 //! ```
-//! # use crate::tedge_actors::{Actor, ChannelError, MessageBox, MessageReceiver, SimpleMessageBox};
+//! # use crate::tedge_actors::{Actor, ChannelError, MessageReceiver, SimpleMessageBox};
 //! # use crate::tedge_actors::examples::calculator::*;
 //! #
 //! # #[tokio::main]
@@ -108,8 +107,8 @@
 //! let actor_box = actor_box_builder.build();
 //!
 //! // The actor is then spawn in the background with its message box.
-//! let actor = Calculator::default();
-//! tokio::spawn(actor.run(actor_box));
+//! let actor = Calculator::new(actor_box);
+//! tokio::spawn(actor.run());
 //!
 //! // One can then interact with the actor
 //! test_box.send(Operation::Add(4)).await.expect("message sent");

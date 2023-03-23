@@ -29,12 +29,12 @@ impl Server for SleepService {
 
 async fn spawn_sleep_service() -> SimpleMessageBox<(ClientId, u64), (ClientId, u64)> {
     let service = SleepService;
-    let actor = ServerActor::new(service);
     let mut box_builder = SimpleMessageBoxBuilder::new("test", 16);
     let handle = box_builder.new_client_box(NoConfig);
     let messages = box_builder.build();
+    let actor = ServerActor::new(service, messages);
 
-    tokio::spawn(actor.run(messages));
+    tokio::spawn(actor.run());
 
     handle
 }
@@ -43,15 +43,15 @@ async fn spawn_concurrent_sleep_service(
     max_concurrency: usize,
 ) -> SimpleMessageBox<(ClientId, u64), (ClientId, u64)> {
     let service = SleepService;
-    let actor = ConcurrentServerActor::new(service);
-    let mut box_builder = SimpleMessageBoxBuilder::new(actor.name(), 16);
+    let mut box_builder = SimpleMessageBoxBuilder::new(service.name(), 16);
     let mut handle_builder = SimpleMessageBoxBuilder::new("handle", 16);
     box_builder.add_peer(&mut handle_builder);
 
     let handle = handle_builder.build();
     let messages = ConcurrentServerMessageBox::new(max_concurrency, box_builder.build());
+    let actor = ConcurrentServerActor::new(service, messages);
 
-    tokio::spawn(actor.run(messages));
+    tokio::spawn(actor.run());
 
     handle
 }

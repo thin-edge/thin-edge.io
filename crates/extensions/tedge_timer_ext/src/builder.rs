@@ -5,7 +5,6 @@ use crate::Timeout;
 use async_trait::async_trait;
 use std::convert::Infallible;
 use std::marker::PhantomData;
-use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
@@ -30,17 +29,16 @@ impl Default for TimerActorBuilder {
     }
 }
 
-impl Builder<(TimerActor, <TimerActor as Actor>::MessageBox)> for TimerActorBuilder {
+impl Builder<TimerActor> for TimerActorBuilder {
     type Error = Infallible;
 
-    fn try_build(self) -> Result<(TimerActor, <TimerActor as Actor>::MessageBox), Self::Error> {
+    fn try_build(self) -> Result<TimerActor, Self::Error> {
         Ok(self.build())
     }
 
-    fn build(self) -> (TimerActor, <TimerActor as Actor>::MessageBox) {
-        let actor = TimerActor::default();
+    fn build(self) -> TimerActor {
         let actor_box = self.box_builder.build();
-        (actor, actor_box)
+        TimerActor::new(actor_box)
     }
 }
 

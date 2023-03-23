@@ -1,5 +1,6 @@
 use anyhow::Result;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
+use c8y_http_proxy::C8YHttpConfig;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use c8y_log_manager::LogManagerBuilder;
 use c8y_log_manager::LogManagerConfig;
@@ -13,13 +14,16 @@ use tedge_actors::Runtime;
 use tedge_actors::ServiceConsumer;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
+use tedge_config::C8yUrlSetting;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
+use tedge_config::DeviceIdSetting;
 use tedge_config::LogPathSetting;
 use tedge_config::MqttClientHostSetting;
 use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
+use tedge_config::TmpPathSetting;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_health_ext::HealthMonitorBuilder;
@@ -106,15 +110,23 @@ async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     let base_mqtt_config = mqtt_config(&tedge_config)?;
     let mqtt_config = health_actor
         .set_init_and_last_will(base_mqtt_config.clone().with_session_name(C8Y_LOG_PLUGIN));
-    let c8y_http_config = (&tedge_config).try_into()?;
+
+    let c8y_host = tedge_config.query(C8yUrlSetting)?.into();
+    let device_id = tedge_config.query(DeviceIdSetting)?;
+    let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
 
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config);
     health_actor.set_connection(&mut mqtt_actor);
 
     let mut jwt_actor = C8YJwtRetriever::builder(base_mqtt_config);
     let mut http_actor = HttpActor::new().builder();
-    let mut c8y_http_proxy_actor =
-        C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);
+    let mut c8y_http_proxy_actor = C8YHttpProxyBuilder::new(
+        c8y_host,
+        device_id,
+        tmp_dir,
+        &mut http_actor,
+        &mut jwt_actor,
+    );
     let mut fs_watch_actor = FsWatchActorBuilder::new();
     let mut signal_actor = SignalActor::builder();
 
@@ -133,7 +145,9 @@ async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     runtime.spawn(mqtt_actor).await?;
     runtime.spawn(jwt_actor).await?;
     runtime.spawn(http_actor).await?;
-    runtime.spawn(c8y_http_proxy_actor).await?;
+    runtime
+        .spawn::<_, C8YHttpConfig>(c8y_http_proxy_actor)
+        .await?;
     runtime.spawn(fs_watch_actor).await?;
     runtime.spawn(log_actor).await?;
     runtime.spawn(signal_actor).await?;

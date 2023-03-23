@@ -42,6 +42,7 @@ pub struct LogManagerActor {
     config: LogManagerConfig,
     mqtt_publisher: LoggingSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
+    messages: SimpleMessageBox<LogInput, NoMessage>,
 }
 
 impl LogManagerActor {
@@ -49,11 +50,13 @@ impl LogManagerActor {
         config: LogManagerConfig,
         mqtt_publisher: LoggingSender<MqttMessage>,
         http_proxy: C8YHttpProxy,
+        messages: SimpleMessageBox<LogInput, NoMessage>,
     ) -> Self {
         Self {
             config,
             mqtt_publisher,
             http_proxy,
+            messages,
         }
     }
 
@@ -342,17 +345,15 @@ impl LogManagerActor {
 
 #[async_trait]
 impl Actor for LogManagerActor {
-    type MessageBox = SimpleMessageBox<LogInput, NoMessage>;
-
     fn name(&self) -> &str {
         "LogManager"
     }
 
-    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         self.reload_supported_log_types().await.unwrap();
         self.get_pending_operations_from_cloud().await.unwrap();
 
-        while let Some(event) = messages.recv().await {
+        while let Some(event) = self.messages.recv().await {
             match event {
                 LogInput::MqttMessage(message) => {
                     self.process_mqtt_message(message).await.unwrap();
@@ -553,8 +554,7 @@ mod tests {
     /// Create a log manager actor ready for testing
     fn new_log_manager_actor(temp_dir: &Path, log_config: LogPluginConfig) -> LogManagerActor {
         let (actor_builder, _, _, _) = new_log_manager_builder(temp_dir, log_config);
-        let (actor, _box) = actor_builder.build();
-        actor
+        actor_builder.build()
     }
 
     /// Spawn a log manager actor and return 2 boxes to exchange MQTT and HTTP messages with it
@@ -567,8 +567,8 @@ mod tests {
         SimpleMessageBox<NoMessage, FsWatchEvent>,
     ) {
         let (actor_builder, mqtt, http, fs) = new_log_manager_builder(temp_dir, log_config);
-        let (actor, message_box) = actor_builder.build();
-        tokio::spawn(actor.run(message_box));
+        let actor = actor_builder.build();
+        tokio::spawn(actor.run());
         (mqtt, http, fs)
     }
 

@@ -73,7 +73,7 @@ impl Runtime {
     /// Spawn an actor
     pub async fn spawn<T, A>(&mut self, actor_builder: T) -> Result<(), RuntimeError>
     where
-        T: Builder<(A, A::MessageBox)> + RuntimeRequestSink,
+        T: Builder<A> + RuntimeRequestSink,
         A: Actor,
     {
         self.handle.spawn(actor_builder).await
@@ -115,7 +115,7 @@ impl RuntimeHandle {
     /// Spawn an actor
     pub async fn spawn<T, A>(&mut self, actor_builder: T) -> Result<(), RuntimeError>
     where
-        T: Builder<(A, A::MessageBox)> + RuntimeRequestSink,
+        T: Builder<A> + RuntimeRequestSink,
         A: Actor,
     {
         let task = RunActor::try_new(actor_builder)?;
@@ -285,21 +285,27 @@ mod tests {
 
     fan_in_message_type!(EchoMessage[String, RuntimeRequest] : Debug, PartialEq);
 
-    pub struct Echo;
+    pub struct Echo {
+        messages: SimpleMessageBox<EchoMessage, EchoMessage>,
+    }
+
+    impl Echo {
+        fn new(messages: SimpleMessageBox<EchoMessage, EchoMessage>) -> Self {
+            Self { messages }
+        }
+    }
 
     #[async_trait]
     impl Actor for Echo {
-        type MessageBox = SimpleMessageBox<EchoMessage, EchoMessage>;
-
         fn name(&self) -> &str {
             "Echo"
         }
 
-        async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
-            while let Some(message) = messages.recv().await {
+        async fn run(mut self) -> Result<(), RuntimeError> {
+            while let Some(message) = self.messages.recv().await {
                 match message {
                     EchoMessage::String(message) => {
-                        messages.send(EchoMessage::String(message)).await?
+                        self.messages.send(EchoMessage::String(message)).await?
                     }
                     EchoMessage::RuntimeRequest(RuntimeRequest::Shutdown) => break,
                 }
@@ -311,39 +317,48 @@ mod tests {
 
     struct Ending;
 
+    impl Ending {
+        fn new(_: SimpleMessageBox<RuntimeRequest, ()>) -> Self {
+            Self
+        }
+    }
+
     #[async_trait]
     impl Actor for Ending {
-        type MessageBox = SimpleMessageBox<RuntimeRequest, ()>;
-
         fn name(&self) -> &str {
             "Ending"
         }
 
-        async fn run(mut self, _: Self::MessageBox) -> Result<(), RuntimeError> {
+        async fn run(mut self) -> Result<(), RuntimeError> {
             Ok(())
         }
     }
 
     struct Panic;
 
+    impl Panic {
+        fn new(_: SimpleMessageBox<RuntimeRequest, ()>) -> Self {
+            Self
+        }
+    }
+
     #[async_trait]
     impl Actor for Panic {
-        type MessageBox = SimpleMessageBox<RuntimeRequest, ()>;
-
         fn name(&self) -> &str {
             "Panic"
         }
 
-        async fn run(mut self, _: Self::MessageBox) -> Result<(), RuntimeError> {
+        async fn run(mut self) -> Result<(), RuntimeError> {
             panic!("Oh dear");
         }
     }
 
-    fn create_actor<A, Input, Output>(
-        actor: A,
+    fn create_actor<ActorBuilder, A, Input, Output>(
+        actor: ActorBuilder,
     ) -> (Sender<Input>, mpsc::Receiver<Output>, RunActor<A>)
     where
-        A: Actor<MessageBox = SimpleMessageBox<Input, Output>>,
+        A: Actor,
+        ActorBuilder: Fn(SimpleMessageBox<Input, Output>) -> A,
         Input: Message + From<RuntimeRequest>,
         Output: Message,
     {
@@ -352,11 +367,8 @@ mod tests {
         let (output_sender, output_receiver) = mpsc::channel(16);
         let output_sender = LoggingSender::new("actor".into(), output_sender.into());
         let receiver = LoggingReceiver::new("actor".into(), input_receiver, signal_receiver);
-        let actor = RunActor::new(
-            actor,
-            SimpleMessageBox::new(receiver, output_sender),
-            Box::new(input_sender.clone()),
-        );
+        let actor = actor(SimpleMessageBox::new(receiver, output_sender));
+        let actor = RunActor::new(actor, Box::new(input_sender.clone()));
 
         (input_sender, output_receiver, actor)
     }
@@ -394,7 +406,7 @@ mod tests {
     #[tokio::test]
     async fn should_spawn_actors() {
         let (mut actions_sender, mut events_receiver, ra) = init();
-        let (mut input_sender, mut output_receiver, actor) = create_actor(Echo);
+        let (mut input_sender, mut output_receiver, actor) = create_actor(Echo::new);
 
         input_sender
             .send(EchoMessage::String("actor should have spawned".into()))
@@ -428,8 +440,8 @@ mod tests {
     #[tokio::test]
     async fn should_handle_actors_finishing_on_their_own() {
         let (mut actions_sender, mut events_receiver, ra) = init();
-        let (_, _, actor1) = create_actor(Ending);
-        let (_, _, actor2) = create_actor(Ending);
+        let (_, _, actor1) = create_actor(Ending::new);
+        let (_, _, actor2) = create_actor(Ending::new);
 
         actions_sender
             .send(RuntimeAction::Spawn(Box::new(actor1)))
@@ -464,8 +476,8 @@ mod tests {
     #[tokio::test]
     async fn shutdown() {
         let (mut actions_sender, mut events_receiver, ra) = init();
-        let (_, _, actor1) = create_actor(Echo);
-        let (_, _, actor2) = create_actor(Echo);
+        let (_, _, actor1) = create_actor(Echo::new);
+        let (_, _, actor2) = create_actor(Echo::new);
 
         actions_sender
             .send(RuntimeAction::Spawn(Box::new(actor1)))
@@ -501,8 +513,8 @@ mod tests {
     #[tokio::test]
     async fn actor_panics() {
         let (mut actions_sender, mut events_receiver, ra) = init();
-        let (_, _, panic_actor) = create_actor(Panic);
-        let (mut sender, mut receiver, echo_actor) = create_actor(Echo);
+        let (_, _, panic_actor) = create_actor(Panic::new);
+        let (mut sender, mut receiver, echo_actor) = create_actor(Echo::new);
 
         actions_sender
             .send(RuntimeAction::Spawn(Box::new(panic_actor)))

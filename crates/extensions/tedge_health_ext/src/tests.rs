@@ -1,15 +1,15 @@
-use std::time::Duration;
-
 use crate::HealthMonitorBuilder;
-use crate::HealthMonitorMessageBox;
+use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::MessageReceiver;
 use tedge_actors::ServiceConsumer;
+use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tokio::time::timeout;
+
 const TEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[tokio::test]
@@ -41,15 +41,15 @@ async fn send_health_check_message_to_service_specific_topic() -> Result<(), any
 
 async fn spawn_a_health_check_actor(
     service_to_be_monitored: &str,
-) -> Result<HealthMonitorMessageBox, anyhow::Error> {
+) -> Result<SimpleMessageBox<MqttMessage, MqttMessage>, anyhow::Error> {
     let mut health_mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
 
     let health_actor = HealthMonitorBuilder::new(service_to_be_monitored);
 
     let health_actor = health_actor.with_connection(&mut health_mqtt_builder);
-    let (actor, message_box) = health_actor.build();
-    tokio::spawn(actor.run(message_box));
+    let actor = health_actor.build();
+    tokio::spawn(actor.run());
 
     Ok(health_mqtt_builder.build())
 }

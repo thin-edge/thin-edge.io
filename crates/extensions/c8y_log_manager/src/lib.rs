@@ -23,7 +23,6 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
-use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
@@ -118,12 +117,10 @@ impl RuntimeRequestSink for LogManagerBuilder {
     }
 }
 
-impl Builder<(LogManagerActor, SimpleMessageBox<LogInput, NoMessage>)> for LogManagerBuilder {
+impl Builder<LogManagerActor> for LogManagerBuilder {
     type Error = LinkError;
 
-    fn try_build(
-        self,
-    ) -> Result<(LogManagerActor, SimpleMessageBox<LogInput, NoMessage>), Self::Error> {
+    fn try_build(self) -> Result<LogManagerActor, Self::Error> {
         let mqtt_publisher = self
             .mqtt_publisher
             .ok_or_else(|| LinkError::MissingPeer {
@@ -137,8 +134,11 @@ impl Builder<(LogManagerActor, SimpleMessageBox<LogInput, NoMessage>)> for LogMa
 
         let message_box = self.box_builder.build();
 
-        let actor = LogManagerActor::new(self.config, mqtt_publisher, http_proxy);
-
-        Ok((actor, message_box))
+        Ok(LogManagerActor::new(
+            self.config,
+            mqtt_publisher,
+            http_proxy,
+            message_box,
+        ))
     }
 }

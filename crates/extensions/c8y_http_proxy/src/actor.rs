@@ -31,7 +31,6 @@ use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ClientMessageBox;
-use tedge_actors::MessageBox;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::ServerMessageBox;
@@ -52,14 +51,12 @@ struct C8YHttpProxyActor {
 
 #[async_trait]
 impl Actor for C8YHttpConfig {
-    type MessageBox = C8YHttpProxyMessageBox;
-
     fn name(&self) -> &str {
         "C8YHttpProxy"
     }
 
-    async fn run(self, messages: Self::MessageBox) -> Result<(), RuntimeError> {
-        let actor = C8YHttpProxyActor::new(self, messages);
+    async fn run(mut self) -> Result<(), RuntimeError> {
+        let actor = C8YHttpProxyActor::new(self);
         actor.run().await
     }
 }
@@ -84,21 +81,15 @@ pub struct C8YRestResponseWithClientId(usize, C8YRestResult);
 fan_in_message_type!(C8YHttpProxyInput[C8YRestRequestWithClientId, HttpResult, JwtResult] : Debug);
 fan_in_message_type!(C8YHttpProxyOutput[C8YRestResponseWithClientId, HttpRequest, JwtRequest] : Debug);
 
-#[async_trait]
-impl MessageBox for C8YHttpProxyMessageBox {
-    type Input = C8YHttpProxyInput;
-    type Output = C8YHttpProxyOutput;
-}
-
 impl C8YHttpProxyActor {
-    pub fn new(config: C8YHttpConfig, peers: C8YHttpProxyMessageBox) -> Self {
+    pub fn new(config: C8YHttpConfig) -> Self {
         let unknown_internal_id = "";
         let end_point = C8yEndPoint::new(&config.c8y_host, &config.device_id, unknown_internal_id);
         let child_devices = HashMap::default();
         C8YHttpProxyActor {
             end_point,
             child_devices,
-            peers,
+            peers: config.messages,
             tmp_dir: config.tmp_dir,
         }
     }

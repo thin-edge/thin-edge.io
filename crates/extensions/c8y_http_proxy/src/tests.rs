@@ -3,6 +3,7 @@ use crate::handle::C8YHttpProxy;
 use crate::C8YHttpConfig;
 use crate::C8YHttpProxyBuilder;
 use c8y_api::json_c8y::InternalIdResponse;
+use std::path::PathBuf;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ServerActor;
@@ -19,12 +20,8 @@ async fn c8y_http_proxy_requests_the_device_internal_id_on_start() {
     let external_id = "external-device-001";
     let tmp_dir = "/tmp";
 
-    let config = C8YHttpConfig {
-        c8y_host: c8y_host.to_string(),
-        device_id: device_id.to_string(),
-        tmp_dir: tmp_dir.into(),
-    };
-    let (mut proxy, mut c8y) = spawn_c8y_http_proxy(config, token).await;
+    let (mut proxy, mut c8y) =
+        spawn_c8y_http_proxy(c8y_host.into(), device_id.into(), tmp_dir.into(), token).await;
 
     // Even before any request is sent to the c8y_proxy
     // the proxy requests over HTTP the internal device id.
@@ -74,23 +71,30 @@ async fn c8y_http_proxy_requests_the_device_internal_id_on_start() {
 /// This also spawns an actor to generate fake JWT tokens.
 /// The tests will only check that the http requests include this token.
 async fn spawn_c8y_http_proxy(
-    config: C8YHttpConfig,
+    c8y_host: String,
+    device_id: String,
+    tmp_dir: PathBuf,
     token: &str,
 ) -> (C8YHttpProxy, FakeHttpServerBox) {
-    let jwt_actor = ServerActor::new(ConstJwtRetriever {
-        token: token.to_string(),
-    });
     let mut jwt = ServerMessageBoxBuilder::new("JWT Actor", 16);
 
     let mut http = FakeHttpServerBox::builder();
 
-    let mut c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http, &mut jwt);
+    let mut c8y_proxy_actor =
+        C8YHttpProxyBuilder::new(c8y_host, device_id, tmp_dir, &mut http, &mut jwt);
     let proxy = C8YHttpProxy::new("C8Y", &mut c8y_proxy_actor);
 
-    tokio::spawn(jwt_actor.run(jwt.build()));
+    let jwt_actor = ServerActor::new(
+        ConstJwtRetriever {
+            token: token.to_string(),
+        },
+        jwt.build(),
+    );
+
+    tokio::spawn(jwt_actor.run());
     tokio::spawn(async move {
-        let (actor, message_box) = c8y_proxy_actor.build();
-        let _ = actor.run(message_box).await;
+        let actor: C8YHttpConfig = c8y_proxy_actor.build();
+        let _ = actor.run().await;
     });
 
     (proxy, http.build())

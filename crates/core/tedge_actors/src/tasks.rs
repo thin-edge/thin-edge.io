@@ -27,32 +27,26 @@ impl std::fmt::Debug for Box<dyn Task> {
 pub struct RunActor<A: Actor> {
     name: String,
     actor: A,
-    messages: A::MessageBox,
     runtime_request_sender: DynSender<RuntimeRequest>,
 }
 
 impl<A: Actor> RunActor<A> {
-    pub(crate) fn new(
-        actor: A,
-        messages: A::MessageBox,
-        runtime_request_sender: DynSender<RuntimeRequest>,
-    ) -> Self {
+    pub(crate) fn new(actor: A, runtime_request_sender: DynSender<RuntimeRequest>) -> Self {
         let name = format!("actor '{}'", actor.name());
         RunActor {
             name,
             actor,
-            messages,
             runtime_request_sender,
         }
     }
 
     pub fn try_new<T>(actor_builder: T) -> Result<Self, RuntimeError>
     where
-        T: Builder<(A, A::MessageBox)> + RuntimeRequestSink,
+        T: Builder<A> + RuntimeRequestSink,
     {
         let runtime_request_sender: DynSender<RuntimeRequest> = actor_builder.get_signal_sender();
-        let (actor, actor_box) = actor_builder.build();
-        let run_actor = RunActor::new(actor, actor_box, runtime_request_sender);
+        let actor = actor_builder.build();
+        let run_actor = RunActor::new(actor, runtime_request_sender);
         Ok(run_actor)
     }
 }
@@ -69,8 +63,7 @@ impl<A: Actor> Task for RunActor<A> {
 
     async fn run(mut self: Box<Self>) -> Result<(), RuntimeError> {
         let actor = self.actor;
-        let messages = self.messages;
 
-        Ok(actor.run(messages).await?)
+        Ok(actor.run().await?)
     }
 }
