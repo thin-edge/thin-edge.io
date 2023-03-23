@@ -1,18 +1,30 @@
 # Reference Guides
-The thin-edge.io command-line interface (tedge CLI) is a set of commands used to create and manage thin-edge.io resources.
 
-Following sections show the tedge sub commands.
+- [Supported platforms](../supported-platforms.md)
 
-* [`tedge` command](../references/tedge.md)
-* [`tedge cert` command](../references/tedge-cert.md)
-* [`tedge config` command](../references/tedge-config.md)
-* [`tedge connect` command](../references/tedge-connect.md)
-* [`tedge disconnect` command](../references/tedge-disconnect.md)
-* [`tedge mqtt` command](../references/tedge-mqtt.md)
-* [Bridged Topics](../references/bridged-topics.md)
+## Configuration files
+- [Thin-edge.io configuration files](./thin-edge-config-files.md)
+- [MQTT bridge configuration](./bridged-topics.md)
+- [Init System Configuration File](./init-system-config.md)
 
-Software Management (under development)
-* [Plugin API](./plugin-api.md)
+## The tedge CLI
 
-Thin-edge.io configuration files
-* [Thin-edge.io configuration files](./thin-edge-config-files.md)
+`tedge` is the command-line interface of `thin-edge.io` to create and manage resources on the device.
+
+- [`tedge` command](../references/tedge.md)
+- [`tedge cert` command](../references/tedge-cert.md)
+- [`tedge config` command](../references/tedge-config.md)
+- [`tedge connect` command](../references/tedge-connect.md)
+- [`tedge disconnect` command](../references/tedge-disconnect.md)
+- [`tedge mqtt` command](../references/tedge-mqtt.md)
+
+## Data Model
+- [Domain Model](../architecture/domain-model.md)
+- [Data Model](../architecture/data-model.md)
+
+## Extension API
+- [Building](../BUILDING.md)
+- [Plugin API](./plugin-api.md)
+- [Log Management](./c8y-log-management.md)
+- [Configuration Management](./c8y-configuration-management.md)
+- [Thin Edge File Transfer Service](./tedge-file-transfer-service.md)
