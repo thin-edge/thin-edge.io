@@ -89,6 +89,7 @@
 //!
 //!
 
+use crate::channels::Sender;
 use crate::Builder;
 use crate::ChannelError;
 use crate::DynSender;
@@ -101,7 +102,6 @@ use crate::SimpleMessageBoxBuilder;
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::StreamExt;
-use log::debug;
 use log::info;
 use std::fmt::Debug;
 
@@ -119,14 +119,6 @@ pub trait MessageBox: 'static + Sized + Send + Sync {
     //       Currently we have on interface to a logger not a message box!
     // Build a message box along 2 channels to send and receive messages to and from the box
     // fn channel(name: &str, capacity: usize) -> ((DynSender<Self::Input>, DynReceiver<Self::Output>), Self);
-
-    /// Name of the associated actor
-    fn name(&self) -> &str;
-
-    /// Log an output message just before sending it.
-    fn log_output(&self, message: &impl Debug) {
-        debug!(target: self.name(), "send {:?}", message);
-    }
 }
 
 /// Either a message or a [RuntimeRequest]
@@ -200,28 +192,67 @@ impl<Input: Send + Debug> ReceiveMessages<Input> for LoggingReceiver<Input> {
     }
 }
 
+pub struct LoggingSender<Output> {
+    name: String,
+    sender: DynSender<Output>,
+}
+
+impl<Output> LoggingSender<Output> {
+    pub fn new(name: String, sender: DynSender<Output>) -> Self {
+        Self { name, sender }
+    }
+}
+
+impl<Output: 'static> Clone for LoggingSender<Output> {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            sender: self.sender.sender_clone(),
+        }
+    }
+}
+
+#[async_trait]
+impl<Output: Debug + Send + Sync + 'static> Sender<Output> for LoggingSender<Output> {
+    async fn send(&mut self, message: Output) -> Result<(), ChannelError> {
+        log_message_sent(&self.name, &message);
+        self.sender.send(message).await
+    }
+
+    fn sender_clone(&self) -> DynSender<Output> {
+        Box::new(LoggingSender {
+            name: self.name.clone(),
+            sender: self.sender.clone(),
+        })
+    }
+
+    fn close_sender(&mut self) {
+        Sender::<Output>::close_sender(&mut self.sender)
+    }
+}
+
+pub fn log_message_sent<I: Debug>(target: &str, message: I) {
+    info!(target: target, "send {message:?}");
+}
+
 /// The basic message box
 pub struct SimpleMessageBox<Input: Debug, Output> {
-    name: String,
     input_receiver: LoggingReceiver<Input>,
-    output_sender: DynSender<Output>,
+    output_sender: LoggingSender<Output>,
 }
 
 impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
     pub fn new(
-        name: String,
         input_receiver: LoggingReceiver<Input>,
-        output_sender: DynSender<Output>,
+        output_sender: LoggingSender<Output>,
     ) -> Self {
         SimpleMessageBox {
-            name,
             input_receiver,
             output_sender,
         }
     }
 
     pub async fn send(&mut self, message: Output) -> Result<(), ChannelError> {
-        self.log_output(&message);
         self.output_sender.send(message).await
     }
 
@@ -300,10 +331,6 @@ impl<Input: Send> ReceiveMessages<Input> for CombinedReceiver<Input> {
 impl<Input: Message, Output: Message> MessageBox for SimpleMessageBox<Input, Output> {
     type Input = Input;
     type Output = Output;
-
-    fn name(&self) -> &str {
-        &self.name
-    }
 }
 
 /// A message box for a request-response server
@@ -392,10 +419,6 @@ impl<Request: Message, Response: Message> MessageBox
 {
     type Input = (ClientId, Request);
     type Output = (ClientId, Response);
-
-    fn name(&self) -> &str {
-        self.clients.name()
-    }
 }
 
 /// Client side handler of requests/responses sent to an actor
@@ -431,8 +454,4 @@ impl<Request: Message, Response: Message> ClientMessageBox<Request, Response> {
 impl<Request: Message, Response: Message> MessageBox for ClientMessageBox<Request, Response> {
     type Input = Response;
     type Output = Request;
-
-    fn name(&self) -> &str {
-        self.messages.name()
-    }
 }

@@ -1,0 +1,89 @@
+#!/bin/sh
+set -e
+
+MQTT_HOST=${MQTT_HOST:-localhost}
+MQTT_PORT=${MQTT_PORT:-1883}
+OUTPUT_LOG=${OUTPUT_LOG:-}
+WAIT=${WAIT:-1}
+
+usage() {
+    echo "
+        $0 [--host <host>] [--port <port>] [--log <path>] [--wait <seconds>]
+    
+    FLAGS
+        --host <host>       MQTT broker host
+        --port <port>       MQTT broker port
+        --log <path>        File path to write the mqtt messages to. The messages will be written to stdout and the given file
+        --wait <sec>        Seconds to wait before trying to reconnect if the mqtt client gets disconnected
+    
+    EXAMPLES
+        $0
+        # Subscribe to the default mqtt broker on localhost:1883
+
+        $0 --log /var/log/mqtt-messages.log
+        # Subscribe to all topics and write the messages to file
+    "
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --host)
+            MQTT_HOST="$2"
+            shift
+            ;;
+        --port)
+            MQTT_PORT="$2"
+            shift
+            ;;
+        --wait)
+            WAIT="$2"
+            shift
+            ;;
+        --log)
+            OUTPUT_LOG="$2"
+            shift
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown option" >&2
+            usage
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+log() {
+    echo "$*" >&2
+}
+
+subscribe() {
+    mosquitto_sub --nodelay -h "$MQTT_HOST" -p "$MQTT_PORT" -t '#' -F '{"timestamp":%U,"message":%j,"payload_hex":"%x"}'
+}
+
+# Wait for mosquitto process to start up (to reduce spamming logs with uninteresting info)
+if command -v pgrep >/dev/null 2>&1; then
+    if [ "$MQTT_HOST" = "localhost" ] || [ "$MQTT_HOST" = "127.0.0.1" ]; then
+        while :; do
+            if pgrep -fa "mosquitto " >/dev/null 2>&1; then
+                break
+            fi
+            sleep 0.5
+        done
+    fi
+fi
+
+# Keep trying forever
+while true; do
+    log "Starting mqtt-logger to ${MQTT_HOST}:${MQTT_PORT}"
+    if [ -n "$OUTPUT_LOG" ]; then
+        subscribe | tee -a "$OUTPUT_LOG" || true
+    else
+        subscribe || true
+    fi
+    log "mqtt-logger stopped, waiting ${WAIT} second/s and trying again"
+    sleep "$WAIT"
+done

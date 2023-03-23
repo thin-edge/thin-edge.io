@@ -2,7 +2,6 @@
 Resource    ../../resources/common.resource
 Library    Cumulocity
 Library    ThinEdgeIO
-Library    DateTime
 
 Test Tags    theme:c8y    theme:software    theme:plugins
 Test Setup       Custom Setup
@@ -29,6 +28,6 @@ Custom Setup
     Set Test Variable    $DEVICE_SN
     Should Have MQTT Messages    tedge/health/tedge-mapper-c8y
     [Documentation]    WORKAROUND: #1731 The tedge-mapper-c8y is restarted due to a supsected race condition between the mapper and tedge-agent which results in the software list message being lost
-    ${timestamp}=        Get Current Date
+    ${timestamp}=        Get Unix Timestamp
     Restart Service    tedge-mapper-c8y
     Should Have MQTT Messages    tedge/health/tedge-mapper-c8y    date_from=${timestamp}

@@ -260,8 +260,7 @@ pub mod tests {
         let (output_sender, mut output_receiver) = mpsc::channel(10);
 
         let actor = ActorWithSpecificMessageBox;
-        let (input_sender, message_box) =
-            SpecificMessageBox::new_box(actor.name(), 10, output_sender.into());
+        let (input_sender, message_box) = SpecificMessageBox::new_box(10, output_sender.into());
         let actor_task = spawn(actor.run(message_box));
 
         spawn(async move {
@@ -327,23 +326,17 @@ pub mod tests {
     fan_in_message_type!(DoMsg[DoThis,DoThat] : Clone , Debug , Eq , PartialEq);
 
     pub struct SpecificMessageBox {
-        name: String,
         input: mpsc::Receiver<String>,
         peer_1: DynSender<DoThis>,
         peer_2: DynSender<DoThat>,
     }
 
     impl SpecificMessageBox {
-        fn new_box(
-            name: &str,
-            capacity: usize,
-            output: DynSender<DoMsg>,
-        ) -> (DynSender<String>, Self) {
+        fn new_box(capacity: usize, output: DynSender<DoMsg>) -> (DynSender<String>, Self) {
             let (sender, input) = mpsc::channel(capacity);
             let peer_1 = adapt(&output);
             let peer_2 = adapt(&output);
             let message_box = SpecificMessageBox {
-                name: name.to_string(),
                 input,
                 peer_1,
                 peer_2,
@@ -368,9 +361,5 @@ pub mod tests {
     impl MessageBox for SpecificMessageBox {
         type Input = String;
         type Output = DoMsg;
-
-        fn name(&self) -> &str {
-            &self.name
-        }
     }
 }

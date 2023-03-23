@@ -8,7 +8,10 @@ import sys
 import shlex
 import shutil
 import subprocess
+import time
+import datetime
 
+import invoke
 from invoke import task
 from dotenv import load_dotenv
 
@@ -271,6 +274,7 @@ def build(
     """
 
     if local:
+        clean(c)
         use_local(c)
 
     # Support podman, and automatically switch if the DOCKER_HOST is set
@@ -292,25 +296,97 @@ def build(
     )
 
 
+test_common_help = {
+    "outputdir": ("Output directory where the reports will be saved to"),
+    "processes": ("Number of processes to use when running tests"),
+    "suite": ("Only run suites matching the given text"),
+    "test_name": ("Only run tests matching the given text"),
+    "include": ("Only run tests matching the given tag"),
+    "exclude": ("Don't run tests matching the given tag"),
+    "retries": ("Max global retries to execute on failed tests. Defaults to 0"),
+    "adapter": (
+        "Default device adapter to use to run tests. e.g. docker, ssh or local"
+    ),
+}
+
+
+@task(
+    help={
+        "iterations": ("Number of test iterations to run"),
+        **test_common_help,
+    }
+)
+def flake_finder(
+    c,
+    iterations=2,
+    suite="",
+    test_name="",
+    adapter="docker",
+    retries=0,
+    outputdir="output_flake_finder",
+    processes=None,
+    include="",
+    exclude="",
+):
+    """Run tests multiple times to find any flakey tests
+
+    The output directory should not exist prior to running the tests.
+
+    Examples
+        invoke flake-finder --iterations 100 --outputdir output_flake_finder_100
+        # Run all integration tests 100 times and generate a report
+
+        invoke flake-finder --iterations 2 --outputdir output_flake_finder --suite service_monitoring
+        # Only run tests related to a given suite and run it 2 times
+    """
+    passed = []
+    failed = []
+    duration_start = time.time()
+    for i in range(1, iterations + 1):
+        iteration_output = Path(outputdir) / f"iteration-{i}"
+        os.makedirs(iteration_output)
+        try:
+            test(
+                c,
+                outputdir=iteration_output,
+                suite=suite,
+                test_name=test_name,
+                adapter=adapter,
+                retries=retries,
+                processes=processes,
+                include=include,
+                exclude=exclude,
+            )
+            passed.append(i)
+        except invoke.exceptions.Failure as ex:
+            failed.append(i)
+
+    duration_sec = time.time() - duration_start
+
+    print("\n\n" + "-" * 30)
+
+    overall_result = "PASSED"
+    if failed:
+        overall_result = "FAILED"
+
+    print(f"Overall: {overall_result}")
+    print(
+        f"Results: {iterations} iterations, {len(passed)} passed, {len(failed)} failed"
+    )
+    print(f"Elapsed time: {datetime.timedelta(seconds=duration_sec)}")
+
+    if failed:
+        print(f"Failed iterations: {failed}")
+
+
 @task(
     aliases=["tests"],
-    help={
-        "outputdir": ("Output directory where the reports will be saved to"),
-        "processes": ("Number of processes to use when running tests"),
-        "suite": ("Only run suites matching the given text"),
-        "test": ("Only run tests matching the given text"),
-        "include": ("Only run tests matching the given tag"),
-        "exclude": ("Don't run tests matching the given tag"),
-        "retries": ("Max global retries to execute on failed tests. Defaults to 0"),
-        "adapter": (
-            "Default device adapter to use to run tests. e.g. docker, ssh or local"
-        ),
-    },
+    help=test_common_help,
 )
 def test(
     c,
     suite="",
-    test="",
+    test_name="",
     adapter="docker",
     retries=0,
     outputdir=None,
@@ -325,10 +401,7 @@ def test(
         invoke test
         # run all tests
 
-        invoke test --file=tests/myfile.robot
-        # Run only tests defined in tests/myfile.robot
-
-        invoke test --test "Successful shell command with output" --processes 1
+        invoke test --test-name "Successful shell command with output" --processes 1
         # Run any test cases matching a give string
 
         invoke test --suite "shell_operation" --processes 1
@@ -425,11 +498,11 @@ def test(
         )
 
     # test filter
-    if test:
+    if test_name:
         command.extend(
             [
                 "--test",
-                shlex.quote(test),
+                shlex.quote(test_name),
             ]
         )
 

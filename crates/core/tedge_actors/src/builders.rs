@@ -36,6 +36,7 @@ use crate::ConcurrentServerMessageBox;
 use crate::DynSender;
 use crate::KeyedSender;
 use crate::LoggingReceiver;
+use crate::LoggingSender;
 use crate::Message;
 use crate::NullSender;
 use crate::RuntimeError;
@@ -209,7 +210,8 @@ impl<Req: Message, Res: Message> Builder<SimpleMessageBox<Req, Res>>
     }
 
     fn build(self) -> SimpleMessageBox<Req, Res> {
-        SimpleMessageBox::new(self.name, self.input_receiver, self.output_sender)
+        let sender = LoggingSender::new(self.name, self.output_sender);
+        SimpleMessageBox::new(self.input_receiver, sender)
     }
 }
 
@@ -252,8 +254,9 @@ impl<Request: Message, Response: Message> ServerMessageBoxBuilder<Request, Respo
     /// Build a message box ready to be used by the service actor
     fn build_service(self) -> ServerMessageBox<Request, Response> {
         let response_sender = SenderVec::new_sender(self.clients);
+        let logging_sender = LoggingSender::new(self.service_name.clone(), response_sender);
 
-        SimpleMessageBox::new(self.service_name, self.input_receiver, response_sender)
+        SimpleMessageBox::new(self.input_receiver, logging_sender)
     }
 
     /// Build a message box aimed to concurrently serve requests

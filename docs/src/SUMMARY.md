@@ -26,6 +26,7 @@
   - [How to create a test certificate](./howto-guides/003_registration.md)
   - [How to connect a cloud end-point](./howto-guides/004_connect.md)
   - [How to send MQTT messages](./howto-guides/005_pub_sub.md)
+  - [How to configure `thin-edge.io`](./howto-guides/006_config.md)
   - [How to test the cloud connection?](./howto-guides/007_test_connection.md)
   - [How to configure the local mqtt bind address and port](./howto-guides/008_config_local_mqtt_bind_address_and_port.md)
   - [How to trouble shoot device monitoring](./howto-guides/009_trouble_shooting_monitoring.md)

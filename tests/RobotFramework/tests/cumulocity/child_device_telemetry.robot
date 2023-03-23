@@ -4,7 +4,7 @@ Library    Cumulocity
 Library    ThinEdgeIO
 
 Test Tags    theme:c8y    theme:telemetry
-Test Setup    Custom Setup
+Suite Setup    Custom Setup
 Test Teardown    Get Logs
 
 *** Test Cases ***
@@ -21,8 +21,8 @@ Child devices support sending custom measurements
 
 
 Child devices support sending custom events
-    Execute Command    tedge mqtt pub tedge/events/myCustomType/${CHILD_SN} '{ "text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
-    ${events}=    Device Should Have Event/s    expected_text=Some test event    with_attachment=False    minimum=1    maximum=1    type=myCustomType    fragment=someOtherCustomFragment
+    Execute Command    tedge mqtt pub tedge/events/myCustomType1/${CHILD_SN} '{ "text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
+    ${events}=    Device Should Have Event/s    expected_text=Some test event    with_attachment=False    minimum=1    maximum=1    type=myCustomType1    fragment=someOtherCustomFragment
     Log    ${events}
 
 
@@ -64,11 +64,29 @@ Child devices support sending inventory data via c8y topic
 
 
 Main device support sending inventory data via c8y topic
-    Execute Command    tedge mqtt pub "c8y/inventory/managedObjects/update/${DEVICE_SN}" '{"parentInfo":{"nested":{"name":"complex"}},"type":"customType"}'
+    Execute Command    tedge mqtt pub "c8y/inventory/managedObjects/update/${DEVICE_SN}" '{"parentInfo":{"nested":{"name":"complex"}},"subType":"customType"}'
     Cumulocity.Set Device    ${DEVICE_SN}
-    ${mo}=    Device Should Have Fragments    parentInfo    type
+    ${mo}=    Device Should Have Fragments    parentInfo    subType
     Should Be Equal    ${mo["parentInfo"]["nested"]["name"]}    complex
-    Should Be Equal    ${mo["type"]}    customType
+    Should Be Equal    ${mo["subType"]}    customType
+
+
+Child device supports sending custom child device measurements directly to c8y
+    Execute Command    tedge mqtt pub "c8y/measurement/measurements/create" '{"time":"2023-03-20T08:03:56.940907Z","externalSource":{"externalId":"${CHILD_SN}","type":"c8y_Serial"},"environment":{"temperature":{"value":29.9,"unit":"°C"}},"type":"10min_average","meta":{"sensorLocation":"Brisbane, Australia"}}'
+    Cumulocity.Set Device    ${CHILD_SN}
+    ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    value=environment    series=temperature    type=10min_average
+    Should Be Equal As Numbers    ${measurements[0]["environment"]["temperature"]["value"]}    29.9
+    Should Be Equal    ${measurements[0]["meta"]["sensorLocation"]}    Brisbane, Australia
+    Should Be Equal    ${measurements[0]["type"]}    10min_average
+
+
+Main device supports sending custom child device measurements directly to c8y
+    Execute Command    tedge mqtt pub "c8y/measurement/measurements/create" '{"time":"2023-03-20T08:03:56.940907Z","environment":{"temperature":{"value":29.9,"unit":"°C"}},"type":"10min_average","meta":{"sensorLocation":"Brisbane, Australia"}}'
+    Cumulocity.Set Device    ${DEVICE_SN}
+    ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    value=environment    series=temperature    type=10min_average
+    Should Be Equal As Numbers    ${measurements[0]["environment"]["temperature"]["value"]}    29.9
+    Should Be Equal    ${measurements[0]["meta"]["sensorLocation"]}    Brisbane, Australia
+    Should Be Equal    ${measurements[0]["type"]}    10min_average
 
 *** Keywords ***
 
@@ -80,3 +98,5 @@ Custom Setup
     Restart Service    tedge-mapper-c8y
     Device Should Exist                      ${DEVICE_SN}
     Device Should Exist                      ${CHILD_SN}
+
+    Service Health Status Should Be Up    tedge-mapper-c8y

@@ -21,12 +21,13 @@ use log::error;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
-use tedge_actors::DynSender;
 use tedge_actors::LoggingReceiver;
+use tedge_actors::LoggingSender;
 use tedge_actors::MessageBox;
 use tedge_actors::ReceiveMessages;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
+use tedge_actors::Sender;
 use tedge_actors::WrappedInput;
 use tedge_api::health::health_status_up_message;
 use tedge_file_system_ext::FsWatchEvent;
@@ -387,17 +388,17 @@ impl Actor for ConfigManagerActor {
 
 pub struct ConfigManagerMessageBox {
     input_receiver: LoggingReceiver<ConfigInput>,
-    pub mqtt_publisher: DynSender<MqttMessage>,
+    pub mqtt_publisher: LoggingSender<MqttMessage>,
     pub c8y_http_proxy: C8YHttpProxy,
-    timer_sender: DynSender<SetTimeout<ChildConfigOperationKey>>,
+    timer_sender: LoggingSender<SetTimeout<ChildConfigOperationKey>>,
 }
 
 impl ConfigManagerMessageBox {
     pub fn new(
         input_receiver: LoggingReceiver<ConfigInput>,
-        mqtt_publisher: DynSender<MqttMessage>,
+        mqtt_publisher: LoggingSender<MqttMessage>,
         c8y_http_proxy: C8YHttpProxy,
-        timer_sender: DynSender<SetTimeout<ChildConfigOperationKey>>,
+        timer_sender: LoggingSender<SetTimeout<ChildConfigOperationKey>>,
     ) -> ConfigManagerMessageBox {
         ConfigManagerMessageBox {
             input_receiver,
@@ -433,10 +434,6 @@ impl ReceiveMessages<ConfigInput> for ConfigManagerMessageBox {
 impl MessageBox for ConfigManagerMessageBox {
     type Input = ConfigInput;
     type Output = MqttMessage;
-
-    fn name(&self) -> &str {
-        "C8Y-Config-Manager"
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]

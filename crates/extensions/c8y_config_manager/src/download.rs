@@ -31,6 +31,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
+use tedge_actors::Sender;
 use tedge_api::OperationStatus;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;

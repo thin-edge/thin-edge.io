@@ -32,7 +32,7 @@ Check PID of tedge-mapper
     Set Suite Variable    ${pid}
 
 Kill the PID
-    Execute Command    sudo kill -9 ${pid}
+    Kill Process    ${pid}
 
 Recheck PID of tedge-agent
     ${pid1}=    Execute Command    pgrep -f tedge-agent    strip=True

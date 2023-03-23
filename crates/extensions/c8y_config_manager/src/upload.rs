@@ -27,6 +27,7 @@ use log::info;
 use log::warn;
 use std::collections::HashMap;
 use std::path::Path;
+use tedge_actors::Sender;
 use tedge_api::OperationStatus;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
