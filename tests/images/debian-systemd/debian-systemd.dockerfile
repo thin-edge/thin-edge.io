@@ -32,6 +32,7 @@ COPY files/c8y-configuration-plugin.toml /etc/tedge/c8y/
 COPY files/deb/ /setup/deb/
 
 COPY files/mqtt-logger.service /etc/systemd/system/
+COPY files/mqtt-logger /usr/bin/
 RUN systemctl enable mqtt-logger.service
 
 # Custom mosquitto config

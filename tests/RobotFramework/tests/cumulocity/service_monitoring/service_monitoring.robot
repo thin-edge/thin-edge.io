@@ -11,7 +11,11 @@ Test Teardown    Get Logs
 
 
 *** Variables ***
-
+# Timeout in seconds used to wait for a service to be up. A longer timeout is sometimes needed in case
+# if the service encounters a 'c8y_api::http_proxy: An error occurred while retrieving internal Id, operation will retry in 60 seconds and mapper will reinitialise'
+# error on startup, and then waits 60 seconds before trying again. The timeout should be larger than this interval to give the service a chance to retry without
+# failing the test
+${TIMEOUT}=    ${90}
 
 *** Test Cases ***
 
@@ -48,8 +52,7 @@ Test if all c8y services using default service type when service type configured
     c8y-log-plugin
     c8y-firmware-plugin
 
-Check health status of tedge-mapper-c8y service on broker restart
-    [Documentation]    Test tedge-mapper-c8y on mqtt broker restart
+Check health status of tedge-mapper-c8y service on broker stop start
     Custom Test Setup
      
     Device Should Exist                      ${DEVICE_SN}_tedge-mapper-c8y    show_info=False 
@@ -57,13 +60,40 @@ Check health status of tedge-mapper-c8y service on broker restart
     Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
     Should Be Equal    ${SERVICE["status"]}    up
      
+    ThinEdgeIO.Stop Service    mosquitto.service
+    ThinEdgeIO.Service Should Be Stopped  mosquitto.service
+
+    Device Should Exist                      ${DEVICE_SN}_tedge-mapper-c8y    show_info=False
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=down
+    Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
+    Should Be Equal    ${SERVICE["status"]}    down
+
+    ThinEdgeIO.Start Service    mosquitto.service
+    ThinEdgeIO.Service Should Be Running  mosquitto.service
+
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up    timeout=${TIMEOUT}
+    Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
+    Should Be Equal    ${SERVICE["status"]}    up
+
+    Custom Test Teardown
+
+Check health status of tedge-mapper-c8y service on broker restart
+    [Documentation]    Test tedge-mapper-c8y on mqtt broker restart
+    Custom Test Setup
+     
+    Device Should Exist                      ${DEVICE_SN}_tedge-mapper-c8y    show_info=False 
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up    timeout=${TIMEOUT}
+    Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
+    Should Be Equal    ${SERVICE["status"]}    up
+     
     ThinEdgeIO.Restart Service    mosquitto.service
     ThinEdgeIO.Service Should Be Running  mosquitto.service
 
+    Sleep    5s    reason=Wait for any potential status changes to be sent to Cumulocity IoT
     Device Should Exist                      ${DEVICE_SN}_tedge-mapper-c8y    show_info=False
-    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=down 
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up    timeout=${TIMEOUT}
     Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
-    Should Be Equal    ${SERVICE["status"]}    down
+    Should Be Equal    ${SERVICE["status"]}    up
 
     Custom Test Teardown
         
@@ -94,6 +124,7 @@ Custom Setup
     Device Should Exist                      ${DEVICE_SN}
 
 Custom Test Setup
+    ThinEdgeIO.Start Service    mosquitto
     ThinEdgeIO.Restart Service    tedge-mapper-c8y
     ThinEdgeIO.Service Should Be Running    tedge-mapper-c8y
 
@@ -108,7 +139,7 @@ Check if a service is up
     ThinEdgeIO.Service Should Be Running    ${service_name}
        
     Device Should Exist                      ${DEVICE_SN}_${service_name}    show_info=False 
-    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up        timeout=${TIMEOUT}
     
     Should Be Equal    ${SERVICE["name"]}    ${service_name}
     Should Be Equal    ${SERVICE["serviceType"]}    service
@@ -142,7 +173,7 @@ Check if a service using configured service type
     Custom Test Setup
     ThinEdgeIO.Start Service    ${service_name}
     Device Should Exist                      ${DEVICE_SN}_${service_name}    show_info=False
-    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up    serviceType\=thinedge        timeout=${TIMEOUT}
 
     Should Be Equal    ${SERVICE["name"]}    ${service_name}
     Should Be Equal    ${SERVICE["serviceType"]}    thinedge
@@ -157,7 +188,7 @@ Check if a service using configured service type as empty
     Custom Test Setup
     ThinEdgeIO.Start Service    ${service_name}
     Device Should Exist                      ${DEVICE_SN}_${service_name}    show_info=False
-    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up        serviceType\=service        timeout=${TIMEOUT}
 
     Should Be Equal    ${SERVICE["name"]}    ${service_name}
     Should Be Equal    ${SERVICE["serviceType"]}    service

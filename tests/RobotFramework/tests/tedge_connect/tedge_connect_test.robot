@@ -18,7 +18,7 @@ tedge_connect_test_positive
 
 tedge_connect_test_negative
     Execute Command    sudo tedge disconnect c8y
-    ${output}=    Execute Command    sudo tedge connect c8y --test    exp_exit_code=1
+    ${output}=    Execute Command    sudo tedge connect c8y --test    exp_exit_code=1    stdout=${False}    stderr=${True}
     Should Contain    ${output}    Error: failed to test connection to Cumulocity cloud.
 
 tedge_connect_test_sm_services

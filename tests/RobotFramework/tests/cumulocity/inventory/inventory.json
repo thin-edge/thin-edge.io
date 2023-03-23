@@ -1,0 +1,8 @@
+{
+    "customData": {
+        "mode": "ACTIVE",
+        "version": 1,
+        "alertingEnabled": true
+    },
+    "types": ["type1", "type2"]
+}

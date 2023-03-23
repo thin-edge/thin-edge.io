@@ -21,6 +21,7 @@ playwright-log.txt
 wordlist.txt
 Results/
 output/
+output_*/
 env/
 interactive_console_output.xml
 .pabotsuitenames

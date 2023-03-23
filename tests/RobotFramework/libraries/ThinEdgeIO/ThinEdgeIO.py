@@ -107,7 +107,9 @@ class ThinEdgeIO(DeviceLibrary):
     @keyword("Get Debian Architecture")
     def get_debian_architecture(self):
         """Get the debian architecture"""
-        return self.execute_command("dpkg --print-architecture", strip=True)
+        return self.execute_command(
+            "dpkg --print-architecture", strip=True, stdout=True, stderr=False
+        )
 
     @keyword("Get Logs")
     def get_logs(self, name: str = None):
@@ -140,12 +142,6 @@ class ThinEdgeIO(DeviceLibrary):
                 "tail -n +1 /var/log/tedge/agent/* 2>/dev/null || true",
                 shell=True,
             )
-
-            # log.info("mqtt logs: mqtt-logger.service")
-            # self.current.execute_command(
-            #     f"journalctl -u mqtt-logger.service -n 1000 --since '@{int(self.test_start_time.timestamp())}'",
-            #     shell=True,
-            # )
         except Exception as ex:
             log.warning("Failed to retrieve logs. %s", ex, exc_info=True)
 
@@ -191,14 +187,14 @@ class ThinEdgeIO(DeviceLibrary):
             log.info(f"No certificate to remove as the device as not been set")
             return
 
-        exit_code, fingerprint = device.execute_command(
+        result = device.execute_command(
             "command -v tedge >/dev/null && (tedge cert show | grep '^Thumbprint:' | cut -d' ' -f2 | tr A-Z a-z) || true",
         )
-        if exit_code != 0:
-            log.info("Failed to get device certificate fingerprint. %s", fingerprint)
+        if result.return_code != 0:
+            log.info("Failed to get device certificate fingerprint. %s", result.stdout)
             return
 
-        fingerprint = fingerprint.decode("utf8").strip()
+        fingerprint = result.stdout.strip()
         if fingerprint:
             try:
                 c8y_lib.trusted_certificate_delete(fingerprint)
@@ -270,7 +266,9 @@ class ThinEdgeIO(DeviceLibrary):
         Returns:
             str: Command output
         """
-        return self.execute_command(f"tedge config set {name} {value}")
+        return self.execute_command(
+            f"tedge config set {name} {value}", stdout=True, stderr=False
+        )
 
     @keyword("Connect Mapper")
     def tedge_connect(self, mapper: str = "c8y") -> str:
@@ -282,7 +280,9 @@ class ThinEdgeIO(DeviceLibrary):
         Returns:
             str: Command output
         """
-        return self.execute_command(f"tedge connect {mapper}")
+        return self.execute_command(
+            f"tedge connect {mapper}", stdout=True, stderr=False
+        )
 
     @keyword("Disconnect Mapper")
     def tedge_disconnect(self, mapper: str = "c8y") -> str:
@@ -294,7 +294,9 @@ class ThinEdgeIO(DeviceLibrary):
         Returns:
             str: Command output
         """
-        return self.execute_command(f"tedge disconnect {mapper}")
+        return self.execute_command(
+            f"tedge disconnect {mapper}", stdout=True, stderr=False
+        )
 
     @keyword("Disconnect Then Connect Mapper")
     def tedge_disconnect_connect(self, mapper: str = "c8y", sleep: float = 0.0):
@@ -338,7 +340,7 @@ class ThinEdgeIO(DeviceLibrary):
         if date_to:
             cmd += f" --until '@{to_date(date_to).timestamp()}'"
 
-        output = self.execute_command(cmd, log_output=False)
+        output = self.execute_command(cmd, log_output=False, stdout=True, stderr=False)
 
         messages = []
         message_pattern_re = None
@@ -365,6 +367,57 @@ class ThinEdgeIO(DeviceLibrary):
         ]
         return matching
 
+    #
+    # Service Health Status
+    #
+    @keyword("Service Health Status Should Be Up")
+    def assert_service_health_status_up(self, service: str) -> Dict[str, Any]:
+        return self._assert_health_status(service, status="up")
+
+    @keyword("Service Health Status Should Be Down")
+    def assert_service_health_status_down(self, service: str) -> Dict[str, Any]:
+        return self._assert_health_status(service, status="down")
+
+    @keyword("Service Health Status Should Be Equal")
+    def assert_service_health_status_equal(
+        self, service: str, status: str
+    ) -> Dict[str, Any]:
+        return self._assert_health_status(service, status=status)
+
+    def _assert_health_status(self, service: str, status: str) -> Dict[str, Any]:
+        message = self.execute_command(
+            f"mosquitto_sub -t 'tedge/health/{service}' --retained-only -C 1 -W 5",
+            stdout=True,
+            stderr=False,
+        )
+        current_status = ""
+        try:
+            health = json.loads(message)
+            current_status = health.get("status", "")
+        except Exception as ex:
+            log.debug(
+                "Detected non json health message. json_error=%s, message=%s",
+                ex,
+                message,
+            )
+            current_status = message
+        assert current_status == status
+        return health
+
+    @keyword("Setup")
+    def setup(
+        self,
+        skip_bootstrap: bool = None,
+        cleanup: bool = None,
+        adapter: str = None,
+        wait_for_healthy: bool = True,
+    ) -> str:
+        serial_sn = super().setup(skip_bootstrap, cleanup, adapter)
+
+        if not skip_bootstrap and wait_for_healthy:
+            self.assert_service_health_status_up("tedge-mapper-c8y")
+        return serial_sn
+
     def _assert_mqtt_topic_messages(
         self,
         topic: str,
@@ -372,11 +425,16 @@ class ThinEdgeIO(DeviceLibrary):
         date_to: relativetime_ = None,
         minimum: int = 1,
         maximum: int = None,
+        message_pattern: str = None,
         **kwargs,
     ) -> List[Dict[str, Any]]:
         # log.info("Checking mqtt messages for topic: %s", topic)
         items = self.mqtt_match_messages(
-            topic=topic, date_from=date_from, date_to=date_to, **kwargs
+            topic=topic,
+            date_from=date_from,
+            date_to=date_to,
+            message_pattern=message_pattern,
+            **kwargs,
         )
 
         messages = [
@@ -428,7 +486,8 @@ class ThinEdgeIO(DeviceLibrary):
 def to_date(value: relativetime_) -> datetime:
     if isinstance(value, datetime):
         return value
-
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value)
     return dateparser.parse(value)
 
 
