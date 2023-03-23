@@ -1,6 +1,6 @@
 [package]
 name = "aws_mapper_ext"
-description = "thin-edge aws extension adding support for az data model"
+description = "thin-edge aws extension adding support for aws data model"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
