@@ -155,7 +155,7 @@ impl Default for TEdgeEnv {
     fn default() -> Self {
         Self {
             prefix: "TEDGE_",
-            separator: "__",
+            separator: "_",
         }
     }
 }
@@ -172,7 +172,9 @@ impl TEdgeEnv {
     }
 
     fn provider(&self) -> figment::providers::Env {
-        figment::providers::Env::prefixed(self.prefix).split(self.separator)
+        let pattern = self.separator;
+        figment::providers::Env::prefixed(self.prefix)
+            .map(move |name| name.as_str().replacen(pattern, ".", 1).into())
     }
 }
 
@@ -205,7 +207,7 @@ mod tests {
             "#,
             )?;
 
-            jail.set_env("TEDGE_C8Y__URL", "override.c8y.io");
+            jail.set_env("TEDGE_C8Y_URL", "override.c8y.io");
 
             assert_eq!(
                 extract_data::<Config, FileAndEnvironment>(&PathBuf::from("tedge.toml"))
@@ -237,7 +239,7 @@ mod tests {
 
             let warnings = unused_value_warnings::<Config>(&figment, &env).unwrap();
             assert_eq!(warnings.len(), 1);
-            let warning = dbg!(warnings.iter().next().unwrap());
+            let warning = dbg!(warnings.first().unwrap());
             assert!(warning.contains("some.value"));
             assert!(warning.contains("tedge.toml"));
             Ok(())
@@ -258,7 +260,7 @@ mod tests {
 
             let warnings = unused_value_warnings::<EmptyConfig>(&figment, &env).unwrap();
             assert_eq!(warnings.len(), 1);
-            let warning = dbg!(warnings.iter().next().unwrap());
+            let warning = dbg!(warnings.first().unwrap());
             assert!(warning.contains(variable_name));
             Ok(())
         })

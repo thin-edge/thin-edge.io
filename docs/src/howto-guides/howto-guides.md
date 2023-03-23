@@ -4,7 +4,7 @@
 2. [How to create a test certificate?](./003_registration.md)
 3. [How to connect a cloud end-point?](./004_connect.md)
 4. [How to use `tedge mqtt` module?](./005_pub_sub.md)
-5. [How to test connection to cloud?](./007_test_connection.md)
+5. [How to configure thin-edge.io?](./006_config.md)
 6. [How to test the cloud connection?](./007_test_connection.md)
 7. [How to configure the local mqtt bind address and port?](./008_config_local_mqtt_bind_address_and_port.md)
 8. [How to trouble shoot device monitoring?](./009_trouble_shooting_monitoring.md)
