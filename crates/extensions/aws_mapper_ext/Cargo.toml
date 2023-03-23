@@ -26,10 +26,10 @@ tedge_mapper_core = { path = "../tedge_mapper_core" }
 tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
 tedge_utils = { path = "../../common/tedge_utils" }
 thiserror = "1.0"
+time = "0.3"
 tokio = { version = "1.23", features = ["macros"] }
 toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
-time = "0.3"
 
 [dev-dependencies]
 anyhow = "1.0.6"
