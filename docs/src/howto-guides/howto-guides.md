@@ -28,3 +28,4 @@
 26. [How to enable configuration management on child devices](./child_device_config_management_agent.md)
 27. [How to remotely connect to your thin-edge.io device via SSH/VNC/Telnet with Cumulocity remote access](./027_remote_access_with_cumulocity.md)
 28. [How to monitor a service from Cumulocity](./028_c8y_service_monitoring.md)
+29. [How to enable firmware management on child devices](./child_device_firmware_management.md)
