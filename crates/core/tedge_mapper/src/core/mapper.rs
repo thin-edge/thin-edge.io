@@ -10,16 +10,14 @@ use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use mqtt_channel::UnboundedReceiver;
 use mqtt_channel::UnboundedSender;
-use tedge_api::health::health_status_up_message;
-
 use std::path::Path;
 use std::time::Duration;
 use tedge_api::health::health_check_topics;
 use tedge_api::health::health_status_down_message;
+use tedge_api::health::health_status_up_message;
 use tedge_api::health::send_health_status;
 use tedge_utils::notify::fs_notify_stream;
 use tedge_utils::notify::FsEvent;
-
 use tracing::error;
 use tracing::info;
 use tracing::instrument;
@@ -179,6 +177,33 @@ async fn process_messages(mapper: &mut Mapper, ops_dir: Option<&Path>) -> Result
         }
         Ok(())
     }
+}
+
+#[cfg(test)]
+pub async fn create_mapper(
+    app_name: &str,
+    mqtt_host: String,
+    mqtt_port: u16,
+    converter: Box<dyn Converter<Error = ConversionError>>,
+) -> Result<Mapper, anyhow::Error> {
+    use mqtt_channel::Connection;
+
+    let health_check_topics: TopicFilter = health_check_topics(app_name);
+
+    let mapper_config = converter.get_mapper_config();
+    let mut topic_filter = mapper_config.in_topic_filter.clone();
+    topic_filter.add_all(health_check_topics.clone());
+
+    let mqtt_client =
+        Connection::new(&mqtt_config(app_name, &mqtt_host, mqtt_port, topic_filter)?).await?;
+
+    Ok(Mapper::new(
+        app_name.to_string(),
+        mqtt_client.received,
+        mqtt_client.published,
+        mqtt_client.errors,
+        converter,
+    ))
 }
 
 #[cfg(test)]

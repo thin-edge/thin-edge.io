@@ -121,7 +121,6 @@ pub fn make_valid_topic_or_panic(topic_name: &str) -> Topic {
 #[cfg(test)]
 mod tests {
     use crate::converter::AwsConverter;
-    use tedge_mapper_core::converter::*;
     use tedge_mapper_core::error::ConversionError;
     use tedge_mapper_core::size_threshold::SizeThreshold;
 

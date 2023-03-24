@@ -86,16 +86,14 @@ pub fn make_valid_topic_or_panic(topic_name: &str) -> Topic {
 #[cfg(test)]
 mod tests {
     use crate::converter::AzureConverter;
-    use tedge_mapper_core::converter::*;
-    use tedge_mapper_core::error::ConversionError;
-    use tedge_mapper_core::size_threshold::SizeThreshold;
-
     use assert_json_diff::*;
     use assert_matches::*;
     use clock::Clock;
     use mqtt_channel::Message;
     use mqtt_channel::Topic;
     use serde_json::json;
+    use tedge_mapper_core::error::ConversionError;
+    use tedge_mapper_core::size_threshold::SizeThreshold;
     use time::macros::datetime;
 
     struct TestClock;
