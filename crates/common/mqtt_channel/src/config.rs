@@ -199,10 +199,10 @@ impl Config {
 
         mqtt_options.set_max_packet_size(self.max_packet_size, self.max_packet_size);
 
-        if let Some(lwp) = self.last_will_message.clone() {
+        if let Some(lwp) = &self.last_will_message {
             let last_will_message = LastWill {
-                topic: lwp.topic.into(),
-                message: lwp.payload.into(),
+                topic: lwp.topic.clone().into(),
+                message: lwp.payload().clone().into(),
                 qos: lwp.qos,
                 retain: lwp.retain,
             };
