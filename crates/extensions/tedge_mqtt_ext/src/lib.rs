@@ -174,17 +174,22 @@ impl Actor for MqttActor {
     async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
         let mut mqtt_client = mqtt_channel::Connection::new(&self.mqtt_config)
             .await
-            .unwrap(); // TODO Convert MqttError to RuntimeError;
+            .map_err(Box::new)?;
 
         loop {
             tokio::select! {
-                Some(message) = messages.recv() => {
-                    mqtt_client
+                message_or_signal = messages.try_recv() => {
+                    match message_or_signal {
+                        Ok(Some(message)) => {
+                                                mqtt_client
                             .published
                             .send(message)
                             .await
-                            .expect("TODO catch actor specific errors");
+                            .map_err(Box::new)?
+                        }
+                        Ok(None) | Err(RuntimeRequest::Shutdown) => break,
                     }
+                }
                 Some(message) = mqtt_client.received.next() => {
                     messages.send(message).await?
                 },
