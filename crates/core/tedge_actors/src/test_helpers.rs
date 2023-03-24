@@ -23,7 +23,7 @@ use std::time::Duration;
 
 /// A test helper that extends a message box with various way to check received messages.
 #[async_trait]
-pub trait MessageReceiverExt<M: Message> {
+pub trait MessageReceiverExt<M: Message>: Sized {
     /// Return a new receiver which returns None if no message is received after the given timeout
     ///
     /// ```
@@ -50,7 +50,30 @@ pub trait MessageReceiverExt<M: Message> {
     /// # Ok(())
     /// # }
     /// ```
-    fn with_timeout(self, timeout: Duration) -> TimedBoxReceiver<M>;
+    ///
+    /// Note that, calling [MessageReceiverExt.with_timout] on a receiver return an `impl ReceiveMessage`
+    /// discarding any other traits implemented by the former receiver.
+    ///
+    /// ```
+    /// # use crate::tedge_actors::{Builder, RuntimeError, SimpleMessageBox, SimpleMessageBoxBuilder};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(),RuntimeError> {
+    ///
+    /// use std::time::Duration;
+    /// use tedge_actors::test_helpers::MessageReceiverExt;
+    /// let message_box: SimpleMessageBox<&str,&str> = SimpleMessageBoxBuilder::new("Box",16).build();
+    ///
+    /// // The timeout_receiver is no more a message_box
+    /// let mut timeout_receiver = message_box.with_timeout(Duration::from_millis(100));
+    ///
+    /// // However the inner message_box can still be accessed
+    /// timeout_receiver.as_mut().send("Hello world").await?;
+    ///
+    /// # Ok(())
+    /// }
+    /// ```
+    ///
+    fn with_timeout(self, timeout: Duration) -> TimedBoxReceiver<Self>;
 
     /// Skip the given number of messages
     ///
@@ -221,10 +244,10 @@ where
     T: ReceiveMessages<M> + Send + Sync + 'static,
     M: Message + Eq + PartialEq,
 {
-    fn with_timeout(self, timeout: Duration) -> TimedBoxReceiver<M> {
+    fn with_timeout(self, timeout: Duration) -> TimedBoxReceiver<Self> {
         TimedBoxReceiver {
             timeout,
-            inner: Box::new(self),
+            inner: self,
         }
     }
 
@@ -284,13 +307,17 @@ where
 
 /// A receiver that behaves as if the channel has been closed,
 /// returning None, when no message is received after a given duration.
-pub struct TimedBoxReceiver<M: Message> {
+pub struct TimedBoxReceiver<T> {
     timeout: Duration,
-    inner: Box<dyn ReceiveMessages<M> + Send + Sync + 'static>,
+    inner: T,
 }
 
 #[async_trait]
-impl<M: Message> ReceiveMessages<M> for TimedBoxReceiver<M> {
+impl<T, M> ReceiveMessages<M> for TimedBoxReceiver<T>
+where
+    M: Message,
+    T: ReceiveMessages<M> + Send + Sync + 'static,
+{
     async fn try_recv(&mut self) -> Result<Option<M>, RuntimeRequest> {
         tokio::time::timeout(self.timeout, self.inner.try_recv())
             .await
@@ -307,6 +334,18 @@ impl<M: Message> ReceiveMessages<M> for TimedBoxReceiver<M> {
         tokio::time::timeout(self.timeout, self.inner.recv())
             .await
             .unwrap_or(None)
+    }
+}
+
+impl<T> AsRef<T> for TimedBoxReceiver<T> {
+    fn as_ref(&self) -> &T {
+        &self.inner
+    }
+}
+
+impl<T> AsMut<T> for TimedBoxReceiver<T> {
+    fn as_mut(&mut self) -> &mut T {
+        &mut self.inner
     }
 }
 
