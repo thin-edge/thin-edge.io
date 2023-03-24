@@ -1,5 +1,6 @@
 # Reference Guides
 
+## Setup
 - [Supported platforms](../supported-platforms.md)
 
 ## Configuration files
