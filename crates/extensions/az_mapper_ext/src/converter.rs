@@ -1,14 +1,19 @@
-use tedge_mapper_core::converter::*;
-use tedge_mapper_core::error::*;
-use tedge_mapper_core::size_threshold::SizeThreshold;
-
-use async_trait::async_trait;
 use clock::Clock;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use tedge_api::serialize::ThinEdgeJsonSerializer;
 use tedge_api::topic::get_child_id_from_measurement_topic;
+use tedge_mapper_core::error::*;
+use tedge_mapper_core::size_threshold::SizeThreshold;
+use tracing::error;
+
+#[derive(Debug)]
+pub struct MapperConfig {
+    pub in_topic_filter: TopicFilter,
+    pub out_topic: Topic,
+    pub errors_topic: Topic,
+}
 
 pub struct AzureConverter {
     pub(crate) add_timestamp: bool,
@@ -37,17 +42,12 @@ impl AzureConverter {
             .try_into()
             .unwrap()
     }
-}
-
-#[async_trait]
-impl Converter for AzureConverter {
-    type Error = ConversionError;
 
     fn get_mapper_config(&self) -> &MapperConfig {
         &self.mapper_config
     }
 
-    async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
+    async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
         let maybe_child_id = get_child_id_from_measurement_topic(&input.topic.name);
 
         let az_out_topic = match maybe_child_id {
@@ -63,6 +63,24 @@ impl Converter for AzureConverter {
         let payload = serializer.into_string()?;
         Ok(vec![(Message::new(&az_out_topic, payload))])
     }
+
+    pub async fn convert(&mut self, input: &Message) -> Vec<Message> {
+        let messages_or_err = self.try_convert(input).await;
+        self.wrap_errors(messages_or_err)
+    }
+
+    fn wrap_errors(&self, messages_or_err: Result<Vec<Message>, ConversionError>) -> Vec<Message> {
+        messages_or_err.unwrap_or_else(|error| vec![self.new_error_message(error)])
+    }
+
+    fn new_error_message(&self, error: ConversionError) -> Message {
+        error!("Mapping error: {}", error);
+        Message::new(&self.get_mapper_config().errors_topic, error.to_string())
+    }
+}
+
+pub fn make_valid_topic_or_panic(topic_name: &str) -> Topic {
+    Topic::new(topic_name).expect("Invalid topic name")
 }
 
 #[cfg(test)]

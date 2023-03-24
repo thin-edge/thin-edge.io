@@ -4,7 +4,6 @@ use tedge_actors::Actor;
 use tedge_actors::ReceiveMessages;
 use tedge_actors::RuntimeError;
 use tedge_actors::SimpleMessageBox;
-use tedge_mapper_core::converter::Converter;
 use tedge_mapper_core::size_threshold::SizeThreshold;
 use tedge_mqtt_ext::MqttMessage;
 
