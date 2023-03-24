@@ -102,7 +102,6 @@ tracing = { version = "0.1", features = ["attributes", "log"] }
 [dev-dependencies]
 assert-json-diff = "2.0"
 assert_matches = "1.5"
-az_mapper_ext = { path = "../../extensions/az_mapper_ext" }
 mockito = "0.31"
 mqtt_tests = { path = "../../tests/mqtt_tests" }
 proptest = "1.0"

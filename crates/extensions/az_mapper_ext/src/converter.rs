@@ -1,11 +1,11 @@
 use clock::Clock;
-use mqtt_channel::Message;
-use mqtt_channel::Topic;
-use mqtt_channel::TopicFilter;
 use tedge_api::serialize::ThinEdgeJsonSerializer;
 use tedge_api::topic::get_child_id_from_measurement_topic;
 use tedge_mapper_core::error::*;
 use tedge_mapper_core::size_threshold::SizeThreshold;
+use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
+use tedge_mqtt_ext::TopicFilter;
 use tracing::error;
 
 #[derive(Debug)]
@@ -47,7 +47,10 @@ impl AzureConverter {
         &self.mapper_config
     }
 
-    async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
+    async fn try_convert(
+        &mut self,
+        input: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
         let maybe_child_id = get_child_id_from_measurement_topic(&input.topic.name);
 
         let az_out_topic = match maybe_child_id {
@@ -61,21 +64,24 @@ impl AzureConverter {
         tedge_api::parser::parse_str(input.payload_str()?, &mut serializer)?;
 
         let payload = serializer.into_string()?;
-        Ok(vec![(Message::new(&az_out_topic, payload))])
+        Ok(vec![(MqttMessage::new(&az_out_topic, payload))])
     }
 
-    pub async fn convert(&mut self, input: &Message) -> Vec<Message> {
+    pub async fn convert(&mut self, input: &MqttMessage) -> Vec<MqttMessage> {
         let messages_or_err = self.try_convert(input).await;
         self.wrap_errors(messages_or_err)
     }
 
-    fn wrap_errors(&self, messages_or_err: Result<Vec<Message>, ConversionError>) -> Vec<Message> {
+    fn wrap_errors(
+        &self,
+        messages_or_err: Result<Vec<MqttMessage>, ConversionError>,
+    ) -> Vec<MqttMessage> {
         messages_or_err.unwrap_or_else(|error| vec![self.new_error_message(error)])
     }
 
-    fn new_error_message(&self, error: ConversionError) -> Message {
+    fn new_error_message(&self, error: ConversionError) -> MqttMessage {
         error!("Mapping error: {}", error);
-        Message::new(&self.get_mapper_config().errors_topic, error.to_string())
+        MqttMessage::new(&self.get_mapper_config().errors_topic, error.to_string())
     }
 }
 
@@ -89,11 +95,11 @@ mod tests {
     use assert_json_diff::*;
     use assert_matches::*;
     use clock::Clock;
-    use mqtt_channel::Message;
-    use mqtt_channel::Topic;
     use serde_json::json;
     use tedge_mapper_core::error::ConversionError;
     use tedge_mapper_core::size_threshold::SizeThreshold;
+    use tedge_mqtt_ext::MqttMessage;
+    use tedge_mqtt_ext::Topic;
     use time::macros::datetime;
 
     struct TestClock;
@@ -115,11 +121,11 @@ mod tests {
         assert_matches!(result, Err(ConversionError::FromThinEdgeJsonParser(_)))
     }
 
-    fn new_tedge_message(input: &str) -> Message {
-        Message::new(&Topic::new_unchecked("tedge/measurements"), input)
+    fn new_tedge_message(input: &str) -> MqttMessage {
+        MqttMessage::new(&Topic::new_unchecked("tedge/measurements"), input)
     }
 
-    fn extract_first_message_payload(mut messages: Vec<Message>) -> String {
+    fn extract_first_message_payload(mut messages: Vec<MqttMessage>) -> String {
         messages.pop().unwrap().payload_str().unwrap().to_string()
     }
 

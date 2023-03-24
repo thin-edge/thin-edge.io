@@ -29,7 +29,7 @@ time = { version = "0.3", features = [
 tracing = { version = "0.1", features = ["attributes", "log"] }
 
 [dev-dependencies]
-anyhow = "1.0.6"
+anyhow = "1.0"
 assert_matches = "1.5"
 clock = { path = "../../common/clock" }
 criterion = "0.3"
