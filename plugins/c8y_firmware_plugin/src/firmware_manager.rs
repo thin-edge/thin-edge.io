@@ -267,10 +267,7 @@ impl FirmwareManager {
             .await
         {
             return match err {
-                FirmwareManagementError::RequestAlreadyAddressed => {
-                    warn!("Skip the received c8y_Firmware operation as the same operation is already in progress.");
-                    Ok(())
-                }
+                FirmwareManagementError::RequestAlreadyAddressed => Ok(()),
                 _ => {
                     self.fail_operation_in_cloud(&child_id, None, &err.to_string())
                         .await?;
@@ -597,7 +594,8 @@ impl FirmwareManager {
         &mut self,
         smartrest_request: SmartRestFirmwareRequest,
     ) -> Result<(), FirmwareManagementError> {
-        let persistent_store_dir_path = self.persistent_dir.join(PERSISTENT_STORE_DIR_NAME);
+        let persistent_store = PersistentStore::from(self.persistent_dir.clone());
+        let persistent_store_dir_path = persistent_store.get_dir_path();
         validate_dir_exists(&persistent_store_dir_path)?;
 
         for entry in fs::read_dir(persistent_store_dir_path.clone())? {
@@ -609,6 +607,37 @@ impl FirmwareManager {
                             && recorded_entry.version == smartrest_request.version
                             && recorded_entry.server_url == smartrest_request.url
                         {
+                            info!("The same operation as the received c8y_Firmware operation is already in progress.");
+
+                            // Resend a firmware request with incremented attempt.
+                            let new_operation_entry = recorded_entry.increment_attempt();
+                            new_operation_entry.overwrite_file(persistent_store.clone())?;
+
+                            let request =
+                                FirmwareOperationRequest::from(new_operation_entry.clone());
+                            self.mqtt_client.published.send(request.try_into()?).await?;
+                            info!(
+                                "Firmware update request is resent. operation_id={}, child={}",
+                                new_operation_entry.operation_id, new_operation_entry.child_id
+                            );
+
+                            let current_operation_state = self
+                                .operation_timer
+                                .current_value(&(
+                                    new_operation_entry.child_id.clone(),
+                                    new_operation_entry.operation_id.clone(),
+                                ))
+                                .unwrap_or(&ActiveOperationState::Pending);
+
+                            self.operation_timer.start_timer(
+                                (
+                                    new_operation_entry.child_id,
+                                    new_operation_entry.operation_id,
+                                ),
+                                *current_operation_state,
+                                self.timeout_sec,
+                            );
+
                             return Err(FirmwareManagementError::RequestAlreadyAddressed);
                         }
                     }
