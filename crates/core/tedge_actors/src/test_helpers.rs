@@ -51,8 +51,9 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// # }
     /// ```
     ///
-    /// Note that, calling [MessageReceiverExt.with_timout] on a receiver return an `impl ReceiveMessage`
+    /// Note that, calling `MessageReceiverExt.with_timeout()` on a receiver returns an `impl MessageReceiver`
     /// discarding any other traits implemented by the former receiver.
+    /// You will have to use `as_ref()` or `as_mut()` to access the wrapped message box.
     ///
     /// ```
     /// # use crate::tedge_actors::{Builder, RuntimeError, SimpleMessageBox, SimpleMessageBoxBuilder};
