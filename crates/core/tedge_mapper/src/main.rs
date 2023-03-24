@@ -4,14 +4,14 @@ use std::path::PathBuf;
 use crate::az::mapper::AzureMapper;
 use crate::c8y::mapper::CumulocityMapper;
 use crate::collectd::mapper::CollectdMapper;
-use tedge_mapper_core::component::TEdgeComponent;
+use aws_mapper_ext::mapper::AwsMapper;
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_config::*;
-use aws_mapper_ext::mapper::AwsMapper;
+use tedge_mapper_core::component::TEdgeComponent;
 
 mod az;
 mod c8y;

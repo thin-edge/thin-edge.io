@@ -30,8 +30,8 @@ impl Actor for AwsMapperActor {
 
     async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
         let clock = Box::new(WallClock);
-           // Quotas at: https://docs.aws.amazon.com/general/latest/gr/iot-core.html#limits_iot
-           let size_threshold = SizeThreshold(128 * 1024);
+        // Quotas at: https://docs.aws.amazon.com/general/latest/gr/iot-core.html#limits_iot
+        let size_threshold = SizeThreshold(128 * 1024);
         let mut converter = Box::new(AwsConverter::new(
             self.add_time_stamp,
             clock,
