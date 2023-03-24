@@ -27,32 +27,6 @@ use tracing::warn;
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 use std::result::Result::Ok;
 
-#[cfg(test)]
-use mqtt_channel::Connection;
-pub async fn create_mapper(
-    app_name: &str,
-    mqtt_host: String,
-    mqtt_port: u16,
-    converter: Box<dyn Converter<Error = ConversionError>>,
-) -> Result<Mapper, anyhow::Error> {
-    let health_check_topics: TopicFilter = health_check_topics(app_name);
-
-    let mapper_config = converter.get_mapper_config();
-    let mut topic_filter = mapper_config.in_topic_filter.clone();
-    topic_filter.add_all(health_check_topics.clone());
-
-    let mqtt_client =
-        Connection::new(&mqtt_config(app_name, &mqtt_host, mqtt_port, topic_filter)?).await?;
-
-    Ok(Mapper::new(
-        app_name.to_string(),
-        mqtt_client.received,
-        mqtt_client.published,
-        mqtt_client.errors,
-        converter,
-    ))
-}
-
 pub fn mqtt_config(
     name: &str,
     host: &str,
@@ -212,6 +186,7 @@ mod tests {
     use super::*;
     use assert_json_diff::assert_json_include;
     use async_trait::async_trait;
+    use mqtt_channel::Connection;
     use mqtt_channel::Message;
     use mqtt_channel::Topic;
     use mqtt_channel::TopicFilter;
@@ -361,5 +336,29 @@ mod tests {
                 Err(UppercaseConverter::conversion_error())
             }
         }
+    }
+
+    pub async fn create_mapper(
+        app_name: &str,
+        mqtt_host: String,
+        mqtt_port: u16,
+        converter: Box<dyn Converter<Error = ConversionError>>,
+    ) -> Result<Mapper, anyhow::Error> {
+        let health_check_topics: TopicFilter = health_check_topics(app_name);
+
+        let mapper_config = converter.get_mapper_config();
+        let mut topic_filter = mapper_config.in_topic_filter.clone();
+        topic_filter.add_all(health_check_topics.clone());
+
+        let mqtt_client =
+            Connection::new(&mqtt_config(app_name, &mqtt_host, mqtt_port, topic_filter)?).await?;
+
+        Ok(Mapper::new(
+            app_name.to_string(),
+            mqtt_client.received,
+            mqtt_client.published,
+            mqtt_client.errors,
+            converter,
+        ))
     }
 }
