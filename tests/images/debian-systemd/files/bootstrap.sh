@@ -783,7 +783,7 @@ main() {
     # Bootstrap
     # ---------------------------------------
     if [ "$BOOTSTRAP" = 1 ]; then
-        banner "Bootstraping device"
+        banner "Bootstrapping device"
         # Check if tedge is installed before trying to bootstrap
         if ! command_exists tedge; then
             fail "Can not bootstrap as tedge is not installed"
