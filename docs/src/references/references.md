@@ -8,7 +8,7 @@
 - [MQTT bridge configuration](./bridged-topics.md)
 - [Init System Configuration File](./init-system-config.md)
 
-## The tedge CLI
+## tedge CLI
 
 `tedge` is the command-line interface of `thin-edge.io` to create and manage resources on the device.
 
