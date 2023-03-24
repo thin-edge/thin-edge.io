@@ -59,6 +59,7 @@ stop-on-upgrade = false
 anyhow = "1.0"
 assert_cmd = "2.0"
 async-trait = "0.1"
+aws_mapper_ext = { path = "../../extensions/aws_mapper_ext" }
 az_mapper_ext = { path = "../../extensions/az_mapper_ext" }
 batcher = { path = "../../common/batcher" }
 c8y_api = { path = "../c8y_api" }
