@@ -13,9 +13,9 @@ use tedge_actors::DynSender;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageBox;
+use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
-use tedge_actors::ReceiveMessages;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
@@ -133,7 +133,7 @@ impl MqttMessageBox {
 }
 
 #[async_trait]
-impl ReceiveMessages<MqttMessage> for MqttMessageBox {
+impl MessageReceiver<MqttMessage> for MqttMessageBox {
     async fn try_recv(&mut self) -> Result<Option<MqttMessage>, RuntimeRequest> {
         self.input_receiver.try_recv().await
     }

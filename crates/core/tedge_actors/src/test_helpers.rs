@@ -2,11 +2,11 @@ use crate::mpsc;
 use crate::Builder;
 use crate::DynSender;
 use crate::Message;
+use crate::MessageReceiver;
 use crate::MessageSink;
 use crate::MessageSource;
 use crate::NoConfig;
 use crate::NullSender;
-use crate::ReceiveMessages;
 use crate::RuntimeRequest;
 use crate::Sender;
 use crate::ServiceConsumer;
@@ -27,7 +27,7 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// Return a new receiver which returns None if no message is received after the given timeout
     ///
     /// ```
-    /// # use tedge_actors::{Builder, NoMessage, ReceiveMessages, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder};
+    /// # use tedge_actors::{Builder, NoMessage, MessageReceiver, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder};
     /// # use std::time::Duration;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(),RuntimeError> {
@@ -78,7 +78,7 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// Skip the given number of messages
     ///
     /// ```
-    /// # use tedge_actors::{Builder, NoMessage, ReceiveMessages, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder};
+    /// # use tedge_actors::{Builder, NoMessage, MessageReceiver, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder};
     /// # use std::time::Duration;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(),RuntimeError> {
@@ -241,7 +241,7 @@ pub trait MessageReceiverExt<M: Message>: Sized {
 #[async_trait]
 impl<T, M> MessageReceiverExt<M> for T
 where
-    T: ReceiveMessages<M> + Send + Sync + 'static,
+    T: MessageReceiver<M> + Send + Sync + 'static,
     M: Message + Eq + PartialEq,
 {
     fn with_timeout(self, timeout: Duration) -> TimedBoxReceiver<Self> {
@@ -313,10 +313,10 @@ pub struct TimedBoxReceiver<T> {
 }
 
 #[async_trait]
-impl<T, M> ReceiveMessages<M> for TimedBoxReceiver<T>
+impl<T, M> MessageReceiver<M> for TimedBoxReceiver<T>
 where
     M: Message,
-    T: ReceiveMessages<M> + Send + Sync + 'static,
+    T: MessageReceiver<M> + Send + Sync + 'static,
 {
     async fn try_recv(&mut self) -> Result<Option<M>, RuntimeRequest> {
         tokio::time::timeout(self.timeout, self.inner.try_recv())

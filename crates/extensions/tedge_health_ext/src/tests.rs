@@ -4,7 +4,7 @@ use crate::HealthMonitorBuilder;
 use crate::HealthMonitorMessageBox;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
-use tedge_actors::ReceiveMessages;
+use tedge_actors::MessageReceiver;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_mqtt_ext::MqttMessage;

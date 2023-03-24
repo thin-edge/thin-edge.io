@@ -9,7 +9,7 @@ use std::fmt::Debug;
 use std::pin::Pin;
 use tedge_actors::Actor;
 use tedge_actors::ClientId;
-use tedge_actors::ReceiveMessages;
+use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::ServerMessageBox;
 use tokio::time::sleep_until;

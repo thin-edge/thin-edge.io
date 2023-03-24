@@ -24,7 +24,7 @@ use tedge_actors::ChannelError;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageBox;
-use tedge_actors::ReceiveMessages;
+use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
@@ -417,7 +417,7 @@ impl ConfigManagerMessageBox {
 }
 
 #[async_trait]
-impl ReceiveMessages<ConfigInput> for ConfigManagerMessageBox {
+impl MessageReceiver<ConfigInput> for ConfigManagerMessageBox {
     async fn try_recv(&mut self) -> Result<Option<ConfigInput>, RuntimeRequest> {
         self.input_receiver.try_recv().await
     }

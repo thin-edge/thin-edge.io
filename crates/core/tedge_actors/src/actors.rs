@@ -1,4 +1,4 @@
-use crate::message_boxes::ReceiveMessages;
+use crate::message_boxes::MessageReceiver;
 use crate::ConcurrentServerMessageBox;
 use crate::Message;
 use crate::MessageBox;
@@ -91,7 +91,7 @@ impl<S: Server> ServerActor<S> {
 /// To be used as an actor, a `Server` is wrapped into a [ServerActor](crate::ServerActor)
 ///
 /// ```
-/// # use tedge_actors::{Actor, Builder, MessageBox, NoConfig, ReceiveMessages, ServerActor, SimpleMessageBox, SimpleMessageBoxBuilder};
+/// # use tedge_actors::{Actor, Builder, MessageBox, NoConfig, MessageReceiver, ServerActor, SimpleMessageBox, SimpleMessageBoxBuilder};
 /// use tedge_actors::test_helpers::ServiceProviderExt;
 /// # use crate::tedge_actors::examples::calculator::*;
 /// #
