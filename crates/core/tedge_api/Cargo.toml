@@ -9,7 +9,6 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-async-trait = "0.1"
 clock = { path = "../../common/clock" }
 csv = "1.1"
 download = { path = "../../common/download" }
@@ -26,7 +25,6 @@ time = { version = "0.3", features = [
     "serde",
     "serde-well-known",
 ] }
-tracing = { version = "0.1", features = ["attributes", "log"] }
 
 [dev-dependencies]
 anyhow = "1.0"

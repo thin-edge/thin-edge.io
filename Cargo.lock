@@ -3623,7 +3623,6 @@ version = "0.10.0"
 dependencies = [
  "anyhow",
  "assert_matches",
- "async-trait",
  "clock",
  "criterion",
  "csv",
@@ -3641,7 +3640,6 @@ dependencies = [
  "test-case",
  "thiserror",
  "time",
- "tracing",
  "walkdir",
 ]
 
