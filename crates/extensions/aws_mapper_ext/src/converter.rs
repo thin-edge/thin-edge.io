@@ -1,8 +1,6 @@
-use tedge_mapper_core::converter::*;
 use tedge_mapper_core::error::*;
 use tedge_mapper_core::size_threshold::SizeThreshold;
 
-use async_trait::async_trait;
 use clock::Clock;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
@@ -10,6 +8,14 @@ use mqtt_channel::TopicFilter;
 use serde_json::Map;
 use serde_json::Value;
 use tedge_api::serialize::ThinEdgeJsonSerializer;
+use tracing::error;
+
+#[derive(Debug)]
+pub struct MapperConfig {
+    pub in_topic_filter: TopicFilter,
+    pub out_topic: Topic,
+    pub errors_topic: Topic,
+}
 
 pub struct AwsConverter {
     pub(crate) add_timestamp: bool,
@@ -47,17 +53,26 @@ impl AwsConverter {
         .try_into()
         .unwrap()
     }
-}
 
-#[async_trait]
-impl Converter for AwsConverter {
-    type Error = ConversionError;
+    pub async fn convert(&mut self, input: &Message) -> Vec<Message> {
+        let messages_or_err = self.try_convert(input).await;
+        self.wrap_errors(messages_or_err)
+    }
+
+    fn wrap_errors(&self, messages_or_err: Result<Vec<Message>, ConversionError>) -> Vec<Message> {
+        messages_or_err.unwrap_or_else(|error| vec![self.new_error_message(error)])
+    }
+
+    fn new_error_message(&self, error: ConversionError) -> Message {
+        error!("Mapping error: {}", error);
+        Message::new(&self.get_mapper_config().errors_topic, error.to_string())
+    }
 
     fn get_mapper_config(&self) -> &MapperConfig {
         &self.mapper_config
     }
 
-    async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error> {
+    async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, ConversionError> {
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
 
         // serialize with ThinEdgeJson for measurements, for alarms and events just add the timestamp
@@ -97,6 +112,10 @@ impl Converter for AwsConverter {
         self.size_threshold.validate(&output)?;
         Ok(vec![(output)])
     }
+}
+
+pub fn make_valid_topic_or_panic(topic_name: &str) -> Topic {
+    Topic::new(topic_name).expect("Invalid topic name")
 }
 
 #[cfg(test)]
