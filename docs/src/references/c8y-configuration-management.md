@@ -268,30 +268,8 @@ by the configuration of thin-edge:
 c8y-configuration-plugin --help
 ```
 
-```
-c8y-configuration-plugin 0.9.0
-
-Thin-edge device configuration management for Cumulocity
-
-USAGE:
-    c8y-configuration-plugin [OPTIONS]
-
-OPTIONS:
-        --config-dir <CONFIG_DIR>      [default: /etc/tedge]
-        --debug                        Turn-on the debug log level
-    -h, --help                         Print help information
-    -V, --version                      Print version information
-
-    On start, `c8y-configuration-plugin` notifies the cloud tenant of the managed configuration files,
-    listed in `CONFIG_DIR/c8y/c8y-configuration-plugin.toml`, sending this list with a `119` on `c8y/s/us`.
-    `c8y-configuration-plugin` subscribes then to `c8y/s/ds` listening for configuration operation
-    requests (messages `524` and `526`).
-    notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
-    
-    The thin-edge `CONFIG_DIR` is used to find where:
-    * to store the configuration file: `c8y/c8y-configuration-plugin.toml`
-    * to store temporary files on download: `tedge config get tmp.path`,
-    * to connect the MQTT bus: `tedge config get mqtt.port`.
+```shell
+<!-- cmdrun c8y-configuration-plugin --help -->
 ```
 
 ## Logging

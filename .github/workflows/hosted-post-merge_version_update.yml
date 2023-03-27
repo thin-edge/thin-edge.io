@@ -2,6 +2,20 @@ name: hosted-post-merge_version_update
 
 on:
   workflow_dispatch:
+    inputs:
+      bump:
+        description: Type of version bump
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+          - release
+          - rc
+          - beta
+          - alpha
+        required: true
+        default: patch
 
 env:
   CARGO_TERM_COLOR: always
@@ -31,19 +45,19 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: install
-          args: --version 0.21.0 cargo-release
+          args: --version 0.24.4 cargo-release
 
       - name: Increment version and tag
         uses: actions-rs/cargo@v1
         with:
           command: release
-          args: patch --no-publish --no-push --no-tag -vv --no-dev-version --no-confirm --execute
+          args: ${{ inputs.bump }} --no-publish --no-push --no-tag -vv --no-confirm --execute
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v4
         with:
-          commit-message: Patch version bump
+          commit-message: ${{ inputs.bump }} version bump
           delete-branch: true
-          title: Patch version bump
-          body: Patch version bump
+          title: ${{ inputs.bump }} version bump
+          body: ${{ inputs.bump }} version bump
           reviewers: rina23q
