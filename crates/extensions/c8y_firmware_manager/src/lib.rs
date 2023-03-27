@@ -11,8 +11,6 @@ use crate::operation::OperationKey;
 use actor::FirmwareInput;
 use actor::FirmwareManagerActor;
 use actor::FirmwareManagerMessageBox;
-use actor::OperationSetTimeout;
-use actor::OperationTimeout;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;

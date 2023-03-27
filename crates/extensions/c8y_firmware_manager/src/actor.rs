@@ -713,10 +713,6 @@ impl ReceiveMessages<FirmwareInput> for FirmwareManagerMessageBox {
 impl MessageBox for FirmwareManagerMessageBox {
     type Input = FirmwareInput;
     type Output = FirmwareOutput;
-
-    fn name(&self) -> &str {
-        "C8Y-Firmware-Manager"
-    }
 }
 
 // TODO! Remove it and use tedge_utils/move_file instead.
