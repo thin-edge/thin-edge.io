@@ -1,0 +1,35 @@
+*** Settings ***
+Resource    ../../resources/common.resource
+Library    ThinEdgeIO
+
+Test Tags    
+Suite Setup    Setup
+Test Teardown   Get Logs
+
+*** Test Cases ***
+
+Check lock file existance in default folder
+    [Documentation]    Whe deploying thin-edge components in single-process containers, 
+    ...    the lock file mechanism used by some components (e.g. tedge-agent, tedge-mapper) 
+    ...    do not makes sense as the container filesystem is isolated. 
+    ...    Having the lock file system just adds unnecessary dependencies on the /run/lock folder.
+    File Should Exist    /var/lock/tedge-agent.lock
+    File Should Exist    /var/lock/tedge-mapper-c8y.lock
+    #Stop the running services
+    Stop Service    tedge-mapper-c8y
+    Stop Service    tedge-agent
+    #Remove the existing lock files
+    Execute Command    sudo rm /var/lock/ted*
+Switch off lock file creation
+    [Documentation]    Add a new configuration option under the '[run]'' section to turn off the lock file generation logic. 
+    ...    '[run]' 
+    ...    'lock_files = false' 
+    ...    Having this configuration setting allows the user to set it using a common environment 
+    ...    setting when running the components in individual containers.
+    Execute Command    sudo tedge config set run.lock_files false
+    #Restart the stopped sewrvices
+    Start Service    tedge-mapper-c8y
+    Start Service    tedge-agent
+    #Check that no lock file is created
+    File Should Not Exist    /var/lock/tedge-agent.lock
+    File Should Not Exist    /var/lock/tedge-mapper-c8y.lock
