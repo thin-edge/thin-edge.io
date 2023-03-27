@@ -140,7 +140,6 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: -p tedge
 
       - name: Update PATH
         run: echo "$PWD/target/debug" >> $GITHUB_PATH
