@@ -1,2 +1,0 @@
-# User Documentation
-This part of the documentation is meant for users, that want to use thin-edge.io with the feature set that is provided. If you want to develop something on top of thin-edge.io, head over to the [Developer Documentation](dev_doc.md). Even if you do not yet plan to develop for thin-edge.io some of the contents there might be of interest to you to get a deeper technical understanding.

@@ -115,7 +115,7 @@ pub fn service_monitor_status_message(
             payload: format!(
                 "102,{device_name}_{cid}_{daemon_name},\"{sanitized_type}\",{daemon_name},\"{sanitized_status}\""
             )
-            .into_bytes(),
+            .into(),
             qos: mqtt_channel::QoS::AtLeastOnce,
             retain: false,
         },
@@ -124,7 +124,7 @@ pub fn service_monitor_status_message(
             payload: format!(
                 "102,{device_name}_{daemon_name},\"{sanitized_type}\",{daemon_name},\"{sanitized_status}\""
             )
-            .into_bytes(),
+            .into(),
             qos: mqtt_channel::QoS::AtLeastOnce,
             retain: false,
         },

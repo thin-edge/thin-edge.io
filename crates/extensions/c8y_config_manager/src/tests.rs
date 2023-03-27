@@ -12,7 +12,7 @@ use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynError;
-use tedge_actors::ReceiveMessages;
+use tedge_actors::MessageReceiver;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_mqtt_ext::MqttMessage;

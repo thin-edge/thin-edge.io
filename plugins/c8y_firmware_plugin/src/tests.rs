@@ -101,6 +101,90 @@ async fn handle_request_child_device() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[serial_test::serial]
+async fn resend_firmware_update_request_child_device() -> anyhow::Result<()> {
+    let mut tmp_dir = TempTedgeDir::new();
+    let broker = mqtt_tests::test_mqtt_broker();
+
+    start_firmware_manager(
+        &mut tmp_dir,
+        broker.port,
+        DEFAULT_REQUEST_TIMEOUT_SEC,
+        true,
+        None,
+    )
+    .await?;
+
+    // Mock download endpoint for the plugin to download a firmware from the cloud
+    let mock_http_server_host = mockito::server_url();
+    let cloud_firmware_url = format!("{mock_http_server_host}/some/cloud/url");
+    let file_cache_key = digest(cloud_firmware_url.clone());
+
+    // Subscribe tedge request endpoint for firmware update
+    let mut tedge_command_messages = broker
+        .messages_published_on(&format!(
+            "tedge/{CHILD_DEVICE_ID}/commands/req/firmware_update"
+        ))
+        .await;
+
+    // Publish a c8y_Firmware operation to the plugin
+    broker
+        .publish(
+            "c8y/s/ds",
+            format!(
+                "515,{CHILD_DEVICE_ID},{FIRMWARE_NAME},{FIRMWARE_VERSION},{cloud_firmware_url}"
+            )
+            .as_str(),
+        )
+        .await?;
+
+    // Check if the received message payload contains some expected fields and value.
+    let received_message = tedge_command_messages
+        .next()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await?
+        .expect("No message received.");
+    let received_json: serde_json::Value = serde_json::from_str(&received_message)?;
+    let expected_request_payload = json!({
+        "attempt": 1,
+        "name": FIRMWARE_NAME,
+        "version": FIRMWARE_VERSION,
+        "url": format!("{mock_http_server_host}/tedge/file-transfer/{CHILD_DEVICE_ID}/firmware_update/{file_cache_key}")
+    });
+
+    assert_json_include!(actual: received_json, expected: expected_request_payload);
+
+    // Publish the same c8y_Firmware operation to the plugin again.
+    broker
+        .publish(
+            "c8y/s/ds",
+            format!(
+                "515,{CHILD_DEVICE_ID},{FIRMWARE_NAME},{FIRMWARE_VERSION},{cloud_firmware_url}"
+            )
+            .as_str(),
+        )
+        .await?;
+
+    // Check if the received message payload contains some expected fields and value. "attempt" must be incremented.
+    let received_message = tedge_command_messages
+        .next()
+        .with_timeout(TEST_TIMEOUT_MS)
+        .await?
+        .expect("No message received.");
+    let received_json: serde_json::Value = serde_json::from_str(&received_message)?;
+    let expected_request_payload = json!({
+        "attempt": 2,
+        "name": FIRMWARE_NAME,
+        "version": FIRMWARE_VERSION,
+        "url": format!("{mock_http_server_host}/tedge/file-transfer/{CHILD_DEVICE_ID}/firmware_update/{file_cache_key}")
+    });
+
+    assert_json_include!(actual: received_json, expected: expected_request_payload);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::serial]
 async fn handle_request_file_download_failed() -> anyhow::Result<()> {
     let mut tmp_dir = TempTedgeDir::new();
     let broker = mqtt_tests::test_mqtt_broker();

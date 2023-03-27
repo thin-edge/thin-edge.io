@@ -140,7 +140,7 @@ impl<Input: Debug> Debug for WrappedInput<Input> {
 }
 
 #[async_trait]
-pub trait ReceiveMessages<Input> {
+pub trait MessageReceiver<Input> {
     /// Return the next received message if any, returning [RuntimeRequest]'s as errors.
     /// Returning [RuntimeRequest] takes priority over messages.
     async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest>;
@@ -172,7 +172,7 @@ impl<Input: Debug> LoggingReceiver<Input> {
 }
 
 #[async_trait]
-impl<Input: Send + Debug> ReceiveMessages<Input> for LoggingReceiver<Input> {
+impl<Input: Send + Debug> MessageReceiver<Input> for LoggingReceiver<Input> {
     async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
         let message = self.receiver.try_recv().await;
         info!(target: &self.name, "recv {:?}", message);
@@ -265,7 +265,7 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
 }
 
 #[async_trait]
-impl<Input: Message, Output: Message> ReceiveMessages<Input> for SimpleMessageBox<Input, Output> {
+impl<Input: Message, Output: Message> MessageReceiver<Input> for SimpleMessageBox<Input, Output> {
     async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
         self.input_receiver.try_recv().await
     }
@@ -297,7 +297,7 @@ impl<Input> CombinedReceiver<Input> {
 }
 
 #[async_trait]
-impl<Input: Send> ReceiveMessages<Input> for CombinedReceiver<Input> {
+impl<Input: Send> MessageReceiver<Input> for CombinedReceiver<Input> {
     async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
         match self.recv_message().await {
             Some(WrappedInput::Message(message)) => Ok(Some(message)),
