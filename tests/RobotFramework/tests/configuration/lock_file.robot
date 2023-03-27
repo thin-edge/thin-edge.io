@@ -15,17 +15,18 @@ Check lock file existance in default folder
     ...    Having the lock file system just adds unnecessary dependencies on the /run/lock folder.
     File Should Exist    /var/lock/tedge-agent.lock
     File Should Exist    /var/lock/tedge-mapper-c8y.lock
-    #Stop the running services
-    Stop Service    tedge-mapper-c8y
-    Stop Service    tedge-agent
-    #Remove the existing lock files
-    Execute Command    sudo rm /var/lock/ted*
+    
 Switch off lock file creation
     [Documentation]    Add a new configuration option under the '[run]'' section to turn off the lock file generation logic. 
     ...    '[run]' 
     ...    'lock_files = false' 
     ...    Having this configuration setting allows the user to set it using a common environment 
     ...    setting when running the components in individual containers.
+    #Stop the running services
+    Stop Service    tedge-mapper-c8y
+    Stop Service    tedge-agent
+    #Remove the existing lock files
+    Execute Command    sudo rm /var/lock/ted*
     Execute Command    sudo tedge config set run.lock_files false
     #Restart the stopped sewrvices
     Start Service    tedge-mapper-c8y
