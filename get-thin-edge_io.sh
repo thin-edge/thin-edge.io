@@ -17,6 +17,8 @@ TEDGE_WATCHDOG=tedge-watchdog
 TEDGE_APT_PLUGIN=tedge-apt-plugin
 C8Y_CONFIGURATION_PLUGIN=c8y-configuration-plugin
 C8Y_LOG_PLUGIN=c8y-log-plugin
+C8Y_FIRMWARE_PLUGIN=c8y-firmware-plugin
+C8Y_REMOTE_ACCESS_PLUGIN=c8y-remote-access-plugin
 
 PURGE_OLD_PACKAGES=
 
@@ -225,6 +227,14 @@ install_tedge_plugins() {
     install_artifact "$C8Y_LOG_PLUGIN"
     install_artifact "$TEDGE_WATCHDOG"
 
+    if [ -n "$C8Y_FIRMWARE_PLUGIN" ]; then
+        install_artifact "$C8Y_FIRMWARE_PLUGIN"
+    fi
+
+    if [ -n "$C8Y_REMOTE_ACCESS_PLUGIN" ]; then
+        install_artifact "$C8Y_REMOTE_ACCESS_PLUGIN"
+    fi
+
     if [ -n "$PURGE_OLD_PACKAGES" ]; then
         remove_package "tedge_apt_plugin"
         remove_package "tedge_apama_plugin"
@@ -268,6 +278,13 @@ main() {
         # Note: No configuration files will be removed as the legacy postrm
         # are removed by the renamed packages
         PURGE_OLD_PACKAGES=1
+    fi
+
+    # Ignore plugins for older versions
+    if dpkg --compare-versions "$VERSION" lt "0.10.0"; then
+        log "ignore c8y-firmware-plugin and c8y-remote-access-plugin as they are not supported in <= 0.10.0"
+        C8Y_FIRMWARE_PLUGIN=
+        C8Y_REMOTE_ACCESS_PLUGIN=
     fi
 
     echo "Thank you for trying thin-edge.io!"
