@@ -19,7 +19,7 @@ pub(crate) struct TEdgeConfigDto {
     #[serde(default, alias = "azure")] // for version 0.1.0 compatibility
     pub(crate) az: AzureConfigDto,
 
-    #[serde(default, alias = "aws")] // for version 0.1.0 compatibility
+    #[serde(default)]
     pub(crate) aws: AwsConfigDto,
 
     #[serde(default)]
