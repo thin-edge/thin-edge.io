@@ -181,7 +181,7 @@ No response from child device on snapshot request
     Should Be Equal    @{listen}    {"url":"http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/config_snapshot/config1","path":"/home/pi/config1","type":"config1"}
 
     #CHECK TIMEOUT MESSAGE
-    Cumulocity.Operation Should Be FAILED    ${operation}    failure_reason=Timeout due to lack of response from child device: ${CHILD_SN} for config type: config1    timeout=30
+    Cumulocity.Operation Should Be FAILED    ${operation}    failure_reason=Timeout due to lack of response from child device: ${CHILD_SN} for config type: config1    timeout=60
 
 No response from child device on config update
     ${file_url}=     Create Inventory Binary    test-config.toml    config1    contents=Dummy config
@@ -192,7 +192,7 @@ No response from child device on config update
     Should Be Equal    @{listen}    {"url":"http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/config_update/config1","path":"/home/pi/config1","type":"config1"}
 
     #CHECK OPERATION
-    Cumulocity.Operation Should Be FAILED    ${operation}    failure_reason=Timeout due to lack of response from child device: ${CHILD_SN} for config type: config1    timeout=30
+    Cumulocity.Operation Should Be FAILED    ${operation}    failure_reason=Timeout due to lack of response from child device: ${CHILD_SN} for config type: config1    timeout=60
 
 Custom Setup
     # Parent

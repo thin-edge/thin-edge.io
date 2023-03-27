@@ -15,6 +15,7 @@ c8y_api = { path = "../../core/c8y_api" }
 download = { path = "../../common/download" }
 log = "0.4"
 mqtt_channel = { path = "../../common/mqtt_channel" }
+nanoid = "0.4"
 tedge_actors = { path = "../../core/tedge_actors" }
 tedge_config = { path = "../../common/tedge_config" }
 tedge_http_ext = { path = "../../extensions/tedge_http_ext" }
