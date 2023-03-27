@@ -78,23 +78,7 @@ This will enable the `c8y-log-plugin.toml` to be tracked and managed by the `c8y
 ## Usage
 
 ```shell
-c8y-log-plugin
-```
-
-```
-Plugin supporting log management from Cumulocity on thin-edge.
-USAGE:
-    c8y-log-plugin [OPTIONS]
-OPTIONS:
-        --config-dir <CONFIG_DIR>      Root directory of tedge config and plugin config files [default: `/etc/tedge`]
-        --config-file <CONFIG_FILE>    Path to the plugin config file [default: `$CONFIG_DIR/c8y/c8y-log-plugin.toml`]
-        --init                         Initializes this plugin by creating all the necessary config files that it needs
-    -h, --help                         Print help information
-    -V, --version                      Print version information
-
-    On start, `c8y-log-plugin` notifies the cloud tenant of the managed log types, defined in `c8y-log-plugin.toml`.
-    On receipt of log requests from the cloud, the log files are fetched using the glob path patterns listed in this config file.
-    The cloud tenant is also notified of the progress of the log request operation until success/failure.
+<!-- cmdrun c8y-log-plugin --help -->
 ```
 
 ## Logging
