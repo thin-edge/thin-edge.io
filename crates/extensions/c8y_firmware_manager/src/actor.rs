@@ -22,7 +22,7 @@ use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::MessageBox;
-use tedge_actors::ReceiveMessages;
+use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::WrappedInput;
@@ -31,6 +31,8 @@ use tedge_api::OperationStatus;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
+use tedge_utils::file::move_file;
+use tedge_utils::file::PermissionEntry;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
@@ -264,7 +266,12 @@ impl FirmwareManagerActor {
 
         // If the downloaded firmware is not already in the cache, move it there
         if !downloaded_firmware.starts_with(&cache_dir_path) {
-            move_file(downloaded_firmware, &cache_file_path)?;
+            move_file(
+                &downloaded_firmware,
+                &cache_file_path,
+                PermissionEntry::new(None, None, None),
+            )
+            .await?;
         }
 
         let symlink_path =
@@ -696,7 +703,7 @@ impl FirmwareManagerMessageBox {
 }
 
 #[async_trait]
-impl ReceiveMessages<FirmwareInput> for FirmwareManagerMessageBox {
+impl MessageReceiver<FirmwareInput> for FirmwareManagerMessageBox {
     async fn try_recv(&mut self) -> Result<Option<FirmwareInput>, RuntimeRequest> {
         self.input_receiver.try_recv().await
     }
@@ -713,14 +720,4 @@ impl ReceiveMessages<FirmwareInput> for FirmwareManagerMessageBox {
 impl MessageBox for FirmwareManagerMessageBox {
     type Input = FirmwareInput;
     type Output = FirmwareOutput;
-}
-
-// TODO! Remove it and use tedge_utils/move_file instead.
-fn move_file(src: &Path, dest: &Path) -> Result<(), FirmwareManagementError> {
-    fs::copy(src, dest).map_err(|_| FirmwareManagementError::FileCopyFailed {
-        src: src.to_path_buf(),
-        dest: dest.to_path_buf(),
-    })?;
-
-    Ok(())
 }
