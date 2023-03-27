@@ -273,7 +273,7 @@ async fn run_task(
 mod tests {
     use super::*;
     use crate::fan_in_message_type;
-    use crate::message_boxes::ReceiveMessages;
+    use crate::message_boxes::MessageReceiver;
     use crate::LoggingReceiver;
     use crate::LoggingSender;
     use crate::Message;

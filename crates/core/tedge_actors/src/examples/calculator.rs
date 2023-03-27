@@ -1,5 +1,5 @@
 // TODO: make examples respond to RuntimeRequests
-use crate::message_boxes::ReceiveMessages;
+use crate::message_boxes::MessageReceiver;
 use crate::Actor;
 use crate::RuntimeError;
 use crate::Server;

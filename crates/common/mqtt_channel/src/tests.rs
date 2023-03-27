@@ -500,7 +500,7 @@ async fn ensure_that_last_will_message_is_delivered() -> Result<(), anyhow::Erro
             .with_port(broker.port)
             .with_last_will_message(Message {
                 topic: topic.clone(),
-                payload: "good bye".into(),
+                payload: "good bye".to_string().into(),
                 qos: QoS::AtLeastOnce,
                 retain: false,
             });

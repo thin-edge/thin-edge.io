@@ -23,7 +23,7 @@ use tedge_actors::Actor;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageBox;
-use tedge_actors::ReceiveMessages;
+use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
@@ -402,7 +402,7 @@ impl MessageBox for LogManagerMessageBox {
 }
 
 #[async_trait]
-impl ReceiveMessages<LogInput> for LogManagerMessageBox {
+impl MessageReceiver<LogInput> for LogManagerMessageBox {
     async fn try_recv(&mut self) -> Result<Option<LogInput>, RuntimeRequest> {
         self.input_receiver.try_recv().await
     }

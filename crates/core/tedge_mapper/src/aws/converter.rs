@@ -70,7 +70,8 @@ impl Converter for AwsConverter {
             || input.topic.name.starts_with("tedge/alarms")
             || input.topic.name.starts_with("tedge/health")
         {
-            let mut payload_json: Map<String, Value> = serde_json::from_slice(&input.payload)?;
+            let mut payload_json: Map<String, Value> =
+                serde_json::from_slice(input.payload.as_ref())?;
 
             if let Some(timestamp) = default_timestamp {
                 let timestamp = timestamp
