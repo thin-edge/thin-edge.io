@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use clock::WallClock;
 use tedge_actors::Actor;
-use tedge_actors::ReceiveMessages;
+use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::SimpleMessageBox;
 use tedge_mapper_core::size_threshold::SizeThreshold;
