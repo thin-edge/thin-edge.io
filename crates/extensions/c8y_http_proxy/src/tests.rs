@@ -80,8 +80,12 @@ async fn spawn_c8y_http_proxy(
 
     let mut http = FakeHttpServerBox::builder();
 
-    let mut c8y_proxy_actor =
-        C8YHttpProxyBuilder::new(c8y_host, device_id, tmp_dir, &mut http, &mut jwt);
+    let config = C8YHttpConfig {
+        c8y_host,
+        device_id,
+        tmp_dir,
+    };
+    let mut c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http, &mut jwt);
     let proxy = C8YHttpProxy::new("C8Y", &mut c8y_proxy_actor);
 
     let jwt_actor = ServerActor::new(
@@ -93,7 +97,7 @@ async fn spawn_c8y_http_proxy(
 
     tokio::spawn(jwt_actor.run());
     tokio::spawn(async move {
-        let actor: C8YHttpConfig = c8y_proxy_actor.build();
+        let actor = c8y_proxy_actor.build();
         let _ = actor.run().await;
     });
 
