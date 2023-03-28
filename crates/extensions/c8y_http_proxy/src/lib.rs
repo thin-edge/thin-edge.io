@@ -1,3 +1,4 @@
+use crate::actor::C8YHttpProxyActor;
 use crate::actor::C8YHttpProxyMessageBox;
 use crate::credentials::JwtResult;
 use crate::credentials::JwtRetriever;
@@ -14,6 +15,12 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServerMessageBoxBuilder;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
+use tedge_config::C8yUrlSetting;
+use tedge_config::ConfigSettingAccessor;
+use tedge_config::DeviceIdSetting;
+use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigError;
+use tedge_config::TmpPathSetting;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
 
@@ -26,11 +33,26 @@ pub mod messages;
 mod tests;
 
 /// Configuration of C8Y REST API
+#[derive(Default)]
 pub struct C8YHttpConfig {
     pub c8y_host: String,
     pub device_id: String,
     pub tmp_dir: PathBuf,
-    pub messages: C8YHttpProxyMessageBox,
+}
+
+impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
+    type Error = TEdgeConfigError;
+
+    fn try_from(tedge_config: &TEdgeConfig) -> Result<Self, Self::Error> {
+        let c8y_host = tedge_config.query(C8yUrlSetting)?;
+        let device_id = tedge_config.query(DeviceIdSetting)?;
+        let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
+        Ok(Self {
+            c8y_host: c8y_host.into(),
+            device_id,
+            tmp_dir,
+        })
+    }
 }
 
 /// A proxy to C8Y REST API
@@ -39,9 +61,7 @@ pub struct C8YHttpConfig {
 /// - `impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>`
 pub struct C8YHttpProxyBuilder {
     /// Config
-    c8y_host: String,
-    device_id: String,
-    tmp_dir: PathBuf,
+    config: C8YHttpConfig,
 
     /// Message box for client requests and responses
     clients: ServerMessageBoxBuilder<C8YRestRequest, C8YRestResult>,
@@ -55,9 +75,7 @@ pub struct C8YHttpProxyBuilder {
 
 impl C8YHttpProxyBuilder {
     pub fn new(
-        c8y_host: String,
-        device_id: String,
-        tmp_dir: PathBuf,
+        config: C8YHttpConfig,
         http: &mut impl ServiceProvider<HttpRequest, HttpResult, NoConfig>,
         jwt: &mut impl ServiceProvider<(), JwtResult, NoConfig>,
     ) -> Self {
@@ -65,9 +83,7 @@ impl C8YHttpProxyBuilder {
         let http = ClientMessageBox::new("C8Y-REST => HTTP", http);
         let jwt = JwtRetriever::new("C8Y-REST => JWT", jwt);
         C8YHttpProxyBuilder {
-            c8y_host,
-            device_id,
-            tmp_dir,
+            config,
             clients,
             http,
             jwt,
@@ -75,26 +91,21 @@ impl C8YHttpProxyBuilder {
     }
 }
 
-impl Builder<C8YHttpConfig> for C8YHttpProxyBuilder {
+impl Builder<C8YHttpProxyActor> for C8YHttpProxyBuilder {
     type Error = Infallible;
 
-    fn try_build(self) -> Result<C8YHttpConfig, Self::Error> {
+    fn try_build(self) -> Result<C8YHttpProxyActor, Self::Error> {
         Ok(self.build())
     }
 
-    fn build(self) -> C8YHttpConfig {
+    fn build(self) -> C8YHttpProxyActor {
         let message_box = C8YHttpProxyMessageBox {
             clients: self.clients.build(),
             http: self.http,
             jwt: self.jwt,
         };
 
-        C8YHttpConfig {
-            c8y_host: self.c8y_host,
-            device_id: self.device_id,
-            tmp_dir: self.tmp_dir,
-            messages: message_box,
-        }
+        C8YHttpProxyActor::new(self.config, message_box)
     }
 }
 
@@ -110,17 +121,5 @@ impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig> for C8YHttpProxyBu
 impl RuntimeRequestSink for C8YHttpProxyBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.clients.get_signal_sender()
-    }
-}
-
-impl Builder<C8YHttpProxyMessageBox> for C8YHttpProxyBuilder {
-    type Error = Infallible;
-
-    fn try_build(self) -> Result<C8YHttpProxyMessageBox, Self::Error> {
-        Ok(C8YHttpProxyMessageBox {
-            clients: self.clients.build(),
-            http: self.http,
-            jwt: self.jwt,
-        })
     }
 }
