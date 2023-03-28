@@ -2,7 +2,7 @@
 Resource    ../../resources/common.resource
 Library    ThinEdgeIO
 
-Test Tags    
+Test Tags    theme:configuration
 Suite Setup    Setup
 Test Teardown   Get Logs
 
@@ -28,7 +28,7 @@ Switch off lock file creation
     #Remove the existing lock files
     Execute Command    sudo rm /run/lock/ted*
     Execute Command    sudo tedge config set run.lock_files false
-    #Restart the stopped sewrvices
+    #Restart the stopped services
     Start Service    tedge-mapper-c8y
     Start Service    tedge-agent
     #Check that no lock file is created
