@@ -3725,7 +3725,6 @@ dependencies = [
  "futures",
  "json-writer",
  "logged_command",
- "mockall",
  "mockito",
  "mqtt_channel",
  "mqtt_tests",

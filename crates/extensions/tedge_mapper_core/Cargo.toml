@@ -20,7 +20,6 @@ flockfile = { path = "../../common/flockfile" }
 futures = "0.3"
 json-writer = { path = "../../common/json_writer" }
 logged_command = { path = "../../common/logged_command" }
-mockall = "0.11"
 mqtt_channel = { path = "../../common/mqtt_channel" }
 plugin_sm = { path = "../../core/plugin_sm" }
 reqwest = { version = "0.11", default-features = false, features = [
