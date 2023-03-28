@@ -10,7 +10,7 @@ Test Teardown    Get Logs
 *** Test Cases ***
 
 Install c8y-remote-access-plugin
-    Skip    remote-access is not yet part of the offficial release. Enable when it is
+    Skip    remote-access is not yet part of the official release. Enable when it is
     Device Should Have Installed Software    c8y-remote-access-plugin
     File Should Exist    /etc/tedge/operations/c8y/c8y_RemoteAccessConnect
     Execute Command    dpkg -r c8y-remote-access-plugin
