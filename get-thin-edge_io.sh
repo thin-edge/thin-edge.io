@@ -4,7 +4,6 @@ set -e
 TYPE=full
 TMPDIR=/tmp/tedge
 LOGFILE=/tmp/tedge/install.log
-DEFAULT_VERSION=0.10.0
 
 # Packages names were changed to confirm to debian naming conventions
 # But we should still care about installing older versions. It will still cause
@@ -244,6 +243,31 @@ install_tedge_plugins() {
     fi
 }
 
+get_latest_version() {
+    # Detect latest version from github api to avoid having a default version in the script
+    if command_exists curl; then
+        response=$(curl -s https://api.github.com/repos/thin-edge/thin-edge.io/releases/latest)
+    elif command_exists wget; then
+        response=$(wget -q --output-document - https://api.github.com/repos/thin-edge/thin-edge.io/releases/latest)
+    else
+        fail 1 "Detecting latest version requires either curl or wget to be installed"
+    fi
+
+    # use the same url pattern as expected when downloading the artifacts (so as not to rely on github api response fields)
+    version=$(
+        echo "$response" \
+            | grep -o "https://github.com/thin-edge/thin-edge.io/releases/download/[0-9]\+\.[0-9]\+\.[0-9]\+/.*\.deb" \
+            | grep -o "/[0-9]\+.[0-9]\+.[0-9]\+/" \
+            | cut -d/ -f2 \
+            | head -1
+    )
+
+    if [ -z "$version" ]; then
+        fail 1 "Failed to detect latest version. You can try specifying an explicit version. Check the help for more details"
+    fi
+    echo "$version"
+}
+
 main() {
     if [ -d "$TMPDIR" ]; then
         rm -Rf "$TMPDIR"
@@ -256,7 +280,7 @@ main() {
     ARCH=$(dpkg --print-architecture)
 
     if [ -z "$VERSION" ]; then
-        VERSION="$DEFAULT_VERSION"
+        VERSION="$(get_latest_version)"
 
         log "Version argument has not been provided, installing latest: $VERSION"
         log "To install a particular version use this script with the version as an argument."
