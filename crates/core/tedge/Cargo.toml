@@ -14,11 +14,6 @@ readme = "README.md"
 recommends = "mosquitto"
 maintainer-scripts = "../../../configuration/debian/tedge"
 
-[package.metadata.release]
-pre-release-replacements = [
-  {file="../../../get-thin-edge_io.sh", search="DEFAULT_VERSION=.*", replace="DEFAULT_VERSION={{version}}", exactly=1},
-]
-
 [dependencies]
 anyhow = "1.0"
 base64 = "0.13"
