@@ -27,7 +27,7 @@ Custom Setup
     Device Should Exist                      ${DEVICE_SN}
     Set Test Variable    $DEVICE_SN
     Should Have MQTT Messages    tedge/health/tedge-mapper-c8y
-    [Documentation]    WORKAROUND: #1731 The tedge-mapper-c8y is restarted due to a supsected race condition between the mapper and tedge-agent which results in the software list message being lost
+    [Documentation]    WORKAROUND: #1731 The tedge-mapper-c8y is restarted due to a suspected race condition between the mapper and tedge-agent which results in the software list message being lost
     ${timestamp}=        Get Unix Timestamp
     Restart Service    tedge-mapper-c8y
     Should Have MQTT Messages    tedge/health/tedge-mapper-c8y    date_from=${timestamp}
