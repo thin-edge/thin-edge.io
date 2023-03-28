@@ -155,10 +155,10 @@ impl RuntimeRequestSink for ConfigManagerBuilder {
     }
 }
 
-impl Builder<(ConfigManagerActor, ConfigManagerMessageBox)> for ConfigManagerBuilder {
+impl Builder<ConfigManagerActor> for ConfigManagerBuilder {
     type Error = LinkError;
 
-    fn try_build(self) -> Result<(ConfigManagerActor, ConfigManagerMessageBox), Self::Error> {
+    fn try_build(self) -> Result<ConfigManagerActor, Self::Error> {
         let mqtt_publisher = self
             .mqtt_publisher
             .ok_or_else(|| LinkError::MissingPeer {
@@ -186,8 +186,6 @@ impl Builder<(ConfigManagerActor, ConfigManagerMessageBox)> for ConfigManagerBui
             timer_sender,
         );
 
-        let actor = ConfigManagerActor::new(self.config);
-
-        Ok((actor, peers))
+        Ok(ConfigManagerActor::new(self.config, peers))
     }
 }

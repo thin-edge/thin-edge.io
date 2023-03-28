@@ -1,7 +1,6 @@
 use crate::message_boxes::MessageReceiver;
 use crate::ConcurrentServerMessageBox;
 use crate::Message;
-use crate::MessageBox;
 use crate::RuntimeError;
 use crate::ServerMessageBox;
 use async_trait::async_trait;
@@ -11,9 +10,6 @@ use async_trait::async_trait;
 ///
 #[async_trait]
 pub trait Actor: 'static + Sized + Send + Sync {
-    /// Type of message box used by this actor
-    type MessageBox: MessageBox;
-
     /// Return the actor instance name
     fn name(&self) -> &str;
 
@@ -22,7 +18,7 @@ pub trait Actor: 'static + Sized + Send + Sync {
     /// Processing input messages,
     /// updating internal state,
     /// and sending messages to peers.
-    async fn run(self, messages: Self::MessageBox) -> Result<(), RuntimeError>;
+    async fn run(mut self) -> Result<(), RuntimeError>;
 }
 
 /// An actor that wraps a request-response server
@@ -30,11 +26,12 @@ pub trait Actor: 'static + Sized + Send + Sync {
 /// Requests are processed in turn, leading either to a response or an error.
 pub struct ServerActor<S: Server> {
     server: S,
+    messages: ServerMessageBox<S::Request, S::Response>,
 }
 
 impl<S: Server> ServerActor<S> {
-    pub fn new(server: S) -> Self {
-        ServerActor { server }
+    pub fn new(server: S, messages: ServerMessageBox<S::Request, S::Response>) -> Self {
+        ServerActor { server, messages }
     }
 }
 
@@ -47,7 +44,7 @@ impl<S: Server> ServerActor<S> {
 ///   updating its state and possibly performing side effects.
 ///
 /// ```
-/// # use crate::tedge_actors::{Server, MessageBox, SimpleMessageBox};
+/// # use crate::tedge_actors::{Server, SimpleMessageBox};
 /// # use async_trait::async_trait;
 ///
 /// # use crate::tedge_actors::examples;
@@ -91,24 +88,25 @@ impl<S: Server> ServerActor<S> {
 /// To be used as an actor, a `Server` is wrapped into a [ServerActor](crate::ServerActor)
 ///
 /// ```
-/// # use tedge_actors::{Actor, Builder, MessageBox, NoConfig, MessageReceiver, ServerActor, SimpleMessageBox, SimpleMessageBoxBuilder};
+/// # use tedge_actors::{Actor, Builder, NoConfig, MessageReceiver, ServerActor, SimpleMessageBox, SimpleMessageBoxBuilder};
 /// use tedge_actors::test_helpers::ServiceProviderExt;
 /// # use crate::tedge_actors::examples::calculator::*;
 /// #
 /// # #[tokio::main]
 /// # async fn main_test() {
 /// #
-/// // Create an actor to handle the requests to a server
-/// let server = Calculator::default();
-/// let actor = ServerActor::new(server);
-///
 /// // As for any actor, one needs a bidirectional channel to the message box of the server.
 /// let mut actor_box_builder = SimpleMessageBoxBuilder::new("Actor", 10);
 /// let mut client_box = actor_box_builder.new_client_box(NoConfig);
 /// let server_box = actor_box_builder.build();
 ///
+/// // Create an actor to handle the requests to a server
+/// let mut calculator_box = SimpleMessageBoxBuilder::new("Calculator - REMOVE ME", 16).build();
+/// let server = Calculator::new(calculator_box);
+/// let actor = ServerActor::new(server, server_box);
+///
 /// // The actor is then spawn in the background with its message box.
-/// tokio::spawn(actor.run(server_box));
+/// tokio::spawn(actor.run());
 ///
 /// // One can then interact with the actor
 /// // Note that now each request is prefixed by a number: the id of the requester
@@ -142,17 +140,15 @@ pub trait Server: 'static + Sized + Send + Sync {
 
 #[async_trait]
 impl<S: Server> Actor for ServerActor<S> {
-    type MessageBox = ServerMessageBox<S::Request, S::Response>;
-
     fn name(&self) -> &str {
         self.server.name()
     }
 
-    async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         let mut server = self.server;
-        while let Some((client_id, request)) = messages.recv().await {
+        while let Some((client_id, request)) = self.messages.recv().await {
             let result = server.handle(request).await;
-            messages.send((client_id, result)).await?
+            self.messages.send((client_id, result)).await?
         }
         Ok(())
     }
@@ -165,24 +161,23 @@ impl<S: Server> Actor for ServerActor<S> {
 /// The server must be `Clone` to create a fresh server handle for each request.
 pub struct ConcurrentServerActor<S: Server + Clone> {
     server: S,
+    messages: ConcurrentServerMessageBox<S::Request, S::Response>,
 }
 
 impl<S: Server + Clone> ConcurrentServerActor<S> {
-    pub fn new(server: S) -> Self {
-        ConcurrentServerActor { server }
+    pub fn new(server: S, messages: ConcurrentServerMessageBox<S::Request, S::Response>) -> Self {
+        ConcurrentServerActor { server, messages }
     }
 }
 
 #[async_trait]
 impl<S: Server + Clone> Actor for ConcurrentServerActor<S> {
-    type MessageBox = ConcurrentServerMessageBox<S::Request, S::Response>;
-
     fn name(&self) -> &str {
         self.server.name()
     }
 
-    async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
-        while let Some((client_id, request)) = messages.recv().await {
+    async fn run(mut self) -> Result<(), RuntimeError> {
+        while let Some((client_id, request)) = self.messages.recv().await {
             // Spawn the request
             let mut server = self.server.clone();
             let pending_result = tokio::spawn(async move {
@@ -191,7 +186,7 @@ impl<S: Server + Clone> Actor for ConcurrentServerActor<S> {
             });
 
             // Send the response back to the client
-            messages.send_response_once_done(pending_result)
+            self.messages.send_response_once_done(pending_result)
         }
 
         Ok(())
@@ -207,19 +202,19 @@ pub mod tests {
     use futures::StreamExt;
     use tokio::spawn;
 
-    struct Echo;
+    struct Echo {
+        messages: SimpleMessageBox<String, String>,
+    }
 
     #[async_trait]
     impl Actor for Echo {
-        type MessageBox = SimpleMessageBox<String, String>;
-
         fn name(&self) -> &str {
             "Echo"
         }
 
-        async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
-            while let Some(message) = messages.recv().await {
-                messages.send(message).await?
+        async fn run(mut self) -> Result<(), RuntimeError> {
+            while let Some(message) = self.messages.recv().await {
+                self.messages.send(message).await?
             }
 
             Ok(())
@@ -228,11 +223,13 @@ pub mod tests {
 
     #[tokio::test]
     async fn running_an_actor_without_a_runtime() {
-        let actor = Echo;
         let mut box_builder = SimpleMessageBoxBuilder::new("test", 16);
         let mut client_message_box = box_builder.new_client_box(NoConfig);
         let actor_message_box = box_builder.build();
-        let actor_task = spawn(actor.run(actor_message_box));
+        let actor = Echo {
+            messages: actor_message_box,
+        };
+        let actor_task = spawn(actor.run());
 
         // Messages sent to the actor
         assert!(client_message_box.send("Hello".to_string()).await.is_ok());
@@ -259,9 +256,11 @@ pub mod tests {
     async fn an_actor_can_send_messages_to_specific_peers() {
         let (output_sender, mut output_receiver) = mpsc::channel(10);
 
-        let actor = ActorWithSpecificMessageBox;
         let (input_sender, message_box) = SpecificMessageBox::new_box(10, output_sender.into());
-        let actor_task = spawn(actor.run(message_box));
+        let actor = ActorWithSpecificMessageBox {
+            messages: message_box,
+        };
+        let actor_task = spawn(actor.run());
 
         spawn(async move {
             let mut sender: DynSender<&str> = adapt(&input_sender);
@@ -294,23 +293,23 @@ pub mod tests {
         );
     }
 
-    pub struct ActorWithSpecificMessageBox;
+    pub struct ActorWithSpecificMessageBox {
+        messages: SpecificMessageBox,
+    }
 
     #[async_trait]
     impl Actor for ActorWithSpecificMessageBox {
-        type MessageBox = SpecificMessageBox;
-
         fn name(&self) -> &str {
             "ActorWithSpecificMessageBox"
         }
 
-        async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
-            while let Some(message) = messages.next().await {
+        async fn run(mut self) -> Result<(), RuntimeError> {
+            while let Some(message) = self.messages.next().await {
                 if message.contains("this") {
-                    messages.do_this(message.to_string()).await?
+                    self.messages.do_this(message.to_string()).await?
                 }
                 if message.contains("that") {
-                    messages.do_that(message.to_string()).await?
+                    self.messages.do_that(message.to_string()).await?
                 }
             }
             Ok(())
@@ -355,11 +354,5 @@ pub mod tests {
         pub async fn do_that(&mut self, action: String) -> Result<(), ChannelError> {
             self.peer_2.send(DoThat(action)).await
         }
-    }
-
-    #[async_trait]
-    impl MessageBox for SpecificMessageBox {
-        type Input = String;
-        type Output = DoMsg;
     }
 }

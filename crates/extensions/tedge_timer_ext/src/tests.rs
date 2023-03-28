@@ -68,7 +68,7 @@ async fn spawn_timer_actor<T: Message>(
     builder.add_peer(peer);
 
     tokio::spawn(async move {
-        let (actor, actor_box) = builder.build();
-        let _ = actor.run(actor_box).await;
+        let actor = builder.build();
+        let _ = actor.run().await;
     });
 }

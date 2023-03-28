@@ -31,7 +31,6 @@ use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ClientMessageBox;
-use tedge_actors::MessageBox;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::ServerMessageBox;
@@ -43,25 +42,11 @@ use tedge_utils::file::move_file;
 
 const RETRY_TIMEOUT_SECS: u64 = 60;
 
-struct C8YHttpProxyActor {
+pub struct C8YHttpProxyActor {
     end_point: C8yEndPoint,
     child_devices: HashMap<String, String>,
     peers: C8YHttpProxyMessageBox,
     tmp_dir: PathBuf,
-}
-
-#[async_trait]
-impl Actor for C8YHttpConfig {
-    type MessageBox = C8YHttpProxyMessageBox;
-
-    fn name(&self) -> &str {
-        "C8YHttpProxy"
-    }
-
-    async fn run(self, messages: Self::MessageBox) -> Result<(), RuntimeError> {
-        let actor = C8YHttpProxyActor::new(self, messages);
-        actor.run().await
-    }
 }
 
 pub struct C8YHttpProxyMessageBox {
@@ -85,25 +70,12 @@ fan_in_message_type!(C8YHttpProxyInput[C8YRestRequestWithClientId, HttpResult, J
 fan_in_message_type!(C8YHttpProxyOutput[C8YRestResponseWithClientId, HttpRequest, JwtRequest] : Debug);
 
 #[async_trait]
-impl MessageBox for C8YHttpProxyMessageBox {
-    type Input = C8YHttpProxyInput;
-    type Output = C8YHttpProxyOutput;
-}
-
-impl C8YHttpProxyActor {
-    pub fn new(config: C8YHttpConfig, peers: C8YHttpProxyMessageBox) -> Self {
-        let unknown_internal_id = "";
-        let end_point = C8yEndPoint::new(&config.c8y_host, &config.device_id, unknown_internal_id);
-        let child_devices = HashMap::default();
-        C8YHttpProxyActor {
-            end_point,
-            child_devices,
-            peers,
-            tmp_dir: config.tmp_dir,
-        }
+impl Actor for C8YHttpProxyActor {
+    fn name(&self) -> &str {
+        "C8Y-REST"
     }
 
-    pub async fn run(mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         self.init().await;
 
         while let Some((client_id, request)) = self.peers.clients.recv().await {
@@ -137,9 +109,19 @@ impl C8YHttpProxyActor {
         }
         Ok(())
     }
+}
 
-    fn name(&self) -> &str {
-        "C8Y-REST"
+impl C8YHttpProxyActor {
+    pub fn new(config: C8YHttpConfig, message_box: C8YHttpProxyMessageBox) -> Self {
+        let unknown_internal_id = "";
+        let end_point = C8yEndPoint::new(&config.c8y_host, &config.device_id, unknown_internal_id);
+        let child_devices = HashMap::default();
+        C8YHttpProxyActor {
+            end_point,
+            child_devices,
+            peers: message_box,
+            tmp_dir: config.tmp_dir,
+        }
     }
 
     async fn init(&mut self) {

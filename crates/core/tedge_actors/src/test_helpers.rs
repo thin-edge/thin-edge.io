@@ -385,8 +385,10 @@ impl<T: Message + Clone + Eq> MessagePlus for T {}
 /// player_box_builder.with_probe(&mut probe).set_connection(&mut server_box_builder);
 ///
 /// // Spawn the actors
-/// tokio::spawn(ServerActor::new(Calculator::default()).run(server_box_builder.build()));
-/// tokio::spawn(Player { name: "Player".to_string(), target: 42}.run(player_box_builder.build()));
+/// let calculator_box = SimpleMessageBoxBuilder::new("Calculator", 1).build();
+/// let calculator = Calculator::new(calculator_box);
+/// tokio::spawn(ServerActor::new(calculator, server_box_builder.build()).run());
+/// tokio::spawn(Player { name: "Player".to_string(), target: 42, messages: player_box_builder.build()}.run());
 ///
 /// // Observe the messages sent and received by the player.
 /// assert_eq!(probe.observe().await, Send(Operation::Add(0)));

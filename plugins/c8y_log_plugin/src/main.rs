@@ -106,6 +106,7 @@ async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     let base_mqtt_config = mqtt_config(&tedge_config)?;
     let mqtt_config = health_actor
         .set_init_and_last_will(base_mqtt_config.clone().with_session_name(C8Y_LOG_PLUGIN));
+
     let c8y_http_config = (&tedge_config).try_into()?;
 
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config);

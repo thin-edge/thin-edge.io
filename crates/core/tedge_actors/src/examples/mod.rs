@@ -2,38 +2,36 @@
 //!
 //! ```
 //! # use async_trait::async_trait;
-//! # use tedge_actors::{Actor, MessageBox, ClientMessageBox, ServerActor, SimpleMessageBox, MessageReceiver, RuntimeError};
+//! # use tedge_actors::{Actor, ClientMessageBox, ServerActor, SimpleMessageBox, MessageReceiver, RuntimeError};
 //! # use crate::tedge_actors::examples::calculator::*;
 //!
 //! /// An actor that send operations to a calculator server actor to reach a given target.
 //! struct Player {
 //!     name: String,
 //!     target: i64,
-//! }
-//!
-//! #[async_trait]
-//! impl Actor for Player {
-//!
 //!     /// This actor use a simple message box
 //!     /// to send `Operation` messages and to receive `Update` messages.
 //!     ///
 //!     /// Presumably this actor interacts with a `Calculator`
 //!     /// and will have to send an `Operation` before receiving in return an `Update`
 //!     /// But nothing enforces that. The message box only tell what is sent and received.
-//!     type MessageBox = SimpleMessageBox<Update,Operation>;
+//!     messages: SimpleMessageBox<Update,Operation>,
+//! }
 //!
+//! #[async_trait]
+//! impl Actor for Player {
 //!     fn name(&self) -> &str {
 //!         &self.name
 //!     }
 //!
-//!     async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
+//!     async fn run(mut self) -> Result<(), RuntimeError> {
 //!         // Send a first identity `Operation` to see where we are.
-//!         messages.send(Operation::Add(0)).await?;
+//!         self.messages.send(Operation::Add(0)).await?;
 //!
-//!         while let Some(status) = messages.recv().await {
+//!         while let Some(status) = self.messages.recv().await {
 //!             // Reduce by two the gap to the target
 //!             let delta = self.target - status.to;
-//!             messages.send(Operation::Add(delta / 2)).await?;
+//!             self.messages.send(Operation::Add(delta / 2)).await?;
 //!         }
 //!
 //!         Ok(())
@@ -45,7 +43,7 @@
 //! to establish appropriate connections between the actor message boxes.
 //!
 //! ```
-//! # use tedge_actors::{Actor, Builder, ChannelError, MessageBox, MessageReceiver, ServiceConsumer, NoConfig, ServerActor, ServerMessageBox, ServerMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder};
+//! # use tedge_actors::{Actor, Builder, ChannelError, MessageReceiver, ServiceConsumer, NoConfig, ServerActor, ServerMessageBox, ServerMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder};
 //! # use crate::tedge_actors::examples::calculator::*;
 //! # #[tokio::main]
 //! # async fn main_test() -> Result<(),ChannelError> {
@@ -75,8 +73,15 @@
 //! let mut player_2_box = player_2_box_builder.build();
 //!
 //! // Then spawn the server
-//! let server = Calculator::default();
-//! tokio::spawn(ServerActor::new(server).run(server_box));
+//! // TODO: Speak to Didier
+//! //   I've moved the message box from the actor trait and the run method no longer takes a message box  
+//! //   the Calculator impls actor so I've added a new that takes a message box but it also impls server
+//! //   using server means the Calculator can handle requests without having a message box
+//! //   which is a problem because if you want to use Calculator as a server then you shouldn't need to have a message box to construct the Calculator
+//! //   but if you construct without a message box then using calculator by calling Actor::run wont work so what should be done?
+//! let mut calculator_box = SimpleMessageBoxBuilder::new("Calculator - REMOVE ME", 16).build();
+//! let server = Calculator::new(calculator_box);
+//! tokio::spawn(ServerActor::new(server, server_box).run());
 //!
 //! // And use the players' boxes to interact with the server actor.
 //! // Note that, compared to the test above of the calculator server,

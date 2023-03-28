@@ -7,9 +7,15 @@ use crate::SimpleMessageBox;
 use async_trait::async_trait;
 
 /// State of the calculator service
-#[derive(Default)]
 pub struct Calculator {
     state: i64,
+    messages: SimpleMessageBox<Operation, Update>,
+}
+
+impl Calculator {
+    pub fn new(messages: SimpleMessageBox<Operation, Update>) -> Self {
+        Self { state: 0, messages }
+    }
 }
 
 /// Input messages of the calculator service
@@ -29,14 +35,12 @@ pub struct Update {
 /// Implementation of the calculator behavior as an actor
 #[async_trait]
 impl Actor for Calculator {
-    type MessageBox = SimpleMessageBox<Operation, Update>;
-
     fn name(&self) -> &str {
         "Calculator"
     }
 
-    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
-        while let Some(op) = messages.recv().await {
+    async fn run(mut self) -> Result<(), RuntimeError> {
+        while let Some(op) = self.messages.recv().await {
             // Process in turn each input message
             let from = self.state;
             let to = match op {
@@ -48,7 +52,7 @@ impl Actor for Calculator {
             self.state = to;
 
             // Send output messages
-            messages.send(Update { from, to }).await?
+            self.messages.send(Update { from, to }).await?
         }
         Ok(())
     }
@@ -84,24 +88,23 @@ impl Server for Calculator {
 pub struct Player {
     pub name: String,
     pub target: i64,
+    pub messages: SimpleMessageBox<Update, Operation>,
 }
 
 #[async_trait]
 impl Actor for Player {
-    type MessageBox = SimpleMessageBox<Update, Operation>;
-
     fn name(&self) -> &str {
         &self.name
     }
 
-    async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         // Send a first identity `Operation` to see where we are.
-        messages.send(Operation::Add(0)).await?;
+        self.messages.send(Operation::Add(0)).await?;
 
-        while let Some(status) = messages.recv().await {
+        while let Some(status) = self.messages.recv().await {
             // Reduce by two the gap to the target
             let delta = self.target - status.to;
-            messages.send(Operation::Add(delta / 2)).await?;
+            self.messages.send(Operation::Add(delta / 2)).await?;
         }
 
         Ok(())
@@ -139,13 +142,23 @@ mod tests {
             .set_connection(&mut service_box_builder);
 
         // Spawn the actors
-        tokio::spawn(ServerActor::new(Calculator::default()).run(service_box_builder.build()));
+        tokio::spawn(
+            ServerActor::new(
+                Calculator {
+                    state: 0,
+                    messages: SimpleMessageBoxBuilder::new("ServerActor", 1).build(),
+                },
+                service_box_builder.build(),
+            )
+            .run(),
+        );
         tokio::spawn(
             Player {
                 name: "Player".to_string(),
                 target: 42,
+                messages: player_box_builder.build(),
             }
-            .run(player_box_builder.build()),
+            .run(),
         );
 
         // Observe the messages sent and received by the player.
