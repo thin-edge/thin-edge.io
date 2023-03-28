@@ -98,6 +98,7 @@ impl Connection {
             mqtt_client,
             published_receiver,
             error_sender,
+            config.last_will_message.clone(),
             pub_done_sender,
         ));
 
@@ -242,6 +243,7 @@ impl Connection {
         mqtt_client: AsyncClient,
         mut messages_receiver: mpsc::UnboundedReceiver<Message>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
+        last_will: Option<Message>,
         done: oneshot::Sender<()>,
     ) {
         loop {
@@ -261,6 +263,15 @@ impl Connection {
                     }
                 }
             }
+        }
+
+        // As the broker doesn't send the last will when the client disconnects gracefully
+        // one has first to explicitly send the last will message.
+        if let Some(last_will) = last_will {
+            let payload = Vec::from(last_will.payload_bytes());
+            let _ = mqtt_client
+                .publish(last_will.topic, last_will.qos, last_will.retain, payload)
+                .await;
         }
         let _ = mqtt_client.disconnect().await;
         let _ = done.send(());
