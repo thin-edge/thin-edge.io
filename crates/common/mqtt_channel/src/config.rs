@@ -61,7 +61,7 @@ pub struct Config {
     /// Default: None
     pub initial_message: Option<InitMessageFn>,
 
-    /// TLS configuration used to connect to the broker.
+    /// Trusted root certificate store used to verify broker certificate
     pub cert_store: Option<rustls::RootCertStore>,
 }
 

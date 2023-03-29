@@ -4,6 +4,7 @@ use crate::cli::mqtt::MqttError;
 use crate::command::BuildCommand;
 use crate::command::BuildContext;
 use crate::command::Command;
+use camino::Utf8PathBuf;
 use rumqttc::QoS;
 use std::time::Duration;
 use tedge_config::*;
@@ -61,6 +62,25 @@ impl BuildCommand for TEdgeMqttCli {
             .load()?
             .query(MqttClientCapathSetting)
             .ok();
+        let client_cert = context
+            .config_repository
+            .load()?
+            .query(MqttClientAuthCertSetting);
+        let client_private_key = context
+            .config_repository
+            .load()?
+            .query(MqttClientAuthKeySetting);
+
+        let client_auth_config = if client_cert.is_err() && client_private_key.is_err() {
+            None
+        } else {
+            let client_cert = client_cert?;
+            let client_private_key = client_private_key?;
+            Some(ClientAuthConfig {
+                cert_file: client_cert,
+                key_file: client_private_key,
+            })
+        };
 
         let cmd = {
             match self {
@@ -80,6 +100,7 @@ impl BuildCommand for TEdgeMqttCli {
                     retain,
                     ca_file,
                     ca_path,
+                    client_auth_config,
                 }
                 .into_boxed(),
                 TEdgeMqttCli::Sub {
@@ -95,6 +116,7 @@ impl BuildCommand for TEdgeMqttCli {
                     client_id: format!("{}-{}", SUB_CLIENT_PREFIX, std::process::id()),
                     ca_file,
                     ca_path,
+                    client_auth_config,
                 }
                 .into_boxed(),
             }
@@ -112,6 +134,11 @@ fn parse_qos(src: &str) -> Result<QoS, MqttError> {
         2 => Ok(QoS::ExactlyOnce),
         _ => Err(MqttError::InvalidQoS),
     }
+}
+
+pub struct ClientAuthConfig {
+    pub cert_file: Utf8PathBuf,
+    pub key_file: Utf8PathBuf,
 }
 
 #[cfg(test)]

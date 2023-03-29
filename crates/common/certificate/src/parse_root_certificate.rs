@@ -109,11 +109,12 @@ fn add_root_cert(root_store: &mut RootCertStore, cert_path: &Path) -> Result<(),
     Ok(())
 }
 
-fn read_pvt_key(key_file: PathBuf) -> Result<PrivateKey, CertificateError> {
-    parse_pkcs8_key(key_file.clone()).or_else(|_| parse_rsa_key(key_file))
+pub fn read_pvt_key(key_file: impl AsRef<Path>) -> Result<PrivateKey, CertificateError> {
+    let key_file = key_file.as_ref();
+    parse_pkcs8_key(key_file).or_else(|_| parse_rsa_key(key_file))
 }
 
-fn parse_pkcs8_key(key_file: PathBuf) -> Result<PrivateKey, CertificateError> {
+fn parse_pkcs8_key(key_file: &Path) -> Result<PrivateKey, CertificateError> {
     let f = File::open(key_file)?;
     let mut key_reader = BufReader::new(f);
     match pkcs8_private_keys(&mut key_reader) {
@@ -122,7 +123,7 @@ fn parse_pkcs8_key(key_file: PathBuf) -> Result<PrivateKey, CertificateError> {
     }
 }
 
-fn parse_rsa_key(key_file: PathBuf) -> Result<PrivateKey, CertificateError> {
+fn parse_rsa_key(key_file: &Path) -> Result<PrivateKey, CertificateError> {
     let f = File::open(key_file)?;
     let mut key_reader = BufReader::new(f);
     match rsa_private_keys(&mut key_reader) {
@@ -132,11 +133,14 @@ fn parse_rsa_key(key_file: PathBuf) -> Result<PrivateKey, CertificateError> {
 }
 
 pub fn read_cert_chain(cert_file: impl AsRef<Path>) -> Result<Vec<Certificate>, CertificateError> {
-    let f = File::open(cert_file)?;
+    let f = File::open(&cert_file)?;
     let mut cert_reader = BufReader::new(f);
     certs(&mut cert_reader)
         .map(|der_chain| der_chain.into_iter().map(Certificate).collect())
-        .map_err(|_| CertificateError::CertificateParseFailed)
+        .map_err(|e| CertificateError::CertificateParseFailed {
+            path: cert_file.as_ref().to_path_buf(),
+            source: e,
+        })
 }
 
 #[cfg(test)]
@@ -155,7 +159,7 @@ mod tests {
         );
         let mut temp_file = NamedTempFile::new().unwrap();
         temp_file.write_all(key.as_bytes()).unwrap();
-        let result = parse_rsa_key(temp_file.path().into()).unwrap();
+        let result = parse_rsa_key(temp_file.path()).unwrap();
         let pvt_key = PrivateKey(vec![48, 46, 2, 1]);
         assert_eq!(result, pvt_key);
     }
@@ -168,7 +172,7 @@ mod tests {
         "-----END PRIVATE KEY-----"};
         let mut temp_file = NamedTempFile::new().unwrap();
         temp_file.write_all(key.as_bytes()).unwrap();
-        let result = parse_pkcs8_key(temp_file.path().into()).unwrap();
+        let result = parse_pkcs8_key(temp_file.path()).unwrap();
         let pvt_key = PrivateKey(vec![48, 46, 2, 1]);
         assert_eq!(result, pvt_key);
     }
@@ -182,7 +186,7 @@ mod tests {
         );
         let mut temp_file = NamedTempFile::new().unwrap();
         temp_file.write_all(key.as_bytes()).unwrap();
-        let parsed_key = read_pvt_key(temp_file.path().into()).unwrap();
+        let parsed_key = read_pvt_key(temp_file.path()).unwrap();
         let expected_pvt_key = PrivateKey(vec![48, 46, 2, 1]);
         assert_eq!(parsed_key, expected_pvt_key);
     }
@@ -196,7 +200,7 @@ mod tests {
         );
         let mut temp_file = NamedTempFile::new().unwrap();
         temp_file.write_all(key.as_bytes()).unwrap();
-        let err = read_pvt_key(temp_file.path().into()).unwrap_err();
+        let err = read_pvt_key(temp_file.path()).unwrap_err();
         assert!(matches!(err, CertificateError::UnknownPrivateKeyFormat));
     }
 

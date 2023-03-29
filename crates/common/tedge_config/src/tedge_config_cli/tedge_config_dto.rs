@@ -53,8 +53,8 @@ pub struct TEdgeConfigDto {
     pub(crate) service: ServiceTypeConfigDto,
 }
 
-/// Represents the device specific configurations defined in the [device] section
-/// of the thin edge configuration TOML file
+/// Represents the device specific configurations defined in the [device]
+/// section of the thin edge configuration TOML file
 #[derive(Debug, Default, Deserialize, Serialize, Document)]
 pub struct DeviceConfigDto {
     /// Path where the device's private key is stored
@@ -81,8 +81,8 @@ pub(crate) struct CumulocityConfigDto {
     #[doku(example = "your-tenant.cumulocity.com", as = "String")]
     pub(crate) url: Option<ConnectUrl>,
 
-    /// The path where Cumulocity root certificate(s) are stored.
-    /// The value can be a directory path as well as the path of the direct certificate file.
+    /// The path where Cumulocity root certificate(s) are stored. The value can
+    /// be a directory path as well as the path of the direct certificate file.
     #[doku(example = "/etc/tedge/c8y-trusted-root-certificates.pem")]
     #[doku(as = "PathBuf")]
     pub(crate) root_cert_path: Option<Utf8PathBuf>,
@@ -134,7 +134,8 @@ pub(crate) struct MqttConfigDto {
 
     pub(crate) client_host: Option<String>,
 
-    /// Mqtt broker port, which is used by the mqtt clients to publish or subscribe
+    /// Mqtt broker port, which is used by the mqtt clients to publish or
+    /// subscribe
     #[doku(example = "1883", as = "u16")]
     // When connecting to a host, port 0 is invalid. When binding, however, port
     // 0 is accepted and understood by the system to dynamically assign any free
@@ -157,6 +158,10 @@ pub(crate) struct MqttConfigDto {
     #[doku(example = "/etc/mosquitto/ca_certificates", as = "PathBuf")]
     pub(crate) client_ca_path: Option<Utf8PathBuf>,
 
+    /// MQTT client authentication configuration, containing a path to a client
+    /// certificate and a private key.
+    pub(crate) client_auth: Option<MqttClientAuthConfig>,
+
     /// The port mosquitto binds to for external use
     #[doku(example = "1883")]
     pub(crate) external_port: Option<u16>,
@@ -169,8 +174,10 @@ pub(crate) struct MqttConfigDto {
     #[doku(example = "wlan0")]
     pub(crate) external_bind_interface: Option<String>,
 
-    // All the paths relating to mosquitto are strings as they need to be safe to write to a configuration file (i.e. probably valid utf-8 at the least)
-    /// Path to a file containing the PEM encoded CA certificates that are trusted when checking incoming client certificates
+    // All the paths relating to mosquitto are strings as they need to be safe
+    // to write to a configuration file (i.e. probably valid utf-8 at the least)
+    /// Path to a file containing the PEM encoded CA certificates that are
+    /// trusted when checking incoming client certificates
     #[doku(example = "/etc/ssl/certs", as = "PathBuf")]
     pub(crate) external_capath: Option<Utf8PathBuf>,
 
@@ -224,6 +231,27 @@ pub struct FirmwareConfigDto {
 pub struct ServiceTypeConfigDto {
     #[serde(rename = "type")]
     pub(crate) service_type: Option<String>,
+}
+
+/// Contains MQTT client authentication configuration.
+///
+// Despite both cert_file and key_file being required for client authentication,
+// fields in this struct are optional because `tedge config set` needs to
+// successfully parse the configuration, update it in memory, and then save
+// deserialized object. If the upcoming configuration refactor discussed in [1]
+// ends up supporting partial updates to such objects, then these fields could
+// be made non-optional.
+//
+// [1]: https://github.com/thin-edge/thin-edge.io/issues/1812
+#[derive(Debug, Default, Deserialize, Serialize, Document)]
+pub(crate) struct MqttClientAuthConfig {
+    /// Path to the client certificate
+    #[doku(example = "/path/to/client.crt", as = "PathBuf")]
+    pub cert_file: Option<Utf8PathBuf>,
+
+    /// Path to the client private key
+    #[doku(example = "/path/to/client.key", as = "PathBuf")]
+    pub key_file: Option<Utf8PathBuf>,
 }
 
 #[cfg(test)]

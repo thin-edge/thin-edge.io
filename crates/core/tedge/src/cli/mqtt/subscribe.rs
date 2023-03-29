@@ -1,8 +1,8 @@
+use super::cli::ClientAuthConfig;
 use crate::cli::mqtt::MqttError;
 use crate::command::Command;
 use camino::Utf8PathBuf;
-use certificate::parse_root_certificate::add_certs_from_directory;
-use certificate::parse_root_certificate::add_certs_from_file;
+use certificate::parse_root_certificate;
 use rumqttc::tokio_rustls::rustls::ClientConfig;
 use rumqttc::tokio_rustls::rustls::RootCertStore;
 use rumqttc::Client;
@@ -24,6 +24,7 @@ pub struct MqttSubscribeCommand {
     pub client_id: String,
     pub ca_file: Option<Utf8PathBuf>,
     pub ca_path: Option<Utf8PathBuf>,
+    pub client_auth_config: Option<ClientAuthConfig>,
 }
 
 impl Command for MqttSubscribeCommand {
@@ -48,11 +49,11 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
         let mut root_store = RootCertStore::empty();
 
         if let Some(ca_file) = cmd.ca_file.clone() {
-            add_certs_from_file(&mut root_store, ca_file)?;
+            parse_root_certificate::add_certs_from_file(&mut root_store, ca_file)?;
         }
 
         if let Some(ca_path) = cmd.ca_path.clone() {
-            add_certs_from_directory(&mut root_store, ca_path)?;
+            parse_root_certificate::add_certs_from_directory(&mut root_store, ca_path)?;
         }
 
         const INSECURE_MQTT_PORT: u16 = 1883;
@@ -67,8 +68,15 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
 
         let tls_config = ClientConfig::builder()
             .with_safe_defaults()
-            .with_root_certificates(root_store)
-            .with_no_client_auth();
+            .with_root_certificates(root_store);
+
+        let tls_config = if let Some(client_auth) = cmd.client_auth_config.as_ref() {
+            let client_cert = parse_root_certificate::read_cert_chain(&client_auth.cert_file)?;
+            let client_key = parse_root_certificate::read_pvt_key(&client_auth.key_file)?;
+            tls_config.with_single_cert(client_cert, client_key)?
+        } else {
+            tls_config.with_no_client_auth()
+        };
 
         options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
     }

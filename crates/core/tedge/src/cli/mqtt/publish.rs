@@ -1,3 +1,4 @@
+use super::cli::ClientAuthConfig;
 use crate::cli::mqtt::MqttError;
 use crate::command::Command;
 use camino::Utf8PathBuf;
@@ -27,6 +28,7 @@ pub struct MqttPublishCommand {
     pub retain: bool,
     pub ca_file: Option<Utf8PathBuf>,
     pub ca_path: Option<Utf8PathBuf>,
+    pub client_auth_config: Option<ClientAuthConfig>,
 }
 
 impl Command for MqttPublishCommand {
@@ -69,8 +71,15 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
 
         let tls_config = ClientConfig::builder()
             .with_safe_defaults()
-            .with_root_certificates(root_store)
-            .with_no_client_auth();
+            .with_root_certificates(root_store);
+
+        let tls_config = if let Some(client_auth) = cmd.client_auth_config.as_ref() {
+            let client_cert = parse_root_certificate::read_cert_chain(&client_auth.cert_file)?;
+            let client_key = parse_root_certificate::read_pvt_key(&client_auth.key_file)?;
+            tls_config.with_single_cert(client_cert, client_key)?
+        } else {
+            tls_config.with_no_client_auth()
+        };
 
         options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
     }

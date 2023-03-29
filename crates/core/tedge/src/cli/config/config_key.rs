@@ -58,6 +58,8 @@ impl ConfigKey {
             config_key!(MqttClientPortSetting),
             config_key!(MqttClientCafileSetting),
             config_key!(MqttClientCapathSetting),
+            config_key!(MqttClientAuthCertSetting),
+            config_key!(MqttClientAuthKeySetting),
             config_key!(MqttPortSetting),
             config_key!(HttpPortSetting),
             config_key!(MqttExternalPortSetting),

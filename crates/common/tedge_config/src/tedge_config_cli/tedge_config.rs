@@ -468,6 +468,92 @@ impl ConfigSettingAccessor<MqttClientCapathSetting> for TEdgeConfig {
     }
 }
 
+impl ConfigSettingAccessor<MqttClientAuthCertSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttClientAuthCertSetting) -> ConfigSettingResult<Utf8PathBuf> {
+        self.data
+            .mqtt
+            .client_auth
+            .as_ref()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: "mqtt.client.auth.cert_file",
+            })?
+            .cert_file
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: "mqtt.client.auth.cert_file",
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttClientAuthCertSetting,
+        cafile: Utf8PathBuf,
+    ) -> ConfigSettingResult<()> {
+        let client_auth_config = self
+            .data
+            .mqtt
+            .client_auth
+            .get_or_insert(MqttClientAuthConfig {
+                cert_file: None,
+                key_file: None,
+            });
+
+        client_auth_config.cert_file = Some(cafile);
+
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttClientAuthCertSetting) -> ConfigSettingResult<()> {
+        if let Some(client_auth) = self.data.mqtt.client_auth.as_mut() {
+            client_auth.cert_file = None;
+        }
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<MqttClientAuthKeySetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttClientAuthKeySetting) -> ConfigSettingResult<Utf8PathBuf> {
+        self.data
+            .mqtt
+            .client_auth
+            .as_ref()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: "mqtt.client.auth.cert_key",
+            })?
+            .key_file
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: "mqtt.client.auth.cert_key",
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttClientAuthKeySetting,
+        cafile: Utf8PathBuf,
+    ) -> ConfigSettingResult<()> {
+        let client_auth_config = self
+            .data
+            .mqtt
+            .client_auth
+            .get_or_insert(MqttClientAuthConfig {
+                cert_file: None,
+                key_file: None,
+            });
+
+        client_auth_config.key_file = Some(cafile);
+
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttClientAuthKeySetting) -> ConfigSettingResult<()> {
+        if let Some(client_auth) = self.data.mqtt.client_auth.as_mut() {
+            client_auth.key_file = None;
+        }
+        Ok(())
+    }
+}
+
 impl ConfigSettingAccessor<MqttPortSetting> for TEdgeConfig {
     fn query(&self, _setting: MqttPortSetting) -> ConfigSettingResult<Port> {
         Ok(self

@@ -291,6 +291,30 @@ impl ConfigSetting for MqttClientCapathSetting {
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct MqttClientAuthCertSetting;
+
+impl ConfigSetting for MqttClientAuthCertSetting {
+    const KEY: &'static str = "mqtt.client.auth.cert_file";
+
+    const DESCRIPTION: &'static str =
+        "Path to the client certificate used for client authentication";
+
+    type Value = Utf8PathBuf;
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct MqttClientAuthKeySetting;
+
+impl ConfigSetting for MqttClientAuthKeySetting {
+    const KEY: &'static str = "mqtt.client.auth.key_file";
+
+    const DESCRIPTION: &'static str =
+        "Path to the client private key used for client authentication";
+
+    type Value = Utf8PathBuf;
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct MqttPortSetting;
 
 impl ConfigSetting for MqttPortSetting {
