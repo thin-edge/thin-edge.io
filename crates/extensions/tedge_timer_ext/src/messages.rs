@@ -22,6 +22,12 @@ pub struct Timeout<T: Message> {
     pub event: T,
 }
 
+impl<T: Message> Timeout<T> {
+    pub fn new(event: T) -> Self {
+        Self { event }
+    }
+}
+
 impl<T: Message + Eq + PartialEq> PartialEq<Self> for Timeout<T> {
     fn eq(&self, other: &Self) -> bool {
         self.event.eq(&other.event)

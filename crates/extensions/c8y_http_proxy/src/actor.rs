@@ -26,7 +26,6 @@ use log::debug;
 use log::error;
 use log::info;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
@@ -46,7 +45,6 @@ pub struct C8YHttpProxyActor {
     end_point: C8yEndPoint,
     child_devices: HashMap<String, String>,
     peers: C8YHttpProxyMessageBox,
-    tmp_dir: PathBuf,
 }
 
 pub struct C8YHttpProxyMessageBox {
@@ -120,7 +118,6 @@ impl C8YHttpProxyActor {
             end_point,
             child_devices,
             peers: message_box,
-            tmp_dir: config.tmp_dir,
         }
     }
 
@@ -290,12 +287,30 @@ impl C8YHttpProxyActor {
             download_info.auth = Some(Auth::new_bearer(token.as_str()));
         }
 
-        // Download a file to tmp dir
-        let file_name = request.file_path.file_name().unwrap().to_str().unwrap();
-        let downloader: Downloader = Downloader::new_sm(file_name, &None, self.tmp_dir.clone());
+        // Download file to the target directory with a temp name
+        let file_path = request.file_path.clone();
+        let file_name = file_path
+            .file_name()
+            .ok_or_else(|| C8YRestError::NoParentDirError(file_path.clone()))?
+            .to_str()
+            .ok_or_else(|| C8YRestError::InvalidFileNameError(file_path.clone()))?;
+        let parent_dir = file_path
+            .parent()
+            .ok_or_else(|| C8YRestError::NoParentDirError(file_path.clone()))?;
+
+        let tmp_file_name = format!("{file_name}.tmp");
+        let target_path = parent_dir.join(tmp_file_name);
+
+        debug!(target: self.name(), "Downloading from: {:?}", download_info.url());
+        let downloader: Downloader = Downloader::new(&target_path);
         downloader.download(&download_info).await?;
 
         // Move the downloaded file to the final destination
+        debug!(
+            "Moving downloaded file from {:?} to {:?}",
+            downloader.filename(),
+            request.file_path
+        );
         move_file(
             downloader.filename(),
             request.file_path,

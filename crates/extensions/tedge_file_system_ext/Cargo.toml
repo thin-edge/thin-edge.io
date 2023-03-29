@@ -15,3 +15,7 @@ tedge_actors = { path = "../../core/tedge_actors" }
 tedge_utils = { path = "../../common/tedge_utils", features = ["fs-notify"] }
 tokio = { version = "1.23", features = ["macros"] }
 try-traits = { version = "0.1" }
+
+[dev-dependencies]
+tedge_test_utils = { path = "../../tests/tedge_test_utils" }
+tokio = { version = "1.23", features = ["rt-multi-thread"] }

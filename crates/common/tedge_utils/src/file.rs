@@ -94,6 +94,7 @@ pub async fn move_file(
     if !dest_path.exists() {
         if let Some(dir_to) = dest_path.parent() {
             tokio::fs::create_dir_all(dir_to).await?;
+            debug!("Created parent directories for {:?}", dest_path);
         } else {
             return Err(FileError::NoParentDir {
                 path: dest_path.to_path_buf(),
@@ -111,6 +112,7 @@ pub async fn move_file(
     };
 
     tokio::fs::rename(src_path, dest_path).await?;
+    debug!("Moved file from {:?} to {:?}", src_path, dest_path);
 
     let file_permissions = if let Some(mode) = original_permission_mode {
         // Use the same file permission as the original one
@@ -121,6 +123,10 @@ pub async fn move_file(
     };
 
     file_permissions.apply(dest_path)?;
+    debug!(
+        "Applied permissions: {:?} to {:?}",
+        file_permissions, dest_path
+    );
 
     Ok(())
 }

@@ -28,7 +28,6 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
 use tedge_actors::WrappedInput;
-use tedge_api::health::health_status_up_message;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -67,18 +66,14 @@ impl ConfigManagerActor {
         &mut self,
         message: MqttMessage,
     ) -> Result<(), ConfigManagementError> {
-        if self.config.health_check_topics.accept(&message) {
-            let message = health_status_up_message("c8y-configuration-plugin");
-            self.messages.send(message.into()).await?;
-            return Ok(());
+        if self.config.c8y_request_topics.accept(&message) {
+            self.process_smartrest_message(message).await?;
         } else if self.config.config_snapshot_response_topics.accept(&message) {
             self.handle_child_device_config_operation_response(&message)
                 .await?;
         } else if self.config.config_update_response_topics.accept(&message) {
             self.handle_child_device_config_operation_response(&message)
                 .await?;
-        } else if self.config.c8y_request_topics.accept(&message) {
-            self.process_smartrest_message(message).await?;
         } else {
             error!(
                 "Received unexpected message on topic: {}",

@@ -15,11 +15,14 @@ use crate::SimpleMessageBox;
 use crate::SimpleMessageBoxBuilder;
 use crate::WrappedInput;
 use async_trait::async_trait;
+use core::future::Future;
 use futures::stream::FusedStream;
 use futures::SinkExt;
 use futures::StreamExt;
 use std::fmt::Debug;
 use std::time::Duration;
+use tokio::time::timeout;
+use tokio::time::Timeout;
 
 /// A test helper that extends a message box with various way to check received messages.
 #[async_trait]
@@ -310,7 +313,7 @@ where
 /// returning None, when no message is received after a given duration.
 pub struct TimedBoxReceiver<T> {
     timeout: Duration,
-    inner: T,
+    pub inner: T,
 }
 
 #[async_trait]
@@ -663,5 +666,21 @@ impl<I: Message, O: Message, C: Clone> ServiceConsumer<I, O, C> for ConsumerBoxB
 
     fn get_response_sender(&self) -> DynSender<O> {
         self.box_builder.get_response_sender()
+    }
+}
+
+pub trait WithTimeout<T>
+where
+    T: Future,
+{
+    fn with_timeout(self, duration: Duration) -> Timeout<T>;
+}
+
+impl<F> WithTimeout<F> for F
+where
+    F: Future,
+{
+    fn with_timeout(self, duration: Duration) -> Timeout<F> {
+        timeout(duration, self)
     }
 }
