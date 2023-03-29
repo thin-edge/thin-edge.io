@@ -44,6 +44,9 @@ pub enum CumulocityMapperError {
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
 
+    #[error(transparent)]
+    FromSerde(#[from] serde_json::Error),
+
     #[error("Operation execution failed: {error_message}. Command: {command}. Operation name: {operation_name}")]
     ExecuteFailed {
         error_message: String,

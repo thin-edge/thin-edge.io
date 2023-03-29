@@ -1,4 +1,3 @@
-use super::error::ConfigManagementError;
 use super::DEFAULT_PLUGIN_CONFIG_TYPE;
 use c8y_api::smartrest::topic::C8yTopic;
 use log::error;
@@ -172,11 +171,11 @@ impl PluginConfig {
     pub fn get_file_entry_from_type(
         &self,
         config_type: &str,
-    ) -> Result<FileEntry, ConfigManagementError> {
+    ) -> Result<FileEntry, InvalidConfigTypeError> {
         let file_entry = self
             .files
             .get(&config_type.to_string())
-            .ok_or(ConfigManagementError::InvalidRequestedConfigType {
+            .ok_or(InvalidConfigTypeError {
                 config_type: config_type.to_owned(),
             })?
             .to_owned();
@@ -191,4 +190,10 @@ impl PluginConfig {
         let supported_config_types = config_types.join(",");
         format!("119,{supported_config_types}")
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("The requested config_type {config_type} is not defined in the plugin configuration file.")]
+pub struct InvalidConfigTypeError {
+    pub config_type: String,
 }

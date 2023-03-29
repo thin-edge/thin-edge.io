@@ -707,13 +707,13 @@ mod tests {
         response.add_errors(
             "debian",
             vec![SoftwareError::Install {
-                module: SoftwareModule {
+                module: Box::new(SoftwareModule {
                     module_type: Some("debian".to_string()),
                     name: "collectd".to_string(),
                     version: Some("5.7".to_string()),
                     url: None,
                     file_path: None,
-                },
+                }),
                 reason: "Network timeout".to_string(),
             }],
         );
@@ -721,13 +721,13 @@ mod tests {
         response.add_errors(
             "docker",
             vec![SoftwareError::Remove {
-                module: SoftwareModule {
+                module: Box::new(SoftwareModule {
                     module_type: Some("docker".to_string()),
                     name: "mongodb".to_string(),
                     version: Some("4.4.6".to_string()),
                     url: None,
                     file_path: None,
-                },
+                }),
                 reason: "Other components dependent on it".to_string(),
             }],
         );

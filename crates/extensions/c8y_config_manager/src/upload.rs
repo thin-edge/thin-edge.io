@@ -2,6 +2,7 @@ use crate::child_device::try_cleanup_config_file_from_file_transfer_repositoy;
 use crate::child_device::ChildConfigOperationKey;
 use crate::child_device::ConfigOperationMessage;
 use crate::child_device::DEFAULT_OPERATION_TIMEOUT;
+use crate::plugin_config::InvalidConfigTypeError;
 
 use super::actor::ActiveOperationState;
 use super::actor::ConfigManagerActor;
@@ -79,7 +80,7 @@ impl ConfigUploadManager {
 
         let plugin_config = PluginConfig::new(&self.config.plugin_config_path);
 
-        let upload_result = {
+        let upload_result =
             match plugin_config.get_file_entry_from_type(&config_upload_request.config_type) {
                 Ok(file_entry) => {
                     let config_file_path = file_entry.path;
@@ -91,9 +92,8 @@ impl ConfigUploadManager {
                     )
                     .await
                 }
-                Err(err) => Err(err),
-            }
-        };
+                Err(err) => Err(err.into()),
+            };
 
         let target_config_type = &config_upload_request.config_type;
 
@@ -160,12 +160,11 @@ impl ConfigUploadManager {
                     .send(SetTimeout::new(DEFAULT_OPERATION_TIMEOUT, operation_key).into())
                     .await?;
             }
-            Err(ConfigManagementError::InvalidRequestedConfigType { config_type }) => {
+            Err(InvalidConfigTypeError { config_type }) => {
                 warn!(
                     "Ignoring the config management request for unknown config type: {config_type}"
                 );
             }
-            Err(err) => return Err(err)?,
         }
 
         Ok(())
