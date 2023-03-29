@@ -73,12 +73,6 @@ pub struct DeviceConfigDto {
     pub(crate) device_type: Option<String>,
 }
 
-#[test]
-fn test_me_now() {
-    toml::from_str::<TEdgeConfigDto>(&doku::to_toml::<TEdgeConfigDto>()).unwrap();
-    println!("{}", doku::to_toml::<TEdgeConfigDto>());
-}
-
 /// Represents the Cumulocity specific configurations defined in the
 /// [c8y] section of the thin edge configuration TOML file
 #[derive(Debug, Default, Deserialize, Serialize, Document)]
