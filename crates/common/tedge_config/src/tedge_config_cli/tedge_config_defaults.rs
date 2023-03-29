@@ -1,11 +1,11 @@
 use crate::seconds::Seconds;
-use crate::tedge_config_cli::models::FilePath;
 use crate::tedge_config_cli::models::IpAddress;
 use crate::tedge_config_cli::models::TemplatesSet;
 use crate::Flag;
 use crate::Port;
 use crate::TEdgeConfigLocation;
-use std::path::Path;
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 
 const DEFAULT_ETC_PATH: &str = "/etc";
 const DEFAULT_MQTT_PORT: u16 = 1883;
@@ -35,19 +35,19 @@ pub const DEFAULT_FILE_TRANSFER_DIR_NAME: &str = "file-transfer";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TEdgeConfigDefaults {
     /// Default device cert path
-    pub default_device_cert_path: FilePath,
+    pub default_device_cert_path: Utf8PathBuf,
 
     /// Default device key path
-    pub default_device_key_path: FilePath,
+    pub default_device_key_path: Utf8PathBuf,
 
     /// Default path for azure root certificates
-    pub default_azure_root_cert_path: FilePath,
+    pub default_azure_root_cert_path: Utf8PathBuf,
 
     /// Default path for AWS root certificates
-    pub default_aws_root_cert_path: FilePath,
+    pub default_aws_root_cert_path: Utf8PathBuf,
 
     /// Default path for c8y root certificates
-    pub default_c8y_root_cert_path: FilePath,
+    pub default_c8y_root_cert_path: Utf8PathBuf,
 
     /// Default c8y smartrest templates
     pub default_c8y_smartrest_templates: TemplatesSet,
@@ -62,16 +62,16 @@ pub struct TEdgeConfigDefaults {
     pub default_http_port: Port,
 
     /// Default tmp path
-    pub default_tmp_path: FilePath,
+    pub default_tmp_path: Utf8PathBuf,
 
     /// Default log path
-    pub default_logs_path: FilePath,
+    pub default_logs_path: Utf8PathBuf,
 
     /// Default run path
-    pub default_run_path: FilePath,
+    pub default_run_path: Utf8PathBuf,
 
     /// Default run path
-    pub default_data_path: FilePath,
+    pub default_data_path: Utf8PathBuf,
 
     /// Default device type
     pub default_device_type: String,
@@ -96,25 +96,23 @@ pub struct TEdgeConfigDefaults {
 
 impl From<&TEdgeConfigLocation> for TEdgeConfigDefaults {
     fn from(config_location: &TEdgeConfigLocation) -> Self {
-        let system_cert_path = Path::new(DEFAULT_ETC_PATH).join("ssl").join("certs");
-        let tmp_path = Path::new(DEFAULT_TMP_PATH);
-        let logs_path = Path::new(DEFAULT_LOG_PATH);
-        let run_path = Path::new(DEFAULT_RUN_PATH);
-        let data_path = Path::new(DEFAULT_DATA_PATH);
+        let system_cert_path = Utf8Path::new(DEFAULT_ETC_PATH).join("ssl").join("certs");
+        let tmp_path = Utf8Path::new(DEFAULT_TMP_PATH);
+        let logs_path = Utf8Path::new(DEFAULT_LOG_PATH);
+        let run_path = Utf8Path::new(DEFAULT_RUN_PATH);
+        let data_path = Utf8Path::new(DEFAULT_DATA_PATH);
         Self {
             default_device_cert_path: config_location
                 .tedge_config_root_path()
                 .join("device-certs")
-                .join("tedge-certificate.pem")
-                .into(),
+                .join("tedge-certificate.pem"),
             default_device_key_path: config_location
                 .tedge_config_root_path()
                 .join("device-certs")
-                .join("tedge-private-key.pem")
-                .into(),
-            default_azure_root_cert_path: system_cert_path.clone().into(),
-            default_aws_root_cert_path: system_cert_path.clone().into(),
-            default_c8y_root_cert_path: system_cert_path.into(),
+                .join("tedge-private-key.pem"),
+            default_azure_root_cert_path: system_cert_path.clone(),
+            default_aws_root_cert_path: system_cert_path.clone(),
+            default_c8y_root_cert_path: system_cert_path,
             default_mapper_timestamp: Flag(true),
             default_mqtt_port: Port(DEFAULT_MQTT_PORT),
             default_http_port: Port(DEFAULT_HTTP_PORT),
@@ -144,22 +142,22 @@ fn test_from_tedge_config_location() {
     assert_eq!(
         defaults,
         TEdgeConfigDefaults {
-            default_device_cert_path: FilePath::from(
+            default_device_cert_path: Utf8PathBuf::from(
                 "/opt/etc/_tedge/device-certs/tedge-certificate.pem"
             ),
-            default_device_key_path: FilePath::from(
+            default_device_key_path: Utf8PathBuf::from(
                 "/opt/etc/_tedge/device-certs/tedge-private-key.pem"
             ),
-            default_azure_root_cert_path: FilePath::from("/etc/ssl/certs"),
-            default_aws_root_cert_path: FilePath::from("/etc/ssl/certs"),
-            default_c8y_root_cert_path: FilePath::from("/etc/ssl/certs"),
+            default_azure_root_cert_path: Utf8PathBuf::from("/etc/ssl/certs"),
+            default_aws_root_cert_path: Utf8PathBuf::from("/etc/ssl/certs"),
+            default_c8y_root_cert_path: Utf8PathBuf::from("/etc/ssl/certs"),
             default_mapper_timestamp: Flag(true),
             default_mqtt_port: Port(DEFAULT_MQTT_PORT),
             default_http_port: Port(DEFAULT_HTTP_PORT),
-            default_tmp_path: FilePath::from("/tmp"),
-            default_logs_path: FilePath::from("/var/log"),
-            default_run_path: FilePath::from("/run"),
-            default_data_path: FilePath::from("/var/tedge"),
+            default_tmp_path: Utf8PathBuf::from("/tmp"),
+            default_logs_path: Utf8PathBuf::from("/var/log"),
+            default_run_path: Utf8PathBuf::from("/run"),
+            default_data_path: Utf8PathBuf::from("/var/tedge"),
             default_device_type: DEFAULT_DEVICE_TYPE.into(),
             default_mqtt_client_host: "localhost".to_string(),
             default_mqtt_bind_address: IpAddress::default(),

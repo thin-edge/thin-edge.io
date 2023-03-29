@@ -80,7 +80,7 @@ async fn main() -> Result<(), anyhow::Error> {
     } else {
         get_log_level(
             "c8y-log-plugin",
-            tedge_config_location.tedge_config_root_path.to_path_buf(),
+            &tedge_config_location.tedge_config_root_path,
         )?
     };
 
@@ -90,8 +90,8 @@ async fn main() -> Result<(), anyhow::Error> {
     let tedge_config = config_repository.load()?;
 
     if config_plugin_opt.init {
-        let logs_dir = tedge_config.query(LogPathSetting)?.as_ref().to_owned();
-        init(&config_plugin_opt.config_dir, &logs_dir)
+        let logs_dir = tedge_config.query(LogPathSetting)?;
+        init(&config_plugin_opt.config_dir, logs_dir.as_std_path())
     } else {
         run(tedge_config).await
     }

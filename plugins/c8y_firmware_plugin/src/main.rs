@@ -86,7 +86,7 @@ async fn main() -> Result<(), FirmwareManagementError> {
     } else {
         get_log_level(
             "c8y-firmware-plugin",
-            tedge_config_location.tedge_config_root_path.to_path_buf(),
+            &tedge_config_location.tedge_config_root_path,
         )?
     };
     set_log_level(log_level);

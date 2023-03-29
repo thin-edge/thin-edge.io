@@ -1,3 +1,5 @@
+use camino::Utf8PathBuf;
+
 #[derive(thiserror::Error, Debug)]
 pub enum SystemServiceError {
     #[error("Service command <{service_command:?}> failed with code: {code:?}.")]
@@ -20,7 +22,7 @@ pub enum SystemServiceError {
     ServiceManagerUnavailable { cmd: String, name: String },
 
     #[error("Toml syntax error in the system config file '{path}': {reason}")]
-    SystemConfigInvalidToml { path: String, reason: String },
+    SystemConfigInvalidToml { path: Utf8PathBuf, reason: String },
 
     #[error(
         "Syntax error in the system config file for '{cmd}': {reason}\n\
@@ -29,7 +31,7 @@ pub enum SystemServiceError {
     SystemConfigInvalidSyntax {
         reason: String,
         cmd: String,
-        path: String,
+        path: Utf8PathBuf,
     },
 
     #[error("Invalid log level: {name:?}, supported levels are info, warn, error and debug")]

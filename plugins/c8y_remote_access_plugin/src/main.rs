@@ -1,7 +1,7 @@
-use std::path::Path;
-use std::path::PathBuf;
 use std::process::Stdio;
 
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use futures::future::try_select;
 use futures::future::Either;
 use miette::Context;
@@ -45,7 +45,7 @@ async fn main() -> miette::Result<()> {
     }
 }
 
-fn declare_supported_operation(config_dir: &Path) -> miette::Result<()> {
+fn declare_supported_operation(config_dir: &Utf8Path) -> miette::Result<()> {
     create_file_with_user_group(
         supported_operation_path(config_dir),
         "tedge",
@@ -63,11 +63,11 @@ on_message = "530"
     .context("Declaring supported operations")
 }
 
-fn remove_supported_operation(config_dir: &Path) -> miette::Result<()> {
+fn remove_supported_operation(config_dir: &Utf8Path) -> miette::Result<()> {
     let path = supported_operation_path(config_dir);
     std::fs::remove_file(&path)
         .into_diagnostic()
-        .with_context(|| format!("Removing supported operation at {}", path.display()))
+        .with_context(|| format!("Removing supported operation at {}", path))
 }
 
 static SUCCESS_MESSAGE: &str = "CONNECTED";
@@ -150,7 +150,7 @@ async fn proxy(command: RemoteAccessConnect, config: TEdgeConfig) -> miette::Res
     Ok(())
 }
 
-fn supported_operation_path(config_dir: &Path) -> PathBuf {
+fn supported_operation_path(config_dir: &Utf8Path) -> Utf8PathBuf {
     let mut path = config_dir.to_owned();
     path.push("operations/c8y/c8y_RemoteAccessConnect");
     path
@@ -171,7 +171,7 @@ mod tests {
     fn default_supported_operation_path() {
         assert_eq!(
             supported_operation_path("/etc/tedge".as_ref()),
-            PathBuf::from("/etc/tedge/operations/c8y/c8y_RemoteAccessConnect")
+            Utf8PathBuf::from("/etc/tedge/operations/c8y/c8y_RemoteAccessConnect")
         );
     }
 }

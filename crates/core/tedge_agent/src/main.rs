@@ -1,6 +1,5 @@
-use std::path::PathBuf;
-
 use agent::SmAgentConfig;
+use camino::Utf8PathBuf;
 use clap::Parser;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
@@ -40,7 +39,7 @@ pub struct AgentOpt {
     ///
     /// WARNING: This is mostly used in testing.
     #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
-    pub config_dir: PathBuf,
+    pub config_dir: Utf8PathBuf,
 }
 
 #[tokio::main]
@@ -54,10 +53,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let log_level = if agent_opt.debug {
         tracing::Level::TRACE
     } else {
-        get_log_level(
-            "tedge-agent",
-            tedge_config_location.tedge_config_root_path.to_path_buf(),
-        )?
+        get_log_level("tedge-agent", &tedge_config_location.tedge_config_root_path)?
     };
 
     set_log_level(log_level);

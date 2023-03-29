@@ -1,13 +1,13 @@
 use super::error::CertError;
 use crate::command::Command;
 
+use camino::Utf8PathBuf;
 use certificate::PemCertificate;
-use tedge_config::*;
 
 /// Show the device certificate, if any
 pub struct ShowCertCmd {
     /// The path where the device certificate will be stored
-    pub cert_path: FilePath,
+    pub cert_path: Utf8PathBuf,
 }
 
 impl Command for ShowCertCmd {

@@ -1,17 +1,16 @@
 use crate::error::FileTransferError;
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use futures::StreamExt;
 use hyper::server::conn::AddrIncoming;
 use hyper::Body;
 use hyper::Request;
 use hyper::Response;
 use hyper::Server;
-use path_clean::PathClean;
 use routerify::Router;
 use routerify::RouterService;
 use std::net::IpAddr;
 use std::net::SocketAddr;
-use std::path::Path;
-use std::path::PathBuf;
 use tedge_config::DEFAULT_DATA_PATH;
 use tedge_config::DEFAULT_FILE_TRANSFER_DIR_NAME;
 use tedge_utils::paths::create_directories;
@@ -24,7 +23,7 @@ const HTTP_FILE_TRANSFER_PORT: u16 = 8000;
 pub struct HttpConfig {
     pub bind_address: SocketAddr,
     pub file_transfer_uri: String,
-    pub data_dir: PathBuf,
+    pub data_dir: Utf8PathBuf,
 }
 
 impl Default for HttpConfig {
@@ -45,7 +44,7 @@ impl HttpConfig {
         }
     }
 
-    pub fn with_data_dir(self, data_dir: PathBuf) -> HttpConfig {
+    pub fn with_data_dir(self, data_dir: Utf8PathBuf) -> HttpConfig {
         Self { data_dir, ..self }
     }
 
@@ -62,7 +61,7 @@ impl HttpConfig {
         format!("{}file-transfer/*", self.file_transfer_uri)
     }
 
-    pub fn file_transfer_dir_as_string(&self) -> PathBuf {
+    pub fn file_transfer_dir_as_string(&self) -> Utf8PathBuf {
         self.data_dir.join(DEFAULT_FILE_TRANSFER_DIR_NAME)
     }
 
@@ -71,7 +70,7 @@ impl HttpConfig {
     /// Check that:
     /// * the `uri` is related to the file-transfer i.e a sub-uri of `self.file_transfer_uri`
     /// * the `path`, once normalized, is actually under `self.file_transfer_dir`
-    pub fn local_path_for_uri(&self, uri: String) -> Result<PathBuf, FileTransferError> {
+    pub fn local_path_for_uri(&self, uri: String) -> Result<Utf8PathBuf, FileTransferError> {
         let ref_uri = uri.clone();
 
         // The file transfer prefix has to be removed from the uri to get the target path
@@ -84,22 +83,25 @@ impl HttpConfig {
 
         // One must check that once normalized (i.e. any `..` removed)
         // the path is still under the file transfer dir
-        let clean_path = full_path.clean();
+        let clean_path = clean_utf8_path(&full_path);
         if clean_path.starts_with(&self.data_dir) {
             Ok(clean_path)
         } else {
             Err(FileTransferError::InvalidURI {
-                value: clean_path.to_string_lossy().to_string(),
+                value: clean_path.to_string(),
             })
         }
     }
 }
 
-fn separate_path_and_file_name(input: PathBuf) -> Option<(PathBuf, String)> {
-    let input_as_str = input.to_str()?;
-    let (relative_path, file_name) = input_as_str.rsplit_once('/')?;
+fn clean_utf8_path(path: &Utf8Path) -> Utf8PathBuf {
+    Utf8PathBuf::from(path_clean::clean(path.as_str()))
+}
 
-    let relative_path = PathBuf::from(relative_path);
+fn separate_path_and_file_name(input: &Utf8Path) -> Option<(Utf8PathBuf, String)> {
+    let (relative_path, file_name) = input.as_str().rsplit_once('/')?;
+
+    let relative_path = Utf8PathBuf::from(relative_path);
     Some((relative_path, file_name.into()))
 }
 
@@ -111,7 +113,7 @@ async fn put(
 
     let mut response = Response::new(Body::empty());
 
-    if let Some((relative_path, file_name)) = separate_path_and_file_name(full_path) {
+    if let Some((relative_path, file_name)) = separate_path_and_file_name(&full_path) {
         let root_path = file_transfer.data_dir.clone();
         let directories_path = root_path.join(relative_path);
 
@@ -183,7 +185,7 @@ async fn delete(
 }
 
 async fn stream_request_body_to_path(
-    path: &Path,
+    path: &Utf8Path,
     body_stream: &mut hyper::Body,
 ) -> Result<(), FileTransferError> {
     let mut buffer = tokio::fs::File::create(path).await?;
@@ -230,13 +232,12 @@ pub fn http_file_transfer_server(
 
 #[cfg(test)]
 mod test {
-
-    use std::path::PathBuf;
-
     use super::http_file_transfer_server;
     use super::separate_path_and_file_name;
     use crate::error::FileTransferError;
     use crate::http_rest::HttpConfig;
+    use camino::Utf8Path;
+    use camino::Utf8PathBuf;
     use hyper::server::conn::AddrIncoming;
     use hyper::Body;
     use hyper::Method;
@@ -248,10 +249,10 @@ mod test {
 
     #[test_case(
         "/tedge/some/dir/file",
-        Some(PathBuf::from("/var/tedge/some/dir/file"))
+        Some(Utf8PathBuf::from("/var/tedge/some/dir/file"))
     )]
     #[test_case("/wrong/some/dir/file", None)]
-    fn test_remove_prefix_from_uri(input: &str, output: Option<PathBuf>) {
+    fn test_remove_prefix_from_uri(input: &str, output: Option<Utf8PathBuf>) {
         let file_transfer = HttpConfig::default();
         let actual_output = file_transfer.local_path_for_uri(input.to_string()).ok();
         assert_eq!(actual_output, output);
@@ -264,8 +265,9 @@ mod test {
         expected_path: &str,
         expected_file_name: &str,
     ) {
-        let (actual_path, actual_file_name) = separate_path_and_file_name(input.into()).unwrap();
-        assert_eq!(actual_path, std::path::PathBuf::from(expected_path));
+        let (actual_path, actual_file_name) =
+            separate_path_and_file_name(Utf8Path::new(input)).unwrap();
+        assert_eq!(actual_path, expected_path);
         assert_eq!(actual_file_name, expected_file_name);
     }
 
@@ -343,7 +345,7 @@ mod test {
         Server<AddrIncoming, RouterService<Body, FileTransferError>>,
     ) {
         let ttd = TempTedgeDir::new();
-        let tempdir_path = ttd.path().to_owned();
+        let tempdir_path = ttd.utf8_path_buf();
         let http_config = HttpConfig::default()
             .with_data_dir(tempdir_path)
             .with_port(3000);

@@ -1,8 +1,8 @@
 use crate::system_services::SystemServiceError;
+use camino::Utf8Path;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
 
 pub const SERVICE_CONFIG_FILE: &str = "system.toml";
 const REBOOT_COMMAND: &[&str] = &["init", "6"];
@@ -60,22 +60,21 @@ impl Default for InitConfig {
 }
 
 impl SystemConfig {
-    pub fn try_new(config_root: PathBuf) -> Result<Self, SystemServiceError> {
+    pub fn try_new(config_root: &Utf8Path) -> Result<Self, SystemServiceError> {
         let config_path = config_root.join(SERVICE_CONFIG_FILE);
-        let config_path_str = config_path.to_str().unwrap_or(SERVICE_CONFIG_FILE);
 
         match fs::read_to_string(config_path.clone()) {
             Ok(contents) => {
                 let config: SystemConfig = toml::from_str(contents.as_str()).map_err(|e| {
                     SystemServiceError::SystemConfigInvalidToml {
-                        path: config_path_str.to_string(),
-                        reason: format!("{}", e),
+                        path: config_path,
+                        reason: e.to_string(),
                     }
                 })?;
                 Ok(config)
             }
             Err(_) => {
-                println!("The system config file '{}' doesn't exist. Use '/bin/systemctl' as a service manager.\n", config_path_str);
+                println!("The system config file '{}' doesn't exist. Use '/bin/systemctl' as a service manager.\n", config_path);
                 Ok(Self::default())
             }
         }
@@ -85,6 +84,7 @@ impl SystemConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use camino::Utf8PathBuf;
     use std::io::Write;
     use tempfile::TempDir;
 
@@ -150,7 +150,7 @@ mod tests {
     "#;
         let expected_config: SystemConfig = toml::from_str(toml_conf)?;
         let (_dir, config_root_path) = create_temp_system_config(toml_conf)?;
-        let config = SystemConfig::try_new(config_root_path).unwrap();
+        let config = SystemConfig::try_new(&config_root_path).unwrap();
         assert_eq!(config, expected_config);
 
         Ok(())
@@ -165,7 +165,7 @@ mod tests {
         let expected_config: SystemConfig = toml::from_str(toml_conf)?;
 
         let (_dir, config_root_path) = create_temp_system_config(toml_conf)?;
-        let config = SystemConfig::try_new(config_root_path).unwrap();
+        let config = SystemConfig::try_new(&config_root_path).unwrap();
 
         assert_eq!(config, expected_config);
 
@@ -173,9 +173,9 @@ mod tests {
     }
 
     // Need to return TempDir, otherwise the dir will be deleted when this function ends.
-    fn create_temp_system_config(content: &str) -> std::io::Result<(TempDir, PathBuf)> {
+    fn create_temp_system_config(content: &str) -> std::io::Result<(TempDir, Utf8PathBuf)> {
         let temp_dir = TempDir::new()?;
-        let config_root = temp_dir.path().to_path_buf();
+        let config_root = Utf8Path::from_path(temp_dir.path()).unwrap().to_owned();
         let config_file_path = config_root.join(SERVICE_CONFIG_FILE);
         let mut file = std::fs::File::create(config_file_path.as_path())?;
         file.write_all(content.as_bytes())?;

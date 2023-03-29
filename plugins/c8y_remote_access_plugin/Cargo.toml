@@ -27,6 +27,7 @@ async-tungstenite = { version = "0.18.0", features = [
 ] }
 base64 = "0.13.1"
 c8y_api = { path = "../../crates/core/c8y_api" }
+camino = "1.1.4"
 clap = { version = "4.1.4", features = ["cargo", "derive"] }
 csv = "1.1.6"
 futures = "0.3.25"

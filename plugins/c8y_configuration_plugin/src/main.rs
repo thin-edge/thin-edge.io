@@ -71,10 +71,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let log_level = if config_plugin_opt.debug {
         tracing::Level::TRACE
     } else {
-        get_log_level(
-            PLUGIN_NAME,
-            tedge_config_location.tedge_config_root_path.to_path_buf(),
-        )?
+        get_log_level(PLUGIN_NAME, &tedge_config_location.tedge_config_root_path)?
     };
 
     set_log_level(log_level);

@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-
+use camino::Utf8PathBuf;
 use flockfile::FlockfileError;
 use mqtt_channel::MqttError;
 use tedge_api::SoftwareError;
@@ -19,7 +18,7 @@ pub enum AgentError {
     FromMqttClient(#[from] MqttError),
 
     #[error("Couldn't load plugins from {plugins_path}")]
-    NoPlugins { plugins_path: PathBuf },
+    NoPlugins { plugins_path: Utf8PathBuf },
 
     #[error(transparent)]
     FromSerdeJson(#[from] serde_json::Error),

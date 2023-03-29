@@ -1,6 +1,6 @@
 use crate::cli::connect::BridgeConfig;
+use camino::Utf8PathBuf;
 use tedge_config::ConnectUrl;
-use tedge_config::FilePath;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfigAzureParams {
@@ -8,9 +8,9 @@ pub struct BridgeConfigAzureParams {
     pub mqtt_tls_port: u16,
     pub config_file: String,
     pub remote_clientid: String,
-    pub bridge_root_cert_path: FilePath,
-    pub bridge_certfile: FilePath,
-    pub bridge_keyfile: FilePath,
+    pub bridge_root_cert_path: Utf8PathBuf,
+    pub bridge_certfile: Utf8PathBuf,
+    pub bridge_keyfile: Utf8PathBuf,
 }
 
 impl From<BridgeConfigAzureParams> for BridgeConfig {
@@ -88,7 +88,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         connection: "edge_to_az".into(),
         address: "test.test.io:8883".into(),
         remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
-        bridge_root_cert_path: "./test_root.pem".into(),
+        bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
         remote_clientid: "alpha".into(),
         local_clientid: "Azure".into(),
         bridge_certfile: "./test-certificate.pem".into(),

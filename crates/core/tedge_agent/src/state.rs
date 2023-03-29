@@ -1,8 +1,8 @@
 use crate::error::StateError;
 use async_trait::async_trait;
+use camino::Utf8PathBuf;
 use serde::Deserialize;
 use serde::Serialize;
-use std::path::PathBuf;
 use std::str::FromStr;
 use tedge_utils::fs::atomically_write_file_async;
 use tokio::fs;
@@ -10,8 +10,8 @@ use tracing::error;
 
 #[derive(Debug)]
 pub struct AgentStateRepository {
-    state_repo_path: PathBuf,
-    state_repo_root: PathBuf,
+    state_repo_path: Utf8PathBuf,
+    state_repo_root: Utf8PathBuf,
 }
 
 #[async_trait]
@@ -76,12 +76,12 @@ impl StateRepository for AgentStateRepository {
 }
 
 impl AgentStateRepository {
-    pub fn new(tedge_root: PathBuf) -> Self {
+    pub fn new(tedge_root: Utf8PathBuf) -> Self {
         let mut state_repo_root = tedge_root;
-        state_repo_root.push(PathBuf::from_str(".agent").expect("infallible"));
+        state_repo_root.push(Utf8PathBuf::from_str(".agent").expect("infallible"));
 
         let mut state_repo_path = state_repo_root.clone();
-        state_repo_path.push(PathBuf::from_str("current-operation").expect("infallible"));
+        state_repo_path.push(Utf8PathBuf::from_str("current-operation").expect("infallible"));
 
         Self {
             state_repo_path,
@@ -132,7 +132,7 @@ mod tests {
     #[tokio::test]
     async fn agent_state_repository_not_exists_fail() {
         let temp_dir = TempTedgeDir::new();
-        let repo = AgentStateRepository::new(temp_dir.path().to_path_buf());
+        let repo = AgentStateRepository::new(temp_dir.utf8_path_buf());
 
         repo.load().await.unwrap_err();
     }
@@ -146,7 +146,7 @@ mod tests {
             .file("current-operation")
             .with_raw_content(content);
 
-        let repo = AgentStateRepository::new(temp_dir.path().to_path_buf());
+        let repo = AgentStateRepository::new(temp_dir.utf8_path_buf());
 
         let data = repo.load().await.unwrap();
         assert_eq!(
@@ -167,7 +167,7 @@ mod tests {
             .file("current-operation")
             .with_raw_content(content);
 
-        let repo = AgentStateRepository::new(temp_dir.path().to_path_buf());
+        let repo = AgentStateRepository::new(temp_dir.utf8_path_buf());
 
         let data = repo.load().await.unwrap();
         assert_eq!(
@@ -188,7 +188,7 @@ mod tests {
             .file("current-operation")
             .with_raw_content(content);
 
-        let repo = AgentStateRepository::new(temp_dir.path().to_path_buf());
+        let repo = AgentStateRepository::new(temp_dir.utf8_path_buf());
 
         let data = repo.load().await.unwrap();
         assert_eq!(
@@ -205,7 +205,7 @@ mod tests {
         let temp_dir = TempTedgeDir::new();
         temp_dir.dir(".agent").file("current-operation");
 
-        let repo = AgentStateRepository::new(temp_dir.path().to_path_buf());
+        let repo = AgentStateRepository::new(temp_dir.utf8_path_buf());
 
         repo.store(&State {
             operation_id: Some("1234".into()),

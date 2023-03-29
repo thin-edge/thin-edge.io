@@ -10,3 +10,5 @@ pub use self::tedge_config_cli::tedge_config_defaults::*;
 use self::tedge_config_cli::tedge_config_dto::*;
 pub use self::tedge_config_cli::tedge_config_location::*;
 pub use self::tedge_config_cli::tedge_config_repository::*;
+pub use camino::Utf8Path as Path;
+pub use camino::Utf8PathBuf as PathBuf;
