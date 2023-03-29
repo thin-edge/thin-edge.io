@@ -5,7 +5,6 @@ use tedge_api::SoftwareUpdateResponse;
 // allowing large size difference between variants warning,
 // because the enum `SmartRestSerializerError` is already Boxed
 // in `SMCumulocityMapperError`
-#[allow(clippy::large_enum_variant)]
 #[derive(thiserror::Error, Debug)]
 pub enum SmartRestSerializerError {
     #[error("The operation status is not supported. {response:?}")]
@@ -49,7 +48,6 @@ pub enum SmartRestDeserializerError {
     NoResponse,
 }
 
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, thiserror::Error)]
 pub enum OperationsError {
     #[error("Failed to read directory: {dir}")]

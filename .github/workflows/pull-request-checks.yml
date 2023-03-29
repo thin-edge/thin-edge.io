@@ -241,7 +241,7 @@ jobs:
         with:
           toolchain: stable
           command: clippy
-          args: --all-features -- -Aclippy::result-large-err
+          args: --all-targets --all-features
 
   cargo-audit:
     name: Run cargo audit

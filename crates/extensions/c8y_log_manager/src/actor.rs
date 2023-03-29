@@ -504,6 +504,7 @@ mod tests {
 
     /// Create a log manager actor builder
     /// along two boxes to exchange MQTT and HTTP messages with the log actor
+    #[allow(clippy::type_complexity)]
     fn new_log_manager_builder(
         temp_dir: &Path,
         log_config: LogPluginConfig,

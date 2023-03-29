@@ -4,7 +4,6 @@ use tedge_mqtt_ext::Topic;
 use tedge_utils::file::FileError;
 use tedge_utils::paths::PathsError;
 
-#[allow(clippy::large_enum_variant)]
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigManagementError {
     #[error(transparent)]

@@ -510,8 +510,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file");
         let user = whoami::username();
-        create_file_with_user_group(&file_path.display().to_string(), &user, &user, 0o775, None)
-            .unwrap();
+        create_file_with_user_group(&file_path, &user, &user, 0o775, None).unwrap();
 
         let new_content = "abc";
         overwrite_file(file_path.as_path(), new_content).unwrap();

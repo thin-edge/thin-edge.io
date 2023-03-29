@@ -157,6 +157,7 @@ where
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[cfg(test)]
     pub fn from_logs_path(
         size_threshold: SizeThreshold,
