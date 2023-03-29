@@ -1,3 +1,4 @@
+use std::io;
 use std::path::PathBuf;
 use tedge_api::SoftwareUpdateResponse;
 
@@ -13,8 +14,8 @@ pub enum SmartRestSerializerError {
     #[error("Failed to serialize SmartREST.")]
     InvalidCsv(#[from] csv::Error),
 
-    #[error(transparent)]
-    FromCsvWriter(#[from] csv::IntoInnerError<csv::Writer<Vec<u8>>>),
+    #[error("IO error")]
+    IoError(#[from] io::Error),
 
     #[error(transparent)]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
@@ -62,9 +63,6 @@ pub enum OperationsError {
 
     #[error("Error while parsing operation file: '{0}': {1}.")]
     TomlError(PathBuf, #[source] toml::de::Error),
-
-    #[error(transparent)]
-    FromSmartRestSerializerError(#[from] SmartRestSerializerError),
 }
 
 #[derive(thiserror::Error, Debug)]
