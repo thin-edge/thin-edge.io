@@ -112,7 +112,7 @@ pub async fn move_file(
     };
 
     tokio::fs::rename(src_path, dest_path).await?;
-    debug!("MOved file from {:?} to {:?}", src_path, dest_path);
+    debug!("Moved file from {:?} to {:?}", src_path, dest_path);
 
     let file_permissions = if let Some(mode) = original_permission_mode {
         // Use the same file permission as the original one

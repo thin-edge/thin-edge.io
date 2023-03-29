@@ -1,5 +1,3 @@
-// #[cfg(test)]
-// mod tests;
 use c8y_config_manager::ConfigManagerBuilder;
 use c8y_config_manager::ConfigManagerConfig;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
@@ -74,7 +72,7 @@ async fn main() -> Result<(), anyhow::Error> {
         tracing::Level::TRACE
     } else {
         get_log_level(
-            "c8y-log-plugin",
+            PLUGIN_NAME,
             tedge_config_location.tedge_config_root_path.to_path_buf(),
         )?
     };

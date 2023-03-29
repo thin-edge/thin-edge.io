@@ -79,7 +79,7 @@ async fn test_config_upload_tedge_device() -> Result<(), DynError> {
     let mut mqtt_message_box = mqtt_message_box.with_timeout(TEST_TIMEOUT);
     let mut c8y_proxy_message_box = c8y_proxy_message_box.with_timeout(TEST_TIMEOUT);
 
-    // Skip the inital bootstrap messages
+    // Skip the initial bootstrap messages
     mqtt_message_box.skip(2).await;
 
     let c8y_config_upload_msg = MqttMessage::new(
@@ -142,7 +142,7 @@ async fn test_config_download_tedge_device() -> Result<(), DynError> {
     let mut mqtt_message_box = mqtt_message_box.with_timeout(TEST_TIMEOUT);
     let mut c8y_proxy_message_box = c8y_proxy_message_box.with_timeout(TEST_TIMEOUT);
 
-    // Skip the inital bootstrap messages
+    // Skip the initial bootstrap messages
     mqtt_message_box.skip(2).await;
 
     let download_url = "http://test.domain.com";
@@ -210,7 +210,7 @@ async fn test_child_device_config_upload_request_mapping() -> Result<(), DynErro
 
     let mut mqtt_message_box = mqtt_message_box.with_timeout(TEST_TIMEOUT);
 
-    // Skip the inital bootstrap messages
+    // Skip the initial bootstrap messages
     mqtt_message_box.skip(2).await;
 
     mqtt_message_box
@@ -263,7 +263,7 @@ async fn test_child_device_config_upload_executing_response_mapping() -> Result<
 
     let mut mqtt_message_box = mqtt_message_box.with_timeout(TEST_TIMEOUT);
 
-    // Skip the inital bootstrap messages
+    // Skip the initial bootstrap messages
     mqtt_message_box.skip(2).await;
 
     let c8y_config_upload_msg = MqttMessage::new(
@@ -312,7 +312,7 @@ async fn test_child_device_config_upload_failed_response_mapping() -> Result<(),
 
     let mut mqtt_message_box = mqtt_message_box.with_timeout(TEST_TIMEOUT);
 
-    // Skip the inital bootstrap messages
+    // Skip the initial bootstrap messages
     mqtt_message_box.skip(2).await;
 
     let c8y_config_upload_msg = MqttMessage::new(
@@ -370,7 +370,7 @@ async fn test_invalid_config_snapshot_response_child_device() -> Result<(), DynE
 
     let mut mqtt_message_box = mqtt_message_box.with_timeout(TEST_TIMEOUT);
 
-    // Skip the inital bootstrap messages
+    // Skip the initial bootstrap messages
     mqtt_message_box.skip(2).await;
 
     let c8y_config_upload_msg = MqttMessage::new(
@@ -423,7 +423,7 @@ async fn test_timeout_on_no_config_snapshot_response_child_device() -> Result<()
 
     let mut mqtt_message_box = mqtt_message_box.with_timeout(TEST_TIMEOUT);
 
-    // Skip the inital bootstrap messages
+    // Skip the initial bootstrap messages
     mqtt_message_box.skip(2).await;
 
     let c8y_config_upload_msg = MqttMessage::new(
@@ -485,7 +485,7 @@ async fn test_child_device_successful_config_snapshot_response_mapping() -> Resu
     let (mut mqtt_message_box, mut c8y_proxy_message_box, _timer_message_box) =
         spawn_config_manager(&device_id, &ttd).await?;
 
-    // Skip the inital bootstrap messages
+    // Skip the initial bootstrap messages
     for _ in 0..2 {
         let _ = tokio::time::timeout(TEST_TIMEOUT, mqtt_message_box.recv()).await?;
     }
@@ -559,7 +559,7 @@ async fn test_child_config_snapshot_successful_response_without_uploaded_file_ma
     let (mut mqtt_message_box, mut c8y_proxy_message_box, _timer_message_box) =
         spawn_config_manager(&device_id, &ttd).await?;
 
-    // Skip the inital bootstrap messages
+    // Skip the initial bootstrap messages
     for _ in 0..2 {
         let _ = tokio::time::timeout(TEST_TIMEOUT, mqtt_message_box.recv()).await?;
     }
@@ -632,7 +632,7 @@ async fn test_child_device_config_download_request_mapping() -> Result<(), DynEr
     let (mut mqtt_message_box, mut c8y_proxy_message_box, _timer_message_box) =
         spawn_config_manager(&device_id, &ttd).await?;
 
-    // Skip the inital bootstrap messages
+    // Skip the initial bootstrap messages
     for _ in 0..2 {
         let _ = tokio::time::timeout(TEST_TIMEOUT, mqtt_message_box.recv()).await?;
     }
@@ -701,7 +701,7 @@ async fn test_child_device_config_update_executing_response_mapping() -> Result<
     let (mut mqtt_message_box, _c8y_proxy_message_box, _timer_message_box) =
         spawn_config_manager(&device_id, &ttd).await?;
 
-    // Skip the inital bootstrap messages
+    // Skip the initial bootstrap messages
     for _ in 0..2 {
         let _ = tokio::time::timeout(TEST_TIMEOUT, mqtt_message_box.recv()).await?;
     }
@@ -750,7 +750,7 @@ async fn test_child_device_config_update_successful_response_mapping() -> Result
     let (mut mqtt_message_box, _c8y_proxy_message_box, _timer_message_box) =
         spawn_config_manager(&device_id, &ttd).await?;
 
-    // Skip the inital bootstrap messages
+    // Skip the initial bootstrap messages
     for _ in 0..2 {
         let _ = tokio::time::timeout(TEST_TIMEOUT, mqtt_message_box.recv()).await?;
     }
@@ -805,7 +805,7 @@ async fn test_child_device_config_update_failed_response_mapping() -> Result<(),
     let (mut mqtt_message_box, _c8y_proxy_message_box, _timer_message_box) =
         spawn_config_manager(&device_id, &ttd).await?;
 
-    // Skip the inital bootstrap messages
+    // Skip the initial bootstrap messages
     for _ in 0..2 {
         let _ = tokio::time::timeout(TEST_TIMEOUT, mqtt_message_box.recv()).await?;
     }
@@ -861,7 +861,7 @@ async fn test_child_device_config_download_fail_with_broken_url() -> Result<(), 
     let (mut mqtt_message_box, mut c8y_proxy_message_box, _timer_message_box) =
         spawn_config_manager(&device_id, &ttd).await?;
 
-    // Skip the inital bootstrap messages
+    // Skip the initial bootstrap messages
     for _ in 0..2 {
         let _ = tokio::time::timeout(TEST_TIMEOUT, mqtt_message_box.recv()).await?;
     }
@@ -940,7 +940,7 @@ async fn test_multiline_smartrest_requests() -> Result<(), DynError> {
         }
     });
 
-    // Skip the inital bootstrap messages
+    // Skip the initial bootstrap messages
     mqtt_message_box.skip(2).await;
 
     mqtt_message_box

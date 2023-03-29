@@ -25,7 +25,6 @@ use download::Downloader;
 use log::debug;
 use log::error;
 use log::info;
-use nanoid::nanoid;
 use std::collections::HashMap;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
@@ -289,15 +288,21 @@ impl C8YHttpProxyActor {
         }
 
         // Download file to the target directory with a temp name
-        let file_name = nanoid!();
-        let parent_dir = request.file_path.parent().ok_or_else(|| {
-            C8YRestError::CustomError(format!(
-                "Parent directory of {:?} not found",
-                request.file_path
-            ))
-        })?;
+        let file_path = request.file_path.clone();
+        let file_name = file_path
+            .file_name()
+            .ok_or_else(|| C8YRestError::NoParentDirError(file_path.clone()))?
+            .to_str()
+            .ok_or_else(|| C8YRestError::InvalidFileNameError(file_path.clone()))?;
+        let parent_dir = file_path
+            .parent()
+            .ok_or_else(|| C8YRestError::NoParentDirError(file_path.clone()))?;
+
+        let tmp_file_name = format!("{file_name}.tmp");
+        let target_path = parent_dir.join(tmp_file_name);
+
         debug!(target: self.name(), "Downloading from: {:?}", download_info.url());
-        let downloader: Downloader = Downloader::new_sm(&file_name, &None, parent_dir);
+        let downloader: Downloader = Downloader::new(&target_path);
         downloader.download(&download_info).await?;
 
         // Move the downloaded file to the final destination

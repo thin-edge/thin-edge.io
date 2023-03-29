@@ -574,7 +574,6 @@ dependencies = [
  "download",
  "log",
  "mqtt_channel",
- "nanoid",
  "tedge_actors",
  "tedge_config",
  "tedge_http_ext",
