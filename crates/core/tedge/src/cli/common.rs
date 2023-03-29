@@ -1,9 +1,8 @@
-use std::fmt;
-
 use tedge_config::system_services::SystemService;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, strum_macros::Display, strum_macros::IntoStaticStr)]
 pub enum Cloud {
+    #[strum(serialize = "Cumulocity")]
     C8y,
     Azure,
     Aws,
@@ -17,21 +16,8 @@ impl Cloud {
             Cloud::C8y => SystemService::TEdgeMapperC8y,
         }
     }
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Aws => "Aws",
-            Self::Azure => "Azure",
-            Self::C8y => "Cumulocity",
-        }
-    }
-}
 
-impl fmt::Display for Cloud {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Cloud::C8y => write!(f, "Cumulocity"),
-            Cloud::Azure => write!(f, "Azure"),
-            Cloud::Aws => write!(f, "Aws"),
-        }
+    pub fn as_str(self) -> &'static str {
+        self.into()
     }
 }

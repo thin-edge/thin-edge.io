@@ -2,29 +2,26 @@ use crate::system_services::CommandBuilder;
 use crate::system_services::SystemService;
 use crate::system_services::SystemServiceError;
 use crate::system_services::SystemServiceManager;
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 
 use super::config::InitConfig;
 use super::config::SystemConfig;
 use super::config::SERVICE_CONFIG_FILE;
 use std::fmt;
-use std::path::PathBuf;
 use std::process::ExitStatus;
 
 #[derive(Debug)]
 pub struct GeneralServiceManager {
     init_config: InitConfig,
-    config_path: String,
+    config_path: Utf8PathBuf,
 }
 
 impl GeneralServiceManager {
-    pub fn try_new(config_root: PathBuf) -> Result<Self, SystemServiceError> {
-        let init_config = SystemConfig::try_new(config_root.clone())?.init;
+    pub fn try_new(config_root: &Utf8Path) -> Result<Self, SystemServiceError> {
+        let init_config = SystemConfig::try_new(config_root)?.init;
 
-        let config_path = config_root
-            .join(SERVICE_CONFIG_FILE)
-            .to_str()
-            .unwrap_or(SERVICE_CONFIG_FILE)
-            .to_string();
+        let config_path = config_root.join(SERVICE_CONFIG_FILE);
 
         Ok(Self {
             init_config,
@@ -91,7 +88,7 @@ impl ExecCommand {
     fn try_new(
         config: Vec<String>,
         cmd: ServiceCommand,
-        config_path: String,
+        config_path: Utf8PathBuf,
     ) -> Result<Self, SystemServiceError> {
         match config.split_first() {
             Some((exec, args)) => Ok(Self {
@@ -109,11 +106,10 @@ impl ExecCommand {
     fn try_new_with_placeholder(
         config: Vec<String>,
         service_cmd: ServiceCommand,
-        config_path: String,
+        config_path: Utf8PathBuf,
         service: SystemService,
     ) -> Result<Self, SystemServiceError> {
-        let replaced =
-            replace_with_service_name(&config, service_cmd, config_path.as_str(), service)?;
+        let replaced = replace_with_service_name(&config, service_cmd, &config_path, service)?;
         Self::try_new(replaced, service_cmd, config_path)
     }
 
@@ -142,14 +138,14 @@ impl fmt::Display for ExecCommand {
 fn replace_with_service_name(
     input_args: &[String],
     service_cmd: ServiceCommand,
-    config_path: &str,
+    config_path: impl Into<Utf8PathBuf>,
     service: SystemService,
 ) -> Result<Vec<String>, SystemServiceError> {
     if !input_args.iter().any(|s| s == "{}") {
         return Err(SystemServiceError::SystemConfigInvalidSyntax {
             reason: "A placeholder '{}' is missing.".to_string(),
             cmd: service_cmd.to_string(),
-            path: config_path.to_string(),
+            path: config_path.into(),
         });
     }
 
@@ -339,7 +335,7 @@ mod tests {
         let exec_command = ExecCommand::try_new(
             config,
             ServiceCommand::Stop(SystemService::Mosquitto),
-            "test/dummy.toml".to_string(),
+            "test/dummy.toml".into(),
         )
         .unwrap();
         assert_eq!(exec_command, expected);
@@ -351,7 +347,7 @@ mod tests {
         let system_config_error = ExecCommand::try_new(
             config,
             ServiceCommand::Stop(SystemService::Mosquitto),
-            "test/dummy.toml".to_string(),
+            "test/dummy.toml".into(),
         )
         .unwrap_err();
         assert_matches!(

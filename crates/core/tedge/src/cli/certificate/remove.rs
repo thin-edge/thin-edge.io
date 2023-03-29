@@ -3,15 +3,15 @@ use std::io;
 
 use super::error::CertError;
 use crate::command::Command;
-use tedge_config::*;
+use camino::Utf8PathBuf;
 
 /// Remove the device certificate
 pub struct RemoveCertCmd {
     /// The path of the certificate to be removed
-    pub cert_path: FilePath,
+    pub cert_path: Utf8PathBuf,
 
     /// The path of the private key to be removed
-    pub key_path: FilePath,
+    pub key_path: Utf8PathBuf,
 }
 
 impl Command for RemoveCertCmd {

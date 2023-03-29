@@ -1,6 +1,7 @@
+use camino::Utf8Path;
+
 use crate::system_services::*;
 use std::fmt::Debug;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Abstraction over the system-provided facility that manages starting, stopping as well as other
@@ -42,7 +43,7 @@ pub trait SystemServiceManager: Debug {
 }
 
 pub fn service_manager(
-    config_root: PathBuf,
+    config_root: &Utf8Path,
 ) -> Result<Arc<dyn SystemServiceManager>, SystemServiceError> {
     Ok(Arc::new(GeneralServiceManager::try_new(config_root)?))
 }

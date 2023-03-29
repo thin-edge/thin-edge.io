@@ -1,6 +1,6 @@
 use crate::cli::connect::BridgeConfig;
+use camino::Utf8PathBuf;
 use tedge_config::ConnectUrl;
-use tedge_config::FilePath;
 use tedge_config::TemplatesSet;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -9,9 +9,9 @@ pub struct BridgeConfigC8yParams {
     pub mqtt_tls_port: u16,
     pub config_file: String,
     pub remote_clientid: String,
-    pub bridge_root_cert_path: FilePath,
-    pub bridge_certfile: FilePath,
-    pub bridge_keyfile: FilePath,
+    pub bridge_root_cert_path: Utf8PathBuf,
+    pub bridge_certfile: Utf8PathBuf,
+    pub bridge_keyfile: Utf8PathBuf,
     pub smartrest_templates: TemplatesSet,
 }
 
@@ -110,7 +110,7 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
         mqtt_tls_port: 8883,
         config_file: "c8y-bridge.conf".into(),
         remote_clientid: "alpha".into(),
-        bridge_root_cert_path: "./test_root.pem".into(),
+        bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
         smartrest_templates: TemplatesSet::try_from(vec!["abc", "def"])?,
@@ -124,7 +124,7 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
         connection: "edge_to_c8y".into(),
         address: "test.test.io:8883".into(),
         remote_username: None,
-        bridge_root_cert_path: "./test_root.pem".into(),
+        bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
         remote_clientid: "alpha".into(),
         local_clientid: "Cumulocity".into(),
         bridge_certfile: "./test-certificate.pem".into(),

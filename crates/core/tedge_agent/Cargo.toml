@@ -35,6 +35,7 @@ assets = [
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
+camino = "1.1.4"
 clap = { version = "3.2", features = ["cargo", "derive"] }
 flockfile = { path = "../../common/flockfile" }
 futures = "0.3"

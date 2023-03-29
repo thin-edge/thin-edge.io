@@ -1,9 +1,11 @@
 use std::convert::TryInto;
 
+use doku::Document;
+
 /// Represents a set of smartrest templates.
 ///
 /// New type to add conversion methods and deduplicate provided templates.
-#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, Eq, PartialEq, Document)]
 #[serde(transparent)]
 pub struct TemplatesSet(pub Vec<String>);
 

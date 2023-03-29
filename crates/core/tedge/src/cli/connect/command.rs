@@ -3,6 +3,7 @@ use crate::cli::connect::jwt_token::*;
 use crate::cli::connect::*;
 use crate::command::Command;
 use crate::ConfigError;
+use camino::Utf8PathBuf;
 use rumqttc::Event;
 use rumqttc::Incoming;
 use rumqttc::MqttOptions;
@@ -10,7 +11,6 @@ use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::QoS::AtLeastOnce;
 use std::path::Path;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_config::system_services::*;
@@ -95,18 +95,9 @@ impl Command for ConnectCommand {
                     .ok()
                     .map(|x| x.to_string()),
                 config.query(MqttExternalBindInterfaceSetting).ok(),
-                config
-                    .query(MqttExternalCAPathSetting)
-                    .ok()
-                    .map(|x| x.to_string()),
-                config
-                    .query(MqttExternalCertfileSetting)
-                    .ok()
-                    .map(|x| x.to_string()),
-                config
-                    .query(MqttExternalKeyfileSetting)
-                    .ok()
-                    .map(|x| x.to_string()),
+                config.query(MqttExternalCAPathSetting).ok(),
+                config.query(MqttExternalCertfileSetting).ok(),
+                config.query(MqttExternalKeyfileSetting).ok(),
             );
 
         let device_type = config.query(DeviceTypeSetting)?;
@@ -579,7 +570,7 @@ fn write_bridge_config_to_file(
 fn get_bridge_config_file_path(
     config_location: &TEdgeConfigLocation,
     bridge_config: &BridgeConfig,
-) -> PathBuf {
+) -> Utf8PathBuf {
     config_location
         .tedge_config_root_path
         .join(TEDGE_BRIDGE_CONF_DIR_PATH)
@@ -589,7 +580,7 @@ fn get_bridge_config_file_path(
 fn get_common_mosquitto_config_file_path(
     config_location: &TEdgeConfigLocation,
     common_mosquitto_config: &CommonMosquittoConfig,
-) -> PathBuf {
+) -> Utf8PathBuf {
     config_location
         .tedge_config_root_path
         .join(TEDGE_BRIDGE_CONF_DIR_PATH)

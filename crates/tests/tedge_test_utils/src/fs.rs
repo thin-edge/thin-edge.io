@@ -1,5 +1,7 @@
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
+use std::fs;
 use std::fs::OpenOptions;
-use std::fs::{self};
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -8,7 +10,7 @@ use tempfile::TempDir;
 #[derive(Debug, Clone)]
 pub struct TempTedgeDir {
     pub temp_dir: Arc<TempDir>,
-    current_file_path: PathBuf,
+    current_file_path: Utf8PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -19,7 +21,7 @@ pub struct TempTedgeFile {
 impl Default for TempTedgeDir {
     fn default() -> Self {
         let temp_dir = TempDir::new().unwrap();
-        let current_file_path = temp_dir.path().to_path_buf();
+        let current_file_path = Utf8Path::from_path(temp_dir.path()).unwrap().to_owned();
         TempTedgeDir {
             temp_dir: Arc::new(temp_dir),
             current_file_path,
@@ -33,7 +35,7 @@ impl TempTedgeDir {
     }
 
     pub fn dir(&self, directory_name: &str) -> TempTedgeDir {
-        let root = self.temp_dir.path().to_path_buf();
+        let root = Utf8Path::from_path(self.temp_dir.path()).unwrap();
         let path = root.join(&self.current_file_path).join(directory_name);
 
         if !path.exists() {
@@ -58,11 +60,19 @@ impl TempTedgeDir {
     }
 
     pub fn path(&self) -> &Path {
+        self.current_file_path.as_std_path()
+    }
+
+    pub fn utf8_path(&self) -> &Utf8Path {
         self.current_file_path.as_path()
     }
 
+    pub fn utf8_path_buf(&self) -> Utf8PathBuf {
+        self.current_file_path.clone()
+    }
+
     pub fn to_path_buf(&self) -> PathBuf {
-        PathBuf::from(self.path())
+        self.current_file_path.clone().into_std_path_buf()
     }
 }
 

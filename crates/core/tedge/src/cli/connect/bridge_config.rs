@@ -1,7 +1,7 @@
 use crate::cli::connect::ConnectError;
 
-use tedge_config::FilePath;
-use url::Url;
+use camino::Utf8PathBuf;
+use reqwest::Url;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfig {
@@ -10,11 +10,11 @@ pub struct BridgeConfig {
     pub connection: String,
     pub address: String,
     pub remote_username: Option<String>,
-    pub bridge_root_cert_path: FilePath,
+    pub bridge_root_cert_path: Utf8PathBuf,
     pub remote_clientid: String,
     pub local_clientid: String,
-    pub bridge_certfile: FilePath,
-    pub bridge_keyfile: FilePath,
+    pub bridge_certfile: Utf8PathBuf,
+    pub bridge_keyfile: Utf8PathBuf,
     pub use_mapper: bool,
     pub use_agent: bool,
     pub try_private: bool,
@@ -78,15 +78,15 @@ impl BridgeConfig {
         // `Url::parse` will treat `domain` as `schema` ...
         Url::parse(&self.address)?;
 
-        if !self.bridge_root_cert_path.as_ref().exists() {
+        if !self.bridge_root_cert_path.exists() {
             return Err(ConnectError::Certificate);
         }
 
-        if !self.bridge_certfile.as_ref().exists() {
+        if !self.bridge_certfile.exists() {
             return Err(ConnectError::Certificate);
         }
 
-        if !self.bridge_keyfile.as_ref().exists() {
+        if !self.bridge_keyfile.exists() {
             return Err(ConnectError::Certificate);
         }
 
@@ -98,11 +98,13 @@ impl BridgeConfig {
 mod test {
 
     use super::*;
+    use camino::Utf8Path;
+    use camino::Utf8PathBuf;
 
     #[test]
     fn test_serialize_with_cafile_correctly() -> anyhow::Result<()> {
         let file = tempfile::NamedTempFile::new()?;
-        let bridge_root_cert_path: FilePath = file.path().into();
+        let bridge_root_cert_path = Utf8Path::from_path(file.path()).unwrap();
 
         let bridge = BridgeConfig {
             cloud_name: "test".into(),
@@ -110,7 +112,7 @@ mod test {
             connection: "edge_to_test".into(),
             address: "test.test.io:8883".into(),
             remote_username: None,
-            bridge_root_cert_path: bridge_root_cert_path.clone(),
+            bridge_root_cert_path: bridge_root_cert_path.to_owned(),
             remote_clientid: "alpha".into(),
             local_clientid: "test".into(),
             bridge_certfile: "./test-certificate.pem".into(),
@@ -164,7 +166,7 @@ bridge_attempt_unsubscribe false
     #[test]
     fn test_serialize_with_capath_correctly() -> anyhow::Result<()> {
         let dir = tempfile::TempDir::new()?;
-        let bridge_root_cert_path: FilePath = dir.path().into();
+        let bridge_root_cert_path = Utf8Path::from_path(dir.path()).unwrap();
 
         let bridge = BridgeConfig {
             cloud_name: "test".into(),
@@ -172,7 +174,7 @@ bridge_attempt_unsubscribe false
             connection: "edge_to_test".into(),
             address: "test.test.io:8883".into(),
             remote_username: None,
-            bridge_root_cert_path: bridge_root_cert_path.clone(),
+            bridge_root_cert_path: bridge_root_cert_path.to_owned(),
             remote_clientid: "alpha".into(),
             local_clientid: "test".into(),
             bridge_certfile: "./test-certificate.pem".into(),
@@ -225,7 +227,7 @@ bridge_attempt_unsubscribe false
     #[test]
     fn test_serialize() -> anyhow::Result<()> {
         let file = tempfile::NamedTempFile::new()?;
-        let bridge_root_cert_path: FilePath = file.path().into();
+        let bridge_root_cert_path = Utf8Path::from_path(file.path()).unwrap();
 
         let config = BridgeConfig {
             cloud_name: "az".into(),
@@ -233,7 +235,7 @@ bridge_attempt_unsubscribe false
             connection: "edge_to_az".into(),
             address: "test.test.io:8883".into(),
             remote_username: Some("test.test.io/alpha/?api-version=2018-06-30".into()),
-            bridge_root_cert_path: bridge_root_cert_path.clone(),
+            bridge_root_cert_path: bridge_root_cert_path.to_owned(),
             remote_clientid: "alpha".into(),
             local_clientid: "Azure".into(),
             bridge_certfile: "./test-certificate.pem".into(),
@@ -289,19 +291,19 @@ bridge_attempt_unsubscribe false
     #[test]
     fn test_validate_ok() -> anyhow::Result<()> {
         let ca_file = tempfile::NamedTempFile::new()?;
-        let bridge_ca_path: FilePath = ca_file.path().into();
+        let bridge_ca_path = Utf8Path::from_path(ca_file.path()).unwrap();
 
         let cert_file = tempfile::NamedTempFile::new()?;
-        let bridge_certfile: FilePath = cert_file.path().into();
+        let bridge_certfile = Utf8Path::from_path(cert_file.path()).unwrap().to_owned();
 
         let key_file = tempfile::NamedTempFile::new()?;
-        let bridge_keyfile: FilePath = key_file.path().into();
+        let bridge_keyfile = Utf8Path::from_path(key_file.path()).unwrap().to_owned();
 
         let correct_url = "http://test.com";
 
         let config = BridgeConfig {
             address: correct_url.into(),
-            bridge_root_cert_path: bridge_ca_path,
+            bridge_root_cert_path: bridge_ca_path.to_owned(),
             bridge_certfile,
             bridge_keyfile,
             ..default_bridge_config()
@@ -317,12 +319,12 @@ bridge_attempt_unsubscribe false
     #[test]
     fn test_validate_wrong_url() {
         let incorrect_url = "noturl";
-        let non_existent_path = "/path/that/does/not/exist";
+        let non_existent_path = Utf8PathBuf::from("/path/that/does/not/exist");
 
         let config = BridgeConfig {
             address: incorrect_url.into(),
-            bridge_certfile: non_existent_path.into(),
-            bridge_keyfile: non_existent_path.into(),
+            bridge_certfile: non_existent_path.clone(),
+            bridge_keyfile: non_existent_path,
             ..default_bridge_config()
         };
 
@@ -332,12 +334,12 @@ bridge_attempt_unsubscribe false
     #[test]
     fn test_validate_wrong_cert_path() {
         let correct_url = "http://test.com";
-        let non_existent_path = "/path/that/does/not/exist";
+        let non_existent_path = Utf8PathBuf::from("/path/that/does/not/exist");
 
         let config = BridgeConfig {
             address: correct_url.into(),
-            bridge_certfile: non_existent_path.into(),
-            bridge_keyfile: non_existent_path.into(),
+            bridge_certfile: non_existent_path.clone(),
+            bridge_keyfile: non_existent_path,
             ..default_bridge_config()
         };
 
@@ -347,7 +349,7 @@ bridge_attempt_unsubscribe false
     #[test]
     fn test_validate_wrong_key_path() -> anyhow::Result<()> {
         let cert_file = tempfile::NamedTempFile::new()?;
-        let bridge_certfile: FilePath = cert_file.path().into();
+        let bridge_certfile = Utf8Path::from_path(cert_file.path()).unwrap().to_owned();
         let correct_url = "http://test.com";
         let non_existent_path = "/path/that/does/not/exist";
 

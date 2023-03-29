@@ -13,5 +13,6 @@ normal = ["anyhow"]
 
 [dependencies]
 anyhow = "1.0"
+camino = "1.1.4"
 tempfile = "3.3"
 toml = "0.5"

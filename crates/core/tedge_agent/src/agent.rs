@@ -8,6 +8,8 @@ use crate::state::SoftwareOperationVariants;
 use crate::state::State;
 use crate::state::StateRepository;
 use crate::state::StateStatus;
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
 use mqtt_channel::Connection;
@@ -23,8 +25,6 @@ use plugin_sm::plugin_manager::ExternalPlugins;
 use plugin_sm::plugin_manager::Plugins;
 use std::convert::TryInto;
 use std::fmt::Debug;
-use std::path::Path;
-use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
 use tedge_api::control_filter_topic;
@@ -96,13 +96,13 @@ pub struct SmAgentConfig {
     pub response_topic_list: Topic,
     pub response_topic_update: Topic,
     pub response_topic_restart: Topic,
-    pub sm_home: PathBuf,
-    pub log_dir: PathBuf,
-    pub run_dir: PathBuf,
-    pub tmp_dir: PathBuf,
-    pub data_dir: PathBuf,
+    pub sm_home: Utf8PathBuf,
+    pub log_dir: Utf8PathBuf,
+    pub run_dir: Utf8PathBuf,
+    pub tmp_dir: Utf8PathBuf,
+    pub data_dir: Utf8PathBuf,
     pub config_location: TEdgeConfigLocation,
-    pub download_dir: PathBuf,
+    pub download_dir: Utf8PathBuf,
     pub http_config: HttpConfig,
     pub use_lock: Flag,
 }
@@ -141,21 +141,21 @@ impl Default for SmAgentConfig {
         let response_topic_restart =
             Topic::new(RestartOperationResponse::topic_name()).expect("Invalid topic");
 
-        let sm_home = PathBuf::from("/etc/tedge");
+        let sm_home = Utf8PathBuf::from("/etc/tedge");
 
-        let log_dir = PathBuf::from(&format!("{DEFAULT_LOG_PATH}/{AGENT_LOG_PATH}"));
+        let log_dir = Utf8PathBuf::from(&format!("{DEFAULT_LOG_PATH}/{AGENT_LOG_PATH}"));
 
-        let run_dir = PathBuf::from(DEFAULT_RUN_PATH);
+        let run_dir = Utf8PathBuf::from(DEFAULT_RUN_PATH);
 
-        let tmp_dir = PathBuf::from(DEFAULT_TMP_PATH);
+        let tmp_dir = Utf8PathBuf::from(DEFAULT_TMP_PATH);
 
         let config_location = TEdgeConfigLocation::default();
 
-        let download_dir = PathBuf::from(DEFAULT_TMP_PATH);
+        let download_dir = Utf8PathBuf::from(DEFAULT_TMP_PATH);
 
         let use_lock = Flag(true);
 
-        let data_dir = PathBuf::from(DEFAULT_DATA_PATH);
+        let data_dir = Utf8PathBuf::from(DEFAULT_DATA_PATH);
 
         let http_config = HttpConfig::default().with_data_dir(data_dir.clone());
 
@@ -206,10 +206,10 @@ impl SmAgentConfig {
         let tedge_download_dir = tedge_config.query_string(TmpPathSetting)?.into();
 
         let tedge_log_dir: String = tedge_config.query_string(LogPathSetting)?;
-        let tedge_log_dir = PathBuf::from(&format!("{tedge_log_dir}/{AGENT_LOG_PATH}"));
+        let tedge_log_dir = Utf8PathBuf::from(&format!("{tedge_log_dir}/{AGENT_LOG_PATH}"));
         let tedge_run_dir = tedge_config.query_string(RunPathSetting)?.into();
         let tedge_tmp_dir = tedge_config.query_string(TmpPathSetting)?.into();
-        let tedge_data_dir: PathBuf = tedge_config.query_string(DataPathSetting)?.into();
+        let tedge_data_dir = tedge_config.query(DataPathSetting)?;
 
         let mut http_config = HttpConfig::default().with_data_dir(tedge_data_dir.clone());
 
@@ -233,7 +233,7 @@ impl SmAgentConfig {
             .with_use_lock(use_lock))
     }
 
-    pub fn with_sm_home(self, sm_home: PathBuf) -> Self {
+    pub fn with_sm_home(self, sm_home: Utf8PathBuf) -> Self {
         Self { sm_home, ..self }
     }
 
@@ -251,26 +251,26 @@ impl SmAgentConfig {
         }
     }
 
-    pub fn with_download_directory(self, tmp_dir: PathBuf) -> Self {
+    pub fn with_download_directory(self, tmp_dir: Utf8PathBuf) -> Self {
         Self {
             download_dir: tmp_dir,
             ..self
         }
     }
 
-    pub fn with_log_directory(self, log_dir: PathBuf) -> Self {
+    pub fn with_log_directory(self, log_dir: Utf8PathBuf) -> Self {
         Self { log_dir, ..self }
     }
 
-    pub fn with_run_directory(self, run_dir: PathBuf) -> Self {
+    pub fn with_run_directory(self, run_dir: Utf8PathBuf) -> Self {
         Self { run_dir, ..self }
     }
 
-    pub fn with_tmp_directory(self, tmp_dir: PathBuf) -> Self {
+    pub fn with_tmp_directory(self, tmp_dir: Utf8PathBuf) -> Self {
         Self { tmp_dir, ..self }
     }
 
-    pub fn with_data_directory(self, data_dir: PathBuf) -> Self {
+    pub fn with_data_directory(self, data_dir: Utf8PathBuf) -> Self {
         Self { data_dir, ..self }
     }
 
@@ -300,14 +300,14 @@ impl SmAgent {
         if config.use_lock.is_set() {
             flock = Some(check_another_instance_is_not_running(
                 name,
-                &config.run_dir,
+                config.run_dir.as_std_path(),
             )?);
         }
 
         info!("{} starting", &name);
 
         let persistence_store = AgentStateRepository::new(config.sm_home.clone());
-        let operation_logs = OperationLogs::try_new(config.log_dir.clone())?;
+        let operation_logs = OperationLogs::try_new(config.log_dir.clone().into())?;
 
         config.mqtt_config = config
             .mqtt_config
@@ -323,9 +323,8 @@ impl SmAgent {
     }
 
     #[instrument(skip(self), name = "sm-agent")]
-    pub async fn init(&mut self, config_dir: PathBuf) -> Result<(), anyhow::Error> {
+    pub async fn init(&mut self, config_dir: Utf8PathBuf) -> Result<(), anyhow::Error> {
         // `config_dir` by default is `/etc/tedge` (or whatever the user sets with --config-dir)
-        let config_dir = config_dir.display();
         create_directory_with_user_group(format!("{config_dir}/.agent"), "tedge", "tedge", 0o775)?;
         create_directory_with_user_group(self.config.log_dir.clone(), "tedge", "tedge", 0o775)?;
         create_directory_with_user_group(self.config.data_dir.clone(), "tedge", "tedge", 0o775)?;
@@ -588,7 +587,7 @@ impl SmAgent {
                 plugins
                     .lock()
                     .await
-                    .process(&request, log_file, &self.config.download_dir)
+                    .process(&request, log_file, self.config.download_dir.as_std_path())
                     .await
             }
             Err(err) => {
@@ -744,7 +743,9 @@ async fn start_http_file_transfer_server(http_config: &HttpConfig) {
     }
 }
 
-fn get_restart_operation_commands(system_config_path: &Path) -> Result<Vec<Command>, AgentError> {
+fn get_restart_operation_commands(
+    system_config_path: &Utf8Path,
+) -> Result<Vec<Command>, AgentError> {
     let mut vec = vec![];
     // sync first
     let mut sync_command = std::process::Command::new(SUDO);
@@ -752,7 +753,7 @@ fn get_restart_operation_commands(system_config_path: &Path) -> Result<Vec<Comma
     vec.push(sync_command);
 
     // reading `system_config_path` to get the restart command or defaulting to `["init", "6"]'
-    let system_config = SystemConfig::try_new(system_config_path.to_path_buf())?;
+    let system_config = SystemConfig::try_new(system_config_path)?;
 
     let mut command = std::process::Command::new(SUDO);
     command.args(system_config.system.reboot);
@@ -771,9 +772,6 @@ fn get_default_plugin(
 
 #[cfg(test)]
 mod tests {
-
-    use std::path::PathBuf;
-
     use assert_json_diff::assert_json_include;
     use serde_json::json;
     use serde_json::Value;
@@ -876,7 +874,7 @@ mod tests {
 
             let plugins = Arc::new(Mutex::new(
                 ExternalPlugins::open(
-                    PathBuf::from(&dir.temp_dir.path()).join("sm-plugins"),
+                    &dir.utf8_path().join("sm-plugins"),
                     get_default_plugin(&agent.config.config_location).unwrap(),
                     Some(SUDO.into()),
                 )
@@ -920,7 +918,7 @@ mod tests {
 
             let plugins = Arc::new(Mutex::new(
                 ExternalPlugins::open(
-                    PathBuf::from(&dir.temp_dir.path()).join("sm-plugins"),
+                    &dir.utf8_path().join("sm-plugins"),
                     get_default_plugin(&agent.config.config_location).unwrap(),
                     Some(SUDO.into()),
                 )

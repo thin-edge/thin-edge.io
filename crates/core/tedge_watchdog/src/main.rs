@@ -49,7 +49,7 @@ async fn main() -> Result<(), anyhow::Error> {
     } else {
         get_log_level(
             "tedge-watchdog",
-            tedge_config_location.tedge_config_root_path.to_path_buf(),
+            &tedge_config_location.tedge_config_root_path,
         )?
     };
 

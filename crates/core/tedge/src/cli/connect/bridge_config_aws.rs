@@ -1,6 +1,6 @@
 use crate::cli::connect::BridgeConfig;
+use camino::Utf8PathBuf;
 use tedge_config::ConnectUrl;
-use tedge_config::FilePath;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfigAwsParams {
@@ -8,9 +8,9 @@ pub struct BridgeConfigAwsParams {
     pub mqtt_tls_port: u16,
     pub config_file: String,
     pub remote_clientid: String,
-    pub bridge_root_cert_path: FilePath,
-    pub bridge_certfile: FilePath,
-    pub bridge_keyfile: FilePath,
+    pub bridge_root_cert_path: Utf8PathBuf,
+    pub bridge_certfile: Utf8PathBuf,
+    pub bridge_keyfile: Utf8PathBuf,
 }
 
 impl From<BridgeConfigAwsParams> for BridgeConfig {
@@ -96,7 +96,7 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
         connection: "edge_to_aws".into(),
         address: "test.test.io:8883".into(),
         remote_username: Some("alpha".into()),
-        bridge_root_cert_path: "./test_root.pem".into(),
+        bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
         remote_clientid: "alpha".into(),
         local_clientid: "Aws".into(),
         bridge_certfile: "./test-certificate.pem".into(),

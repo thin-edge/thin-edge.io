@@ -1,3 +1,4 @@
+use doku::Document;
 use std::convert::TryFrom;
 use url::Host;
 
@@ -6,6 +7,12 @@ use url::Host;
 pub struct ConnectUrl {
     input: String,
     host: Host,
+}
+
+impl Document for ConnectUrl {
+    fn ty() -> doku::Type {
+        String::ty()
+    }
 }
 
 #[derive(thiserror::Error, Debug)]

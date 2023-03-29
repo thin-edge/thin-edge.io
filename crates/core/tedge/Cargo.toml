@@ -28,6 +28,7 @@ reqwest = { version = "0.11", default-features = false, features = [
 ] }
 rpassword = "5.0"
 rumqttc = "0.17"
+strum_macros = "0.24.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tedge_config = { path = "../../common/tedge_config" }
@@ -37,6 +38,7 @@ toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 url = "2.2"
 which = "4.2"
+camino = "1.1.4"
 
 [dev-dependencies]
 assert_cmd = "2.0"

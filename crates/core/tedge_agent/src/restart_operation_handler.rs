@@ -1,11 +1,11 @@
 pub mod restart_operation {
 
     use crate::error::AgentError;
+    use camino::Utf8Path;
     use std::fs::File;
     use std::fs::OpenOptions;
     use std::io::Read;
     use std::io::Write;
-    use std::path::Path;
     use time::OffsetDateTime;
 
     const TEDGE_AGENT_RESTART: &str = "tedge_agent_restart";
@@ -18,9 +18,9 @@ pub mod restart_operation {
     /// ```
     /// RestartOperationHelper::create_tmp_restart_file()?;
     /// ```
-    pub fn create_tmp_restart_file(tmp_dir: &Path) -> Result<(), AgentError> {
+    pub fn create_tmp_restart_file(tmp_dir: &Utf8Path) -> Result<(), AgentError> {
         let path = &tmp_dir.join(TEDGE_AGENT_RESTART);
-        let path = Path::new(path);
+        let path = Utf8Path::new(path);
 
         let mut file = match OpenOptions::new()
             .create(true)
@@ -38,13 +38,12 @@ pub mod restart_operation {
         Ok(())
     }
 
-    pub fn tmp_restart_file_exists(run_dir: &Path) -> bool {
-        let path = &run_dir.join(TEDGE_AGENT_RESTART);
-        Path::new(path).exists()
+    pub fn tmp_restart_file_exists(run_dir: &Utf8Path) -> bool {
+        run_dir.join(TEDGE_AGENT_RESTART).exists()
     }
 
     /// returns the datetime of `SLASH_RUN_PATH_TEDGE_AGENT_RESTART` "modified at".
-    fn get_restart_file_datetime(run_dir: &Path) -> Result<time::OffsetDateTime, AgentError> {
+    fn get_restart_file_datetime(run_dir: &Utf8Path) -> Result<time::OffsetDateTime, AgentError> {
         let mut file = File::open(run_dir.join(TEDGE_AGENT_RESTART))?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
@@ -98,7 +97,7 @@ pub mod restart_operation {
     }
 
     /// checks if system rebooted by comparing dt of tedge_agent_restart with dt of system restart.
-    pub fn has_rebooted(run_dir: &Path) -> Result<bool, AgentError> {
+    pub fn has_rebooted(run_dir: &Utf8Path) -> Result<bool, AgentError> {
         // there is no slash run file after the reboot, so we assume success.
         // this is true for most of the cases as "/run/" is normally cleared after a reboot.
         if !tmp_restart_file_exists(run_dir) {
