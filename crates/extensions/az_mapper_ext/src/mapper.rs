@@ -3,6 +3,9 @@ use std::path::Path;
 use crate::converter::AzureConverter;
 use crate::AzureMapperBuilder;
 use async_trait::async_trait;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
 use tedge_actors::ServiceConsumer;
 use tedge_config::AzureMapperTimestamp;
@@ -14,6 +17,7 @@ use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mapper_core::component::TEdgeComponent;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
+use tedge_signal_ext::SignalActor;
 use tedge_utils::file::create_directory_with_user_group;
 use tracing::info;
 
@@ -78,6 +82,12 @@ impl TEdgeComponent for AzureMapper {
         mqtt_actor.mqtt_config = health_actor.set_init_and_last_will(mqtt_actor.mqtt_config);
         let health_actor = health_actor.with_connection(&mut mqtt_actor);
 
+        let mut signal_actor = SignalActor::builder();
+
+        // Shutdown on SIGINT
+        signal_actor.register_peer(NoConfig, runtime.get_handle().get_sender());
+
+        runtime.spawn(signal_actor).await?;
         runtime.spawn(mqtt_actor).await?;
         runtime.spawn(azure_actor).await?;
         runtime.spawn(health_actor).await?;

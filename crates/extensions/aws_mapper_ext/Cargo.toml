@@ -23,6 +23,7 @@ tedge_config = { path = "../../common/tedge_config" }
 tedge_health_ext = { path = "../../extensions/tedge_health_ext" }
 tedge_mapper_core = { path = "../tedge_mapper_core" }
 tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
+tedge_signal_ext = { path = "../../extensions/tedge_signal_ext" }
 tedge_utils = { path = "../../common/tedge_utils" }
 thiserror = "1.0"
 time = "0.3"
