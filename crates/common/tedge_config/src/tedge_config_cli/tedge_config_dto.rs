@@ -78,7 +78,7 @@ pub struct DeviceConfigDto {
 #[derive(Debug, Default, Deserialize, Serialize, Document)]
 pub(crate) struct CumulocityConfigDto {
     /// Endpoint URL of the Cumulocity tenant
-    #[doku(example = "your-tenant.cumulocity.com")]
+    #[doku(example = "your-tenant.cumulocity.com", as = "String")]
     pub(crate) url: Option<ConnectUrl>,
 
     /// The path where Cumulocity root certificate(s) are stored.
@@ -90,14 +90,14 @@ pub(crate) struct CumulocityConfigDto {
     // TODO improve these examples
     #[doku(example = "template1")]
     #[doku(example = "template2")]
-    /// Set of c8y templates used for subscriptions
+    /// Set of c8y template names used for subscriptions
     pub(crate) smartrest_templates: Option<TemplatesSet>,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize, Document)]
 pub(crate) struct AzureConfigDto {
     /// Endpoint URL of Azure IoT tenant
-    #[doku(example = "myazure.azure-devices.net")]
+    #[doku(example = "myazure.azure-devices.net", as = "String")]
     pub(crate) url: Option<ConnectUrl>,
 
     /// The path where Azure root certificate(s) are stored
@@ -113,7 +113,7 @@ pub(crate) struct AzureConfigDto {
 #[derive(Debug, Default, Deserialize, Serialize, Document)]
 pub(crate) struct AwsConfigDto {
     /// Endpoint URL of AWS instance
-    #[doku(example = "your-endpoint.amazonaws.com")]
+    #[doku(example = "your-endpoint.amazonaws.com", as = "String")]
     pub(crate) url: Option<ConnectUrl>,
 
     /// The path where AWS root certificate(s) are stored
