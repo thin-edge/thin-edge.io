@@ -47,8 +47,7 @@ remove_or_purge_package_if_exists() {
     disconnect_from_cloud
     stop_extension_services
     for package in $packages; do
-        status=$(dpkg -s "$package" 2>/dev/null | grep -w installed) || true
-        if [ "$status" = "Status: install ok installed" ]; then
+        if dpkg -s "$package" >/dev/null 2>&1; then
             sudo apt --assume-yes "$1" "$package"
         fi
     done
