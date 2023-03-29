@@ -17,6 +17,7 @@ maintainer-scripts = "../../../configuration/debian/tedge"
 [dependencies]
 anyhow = "1.0"
 base64 = "0.13"
+camino = "1.1.4"
 certificate = { path = "../../common/certificate" }
 clap = { version = "3", features = ["cargo", "derive"] }
 hyper = { version = "0.14", default-features = false }
@@ -28,9 +29,9 @@ reqwest = { version = "0.11", default-features = false, features = [
 ] }
 rpassword = "5.0"
 rumqttc = "0.17"
-strum_macros = "0.24.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+strum_macros = "0.24.1"
 tedge_config = { path = "../../common/tedge_config" }
 tedge_utils = { path = "../../common/tedge_utils" }
 thiserror = "1.0"
@@ -38,7 +39,6 @@ toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 url = "2.2"
 which = "4.2"
-camino = "1.1.4"
 
 [dev-dependencies]
 assert_cmd = "2.0"
