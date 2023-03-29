@@ -76,7 +76,7 @@ impl TEdgeComponent for AwsMapper {
         let health_actor = health_actor.with_connection(&mut mqtt_actor);
 
         let mut signal_actor = SignalActor::builder();
-        
+
         // Shutdown on SIGINT
         signal_actor.register_peer(NoConfig, runtime.get_handle().get_sender());
 
