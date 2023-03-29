@@ -148,8 +148,12 @@ impl ConfigManagerBuilder {
     where
         T: MessageSource<FsWatchEvent, PathBuf>,
     {
-        let config_dir = self.config.config_dir.clone();
-        fs_builder.register_peer(config_dir, self.events_sender.clone().into());
+        let watch_dir = self
+            .config
+            .config_dir
+            .clone()
+            .join(DEFAULT_OPERATION_DIR_NAME);
+        fs_builder.register_peer(watch_dir, self.events_sender.clone().into());
 
         Ok(())
     }
