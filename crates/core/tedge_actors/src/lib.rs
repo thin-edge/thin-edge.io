@@ -205,6 +205,7 @@
 mod actors;
 pub mod builders;
 pub mod channels;
+mod converter;
 mod errors;
 pub mod keyed_messages;
 pub mod message_boxes;
@@ -218,6 +219,7 @@ pub mod internal {
 pub use actors::*;
 pub use builders::*;
 pub use channels::*;
+pub use converter::*;
 pub use errors::*;
 pub use keyed_messages::*;
 pub use message_boxes::*;
