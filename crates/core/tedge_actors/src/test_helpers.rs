@@ -78,7 +78,7 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// }
     /// ```
     ///
-    fn with_timeout(self, timeout: Duration) -> TimedBoxReceiver<Self>;
+    fn with_timeout(self, timeout: Duration) -> TimedMessageBox<Self>;
 
     /// Skip the given number of messages
     ///
@@ -249,8 +249,8 @@ where
     T: MessageReceiver<M> + Send + Sync + 'static,
     M: Message + Eq + PartialEq,
 {
-    fn with_timeout(self, timeout: Duration) -> TimedBoxReceiver<Self> {
-        TimedBoxReceiver {
+    fn with_timeout(self, timeout: Duration) -> TimedMessageBox<Self> {
+        TimedMessageBox {
             timeout,
             inner: self,
         }
@@ -310,15 +310,15 @@ where
     }
 }
 
-/// A receiver that behaves as if the channel has been closed,
+/// A message box that behaves as if the channel has been closed on recv,
 /// returning None, when no message is received after a given duration.
-pub struct TimedBoxReceiver<T> {
+pub struct TimedMessageBox<T> {
     timeout: Duration,
     inner: T,
 }
 
 #[async_trait]
-impl<T, M> MessageReceiver<M> for TimedBoxReceiver<T>
+impl<T, M> MessageReceiver<M> for TimedMessageBox<T>
 where
     M: Message,
     T: MessageReceiver<M> + Send + Sync + 'static,
@@ -343,7 +343,7 @@ where
 }
 
 #[async_trait]
-impl<T, M> Sender<M> for TimedBoxReceiver<T>
+impl<T, M> Sender<M> for TimedMessageBox<T>
 where
     M: Message,
     T: Sender<M>,
@@ -361,13 +361,13 @@ where
     }
 }
 
-impl<T> AsRef<T> for TimedBoxReceiver<T> {
+impl<T> AsRef<T> for TimedMessageBox<T> {
     fn as_ref(&self) -> &T {
         &self.inner
     }
 }
 
-impl<T> AsMut<T> for TimedBoxReceiver<T> {
+impl<T> AsMut<T> for TimedMessageBox<T> {
     fn as_mut(&mut self) -> &mut T {
         &mut self.inner
     }
