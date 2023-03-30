@@ -1,6 +1,6 @@
 *** Settings ***
 Resource    ../../resources/common.resource
-Library    ThinEdgeIO    adapter=ssh
+Library    ThinEdgeIO
 
 Test Tags    theme:configuration
 Suite Setup    Setup
