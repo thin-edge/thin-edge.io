@@ -3,6 +3,7 @@ use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::MessageReceiver;
+use tedge_actors::Sender;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;

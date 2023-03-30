@@ -232,17 +232,6 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
             output_sender,
         }
     }
-
-    pub async fn send(&mut self, message: Output) -> Result<(), ChannelError> {
-        self.output_sender.send(message).await
-    }
-
-    /// Close the sending channel of this message box.
-    ///
-    /// This makes the receiving end aware that no more message will be sent.
-    pub fn close_output(&mut self) {
-        self.output_sender.close_sender()
-    }
 }
 
 #[async_trait]
@@ -257,6 +246,21 @@ impl<Input: Message, Output: Message> MessageReceiver<Input> for SimpleMessageBo
 
     async fn recv(&mut self) -> Option<Input> {
         self.input_receiver.recv().await
+    }
+}
+
+#[async_trait]
+impl<Input: Message, Output: Message> Sender<Output> for SimpleMessageBox<Input, Output> {
+    async fn send(&mut self, message: Output) -> Result<(), ChannelError> {
+        self.output_sender.send(message).await
+    }
+
+    fn sender_clone(&self) -> DynSender<Output> {
+        self.output_sender.sender_clone()
+    }
+
+    fn close_sender(&mut self) {
+        self.output_sender.close_sender()
     }
 }
 

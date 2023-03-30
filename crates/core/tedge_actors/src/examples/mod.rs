@@ -2,7 +2,7 @@
 //!
 //! ```
 //! # use async_trait::async_trait;
-//! # use tedge_actors::{Actor, ClientMessageBox, ServerActor, SimpleMessageBox, MessageReceiver, RuntimeError};
+//! # use tedge_actors::{Actor, ClientMessageBox, ServerActor, SimpleMessageBox, MessageReceiver, Sender, RuntimeError};
 //! # use crate::tedge_actors::examples::calculator::*;
 //!
 //! /// An actor that send operations to a calculator server actor to reach a given target.
@@ -43,7 +43,7 @@
 //! to establish appropriate connections between the actor message boxes.
 //!
 //! ```
-//! # use tedge_actors::{Actor, Builder, ChannelError, MessageReceiver, ServiceConsumer, NoConfig, ServerActor, ServerMessageBox, ServerMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder};
+//! # use tedge_actors::{Actor, Builder, ChannelError, MessageReceiver, Sender, ServiceConsumer, NoConfig, ServerActor, ServerMessageBox, ServerMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder};
 //! # use crate::tedge_actors::examples::calculator::*;
 //! # #[tokio::main]
 //! # async fn main_test() -> Result<(),ChannelError> {

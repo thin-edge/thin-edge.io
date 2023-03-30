@@ -19,6 +19,7 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynError;
 use tedge_actors::MessageReceiver;
+use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::OperationStatus;
@@ -86,7 +87,7 @@ async fn test_config_upload_tedge_device() -> Result<(), DynError> {
         &Topic::new_unchecked("c8y/s/ds"),
         format!("526,{device_id},{test_config_type}").as_str(),
     );
-    mqtt_message_box.inner.send(c8y_config_upload_msg).await?;
+    mqtt_message_box.send(c8y_config_upload_msg).await?;
 
     // Assert EXECUTING SmartREST MQTT message
     mqtt_message_box
@@ -107,7 +108,6 @@ async fn test_config_upload_tedge_device() -> Result<(), DynError> {
 
     // Provide mock config file upload HTTP response to continue
     c8y_proxy_message_box
-        .inner
         .send(Ok(C8YRestResponse::EventId("test-url".to_string())))
         .await?;
 
@@ -147,7 +147,6 @@ async fn test_config_download_tedge_device() -> Result<(), DynError> {
 
     let download_url = "http://test.domain.com";
     mqtt_message_box
-        .inner
         .send(MqttMessage::new(
             &C8yTopic::SmartRestRequest.to_topic().unwrap(),
             format!("524,{device_id},{download_url},{test_config_type}"),
@@ -173,7 +172,6 @@ async fn test_config_download_tedge_device() -> Result<(), DynError> {
 
     // Provide mock config file download HTTP response to continue
     c8y_proxy_message_box
-        .inner
         .send(Ok(C8YRestResponse::Unit(())))
         .await?;
 
@@ -214,7 +212,6 @@ async fn test_child_device_config_upload_request_mapping() -> Result<(), DynErro
     mqtt_message_box.skip(2).await;
 
     mqtt_message_box
-        .inner
         .send(MqttMessage::new(
             &Topic::new_unchecked("c8y/s/ds"),
             format!("526,{child_device_id},{test_config_type}").as_str(),
@@ -277,7 +274,7 @@ async fn test_child_device_config_upload_executing_response_mapping() -> Result<
             reason: None,
         })?,
     );
-    mqtt_message_box.inner.send(c8y_config_upload_msg).await?;
+    mqtt_message_box.send(c8y_config_upload_msg).await?;
 
     mqtt_message_box
         .with_timeout(TEST_TIMEOUT)
@@ -327,7 +324,7 @@ async fn test_child_device_config_upload_failed_response_mapping() -> Result<(),
         })
         .to_string(),
     );
-    mqtt_message_box.inner.send(c8y_config_upload_msg).await?;
+    mqtt_message_box.send(c8y_config_upload_msg).await?;
 
     mqtt_message_box
         .with_timeout(TEST_TIMEOUT)
@@ -379,7 +376,7 @@ async fn test_invalid_config_snapshot_response_child_device() -> Result<(), DynE
         )),
         "invalid json",
     );
-    mqtt_message_box.inner.send(c8y_config_upload_msg).await?;
+    mqtt_message_box.send(c8y_config_upload_msg).await?;
 
     mqtt_message_box
         .assert_received(
@@ -430,7 +427,7 @@ async fn test_timeout_on_no_config_snapshot_response_child_device() -> Result<()
         &Topic::new_unchecked("c8y/s/ds"),
         format!("526,{child_device_id},{test_config_type}").as_str(),
     );
-    mqtt_message_box.inner.send(c8y_config_upload_msg).await?;
+    mqtt_message_box.send(c8y_config_upload_msg).await?;
 
     // Skip mapped tedge/config_snapshot request
     mqtt_message_box.skip(1).await;
@@ -448,7 +445,6 @@ async fn test_timeout_on_no_config_snapshot_response_child_device() -> Result<()
         .await?;
 
     mqtt_message_box
-    .inner
         .assert_received([
             MqttMessage::new(
                 &C8yTopic::ChildSmartRestResponse(child_device_id.into()).to_topic()?,
@@ -944,7 +940,6 @@ async fn test_multiline_smartrest_requests() -> Result<(), DynError> {
     mqtt_message_box.skip(2).await;
 
     mqtt_message_box
-        .inner
         .send(MqttMessage::new(
             &Topic::new_unchecked("c8y/s/ds"),
             format!("526,{device_id},{test_config_type}").as_str(),

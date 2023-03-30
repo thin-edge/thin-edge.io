@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use tedge_actors::Actor;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
+use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_mqtt_ext::MqttMessage;
 

@@ -7,6 +7,7 @@ use crate::MessageSink;
 use crate::MessageSource;
 use crate::NoConfig;
 use crate::RuntimeError;
+use crate::Sender;
 use crate::ServiceConsumer;
 use crate::ServiceProvider;
 use crate::SimpleMessageBox;
@@ -43,17 +44,17 @@ use std::convert::Infallible;
 /// # #[tokio::main]
 /// # async fn main() -> Result<(),RuntimeError> {
 /// # use std::time::Duration;
-/// # use tedge_actors::{Actor, Builder, MessageReceiver, MessageSource, NoConfig};
+/// # use tedge_actors::{Actor, Builder, MessageReceiver, MessageSource, NoConfig, Sender};
 /// # use tedge_actors::test_helpers::MessageReceiverExt;
 /// let mut actor = ConvertingActor::builder("Repeater", Repeater);
 /// let mut test_box = SimpleMessageBoxBuilder::new("Test", 16).with_connection(&mut actor).build().with_timeout(Duration::from_millis(100));
 /// tokio::spawn(actor.build().run());
 ///
-/// test_box.inner.send((3, 42)).await?;
+/// test_box.send((3, 42)).await?;
 /// test_box.assert_received([42,42,42]).await;
 ///
-/// test_box.inner.send((0, 55)).await?;
-/// test_box.inner.send((2, 1234)).await?;
+/// test_box.send((0, 55)).await?;
+/// test_box.send((2, 1234)).await?;
 /// test_box.assert_received([1234,1234]).await;
 ///
 /// assert_eq!(test_box.recv().await, None);

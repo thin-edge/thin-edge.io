@@ -423,6 +423,7 @@ mod tests {
     use tedge_actors::Builder;
     use tedge_actors::MessageReceiver;
     use tedge_actors::NoMessage;
+    use tedge_actors::Sender;
     use tedge_actors::SimpleMessageBox;
     use tedge_actors::SimpleMessageBoxBuilder;
     use tedge_file_system_ext::FsWatchEvent;
