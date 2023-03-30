@@ -2031,6 +2031,7 @@ version = "0.10.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "certificate",
  "fastrand",
  "futures",
  "mqtt_tests",

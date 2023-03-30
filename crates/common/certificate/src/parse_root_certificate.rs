@@ -5,9 +5,11 @@ use rustls::RootCertStore;
 use rustls_pemfile::certs;
 use rustls_pemfile::pkcs8_private_keys;
 use rustls_pemfile::rsa_private_keys;
+use std::ffi::OsString;
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
+use std::path::Path;
 use std::path::PathBuf;
 
 use crate::CertificateError;
@@ -17,7 +19,7 @@ pub fn create_tls_config(
     client_private_key: PathBuf,
     client_certificate: PathBuf,
 ) -> Result<ClientConfig, CertificateError> {
-    let root_cert_store = new_root_store(root_certificates)?;
+    let root_cert_store = new_root_store(&root_certificates)?;
     let pvt_key = read_pvt_key(client_private_key)?;
     let cert_chain = read_cert_chain(client_certificate)?;
 
@@ -27,27 +29,65 @@ pub fn create_tls_config(
         .with_single_cert(cert_chain, pvt_key)?)
 }
 
-fn new_root_store(cert_path: PathBuf) -> Result<RootCertStore, CertificateError> {
+pub fn add_certs_from_file(
+    root_store: &mut RootCertStore,
+    cert_file: impl AsRef<Path>,
+) -> Result<(), CertificateError> {
+    let cert_chain = read_cert_chain(cert_file)?;
+    for cert in cert_chain {
+        root_store
+            .add(&cert)
+            .map_err(|_| CertificateError::RootStoreAdd)?;
+    }
+
+    Ok(())
+}
+
+pub fn add_certs_from_directory(
+    root_store: &mut RootCertStore,
+    cert_dir: impl AsRef<Path>,
+) -> Result<(), CertificateError> {
+    let files = fs::read_dir(cert_dir)?;
+    let certs = files.filter_map(|f| f.ok()).filter(|file| {
+        file.path()
+            .extension()
+            .filter(|&extension| {
+                ["pem", "cer", "crt"]
+                    .map(OsString::from)
+                    .iter()
+                    .any(|e| e == extension)
+            })
+            .is_some()
+    });
+
+    for cert_file in certs {
+        add_certs_from_file(root_store, cert_file.path())?;
+    }
+
+    Ok(())
+}
+
+fn new_root_store(cert_path: &Path) -> Result<RootCertStore, CertificateError> {
     let mut root_store = RootCertStore::empty();
     rec_add_root_cert(&mut root_store, cert_path);
     Ok(root_store)
 }
 
-fn rec_add_root_cert(root_store: &mut RootCertStore, cert_path: PathBuf) {
-    if let Err(err) = try_rec_add_root_cert(root_store, cert_path.clone()) {
+fn rec_add_root_cert(root_store: &mut RootCertStore, cert_path: &Path) {
+    if let Err(err) = try_rec_add_root_cert(root_store, cert_path) {
         eprintln!("Ignoring certificates in {:?} due to: {}", cert_path, err)
     }
 }
 
 fn try_rec_add_root_cert(
     root_store: &mut RootCertStore,
-    cert_path: PathBuf,
+    cert_path: &Path,
 ) -> Result<(), CertificateError> {
-    if fs::metadata(&cert_path)?.is_dir() {
+    if fs::metadata(cert_path)?.is_dir() {
         for file_entry in fs::read_dir(cert_path)?.flatten() {
-            rec_add_root_cert(root_store, file_entry.path());
+            rec_add_root_cert(root_store, &file_entry.path());
         }
-    } else if let Err(err) = add_root_cert(root_store, cert_path.clone()) {
+    } else if let Err(err) = add_root_cert(root_store, cert_path) {
         eprintln!(
             "Ignoring certificates in file {:?} due to: {}",
             cert_path, err
@@ -56,11 +96,8 @@ fn try_rec_add_root_cert(
     Ok(())
 }
 
-fn add_root_cert(
-    root_store: &mut RootCertStore,
-    cert_path: PathBuf,
-) -> Result<(), CertificateError> {
-    let certificates = read_cert_chain(cert_path.clone())?;
+fn add_root_cert(root_store: &mut RootCertStore, cert_path: &Path) -> Result<(), CertificateError> {
+    let certificates = read_cert_chain(cert_path)?;
     for certificate in certificates.iter() {
         if let Err(err) = root_store.add(certificate) {
             eprintln!(
@@ -94,7 +131,7 @@ fn parse_rsa_key(key_file: PathBuf) -> Result<PrivateKey, CertificateError> {
     }
 }
 
-pub fn read_cert_chain(cert_file: PathBuf) -> Result<Vec<Certificate>, CertificateError> {
+pub fn read_cert_chain(cert_file: impl AsRef<Path>) -> Result<Vec<Certificate>, CertificateError> {
     let f = File::open(cert_file)?;
     let mut cert_reader = BufReader::new(f);
     certs(&mut cert_reader)
@@ -167,7 +204,7 @@ mod tests {
     fn an_empty_directory_contains_no_root_certificate() {
         let temp_dir = TempDir::new().unwrap();
 
-        let root_certs = new_root_store(temp_dir.into_path()).unwrap();
+        let root_certs = new_root_store(temp_dir.path()).unwrap();
         assert!(root_certs.is_empty());
     }
 
@@ -187,7 +224,7 @@ mod tests {
             .write_all(include_str!("./test_root_cert_2.txt").as_bytes())
             .unwrap();
 
-        let root_certs = new_root_store(temp_dir.path().to_path_buf()).unwrap();
+        let root_certs = new_root_store(temp_dir.path()).unwrap();
         assert_eq!(root_certs.len(), 3);
     }
 
@@ -208,7 +245,7 @@ mod tests {
             .write_all(include_str!("./test_root_cert_2.txt").as_bytes())
             .unwrap();
 
-        let root_certs = new_root_store(temp_dir.path().to_path_buf()).unwrap();
+        let root_certs = new_root_store(temp_dir.path()).unwrap();
         assert_eq!(root_certs.len(), 3);
     }
 }

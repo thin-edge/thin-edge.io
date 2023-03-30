@@ -1,5 +1,10 @@
 use crate::cli::mqtt::MqttError;
 use crate::command::Command;
+use camino::Utf8PathBuf;
+use certificate::parse_root_certificate::add_certs_from_directory;
+use certificate::parse_root_certificate::add_certs_from_file;
+use rumqttc::tokio_rustls::rustls::ClientConfig;
+use rumqttc::tokio_rustls::rustls::RootCertStore;
 use rumqttc::Client;
 use rumqttc::Event;
 use rumqttc::Incoming;
@@ -17,6 +22,8 @@ pub struct MqttSubscribeCommand {
     pub qos: QoS,
     pub hide_topic: bool,
     pub client_id: String,
+    pub ca_file: Option<Utf8PathBuf>,
+    pub ca_path: Option<Utf8PathBuf>,
 }
 
 impl Command for MqttSubscribeCommand {
@@ -36,6 +43,35 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
     let mut options = MqttOptions::new(cmd.client_id.as_str(), &cmd.host, cmd.port);
     options.set_clean_session(true);
     options.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
+
+    if cmd.ca_file.is_some() || cmd.ca_path.is_some() {
+        let mut root_store = RootCertStore::empty();
+
+        if let Some(ca_file) = cmd.ca_file.clone() {
+            add_certs_from_file(&mut root_store, ca_file)?;
+        }
+
+        if let Some(ca_path) = cmd.ca_path.clone() {
+            add_certs_from_directory(&mut root_store, ca_path)?;
+        }
+
+        const INSECURE_MQTT_PORT: u16 = 1883;
+        const SECURE_MQTT_PORT: u16 = 8883;
+
+        if cmd.port == INSECURE_MQTT_PORT && !root_store.is_empty() {
+            eprintln!("Warning: Connecting on port 1883 for insecure MQTT using a TLS connection");
+        }
+        if cmd.port == SECURE_MQTT_PORT && root_store.is_empty() {
+            eprintln!("Warning: Connecting on port 8883 for secure MQTT with no CA certificates");
+        }
+
+        let tls_config = ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
+
+        options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
+    }
 
     let (mut client, mut connection) = Client::new(options, DEFAULT_QUEUE_CAPACITY);
 
@@ -68,11 +104,11 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
                 eprintln!("INFO: Connected");
                 client.subscribe(cmd.topic.as_str(), cmd.qos).unwrap();
             }
+            // TODO: should we keep trying to reconnect for all errors, or just
+            // if the broker isn't up and abort when e.g. we receive connection
+            // refused?
             Err(err) => {
                 let err_msg = err.to_string();
-                if err_msg.contains("I/O: Connection refused (os error 111)") {
-                    return Err(MqttError::ServerConnection(err_msg));
-                }
 
                 eprintln!("ERROR: {}", err_msg);
                 std::thread::sleep(std::time::Duration::from_secs(1));

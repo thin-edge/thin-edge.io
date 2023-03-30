@@ -1,8 +1,11 @@
 use crate::Message;
 use crate::TopicFilter;
+use certificate::parse_root_certificate;
+use rumqttc::tokio_rustls::rustls;
 use rumqttc::LastWill;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::path::Path;
 use std::sync::Arc;
 
 /// Configuration of an MQTT connection
@@ -13,7 +16,8 @@ pub struct Config {
     /// Default: "localhost"
     pub host: String,
 
-    /// MQTT port to connect to
+    /// MQTT port to connect to. Usually it's either 1883 for insecure MQTT and
+    /// 8883 for secure MQTT.
     ///
     /// Default: 1883
     pub port: u16,
@@ -56,6 +60,9 @@ pub struct Config {
     ///
     /// Default: None
     pub initial_message: Option<InitMessageFn>,
+
+    /// TLS configuration used to connect to the broker.
+    pub cert_store: Option<rustls::RootCertStore>,
 }
 
 #[derive(Clone)]
@@ -94,6 +101,7 @@ impl Default for Config {
             max_packet_size: 1024 * 1024,
             last_will_message: None,
             initial_message: None,
+            cert_store: None,
         }
     }
 }
@@ -179,6 +187,35 @@ impl Config {
         }
     }
 
+    /// Adds all certificates present in `ca_file` file to the trust store.
+    pub fn with_cafile(
+        self,
+        ca_file: impl AsRef<Path>,
+    ) -> Result<Self, certificate::CertificateError> {
+        let mut cert_store = self.cert_store.unwrap_or_else(rustls::RootCertStore::empty);
+        parse_root_certificate::add_certs_from_file(&mut cert_store, ca_file)?;
+
+        Ok(Self {
+            cert_store: Some(cert_store),
+            ..self
+        })
+    }
+
+    /// Adds all certificate from all files in the directory `ca_dir` to the
+    /// trust store.
+    pub fn with_cadir(
+        self,
+        ca_dir: impl AsRef<Path>,
+    ) -> Result<Self, certificate::CertificateError> {
+        let mut cert_store = self.cert_store.unwrap_or_else(rustls::RootCertStore::empty);
+        parse_root_certificate::add_certs_from_directory(&mut cert_store, ca_dir)?;
+
+        Ok(Self {
+            cert_store: Some(cert_store),
+            ..self
+        })
+    }
+
     /// Wrap this config into an internal set of options for `rumqttc`.
     pub(crate) fn mqtt_options(&self) -> rumqttc::MqttOptions {
         let id = match &self.session_name {
@@ -195,6 +232,15 @@ impl Config {
             mqtt_options.set_clean_session(true);
         } else {
             mqtt_options.set_clean_session(self.clean_session);
+        }
+
+        if let Some(cert_store) = self.cert_store.as_ref() {
+            let tls_config = rustls::ClientConfig::builder()
+                .with_safe_defaults()
+                .with_root_certificates(cert_store.clone())
+                .with_no_client_auth();
+
+            mqtt_options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
         }
 
         mqtt_options.set_max_packet_size(self.max_packet_size, self.max_packet_size);
