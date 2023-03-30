@@ -1,6 +1,6 @@
 *** Settings ***
 Resource    ../../resources/common.resource
-Library    ThinEdgeIO
+Library    ThinEdgeIO    adapter=ssh
 
 Test Tags    theme:configuration
 Suite Setup    Setup
@@ -19,8 +19,8 @@ Check lock file existence in default folder
 Check starting same service twice
     [Documentation]    This step is checking if same service can be started twice, 
     ...    expected is that this should not be the case
-    Execute Command    sudo runuser -u tedge tedge-agent    exp_exit_code=!0
-    Execute Command    sudo runuser -u tedge tedge-mapper-c8y    exp_exit_code=!0
+    Execute Command    sudo -u tedge tedge-agent    exp_exit_code=!0
+    Execute Command    sudo -u tedge tedge-mapper c8y    exp_exit_code=!0
 
 Switch off lock file creation
     [Documentation]    Add a new configuration option under the '[run]'' section to turn off the lock file generation logic. 
