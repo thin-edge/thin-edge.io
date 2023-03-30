@@ -117,6 +117,9 @@ class ThinEdgeIO(DeviceLibrary):
 
         Args:
             name (str, optional): Device name to get logs for. Defaults to None.
+
+        *Example:*
+        | `Test Teardown` | | | | | Get Logs | | | | | name=${PARENT_SN} |
         """
         if not self.current:
             log.info("Device has not been setup, so no logs to collect")
@@ -263,6 +266,14 @@ class ThinEdgeIO(DeviceLibrary):
             name (str): Setting name to update
             value (str): Value to be updated with
 
+        *Example:*
+
+        Update known setting
+        | ${DEVICE_SN} | | | | | Setup |
+        | `Set Tedge Configuration Using CLI` | | | | | device.type | | | | | mycustomtype |
+        | ${OUTPUT}= | | | | | `Execute Command` | | | | | tedge config get device.type |
+        | `Should Match` | | | | | ${OUTPUT} | | | | | mycustomtype\\n |
+
         Returns:
             str: Command output
         """
@@ -305,6 +316,9 @@ class ThinEdgeIO(DeviceLibrary):
         Args:
             mapper (str, optional): Mapper name, e.g. c8y, az, etc. Defaults to "c8y".
             sleep (float, optional): Time to wait in seconds before connecting. Defaults to 0.0.
+
+        *Examples:*
+        | `Disconnect Then Connect Mapper` | | | | | c8y |
         """
         self.tedge_disconnect(mapper)
         if sleep > 0:
@@ -372,6 +386,11 @@ class ThinEdgeIO(DeviceLibrary):
     #
     @keyword("Service Health Status Should Be Up")
     def assert_service_health_status_up(self, service: str) -> Dict[str, Any]:
+        """ Checks if the Service Health Status is up
+
+        *Example:*
+        | `Service Health Status Should Be Up` | | | | | tedge-mapper-c8y |
+        """
         return self._assert_health_status(service, status="up")
 
     @keyword("Service Health Status Should Be Down")
@@ -468,9 +487,10 @@ class ThinEdgeIO(DeviceLibrary):
         """
         Check for the presence of a topic
 
-        Examples
+        *Examples:*
 
-        | ${messages}= | Should Have MQTT Message | c8y/s/# | -30s | 0s |
+        | ${listen}= | | | | | `Should Have MQTT Message` | | | | |  topic=tedge/${CHILD_SN}/commands/req/config_snapshot | | | | | date_from=-5s |
+        | ${messages}= | | | | | `Should Have MQTT Message` | | | | |  tedge/health/c8y-log-plugin | | | | | minimum=1 | | | | |minimum=2 |
         """
         result = self._assert_mqtt_topic_messages(
             topic,
