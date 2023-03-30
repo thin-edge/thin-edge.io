@@ -23,7 +23,7 @@ Install latest tedge via script (from main branch)
 
 Install then uninstall latest tedge via script (from main branch)
     # Install
-    Execute Command    curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
+    Execute Command    ./bootstrap.sh --install --no-bootstrap
     Execute Command    dpkg -s tedge
     Execute Command    dpkg -s tedge-mapper
     Execute Command    dpkg -s tedge-agent
