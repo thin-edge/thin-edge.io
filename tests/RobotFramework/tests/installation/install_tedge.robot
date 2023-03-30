@@ -22,8 +22,8 @@ Install latest tedge via script (from main branch)
     Tedge Version Should Match Regex    ^\\d+\\.\\d+\\.\\d+$
 
 Install then uninstall latest tedge via script (from main branch)
-    # Install
-    Execute Command    ./bootstrap.sh --install --no-bootstrap
+    # Install (just install everything, don't set anything up)
+    Execute Command    ./bootstrap.sh --install --no-bootstrap --no-connect
     Execute Command    dpkg -s tedge
     Execute Command    dpkg -s tedge-mapper
     Execute Command    dpkg -s tedge-agent
