@@ -165,7 +165,7 @@ impl Actor for MqttActor {
         "MQTT"
     }
 
-    async fn run(mut self) -> Result<(), RuntimeError> {
+    async fn run(&mut self) -> Result<(), RuntimeError> {
         let mut mqtt_client = mqtt_channel::Connection::new(&self.mqtt_config)
             .await
             .map_err(Box::new)?;

@@ -349,7 +349,7 @@ impl Actor for ConfigManagerActor {
         "ConfigManager"
     }
 
-    async fn run(mut self) -> Result<(), RuntimeError> {
+    async fn run(&mut self) -> Result<(), RuntimeError> {
         self.publish_supported_config_types().await?;
         self.get_pending_operations_from_cloud().await?;
 

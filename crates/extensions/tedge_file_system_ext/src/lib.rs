@@ -120,7 +120,7 @@ impl Actor for FsWatchActor {
         "FsWatcher"
     }
 
-    async fn run(mut self) -> Result<(), RuntimeError> {
+    async fn run(&mut self) -> Result<(), RuntimeError> {
         let mut fs_notify = NotifyStream::try_default().unwrap();
         for (watch_path, _) in self.messages.get_watch_dirs().iter() {
             fs_notify
@@ -182,10 +182,10 @@ mod tests {
 
         fs_actor_builder.register_peer(ttd.to_path_buf(), client_builder.get_sender());
 
-        let actor = fs_actor_builder.build();
+        let mut actor = fs_actor_builder.build();
         let client_box = client_builder.build();
 
-        tokio::spawn(async { actor.run().await });
+        tokio::spawn(async move { actor.run().await });
 
         ttd.file("file_a");
         ttd.dir("dir_b").file("file_b");

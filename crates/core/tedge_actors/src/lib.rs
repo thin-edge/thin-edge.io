@@ -51,7 +51,7 @@
 //!         "Calculator"
 //!     }
 //!
-//!     async fn run(mut self)-> Result<(), RuntimeError>  {
+//!     async fn run(&mut self)-> Result<(), RuntimeError>  {
 //!         while let Some(op) = self.messages.recv().await {
 //!             // Process in turn each input message
 //!             let from = self.state;
@@ -107,8 +107,8 @@
 //! let actor_box = actor_box_builder.build();
 //!
 //! // The actor is then spawn in the background with its message box.
-//! let actor = Calculator::new(actor_box);
-//! tokio::spawn(actor.run());
+//! let mut actor = Calculator::new(actor_box);
+//! tokio::spawn(async move { actor.run().await } );
 //!
 //! // One can then interact with the actor
 //! test_box.send(Operation::Add(4)).await.expect("message sent");
@@ -210,11 +210,11 @@ mod errors;
 pub mod keyed_messages;
 pub mod message_boxes;
 mod messages;
+mod run_actor;
 pub mod runtime;
-mod tasks;
 
 pub mod internal {
-    pub use crate::tasks::*;
+    pub use crate::run_actor::*;
 }
 pub use actors::*;
 pub use builders::*;

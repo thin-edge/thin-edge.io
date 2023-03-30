@@ -40,7 +40,7 @@ impl Actor for Calculator {
         "Calculator"
     }
 
-    async fn run(mut self) -> Result<(), RuntimeError> {
+    async fn run(&mut self) -> Result<(), RuntimeError> {
         while let Some(op) = self.messages.recv().await {
             // Process in turn each input message
             let from = self.state;
@@ -98,7 +98,7 @@ impl Actor for Player {
         &self.name
     }
 
-    async fn run(mut self) -> Result<(), RuntimeError> {
+    async fn run(&mut self) -> Result<(), RuntimeError> {
         // Send a first identity `Operation` to see where we are.
         self.messages.send(Operation::Add(0)).await?;
 
@@ -143,7 +143,7 @@ mod tests {
             .set_connection(&mut service_box_builder);
 
         // Spawn the actors
-        tokio::spawn(
+        tokio::spawn(async move {
             ServerActor::new(
                 Calculator {
                     state: 0,
@@ -151,16 +151,18 @@ mod tests {
                 },
                 service_box_builder.build(),
             )
-            .run(),
-        );
-        tokio::spawn(
+            .run()
+            .await
+        });
+        tokio::spawn(async move {
             Player {
                 name: "Player".to_string(),
                 target: 42,
                 messages: player_box_builder.build(),
             }
-            .run(),
-        );
+            .run()
+            .await
+        });
 
         // Observe the messages sent and received by the player.
         assert_eq!(probe.observe().await, Send(Operation::Add(0)));

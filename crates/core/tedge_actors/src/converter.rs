@@ -48,7 +48,7 @@ use std::convert::Infallible;
 /// # use tedge_actors::test_helpers::MessageReceiverExt;
 /// let mut actor = ConvertingActor::builder("Repeater", Repeater);
 /// let mut test_box = SimpleMessageBoxBuilder::new("Test", 16).with_connection(&mut actor).build().with_timeout(Duration::from_millis(100));
-/// tokio::spawn(actor.build().run());
+/// tokio::spawn(async move { actor.build().run().await });
 ///
 /// test_box.send((3, 42)).await?;
 /// test_box.assert_received([42,42,42]).await;
@@ -106,7 +106,7 @@ impl<C: Converter> Actor for ConvertingActor<C> {
         &self.name
     }
 
-    async fn run(mut self) -> Result<(), RuntimeError> {
+    async fn run(&mut self) -> Result<(), RuntimeError> {
         let init_messages = self.init_messages()?;
         self.send(init_messages).await?;
 
