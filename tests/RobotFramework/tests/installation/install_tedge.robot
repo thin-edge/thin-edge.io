@@ -21,6 +21,26 @@ Install latest tedge via script (from main branch)
     Execute Command    curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
     Tedge Version Should Match Regex    ^\\d+\\.\\d+\\.\\d+$
 
+Install then uninstall latest tedge via script (from main branch)
+    # Install
+    Execute Command    curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
+    Execute Command    dpkg -s tedge
+    Execute Command    dpkg -s tedge-mapper
+    Execute Command    dpkg -s tedge-agent
+    Execute Command    dpkg -s c8y-log-plugin
+    Execute Command    dpkg -s c8y-configuration-plugin
+    Execute Command    dpkg -s c8y-firmware-plugin
+    Execute Command    dpkg -s c8y-remote-access-plugin
+
+    # Uninstall
+    Execute Command    curl -sSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh | sudo sh -s purge
+    Execute Command    dpkg -s tedge    exp_exit_code=!0
+    Execute Command    dpkg -s tedge-mapper    exp_exit_code=!0
+    Execute Command    dpkg -s tedge-agent    exp_exit_code=!0
+    Execute Command    dpkg -s c8y-log-plugin    exp_exit_code=!0
+    Execute Command    dpkg -s c8y-configuration-plugin    exp_exit_code=!0
+    Execute Command    dpkg -s c8y-firmware-plugin    exp_exit_code=!0
+    Execute Command    dpkg -s c8y-remote-access-plugin    exp_exit_code=!0
 
 *** Keywords ***
 
