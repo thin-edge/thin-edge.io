@@ -87,10 +87,8 @@ pub(crate) struct CumulocityConfigDto {
     #[doku(as = "PathBuf")]
     pub(crate) root_cert_path: Option<Utf8PathBuf>,
 
-    // TODO improve these examples
-    #[doku(example = "template1")]
-    #[doku(example = "template2")]
-    /// Set of c8y template names used for subscriptions
+    /// Set of c8y template IDs used for subscriptions
+    #[doku(literal_example = "templateId1,templateId2", as = "String")]
     pub(crate) smartrest_templates: Option<TemplatesSet>,
 }
 
@@ -226,4 +224,78 @@ pub struct FirmwareConfigDto {
 pub struct ServiceTypeConfigDto {
     #[serde(rename = "type")]
     pub(crate) service_type: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use core::panic;
+    use std::borrow::Cow;
+
+    use figment::providers::Format;
+    use serde::de::DeserializeOwned;
+
+    use super::*;
+
+    #[test]
+    fn example_values_can_be_deserialised() {
+        let ty = TEdgeConfigDto::ty();
+        let doku::TypeKind::Struct { fields, transparent: false } = ty.kind else { panic!("Expected struct but got {:?}", ty.kind) };
+        let doku::Fields::Named { fields } = fields else { panic!("Expected named fields but got {:?}", fields)};
+        for (key, ty) in struct_field_paths(None, &fields) {
+            verify_examples_for::<TEdgeConfigDto>(&key, ty)
+        }
+    }
+
+    fn verify_examples_for<Dto>(key: &str, ty: doku::Type)
+    where
+        Dto: Default + Serialize + DeserializeOwned,
+    {
+        for example in ty.example.iter().flat_map(|e| e.iter()) {
+            println!("Testing {key}={example}");
+            figment::Jail::expect_with(|jail| {
+                jail.set_env(key, example);
+                let figment = figment::Figment::new()
+                    .merge(figment::providers::Toml::string(
+                        &toml::to_string(&Dto::default()).unwrap(),
+                    ))
+                    .merge(figment::providers::Env::raw().split("."));
+
+                figment.extract::<Dto>().unwrap_or_else(|_| {
+                    panic!("\n\nFailed to deserialize example data: {key}={example}\n\n")
+                });
+
+                Ok(())
+            });
+        }
+    }
+
+    fn key_name(prefix: Option<&str>, name: &'static str) -> Cow<'static, str> {
+        match prefix {
+            Some(prefix) => Cow::Owned(format!("{prefix}.{name}")),
+            None => Cow::Borrowed(name),
+        }
+    }
+
+    fn struct_field_paths(
+        prefix: Option<&str>,
+        fields: &[(&'static str, doku::Field)],
+    ) -> Vec<(Cow<'static, str>, doku::Type)> {
+        fields
+            .iter()
+            .flat_map(|(name, field)| match named_fields(&field.ty.kind) {
+                Some(fields) => struct_field_paths(Some(&key_name(prefix, name)), fields),
+                None => vec![(key_name(prefix, name), field.ty.clone())],
+            })
+            .collect()
+    }
+
+    fn named_fields(kind: &doku::TypeKind) -> Option<&[(&'static str, doku::Field)]> {
+        match kind {
+            doku::TypeKind::Struct {
+                fields: doku::Fields::Named { fields },
+                transparent: false,
+            } => Some(fields),
+            _ => None,
+        }
+    }
 }
