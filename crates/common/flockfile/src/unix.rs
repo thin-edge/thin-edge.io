@@ -1,5 +1,7 @@
 use nix::fcntl::flock;
 use nix::fcntl::FlockArg;
+use nix::unistd::write;
+use nix::unistd::Pid;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::fs::{self};
@@ -83,11 +85,20 @@ impl Flockfile {
                     source: err,
                 })?;
 
+        // Convert the PID to a string
+        let pid_string = format!("{}", Pid::this());
+
         flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock).map_err(|err| {
             FlockfileError::FromNix {
                 path: path.clone(),
                 source: err,
             }
+        })?;
+
+        // Write the PID to the lock file
+        write(file.as_raw_fd(), pid_string.as_bytes()).map_err(|err| FlockfileError::FromNix {
+            path: path.clone(),
+            source: err,
         })?;
 
         info!(r#"Lockfile created {:?}"#, &path);
@@ -164,6 +175,7 @@ mod tests {
     use assert_matches::*;
     use std::fs;
     use std::io;
+    use std::io::Read;
     use tempfile::NamedTempFile;
 
     #[test]
@@ -205,5 +217,20 @@ mod tests {
             Flockfile::new_lock(&path).unwrap_err(),
             FlockfileError::FromNix { .. }
         );
+    }
+
+    #[test]
+    fn check_pid() {
+        let path = NamedTempFile::new().unwrap().into_temp_path().to_owned();
+        let _lockfile = Flockfile::new_lock(&path).unwrap();
+
+        let mut read_lockfile = OpenOptions::new().read(true).open(&path).unwrap();
+
+        let mut pid_string = String::new();
+        read_lockfile.read_to_string(&mut pid_string).unwrap();
+
+        let pid = Pid::from_raw(pid_string.parse().unwrap());
+
+        assert_eq!(pid, Pid::this());
     }
 }
