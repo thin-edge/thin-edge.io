@@ -874,7 +874,7 @@ mod tests {
 
             let plugins = Arc::new(Mutex::new(
                 ExternalPlugins::open(
-                    &dir.utf8_path().join("sm-plugins"),
+                    dir.utf8_path().join("sm-plugins"),
                     get_default_plugin(&agent.config.config_location).unwrap(),
                     Some(SUDO.into()),
                 )
@@ -918,7 +918,7 @@ mod tests {
 
             let plugins = Arc::new(Mutex::new(
                 ExternalPlugins::open(
-                    &dir.utf8_path().join("sm-plugins"),
+                    dir.utf8_path().join("sm-plugins"),
                     get_default_plugin(&agent.config.config_location).unwrap(),
                     Some(SUDO.into()),
                 )

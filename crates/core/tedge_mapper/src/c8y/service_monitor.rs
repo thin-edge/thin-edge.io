@@ -206,10 +206,10 @@ mod tests {
         c8y_monitor_topic: &str,
         c8y_monitor_payload: &str,
     ) {
-        let topic = Topic::new_unchecked(&health_topic);
+        let topic = Topic::new_unchecked(health_topic);
         let health_message = Message::new(&topic, health_payload.as_bytes().to_owned());
         let expected_message = Message::new(
-            &Topic::new_unchecked(&c8y_monitor_topic),
+            &Topic::new_unchecked(c8y_monitor_topic),
             c8y_monitor_payload.as_bytes(),
         );
 

@@ -10,6 +10,7 @@ use super::upload::ConfigUploadManager;
 use super::upload::UploadConfigFileStatusMessage;
 use super::ConfigManagerConfig;
 use super::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
+use crate::child_device::InvalidChildDeviceTopicError;
 use async_trait::async_trait;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
@@ -422,7 +423,7 @@ pub enum ConfigOperation {
 }
 
 impl TryFrom<&MqttMessage> for ConfigOperation {
-    type Error = ConfigManagementError;
+    type Error = InvalidChildDeviceTopicError;
 
     fn try_from(message: &MqttMessage) -> Result<Self, Self::Error> {
         let operation_name = get_operation_name_from_child_topic(&message.topic.name)?;
@@ -432,7 +433,7 @@ impl TryFrom<&MqttMessage> for ConfigOperation {
         } else if operation_name == "config_update" {
             Ok(Self::Update)
         } else {
-            Err(ConfigManagementError::InvalidChildDeviceTopic {
+            Err(InvalidChildDeviceTopicError {
                 topic: message.topic.name.clone(),
             })
         }

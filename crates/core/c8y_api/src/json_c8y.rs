@@ -160,7 +160,7 @@ impl TryFrom<ThinEdgeEvent> for C8yCreateEvent {
             }
         }
         if let Some(source) = event.source {
-            update_the_external_source_event(&mut extras, &source)?;
+            update_the_external_source_event(&mut extras, &source);
         }
 
         Ok(Self {
@@ -205,16 +205,12 @@ fn combine_version_and_type(
         },
     }
 }
-fn update_the_external_source_event(
-    extras: &mut HashMap<String, Value>,
-    source: &str,
-) -> Result<(), SMCumulocityMapperError> {
+
+fn update_the_external_source_event(extras: &mut HashMap<String, Value>, source: &str) {
     let mut value = serde_json::Map::new();
     value.insert("externalId".to_string(), source.into());
     value.insert("type".to_string(), "c8y_Serial".into());
     extras.insert("externalSource".into(), value.into());
-
-    Ok(())
 }
 
 fn make_c8y_source_fragment(source_name: &str) -> Option<SourceInfo> {

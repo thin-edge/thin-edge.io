@@ -27,8 +27,11 @@ use logged_command::LoggedCommand;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 use plugin_sm::operation_logs::OperationLogs;
+use plugin_sm::operation_logs::OperationLogsError;
 use service_monitor::convert_health_status_message;
 use std::collections::HashMap;
+use tedge_config::TEdgeConfigError;
+use thiserror::Error;
 
 use std::fs;
 use std::fs::File;
@@ -121,11 +124,13 @@ where
         children: HashMap<String, Operations>,
         mapper_config: MapperConfig,
         mqtt_publisher: mpsc::UnboundedSender<Message>,
-    ) -> Result<Self, CumulocityMapperError> {
+    ) -> Result<Self, CumulocityConverterBuildError> {
         let alarm_converter = AlarmConverter::new();
 
         let tedge_config = get_tedge_config()?;
-        let logs_path = tedge_config.query(LogPathSetting)?;
+
+        // this can't fail because in absence of value this query returns a default
+        let logs_path = tedge_config.query(LogPathSetting).unwrap();
 
         let log_dir = PathBuf::from(&format!("{}/{TEDGE_AGENT_LOG_DIR}", logs_path));
 
@@ -152,6 +157,7 @@ where
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[cfg(test)]
     pub fn from_logs_path(
         size_threshold: SizeThreshold,
@@ -358,6 +364,15 @@ where
     fn can_send_over_mqtt(&self, message: &Message) -> bool {
         message.payload_bytes().len() < self.size_threshold.0
     }
+}
+
+#[derive(Error, Debug)]
+pub enum CumulocityConverterBuildError {
+    #[error(transparent)]
+    InvalidConfig(#[from] TEdgeConfigError),
+
+    #[error(transparent)]
+    OperationLogsError(#[from] OperationLogsError),
 }
 
 #[async_trait]

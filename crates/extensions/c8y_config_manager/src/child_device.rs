@@ -1,5 +1,4 @@
 use super::actor::ConfigOperation;
-use super::error::ConfigManagementError;
 use super::plugin_config::FileEntry;
 use c8y_api::smartrest::topic::C8yTopic;
 use log::error;
@@ -10,6 +9,7 @@ use tedge_api::OperationStatus;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
+use thiserror::Error;
 
 pub const DEFAULT_OPERATION_TIMEOUT: Duration = Duration::from_secs(60); //TODO: Make this configurable?
 
@@ -138,30 +138,34 @@ pub fn try_cleanup_config_file_from_file_transfer_repositoy(
 }
 
 /// Return child id from topic.
-pub fn get_child_id_from_child_topic(topic: &str) -> Result<String, ConfigManagementError> {
+pub fn get_child_id_from_child_topic(topic: &str) -> Result<String, InvalidChildDeviceTopicError> {
     let mut topic_split = topic.split('/');
     // the second element is the child id
-    let child_id = topic_split
-        .nth(1)
-        .ok_or(ConfigManagementError::InvalidChildDeviceTopic {
-            topic: topic.into(),
-        })?;
+    let child_id = topic_split.nth(1).ok_or(InvalidChildDeviceTopicError {
+        topic: topic.into(),
+    })?;
     Ok(child_id.to_string())
 }
 
 /// Return operation name from topic.
-pub fn get_operation_name_from_child_topic(topic: &str) -> Result<String, ConfigManagementError> {
+pub fn get_operation_name_from_child_topic(
+    topic: &str,
+) -> Result<String, InvalidChildDeviceTopicError> {
     let topic_split = topic.split('/');
-    let operation_name =
-        topic_split
-            .last()
-            .ok_or(ConfigManagementError::InvalidChildDeviceTopic {
-                topic: topic.into(),
-            })?;
+    let operation_name = topic_split.last().ok_or(InvalidChildDeviceTopicError {
+        topic: topic.into(),
+    })?;
     Ok(operation_name.to_string())
 }
+
+#[derive(Error, Debug)]
+#[error("Message received on invalid topic from child device: {topic}")]
+pub struct InvalidChildDeviceTopicError {
+    pub topic: String,
+}
+
 impl TryFrom<&MqttMessage> for ConfigOperationResponse {
-    type Error = ConfigManagementError;
+    type Error = ParseOperationResponseError;
 
     fn try_from(message: &MqttMessage) -> Result<Self, Self::Error> {
         let topic = &message.topic.name;
@@ -169,7 +173,7 @@ impl TryFrom<&MqttMessage> for ConfigOperationResponse {
         let operation_name = get_operation_name_from_child_topic(topic)?;
 
         let request_payload: ChildDeviceResponsePayload =
-            serde_json::from_str(message.payload_str()?)?;
+            serde_json::from_slice(message.payload.as_bytes())?;
 
         if operation_name == "config_snapshot" {
             return Ok(Self::Snapshot {
@@ -183,10 +187,20 @@ impl TryFrom<&MqttMessage> for ConfigOperationResponse {
                 payload: request_payload,
             });
         }
-        Err(ConfigManagementError::InvalidChildDeviceTopic {
+        Err(InvalidChildDeviceTopicError {
             topic: topic.to_string(),
-        })
+        }
+        .into())
     }
+}
+
+#[derive(Error, Debug)]
+pub enum ParseOperationResponseError {
+    #[error("Failed to parse response from child device with: {0}")]
+    DeserializationError(#[from] serde_json::Error),
+
+    #[error(transparent)]
+    InvalidChildDeviceTopic(#[from] InvalidChildDeviceTopicError),
 }
 
 impl ConfigOperationRequest {
@@ -213,7 +227,7 @@ impl ConfigOperationRequest {
     pub fn operation_request_payload(
         &self,
         local_http_host: &str,
-    ) -> Result<String, ConfigManagementError> {
+    ) -> Result<String, serde_json::Error> {
         let url = format!(
             "http://{local_http_host}/tedge/file-transfer/{}",
             self.http_file_repository_relative_path()

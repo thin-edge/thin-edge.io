@@ -207,15 +207,18 @@ where
 }
 
 fn serialize_smartrest<S: Serialize>(record: S) -> Result<String, SmartRestSerializerError> {
-    let mut wtr = Box::new(
-        WriterBuilder::new()
-            .has_headers(false)
-            .quote_style(QuoteStyle::Never)
-            .double_quote(false)
-            .from_writer(vec![]),
-    );
+    let mut wtr = WriterBuilder::new()
+        .has_headers(false)
+        .quote_style(QuoteStyle::Never)
+        .double_quote(false)
+        .from_writer(vec![]);
     wtr.serialize(record)?;
-    let csv = String::from_utf8(wtr.into_inner()?)?;
+
+    // csv::IntoInnerError still contains the writer and we can use it to
+    // recover, but if we don't and only report the error, we should report the
+    // inner io::Error
+    let csv = wtr.into_inner().map_err(|e| e.into_error())?;
+    let csv = String::from_utf8(csv)?;
     Ok(csv)
 }
 

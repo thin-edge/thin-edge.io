@@ -63,12 +63,8 @@ pub enum ConversionError {
     #[error(transparent)]
     FromThinEdgeJsonParser(#[from] tedge_api::parser::ThinEdgeJsonParserError),
 
-    #[error("The size of the message received on {topic} is {actual_size} which is greater than the threshold size of {threshold}.")]
-    SizeThresholdExceeded {
-        topic: String,
-        actual_size: usize,
-        threshold: usize,
-    },
+    #[error(transparent)]
+    SizeThresholdExceeded(#[from] super::size_threshold::SizeThresholdExceededError),
 
     #[error(transparent)]
     FromMqttClient(#[from] MqttError),

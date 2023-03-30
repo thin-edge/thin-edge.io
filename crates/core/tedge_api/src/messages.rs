@@ -10,20 +10,20 @@ pub trait Jsonify<'a>
 where
     Self: Deserialize<'a> + Serialize + Sized,
 {
-    fn from_json(json_str: &'a str) -> Result<Self, SoftwareError> {
-        Ok(serde_json::from_str(json_str)?)
+    fn from_json(json_str: &'a str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json_str)
     }
 
-    fn from_slice(bytes: &'a [u8]) -> Result<Self, SoftwareError> {
-        Ok(serde_json::from_slice(bytes)?)
+    fn from_slice(bytes: &'a [u8]) -> Result<Self, serde_json::Error> {
+        serde_json::from_slice(bytes)
     }
 
-    fn to_json(&self) -> Result<String, SoftwareError> {
-        Ok(serde_json::to_string(self)?)
+    fn to_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(self)
     }
 
-    fn to_bytes(&self) -> Result<Vec<u8>, SoftwareError> {
-        Ok(serde_json::to_vec(self)?)
+    fn to_bytes(&self) -> Result<Vec<u8>, serde_json::Error> {
+        serde_json::to_vec(self)
     }
 }
 

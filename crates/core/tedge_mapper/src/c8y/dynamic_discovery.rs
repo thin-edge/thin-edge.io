@@ -20,7 +20,6 @@ pub struct DiscoverOp {
 }
 
 #[derive(thiserror::Error, Debug)]
-#[allow(clippy::enum_variant_names)]
 pub enum DynamicDiscoverOpsError {
     #[error("A non-UTF8 path cannot be parsed as an operation: {0:?}")]
     NotAnOperation(PathBuf),
