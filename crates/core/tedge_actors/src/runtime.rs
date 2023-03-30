@@ -280,7 +280,6 @@ mod tests {
     use crate::SimpleMessageBox;
     use async_trait::async_trait;
     use futures::channel::mpsc;
-    use futures::channel::mpsc::Sender;
     use std::time::Duration;
 
     fan_in_message_type!(EchoMessage[String, RuntimeRequest] : Debug, PartialEq);
@@ -305,7 +304,8 @@ mod tests {
             while let Some(message) = self.messages.recv().await {
                 match message {
                     EchoMessage::String(message) => {
-                        self.messages.send(EchoMessage::String(message)).await?
+                        crate::Sender::send(&mut self.messages, EchoMessage::String(message))
+                            .await?
                     }
                     EchoMessage::RuntimeRequest(RuntimeRequest::Shutdown) => break,
                 }
@@ -355,7 +355,7 @@ mod tests {
 
     fn create_actor<ActorBuilder, A, Input, Output>(
         actor: ActorBuilder,
-    ) -> (Sender<Input>, mpsc::Receiver<Output>, RunActor<A>)
+    ) -> (mpsc::Sender<Input>, mpsc::Receiver<Output>, RunActor<A>)
     where
         A: Actor,
         ActorBuilder: Fn(SimpleMessageBox<Input, Output>) -> A,

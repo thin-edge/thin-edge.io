@@ -1,5 +1,6 @@
 use crate::mpsc;
 use crate::Builder;
+use crate::ChannelError;
 use crate::DynSender;
 use crate::Message;
 use crate::MessageReceiver;
@@ -30,7 +31,7 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// Return a new receiver which returns None if no message is received after the given timeout
     ///
     /// ```
-    /// # use tedge_actors::{Builder, NoMessage, MessageReceiver, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder};
+    /// # use tedge_actors::{Builder, NoMessage, MessageReceiver, RuntimeError, Sender, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder};
     /// # use std::time::Duration;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(),RuntimeError> {
@@ -59,7 +60,7 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// You will have to use `as_ref()` or `as_mut()` to access the wrapped message box.
     ///
     /// ```
-    /// # use crate::tedge_actors::{Builder, RuntimeError, SimpleMessageBox, SimpleMessageBoxBuilder};
+    /// # use crate::tedge_actors::{Builder, RuntimeError, Sender, SimpleMessageBox, SimpleMessageBoxBuilder};
     /// # #[tokio::main]
     /// # async fn main() -> Result<(),RuntimeError> {
     ///
@@ -71,18 +72,18 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// let mut timeout_receiver = message_box.with_timeout(Duration::from_millis(100));
     ///
     /// // However the inner message_box can still be accessed
-    /// timeout_receiver.as_mut().send("Hello world").await?;
+    /// timeout_receiver.send("Hello world").await?;
     ///
     /// # Ok(())
     /// }
     /// ```
     ///
-    fn with_timeout(self, timeout: Duration) -> TimedBoxReceiver<Self>;
+    fn with_timeout(self, timeout: Duration) -> TimedMessageBox<Self>;
 
     /// Skip the given number of messages
     ///
     /// ```
-    /// # use tedge_actors::{Builder, NoMessage, MessageReceiver, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder};
+    /// # use tedge_actors::{Builder, NoMessage, MessageReceiver, RuntimeError, Sender, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder};
     /// # use std::time::Duration;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(),RuntimeError> {
@@ -108,7 +109,7 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// Check that all messages are received in the given order without any interleaved messages.
     ///
     /// ```rust
-    /// # use crate::tedge_actors::{Builder, NoMessage, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
+    /// # use crate::tedge_actors::{Builder, NoMessage, RuntimeError, Sender, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
     /// # use std::time::Duration;
     /// #[derive(Debug,Eq,PartialEq)]
     /// enum MyMessage {
@@ -149,7 +150,7 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// Check that all messages are received possibly in a different order or with interleaved messages.
     ///
     /// ```rust
-    /// use crate::tedge_actors::{Builder, NoMessage, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
+    /// use crate::tedge_actors::{Builder, NoMessage, RuntimeError, Sender, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
     ///
     /// #[derive(Debug,Eq,PartialEq)]
     /// enum MyMessage {
@@ -192,7 +193,7 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// The messages can possibly be received in a different order or with interleaved messages.
     ///
     /// ```rust
-    /// use crate::tedge_actors::{Builder, NoMessage, RuntimeError, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
+    /// use crate::tedge_actors::{Builder, NoMessage, RuntimeError, Sender, ServiceConsumer, SimpleMessageBox, SimpleMessageBoxBuilder, test_helpers};
     ///
     /// #[derive(Debug,Eq,PartialEq)]
     /// enum MyMessage {
@@ -248,8 +249,8 @@ where
     T: MessageReceiver<M> + Send + Sync + 'static,
     M: Message + Eq + PartialEq,
 {
-    fn with_timeout(self, timeout: Duration) -> TimedBoxReceiver<Self> {
-        TimedBoxReceiver {
+    fn with_timeout(self, timeout: Duration) -> TimedMessageBox<Self> {
+        TimedMessageBox {
             timeout,
             inner: self,
         }
@@ -309,15 +310,15 @@ where
     }
 }
 
-/// A receiver that behaves as if the channel has been closed,
+/// A message box that behaves as if the channel has been closed on recv,
 /// returning None, when no message is received after a given duration.
-pub struct TimedBoxReceiver<T> {
+pub struct TimedMessageBox<T> {
     timeout: Duration,
-    pub inner: T,
+    inner: T,
 }
 
 #[async_trait]
-impl<T, M> MessageReceiver<M> for TimedBoxReceiver<T>
+impl<T, M> MessageReceiver<M> for TimedMessageBox<T>
 where
     M: Message,
     T: MessageReceiver<M> + Send + Sync + 'static,
@@ -341,13 +342,32 @@ where
     }
 }
 
-impl<T> AsRef<T> for TimedBoxReceiver<T> {
+#[async_trait]
+impl<T, M> Sender<M> for TimedMessageBox<T>
+where
+    M: Message,
+    T: Sender<M>,
+{
+    async fn send(&mut self, message: M) -> Result<(), ChannelError> {
+        self.inner.send(message).await
+    }
+
+    fn sender_clone(&self) -> DynSender<M> {
+        self.inner.sender_clone()
+    }
+
+    fn close_sender(&mut self) {
+        self.inner.close_sender()
+    }
+}
+
+impl<T> AsRef<T> for TimedMessageBox<T> {
     fn as_ref(&self) -> &T {
         &self.inner
     }
 }
 
-impl<T> AsMut<T> for TimedBoxReceiver<T> {
+impl<T> AsMut<T> for TimedMessageBox<T> {
     fn as_mut(&mut self) -> &mut T {
         &mut self.inner
     }

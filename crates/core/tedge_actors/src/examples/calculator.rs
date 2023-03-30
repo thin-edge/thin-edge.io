@@ -1,3 +1,4 @@
+use crate::Sender;
 // TODO: make examples respond to RuntimeRequests
 use crate::message_boxes::MessageReceiver;
 use crate::Actor;

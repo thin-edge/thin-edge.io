@@ -11,7 +11,7 @@
 //! - output messages that the actor produces and sends to its peers.
 //!
 //! ```
-//! # use crate::tedge_actors::{Actor, RuntimeError, MessageReceiver, RuntimeRequest, SimpleMessageBox};
+//! # use crate::tedge_actors::{Actor, RuntimeError, MessageReceiver, RuntimeRequest, Sender, SimpleMessageBox};
 //! # use async_trait::async_trait;
 //! #
 //! /// State of the calculator actor
@@ -93,7 +93,7 @@
 //! - receive output messages sent by the actor.
 //!
 //! ```
-//! # use crate::tedge_actors::{Actor, ChannelError, MessageReceiver, SimpleMessageBox};
+//! # use crate::tedge_actors::{Actor, ChannelError, MessageReceiver, Sender, SimpleMessageBox};
 //! # use crate::tedge_actors::examples::calculator::*;
 //! #
 //! # #[tokio::main]

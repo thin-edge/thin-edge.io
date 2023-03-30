@@ -2,6 +2,7 @@ use crate::message_boxes::MessageReceiver;
 use crate::ConcurrentServerMessageBox;
 use crate::Message;
 use crate::RuntimeError;
+use crate::Sender;
 use crate::ServerMessageBox;
 use async_trait::async_trait;
 
@@ -88,7 +89,7 @@ impl<S: Server> ServerActor<S> {
 /// To be used as an actor, a `Server` is wrapped into a [ServerActor](crate::ServerActor)
 ///
 /// ```
-/// # use tedge_actors::{Actor, Builder, NoConfig, MessageReceiver, ServerActor, SimpleMessageBox, SimpleMessageBoxBuilder};
+/// # use tedge_actors::{Actor, Builder, NoConfig, MessageReceiver, Sender, ServerActor, SimpleMessageBox, SimpleMessageBoxBuilder};
 /// use tedge_actors::test_helpers::ServiceProviderExt;
 /// # use crate::tedge_actors::examples::calculator::*;
 /// #
@@ -240,7 +241,7 @@ pub mod tests {
         assert_eq!(client_message_box.recv().await, Some("World".to_string()));
 
         // When there is no more input message senders
-        client_message_box.close_output();
+        client_message_box.close_sender();
 
         // The actor stops
         actor_task

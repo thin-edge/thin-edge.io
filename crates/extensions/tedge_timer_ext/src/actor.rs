@@ -11,6 +11,7 @@ use tedge_actors::Actor;
 use tedge_actors::ClientId;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
+use tedge_actors::Sender;
 use tedge_actors::ServerMessageBox;
 use tokio::time::sleep_until;
 use tokio::time::Instant;
