@@ -14,7 +14,7 @@ Check lock file existence in default folder
     ...    do not makes sense as the container filesystem is isolated. 
     ...    Having the lock file system just adds unnecessary dependencies on the /run/lock folder.
     File Should Exist    /run/lock/tedge-agent.lock
-    File Should Exist    /run/lock/tedge-mapper-c8y.lock
+    File Should Exist    /run/lock/tedge-mapper c8y.lock
 
 Check starting same service twice
     [Documentation]    This step is checking if same service can be started twice, 
