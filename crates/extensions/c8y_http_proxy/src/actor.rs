@@ -38,7 +38,6 @@ use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResponseExt;
 use tedge_http_ext::HttpResult;
-use tedge_utils::file::move_file;
 
 const RETRY_TIMEOUT_SECS: u64 = 60;
 
@@ -288,36 +287,9 @@ impl C8YHttpProxyActor {
             download_info.auth = Some(Auth::new_bearer(token.as_str()));
         }
 
-        // Download file to the target directory with a temp name
-        let file_path = request.file_path.clone();
-        let file_name = file_path
-            .file_name()
-            .ok_or_else(|| C8YRestError::NoParentDirError(file_path.clone()))?
-            .to_str()
-            .ok_or_else(|| C8YRestError::InvalidFileNameError(file_path.clone()))?;
-        let parent_dir = file_path
-            .parent()
-            .ok_or_else(|| C8YRestError::NoParentDirError(file_path.clone()))?;
-
-        let tmp_file_name = format!("{file_name}.tmp");
-        let target_path = parent_dir.join(tmp_file_name);
-
         debug!(target: self.name(), "Downloading from: {:?}", download_info.url());
-        let downloader: Downloader = Downloader::new(&target_path);
+        let downloader: Downloader = Downloader::new(&request.file_path, request.file_permissions);
         downloader.download(&download_info).await?;
-
-        // Move the downloaded file to the final destination
-        debug!(
-            "Moving downloaded file from {:?} to {:?}",
-            downloader.filename(),
-            request.file_path
-        );
-        move_file(
-            downloader.filename(),
-            request.file_path,
-            request.file_permissions,
-        )
-        .await?;
 
         Ok(())
     }
