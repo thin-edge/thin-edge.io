@@ -69,8 +69,18 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR. Only after the manual approval process
           fetch-depth: 0
 
+      - name: Retrieve MSRV from workspace Cargo.toml
+        id: rust_version
+        uses: SebRollen/toml-action@v1.0.2
+        with:
+          file: Cargo.toml
+          field: "workspace.package.rust-version"
+
       - name: Enable toolchain via github action
-        uses: dtolnay/rust-toolchain@1.64.0
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.rust_version.outputs.value }}
+          targets: ${{ matrix.job.target }}
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
