@@ -174,7 +174,7 @@ impl Actor for TimerActor {
         "Timer"
     }
 
-    async fn run(mut self) -> Result<(), RuntimeError> {
+    async fn run(&mut self) -> Result<(), RuntimeError> {
         loop {
             if let Some(current) = self.current_timer.take() {
                 let time_elapsed = current.sleep;

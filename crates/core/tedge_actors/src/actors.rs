@@ -10,7 +10,7 @@ use async_trait::async_trait;
 ///
 ///
 #[async_trait]
-pub trait Actor: 'static + Sized + Send + Sync {
+pub trait Actor: 'static + Send + Sync {
     /// Return the actor instance name
     fn name(&self) -> &str;
 
@@ -19,7 +19,7 @@ pub trait Actor: 'static + Sized + Send + Sync {
     /// Processing input messages,
     /// updating internal state,
     /// and sending messages to peers.
-    async fn run(mut self) -> Result<(), RuntimeError>;
+    async fn run(&mut self) -> Result<(), RuntimeError>;
 }
 
 /// An actor that wraps a request-response server
@@ -104,10 +104,10 @@ impl<S: Server> ServerActor<S> {
 /// // Create an actor to handle the requests to a server
 /// let mut calculator_box = SimpleMessageBoxBuilder::new("Calculator - REMOVE ME", 16).build();
 /// let server = Calculator::new(calculator_box);
-/// let actor = ServerActor::new(server, server_box);
+/// let mut actor = ServerActor::new(server, server_box);
 ///
 /// // The actor is then spawn in the background with its message box.
-/// tokio::spawn(actor.run());
+/// tokio::spawn(async move { actor.run().await } );
 ///
 /// // One can then interact with the actor
 /// // Note that now each request is prefixed by a number: the id of the requester
@@ -145,8 +145,8 @@ impl<S: Server> Actor for ServerActor<S> {
         self.server.name()
     }
 
-    async fn run(mut self) -> Result<(), RuntimeError> {
-        let mut server = self.server;
+    async fn run(&mut self) -> Result<(), RuntimeError> {
+        let server = &mut self.server;
         while let Some((client_id, request)) = self.messages.recv().await {
             let result = server.handle(request).await;
             self.messages.send((client_id, result)).await?
@@ -177,7 +177,7 @@ impl<S: Server + Clone> Actor for ConcurrentServerActor<S> {
         self.server.name()
     }
 
-    async fn run(mut self) -> Result<(), RuntimeError> {
+    async fn run(&mut self) -> Result<(), RuntimeError> {
         while let Some((client_id, request)) = self.messages.recv().await {
             // Spawn the request
             let mut server = self.server.clone();
@@ -213,7 +213,7 @@ pub mod tests {
             "Echo"
         }
 
-        async fn run(mut self) -> Result<(), RuntimeError> {
+        async fn run(&mut self) -> Result<(), RuntimeError> {
             while let Some(message) = self.messages.recv().await {
                 self.messages.send(message).await?
             }
@@ -227,10 +227,10 @@ pub mod tests {
         let mut box_builder = SimpleMessageBoxBuilder::new("test", 16);
         let mut client_message_box = box_builder.new_client_box(NoConfig);
         let actor_message_box = box_builder.build();
-        let actor = Echo {
+        let mut actor = Echo {
             messages: actor_message_box,
         };
-        let actor_task = spawn(actor.run());
+        let actor_task = spawn(async move { actor.run().await });
 
         // Messages sent to the actor
         assert!(client_message_box.send("Hello".to_string()).await.is_ok());
@@ -258,10 +258,10 @@ pub mod tests {
         let (output_sender, mut output_receiver) = mpsc::channel(10);
 
         let (input_sender, message_box) = SpecificMessageBox::new_box(10, output_sender.into());
-        let actor = ActorWithSpecificMessageBox {
+        let mut actor = ActorWithSpecificMessageBox {
             messages: message_box,
         };
-        let actor_task = spawn(actor.run());
+        let actor_task = spawn(async move { actor.run().await });
 
         spawn(async move {
             let mut sender: DynSender<&str> = adapt(&input_sender);
@@ -304,7 +304,7 @@ pub mod tests {
             "ActorWithSpecificMessageBox"
         }
 
-        async fn run(mut self) -> Result<(), RuntimeError> {
+        async fn run(&mut self) -> Result<(), RuntimeError> {
             while let Some(message) = self.messages.next().await {
                 if message.contains("this") {
                     self.messages.do_this(message.to_string()).await?

@@ -24,7 +24,7 @@
 //!         &self.name
 //!     }
 //!
-//!     async fn run(mut self) -> Result<(), RuntimeError> {
+//!     async fn run(&mut self) -> Result<(), RuntimeError> {
 //!         // Send a first identity `Operation` to see where we are.
 //!         self.messages.send(Operation::Add(0)).await?;
 //!
@@ -81,7 +81,7 @@
 //! //   but if you construct without a message box then using calculator by calling Actor::run wont work so what should be done?
 //! let mut calculator_box = SimpleMessageBoxBuilder::new("Calculator - REMOVE ME", 16).build();
 //! let server = Calculator::new(calculator_box);
-//! tokio::spawn(ServerActor::new(server, server_box).run());
+//! tokio::spawn(async move { ServerActor::new(server, server_box).run().await } );
 //!
 //! // And use the players' boxes to interact with the server actor.
 //! // Note that, compared to the test above of the calculator server,

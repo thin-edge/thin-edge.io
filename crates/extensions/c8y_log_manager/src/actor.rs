@@ -349,7 +349,7 @@ impl Actor for LogManagerActor {
         "LogManager"
     }
 
-    async fn run(mut self) -> Result<(), RuntimeError> {
+    async fn run(&mut self) -> Result<(), RuntimeError> {
         self.reload_supported_log_types().await.unwrap();
         self.get_pending_operations_from_cloud().await.unwrap();
 
@@ -569,8 +569,8 @@ mod tests {
         SimpleMessageBox<NoMessage, FsWatchEvent>,
     ) {
         let (actor_builder, mqtt, http, fs) = new_log_manager_builder(temp_dir, log_config);
-        let actor = actor_builder.build();
-        tokio::spawn(actor.run());
+        let mut actor = actor_builder.build();
+        tokio::spawn(async move { actor.run().await });
         (mqtt, http, fs)
     }
 

@@ -49,8 +49,8 @@ async fn spawn_a_health_check_actor(
     let health_actor = HealthMonitorBuilder::new(service_to_be_monitored);
 
     let health_actor = health_actor.with_connection(&mut health_mqtt_builder);
-    let actor = health_actor.build();
-    tokio::spawn(actor.run());
+    let mut actor = health_actor.build();
+    tokio::spawn(async move { actor.run().await });
 
     Ok(health_mqtt_builder.build())
 }

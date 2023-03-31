@@ -1,5 +1,4 @@
 use crate::internal::RunActor;
-use crate::internal::Task;
 use crate::Actor;
 use crate::Builder;
 use crate::ChannelError;
@@ -23,7 +22,7 @@ use tokio::task::JoinHandle;
 #[derive(Debug)]
 pub enum RuntimeAction {
     Shutdown,
-    Spawn(Box<dyn Task>),
+    Spawn(RunActor),
 }
 
 /// Requests sent by the runtime to actors
@@ -113,13 +112,14 @@ impl RuntimeHandle {
     }
 
     /// Spawn an actor
-    pub async fn spawn<T, A>(&mut self, actor_builder: T) -> Result<(), RuntimeError>
+    pub async fn spawn<A, T>(&mut self, actor_builder: T) -> Result<(), RuntimeError>
     where
-        T: Builder<A> + RuntimeRequestSink,
         A: Actor,
+        T: Builder<A> + RuntimeRequestSink,
     {
-        let task = RunActor::try_new(actor_builder)?;
-        Ok(self.send(RuntimeAction::Spawn(Box::new(task))).await?)
+        let run_actor = RunActor::from_builder(actor_builder);
+
+        Ok(self.send(RuntimeAction::Spawn(run_actor)).await?)
     }
 
     /// Send an action to the runtime
@@ -176,7 +176,7 @@ impl RuntimeActor {
                                         task: running_name.clone(),
                                     })
                                     .await;
-                                    self.running_actors.insert(running_name.clone(), actor.runtime_request_sender());
+                                    self.running_actors.insert(running_name.clone(), actor.get_signal_sender());
                                     self.futures.push(tokio::spawn(run_task(actor, running_name)));
                                     actors_count += 1;
                                }
@@ -257,10 +257,7 @@ where
     }
 }
 
-async fn run_task(
-    task: Box<dyn Task>,
-    running_name: String,
-) -> Result<String, (String, RuntimeError)> {
+async fn run_task(task: RunActor, running_name: String) -> Result<String, (String, RuntimeError)> {
     match tokio::spawn(task.run()).await {
         Ok(r) => r
             .map(|_| running_name.clone())
@@ -300,7 +297,7 @@ mod tests {
             "Echo"
         }
 
-        async fn run(mut self) -> Result<(), RuntimeError> {
+        async fn run(&mut self) -> Result<(), RuntimeError> {
             while let Some(message) = self.messages.recv().await {
                 match message {
                     EchoMessage::String(message) => {
@@ -329,7 +326,7 @@ mod tests {
             "Ending"
         }
 
-        async fn run(mut self) -> Result<(), RuntimeError> {
+        async fn run(&mut self) -> Result<(), RuntimeError> {
             Ok(())
         }
     }
@@ -348,14 +345,14 @@ mod tests {
             "Panic"
         }
 
-        async fn run(mut self) -> Result<(), RuntimeError> {
+        async fn run(&mut self) -> Result<(), RuntimeError> {
             panic!("Oh dear");
         }
     }
 
     fn create_actor<ActorBuilder, A, Input, Output>(
         actor: ActorBuilder,
-    ) -> (mpsc::Sender<Input>, mpsc::Receiver<Output>, RunActor<A>)
+    ) -> (mpsc::Sender<Input>, mpsc::Receiver<Output>, RunActor)
     where
         A: Actor,
         ActorBuilder: Fn(SimpleMessageBox<Input, Output>) -> A,
@@ -368,7 +365,7 @@ mod tests {
         let output_sender = LoggingSender::new("actor".into(), output_sender.into());
         let receiver = LoggingReceiver::new("actor".into(), input_receiver, signal_receiver);
         let actor = actor(SimpleMessageBox::new(receiver, output_sender));
-        let actor = RunActor::new(actor, Box::new(input_sender.clone()));
+        let actor = RunActor::new(Box::new(actor), Box::new(input_sender.clone()));
 
         (input_sender, output_receiver, actor)
     }
@@ -414,7 +411,7 @@ mod tests {
             .unwrap();
 
         actions_sender
-            .send(RuntimeAction::Spawn(Box::new(actor)))
+            .send(RuntimeAction::Spawn(actor))
             .await
             .unwrap();
 
@@ -444,12 +441,12 @@ mod tests {
         let (_, _, actor2) = create_actor(Ending::new);
 
         actions_sender
-            .send(RuntimeAction::Spawn(Box::new(actor1)))
+            .send(RuntimeAction::Spawn(actor1))
             .await
             .unwrap();
 
         actions_sender
-            .send(RuntimeAction::Spawn(Box::new(actor2)))
+            .send(RuntimeAction::Spawn(actor2))
             .await
             .unwrap();
 
@@ -480,12 +477,12 @@ mod tests {
         let (_, _, actor2) = create_actor(Echo::new);
 
         actions_sender
-            .send(RuntimeAction::Spawn(Box::new(actor1)))
+            .send(RuntimeAction::Spawn(actor1))
             .await
             .unwrap();
 
         actions_sender
-            .send(RuntimeAction::Spawn(Box::new(actor2)))
+            .send(RuntimeAction::Spawn(actor2))
             .await
             .unwrap();
 
@@ -517,19 +514,18 @@ mod tests {
         let (mut sender, mut receiver, echo_actor) = create_actor(Echo::new);
 
         actions_sender
-            .send(RuntimeAction::Spawn(Box::new(panic_actor)))
+            .send(RuntimeAction::Spawn(panic_actor))
             .await
             .unwrap();
 
         actions_sender
-            .send(RuntimeAction::Spawn(Box::new(echo_actor)))
+            .send(RuntimeAction::Spawn(echo_actor))
             .await
             .unwrap();
 
         let wait_for_actor_to_panic = async {
             while let Some(event) = events_receiver.next().await {
-                if matches!(event, RuntimeEvent::Aborted { task, .. } if task == "actor 'Panic'-0")
-                {
+                if matches!(event, RuntimeEvent::Aborted { task, .. } if task == "Panic-0") {
                     break;
                 }
             }
