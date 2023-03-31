@@ -46,7 +46,7 @@ use std::convert::Infallible;
 /// # use std::time::Duration;
 /// # use tedge_actors::{Actor, Builder, MessageReceiver, MessageSource, NoConfig, Sender};
 /// # use tedge_actors::test_helpers::MessageReceiverExt;
-/// let mut actor = ConvertingActor::builder("Repeater", Repeater);
+/// let mut actor = ConvertingActor::builder("Repeater", Repeater, NoConfig);
 /// let mut test_box = SimpleMessageBoxBuilder::new("Test", 16).with_connection(&mut actor).build().with_timeout(Duration::from_millis(100));
 /// tokio::spawn(actor.build().run());
 ///
@@ -95,8 +95,12 @@ pub struct ConvertingActor<C: Converter> {
 }
 
 impl<C: Converter> ConvertingActor<C> {
-    pub fn builder(name: &str, converter: C) -> ConvertingActorBuilder<C> {
-        ConvertingActorBuilder::new(name, converter)
+    pub fn builder<Config>(
+        name: &str,
+        converter: C,
+        config: Config,
+    ) -> ConvertingActorBuilder<C, Config> {
+        ConvertingActorBuilder::new(name, converter, config)
     }
 }
 
@@ -153,23 +157,25 @@ impl<C: Converter> ConvertingActor<C> {
     }
 }
 
-pub struct ConvertingActorBuilder<C: Converter> {
+pub struct ConvertingActorBuilder<C: Converter, Config> {
     name: String,
     converter: C,
+    config: Config,
     message_box: SimpleMessageBoxBuilder<C::Input, C::Output>,
 }
 
-impl<C: Converter> ConvertingActorBuilder<C> {
-    fn new(name: &str, converter: C) -> Self {
+impl<C: Converter, Config> ConvertingActorBuilder<C, Config> {
+    fn new(name: &str, converter: C, config: Config) -> Self {
         ConvertingActorBuilder {
             name: name.to_string(),
             converter,
+            config,
             message_box: SimpleMessageBoxBuilder::new(name, 16), // FIXME: capacity should not be hardcoded
         }
     }
 }
 
-impl<C: Converter> Builder<ConvertingActor<C>> for ConvertingActorBuilder<C> {
+impl<C: Converter, Config> Builder<ConvertingActor<C>> for ConvertingActorBuilder<C, Config> {
     type Error = Infallible;
 
     fn try_build(self) -> Result<ConvertingActor<C>, Self::Error> {
@@ -185,19 +191,31 @@ impl<C: Converter> Builder<ConvertingActor<C>> for ConvertingActorBuilder<C> {
     }
 }
 
-impl<C: Converter> MessageSource<C::Output, NoConfig> for ConvertingActorBuilder<C> {
+impl<C: Converter, Config> MessageSource<C::Output, NoConfig>
+    for ConvertingActorBuilder<C, Config>
+{
     fn register_peer(&mut self, config: NoConfig, sender: DynSender<C::Output>) {
         self.message_box.register_peer(config, sender)
     }
 }
 
-impl<C: Converter> MessageSink<C::Input> for ConvertingActorBuilder<C> {
+impl<C: Converter, Config: Clone, SourceConfig> MessageSink<C::Input, SourceConfig>
+    for ConvertingActorBuilder<C, Config>
+where
+    SourceConfig: From<Config>,
+{
+    fn get_config(&self) -> SourceConfig {
+        self.config.clone().into()
+    }
+
     fn get_sender(&self) -> DynSender<C::Input> {
         self.message_box.get_sender()
     }
 }
 
-impl<C: Converter> ServiceProvider<C::Input, C::Output, NoConfig> for ConvertingActorBuilder<C> {
+impl<C: Converter, Config> ServiceProvider<C::Input, C::Output, NoConfig>
+    for ConvertingActorBuilder<C, Config>
+{
     fn add_peer(&mut self, peer: &mut impl ServiceConsumer<C::Input, C::Output, NoConfig>) {
         self.message_box.add_peer(peer)
     }
