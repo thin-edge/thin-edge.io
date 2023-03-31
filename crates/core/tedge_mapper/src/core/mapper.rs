@@ -2,6 +2,7 @@ use crate::c8y::dynamic_discovery::*;
 use crate::core::converter::*;
 use crate::core::error::*;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
+#[cfg(test)]
 use mqtt_channel::Connection;
 use mqtt_channel::Message;
 use mqtt_channel::MqttError;
@@ -11,7 +12,20 @@ use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use mqtt_channel::UnboundedReceiver;
 use mqtt_channel::UnboundedSender;
+use tedge_actors::builders::ServiceConsumer;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
+use tedge_actors::Runtime;
 use tedge_api::health::health_status_up_message;
+use tedge_config::ConfigSettingAccessor;
+use tedge_config::MqttClientHostSetting;
+use tedge_config::MqttClientPortSetting;
+use tedge_config::TEdgeConfig;
+use tedge_health_ext::HealthMonitorBuilder;
+use tedge_mqtt_ext::MqttActorBuilder;
+use tedge_mqtt_ext::MqttConfig;
+use tedge_signal_ext::SignalActor;
 
 use std::path::Path;
 use std::time::Duration;
@@ -28,6 +42,7 @@ use tracing::warn;
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 use std::result::Result::Ok;
 
+#[cfg(test)]
 pub async fn create_mapper(
     app_name: &str,
     mqtt_host: String,
@@ -204,6 +219,45 @@ async fn process_messages(mapper: &mut Mapper, ops_dir: Option<&Path>) -> Result
         }
         Ok(())
     }
+}
+
+pub async fn start_basic_actors(
+    mapper_name: &str,
+    config: &TEdgeConfig,
+) -> Result<(Runtime, MqttActorBuilder), anyhow::Error> {
+    let runtime_events_logger = None;
+    let mut runtime = Runtime::try_new(runtime_events_logger).await?;
+    let mut signal_actor = SignalActor::builder();
+
+    let mut mqtt_actor = get_mqtt_actor(mapper_name, config).await?;
+
+    //Instantiate health monitor actor
+    let health_actor = HealthMonitorBuilder::new(mapper_name);
+    mqtt_actor.mqtt_config = health_actor.set_init_and_last_will(mqtt_actor.mqtt_config);
+    let health_actor = health_actor.with_connection(&mut mqtt_actor);
+
+    // Shutdown on SIGINT
+    signal_actor.register_peer(NoConfig, runtime.get_handle().get_sender());
+
+    runtime.spawn(signal_actor).await?;
+    runtime.spawn(health_actor).await?;
+    Ok((runtime, mqtt_actor))
+}
+
+async fn get_mqtt_actor(
+    session_name: &str,
+    tedge_config: &TEdgeConfig,
+) -> Result<MqttActorBuilder, anyhow::Error> {
+    let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
+    let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
+
+    let mqtt_config = MqttConfig::default()
+        .with_host(mqtt_host)
+        .with_port(mqtt_port);
+
+    Ok(MqttActorBuilder::new(
+        mqtt_config.with_session_name(session_name),
+    ))
 }
 
 #[cfg(test)]
