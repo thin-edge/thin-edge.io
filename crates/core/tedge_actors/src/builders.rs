@@ -71,6 +71,29 @@ pub struct NoConfig;
 pub trait MessageSink<M: Message> {
     /// Return the sender that can be used by peers to send messages to this actor
     fn get_sender(&self) -> DynSender<M>;
+
+    /// Add a source of messages to the actor under construction
+    fn add_input<N, Config>(&mut self, source: &mut impl MessageSource<N, Config>, config: Config)
+    where
+        N: Message,
+        M: From<N>,
+    {
+        source.register_peer(config, crate::adapt(&self.get_sender()))
+    }
+
+    /// Add a source of messages to the actor under construction,
+    /// the messages being translated on the fly
+    fn add_mapped_input<N, Config, DynMessageMapper>(
+        &mut self,
+        source: &mut impl MessageSource<N, Config>,
+        config: Config,
+        cast: DynMessageMapper,
+    ) where
+        N: Message,
+        DynMessageMapper: Fn(DynSender<M>) -> DynSender<N>,
+    {
+        source.register_peer(config, cast(self.get_sender()))
+    }
 }
 
 /// The builder of a MessageBox must implement this trait for every message type that it can receive from its peers
