@@ -483,6 +483,7 @@ install_via_apt() {
             c8y-configuration-plugin="$VERSION" \
             c8y-log-plugin="$VERSION" \
             c8y-firmware-plugin="$VERSION" \
+            c8y-remote-access-plugin="$VERSION" \
             tedge-watchdog="$VERSION"
     else
         echo "Installing latest available version"
@@ -494,6 +495,7 @@ install_via_apt() {
             c8y-configuration-plugin \
             c8y-log-plugin \
             c8y-firmware-plugin \
+            c8y-remote-access-plugin \
             tedge-watchdog
     fi
 }
@@ -536,6 +538,7 @@ install_via_local_files() {
     find_then_install_deb "$INSTALL_SOURCEDIR" "c8y[_-]log[_-]plugin_*_$ARCH.deb"
     find_then_install_deb "$INSTALL_SOURCEDIR" "c8y-firmware-plugin_*_$ARCH.deb"
     find_then_install_deb "$INSTALL_SOURCEDIR" "tedge[_-]watchdog_*_$ARCH.deb"
+    find_then_install_deb "$INSTALL_SOURCEDIR" "c8y-remote-access-plugin*_$ARCH.deb"
 }
 
 clean_files() {

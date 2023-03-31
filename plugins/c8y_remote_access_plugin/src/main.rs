@@ -39,7 +39,10 @@ async fn main() -> miette::Result<()> {
 
     match command {
         Command::Init => declare_supported_operation(config_dir.tedge_config_root_path()),
-        Command::Cleanup => remove_supported_operation(config_dir.tedge_config_root_path()),
+        Command::Cleanup => {
+            remove_supported_operation(config_dir.tedge_config_root_path());
+            Ok(())
+        }
         Command::Connect(command) => proxy(command, tedge_config).await,
         Command::SpawnChild(command) => spawn_child(command).await,
     }
@@ -63,11 +66,10 @@ on_message = "530"
     .context("Declaring supported operations")
 }
 
-fn remove_supported_operation(config_dir: &Utf8Path) -> miette::Result<()> {
+fn remove_supported_operation(config_dir: &Utf8Path) {
     let path = supported_operation_path(config_dir);
-    std::fs::remove_file(&path)
-        .into_diagnostic()
-        .with_context(|| format!("Removing supported operation at {}", path))
+    // Ignore the error as the file may already have been deleted (#1869)
+    let _ = std::fs::remove_file(path);
 }
 
 static SUCCESS_MESSAGE: &str = "CONNECTED";
@@ -173,5 +175,31 @@ mod tests {
             supported_operation_path("/etc/tedge".as_ref()),
             Utf8PathBuf::from("/etc/tedge/operations/c8y/c8y_RemoteAccessConnect")
         );
+    }
+
+    #[test]
+    fn cleanup_existing_operation() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let operation_path = create_example_operation(dir.path().try_into().unwrap());
+        remove_supported_operation(dir.path().try_into().unwrap());
+
+        assert!(!operation_path.exists());
+    }
+
+    #[test]
+    fn cleanup_non_existent_operation() {
+        // Verify that this doesn't panic
+        remove_supported_operation(
+            "/tmp/already-deleted-operations-via-removal-of-tedge-agent".into(),
+        );
+    }
+
+    fn create_example_operation(dir: &Utf8Path) -> Utf8PathBuf {
+        let operation_path = supported_operation_path(dir);
+        std::fs::create_dir_all(operation_path.parent().unwrap()).unwrap();
+        std::fs::File::create(&operation_path).unwrap();
+        assert!(operation_path.exists());
+        operation_path
     }
 }
