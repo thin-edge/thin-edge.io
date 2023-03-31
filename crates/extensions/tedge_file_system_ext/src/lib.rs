@@ -187,12 +187,16 @@ mod tests {
 
         tokio::spawn(async move { actor.run().await });
 
+        // FIXME One has to wait for the actor actually launched before updating the file system.
+        //       - Do we need some message sent by the actors to say that are ready?
+        //       - Do we need a more sophisticated actor that list the existing files on start?
+        tokio::time::sleep(Duration::from_millis(100)).await;
         ttd.file("file_a");
         ttd.dir("dir_b").file("file_b");
 
         client_box
             .with_timeout(TEST_TIMEOUT)
-            .assert_received([
+            .assert_received_unordered([
                 FsWatchEvent::Modified(ttd.to_path_buf().join("file_a")),
                 FsWatchEvent::DirectoryCreated(ttd.to_path_buf().join("dir_b")),
                 FsWatchEvent::Modified(ttd.to_path_buf().join("dir_b").join("file_b")),

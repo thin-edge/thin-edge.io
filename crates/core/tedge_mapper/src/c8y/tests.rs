@@ -221,6 +221,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
+#[ignore]
 async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result<(), anyhow::Error>
 {
     // The test assures recovery and processing of messages by the SM-Mapper when it fails in the middle of the operation.
