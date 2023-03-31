@@ -20,6 +20,9 @@ pub enum DownloadError {
     #[error(transparent)]
     FromNix(#[from] nix::Error),
 
+    #[error(transparent)]
+    FromFileError(#[from] tedge_utils::file::FileError),
+
     #[error("Not enough disk space")]
     InsufficientSpace,
 

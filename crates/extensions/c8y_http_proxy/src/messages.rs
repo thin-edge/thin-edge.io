@@ -30,15 +30,6 @@ pub enum C8YRestError {
     #[error("Failed with {0}")]
     CustomError(String),
 
-    #[error("The provided path {0} does not have a file name")]
-    NoFileNameError(PathBuf),
-
-    #[error("The provided path {0} contains non UTF-8 characters in the file name")]
-    InvalidFileNameError(PathBuf),
-
-    #[error("The provided path {0} does not have a parent directory")]
-    NoParentDirError(PathBuf),
-
     #[error(transparent)]
     FromDownloadError(#[from] download::DownloadError),
 

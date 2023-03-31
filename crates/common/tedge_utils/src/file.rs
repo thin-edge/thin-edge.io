@@ -39,8 +39,14 @@ pub enum FileError {
     #[error("Could not save the file {file:?} to disk. Received error: {from:?}.")]
     FailedToSync { file: PathBuf, from: std::io::Error },
 
-    #[error("No parent dir for {:?}", path)]
-    NoParentDir { path: PathBuf },
+    #[error("The path {0} does not have a parent directory")]
+    NoParentDir(PathBuf),
+
+    #[error("The path {0} does not have a file name")]
+    NoFileName(PathBuf),
+
+    #[error("The path {0} contains non UTF-8 characters in the file name")]
+    InvalidFileName(PathBuf),
 
     #[error(transparent)]
     FromIoError(#[from] std::io::Error),
@@ -96,9 +102,7 @@ pub async fn move_file(
             tokio::fs::create_dir_all(dir_to).await?;
             debug!("Created parent directories for {:?}", dest_path);
         } else {
-            return Err(FileError::NoParentDir {
-                path: dest_path.to_path_buf(),
-            });
+            return Err(FileError::NoParentDir(dest_path.to_path_buf()));
         }
     }
 
