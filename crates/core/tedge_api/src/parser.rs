@@ -92,12 +92,6 @@ where
             let key: Cow<str> = key;
 
             match key.as_ref() {
-                "type" => return Err(de::Error::custom(invalid_measurement_name("type"))),
-                "externalSource" => {
-                    return Err(de::Error::custom(invalid_measurement_name(
-                        "externalSource",
-                    )))
-                }
                 "time" => {
                     let timestamp_str: &str = map.next_value()?;
                     let timestamp = OffsetDateTime::parse(
@@ -233,6 +227,17 @@ where
 
         self.visit_f64(value)
     }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        self.visitor
+            .visit_text_property(self.key.as_ref(), value)
+            .map_err(de::Error::custom)?;
+
+        Ok(())
+    }
 }
 
 /// The `DeserializeSeed` trait enables us to inject state required for deserialization. In our case
@@ -279,10 +284,6 @@ fn invalid_empty_measurement(key: &str) -> String {
         "Empty Thin Edge measurement: {:?} must contain at least one measurement",
         key
     )
-}
-
-fn invalid_measurement_name(name: &str) -> String {
-    format!("Invalid measurement name: \"{}\" is a reserved word.", name)
 }
 
 fn map_error(error: serde_json::Error, input: &str) -> ThinEdgeJsonParserError {
@@ -358,6 +359,25 @@ mod tests {
         res.unwrap_err().to_string(),
         "Invalid JSON: invalid type: null, expected a borrowed string at line 2 column 13: `l\n}\n`",
     );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_type_as_measurement() -> anyhow::Result<()> {
+        use crate::builder::ThinEdgeJsonBuilder;
+
+        let input = r#"{
+            "time" : "2021-04-30T17:03:14.123+02:00",
+            "pressure": 123.4,
+            "type": "456"       
+        }"#;
+
+        let mut builder = ThinEdgeJsonBuilder::default();
+
+        let res = parse_str(input, &mut builder);
+
+        assert!(res.is_ok());
 
         Ok(())
     }

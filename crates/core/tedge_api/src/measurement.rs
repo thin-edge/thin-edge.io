@@ -22,6 +22,7 @@ use time::OffsetDateTime;
 ///
 ///     #[error("Unexpected start of group")]
 ///     UnexpectedStartOfGroup,
+///
 /// }
 ///
 /// impl MeasurementVisitor for MeasurementPrinter {
@@ -37,6 +38,7 @@ use time::OffsetDateTime;
 ///         }
 ///     }
 ///
+///      
 ///     fn visit_measurement(&mut self, name: &str, value: f64) -> Result<(), Self::Error> {
 ///         if let Some(group_name) = self.group.as_ref() {
 ///             Ok(println!("{}.{} = {}", group_name, name, value))
@@ -62,6 +64,10 @@ use time::OffsetDateTime;
 ///             Ok(())
 ///         }
 ///     }
+///    
+///    fn visit_text_property(&mut self, _name: &str, _value: &str) -> Result<(), Self::Error>{
+///         Ok(())
+///    }
 /// }
 /// ```
 pub trait MeasurementVisitor {
@@ -73,6 +79,9 @@ pub trait MeasurementVisitor {
 
     /// Add a new measurement, attached to the current group if any.
     fn visit_measurement(&mut self, name: &str, value: f64) -> Result<(), Self::Error>;
+
+    /// Add a text property, attached to the current group if any.
+    fn visit_text_property(&mut self, _name: &str, _value: &str) -> Result<(), Self::Error>;
 
     /// Start to gather measurements for a group.
     fn visit_start_group(&mut self, group: &str) -> Result<(), Self::Error>;

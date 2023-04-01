@@ -186,6 +186,10 @@ impl MeasurementVisitor for MeasurementGrouper {
             }
         }
     }
+
+    fn visit_text_property(&mut self, _name: &str, _value: &str) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -213,6 +217,7 @@ mod tests {
             fn visit_measurement(&mut self, name: &str, value: f64) -> Result<(), TestError>;
             fn visit_start_group(&mut self, group: &str) -> Result<(), TestError>;
             fn visit_end_group(&mut self) -> Result<(), TestError>;
+            fn visit_text_property(&mut self, _name: &str, _value:&str)-> Result<(), TestError>;
         }
     }
 
