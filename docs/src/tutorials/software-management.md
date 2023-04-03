@@ -33,7 +33,7 @@ Find more information about [how to install and enable software management.](../
 
 Managing the software packages installed on the devices from your Cumulocity tenant is a two steps operation.
 
-* Populate the software repository with all the software packages and versions you plan to install.
+* Populate the software repository with all the software packages and versions you plan to install.
 * Trigger software update operations on the devices, to install specific packages from the repository.
 
 Find more information about [managing the device software](https://cumulocity.com/guides/users-guide/device-management/#managing-device-software)

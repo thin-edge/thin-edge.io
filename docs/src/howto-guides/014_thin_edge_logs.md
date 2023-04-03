@@ -6,27 +6,28 @@ On a thin-edge device different components like mappers, agent, and plugins run.
 The logs here capture INFO, WARNING, and ERROR messages.
 
 ### Cloud mapper logs
-The thin-edge cloud mapper component that sends the measurement data to the cloud can be accessed as below.
+The thin-edge cloud mapper component that sends the measurement data to the cloud can be accessed as below.
 
 #### Tedge Cumulocity mapper
-The log messages of the Cumulocity mapper component that sends the measurement data from the thin-edge device to the Cumulocity
-cloud can be accessed as below
+The log messages of the Cumulocity mapper component that sends the measurement data from the thin-edge device to the Cumulocity
+cloud can be accessed as below
 
 `journalctl -u tedge-mapper-c8y.service`
+
 
 > Note: Run `tedge-mapper --debug c8y` to log more debug messages
 
 #### Tedge Azure mapper
-The log messages of the Azure mapper component that sends the measurement data from the thin-edge device to the Azure
-cloud can be accessed as below.
+The log messages of the Azure mapper component that sends the measurement data from the thin-edge device to the Azure
+cloud can be accessed as below.
 
 `journalctl -u tedge-mapper-az.service`
 
 > Note: Run `tedge-mapper --debug az` to log more debug messages
 
 #### Tedge AWS mapper
-The log messages of the AWS mapper component that sends the measurement data from the thin-edge device to the AWS
-cloud can be accessed as below.
+The log messages of the AWS mapper component that sends the measurement data from the thin-edge device to the AWS
+cloud can be accessed as below.
 
 `journalctl -u tedge-mapper-aws.service`
 
