@@ -3175,6 +3175,7 @@ dependencies = [
  "futures-timer",
  "log",
  "mqtt_channel",
+ "tedge_config",
  "tokio",
 ]
 
@@ -3787,6 +3788,7 @@ dependencies = [
  "certificate",
  "doku",
  "figment",
+ "mqtt_channel",
  "serde",
  "serde_ignored",
  "strum_macros",

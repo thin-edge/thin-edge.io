@@ -4,7 +4,6 @@ use futures_timer::Delay;
 use log::debug;
 use log::error;
 use log::info;
-use mqtt_channel::Config;
 use mqtt_channel::Connection;
 use mqtt_channel::ErrChannel;
 use mqtt_channel::Message;
@@ -20,6 +19,7 @@ use std::io::Write;
 use std::process;
 use std::time::Duration;
 use std::time::Instant;
+use tedge_config::ConfigRepository;
 
 /*
 
@@ -71,12 +71,18 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     init_logger();
 
+    let config_location = tedge_config::TEdgeConfigLocation::default();
+    let config_repository = tedge_config::TEdgeConfigRepository::new(config_location);
+    let tedge_config = config_repository.load()?;
+
     let name = "sawtooth_".to_string() + &process::id().to_string();
-    let config = Config::default()
+    let mqtt_config = tedge_config
+        .mqtt_config()?
         .with_clean_session(true)
         .with_session_name(name)
         .with_subscriptions(c8y_err);
-    let mqtt = Connection::new(&config).await?;
+
+    let mqtt = Connection::new(&mqtt_config).await?;
 
     let mqtt_pub_channel = mqtt.published;
     let c8y_errors = mqtt.received;

@@ -1,3 +1,5 @@
+use rumqttc::tokio_rustls::rustls;
+
 /// An MQTT related error
 #[derive(thiserror::Error, Debug)]
 pub enum MqttError {
@@ -9,6 +11,9 @@ pub enum MqttError {
 
     #[error("Invalid session: a session name must be provided")]
     InvalidSessionConfig,
+
+    #[error(transparent)]
+    InvalidPrivateKey(#[from] rustls::Error),
 
     #[error("MQTT client error: {0}")]
     ClientError(#[from] rumqttc::ClientError),
@@ -38,6 +43,9 @@ pub enum MqttError {
         "The send channel of the connection has been closed and no more messages can be published"
     )]
     SendOnClosedConnection,
+
+    #[error("Failed to create a TLS config")]
+    TlsConfig(#[from] certificate::CertificateError),
 }
 
 impl MqttError {

@@ -13,6 +13,7 @@ use c8y_api::http_proxy::C8YHttpProxy;
 use c8y_api::http_proxy::JwtAuthHttpProxy;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
+use mqtt_channel::BrokerConfig;
 use mqtt_channel::Connection;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
@@ -87,13 +88,10 @@ impl TEdgeComponent for CumulocityMapper {
 
         let mapper_config = create_mapper_config(&operations);
 
-        let mqtt_client = create_mqtt_client(
-            CUMULOCITY_MAPPER_NAME,
-            mqtt_host.clone(),
-            mqtt_port,
-            &mapper_config,
-        )
-        .await?;
+        let broker_config = tedge_config.mqtt_config()?.broker;
+
+        let mqtt_client =
+            create_mqtt_client(CUMULOCITY_MAPPER_NAME, broker_config, &mapper_config).await?;
 
         // Dedicated mqtt client just for sending a will message, when the mapper goes down
         let _mqtt_client_wm = create_mqtt_client_will_message(
@@ -168,16 +166,14 @@ pub fn create_mapper_config(operations: &Operations) -> MapperConfig {
 
 pub async fn create_mqtt_client(
     app_name: &str,
-    mqtt_host: String,
-    mqtt_port: u16,
+    broker_config: BrokerConfig,
     mapper_config: &MapperConfig,
 ) -> Result<Connection, anyhow::Error> {
     let health_check_topics: TopicFilter = health_check_topics(app_name);
     let mut topic_filter = mapper_config.in_topic_filter.clone();
     topic_filter.add_all(health_check_topics.clone());
 
-    let mqtt_client =
-        Connection::new(&mqtt_config(app_name, &mqtt_host, mqtt_port, topic_filter)?).await?;
+    let mqtt_client = Connection::new(&mqtt_config(app_name, broker_config, topic_filter)?).await?;
 
     Ok(mqtt_client)
 }
@@ -328,14 +324,14 @@ mod tests {
         );
 
         let broker = test_mqtt_broker();
+        let broker_config = BrokerConfig {
+            host: MQTT_HOST.to_string(),
+            port: broker.port,
+            authentication: None,
+        };
 
-        let mut mapper = create_mapper(
-            CUMULOCITY_MAPPER_NAME_TEST,
-            MQTT_HOST.into(),
-            broker.port,
-            converter,
-        )
-        .await?;
+        let mut mapper =
+            create_mapper(CUMULOCITY_MAPPER_NAME_TEST, broker_config, converter).await?;
 
         // subscribe to `sub_topic`
         let mut messages = broker.messages_published_on(sub_topic).await;

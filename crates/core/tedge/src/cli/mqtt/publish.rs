@@ -51,11 +51,11 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
     if cmd.ca_file.is_some() || cmd.ca_path.is_some() {
         let mut root_store = RootCertStore::empty();
 
-        if let Some(ca_file) = cmd.ca_file.clone() {
+        if let Some(ca_file) = &cmd.ca_file {
             parse_root_certificate::add_certs_from_file(&mut root_store, ca_file)?;
         }
 
-        if let Some(ca_path) = cmd.ca_path.clone() {
+        if let Some(ca_path) = &cmd.ca_path {
             parse_root_certificate::add_certs_from_directory(&mut root_store, ca_path)?;
         }
 
