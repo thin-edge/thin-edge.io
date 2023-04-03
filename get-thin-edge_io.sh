@@ -4,7 +4,6 @@ set -e
 TYPE=full
 TMPDIR=/tmp/tedge
 LOGFILE=/tmp/tedge/install.log
-DEFAULT_VERSION=0.9.0
 
 # Packages names were changed to confirm to debian naming conventions
 # But we should still care about installing older versions. It will still cause
@@ -17,6 +16,8 @@ TEDGE_WATCHDOG=tedge-watchdog
 TEDGE_APT_PLUGIN=tedge-apt-plugin
 C8Y_CONFIGURATION_PLUGIN=c8y-configuration-plugin
 C8Y_LOG_PLUGIN=c8y-log-plugin
+C8Y_FIRMWARE_PLUGIN=c8y-firmware-plugin
+C8Y_REMOTE_ACCESS_PLUGIN=c8y-remote-access-plugin
 
 PURGE_OLD_PACKAGES=
 
@@ -225,6 +226,14 @@ install_tedge_plugins() {
     install_artifact "$C8Y_LOG_PLUGIN"
     install_artifact "$TEDGE_WATCHDOG"
 
+    if [ -n "$C8Y_FIRMWARE_PLUGIN" ]; then
+        install_artifact "$C8Y_FIRMWARE_PLUGIN"
+    fi
+
+    if [ -n "$C8Y_REMOTE_ACCESS_PLUGIN" ]; then
+        install_artifact "$C8Y_REMOTE_ACCESS_PLUGIN"
+    fi
+
     if [ -n "$PURGE_OLD_PACKAGES" ]; then
         remove_package "tedge_apt_plugin"
         remove_package "tedge_apama_plugin"
@@ -232,6 +241,31 @@ install_tedge_plugins() {
         remove_package "c8y_log_plugin"
         remove_package "tedge_watchdog"
     fi
+}
+
+get_latest_version() {
+    # Detect latest version from github api to avoid having a default version in the script
+    if command_exists curl; then
+        response=$(curl -s https://api.github.com/repos/thin-edge/thin-edge.io/releases/latest)
+    elif command_exists wget; then
+        response=$(wget -q --output-document - https://api.github.com/repos/thin-edge/thin-edge.io/releases/latest)
+    else
+        fail 1 "Detecting latest version requires either curl or wget to be installed"
+    fi
+
+    # use the same url pattern as expected when downloading the artifacts (so as not to rely on github api response fields)
+    version=$(
+        echo "$response" \
+            | grep -o "https://github.com/thin-edge/thin-edge.io/releases/download/[0-9]\+\.[0-9]\+\.[0-9]\+/.*\.deb" \
+            | grep -o "/[0-9]\+.[0-9]\+.[0-9]\+/" \
+            | cut -d/ -f2 \
+            | head -1
+    )
+
+    if [ -z "$version" ]; then
+        fail 1 "Failed to detect latest version. You can try specifying an explicit version. Check the help for more details"
+    fi
+    echo "$version"
 }
 
 main() {
@@ -246,7 +280,7 @@ main() {
     ARCH=$(dpkg --print-architecture)
 
     if [ -z "$VERSION" ]; then
-        VERSION="$DEFAULT_VERSION"
+        VERSION="$(get_latest_version)"
 
         log "Version argument has not been provided, installing latest: $VERSION"
         log "To install a particular version use this script with the version as an argument."
@@ -268,6 +302,13 @@ main() {
         # Note: No configuration files will be removed as the legacy postrm
         # are removed by the renamed packages
         PURGE_OLD_PACKAGES=1
+    fi
+
+    # Ignore plugins for older versions
+    if dpkg --compare-versions "$VERSION" lt "0.10.0"; then
+        log "ignore c8y-firmware-plugin and c8y-remote-access-plugin as they are not supported in <= 0.10.0"
+        C8Y_FIRMWARE_PLUGIN=
+        C8Y_REMOTE_ACCESS_PLUGIN=
     fi
 
     echo "Thank you for trying thin-edge.io!"

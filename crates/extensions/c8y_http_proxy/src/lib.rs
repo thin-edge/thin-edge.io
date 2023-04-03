@@ -1,3 +1,4 @@
+use crate::actor::C8YHttpProxyActor;
 use crate::actor::C8YHttpProxyMessageBox;
 use crate::credentials::JwtResult;
 use crate::credentials::JwtRetriever;
@@ -90,21 +91,21 @@ impl C8YHttpProxyBuilder {
     }
 }
 
-impl Builder<(C8YHttpConfig, C8YHttpProxyMessageBox)> for C8YHttpProxyBuilder {
+impl Builder<C8YHttpProxyActor> for C8YHttpProxyBuilder {
     type Error = Infallible;
 
-    fn try_build(self) -> Result<(C8YHttpConfig, C8YHttpProxyMessageBox), Self::Error> {
+    fn try_build(self) -> Result<C8YHttpProxyActor, Self::Error> {
         Ok(self.build())
     }
 
-    fn build(self) -> (C8YHttpConfig, C8YHttpProxyMessageBox) {
-        let actor = self.config;
+    fn build(self) -> C8YHttpProxyActor {
         let message_box = C8YHttpProxyMessageBox {
             clients: self.clients.build(),
             http: self.http,
             jwt: self.jwt,
         };
-        (actor, message_box)
+
+        C8YHttpProxyActor::new(self.config, message_box)
     }
 }
 
@@ -120,17 +121,5 @@ impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig> for C8YHttpProxyBu
 impl RuntimeRequestSink for C8YHttpProxyBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.clients.get_signal_sender()
-    }
-}
-
-impl Builder<C8YHttpProxyMessageBox> for C8YHttpProxyBuilder {
-    type Error = Infallible;
-
-    fn try_build(self) -> Result<C8YHttpProxyMessageBox, Self::Error> {
-        Ok(C8YHttpProxyMessageBox {
-            clients: self.clients.build(),
-            http: self.http,
-            jwt: self.jwt,
-        })
     }
 }

@@ -2,7 +2,6 @@ use c8y_api::smartrest::topic::C8yTopic;
 
 use std::path::Path;
 use std::path::PathBuf;
-use tedge_api::health::health_check_topics;
 use tedge_config::*;
 use tedge_mqtt_ext::TopicFilter;
 
@@ -27,7 +26,6 @@ pub struct ConfigManagerConfig {
     pub plugin_config_path: PathBuf,
     pub plugin_config: PluginConfig,
     pub c8y_request_topics: TopicFilter,
-    pub health_check_topics: TopicFilter,
     pub config_snapshot_response_topics: TopicFilter,
     pub config_update_response_topics: TopicFilter,
 }
@@ -56,7 +54,6 @@ impl ConfigManagerConfig {
         let file_transfer_dir = data_dir.join(DEFAULT_FILE_TRANSFER_DIR_NAME);
 
         let c8y_request_topics: TopicFilter = C8yTopic::SmartRestRequest.into();
-        let health_check_topics = health_check_topics(DEFAULT_PLUGIN_CONFIG_TYPE);
         let config_snapshot_response_topics: TopicFilter =
             ConfigOperationResponseTopic::SnapshotResponse.into();
         let config_update_response_topics: TopicFilter =
@@ -74,7 +71,6 @@ impl ConfigManagerConfig {
             plugin_config_path,
             plugin_config,
             c8y_request_topics,
-            health_check_topics,
             config_snapshot_response_topics,
             config_update_response_topics,
         }

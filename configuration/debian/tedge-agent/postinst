@@ -48,8 +48,10 @@ if command -v systemctl >/dev/null; then
     # Indeed, during an OTA self-update, the previous version of the  `agent` is kept running
     # to monitor the installation of the new version up to completion.
     if [ -f "/etc/tedge/mosquitto-conf/c8y-bridge.conf" ] && ! systemctl is-active --quiet tedge-agent ; then
-        systemctl start tedge-agent.service
-        systemctl enable tedge-agent.service
+        deb-systemd-helper enable tedge-agent.service >/dev/null || true
+        if [ -d /run/systemd/system ]; then
+            deb-systemd-invoke start tedge-agent.service >/dev/null || true
+        fi
     fi
 fi
 

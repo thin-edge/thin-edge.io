@@ -303,7 +303,7 @@ checksum = "a4a4ddaa51a5bc52a6948f74c06d20aaaddb71924eab79b8c97a8c556e942d6a"
 
 [[package]]
 name = "batcher"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "time",
  "tokio",
@@ -390,37 +390,28 @@ checksum = "89b2fd2a0dcf38d7971e2194b6b6eebab45ae01067456a7fd93d5547a61b70be"
 
 [[package]]
 name = "c8y-configuration-plugin"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
- "assert_matches",
- "c8y_api",
+ "c8y_config_manager",
+ "c8y_http_proxy",
  "clap 3.2.23",
- "csv",
- "download",
- "futures",
- "mockall",
- "mockito",
- "mqtt_channel",
- "mqtt_tests",
- "reqwest",
- "serde",
- "serde_json",
- "serial_test",
- "tedge_api",
+ "tedge_actors",
  "tedge_config",
- "tedge_test_utils",
+ "tedge_file_system_ext",
+ "tedge_health_ext",
+ "tedge_http_ext",
+ "tedge_mqtt_ext",
+ "tedge_signal_ext",
+ "tedge_timer_ext",
  "tedge_utils",
- "test-case",
- "thiserror",
  "tokio",
- "toml",
  "tracing",
 ]
 
 [[package]]
 name = "c8y-device-management"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "c8y_config_manager",
@@ -442,7 +433,7 @@ dependencies = [
 
 [[package]]
 name = "c8y-firmware-plugin"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -475,41 +466,33 @@ dependencies = [
 
 [[package]]
 name = "c8y-log-plugin"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
- "assert_matches",
- "c8y_api",
+ "c8y_http_proxy",
+ "c8y_log_manager",
  "clap 3.2.23",
- "csv",
- "easy_reader",
- "filetime",
- "glob",
- "mockall",
- "mqtt_channel",
- "serde",
- "serde_json",
- "serial_test",
- "tedge_api",
+ "tedge_actors",
  "tedge_config",
+ "tedge_file_system_ext",
+ "tedge_health_ext",
+ "tedge_http_ext",
+ "tedge_mqtt_ext",
+ "tedge_signal_ext",
  "tedge_utils",
- "tempfile",
- "test-case",
- "thiserror",
- "time",
  "tokio",
- "toml",
  "tracing",
 ]
 
 [[package]]
 name = "c8y-remote-access-plugin"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "async-compat",
  "async-tungstenite",
  "base64 0.13.1",
  "c8y_api",
+ "camino",
  "clap 4.1.6",
  "csv",
  "futures",
@@ -521,6 +504,7 @@ dependencies = [
  "serde",
  "tedge_config",
  "tedge_utils",
+ "tempfile",
  "thiserror",
  "tokio",
  "tungstenite",
@@ -530,7 +514,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_api"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -563,7 +547,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_config_manager"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "async-trait",
  "c8y_api",
@@ -618,7 +602,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_http_proxy"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "async-trait",
  "c8y_api",
@@ -635,23 +619,29 @@ dependencies = [
 
 [[package]]
 name = "c8y_log_manager"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "async-trait",
  "c8y_api",
  "c8y_http_proxy",
  "easy_reader",
+ "filetime",
  "glob",
  "log",
  "serde",
+ "serial_test",
  "tedge_actors",
  "tedge_api",
  "tedge_config",
  "tedge_file_system_ext",
  "tedge_mqtt_ext",
+ "tedge_test_utils",
  "tedge_utils",
+ "test-case",
  "thiserror",
+ "time",
  "tokio",
  "toml",
 ]
@@ -661,6 +651,15 @@ name = "cache-padded"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1db59621ec70f09c5e9b597b220c7a2b43611f4710dc03ceb8748637775692c"
+
+[[package]]
+name = "camino"
+version = "1.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c530edf18f37068ac2d977409ed5cd50d53d73bc653c7647b48eb78976ac9ae2"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "cast"
@@ -676,7 +675,7 @@ checksum = "50d30906286121d95be3d479533b458f87493b30a4b5f79a607db8f5d11aa91f"
 
 [[package]]
 name = "certificate"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -794,7 +793,7 @@ dependencies = [
 
 [[package]]
 name = "clock"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "mockall",
  "time",
@@ -947,9 +946,9 @@ dependencies = [
 
 [[package]]
 name = "csv"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af91f40b7355f82b0a891f50e70399475945bb0b0da4f1700ce60761c9d3e359"
+checksum = "0b015497079b9a9d69c02ad25de6c0a6edef051ea6360a327d0bd05802ef64ad"
 dependencies = [
  "csv-core",
  "itoa",
@@ -972,6 +971,41 @@ version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d2301688392eb071b0bf1a37be05c469d3cc4dbbd95df672fe28ab021e6a096"
 dependencies = [
+ "quote 1.0.23",
+ "syn 1.0.107",
+]
+
+[[package]]
+name = "darling"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a01d95850c592940db9b8194bc39f4bc0e89dee5c4265e4b1807c34a9aba453c"
+dependencies = [
+ "darling_core",
+ "darling_macro",
+]
+
+[[package]]
+name = "darling_core"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "859d65a907b6852c9361e3185c862aae7fafd2887876799fa55f5f99dc40d610"
+dependencies = [
+ "fnv",
+ "ident_case",
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "strsim",
+ "syn 1.0.107",
+]
+
+[[package]]
+name = "darling_macro"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c972679f83bdf9c42bd905396b6c3588a843a17f0f16dfcfa3e2c5d57441835"
+dependencies = [
+ "darling_core",
  "quote 1.0.23",
  "syn 1.0.107",
 ]
@@ -1060,6 +1094,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
+name = "doku"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "966b1227ac4d9d77f4d7e9507dd01c56ceaec6e35888661b54319123da47b159"
+dependencies = [
+ "doku-derive",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "doku-derive"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "252ec56116f931b050b5d80512c2c76f4807a297dd95a93f37593dd7650868a5"
+dependencies = [
+ "darling",
+ "proc-macro2 1.0.51",
+ "quote 1.0.23",
+ "syn 1.0.107",
+]
+
+[[package]]
 name = "downcast"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1067,7 +1124,7 @@ checksum = "1435fa1053d8b2fbbe9be7e97eca7f33d37b28409959813daefc1446a14247f1"
 
 [[package]]
 name = "download"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "backoff",
@@ -1078,6 +1135,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "tedge_utils",
  "tempfile",
  "test-case",
  "thiserror",
@@ -1162,6 +1220,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "errno"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50d6a0976c999d473fe89ad888d5a284e55366d9dc9038b1ba2aa15128c4afa0"
+dependencies = [
+ "errno-dragonfly",
+ "libc",
+ "windows-sys 0.45.0",
+]
+
+[[package]]
 name = "errno-dragonfly"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1210,7 +1279,7 @@ checksum = "8a3de6e8d11b22ff9edc6d916f890800597d60f8b2da1caf2955c274638d6412"
 dependencies = [
  "cfg-if 1.0.0",
  "libc",
- "redox_syscall",
+ "redox_syscall 0.2.16",
  "windows-sys 0.45.0",
 ]
 
@@ -1225,7 +1294,7 @@ dependencies = [
 
 [[package]]
 name = "flockfile"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "assert_matches",
  "nix",
@@ -1607,6 +1676,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ident_case"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
+
+[[package]]
 name = "idna"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1685,7 +1760,7 @@ checksum = "22e18b0a45d56fe973d6db23972bf5bc46f988a4a2385deac9cc29572f09daef"
 dependencies = [
  "hermit-abi 0.3.1",
  "io-lifetimes",
- "rustix",
+ "rustix 0.36.8",
  "windows-sys 0.45.0",
 ]
 
@@ -1753,7 +1828,7 @@ dependencies = [
 
 [[package]]
 name = "json-writer"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "serde_json",
@@ -1788,9 +1863,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.139"
+version = "0.2.140"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "201de327520df007757c1f0adce6e827fe8562fbc28bfd9c15571c66ca1f5f79"
+checksum = "99227334921fae1a979cf0bfdfcc6b3e5ce376ef57e16fb6fb3ea2ed6095f80c"
 
 [[package]]
 name = "libm"
@@ -1803,6 +1878,12 @@ name = "linux-raw-sys"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f051f77a7c8e6957c0696eac88f26b0117e54f52d3fc682ab19397a8812846a4"
+
+[[package]]
+name = "linux-raw-sys"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd550e73688e6d578f0ac2119e32b797a327631a42f9433e59d02e139c8df60d"
 
 [[package]]
 name = "lock_api"
@@ -1826,7 +1907,7 @@ dependencies = [
 
 [[package]]
 name = "logged_command"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -1998,10 +2079,11 @@ dependencies = [
 
 [[package]]
 name = "mqtt_channel"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "certificate",
  "fastrand",
  "futures",
  "mqtt_tests",
@@ -2013,7 +2095,7 @@ dependencies = [
 
 [[package]]
 name = "mqtt_tests"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "fastrand",
@@ -2300,7 +2382,7 @@ checksum = "9069cbb9f99e3a5083476ccb29ceb1de18b9118cafa53e90c9551235de2b9521"
 dependencies = [
  "cfg-if 1.0.0",
  "libc",
- "redox_syscall",
+ "redox_syscall 0.2.16",
  "smallvec",
  "windows-sys 0.45.0",
 ]
@@ -2421,7 +2503,7 @@ dependencies = [
 
 [[package]]
 name = "plugin_sm"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2684,13 +2766,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "redox_syscall"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "567664f262709473930a4bf9e51bf2ebf3348f2e748ccc50dea20646858f8f29"
+dependencies = [
+ "bitflags",
+]
+
+[[package]]
 name = "redox_users"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b033d837a7cf162d7993aded9304e30a83213c648b6e389db233191f891e5c2b"
 dependencies = [
  "getrandom",
- "redox_syscall",
+ "redox_syscall 0.2.16",
  "thiserror",
 ]
 
@@ -2913,10 +3004,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f43abb88211988493c1abb44a70efa56ff0ce98f233b7b276146f1f3f7ba9644"
 dependencies = [
  "bitflags",
- "errno",
+ "errno 0.2.8",
  "io-lifetimes",
  "libc",
- "linux-raw-sys",
+ "linux-raw-sys 0.1.4",
+ "windows-sys 0.45.0",
+]
+
+[[package]]
+name = "rustix"
+version = "0.37.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e78cc525325c06b4a7ff02db283472f3c042b7ff0c391f96c6d5ac6f4f91b75"
+dependencies = [
+ "bitflags",
+ "errno 0.3.0",
+ "io-lifetimes",
+ "libc",
+ "linux-raw-sys 0.3.0",
  "windows-sys 0.45.0",
 ]
 
@@ -3012,7 +3117,7 @@ dependencies = [
 
 [[package]]
 name = "sawtooth-publisher"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "async-log",
  "env_logger 0.9.3",
@@ -3409,12 +3514,13 @@ dependencies = [
 
 [[package]]
 name = "tedge"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
  "assert_matches",
  "base64 0.13.1",
+ "camino",
  "certificate",
  "clap 3.2.23",
  "hyper",
@@ -3427,6 +3533,7 @@ dependencies = [
  "rumqttc 0.17.0",
  "serde",
  "serde_json",
+ "strum_macros",
  "tedge_config",
  "tedge_utils",
  "tempfile",
@@ -3441,13 +3548,14 @@ dependencies = [
 
 [[package]]
 name = "tedge-agent"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
  "assert_cmd",
  "async-stream",
  "async-trait",
+ "camino",
  "clap 3.2.23",
  "flockfile",
  "futures",
@@ -3479,7 +3587,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-apt-plugin"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "clap 3.2.23",
@@ -3495,7 +3603,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-dummy-plugin"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "clap 3.2.23",
  "thiserror",
@@ -3503,7 +3611,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-mapper"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -3546,7 +3654,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-watchdog"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "clap 3.2.23",
@@ -3567,7 +3675,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_actors"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "async-trait",
  "env_logger 0.10.0",
@@ -3579,7 +3687,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_api"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3605,11 +3713,13 @@ dependencies = [
 
 [[package]]
 name = "tedge_config"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "assert_matches",
+ "camino",
  "certificate",
+ "doku",
  "figment",
  "serde",
  "serde_ignored",
@@ -3626,11 +3736,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_downloader_ext"
+version = "0.10.0"
+dependencies = [
+ "async-trait",
+ "download",
+ "log",
+ "mockito",
+ "tedge_actors",
+ "tedge_test_utils",
+ "tedge_utils",
+ "tokio",
+]
+
+[[package]]
 name = "tedge_file_system_ext"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "async-trait",
  "tedge_actors",
+ "tedge_test_utils",
  "tedge_utils",
  "tokio",
  "try-traits",
@@ -3638,7 +3763,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_health_ext"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3654,7 +3779,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_http_ext"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "async-trait",
  "futures",
@@ -3670,7 +3795,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_mqtt_ext"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "async-trait",
  "mqtt_channel",
@@ -3681,7 +3806,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_script_ext"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "async-trait",
  "tedge_actors",
@@ -3690,7 +3815,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_signal_ext"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "async-trait",
  "signal-hook",
@@ -3701,16 +3826,17 @@ dependencies = [
 
 [[package]]
 name = "tedge_test_utils"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
+ "camino",
  "tempfile",
  "toml",
 ]
 
 [[package]]
 name = "tedge_timer_ext"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "async-trait",
  "tedge_actors",
@@ -3719,7 +3845,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_utils"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "assert_matches",
  "futures",
@@ -3738,15 +3864,15 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.4.0"
+version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af18f7ae1acd354b992402e9ec5864359d693cd8a79dcbef59f76891701c1e95"
+checksum = "b9fbec84f381d5795b08656e4912bec604d162bff9291d6189a78f4c8ab87998"
 dependencies = [
  "cfg-if 1.0.0",
  "fastrand",
- "redox_syscall",
- "rustix",
- "windows-sys 0.42.0",
+ "redox_syscall 0.3.5",
+ "rustix 0.37.5",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]

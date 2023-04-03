@@ -213,6 +213,9 @@ pub enum CertificateError {
     #[error("HTTP Connection Problem: {msg} \nHint: {hint}")]
     CertificateValidationFailure { hint: String, msg: String },
 
+    #[error("Failed to add the certificate to root store")]
+    RootStoreAdd,
+
     #[error(transparent)]
     CertParse(#[from] rustls::Error),
 }

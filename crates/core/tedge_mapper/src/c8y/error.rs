@@ -5,7 +5,6 @@ use c8y_api::smartrest::error::SmartRestSerializerError;
 use plugin_sm::operation_logs::OperationLogsError;
 
 #[derive(thiserror::Error, Debug)]
-#[allow(clippy::large_enum_variant)]
 #[allow(clippy::enum_variant_names)]
 pub enum CumulocityMapperError {
     #[error(transparent)]
@@ -43,6 +42,9 @@ pub enum CumulocityMapperError {
 
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
+
+    #[error(transparent)]
+    FromSerde(#[from] serde_json::Error),
 
     #[error("Operation execution failed: {error_message}. Command: {command}. Operation name: {operation_name}")]
     ExecuteFailed {

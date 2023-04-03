@@ -152,3 +152,22 @@ impl LogPluginConfig {
         format!("118,{supported_config_types}")
     }
 }
+
+#[test]
+fn test_no_duplicated_file_types() {
+    let files = vec![
+        FileEntry {
+            path: "a/path".to_string(),
+            config_type: "type_one".to_string(),
+        },
+        FileEntry {
+            path: "some/path".to_string(),
+            config_type: "type_one".to_string(),
+        },
+    ];
+    let logs_config = LogPluginConfig { files };
+    assert_eq!(
+        logs_config.get_all_file_types(),
+        vec!["type_one".to_string()]
+    );
+}

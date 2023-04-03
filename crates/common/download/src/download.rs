@@ -1,6 +1,7 @@
 use crate::error::DownloadError;
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
+use log::debug;
 #[cfg(target_os = "linux")]
 use nix::fcntl::fallocate;
 #[cfg(target_os = "linux")]
@@ -15,6 +16,9 @@ use std::os::unix::prelude::AsRawFd;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
+use tedge_utils::file::move_file;
+use tedge_utils::file::FileError;
+use tedge_utils::file::PermissionEntry;
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -67,20 +71,23 @@ impl Auth {
 #[derive(Debug)]
 pub struct Downloader {
     target_filename: PathBuf,
+    target_permission: PermissionEntry,
 }
 
 impl From<PathBuf> for Downloader {
     fn from(path: PathBuf) -> Self {
         Self {
             target_filename: path,
+            target_permission: PermissionEntry::default(),
         }
     }
 }
 
 impl Downloader {
-    pub fn new(target_path: &Path) -> Self {
+    pub fn new(target_path: &Path, target_permission: PermissionEntry) -> Self {
         Self {
             target_filename: target_path.to_path_buf(),
+            target_permission,
         }
     }
 
@@ -93,7 +100,7 @@ impl Downloader {
 
         let target_filename = PathBuf::new().join(target_dir_path).join(filename);
 
-        Self { target_filename }
+        target_filename.into()
     }
 
     pub async fn download(&self, url: &DownloadInfo) -> Result<(), DownloadError> {
@@ -105,6 +112,20 @@ impl Downloader {
                 tokio::fs::create_dir_all(file_parent).await?;
             }
         }
+
+        // Download file to the target directory with a temp name
+        let target_file_path = self.target_filename.clone();
+        let file_name = target_file_path
+            .file_name()
+            .ok_or_else(|| FileError::NoParentDir(target_file_path.clone()))?
+            .to_str()
+            .ok_or_else(|| FileError::InvalidFileName(target_file_path.clone()))?;
+        let parent_dir = target_file_path
+            .parent()
+            .ok_or_else(|| FileError::NoParentDir(target_file_path.clone()))?;
+
+        let tmp_file_name = format!("{file_name}.tmp");
+        let tmp_target_path = parent_dir.join(tmp_file_name);
 
         // Default retry is an exponential retry with a limit of 15 minutes total.
         // Let's set some more reasonable retry policy so we don't block the downloads for too long.
@@ -148,8 +169,7 @@ impl Downloader {
         .await?;
 
         let file_len = response.content_length().unwrap_or(0);
-        let mut file =
-            create_file_and_try_pre_allocate_space(self.target_filename.as_path(), file_len)?;
+        let mut file = create_file_and_try_pre_allocate_space(&tmp_target_path, file_len)?;
 
         while let Some(chunk) = response.chunk().await? {
             if let Err(err) = file.write_all(&chunk) {
@@ -160,6 +180,18 @@ impl Downloader {
                 });
             }
         }
+
+        // Move the downloaded file to the final destination
+        debug!(
+            "Moving downloaded file from {:?} to {:?}",
+            tmp_target_path, target_file_path
+        );
+        move_file(
+            tmp_target_path,
+            target_file_path,
+            self.target_permission.clone(),
+        )
+        .await?;
 
         Ok(())
     }
@@ -241,6 +273,7 @@ mod tests {
     use std::io::Write;
     use std::path::Path;
     use std::path::PathBuf;
+    use tempfile::tempdir;
     use tempfile::NamedTempFile;
     use tempfile::TempDir;
     use test_case::test_case;
@@ -279,6 +312,31 @@ mod tests {
         let log_content = std::fs::read(downloader.filename())?;
 
         assert_eq!("hello".as_bytes(), log_content);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn downloader_download_to_target_path() -> anyhow::Result<()> {
+        let temp_dir = tempdir()?;
+        let _mock1 = mock("GET", "/some_file.txt")
+            .with_status(200)
+            .with_body(b"hello")
+            .create();
+
+        let target_file_path = temp_dir.path().join("downloaded_file.txt");
+
+        let mut target_url = mockito::server_url();
+        target_url.push_str("/some_file.txt");
+
+        let url = DownloadInfo::new(&target_url);
+
+        let downloader = Downloader::new(&target_file_path, PermissionEntry::default());
+        downloader.download(&url).await?;
+
+        let file_content = std::fs::read(target_file_path)?;
+
+        assert_eq!(file_content, "hello".as_bytes());
 
         Ok(())
     }

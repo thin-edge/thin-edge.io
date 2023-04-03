@@ -334,7 +334,7 @@ impl Plugin for ExternalPluginCommand {
             Ok(())
         } else {
             Err(SoftwareError::Install {
-                module: module.clone(),
+                module: Box::new(module.clone()),
                 reason: self.content(output.stderr)?,
             })
         }
@@ -352,7 +352,7 @@ impl Plugin for ExternalPluginCommand {
             Ok(())
         } else {
             Err(SoftwareError::Remove {
-                module: module.clone(),
+                module: Box::new(module.clone()),
                 reason: self.content(output.stderr)?,
             })
         }

@@ -1,8 +1,8 @@
+use camino::Utf8PathBuf;
 use certificate::translate_rustls_error;
 use reqwest::StatusCode;
 use std::error::Error;
 use tedge_config::ConfigSettingError;
-use tedge_config::FilePath;
 use tedge_config::TEdgeConfigError;
 use tedge_utils::paths::PathsError;
 
@@ -14,7 +14,7 @@ pub enum CertError {
         Run `tedge cert remove` first to generate a new certificate.
     "#
     )]
-    CertificateAlreadyExists { path: FilePath },
+    CertificateAlreadyExists { path: Utf8PathBuf },
 
     #[error(
         r#"No certificate has been attached to that device.
@@ -22,7 +22,7 @@ pub enum CertError {
         Run `tedge cert create` to generate a new certificate.
     "#
     )]
-    CertificateNotFound { path: FilePath },
+    CertificateNotFound { path: Utf8PathBuf },
 
     #[error(
         r#"No private key has been attached to that device.
@@ -30,7 +30,7 @@ pub enum CertError {
         Run `tedge cert create` to generate a new key and certificate.
     "#
     )]
-    KeyNotFound { path: FilePath },
+    KeyNotFound { path: Utf8PathBuf },
 
     #[error(
         r#"A private key already exists and would be overwritten.
@@ -38,7 +38,7 @@ pub enum CertError {
         Run `tedge cert remove` first to generate a new certificate and private key.
     "#
     )]
-    KeyAlreadyExists { path: FilePath },
+    KeyAlreadyExists { path: Utf8PathBuf },
 
     #[error(transparent)]
     ConfigError(#[from] crate::ConfigError),
@@ -82,7 +82,7 @@ pub enum CertError {
 
 impl CertError {
     /// Improve the error message in case the error in a IO error on the certificate file.
-    pub fn cert_context(self, path: FilePath) -> CertError {
+    pub fn cert_context(self, path: Utf8PathBuf) -> CertError {
         match self {
             CertError::IoError(ref err) => match err.kind() {
                 std::io::ErrorKind::AlreadyExists => CertError::CertificateAlreadyExists { path },
@@ -94,7 +94,7 @@ impl CertError {
     }
 
     /// Improve the error message in case the error in a IO error on the private key file.
-    pub fn key_context(self, path: FilePath) -> CertError {
+    pub fn key_context(self, path: Utf8PathBuf) -> CertError {
         match self {
             CertError::IoError(ref err) => match err.kind() {
                 std::io::ErrorKind::AlreadyExists => CertError::KeyAlreadyExists { path },

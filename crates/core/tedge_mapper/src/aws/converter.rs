@@ -105,6 +105,7 @@ mod tests {
     use crate::core::converter::*;
     use crate::core::error::ConversionError;
     use crate::core::size_threshold::SizeThreshold;
+    use crate::core::size_threshold::SizeThresholdExceededError;
 
     use assert_json_diff::*;
     use assert_matches::*;
@@ -247,11 +248,12 @@ mod tests {
 
         assert_matches!(
             result,
-            Err(ConversionError::SizeThresholdExceeded {
-                topic: _topic,
-                actual_size: _input_size,
-                threshold: 1
-            })
+            Err(ConversionError::SizeThresholdExceeded(
+                SizeThresholdExceededError {
+                    size: _input_size,
+                    threshold: 1
+                }
+            ))
         );
     }
 }

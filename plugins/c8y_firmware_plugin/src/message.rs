@@ -154,7 +154,7 @@ mod tests {
             "attempt": 1
         });
         assert_json_eq!(
-            serde_json::from_str::<serde_json::Value>(&message.payload_str().unwrap()).unwrap(),
+            serde_json::from_str::<serde_json::Value>(message.payload_str().unwrap()).unwrap(),
             expected_json
         );
     }

@@ -11,19 +11,29 @@ use tedge_actors::Actor;
 use tedge_actors::ClientId;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
+use tedge_actors::Sender;
 use tedge_actors::ServerMessageBox;
 use tokio::time::sleep_until;
 use tokio::time::Instant;
 
 /// An actor that manages a set of timers
-#[derive(Default)]
 pub struct TimerActor {
     current_timer: Option<SleepHandle>,
     next_timers: BinaryHeap<TimerEntry>,
     next_timer_id: usize,
+    messages: ServerMessageBox<SetTimeout<AnyPayload>, Timeout<AnyPayload>>,
 }
 
 impl TimerActor {
+    pub fn new(messages: ServerMessageBox<SetTimeout<AnyPayload>, Timeout<AnyPayload>>) -> Self {
+        Self {
+            current_timer: None,
+            next_timers: BinaryHeap::default(),
+            next_timer_id: 0,
+            messages,
+        }
+    }
+
     pub fn builder() -> TimerActorBuilder {
         TimerActorBuilder::default()
     }
@@ -160,13 +170,11 @@ struct SleepHandle {
 
 #[async_trait]
 impl Actor for TimerActor {
-    type MessageBox = ServerMessageBox<SetTimeout<AnyPayload>, Timeout<AnyPayload>>;
-
     fn name(&self) -> &str {
         "Timer"
     }
 
-    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
+    async fn run(&mut self) -> Result<(), RuntimeError> {
         loop {
             if let Some(current) = self.current_timer.take() {
                 let time_elapsed = current.sleep;
@@ -178,10 +186,10 @@ impl Actor for TimerActor {
                         let response = Timeout {
                             event: current_timer.event_id
                         };
-                        messages.send((caller, response)).await?;
+                        self.messages.send((caller, response)).await?;
                         self.start_next_timer()
                     },
-                    maybe_message = messages.recv() => {
+                    maybe_message = self.messages.recv() => {
                         // The current timer has to be restarted
                         self.start_timer(current_timer);
 
@@ -193,7 +201,7 @@ impl Actor for TimerActor {
             } else {
                 // There is no pending timers
                 // So simply wait for a timer request
-                match messages.recv().await {
+                match self.messages.recv().await {
                     None => {
                         // Done: no more request, nor pending timer
                         break;

@@ -1,6 +1,7 @@
 use super::error::get_webpki_error_from_reqwest;
 use super::error::CertError;
 use crate::command::Command;
+use camino::Utf8PathBuf;
 use reqwest::StatusCode;
 use reqwest::Url;
 use std::io::prelude::*;
@@ -23,7 +24,7 @@ struct UploadCertBody {
 
 pub struct UploadCertCmd {
     pub device_id: String,
-    pub path: FilePath,
+    pub path: Utf8PathBuf,
     pub host: ConnectUrl,
     pub username: String,
 }

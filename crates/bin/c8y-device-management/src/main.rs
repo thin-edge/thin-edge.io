@@ -25,6 +25,7 @@ use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_signal_ext::SignalActor;
 use tedge_timer_ext::TimerActor;
+
 pub const PLUGIN_NAME: &str = "c8y-device-management";
 
 #[tokio::main]
@@ -34,6 +35,7 @@ async fn main() -> anyhow::Result<()> {
     let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
     let tedge_config = get_tedge_config()?;
+    let c8y_http_config = (&tedge_config).try_into()?;
 
     // Create actor instances
     let mqtt_config = mqtt_config(&tedge_config)?;
@@ -42,7 +44,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut jwt_actor = C8YJwtRetriever::builder(mqtt_config);
     let mut http_actor = HttpActor::new().builder();
-    let c8y_http_config = (&tedge_config).try_into()?;
+
     let mut c8y_http_proxy_actor =
         C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);
 

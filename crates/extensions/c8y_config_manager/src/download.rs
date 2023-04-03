@@ -1,5 +1,6 @@
 use crate::child_device::ChildConfigOperationKey;
 use crate::child_device::DEFAULT_OPERATION_TIMEOUT;
+use crate::plugin_config::InvalidConfigTypeError;
 
 use super::actor::ActiveOperationState;
 use super::actor::ConfigManagerActor;
@@ -85,20 +86,18 @@ impl ConfigDownloadManager {
         let mut target_file_entry = FileEntry::default();
 
         let plugin_config = PluginConfig::new(&self.config.plugin_config_path);
-        let download_result = {
-            match plugin_config.get_file_entry_from_type(&target_config_type) {
-                Ok(file_entry) => {
-                    target_file_entry = file_entry;
-                    self.download_config_file(
-                        smartrest_request.url.as_str(),
-                        PathBuf::from(&target_file_entry.path),
-                        target_file_entry.file_permissions,
-                        message_box,
-                    )
-                    .await
-                }
-                Err(err) => Err(err),
+        let download_result = match plugin_config.get_file_entry_from_type(&target_config_type) {
+            Ok(file_entry) => {
+                target_file_entry = file_entry;
+                self.download_config_file(
+                    smartrest_request.url.as_str(),
+                    PathBuf::from(&target_file_entry.path),
+                    target_file_entry.file_permissions,
+                    message_box,
+                )
+                .await
             }
+            Err(err) => Err(err.into()),
         };
 
         match download_result {
@@ -219,12 +218,11 @@ impl ConfigDownloadManager {
                         .await?;
                 }
             }
-            Err(ConfigManagementError::InvalidRequestedConfigType { config_type }) => {
+            Err(InvalidConfigTypeError { config_type }) => {
                 warn!(
                     "Ignoring the config operation request for unknown config type: {config_type}"
                 );
             }
-            Err(err) => return Err(err)?,
         }
 
         Ok(())

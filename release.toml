@@ -1,6 +1,5 @@
 consolidate-commits = true
 publish = false
-dev-version = false
 tag-name = "{{prefix}}{{version}}"
 
 pre-release-commit-message = "(cargo release) bump version"

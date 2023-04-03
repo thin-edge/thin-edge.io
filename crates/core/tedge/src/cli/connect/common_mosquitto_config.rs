@@ -1,3 +1,5 @@
+use camino::Utf8PathBuf;
+
 const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -6,9 +8,9 @@ pub struct ListenerConfig {
     pub bind_address: Option<String>,
     pub bind_interface: Option<String>,
     pub allow_anonymous: bool,
-    pub capath: Option<String>,
-    pub certfile: Option<String>,
-    pub keyfile: Option<String>,
+    pub capath: Option<Utf8PathBuf>,
+    pub certfile: Option<Utf8PathBuf>,
+    pub keyfile: Option<Utf8PathBuf>,
     pub require_certificate: bool,
 }
 
@@ -135,9 +137,9 @@ impl CommonMosquittoConfig {
         port: Option<u16>,
         bind_address: Option<String>,
         bind_interface: Option<String>,
-        capath: Option<String>,
-        certfile: Option<String>,
-        keyfile: Option<String>,
+        capath: Option<Utf8PathBuf>,
+        certfile: Option<Utf8PathBuf>,
+        keyfile: Option<Utf8PathBuf>,
     ) -> Self {
         let mut external_listener = ListenerConfig {
             port,

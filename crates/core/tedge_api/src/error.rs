@@ -26,7 +26,7 @@ pub enum SoftwareError {
 
     #[error("Failed to install {module:?}")]
     Install {
-        module: SoftwareModule,
+        module: Box<SoftwareModule>,
         reason: String,
     },
 
@@ -53,7 +53,7 @@ pub enum SoftwareError {
 
     #[error("Failed to uninstall {module:?}")]
     Remove {
-        module: SoftwareModule,
+        module: Box<SoftwareModule>,
         reason: String,
     },
 

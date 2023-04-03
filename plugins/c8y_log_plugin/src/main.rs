@@ -1,51 +1,35 @@
-mod config;
-mod error;
-mod logfile_request;
-
 use anyhow::Result;
-use c8y_api::http_proxy::C8YHttpProxy;
-use c8y_api::http_proxy::JwtAuthHttpProxy;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
-use c8y_api::smartrest::topic::C8yTopic;
-use c8y_api::utils::bridge::is_c8y_bridge_up;
-use c8y_api::utils::bridge::C8Y_BRIDGE_HEALTH_TOPIC;
+use c8y_http_proxy::credentials::C8YJwtRetriever;
+use c8y_http_proxy::C8YHttpProxyBuilder;
+use c8y_log_manager::LogManagerBuilder;
+use c8y_log_manager::LogManagerConfig;
 use clap::Parser;
-
-use c8y_api::smartrest::message::get_smartrest_device_id;
-use mqtt_channel::Connection;
-use mqtt_channel::Message;
-use mqtt_channel::StreamExt;
-use mqtt_channel::TopicFilter;
 use std::path::Path;
 use std::path::PathBuf;
-use tedge_api::health::health_check_topics;
-use tedge_api::health::health_status_down_message;
-use tedge_api::health::health_status_up_message;
-use tedge_api::health::send_health_status;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
+use tedge_actors::Runtime;
+use tedge_actors::ServiceConsumer;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
-use tedge_config::DeviceIdSetting;
 use tedge_config::LogPathSetting;
 use tedge_config::MqttClientHostSetting;
 use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
+use tedge_config::TEdgeConfigError;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
-
+use tedge_file_system_ext::FsWatchActorBuilder;
+use tedge_health_ext::HealthMonitorBuilder;
+use tedge_http_ext::HttpActor;
+use tedge_mqtt_ext::MqttActorBuilder;
+use tedge_mqtt_ext::MqttConfig;
+use tedge_signal_ext::SignalActor;
 use tedge_utils::file::create_directory_with_user_group;
 use tedge_utils::file::create_file_with_user_group;
-use tedge_utils::notify::fs_notify_stream;
-use tedge_utils::notify::FsEvent;
-use tedge_utils::paths::PathsError;
-use tracing::error;
 use tracing::info;
-
-use crate::config::LogPluginConfig;
-use crate::logfile_request::handle_dynamic_log_type_update;
-use crate::logfile_request::handle_logfile_request_operation;
-use crate::logfile_request::read_log_config;
 
 const DEFAULT_PLUGIN_CONFIG_FILE: &str = "c8y/c8y-log-plugin.toml";
 const AFTER_HELP_TEXT: &str = r#"On start, `c8y-log-plugin` notifies the cloud tenant of the log types listed in the `CONFIG_FILE`, sending this list with a `118` on `c8y/s/us`.
@@ -79,158 +63,14 @@ pub struct LogfileRequestPluginOpt {
     pub config_dir: PathBuf,
 }
 
-async fn create_mqtt_client(
-    tedge_config: &TEdgeConfig,
-) -> Result<mqtt_channel::Connection, anyhow::Error> {
-    let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
-    let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
-    let mut topics: TopicFilter = health_check_topics(C8Y_LOG_PLUGIN);
-
-    topics.add_unchecked(&C8yTopic::SmartRestRequest.to_string());
-    // subscribing also to c8y bridge health topic to know when the bridge is up
-    topics.add(C8Y_BRIDGE_HEALTH_TOPIC)?;
-
-    let mqtt_config = mqtt_channel::Config::default()
-        .with_session_name(C8Y_LOG_PLUGIN)
-        .with_host(mqtt_host)
-        .with_port(mqtt_port)
-        .with_subscriptions(topics)
-        .with_initial_message(|| health_status_up_message(C8Y_LOG_PLUGIN))
-        .with_last_will_message(health_status_down_message(C8Y_LOG_PLUGIN));
-
-    let mqtt_client = mqtt_channel::Connection::new(&mqtt_config).await?;
-    Ok(mqtt_client)
-}
-
-pub async fn create_http_client(
-    tedge_config: &TEdgeConfig,
-) -> Result<JwtAuthHttpProxy, anyhow::Error> {
-    let mut http_proxy = JwtAuthHttpProxy::try_new(tedge_config).await?;
-    http_proxy.init().await?;
-    Ok(http_proxy)
-}
-
-async fn run(
-    config_dir: &Path,
-    config_file_name: &str,
-    device_name: &str,
-    mqtt_client: &mut Connection,
-    http_client: &mut JwtAuthHttpProxy,
-) -> Result<(), anyhow::Error> {
-    let config_file_path = config_dir.join(config_file_name);
-    let mut plugin_config = read_log_config(&config_file_path);
-
-    let health_check_topics = health_check_topics(C8Y_LOG_PLUGIN);
-    handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
-
-    let mut fs_notification_stream = fs_notify_stream(&[(
-        config_dir,
-        Some(config_file_name.to_string()),
-        &[
-            FsEvent::Modified,
-            FsEvent::FileDeleted,
-            FsEvent::FileCreated,
-        ],
-    )])?;
-
-    // Now the log plugin is done with the initialization and ready for processing the messages
-    send_health_status(&mut mqtt_client.published, C8Y_LOG_PLUGIN).await;
-
-    info!("Ready to serve log requests");
-
-    loop {
-        tokio::select! {
-                message = mqtt_client.received.next() => {
-                if let Some(message) = message {
-                    process_mqtt_message(message, &plugin_config, mqtt_client, http_client, health_check_topics.clone(), device_name).await?;
-                } else {
-                    // message is None and the connection has been closed
-                    return Ok(())
-                }
-            }
-            Some((path, mask)) = fs_notification_stream.rx.recv() => {
-                match mask {
-                    FsEvent::FileCreated | FsEvent::FileDeleted | FsEvent::Modified => {
-                        if path.file_name().ok_or_else(|| PathsError::ParentDirNotFound {path: path.as_os_str().into()})?.eq("c8y-log-plugin.toml") {
-                            plugin_config = read_log_config(&path);
-                            handle_dynamic_log_type_update(&plugin_config, mqtt_client).await?;
-                        }
-                    },
-                    _ => {
-                        // ignore other events (FsEvent::DirCreated, FsEvent::DirDeleted)
-                    }
-                }
-            }
-        }
-    }
-}
-
-pub async fn process_mqtt_message(
-    message: Message,
-    plugin_config: &LogPluginConfig,
-    mqtt_client: &mut Connection,
-    http_client: &mut JwtAuthHttpProxy,
-    health_check_topics: TopicFilter,
-    device_name: &str,
-) -> Result<(), anyhow::Error> {
-    if is_c8y_bridge_up(&message) {
-        handle_dynamic_log_type_update(plugin_config, mqtt_client).await?;
-    } else if health_check_topics.accept(&message) {
-        send_health_status(&mut mqtt_client.published, C8Y_LOG_PLUGIN).await;
-    } else if let Ok(payload) = message.payload_str() {
-        for smartrest_message in payload.split('\n') {
-            let result = match smartrest_message.split(',').next().unwrap_or_default() {
-                "522" => {
-                    info!("Log request received: {payload}");
-                    match get_smartrest_device_id(payload) {
-                        Some(device_id) if device_id == device_name => {
-                            // retrieve smartrest object from payload
-                            let maybe_smartrest_obj =
-                                SmartRestLogRequest::from_smartrest(smartrest_message);
-                            if let Ok(smartrest_obj) = maybe_smartrest_obj {
-                                handle_logfile_request_operation(
-                                    &smartrest_obj,
-                                    plugin_config,
-                                    mqtt_client,
-                                    http_client,
-                                )
-                                .await
-                            } else {
-                                error!("Incorrect SmartREST payload: {}", smartrest_message);
-                                Ok(())
-                            }
-                        }
-                        // Ignore operation messages created for child devices
-                        _ => Ok(()),
-                    }
-                }
-                _ => {
-                    // Ignore operation messages not meant for this plugin
-                    Ok(())
-                }
-            };
-
-            if let Err(err) = result {
-                let error_message = format!(
-                    "Handling of operation: '{}' failed with {}",
-                    smartrest_message, err
-                );
-                error!("{}", error_message);
-            }
-        }
-    }
-    Ok(())
-}
+// FIXME:
+// - subscribing also to c8y bridge health topic to know when the bridge is up
+//   topics.add(C8Y_BRIDGE_HEALTH_TOPIC)?;
+// - use the health check actor
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let config_plugin_opt = LogfileRequestPluginOpt::parse();
-    let config_dir = PathBuf::from(
-        &config_plugin_opt
-            .config_dir
-            .to_str()
-            .unwrap_or(DEFAULT_TEDGE_CONFIG_PATH),
-    );
 
     // Load tedge config from the provided location
     let tedge_config_location =
@@ -240,7 +80,7 @@ async fn main() -> Result<(), anyhow::Error> {
     } else {
         get_log_level(
             "c8y-log-plugin",
-            tedge_config_location.tedge_config_root_path.to_path_buf(),
+            &tedge_config_location.tedge_config_root_path,
         )?
     };
 
@@ -249,28 +89,59 @@ async fn main() -> Result<(), anyhow::Error> {
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
     let tedge_config = config_repository.load()?;
 
-    let logs_dir = tedge_config.query(LogPathSetting)?;
-    let logs_dir = PathBuf::from(logs_dir.to_string());
-
     if config_plugin_opt.init {
-        init(&config_plugin_opt.config_dir, &logs_dir)?;
-        return Ok(());
+        let logs_dir = tedge_config.query(LogPathSetting)?;
+        init(&config_plugin_opt.config_dir, logs_dir.as_std_path())
+    } else {
+        run(tedge_config).await
     }
+}
 
-    let device_name = tedge_config.query(DeviceIdSetting)?;
+async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
+    let runtime_events_logger = None;
+    let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
-    // Create required clients
-    let mut mqtt_client = create_mqtt_client(&tedge_config).await?;
-    let mut http_client = create_http_client(&tedge_config).await?;
+    let mut health_actor = HealthMonitorBuilder::new(C8Y_LOG_PLUGIN);
 
-    run(
-        &config_dir,
-        DEFAULT_PLUGIN_CONFIG_FILE,
-        &device_name,
-        &mut mqtt_client,
-        &mut http_client,
-    )
-    .await?;
+    let base_mqtt_config = mqtt_config(&tedge_config)?;
+    let mqtt_config = health_actor
+        .set_init_and_last_will(base_mqtt_config.clone().with_session_name(C8Y_LOG_PLUGIN));
+
+    let c8y_http_config = (&tedge_config).try_into()?;
+
+    let mut mqtt_actor = MqttActorBuilder::new(mqtt_config);
+    health_actor.set_connection(&mut mqtt_actor);
+
+    let mut jwt_actor = C8YJwtRetriever::builder(base_mqtt_config);
+    let mut http_actor = HttpActor::new().builder();
+    let mut c8y_http_proxy_actor =
+        C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);
+    let mut fs_watch_actor = FsWatchActorBuilder::new();
+    let mut signal_actor = SignalActor::builder();
+
+    // Instantiate log manager actor
+    let log_manager_config =
+        LogManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH, &tedge_config)?;
+    let mut log_actor = LogManagerBuilder::new(log_manager_config);
+    log_actor.with_fs_connection(&mut fs_watch_actor)?;
+    log_actor.with_c8y_http_proxy(&mut c8y_http_proxy_actor)?;
+    log_actor.with_mqtt_connection(&mut mqtt_actor)?;
+
+    // Shutdown on SIGINT
+    signal_actor.register_peer(NoConfig, runtime.get_handle().get_sender());
+
+    // Run the actors
+    runtime.spawn(mqtt_actor).await?;
+    runtime.spawn(jwt_actor).await?;
+    runtime.spawn(http_actor).await?;
+    runtime.spawn(c8y_http_proxy_actor).await?;
+    runtime.spawn(fs_watch_actor).await?;
+    runtime.spawn(log_actor).await?;
+    runtime.spawn(signal_actor).await?;
+    runtime.spawn(health_actor).await?;
+
+    info!("Ready to serve log requests");
+    runtime.run_to_completion().await?;
     Ok(())
 }
 
@@ -353,4 +224,13 @@ fn create_init_logs_directories_and_files(
     )?;
 
     Ok(())
+}
+
+fn mqtt_config(tedge_config: &TEdgeConfig) -> Result<MqttConfig, TEdgeConfigError> {
+    let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
+    let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
+    let config = MqttConfig::default()
+        .with_host(mqtt_host)
+        .with_port(mqtt_port);
+    Ok(config)
 }

@@ -4,16 +4,13 @@ use tedge_mqtt_ext::Topic;
 use tedge_utils::file::FileError;
 use tedge_utils::paths::PathsError;
 
-#[allow(clippy::large_enum_variant)]
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigManagementError {
-    #[error(
-        "The requested config_type {config_type} is not defined in the plugin configuration file."
-    )]
-    InvalidRequestedConfigType { config_type: String },
+    #[error(transparent)]
+    InvalidRequestedConfigType(#[from] super::plugin_config::InvalidConfigTypeError),
 
-    #[error("Message received on invalid topic from child device: {topic}")]
-    InvalidChildDeviceTopic { topic: String },
+    #[error(transparent)]
+    InvalidChildDeviceTopic(#[from] super::child_device::InvalidChildDeviceTopicError),
 
     #[error("Invalid operation response with empty status received on topic: {0:?}")]
     EmptyOperationStatus(Topic),

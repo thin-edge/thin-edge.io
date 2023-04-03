@@ -11,15 +11,12 @@ use tedge_actors::MessageSink;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceConsumer;
-use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::health::health_status_down_message;
 use tedge_api::health::health_status_up_message;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
-
-type HealthMonitorMessageBox = SimpleMessageBox<MqttMessage, MqttMessage>;
 
 pub struct HealthMonitorBuilder {
     service_name: String,
@@ -56,15 +53,14 @@ impl RuntimeRequestSink for HealthMonitorBuilder {
     }
 }
 
-impl Builder<(HealthMonitorActor, HealthMonitorMessageBox)> for HealthMonitorBuilder {
+impl Builder<HealthMonitorActor> for HealthMonitorBuilder {
     type Error = LinkError;
 
-    fn try_build(self) -> Result<(HealthMonitorActor, HealthMonitorMessageBox), Self::Error> {
+    fn try_build(self) -> Result<HealthMonitorActor, Self::Error> {
         let message_box = self.box_builder.build();
+        let actor = HealthMonitorActor::new(self.service_name, message_box);
 
-        let actor = HealthMonitorActor::new(self.service_name);
-
-        Ok((actor, message_box))
+        Ok(actor)
     }
 }
 

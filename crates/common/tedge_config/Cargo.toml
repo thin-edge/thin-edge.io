@@ -9,11 +9,13 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+camino = { version = "1.1.4", features = ["serde", "serde1"] }
 certificate = { path = "../certificate" }
+doku = "0.20.0"
 figment = { version = "0.10", features = ["env", "toml"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_ignored = "0.1"
-strum_macros = { version = "0.24", optional = true }
+strum_macros = { version = "0.24" }
 tedge_utils = { path = "../tedge_utils" }
 thiserror = "1.0"
 toml = "0.5"

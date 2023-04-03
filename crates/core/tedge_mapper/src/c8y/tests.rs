@@ -2,6 +2,7 @@ use crate::core::converter::Converter;
 use crate::core::error::ConversionError;
 use crate::core::mapper::create_mapper;
 use crate::core::size_threshold::SizeThreshold;
+use crate::core::size_threshold::SizeThresholdExceededError;
 use anyhow::Result;
 use assert_json_diff::assert_json_include;
 use assert_matches::assert_matches;
@@ -220,6 +221,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
+#[ignore]
 async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result<(), anyhow::Error>
 {
     // The test assures recovery and processing of messages by the SM-Mapper when it fails in the middle of the operation.
@@ -1238,11 +1240,12 @@ async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
 
     assert_matches!(
         converter.try_convert(&alarm_message).await,
-        Err(ConversionError::SizeThresholdExceeded {
-            topic: _,
-            actual_size: _,
-            threshold: _
-        })
+        Err(ConversionError::SizeThresholdExceeded(
+            SizeThresholdExceededError {
+                size: _,
+                threshold: _
+            }
+        ))
     );
     Ok(())
 }

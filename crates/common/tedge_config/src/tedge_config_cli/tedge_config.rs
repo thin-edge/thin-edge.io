@@ -1,5 +1,6 @@
 use crate::seconds::Seconds;
 use crate::*;
+use camino::Utf8PathBuf;
 use certificate::CertificateError;
 use certificate::PemCertificate;
 use std::convert::TryFrom;
@@ -199,7 +200,7 @@ impl ConfigSettingAccessor<C8ySmartRestTemplates> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<DeviceCertPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: DeviceCertPathSetting) -> ConfigSettingResult<FilePath> {
+    fn query(&self, _setting: DeviceCertPathSetting) -> ConfigSettingResult<Utf8PathBuf> {
         Ok(self
             .data
             .device
@@ -211,7 +212,7 @@ impl ConfigSettingAccessor<DeviceCertPathSetting> for TEdgeConfig {
     fn update(
         &mut self,
         _setting: DeviceCertPathSetting,
-        value: FilePath,
+        value: Utf8PathBuf,
     ) -> ConfigSettingResult<()> {
         self.data.device.cert_path = Some(value);
         Ok(())
@@ -224,7 +225,7 @@ impl ConfigSettingAccessor<DeviceCertPathSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<DeviceKeyPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: DeviceKeyPathSetting) -> ConfigSettingResult<FilePath> {
+    fn query(&self, _setting: DeviceKeyPathSetting) -> ConfigSettingResult<Utf8PathBuf> {
         Ok(self
             .data
             .device
@@ -236,7 +237,7 @@ impl ConfigSettingAccessor<DeviceKeyPathSetting> for TEdgeConfig {
     fn update(
         &mut self,
         _setting: DeviceKeyPathSetting,
-        value: FilePath,
+        value: Utf8PathBuf,
     ) -> ConfigSettingResult<()> {
         self.data.device.key_path = Some(value);
         Ok(())
@@ -249,7 +250,7 @@ impl ConfigSettingAccessor<DeviceKeyPathSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<AzureRootCertPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: AzureRootCertPathSetting) -> ConfigSettingResult<FilePath> {
+    fn query(&self, _setting: AzureRootCertPathSetting) -> ConfigSettingResult<Utf8PathBuf> {
         Ok(self
             .data
             .az
@@ -261,7 +262,7 @@ impl ConfigSettingAccessor<AzureRootCertPathSetting> for TEdgeConfig {
     fn update(
         &mut self,
         _setting: AzureRootCertPathSetting,
-        value: FilePath,
+        value: Utf8PathBuf,
     ) -> ConfigSettingResult<()> {
         self.data.az.root_cert_path = Some(value);
         Ok(())
@@ -274,7 +275,7 @@ impl ConfigSettingAccessor<AzureRootCertPathSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<AwsRootCertPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: AwsRootCertPathSetting) -> ConfigSettingResult<FilePath> {
+    fn query(&self, _setting: AwsRootCertPathSetting) -> ConfigSettingResult<Utf8PathBuf> {
         Ok(self
             .data
             .aws
@@ -286,7 +287,7 @@ impl ConfigSettingAccessor<AwsRootCertPathSetting> for TEdgeConfig {
     fn update(
         &mut self,
         _setting: AwsRootCertPathSetting,
-        value: FilePath,
+        value: Utf8PathBuf,
     ) -> ConfigSettingResult<()> {
         self.data.aws.root_cert_path = Some(value);
         Ok(())
@@ -341,7 +342,7 @@ impl ConfigSettingAccessor<AwsMapperTimestamp> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<C8yRootCertPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<FilePath> {
+    fn query(&self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<Utf8PathBuf> {
         Ok(self
             .data
             .c8y
@@ -353,7 +354,7 @@ impl ConfigSettingAccessor<C8yRootCertPathSetting> for TEdgeConfig {
     fn update(
         &mut self,
         _setting: C8yRootCertPathSetting,
-        value: FilePath,
+        value: Utf8PathBuf,
     ) -> ConfigSettingResult<()> {
         self.data.c8y.root_cert_path = Some(value);
         Ok(())
@@ -411,6 +412,58 @@ impl ConfigSettingAccessor<MqttClientPortSetting> for TEdgeConfig {
 
     fn unset(&mut self, _setting: MqttClientPortSetting) -> ConfigSettingResult<()> {
         self.data.mqtt.client_port = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<MqttClientCafileSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttClientCafileSetting) -> ConfigSettingResult<Utf8PathBuf> {
+        self.data
+            .mqtt
+            .client_ca_file
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: "mqtt.client.ca_file",
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttClientCafileSetting,
+        ca_file: Utf8PathBuf,
+    ) -> ConfigSettingResult<()> {
+        self.data.mqtt.client_ca_file = Some(ca_file);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttClientCafileSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.client_ca_file = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<MqttClientCapathSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttClientCapathSetting) -> ConfigSettingResult<Utf8PathBuf> {
+        self.data
+            .mqtt
+            .client_ca_path
+            .clone()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: "mqtt.client.ca_path",
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttClientCapathSetting,
+        cafile: Utf8PathBuf,
+    ) -> ConfigSettingResult<()> {
+        self.data.mqtt.client_ca_path = Some(cafile);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttClientCapathSetting) -> ConfigSettingResult<()> {
+        self.data.mqtt.client_ca_path = None;
         Ok(())
     }
 }
@@ -587,7 +640,7 @@ impl ConfigSettingAccessor<MqttExternalBindInterfaceSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<MqttExternalCAPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: MqttExternalCAPathSetting) -> ConfigSettingResult<FilePath> {
+    fn query(&self, _setting: MqttExternalCAPathSetting) -> ConfigSettingResult<Utf8PathBuf> {
         self.data
             .mqtt
             .external_capath
@@ -600,7 +653,7 @@ impl ConfigSettingAccessor<MqttExternalCAPathSetting> for TEdgeConfig {
     fn update(
         &mut self,
         _setting: MqttExternalCAPathSetting,
-        value: FilePath,
+        value: Utf8PathBuf,
     ) -> ConfigSettingResult<()> {
         self.data.mqtt.external_capath = Some(value);
         Ok(())
@@ -613,7 +666,7 @@ impl ConfigSettingAccessor<MqttExternalCAPathSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<MqttExternalCertfileSetting> for TEdgeConfig {
-    fn query(&self, _setting: MqttExternalCertfileSetting) -> ConfigSettingResult<FilePath> {
+    fn query(&self, _setting: MqttExternalCertfileSetting) -> ConfigSettingResult<Utf8PathBuf> {
         self.data
             .mqtt
             .external_certfile
@@ -626,7 +679,7 @@ impl ConfigSettingAccessor<MqttExternalCertfileSetting> for TEdgeConfig {
     fn update(
         &mut self,
         _setting: MqttExternalCertfileSetting,
-        value: FilePath,
+        value: Utf8PathBuf,
     ) -> ConfigSettingResult<()> {
         self.data.mqtt.external_certfile = Some(value);
         Ok(())
@@ -639,7 +692,7 @@ impl ConfigSettingAccessor<MqttExternalCertfileSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<MqttExternalKeyfileSetting> for TEdgeConfig {
-    fn query(&self, _setting: MqttExternalKeyfileSetting) -> ConfigSettingResult<FilePath> {
+    fn query(&self, _setting: MqttExternalKeyfileSetting) -> ConfigSettingResult<Utf8PathBuf> {
         self.data
             .mqtt
             .external_keyfile
@@ -652,7 +705,7 @@ impl ConfigSettingAccessor<MqttExternalKeyfileSetting> for TEdgeConfig {
     fn update(
         &mut self,
         _setting: MqttExternalKeyfileSetting,
-        value: FilePath,
+        value: Utf8PathBuf,
     ) -> ConfigSettingResult<()> {
         self.data.mqtt.external_keyfile = Some(value);
         Ok(())
@@ -713,7 +766,7 @@ where
 }
 
 impl ConfigSettingAccessor<TmpPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: TmpPathSetting) -> ConfigSettingResult<FilePath> {
+    fn query(&self, _setting: TmpPathSetting) -> ConfigSettingResult<Utf8PathBuf> {
         Ok(self
             .data
             .tmp
@@ -722,7 +775,7 @@ impl ConfigSettingAccessor<TmpPathSetting> for TEdgeConfig {
             .unwrap_or_else(|| self.config_defaults.default_tmp_path.clone()))
     }
 
-    fn update(&mut self, _setting: TmpPathSetting, value: FilePath) -> ConfigSettingResult<()> {
+    fn update(&mut self, _setting: TmpPathSetting, value: Utf8PathBuf) -> ConfigSettingResult<()> {
         self.data.tmp.dir_path = Some(value);
         Ok(())
     }
@@ -734,7 +787,7 @@ impl ConfigSettingAccessor<TmpPathSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<LogPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: LogPathSetting) -> ConfigSettingResult<FilePath> {
+    fn query(&self, _setting: LogPathSetting) -> ConfigSettingResult<Utf8PathBuf> {
         Ok(self
             .data
             .logs
@@ -743,7 +796,7 @@ impl ConfigSettingAccessor<LogPathSetting> for TEdgeConfig {
             .unwrap_or_else(|| self.config_defaults.default_logs_path.clone()))
     }
 
-    fn update(&mut self, _setting: LogPathSetting, value: FilePath) -> ConfigSettingResult<()> {
+    fn update(&mut self, _setting: LogPathSetting, value: Utf8PathBuf) -> ConfigSettingResult<()> {
         self.data.logs.dir_path = Some(value);
         Ok(())
     }
@@ -755,7 +808,7 @@ impl ConfigSettingAccessor<LogPathSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<RunPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: RunPathSetting) -> ConfigSettingResult<FilePath> {
+    fn query(&self, _setting: RunPathSetting) -> ConfigSettingResult<Utf8PathBuf> {
         Ok(self
             .data
             .run
@@ -764,7 +817,7 @@ impl ConfigSettingAccessor<RunPathSetting> for TEdgeConfig {
             .unwrap_or_else(|| self.config_defaults.default_run_path.clone()))
     }
 
-    fn update(&mut self, _setting: RunPathSetting, value: FilePath) -> ConfigSettingResult<()> {
+    fn update(&mut self, _setting: RunPathSetting, value: Utf8PathBuf) -> ConfigSettingResult<()> {
         self.data.run.dir_path = Some(value);
         Ok(())
     }
@@ -776,7 +829,7 @@ impl ConfigSettingAccessor<RunPathSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<DataPathSetting> for TEdgeConfig {
-    fn query(&self, _setting: DataPathSetting) -> ConfigSettingResult<FilePath> {
+    fn query(&self, _setting: DataPathSetting) -> ConfigSettingResult<Utf8PathBuf> {
         Ok(self
             .data
             .data
@@ -785,7 +838,7 @@ impl ConfigSettingAccessor<DataPathSetting> for TEdgeConfig {
             .unwrap_or_else(|| self.config_defaults.default_data_path.clone()))
     }
 
-    fn update(&mut self, _setting: DataPathSetting, value: FilePath) -> ConfigSettingResult<()> {
+    fn update(&mut self, _setting: DataPathSetting, value: Utf8PathBuf) -> ConfigSettingResult<()> {
         self.data.data.dir_path = Some(value);
         Ok(())
     }

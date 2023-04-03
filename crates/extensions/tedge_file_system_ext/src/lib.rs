@@ -7,15 +7,12 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
-use tedge_actors::MessageBox;
 use tedge_actors::MessageSource;
-use tedge_actors::NoMessage;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_utils::notify::FsEvent;
 use tedge_utils::notify::NotifyStream;
-use tokio::sync::mpsc::Receiver;
 use try_traits::Infallible;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -33,6 +30,10 @@ pub struct FsWatchMessageBox {
 }
 
 impl FsWatchMessageBox {
+    fn get_watch_dirs(&self) -> &Vec<(PathBuf, DynSender<FsWatchEvent>)> {
+        &self.watch_dirs
+    }
+
     async fn send(&mut self, message: FsWatchEvent) -> Result<(), ChannelError> {
         let path = match message.clone() {
             FsWatchEvent::Modified(path) => path,
@@ -56,11 +57,6 @@ impl FsWatchMessageBox {
     async fn recv(&mut self) -> Option<RuntimeRequest> {
         self.signal_receiver.next().await
     }
-}
-
-impl MessageBox for FsWatchMessageBox {
-    type Input = NoMessage;
-    type Output = FsWatchEvent;
 }
 
 pub struct FsWatchActorBuilder {
@@ -98,16 +94,35 @@ impl RuntimeRequestSink for FsWatchActorBuilder {
     }
 }
 
-impl Builder<(FsWatchActor, FsWatchMessageBox)> for FsWatchActorBuilder {
+impl Builder<FsWatchActor> for FsWatchActorBuilder {
     type Error = Infallible;
 
-    fn try_build(self) -> Result<(FsWatchActor, FsWatchMessageBox), Self::Error> {
+    fn try_build(self) -> Result<FsWatchActor, Self::Error> {
         Ok(self.build())
     }
 
-    fn build(self) -> (FsWatchActor, FsWatchMessageBox) {
+    fn build(self) -> FsWatchActor {
+        let messages = FsWatchMessageBox {
+            watch_dirs: self.watch_dirs,
+            signal_receiver: self.signal_receiver,
+        };
+
+        FsWatchActor { messages }
+    }
+}
+pub struct FsWatchActor {
+    messages: FsWatchMessageBox,
+}
+
+#[async_trait]
+impl Actor for FsWatchActor {
+    fn name(&self) -> &str {
+        "FsWatcher"
+    }
+
+    async fn run(&mut self) -> Result<(), RuntimeError> {
         let mut fs_notify = NotifyStream::try_default().unwrap();
-        for (watch_path, _) in self.watch_dirs.iter() {
+        for (watch_path, _) in self.messages.get_watch_dirs().iter() {
             fs_notify
                 .add_watcher(
                     watch_path,
@@ -121,35 +136,10 @@ impl Builder<(FsWatchActor, FsWatchMessageBox)> for FsWatchActorBuilder {
                 .unwrap();
         }
 
-        let fs_event_actor = FsWatchActor {
-            fs_notify_receiver: fs_notify.rx,
-        };
-
-        let mailbox = FsWatchMessageBox {
-            watch_dirs: self.watch_dirs,
-            signal_receiver: self.signal_receiver,
-        };
-
-        (fs_event_actor, mailbox)
-    }
-}
-pub struct FsWatchActor {
-    fs_notify_receiver: Receiver<(PathBuf, FsEvent)>,
-}
-
-#[async_trait]
-impl Actor for FsWatchActor {
-    type MessageBox = FsWatchMessageBox;
-
-    fn name(&self) -> &str {
-        "FsWatcher"
-    }
-
-    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
         loop {
             tokio::select! {
-                Some(RuntimeRequest::Shutdown) = messages.recv() => return Err(ChannelError::ReceiveError().into()),
-                Some((path, fs_event)) = self.fs_notify_receiver.recv() => {
+                Some(RuntimeRequest::Shutdown) = self.messages.recv() => return Err(ChannelError::ReceiveError().into()),
+                Some((path, fs_event)) = fs_notify.rx.recv() => {
                     let output = match fs_event {
                         FsEvent::Modified => FsWatchEvent::Modified(path),
                         FsEvent::FileCreated => FsWatchEvent::FileCreated(path),
@@ -157,10 +147,62 @@ impl Actor for FsWatchActor {
                         FsEvent::DirectoryCreated => FsWatchEvent::DirectoryCreated(path),
                         FsEvent::DirectoryDeleted => FsWatchEvent::DirectoryDeleted(path),
                     };
-                    messages.send(output).await?;
+                    self.messages.send(output).await?;
                 }
                 else => return Err(ChannelError::ReceiveError().into())
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use crate::FsWatchActorBuilder;
+    use crate::FsWatchEvent;
+    use tedge_actors::test_helpers::MessageReceiverExt;
+    use tedge_actors::Actor;
+    use tedge_actors::Builder;
+    use tedge_actors::DynError;
+    use tedge_actors::MessageSink;
+    use tedge_actors::MessageSource;
+    use tedge_actors::NoMessage;
+    use tedge_actors::SimpleMessageBoxBuilder;
+    use tedge_test_utils::fs::TempTedgeDir;
+
+    const TEST_TIMEOUT: Duration = Duration::from_secs(5);
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_fs_events() -> Result<(), DynError> {
+        let ttd = TempTedgeDir::new();
+        let mut fs_actor_builder = FsWatchActorBuilder::new();
+        let client_builder: SimpleMessageBoxBuilder<FsWatchEvent, NoMessage> =
+            SimpleMessageBoxBuilder::new("FS Client", 5);
+
+        fs_actor_builder.register_peer(ttd.to_path_buf(), client_builder.get_sender());
+
+        let mut actor = fs_actor_builder.build();
+        let client_box = client_builder.build();
+
+        tokio::spawn(async move { actor.run().await });
+
+        // FIXME One has to wait for the actor actually launched before updating the file system.
+        //       - Do we need some message sent by the actors to say that are ready?
+        //       - Do we need a more sophisticated actor that list the existing files on start?
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        ttd.file("file_a");
+        ttd.dir("dir_b").file("file_b");
+
+        client_box
+            .with_timeout(TEST_TIMEOUT)
+            .assert_received_unordered([
+                FsWatchEvent::Modified(ttd.to_path_buf().join("file_a")),
+                FsWatchEvent::DirectoryCreated(ttd.to_path_buf().join("dir_b")),
+                FsWatchEvent::Modified(ttd.to_path_buf().join("dir_b").join("file_b")),
+            ])
+            .await;
+
+        Ok(())
     }
 }

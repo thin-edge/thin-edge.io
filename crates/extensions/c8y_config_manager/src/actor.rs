@@ -10,6 +10,7 @@ use super::upload::ConfigUploadManager;
 use super::upload::UploadConfigFileStatusMessage;
 use super::ConfigManagerConfig;
 use super::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
+use crate::child_device::InvalidChildDeviceTopicError;
 use async_trait::async_trait;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
@@ -23,13 +24,11 @@ use tedge_actors::Actor;
 use tedge_actors::ChannelError;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
-use tedge_actors::MessageBox;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
 use tedge_actors::WrappedInput;
-use tedge_api::health::health_status_up_message;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -47,10 +46,11 @@ pub struct ConfigManagerActor {
     config: ConfigManagerConfig,
     config_upload_manager: ConfigUploadManager,
     config_download_manager: ConfigDownloadManager,
+    messages: ConfigManagerMessageBox,
 }
 
 impl ConfigManagerActor {
-    pub fn new(config: ConfigManagerConfig) -> Self {
+    pub fn new(config: ConfigManagerConfig, messages: ConfigManagerMessageBox) -> Self {
         let config_upload_manager = ConfigUploadManager::new(config.clone());
 
         let config_download_manager = ConfigDownloadManager::new(config.clone());
@@ -59,26 +59,22 @@ impl ConfigManagerActor {
             config,
             config_upload_manager,
             config_download_manager,
+            messages,
         }
     }
 
     pub async fn process_mqtt_message(
         &mut self,
         message: MqttMessage,
-        message_box: &mut ConfigManagerMessageBox,
     ) -> Result<(), ConfigManagementError> {
-        if self.config.health_check_topics.accept(&message) {
-            let message = health_status_up_message("c8y-configuration-plugin");
-            message_box.send(message.into()).await?;
-            return Ok(());
+        if self.config.c8y_request_topics.accept(&message) {
+            self.process_smartrest_message(message).await?;
         } else if self.config.config_snapshot_response_topics.accept(&message) {
-            self.handle_child_device_config_operation_response(&message, message_box)
+            self.handle_child_device_config_operation_response(&message)
                 .await?;
         } else if self.config.config_update_response_topics.accept(&message) {
-            self.handle_child_device_config_operation_response(&message, message_box)
+            self.handle_child_device_config_operation_response(&message)
                 .await?;
-        } else if self.config.c8y_request_topics.accept(&message) {
-            self.process_smartrest_message(message, message_box).await?;
         } else {
             error!(
                 "Received unexpected message on topic: {}",
@@ -91,7 +87,6 @@ impl ConfigManagerActor {
     pub async fn process_smartrest_message(
         &mut self,
         message: MqttMessage,
-        message_box: &mut ConfigManagerMessageBox,
     ) -> Result<(), ConfigManagementError> {
         let payload = message.payload_str()?;
         for smartrest_message in payload.split('\n') {
@@ -106,7 +101,10 @@ impl ConfigManagerActor {
                     if let Ok(config_download_request) = maybe_config_download_request {
                         if let Err(err) = self
                             .config_download_manager
-                            .handle_config_download_request(config_download_request, message_box)
+                            .handle_config_download_request(
+                                config_download_request,
+                                &mut self.messages,
+                            )
                             .await
                         {
                             Self::fail_config_operation_in_c8y(
@@ -114,7 +112,7 @@ impl ConfigManagerActor {
                                 None,
                                 ActiveOperationState::Pending,
                                 format!("Failed due to {}", err),
-                                message_box,
+                                &mut self.messages,
                             )
                             .await?;
                         }
@@ -135,7 +133,7 @@ impl ConfigManagerActor {
                         // handle the config file upload request
                         if let Err(err) = self
                             .config_upload_manager
-                            .handle_config_upload_request(config_upload_request, message_box)
+                            .handle_config_upload_request(config_upload_request, &mut self.messages)
                             .await
                         {
                             Self::fail_config_operation_in_c8y(
@@ -143,7 +141,7 @@ impl ConfigManagerActor {
                                 None,
                                 ActiveOperationState::Pending,
                                 format!("Failed due to {}", err),
-                                message_box,
+                                &mut self.messages,
                             )
                             .await?;
                         }
@@ -169,7 +167,6 @@ impl ConfigManagerActor {
     pub async fn handle_child_device_config_operation_response(
         &mut self,
         message: &MqttMessage,
-        message_box: &mut ConfigManagerMessageBox,
     ) -> Result<(), ConfigManagementError> {
         match ConfigOperationResponse::try_from(message) {
             Ok(config_response) => {
@@ -178,7 +175,7 @@ impl ConfigManagerActor {
                         self.config_download_manager
                             .handle_child_device_config_update_response(
                                 &config_response,
-                                message_box,
+                                &mut self.messages,
                             )
                             .await?
                     }
@@ -186,14 +183,14 @@ impl ConfigManagerActor {
                         self.config_upload_manager
                             .handle_child_device_config_snapshot_response(
                                 &config_response,
-                                message_box,
+                                &mut self.messages,
                             )
                             .await?
                     }
                 };
 
                 for smartrest_response in smartrest_responses {
-                    message_box.send(smartrest_response.into()).await?
+                    self.messages.send(smartrest_response.into()).await?
                 }
 
                 Ok(())
@@ -207,7 +204,7 @@ impl ConfigManagerActor {
                     Some(child_id),
                     ActiveOperationState::Pending,
                     err.to_string(),
-                    message_box,
+                    &mut self.messages,
                 )
                 .await
             }
@@ -217,7 +214,6 @@ impl ConfigManagerActor {
     pub async fn process_file_watch_events(
         &mut self,
         event: FsWatchEvent,
-        message_box: &mut ConfigManagerMessageBox,
     ) -> Result<(), ConfigManagementError> {
         let path = match event {
             FsWatchEvent::Modified(path) => path,
@@ -239,14 +235,14 @@ impl ConfigManagerActor {
                 if parent_dir_name.eq("c8y") {
                     let plugin_config = PluginConfig::new(&path);
                     let message = plugin_config.to_supported_config_types_message()?;
-                    message_box.send(message.into()).await?;
+                    self.messages.send(message.into()).await?;
                 } else {
                     // this is a child device
                     let plugin_config = PluginConfig::new(&path);
                     let message = plugin_config.to_supported_config_types_message_for_child(
                         &parent_dir_name.to_string_lossy(),
                     )?;
-                    message_box.send(message.into()).await?;
+                    self.messages.send(message.into()).await?;
                 }
             }
         }
@@ -257,41 +253,34 @@ impl ConfigManagerActor {
     pub async fn process_operation_timeout(
         &mut self,
         timeout: OperationTimeout,
-        message_box: &mut ConfigManagerMessageBox,
     ) -> Result<(), ConfigManagementError> {
         match timeout.event.operation_type {
             ConfigOperation::Snapshot => {
                 self.config_upload_manager
-                    .process_operation_timeout(timeout, message_box)
+                    .process_operation_timeout(timeout, &mut self.messages)
                     .await
             }
             ConfigOperation::Update => {
                 self.config_download_manager
-                    .process_operation_timeout(timeout, message_box)
+                    .process_operation_timeout(timeout, &mut self.messages)
                     .await
             }
         }
     }
 
-    async fn publish_supported_config_types(
-        &mut self,
-        message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<(), ConfigManagementError> {
+    async fn publish_supported_config_types(&mut self) -> Result<(), ConfigManagementError> {
         let message = self
             .config
             .plugin_config
             .to_supported_config_types_message()?;
-        message_box.send(message.into()).await.unwrap();
+        self.messages.send(message.into()).await.unwrap();
         Ok(())
     }
 
-    async fn get_pending_operations_from_cloud(
-        &mut self,
-        message_box: &mut ConfigManagerMessageBox,
-    ) -> Result<(), ConfigManagementError> {
+    async fn get_pending_operations_from_cloud(&mut self) -> Result<(), ConfigManagementError> {
         // Get pending operations
         let message = MqttMessage::new(&C8yTopic::SmartRestResponse.to_topic()?, "500");
-        message_box.send(message.into()).await?;
+        self.messages.send(message.into()).await?;
         Ok(())
     }
 
@@ -356,28 +345,24 @@ impl ConfigManagerActor {
 
 #[async_trait]
 impl Actor for ConfigManagerActor {
-    type MessageBox = ConfigManagerMessageBox;
-
     fn name(&self) -> &str {
         "ConfigManager"
     }
 
-    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
-        self.publish_supported_config_types(&mut messages).await?;
-        self.get_pending_operations_from_cloud(&mut messages)
-            .await?;
+    async fn run(&mut self) -> Result<(), RuntimeError> {
+        self.publish_supported_config_types().await?;
+        self.get_pending_operations_from_cloud().await?;
 
-        while let Some(event) = messages.recv().await {
+        while let Some(event) = self.messages.recv().await {
             match event {
                 ConfigInput::MqttMessage(message) => {
-                    self.process_mqtt_message(message, &mut messages).await?;
+                    self.process_mqtt_message(message).await?;
                 }
                 ConfigInput::FsWatchEvent(event) => {
-                    self.process_file_watch_events(event, &mut messages).await?;
+                    self.process_file_watch_events(event).await?;
                 }
                 ConfigInput::OperationTimeout(timeout) => {
-                    self.process_operation_timeout(timeout, &mut messages)
-                        .await?;
+                    self.process_operation_timeout(timeout).await?;
                 }
             }
         }
@@ -431,11 +416,6 @@ impl MessageReceiver<ConfigInput> for ConfigManagerMessageBox {
     }
 }
 
-impl MessageBox for ConfigManagerMessageBox {
-    type Input = ConfigInput;
-    type Output = MqttMessage;
-}
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum ConfigOperation {
     Snapshot,
@@ -443,7 +423,7 @@ pub enum ConfigOperation {
 }
 
 impl TryFrom<&MqttMessage> for ConfigOperation {
-    type Error = ConfigManagementError;
+    type Error = InvalidChildDeviceTopicError;
 
     fn try_from(message: &MqttMessage) -> Result<Self, Self::Error> {
         let operation_name = get_operation_name_from_child_topic(&message.topic.name)?;
@@ -453,7 +433,7 @@ impl TryFrom<&MqttMessage> for ConfigOperation {
         } else if operation_name == "config_update" {
             Ok(Self::Update)
         } else {
-            Err(ConfigManagementError::InvalidChildDeviceTopic {
+            Err(InvalidChildDeviceTopicError {
                 topic: message.topic.name.clone(),
             })
         }

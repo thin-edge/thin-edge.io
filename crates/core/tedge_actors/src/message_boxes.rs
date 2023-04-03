@@ -73,10 +73,7 @@
 //! each [Actor](crate::Actor) is free to choose its own [MessageBox](crate::MessageBox) implementation:
 //!
 //! ```no_run
-//! # use crate::tedge_actors::MessageBox;
 //! trait Actor {
-//!     /// Type of message box used by this actor
-//!     type MessageBox: MessageBox;
 //! }
 //! ```
 //!
@@ -104,22 +101,6 @@ use futures::channel::mpsc;
 use futures::StreamExt;
 use log::info;
 use std::fmt::Debug;
-
-/// A trait to define the interactions with a message box
-///
-pub trait MessageBox: 'static + Sized + Send + Sync {
-    /// Type of input messages the actor consumes
-    type Input: Message;
-
-    /// Type of output messages the actor produces
-    type Output: Message;
-
-    // TODO: add a method aimed to build the box for testing purpose
-    //       Without this its hard to relate the Input and Output messages of the box
-    //       Currently we have on interface to a logger not a message box!
-    // Build a message box along 2 channels to send and receive messages to and from the box
-    // fn channel(name: &str, capacity: usize) -> ((DynSender<Self::Input>, DynReceiver<Self::Output>), Self);
-}
 
 /// Either a message or a [RuntimeRequest]
 pub enum WrappedInput<Input> {
@@ -251,17 +232,6 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
             output_sender,
         }
     }
-
-    pub async fn send(&mut self, message: Output) -> Result<(), ChannelError> {
-        self.output_sender.send(message).await
-    }
-
-    /// Close the sending channel of this message box.
-    ///
-    /// This makes the receiving end aware that no more message will be sent.
-    pub fn close_output(&mut self) {
-        self.output_sender.close_sender()
-    }
 }
 
 #[async_trait]
@@ -276,6 +246,21 @@ impl<Input: Message, Output: Message> MessageReceiver<Input> for SimpleMessageBo
 
     async fn recv(&mut self) -> Option<Input> {
         self.input_receiver.recv().await
+    }
+}
+
+#[async_trait]
+impl<Input: Message, Output: Message> Sender<Output> for SimpleMessageBox<Input, Output> {
+    async fn send(&mut self, message: Output) -> Result<(), ChannelError> {
+        self.output_sender.send(message).await
+    }
+
+    fn sender_clone(&self) -> DynSender<Output> {
+        self.output_sender.sender_clone()
+    }
+
+    fn close_sender(&mut self) {
+        self.output_sender.close_sender()
     }
 }
 
@@ -326,11 +311,6 @@ impl<Input: Send> MessageReceiver<Input> for CombinedReceiver<Input> {
             _ => None,
         }
     }
-}
-
-impl<Input: Message, Output: Message> MessageBox for SimpleMessageBox<Input, Output> {
-    type Input = Input;
-    type Output = Output;
 }
 
 /// A message box for a request-response server
@@ -414,13 +394,6 @@ impl<Request: Message, Response: Message> ConcurrentServerMessageBox<Request, Re
     }
 }
 
-impl<Request: Message, Response: Message> MessageBox
-    for ConcurrentServerMessageBox<Request, Response>
-{
-    type Input = (ClientId, Request);
-    type Output = (ClientId, Response);
-}
-
 /// Client side handler of requests/responses sent to an actor
 ///
 /// Note that this message box sends requests and receive responses.
@@ -449,9 +422,4 @@ impl<Request: Message, Response: Message> ClientMessageBox<Request, Response> {
             .await
             .ok_or(ChannelError::ReceiveError())
     }
-}
-
-impl<Request: Message, Response: Message> MessageBox for ClientMessageBox<Request, Response> {
-    type Input = Response;
-    type Output = Request;
 }

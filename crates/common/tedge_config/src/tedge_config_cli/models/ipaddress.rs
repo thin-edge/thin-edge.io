@@ -1,3 +1,4 @@
+use doku::Document;
 use serde::Deserialize;
 use serde::Serialize;
 use std::convert::TryFrom;
@@ -6,7 +7,7 @@ use std::fmt;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Document)]
 pub struct IpAddress(pub IpAddr);
 
 #[derive(thiserror::Error, Debug)]

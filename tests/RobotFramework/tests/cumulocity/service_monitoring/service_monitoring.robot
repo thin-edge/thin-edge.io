@@ -12,7 +12,7 @@ Test Teardown    Get Logs
 
 *** Variables ***
 # Timeout in seconds used to wait for a service to be up. A longer timeout is sometimes needed in case
-# if the service encounters a 'c8y_api::http_proxy: An error occurred while retrieving internal Id, operation will retry in 60 seconds and mapper will reinitialise'
+# if the service encounters a 'c8y_api::http_proxy: An error occurred while retrieving internal Id, operation will retry in 60 seconds and mapper will reinitialize'
 # error on startup, and then waits 60 seconds before trying again. The timeout should be larger than this interval to give the service a chance to retry without
 # failing the test
 ${TIMEOUT}=    ${90}

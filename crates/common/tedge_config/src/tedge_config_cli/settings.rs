@@ -1,5 +1,6 @@
 use crate::tedge_config_cli::config_setting::*;
 use crate::tedge_config_cli::models::*;
+use camino::Utf8PathBuf;
 
 ///
 /// Identifier of the device within the fleet. It must be globally
@@ -47,7 +48,7 @@ impl ConfigSetting for DeviceKeyPathSetting {
     const DESCRIPTION: &'static str =
         "Path to the private key file. Example: /home/user/.tedge/tedge-private-key.pem";
 
-    type Value = FilePath;
+    type Value = Utf8PathBuf;
 }
 
 ///
@@ -64,7 +65,7 @@ impl ConfigSetting for DeviceCertPathSetting {
     const DESCRIPTION: &'static str =
         "Path to the certificate file. Example: /home/user/.tedge/tedge-certificate.crt";
 
-    type Value = FilePath;
+    type Value = Utf8PathBuf;
 }
 
 ///
@@ -99,7 +100,7 @@ impl ConfigSetting for C8yRootCertPathSetting {
         "Example: /home/user/.tedge/c8y-trusted-root-certificates.pem"
     );
 
-    type Value = FilePath;
+    type Value = Utf8PathBuf;
 }
 
 ///
@@ -156,7 +157,7 @@ impl ConfigSetting for AzureRootCertPathSetting {
         "Example: /home/user/.tedge/azure-trusted-root-certificates.pem"
     );
 
-    type Value = FilePath;
+    type Value = Utf8PathBuf;
 }
 
 ///
@@ -229,7 +230,7 @@ impl ConfigSetting for AwsRootCertPathSetting {
         "Example: /home/user/.tedge/aws-trusted-root-certificates.pem"
     );
 
-    type Value = FilePath;
+    type Value = Utf8PathBuf;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -258,6 +259,35 @@ impl ConfigSetting for MqttClientPortSetting {
     );
 
     type Value = Port;
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct MqttClientCafileSetting;
+
+impl ConfigSetting for MqttClientCafileSetting {
+    const KEY: &'static str = "mqtt.client.ca_file";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Path to the CA certificate used by MQTT clients to use when ",
+        "authenticating the MQTT broker."
+    );
+
+    type Value = Utf8PathBuf;
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct MqttClientCapathSetting;
+
+impl ConfigSetting for MqttClientCapathSetting {
+    const KEY: &'static str = "mqtt.client.ca_path";
+
+    const DESCRIPTION: &'static str = concat!(
+        "Path to the directory containing CA certificate used by MQTT clients ",
+        "to use when authenticating the MQTT broker. For a certificate to be ",
+        "used, it needs to have one of the following extensions: .pem/.crt/.cer"
+    );
+
+    type Value = Utf8PathBuf;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -370,7 +400,7 @@ impl ConfigSetting for MqttExternalCAPathSetting {
         "Note: If the capath is not set, then no certificates are required for the external connections."
     );
 
-    type Value = FilePath;
+    type Value = Utf8PathBuf;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -385,7 +415,7 @@ impl ConfigSetting for MqttExternalCertfileSetting {
         "Note: This setting shall be used together with `mqtt.external.keyfile` for external connections."
     );
 
-    type Value = FilePath;
+    type Value = Utf8PathBuf;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -400,7 +430,7 @@ impl ConfigSetting for MqttExternalKeyfileSetting {
         "Note: This setting shall be used together with `mqtt.external.certfile` for external connections."
     );
 
-    type Value = FilePath;
+    type Value = Utf8PathBuf;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -428,7 +458,7 @@ impl ConfigSetting for TmpPathSetting {
         "Example: /tmp"
     );
 
-    type Value = FilePath;
+    type Value = Utf8PathBuf;
 }
 
 pub struct LogPathSetting;
@@ -441,7 +471,7 @@ impl ConfigSetting for LogPathSetting {
         "Example: /var/log"
     );
 
-    type Value = FilePath;
+    type Value = Utf8PathBuf;
 }
 
 pub struct RunPathSetting;
@@ -454,7 +484,7 @@ impl ConfigSetting for RunPathSetting {
         "Example: /run"
     );
 
-    type Value = FilePath;
+    type Value = Utf8PathBuf;
 }
 
 pub struct DataPathSetting;
@@ -467,7 +497,7 @@ impl ConfigSetting for DataPathSetting {
         "Example: /var/tedge"
     );
 
-    type Value = FilePath;
+    type Value = Utf8PathBuf;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

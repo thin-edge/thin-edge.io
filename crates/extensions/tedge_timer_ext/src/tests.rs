@@ -7,6 +7,7 @@ use tedge_actors::Builder;
 use tedge_actors::Message;
 use tedge_actors::MessageReceiver;
 use tedge_actors::NoConfig;
+use tedge_actors::Sender;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
@@ -68,7 +69,7 @@ async fn spawn_timer_actor<T: Message>(
     builder.add_peer(peer);
 
     tokio::spawn(async move {
-        let (actor, actor_box) = builder.build();
-        let _ = actor.run(actor_box).await;
+        let mut actor = builder.build();
+        let _ = actor.run().await;
     });
 }

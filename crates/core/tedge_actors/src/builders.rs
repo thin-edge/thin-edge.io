@@ -341,69 +341,45 @@ impl<S: Server, K> ServerActorBuilder<S, K> {
 
 impl<S: Server> ServerActorBuilder<S, Sequential> {
     pub async fn run(self) -> Result<(), RuntimeError> {
-        let actor = ServerActor::new(self.server);
         let messages = self.box_builder.build();
+        let mut actor = ServerActor::new(self.server, messages);
 
-        actor.run(messages).await
+        actor.run().await
     }
 }
 
 impl<S: Server + Clone> ServerActorBuilder<S, Concurrent> {
     pub async fn run(self) -> Result<(), RuntimeError> {
-        let actor = ConcurrentServerActor::new(self.server);
         let messages = self.box_builder.build();
+        let mut actor = ConcurrentServerActor::new(self.server, messages);
 
-        actor.run(messages).await
+        actor.run().await
     }
 }
 
-impl<S: Server> Builder<(ServerActor<S>, ServerMessageBox<S::Request, S::Response>)>
-    for ServerActorBuilder<S, Sequential>
-{
+impl<S: Server> Builder<ServerActor<S>> for ServerActorBuilder<S, Sequential> {
     type Error = Infallible;
 
-    fn try_build(
-        self,
-    ) -> Result<(ServerActor<S>, ServerMessageBox<S::Request, S::Response>), Self::Error> {
+    fn try_build(self) -> Result<ServerActor<S>, Self::Error> {
         Ok(self.build())
     }
 
-    fn build(self) -> (ServerActor<S>, ServerMessageBox<S::Request, S::Response>) {
-        let actor = ServerActor::new(self.server);
+    fn build(self) -> ServerActor<S> {
         let actor_box = self.box_builder.build();
-        (actor, actor_box)
+        ServerActor::new(self.server, actor_box)
     }
 }
 
-impl<S: Server + Clone>
-    Builder<(
-        ConcurrentServerActor<S>,
-        ConcurrentServerMessageBox<S::Request, S::Response>,
-    )> for ServerActorBuilder<S, Concurrent>
-{
+impl<S: Server + Clone> Builder<ConcurrentServerActor<S>> for ServerActorBuilder<S, Concurrent> {
     type Error = Infallible;
 
-    fn try_build(
-        self,
-    ) -> Result<
-        (
-            ConcurrentServerActor<S>,
-            ConcurrentServerMessageBox<S::Request, S::Response>,
-        ),
-        Self::Error,
-    > {
+    fn try_build(self) -> Result<ConcurrentServerActor<S>, Self::Error> {
         Ok(self.build())
     }
 
-    fn build(
-        self,
-    ) -> (
-        ConcurrentServerActor<S>,
-        ConcurrentServerMessageBox<S::Request, S::Response>,
-    ) {
-        let actor = ConcurrentServerActor::new(self.server);
+    fn build(self) -> ConcurrentServerActor<S> {
         let actor_box = self.box_builder.build();
-        (actor, actor_box)
+        ConcurrentServerActor::new(self.server, actor_box)
     }
 }
 

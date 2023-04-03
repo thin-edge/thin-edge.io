@@ -1,11 +1,10 @@
-use crate::smartrest::error::SmartRestSerializerError;
 use tedge_api::alarm::AlarmSeverity;
 use tedge_api::alarm::ThinEdgeAlarm;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
 /// Converts from thin-edge alarm to C8Y alarm SmartREST message
-pub fn serialize_alarm(alarm: ThinEdgeAlarm) -> Result<String, SmartRestSerializerError> {
+pub fn serialize_alarm(alarm: ThinEdgeAlarm) -> Result<String, time::error::Format> {
     match alarm.data {
         None => Ok(format!("306,{}", alarm.name)),
         Some(alarm_data) => {

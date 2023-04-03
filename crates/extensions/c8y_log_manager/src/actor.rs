@@ -9,6 +9,7 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
+use c8y_api::utils::bridge::is_c8y_bridge_up;
 use c8y_api::OffsetDateTime;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use easy_reader::EasyReader;
@@ -20,19 +21,14 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
-use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
-use tedge_actors::MessageBox;
 use tedge_actors::MessageReceiver;
+use tedge_actors::NoMessage;
 use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
-use tedge_actors::WrappedInput;
-use tedge_api::health::health_check_topics;
-use tedge_api::health::health_status_up_message;
+use tedge_actors::SimpleMessageBox;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::paths::PathsError;
 
 use super::error::LogRetrievalError;
@@ -44,9 +40,9 @@ fan_in_message_type!(LogOutput[MqttMessage]: Debug);
 
 pub struct LogManagerActor {
     config: LogManagerConfig,
-    health_check_topics: TopicFilter,
     mqtt_publisher: LoggingSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
+    messages: SimpleMessageBox<LogInput, NoMessage>,
 }
 
 impl LogManagerActor {
@@ -54,14 +50,13 @@ impl LogManagerActor {
         config: LogManagerConfig,
         mqtt_publisher: LoggingSender<MqttMessage>,
         http_proxy: C8YHttpProxy,
+        messages: SimpleMessageBox<LogInput, NoMessage>,
     ) -> Self {
-        let health_check_topics = health_check_topics("c8y-log-plugin");
-
         Self {
             config,
-            health_check_topics,
             mqtt_publisher,
             http_proxy,
+            messages,
         }
     }
 
@@ -69,8 +64,9 @@ impl LogManagerActor {
         &mut self,
         message: MqttMessage,
     ) -> Result<(), anyhow::Error> {
-        if self.health_check_topics.accept(&message) {
-            self.send_health_status().await?;
+        if is_c8y_bridge_up(&message) {
+            self.reload_supported_log_types().await?;
+            self.get_pending_operations_from_cloud().await?;
         } else if let Ok(payload) = message.payload_str() {
             for smartrest_message in payload.split('\n') {
                 let result = match smartrest_message.split(',').next().unwrap_or_default() {
@@ -317,7 +313,9 @@ impl LogManagerActor {
                 path: path.as_os_str().into(),
             })?
             .eq("c8y-log-plugin.toml")
-        {}
+        {
+            self.reload_supported_log_types().await?;
+        }
 
         Ok(())
     }
@@ -343,27 +341,19 @@ impl LogManagerActor {
         self.mqtt_publisher.send(msg).await?;
         Ok(())
     }
-
-    async fn send_health_status(&mut self) -> Result<(), anyhow::Error> {
-        let message = health_status_up_message("c8y-log-plugin");
-        self.mqtt_publisher.send(message).await?;
-        Ok(())
-    }
 }
 
 #[async_trait]
 impl Actor for LogManagerActor {
-    type MessageBox = LogManagerMessageBox;
-
     fn name(&self) -> &str {
         "LogManager"
     }
 
-    async fn run(mut self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
+    async fn run(&mut self) -> Result<(), RuntimeError> {
         self.reload_supported_log_types().await.unwrap();
         self.get_pending_operations_from_cloud().await.unwrap();
 
-        while let Some(event) = messages.recv().await {
+        while let Some(event) = self.messages.recv().await {
             match event {
                 LogInput::MqttMessage(message) => {
                     self.process_mqtt_message(message).await.unwrap();
@@ -374,45 +364,6 @@ impl Actor for LogManagerActor {
             }
         }
         Ok(())
-    }
-}
-
-// FIXME: Consider to use a SimpleMessageBox<LogInput,MqttMessage>
-pub struct LogManagerMessageBox {
-    input_receiver: LoggingReceiver<LogInput>,
-    #[allow(dead_code)]
-    mqtt_requests: LoggingSender<MqttMessage>,
-}
-
-impl LogManagerMessageBox {
-    pub fn new(
-        input_receiver: LoggingReceiver<LogInput>,
-        mqtt_con: LoggingSender<MqttMessage>,
-    ) -> LogManagerMessageBox {
-        LogManagerMessageBox {
-            input_receiver,
-            mqtt_requests: mqtt_con,
-        }
-    }
-}
-
-impl MessageBox for LogManagerMessageBox {
-    type Input = LogInput;
-    type Output = LogOutput;
-}
-
-#[async_trait]
-impl MessageReceiver<LogInput> for LogManagerMessageBox {
-    async fn try_recv(&mut self) -> Result<Option<LogInput>, RuntimeRequest> {
-        self.input_receiver.try_recv().await
-    }
-
-    async fn recv_message(&mut self) -> Option<WrappedInput<LogInput>> {
-        self.input_receiver.recv_message().await
-    }
-
-    async fn recv(&mut self) -> Option<LogInput> {
-        self.input_receiver.recv().await
     }
 }
 
@@ -452,5 +403,410 @@ impl TryIntoOperationStatusMessage for LogfileRequest {
             failure_reason,
         )
         .to_smartrest()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+    use std::path::Path;
+    use std::path::PathBuf;
+
+    use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
+    use c8y_http_proxy::messages::C8YRestRequest;
+    use c8y_http_proxy::messages::C8YRestResponse;
+    use c8y_http_proxy::messages::C8YRestResult;
+    use c8y_http_proxy::messages::UploadLogBinary;
+    use filetime::set_file_mtime;
+    use filetime::FileTime;
+    use tedge_actors::Actor;
+    use tedge_actors::Builder;
+    use tedge_actors::MessageReceiver;
+    use tedge_actors::NoMessage;
+    use tedge_actors::Sender;
+    use tedge_actors::SimpleMessageBox;
+    use tedge_actors::SimpleMessageBoxBuilder;
+    use tedge_file_system_ext::FsWatchEvent;
+    use tedge_mqtt_ext::MqttMessage;
+    use tedge_test_utils::fs::TempTedgeDir;
+    use time::macros::datetime;
+
+    use super::LogManagerActor;
+    use crate::config::LogPluginConfig;
+    use crate::LogManagerBuilder;
+    use crate::LogManagerConfig;
+    use crate::Topic;
+
+    /// Preparing a temp directory containing four files, with
+    /// two types { type_one, type_two }:
+    ///
+    ///     file_a, type_one
+    ///     file_b, type_one
+    ///     file_c, type_two
+    ///     file_d, type_one
+    ///
+    /// each file has the following modified "file update" timestamp:
+    ///     file_a has timestamp: 1970/01/01 00:00:02
+    ///     file_b has timestamp: 1970/01/01 00:00:03
+    ///     file_c has timestamp: 1970/01/01 00:00:11
+    ///     file_d has timestamp: (current, not modified)
+    fn prepare() -> Result<(TempTedgeDir, LogPluginConfig), anyhow::Error> {
+        let tempdir = TempTedgeDir::new();
+        let tempdir_path = tempdir
+            .path()
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("temp dir not created"))?;
+
+        std::fs::File::create(format!("{tempdir_path}/file_a"))?;
+        std::fs::File::create(format!("{tempdir_path}/file_b"))?;
+        tempdir.file("file_c").with_raw_content("Some content");
+        std::fs::File::create(format!("{tempdir_path}/file_d"))?;
+
+        let new_mtime = FileTime::from_unix_time(2, 0);
+        set_file_mtime(format!("{tempdir_path}/file_a"), new_mtime).unwrap();
+
+        let new_mtime = FileTime::from_unix_time(3, 0);
+        set_file_mtime(format!("{tempdir_path}/file_b"), new_mtime).unwrap();
+
+        let new_mtime = FileTime::from_unix_time(11, 0);
+        set_file_mtime(format!("{tempdir_path}/file_c"), new_mtime).unwrap();
+
+        tempdir
+            .file("c8y-log-plugin.toml")
+            .with_raw_content(&format!(
+                r#"files = [
+            {{ type = "type_one", path = "{tempdir_path}/file_a" }},
+            {{ type = "type_one", path = "{tempdir_path}/file_b" }},
+            {{ type = "type_two", path = "{tempdir_path}/file_c" }},
+            {{ type = "type_one", path = "{tempdir_path}/file_d" }},
+        ]"#
+            ));
+
+        let logs_config = LogPluginConfig::new(&tempdir.path().join("c8y-log-plugin.toml"));
+
+        Ok((tempdir, logs_config))
+    }
+
+    fn build_smartrest_log_request_object(
+        log_type: String,
+        needle: Option<String>,
+        lines: usize,
+    ) -> SmartRestLogRequest {
+        SmartRestLogRequest {
+            message_id: "522".to_string(),
+            device: "device".to_string(),
+            log_type,
+            date_from: datetime!(1970-01-01 00:00:03 +00:00),
+            date_to: datetime!(1970-01-01 00:00:00 +00:00), // not used
+            needle,
+            lines,
+        }
+    }
+
+    /// Create a log manager actor builder
+    /// along two boxes to exchange MQTT and HTTP messages with the log actor
+    #[allow(clippy::type_complexity)]
+    fn new_log_manager_builder(
+        temp_dir: &Path,
+        log_config: LogPluginConfig,
+    ) -> (
+        LogManagerBuilder,
+        SimpleMessageBox<MqttMessage, MqttMessage>,
+        SimpleMessageBox<C8YRestRequest, C8YRestResult>,
+        SimpleMessageBox<NoMessage, FsWatchEvent>,
+    ) {
+        let config = LogManagerConfig {
+            config_dir: temp_dir.to_path_buf(),
+            tmp_dir: temp_dir.to_path_buf(),
+            device_id: "SUT".to_string(),
+            mqtt_host: "127.0.0.1".to_string(),
+            mqtt_port: 1883,
+            c8y_url: "mytenant.c8y.com".try_into().unwrap(),
+            tedge_http_host: "127.0.0.1".try_into().unwrap(),
+            tedge_http_port: 80,
+            plugin_config_path: temp_dir.join("c8y-log-plugin.toml"),
+            plugin_config: log_config,
+        };
+
+        let mut log_builder = LogManagerBuilder::new(config);
+
+        let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
+            SimpleMessageBoxBuilder::new("MQTT", 5);
+        let mut c8y_proxy_builder: SimpleMessageBoxBuilder<C8YRestRequest, C8YRestResult> =
+            SimpleMessageBoxBuilder::new("C8Y", 1);
+        let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
+            SimpleMessageBoxBuilder::new("FS", 5);
+
+        log_builder.with_mqtt_connection(&mut mqtt_builder).unwrap();
+        log_builder
+            .with_c8y_http_proxy(&mut c8y_proxy_builder)
+            .unwrap();
+        log_builder
+            .with_fs_connection(&mut fs_watcher_builder)
+            .unwrap();
+
+        (
+            log_builder,
+            mqtt_builder.build(),
+            c8y_proxy_builder.build(),
+            fs_watcher_builder.build(),
+        )
+    }
+
+    /// Create a log manager actor ready for testing
+    fn new_log_manager_actor(temp_dir: &Path, log_config: LogPluginConfig) -> LogManagerActor {
+        let (actor_builder, _, _, _) = new_log_manager_builder(temp_dir, log_config);
+        actor_builder.build()
+    }
+
+    /// Spawn a log manager actor and return 2 boxes to exchange MQTT and HTTP messages with it
+    fn spawn_log_manager_actor(
+        temp_dir: &Path,
+        log_config: LogPluginConfig,
+    ) -> (
+        SimpleMessageBox<MqttMessage, MqttMessage>,
+        SimpleMessageBox<C8YRestRequest, C8YRestResult>,
+        SimpleMessageBox<NoMessage, FsWatchEvent>,
+    ) {
+        let (actor_builder, mqtt, http, fs) = new_log_manager_builder(temp_dir, log_config);
+        let mut actor = actor_builder.build();
+        tokio::spawn(async move { actor.run().await });
+        (mqtt, http, fs)
+    }
+
+    #[test]
+    /// Filter on type = "type_one".
+    /// There are four logs created in tempdir { file_a, file_b, file_c, file_d }
+    /// Of which, { file_a, file_b, file_d } are "type_one"
+    fn test_filter_logs_on_type() {
+        let (tempdir, logs_config) = prepare().unwrap();
+        let tempdir_path = tempdir.path().to_str().unwrap();
+        let smartrest_obj = build_smartrest_log_request_object("type_one".to_string(), None, 1000);
+        let mut actor = new_log_manager_actor(tempdir.path(), logs_config);
+
+        let logs = actor.filter_logs_on_type(&smartrest_obj).unwrap();
+        assert_eq!(
+            logs,
+            vec![
+                PathBuf::from(&format!("{tempdir_path}/file_a")),
+                PathBuf::from(&format!("{tempdir_path}/file_b")),
+                PathBuf::from(&format!("{tempdir_path}/file_d"))
+            ]
+        )
+    }
+
+    #[test]
+    /// Out of logs filtered on type = "type_one", that is: { file_a, file_b, file_d }.
+    /// Only logs filtered on metadata remain, that is { file_b, file_d }.
+    ///
+    /// This is because:
+    ///
+    /// file_a has timestamp: 1970/01/01 00:00:02
+    /// file_b has timestamp: 1970/01/01 00:00:03
+    /// file_d has timestamp: (current, not modified)
+    ///
+    /// The order of the output is { file_d, file_b }, because files are sorted from
+    /// most recent to oldest
+    fn test_filter_logs_path_on_metadata() {
+        let (tempdir, logs_config) = prepare().unwrap();
+        let smartrest_obj = build_smartrest_log_request_object("type_one".to_string(), None, 1000);
+        let mut actor = new_log_manager_actor(tempdir.path(), logs_config);
+
+        let logs = actor.filter_logs_on_type(&smartrest_obj).unwrap();
+        let logs = LogManagerActor::filter_logs_path_on_metadata(&smartrest_obj, logs).unwrap();
+
+        assert_eq!(
+            logs,
+            vec![
+                PathBuf::from(format!("{}/file_d", tempdir.path().to_str().unwrap())),
+                PathBuf::from(format!("{}/file_b", tempdir.path().to_str().unwrap())),
+            ]
+        )
+    }
+
+    #[test]
+    /// Inserting 5 log lines in { file_a }:
+    /// [
+    ///     this is the first line.
+    ///     this is the second line.
+    ///     this is the third line.
+    ///     this is the fourth line.
+    ///     this is the fifth line.
+    /// ]
+    ///
+    /// Requesting back only 4. Note that because we read the logs in reverse order, the first line
+    /// should be omitted. The result should be:
+    /// [
+    ///     this is the second line.
+    ///     this is the third line.
+    ///     this is the fourth line.
+    ///     this is the fifth line.
+    /// ]
+    ///
+    fn test_read_log_content() {
+        let (tempdir, _logs_config) = prepare().unwrap();
+        let path = tempdir.path().to_str().unwrap();
+        let file_path = &format!("{path}/file_a");
+        let mut log_file = std::fs::OpenOptions::new()
+            .append(true)
+            .create(false)
+            .write(true)
+            .open(file_path)
+            .unwrap();
+
+        let data = "this is the first line.\nthis is the second line.\nthis is the third line.\nthis is the forth line.\nthis is the fifth line.";
+
+        log_file.write_all(data.as_bytes()).unwrap();
+
+        let line_counter = 0;
+        let max_lines = 4;
+        let filter_text = None;
+
+        let (line_counter, result) = LogManagerActor::read_log_content(
+            Path::new(file_path),
+            line_counter,
+            max_lines,
+            &filter_text,
+        )
+        .unwrap();
+
+        assert_eq!(line_counter, max_lines);
+        assert_eq!(result, "filename: file_a\nthis is the second line.\nthis is the third line.\nthis is the forth line.\nthis is the fifth line.\n");
+    }
+
+    #[test]
+    /// Inserting 5 lines of logs for each log file { file_a, ..., file_d }.
+    /// Each line contains the text: "this is the { line_number } line of { file_name }
+    /// where line_number { first, second, third, forth, fifth }
+    /// where file_name { file_a, ..., file_d }
+    ///
+    /// Requesting logs for log_type = "type_one", that are older than:
+    /// timestamp: 1970/01/01 00:00:03
+    ///
+    /// These are:
+    /// file_b and file_d
+    ///
+    /// file_d is the newest file, so its logs are read first. then file_b.
+    ///
+    /// Because only 7 lines are requested (and each file has 5 lines), the expedted
+    /// result is:
+    ///
+    /// - all logs from file_d (5)
+    /// - last two logs from file_b (2)
+    fn test_read_log_content_multiple_files() {
+        let (tempdir, logs_config) = prepare().unwrap();
+        let tempdir_path = tempdir.path().to_str().unwrap();
+
+        for (file_name, m_time) in [
+            ("file_a", 2),
+            ("file_b", 3),
+            ("file_c", 11),
+            ("file_d", 100),
+        ] {
+            let file_path = &format!("{tempdir_path}/{file_name}");
+
+            let mut log_file = std::fs::OpenOptions::new()
+                .append(true)
+                .create(false)
+                .write(true)
+                .open(file_path)
+                .unwrap();
+
+            let data = &format!("this is the first line of {file_name}.\nthis is the second line of {file_name}.\nthis is the third line of {file_name}.\nthis is the forth line of {file_name}.\nthis is the fifth line of {file_name}.");
+
+            log_file.write_all(data.as_bytes()).unwrap();
+
+            let new_mtime = FileTime::from_unix_time(m_time, 0);
+            set_file_mtime(file_path, new_mtime).unwrap();
+        }
+
+        let smartrest_obj = build_smartrest_log_request_object("type_one".to_string(), None, 7);
+        let mut actor = new_log_manager_actor(tempdir.path(), logs_config);
+
+        let result = actor.new_read_logs(&smartrest_obj).unwrap();
+        assert_eq!(result, String::from("filename: file_d\nthis is the first line of file_d.\nthis is the second line of file_d.\nthis is the third line of file_d.\nthis is the forth line of file_d.\nthis is the fifth line of file_d.\nfilename: file_b\nthis is the forth line of file_b.\nthis is the fifth line of file_b.\n"))
+    }
+
+    #[tokio::test]
+    async fn log_manager_send_log_types_on_start_and_bridge_up_and_config_update(
+    ) -> Result<(), anyhow::Error> {
+        let (tempdir, logs_config) = prepare()?;
+        let (mut mqtt, _http, mut fs) = spawn_log_manager_actor(tempdir.path(), logs_config);
+
+        let c8y_s_us = Topic::new_unchecked("c8y/s/us");
+        let bridge = Topic::new_unchecked("tedge/health/mosquitto-c8y-bridge");
+
+        assert_eq!(
+            mqtt.recv().await,
+            Some(MqttMessage::new(&c8y_s_us, "118,type_one,type_two"))
+        );
+        assert_eq!(mqtt.recv().await, Some(MqttMessage::new(&c8y_s_us, "500")));
+
+        mqtt.send(MqttMessage::new(&bridge, "1")).await?;
+        assert_eq!(
+            mqtt.recv().await,
+            Some(MqttMessage::new(&c8y_s_us, "118,type_one,type_two"))
+        );
+        assert_eq!(mqtt.recv().await, Some(MqttMessage::new(&c8y_s_us, "500")));
+
+        fs.send(FsWatchEvent::Modified(
+            tempdir.path().join("c8y-log-plugin.toml"),
+        ))
+        .await?;
+        assert_eq!(
+            mqtt.recv().await,
+            Some(MqttMessage::new(&c8y_s_us, "118,type_one,type_two"))
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn log_manager_upload_log_files_on_request() -> Result<(), anyhow::Error> {
+        let (tempdir, logs_config) = prepare()?;
+        let (mut mqtt, mut http, _fs) = spawn_log_manager_actor(tempdir.path(), logs_config);
+
+        let c8y_s_ds = Topic::new_unchecked("c8y/s/ds");
+        let c8y_s_us = Topic::new_unchecked("c8y/s/us");
+
+        // Let's ignore the 2 init messages sent on start
+        assert!(mqtt.recv().await.is_some());
+        assert!(mqtt.recv().await.is_some());
+
+        // When a log request is received
+        let log_request =
+            "522,SUT,type_two,1970-01-01T00:00:00+0000,1970-01-01T00:00:30+0000,,1000";
+        mqtt.send(MqttMessage::new(&c8y_s_ds, log_request)).await?;
+
+        // The log manager notifies C8Y that the request has been received and is processed
+        assert_eq!(
+            mqtt.recv().await,
+            Some(MqttMessage::new(&c8y_s_us, "501,c8y_LogfileRequest\n"))
+        );
+
+        // Then uploads the requested content over HTTP
+        assert_eq!(
+            http.recv().await,
+            Some(C8YRestRequest::UploadLogBinary(UploadLogBinary {
+                log_type: "type_two".to_string(),
+                log_content: "filename: file_c\nSome content\n".to_string(),
+                child_device_id: None
+            }))
+        );
+
+        // C8Y responds with an event id
+        http.send(Ok(C8YRestResponse::EventId("12345".to_string())))
+            .await?;
+
+        // Finally, the log manager uses the event id to notify C8Y that the request has been fully processed
+        assert_eq!(
+            mqtt.recv().await,
+            Some(MqttMessage::new(
+                &c8y_s_us,
+                "503,c8y_LogfileRequest,12345\n"
+            ))
+        );
+
+        Ok(())
     }
 }

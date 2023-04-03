@@ -39,8 +39,14 @@ pub enum FileError {
     #[error("Could not save the file {file:?} to disk. Received error: {from:?}.")]
     FailedToSync { file: PathBuf, from: std::io::Error },
 
-    #[error("No parent dir for {:?}", path)]
-    NoParentDir { path: PathBuf },
+    #[error("The path {0} does not have a parent directory")]
+    NoParentDir(PathBuf),
+
+    #[error("The path {0} does not have a file name")]
+    NoFileName(PathBuf),
+
+    #[error("The path {0} contains non UTF-8 characters in the file name")]
+    InvalidFileName(PathBuf),
 
     #[error(transparent)]
     FromIoError(#[from] std::io::Error),
@@ -94,10 +100,9 @@ pub async fn move_file(
     if !dest_path.exists() {
         if let Some(dir_to) = dest_path.parent() {
             tokio::fs::create_dir_all(dir_to).await?;
+            debug!("Created parent directories for {:?}", dest_path);
         } else {
-            return Err(FileError::NoParentDir {
-                path: dest_path.to_path_buf(),
-            });
+            return Err(FileError::NoParentDir(dest_path.to_path_buf()));
         }
     }
 
@@ -111,6 +116,7 @@ pub async fn move_file(
     };
 
     tokio::fs::rename(src_path, dest_path).await?;
+    debug!("Moved file from {:?} to {:?}", src_path, dest_path);
 
     let file_permissions = if let Some(mode) = original_permission_mode {
         // Use the same file permission as the original one
@@ -121,6 +127,10 @@ pub async fn move_file(
     };
 
     file_permissions.apply(dest_path)?;
+    debug!(
+        "Applied permissions: {:?} to {:?}",
+        file_permissions, dest_path
+    );
 
     Ok(())
 }
@@ -504,8 +514,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file");
         let user = whoami::username();
-        create_file_with_user_group(&file_path.display().to_string(), &user, &user, 0o775, None)
-            .unwrap();
+        create_file_with_user_group(&file_path, &user, &user, 0o775, None).unwrap();
 
         let new_content = "abc";
         overwrite_file(file_path.as_path(), new_content).unwrap();

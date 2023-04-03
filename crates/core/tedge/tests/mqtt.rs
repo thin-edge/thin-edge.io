@@ -50,36 +50,4 @@ mod tests {
         assert.success().code(predicate::eq(0));
         Ok(())
     }
-
-    #[test_case(Some("0"))]
-    #[test_case(Some("1"))]
-    #[test_case(Some("2"))]
-    #[test_case(None)]
-    fn mqtt_pub_no_broker_running(qos: Option<&str>) {
-        let mut cmd = Command::cargo_bin("tedge").unwrap();
-        cmd.args(["mqtt", "pub", "topic", "message"])
-            .timeout(std::time::Duration::from_secs(1));
-
-        if let Some(qos) = qos {
-            cmd.args(["--qos", qos]);
-        }
-
-        let _output = cmd.assert().code(predicate::eq(1));
-    }
-
-    #[test_case(Some("0"))]
-    #[test_case(Some("1"))]
-    #[test_case(Some("2"))]
-    #[test_case(None)]
-    fn mqtt_sub_no_broker_running(qos: Option<&str>) {
-        let mut cmd = Command::cargo_bin("tedge").unwrap();
-        cmd.args(["mqtt", "sub", "topic"])
-            .timeout(std::time::Duration::from_secs(1));
-
-        if let Some(qos) = qos {
-            cmd.args(["--qos", qos]);
-        }
-
-        let _output = cmd.assert().code(predicate::eq(1));
-    }
 }

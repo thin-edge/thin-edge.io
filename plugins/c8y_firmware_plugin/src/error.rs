@@ -1,4 +1,3 @@
-#[allow(clippy::large_enum_variant)]
 #[derive(thiserror::Error, Debug)]
 pub enum FirmwareManagementError {
     #[error("Invalid topic received from child device: {topic}")]

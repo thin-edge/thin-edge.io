@@ -96,7 +96,7 @@ impl DisconnectBridgeCommand {
 
             Err(e) => Err(DisconnectBridgeError::FileOperationFailed(
                 e,
-                bridge_conf_path,
+                bridge_conf_path.into(),
             )),
         }
     }

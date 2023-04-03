@@ -9,6 +9,8 @@ use crate::smartrest::smartrest_serializer::SmartRestSerializer;
 use crate::smartrest::smartrest_serializer::SmartRestSetSupportedOperations;
 use serde::Deserialize;
 
+use super::error::SmartRestSerializerError;
+
 /// Operations are derived by reading files subdirectories per cloud /etc/tedge/operations directory
 /// Each operation is a file name in one of the subdirectories
 /// The file name is the operation name
@@ -126,11 +128,11 @@ impl Operations {
             .collect::<HashSet<String>>()
     }
 
-    pub fn create_smartrest_ops_message(&self) -> Result<String, OperationsError> {
+    pub fn create_smartrest_ops_message(&self) -> Result<String, SmartRestSerializerError> {
         let mut ops = self.get_operations_list();
         ops.sort();
         let ops = ops.iter().map(|op| op as &str).collect::<Vec<&str>>();
-        Ok(SmartRestSetSupportedOperations::new(&ops).to_smartrest()?)
+        SmartRestSetSupportedOperations::new(&ops).to_smartrest()
     }
 }
 

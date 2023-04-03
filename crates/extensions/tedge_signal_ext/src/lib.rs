@@ -14,6 +14,7 @@ use tedge_actors::RuntimeAction;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 
@@ -23,15 +24,17 @@ pub struct SignalActorBuilder {
     box_builder: SimpleMessageBoxBuilder<NoMessage, RuntimeAction>,
 }
 
-impl Builder<(SignalActor, SignalMessageBox)> for SignalActorBuilder {
+impl Builder<SignalActor> for SignalActorBuilder {
     type Error = Infallible;
 
-    fn try_build(self) -> Result<(SignalActor, SignalMessageBox), Self::Error> {
+    fn try_build(self) -> Result<SignalActor, Self::Error> {
         Ok(self.build())
     }
 
-    fn build(self) -> (SignalActor, SignalMessageBox) {
-        (SignalActor, self.box_builder.build())
+    fn build(self) -> SignalActor {
+        SignalActor {
+            messages: self.box_builder.build(),
+        }
     }
 }
 
@@ -47,9 +50,15 @@ impl MessageSource<RuntimeAction, NoConfig> for SignalActorBuilder {
     }
 }
 
-pub struct SignalActor;
+pub struct SignalActor {
+    messages: SignalMessageBox,
+}
 
 impl SignalActor {
+    pub fn new(messages: SignalMessageBox) -> Self {
+        Self { messages }
+    }
+
     pub fn builder() -> SignalActorBuilder {
         let box_builder = SimpleMessageBoxBuilder::new("Signal-Handler", 1);
         SignalActorBuilder { box_builder }
@@ -58,20 +67,18 @@ impl SignalActor {
 
 #[async_trait]
 impl Actor for SignalActor {
-    type MessageBox = SignalMessageBox;
-
     fn name(&self) -> &str {
         "Signal-Handler"
     }
 
-    async fn run(self, mut messages: Self::MessageBox) -> Result<(), RuntimeError> {
+    async fn run(&mut self) -> Result<(), RuntimeError> {
         let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT]).unwrap(); // FIXME
         loop {
             tokio::select! {
-                None = messages.recv() => return Ok(()),
+                None = self.messages.recv() => return Ok(()),
                 Some(signal) = signals.next() => {
                     match signal {
-                        SIGTERM | SIGINT | SIGQUIT => messages.send(RuntimeAction::Shutdown).await?,
+                        SIGTERM | SIGINT | SIGQUIT => self.messages.send(RuntimeAction::Shutdown).await?,
                         _ => unreachable!(),
                     }
                 }

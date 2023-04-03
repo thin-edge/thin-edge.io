@@ -2,6 +2,20 @@ name: hosted-post-merge_version_update
 
 on:
   workflow_dispatch:
+    inputs:
+      bump:
+        description: Type of version bump
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+          - release
+          - rc
+          - beta
+          - alpha
+        required: true
+        default: patch
 
 env:
   CARGO_TERM_COLOR: always
@@ -17,12 +31,18 @@ jobs:
           git config --global user.email "info@thin-edge.io"
           git config --global user.name "Versioneer"
 
-      - name: enable toolchain via github action
-        uses: actions-rs/toolchain@v1
+      - name: Retrieve MSRV from workspace Cargo.toml
+        id: rust_version
+        uses: SebRollen/toml-action@v1.0.2
         with:
-          toolchain: 1.64.0
+          file: Cargo.toml
+          field: "workspace.package.rust-version"
+
+      - name: Enable toolchain via github action
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.rust_version.outputs.value }}
           components: cargo
-          override: true
 
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
@@ -31,19 +51,19 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: install
-          args: --version 0.21.0 cargo-release
+          args: --version 0.24.4 cargo-release
 
       - name: Increment version and tag
         uses: actions-rs/cargo@v1
         with:
           command: release
-          args: patch --no-publish --no-push --no-tag -vv --no-dev-version --no-confirm --execute
+          args: ${{ inputs.bump }} --no-publish --no-push --no-tag -vv --no-confirm --execute
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v4
         with:
-          commit-message: Patch version bump
+          commit-message: ${{ inputs.bump }} version bump
           delete-branch: true
-          title: Patch version bump
-          body: Patch version bump
+          title: ${{ inputs.bump }} version bump
+          body: ${{ inputs.bump }} version bump
           reviewers: rina23q

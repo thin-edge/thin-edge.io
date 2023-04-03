@@ -29,6 +29,7 @@ use tedge_config::DeviceIdSetting;
 use tedge_config::MqttClientHostSetting;
 use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
+use tedge_utils::file::PermissionEntry;
 use time::OffsetDateTime;
 
 use download::Auth;
@@ -516,7 +517,7 @@ impl C8YHttpProxy for JwtAuthHttpProxy {
 
         // Download a file to tmp dir
         let target_path = tmp_dir.join(file_name);
-        let downloader = Downloader::new(target_path.as_path());
+        let downloader = Downloader::new(target_path.as_path(), PermissionEntry::default());
         downloader.download(&download_info).await?;
 
         Ok(downloader.filename().to_path_buf())

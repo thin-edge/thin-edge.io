@@ -4,8 +4,40 @@ use std::convert::TryInto;
 ///
 /// New type to add conversion methods and deduplicate provided templates.
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
-#[serde(transparent)]
+#[serde(from = "FromTomlOrCli")]
 pub struct TemplatesSet(pub Vec<String>);
+
+#[derive(serde::Deserialize)]
+#[serde(from = "String")]
+struct CommaDelimited(Vec<String>);
+
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum FromTomlOrCli {
+    Toml(Vec<String>),
+    Cli(CommaDelimited),
+}
+
+impl From<String> for CommaDelimited {
+    fn from(value: String) -> Self {
+        Self(
+            value
+                .split(',')
+                .map(|s| s.trim().to_owned())
+                .filter(|s| !s.is_empty())
+                .collect(),
+        )
+    }
+}
+
+impl From<FromTomlOrCli> for TemplatesSet {
+    fn from(value: FromTomlOrCli) -> Self {
+        match value {
+            FromTomlOrCli::Toml(entries) => Self(entries),
+            FromTomlOrCli::Cli(CommaDelimited(entries)) => Self(entries),
+        }
+    }
+}
 
 #[derive(thiserror::Error, Debug)]
 #[error("TemplateSet to String conversion failed: {0:?}")]

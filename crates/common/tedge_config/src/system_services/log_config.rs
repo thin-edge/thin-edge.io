@@ -1,11 +1,12 @@
+use camino::Utf8Path;
+
 use crate::system_services::SystemConfig;
 use crate::system_services::SystemServiceError;
-use std::path::PathBuf;
 use std::str::FromStr;
 
 pub fn get_log_level(
     sname: &str,
-    config_dir: PathBuf,
+    config_dir: &Utf8Path,
 ) -> Result<tracing::Level, SystemServiceError> {
     let loglevel = SystemConfig::try_new(config_dir)?.log;
     match loglevel.get(sname) {
@@ -31,6 +32,7 @@ pub fn set_log_level(log_level: tracing::Level) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use camino::Utf8PathBuf;
     use std::io::Write;
     use tempfile::TempDir;
     use tracing::Level;
@@ -43,7 +45,7 @@ mod tests {
     "#;
 
         let (_dir, config_dir) = create_temp_system_config(toml_conf)?;
-        let res = get_log_level("tedge_mapper", config_dir)?;
+        let res = get_log_level("tedge_mapper", &config_dir)?;
         assert_eq!(Level::DEBUG, res);
         Ok(())
     }
@@ -55,7 +57,7 @@ mod tests {
         tedge_mapper = "infoo"
     "#;
         let (_dir, config_dir) = create_temp_system_config(toml_conf)?;
-        let res = get_log_level("tedge_mapper", config_dir).unwrap_err();
+        let res = get_log_level("tedge_mapper", &config_dir).unwrap_err();
         assert_eq!(
             "Invalid log level: \"infoo\", supported levels are info, warn, error and debug",
             res.to_string()
@@ -71,7 +73,7 @@ mod tests {
     "#;
 
         let (_dir, config_dir) = create_temp_system_config(toml_conf)?;
-        let res = get_log_level("tedge_mapper", config_dir).unwrap_err();
+        let res = get_log_level("tedge_mapper", &config_dir).unwrap_err();
 
         assert_eq!(
             "Invalid log level: \"\", supported levels are info, warn, error and debug",
@@ -88,18 +90,18 @@ mod tests {
     "#;
 
         let (_dir, config_dir) = create_temp_system_config(toml_conf)?;
-        let res = get_log_level("tedge_mapper", config_dir).unwrap();
+        let res = get_log_level("tedge_mapper", &config_dir).unwrap();
         assert_eq!(Level::INFO, res);
         Ok(())
     }
 
     // Need to return TempDir, otherwise the dir will be deleted when this function ends.
-    fn create_temp_system_config(content: &str) -> std::io::Result<(TempDir, PathBuf)> {
+    fn create_temp_system_config(content: &str) -> std::io::Result<(TempDir, Utf8PathBuf)> {
         let temp_dir = TempDir::new()?;
         let config_root = temp_dir.path().to_path_buf();
         let config_file_path = config_root.join("system.toml");
         let mut file = std::fs::File::create(config_file_path.as_path())?;
         file.write_all(content.as_bytes())?;
-        Ok((temp_dir, config_root))
+        Ok((temp_dir, config_root.try_into().unwrap()))
     }
 }
