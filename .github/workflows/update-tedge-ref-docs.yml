@@ -18,12 +18,17 @@ jobs:
            git config --global user.email "info@thin-edge.io"
            git config --global user.name "Versioneer"
 
-        - name: enable toolchain via github action
-          # https://github.com/actions-rs/toolchain
-          uses: actions-rs/toolchain@v1
+        - name: Retrieve MSRV from workspace Cargo.toml
+          id: rust_version
+          uses: SebRollen/toml-action@v1.0.2
           with:
-            toolchain: 1.64.0
-            override: true
+            file: Cargo.toml
+            field: "workspace.package.rust-version"
+
+        - name: Enable toolchain via github action
+          uses: dtolnay/rust-toolchain@master
+          with:
+            toolchain: ${{ steps.rust_version.outputs.value }}
 
         - name: Enable cache
           # https://github.com/marketplace/actions/rust-cache

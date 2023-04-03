@@ -54,9 +54,19 @@ jobs:
       locks: ${{ steps.filter.outputs.locks }}
     steps:
       - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@1.64.0
+
+      - name: Retrieve MSRV from workspace Cargo.toml
+        id: rust_version
+        uses: SebRollen/toml-action@v1.0.2
+        with:
+          file: Cargo.toml
+          field: "workspace.package.rust-version"
+
+      - name: Enable toolchain via github action
+        uses: dtolnay/rust-toolchain@master
         with:
           targets: armv7-unknown-linux-gnueabihf
+          toolchain: ${{ steps.rust_version.outputs.value }}
 
       - uses: Swatinem/rust-cache@v2
 
@@ -270,8 +280,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: enable toolchain via github action
-        uses: dtolnay/rust-toolchain@1.64.0
+      - name: Retrieve MSRV from workspace Cargo.toml
+        id: rust_version
+        uses: SebRollen/toml-action@v1.0.2
+        with:
+          file: Cargo.toml
+          field: "workspace.package.rust-version"
+
+      - name: Enable toolchain via github action
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.rust_version.outputs.value }}
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
@@ -323,8 +342,17 @@ jobs:
 #      - name: Checkout
 #        uses: actions/checkout@v3
 #
-#      - name: Install rust v1.64.0
-#        uses: dtolnay/rust-toolchain@1.64.0
+#      - name: Retrieve MSRV from workspace Cargo.toml
+#        id: rust_version
+#        uses: SebRollen/toml-action@v1.0.2
+#        with:
+#          file: Cargo.toml
+#          field: "workspace.package.rust-version"
+#
+#      - name: Enable toolchain via github action
+#        uses: dtolnay/rust-toolchain@master
+#        with:
+#          toolchain: ${{ steps.rust_version.outputs.value }}
 #
 #      - name: Enable cache
 #        # https://github.com/marketplace/actions/rust-cache

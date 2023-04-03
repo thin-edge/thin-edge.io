@@ -37,9 +37,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Enable toolchain via github action
-        uses: dtolnay/rust-toolchain@1.64.0
+      - name: Retrieve MSRV from workspace Cargo.toml
+        id: rust_version
+        uses: SebRollen/toml-action@v1.0.2
         with:
+          file: Cargo.toml
+          field: "workspace.package.rust-version"
+
+      - name: Enable toolchain via github action
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.rust_version.outputs.value }}
           targets: ${{ matrix.job.target }}
 
       - name: Enable cache
