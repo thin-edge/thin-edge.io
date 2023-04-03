@@ -2,7 +2,9 @@
 
 With `thin-edge.io` you can enable connection for external devices to your `thin-edge.io` enabled device with the use of a few commands.
 
-> Note: Currently, only one additional listener can be defined.
+```admonish note
+Currently, only one additional listener can be defined.
+```
 
 ## Configuration
 
@@ -18,8 +20,11 @@ The following configurations option are available for you if you want to add an 
 `mqtt.external.certfile`         Path to the certificate file, which is used by external MQTT listener. Example: /etc/tedge/server-certs/tedge-certificate.pem
 `mqtt.external.keyfile`          Path to the private key file, which is used by external MQTT listener. Example: /etc/tedge/server-certs/tedge-private-key.pem
 
-> If none of these options is set, then no external listener is set.
-> If one of these options is set, then default values are inferred by the MQTT server (Mosquitto). For instance, the port defaults to 1883 for a non-TLS listener, and to 8883 for a TLS listener.
+```admonish note
+If none of these options is set, then no external listener is set.
+If one of these options is set, then default values are inferred by the MQTT server (Mosquitto).
+For instance, the port defaults to 1883 for a non-TLS listener, and to 8883 for a TLS listener.
+```
 
 These settings can be considered in 2 groups, listener configuration and TLS configuration.
 
@@ -57,4 +62,6 @@ To fully enable TLS authentication clients, client side certificate validation c
 tedge config set mqtt.external.capath /etc/ssl/certs
 ```
 
-> Note: Providing all 3 configuration will trigger thin-edge.io to require client certificates.
+```admonish note
+When these 3 mqtt settings are configured then client certificates will be required to connect thin-edge.
+```

@@ -73,14 +73,16 @@ For `tedge` debian package do:
 ```shell
 ar -x tedge_*_amd64.deb | tar -xf data.tar.xz
 ```
+
 This unpacks two directories `usr/bin/`, move its contents to `/usr/bin`
 
 ```shell
 sudo mv usr/bin/tedge /usr/bin
 ```
 
-> Note: Do the same for tedge\_agent and tedge\_mapper debian packages.
-
+```admonish note
+Do the same for tedge\_agent and tedge\_mapper debian packages.
+```
 
 ## Step 1: Creating the tedge user
 
@@ -116,7 +118,9 @@ This should show the following output:
   <img src="./images/manual_installation-binaries_init.png" alt="Sublime's custom image"/>
 </p>
 
-> Note: if you do not restart mosquitto you will see a Connection refused error. Do not worry, this error can be ignored.
+```asmonish note
+If you do not restart mosquitto you will see a Connection refused error. Do not worry, this error can be ignored.
+```
 
 Ensure that running the init has created the following files and directories in `/etc/tedge`:
 
@@ -141,44 +145,50 @@ sudo mosquitto --config-file /etc/mosquitto/mosquitto.conf
 
 You will need service files for tedge\_agent and tedge\_mapper. For example:
 
-> Note that, for Cumulocity IoT, the `tedge connect` command expects three service files called: mosquitto, tedge-agent and tedge-mapper-c8y
+```admonish note
+For Cumulocity IoT, the `tedge connect` command expects three service files called: mosquitto, tedge-agent and tedge-mapper-c8y
+```
 
 For the `tedge-agent` service an example file is the following:
-> FILE: /etc/init.d/tedge-agent
-```sh
-#!/sbin/runscript
 
-start() {
-   ebegin "Starting tedge-agent"
-   start-stop-daemon --user tedge --start --background --exec tedge-agent
-   eend $?
-}
-
-stop() {
-    ebegin "Stopping tedge-agent"
-    start-stop-daemon --stop --exec tedge-agent
-    eend $?
-}
+```admonish example title="/etc/init.d/tedge-agent"
+> ```sh
+> #!/sbin/runscript
+> 
+> start() {
+>    ebegin "Starting tedge-agent"
+>    start-stop-daemon --user tedge --start --background --exec tedge-agent
+>    eend $?
+> }
+>
+> stop() {
+>     ebegin "Stopping tedge-agent"
+>     start-stop-daemon --stop --exec tedge-agent
+>     eend $?
+> }
+> ```
 ```
 
-For the `tedge-mapper-c8y` service an example file is the following:
-> FILE: /etc/init.d/tedge-mapper-c8y
-```sh
-#!/sbin/runscript
+For the `tedge-mapper-c8y` service an example file is the following
 
-start() {
-   ebegin "Starting tedge-mapper-c8y"
-   start-stop-daemon --user tedge --start --background --exec tedge-mapper c8y
-   eend $?
-}
 
-stop() {
-   ebegin "Stopping tedge-mapper-c8y"
-   start-stop-daemon --stop --exec tedge-mapper
-   eend $?
-}
+```admonish example title="/etc/init.d/tedge-mapper-c8y"
+>```sh
+> #!/sbin/runscript
+>
+> start() {
+>    ebegin "Starting tedge-mapper-c8y"
+>    start-stop-daemon --user tedge --start --background --exec tedge-mapper c8y
+>    eend $?
+> }
+>
+> stop() {
+>    ebegin "Stopping tedge-mapper-c8y"
+>    start-stop-daemon --stop --exec tedge-mapper
+>    eend $?
+> }
+>```
 ```
-
 
 ```sh
 sudo chmod +x /etc/init.d/tedge-agent
@@ -188,16 +198,17 @@ sudo chmod +x /etc/init.d/tedge-mapper-c8y
 Next, we need to add a `system.toml` to `/etc/tedge/`, telling it to use OpenRC. To do this create the following file:
 
 
-> FILE: /etc/tedge/system.toml
-```sh
-[init]
-name = "OpenRC"
-is_available = ["/sbin/rc-service", "-l"]
-restart = ["/sbin/rc-service", "{}", "restart"]
-stop =  ["/sbin/rc-service", "{}", "stop"]
-enable =  ["/sbin/rc-update", "add", "{}"]
-disable =  ["/sbin/rc-update", "delete", "{}"]
-is_active = ["/sbin/rc-service", "{}", "status"]
+```admonish example title="/etc/tedge/system.toml"
+>```
+> [init]
+> name = "OpenRC"
+> is_available = ["/sbin/rc-service", "-l"]
+> restart = ["/sbin/rc-service", "{}", "restart"]
+> stop =  ["/sbin/rc-service", "{}", "stop"]
+> enable =  ["/sbin/rc-update", "add", "{}"]
+> disable =  ["/sbin/rc-update", "delete", "{}"]
+> is_active = ["/sbin/rc-service", "{}", "status"]
+>```
 ```
 
 Limit the file's permission to read only:

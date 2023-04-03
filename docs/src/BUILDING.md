@@ -55,13 +55,15 @@ rustc --version
 rustc 1.64.0 (a55dd71d5 2022-09-19)
 ```
 
-> Note: Above command will add rust to path only for existing session,
-> after you restart the session you will have to add it again,
-> to add rust to the path permanently it will depend on your shell but for Bash,
-> you simply need to add the line from above, `export PATH=$PATH:$HOME/.cargo/bin` to your ~/.bashrc.
+```admonish
+Above command will add rust to path only for existing session,
+after you restart the session you will have to add it again,
+to add rust to the path permanently it will depend on your shell but for Bash,
+you simply need to add the line from above, `export PATH=$PATH:$HOME/.cargo/bin` to your ~/.bashrc.
 
-> For other shells, you'll want to find the appropriate place to set a configuration at start time,
-> eg. zsh uses ~/.zshrc. Check your shell's documentation to find what file it uses.
+For other shells, you'll want to find the appropriate place to set a configuration at start time,
+eg. zsh uses ~/.zshrc. Check your shell's documentation to find what file it uses.
+```
 
 thin-edge.io operates the `MSRV` (Minimum Supported Rust Version) and uses stable toolchain.
 

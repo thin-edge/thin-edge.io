@@ -29,10 +29,13 @@ The payload format must be as follows:
 }
 ```
 
-> Note: These messages must be sent with MQTT retained flag enabled and with QOS > 1 to ensure guaranteed processing by thin-edge.io.
+```admonish note
+These messages must be sent with MQTT retained flag enabled and with QOS > 1 to ensure guaranteed processing by thin-edge.io.
 Enabling the retained flag ensures that the alarm stays persisted with the MQTT broker until its state changes again.
-These retained messages will make sure that the thin-edge.io processes or any other third-party processes subscribed to these alarms will get those, even if they were down at the moment the alarm was raised.
+These retained messages will make sure that the thin-edge.io processes or any other third-party processes subscribed to these alarms will get those,
+even if they were down at the moment the alarm was raised.
 If multiple messages are sent to the same alarm topic, the last alarm is considered to have overwritten the previous one.
+```
 
 Here is a sample alarm raised for `temperature_high` alarm type with `critical` severity:
 
@@ -47,11 +50,13 @@ Payload:
 }
 ```
 
-> Note: Both the `text` field and the `time` field are optional.
+```admonish note
+Both the `text` field and the `time` field are optional.
 When a `text` is not provided, it is assumed to be empty.
 When `time` is not provided, thin-edge.io will use the current system time as the `time` of the alarm.
 When you want to skip both fields, use an empty json fragment `{}` as the payload to indicate the same.
 An empty message can't be used for the same, as empty messages are used to clear alarms, which is discussed in the next section.
+```
 
 The `<severity>` value in the MQTT topic can only be one of the following values:
 
@@ -71,10 +76,11 @@ An already raised alarm can be cleared by sending an empty message with retained
 For example `temperature_alarm` will be cleared by publishing an empty payload message as below:
 ```
 tedge mqtt pub tedge/alarms/critical/temperature_alarm "" -q 2 -r
-
 ```
 
-> Note: Using the retained (-r) flag is a must while clearing the alarm as well, without which the alarm won't be cleared properly.
+```admonish note
+Using the retained (-r) flag is a must while clearing the alarm as well, without which the alarm won't be cleared properly.
+```
 
 If alarms of different severities exist for a given alarm type, they must all be cleared separately as they're all treated as independent alarms.
 
@@ -116,7 +122,9 @@ Payload:
 }
 ```
 
-> Note: Other than `text` and `time` fields, all the other fields are considered as custom fragments.
+```admonish note
+Other than `text` and `time` fields, all the other fields are considered as custom fragments.
+```
 
 ### Raising an alarm with empty json payload
 
@@ -126,9 +134,12 @@ Payload:
 ```json
 {}
 ```
-> Note: The `default` value for the `time` fragment will be the timestamp in utc time that is added by the `tedge-mapper-c8y`
+
+```admonish note
+The `default` value for the `time` fragment will be the timestamp in utc time that is added by the `tedge-mapper-c8y`
 while alarm message being translated to cumulocity format.
 The default value for the `text` fragment will be derived from the `alarm-type` of the topic.
+```
 
 ## Cloud data mapping
 
@@ -136,7 +147,9 @@ If the device is connected to some supported IoT cloud platform, any alarms rais
 The mapping of thin-edge alarms data to its respective cloud-native representation will be done by the corresponding cloud mapper process.
 For example, if the device is connected to Cumulocity IoT cloud platform, the Cumulocity cloud mapper process will translate the thin-edge alarm JSON data to its equivalent Cumulocity SmartREST representation.
 
-> Warning: As of now, alarm data mapping is supported only on Cumulocity IoT cloud platform.
+```admonish warning
+As of now, alarm data mapping is supported only on Cumulocity IoT cloud platform.
+```
 
 ### Cumulocity cloud data mapping
 

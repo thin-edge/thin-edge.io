@@ -88,7 +88,9 @@ files = [
 
 For more details on this configuration file format, refer to the [reference guide](./../references/c8y-configuration-management.md#configuration).
 
-> Note: You can also configure the `c8y-configuration-plugin.toml` from the cloud later.
+```admonish note
+You can also configure the `c8y-configuration-plugin.toml` from the cloud later.
+```
 
 **Step 2**
 Start the configuration plugin process and enable it on boot by `systemctl` (recommended).
@@ -128,8 +130,10 @@ You can choose the file that you uploaded from the **AVAILABLE SUPPORTED CONFIGU
 After the operation created gets marked SUCCESSFUL, reload the page.
 Then you can find new supported configuration types as you defined.
 
-> Note: All configuration updates are notified over `tedge/configuration_change/<config-type>` MQTT topic, giving the opportunity to software components installed on the device or a child device to react to these updates.
-> For more details, refer to the [Notifications section of the specification](./../references/c8y-configuration-management.md#notifications).
+```admonish note
+All configuration updates are notified over `tedge/configuration_change/<config-type>` MQTT topic, giving the opportunity to software components installed on the device or a child device to react to these updates.
+For more details, refer to the [Notifications section of the specification](./../references/c8y-configuration-management.md#notifications).
+```
 
 To get to know more about the `c8y-configuration-plugin`, refer to [Specifications of Device Configuration Management using Cumulocity](./../references/c8y-configuration-management.md).
 

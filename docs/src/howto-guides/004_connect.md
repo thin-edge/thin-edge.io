@@ -3,9 +3,12 @@
 ## Connect to Cumulocity IoT
 
 To create northbound connection a local bridge shall be established and this can be achieved with `tedge` cli and following commands:
-> Note: `tedge connect` requires `sudo` privilege.
 
-___
+```admonish
+Note: `tedge connect` requires `sudo` privilege.
+```
+
+## Setting the cloud end-point
 
 Configure required parameters for thin-edge.io with [`tedge config set`](../references/tedge-config.md):
 
@@ -13,9 +16,11 @@ Configure required parameters for thin-edge.io with [`tedge config set`](../refe
 sudo tedge config set c8y.url example.cumulocity.com
 ```
 
-> Tip: If you you are unsure which parameters are required for the command to work run the command and it will tell you which parameters are missing.
-> For example, if we issue [`tedge connect c8y`](../references/tedge-connect.md) without any configuration following advice will be given:
->
+```admonish info
+If you are unsure which parameters required by the command, simply run the command and it will tell you which parameters are missing.
+
+For example, if we issue [`tedge connect c8y`](../references/tedge-connect.md) without any configuration following advice will be given:
+
 > ```shell
 > $ tedge connect c8y`
 > ...
@@ -24,28 +29,37 @@ sudo tedge config set c8y.url example.cumulocity.com
 > Caused by:
 >     Required configuration item is not provided 'c8y.url', run 'tedge config set c8y.url <value>' to add it to config.
 > ```
->
-> This message explains which configuration parameter is missing and how to add it to configuration, in this case we are told to run `tedge config set c8y.url <value>`.
 
-___
+This message explains which configuration parameter is missing and how to add it to configuration,
+in this case we are told to run `tedge config set c8y.url <value>`.
+```
+
+## Making the cloud trust the device
 
 The next step is to have the device certificate trusted by Cumulocity. This is done by uploading the certificate of the signee.
-You can upload root certificate via [Cumulocity UI](https://cumulocity.com/guides/users-guide/device-management/#trusted-certificates) or with [`tedge cert upload`](../references/tedge-cert.md) as described below.
+You can upload the root certificate using the [Cumulocity UI](https://cumulocity.com/guides/users-guide/device-management/#trusted-certificates)
+or with [`tedge cert upload`](../references/tedge-cert.md) command as described below.
 
-> Note: This command takes parameter `user`, this is due to upload mechanism to Cumulocity cloud which uses username and password for authentication.
->
-> After issuing this command you are going to be prompted for a password. Users usernames and passwords are not stored in configuration due to security.
+```admonish
+The `tedge cert upload` command requires the credentials of a Cumulocity user
+having the permissions to upload trusted certificates on the Cumulocity tenant of the device.
+
+The user name is provided as `--user <username>` parameter,
+and the command will prompt you for this user's password.
+These credentials are used only for this upload and will in no case be stored on the device.
+```
 
 ```shell
 sudo tedge cert upload c8y --user <username>
 ```
 
-where:
-> `username` -> user in Cumulocity with permissions to upload new certificates
+## Creating an MQTT brigde between the device and the cloud
 
-___
+The connection from the device to the cloud is established using a so-called MQTT bridge:
+a permanent secured bi-directionnel MQTT connection that forward messages back and forth
+between the two end-points.
 
-To create bridge use [`tedge connect`](../references/tedge-connect.md):
+To create the bridge use the [`tedge connect`](../references/tedge-connect.md) command.
 
 ```shell
 sudo tedge connect c8y
@@ -140,7 +154,9 @@ Disabling tedge-agent service.
 tedge-agent service successfully stopped and disabled!
 ```
 
-> Note: `tedge disconnect c8y` also stops and disable **tedge-mapper** service if it is installed on the device.
+```admonish
+`tedge disconnect c8y` also stops and disable the **tedge-mapper** service if it is installed on the device.
+```
 
 And now you can issue [`tedge connect c8y`](../references/tedge-connect.md) to create new bridge.
 
