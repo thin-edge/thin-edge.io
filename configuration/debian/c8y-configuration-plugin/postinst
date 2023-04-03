@@ -11,12 +11,3 @@ if [ ! -e /usr/bin/c8y_configuration_plugin ]; then
 fi
 
 #DEBHELPER#
-
-# Enable the service only if systemctl is available
-if command -v systemctl >/dev/null; then
-    ### Enable the services if the device is connected to c8y cloud
-    if [ -f "/etc/tedge/mosquitto-conf/c8y-bridge.conf" ]; then
-        systemctl start c8y-configuration-plugin.service
-        systemctl enable c8y-configuration-plugin.service
-    fi
-fi
