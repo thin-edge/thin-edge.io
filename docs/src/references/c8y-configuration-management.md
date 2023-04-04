@@ -24,7 +24,7 @@ Thin-edge provides an operation plugin to
 * Once a snapshot has been downloaded from Cumulocity to the device,
   __the plugin publishes a notification message on the local thin-edge MQTT bus__.
   The device software has to subscribe to these messages if any action is required,
-  say to check the content of file, to preprocess it or to restart a daemon.
+  say to check the content of file, to pre-process it or to restart a daemon.
 * The configuration plugin also manage configuration files for child-devices connected to the main thin-edge device.
   From the cloud point of view, these child-devices are configured exactly using the same user interface,
   with the ability to focus on a device, to upload the current configuration files,

@@ -118,7 +118,7 @@ This should show the following output:
   <img src="./images/manual_installation-binaries_init.png" alt="Sublime's custom image"/>
 </p>
 
-```asmonish note
+```admonish note
 If you do not restart mosquitto you will see a Connection refused error. Do not worry, this error can be ignored.
 ```
 
