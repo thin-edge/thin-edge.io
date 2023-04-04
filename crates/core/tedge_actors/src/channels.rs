@@ -104,6 +104,62 @@ impl<M: Message> From<NullSender> for DynSender<M> {
     }
 }
 
+/// A sender that transforms the messages on the fly
+pub struct MappingSender<F, M> {
+    inner: DynSender<M>,
+    cast: std::sync::Arc<F>,
+}
+
+impl<F, M> MappingSender<F, M> {
+    pub fn new(inner: DynSender<M>, cast: F) -> Self {
+        MappingSender {
+            inner,
+            cast: std::sync::Arc::new(cast),
+        }
+    }
+}
+
+#[async_trait]
+impl<M, N, NS, F> Sender<M> for MappingSender<F, N>
+where
+    M: Message,
+    N: Message,
+    NS: Iterator<Item = N> + Send,
+    F: Fn(M) -> NS,
+    F: 'static + Sync + Send,
+{
+    async fn send(&mut self, message: M) -> Result<(), ChannelError> {
+        for out_message in self.cast.as_ref()(message) {
+            self.inner.send(out_message).await?
+        }
+        Ok(())
+    }
+
+    fn sender_clone(&self) -> DynSender<M> {
+        Box::new(MappingSender {
+            inner: self.inner.sender_clone(),
+            cast: self.cast.clone(),
+        })
+    }
+
+    fn close_sender(&mut self) {
+        self.inner.as_mut().close_sender()
+    }
+}
+
+impl<M, N, NS, F> From<MappingSender<F, N>> for DynSender<M>
+where
+    M: Message,
+    N: Message,
+    NS: Iterator<Item = N> + Send,
+    F: Fn(M) -> NS,
+    F: 'static + Sync + Send,
+{
+    fn from(value: MappingSender<F, N>) -> Self {
+        Box::new(value)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

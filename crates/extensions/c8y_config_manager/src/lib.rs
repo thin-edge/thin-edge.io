@@ -148,13 +148,7 @@ impl ConfigManagerBuilder {
     where
         T: MessageSource<FsWatchEvent, PathBuf>,
     {
-        let watch_dir = self
-            .config
-            .config_dir
-            .clone()
-            .join(DEFAULT_OPERATION_DIR_NAME);
-        fs_builder.register_peer(watch_dir, self.events_sender.clone().into());
-
+        fs_builder.add_sink(self);
         Ok(())
     }
 
@@ -167,7 +161,14 @@ impl ConfigManagerBuilder {
     }
 }
 
-impl MessageSink<FsWatchEvent> for ConfigManagerBuilder {
+impl MessageSink<FsWatchEvent, PathBuf> for ConfigManagerBuilder {
+    fn get_config(&self) -> PathBuf {
+        self.config
+            .config_dir
+            .clone()
+            .join(DEFAULT_OPERATION_DIR_NAME)
+    }
+
     fn get_sender(&self) -> DynSender<FsWatchEvent> {
         self.events_sender.clone().into()
     }

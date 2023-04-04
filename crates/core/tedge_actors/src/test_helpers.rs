@@ -630,7 +630,11 @@ impl<I: MessagePlus, O: MessagePlus> MessageSource<O, NoConfig> for Probe<I, O> 
     }
 }
 
-impl<I: MessagePlus, O: MessagePlus> MessageSink<I> for Probe<I, O> {
+impl<I: MessagePlus, O: MessagePlus> MessageSink<I, NoConfig> for Probe<I, O> {
+    fn get_config(&self) -> NoConfig {
+        NoConfig
+    }
+
     fn get_sender(&self) -> DynSender<I> {
         self.input_interceptor.clone().into()
     }
