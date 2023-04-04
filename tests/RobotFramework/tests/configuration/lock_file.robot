@@ -16,6 +16,27 @@ Check lock file existence in default folder
     File Should Exist    /run/lock/tedge-agent.lock
     File Should Exist    /run/lock/tedge-mapper-c8y.lock
 
+Check PID number in lock file
+    [Documentation]    Include the pid inside the existing lock files under /run/lock/
+    ${pid_agent1}=    Execute Command    pgrep -f 'tedge-agent'    strip=True
+    ${pid_mapper1}=    Execute Command    pgrep -f 'tedge-mapper c8y'    strip=True
+    ${pid_agent_lock1}=    Execute Command    cat /run/lock/tedge-agent.lock
+    ${pid_mapper_lock1}=    Execute Command    cat /run/lock/tedge-mapper-c8y.lock
+    Should Be Equal    ${pid_agent1}    ${pid_agent_lock1}
+    Should Be Equal    ${pid_mapper1}    ${pid_mapper_lock1}
+
+Check PID number in lock file after restarting the services
+    [Documentation]    Include the new pid generated after service restart 
+    ...  inside the existing lock files under /run/lock/
+    Restart Service    tedge-agent
+    Restart Service    tedge-mapper-c8y
+    ${pid_agent2}=    Execute Command    pgrep -f 'tedge-agent'    strip=True
+    ${pid_mapper2}=    Execute Command    pgrep -f 'tedge-mapper c8y'    strip=True
+    ${pid_agent_lock2}=    Execute Command    cat /run/lock/tedge-agent.lock
+    ${pid_mapper_lock2}=    Execute Command    cat /run/lock/tedge-mapper-c8y.lock
+    Should Be Equal    ${pid_agent2}    ${pid_agent_lock2}
+    Should Be Equal    ${pid_mapper2}    ${pid_mapper_lock2}
+
 Check starting same service twice
     [Documentation]    This step is checking if same service can be started twice, 
     ...    expected is that this should not be the case
