@@ -27,6 +27,7 @@ sha256 = "1.1"
 tedge_actors = { path = "../../core/tedge_actors" }
 tedge_api = { path = "../../../crates/core/tedge_api" }
 tedge_config = { path = "../../../crates/common/tedge_config" }
+tedge_downloader_ext = { path = "../../extensions/tedge_downloader_ext" }
 tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
 tedge_timer_ext = { path = "../../extensions/tedge_timer_ext" }
 tedge_utils = { path = "../../../crates/common/tedge_utils", features = [

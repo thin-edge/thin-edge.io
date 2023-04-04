@@ -42,11 +42,11 @@ pub struct FirmwareManagerBuilder {
 
 impl FirmwareManagerBuilder {
     pub fn new(config: FirmwareManagerConfig) -> FirmwareManagerBuilder {
-        let (events_sender, events_receiver) = mpsc::channel(10);
+        let (events_sender, input_receiver) = mpsc::channel(10);
         let (signal_sender, signal_receiver) = mpsc::channel(10);
         let receiver = LoggingReceiver::new(
             "C8Y-Firmware-Manager".into(),
-            events_receiver,
+            input_receiver,
             signal_receiver,
         );
 
@@ -91,7 +91,7 @@ impl ServiceConsumer<MqttMessage, MqttMessage, TopicFilter> for FirmwareManagerB
     fn get_config(&self) -> TopicFilter {
         vec!["c8y/s/ds", "tedge/+/commands/res/firmware_update"]
             .try_into()
-            .unwrap()
+            .expect("Infallible")
     }
 
     fn set_request_sender(&mut self, request_sender: DynSender<MqttMessage>) {
@@ -109,10 +109,10 @@ impl RuntimeRequestSink for FirmwareManagerBuilder {
     }
 }
 
-impl Builder<(FirmwareManagerActor, FirmwareManagerMessageBox)> for FirmwareManagerBuilder {
+impl Builder<FirmwareManagerActor> for FirmwareManagerBuilder {
     type Error = LinkError;
 
-    fn try_build(self) -> Result<(FirmwareManagerActor, FirmwareManagerMessageBox), Self::Error> {
+    fn try_build(self) -> Result<FirmwareManagerActor, Self::Error> {
         let mqtt_publisher = self.mqtt_publisher.ok_or_else(|| LinkError::MissingPeer {
             role: "mqtt".to_string(),
         })?;
@@ -132,8 +132,6 @@ impl Builder<(FirmwareManagerActor, FirmwareManagerMessageBox)> for FirmwareMana
             timer_sender,
         );
 
-        let actor = FirmwareManagerActor::new(self.config);
-
-        Ok((actor, peers))
+        Ok(FirmwareManagerActor::new(self.config, peers))
     }
 }

@@ -2,16 +2,18 @@ use super::*;
 
 use crate::actor::OperationSetTimeout;
 use crate::actor::OperationTimeout;
+
 use assert_json_diff::assert_json_include;
 use mqtt_channel::Topic;
 use serde_json::json;
 use sha256::digest;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
-use tedge_actors::test_helpers::TimedBoxReceiver;
+use tedge_actors::test_helpers::TimedMessageBox;
 use tedge_actors::Actor;
 use tedge_actors::DynError;
 use tedge_actors::MessageReceiver;
+use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_config::IpAddress;
@@ -346,23 +348,20 @@ fn get_operation_id_from_firmware_update_request(mqtt_message: MqttMessage) -> S
 }
 
 async fn publish_smartrest_firmware_operation(
-    mqtt_message_box: &mut TimedBoxReceiver<SimpleMessageBox<MqttMessage, MqttMessage>>,
+    mqtt_message_box: &mut TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
 ) -> Result<(), DynError> {
     let c8y_firmware_update_msg = MqttMessage::new(
         &Topic::new_unchecked("c8y/s/ds"),
         format!("515,{CHILD_DEVICE_ID},{FIRMWARE_NAME},{FIRMWARE_VERSION},{DOWNLOAD_URL}"),
     );
-    mqtt_message_box
-        .as_mut()
-        .send(c8y_firmware_update_msg)
-        .await?;
+    mqtt_message_box.send(c8y_firmware_update_msg).await?;
     Ok(())
 }
 
 async fn publish_firmware_update_response(
     status: &str,
     operation_id: &str,
-    mqtt_message_box: &mut TimedBoxReceiver<SimpleMessageBox<MqttMessage, MqttMessage>>,
+    mqtt_message_box: &mut TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
 ) -> Result<(), DynError> {
     let firmware_update_response = MqttMessage::new(
         &Topic::new_unchecked(&format!(
@@ -387,7 +386,7 @@ async fn spawn_firmware_manager(
     create_dir: bool,
 ) -> Result<
     (
-        TimedBoxReceiver<SimpleMessageBox<MqttMessage, MqttMessage>>,
+        TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
         SimpleMessageBox<C8YRestRequest, C8YRestResult>,
         SimpleMessageBox<OperationSetTimeout, OperationTimeout>,
     ),
@@ -426,8 +425,8 @@ async fn spawn_firmware_manager(
     let c8y_proxy_message_box = c8y_proxy_builder.build();
     let timer_message_box = timer_builder.build();
 
-    let (actor, message_box) = firmware_manager_builder.build();
-    let _join_handle = tokio::spawn(async move { actor.run(message_box).await });
+    let mut firmware_manager_actor = firmware_manager_builder.build();
+    let _join_handle = tokio::spawn(async move { firmware_manager_actor.run().await });
 
     Ok((mqtt_message_box, c8y_proxy_message_box, timer_message_box))
 }
