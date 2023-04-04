@@ -110,8 +110,6 @@ it gets translated into JSON via MQTT by the Cumulocity mapper.
 
 ## Azure IoT Hub mapper
 
-> Note: Child device measurements are not supported yet on Azure IoT Hub.
-
 The Azure IoT Hub mapper takes messages formatted in the [Thin Edge JSON](thin-edge-json.md) as input.
 It validates if the incoming message is correctly formatted Thin Edge JSON, then outputs the message.
 The validated messages are published on the topic `az/messages/events/` from where they are forwarded to Azure IoT Hub.

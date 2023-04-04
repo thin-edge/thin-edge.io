@@ -43,8 +43,10 @@ esac
 exit 0
 ```
 
-> **Info**: the filename will be used as a plugin type to report the software list to a cloud.
-> If you name it `docker.sh`, you will see `docker.sh` as a plugin type in cloud.
+```admonish info
+The plugin filename will be used as a plugin type to report the software list to a cloud.
+If you name it `docker.sh`, you will see `docker.sh` as a plugin type in cloud.
+```
 
 If you execute `./docker list`, you will see this kind of output.
 
@@ -74,8 +76,10 @@ Here is the table of the commands that you can use in a plugin.
 The order of the commands invoked by the Software Management Agent is:
 `prepare` -> `update-list` or [`install`, `remove`] ->`finalize`
 
-> **info**: There is no guarantee of the order between `install` and `remove`.
-> If you need a specific order, use `update-list` command instead.
+```admonish info
+There is no guarantee of the order between `install` and `remove`.
+If you need a specific order, use the `update-list` command instead.
+```
 
 In the following sections, we will dive into each command and other rules deeply.
 
@@ -122,7 +126,9 @@ sudo /etc/tedge/sm-plugins/docker list
 
 to report the list of software modules installed.
 
-> **Important**: the Software Management Agent executes a plugin using `sudo` and as `tedge-agent` user.
+```admonish attention
+The Software Management Agent executes the plugin commands using `sudo` using the `tedge` user.
+```
 
 `docker` should output in the CSV with tabulations as separators like
 

@@ -80,8 +80,6 @@ data that can be represented in Thin Edge JSON format and the reserved fields li
 
 ## Sending measurements to child devices
 
-> Note: Currently this feature supports Cumulocity IoT only.
-
 If valid Thin Edge JSON measurements are published to the `tedge/measurements/<child-id>` topic,
 the measurements are recorded under a child device of your thin-edge.io device.
 
