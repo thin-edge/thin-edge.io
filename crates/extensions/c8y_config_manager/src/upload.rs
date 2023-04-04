@@ -288,7 +288,8 @@ impl ConfigUploadManager {
                 )?;
                 // copy to /etc/c8y
                 let path_from = &format!(
-                    "/var/tedge/file-transfer/{}/c8y-configuration-plugin",
+                    "{}/{}/c8y-configuration-plugin",
+                    self.config.file_transfer_dir.display(),
                     config_response.get_child_id()
                 );
                 let path_from = Path::new(path_from);
