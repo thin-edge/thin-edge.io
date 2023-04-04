@@ -37,6 +37,7 @@ use crate::DynSender;
 use crate::KeyedSender;
 use crate::LoggingReceiver;
 use crate::LoggingSender;
+use crate::MappingSender;
 use crate::Message;
 use crate::NullSender;
 use crate::RuntimeError;
@@ -68,15 +69,88 @@ pub trait Builder<T>: Sized {
 pub struct NoConfig;
 
 /// The builder of a MessageBox must implement this trait for every message type that can be sent to it
-pub trait MessageSink<M: Message> {
+pub trait MessageSink<M: Message, Config> {
+    /// Return the config used by this actor to connect the message source
+    fn get_config(&self) -> Config;
+
     /// Return the sender that can be used by peers to send messages to this actor
     fn get_sender(&self) -> DynSender<M>;
+
+    /// Add a source of messages to the actor under construction
+    fn add_input<N>(&mut self, source: &mut impl MessageSource<N, Config>)
+    where
+        N: Message,
+        M: From<N>,
+    {
+        source.register_peer(self.get_config(), crate::adapt(&self.get_sender()))
+    }
+
+    /// Add a source of messages to the actor under construction, the messages being translated on the fly.
+    ///
+    /// The transformation function will be applied to the messages sent by the source,
+    /// to convert them in a sequence, possibly empty, of messages forwarded to this sink.
+    ///
+    /// ```
+    /// # use std::time::Duration;
+    /// # use tedge_actors::Builder;
+    /// # use tedge_actors::ChannelError;
+    /// # use tedge_actors::MessageReceiver;
+    /// # use tedge_actors::MessageSink;
+    /// # use tedge_actors::NoMessage;
+    /// # use tedge_actors::Sender;
+    /// # use tedge_actors::SimpleMessageBox;
+    /// # use tedge_actors::SimpleMessageBoxBuilder;
+    /// # use tedge_actors::test_helpers::MessageReceiverExt;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(),ChannelError> {
+    /// let mut receiver_builder = SimpleMessageBoxBuilder::new("Recv", 16);
+    /// let mut sender_builder = SimpleMessageBoxBuilder::new("Send", 16);
+    ///
+    /// // Convert the `&str` sent by the source into an iterator of `char` as expected by the receiver.
+    /// receiver_builder.add_mapped_input(&mut sender_builder, |str: &'static str| str.chars() );
+    ///
+    /// let mut sender: SimpleMessageBox<NoMessage, &'static str>= sender_builder.build();
+    /// let receiver: SimpleMessageBox<char, NoMessage> = receiver_builder.build();
+    ///
+    /// sender.send("Hello!").await?;
+    ///
+    /// let mut receiver = receiver.with_timeout(Duration::from_millis(100));
+    /// assert_eq!(receiver.recv().await, Some('H'));
+    /// assert_eq!(receiver.recv().await, Some('e'));
+    /// assert_eq!(receiver.recv().await, Some('l'));
+    /// assert_eq!(receiver.recv().await, Some('l'));
+    /// assert_eq!(receiver.recv().await, Some('o'));
+    /// assert_eq!(receiver.recv().await, Some('!'));
+    /// assert_eq!(receiver.recv().await, None);
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+    fn add_mapped_input<N, MS, MessageMapper>(
+        &mut self,
+        source: &mut impl MessageSource<N, Config>,
+        cast: MessageMapper,
+    ) where
+        N: Message,
+        MS: Iterator<Item = M> + Send,
+        MessageMapper: Fn(N) -> MS,
+        MessageMapper: 'static + Send + Sync,
+    {
+        let sender = MappingSender::new(self.get_sender(), cast);
+        source.register_peer(self.get_config(), sender.into())
+    }
 }
 
 /// The builder of a MessageBox must implement this trait for every message type that it can receive from its peers
 pub trait MessageSource<M: Message, Config> {
     /// The message will be sent to the peer using the provided `sender`
     fn register_peer(&mut self, config: Config, sender: DynSender<M>);
+
+    /// Connect a peer actor that will consume the message produced by this actor
+    fn add_sink(&mut self, peer: &mut impl MessageSink<M, Config>) {
+        self.register_peer(peer.get_config(), peer.get_sender());
+    }
 }
 
 /// The builder of a MessageBox must implement this trait to receive requests from the runtime
@@ -188,7 +262,11 @@ impl<I: Message, O: Message, C> MessageSource<O, C> for SimpleMessageBoxBuilder<
     }
 }
 
-impl<I: Message, O: Message> MessageSink<I> for SimpleMessageBoxBuilder<I, O> {
+impl<I: Message, O: Message> MessageSink<I, NoConfig> for SimpleMessageBoxBuilder<I, O> {
+    fn get_config(&self) -> NoConfig {
+        NoConfig
+    }
+
     fn get_sender(&self) -> DynSender<I> {
         self.input_sender.sender_clone()
     }

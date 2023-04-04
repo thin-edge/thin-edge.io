@@ -69,12 +69,7 @@ impl LogManagerBuilder {
         &mut self,
         fs_builder: &mut impl MessageSource<FsWatchEvent, PathBuf>,
     ) -> Result<(), LinkError> {
-        let config_dir = self.config.config_dir.clone();
-        fs_builder.register_peer(
-            config_dir,
-            tedge_actors::adapt(&self.box_builder.get_sender()),
-        );
-
+        fs_builder.add_sink(self);
         Ok(())
     }
 
@@ -105,7 +100,11 @@ impl ServiceConsumer<MqttMessage, MqttMessage, TopicFilter> for LogManagerBuilde
     }
 }
 
-impl MessageSink<FsWatchEvent> for LogManagerBuilder {
+impl MessageSink<FsWatchEvent, PathBuf> for LogManagerBuilder {
+    fn get_config(&self) -> PathBuf {
+        self.config.config_dir.clone()
+    }
+
     fn get_sender(&self) -> DynSender<FsWatchEvent> {
         tedge_actors::adapt(&self.box_builder.get_sender())
     }

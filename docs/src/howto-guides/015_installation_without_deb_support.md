@@ -14,7 +14,9 @@ The prebuilt binaries can be obtained from `thin-edge.io` [repository releases](
 
 By default `thin-edge.io` is built with 3 architectures in mind: `amd64 (x86_64)`, `arm64 (aarch64)` and `armhf` with gnulibc bindings, so if you are looking to install `thin-edge.io` on a different platform you have to build your own binaries from source which you can do easily if you follow the [Building `thin-edge.io`](./../BUILDING.md) guide.
 
-> Note: By default `thin-edge.io` is built with `GNU libc`, but it is possible to use `musl` instead.
+```admonish note
+By default `thin-edge.io` is built with `musl`, but it is possible to use `GNU libc` instead.
+```
 
 Full installation of `thin-edge.io` requires the following components:
 
@@ -24,10 +26,9 @@ Full installation of `thin-edge.io` requires the following components:
 
 #### Extracting binaries from deb packages
 
-> Required packages:
->
-> * ar
-> * tar
+Required packages:
+* ar
+* tar
 
 Currently all binaries provided with releases are packaged into `deb` packages.
 `deb` packages can be extracted to get the binaries for installation (example):

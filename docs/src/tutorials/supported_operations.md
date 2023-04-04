@@ -115,7 +115,9 @@ To add new operation we will create a file in `/etc/tedge/operations/c8y` direct
 sudo -u tedge touch /etc/tedge/operations/c8y/c8y_Restart
 ```
 
-> Note: We are using `sudo -u` to create the file because we want to make sure that the file is owned by `tedge` user.
+```admonish note
+We are using `sudo -u` to create the file because we want to make sure that the file is owned by `tedge` user.
+```
 
 Now the new operation will be automatically added to the list and the list will be sent to the cloud.
 
@@ -161,7 +163,9 @@ First we create a file with the name of the operation:
 sudo -u tedge touch /etc/tedge/operations/c8y/c8y_Command
 ```
 
-> Note: the needs to be readable by `thin-edge.io` user - `tedge` - and should have permissions `644`.
+```admonish note
+The needs to be readable by `thin-edge.io` user - `tedge` - and should have permissions `644`.
+```
 
 In this example we want `thin-edge.io` to pick up a message on specific topic and execute the command on the device, our topic is `c8y/s/ds`.
 We also know that the message we expect is going to use SmartRest template `511` and our plugin is located in `/etc/tedge/operations/command`.
@@ -200,7 +204,9 @@ This simple example will parse the third field of the received SmartREST message
 If it exits with the status code `0`, a successful message with the stdout content will be reported to Cumulocity.
 If it exits with a non-zero code, a failure message with the stderr content will be sent out.
 
-> Note: The command will be executed with tedge-mapper permission level so most of the system level commands will not work.
+```admonish note
+The command will be executed with tedge-mapper permission level so most of the system level commands will not work.
+```
 
 ### List of currently supported operations parameters
 

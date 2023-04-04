@@ -3,11 +3,15 @@
 This document describes how to manage the software modules that are installed on a thin-edge device from the
 cloud using the **software management** feature of thin-edge.io.
 
-> Note: This tutorial shows the Debian based distributions **apt** package manager use-case powered by our official **apt** plugin.
-> Other package managers can be supported by adding a plugin.
-> Refer to [this](./write-my-software-management-plugin.md) document on how to write a plugin to support software management for any other software type.
+```admonish note
+This tutorial shows the Debian based distributions **apt** package manager use-case powered by our official **apt** plugin.
+Other package managers can be supported by adding a plugin.
+Refer to [this](./write-my-software-management-plugin.md) document on how to write a plugin to support software management for any other software type.
+```
 
-> Important: As of now, software management feature is supported only from Cumulocity cloud, which supports only `install` and `delete` as an action of c8y_SoftwareUpdate operation.
+```admonish warning
+As of now, software management feature is supported only from Cumulocity cloud, which supports only `install` and `delete` as an action of c8y_SoftwareUpdate operation.
+```
 
 Three components are required on your devices to enable software management:
 
@@ -33,7 +37,7 @@ Find more information about [how to install and enable software management.](../
 
 Managing the software packages installed on the devices from your Cumulocity tenant is a two steps operation.
 
-* Populate the software repository with all the software packages and versions you plan to install.
+* Populate the software repository with all the software packages and versions you plan to install.
 * Trigger software update operations on the devices, to install specific packages from the repository.
 
 Find more information about [managing the device software](https://cumulocity.com/guides/users-guide/device-management/#managing-device-software)
@@ -86,7 +90,9 @@ From the Cumulocity cloud `Software` tab of a device, software can be
 
 * [removed](https://cumulocity.com/guides/users-guide/device-management/#to-delete-software-from-a-device)
 
-> Note: Once the above mentioned operation is selected, one should click on **Apply changes** to confirm operation.
+```admonish note
+Once the above mentioned operation is selected, one should click on **Apply changes** to confirm operation.
+```
 
 ## Default plugin
 

@@ -13,7 +13,9 @@ health status message format for both the `thin-edge` and for the `child` device
 |Thin-edge-device|`tedge/health/<service-name>`|`{"status":"status of the service","type":"type of service"}`|
 |Child-device|`tedge/health/<child-device-id>/<service-name>`|`{"status":"status of the service","type":"type of service"}`|
 
-> Note: The `status` here can be `up or down` or any other string. For example, `unknown`.
+```admonish note
+The `status` here can be `up or down` or any other string. For example, `unknown`.
+```
 
 For example, to monitor the health status of a `tedge-mapper-c8y service` that is running on a `thin-edge.io` device
 one has to send the below message.
@@ -31,7 +33,9 @@ To monitor the health of a `docker` service that is running on an `external-sens
 tedge mqtt pub tedge/health/external-sensor/docker `{"status":"up","type":"systemd"}` -q 2 -r
 ```
 
-> Note: The health status message has to be sent as a `retain` message.
+```admonish note
+The health status message has to be sent as a `retain` message.
+```
 
 When an `empty health status,i.e('{}' or '')` message sent, the `status` will be replaced with `unknown` and the `type` will be replaced with default value `service`.
 
@@ -47,10 +51,12 @@ The table below gives more information about the **Cumulocity IoT** topic and th
 |Thin-edge-device|`c8y/s/us`|`102,<unique-service-id>,type,service-name,status`|
 |Child-device|`c8y/s/us/<child-id>`|`102,<unique-service-id>,type,service-name,status`|
 
-> Note: The `unique-service-id` for thin-edge device will be  `<device-name>_<service-name>`.
+```admonish note
+The `unique-service-id` for thin-edge device will be  `<device-name>_<service-name>`.
 In case of child device `<device-name>_<child-id>_<service-name>`.
 
-> Note: `102` is the `smartrest` template number for the service monitoring message.
+Note also that `102` is the `smartrest` template number for the service monitoring message.
+```
 
 ## Configuring the default service type
 
@@ -62,15 +68,17 @@ The example below shows how one can set the default service type to `systemd`.
 tedge config set service.type systemd
 
 ```
-> Note: When the `service type` was not sent with the `health status` message, then the configured default value will be used by
+
+```admonish note
+When the `service type` was not sent with the `health status` message, then the configured default value will be used by
 the mapper while translating the `health status` message to `service status` message.
+```
 
 To clear the configured default service type one can use the command below.
 This will set the `service.type` to `service`.
 
 ```
 tedge config unset service.type
-
 ```
 
 # References
