@@ -51,10 +51,6 @@ impl AwsConverter {
     }
 }
 
-pub fn make_valid_topic_or_panic(topic_name: &str) -> Topic {
-    Topic::new(topic_name).expect("Invalid topic name")
-}
-
 impl Converter for AwsConverter {
     type Error = ConversionError;
     type Input = MqttMessage;
