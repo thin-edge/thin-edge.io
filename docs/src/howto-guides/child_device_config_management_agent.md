@@ -76,7 +76,7 @@ Once the upload is complete, the agent should notify thin-edge about the upload 
 **Payload**:
 
 ```json
-{ "type": "c8y-configuration-plugin”, "path": ”/child/local/fs/path” }
+{ "type": "c8y-configuration-plugin", "path": "/child/local/fs/path" }
 ```
 
 # Handle config snapshot requests from thin-edge
@@ -84,9 +84,9 @@ Once the upload is complete, the agent should notify thin-edge about the upload 
 Handling config snapshot requests from thin-edge is a 4-step process:
 
 1. Subscribe to, and receive config snapshot requests via MQTT
-1. Send an “executing” operation status update to acknowledge the receipt of the request via MQTT
+1. Send an "executing" operation status update to acknowledge the receipt of the request via MQTT
 1. Upload the requested config file to the URL received in the request via HTTP
-1. Send a “successful” operation status update via MQTT
+1. Send a "successful" operation status update via MQTT
 
 These steps are explained in detail below:
 
@@ -156,10 +156,10 @@ a "failed" status update must be sent instead, to the same topic as follows:
 Handling config update requests from thin-edge is a 5-step process:
 
 1. Subscribe to, and receive config update requests via MQTT
-1. Send an “executing” operation status update to acknowledge the receipt of the request via MQTT
+1. Send an "executing" operation status update to acknowledge the receipt of the request via MQTT
 1. Download the config file update from the URL received in the request via HTTP
 1. Apply the config file update on the child device
-1. Send a “successful” operation status update via MQTT
+1. Send a "successful" operation status update via MQTT
 
 The child device agent must subscribe to the `tedge/{child-d}/commands/req/config_update` MQTT topic
 to receive the config update requests from thin-edge.

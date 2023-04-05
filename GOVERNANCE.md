@@ -92,7 +92,7 @@ The project has a hierarchy to solve these two problems:
         * This makes it easier to decide on technical questions
     * Everyone has to agree on the core project as it is the foundations to all others.
     * At the periphery, sub-projects might be related to specific eco-systems (e.g. Cumulocity or Moneo) and therefore have independent decision processes.
-    *	At an intermediate level, one might have sub-projects related to specific use-cases like “JSON over MQTT”.
+    *	At an intermediate level, one might have sub-projects related to specific use-cases like "JSON over MQTT".
 * All the sub-projects share a common repository - to ease consistency across projects and over time.
     *	Labels are used to organize issues/PRs/discussions along sub-projects.
     *	Code ownership is used to enforce cooperation around key components, but the default is to let things open and to trust each other, using version control as a safety net.

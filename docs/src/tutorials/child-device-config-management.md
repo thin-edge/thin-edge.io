@@ -166,7 +166,7 @@ Follow these steps to bootstrap the child device:
    **Payload:** 
    
    ```json
-   { "type": "c8y-configuration-plugin”, "path": ”/child/local/fs/path” }
+   { "type": "c8y-configuration-plugin", "path": "/child/local/fs/path" }
    ```
 
    **Example:**
@@ -311,7 +311,7 @@ Performing config update is an 8-step process:
    else the operation will fail with a timeout.
    ```
 
-5. Optionally send an “executing” operation status update to acknowledge the receipt of the request via MQTT as follows:
+5. Optionally send an "executing" operation status update to acknowledge the receipt of the request via MQTT as follows:
 
    **Topic:**
    
@@ -352,7 +352,7 @@ Performing config update is an 8-step process:
 
    The connector can then apply the downloaded configuration file update on the device.
 
-8. Send a “successful” operation status update via MQTT
+8. Send a "successful" operation status update via MQTT
 
    Once the update is applied, send a "successful" MQTT status message as follows:
    
