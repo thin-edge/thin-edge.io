@@ -106,7 +106,7 @@ That includes:
   * all **telemetry data** and **device management** functionality can appear in the context of the 
     **external child-device's** individual **device twin**, or the **main-device's** **device twin**
   * also _containers_ or _processes_ running on the **main-devices** can be handled like **external child-device**;
-    those are referered then as **logical child-devices**
+    those are referred then as **logical child-devices**
 
 The figure below illustrates the child-device concept.
 
@@ -162,7 +162,7 @@ A **plugin** defines and implements a specific **contract** for all interactions
     * optionally any custom-specific meta-information per **device**
   * the **inventory** is the communication backbone for **plugins**, **external child-devices**, the **domain application**[^1] and **thin-edge** it-self
       * one can add information to announce capabilities a **device** supports
-      * another one can retrieve those information to identify capabililties a **device** supports
+      * another one can retrieve those information to identify capabilities a **device** supports
 
 # Appendix
 

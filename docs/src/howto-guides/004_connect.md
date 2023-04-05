@@ -53,10 +53,10 @@ These credentials are used only for this upload and will in no case be stored on
 sudo tedge cert upload c8y --user <username>
 ```
 
-## Creating an MQTT brigde between the device and the cloud
+## Creating an MQTT bridge between the device and the cloud
 
 The connection from the device to the cloud is established using a so-called MQTT bridge:
-a permanent secured bi-directionnel MQTT connection that forward messages back and forth
+a permanent secured bidirectional MQTT connection that forward messages back and forth
 between the two end-points.
 
 To create the bridge use the [`tedge connect`](../references/tedge-connect.md) command.

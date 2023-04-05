@@ -68,7 +68,7 @@ maintenance of their codebase.
 The teams follow the project hierarchy for decisions, i.e. higher decisions take precedence.
 
 Decisions impacting multiple teams or the whole project need to be handled with special care.
-They need to be discussed with all relevant teams and a consesus needs to be reached.
+They need to be discussed with all relevant teams and a consensus needs to be reached.
 Some decisions are local, e.g. a component maintained by a company, but even in
 this case the team still needs to be a 'good citizen' in the project and follow
 agreed upon conventions (CI, format, etc..)

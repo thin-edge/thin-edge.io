@@ -37,7 +37,7 @@ In thin-edge.io we decided not to follow this approach because:
 * Libraries are **programming language dependent**,
   and thus developing a library for a number of  programming languages always excludes developers using other
   programming languages. Additionally the effort to support many libraries (C, C++, Rust, Python, etc) is huge,
-  including adding new features, testing, documentation, examples, stackoverflow.
+  including adding new features, testing, documentation, examples, Stack Overflow.
   Essentially we would create multiple small user groups instead of one large user group.
 * Using an IPC mechanism (and not a library) makes it easier to **dynamically plug** together components during runtime
   (instead of recompiling the software). For example, it is easier to add additional protocol stacks

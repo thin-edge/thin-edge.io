@@ -94,7 +94,7 @@ monitoring metrics are emitted by `collectd` on a hierarchy of MQTT topics.
 * `collectd/$HOSTNAME/#` - All the metrics collected on the device (which hostname is `$HOSTNAME`).
 * `collectd/$HOSTNAME/$PLUGIN/#` - All the metrics collected by a given collectd plugin, named `$PLUGIN`.
 * `collectd/$HOSTNAME/$PLUGIN/$METRIC` - The topic for a given metric, named `$METRIC`.
-   All the measurements are published as a pair of a Unix timestamp in milli-seconds and a numeric value
+   All the measurements are published as a pair of a Unix timestamp in milliseconds and a numeric value
    in the format `$TIMESTAMP:$VALUE`. For example, `1623155717:98.6`.
 
 The `collectd-mapper` daemon process ingests these measurements and emits translated messages

@@ -51,7 +51,7 @@
   - [How to enable firmware management on child devices](./howto-guides/child_device_firmware_management.md)
   - [How to remotely connect to your thin-edge.io device via SSH/VNC/Telnet with Cumulocity remote access](howto-guides/027_remote_access_with_cumulocity.md)
   - [How to monitor a service from Cumulocity](howto-guides/028_c8y_service_monitoring.md)
-  - [How to manage apama software artefatcs with apama plugin?](howto-guides/017_apama_software_management_plugin.md)
+  - [How to manage Apama software artifacts with Apama plugin?](howto-guides/017_apama_software_management_plugin.md)
   - [How to retrieve JWT token from Cumulocity?](howto-guides/011_retrieve_jwt_token_from_cumulocity.md)
 
 - [Reference](references/references.md)
