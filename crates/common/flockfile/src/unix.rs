@@ -1,7 +1,6 @@
 use nix::fcntl::flock;
 use nix::fcntl::FlockArg;
 use nix::unistd::write;
-use nix::unistd::Pid;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::fs::{self};
@@ -86,7 +85,7 @@ impl Flockfile {
                 })?;
 
         // Convert the PID to a string
-        let pid_string = format!("{}", Pid::this());
+        let pid_string = format!("{}", std::process::id());
 
         flock(file.as_raw_fd(), FlockArg::LockExclusiveNonblock).map_err(|err| {
             FlockfileError::FromNix {
@@ -173,6 +172,7 @@ mod tests {
 
     use super::*;
     use assert_matches::*;
+    use nix::unistd::Pid;
     use std::fs;
     use std::io;
     use std::io::Read;
