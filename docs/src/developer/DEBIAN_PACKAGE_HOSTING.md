@@ -88,6 +88,9 @@ curl -1sLf \
         tedge-agent \
         tedge-watchdog \
         c8y-configuration-plugin \
+        tedge-apt-plugin \
+        c8y-firmware-plugin \
+        c8y-remote-access-plugin \
         c8y-log-plugin
     ```
 
