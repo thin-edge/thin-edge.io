@@ -90,6 +90,82 @@ async fn handle_request_child_device_without_new_download() -> Result<(), DynErr
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn resend_firmware_update_request_child_device() -> Result<(), DynError> {
+    let mut ttd = TempTedgeDir::new();
+
+    let (
+        mut mqtt_message_box,
+        mut _c8y_proxy_message_box,
+        mut _timer_message_box,
+        mut _downloader_message_box,
+    ) = spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, true, true).await?;
+
+    // Publish firmware update operation to child device.
+    publish_smartrest_firmware_operation(&mut mqtt_message_box).await?;
+
+    // Ignore SmartREST 500.
+    mqtt_message_box.skip(1).await;
+
+    // The first MQTT message after the c8y operation published should be firmware update request.
+    let (topic, received_json) = mqtt_message_box
+        .recv()
+        .await
+        .map(|msg| {
+            (
+                msg.topic.name,
+                serde_json::from_str::<serde_json::Value>(msg.payload.as_str().expect("UTF8"))
+                    .expect("JSON"),
+            )
+        })
+        .unwrap();
+
+    assert_eq!(
+        topic,
+        format!("tedge/{CHILD_DEVICE_ID}/commands/req/firmware_update")
+    );
+
+    let expected_json = json!({
+        "attempt": 1,
+        "name": FIRMWARE_NAME,
+        "version": FIRMWARE_VERSION,
+        "url": format!("http://{TEDGE_HOST}:{TEDGE_HTTP_PORT}/tedge/file-transfer/{CHILD_DEVICE_ID}/firmware_update/{DOWNLOADED_FILE_NAME}")
+    });
+    assert_json_include!(actual: received_json, expected: expected_json);
+
+    // Publish the same c8y_Firmware operation to the plugin again.
+    publish_smartrest_firmware_operation(&mut mqtt_message_box).await?;
+
+    // The MQTT message after the c8y operation published should be firmware update request.
+    let (topic, received_json) = mqtt_message_box
+        .recv()
+        .await
+        .map(|msg| {
+            (
+                msg.topic.name,
+                serde_json::from_str::<serde_json::Value>(msg.payload.as_str().expect("UTF8"))
+                    .expect("JSON"),
+            )
+        })
+        .unwrap();
+
+    assert_eq!(
+        topic,
+        format!("tedge/{CHILD_DEVICE_ID}/commands/req/firmware_update")
+    );
+
+    // "attempt" should be increased.
+    let expected_json = json!({
+        "attempt": 2,
+        "name": FIRMWARE_NAME,
+        "version": FIRMWARE_VERSION,
+        "url": format!("http://{TEDGE_HOST}:{TEDGE_HTTP_PORT}/tedge/file-transfer/{CHILD_DEVICE_ID}/firmware_update/{DOWNLOADED_FILE_NAME}")
+    });
+    assert_json_include!(actual: received_json, expected: expected_json);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn handle_request_child_device_with_new_download() -> Result<(), DynError> {
     let mut ttd = TempTedgeDir::new();
 

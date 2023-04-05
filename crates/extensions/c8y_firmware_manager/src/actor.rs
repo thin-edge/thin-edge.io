@@ -141,7 +141,6 @@ impl FirmwareManagerActor {
 
         let child_id = smartrest_request.device.as_str();
 
-        // TODO: Sync with the latest change on the plugin
         if let Err(err) = self
             .validate_same_request_in_progress(smartrest_request.clone())
             .await
@@ -367,7 +366,6 @@ impl FirmwareManagerActor {
             Some(&ActiveOperationState::Executing) => {}
             Some(&ActiveOperationState::Pending) => {
                 self.publish_c8y_executing_message(&child_id).await?;
-                // TODO: Maybe cutting off as a function.
                 self.active_child_ops
                     .insert(operation_key.clone(), ActiveOperationState::Executing);
             }
@@ -397,10 +395,7 @@ impl FirmwareManagerActor {
                 )
                 .await?;
                 self.remove_status_file(operation_id)?;
-                self.remove_entry_from_active_operations(&OperationKey::new(
-                    &child_id,
-                    operation_id,
-                ));
+                self.remove_entry_from_active_operations(&operation_key);
             }
             OperationStatus::Executing => {
                 // Starting timer again means extending the timer.
@@ -451,6 +446,28 @@ impl FirmwareManagerActor {
                             && recorded_entry.version == smartrest_request.version
                             && recorded_entry.server_url == smartrest_request.url
                         {
+                            info!("The same operation as the received c8y_Firmware operation is already in progress.");
+
+                            // Resend a firmware request with incremented attempt.
+                            let new_operation_entry = recorded_entry.increment_attempt();
+                            let operation_key = OperationKey::new(
+                                &new_operation_entry.child_id,
+                                &new_operation_entry.operation_id,
+                            );
+
+                            new_operation_entry.overwrite_file(&firmware_dir_path)?;
+                            self.publish_firmware_update_request(new_operation_entry)
+                                .await?;
+                            // Add operation to hashmap
+                            self.active_child_ops
+                                .insert(operation_key.clone(), ActiveOperationState::Pending);
+                            // Start timer
+                            self.message_box
+                                .send(
+                                    SetTimeout::new(self.config.timeout_sec, operation_key).into(),
+                                )
+                                .await?;
+
                             return Err(FirmwareManagementError::RequestAlreadyAddressed);
                         }
                     }
@@ -544,7 +561,7 @@ impl FirmwareManagerActor {
             FirmwareOperationRequest::from(operation_entry.clone()).try_into()?;
         self.message_box.send(mqtt_message.into()).await?;
         info!(
-            "Firmware update request is resent. operation_id={}, child={}",
+            "Firmware update request is sent. operation_id={}, child={}",
             operation_entry.operation_id, operation_entry.child_id
         );
         Ok(())
@@ -615,6 +632,7 @@ impl FirmwareManagerActor {
         Ok(())
     }
 
+    // TODO: What "key not found" mean?
     fn remove_entry_from_active_operations(
         &mut self,
         operation_key: &OperationKey,
