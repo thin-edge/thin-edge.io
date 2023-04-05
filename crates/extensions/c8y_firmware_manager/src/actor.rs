@@ -12,7 +12,6 @@ use sha256::digest;
 use sha256::try_digest;
 use std::collections::HashMap;
 use std::fs;
-use std::fs::File;
 use std::os::unix::fs as unix_fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -24,8 +23,11 @@ use tedge_actors::LoggingReceiver;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
+use tedge_actors::Sender;
 use tedge_actors::WrappedInput;
 use tedge_api::OperationStatus;
+use tedge_downloader_ext::DownloadRequest;
+use tedge_downloader_ext::DownloadResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
@@ -48,12 +50,16 @@ use crate::operation::OperationKey;
 pub type OperationSetTimeout = SetTimeout<OperationKey>;
 pub type OperationTimeout = Timeout<OperationKey>;
 
-fan_in_message_type!(FirmwareInput[MqttMessage, OperationTimeout] : Debug);
-fan_in_message_type!(FirmwareOutput[MqttMessage, OperationSetTimeout] : Debug);
+pub type IdDownloadResult = (String, DownloadResult);
+pub type IdDownloadRequest = (String, DownloadRequest);
+
+fan_in_message_type!(FirmwareInput[MqttMessage, OperationTimeout, IdDownloadResult] : Debug);
+fan_in_message_type!(FirmwareOutput[MqttMessage, OperationSetTimeout, IdDownloadRequest] : Debug);
 
 pub struct FirmwareManagerActor {
     config: FirmwareManagerConfig,
     active_child_ops: HashMap<OperationKey, ActiveOperationState>,
+    reqs_pending_download: HashMap<String, SmartRestFirmwareRequest>,
     message_box: FirmwareManagerMessageBox,
 }
 
@@ -62,6 +68,7 @@ impl FirmwareManagerActor {
         Self {
             config,
             active_child_ops: HashMap::new(),
+            reqs_pending_download: HashMap::new(),
             message_box,
         }
     }
@@ -70,11 +77,11 @@ impl FirmwareManagerActor {
         &mut self,
         message: MqttMessage,
     ) -> Result<(), FirmwareManagementError> {
-        if self.config.firmware_update_response_topics.accept(&message) {
-            self.handle_child_device_firmware_operation_response(message.clone())
-                .await?;
-        } else if self.config.c8y_request_topics.accept(&message) {
+        if self.config.c8y_request_topics.accept(&message) {
             self.handle_firmware_update_smartrest_request(message)
+                .await?;
+        } else if self.config.firmware_update_response_topics.accept(&message) {
+            self.handle_child_device_firmware_operation_response(message.clone())
                 .await?;
         } else {
             error!(
@@ -90,24 +97,23 @@ impl FirmwareManagerActor {
         message: MqttMessage,
     ) -> Result<(), FirmwareManagementError> {
         for smartrest_message in collect_smartrest_messages(message.payload_str()?) {
-            let result = match get_smartrest_template_id(smartrest_message.as_str()).as_str() {
-                "515" => {
-                    match SmartRestFirmwareRequest::from_smartrest(smartrest_message.as_str()) {
-                        Ok(firmware_request) => {
-                            self.handle_firmware_download_request(firmware_request)
-                                .await
-                        }
-                        Err(_) => {
-                            error!("Incorrect c8y_Firmware SmartREST payload: {smartrest_message}");
-                            Ok(())
-                        }
+            let result = match get_smartrest_template_id(&smartrest_message).as_str() {
+                "515" => match SmartRestFirmwareRequest::from_smartrest(&smartrest_message) {
+                    Ok(firmware_request) => {
+                        self.handle_firmware_download_request(firmware_request)
+                            .await
                     }
-                }
+                    Err(_) => {
+                        error!("Incorrect c8y_Firmware SmartREST payload: {smartrest_message}");
+                        Ok(())
+                    }
+                },
                 _ => {
                     // Ignore operation messages not meant for this plugin
                     Ok(())
                 }
             };
+
             if let Err(err) = result {
                 error!("Handling of operation: '{smartrest_message}' failed with {err}");
             }
@@ -135,6 +141,7 @@ impl FirmwareManagerActor {
 
         let child_id = smartrest_request.device.as_str();
 
+        // TODO: Sync with the latest change on the plugin
         if let Err(err) = self
             .validate_same_request_in_progress(smartrest_request.clone())
             .await
@@ -145,7 +152,7 @@ impl FirmwareManagerActor {
                     Ok(())
                 }
                 _ => {
-                    self.fail_operation_in_cloud(&child_id, None, &err.to_string())
+                    self.fail_operation_in_cloud(child_id, None, &err.to_string())
                         .await?;
                     Err(err)
                 }
@@ -160,7 +167,7 @@ impl FirmwareManagerActor {
             )
             .await
         {
-            self.fail_operation_in_cloud(&child_id, Some(&op_id), &err.to_string())
+            self.fail_operation_in_cloud(child_id, Some(&op_id), &err.to_string())
                 .await?;
         }
 
@@ -191,20 +198,68 @@ impl FirmwareManagerActor {
             )
             .await?;
         } else {
-            // TODO: Reimplement this block with downloader. All are fake implementation for tests.
             info!(
                 "Awaiting firmware download for op_id: {} from url: {}",
                 operation_id, firmware_url
             );
-            // Now mocking the downloader by just creating a file in the desired destination.
-            File::create(&cache_file_path)?;
-            // This function shouldn't be here, but call it until downloader implementation ready.
-            self.handle_firmware_update_request_with_downloaded_file(
-                smartrest_request,
-                operation_id,
-                &cache_file_path,
-            )
-            .await?;
+
+            // TODO: JWT token
+            // If url_is_in_my_tenant_domain
+            // let auth = if false {
+            //     let client_message_box = self.message_box.c8y_http_proxy.get_client_message_box();
+            //     let jwt_token = client_message_box.await_response(C8YR).await?;
+            //     Some(jwt_token)
+            // } else {
+            //     None
+            // };
+
+            // Send a request to the DownloadManager to download the file asynchronously
+            let download_request = DownloadRequest::new(firmware_url, &cache_file_path, None);
+
+            self.message_box
+                .download_sender
+                .send((operation_id.to_string(), download_request))
+                .await?;
+            self.reqs_pending_download
+                .insert(operation_id.to_string(), smartrest_request);
+        }
+        Ok(())
+    }
+
+    async fn process_after_download(
+        &mut self,
+        operation_id: &str,
+        download_result: DownloadResult,
+    ) -> Result<(), FirmwareManagementError> {
+        if let Some(smartrest_request) = self.reqs_pending_download.remove(operation_id) {
+            let child_id = smartrest_request.device.clone();
+            match download_result {
+                Ok(response) => {
+                    if let Err(err) = self
+                        .handle_firmware_update_request_with_downloaded_file(
+                            smartrest_request,
+                            operation_id,
+                            &response.file_path,
+                        )
+                        .await
+                    {
+                        self.fail_operation_in_cloud(
+                            &child_id,
+                            Some(operation_id),
+                            &err.to_string(),
+                        )
+                        .await?;
+                    }
+                }
+                Err(err) => {
+                    let firmware_url = smartrest_request.url;
+                    let failure_reason = format!("Download from {firmware_url} failed with {err}");
+                    self.fail_operation_in_cloud(&child_id, Some(operation_id), &failure_reason)
+                        .await?;
+                }
+            }
+        } else {
+            error!("Unexpected: Download completed for unknown operation: {operation_id}");
         }
         Ok(())
     }
@@ -305,7 +360,7 @@ impl FirmwareManagerActor {
         let received_status = child_device_payload.status;
         info!("Firmware update response received. Details: id={operation_id}, child={child_id}, status={received_status:?}");
 
-        let operation_key = OperationKey::new(&child_id, &operation_id);
+        let operation_key = OperationKey::new(&child_id, operation_id);
         let current_operation_state = self.active_child_ops.get(&operation_key);
 
         match current_operation_state {
@@ -344,7 +399,7 @@ impl FirmwareManagerActor {
                 self.remove_status_file(operation_id)?;
                 self.remove_entry_from_active_operations(&OperationKey::new(
                     &child_id,
-                    &operation_id,
+                    operation_id,
                 ));
             }
             OperationStatus::Executing => {
@@ -619,7 +674,10 @@ impl Actor for FirmwareManagerActor {
                 }
                 FirmwareInput::OperationTimeout(timeout) => {
                     self.process_operation_timeout(timeout).await?;
-                } // TODO: Add downloader
+                }
+                FirmwareInput::IdDownloadResult((id, result)) => {
+                    self.process_after_download(&id, result).await?
+                }
             }
         }
         Ok(())
@@ -631,6 +689,7 @@ pub struct FirmwareManagerMessageBox {
     mqtt_publisher: DynSender<MqttMessage>,
     c8y_http_proxy: C8YHttpProxy,
     timer_sender: DynSender<SetTimeout<OperationKey>>,
+    download_sender: DynSender<IdDownloadRequest>,
 }
 
 impl FirmwareManagerMessageBox {
@@ -639,12 +698,14 @@ impl FirmwareManagerMessageBox {
         mqtt_publisher: DynSender<MqttMessage>,
         c8y_http_proxy: C8YHttpProxy,
         timer_sender: DynSender<SetTimeout<OperationKey>>,
+        download_sender: DynSender<IdDownloadRequest>,
     ) -> Self {
         Self {
             input_receiver,
             mqtt_publisher,
             c8y_http_proxy,
             timer_sender,
+            download_sender,
         }
     }
 
@@ -652,6 +713,7 @@ impl FirmwareManagerMessageBox {
         match message {
             FirmwareOutput::MqttMessage(message) => self.mqtt_publisher.send(message).await,
             FirmwareOutput::OperationSetTimeout(message) => self.timer_sender.send(message).await,
+            FirmwareOutput::IdDownloadRequest(message) => self.download_sender.send(message).await,
         }
     }
 }

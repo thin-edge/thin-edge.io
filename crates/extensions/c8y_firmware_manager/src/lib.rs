@@ -7,6 +7,8 @@ mod operation;
 #[cfg(test)]
 mod tests;
 
+use crate::actor::IdDownloadRequest;
+use crate::actor::IdDownloadResult;
 use crate::operation::OperationKey;
 use actor::FirmwareInput;
 use actor::FirmwareManagerActor;
@@ -37,6 +39,7 @@ pub struct FirmwareManagerBuilder {
     mqtt_publisher: Option<DynSender<MqttMessage>>,
     c8y_http_proxy: Option<C8YHttpProxy>,
     timer_sender: Option<DynSender<SetTimeout<OperationKey>>>,
+    download_sender: Option<DynSender<IdDownloadRequest>>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
 }
 
@@ -57,6 +60,7 @@ impl FirmwareManagerBuilder {
             mqtt_publisher: None,
             c8y_http_proxy: None,
             timer_sender: None,
+            download_sender: None,
             signal_sender,
         }
     }
@@ -83,6 +87,20 @@ impl ServiceConsumer<SetTimeout<OperationKey>, Timeout<OperationKey>, NoConfig>
     }
 
     fn get_response_sender(&self) -> DynSender<Timeout<OperationKey>> {
+        self.events_sender.clone().into()
+    }
+}
+
+impl ServiceConsumer<IdDownloadRequest, IdDownloadResult, NoConfig> for FirmwareManagerBuilder {
+    fn get_config(&self) -> NoConfig {
+        NoConfig
+    }
+
+    fn set_request_sender(&mut self, sender: DynSender<IdDownloadRequest>) {
+        self.download_sender = Some(sender);
+    }
+
+    fn get_response_sender(&self) -> DynSender<IdDownloadResult> {
         self.events_sender.clone().into()
     }
 }
@@ -125,11 +143,16 @@ impl Builder<FirmwareManagerActor> for FirmwareManagerBuilder {
             role: "timer".to_string(),
         })?;
 
+        let download_requester = self.download_sender.ok_or_else(|| LinkError::MissingPeer {
+            role: "downloader".to_string(),
+        })?;
+
         let peers = FirmwareManagerMessageBox::new(
             self.receiver,
             mqtt_publisher,
             c8y_http_proxy,
             timer_sender,
+            download_requester,
         );
 
         Ok(FirmwareManagerActor::new(self.config, peers))
