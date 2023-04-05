@@ -140,6 +140,12 @@ jobs:
           crate: mdbook-admonish
           version: latest
 
+      - name: Install mdbook-pagetoc
+        uses: actions-rs/install@v0.1
+        with:
+          crate: mdbook-pagetoc
+          version: latest
+
       - name: Install mdbook-cmdrun
         uses: actions-rs/install@v0.1
         with:
