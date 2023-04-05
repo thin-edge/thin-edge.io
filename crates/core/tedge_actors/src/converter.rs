@@ -7,6 +7,8 @@ use crate::MessageSink;
 use crate::MessageSource;
 use crate::NoConfig;
 use crate::RuntimeError;
+use crate::RuntimeRequest;
+use crate::RuntimeRequestSink;
 use crate::Sender;
 use crate::ServiceConsumer;
 use crate::ServiceProvider;
@@ -218,5 +220,11 @@ impl<C: Converter, Config> ServiceProvider<C::Input, C::Output, NoConfig>
 {
     fn add_peer(&mut self, peer: &mut impl ServiceConsumer<C::Input, C::Output, NoConfig>) {
         self.message_box.add_peer(peer)
+    }
+}
+
+impl<C: Converter, Config> RuntimeRequestSink for ConvertingActorBuilder<C, Config> {
+    fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
+        self.message_box.get_signal_sender()
     }
 }

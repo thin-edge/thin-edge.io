@@ -1,21 +1,18 @@
 use std::path::Path;
 
-use crate::az::converter::AzureConverter;
 use crate::core::component::TEdgeComponent;
-use crate::core::mapper::create_mapper;
-use crate::core::size_threshold::SizeThreshold;
-
+use crate::core::mapper::start_basic_actors;
 use async_trait::async_trait;
+use az_mapper_ext::converter::AzureConverter;
 use clock::WallClock;
-use tedge_config::AzureMapperTimestamp;
-use tedge_config::ConfigSettingAccessor;
-use tedge_config::MqttClientHostSetting;
-use tedge_config::MqttClientPortSetting;
+use tedge_actors::ConvertingActor;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
 use tedge_config::TEdgeConfig;
+use tedge_config::*;
 use tedge_utils::file::create_directory_with_user_group;
 use tracing::info;
-use tracing::info_span;
-use tracing::Instrument;
 
 const AZURE_MAPPER_NAME: &str = "tedge-mapper-az";
 
@@ -49,23 +46,27 @@ impl TEdgeComponent for AzureMapper {
     async fn start(
         &self,
         tedge_config: TEdgeConfig,
-        config_dir: &Path,
+        _config_dir: &Path,
     ) -> Result<(), anyhow::Error> {
-        let add_timestamp = tedge_config.query(AzureMapperTimestamp)?.is_set();
-        let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
-        let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
-        let clock = Box::new(WallClock);
-        let size_threshold = SizeThreshold(255 * 1024);
+        let (mut runtime, mut mqtt_actor) =
+            start_basic_actors(self.session_name(), &tedge_config).await?;
 
-        let converter = Box::new(AzureConverter::new(add_timestamp, clock, size_threshold));
+        let az_converter = AzureConverter::new(
+            tedge_config.query(AzureMapperTimestamp)?.is_set(),
+            Box::new(WallClock),
+        );
+        let mut az_converting_actor = ConvertingActor::builder(
+            "AzConverter",
+            az_converter,
+            AzureConverter::in_topic_filter(),
+        );
+        az_converting_actor.add_input(&mut mqtt_actor);
 
-        let mut mapper = create_mapper(AZURE_MAPPER_NAME, mqtt_host, mqtt_port, converter).await?;
+        az_converting_actor.register_peer(NoConfig, mqtt_actor.get_sender());
 
-        mapper
-            .run(Some(&config_dir.join("operations/az")))
-            .instrument(info_span!(AZURE_MAPPER_NAME))
-            .await?;
-
+        runtime.spawn(az_converting_actor).await?;
+        runtime.spawn(mqtt_actor).await?;
+        runtime.run_to_completion().await?;
         Ok(())
     }
 }

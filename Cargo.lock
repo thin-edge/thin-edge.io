@@ -261,6 +261,46 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
+name = "aws_mapper_ext"
+version = "0.10.0"
+dependencies = [
+ "assert-json-diff",
+ "assert_matches",
+ "async-trait",
+ "clock",
+ "log",
+ "rand",
+ "serde",
+ "serde_json",
+ "tedge_actors",
+ "tedge_api",
+ "tedge_mqtt_ext",
+ "thiserror",
+ "time",
+ "tokio",
+]
+
+[[package]]
+name = "az_mapper_ext"
+version = "0.10.0"
+dependencies = [
+ "assert-json-diff",
+ "assert_matches",
+ "async-trait",
+ "clock",
+ "log",
+ "rand",
+ "serde",
+ "serde_json",
+ "tedge_actors",
+ "tedge_api",
+ "tedge_mqtt_ext",
+ "thiserror",
+ "time",
+ "tokio",
+]
+
+[[package]]
 name = "backoff"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3585,6 +3625,8 @@ dependencies = [
  "assert_cmd",
  "assert_matches",
  "async-trait",
+ "aws_mapper_ext",
+ "az_mapper_ext",
  "batcher",
  "c8y_api",
  "clap 3.2.23",
@@ -3606,8 +3648,12 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
+ "tedge_actors",
  "tedge_api",
  "tedge_config",
+ "tedge_health_ext",
+ "tedge_mqtt_ext",
+ "tedge_signal_ext",
  "tedge_test_utils",
  "tedge_utils",
  "test-case",

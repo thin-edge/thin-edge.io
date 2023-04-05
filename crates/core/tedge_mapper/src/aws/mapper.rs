@@ -1,20 +1,19 @@
 use std::path::Path;
 
-use crate::aws::converter::AwsConverter;
 use crate::core::component::TEdgeComponent;
-use crate::core::mapper::create_mapper;
-use crate::core::size_threshold::SizeThreshold;
+use crate::core::mapper::start_basic_actors;
+use aws_mapper_ext::converter::AwsConverter;
 
 use async_trait::async_trait;
 use clock::WallClock;
+use tedge_actors::ConvertingActor;
+use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
+use tedge_actors::NoConfig;
 use tedge_config::AwsMapperTimestamp;
 use tedge_config::ConfigSettingAccessor;
-use tedge_config::MqttClientHostSetting;
-use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
 use tracing::info;
-use tracing::info_span;
-use tracing::Instrument;
 
 const AWS_MAPPER_NAME: &str = "tedge-mapper-aws";
 
@@ -38,22 +37,23 @@ impl TEdgeComponent for AwsMapper {
         tedge_config: TEdgeConfig,
         _config_dir: &Path,
     ) -> Result<(), anyhow::Error> {
-        let add_timestamp = tedge_config.query(AwsMapperTimestamp)?.is_set();
-        let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
-        let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
+        let (mut runtime, mut mqtt_actor) =
+            start_basic_actors(self.session_name(), &tedge_config).await?;
         let clock = Box::new(WallClock);
-        // Quotas at: https://docs.aws.amazon.com/general/latest/gr/iot-core.html#limits_iot
-        let size_threshold = SizeThreshold(128 * 1024);
+        let aws_converter =
+            AwsConverter::new(tedge_config.query(AwsMapperTimestamp)?.is_set(), clock);
+        let mut aws_converting_actor = ConvertingActor::builder(
+            "AwsConverter",
+            aws_converter,
+            AwsConverter::in_topic_filter(),
+        );
 
-        let converter = Box::new(AwsConverter::new(add_timestamp, clock, size_threshold));
+        aws_converting_actor.add_input(&mut mqtt_actor);
+        aws_converting_actor.register_peer(NoConfig, mqtt_actor.get_sender());
 
-        let mut mapper = create_mapper(AWS_MAPPER_NAME, mqtt_host, mqtt_port, converter).await?;
-
-        mapper
-            .run(None)
-            .instrument(info_span!(AWS_MAPPER_NAME))
-            .await?;
-
+        runtime.spawn(aws_converting_actor).await?;
+        runtime.spawn(mqtt_actor).await?;
+        runtime.run_to_completion().await?;
         Ok(())
     }
 }
