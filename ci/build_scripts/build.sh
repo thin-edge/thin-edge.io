@@ -150,8 +150,11 @@ if ! cargo zigbuild --help &>/dev/null; then
     cargo install cargo-zigbuild
 fi
 
-if ! python3 -c 'import ziglang' &>/dev/null; then
-    pip3 install ziglang
+# Allow users to install zig by other package managers
+if ! zig --help &>/dev/null; then
+    if ! python3 -m ziglang --help &>/dev/null; then
+        pip3 install ziglang
+    fi
 fi
 
 if [ -z "$ARCH" ]; then
