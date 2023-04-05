@@ -60,7 +60,7 @@ jobs:
           args: ${{ inputs.bump }} --no-publish --no-push --no-tag -vv --no-confirm --execute
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v4
+        uses: peter-evans/create-pull-request@v5
         with:
           commit-message: ${{ inputs.bump }} version bump
           delete-branch: true
