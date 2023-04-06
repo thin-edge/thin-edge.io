@@ -1,0 +1,31 @@
+[package]
+name = "collectd_ext"
+description = "thin-edge extension adding support for collectd"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1"
+batcher = { path = "../../common/batcher" }
+clock = { path = "../../common/clock" }
+log = "0.4"
+tedge_actors = { path = "../../core/tedge_actors" }
+tedge_api = { path = "../../core/tedge_api" }
+tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
+thiserror = "1.0"
+time = "0.3"
+tokio = { version = "1.23", features = [
+    "sync",
+    "time",
+] }
+
+[dev-dependencies]
+anyhow = "1.0"
+assert_matches = "1.5"
+time = { version = "0.3", features = ["macros"] }

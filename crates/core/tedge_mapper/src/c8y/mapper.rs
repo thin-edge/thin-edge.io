@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use crate::c8y::converter::CumulocityConverter;
 use crate::c8y::converter::CumulocityDeviceInfo;
 use crate::core::component::TEdgeComponent;
-use crate::core::converter::make_valid_topic_or_panic;
 use crate::core::converter::MapperConfig;
 use crate::core::mapper::mqtt_config;
 use crate::core::mapper::Mapper;
@@ -15,6 +14,7 @@ use c8y_api::http_proxy::JwtAuthHttpProxy;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
 use mqtt_channel::Connection;
+use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use tedge_api::health::health_check_topics;
 use tedge_api::topic::ResponseTopic;
@@ -161,8 +161,8 @@ pub fn create_mapper_config(operations: &Operations) -> MapperConfig {
 
     MapperConfig {
         in_topic_filter: topic_filter,
-        out_topic: make_valid_topic_or_panic("c8y/measurement/measurements/create"),
-        errors_topic: make_valid_topic_or_panic("tedge/errors"),
+        out_topic: Topic::new_unchecked("c8y/measurement/measurements/create"),
+        errors_topic: Topic::new_unchecked("tedge/errors"),
     }
 }
 

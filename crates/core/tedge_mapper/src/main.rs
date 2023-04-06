@@ -22,7 +22,7 @@ fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     match component_name {
         MapperName::Az => Box::new(AzureMapper::new()),
         MapperName::Aws => Box::new(AwsMapper),
-        MapperName::Collectd => Box::new(CollectdMapper::new()),
+        MapperName::Collectd => Box::new(CollectdMapper),
         MapperName::C8y => Box::new(CumulocityMapper::new()),
     }
 }

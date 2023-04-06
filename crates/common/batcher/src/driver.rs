@@ -1,12 +1,16 @@
 use crate::batchable::Batchable;
 use crate::batcher::Batcher;
 use crate::batcher::BatcherOutput;
+use async_trait::async_trait;
 use std::collections::BTreeSet;
 use std::time::Duration;
+use tedge_actors::Actor;
+use tedge_actors::ChannelError;
+use tedge_actors::MessageReceiver;
+use tedge_actors::RuntimeError;
+use tedge_actors::Sender;
+use tedge_actors::SimpleMessageBox;
 use time::OffsetDateTime;
-use tokio::sync::mpsc::error::SendError;
-use tokio::sync::mpsc::Receiver;
-use tokio::sync::mpsc::Sender;
 
 /// Input message to the BatchDriver's input channel.
 #[derive(Debug)]
@@ -18,6 +22,12 @@ pub enum BatchDriverInput<B: Batchable> {
     Flush,
 }
 
+impl<B: Batchable> From<B> for BatchDriverInput<B> {
+    fn from(event: B) -> Self {
+        BatchDriverInput::Event(event)
+    }
+}
+
 /// Output message from the BatchDriver's output channel.
 #[derive(Debug)]
 pub enum BatchDriverOutput<B: Batchable> {
@@ -27,13 +37,20 @@ pub enum BatchDriverOutput<B: Batchable> {
     Flush,
 }
 
+impl<B: Batchable> From<BatchDriverOutput<B>> for Vec<B> {
+    fn from(value: BatchDriverOutput<B>) -> Self {
+        match value {
+            BatchDriverOutput::Batch(events) => events,
+            BatchDriverOutput::Flush => vec![],
+        }
+    }
+}
+
 /// The central API for using the batching algorithm.
 /// Send items in, get batches out.
-#[derive(Debug)]
 pub struct BatchDriver<B: Batchable> {
     batcher: Batcher<B>,
-    input: Receiver<BatchDriverInput<B>>,
-    output: Sender<BatchDriverOutput<B>>,
+    message_box: SimpleMessageBox<BatchDriverInput<B>, BatchDriverOutput<B>>,
     timers: BTreeSet<OffsetDateTime>,
 }
 
@@ -43,23 +60,14 @@ enum TimeTo {
     Past(OffsetDateTime),
 }
 
-impl<B: Batchable> BatchDriver<B> {
-    /// Define the batching process and channels to interact with it.
-    pub fn new(
-        batcher: Batcher<B>,
-        input: Receiver<BatchDriverInput<B>>,
-        output: Sender<BatchDriverOutput<B>>,
-    ) -> BatchDriver<B> {
-        BatchDriver {
-            batcher,
-            input,
-            output,
-            timers: BTreeSet::new(),
-        }
+#[async_trait]
+impl<B: Batchable> Actor for BatchDriver<B> {
+    fn name(&self) -> &str {
+        "Event batcher"
     }
 
     /// Start the batching - runs until receiving a Flush message
-    pub async fn run(mut self) -> Result<(), SendError<BatchDriverOutput<B>>> {
+    async fn run(&mut self) -> Result<(), RuntimeError> {
         loop {
             let message = match self.time_to_next_timer() {
                 TimeTo::Unbounded => self.recv(None),
@@ -79,7 +87,21 @@ impl<B: Batchable> BatchDriver<B> {
             };
         }
 
-        self.flush().await
+        Ok(self.flush().await?)
+    }
+}
+
+impl<B: Batchable> BatchDriver<B> {
+    /// Define the batching process and channels to interact with it.
+    pub fn new(
+        batcher: Batcher<B>,
+        message_box: SimpleMessageBox<BatchDriverInput<B>, BatchDriverOutput<B>>,
+    ) -> BatchDriver<B> {
+        BatchDriver {
+            batcher,
+            message_box,
+            timers: BTreeSet::new(),
+        }
     }
 
     async fn recv(
@@ -87,8 +109,8 @@ impl<B: Batchable> BatchDriver<B> {
         timeout: Option<Duration>,
     ) -> Result<Option<BatchDriverInput<B>>, tokio::time::error::Elapsed> {
         match timeout {
-            None => Ok(self.input.recv().await),
-            Some(timeout) => tokio::time::timeout(timeout, self.input.recv()).await,
+            None => Ok(self.message_box.recv().await),
+            Some(timeout) => tokio::time::timeout(timeout, self.message_box.recv()).await,
         }
     }
 
@@ -108,11 +130,13 @@ impl<B: Batchable> BatchDriver<B> {
         }
     }
 
-    async fn event(&mut self, event: B) -> Result<(), SendError<BatchDriverOutput<B>>> {
+    async fn event(&mut self, event: B) -> Result<(), ChannelError> {
         for action in self.batcher.event(OffsetDateTime::now_utc(), event) {
             match action {
                 BatcherOutput::Batch(batch) => {
-                    self.output.send(BatchDriverOutput::Batch(batch)).await?;
+                    self.message_box
+                        .send(BatchDriverOutput::Batch(batch))
+                        .await?;
                 }
                 BatcherOutput::Timer(t) => {
                     self.timers.insert(t);
@@ -123,20 +147,24 @@ impl<B: Batchable> BatchDriver<B> {
         Ok(())
     }
 
-    async fn time(&mut self, timer: OffsetDateTime) -> Result<(), SendError<BatchDriverOutput<B>>> {
+    async fn time(&mut self, timer: OffsetDateTime) -> Result<(), ChannelError> {
         for batch in self.batcher.time(timer) {
-            self.output.send(BatchDriverOutput::Batch(batch)).await?;
+            self.message_box
+                .send(BatchDriverOutput::Batch(batch))
+                .await?;
         }
 
         Ok(())
     }
 
-    async fn flush(self) -> Result<(), SendError<BatchDriverOutput<B>>> {
+    async fn flush(&mut self) -> Result<(), ChannelError> {
         for batch in self.batcher.flush() {
-            self.output.send(BatchDriverOutput::Batch(batch)).await?;
+            self.message_box
+                .send(BatchDriverOutput::Batch(batch))
+                .await?;
         }
 
-        self.output.send(BatchDriverOutput::Flush).await
+        self.message_box.send(BatchDriverOutput::Flush).await
     }
 }
 
@@ -148,56 +176,56 @@ mod tests {
     use crate::config::BatchConfigBuilder;
     use crate::driver::BatchDriver;
     use std::time::Duration;
-    use tokio::sync::mpsc::channel;
-    use tokio::sync::mpsc::error::SendError;
-    use tokio::sync::mpsc::Receiver;
-    use tokio::sync::mpsc::Sender;
+    use tedge_actors::test_helpers::ServiceProviderExt;
+    use tedge_actors::Builder;
+    use tedge_actors::NoConfig;
+    use tedge_actors::SimpleMessageBoxBuilder;
     use tokio::time::timeout;
 
+    type TestBox =
+        SimpleMessageBox<BatchDriverOutput<TestBatchEvent>, BatchDriverInput<TestBatchEvent>>;
+
     #[tokio::test]
-    async fn flush_empty() -> Result<(), SendError<BatchDriverInput<TestBatchEvent>>> {
-        let (input_send, mut output_recv) = spawn_driver();
-        input_send.send(BatchDriverInput::Flush).await?;
-        assert_recv_flush(&mut output_recv).await;
+    async fn flush_empty() -> Result<(), ChannelError> {
+        let mut test_box = spawn_driver();
+        test_box.send(BatchDriverInput::Flush).await?;
+        assert_recv_flush(&mut test_box).await;
         Ok(())
     }
 
     #[tokio::test]
-    async fn flush_one_batch() -> Result<(), SendError<BatchDriverInput<TestBatchEvent>>> {
-        let (input_send, mut output_recv) = spawn_driver();
+    async fn flush_one_batch() -> Result<(), ChannelError> {
+        let mut test_box = spawn_driver();
 
         let event1 = TestBatchEvent::new(1, OffsetDateTime::now_utc());
-        input_send.send(BatchDriverInput::Event(event1)).await?;
-        input_send.send(BatchDriverInput::Flush).await?;
+        test_box.send(BatchDriverInput::Event(event1)).await?;
+        test_box.send(BatchDriverInput::Flush).await?;
 
-        assert_recv_batch(&mut output_recv, vec![event1]).await;
-        assert_recv_flush(&mut output_recv).await;
+        assert_recv_batch(&mut test_box, vec![event1]).await;
+        assert_recv_flush(&mut test_box).await;
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn two_batches_with_timer() -> Result<(), SendError<BatchDriverInput<TestBatchEvent>>> {
-        let (input_send, mut output_recv) = spawn_driver();
+    async fn two_batches_with_timer() -> Result<(), ChannelError> {
+        let mut test_box = spawn_driver();
 
         let event1 = TestBatchEvent::new(1, OffsetDateTime::now_utc());
-        input_send.send(BatchDriverInput::Event(event1)).await?;
+        test_box.send(BatchDriverInput::Event(event1)).await?;
 
-        assert_recv_batch(&mut output_recv, vec![event1]).await;
+        assert_recv_batch(&mut test_box, vec![event1]).await;
 
         let event2 = TestBatchEvent::new(2, OffsetDateTime::now_utc());
-        input_send.send(BatchDriverInput::Event(event2)).await?;
+        test_box.send(BatchDriverInput::Event(event2)).await?;
 
-        assert_recv_batch(&mut output_recv, vec![event2]).await;
+        assert_recv_batch(&mut test_box, vec![event2]).await;
 
         Ok(())
     }
 
-    async fn assert_recv_batch(
-        output_recv: &mut Receiver<BatchDriverOutput<TestBatchEvent>>,
-        expected: Vec<TestBatchEvent>,
-    ) {
-        match timeout(Duration::from_secs(10), output_recv.recv()).await {
+    async fn assert_recv_batch(test_box: &mut TestBox, expected: Vec<TestBatchEvent>) {
+        match timeout(Duration::from_secs(10), test_box.recv()).await {
             Ok(Some(BatchDriverOutput::Batch(batch))) => assert_batch(batch, expected),
             other => panic!("Failed to receive batch: {:?}", other),
         }
@@ -213,30 +241,28 @@ mod tests {
         }
     }
 
-    async fn assert_recv_flush(output_recv: &mut Receiver<BatchDriverOutput<TestBatchEvent>>) {
-        match timeout(Duration::from_secs(10), output_recv.recv()).await {
+    async fn assert_recv_flush(test_box: &mut TestBox) {
+        match timeout(Duration::from_secs(10), test_box.recv()).await {
             Ok(Some(BatchDriverOutput::Flush)) => {}
             other => panic!("Failed to receive flush: {:?}", other),
         }
     }
 
-    fn spawn_driver() -> (
-        Sender<BatchDriverInput<TestBatchEvent>>,
-        Receiver<BatchDriverOutput<TestBatchEvent>>,
-    ) {
-        let (input_send, input_recv) = channel(1);
-        let (output_send, output_recv) = channel(1);
+    fn spawn_driver() -> TestBox {
         let config = BatchConfigBuilder::new()
             .event_jitter(50)
             .delivery_jitter(20)
             .message_leap_limit(0)
             .build();
         let batcher = Batcher::new(config);
+        let mut box_builder = SimpleMessageBoxBuilder::new("test", 1);
+        let test_box = box_builder.new_client_box(NoConfig);
+        let driver_box = box_builder.build();
 
-        let driver = BatchDriver::new(batcher, input_recv, output_send);
-        tokio::spawn(driver.run());
+        let mut driver = BatchDriver::new(batcher, driver_box);
+        tokio::spawn(async move { driver.run().await });
 
-        (input_send, output_recv)
+        test_box
     }
 
     #[derive(Debug, Copy, Clone, Eq, PartialEq)]
