@@ -1,7 +1,7 @@
 //! Actor and Message box builders
 //!
 //! [Actor](crate::Actor) implementations are given the freedom
-//! to choose their own [MessageBox](crate::MessageBox) implementation.
+//! to choose their own [message box](crate::message_boxes) implementation.
 //! This adds the flexibility to process some messages with a higher priority,
 //! to await a message from a specific source,
 //! or simply to ease the actor code with specific peer handles.

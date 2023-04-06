@@ -4,19 +4,34 @@
 //!
 //! Actors are processing units that interact using asynchronous messages.
 //!
-//! The behavior of an actor is defined by:
-//! - the state owned and freely updated by the actor,
-//! - a message box connected to peer actors,
-//! - input messages that the actor receives from its peers and processes in turn,
-//! - output messages that the actor produces and sends to its peers.
+//! The behavior of an [Actor](crate::Actor) is defined by:
+//! - a state owned and freely updated by the actor,
+//! - a [message box](crate::message_boxes) connected to peer actors,
+//! - input [messages](crate::Message) that the actor receives from its peers and processes in turn,
+//! - output [messages](crate::Message) that the actor produces and sends to its peers,
+//! - an event loop, the [Actor::run()](crate::Actor::run) method.
+//!
 //!
 //! ```
 //! # use crate::tedge_actors::{Actor, RuntimeError, MessageReceiver, RuntimeRequest, Sender, SimpleMessageBox};
 //! # use async_trait::async_trait;
 //! #
-//! /// State of the calculator actor
+//! /// State of the calculator actor along with its message box
 //! struct Calculator {
+//!     /// The actor state. Here a simple number.
+//!     ///
+//!     /// This state rules the behavior of the actor
 //!     state: i64,
+//!
+//!     /// This actor uses a simple message box,
+//!     /// from where input messages are received
+//!     /// and to which output messages are sent.
+//!     ///
+//!     /// More sophisticated actors might use specific boxes,
+//!     /// notably to send and receive messages from specific peers.
+//!     /// However, this actor has no such needs: the input messages
+//!     /// are processed independently of their producers
+//!     /// and the output messages are sent independently of their consumers.
 //!     messages: SimpleMessageBox<Operation, Update>,
 //! }
 //!
@@ -37,20 +52,20 @@
 //! /// Implementation of the calculator behavior
 //! #[async_trait]
 //! impl Actor for Calculator {
-//!     // This actor uses a simple message box,
-//!     // from where input messages are received
-//!     // and to which output messages are sent.
-//!     //
-//!     // More sophisticated actors might used specific boxes,
-//!     // notably to send and receive messages from specific peers.
-//!     // However, this actor has no such needs: the input messages
-//!     // are processed independently of their producers
-//!     // and the output messages are sent independently of their consumers.
-//!
+//!     /// The actor name is only used for logging
 //!     fn name(&self) -> &str {
 //!         "Calculator"
 //!     }
 //!
+//!     /// Run the actor: processing message in, sending message out, updating the internal state
+//!     ///
+//!     /// This actor implements a simple message loop:
+//!     /// - input messages are processed in turn,
+//!     /// - output messages are sent to respond to some input.
+//!     ///
+//!     /// However, there are no constraints on the behavior of an actor.
+//!     /// A more sophisticated actor might send output messages waiting for a request
+//!     /// or process concurrently several requests.
 //!     async fn run(&mut self)-> Result<(), RuntimeError>  {
 //!         while let Some(op) = self.messages.recv().await {
 //!             // Process in turn each input message
@@ -71,38 +86,52 @@
 //! }
 //! ```
 //!
-//! The `Actor` trait provides the flexibility to:
-//!
-//! - use a specific [MessageBox](crate::MessageBox) implementation
-//!   to address specific communication needs
-//!   (pub/sub, request/response, message priority, concurrent message processing, ...)
-//! - freely interleave message reception and emission in its [Actor::run()](crate::Actor::run) event loop,
-//!   reacting to peer messages as well as internal events,
-//!   sending responses for requests, possibly deferring some responses,
-//!   acting as a source of messages ...
-//!
-//! This crate also provides specific `Actor` implementations:
+//! This crate provides specific `Actor` implementations:
 //! - The [ServerActor](crate::ServerActor) wraps a [Server](crate::Server),
 //!   to implement a request-response communication pattern with a set of connected client actors.
+//! - The [ConvertingActor](crate::ConvertingActor) wraps a [Converter](crate::Converter),
+//!   that translates each input message into a sequence of output messages.
 //!
 //! ## Testing an actor
 //!
-//! To run and test an actor one needs to create a test message box connected to the actor message box.
-//! This test box can then be used to:
-//! - send input messages to the actor
-//! - receive output messages sent by the actor.
+//! To test an actor no specific actor runtime is required.
+//! One just needs to create a test message boxes connected to the actor message box,
+//! in order to interact with the running actor
+//! by sending input messages and checking the output messages.
+//!
+//! As each actor is free to chose its own implementation for its message box,
+//! the details on how to connect test message boxes will be specific to each actor.
+//! [Actor and message box builders](crate::builders) are provided to address these specificities
+//! with a generic approach with exposing the internal structure of the actors.
+//!
+//! To test the `Calculator` example we need first to create its box using a
+//! [SimpleMessageBoxBuilder](crate::SimpleMessageBoxBuilder),
+//! as this actor expects a [SimpleMessageBox](crate::SimpleMessageBox).
+//! And then, to create a test box connected to the actor message box,
+//! we use the [ServiceProviderExt](crate::test_helpers::ServiceProviderExt) test helper extension
+//! and the [new_client_box](crate::test_helpers::ServiceProviderExt::new_client_box) method.
 //!
 //! ```
-//! # use crate::tedge_actors::{Actor, ChannelError, MessageReceiver, Sender, SimpleMessageBox};
+//! # use crate::tedge_actors::Actor;
+//! # use crate::tedge_actors::Builder;
+//! # use crate::tedge_actors::ChannelError;
+//! # use crate::tedge_actors::MessageReceiver;
+//! # use crate::tedge_actors::NoConfig;
+//! # use crate::tedge_actors::Sender;
+//! # use crate::tedge_actors::SimpleMessageBox;
+//! # use crate::tedge_actors::SimpleMessageBoxBuilder;
 //! # use crate::tedge_actors::examples::calculator::*;
 //! #
 //! # #[tokio::main]
 //! # async fn main() {
 //! #
-//! // Create a message box for the actor, along a test box ready to communicate with the actor.
-//! use tedge_actors::{Builder, NoConfig, SimpleMessageBoxBuilder};
+//! // Add the `new_client_box()` extension to the `SimpleMessageBoxBuilder`.
 //! use tedge_actors::test_helpers::ServiceProviderExt;
+//!
+//! // Use a builder for the actor message box
 //! let mut actor_box_builder = SimpleMessageBoxBuilder::new("Actor", 10);
+//!
+//! // Create a test box ready then the actor box
 //! let mut test_box = actor_box_builder.new_client_box(NoConfig);
 //! let actor_box = actor_box_builder.build();
 //!
@@ -126,6 +155,13 @@
 //! See the [test_helpers](crate::test_helpers) module for various ways
 //! to observe and interact with running actors.
 //!
+//! - The [MessageReceiverExt](crate::test_helpers::MessageReceiverExt) extension
+//!   extends a message with assertion methods checking that expected messages are actually received
+//!   .i.e sent by the actor under test.
+//! - The [ServiceProviderExt](crate::test_helpers::ServiceProviderExt) extension
+//!   extends the message box builders of any actor that [provide a service](crate::ServiceProvider)
+//! - The [ServiceConsumerExt](crate::test_helpers::ServiceConsumerExt) extension
+//!   extends the message box builders of any actor that [consume a service](crate::ServiceConsumer)
 //! - A [Probe](crate::test_helpers::Probe) can be interleaved between two actors
 //!   to observe their interactions.
 //!
@@ -140,8 +176,7 @@
 //!
 //! The connection builder traits work as pairs:
 //! - An actor that provides some service makes this service available
-//!   with
-//! an actor builder that implements the [ServiceProvider](crate::ServiceProvider) trait.
+//!   with an actor builder that implements the [ServiceProvider](crate::ServiceProvider) trait.
 //! - In a symmetrical way, an actor that requires another service to provide its own feature,
 //!   implements the [ServiceConsumer](crate::ServiceConsumer) trait
 //!   to connect itself to the [ServiceProvider](crate::ServiceProvider)
@@ -196,10 +231,7 @@
 //!
 //! TODO
 //!
-//! ## Implementing specific message boxes
-//!
-//! TODO
-//!
+
 #![forbid(unsafe_code)]
 
 mod actors;
@@ -207,15 +239,13 @@ pub mod builders;
 pub mod channels;
 mod converter;
 mod errors;
-pub mod keyed_messages;
+mod keyed_messages;
 pub mod message_boxes;
 mod messages;
+#[doc(hidden)]
 mod run_actor;
 pub mod runtime;
 
-pub mod internal {
-    pub use crate::run_actor::*;
-}
 pub use actors::*;
 pub use builders::*;
 pub use channels::*;

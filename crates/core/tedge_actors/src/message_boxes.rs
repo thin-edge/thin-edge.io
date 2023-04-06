@@ -1,7 +1,7 @@
 //! Message boxes are the only way for actors to interact with each others.
 //!
 //! When an [Actor](crate::Actor) instance is spawned,
-//! this actor is given a [MessageBox](crate::MessageBox)
+//! this actor is given a [message box](crate::message_boxes)
 //! to collect its input [Messages](crate::Message) and to forward its output [Messages](crate::Message).
 //!
 //! Conceptually, a message box is a receiver of input messages combined with a sender of output messages.
@@ -70,7 +70,7 @@
 //!
 //! To address this diversity of message priority requirements,
 //! but also to add specific coordination among input and output channels,
-//! each [Actor](crate::Actor) is free to choose its own [MessageBox](crate::MessageBox) implementation:
+//! each [Actor](crate::Actor) is free to choose its own [message box](crate::message_boxes) implementation:
 //!
 //! ```no_run
 //! trait Actor {
@@ -85,7 +85,10 @@
 //! - [ClientMessageBox](crate::ClientMessageBox) for client actors that use a request-response service from a server actor,
 //!
 //!
-
+//! ## Implementing specific message boxes
+//!
+//! TODO
+//!
 use crate::channels::Sender;
 use crate::Builder;
 use crate::ChannelError;

@@ -1,4 +1,6 @@
-use crate::internal::RunActor;
+//! Supervise the actors of an application
+//!
+use crate::run_actor::RunActor;
 use crate::Actor;
 use crate::Builder;
 use crate::ChannelError;

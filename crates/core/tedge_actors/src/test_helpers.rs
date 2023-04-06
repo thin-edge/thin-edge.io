@@ -1,3 +1,4 @@
+//! Testing actors
 use crate::mpsc;
 use crate::Builder;
 use crate::ChannelError;
