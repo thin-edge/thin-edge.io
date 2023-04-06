@@ -64,7 +64,7 @@
 //!     /// - output messages are sent to respond to some input.
 //!     ///
 //!     /// However, there are no constraints on the behavior of an actor.
-//!     /// A more sophisticated actor might send output messages waiting for a request
+//!     /// A more sophisticated actor might send output messages independently of any request
 //!     /// or process concurrently several requests.
 //!     async fn run(&mut self)-> Result<(), RuntimeError>  {
 //!         while let Some(op) = self.messages.recv().await {
@@ -174,17 +174,31 @@
 //! These builders implement connector traits
 //! that define the services provided and consumed by the actors under construction.
 //!
-//! The connection builder traits work as pairs:
-//! - An actor that provides some service makes this service available
-//!   with an actor builder that implements the [ServiceProvider](crate::ServiceProvider) trait.
-//! - In a symmetrical way, an actor that requires another service to provide its own feature,
-//!   implements the [ServiceConsumer](crate::ServiceConsumer) trait
-//!   to connect itself to the [ServiceProvider](crate::ServiceProvider)
-//! - These two traits define the types of the messages sent in both directions
-//!   and how to connect the message boxes of the actors under construction,
-//!   possibly using some configuration.
-//! - Two actor builders, a `consumer: ServiceConsumer<I,O,C>` and a `producer: ServiceProvider<I,O,C>`
-//!   can then be connected to each other : `consumer.set_connection(producer)`
+//! The connection builder traits work by pairs:
+//! - A [MessageSink](crate::MessageSink) connects a [MessageSource](crate::MessageSource),
+//!   so the messages sent by the latter will be received by the former.
+//! - A [ServiceConsumer](crate::ServiceConsumer) connects a [ServiceProvider](crate::ServiceProvider),
+//!   to use the service, sending requests to and receiving responses from the service.
+//!
+//! These traits define the types of the messages sent and received.
+//! - A sink that excepts message of type `M` can only be connected to a source of messages
+//!   that can be converted into `M` values.
+//! - Similarly a service is defined by two types of messages, the requests received by the service
+//!   and the responses sent by the service. To use a service, a consumer will have to send messages
+//!   that can be converted into the service request type and be ready to receive messages converted from
+//!   the service response type.
+//! - Note, that no contract is enforced beyond the type-compatibility of the messages sent between the actors.
+//!   A consumer of an HTTP service needs to known that a request must be sent before any response can be received;
+//!   while a consumer of an MQTT service can expect to receive messages without sending a single one.
+//!
+//! The connection builder traits also define a configuration type.
+//! - The semantics of this type is defined by the message source or the service provider.
+//!   It can be used to filter the values sent to a given sink
+//!   or to restrict the scope of the service provided to a given service consumer.
+//! - The configuration values are provided by the message sinks and the service consumers
+//!   to specify the context of their connection to a source or a service.
+//!
+//! Note that these traits are implemented by the actor builders, not by the actors themselves.
 //!
 //! ```no_run
 //! # use tedge_actors::{DynSender, NoConfig, ServiceConsumer, ServiceProvider};
@@ -192,38 +206,47 @@
 //! # struct SomeActorBuilder;
 //! # #[derive(Default)]
 //! # struct SomeOtherActorBuilder;
-//! # impl ServiceProvider<(),(),NoConfig> for SomeActorBuilder {
-//! #     fn connect_consumer(&mut self, config: NoConfig, response_sender: DynSender<()>) -> DynSender<()> {
-//! #         todo!()
-//! #     }
-//! # }
-//! #
-//! # impl ServiceConsumer<(),(),NoConfig> for SomeOtherActorBuilder {
-//! #     fn get_config(&self) -> NoConfig {
-//! #        todo!()
-//! #     }
-//! #     fn set_request_sender(&mut self, request_sender: DynSender<()>) {
-//! #         todo!()
-//! #     }
-//! #     fn get_response_sender(&self) -> DynSender<()> {
-//! #         todo!()
-//! #     }
-//! # }
+//! # #[derive(Debug)]
+//! # struct SomeInput;
+//! # #[derive(Debug)]
+//! # struct SomeOutput;
+//! # struct SomeConfig;
+//! /// An actor builder declares that it provides a service
+//! /// by implementing the `ServiceProvider` trait for the appropriate input, output and config types.
+//! impl ServiceProvider<SomeInput,SomeOutput,SomeConfig> for SomeActorBuilder {
+//!     /// Exchange two message senders with the new peer, so each can send messages to the other
+//!     ///
+//!     /// The service registers the new consumer and ist sender (i.e. where to send response),
+//!     /// possibly using the configuration `config` to adapt the service,
+//!     /// and returns to the consumer a sender where the requests will have to be sent.
+//!     fn connect_consumer(&mut self, config: SomeConfig, response_sender: DynSender<SomeOutput>)
+//!         -> DynSender<SomeInput> {
+//!          todo!()
+//!      }
+//! }
 //!
-//! // An actor builder declares that it provides a service
-//! // by implementing the `ServiceProvider` trait for the appropriate input, output and config types.
-//! //
-//! // Here, `SomeActorBuilder: ServiceProvider<SomeInput, SomeOutput, SomeConfig>`
-//! let mut producer = SomeActorBuilder::default();
+//! /// An actor builder also declares that it is a consumer of other services required by it. This is done
+//! /// by implementing the `ServiceConsumer` trait for the appropriate input, output and config types.
+//! impl ServiceConsumer<SomeInput,SomeOutput,SomeConfig> for SomeOtherActorBuilder {
+//!     fn get_config(&self) -> SomeConfig {
+//!        todo!()
+//!     }
 //!
-//! // An actor builder also declares that it is a consumer of other services required by it. This is done
-//! // by implementing the `ServiceConsumer` trait for the appropriate input, output and config types.
-//! //
-//! // Here, `SomeOtherActorBuilder: ServiceConsumer<SomeInput, SomeOutput, SomeConfig>`
-//! let mut consumer = SomeOtherActorBuilder::default();
+//!     /// Update this actor with the sender where the service expects input messages to be sent
+//!     fn set_request_sender(&mut self, request_sender: DynSender<SomeInput>) {
+//!         todo!()
+//!     }
+//!
+//!     /// Tell the service where to send its output messages to this actor
+//!     fn get_response_sender(&self) -> DynSender<SomeOutput> {
+//!         todo!()
+//!     }
+//! }
 //!
 //! // These two actors having compatible expectations along input, output and config types,
 //! // can then be connected to each other.
+//! let mut producer = SomeActorBuilder::default();
+//! let mut consumer = SomeOtherActorBuilder::default();
 //! consumer.set_connection(&mut producer);
 //! ```
 //!
