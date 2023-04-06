@@ -5,7 +5,8 @@ use c8y_api::smartrest::smartrest_deserializer::SmartRestFirmwareRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
-use c8y_http_proxy::handle::C8YHttpProxy;
+use c8y_http_proxy::credentials::JwtRetriever;
+use download::Auth;
 use mqtt_channel::Topic;
 use nanoid::nanoid;
 use sha256::digest;
@@ -202,18 +203,22 @@ impl FirmwareManagerActor {
                 operation_id, firmware_url
             );
 
-            // TODO: JWT token
-            // If url_is_in_my_tenant_domain
-            // let auth = if false {
-            //     let client_message_box = self.message_box.c8y_http_proxy.get_client_message_box();
-            //     let jwt_token = client_message_box.await_response(C8YR).await?;
-            //     Some(jwt_token)
-            // } else {
-            //     None
-            // };
+            let auth = if self
+                .config
+                .c8y_end_point
+                .url_is_in_my_tenant_domain(firmware_url)
+            {
+                if let Ok(token) = self.message_box.jwt_retriever.await_response(()).await? {
+                    Some(Auth::new_bearer(&token))
+                } else {
+                    return Err(FirmwareManagementError::NoJwtToken);
+                }
+            } else {
+                None
+            };
 
             // Send a request to the DownloadManager to download the file asynchronously
-            let download_request = DownloadRequest::new(firmware_url, &cache_file_path, None);
+            let download_request = DownloadRequest::new(firmware_url, &cache_file_path, auth);
 
             self.message_box
                 .download_sender
@@ -632,7 +637,6 @@ impl FirmwareManagerActor {
         Ok(())
     }
 
-    // TODO: What "key not found" mean?
     fn remove_entry_from_active_operations(
         &mut self,
         operation_key: &OperationKey,
@@ -644,7 +648,7 @@ impl FirmwareManagerActor {
         }
     }
 
-    /// The symlink path should be <tedge-data-dir>/file-transfer/<child-id>/firmware_update/<file_cache_key>
+    // The symlink path should be <tedge-data-dir>/file-transfer/<child-id>/firmware_update/<file_cache_key>
     fn create_file_transfer_symlink(
         &self,
         child_id: &str,
@@ -705,7 +709,7 @@ impl Actor for FirmwareManagerActor {
 pub struct FirmwareManagerMessageBox {
     input_receiver: LoggingReceiver<FirmwareInput>,
     mqtt_publisher: DynSender<MqttMessage>,
-    c8y_http_proxy: C8YHttpProxy,
+    jwt_retriever: JwtRetriever,
     timer_sender: DynSender<SetTimeout<OperationKey>>,
     download_sender: DynSender<IdDownloadRequest>,
 }
@@ -714,14 +718,14 @@ impl FirmwareManagerMessageBox {
     pub fn new(
         input_receiver: LoggingReceiver<FirmwareInput>,
         mqtt_publisher: DynSender<MqttMessage>,
-        c8y_http_proxy: C8YHttpProxy,
+        jwt_retriever: JwtRetriever,
         timer_sender: DynSender<SetTimeout<OperationKey>>,
         download_sender: DynSender<IdDownloadRequest>,
     ) -> Self {
         Self {
             input_receiver,
             mqtt_publisher,
-            c8y_http_proxy,
+            jwt_retriever,
             timer_sender,
             download_sender,
         }

@@ -422,6 +422,7 @@ dependencies = [
  "log",
  "tedge_actors",
  "tedge_config",
+ "tedge_downloader_ext",
  "tedge_file_system_ext",
  "tedge_health_ext",
  "tedge_http_ext",

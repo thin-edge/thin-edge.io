@@ -13,9 +13,8 @@ use crate::operation::OperationKey;
 use actor::FirmwareInput;
 use actor::FirmwareManagerActor;
 use actor::FirmwareManagerMessageBox;
-use c8y_http_proxy::handle::C8YHttpProxy;
-use c8y_http_proxy::messages::C8YRestRequest;
-use c8y_http_proxy::messages::C8YRestResult;
+use c8y_http_proxy::credentials::JwtResult;
+use c8y_http_proxy::credentials::JwtRetriever;
 pub use config::*;
 use mqtt_channel::TopicFilter;
 use tedge_actors::futures::channel::mpsc;
@@ -37,7 +36,7 @@ pub struct FirmwareManagerBuilder {
     receiver: LoggingReceiver<FirmwareInput>,
     events_sender: mpsc::Sender<FirmwareInput>,
     mqtt_publisher: Option<DynSender<MqttMessage>>,
-    c8y_http_proxy: Option<C8YHttpProxy>,
+    jwt_retriever: Option<JwtRetriever>,
     timer_sender: Option<DynSender<SetTimeout<OperationKey>>>,
     download_sender: Option<DynSender<IdDownloadRequest>>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
@@ -58,19 +57,19 @@ impl FirmwareManagerBuilder {
             receiver,
             events_sender,
             mqtt_publisher: None,
-            c8y_http_proxy: None,
+            jwt_retriever: None,
             timer_sender: None,
             download_sender: None,
             signal_sender,
         }
     }
 
-    /// Connect this config manager instance to some http connection provider
-    pub fn with_c8y_http_proxy(
+    /// Connect this config manager instance to jwt token actor
+    pub fn with_jwt_token(
         &mut self,
-        http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
+        jwt: &mut impl ServiceProvider<(), JwtResult, NoConfig>,
     ) -> Result<(), LinkError> {
-        self.c8y_http_proxy = Some(C8YHttpProxy::new("FirmwareManager => C8Y", http));
+        self.jwt_retriever = Some(JwtRetriever::new("Firmware => JWT", jwt));
         Ok(())
     }
 }
@@ -135,8 +134,8 @@ impl Builder<FirmwareManagerActor> for FirmwareManagerBuilder {
             role: "mqtt".to_string(),
         })?;
 
-        let c8y_http_proxy = self.c8y_http_proxy.ok_or_else(|| LinkError::MissingPeer {
-            role: "c8y-http".to_string(),
+        let jwt_retriever = self.jwt_retriever.ok_or_else(|| LinkError::MissingPeer {
+            role: "jwt".to_string(),
         })?;
 
         let timer_sender = self.timer_sender.ok_or_else(|| LinkError::MissingPeer {
@@ -150,7 +149,7 @@ impl Builder<FirmwareManagerActor> for FirmwareManagerBuilder {
         let peers = FirmwareManagerMessageBox::new(
             self.receiver,
             mqtt_publisher,
-            c8y_http_proxy,
+            jwt_retriever,
             timer_sender,
             download_requester,
         );

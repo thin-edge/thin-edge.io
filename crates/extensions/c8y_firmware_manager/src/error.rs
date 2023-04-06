@@ -19,6 +19,9 @@ pub enum FirmwareManagementError {
     #[error("The received SmartREST request is duplicated with already addressed operation. Ignore this request.")]
     RequestAlreadyAddressed,
 
+    #[error("Failed to retrieve JWT token.")]
+    NoJwtToken,
+
     #[error("Failed to parse response from child device with: {0}")]
     FromSerdeJsonError(#[from] serde_json::Error),
 

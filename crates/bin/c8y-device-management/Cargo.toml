@@ -19,6 +19,7 @@ env_logger = "0.10"
 log = "0.4"
 tedge_actors = { path = "../../core/tedge_actors" }
 tedge_config = { path = "../../common/tedge_config" }
+tedge_downloader_ext = { path = "../../extensions/tedge_downloader_ext" }
 tedge_file_system_ext = { path = "../../extensions/tedge_file_system_ext" }
 tedge_health_ext = { path = "../../extensions/tedge_health_ext" }
 tedge_http_ext = { path = "../../extensions/tedge_http_ext" }
