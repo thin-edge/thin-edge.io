@@ -73,4 +73,5 @@
   - [Configuration Management](references/c8y-configuration-management.md)
   - [Thin Edge File Transfer Service](references/tedge-file-transfer-service.md)
 
-- [Index](./SUMMARY.md)
+[](./tags.md)
+[Index](./SUMMARY.md)

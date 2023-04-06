@@ -1,5 +1,7 @@
 # Thin Edge Alarm
 
+`tag:telemetry`
+
 Alarms on thin-edge.io can be used to create alerts, represent state changes etc.
 For example, an alarm can be raised when a certain measurement value breaches some threshold (like high temperature) or when an unexpected event occurs in the system (like a sensor failure).
 

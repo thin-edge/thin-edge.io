@@ -40,6 +40,10 @@ jobs:
 
       - uses: actions-rs/install@v0.1
         with:
+          crate: mdbook-tag
+
+      - uses: actions-rs/install@v0.1
+        with:
           crate: mdbook-cmdrun
           version: latest
 

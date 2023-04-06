@@ -1,5 +1,7 @@
 # Connect your device to Cumulocity IoT
 
+`tag:cumulocity`
+
 The very first step to enable `thin-edge.io` is to connect your device to the cloud.
 * This is a 10 minutes operation to be done only once.
 * It establishes a permanent connection from your device to the cloud end-point.

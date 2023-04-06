@@ -1,5 +1,7 @@
 # Configuration management on child-devices
 
+`tag:configuration` `tag:child-devices` `tag:cumulocity`
+
 After following this tutorial, you will know how to manage various configuration files on child-devices connected to a thin-edge device.
 You will learn how to perform the following configuration management operations on child devices:
 * Fetch and view the snapshot of a configuration on a child-device from Cumulocity IoT cloud

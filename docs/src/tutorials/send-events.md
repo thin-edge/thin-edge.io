@@ -1,5 +1,7 @@
 # Thin Edge Event
 
+`tag:telemetry`
+
 Events on thin-edge.io can be used to trigger signals when some event happens in the system.
 For example, a person entering a room or someone logging into a machine/website can all be represented as events.
 Events are stateless and hence are processed as and when they occur.

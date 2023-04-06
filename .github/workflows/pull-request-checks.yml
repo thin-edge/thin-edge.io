@@ -146,6 +146,11 @@ jobs:
           crate: mdbook-pagetoc
           version: latest
 
+      - name: Install mdbook-tag
+        uses: actions-rs/install@v0.1
+        with:
+          crate: mdbook-tag
+
       - name: Install mdbook-cmdrun
         uses: actions-rs/install@v0.1
         with:
