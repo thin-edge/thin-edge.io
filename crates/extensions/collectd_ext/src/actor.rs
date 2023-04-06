@@ -1,5 +1,6 @@
 use crate::collectd::CollectdMessage;
 use async_trait::async_trait;
+use log::error;
 use std::convert::Infallible;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
@@ -19,7 +20,6 @@ use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
-use tracing::error;
 
 /// An actor that collects measurements from collectd over MQTT
 pub struct CollectdActor {

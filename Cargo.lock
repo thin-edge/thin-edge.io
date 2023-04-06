@@ -817,13 +817,13 @@ dependencies = [
  "async-trait",
  "batcher",
  "clock",
+ "log",
  "tedge_actors",
  "tedge_api",
  "tedge_mqtt_ext",
  "thiserror",
  "time",
  "tokio",
- "tracing",
 ]
 
 [[package]]

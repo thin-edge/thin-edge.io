@@ -14,6 +14,7 @@ repository = { workspace = true }
 async-trait = "0.1"
 batcher = { path = "../../common/batcher" }
 clock = { path = "../../common/clock" }
+log = "0.4"
 tedge_actors = { path = "../../core/tedge_actors" }
 tedge_api = { path = "../../core/tedge_api" }
 tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
@@ -23,7 +24,6 @@ tokio = { version = "1.23", features = [
     "sync",
     "time",
 ] }
-tracing = { version = "0.1", features = ["attributes", "log"] }
 
 [dev-dependencies]
 anyhow = "1.0"

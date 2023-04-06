@@ -1,9 +1,9 @@
 use crate::batcher::MessageBatch;
 use crate::collectd::CollectdMessage;
 use batcher::BatchDriverOutput;
+use log::error;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
-use tracing::error;
 
 pub fn batch_into_mqtt_messages(
     output_topic: &Topic,
