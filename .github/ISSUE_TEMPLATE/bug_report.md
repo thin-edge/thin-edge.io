@@ -4,7 +4,7 @@ about: Create a report to help us improve
 labels: 'bug'
 ---
 
-**Bug was detected in one of the following services**
+**Bug was detected in one of the following services:**
 <!-- Please choose in which service was the bug. -->
 
 [ ] - tedge-agent
@@ -28,7 +28,7 @@ labels: 'bug'
 [ ] - Not sure
 ***
 
-**Bug reproduction rate**
+**Bug reproduction rate:**
 <!-- Please choose the bug reproduction rate. (100% is for always). -->
 
 [___] %
