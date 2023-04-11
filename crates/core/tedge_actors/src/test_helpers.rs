@@ -393,7 +393,7 @@ impl<T: Message + Clone + Eq> MessagePlus for T {}
 /// # use tedge_actors::{Actor, Builder, ChannelError, ServiceConsumer, NoConfig, ServerActor, ServerMessageBoxBuilder, SimpleMessageBoxBuilder};
 ///
 /// # use tedge_actors::test_helpers::ProbeEvent::{Recv, Send};
-/// # use crate::tedge_actors::examples::calculator::*;
+/// # use crate::tedge_actors::examples::calculator_server::*;
 /// # #[tokio::main]
 /// # async fn main_test() -> Result<(),ChannelError> {
 /// #
@@ -409,8 +409,7 @@ impl<T: Message + Clone + Eq> MessagePlus for T {}
 /// player_box_builder.with_probe(&mut probe).set_connection(&mut server_box_builder);
 ///
 /// // Spawn the actors
-/// let calculator_box = SimpleMessageBoxBuilder::new("Calculator", 1).build();
-/// let calculator = Calculator::new(calculator_box);
+/// let calculator = Calculator::default();
 /// tokio::spawn(async move { ServerActor::new(calculator, server_box_builder.build()).run().await } );
 /// tokio::spawn(async move { Player { name: "Player".to_string(), target: 42, messages: player_box_builder.build()}.run().await } );
 ///
