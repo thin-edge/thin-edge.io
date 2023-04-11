@@ -9,6 +9,7 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
+use tedge_api::topic::get_child_id_from_child_topic;
 use tedge_api::OperationStatus;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -98,7 +99,11 @@ impl TryFrom<&MqttMessage> for FirmwareOperationResponse {
 
     fn try_from(message: &MqttMessage) -> Result<Self, Self::Error> {
         let topic = &message.topic.name;
-        let child_id = get_child_id_from_child_topic(topic)?;
+        let child_id = get_child_id_from_child_topic(topic).ok_or(
+            FirmwareManagementError::InvalidTopicFromChildOperation {
+                topic: topic.into(),
+            },
+        )?;
         let request_payload: ResponsePayload = serde_json::from_str(message.payload_str()?)?;
 
         Ok(Self {
@@ -106,19 +111,6 @@ impl TryFrom<&MqttMessage> for FirmwareOperationResponse {
             payload: request_payload,
         })
     }
-}
-
-// FIXME: Duplicated with config plugin
-pub fn get_child_id_from_child_topic(topic: &str) -> Result<String, FirmwareManagementError> {
-    let mut topic_split = topic.split('/');
-    // the second element is the child id
-    let child_id =
-        topic_split
-            .nth(1)
-            .ok_or(FirmwareManagementError::InvalidTopicFromChildOperation {
-                topic: topic.into(),
-            })?;
-    Ok(child_id.to_string())
 }
 
 pub struct DownloadFirmwareStatusMessage {}

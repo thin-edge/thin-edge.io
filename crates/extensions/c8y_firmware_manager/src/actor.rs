@@ -26,6 +26,7 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
 use tedge_actors::WrappedInput;
+use tedge_api::topic::get_child_id_from_child_topic;
 use tedge_api::Auth;
 use tedge_api::OperationStatus;
 use tedge_downloader_ext::DownloadRequest;
@@ -39,7 +40,6 @@ use tedge_utils::file::PermissionEntry;
 
 use crate::config::FirmwareManagerConfig;
 use crate::error::FirmwareManagementError;
-use crate::message::get_child_id_from_child_topic;
 use crate::message::DownloadFirmwareStatusMessage;
 use crate::message::FirmwareOperationRequest;
 use crate::message::FirmwareOperationResponse;
@@ -379,7 +379,12 @@ impl FirmwareManagerActor {
         &mut self,
         message: MqttMessage,
     ) -> Result<(), FirmwareManagementError> {
-        let child_id = get_child_id_from_child_topic(&message.topic.name)?;
+        let topic_name = &message.topic.name;
+        let child_id = get_child_id_from_child_topic(topic_name).ok_or(
+            FirmwareManagementError::InvalidTopicFromChildOperation {
+                topic: topic_name.to_string(),
+            },
+        )?;
 
         match FirmwareOperationResponse::try_from(&message) {
             Ok(response) => {
