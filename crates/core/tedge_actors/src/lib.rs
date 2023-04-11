@@ -260,7 +260,7 @@
 mod actors;
 pub mod builders;
 pub mod channels;
-mod converter;
+pub mod converter;
 mod errors;
 mod keyed_messages;
 pub mod message_boxes;
