@@ -9,9 +9,9 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
-use mqtt_channel::Topic;
 use tedge_api::OperationStatus;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 
 #[derive(Debug)]
 pub struct FirmwareOperationRequest {
@@ -182,7 +182,7 @@ mod tests {
             "attempt": 1
         });
         assert_json_eq!(
-            serde_json::from_str::<serde_json::Value>(&message.payload_str().unwrap()).unwrap(),
+            serde_json::from_str::<serde_json::Value>(message.payload_str().unwrap()).unwrap(),
             expected_json
         );
     }

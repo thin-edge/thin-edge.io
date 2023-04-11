@@ -7,6 +7,8 @@ use serde::Deserializer;
 use serde::Serialize;
 use std::convert::TryFrom;
 use std::convert::TryInto;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use tedge_api::SoftwareModule;
 use tedge_api::SoftwareModuleUpdate;
 use tedge_api::SoftwareUpdateRequest;
@@ -279,6 +281,16 @@ pub struct SmartRestFirmwareRequest {
     pub name: String,
     pub version: String,
     pub url: String,
+}
+
+impl Display for SmartRestFirmwareRequest {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "device={}, name={}, version={}, url={}",
+            self.device, self.name, self.version, self.url
+        )
+    }
 }
 
 impl SmartRestRequestGeneric for SmartRestFirmwareRequest {}

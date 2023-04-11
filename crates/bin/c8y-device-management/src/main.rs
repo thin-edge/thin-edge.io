@@ -77,13 +77,13 @@ async fn main() -> anyhow::Result<()> {
 
     // Instantiate firmware manager actor
     let firmware_manager_config = FirmwareManagerConfig::from_tedge_config(&tedge_config)?;
-    let mut firmware_actor = FirmwareManagerBuilder::new(firmware_manager_config);
-
-    // Connect other actor instances to firmware manager actor
-    firmware_actor.with_jwt_token(&mut jwt_actor)?;
-    firmware_actor.set_connection(&mut mqtt_actor);
-    firmware_actor.set_connection(&mut timer_actor);
-    firmware_actor.set_connection(&mut downloader_actor);
+    let firmware_actor = FirmwareManagerBuilder::new(
+        firmware_manager_config,
+        &mut mqtt_actor,
+        &mut jwt_actor,
+        &mut timer_actor,
+        &mut downloader_actor,
+    );
 
     //Instantiate health monitor actor
     let health_actor = HealthMonitorBuilder::new(PLUGIN_NAME);

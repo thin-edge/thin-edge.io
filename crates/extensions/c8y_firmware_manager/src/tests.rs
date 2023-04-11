@@ -5,8 +5,6 @@ use crate::actor::OperationTimeout;
 
 use assert_json_diff::assert_json_include;
 use c8y_http_proxy::credentials::JwtRequest;
-use download::Auth;
-use mqtt_channel::Topic;
 use serde_json::json;
 use sha256::digest;
 use std::time::Duration;
@@ -18,8 +16,11 @@ use tedge_actors::MessageReceiver;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::Auth;
+use tedge_api::DownloadError;
 use tedge_config::IpAddress;
 use tedge_downloader_ext::DownloadResponse;
+use tedge_mqtt_ext::Topic;
 use tedge_test_utils::fs::TempTedgeDir;
 
 const CHILD_DEVICE_ID: &str = "child-device";
@@ -253,7 +254,7 @@ async fn handle_request_child_device_with_failed_download() -> Result<(), DynErr
     let (id, _download_request) = downloader_message_box.recv().await.unwrap();
 
     // Simulate downloading a file is failed.
-    let fake_download_error = download::DownloadError::FromIo {
+    let fake_download_error = DownloadError::FromIo {
         reason: "fail".to_string(),
     };
     downloader_message_box
@@ -667,7 +668,7 @@ async fn handle_child_response_while_busy_downloading() -> Result<(), DynError> 
 }
 
 fn get_operation_id_from_firmware_update_request(mqtt_message: MqttMessage) -> String {
-    serde_json::from_str::<serde_json::Value>(&mqtt_message.payload.as_str().unwrap())
+    serde_json::from_str::<serde_json::Value>(mqtt_message.payload.as_str().unwrap())
         .expect("Deserialize JSON")
         .get("id")
         .expect("'id' field exists")
@@ -737,7 +738,7 @@ async fn spawn_firmware_manager(
 
     let config = FirmwareManagerConfig::new(
         device_id.to_string(),
-        tedge_host.into(),
+        tedge_host,
         TEDGE_HTTP_PORT,
         tmp_dir.to_path_buf(),
         tmp_dir.to_path_buf(),
@@ -754,12 +755,13 @@ async fn spawn_firmware_manager(
     let mut downloader_builder: SimpleMessageBoxBuilder<IdDownloadRequest, IdDownloadResult> =
         SimpleMessageBoxBuilder::new("Downloader", 5);
 
-    let mut firmware_manager_builder = FirmwareManagerBuilder::new(config);
-
-    firmware_manager_builder.with_jwt_token(&mut jwt_builder)?;
-    firmware_manager_builder.set_connection(&mut mqtt_builder);
-    firmware_manager_builder.set_connection(&mut timer_builder);
-    firmware_manager_builder.set_connection(&mut downloader_builder);
+    let firmware_manager_builder = FirmwareManagerBuilder::new(
+        config,
+        &mut mqtt_builder,
+        &mut jwt_builder,
+        &mut timer_builder,
+        &mut downloader_builder,
+    );
 
     let mqtt_message_box = mqtt_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let jwt_message_box = jwt_builder.build().with_timeout(TEST_TIMEOUT_MS);

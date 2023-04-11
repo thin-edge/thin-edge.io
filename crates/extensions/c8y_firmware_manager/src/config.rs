@@ -3,7 +3,6 @@ use crate::error::FirmwareManagementError::DirectoryNotFound;
 
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::smartrest::topic::C8yTopic;
-use mqtt_channel::TopicFilter;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -19,6 +18,7 @@ use tedge_config::IpAddress;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
 use tedge_config::TmpPathSetting;
+use tedge_mqtt_ext::TopicFilter;
 
 const PLUGIN_SERVICE_NAME: &str = "c8y-firmware-plugin";
 const FIRMWARE_UPDATE_RESPONSE_TOPICS: &str = "tedge/+/commands/res/firmware_update";

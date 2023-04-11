@@ -1,5 +1,5 @@
 mod actor;
-pub use actor::*;
-
 #[cfg(test)]
 mod tests;
+
+pub use actor::*;

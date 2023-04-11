@@ -13,14 +13,8 @@ repository = { workspace = true }
 async-trait = "0.1"
 c8y_api = { path = "../../../crates/core/c8y_api" }
 c8y_http_proxy = { path = "../../extensions/c8y_http_proxy" }
-csv = "1.1"
-download = { path = "../../../crates/common/download" }
-futures = "0.3"
-mqtt_channel = { path = "../../../crates/common/mqtt_channel" }
+log = "0.4"
 nanoid = "0.4"
-reqwest = { version = "0.11", default-features = false, features = [
-    "rustls-tls",
-] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha256 = "1.1"
@@ -30,27 +24,12 @@ tedge_config = { path = "../../../crates/common/tedge_config" }
 tedge_downloader_ext = { path = "../../extensions/tedge_downloader_ext" }
 tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
 tedge_timer_ext = { path = "../../extensions/tedge_timer_ext" }
-tedge_utils = { path = "../../../crates/common/tedge_utils", features = [
-    "logging",
-    "fs-notify",
-] }
+tedge_utils = { path = "../../../crates/common/tedge_utils" }
 thiserror = "1.0"
-tokio = { version = "1.23", default_features = false, features = [
-    "fs",
-    "io-util",
-    "macros",
-    "rt-multi-thread",
-    "signal",
-    "time",
-] }
-toml = "0.5"
-tracing = { version = "0.1", features = ["attributes", "log"] }
 
 [dev-dependencies]
 assert-json-diff = "2.0"
 assert_matches = "1.5"
 mockall = "0.11"
 tedge_test_utils = { path = "../../../crates/tests/tedge_test_utils" }
-tokio = { version = "1.23", default_features = false, features = ["test-util"] }
-toml = "0.5"
-
+tokio = { version = "1.23", default_features = false, features = ["test-util", "rt-multi-thread",] }
