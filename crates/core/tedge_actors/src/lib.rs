@@ -175,7 +175,7 @@
 //! that define the services provided and consumed by the actors under construction.
 //!
 //! The connection builder traits work by pairs:
-//! - A [MessageSink](crate::MessageSink) connects a [MessageSource](crate::MessageSource),
+//! - A [MessageSink](crate::MessageSink) connects to a [MessageSource](crate::MessageSource),
 //!   so the messages sent by the latter will be received by the former.
 //! - A [ServiceConsumer](crate::ServiceConsumer) connects a [ServiceProvider](crate::ServiceProvider),
 //!   to use the service, sending requests to and receiving responses from the service.
@@ -216,7 +216,7 @@
 //! impl ServiceProvider<SomeInput,SomeOutput,SomeConfig> for SomeActorBuilder {
 //!     /// Exchange two message senders with the new peer, so each can send messages to the other
 //!     ///
-//!     /// The service registers the new consumer and ist sender (i.e. where to send response),
+//!     /// The service registers the new consumer and its sender (i.e. where to send response),
 //!     /// possibly using the configuration `config` to adapt the service,
 //!     /// and returns to the consumer a sender where the requests will have to be sent.
 //!     fn connect_consumer(&mut self, config: SomeConfig, response_sender: DynSender<SomeOutput>)
@@ -252,7 +252,70 @@
 //!
 //! ## Running actors
 //!
-//! TODO
+//! An [Actor] can [run](crate::Actor::run) without any specific runtime.
+//! However, running the actors of an application in the context of the [tedge_actors::Runtime](crate::Runtime)
+//! has several benefits:
+//! - The runtime monitors all the running actors, catching normal terminations, aborts and panics.
+//! - The runtime can send [RuntimeRequest] to all the running actors,
+//!   notably to trigger a graceful shutdown of the application.
+//! - Any actor can send [RuntimeAction] to the runtime,
+//!   to spawn a new actor or to request a global shutdown of the application.
+//! - An actor can subscribe to the [RuntimeEvent] published by the runtime,
+//!   to be notified of actor events such as start, termination or crash.
+//!
+//! To run an actor `A` using the [tedge_actors::Runtime](crate::Runtime) requires more than just
+//! an [Actor] implementation. One needs an [actor builder](crate::builders) that implements:
+//! - `Builder<A>` to let the runtime create the actor instance,
+//! - `RuntimeRequestSink` so the [Runtime] can be connected to the runtime,
+//! - possibly [MessageSink], [MessageSource], [ServiceProvider] or [ServiceConsumer],
+//!   to be connected to other actors, accordingly to the actor dependencies and services.
+//!
+//! ```no_run
+//! # use std::convert::Infallible;
+//! # use tedge_actors::{Actor, Builder, DynSender, Runtime, RuntimeError, RuntimeRequest, RuntimeRequestSink};
+//! struct MyActor;
+//! # #[derive(Default)]
+//! struct MyActorBuilder;
+//!
+//! #[async_trait::async_trait]
+//! impl Actor for MyActor {
+//!    fn name(&self) -> &str {
+//!         todo!()
+//!     }
+//!
+//!     async fn run(&mut self) -> Result<(), RuntimeError> {
+//!         todo!()
+//!     }
+//! }
+//!
+//! impl Builder<MyActor> for MyActorBuilder {
+//!     type Error = Infallible;
+//!
+//!     fn try_build(self) -> Result<MyActor, Self::Error> {
+//!         todo!()
+//!     }
+//! }
+//!
+//! impl RuntimeRequestSink for MyActorBuilder {
+//!     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
+//!        todo!()
+//!     }
+//! }
+//!
+//! # #[tokio::main]
+//! # async fn main() -> Result<(), RuntimeError> {
+//! let runtime_events_logger = None;
+//! let mut runtime = Runtime::try_new(runtime_events_logger).await?;
+//!
+//! let my_actor_builder = MyActorBuilder::default();
+//!
+//! runtime.spawn(my_actor_builder);
+//!
+//! runtime.run_to_completion().await?;
+//!
+//! # Ok(())
+//! # }
+//! ```
 //!
 
 #![forbid(unsafe_code)]
