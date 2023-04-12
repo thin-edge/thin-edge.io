@@ -1,3 +1,5 @@
+use tedge_actors::RuntimeError;
+
 #[derive(thiserror::Error, Debug)]
 pub enum FirmwareManagementError {
     #[error("Invalid topic received from child device: {topic}")]
@@ -17,8 +19,8 @@ pub enum FirmwareManagementError {
     #[error("The received SmartREST request is duplicated with already addressed operation. Ignore this request.")]
     RequestAlreadyAddressed,
 
-    #[error(transparent)]
-    FromMqttError(#[from] mqtt_channel::MqttError),
+    #[error("Failed to retrieve JWT token.")]
+    NoJwtToken,
 
     #[error("Failed to parse response from child device with: {0}")]
     FromSerdeJsonError(#[from] serde_json::Error),
@@ -45,5 +47,14 @@ pub enum FirmwareManagementError {
     FromConfigSettingError(#[from] tedge_config::ConfigSettingError),
 
     #[error(transparent)]
-    FromSendError(#[from] futures::channel::mpsc::SendError),
+    FromChannelError(#[from] tedge_actors::ChannelError),
+
+    #[error(transparent)]
+    FromMqttError(#[from] tedge_mqtt_ext::MqttError),
+}
+
+impl From<FirmwareManagementError> for RuntimeError {
+    fn from(error: FirmwareManagementError) -> Self {
+        RuntimeError::ActorError(Box::new(error))
+    }
 }

@@ -1,9 +1,18 @@
 use crate::error::FirmwareManagementError;
-use crate::firmware_manager::FirmwareOperationEntry;
-use c8y_api::smartrest::topic::C8yTopic;
-use mqtt_channel::Message;
-use mqtt_channel::Topic;
+use crate::operation::FirmwareOperationEntry;
+
+use c8y_api::smartrest::error::SmartRestSerializerError;
+use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use c8y_api::smartrest::smartrest_serializer::SmartRest;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
+use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
+use tedge_api::topic::get_child_id_from_child_topic;
 use tedge_api::OperationStatus;
+use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 
 #[derive(Debug)]
 pub struct FirmwareOperationRequest {
@@ -52,11 +61,11 @@ impl From<FirmwareOperationEntry> for FirmwareOperationRequest {
     }
 }
 
-impl TryInto<Message> for FirmwareOperationRequest {
+impl TryInto<MqttMessage> for FirmwareOperationRequest {
     type Error = FirmwareManagementError;
 
-    fn try_into(self) -> Result<Message, Self::Error> {
-        let message = Message::new(&self.get_topic(), self.get_json_payload()?);
+    fn try_into(self) -> Result<MqttMessage, Self::Error> {
+        let message = MqttMessage::new(&self.get_topic(), self.get_json_payload()?);
         Ok(message)
     }
 }
@@ -80,21 +89,21 @@ impl FirmwareOperationResponse {
         self.child_id.clone()
     }
 
-    pub fn get_child_topic(&self) -> String {
-        C8yTopic::ChildSmartRestResponse(self.child_id.clone()).to_string()
-    }
-
     pub fn get_payload(&self) -> &ResponsePayload {
         &self.payload
     }
 }
 
-impl TryFrom<&Message> for FirmwareOperationResponse {
+impl TryFrom<&MqttMessage> for FirmwareOperationResponse {
     type Error = FirmwareManagementError;
 
-    fn try_from(message: &Message) -> Result<Self, Self::Error> {
+    fn try_from(message: &MqttMessage) -> Result<Self, Self::Error> {
         let topic = &message.topic.name;
-        let child_id = get_child_id_from_child_topic(topic)?;
+        let child_id = get_child_id_from_child_topic(topic).ok_or(
+            FirmwareManagementError::InvalidTopicFromChildOperation {
+                topic: topic.into(),
+            },
+        )?;
         let request_payload: ResponsePayload = serde_json::from_str(message.payload_str()?)?;
 
         Ok(Self {
@@ -104,17 +113,28 @@ impl TryFrom<&Message> for FirmwareOperationResponse {
     }
 }
 
-// FIXME: Duplicated with config plugin
-pub fn get_child_id_from_child_topic(topic: &str) -> Result<String, FirmwareManagementError> {
-    let mut topic_split = topic.split('/');
-    // the second element is the child id
-    let child_id =
-        topic_split
-            .nth(1)
-            .ok_or(FirmwareManagementError::InvalidTopicFromChildOperation {
-                topic: topic.into(),
-            })?;
-    Ok(child_id.to_string())
+pub struct DownloadFirmwareStatusMessage {}
+
+impl TryIntoOperationStatusMessage for DownloadFirmwareStatusMessage {
+    fn status_executing() -> Result<SmartRest, SmartRestSerializerError> {
+        SmartRestSetOperationToExecuting::new(CumulocitySupportedOperations::C8yFirmware)
+            .to_smartrest()
+    }
+
+    fn status_successful(
+        _parameter: Option<String>,
+    ) -> Result<SmartRest, SmartRestSerializerError> {
+        SmartRestSetOperationToSuccessful::new(CumulocitySupportedOperations::C8yFirmware)
+            .to_smartrest()
+    }
+
+    fn status_failed(failure_reason: String) -> Result<SmartRest, SmartRestSerializerError> {
+        SmartRestSetOperationToFailed::new(
+            CumulocitySupportedOperations::C8yFirmware,
+            failure_reason,
+        )
+        .to_smartrest()
+    }
 }
 
 #[cfg(test)]
@@ -139,7 +159,7 @@ mod tests {
         };
         let firmware_operation_request = FirmwareOperationRequest::from(operation_entry);
 
-        let message: Message = firmware_operation_request.try_into().unwrap();
+        let message: MqttMessage = firmware_operation_request.try_into().unwrap();
         assert_eq!(
             message.topic,
             Topic::new_unchecked("tedge/child-id/commands/req/firmware_update")
@@ -167,7 +187,7 @@ mod tests {
             "reason": null
         })
         .to_string();
-        let incoming_message = Message::new(
+        let incoming_message = MqttMessage::new(
             &Topic::new_unchecked("tedge/child-id/commands/res/firmware_update"),
             incoming_payload,
         );
@@ -181,7 +201,6 @@ mod tests {
 
         assert_eq!(firmware_response.get_payload(), &expected_payload);
         assert_eq!(firmware_response.get_child_id(), "child-id");
-        assert_eq!(firmware_response.get_child_topic(), "c8y/s/us/child-id");
         assert_eq!(
             firmware_response,
             FirmwareOperationResponse {
@@ -199,7 +218,7 @@ mod tests {
             "reason": "aaa"
         })
         .to_string();
-        let message = Message::new(
+        let message = MqttMessage::new(
             &Topic::new_unchecked("tedge/child-id/commands/res/firmware_update"),
             incoming_payload,
         );
@@ -218,7 +237,7 @@ mod tests {
             "id": "op-id",
         })
         .to_string();
-        let message = Message::new(
+        let message = MqttMessage::new(
             &Topic::new_unchecked("tedge/child-id/commands/res/firmware_update"),
             incoming_payload,
         );
@@ -236,7 +255,7 @@ mod tests {
             "id": "op-id",
         })
         .to_string();
-        let message = Message::new(
+        let message = MqttMessage::new(
             &Topic::new_unchecked("tedge/child-id/commands/res/firmware_update"),
             incoming_payload,
         );
@@ -254,7 +273,7 @@ mod tests {
             "id": "op-id",
         })
         .to_string();
-        let message = Message::new(
+        let message = MqttMessage::new(
             &Topic::new_unchecked("tedge/child-id/commands/res/firmware_update"),
             incoming_payload,
         );
@@ -272,7 +291,7 @@ mod tests {
             "reason": "aaa"
         })
         .to_string();
-        let message = Message::new(
+        let message = MqttMessage::new(
             &Topic::new_unchecked("tedge/child-id/commands/res/firmware_update"),
             incoming_payload,
         );

@@ -1,0 +1,35 @@
+[package]
+name = "c8y_firmware_manager"
+description = "Thin-edge device firmware management for Cumulocity"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+async-trait = "0.1"
+c8y_api = { path = "../../../crates/core/c8y_api" }
+c8y_http_proxy = { path = "../../extensions/c8y_http_proxy" }
+log = "0.4"
+nanoid = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha256 = "1.1"
+tedge_actors = { path = "../../core/tedge_actors" }
+tedge_api = { path = "../../../crates/core/tedge_api" }
+tedge_config = { path = "../../../crates/common/tedge_config" }
+tedge_downloader_ext = { path = "../../extensions/tedge_downloader_ext" }
+tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
+tedge_timer_ext = { path = "../../extensions/tedge_timer_ext" }
+tedge_utils = { path = "../../../crates/common/tedge_utils" }
+thiserror = "1.0"
+
+[dev-dependencies]
+assert-json-diff = "2.0"
+assert_matches = "1.5"
+mockall = "0.11"
+tedge_test_utils = { path = "../../../crates/tests/tedge_test_utils" }
+tokio = { version = "1.23", default_features = false, features = ["test-util", "rt-multi-thread",] }

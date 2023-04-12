@@ -12,7 +12,7 @@ use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
 use tedge_utils::file::PermissionEntry;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DownloadRequest {
     pub url: String,
     pub file_path: PathBuf,
@@ -38,7 +38,7 @@ pub struct DownloadResponse {
 }
 
 impl DownloadResponse {
-    fn new(url: &str, file_path: &Path) -> Self {
+    pub fn new(url: &str, file_path: &Path) -> Self {
         Self {
             url: url.into(),
             file_path: file_path.into(),
@@ -69,14 +69,16 @@ impl DownloaderActor {
 
 #[async_trait]
 impl Server for DownloaderActor {
-    type Request = DownloadRequest;
-    type Response = DownloadResult;
+    type Request = (String, DownloadRequest);
+    type Response = (String, DownloadResult);
 
     fn name(&self) -> &str {
         "Downloader"
     }
 
-    async fn handle(&mut self, request: Self::Request) -> Self::Response {
+    async fn handle(&mut self, id_request: Self::Request) -> Self::Response {
+        let (id, request) = id_request;
+
         let download_info = if let Some(auth) = request.auth {
             DownloadInfo::new(&request.url).with_auth(auth)
         } else {
@@ -91,12 +93,14 @@ impl Server for DownloaderActor {
             request.file_path.display()
         );
 
-        match downloader.download(&download_info).await {
+        let result = match downloader.download(&download_info).await {
             Ok(_) => Ok(DownloadResponse::new(
                 request.url.as_str(),
                 downloader.filename(),
             )),
             Err(err) => Err(err),
-        }
+        };
+
+        (id, result)
     }
 }

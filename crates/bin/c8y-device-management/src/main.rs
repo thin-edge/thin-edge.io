@@ -1,5 +1,7 @@
 use c8y_config_manager::ConfigManagerBuilder;
 use c8y_config_manager::ConfigManagerConfig;
+use c8y_firmware_manager::FirmwareManagerBuilder;
+use c8y_firmware_manager::FirmwareManagerConfig;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use c8y_log_manager::LogManagerBuilder;
@@ -16,6 +18,7 @@ use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
+use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_http_ext::HttpActor;
@@ -49,6 +52,7 @@ async fn main() -> anyhow::Result<()> {
     let mut fs_watch_actor = FsWatchActorBuilder::new();
     let mut signal_actor = SignalActor::builder();
     let mut timer_actor = TimerActor::builder();
+    let mut downloader_actor = DownloaderActor::new().builder();
 
     //Instantiate config manager actor
     let config_manager_config =
@@ -71,6 +75,16 @@ async fn main() -> anyhow::Result<()> {
     log_actor.with_c8y_http_proxy(&mut c8y_http_proxy_actor)?;
     log_actor.with_mqtt_connection(&mut mqtt_actor)?;
 
+    // Instantiate firmware manager actor
+    let firmware_manager_config = FirmwareManagerConfig::from_tedge_config(&tedge_config)?;
+    let firmware_actor = FirmwareManagerBuilder::new(
+        firmware_manager_config,
+        &mut mqtt_actor,
+        &mut jwt_actor,
+        &mut timer_actor,
+        &mut downloader_actor,
+    );
+
     //Instantiate health monitor actor
     let health_actor = HealthMonitorBuilder::new(PLUGIN_NAME);
     mqtt_actor.mqtt_config = health_actor.set_init_and_last_will(mqtt_actor.mqtt_config);
@@ -89,8 +103,10 @@ async fn main() -> anyhow::Result<()> {
     runtime.spawn(fs_watch_actor).await?;
     runtime.spawn(config_actor).await?;
     runtime.spawn(log_actor).await?;
+    runtime.spawn(firmware_actor).await?;
     runtime.spawn(timer_actor).await?;
     runtime.spawn(health_actor).await?;
+    runtime.spawn(downloader_actor).await?;
 
     runtime.run_to_completion().await?;
 

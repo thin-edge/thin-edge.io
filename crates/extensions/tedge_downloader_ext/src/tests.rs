@@ -24,10 +24,14 @@ async fn download_without_auth() -> Result<(), DynError> {
 
     let mut requester = spawn_downloader_actor().await;
 
-    let response = timeout(TEST_TIMEOUT, requester.await_response(download_request))
-        .await?
-        .expect("timeout");
+    let (id, response) = timeout(
+        TEST_TIMEOUT,
+        requester.await_response(("id".to_string(), download_request)),
+    )
+    .await?
+    .expect("timeout");
 
+    assert_eq!(id.as_str(), "id");
     assert!(response.is_ok());
     assert_eq!(response.as_ref().unwrap().file_path, target_path.as_path());
     assert_eq!(response.as_ref().unwrap().url, server_url);
@@ -55,10 +59,14 @@ async fn download_with_auth() -> Result<(), DynError> {
 
     let mut requester = spawn_downloader_actor().await;
 
-    let response = timeout(TEST_TIMEOUT, requester.await_response(download_request))
-        .await?
-        .expect("timeout");
+    let (id, response) = timeout(
+        TEST_TIMEOUT,
+        requester.await_response(("id".to_string(), download_request)),
+    )
+    .await?
+    .expect("timeout");
 
+    assert_eq!(id.as_str(), "id");
     assert!(response.is_ok());
     assert_eq!(response.as_ref().unwrap().file_path, target_path.as_path());
     assert_eq!(response.as_ref().unwrap().url, server_url);
@@ -66,7 +74,8 @@ async fn download_with_auth() -> Result<(), DynError> {
     Ok(())
 }
 
-async fn spawn_downloader_actor() -> ClientMessageBox<DownloadRequest, DownloadResult> {
+async fn spawn_downloader_actor(
+) -> ClientMessageBox<(String, DownloadRequest), (String, DownloadResult)> {
     let mut downloader_actor_builder = DownloaderActor::new().builder();
     let requester = ClientMessageBox::new("DownloadRequester", &mut downloader_actor_builder);
 
