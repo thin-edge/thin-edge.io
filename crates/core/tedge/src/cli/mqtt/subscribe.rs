@@ -23,7 +23,7 @@ pub struct MqttSubscribeCommand {
     pub hide_topic: bool,
     pub client_id: String,
     pub ca_file: Option<Utf8PathBuf>,
-    pub ca_path: Option<Utf8PathBuf>,
+    pub ca_dir: Option<Utf8PathBuf>,
     pub client_auth_config: Option<ClientAuthConfig>,
 }
 
@@ -45,15 +45,15 @@ fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), MqttError> {
     options.set_clean_session(true);
     options.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
 
-    if cmd.ca_file.is_some() || cmd.ca_path.is_some() {
+    if cmd.ca_file.is_some() || cmd.ca_dir.is_some() {
         let mut root_store = RootCertStore::empty();
 
         if let Some(ca_file) = &cmd.ca_file {
             parse_root_certificate::add_certs_from_file(&mut root_store, ca_file)?;
         }
 
-        if let Some(ca_path) = &cmd.ca_path {
-            parse_root_certificate::add_certs_from_directory(&mut root_store, ca_path)?;
+        if let Some(ca_dir) = &cmd.ca_dir {
+            parse_root_certificate::add_certs_from_directory(&mut root_store, ca_dir)?;
         }
 
         const INSECURE_MQTT_PORT: u16 = 1883;

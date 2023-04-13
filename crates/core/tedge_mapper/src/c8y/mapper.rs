@@ -22,8 +22,6 @@ use tedge_api::topic::ResponseTopic;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::DeviceIdSetting;
 use tedge_config::DeviceTypeSetting;
-use tedge_config::MqttClientHostSetting;
-use tedge_config::MqttClientPortSetting;
 use tedge_config::ServiceTypeSetting;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file::*;
@@ -82,8 +80,6 @@ impl TEdgeComponent for CumulocityMapper {
         http_proxy.init().await?;
         let device_name = tedge_config.query(DeviceIdSetting)?;
         let device_type = tedge_config.query(DeviceTypeSetting)?;
-        let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
-        let mqtt_host = tedge_config.query(MqttClientHostSetting)?.to_string();
         let service_type = tedge_config.query(ServiceTypeSetting)?.to_string();
 
         let mapper_config = create_mapper_config(&operations);
@@ -98,8 +94,7 @@ impl TEdgeComponent for CumulocityMapper {
             &device_name,
             CUMULOCITY_MAPPER_NAME,
             &service_type,
-            mqtt_host.clone(),
-            mqtt_port,
+            &tedge_config,
         )
         .await?;
 
@@ -182,12 +177,10 @@ pub async fn create_mqtt_client_will_message(
     device_name: &str,
     app_name: &str,
     service_type: &str,
-    mqtt_host: String,
-    mqtt_port: u16,
+    tedge_config: &TEdgeConfig,
 ) -> Result<Connection, anyhow::Error> {
-    let mqtt_config = mqtt_channel::Config::default()
-        .with_host(mqtt_host)
-        .with_port(mqtt_port)
+    let mqtt_config = tedge_config
+        .mqtt_config()?
         .with_session_name("last_will_c8y_mapper")
         .with_last_will_message(service_monitor_status_message(
             device_name,

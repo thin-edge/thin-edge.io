@@ -265,7 +265,7 @@ impl ConfigSetting for MqttClientPortSetting {
 pub struct MqttClientCafileSetting;
 
 impl ConfigSetting for MqttClientCafileSetting {
-    const KEY: &'static str = "mqtt.client.ca_file";
+    const KEY: &'static str = "mqtt.client.auth.cafile";
 
     const DESCRIPTION: &'static str = concat!(
         "Path to the CA certificate used by MQTT clients to use when ",
@@ -279,7 +279,7 @@ impl ConfigSetting for MqttClientCafileSetting {
 pub struct MqttClientCapathSetting;
 
 impl ConfigSetting for MqttClientCapathSetting {
-    const KEY: &'static str = "mqtt.client.ca_path";
+    const KEY: &'static str = "mqtt.client.auth.cadir";
 
     const DESCRIPTION: &'static str = concat!(
         "Path to the directory containing CA certificate used by MQTT clients ",
@@ -294,7 +294,7 @@ impl ConfigSetting for MqttClientCapathSetting {
 pub struct MqttClientAuthCertSetting;
 
 impl ConfigSetting for MqttClientAuthCertSetting {
-    const KEY: &'static str = "mqtt.client.auth.cert_file";
+    const KEY: &'static str = "mqtt.client.auth.certfile";
 
     const DESCRIPTION: &'static str =
         "Path to the client certificate used for client authentication";
@@ -306,7 +306,7 @@ impl ConfigSetting for MqttClientAuthCertSetting {
 pub struct MqttClientAuthKeySetting;
 
 impl ConfigSetting for MqttClientAuthKeySetting {
-    const KEY: &'static str = "mqtt.client.auth.key_file";
+    const KEY: &'static str = "mqtt.client.auth.keyfile";
 
     const DESCRIPTION: &'static str =
         "Path to the client private key used for client authentication";

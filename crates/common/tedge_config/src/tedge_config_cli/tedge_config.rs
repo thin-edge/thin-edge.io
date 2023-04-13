@@ -423,7 +423,7 @@ impl ConfigSettingAccessor<MqttClientCafileSetting> for TEdgeConfig {
             .client_ca_file
             .clone()
             .ok_or(ConfigSettingError::ConfigNotSet {
-                key: "mqtt.client.ca_file",
+                key: "mqtt.client.auth.cafile",
             })
     }
 
@@ -449,7 +449,7 @@ impl ConfigSettingAccessor<MqttClientCapathSetting> for TEdgeConfig {
             .client_ca_path
             .clone()
             .ok_or(ConfigSettingError::ConfigNotSet {
-                key: "mqtt.client.ca_path",
+                key: "mqtt.client.auth.cadir",
             })
     }
 
@@ -475,12 +475,14 @@ impl ConfigSettingAccessor<MqttClientAuthCertSetting> for TEdgeConfig {
             .client_auth
             .as_ref()
             .ok_or(ConfigSettingError::ConfigNotSet {
-                key: "mqtt.client.auth.cert_file",
+                key: "mqtt.client.auth.certfile",
             })?
             .cert_file
             .clone()
+            // TODO (Marcel): remove unnecessary Options once tedge_config is
+            // refactored
             .ok_or(ConfigSettingError::ConfigNotSet {
-                key: "mqtt.client.auth.cert_file",
+                key: "mqtt.client.auth.certfile",
             })
     }
 
@@ -518,12 +520,14 @@ impl ConfigSettingAccessor<MqttClientAuthKeySetting> for TEdgeConfig {
             .client_auth
             .as_ref()
             .ok_or(ConfigSettingError::ConfigNotSet {
-                key: "mqtt.client.auth.cert_key",
+                key: "mqtt.client.auth.certkey",
             })?
             .key_file
             .clone()
+            // TODO (Marcel): remove unnecessary Options once tedge_config is
+            // refactored
             .ok_or(ConfigSettingError::ConfigNotSet {
-                key: "mqtt.client.auth.cert_key",
+                key: "mqtt.client.auth.certkey",
             })
     }
 

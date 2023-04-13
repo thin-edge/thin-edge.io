@@ -130,7 +130,7 @@ impl Connection {
             eprintln!("WARNING: Connecting on port 8883 for secure MQTT without a CA file");
         }
 
-        let mqtt_options = config.mqtt_options()?;
+        let mqtt_options = config.rumqttc_options()?;
         let (mqtt_client, mut event_loop) = AsyncClient::new(mqtt_options, config.queue_capacity);
 
         loop {

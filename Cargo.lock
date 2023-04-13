@@ -2158,7 +2158,7 @@ dependencies = [
  "fastrand",
  "futures",
  "mqtt_tests",
- "rumqttc 0.18.0",
+ "rumqttc",
  "serial_test",
  "thiserror",
  "tokio",
@@ -2172,7 +2172,7 @@ dependencies = [
  "fastrand",
  "futures",
  "once_cell",
- "rumqttc 0.18.0",
+ "rumqttc",
  "rumqttd",
  "tokio",
 ]
@@ -2994,25 +2994,6 @@ dependencies = [
 
 [[package]]
 name = "rumqttc"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "499b7ab08ffa5a722958b6ce1b7c0270bea30909f589d12c5ec3a051afe423fc"
-dependencies = [
- "bytes",
- "flume",
- "futures",
- "http",
- "log",
- "pollster",
- "rustls-native-certs",
- "rustls-pemfile 0.3.0",
- "thiserror",
- "tokio",
- "tokio-rustls",
-]
-
-[[package]]
-name = "rumqttc"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1514bbc994fc9f36ab7f7ae067b3e4758c717aff7a06c4818c6787cad8b086e1"
@@ -3590,7 +3571,7 @@ dependencies = [
  "predicates 2.1.5",
  "reqwest",
  "rpassword",
- "rumqttc 0.17.0",
+ "rumqttc",
  "serde",
  "serde_json",
  "strum_macros",

@@ -21,7 +21,7 @@ cat > v3.ext << EOF
 authorityKeyIdentifier=keyid
 basicConstraints=CA:FALSE
 keyUsage = digitalSignature, keyAgreement
-subjectAltName=DNS:$(hostname)
+subjectAltName=DNS:$(hostname),DNS:localhost
 EOF
 
 openssl x509 -req \

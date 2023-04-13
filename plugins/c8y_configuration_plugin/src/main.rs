@@ -29,7 +29,7 @@ notifying the Cumulocity tenant of their progress (messages `501`, `502` and `50
 The thin-edge `CONFIG_DIR` is used to find where:
   * to store temporary files on download: `tedge config get tmp.path`,
   * to log operation errors and progress: `tedge config get log.path`,
-  * to connect the MQTT bus: `tedge config get mqtt.port`."#;
+  * to connect the MQTT bus: `tedge config get mqtt.client.port`."#;
 
 #[derive(Debug, clap::Parser)]
 #[clap(

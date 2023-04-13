@@ -99,7 +99,7 @@ impl BuildCommand for TEdgeMqttCli {
                     disconnect_timeout: DISCONNECT_TIMEOUT,
                     retain,
                     ca_file,
-                    ca_path,
+                    ca_dir: ca_path,
                     client_auth_config,
                 }
                 .into_boxed(),
@@ -115,7 +115,7 @@ impl BuildCommand for TEdgeMqttCli {
                     hide_topic,
                     client_id: format!("{}-{}", SUB_CLIENT_PREFIX, std::process::id()),
                     ca_file,
-                    ca_path,
+                    ca_dir: ca_path,
                     client_auth_config,
                 }
                 .into_boxed(),

@@ -3,21 +3,24 @@ use crate::cli::connect::CONNECTION_TIMEOUT;
 use crate::cli::connect::RESPONSE_TIMEOUT;
 use rumqttc::Event;
 use rumqttc::Incoming;
-use rumqttc::MqttOptions;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::QoS::AtLeastOnce;
+use tedge_config::TEdgeConfig;
 
-pub(crate) fn get_connected_c8y_url(port: u16, host: String) -> Result<String, ConnectError> {
+pub(crate) fn get_connected_c8y_url(tedge_config: &TEdgeConfig) -> Result<String, ConnectError> {
     const C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM: &str = "c8y/s/uat";
     const C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM: &str = "c8y/s/dat";
     const CLIENT_ID: &str = "get_jwt_token_c8y";
 
-    let mut options = MqttOptions::new(CLIENT_ID, host, port);
-    options.set_keep_alive(RESPONSE_TIMEOUT);
-    options.set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
+    let mut mqtt_options = tedge_config
+        .mqtt_config()?
+        .with_session_name(CLIENT_ID)
+        .rumqttc_options()?;
+    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
+    mqtt_options.set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
 
-    let (mut client, mut connection) = rumqttc::Client::new(options, 10);
+    let (mut client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
     let mut acknowledged = false;
 
     client.subscribe(C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM, AtLeastOnce)?;

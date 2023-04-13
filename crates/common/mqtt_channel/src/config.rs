@@ -281,7 +281,7 @@ impl Config {
     }
 
     /// Wrap this config into an internal set of options for `rumqttc`.
-    pub(crate) fn mqtt_options(&self) -> Result<rumqttc::MqttOptions, rustls::Error> {
+    pub fn rumqttc_options(&self) -> Result<rumqttc::MqttOptions, rustls::Error> {
         let id = match &self.session_name {
             None => std::iter::repeat_with(fastrand::lowercase)
                 .take(10)
