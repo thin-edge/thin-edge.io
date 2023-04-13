@@ -1,16 +1,20 @@
 use crate::RuntimeError;
 use async_trait::async_trait;
 
-/// Enable a struct to be used as an actor.
+/// Enable a struct to be used as an actor: a processing unit that interact using asynchronous messages.
 ///
-/// This trait provides the flexibility to:
+/// This trait provides an actor the flexibility to:
 ///
-/// - use a specific [message box](crate::message_boxes) to address specific communication needs
-///   (pub/sub, request/response, message priority, concurrent message processing, ...)
-/// - freely interleave message reception and emission in its [Actor::run()](crate::Actor::run) event loop,
-///   reacting to peer messages as well as internal events,
-///   sending responses for requests, possibly deferring some responses,
-///   acting as a source of messages ...
+/// - own and freely update some internal state,
+/// - use a specific [message box](crate::message_boxes) to address specific communication needs:
+///   - pub/sub,
+///   - request/response,
+///   - message priority,
+///   - concurrent message processing, ...
+/// - freely interleave message reception and emission in its [Actor::run()](crate::Actor::run) event loop:
+///   - reacting to peer messages as well as internal events,
+///   - sending responses for requests, possibly deferring some responses,
+///   - acting as a source of messages ...
 #[async_trait]
 pub trait Actor: 'static + Send + Sync {
     /// Return the actor instance name

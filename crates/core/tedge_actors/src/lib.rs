@@ -102,7 +102,7 @@
 //! As each actor is free to chose its own implementation for its message box,
 //! the details on how to connect test message boxes will be specific to each actor.
 //! [Actor and message box builders](crate::builders) are provided to address these specificities
-//! with a generic approach with exposing the internal structure of the actors.
+//! with a generic approach without exposing the internal structure of the actors.
 //!
 //! To test the `Calculator` example we need first to create its box using a
 //! [SimpleMessageBoxBuilder](crate::SimpleMessageBoxBuilder),
@@ -155,6 +155,8 @@
 //! See the [test_helpers](crate::test_helpers) module for various ways
 //! to observe and interact with running actors.
 //!
+//! - The primary tool to interact with an actor under test is the [SimpleMessageBoxBuilder],
+//!   that can be used to connect [SimpleMessageBox] and interact with the actor.
 //! - The [MessageReceiverExt](crate::test_helpers::MessageReceiverExt) extension
 //!   extends a message with assertion methods checking that expected messages are actually received
 //!   .i.e sent by the actor under test.

@@ -214,7 +214,13 @@ pub fn log_message_sent<I: Debug>(target: &str, message: I) {
     info!(target: target, "send {message:?}");
 }
 
-/// The basic message box
+/// The basic message box to send and receive messages
+///
+/// - Handle runtime messages along regular ones
+/// - Log received messages when pull out of the box
+/// - Log sent messages when pushed into the target box
+///
+/// Such a box is connected to peer actors using a [SimpleMessageBoxBuilder](crate::SimpleMessageBoxBuilder).
 pub struct SimpleMessageBox<Input: Debug, Output> {
     input_receiver: LoggingReceiver<Input>,
     output_sender: LoggingSender<Output>,
