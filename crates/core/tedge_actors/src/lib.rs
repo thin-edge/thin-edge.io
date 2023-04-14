@@ -158,7 +158,7 @@
 //! # #[derive(Default)]
 //! # struct SomeOtherActorBuilder;
 //! # impl ServiceProvider<(),(),NoConfig> for SomeActorBuilder {
-//! #     fn add_peer(&mut self, peer: &mut impl ServiceConsumer<(), (), NoConfig>) {
+//! #     fn connect_consumer(&mut self, config: NoConfig, response_sender: DynSender<()>) -> DynSender<()> {
 //! #         todo!()
 //! #     }
 //! # }

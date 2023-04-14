@@ -9,13 +9,11 @@ use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
-use tedge_actors::NoMessage;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
 use tedge_actors::ServiceConsumer;
-use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_mqtt_ext::MqttMessage;
@@ -78,15 +76,6 @@ impl ServiceConsumer<MqttMessage, MqttMessage, TopicFilter> for CollectdActorBui
 
     fn get_response_sender(&self) -> DynSender<MqttMessage> {
         self.message_box.get_response_sender()
-    }
-}
-
-impl ServiceProvider<NoMessage, CollectdMessage, NoConfig> for CollectdActorBuilder {
-    fn add_peer(&mut self, peer: &mut impl ServiceConsumer<NoMessage, CollectdMessage, NoConfig>) {
-        // FIXME: This line is correct but weird
-        // FIXME: and highlights that ServiceConsumer method names have still to be improved
-        self.message_box
-            .set_request_sender(peer.get_response_sender())
     }
 }
 

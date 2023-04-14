@@ -20,7 +20,6 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
-use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
 use tedge_actors::WrappedInput;
 
@@ -67,11 +66,14 @@ impl MqttActorBuilder {
 }
 
 impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter> for MqttActorBuilder {
-    fn add_peer(&mut self, peer: &mut impl ServiceConsumer<MqttMessage, MqttMessage, TopicFilter>) {
-        let subscriptions = peer.get_config();
-        let sender = LoggingSender::new("MQTT".into(), peer.get_response_sender());
+    fn connect_consumer(
+        &mut self,
+        subscriptions: TopicFilter,
+        response_sender: DynSender<MqttMessage>,
+    ) -> DynSender<MqttMessage> {
+        let sender = LoggingSender::new("MQTT".into(), response_sender);
         self.subscriber_addresses.push((subscriptions, sender));
-        peer.set_request_sender(self.publish_sender.clone().into())
+        self.publish_sender.clone().into()
     }
 }
 

@@ -4,7 +4,6 @@ use crate::SetTimeout;
 use crate::Timeout;
 use async_trait::async_trait;
 use std::convert::Infallible;
-use std::marker::PhantomData;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
@@ -14,7 +13,6 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
 use tedge_actors::ServerMessageBoxBuilder;
-use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
 
 pub struct TimerActorBuilder {
@@ -49,50 +47,19 @@ impl RuntimeRequestSink for TimerActorBuilder {
 }
 
 impl<T: Message> ServiceProvider<SetTimeout<T>, Timeout<T>, NoConfig> for TimerActorBuilder {
-    fn add_peer(&mut self, peer: &mut impl ServiceConsumer<SetTimeout<T>, Timeout<T>, NoConfig>) {
-        let mut adapter = AnyTimerAdapter::new(peer);
-        self.box_builder.add_peer(&mut adapter);
-    }
-}
-
-/// A message adapter used by actors to send timer requests with a generic payload `SetTimeout<T>`
-/// and to receive accordingly timer responses with a generic payload `Timeout<T>`,
-/// while the timer actor only handles opaque payloads of type `Box<dyn Any>`.
-struct AnyTimerAdapter<'a, T: Message, Plug: ServiceConsumer<SetTimeout<T>, Timeout<T>, NoConfig>> {
-    inner: &'a mut Plug,
-    _phantom: PhantomData<T>,
-}
-
-impl<'a, T: Message, Plug: ServiceConsumer<SetTimeout<T>, Timeout<T>, NoConfig>>
-    AnyTimerAdapter<'a, T, Plug>
-{
-    fn new(inner: &'a mut Plug) -> Self {
-        Self {
-            inner,
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<'a, T, Plug> ServiceConsumer<SetTimeout<AnyPayload>, Timeout<AnyPayload>, NoConfig>
-    for AnyTimerAdapter<'a, T, Plug>
-where
-    T: Message,
-    Plug: ServiceConsumer<SetTimeout<T>, Timeout<T>, NoConfig>,
-{
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
-    fn set_request_sender(&mut self, request_sender: DynSender<SetTimeout<AnyPayload>>) {
-        self.inner.set_request_sender(Box::new(SetTimeoutSender {
+    fn connect_consumer(
+        &mut self,
+        config: NoConfig,
+        response_sender: DynSender<Timeout<T>>,
+    ) -> DynSender<SetTimeout<T>> {
+        let adapted_response_sender = Box::new(TimeoutSender {
+            inner: response_sender,
+        });
+        let request_sender = self
+            .box_builder
+            .connect_consumer(config, adapted_response_sender);
+        Box::new(SetTimeoutSender {
             inner: request_sender,
-        }))
-    }
-
-    fn get_response_sender(&self) -> DynSender<Timeout<AnyPayload>> {
-        Box::new(TimeoutSender {
-            inner: self.inner.get_response_sender(),
         })
     }
 }

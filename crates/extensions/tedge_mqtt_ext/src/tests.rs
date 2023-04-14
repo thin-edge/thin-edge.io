@@ -1,6 +1,7 @@
 use crate::*;
 use mqtt_channel::Topic;
 use tedge_actors::Builder;
+use tedge_actors::ServiceConsumer;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 

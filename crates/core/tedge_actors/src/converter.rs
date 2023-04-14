@@ -10,7 +10,6 @@ use crate::RuntimeError;
 use crate::RuntimeRequest;
 use crate::RuntimeRequestSink;
 use crate::Sender;
-use crate::ServiceConsumer;
 use crate::ServiceProvider;
 use crate::SimpleMessageBox;
 use crate::SimpleMessageBoxBuilder;
@@ -218,8 +217,12 @@ where
 impl<C: Converter, Config> ServiceProvider<C::Input, C::Output, NoConfig>
     for ConvertingActorBuilder<C, Config>
 {
-    fn add_peer(&mut self, peer: &mut impl ServiceConsumer<C::Input, C::Output, NoConfig>) {
-        self.message_box.add_peer(peer)
+    fn connect_consumer(
+        &mut self,
+        config: NoConfig,
+        response_sender: DynSender<C::Output>,
+    ) -> DynSender<C::Input> {
+        self.message_box.connect_consumer(config, response_sender)
     }
 }
 
