@@ -68,12 +68,12 @@ async fn main() -> anyhow::Result<()> {
     // Instantiate log manager actor
     let log_manager_config =
         LogManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH, &tedge_config)?;
-    let mut log_actor = LogManagerBuilder::new(log_manager_config);
-
-    // Connect other actor instances to log manager actor
-    log_actor.with_fs_connection(&mut fs_watch_actor)?;
-    log_actor.with_c8y_http_proxy(&mut c8y_http_proxy_actor)?;
-    log_actor.with_mqtt_connection(&mut mqtt_actor)?;
+    let log_actor = LogManagerBuilder::new(
+        log_manager_config,
+        &mut mqtt_actor,
+        &mut c8y_http_proxy_actor,
+        &mut fs_watch_actor,
+    );
 
     // Instantiate firmware manager actor
     let firmware_manager_config = FirmwareManagerConfig::from_tedge_config(&tedge_config)?;

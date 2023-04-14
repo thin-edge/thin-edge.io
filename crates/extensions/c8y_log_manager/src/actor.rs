@@ -528,8 +528,6 @@ mod tests {
             plugin_config: log_config,
         };
 
-        let mut log_builder = LogManagerBuilder::new(config);
-
         let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
             SimpleMessageBoxBuilder::new("MQTT", 5);
         let mut c8y_proxy_builder: SimpleMessageBoxBuilder<C8YRestRequest, C8YRestResult> =
@@ -537,13 +535,12 @@ mod tests {
         let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
             SimpleMessageBoxBuilder::new("FS", 5);
 
-        log_builder.with_mqtt_connection(&mut mqtt_builder).unwrap();
-        log_builder
-            .with_c8y_http_proxy(&mut c8y_proxy_builder)
-            .unwrap();
-        log_builder
-            .with_fs_connection(&mut fs_watcher_builder)
-            .unwrap();
+        let log_builder = LogManagerBuilder::new(
+            config,
+            &mut mqtt_builder,
+            &mut c8y_proxy_builder,
+            &mut fs_watcher_builder,
+        );
 
         (
             log_builder,
