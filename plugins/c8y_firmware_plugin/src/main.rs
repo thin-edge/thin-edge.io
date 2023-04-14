@@ -8,7 +8,6 @@ use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
-use tedge_actors::ServiceConsumer;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::ConfigRepository;
@@ -97,13 +96,10 @@ async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     let mut signal_actor = SignalActor::builder();
     let mut timer_actor = TimerActor::builder();
     let mut downloader_actor = DownloaderActor::new().builder();
-
-    //Instantiate health monitor actor
-    let mut health_actor = HealthMonitorBuilder::new(PLUGIN_NAME);
-    let mqtt_config = health_actor.set_init_and_last_will(mqtt_config);
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
 
-    health_actor.set_connection(&mut mqtt_actor);
+    //Instantiate health monitor actor
+    let health_actor = HealthMonitorBuilder::new(PLUGIN_NAME, &mut mqtt_actor);
 
     // Instantiate firmware manager actor
     let firmware_manager_config = FirmwareManagerConfig::from_tedge_config(&tedge_config)?;

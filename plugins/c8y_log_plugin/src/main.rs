@@ -10,7 +10,6 @@ use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
-use tedge_actors::ServiceConsumer;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::ConfigRepository;
@@ -101,16 +100,13 @@ async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     let runtime_events_logger = None;
     let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
-    let mut health_actor = HealthMonitorBuilder::new(C8Y_LOG_PLUGIN);
-
     let base_mqtt_config = mqtt_config(&tedge_config)?;
-    let mqtt_config = health_actor
-        .set_init_and_last_will(base_mqtt_config.clone().with_session_name(C8Y_LOG_PLUGIN));
+    let mqtt_config = base_mqtt_config.clone().with_session_name(C8Y_LOG_PLUGIN);
 
     let c8y_http_config = (&tedge_config).try_into()?;
 
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config);
-    health_actor.set_connection(&mut mqtt_actor);
+    let health_actor = HealthMonitorBuilder::new(C8Y_LOG_PLUGIN, &mut mqtt_actor);
 
     let mut jwt_actor = C8YJwtRetriever::builder(base_mqtt_config);
     let mut http_actor = HttpActor::new().builder();

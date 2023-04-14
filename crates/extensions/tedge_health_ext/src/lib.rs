@@ -11,6 +11,7 @@ use tedge_actors::MessageSink;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceConsumer;
+use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::health::health_status_down_message;
 use tedge_api::health::health_status_up_message;
@@ -20,26 +21,38 @@ use tedge_mqtt_ext::TopicFilter;
 
 pub struct HealthMonitorBuilder {
     service_name: String,
-    subscriptions: TopicFilter,
     box_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
 }
 
 impl HealthMonitorBuilder {
-    pub fn new(service_name: &str) -> Self {
+    pub fn new(
+        service_name: &str,
+        mqtt: &mut (impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter> + AsMut<MqttConfig>),
+    ) -> Self {
+        // Connect this actor to MQTT
         let subscriptions = vec![
             "tedge/health-check",
             &format!("tedge/health-check/{service_name}"),
         ]
         .try_into()
-        .expect("Failed to create the HealthMonitorActor topicfilter");
-        HealthMonitorBuilder {
+        .expect("Failed to create the HealthMonitorActor topic filter");
+
+        let mut box_builder = SimpleMessageBoxBuilder::new(service_name, 16);
+        box_builder
+            .set_request_sender(mqtt.connect_consumer(subscriptions, box_builder.get_sender()));
+
+        let builder = HealthMonitorBuilder {
             service_name: service_name.to_owned(),
-            subscriptions,
-            box_builder: SimpleMessageBoxBuilder::new(service_name, 16),
-        }
+            box_builder,
+        };
+
+        // Update the MQTT config
+        *mqtt.as_mut() = builder.set_init_and_last_will(mqtt.as_mut().clone());
+
+        builder
     }
 
-    pub fn set_init_and_last_will(&self, config: MqttConfig) -> MqttConfig {
+    fn set_init_and_last_will(&self, config: MqttConfig) -> MqttConfig {
         let name = self.service_name.to_owned();
         config
             .with_initial_message(move || health_status_up_message(&name))
@@ -61,19 +74,5 @@ impl Builder<HealthMonitorActor> for HealthMonitorBuilder {
         let actor = HealthMonitorActor::new(self.service_name, message_box);
 
         Ok(actor)
-    }
-}
-
-impl ServiceConsumer<MqttMessage, MqttMessage, TopicFilter> for HealthMonitorBuilder {
-    fn get_config(&self) -> TopicFilter {
-        self.subscriptions.clone()
-    }
-
-    fn set_request_sender(&mut self, request_sender: DynSender<MqttMessage>) {
-        self.box_builder.set_request_sender(request_sender);
-    }
-
-    fn get_response_sender(&self) -> DynSender<MqttMessage> {
-        self.box_builder.get_sender()
     }
 }

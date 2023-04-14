@@ -31,7 +31,7 @@ pub use mqtt_channel::Topic;
 pub use mqtt_channel::TopicFilter;
 
 pub struct MqttActorBuilder {
-    pub mqtt_config: mqtt_channel::Config,
+    mqtt_config: mqtt_channel::Config,
     input_receiver: LoggingReceiver<MqttMessage>,
     publish_sender: mpsc::Sender<MqttMessage>,
     pub subscriber_addresses: Vec<(TopicFilter, LoggingSender<MqttMessage>)>,
@@ -62,6 +62,12 @@ impl MqttActorBuilder {
         let mqtt_message_box = MqttMessageBox::new(self.input_receiver, self.subscriber_addresses);
 
         MqttActor::new(mqtt_config, mqtt_message_box)
+    }
+}
+
+impl AsMut<MqttConfig> for MqttActorBuilder {
+    fn as_mut(&mut self) -> &mut MqttConfig {
+        &mut self.mqtt_config
     }
 }
 

@@ -10,7 +10,6 @@ use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
-use tedge_actors::ServiceConsumer;
 use tedge_config::get_tedge_config;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::MqttClientHostSetting;
@@ -86,9 +85,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Instantiate health monitor actor
-    let health_actor = HealthMonitorBuilder::new(PLUGIN_NAME);
-    mqtt_actor.mqtt_config = health_actor.set_init_and_last_will(mqtt_actor.mqtt_config);
-    let health_actor = health_actor.with_connection(&mut mqtt_actor);
+    let health_actor = HealthMonitorBuilder::new(PLUGIN_NAME, &mut mqtt_actor);
 
     // Shutdown on SIGINT
     signal_actor.register_peer(NoConfig, runtime.get_handle().get_sender());
