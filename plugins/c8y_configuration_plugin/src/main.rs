@@ -102,29 +102,28 @@ async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     let mut signal_actor = SignalActor::builder();
     let mut timer_actor = TimerActor::builder();
 
-    //Instantiate health monitor actor
+    // Instantiate health monitor actor
     let mut health_actor = HealthMonitorBuilder::new(PLUGIN_NAME);
     let mqtt_config = health_actor.set_init_and_last_will(mqtt_config);
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
 
     health_actor.set_connection(&mut mqtt_actor);
 
-    //Instantiate config manager actor
+    // Instantiate config manager actor
     let config_manager_config =
         ConfigManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH, &tedge_config)?;
-    let mut config_actor = ConfigManagerBuilder::new(config_manager_config);
-
-    // Connect other actor instances to config manager actor
-    config_actor.with_fs_connection(&mut fs_watch_actor)?;
-    config_actor.with_c8y_http_proxy(&mut c8y_http_proxy_actor)?;
-    config_actor.set_connection(&mut mqtt_actor);
-    config_actor.set_connection(&mut timer_actor);
+    let config_actor = ConfigManagerBuilder::new(
+        config_manager_config,
+        &mut mqtt_actor,
+        &mut c8y_http_proxy_actor,
+        &mut timer_actor,
+        &mut fs_watch_actor,
+    );
 
     // Shutdown on SIGINT
     signal_actor.register_peer(NoConfig, runtime.get_handle().get_sender());
 
     // Run the actors
-    // FIXME: having to list all the actors is error prone
     runtime.spawn(signal_actor).await?;
     runtime.spawn(mqtt_actor).await?;
     runtime.spawn(jwt_actor).await?;

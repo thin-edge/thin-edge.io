@@ -19,10 +19,12 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynError;
 use tedge_actors::MessageReceiver;
+use tedge_actors::NoMessage;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::OperationStatus;
+use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_test_utils::fs::TempTedgeDir;
@@ -997,12 +999,16 @@ async fn spawn_config_manager(
         SimpleMessageBoxBuilder::new("C8Y", 1);
     let mut timer_builder: SimpleMessageBoxBuilder<OperationTimer, OperationTimeout> =
         SimpleMessageBoxBuilder::new("Timer", 5);
+    let mut fs_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
+        SimpleMessageBoxBuilder::new("FsNotify", 5);
 
-    let mut config_manager_builder = ConfigManagerBuilder::new(config);
-
-    config_manager_builder.with_c8y_http_proxy(&mut c8y_proxy_builder)?;
-    config_manager_builder.with_mqtt_connection(&mut mqtt_builder)?;
-    config_manager_builder.with_timer(&mut timer_builder)?;
+    let config_manager_builder = ConfigManagerBuilder::new(
+        config,
+        &mut mqtt_builder,
+        &mut c8y_proxy_builder,
+        &mut timer_builder,
+        &mut fs_builder,
+    );
 
     let mqtt_message_box = mqtt_builder.build();
     let c8y_proxy_message_box = c8y_proxy_builder.build();

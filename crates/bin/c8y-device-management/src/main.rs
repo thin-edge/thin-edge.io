@@ -54,18 +54,18 @@ async fn main() -> anyhow::Result<()> {
     let mut timer_actor = TimerActor::builder();
     let mut downloader_actor = DownloaderActor::new().builder();
 
-    //Instantiate config manager actor
+    // Instantiate config manager actor
     let config_manager_config =
         ConfigManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH, &tedge_config)?;
-    let mut config_actor = ConfigManagerBuilder::new(config_manager_config);
+    let config_actor = ConfigManagerBuilder::new(
+        config_manager_config,
+        &mut mqtt_actor,
+        &mut c8y_http_proxy_actor,
+        &mut timer_actor,
+        &mut fs_watch_actor,
+    );
 
-    // Connect other actor instances to config manager actor
-    config_actor.with_fs_connection(&mut fs_watch_actor)?;
-    config_actor.with_c8y_http_proxy(&mut c8y_http_proxy_actor)?;
-    config_actor.set_connection(&mut mqtt_actor);
-    config_actor.set_connection(&mut timer_actor);
-
-    //Instantiate log manager actor
+    // Instantiate log manager actor
     let log_manager_config =
         LogManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH, &tedge_config)?;
     let mut log_actor = LogManagerBuilder::new(log_manager_config);
@@ -85,7 +85,7 @@ async fn main() -> anyhow::Result<()> {
         &mut downloader_actor,
     );
 
-    //Instantiate health monitor actor
+    // Instantiate health monitor actor
     let health_actor = HealthMonitorBuilder::new(PLUGIN_NAME);
     mqtt_actor.mqtt_config = health_actor.set_init_and_last_will(mqtt_actor.mqtt_config);
     let health_actor = health_actor.with_connection(&mut mqtt_actor);

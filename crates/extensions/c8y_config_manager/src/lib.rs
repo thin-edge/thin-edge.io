@@ -24,17 +24,14 @@ use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
-use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
-use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
 use tedge_timer_ext::SetTimeout;
-use tedge_timer_ext::Timeout;
 use tedge_utils::file::create_directory_with_user_group;
 use tedge_utils::file::create_file_with_user_group;
 
@@ -98,101 +95,14 @@ files = [
 pub struct ConfigManagerBuilder {
     config: ConfigManagerConfig,
     receiver: LoggingReceiver<ConfigInput>,
-    events_sender: mpsc::Sender<ConfigInput>,
-    mqtt_publisher: Option<DynSender<MqttMessage>>,
-    c8y_http_proxy: Option<C8YHttpProxy>,
-    timer_sender: Option<DynSender<SetTimeout<ChildConfigOperationKey>>>,
+    mqtt_publisher: DynSender<MqttMessage>,
+    c8y_http_proxy: C8YHttpProxy,
+    timer_sender: DynSender<SetTimeout<ChildConfigOperationKey>>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
 }
 
-impl ConfigManagerBuilder {
-    pub fn new(config: ConfigManagerConfig) -> ConfigManagerBuilder {
-        let (events_sender, events_receiver) = mpsc::channel(10);
-        let (signal_sender, signal_receiver) = mpsc::channel(10);
-        let receiver = LoggingReceiver::new(
-            "C8Y-Config-Manager".into(),
-            events_receiver,
-            signal_receiver,
-        );
-
-        ConfigManagerBuilder {
-            config,
-            receiver,
-            events_sender,
-            mqtt_publisher: None,
-            c8y_http_proxy: None,
-            timer_sender: None,
-            signal_sender,
-        }
-    }
-
-    /// Connect this config manager instance to some http connection provider
-    pub fn with_c8y_http_proxy(
-        &mut self,
-        http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
-    ) -> Result<(), LinkError> {
-        self.c8y_http_proxy = Some(C8YHttpProxy::new("ConfigManager => C8Y", http));
-        Ok(())
-    }
-
-    /// Connect this config manager instance to some mqtt connection provider
-    pub fn with_mqtt_connection<T>(&mut self, mqtt: &mut T) -> Result<(), LinkError>
-    where
-        T: ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
-    {
-        mqtt.add_peer(self);
-        Ok(())
-    }
-
-    pub fn with_fs_connection<T>(&mut self, fs_builder: &mut T) -> Result<(), LinkError>
-    where
-        T: MessageSource<FsWatchEvent, PathBuf>,
-    {
-        fs_builder.add_sink(self);
-        Ok(())
-    }
-
-    pub fn with_timer(
-        &mut self,
-        timer_builder: &mut impl ServiceProvider<OperationTimer, OperationTimeout, NoConfig>,
-    ) -> Result<(), LinkError> {
-        timer_builder.add_peer(self);
-        Ok(())
-    }
-}
-
-impl MessageSink<FsWatchEvent, PathBuf> for ConfigManagerBuilder {
-    fn get_config(&self) -> PathBuf {
-        self.config
-            .config_dir
-            .clone()
-            .join(DEFAULT_OPERATION_DIR_NAME)
-    }
-
-    fn get_sender(&self) -> DynSender<FsWatchEvent> {
-        self.events_sender.clone().into()
-    }
-}
-
-impl
-    ServiceConsumer<SetTimeout<ChildConfigOperationKey>, Timeout<ChildConfigOperationKey>, NoConfig>
-    for ConfigManagerBuilder
-{
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
-    fn set_request_sender(&mut self, sender: DynSender<SetTimeout<ChildConfigOperationKey>>) {
-        self.timer_sender = Some(sender);
-    }
-
-    fn get_response_sender(&self) -> DynSender<Timeout<ChildConfigOperationKey>> {
-        self.events_sender.clone().into()
-    }
-}
-
-impl ServiceConsumer<MqttMessage, MqttMessage, TopicFilter> for ConfigManagerBuilder {
-    fn get_config(&self) -> TopicFilter {
+impl ConfigManagerConfig {
+    pub fn subscriptions(&self) -> TopicFilter {
         vec![
             "c8y/s/ds",
             "tedge/+/commands/res/config_snapshot",
@@ -202,12 +112,41 @@ impl ServiceConsumer<MqttMessage, MqttMessage, TopicFilter> for ConfigManagerBui
         .unwrap()
     }
 
-    fn set_request_sender(&mut self, request_sender: DynSender<MqttMessage>) {
-        self.mqtt_publisher = Some(request_sender)
+    pub fn config_directory(&self) -> PathBuf {
+        self.config_dir.clone().join(DEFAULT_OPERATION_DIR_NAME)
     }
+}
 
-    fn get_response_sender(&self) -> DynSender<MqttMessage> {
-        self.events_sender.clone().into()
+impl ConfigManagerBuilder {
+    pub fn new(
+        config: ConfigManagerConfig,
+        mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
+        http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
+        timer: &mut impl ServiceProvider<OperationTimer, OperationTimeout, NoConfig>,
+        fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
+    ) -> ConfigManagerBuilder {
+        let (events_sender, events_receiver) = mpsc::channel(10);
+        let (signal_sender, signal_receiver) = mpsc::channel(10);
+        let receiver = LoggingReceiver::new(
+            "C8Y-Config-Manager".into(),
+            events_receiver,
+            signal_receiver,
+        );
+
+        let mqtt_publisher =
+            mqtt.connect_consumer(config.subscriptions(), events_sender.clone().into());
+        let c8y_http_proxy = C8YHttpProxy::new("ConfigManager => C8Y", http);
+        let timer_sender = timer.connect_consumer(NoConfig, events_sender.clone().into());
+        fs_notify.register_peer(config.config_directory(), events_sender.into());
+
+        ConfigManagerBuilder {
+            config,
+            receiver,
+            mqtt_publisher,
+            c8y_http_proxy,
+            timer_sender,
+            signal_sender,
+        }
     }
 }
 
@@ -221,30 +160,14 @@ impl Builder<ConfigManagerActor> for ConfigManagerBuilder {
     type Error = LinkError;
 
     fn try_build(self) -> Result<ConfigManagerActor, Self::Error> {
-        let mqtt_publisher = self
-            .mqtt_publisher
-            .ok_or_else(|| LinkError::MissingPeer {
-                role: "mqtt".to_string(),
-            })
-            .map(|mqtt_publisher| {
-                LoggingSender::new("ConfigManager MQTT publisher".into(), mqtt_publisher)
-            })?;
-
-        let c8y_http_proxy = self.c8y_http_proxy.ok_or_else(|| LinkError::MissingPeer {
-            role: "c8y-http".to_string(),
-        })?;
-
-        let timer_sender = self
-            .timer_sender
-            .ok_or_else(|| LinkError::MissingPeer {
-                role: "timer".to_string(),
-            })
-            .map(|timer_sender| LoggingSender::new("ConfigManager timer".into(), timer_sender))?;
+        let mqtt_publisher =
+            LoggingSender::new("ConfigManager MQTT publisher".into(), self.mqtt_publisher);
+        let timer_sender = LoggingSender::new("ConfigManager timer".into(), self.timer_sender);
 
         let peers = ConfigManagerMessageBox::new(
             self.receiver,
             mqtt_publisher,
-            c8y_http_proxy,
+            self.c8y_http_proxy,
             timer_sender,
         );
 
