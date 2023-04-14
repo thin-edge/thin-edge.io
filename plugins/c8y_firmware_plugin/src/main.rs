@@ -4,9 +4,6 @@ use c8y_firmware_manager::FirmwareManagerConfig;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use clap::Parser;
 use std::path::PathBuf;
-use tedge_actors::MessageSink;
-use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
@@ -92,8 +89,6 @@ async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     // Create actor instances
     let mqtt_config = mqtt_config(&tedge_config)?;
     let mut jwt_actor = C8YJwtRetriever::builder(mqtt_config.clone());
-
-    let mut signal_actor = SignalActor::builder();
     let mut timer_actor = TimerActor::builder();
     let mut downloader_actor = DownloaderActor::new().builder();
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
@@ -112,10 +107,9 @@ async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     );
 
     // Shutdown on SIGINT
-    signal_actor.register_peer(NoConfig, runtime.get_handle().get_sender());
+    let signal_actor = SignalActor::builder(&runtime.get_handle());
 
     // Run the actors
-    // FIXME: having to list all the actors is error prone
     runtime.spawn(signal_actor).await?;
     runtime.spawn(mqtt_actor).await?;
     runtime.spawn(jwt_actor).await?;

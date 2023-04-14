@@ -4,9 +4,6 @@ use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use clap::Parser;
 use std::path::PathBuf;
-use tedge_actors::MessageSink;
-use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
@@ -98,7 +95,6 @@ async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
         C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);
 
     let mut fs_watch_actor = FsWatchActorBuilder::new();
-    let mut signal_actor = SignalActor::builder();
     let mut timer_actor = TimerActor::builder();
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
 
@@ -117,7 +113,7 @@ async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     );
 
     // Shutdown on SIGINT
-    signal_actor.register_peer(NoConfig, runtime.get_handle().get_sender());
+    let signal_actor = SignalActor::builder(&runtime.get_handle());
 
     // Run the actors
     runtime.spawn(signal_actor).await?;

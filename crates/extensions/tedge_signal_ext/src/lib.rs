@@ -7,6 +7,7 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::MessageReceiver;
+use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::NoMessage;
@@ -55,12 +56,9 @@ pub struct SignalActor {
 }
 
 impl SignalActor {
-    pub fn new(messages: SignalMessageBox) -> Self {
-        Self { messages }
-    }
-
-    pub fn builder() -> SignalActorBuilder {
-        let box_builder = SimpleMessageBoxBuilder::new("Signal-Handler", 1);
+    pub fn builder(runtime: &impl MessageSink<RuntimeAction, NoConfig>) -> SignalActorBuilder {
+        let mut box_builder = SimpleMessageBoxBuilder::new("Signal-Handler", 1);
+        box_builder.add_sink(runtime);
         SignalActorBuilder { box_builder }
     }
 }

@@ -6,9 +6,6 @@ use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use c8y_log_manager::LogManagerBuilder;
 use c8y_log_manager::LogManagerConfig;
-use tedge_actors::MessageSink;
-use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
 use tedge_config::get_tedge_config;
 use tedge_config::ConfigSettingAccessor;
@@ -36,12 +33,10 @@ async fn main() -> anyhow::Result<()> {
 
     let tedge_config = get_tedge_config()?;
     let c8y_http_config = (&tedge_config).try_into()?;
-
-    // Create actor instances
     let mqtt_config = mqtt_config(&tedge_config)?;
 
+    // Create actor instances
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
-
     let mut jwt_actor = C8YJwtRetriever::builder(mqtt_config);
     let mut http_actor = HttpActor::new().builder();
 
@@ -49,7 +44,6 @@ async fn main() -> anyhow::Result<()> {
         C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);
 
     let mut fs_watch_actor = FsWatchActorBuilder::new();
-    let mut signal_actor = SignalActor::builder();
     let mut timer_actor = TimerActor::builder();
     let mut downloader_actor = DownloaderActor::new().builder();
 
@@ -88,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
     let health_actor = HealthMonitorBuilder::new(PLUGIN_NAME, &mut mqtt_actor);
 
     // Shutdown on SIGINT
-    signal_actor.register_peer(NoConfig, runtime.get_handle().get_sender());
+    let signal_actor = SignalActor::builder(&runtime.get_handle());
 
     // Run the actors
     // FIXME: having to list all the actors is error prone
