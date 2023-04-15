@@ -1,20 +1,20 @@
 use std::fs as std_fs;
 use std::io::Write;
 use std::path::Path;
+use std::path::PathBuf;
 
 use tokio::fs as tokio_fs;
 use tokio::io::AsyncWriteExt;
 
 /// Write file to filesystem atomically using std::fs synchronously.
-pub fn atomically_write_file_sync(
-    tempfile: impl AsRef<Path>,
-    dest: impl AsRef<Path>,
-    content: &[u8],
-) -> std::io::Result<()> {
+pub fn atomically_write_file_sync(dest: impl AsRef<Path>, content: &[u8]) -> std::io::Result<()> {
+    let mut tempfile = PathBuf::from(dest.as_ref());
+    tempfile.set_extension("tmp");
+
     let mut file = std_fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(tempfile.as_ref())?;
+        .open(&tempfile)?;
 
     if let Err(err) = file.write_all(content) {
         let _ = std_fs::remove_file(tempfile);
@@ -23,7 +23,7 @@ pub fn atomically_write_file_sync(
 
     file.flush()?;
 
-    if let Err(err) = std_fs::rename(tempfile.as_ref(), dest) {
+    if let Err(err) = std_fs::rename(&tempfile, dest) {
         let _ = std_fs::remove_file(tempfile);
         return Err(err);
     }
@@ -33,14 +33,16 @@ pub fn atomically_write_file_sync(
 
 /// Write file to filesystem atomically using tokio::fs asynchronously.
 pub async fn atomically_write_file_async(
-    tempfile: impl AsRef<Path>,
     dest: impl AsRef<Path>,
     content: &[u8],
 ) -> std::io::Result<()> {
+    let mut tempfile = PathBuf::from(dest.as_ref());
+    tempfile.set_extension("tmp");
+
     let mut file = tokio_fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(tempfile.as_ref())
+        .open(&tempfile)
         .await?;
 
     if let Err(err) = file.write_all(content).await {
@@ -50,7 +52,7 @@ pub async fn atomically_write_file_async(
 
     file.flush().await?;
 
-    if let Err(err) = tokio_fs::rename(tempfile.as_ref(), dest).await {
+    if let Err(err) = tokio_fs::rename(&tempfile, dest).await {
         tokio_fs::remove_file(tempfile).await?;
         return Err(err);
     }
@@ -73,7 +75,7 @@ mod tests {
 
         let content = "test_data";
 
-        atomically_write_file_async(&temp_path, &destination_path, content.as_bytes())
+        atomically_write_file_async(&destination_path, content.as_bytes())
             .await
             .unwrap();
 
@@ -88,15 +90,12 @@ mod tests {
     #[test]
     fn atomically_write_file_file_sync() {
         let temp_dir = tempdir().unwrap();
-        let temp_path = temp_dir.path().join("test1");
         let destination_path = temp_dir.path().join("test2");
 
         let content = "test_data";
 
-        let () =
-            atomically_write_file_sync(&temp_path, &destination_path, content.as_bytes()).unwrap();
+        let () = atomically_write_file_sync(&destination_path, content.as_bytes()).unwrap();
 
-        std::fs::File::open(&temp_path).unwrap_err();
         if let Ok(destination_content) = std::fs::read(&destination_path) {
             assert_eq!(destination_content, content.as_bytes());
         } else {
