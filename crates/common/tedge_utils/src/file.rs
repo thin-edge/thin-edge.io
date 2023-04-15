@@ -1,3 +1,4 @@
+use futures::TryFutureExt;
 use nix::unistd::*;
 use std::fs;
 use std::io;
@@ -90,6 +91,13 @@ pub fn create_file_with_user_group(
     perm_entry.create_file(file.as_ref(), default_content)
 }
 
+/// This function move file to destination path using rename.
+/// If directories are located on a different mount point, copy and delete method will be used instead.
+/// If the destination directory does not exist, it will create it, as well as all parent directories.
+/// Function cannot move whole directories if copy and delete method is used.
+/// This method returns
+///     Ok() when file was moved successfully
+///     Err(_) when the source path does not exists or function has no permission to move file
 pub async fn move_file(
     src_path: impl AsRef<Path>,
     dest_path: impl AsRef<Path>,
@@ -97,6 +105,7 @@ pub async fn move_file(
 ) -> Result<(), FileError> {
     let src_path = src_path.as_ref();
     let dest_path = dest_path.as_ref();
+
     if !dest_path.exists() {
         if let Some(dir_to) = dest_path.parent() {
             tokio::fs::create_dir_all(dir_to).await?;
@@ -115,7 +124,14 @@ pub async fn move_file(
         false => None,
     };
 
-    tokio::fs::rename(src_path, dest_path).await?;
+    // Copy source to destination using rename. If that one fails due to cross-filesystem, use copy and delete.
+    // As a ErrorKind::CrossesDevices is nightly feature we call copy and delete no matter what kind of error we get.
+    tokio::fs::rename(src_path, dest_path)
+        .or_else(|_| {
+            tokio::fs::copy(src_path, dest_path).and_then(|_| tokio::fs::remove_file(src_path))
+        })
+        .await?;
+
     debug!("Moved file from {:?} to {:?}", src_path, dest_path);
 
     let file_permissions = if let Some(mode) = original_permission_mode {
@@ -535,5 +551,23 @@ mod tests {
         assert_eq!(get_gid_by_name("root").unwrap(), 0);
         let err = get_gid_by_name("test").unwrap_err();
         assert!(err.to_string().contains("Group not found"));
+    }
+
+    #[tokio::test]
+    async fn move_file_to_different_filesystem() {
+        let file_dir = TempDir::new().unwrap();
+        let file_path = file_dir.path().join("file");
+        let user = whoami::username();
+        create_file_with_user_group(&file_path, &user, &user, 0o775, Some("test")).unwrap();
+
+        let dest_dir = TempDir::new_in(".").unwrap();
+        let dest_path = dest_dir.path().join("another-file");
+
+        move_file(file_path, &dest_path, PermissionEntry::default())
+            .await
+            .unwrap();
+
+        let content = fs::read(&dest_path).unwrap();
+        assert_eq!("test".as_bytes(), content);
     }
 }
