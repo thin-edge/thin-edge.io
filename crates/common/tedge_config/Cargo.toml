@@ -19,7 +19,7 @@ serde_ignored = "0.1"
 strum_macros = { version = "0.24" }
 tedge_utils = { path = "../tedge_utils" }
 thiserror = "1.0"
-toml = "0.5"
+toml = "0.7"
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["time"] }
 url = "2.2"
