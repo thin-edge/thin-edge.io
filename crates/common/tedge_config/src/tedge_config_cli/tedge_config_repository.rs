@@ -17,9 +17,10 @@ pub struct TEdgeConfigRepository {
 pub trait ConfigRepository<T> {
     type Error;
     fn load(&self) -> Result<T, Self::Error>;
+    // TODO don't make this part of the trait. Do we even need the trait?
     fn update_toml(
         &self,
-        update: &impl Fn(&mut T) -> ConfigSettingResult<()>,
+        update: impl FnOnce(&mut T) -> ConfigSettingResult<()>,
     ) -> Result<(), Self::Error>;
 }
 
@@ -35,7 +36,7 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
 
     fn update_toml(
         &self,
-        update: &impl Fn(&mut TEdgeConfig) -> ConfigSettingResult<()>,
+        update: impl FnOnce(&mut TEdgeConfig) -> ConfigSettingResult<()>,
     ) -> Result<(), Self::Error> {
         let mut config = self.read_file_or_default::<FileOnly>(
             self.config_location.tedge_config_file_path().into(),
@@ -49,13 +50,6 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
 impl TEdgeConfigRepository {
     pub fn new(config_location: TEdgeConfigLocation) -> Self {
         let config_defaults = TEdgeConfigDefaults::from(&config_location);
-        Self::new_with_defaults(config_location, config_defaults)
-    }
-
-    pub fn new_with_defaults(
-        config_location: TEdgeConfigLocation,
-        config_defaults: TEdgeConfigDefaults,
-    ) -> Self {
         Self {
             config_location,
             config_defaults,
@@ -97,5 +91,110 @@ impl TEdgeConfigRepository {
             toml.as_bytes(),
         )?;
         Ok(())
+    }
+
+    /// Deletes a key from the current configuration
+    ///
+    /// # Errors
+    /// This returns an error if persisting the updated configuration in the TOML file
+    /// fails, but unsetting the value in the underlying configuration is guaranteed to
+    /// succeed as [WritableKey] only includes valid keys.
+    ///
+    /// ```
+    /// # use tedge_test_utils::fs::TempTedgeDir;
+    /// use tedge_config::*;
+    ///
+    /// let location = TEdgeConfigLocation::default();
+    /// # let tmp_dir = TempTedgeDir::new();
+    /// # let location = TEdgeConfigLocation::from_custom_root(tmp_dir.path());
+    /// let repo = TEdgeConfigRepository::new(location);
+    ///
+    /// assert!(repo.update(ConfigurationUpdate::C8yUrl(ConnectUrl::try_from("test.cumulocity.com")?)).is_ok());
+    ///
+    /// assert!(repo.unset(WritableKey::C8yUrl).is_ok());
+    ///
+    /// // Unsetting a value that isn't set will succeed
+    /// assert!(repo.unset(WritableKey::C8yUrl).is_ok());
+    /// # Ok::<(), TEdgeConfigError>(())
+    /// ```
+    pub fn unset(&self, key: WritableKey) -> Result<(), TEdgeConfigError> {
+        self.update_toml(|config| {
+            typed_unset(&mut config.data, key);
+            Ok(())
+        })
+    }
+
+    /// Updates a value for a particular key in the current configuration
+    ///
+    /// # Errors
+    /// This returns an error if persisting the updated configuration in the TOML file
+    /// fails, but the update to the underlying configuration is guaranteed to succeed
+    /// as [ConfigurationUpdate] only accepts valid configuration updates.
+    ///
+    /// ```
+    /// # use tedge_test_utils::fs::TempTedgeDir;
+    /// use tedge_config::*;
+    ///
+    /// let location = TEdgeConfigLocation::default();
+    /// # let tmp_dir = TempTedgeDir::new();
+    /// # let location = TEdgeConfigLocation::from_custom_root(tmp_dir.path());
+    /// let repo = TEdgeConfigRepository::new(location);
+    ///
+    /// repo.update(ConfigurationUpdate::MqttPort(2345))?;
+    ///
+    /// let config = repo.load_new()?;
+    /// assert_eq!(config.mqtt_port(), 2345);
+    ///
+    /// # Ok::<_, TEdgeConfigError>(())
+    /// ```
+    pub fn update(&self, update: ConfigurationUpdate) -> Result<(), TEdgeConfigError> {
+        self.update_toml(|config| {
+            typed_update(&mut config.data, update);
+            Ok(())
+        })
+    }
+
+    /// Updates the value for a particular key in the current configuration
+    ///
+    /// This takes value as `&str` to accept arbitrary user input. This is intended for
+    /// the `tedge config set` subcommand.
+    ///
+    /// # Errors
+    /// This returns an error if the value cannot be deserialised to the appropriate type
+    /// for the provided key.
+    ///
+    /// Like [TEdgeConfigRepository::update], this also returns an error if persisting the
+    /// updated configuration in the TOML file fails.
+    ///
+    /// ```
+    /// # use tedge_test_utils::fs::TempTedgeDir;
+    /// use tedge_config::*;
+    ///
+    /// let location = TEdgeConfigLocation::default();
+    /// # let tmp_dir = TempTedgeDir::new();
+    /// # let location = TEdgeConfigLocation::from_custom_root(tmp_dir.path());
+    /// let repo = TEdgeConfigRepository::new(location);
+    ///
+    /// assert!(repo.update_string(WritableKey::MqttPort, "not a port").is_err());
+    /// assert!(repo.update_string(WritableKey::C8yUrl, "test.cumulocity.com").is_ok());
+    ///
+    /// let config = repo.load_new()?;
+    /// assert_eq!(config.mqtt_port(), 1883);
+    /// assert_eq!(config.c8y_url()?, ConnectUrl::try_from("test.cumulocity.com")?);
+    ///
+    /// # Ok::<_, TEdgeConfigError>(())
+    /// ```
+    pub fn update_string(&self, key: WritableKey, value: &str) -> Result<(), TEdgeConfigError> {
+        self.update_toml(|config| {
+            config.data = TEdgeConfigUpdate::new(key, value).apply_to(&config.data)?;
+            Ok(())
+        })
+    }
+
+    pub fn load_new(&self) -> Result<super::new_tedge_config::NewTEdgeConfig, TEdgeConfigError> {
+        Ok(super::new_tedge_config::NewTEdgeConfig::new(
+            self.load()?,
+            &self.config_location,
+        ))
     }
 }

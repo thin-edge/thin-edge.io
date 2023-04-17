@@ -1,4 +1,5 @@
 use camino::Utf8PathBuf;
+use tedge_config::IpAddress;
 
 const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
 
@@ -135,7 +136,7 @@ impl CommonMosquittoConfig {
     pub fn with_external_opts(
         self,
         port: Option<u16>,
-        bind_address: Option<String>,
+        bind_address: Option<IpAddress>,
         bind_interface: Option<String>,
         capath: Option<Utf8PathBuf>,
         certfile: Option<Utf8PathBuf>,
@@ -143,7 +144,7 @@ impl CommonMosquittoConfig {
     ) -> Self {
         let mut external_listener = ListenerConfig {
             port,
-            bind_address,
+            bind_address: bind_address.map(|ip| ip.to_string()),
             bind_interface,
             capath,
             certfile,
@@ -201,10 +202,10 @@ fn test_serialize() -> anyhow::Result<()> {
 fn test_serialize_with_opts() -> anyhow::Result<()> {
     let common_mosquitto_config = CommonMosquittoConfig::default();
     let mosquitto_config_with_opts = common_mosquitto_config
-        .with_internal_opts(1234, "1.2.3.4".into())
+        .with_internal_opts(1234, "1.2.3.4".parse().unwrap())
         .with_external_opts(
             Some(2345),
-            Some("0.0.0.0".to_string()),
+            Some("0.0.0.0".parse().unwrap()),
             Some("wlan0".into()),
             Some("/etc/ssl/certs".into()),
             Some("cert.pem".into()),

@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::fmt;
 use url::Host;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
@@ -6,6 +7,20 @@ use url::Host;
 pub struct ConnectUrl {
     input: String,
     host: Host,
+}
+
+#[cfg(test)]
+impl fake::Dummy<fake::Faker> for ConnectUrl {
+    fn dummy_with_rng<R: rand::Rng + ?Sized>(_config: &fake::Faker, rng: &mut R) -> Self {
+        use fake::faker::internet::en::Username;
+        use fake::Fake;
+
+        Self::try_from(format!(
+            "{}.com",
+            Username().fake_with_rng::<String, _>(rng)
+        ))
+        .unwrap()
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -52,6 +67,12 @@ impl From<ConnectUrl> for String {
 impl From<ConnectUrl> for Host {
     fn from(val: ConnectUrl) -> Self {
         val.host
+    }
+}
+
+impl fmt::Display for ConnectUrl {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 

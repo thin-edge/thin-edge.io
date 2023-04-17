@@ -6,8 +6,13 @@ use std::convert::TryInto;
 use std::fmt;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
+use std::str::FromStr;
 
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Document)]
+#[cfg(test)]
+use fake::Fake;
+
+#[derive(thiserror::Error, Debug, Copy, Clone, PartialEq, Eq, Deserialize, Serialize, Document)]
+#[cfg_attr(test, derive(fake::Dummy))]
 pub struct IpAddress(pub IpAddr);
 
 #[derive(thiserror::Error, Debug)]
@@ -38,6 +43,14 @@ impl TryFrom<&str> for IpAddress {
                 input: input.to_string(),
             })
             .map(IpAddress)
+    }
+}
+
+impl FromStr for IpAddress {
+    type Err = InvalidIpAddress;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::try_from(s)
     }
 }
 

@@ -5,7 +5,6 @@ use certificate::CertificateError;
 use certificate::PemCertificate;
 use std::convert::TryFrom;
 use std::convert::TryInto;
-use std::num::NonZeroU16;
 
 /// loads tedge config from system default
 pub fn get_tedge_config() -> Result<TEdgeConfig, TEdgeConfigError> {
@@ -33,14 +32,6 @@ impl ConfigSettingAccessor<DeviceIdSetting> for TEdgeConfig {
             .map_err(|err| cert_error_into_config_error(DeviceIdSetting::KEY, err))?;
         Ok(device_id)
     }
-
-    fn update(&mut self, _setting: DeviceIdSetting, _value: String) -> ConfigSettingResult<()> {
-        Err(device_id_read_only_error())
-    }
-
-    fn unset(&mut self, _setting: DeviceIdSetting) -> ConfigSettingResult<()> {
-        Err(device_id_read_only_error())
-    }
 }
 
 impl ConfigSettingAccessor<DeviceTypeSetting> for TEdgeConfig {
@@ -52,38 +43,6 @@ impl ConfigSettingAccessor<DeviceTypeSetting> for TEdgeConfig {
             .clone()
             .unwrap_or_else(|| self.config_defaults.default_device_type.clone());
         Ok(device_type)
-    }
-
-    fn update(
-        &mut self,
-        _setting: DeviceTypeSetting,
-        value: <DeviceTypeSetting as ConfigSetting>::Value,
-    ) -> ConfigSettingResult<()> {
-        self.data.device.device_type = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: DeviceTypeSetting) -> ConfigSettingResult<()> {
-        self.data.device.device_type = None;
-        Ok(())
-    }
-}
-
-fn device_id_read_only_error() -> ConfigSettingError {
-    ConfigSettingError::ReadonlySetting {
-        message: concat!(
-            "The device id is read from the device certificate and cannot be set directly.\n",
-            "To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",
-        ),
-    }
-}
-
-fn http_bind_address_read_only_error() -> ConfigSettingError {
-    ConfigSettingError::ReadonlySetting {
-        message: concat!(
-            "The http address cannot be set directly. It is read from the mqtt bind address.\n",
-            "To set 'http.bind_address' to some <address>, you can `tedge config set mqtt.bind_address <address>`.",
-        ),
     }
 }
 
@@ -98,12 +57,12 @@ fn cert_error_into_config_error(key: &'static str, err: CertificateError) -> Con
             },
             _ => ConfigSettingError::DerivationFailed {
                 key,
-                cause: format!("{}", err),
+                cause: Box::new(err),
             },
         },
         _ => ConfigSettingError::DerivationFailed {
             key,
-            cause: format!("{}", err),
+            cause: Box::new(err),
         },
     }
 }
@@ -118,16 +77,6 @@ impl ConfigSettingAccessor<AzureUrlSetting> for TEdgeConfig {
                 key: AzureUrlSetting::KEY,
             })
     }
-
-    fn update(&mut self, _setting: AzureUrlSetting, value: ConnectUrl) -> ConfigSettingResult<()> {
-        self.data.az.url = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: AzureUrlSetting) -> ConfigSettingResult<()> {
-        self.data.az.url = None;
-        Ok(())
-    }
 }
 
 impl ConfigSettingAccessor<AwsUrlSetting> for TEdgeConfig {
@@ -139,16 +88,6 @@ impl ConfigSettingAccessor<AwsUrlSetting> for TEdgeConfig {
             .ok_or(ConfigSettingError::ConfigNotSet {
                 key: AwsUrlSetting::KEY,
             })
-    }
-
-    fn update(&mut self, _setting: AwsUrlSetting, value: ConnectUrl) -> ConfigSettingResult<()> {
-        self.data.aws.url = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: AwsUrlSetting) -> ConfigSettingResult<()> {
-        self.data.aws.url = None;
-        Ok(())
     }
 }
 
@@ -162,16 +101,6 @@ impl ConfigSettingAccessor<C8yUrlSetting> for TEdgeConfig {
                 key: C8yUrlSetting::KEY,
             })
     }
-
-    fn update(&mut self, _setting: C8yUrlSetting, value: ConnectUrl) -> ConfigSettingResult<()> {
-        self.data.c8y.url = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: C8yUrlSetting) -> ConfigSettingResult<()> {
-        self.data.c8y.url = None;
-        Ok(())
-    }
 }
 
 impl ConfigSettingAccessor<C8ySmartRestTemplates> for TEdgeConfig {
@@ -183,20 +112,6 @@ impl ConfigSettingAccessor<C8ySmartRestTemplates> for TEdgeConfig {
             .clone()
             .unwrap_or_else(|| self.config_defaults.default_c8y_smartrest_templates.clone()))
     }
-
-    fn update(
-        &mut self,
-        _setting: C8ySmartRestTemplates,
-        value: TemplatesSet,
-    ) -> ConfigSettingResult<()> {
-        self.data.c8y.smartrest_templates = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: C8ySmartRestTemplates) -> ConfigSettingResult<()> {
-        self.data.c8y.smartrest_templates = None;
-        Ok(())
-    }
 }
 
 impl ConfigSettingAccessor<DeviceCertPathSetting> for TEdgeConfig {
@@ -206,21 +121,8 @@ impl ConfigSettingAccessor<DeviceCertPathSetting> for TEdgeConfig {
             .device
             .cert_path
             .clone()
+            .map(|p| p.0)
             .unwrap_or_else(|| self.config_defaults.default_device_cert_path.clone()))
-    }
-
-    fn update(
-        &mut self,
-        _setting: DeviceCertPathSetting,
-        value: Utf8PathBuf,
-    ) -> ConfigSettingResult<()> {
-        self.data.device.cert_path = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: DeviceCertPathSetting) -> ConfigSettingResult<()> {
-        self.data.device.cert_path = None;
-        Ok(())
     }
 }
 
@@ -231,21 +133,8 @@ impl ConfigSettingAccessor<DeviceKeyPathSetting> for TEdgeConfig {
             .device
             .key_path
             .clone()
+            .map(|p| p.0)
             .unwrap_or_else(|| self.config_defaults.default_device_key_path.clone()))
-    }
-
-    fn update(
-        &mut self,
-        _setting: DeviceKeyPathSetting,
-        value: Utf8PathBuf,
-    ) -> ConfigSettingResult<()> {
-        self.data.device.key_path = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: DeviceKeyPathSetting) -> ConfigSettingResult<()> {
-        self.data.device.key_path = None;
-        Ok(())
     }
 }
 
@@ -256,21 +145,8 @@ impl ConfigSettingAccessor<AzureRootCertPathSetting> for TEdgeConfig {
             .az
             .root_cert_path
             .clone()
+            .map(|p| p.0)
             .unwrap_or_else(|| self.config_defaults.default_azure_root_cert_path.clone()))
-    }
-
-    fn update(
-        &mut self,
-        _setting: AzureRootCertPathSetting,
-        value: Utf8PathBuf,
-    ) -> ConfigSettingResult<()> {
-        self.data.az.root_cert_path = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: AzureRootCertPathSetting) -> ConfigSettingResult<()> {
-        self.data.az.root_cert_path = None;
-        Ok(())
     }
 }
 
@@ -281,21 +157,8 @@ impl ConfigSettingAccessor<AwsRootCertPathSetting> for TEdgeConfig {
             .aws
             .root_cert_path
             .clone()
+            .map(|p| p.0)
             .unwrap_or_else(|| self.config_defaults.default_aws_root_cert_path.clone()))
-    }
-
-    fn update(
-        &mut self,
-        _setting: AwsRootCertPathSetting,
-        value: Utf8PathBuf,
-    ) -> ConfigSettingResult<()> {
-        self.data.aws.root_cert_path = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: AwsRootCertPathSetting) -> ConfigSettingResult<()> {
-        self.data.aws.root_cert_path = None;
-        Ok(())
     }
 }
 
@@ -308,16 +171,6 @@ impl ConfigSettingAccessor<AzureMapperTimestamp> for TEdgeConfig {
             .map(Flag)
             .unwrap_or_else(|| self.config_defaults.default_mapper_timestamp.clone()))
     }
-
-    fn update(&mut self, _setting: AzureMapperTimestamp, value: Flag) -> ConfigSettingResult<()> {
-        self.data.az.mapper_timestamp = Some(value.into());
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: AzureMapperTimestamp) -> ConfigSettingResult<()> {
-        self.data.az.mapper_timestamp = None;
-        Ok(())
-    }
 }
 
 impl ConfigSettingAccessor<AwsMapperTimestamp> for TEdgeConfig {
@@ -329,16 +182,6 @@ impl ConfigSettingAccessor<AwsMapperTimestamp> for TEdgeConfig {
             .map(Flag)
             .unwrap_or_else(|| self.config_defaults.default_mapper_timestamp.clone()))
     }
-
-    fn update(&mut self, _setting: AwsMapperTimestamp, value: Flag) -> ConfigSettingResult<()> {
-        self.data.aws.mapper_timestamp = Some(value.into());
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: AwsMapperTimestamp) -> ConfigSettingResult<()> {
-        self.data.aws.mapper_timestamp = None;
-        Ok(())
-    }
 }
 
 impl ConfigSettingAccessor<C8yRootCertPathSetting> for TEdgeConfig {
@@ -348,21 +191,8 @@ impl ConfigSettingAccessor<C8yRootCertPathSetting> for TEdgeConfig {
             .c8y
             .root_cert_path
             .clone()
+            .map(|p| p.0)
             .unwrap_or_else(|| self.config_defaults.default_c8y_root_cert_path.clone()))
-    }
-
-    fn update(
-        &mut self,
-        _setting: C8yRootCertPathSetting,
-        value: Utf8PathBuf,
-    ) -> ConfigSettingResult<()> {
-        self.data.c8y.root_cert_path = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: C8yRootCertPathSetting) -> ConfigSettingResult<()> {
-        self.data.c8y.root_cert_path = None;
-        Ok(())
     }
 }
 
@@ -375,20 +205,6 @@ impl ConfigSettingAccessor<MqttClientHostSetting> for TEdgeConfig {
             .clone()
             .unwrap_or(self.config_defaults.default_mqtt_client_host.clone()))
     }
-
-    fn update(
-        &mut self,
-        _setting: MqttClientHostSetting,
-        value: String,
-    ) -> ConfigSettingResult<()> {
-        self.data.mqtt.client_host = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: MqttClientHostSetting) -> ConfigSettingResult<()> {
-        self.data.mqtt.client_host = None;
-        Ok(())
-    }
 }
 
 impl ConfigSettingAccessor<MqttClientPortSetting> for TEdgeConfig {
@@ -397,22 +213,8 @@ impl ConfigSettingAccessor<MqttClientPortSetting> for TEdgeConfig {
             .data
             .mqtt
             .client_port
-            .map(|p| Port(p.into()))
+            .map(|p| Port(p.0.into()))
             .unwrap_or_else(|| self.config_defaults.default_mqtt_port))
-    }
-
-    fn update(&mut self, _setting: MqttClientPortSetting, value: Port) -> ConfigSettingResult<()> {
-        let port: u16 = value.into();
-        let port: NonZeroU16 = port.try_into().map_err(|_| ConfigSettingError::Other {
-            msg: "Can't use 0 for a client port",
-        })?;
-        self.data.mqtt.client_port = Some(port);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: MqttClientPortSetting) -> ConfigSettingResult<()> {
-        self.data.mqtt.client_port = None;
-        Ok(())
     }
 }
 
@@ -422,23 +224,10 @@ impl ConfigSettingAccessor<MqttClientCafileSetting> for TEdgeConfig {
             .mqtt
             .client_ca_file
             .clone()
+            .map(|p| p.0)
             .ok_or(ConfigSettingError::ConfigNotSet {
                 key: "mqtt.client.ca_file",
             })
-    }
-
-    fn update(
-        &mut self,
-        _setting: MqttClientCafileSetting,
-        ca_file: Utf8PathBuf,
-    ) -> ConfigSettingResult<()> {
-        self.data.mqtt.client_ca_file = Some(ca_file);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: MqttClientCafileSetting) -> ConfigSettingResult<()> {
-        self.data.mqtt.client_ca_file = None;
-        Ok(())
     }
 }
 
@@ -448,23 +237,10 @@ impl ConfigSettingAccessor<MqttClientCapathSetting> for TEdgeConfig {
             .mqtt
             .client_ca_path
             .clone()
+            .map(|p| p.0)
             .ok_or(ConfigSettingError::ConfigNotSet {
                 key: "mqtt.client.ca_path",
             })
-    }
-
-    fn update(
-        &mut self,
-        _setting: MqttClientCapathSetting,
-        cafile: Utf8PathBuf,
-    ) -> ConfigSettingResult<()> {
-        self.data.mqtt.client_ca_path = Some(cafile);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: MqttClientCapathSetting) -> ConfigSettingResult<()> {
-        self.data.mqtt.client_ca_path = None;
-        Ok(())
     }
 }
 
@@ -477,16 +253,6 @@ impl ConfigSettingAccessor<MqttPortSetting> for TEdgeConfig {
             .map(Port)
             .unwrap_or_else(|| self.config_defaults.default_mqtt_port))
     }
-
-    fn update(&mut self, _setting: MqttPortSetting, value: Port) -> ConfigSettingResult<()> {
-        self.data.mqtt.port = Some(value.into());
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: MqttPortSetting) -> ConfigSettingResult<()> {
-        self.data.mqtt.port = None;
-        Ok(())
-    }
 }
 
 impl ConfigSettingAccessor<HttpPortSetting> for TEdgeConfig {
@@ -497,16 +263,6 @@ impl ConfigSettingAccessor<HttpPortSetting> for TEdgeConfig {
             .port
             .map(Port)
             .unwrap_or_else(|| self.config_defaults.default_http_port))
-    }
-
-    fn update(&mut self, _setting: HttpPortSetting, value: Port) -> ConfigSettingResult<()> {
-        self.data.http.port = Some(value.into());
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: HttpPortSetting) -> ConfigSettingResult<()> {
-        self.data.http.port = None;
-        Ok(())
     }
 }
 
@@ -522,18 +278,6 @@ impl ConfigSettingAccessor<HttpBindAddressSetting> for TEdgeConfig {
             Err(_) => Ok(internal_bind_address),
         }
     }
-
-    fn update(
-        &mut self,
-        _setting: HttpBindAddressSetting,
-        _value: IpAddress,
-    ) -> ConfigSettingResult<()> {
-        Err(http_bind_address_read_only_error())
-    }
-
-    fn unset(&mut self, _setting: HttpBindAddressSetting) -> ConfigSettingResult<()> {
-        Err(http_bind_address_read_only_error())
-    }
 }
 
 impl ConfigSettingAccessor<MqttBindAddressSetting> for TEdgeConfig {
@@ -542,22 +286,7 @@ impl ConfigSettingAccessor<MqttBindAddressSetting> for TEdgeConfig {
             .data
             .mqtt
             .bind_address
-            .clone()
-            .unwrap_or_else(|| self.config_defaults.default_mqtt_bind_address.clone()))
-    }
-
-    fn update(
-        &mut self,
-        _setting: MqttBindAddressSetting,
-        value: IpAddress,
-    ) -> ConfigSettingResult<()> {
-        self.data.mqtt.bind_address = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: MqttBindAddressSetting) -> ConfigSettingResult<()> {
-        self.data.mqtt.bind_address = None;
-        Ok(())
+            .unwrap_or(self.config_defaults.default_mqtt_bind_address))
     }
 }
 
@@ -571,20 +300,6 @@ impl ConfigSettingAccessor<MqttExternalPortSetting> for TEdgeConfig {
                 key: MqttExternalPortSetting::KEY,
             })
     }
-
-    fn update(
-        &mut self,
-        _setting: MqttExternalPortSetting,
-        value: Port,
-    ) -> ConfigSettingResult<()> {
-        self.data.mqtt.external_port = Some(value.into());
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: MqttExternalPortSetting) -> ConfigSettingResult<()> {
-        self.data.mqtt.external_port = None;
-        Ok(())
-    }
 }
 
 impl ConfigSettingAccessor<MqttExternalBindAddressSetting> for TEdgeConfig {
@@ -592,24 +307,9 @@ impl ConfigSettingAccessor<MqttExternalBindAddressSetting> for TEdgeConfig {
         self.data
             .mqtt
             .external_bind_address
-            .clone()
             .ok_or(ConfigSettingError::ConfigNotSet {
                 key: MqttExternalBindAddressSetting::KEY,
             })
-    }
-
-    fn update(
-        &mut self,
-        _setting: MqttExternalBindAddressSetting,
-        value: IpAddress,
-    ) -> ConfigSettingResult<()> {
-        self.data.mqtt.external_bind_address = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: MqttExternalBindAddressSetting) -> ConfigSettingResult<()> {
-        self.data.mqtt.external_bind_address = None;
-        Ok(())
     }
 }
 
@@ -623,45 +323,15 @@ impl ConfigSettingAccessor<MqttExternalBindInterfaceSetting> for TEdgeConfig {
                 key: MqttExternalBindInterfaceSetting::KEY,
             })
     }
-
-    fn update(
-        &mut self,
-        _setting: MqttExternalBindInterfaceSetting,
-        value: String,
-    ) -> ConfigSettingResult<()> {
-        self.data.mqtt.external_bind_interface = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: MqttExternalBindInterfaceSetting) -> ConfigSettingResult<()> {
-        self.data.mqtt.external_bind_interface = None;
-        Ok(())
-    }
 }
 
 impl ConfigSettingAccessor<MqttExternalCAPathSetting> for TEdgeConfig {
     fn query(&self, _setting: MqttExternalCAPathSetting) -> ConfigSettingResult<Utf8PathBuf> {
-        self.data
-            .mqtt
-            .external_capath
-            .clone()
-            .ok_or(ConfigSettingError::ConfigNotSet {
+        self.data.mqtt.external_ca_path.clone().map(|p| p.0).ok_or(
+            ConfigSettingError::ConfigNotSet {
                 key: MqttExternalCAPathSetting::KEY,
-            })
-    }
-
-    fn update(
-        &mut self,
-        _setting: MqttExternalCAPathSetting,
-        value: Utf8PathBuf,
-    ) -> ConfigSettingResult<()> {
-        self.data.mqtt.external_capath = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: MqttExternalCAPathSetting) -> ConfigSettingResult<()> {
-        self.data.mqtt.external_capath = None;
-        Ok(())
+            },
+        )
     }
 }
 
@@ -669,51 +339,22 @@ impl ConfigSettingAccessor<MqttExternalCertfileSetting> for TEdgeConfig {
     fn query(&self, _setting: MqttExternalCertfileSetting) -> ConfigSettingResult<Utf8PathBuf> {
         self.data
             .mqtt
-            .external_certfile
+            .external_cert_file
             .clone()
+            .map(|p| p.0)
             .ok_or(ConfigSettingError::ConfigNotSet {
                 key: MqttExternalCertfileSetting::KEY,
             })
-    }
-
-    fn update(
-        &mut self,
-        _setting: MqttExternalCertfileSetting,
-        value: Utf8PathBuf,
-    ) -> ConfigSettingResult<()> {
-        self.data.mqtt.external_certfile = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: MqttExternalCertfileSetting) -> ConfigSettingResult<()> {
-        self.data.mqtt.external_certfile = None;
-        Ok(())
     }
 }
 
 impl ConfigSettingAccessor<MqttExternalKeyfileSetting> for TEdgeConfig {
     fn query(&self, _setting: MqttExternalKeyfileSetting) -> ConfigSettingResult<Utf8PathBuf> {
-        self.data
-            .mqtt
-            .external_keyfile
-            .clone()
-            .ok_or(ConfigSettingError::ConfigNotSet {
+        self.data.mqtt.external_key_file.clone().map(|p| p.0).ok_or(
+            ConfigSettingError::ConfigNotSet {
                 key: MqttExternalKeyfileSetting::KEY,
-            })
-    }
-
-    fn update(
-        &mut self,
-        _setting: MqttExternalKeyfileSetting,
-        value: Utf8PathBuf,
-    ) -> ConfigSettingResult<()> {
-        self.data.mqtt.external_keyfile = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: MqttExternalKeyfileSetting) -> ConfigSettingResult<()> {
-        self.data.mqtt.external_keyfile = None;
-        Ok(())
+            },
+        )
     }
 }
 
@@ -721,25 +362,11 @@ impl ConfigSettingAccessor<SoftwarePluginDefaultSetting> for TEdgeConfig {
     fn query(&self, _setting: SoftwarePluginDefaultSetting) -> ConfigSettingResult<String> {
         self.data
             .software
-            .default_plugin_type
+            .default_plugin
             .clone()
             .ok_or(ConfigSettingError::ConfigNotSet {
                 key: SoftwarePluginDefaultSetting::KEY,
             })
-    }
-
-    fn update(
-        &mut self,
-        _setting: SoftwarePluginDefaultSetting,
-        value: String,
-    ) -> ConfigSettingResult<()> {
-        self.data.software.default_plugin_type = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: SoftwarePluginDefaultSetting) -> ConfigSettingResult<()> {
-        self.data.software.default_plugin_type = None;
-        Ok(())
     }
 }
 
@@ -757,12 +384,6 @@ where
             .try_into()
             .map_err(|_e| ConfigSettingError::ConversionIntoStringFailed)
     }
-
-    fn update_string(&mut self, setting: T, string_value: String) -> ConfigSettingResult<()> {
-        T::Value::try_from(string_value)
-            .map_err(|_e| ConfigSettingError::ConversionFromStringFailed)
-            .and_then(|value| self.update(setting, value))
-    }
 }
 
 impl ConfigSettingAccessor<TmpPathSetting> for TEdgeConfig {
@@ -770,19 +391,10 @@ impl ConfigSettingAccessor<TmpPathSetting> for TEdgeConfig {
         Ok(self
             .data
             .tmp
-            .dir_path
+            .path
             .clone()
+            .map(|p| p.0)
             .unwrap_or_else(|| self.config_defaults.default_tmp_path.clone()))
-    }
-
-    fn update(&mut self, _setting: TmpPathSetting, value: Utf8PathBuf) -> ConfigSettingResult<()> {
-        self.data.tmp.dir_path = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: TmpPathSetting) -> ConfigSettingResult<()> {
-        self.data.tmp.dir_path = None;
-        Ok(())
     }
 }
 
@@ -791,19 +403,10 @@ impl ConfigSettingAccessor<LogPathSetting> for TEdgeConfig {
         Ok(self
             .data
             .logs
-            .dir_path
+            .path
             .clone()
+            .map(|p| p.0)
             .unwrap_or_else(|| self.config_defaults.default_logs_path.clone()))
-    }
-
-    fn update(&mut self, _setting: LogPathSetting, value: Utf8PathBuf) -> ConfigSettingResult<()> {
-        self.data.logs.dir_path = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: LogPathSetting) -> ConfigSettingResult<()> {
-        self.data.logs.dir_path = None;
-        Ok(())
     }
 }
 
@@ -812,19 +415,10 @@ impl ConfigSettingAccessor<RunPathSetting> for TEdgeConfig {
         Ok(self
             .data
             .run
-            .dir_path
+            .path
             .clone()
+            .map(|p| p.0)
             .unwrap_or_else(|| self.config_defaults.default_run_path.clone()))
-    }
-
-    fn update(&mut self, _setting: RunPathSetting, value: Utf8PathBuf) -> ConfigSettingResult<()> {
-        self.data.run.dir_path = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: RunPathSetting) -> ConfigSettingResult<()> {
-        self.data.run.dir_path = None;
-        Ok(())
     }
 }
 
@@ -833,19 +427,10 @@ impl ConfigSettingAccessor<DataPathSetting> for TEdgeConfig {
         Ok(self
             .data
             .data
-            .dir_path
+            .path
             .clone()
+            .map(|p| p.0)
             .unwrap_or_else(|| self.config_defaults.default_data_path.clone()))
-    }
-
-    fn update(&mut self, _setting: DataPathSetting, value: Utf8PathBuf) -> ConfigSettingResult<()> {
-        self.data.data.dir_path = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: DataPathSetting) -> ConfigSettingResult<()> {
-        self.data.data.dir_path = None;
-        Ok(())
     }
 }
 
@@ -858,16 +443,6 @@ impl ConfigSettingAccessor<LockFilesSetting> for TEdgeConfig {
             .map(Flag)
             .unwrap_or_else(|| self.config_defaults.default_lock_files.clone()))
     }
-
-    fn update(&mut self, _setting: LockFilesSetting, value: Flag) -> ConfigSettingResult<()> {
-        self.data.run.lock_files = Some(value.into());
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: LockFilesSetting) -> ConfigSettingResult<()> {
-        self.data.run.lock_files = None;
-        Ok(())
-    }
 }
 
 impl ConfigSettingAccessor<FirmwareChildUpdateTimeoutSetting> for TEdgeConfig {
@@ -879,24 +454,6 @@ impl ConfigSettingAccessor<FirmwareChildUpdateTimeoutSetting> for TEdgeConfig {
             .map(Seconds)
             .unwrap_or(self.config_defaults.default_firmware_child_update_timeout))
     }
-
-    fn update(
-        &mut self,
-        _setting: FirmwareChildUpdateTimeoutSetting,
-        value: Seconds,
-    ) -> ConfigSettingResult<()> {
-        self.data.firmware.child_update_timeout = Some(value.into());
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: FirmwareChildUpdateTimeoutSetting) -> ConfigSettingResult<()> {
-        self.data.firmware.child_update_timeout = Some(
-            self.config_defaults
-                .default_firmware_child_update_timeout
-                .into(),
-        );
-        Ok(())
-    }
 }
 
 impl ConfigSettingAccessor<ServiceTypeSetting> for TEdgeConfig {
@@ -907,15 +464,5 @@ impl ConfigSettingAccessor<ServiceTypeSetting> for TEdgeConfig {
             .service_type
             .clone()
             .unwrap_or_else(|| self.config_defaults.default_service_type.clone()))
-    }
-
-    fn update(&mut self, _setting: ServiceTypeSetting, value: String) -> ConfigSettingResult<()> {
-        self.data.service.service_type = Some(value);
-        Ok(())
-    }
-
-    fn unset(&mut self, _setting: ServiceTypeSetting) -> ConfigSettingResult<()> {
-        self.data.service.service_type = Some(self.config_defaults.default_service_type.clone());
-        Ok(())
     }
 }

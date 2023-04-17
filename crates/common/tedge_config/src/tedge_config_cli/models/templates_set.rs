@@ -7,6 +7,20 @@ use std::convert::TryInto;
 #[serde(from = "FromTomlOrCli")]
 pub struct TemplatesSet(pub Vec<String>);
 
+#[cfg(test)]
+impl fake::Dummy<fake::Faker> for TemplatesSet {
+    fn dummy_with_rng<R: rand::Rng + ?Sized>(_config: &fake::Faker, rng: &mut R) -> Self {
+        use rand::distributions::Alphanumeric;
+        use rand::distributions::DistString;
+
+        Self(
+            (0..=3)
+                .map(|_| Alphanumeric.sample_string(rng, 30))
+                .collect(),
+        )
+    }
+}
+
 #[derive(serde::Deserialize)]
 #[serde(from = "String")]
 struct CommaDelimited(Vec<String>);

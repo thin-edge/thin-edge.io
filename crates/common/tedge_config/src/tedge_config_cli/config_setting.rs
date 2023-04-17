@@ -1,3 +1,5 @@
+use super::new_tedge_config::WritableKey;
+
 pub trait ConfigSetting {
     /// This is something like `device.id`.
     const KEY: &'static str;
@@ -19,12 +21,6 @@ pub trait ConfigSettingAccessor<T: ConfigSetting> {
             Err(err) => Err(err),
         }
     }
-
-    /// Update a configuration setting
-    fn update(&mut self, _setting: T, _value: T::Value) -> ConfigSettingResult<()>;
-
-    /// Unset a configuration setting / reset to default
-    fn unset(&mut self, _setting: T) -> ConfigSettingResult<()>;
 }
 
 /// Extension trait that provides methods to query a setting as a String or
@@ -40,9 +36,6 @@ pub trait ConfigSettingAccessorStringExt<T: ConfigSetting>: ConfigSettingAccesso
             Err(err) => Err(err),
         }
     }
-
-    /// Update a configuration setting from a String value
-    fn update_string(&mut self, setting: T, value: String) -> ConfigSettingResult<()>;
 }
 
 pub type ConfigSettingResult<T> = Result<T, ConfigSettingError>;
@@ -50,13 +43,13 @@ pub type ConfigSettingResult<T> = Result<T, ConfigSettingError>;
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigSettingError {
     #[error(
-        r#"A value for `{key}` is missing.
+        r#"A value for '{key}' is missing.\n\
     A value can be set with `tedge config set {key} <value>`"#
     )]
     ConfigNotSet { key: &'static str },
 
-    #[error("Readonly setting: {message}")]
-    ReadonlySetting { message: &'static str },
+    #[error("Cannot write to read-only setting: {message}")]
+    WriteToReadOnlySetting { message: &'static str },
 
     #[error("Conversion from String failed")]
     ConversionFromStringFailed,
@@ -64,10 +57,14 @@ pub enum ConfigSettingError {
     #[error("Conversion into String failed")]
     ConversionIntoStringFailed,
 
-    #[error("Derivation for `{key}` failed: {cause}")]
-    DerivationFailed { key: &'static str, cause: String },
+    #[error("Derivation for '{key}' failed: {cause}")]
+    DerivationFailed {
+        key: &'static str,
+        #[source]
+        cause: Box<dyn std::error::Error + Send + Sync>,
+    },
 
-    #[error("Config value {key}, cannot be configured: {message} ")]
+    #[error("Config value '{key}', cannot be configured: {message} ")]
     SettingIsNotConfigurable {
         key: &'static str,
         message: &'static str,
@@ -75,4 +72,32 @@ pub enum ConfigSettingError {
 
     #[error("An error occurred: {msg}")]
     Other { msg: &'static str },
+
+    #[error("Unrecognised configuration key '{key}'")]
+    WriteUnrecognisedKey {
+        /// The key that was requested
+        key: String,
+    },
+
+    #[error("Unrecognised configuration key: '{key}'")]
+    ReadUnrecognisedKey {
+        /// The key that was requested
+        key: String,
+    },
+
+    #[error("Failed to deserialize '{key}': {error}")]
+    Figment {
+        /// The key that was requested
+        key: WritableKey,
+
+        #[source]
+        /// The underlying error when deserializing that value
+        error: figment::Error,
+    },
+
+    #[error("'{key}' could not be read:\n{message}")]
+    ReadOnlySettingNotConfigured {
+        key: &'static str,
+        message: &'static str,
+    },
 }

@@ -8,7 +8,7 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 
 const DEFAULT_ETC_PATH: &str = "/etc";
-const DEFAULT_MQTT_PORT: u16 = 1883;
+pub const DEFAULT_MQTT_PORT: u16 = 1883;
 const DEFAULT_HTTP_PORT: u16 = 8000;
 pub const DEFAULT_TMP_PATH: &str = "/tmp";
 pub const DEFAULT_LOG_PATH: &str = "/var/log";

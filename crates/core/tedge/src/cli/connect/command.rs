@@ -14,6 +14,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_config::system_services::*;
+use tedge_config::tedge_config_cli::new_tedge_config::NewTEdgeConfig;
 use tedge_config::*;
 use tedge_utils::paths::create_directories;
 use tedge_utils::paths::ok_if_not_found;
@@ -54,7 +55,7 @@ impl Command for ConnectCommand {
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        let config = self.config_repository.load()?;
+        let config = self.config_repository.load_new()?;
         if self.is_test_connection {
             let br_config = self.bridge_config(&config)?;
             if self.check_if_bridge_exists(&br_config) {
@@ -84,23 +85,18 @@ impl Command for ConnectCommand {
         let updated_mosquitto_config = self
             .common_mosquitto_config
             .clone()
-            .with_internal_opts(
-                config.query(MqttPortSetting)?.into(),
-                config.query(MqttBindAddressSetting)?.to_string(),
-            )
+            // TODO should this be client host? or should it really be bind_address
+            .with_internal_opts(config.mqtt_port(), config.mqtt_client_host())
             .with_external_opts(
-                config.query(MqttExternalPortSetting).ok().map(|x| x.into()),
-                config
-                    .query(MqttExternalBindAddressSetting)
-                    .ok()
-                    .map(|x| x.to_string()),
-                config.query(MqttExternalBindInterfaceSetting).ok(),
-                config.query(MqttExternalCAPathSetting).ok(),
-                config.query(MqttExternalCertfileSetting).ok(),
-                config.query(MqttExternalKeyfileSetting).ok(),
+                config.mqtt_external_port().ok(),
+                config.mqtt_external_bind_address().ok(),
+                config.mqtt_external_bind_interface().ok(),
+                config.mqtt_external_ca_path().ok(),
+                config.mqtt_external_cert_file().ok(),
+                config.mqtt_external_key_file().ok(),
             );
 
-        let device_type = config.query(DeviceTypeSetting)?;
+        let device_type = config.device_device_type();
 
         new_bridge(
             &bridge_config,
@@ -136,9 +132,9 @@ impl Command for ConnectCommand {
 
         if let Cloud::C8y = self.cloud {
             check_connected_c8y_tenant_as_configured(
-                &config.query_string(C8yUrlSetting)?,
-                config.query(MqttClientPortSetting)?.into(),
-                config.query(MqttClientHostSetting)?,
+                &config.c8y_url()?,
+                config.mqtt_port(),
+                config.mqtt_bind_address(),
             );
             enable_software_management(&bridge_config, self.service_manager.as_ref());
         }
@@ -148,44 +144,44 @@ impl Command for ConnectCommand {
 }
 
 impl ConnectCommand {
-    fn bridge_config(&self, config: &TEdgeConfig) -> Result<BridgeConfig, ConfigError> {
+    fn bridge_config(&self, config: &NewTEdgeConfig) -> Result<BridgeConfig, ConfigError> {
         match self.cloud {
             Cloud::Azure => {
                 let params = BridgeConfigAzureParams {
-                    connect_url: config.query(AzureUrlSetting)?,
+                    connect_url: config.az_url()?,
                     mqtt_tls_port: MQTT_TLS_PORT,
                     config_file: AZURE_CONFIG_FILENAME.into(),
-                    bridge_root_cert_path: config.query(AzureRootCertPathSetting)?,
-                    remote_clientid: config.query(DeviceIdSetting)?,
-                    bridge_certfile: config.query(DeviceCertPathSetting)?,
-                    bridge_keyfile: config.query(DeviceKeyPathSetting)?,
+                    bridge_root_cert_path: config.az_root_cert_path(),
+                    remote_clientid: config.device_id()?.to_owned(),
+                    bridge_certfile: config.device_cert_path(),
+                    bridge_keyfile: config.device_key_path(),
                 };
 
                 Ok(BridgeConfig::from(params))
             }
             Cloud::Aws => {
                 let params = BridgeConfigAwsParams {
-                    connect_url: config.query(AwsUrlSetting)?,
+                    connect_url: config.aws_url()?,
                     mqtt_tls_port: MQTT_TLS_PORT,
                     config_file: AWS_CONFIG_FILENAME.into(),
-                    bridge_root_cert_path: config.query(AwsRootCertPathSetting)?,
-                    remote_clientid: config.query(DeviceIdSetting)?,
-                    bridge_certfile: config.query(DeviceCertPathSetting)?,
-                    bridge_keyfile: config.query(DeviceKeyPathSetting)?,
+                    bridge_root_cert_path: config.aws_root_cert_path(),
+                    remote_clientid: config.device_id()?.to_owned(),
+                    bridge_certfile: config.device_cert_path(),
+                    bridge_keyfile: config.device_key_path(),
                 };
 
                 Ok(BridgeConfig::from(params))
             }
             Cloud::C8y => {
                 let params = BridgeConfigC8yParams {
-                    connect_url: config.query(C8yUrlSetting)?,
+                    connect_url: config.c8y_url()?,
                     mqtt_tls_port: MQTT_TLS_PORT,
                     config_file: C8Y_CONFIG_FILENAME.into(),
-                    bridge_root_cert_path: config.query(C8yRootCertPathSetting)?,
-                    remote_clientid: config.query(DeviceIdSetting)?,
-                    bridge_certfile: config.query(DeviceCertPathSetting)?,
-                    bridge_keyfile: config.query(DeviceKeyPathSetting)?,
-                    smartrest_templates: config.query(C8ySmartRestTemplates)?,
+                    bridge_root_cert_path: config.c8y_root_cert_path(),
+                    remote_clientid: config.device_id()?.to_owned(),
+                    bridge_certfile: config.device_cert_path(),
+                    bridge_keyfile: config.device_key_path(),
+                    smartrest_templates: config.c8y_smartrest_templates(),
                 };
 
                 Ok(BridgeConfig::from(params))
@@ -193,9 +189,12 @@ impl ConnectCommand {
         }
     }
 
-    fn check_connection(&self, config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
-        let port = config.query(MqttClientPortSetting)?.into();
-        let host = config.query(MqttClientHostSetting)?;
+    fn check_connection(
+        &self,
+        config: &tedge_config::tedge_config_cli::new_tedge_config::NewTEdgeConfig,
+    ) -> Result<DeviceStatus, ConnectError> {
+        let port = config.mqtt_port();
+        let host = config.mqtt_client_host();
 
         println!(
             "Sending packets to check connection. This may take up to {} seconds.\n",
@@ -204,7 +203,7 @@ impl ConnectCommand {
         match self.cloud {
             Cloud::Azure => check_device_status_azure(port, host),
             Cloud::Aws => check_device_status_aws(port, host),
-            Cloud::C8y => check_device_status_c8y(config),
+            Cloud::C8y => check_device_status_c8y(port, host),
         }
     }
 
@@ -221,16 +220,12 @@ impl ConnectCommand {
 
 // Check the connection by using the jwt token retrieval over the mqtt.
 // If successful in getting the jwt token '71,xxxxx', the connection is established.
-fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, ConnectError> {
+fn check_device_status_c8y(port: u16, host: String) -> Result<DeviceStatus, ConnectError> {
     const C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM: &str = "c8y/s/dat";
     const C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM: &str = "c8y/s/uat";
     const CLIENT_ID: &str = "check_connection_c8y";
 
-    let mut options = MqttOptions::new(
-        CLIENT_ID,
-        tedge_config.query(MqttClientHostSetting)?,
-        tedge_config.query(MqttClientPortSetting)?.into(),
-    );
+    let mut options = MqttOptions::new(CLIENT_ID, host, port);
 
     options.set_keep_alive(RESPONSE_TIMEOUT);
     options.set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
@@ -588,9 +583,13 @@ fn get_common_mosquitto_config_file_path(
 }
 
 // To confirm the connected c8y tenant is the one that user configured.
-fn check_connected_c8y_tenant_as_configured(configured_url: &str, port: u16, host: String) {
+fn check_connected_c8y_tenant_as_configured(
+    configured_url: &ConnectUrl,
+    port: u16,
+    host: IpAddress,
+) {
     match get_connected_c8y_url(port, host) {
-        Ok(url) if url == configured_url => {}
+        Ok(url) if url == configured_url.as_str() => {}
         Ok(url) => println!(
             "Warning: Connecting to {}, but the configured URL is {}.\n\
             The device certificate has to be removed from the former tenant.\n",

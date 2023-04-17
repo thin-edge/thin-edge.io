@@ -88,7 +88,7 @@ mod tests {
         get_device_id_cmd
             .assert()
             .success()
-            .stderr(predicate::str::contains("'device.id' is not configurable"));
+            .stderr(predicate::str::contains("'device.id' is not set"));
 
         // The create command created a certificate
         create_cmd.assert().success();
@@ -184,7 +184,7 @@ mod tests {
     #[test_case(
         "c8y.url",
         "mytenant.cumulocity.com",
-        "The provided config key: \'c8y.url\' is not set\n",
+        "The provided config key: 'c8y.url' is not set\n",
         false
     )]
     #[test_case("mqtt.port", "8880", "1883", true)]
@@ -358,11 +358,11 @@ mod tests {
         let output = assert.get_output().clone();
         let output_str = String::from_utf8(output.stdout).unwrap();
 
-        let key_path = extract_config_value(&output_str, "device.key.path");
+        let key_path = extract_config_value(&output_str, "device.key_path");
         assert!(key_path.ends_with("tedge-private-key.pem"));
         assert!(key_path.contains(test_home_str));
 
-        let cert_path = extract_config_value(&output_str, "device.cert.path");
+        let cert_path = extract_config_value(&output_str, "device.cert_path");
         assert!(cert_path.ends_with("tedge-certificate.pem"));
         assert!(cert_path.contains(test_home_str));
     }
@@ -401,11 +401,11 @@ mod tests {
         let output = assert.get_output();
         let output_str = String::from_utf8(output.clone().stdout).unwrap();
 
-        let key_path = extract_config_value(&output_str, "device.key.path");
+        let key_path = extract_config_value(&output_str, "device.key_path");
         assert!(key_path.ends_with("tedge-private-key.pem"));
         assert!(key_path.contains(test_home_str));
 
-        let cert_path = extract_config_value(&output_str, "device.cert.path");
+        let cert_path = extract_config_value(&output_str, "device.cert_path");
         assert!(cert_path.ends_with("tedge-certificate.pem"));
         assert!(cert_path.contains(test_home_str));
 
@@ -455,10 +455,10 @@ mod tests {
     fn get_tedge_config_keys() -> Vec<&'static str> {
         let vec = vec![
             "device.id",
-            "device.key.path",
-            "device.cert.path",
+            "device.key_path",
+            "device.cert_path",
             "c8y.url",
-            "c8y.root.cert.path",
+            "c8y.root_cert_path",
         ];
         vec
     }

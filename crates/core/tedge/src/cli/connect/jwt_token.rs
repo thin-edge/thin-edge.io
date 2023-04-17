@@ -7,13 +7,14 @@ use rumqttc::MqttOptions;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::QoS::AtLeastOnce;
+use tedge_config::IpAddress;
 
-pub(crate) fn get_connected_c8y_url(port: u16, host: String) -> Result<String, ConnectError> {
+pub(crate) fn get_connected_c8y_url(port: u16, host: IpAddress) -> Result<String, ConnectError> {
     const C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM: &str = "c8y/s/uat";
     const C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM: &str = "c8y/s/dat";
     const CLIENT_ID: &str = "get_jwt_token_c8y";
 
-    let mut options = MqttOptions::new(CLIENT_ID, host, port);
+    let mut options = MqttOptions::new(CLIENT_ID, host.to_string(), port);
     options.set_keep_alive(RESPONSE_TIMEOUT);
     options.set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
 

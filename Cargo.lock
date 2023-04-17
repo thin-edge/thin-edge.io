@@ -1199,9 +1199,9 @@ checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "doku"
-version = "0.20.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "966b1227ac4d9d77f4d7e9507dd01c56ceaec6e35888661b54319123da47b159"
+checksum = "b738a9a7942e6996e6df51b8a58db17105fe5a448112add828fc9ff93fcd6c8e"
 dependencies = [
  "doku-derive",
  "serde",
@@ -1210,9 +1210,9 @@ dependencies = [
 
 [[package]]
 name = "doku-derive"
-version = "0.20.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "252ec56116f931b050b5d80512c2c76f4807a297dd95a93f37593dd7650868a5"
+checksum = "4dd9ccf9dd3a20ad0a08c3a099693490eb243be3287330d77bd3c9c06225babb"
 dependencies = [
  "darling",
  "proc-macro2 1.0.56",
@@ -1246,6 +1246,17 @@ dependencies = [
  "tokio",
  "tokio-test",
  "url",
+]
+
+[[package]]
+name = "dummy"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bf5ff6f74150b0bbb6e6057718a903b3d8f3fc7096c9190fc162ca99d3b2273"
+dependencies = [
+ "darling",
+ "quote 1.0.26",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -1338,6 +1349,16 @@ name = "event-listener"
 version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
+
+[[package]]
+name = "fake"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d68f517805463f3a896a9d29c1d6ff09d3579ded64a7201b4069f8f9c0d52fd"
+dependencies = [
+ "dummy",
+ "rand",
+]
 
 [[package]]
 name = "fastrand"
@@ -2450,6 +2471,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
 
 [[package]]
+name = "pad"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2ad9b889f1b12e0b9ee24db044b5129150d5eada288edc800f789928dc8c0e3"
+dependencies = [
+ "unicode-width",
+]
+
+[[package]]
 name = "parking_lot"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2471,6 +2501,12 @@ dependencies = [
  "smallvec",
  "windows-sys 0.45.0",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f746c4065a8fa3fe23974dd82f15431cc8d40779821001404d10d2e79ca7d79"
 
 [[package]]
 name = "path-clean"
@@ -2986,9 +3022,9 @@ dependencies = [
 
 [[package]]
 name = "rstest"
-version = "0.16.0"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b07f2d176c472198ec1e6551dc7da28f1c089652f66a7b722676c2238ebc0edf"
+checksum = "de1bb486a691878cd320c2f0d319ba91eeaa2e894066d8b5f8f117c000e9d962"
 dependencies = [
  "futures",
  "futures-timer",
@@ -2998,9 +3034,9 @@ dependencies = [
 
 [[package]]
 name = "rstest_macros"
-version = "0.16.0"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7229b505ae0706e64f37ffc54a9c163e11022a6636d58fe1f3f52018257ff9f7"
+checksum = "290ca1a1c8ca7edb7c3283bd44dc35dd54fdec6253a3912e201ba1072018fca8"
 dependencies = [
  "cfg-if 1.0.0",
  "proc-macro2 1.0.56",
@@ -3506,6 +3542,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
+name = "strum"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "063e6045c0e62079840579a7e47a355ae92f60eb74daaf156fb1e84ba164e63f"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
 name = "strum_macros"
 version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3598,13 +3643,16 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "assert_matches",
+ "atty",
  "base64 0.13.1",
  "camino",
  "certificate",
  "clap 3.2.23",
+ "doku",
  "hyper",
  "mockito",
  "mqtt_tests",
+ "pad",
  "pem",
  "predicates 2.1.5",
  "reqwest",
@@ -3612,6 +3660,7 @@ dependencies = [
  "rumqttc 0.17.0",
  "serde",
  "serde_json",
+ "strum",
  "strum_macros",
  "tedge_config",
  "tedge_utils",
@@ -3623,6 +3672,7 @@ dependencies = [
  "tracing",
  "url",
  "which",
+ "yansi",
 ]
 
 [[package]]
@@ -3806,9 +3856,15 @@ dependencies = [
  "camino",
  "certificate",
  "doku",
+ "fake",
  "figment",
+ "once_cell",
+ "paste",
+ "rand",
+ "rstest",
  "serde",
  "serde_ignored",
+ "strum",
  "strum_macros",
  "tedge_test_utils",
  "tedge_utils",

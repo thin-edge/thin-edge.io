@@ -20,9 +20,9 @@ const BROKER_USER: &str = "mosquitto";
 const BROKER_GROUP: &str = "mosquitto";
 
 fn main() -> anyhow::Result<()> {
-    let opt = cli::Opt::parse();
-
     set_log_level(tracing::Level::WARN);
+
+    let opt = cli::Opt::parse();
 
     if opt.init {
         initialize_tedge(&opt.config_dir)?;
