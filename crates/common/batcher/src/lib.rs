@@ -24,7 +24,6 @@ use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
-use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
 
@@ -75,11 +74,12 @@ impl<B: Batchable> BatchingActorBuilder<B> {
 impl<B: Batchable> ServiceProvider<BatchDriverInput<B>, BatchDriverOutput<B>, NoConfig>
     for BatchingActorBuilder<B>
 {
-    fn add_peer(
+    fn connect_consumer(
         &mut self,
-        peer: &mut impl ServiceConsumer<BatchDriverInput<B>, BatchDriverOutput<B>, NoConfig>,
-    ) {
-        self.message_box.add_peer(peer);
+        config: NoConfig,
+        response_sender: DynSender<BatchDriverOutput<B>>,
+    ) -> DynSender<BatchDriverInput<B>> {
+        self.message_box.connect_consumer(config, response_sender)
     }
 }
 

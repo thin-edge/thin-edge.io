@@ -22,6 +22,7 @@ use tedge_config::IpAddress;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_mqtt_ext::Topic;
 use tedge_test_utils::fs::TempTedgeDir;
+use tedge_timer_ext::Timeout;
 
 const CHILD_DEVICE_ID: &str = "child-device";
 const C8Y_CHILD_PUBLISH_TOPIC_NAME: &str = "c8y/s/us/child-device";

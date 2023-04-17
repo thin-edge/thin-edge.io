@@ -6,11 +6,7 @@ use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use c8y_log_manager::LogManagerBuilder;
 use c8y_log_manager::LogManagerConfig;
-use tedge_actors::MessageSink;
-use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
-use tedge_actors::ServiceConsumer;
 use tedge_config::get_tedge_config;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::MqttClientHostSetting;
@@ -37,12 +33,10 @@ async fn main() -> anyhow::Result<()> {
 
     let tedge_config = get_tedge_config()?;
     let c8y_http_config = (&tedge_config).try_into()?;
-
-    // Create actor instances
     let mqtt_config = mqtt_config(&tedge_config)?;
 
+    // Create actor instances
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
-
     let mut jwt_actor = C8YJwtRetriever::builder(mqtt_config);
     let mut http_actor = HttpActor::new().builder();
 
@@ -50,30 +44,29 @@ async fn main() -> anyhow::Result<()> {
         C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);
 
     let mut fs_watch_actor = FsWatchActorBuilder::new();
-    let mut signal_actor = SignalActor::builder();
     let mut timer_actor = TimerActor::builder();
     let mut downloader_actor = DownloaderActor::new().builder();
 
-    //Instantiate config manager actor
+    // Instantiate config manager actor
     let config_manager_config =
         ConfigManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH, &tedge_config)?;
-    let mut config_actor = ConfigManagerBuilder::new(config_manager_config);
+    let config_actor = ConfigManagerBuilder::new(
+        config_manager_config,
+        &mut mqtt_actor,
+        &mut c8y_http_proxy_actor,
+        &mut timer_actor,
+        &mut fs_watch_actor,
+    );
 
-    // Connect other actor instances to config manager actor
-    config_actor.with_fs_connection(&mut fs_watch_actor)?;
-    config_actor.with_c8y_http_proxy(&mut c8y_http_proxy_actor)?;
-    config_actor.set_connection(&mut mqtt_actor);
-    config_actor.set_connection(&mut timer_actor);
-
-    //Instantiate log manager actor
+    // Instantiate log manager actor
     let log_manager_config =
         LogManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH, &tedge_config)?;
-    let mut log_actor = LogManagerBuilder::new(log_manager_config);
-
-    // Connect other actor instances to log manager actor
-    log_actor.with_fs_connection(&mut fs_watch_actor)?;
-    log_actor.with_c8y_http_proxy(&mut c8y_http_proxy_actor)?;
-    log_actor.with_mqtt_connection(&mut mqtt_actor)?;
+    let log_actor = LogManagerBuilder::new(
+        log_manager_config,
+        &mut mqtt_actor,
+        &mut c8y_http_proxy_actor,
+        &mut fs_watch_actor,
+    );
 
     // Instantiate firmware manager actor
     let firmware_manager_config = FirmwareManagerConfig::from_tedge_config(&tedge_config)?;
@@ -85,13 +78,11 @@ async fn main() -> anyhow::Result<()> {
         &mut downloader_actor,
     );
 
-    //Instantiate health monitor actor
-    let health_actor = HealthMonitorBuilder::new(PLUGIN_NAME);
-    mqtt_actor.mqtt_config = health_actor.set_init_and_last_will(mqtt_actor.mqtt_config);
-    let health_actor = health_actor.with_connection(&mut mqtt_actor);
+    // Instantiate health monitor actor
+    let health_actor = HealthMonitorBuilder::new(PLUGIN_NAME, &mut mqtt_actor);
 
     // Shutdown on SIGINT
-    signal_actor.register_peer(NoConfig, runtime.get_handle().get_sender());
+    let signal_actor = SignalActor::builder(&runtime.get_handle());
 
     // Run the actors
     // FIXME: having to list all the actors is error prone

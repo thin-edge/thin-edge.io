@@ -12,10 +12,6 @@ use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use mqtt_channel::UnboundedReceiver;
 use mqtt_channel::UnboundedSender;
-use tedge_actors::builders::ServiceConsumer;
-use tedge_actors::MessageSink;
-use tedge_actors::MessageSource;
-use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
 use tedge_api::health::health_status_up_message;
 use tedge_config::ConfigSettingAccessor;
@@ -227,17 +223,14 @@ pub async fn start_basic_actors(
 ) -> Result<(Runtime, MqttActorBuilder), anyhow::Error> {
     let runtime_events_logger = None;
     let mut runtime = Runtime::try_new(runtime_events_logger).await?;
-    let mut signal_actor = SignalActor::builder();
 
     let mut mqtt_actor = get_mqtt_actor(mapper_name, config).await?;
 
     //Instantiate health monitor actor
-    let health_actor = HealthMonitorBuilder::new(mapper_name);
-    mqtt_actor.mqtt_config = health_actor.set_init_and_last_will(mqtt_actor.mqtt_config);
-    let health_actor = health_actor.with_connection(&mut mqtt_actor);
+    let health_actor = HealthMonitorBuilder::new(mapper_name, &mut mqtt_actor);
 
     // Shutdown on SIGINT
-    signal_actor.register_peer(NoConfig, runtime.get_handle().get_sender());
+    let signal_actor = SignalActor::builder(&runtime.get_handle());
 
     runtime.spawn(signal_actor).await?;
     runtime.spawn(health_actor).await?;

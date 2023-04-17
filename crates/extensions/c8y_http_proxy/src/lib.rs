@@ -13,7 +13,6 @@ use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServerMessageBoxBuilder;
-use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
 use tedge_config::C8yUrlSetting;
 use tedge_config::ConfigSettingAccessor;
@@ -110,11 +109,12 @@ impl Builder<C8YHttpProxyActor> for C8YHttpProxyBuilder {
 }
 
 impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig> for C8YHttpProxyBuilder {
-    fn add_peer(
+    fn connect_consumer(
         &mut self,
-        peer: &mut impl ServiceConsumer<C8YRestRequest, C8YRestResult, NoConfig>,
-    ) {
-        self.clients.add_peer(peer)
+        config: NoConfig,
+        response_sender: DynSender<C8YRestResult>,
+    ) -> DynSender<C8YRestRequest> {
+        self.clients.connect_consumer(config, response_sender)
     }
 }
 
