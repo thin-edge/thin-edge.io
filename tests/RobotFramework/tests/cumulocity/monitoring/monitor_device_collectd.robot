@@ -39,7 +39,8 @@ Check thin-edge monitoring
     # Check thin-edge monitoring
     ${tedge_messages}=    Should Have MQTT Messages    topic=tedge/measurements    minimum=1    maximum=None
     ${c8y_messages}=    Should Have MQTT Messages    topic=c8y/measurement/measurements/create    minimum=1    maximum=None
-    
+    Should Contain    @{c8y_messages}    "type":"ThinEdgeMeasurement"
+
 *** Keywords ***
 
 Custom Setup
