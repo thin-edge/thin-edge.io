@@ -3,7 +3,18 @@ set -e
 
 ### Add include to mosquitto.conf so tedge specific conf will be loaded
 if ! grep -q "/etc/tedge/mosquitto-conf" "/etc/mosquitto/mosquitto.conf"; then
-    echo "include_dir /etc/tedge/mosquitto-conf" >>/etc/mosquitto/mosquitto.conf
+    # Append `include_dir /etc/tedge/mosquitto-conf` before `include_dir
+    # /etc/mosquitto/conf.d` so that conf files in conf.d inherit
+    # `per_listener_settings` defined in /etc/tedge/mosquitto-conf.
+    # `per_listener_settings` has to be defined once, before other listener
+    # settings or else it causes the following error:
+    #
+    # Error: per_listener_settings must be set before any other security
+    # settings.
+    mosquitto_conf=$(awk '/include_dir \/etc\/mosquitto\/conf.d/ \
+    { print "include_dir /etc/tedge/mosquitto-conf"; }1' \
+    /etc/mosquitto/mosquitto.conf)
+    echo "$mosquitto_conf" > /etc/mosquitto/mosquitto.conf
 fi
 
 # Initialize the tedge
