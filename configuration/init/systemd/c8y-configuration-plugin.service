@@ -6,6 +6,7 @@ After=syslog.target network.target mosquitto.service
 ExecStart=/usr/bin/c8y-configuration-plugin
 Restart=on-failure
 RestartPreventExitStatus=255
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target

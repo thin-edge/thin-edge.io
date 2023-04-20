@@ -7,6 +7,7 @@ User=tedge
 ExecStart=/usr/bin/tedge-mapper collectd
 Restart=on-failure
 RestartPreventExitStatus=255
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
