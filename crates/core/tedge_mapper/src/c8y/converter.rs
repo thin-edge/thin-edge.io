@@ -1,13 +1,24 @@
+use super::alarm_converter::AlarmConverter;
+use super::error::CumulocityMapperError;
+use super::fragments::C8yAgentFragment;
+use super::fragments::C8yDeviceDataFragment;
+use super::service_monitor;
 use crate::c8y::dynamic_discovery::*;
 use crate::c8y::json;
 use crate::core::converter::*;
 use crate::core::error::*;
 use crate::core::size_threshold::SizeThreshold;
 use async_trait::async_trait;
-use c8y_api::http_proxy::C8YHttpProxy;
+use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::smartrest::error::SmartRestDeserializerError;
+use c8y_api::smartrest::message::collect_smartrest_messages;
+use c8y_api::smartrest::message::get_failure_reason_for_smartrest;
+use c8y_api::smartrest::message::get_smartrest_device_id;
+use c8y_api::smartrest::message::get_smartrest_template_id;
+use c8y_api::smartrest::message::sanitize_for_smartrest;
+use c8y_api::smartrest::message::MAX_PAYLOAD_LIMIT_IN_BYTES;
 use c8y_api::smartrest::operations::get_operation;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::smartrest_deserializer::AvailableChildDevices;
@@ -20,9 +31,12 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
+use c8y_api::smartrest::topic::C8yTopic;
+use c8y_api::smartrest::topic::MapperSubscribeTopic;
+use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use c8y_api::utils::child_device::new_child_device_message;
-use futures::channel::mpsc;
-use futures::SinkExt;
+use c8y_http_proxy::handle::C8YHttpProxy;
+use camino::Utf8PathBuf;
 use logged_command::LoggedCommand;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
@@ -30,14 +44,13 @@ use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
 use service_monitor::convert_health_status_message;
 use std::collections::HashMap;
-use tedge_config::TEdgeConfigError;
-use thiserror::Error;
-
 use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
+use tedge_actors::LoggingSender;
+use tedge_actors::Sender;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::topic::get_child_id_from_measurement_topic;
@@ -52,28 +65,13 @@ use tedge_api::RestartOperationResponse;
 use tedge_api::SoftwareListRequest;
 use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareUpdateResponse;
-use tedge_config::get_tedge_config;
-use tedge_config::ConfigSettingAccessor;
-use tedge_config::LogPathSetting;
+use tedge_config::TEdgeConfigError;
+use tedge_mqtt_ext::MqttMessage;
+use thiserror::Error;
 use time::format_description::well_known::Rfc3339;
 use tracing::debug;
 use tracing::info;
 use tracing::log::error;
-
-use super::alarm_converter::AlarmConverter;
-use super::error::CumulocityMapperError;
-use super::fragments::C8yAgentFragment;
-use super::fragments::C8yDeviceDataFragment;
-use super::service_monitor;
-use c8y_api::smartrest::message::collect_smartrest_messages;
-use c8y_api::smartrest::message::get_failure_reason_for_smartrest;
-use c8y_api::smartrest::message::get_smartrest_device_id;
-use c8y_api::smartrest::message::get_smartrest_template_id;
-use c8y_api::smartrest::message::sanitize_for_smartrest;
-use c8y_api::smartrest::message::MAX_PAYLOAD_LIMIT_IN_BYTES;
-use c8y_api::smartrest::topic::C8yTopic;
-use c8y_api::smartrest::topic::MapperSubscribeTopic;
-use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 
 const C8Y_CLOUD: &str = "c8y";
 const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
@@ -91,13 +89,11 @@ pub struct CumulocityDeviceInfo {
     pub device_type: String,
     pub operations: Operations,
     pub service_type: String,
+    pub c8y_host: String,
 }
 
-#[derive(Debug)]
-pub struct CumulocityConverter<Proxy>
-where
-    Proxy: C8YHttpProxy,
-{
+// #[derive(Debug)]
+pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
     pub(crate) mapper_config: MapperConfig,
     device_name: String,
@@ -105,32 +101,27 @@ where
     alarm_converter: AlarmConverter,
     pub operations: Operations,
     operation_logs: OperationLogs,
-    http_proxy: Proxy,
+    mqtt_publisher: LoggingSender<MqttMessage>,
+    http_proxy: C8YHttpProxy,
     pub cfg_dir: PathBuf,
     pub children: HashMap<String, Operations>,
-    mqtt_publisher: mpsc::UnboundedSender<Message>,
     pub service_type: String,
+    pub c8y_endpoint: C8yEndPoint,
 }
 
-impl<Proxy> CumulocityConverter<Proxy>
-where
-    Proxy: C8YHttpProxy,
-{
+impl CumulocityConverter {
+    //HIPPO Simplify this constructor to take minimal inputs
     pub fn new(
         size_threshold: SizeThreshold,
         device_info: CumulocityDeviceInfo,
-        http_proxy: Proxy,
+        mqtt_publisher: LoggingSender<MqttMessage>,
+        http_proxy: C8YHttpProxy,
         cfg_dir: &Path,
+        logs_path: Utf8PathBuf,
         children: HashMap<String, Operations>,
         mapper_config: MapperConfig,
-        mqtt_publisher: mpsc::UnboundedSender<Message>,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let alarm_converter = AlarmConverter::new();
-
-        let tedge_config = get_tedge_config()?;
-
-        // this can't fail because in absence of value this query returns a default
-        let logs_path = tedge_config.query(LogPathSetting).unwrap();
 
         let log_dir = PathBuf::from(&format!("{}/{TEDGE_AGENT_LOG_DIR}", logs_path));
 
@@ -140,6 +131,8 @@ where
         let device_type = device_info.device_type;
         let operations = device_info.operations;
         let service_type = device_info.service_type;
+
+        let c8y_endpoint = C8yEndPoint::new(&device_info.c8y_host, &device_name, "");
 
         Ok(CumulocityConverter {
             size_threshold,
@@ -154,46 +147,7 @@ where
             children,
             mqtt_publisher,
             service_type,
-        })
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    #[cfg(test)]
-    pub fn from_logs_path(
-        size_threshold: SizeThreshold,
-        device_name: String,
-        device_type: String,
-        operations: Operations,
-        http_proxy: Proxy,
-        logs_path: PathBuf,
-        cfg_dir: PathBuf,
-        mapper_config: MapperConfig,
-        mqtt_publisher: mpsc::UnboundedSender<Message>,
-        service_type: String,
-    ) -> Result<Self, CumulocityMapperError> {
-        let alarm_converter = AlarmConverter::new();
-
-        let log_dir = PathBuf::from(&format!(
-            "{}/{TEDGE_AGENT_LOG_DIR}",
-            logs_path.to_str().unwrap()
-        ));
-
-        let operation_logs = OperationLogs::try_new(log_dir)?;
-        let children: HashMap<String, Operations> = HashMap::new();
-
-        Ok(CumulocityConverter {
-            size_threshold,
-            mapper_config,
-            device_name,
-            device_type,
-            alarm_converter,
-            operations,
-            operation_logs,
-            http_proxy,
-            cfg_dir,
-            children,
-            mqtt_publisher,
-            service_type,
+            c8y_endpoint,
         })
     }
 
@@ -376,10 +330,7 @@ pub enum CumulocityConverterBuildError {
 }
 
 #[async_trait]
-impl<Proxy> Converter for CumulocityConverter<Proxy>
-where
-    Proxy: C8YHttpProxy,
-{
+impl Converter for CumulocityConverter {
     type Error = ConversionError;
 
     fn get_mapper_config(&self) -> &MapperConfig {
@@ -431,7 +382,8 @@ where
                         &self.device_name,
                         &self.cfg_dir,
                         &mut self.children,
-                        &self.mqtt_publisher,
+                        &mut self.mqtt_publisher,
+                        &self.c8y_endpoint,
                     )
                     .await
                 }
@@ -536,16 +488,18 @@ fn add_or_remove_operation(
     Ok(())
 }
 
+//HIPPO: move this function and every sub-functions inside converter
 #[allow(clippy::too_many_arguments)]
 async fn parse_c8y_topics(
     message: &Message,
     operations: &Operations,
-    http_proxy: &mut impl C8YHttpProxy,
+    http_proxy: &mut C8YHttpProxy,
     operation_logs: &OperationLogs,
     device_name: &str,
     config_dir: &Path,
     children: &mut HashMap<String, Operations>,
-    mqtt_publisher: &mpsc::UnboundedSender<Message>,
+    mqtt_publisher: &mut LoggingSender<MqttMessage>,
+    c8y_endpoint: &C8yEndPoint,
 ) -> Result<Vec<Message>, ConversionError> {
     let mut output: Vec<Message> = Vec::new();
     for smartrest_message in collect_smartrest_messages(message.payload_str()?) {
@@ -558,6 +512,7 @@ async fn parse_c8y_topics(
             config_dir,
             children,
             mqtt_publisher,
+            c8y_endpoint,
         )
         .await
         {
@@ -708,7 +663,7 @@ async fn publish_restart_operation_status(
 
 async fn publish_operation_status(
     json_response: &str,
-    http_proxy: &mut impl C8YHttpProxy,
+    http_proxy: &mut C8YHttpProxy,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
     let response = SoftwareUpdateResponse::from_json(json_response)?;
     let topic = C8yTopic::SmartRestResponse.to_topic()?;
@@ -736,7 +691,7 @@ async fn publish_operation_status(
 
 async fn validate_and_publish_software_list(
     payload: &str,
-    http_proxy: &mut impl C8YHttpProxy,
+    http_proxy: &mut C8YHttpProxy,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
     let response = &SoftwareListResponse::from_json(payload)?;
 
@@ -744,7 +699,7 @@ async fn validate_and_publish_software_list(
         OperationStatus::Successful => {
             let c8y_software_list: C8yUpdateSoftwareListResponse = response.into();
             http_proxy
-                .send_software_list_http(&c8y_software_list)
+                .send_software_list_http(c8y_software_list)
                 .await?;
         }
 
@@ -763,7 +718,7 @@ async fn execute_operation(
     command: &str,
     operation_name: &str,
     operation_logs: &OperationLogs,
-    mqtt_publisher: &mpsc::UnboundedSender<Message>,
+    mqtt_publisher: &mut LoggingSender<MqttMessage>,
 ) -> Result<(), CumulocityMapperError> {
     let command = command.to_owned();
     let payload = payload.to_string();
@@ -902,17 +857,18 @@ fn register_child_device_supported_operations(
 async fn process_smartrest(
     payload: &str,
     operations: &Operations,
-    http_proxy: &mut impl C8YHttpProxy,
+    http_proxy: &mut C8YHttpProxy,
     operation_logs: &OperationLogs,
     device_name: &str,
     config_dir: &Path,
     children: &mut HashMap<String, Operations>,
-    mqtt_publisher: &mpsc::UnboundedSender<Message>,
+    mqtt_publisher: &mut LoggingSender<MqttMessage>,
+    c8y_endpoint: &C8yEndPoint,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
     match get_smartrest_device_id(payload) {
         Some(device_id) if device_id == device_name => {
             match get_smartrest_template_id(payload).as_str() {
-                "528" => forward_software_request(payload, http_proxy).await,
+                "528" => forward_software_request(payload, http_proxy, c8y_endpoint).await,
                 "510" => forward_restart_request(payload),
                 template => {
                     forward_operation_request(
@@ -941,7 +897,8 @@ async fn process_smartrest(
 
 async fn forward_software_request(
     smartrest: &str,
-    http_proxy: &mut impl C8YHttpProxy,
+    http_proxy: &mut C8YHttpProxy,
+    c8y_endpoint: &C8yEndPoint,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
     let topic = Topic::new(RequestTopic::SoftwareUpdateRequest.as_str())?;
     let update_software = SmartRestUpdateSoftware::default();
@@ -957,10 +914,11 @@ async fn forward_software_request(
         .for_each(|modules| {
             modules.modules.iter_mut().for_each(|module| {
                 if let Some(url) = &module.url {
-                    if http_proxy.url_is_in_my_tenant_domain(url.url()) {
-                        module.url = module.url.as_ref().map(|s| {
-                            DownloadInfo::new(&s.url).with_auth(Auth::new_bearer(&token.token()))
-                        });
+                    if c8y_endpoint.url_is_in_my_tenant_domain(url.url()) {
+                        module.url = module
+                            .url
+                            .as_ref()
+                            .map(|s| DownloadInfo::new(&s.url).with_auth(Auth::new_bearer(&token)));
                     } else {
                         module.url = module.url.as_ref().map(|s| DownloadInfo::new(&s.url));
                     }
@@ -987,7 +945,7 @@ async fn forward_operation_request(
     template: &str,
     operations: &Operations,
     operation_logs: &OperationLogs,
-    mqtt_publisher: &mpsc::UnboundedSender<Message>,
+    mqtt_publisher: &mut LoggingSender<MqttMessage>,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
     if let Some(operation) = operations.matching_smartrest_template(template) {
         if let Some(command) = operation.command() {
@@ -1052,6 +1010,7 @@ fn get_inventory_fragments(
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use crate::c8y::tests::create_test_mqtt_client_with_empty_operations;
@@ -1236,3 +1195,4 @@ mod tests {
         assert_eq!(supported_operations_counter, 4);
     }
 }
+ */

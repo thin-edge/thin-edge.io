@@ -1,6 +1,7 @@
 use crate::error::SoftwareError;
 use crate::software::*;
 use download::DownloadInfo;
+use mqtt_channel::Topic;
 use nanoid::nanoid;
 use serde::Deserialize;
 use serde::Serialize;
@@ -60,6 +61,10 @@ impl SoftwareListRequest {
     pub fn topic_name() -> &'static str {
         "tedge/commands/req/software/list"
     }
+
+    pub fn topic() -> Topic {
+        Topic::new_unchecked(Self::topic_name())
+    }
 }
 
 /// Message payload definition for SoftwareUpdate request.
@@ -93,6 +98,10 @@ impl SoftwareUpdateRequest {
 
     pub fn topic_name() -> &'static str {
         "tedge/commands/req/software/update"
+    }
+
+    pub fn topic() -> Topic {
+        Topic::new_unchecked(Self::topic_name())
     }
 
     pub fn add_update(&mut self, mut update: SoftwareModuleUpdate) {
@@ -208,6 +217,10 @@ impl SoftwareListResponse {
         "tedge/commands/res/software/list"
     }
 
+    pub fn topic() -> Topic {
+        Topic::new_unchecked(Self::topic_name())
+    }
+
     pub fn add_modules(&mut self, plugin_type: &str, modules: Vec<SoftwareModule>) {
         self.response.add_modules(
             plugin_type.to_string(),
@@ -258,6 +271,10 @@ impl SoftwareUpdateResponse {
 
     pub fn topic_name() -> &'static str {
         "tedge/commands/res/software/update"
+    }
+
+    pub fn topic() -> Topic {
+        Topic::new_unchecked(Self::topic_name())
     }
 
     pub fn add_modules(&mut self, plugin_type: &str, modules: Vec<SoftwareModule>) {

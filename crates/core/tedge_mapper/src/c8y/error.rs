@@ -2,6 +2,7 @@ use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::error::SMCumulocityMapperError;
 use c8y_api::smartrest::error::SmartRestDeserializerError;
 use c8y_api::smartrest::error::SmartRestSerializerError;
+use c8y_http_proxy::messages::C8YRestError;
 use plugin_sm::operation_logs::OperationLogsError;
 
 #[derive(thiserror::Error, Debug)]
@@ -64,4 +65,7 @@ pub enum CumulocityMapperError {
 
     #[error(transparent)]
     TedgeConfig(#[from] tedge_config::TEdgeConfigError),
+
+    #[error(transparent)]
+    FromC8YRestError(#[from] C8YRestError),
 }

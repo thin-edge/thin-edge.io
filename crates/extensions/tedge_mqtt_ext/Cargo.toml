@@ -10,8 +10,10 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+assert-json-diff = "2.0"
 async-trait = "0.1"
 mqtt_channel = { path = "../../common/mqtt_channel" }
+serde_json = "1.0"
 tedge_actors = { path = "../../core/tedge_actors" }
 tokio = { version = "1.23", default_features = false, features = ["macros"] }
 

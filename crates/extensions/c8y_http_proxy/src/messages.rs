@@ -6,8 +6,9 @@ use tedge_actors::ChannelError;
 use tedge_http_ext::HttpError;
 use tedge_utils::file::PermissionEntry;
 
-fan_in_message_type!(C8YRestRequest[C8yCreateEvent, C8yUpdateSoftwareListResponse, UploadLogBinary, UploadConfigFile, DownloadFile]: Debug, PartialEq, Eq);
-fan_in_message_type!(C8YRestResponse[EventId, Unit]: Debug);
+fan_in_message_type!(C8YRestRequest[GetJwtToken, IsUrlInCurrentDomain, C8yCreateEvent, C8yUpdateSoftwareListResponse, UploadLogBinary, UploadConfigFile, DownloadFile]: Debug, PartialEq, Eq);
+//HIPPO Rename EventId to String as there could be many other String responses as well and this macro doesn't allow another String variant
+fan_in_message_type!(C8YRestResponse[EventId, Unit, Bool]: Debug);
 
 #[derive(thiserror::Error, Debug)]
 pub enum C8YRestError {
@@ -40,6 +41,14 @@ pub enum C8YRestError {
 pub type C8YRestResult = Result<C8YRestResponse, C8YRestError>;
 
 #[derive(Debug, PartialEq, Eq)]
+pub struct GetJwtToken;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct IsUrlInCurrentDomain {
+    pub url: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct UploadLogBinary {
     pub log_type: String,
     pub log_content: String,
@@ -63,6 +72,8 @@ pub struct DownloadFile {
 pub type EventId = String;
 
 pub type Unit = ();
+
+pub type Bool = bool;
 
 // Transform any unexpected message into an error
 impl From<C8YRestResult> for C8YRestError {

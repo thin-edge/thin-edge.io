@@ -3672,6 +3672,8 @@ dependencies = [
  "az_mapper_ext",
  "batcher",
  "c8y_api",
+ "c8y_http_proxy",
+ "camino",
  "clap 3.2.23",
  "clock",
  "collectd_ext",
@@ -3681,7 +3683,6 @@ dependencies = [
  "futures",
  "json-writer",
  "logged_command",
- "mockall",
  "mockito",
  "mqtt_channel",
  "mqtt_tests",
@@ -3695,10 +3696,13 @@ dependencies = [
  "tedge_actors",
  "tedge_api",
  "tedge_config",
+ "tedge_file_system_ext",
  "tedge_health_ext",
+ "tedge_http_ext",
  "tedge_mqtt_ext",
  "tedge_signal_ext",
  "tedge_test_utils",
+ "tedge_timer_ext",
  "tedge_utils",
  "test-case",
  "thiserror",
@@ -3855,9 +3859,11 @@ dependencies = [
 name = "tedge_mqtt_ext"
 version = "0.10.0"
 dependencies = [
+ "assert-json-diff",
  "async-trait",
  "mqtt_channel",
  "mqtt_tests",
+ "serde_json",
  "tedge_actors",
  "tokio",
 ]

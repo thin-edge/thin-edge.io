@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use crate::c8y::error::CumulocityMapperError;
 
 use c8y_api::smartrest::error::OperationsError;
+use c8y_http_proxy::messages::C8YRestError;
 use mqtt_channel::MqttError;
 use tedge_api::serialize::ThinEdgeJsonSerializationError;
 use tedge_config::TEdgeConfigError;
@@ -109,4 +110,7 @@ pub enum ConversionError {
 
     #[error("Failed to extract the child device name from file path : {dir}")]
     DirPathComponentError { dir: PathBuf },
+
+    #[error(transparent)]
+    FromC8YRestError(#[from] C8YRestError),
 }
