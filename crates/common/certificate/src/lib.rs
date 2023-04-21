@@ -5,6 +5,7 @@ use rcgen::RcgenError;
 use sha1::Digest;
 use sha1::Sha1;
 use std::path::Path;
+use std::path::PathBuf;
 use time::Duration;
 use time::OffsetDateTime;
 use zeroize::Zeroizing;
@@ -207,8 +208,11 @@ pub enum CertificateError {
     #[error("Fail to parse the private key")]
     UnknownPrivateKeyFormat,
 
-    #[error("Could not parse certificate")]
-    CertificateParseFailed,
+    #[error("Could not parse certificate {path}")]
+    CertificateParseFailed {
+        path: PathBuf,
+        source: std::io::Error,
+    },
 
     #[error("HTTP Connection Problem: {msg} \nHint: {hint}")]
     CertificateValidationFailure { hint: String, msg: String },

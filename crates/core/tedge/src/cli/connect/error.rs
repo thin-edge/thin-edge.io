@@ -1,3 +1,6 @@
+use rumqttc::tokio_rustls::rustls;
+use tedge_config::mqtt_config::MqttConfigBuildError;
+
 #[derive(thiserror::Error, Debug)]
 pub enum ConnectError {
     #[error("Couldn't load certificate, provide valid certificate path in configuration. Use 'tedge config --set'")]
@@ -14,6 +17,12 @@ pub enum ConnectError {
 
     #[error(transparent)]
     MqttClient(#[from] rumqttc::ClientError),
+
+    #[error("Can't crate MQTT config")]
+    CreateMqttConfig(#[from] MqttConfigBuildError),
+
+    #[error("Can't create TLS config")]
+    CreateTlsConfig(#[from] rustls::Error),
 
     #[error(transparent)]
     PathsError(#[from] tedge_utils::paths::PathsError),

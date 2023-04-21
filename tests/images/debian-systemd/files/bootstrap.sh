@@ -18,6 +18,7 @@ FLAGS
     --mapper <name>                         Name of the mapper to use when connecting (if user has specified the --connect option).
                                             Defaults to 'c8y'. Currently only c8y works.
     --bootstrap                             Force bootstrapping/re-bootstrapping of the device
+    --secure/--no-secure                    Configure certificate-based broker and client authentication. Default True.
 
     DEVICE FLAGS
     --device-id <name>                      Use a specific device-id. A prefix will be added to the device id
@@ -105,6 +106,7 @@ banner() {
 # Defaults
 DEVICE_ID=${DEVICE_ID:-}
 BOOTSTRAP=${BOOTSTRAP:-}
+SECURE=${SECURE:-1}
 CONNECT=${CONNECT:-1}
 INSTALL=${INSTALL:-1}
 CLEAN=${CLEAN:-0}
@@ -271,6 +273,13 @@ do
 
         --no-bootstrap)
             BOOTSTRAP=0
+            ;;
+
+        --secure)
+            SECURE=1
+            ;;
+        --no-secure)
+            SECURE=0
             ;;
 
         # ----------------------
@@ -651,6 +660,69 @@ install_tedge() {
     esac
 }
 
+gen_certs() {
+    openssl req \
+        -new \
+        -x509 \
+        -days 365 \
+        -extensions v3_ca \
+        -nodes \
+        -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=ca" \
+        -keyout ca.key \
+        -out ca.crt
+
+    openssl genrsa -out server.key 2048
+
+    openssl req -out server.csr -key server.key -new \
+        -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=$(hostname)"
+
+    cat > v3.ext << EOF
+    authorityKeyIdentifier=keyid
+    basicConstraints=CA:FALSE
+    keyUsage = digitalSignature, keyAgreement
+    subjectAltName=DNS:$(hostname), DNS:localhost
+EOF
+
+    openssl x509 -req \
+        -in server.csr \
+        -CA ca.crt \
+        -CAkey ca.key \
+        -extfile v3.ext \
+        -CAcreateserial \
+        -out server.crt \
+        -days 365
+
+    openssl genrsa -out client.key 2048
+
+    openssl req -out client.csr \
+        -key client.key \
+        -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=client1" \
+        -new
+
+    openssl x509 -req \
+        -in client.csr \
+        -CA ca.crt \
+        -CAkey ca.key \
+        -CAcreateserial \
+        -out client.crt \
+        -days 365
+
+    mv ca* /etc/mosquitto/ca_certificates
+    mv server* /etc/mosquitto/ca_certificates
+
+    cp secure-listener.conf /etc/mosquitto/conf.d/
+
+    chown -R mosquitto:mosquitto /etc/mosquitto/ca_certificates
+    chown tedge:tedge /setup/client.*
+
+    tedge config set mqtt.client.port 8883
+    tedge config set mqtt.client.auth.cafile /etc/mosquitto/ca_certificates/ca.crt
+    tedge config set mqtt.client.auth.certfile /setup/client.crt
+    tedge config set mqtt.client.auth.keyfile /setup/client.key
+
+    systemctl restart mosquitto
+}
+
 prompt_value() {
     user_text="$1"
     value="$2"
@@ -780,6 +852,14 @@ main() {
     if [ "$INSTALL" = 1 ]; then
         banner "Installing thin-edge.io"
         install_tedge
+    fi
+
+    # ---------------------------------------
+    # Set up authentication
+    # ---------------------------------------
+    if [ "$SECURE" = 1 ]; then
+        banner "Setting up certificates"
+        gen_certs
     fi
 
     # ---------------------------------------

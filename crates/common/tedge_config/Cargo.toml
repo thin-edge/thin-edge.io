@@ -13,12 +13,13 @@ camino = { version = "1.1.4", features = ["serde", "serde1"] }
 certificate = { path = "../certificate" }
 doku = "0.20.0"
 figment = { version = "0.10", features = ["env", "toml"] }
+mqtt_channel = { path = "../mqtt_channel" }
 serde = { version = "1.0", features = ["derive"] }
 serde_ignored = "0.1"
 strum_macros = { version = "0.24" }
 tedge_utils = { path = "../tedge_utils" }
 thiserror = "1.0"
-toml = "0.5"
+toml = "0.7"
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["time"] }
 url = "2.2"

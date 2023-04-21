@@ -22,8 +22,9 @@ ${toml}    SEPARATOR=\n
 *** Test Cases ***
 
 Configuration types should be detected on file change (without restarting service)
-    ${DEVICE_SN}=    Setup
-    Execute Command    sudo systemctl start c8y-configuration-plugin.service
+    ${DEVICE_SN}=    Setup    skip_bootstrap=True
+    Execute Command    /setup/bootstrap.sh 2>&1
+    Execute Command    sudo systemctl restart c8y-configuration-plugin.service
     Device Should Exist    ${DEVICE_SN}
 
     ${supported_configs}=    Should Support Configurations    c8y-configuration-plugin    includes=True

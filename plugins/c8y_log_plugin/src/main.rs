@@ -7,15 +7,13 @@ use clap::Parser;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::Runtime;
+use tedge_config::mqtt_config::MqttConfigBuildError;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::LogPathSetting;
-use tedge_config::MqttClientHostSetting;
-use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigError;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_health_ext::HealthMonitorBuilder;
@@ -219,11 +217,6 @@ fn create_init_logs_directories_and_files(
     Ok(())
 }
 
-fn mqtt_config(tedge_config: &TEdgeConfig) -> Result<MqttConfig, TEdgeConfigError> {
-    let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
-    let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
-    let config = MqttConfig::default()
-        .with_host(mqtt_host)
-        .with_port(mqtt_port);
-    Ok(config)
+fn mqtt_config(tedge_config: &TEdgeConfig) -> Result<MqttConfig, MqttConfigBuildError> {
+    tedge_config.mqtt_config()
 }

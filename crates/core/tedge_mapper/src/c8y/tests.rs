@@ -12,6 +12,7 @@ use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::smartrest::error::SMCumulocityMapperError;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestJwtResponse;
+use mqtt_channel::BrokerConfig;
 
 use crate::c8y::mapper::create_mapper_config;
 use crate::c8y::mapper::create_mqtt_client;
@@ -1853,13 +1854,14 @@ async fn start_c8y_mapper(
     ops_dir: &TempTedgeDir,
 ) -> Result<(TempTedgeDir, JoinHandle<()>), anyhow::Error> {
     let (temp_dir, converter) = create_c8y_converter(ops_dir).await;
-    let mut mapper = create_mapper(
-        "c8y-mapper-test",
-        MQTT_HOST.to_string(),
-        mqtt_port,
-        Box::new(converter),
-    )
-    .await?;
+
+    let broker_config = BrokerConfig {
+        host: MQTT_HOST.to_string(),
+        port: mqtt_port,
+        authentication: None,
+    };
+
+    let mut mapper = create_mapper("c8y-mapper-test", broker_config, Box::new(converter)).await?;
     let ops_path = ops_dir.path().to_path_buf().join("operations").join("c8y");
     let mapper_task = tokio::spawn(async move {
         let _ = mapper.run(Some(&ops_path)).await;
@@ -1927,14 +1929,14 @@ async fn publish_a_fake_jwt_token(broker: &MqttProcessHandler) {
 
 pub async fn create_test_mqtt_client(mapper_config: &MapperConfig) -> Connection {
     let broker = mqtt_tests::test_mqtt_broker();
-    create_mqtt_client(
-        "c8y-mapper-test-client",
-        MQTT_HOST.to_string(),
-        broker.port,
-        mapper_config,
-    )
-    .await
-    .unwrap()
+    let broker_config = BrokerConfig {
+        host: MQTT_HOST.to_string(),
+        port: broker.port,
+        authentication: None,
+    };
+    create_mqtt_client("c8y-mapper-test-client", broker_config, mapper_config)
+        .await
+        .unwrap()
 }
 
 pub async fn create_test_mqtt_client_with_empty_operations() -> Connection {

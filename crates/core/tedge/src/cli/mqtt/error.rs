@@ -1,4 +1,5 @@
 use certificate::CertificateError;
+use rumqttc::tokio_rustls::rustls;
 
 #[derive(thiserror::Error, Debug)]
 pub enum MqttError {
@@ -25,6 +26,9 @@ pub enum MqttError {
 
     #[error(transparent)]
     FromRumqttConnection(rumqttc::ConnectionError),
+
+    #[error("Invalid private key")]
+    PrivateKeyError(#[from] rustls::Error),
 }
 
 // Not sure if there is a better way to do this, unfortunately rumqttc error

@@ -8,18 +8,12 @@ use c8y_log_manager::LogManagerBuilder;
 use c8y_log_manager::LogManagerConfig;
 use tedge_actors::Runtime;
 use tedge_config::get_tedge_config;
-use tedge_config::ConfigSettingAccessor;
-use tedge_config::MqttClientHostSetting;
-use tedge_config::MqttClientPortSetting;
-use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigError;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_http_ext::HttpActor;
 use tedge_mqtt_ext::MqttActorBuilder;
-use tedge_mqtt_ext::MqttConfig;
 use tedge_signal_ext::SignalActor;
 use tedge_timer_ext::TimerActor;
 
@@ -33,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
 
     let tedge_config = get_tedge_config()?;
     let c8y_http_config = (&tedge_config).try_into()?;
-    let mqtt_config = mqtt_config(&tedge_config)?;
+    let mqtt_config = tedge_config.mqtt_config()?;
 
     // Create actor instances
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
@@ -102,13 +96,4 @@ async fn main() -> anyhow::Result<()> {
     runtime.run_to_completion().await?;
 
     Ok(())
-}
-
-fn mqtt_config(tedge_config: &TEdgeConfig) -> Result<MqttConfig, TEdgeConfigError> {
-    let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
-    let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
-    let config = MqttConfig::default()
-        .with_host(mqtt_host)
-        .with_port(mqtt_port);
-    Ok(config)
 }

@@ -1,3 +1,4 @@
+use super::cli::ClientAuthConfig;
 use crate::cli::mqtt::MqttError;
 use crate::command::Command;
 use camino::Utf8PathBuf;
@@ -26,7 +27,8 @@ pub struct MqttPublishCommand {
     pub disconnect_timeout: Duration,
     pub retain: bool,
     pub ca_file: Option<Utf8PathBuf>,
-    pub ca_path: Option<Utf8PathBuf>,
+    pub ca_dir: Option<Utf8PathBuf>,
+    pub client_auth_config: Option<ClientAuthConfig>,
 }
 
 impl Command for MqttPublishCommand {
@@ -46,15 +48,15 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
     let mut options = MqttOptions::new(cmd.client_id.as_str(), &cmd.host, cmd.port);
     options.set_clean_session(true);
 
-    if cmd.ca_file.is_some() || cmd.ca_path.is_some() {
+    if cmd.ca_file.is_some() || cmd.ca_dir.is_some() {
         let mut root_store = RootCertStore::empty();
 
-        if let Some(ca_file) = cmd.ca_file.clone() {
+        if let Some(ca_file) = &cmd.ca_file {
             parse_root_certificate::add_certs_from_file(&mut root_store, ca_file)?;
         }
 
-        if let Some(ca_path) = cmd.ca_path.clone() {
-            parse_root_certificate::add_certs_from_directory(&mut root_store, ca_path)?;
+        if let Some(ca_dir) = &cmd.ca_dir {
+            parse_root_certificate::add_certs_from_directory(&mut root_store, ca_dir)?;
         }
 
         const INSECURE_MQTT_PORT: u16 = 1883;
@@ -69,8 +71,15 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
 
         let tls_config = ClientConfig::builder()
             .with_safe_defaults()
-            .with_root_certificates(root_store)
-            .with_no_client_auth();
+            .with_root_certificates(root_store);
+
+        let tls_config = if let Some(client_auth) = cmd.client_auth_config.as_ref() {
+            let client_cert = parse_root_certificate::read_cert_chain(&client_auth.cert_file)?;
+            let client_key = parse_root_certificate::read_pvt_key(&client_auth.key_file)?;
+            tls_config.with_single_cert(client_cert, client_key)?
+        } else {
+            tls_config.with_no_client_auth()
+        };
 
         options.set_transport(rumqttc::Transport::tls_with_config(tls_config.into()));
     }

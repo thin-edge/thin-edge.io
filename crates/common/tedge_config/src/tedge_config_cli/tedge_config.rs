@@ -423,7 +423,7 @@ impl ConfigSettingAccessor<MqttClientCafileSetting> for TEdgeConfig {
             .client_ca_file
             .clone()
             .ok_or(ConfigSettingError::ConfigNotSet {
-                key: "mqtt.client.ca_file",
+                key: "mqtt.client.auth.cafile",
             })
     }
 
@@ -449,7 +449,7 @@ impl ConfigSettingAccessor<MqttClientCapathSetting> for TEdgeConfig {
             .client_ca_path
             .clone()
             .ok_or(ConfigSettingError::ConfigNotSet {
-                key: "mqtt.client.ca_path",
+                key: "mqtt.client.auth.cadir",
             })
     }
 
@@ -464,6 +464,96 @@ impl ConfigSettingAccessor<MqttClientCapathSetting> for TEdgeConfig {
 
     fn unset(&mut self, _setting: MqttClientCapathSetting) -> ConfigSettingResult<()> {
         self.data.mqtt.client_ca_path = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<MqttClientAuthCertSetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttClientAuthCertSetting) -> ConfigSettingResult<Utf8PathBuf> {
+        self.data
+            .mqtt
+            .client_auth
+            .as_ref()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: "mqtt.client.auth.certfile",
+            })?
+            .cert_file
+            .clone()
+            // TODO (Marcel): remove unnecessary Options once tedge_config is
+            // refactored
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: "mqtt.client.auth.certfile",
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttClientAuthCertSetting,
+        cafile: Utf8PathBuf,
+    ) -> ConfigSettingResult<()> {
+        let client_auth_config = self
+            .data
+            .mqtt
+            .client_auth
+            .get_or_insert(MqttClientAuthConfig {
+                cert_file: None,
+                key_file: None,
+            });
+
+        client_auth_config.cert_file = Some(cafile);
+
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttClientAuthCertSetting) -> ConfigSettingResult<()> {
+        if let Some(client_auth) = self.data.mqtt.client_auth.as_mut() {
+            client_auth.cert_file = None;
+        }
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<MqttClientAuthKeySetting> for TEdgeConfig {
+    fn query(&self, _setting: MqttClientAuthKeySetting) -> ConfigSettingResult<Utf8PathBuf> {
+        self.data
+            .mqtt
+            .client_auth
+            .as_ref()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: "mqtt.client.auth.certkey",
+            })?
+            .key_file
+            .clone()
+            // TODO (Marcel): remove unnecessary Options once tedge_config is
+            // refactored
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: "mqtt.client.auth.certkey",
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: MqttClientAuthKeySetting,
+        cafile: Utf8PathBuf,
+    ) -> ConfigSettingResult<()> {
+        let client_auth_config = self
+            .data
+            .mqtt
+            .client_auth
+            .get_or_insert(MqttClientAuthConfig {
+                cert_file: None,
+                key_file: None,
+            });
+
+        client_auth_config.key_file = Some(cafile);
+
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: MqttClientAuthKeySetting) -> ConfigSettingResult<()> {
+        if let Some(client_auth) = self.data.mqtt.client_auth.as_mut() {
+            client_auth.key_file = None;
+        }
         Ok(())
     }
 }
