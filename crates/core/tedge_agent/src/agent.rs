@@ -1,6 +1,6 @@
 use crate::error::AgentError;
-use crate::http_rest;
 use crate::http_rest::HttpConfig;
+use crate::http_server::HttpServerBuilder;
 use crate::restart_operation_handler::restart_operation;
 use crate::state::AgentStateRepository;
 use crate::state::RestartOperationStatus;
@@ -27,6 +27,8 @@ use std::convert::TryInto;
 use std::fmt::Debug;
 use std::process::Command;
 use std::sync::Arc;
+use tedge_actors::Actor;
+use tedge_actors::Builder;
 use tedge_api::control_filter_topic;
 use tedge_api::health::health_check_topics;
 use tedge_api::health::health_status_down_message;
@@ -374,9 +376,9 @@ impl SmAgent {
         let http_config = self.config.http_config.clone();
 
         // spawning file transfer server
-        tokio::spawn(async move {
-            start_http_file_transfer_server(&http_config).await;
-        });
+        let http_server_builder = HttpServerBuilder::new(http_config);
+        let mut http_server_actor = http_server_builder.build();
+        tokio::spawn(async move { http_server_actor.run().await });
 
         while let Err(error) = self
             .process_subscribed_messages(&mut mqtt.received, &mut mqtt.published, &plugins)
@@ -721,19 +723,6 @@ impl SmAgent {
     }
 }
 
-async fn start_http_file_transfer_server(http_config: &HttpConfig) {
-    let server = http_rest::http_file_transfer_server(http_config);
-
-    match server {
-        Ok(server) => {
-            if let Err(err) = server.await {
-                error!("{}", err);
-            }
-        }
-        Err(err) => error!("{}", err),
-    }
-}
-
 fn get_restart_operation_commands(
     system_config_path: &Utf8Path,
 ) -> Result<Vec<Command>, AgentError> {
@@ -940,12 +929,17 @@ mod tests {
 
         // handle_one uses port 3000.
         // handle_two will not be able to bind to the same port.
+        let http_server_builder = HttpServerBuilder::new(http_config);
+        let mut http_server_actor = http_server_builder.build();
+        let http_server_builder_two = HttpServerBuilder::new(config_clone);
+        let mut http_server_actor_two = http_server_builder_two.build();
+
         let handle_one = tokio::spawn(async move {
-            start_http_file_transfer_server(&config_clone).await;
+            http_server_actor.run().await.unwrap();
         });
 
         let handle_two = tokio::spawn(async move {
-            start_http_file_transfer_server(&http_config).await;
+            http_server_actor_two.run().await.unwrap();
         });
 
         // although the code inside handle_two throws an error it does not panic.
