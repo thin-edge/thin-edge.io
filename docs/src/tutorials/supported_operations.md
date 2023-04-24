@@ -204,6 +204,12 @@ This simple example will parse the third field of the received SmartREST message
 If it exits with the status code `0`, a successful message with the stdout content will be reported to Cumulocity.
 If it exits with a non-zero code, a failure message with the stderr content will be sent out.
 
+Once the script is in place, restart the Cumulocity mapper so that it picks up the newly added operation.
+
+```shell
+sudo systemctl restart tedge-mapper-c8y
+```
+
 ```admonish note
 The command will be executed with tedge-mapper permission level so most of the system level commands will not work.
 ```
