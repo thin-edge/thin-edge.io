@@ -1,13 +1,6 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::hash::Hash;
-use std::path::Path;
-use std::path::PathBuf;
-
 use notify::event::AccessKind;
 use notify::event::AccessMode;
 use notify::event::CreateKind;
-use notify::event::DataChange;
 use notify::event::ModifyKind;
 use notify::event::RemoveKind;
 use notify::Config;
@@ -16,6 +9,9 @@ use notify::INotifyWatcher;
 use notify::RecommendedWatcher;
 use notify::RecursiveMode;
 use notify::Watcher;
+use std::hash::Hash;
+use std::path::Path;
+use std::path::PathBuf;
 use strum_macros::Display;
 use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::Receiver;
@@ -50,14 +46,9 @@ pub enum NotifyStreamError {
     DuplicateWatcher { mask: FsEvent, path: PathBuf },
 }
 
-type DirPath = PathBuf;
-type MaybeFileName = Option<String>;
-type Metadata = HashMap<DirPath, HashMap<MaybeFileName, HashSet<FsEvent>>>;
-
 pub struct NotifyStream {
     watcher: INotifyWatcher,
     pub rx: Receiver<(PathBuf, FsEvent)>,
-    metadata: Metadata,
 }
 
 impl NotifyStream {
@@ -70,141 +61,76 @@ impl NotifyStream {
             move |res: Result<notify::Event, notify::Error>| {
                 futures::executor::block_on(async {
                     if let Ok(notify_event) = res {
-                        match notify_event.kind {
-                            EventKind::Modify(ModifyKind::Data(DataChange::Any)) => {
-                                for path in notify_event.paths {
-                                    let _ = tx.send((path, FsEvent::Modified)).await;
+                        let event = match notify_event.kind {
+                            EventKind::Access(access_kind) => match access_kind {
+                                AccessKind::Close(access_mode) => match access_mode {
+                                    AccessMode::Any | AccessMode::Other | AccessMode::Write => {
+                                        Some(FsEvent::Modified)
+                                    }
+                                    AccessMode::Read | AccessMode::Execute => None,
+                                },
+                                AccessKind::Any | AccessKind::Other => Some(FsEvent::Modified),
+                                AccessKind::Read | AccessKind::Open(_) => None,
+                            },
+                            EventKind::Create(create_kind) => match create_kind {
+                                CreateKind::File | CreateKind::Any | CreateKind::Other => {
+                                    Some(FsEvent::FileCreated)
                                 }
-                            }
+                                CreateKind::Folder => Some(FsEvent::DirectoryCreated),
+                            },
+                            EventKind::Modify(modify_kind) => match modify_kind {
+                                ModifyKind::Data(_)
+                                | ModifyKind::Metadata(_)
+                                | ModifyKind::Name(_)
+                                | ModifyKind::Any
+                                | ModifyKind::Other => Some(FsEvent::Modified),
+                            },
+                            EventKind::Remove(remove_kind) => match remove_kind {
+                                RemoveKind::File | RemoveKind::Any | RemoveKind::Other => {
+                                    Some(FsEvent::FileDeleted)
+                                }
+                                RemoveKind::Folder => Some(FsEvent::DirectoryDeleted),
+                            },
+                            EventKind::Any | EventKind::Other => Some(FsEvent::Modified),
+                        };
 
-                            EventKind::Access(AccessKind::Close(AccessMode::Write)) => {
-                                for path in notify_event.paths {
-                                    let _ = tx.send((path, FsEvent::Modified)).await;
-                                }
+                        if let Some(event) = event {
+                            for path in notify_event.paths {
+                                let _ = tx.send((path, event)).await;
                             }
-                            EventKind::Create(CreateKind::File) => {
-                                for path in notify_event.paths {
-                                    let _ = tx.send((path, FsEvent::FileCreated)).await;
-                                }
-                            }
-                            EventKind::Create(CreateKind::Folder) => {
-                                for path in notify_event.paths {
-                                    let _ = tx.send((path, FsEvent::DirectoryCreated)).await;
-                                }
-                            }
-                            EventKind::Remove(RemoveKind::File) => {
-                                for path in notify_event.paths {
-                                    let _ = tx.send((path, FsEvent::FileDeleted)).await;
-                                }
-                            }
-                            EventKind::Remove(RemoveKind::Folder) => {
-                                for path in notify_event.paths {
-                                    let _ = tx.send((path, FsEvent::DirectoryDeleted)).await;
-                                }
-                            }
-                            _other => {}
                         }
                     }
                 })
             },
             Config::default(),
         )?;
-        Ok(Self {
-            watcher,
-            rx,
-            metadata: HashMap::new(),
-        })
+        Ok(Self { watcher, rx })
     }
 
-    #[cfg(test)]
-    fn get_metadata(&self) -> &Metadata {
-        &self.metadata
-    }
-    fn get_metadata_as_mut(&mut self) -> &mut Metadata {
-        &mut self.metadata
-    }
-
-    pub fn add_watcher(
-        &mut self,
-        dir_path: &Path,
-        file: Option<String>,
-        events: &[FsEvent],
-    ) -> Result<(), NotifyStreamError> {
+    /// Will return an error if you try to watch a file/directory which doesn't exist
+    pub fn add_watcher(&mut self, dir_path: &Path) -> Result<(), NotifyStreamError> {
         self.watcher.watch(dir_path, RecursiveMode::Recursive)?;
 
-        // we add the information to the metadata
-        let maybe_file_name_entry = self
-            .get_metadata_as_mut()
-            .entry(dir_path.to_path_buf())
-            .or_insert_with(HashMap::new);
-
-        let file_event_entry = maybe_file_name_entry
-            .entry(file)
-            .or_insert_with(HashSet::new);
-        for event in events {
-            file_event_entry.insert(*event);
-        }
         Ok(())
     }
 }
 
-pub fn fs_notify_stream(
-    input: &[(&Path, Option<String>, &[FsEvent])],
-) -> Result<NotifyStream, NotifyStreamError> {
+pub fn fs_notify_stream(input: &[&Path]) -> Result<NotifyStream, NotifyStreamError> {
     let mut fs_notify = NotifyStream::try_default()?;
-    for (dir_path, watch, flags) in input {
-        fs_notify.add_watcher(dir_path, watch.to_owned(), flags)?;
+    for dir_path in input {
+        fs_notify.add_watcher(dir_path)?;
     }
     Ok(fs_notify)
 }
 
 #[cfg(test)]
-mod notify_tests {
+mod tests {
+    use super::*;
+    use maplit::hashmap;
     use std::collections::HashMap;
     use std::sync::Arc;
-
-    use maplit::hashmap;
+    use std::time::Duration;
     use tedge_test_utils::fs::TempTedgeDir;
-
-    use crate::notify::FsEvent;
-
-    use super::fs_notify_stream;
-    use super::NotifyStream;
-
-    /// This test:
-    ///     Creates a duplicate watcher (same directory path, same file name, same event)
-    ///     Adds a new event for the same directory path, same file name
-    ///     Checks the duplicate event is not duplicated in the data structure
-    ///     Checks the new event is in the data structure
-    #[test]
-    fn it_inserts_new_file_events_correctly() {
-        let ttd = TempTedgeDir::new();
-        let mut notify = NotifyStream::try_default().unwrap();
-        let maybe_file_name = Some("file_a".to_string());
-
-        notify
-            .add_watcher(ttd.path(), maybe_file_name.clone(), &[FsEvent::FileCreated])
-            .unwrap();
-        notify
-            .add_watcher(ttd.path(), maybe_file_name.clone(), &[FsEvent::FileCreated])
-            .unwrap();
-        notify
-            .add_watcher(ttd.path(), maybe_file_name.clone(), &[FsEvent::FileDeleted])
-            .unwrap();
-
-        let event_hashset = notify
-            .get_metadata()
-            .get(ttd.path())
-            .unwrap()
-            .get(&maybe_file_name)
-            .unwrap();
-
-        // assert no duplicate entry was created for the second insert and new event was added
-        // in total 2 events are expected: FileEvent::Created, FileEvent::Deleted
-        assert_eq!(event_hashset.len(), 2);
-        assert!(event_hashset.contains(&FsEvent::FileCreated));
-        assert!(event_hashset.contains(&FsEvent::FileDeleted));
-    }
 
     async fn assert_rx_stream(
         mut inputs: HashMap<String, Vec<FsEvent>>,
@@ -246,19 +172,7 @@ mod notify_tests {
             String::from("file_b") => vec![FsEvent::FileCreated, FsEvent::Modified]
         };
 
-        let stream = fs_notify_stream(&[
-            (
-                ttd.path(),
-                Some(String::from("file_a")),
-                &[FsEvent::FileCreated],
-            ),
-            (
-                ttd.path(),
-                Some(String::from("file_b")),
-                &[FsEvent::FileCreated, FsEvent::Modified],
-            ),
-        ])
-        .unwrap();
+        let stream = fs_notify_stream(&[ttd.path(), ttd.path()]).unwrap();
 
         let fs_notify_handler = tokio::task::spawn(async move {
             assert_rx_stream(expected_events, stream).await;
@@ -278,29 +192,32 @@ mod notify_tests {
         let ttd = Arc::new(TempTedgeDir::new());
         let ttd_clone = ttd.clone();
         let mut fs_notify = NotifyStream::try_default().unwrap();
-        fs_notify
-            .add_watcher(ttd.path(), None, &[FsEvent::FileCreated, FsEvent::Modified])
+        fs_notify.add_watcher(ttd.path()).unwrap();
+
+        let assert_file_events = tokio::spawn(async move {
+            let expected_events = hashmap! {
+                String::from("dir_a") => vec![FsEvent::DirectoryCreated],
+                String::from("file_a") => vec![FsEvent::FileCreated],
+                String::from("file_b") => vec![FsEvent::FileCreated, FsEvent::Modified],
+                String::from("file_c") => vec![FsEvent::FileCreated, FsEvent::FileDeleted],
+            };
+
+            let file_system_handler = async {
+                ttd_clone.dir("dir_a");
+                ttd_clone.file("file_a");
+                ttd_clone.file("file_b");
+                ttd_clone.file("file_c").delete();
+            };
+            let _ = tokio::join!(
+                assert_rx_stream(expected_events, fs_notify),
+                file_system_handler
+            );
+        });
+
+        tokio::time::timeout(Duration::from_secs(1), assert_file_events)
+            .await
+            .unwrap()
             .unwrap();
-
-        let expected_events = hashmap! {
-            String::from("file_a") => vec![FsEvent::FileCreated],
-            String::from("file_b") => vec![FsEvent::FileCreated, FsEvent::Modified],
-            String::from("file_c") => vec![FsEvent::FileCreated, FsEvent::FileDeleted],
-        };
-
-        let file_system_handler = tokio::spawn(async move {
-            ttd_clone.dir("dir_a");
-            ttd_clone.file("file_a");
-            ttd_clone.file("file_b"); //.with_raw_content("yo");
-            ttd_clone.file("file_c").delete();
-        });
-
-        let fs_notify_handler = tokio::spawn(async move {
-            assert_rx_stream(expected_events, fs_notify).await;
-        });
-
-        fs_notify_handler.await.unwrap();
-        file_system_handler.await.unwrap();
     }
 
     #[tokio::test]
@@ -315,16 +232,7 @@ mod notify_tests {
             String::from("file_c") => vec![FsEvent::FileCreated, FsEvent::FileDeleted]
         };
 
-        let stream = fs_notify_stream(&[(
-            ttd.path(),
-            None,
-            &[
-                FsEvent::FileCreated,
-                FsEvent::Modified,
-                FsEvent::FileDeleted,
-            ],
-        )])
-        .unwrap();
+        let stream = fs_notify_stream(&[ttd.path()]).unwrap();
 
         let fs_notify_handler = tokio::task::spawn(async move {
             assert_rx_stream(expected_events, stream).await;
@@ -359,21 +267,8 @@ mod notify_tests {
             String::from("dir_d") => vec![FsEvent::DirectoryCreated],
         };
 
-        let stream = fs_notify_stream(&[
-            (ttd_a.path(), None, &[FsEvent::FileCreated]),
-            (
-                ttd_b.path(),
-                None,
-                &[FsEvent::FileCreated, FsEvent::Modified],
-            ),
-            (
-                ttd_c.path(),
-                None,
-                &[FsEvent::FileCreated, FsEvent::FileDeleted],
-            ),
-            (ttd_d.path(), None, &[FsEvent::FileCreated]),
-        ])
-        .unwrap();
+        let stream =
+            fs_notify_stream(&[ttd_a.path(), ttd_b.path(), ttd_c.path(), ttd_d.path()]).unwrap();
 
         let fs_notify_handler = tokio::task::spawn(async move {
             assert_rx_stream(expected_events, stream).await;
