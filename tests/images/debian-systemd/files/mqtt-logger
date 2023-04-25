@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-MQTT_HOST=${MQTT_HOST:-localhost}
-MQTT_PORT=${MQTT_PORT:-1883}
+MQTT_HOST=${MQTT_HOST:-}
+MQTT_PORT=${MQTT_PORT:-}
 OUTPUT_LOG=${OUTPUT_LOG:-}
 WAIT=${WAIT:-1}
 
@@ -24,6 +24,16 @@ usage() {
         # Subscribe to all topics and write the messages to file
     "
 }
+
+# Use defaults from tedge if they are set
+if command -v tedge >/dev/null 2>&1; then
+    if [ -z "$MQTT_HOST" ]; then
+        MQTT_HOST=$(tedge config get mqtt.client.host)
+    fi
+    if [ -z "$MQTT_PORT" ]; then
+        MQTT_PORT=$(tedge config get mqtt.client.port)
+    fi
+fi
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -55,6 +65,10 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
+
+# set defaults
+MQTT_HOST=${MQTT_HOST:-localhost}
+MQTT_PORT=${MQTT_PORT:-1883}
 
 log() {
     echo "$*" >&2
