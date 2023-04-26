@@ -48,14 +48,14 @@ Check thin-edge monitoring
 Check grouping of measurements 
     
     Execute Command    sudo systemctl stop collectd
-    Sleep    1s    reason=Needed because of the batching
+    Sleep    5s    reason=Needed because of the batching
     ${start_time}=    Get Unix Timestamp
     Execute Command    tedge mqtt pub collectd/localhost/temperature/temp1 "`date +%s.%N`:50" && tedge mqtt pub collectd/localhost/temperature/temp2 "`date +%s.%N`:40" && tedge mqtt pub collectd/localhost/pressure/pres1 "`date +%s.%N`:10" && tedge mqtt pub collectd/localhost/pressure/pres2 "`date +%s.%N`:20"
-    ${fake_topic1}    Should Have MQTT Messages    c8y/measurement/measurements/create    maximum=1    date_from=${start_time}
-    Should Contain    @{fake_topic1}    "temp1":{"value":50.0}
-    Should Contain    @{fake_topic1}    "temp2":{"value":40.0}
-    Should Contain    @{fake_topic1}    "pres1":{"value":10.0}
-    Should Contain    @{fake_topic1}    "pres2":{"value":20.0}
+    ${c8y_messages}    Should Have MQTT Messages    c8y/measurement/measurements/create    maximum=1    date_from=${start_time}
+    Should Contain    @{c8y_messages}    "temp1":{"value":50.0}
+    Should Contain    @{c8y_messages}    "temp2":{"value":40.0}
+    Should Contain    @{c8y_messages}    "pres1":{"value":10.0}
+    Should Contain    @{c8y_messages}    "pres2":{"value":20.0}
     
 *** Keywords ***
 
