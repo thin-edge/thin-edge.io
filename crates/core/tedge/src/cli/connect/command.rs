@@ -84,11 +84,13 @@ impl Command for ConnectCommand {
         let updated_mosquitto_config = self
             .common_mosquitto_config
             .clone()
-            // TODO should this be client host? or should it really be bind_address
-            .with_internal_opts(config.mqtt_port(), config.mqtt_bind_address())
+            .with_internal_opts(config.mqtt_port(), config.mqtt_bind_address().to_string())
             .with_external_opts(
                 config.mqtt_external_port().ok(),
-                config.mqtt_external_bind_address().ok(),
+                config
+                    .mqtt_external_bind_address()
+                    .map(|ip| ip.to_string())
+                    .ok(),
                 config.mqtt_external_bind_interface().ok(),
                 config.mqtt_external_ca_path().ok(),
                 config.mqtt_external_cert_file().ok(),

@@ -1,12 +1,11 @@
 use camino::Utf8PathBuf;
-use tedge_config::IpAddress;
 
 const COMMON_MOSQUITTO_CONFIG_FILENAME: &str = "tedge-mosquitto.conf";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ListenerConfig {
     pub port: Option<u16>,
-    pub bind_address: Option<IpAddress>,
+    pub bind_address: Option<String>,
     pub bind_interface: Option<String>,
     pub allow_anonymous: bool,
     pub capath: Option<Utf8PathBuf>,
@@ -50,7 +49,7 @@ impl ListenerConfig {
         writeln!(writer, "{} {}", key, value)
     }
     pub fn write(&self, writer: &mut dyn std::io::Write) -> std::io::Result<()> {
-        let bind_address = self.bind_address.unwrap_or_default();
+        let bind_address = self.bind_address.as_deref().unwrap_or("localhost");
         let maybe_listener = self
             .port
             .as_ref()
@@ -85,7 +84,7 @@ impl Default for CommonMosquittoConfig {
             config_file: COMMON_MOSQUITTO_CONFIG_FILENAME.into(),
             internal_listener: ListenerConfig {
                 port: Some(1883),
-                bind_address: Some("127.0.0.1".parse().unwrap()),
+                bind_address: Some("localhost".to_owned()),
                 allow_anonymous: true,
                 require_certificate: false,
                 ..Default::default()
@@ -121,7 +120,7 @@ impl CommonMosquittoConfig {
         Ok(())
     }
 
-    pub fn with_internal_opts(self, port: u16, bind_address: IpAddress) -> Self {
+    pub fn with_internal_opts(self, port: u16, bind_address: String) -> Self {
         let internal_listener = ListenerConfig {
             port: Some(port),
             bind_address: Some(bind_address),
@@ -136,7 +135,7 @@ impl CommonMosquittoConfig {
     pub fn with_external_opts(
         self,
         port: Option<u16>,
-        bind_address: Option<IpAddress>,
+        bind_address: Option<String>,
         bind_interface: Option<String>,
         capath: Option<Utf8PathBuf>,
         certfile: Option<Utf8PathBuf>,
