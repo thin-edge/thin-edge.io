@@ -11,6 +11,10 @@ Documentation      With thin-edge.io device monitoring, you can collect metrics 
 ...                1. Install collectd,
 ...                2. Configure collectd,
 ...                3. Enable thin-edge.io monitoring.
+...                Checking the grouping of measurements:
+...                Sending fake collectd measurements with stopped collectd and check that messages are
+...                published on tedge/measurements for that timestamp and grouping the two fake collectd measurements 
+...                (i.e. the temperature and the pressure sent by the two fake measurements).
 
 
 Resource        ../../../resources/common.resource
@@ -41,20 +45,18 @@ Check thin-edge monitoring
     ${c8y_messages}=    Should Have MQTT Messages    topic=c8y/measurement/measurements/create    minimum=1    maximum=None
     Should Contain    @{c8y_messages}    "type":"ThinEdgeMeasurement"
 
-Publish data on fake collectd topic
-    # Sending fake collectd measurements with stopped collectd and check that messages are
-    #  published on tedge/measurements for that timestamp and grouping the two fake collectd measurements 
-    # (i.e. the temperature and the pressure sent by the two fake measurements).
+Check grouping of measurements 
+    
     Execute Command    sudo systemctl stop collectd
-    Sleep    1s
-    ${start_time}=    Get Time
+    Sleep    1s    reason=Needed because of the batching
+    ${start_time}=    Get Unix Timestamp
     Execute Command    tedge mqtt pub collectd/localhost/temperature/temp1 "`date +%s.%N`:50" && tedge mqtt pub collectd/localhost/temperature/temp2 "`date +%s.%N`:40" && tedge mqtt pub collectd/localhost/pressure/pres1 "`date +%s.%N`:10" && tedge mqtt pub collectd/localhost/pressure/pres2 "`date +%s.%N`:20"
     ${fake_topic1}    Should Have MQTT Messages    c8y/measurement/measurements/create    maximum=1    date_from=${start_time}
     Should Contain    @{fake_topic1}    "temp1":{"value":50.0}
     Should Contain    @{fake_topic1}    "temp2":{"value":40.0}
     Should Contain    @{fake_topic1}    "pres1":{"value":10.0}
     Should Contain    @{fake_topic1}    "pres2":{"value":20.0}
-
+    
 *** Keywords ***
 
 Custom Setup
