@@ -271,7 +271,7 @@ impl ConfigSettingAccessor<MqttClientAuthKeySetting> for TEdgeConfig {
             // TODO (Marcel): remove unnecessary Options once tedge_config is
             // refactored
             .ok_or(ConfigSettingError::ConfigNotSet {
-                key: "mqtt.client.auth.certkey",
+                key: "mqtt.client.auth.keyfile",
             })
     }
 }

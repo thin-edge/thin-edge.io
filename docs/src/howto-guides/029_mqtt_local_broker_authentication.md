@@ -90,11 +90,11 @@ keyfile  PATH_TO_CLIENT_CA_CERTIFICATE
 ### Step 2: Configure thin-edge.io to use a client certificate and private key
 
 ```sh
-tedge config set mqtt.client.auth.cert_file PATH_TO_CLIENT_CERTIFICATE
-tedge config set mqtt.client.auth.key_file PATH_TO_CLIENT_PRIVATE_KEY
+tedge config set mqtt.client.auth.certfile PATH_TO_CLIENT_CERTIFICATE
+tedge config set mqtt.client.auth.keyfile PATH_TO_CLIENT_PRIVATE_KEY
 ```
 
-Both `cert_file` and `key_file` are required to enable client authentication.
+Both `certfile` and `keyfile` are required to enable client authentication.
 Setting only one of them will result in an error about the second one not being
 set.
 
