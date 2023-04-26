@@ -550,6 +550,30 @@ macro_rules! configuration_keys {
                 }
             }
 
+            fn redot_key(key: String) -> String {
+                use ::std::collections::HashMap;
+
+                static MAP: Lazy<HashMap<String, &'static str>> = Lazy::new(|| {
+                    let mut map = HashMap::new();
+                    $(
+                        if map.insert(key_name_for!($($ro_config_path),+).replace('.', "_"), key_name_for!($($ro_config_path),+)).is_some() {
+                            panic!("Conflicting keys: there are multiple key names that look like {}", key_name_for!($($ro_config_path),+));
+                        }
+                    )*
+                    $(
+                        if map.insert(key_name_for!($($config_path),+ $(; $literal_name)?).replace('.', "_"), key_name_for!($($config_path),+ $(; $literal_name)?)).is_some() {
+                            panic!("Conflicting keys: there are multiple key names that look like {}", key_name_for!($($config_path),+ $(; $literal_name)?));
+                        }
+                    )+
+                    map
+                });
+
+                match MAP.get(&key) {
+                    Some(&res) => res.to_owned(),
+                    None => key,
+                }
+            }
+
             impl From<&ConfigurationUpdate> for WritableKey {
                 fn from(update: &ConfigurationUpdate) -> WritableKey {
                     match update {
@@ -747,27 +771,37 @@ fn emit_warning_if_necessary(normalized: &str, input: &str) {
 
 /// Normalize the provided key to the most up-to-date format
 ///
-/// Previously, keys had many dots, e.g. `mqtt.external.port`, but this mapped to `mqtt.external_port`
-/// in the toml, which is confuing. This removes unnecessary dots
+/// Previously, keys had many dots, e.g. `mqtt.external.port`, but this mapped
+/// to `mqtt.external_port` in the toml, which is confuing. This removes
+/// unnecessary dots
 fn normalize_key(input: &str) -> String {
-    let (prefix, suffix) = input.split_once('.').unwrap_or((input, ""));
-    let suffix = suffix.replace('.', "_");
-    let normalized = replace_aliases(format!("{prefix}.{suffix}"));
-    emit_warning_if_necessary(&normalized, input);
-    normalized
+    let normalized = replace_aliases(input.replace('.', "_"));
+    let dotted = redot_key(normalized);
+    // We removed all dots, the only way they could be reintroduced is through
+    // redot_key recognising the key. We only want to warn the (tedge config)
+    // user if the key is valid, as they'll get an error to say the key is
+    // unrecognised when that's the case.
+    if dotted.contains('.') {
+        // TODO test that the warning is emitted
+        emit_warning_if_necessary(&dotted, input);
+    }
+    dotted
 }
 
 /// A map from aliases to canonical keys
-static ALIASES: Lazy<HashMap<Cow<'static, str>, Cow<'static, str>>> = Lazy::new(|| {
+static ALIASES: Lazy<HashMap<String, Cow<'static, str>>> = Lazy::new(|| {
     let ty = TEdgeConfigDto::ty();
     let doku::TypeKind::Struct { fields, transparent: false } = ty.kind else { panic!("Expected struct but got {:?}", ty.kind) };
     let doku::Fields::Named { fields } = fields else { panic!("Expected named fields but got {:?}", fields)};
     struct_field_aliases(None, &fields)
+        .into_iter()
+        .map(|(alias, dest)| (alias.replace('.', "_"), dest))
+        .collect()
 });
 
 fn replace_aliases(key: String) -> String {
     ALIASES
-        .get(&Cow::Borrowed(key.as_str()))
+        .get(&key)
         .map(|c| c.clone().into_owned())
         .unwrap_or(key)
 }

@@ -322,7 +322,7 @@ pub(crate) struct MqttConfigDto {
 
     /// MQTT client authentication configuration, containing a path to a client
     /// certificate and a private key.
-    #[serde(skip_serializing_if = "MqttClientAuthConfig::is_empty")]
+    #[serde(skip_serializing_if = "MqttClientAuthConfig::is_empty", default)]
     pub(crate) client_auth: MqttClientAuthConfig,
 
     /// The port mosquitto binds to for external use
