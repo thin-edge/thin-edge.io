@@ -1,3 +1,4 @@
+use anyhow::Context;
 use c8y_config_manager::ConfigManagerBuilder;
 use c8y_config_manager::ConfigManagerConfig;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
@@ -73,7 +74,12 @@ async fn main() -> Result<(), anyhow::Error> {
     let tedge_config = config_repository.load()?;
 
     if config_plugin_opt.init {
-        init(config_plugin_opt.config_dir)
+        init(config_plugin_opt.config_dir).with_context(|| {
+            format!(
+                "Failed to initialize {}. You have to run the command with sudo.",
+                PLUGIN_NAME
+            )
+        })
     } else {
         run(tedge_config).await
     }

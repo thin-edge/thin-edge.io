@@ -1,3 +1,4 @@
+use anyhow::Context;
 use anyhow::Result;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
@@ -85,7 +86,12 @@ async fn main() -> Result<(), anyhow::Error> {
 
     if config_plugin_opt.init {
         let logs_dir = tedge_config.query(LogPathSetting)?;
-        init(&config_plugin_opt.config_dir, logs_dir.as_std_path())
+        init(&config_plugin_opt.config_dir, logs_dir.as_std_path()).with_context(|| {
+            format!(
+                "Failed to initialize {}. You have to run the command with sudo.",
+                C8Y_LOG_PLUGIN
+            )
+        })
     } else {
         run(tedge_config).await
     }
