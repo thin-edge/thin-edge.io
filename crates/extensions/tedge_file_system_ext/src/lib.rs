@@ -123,17 +123,7 @@ impl Actor for FsWatchActor {
     async fn run(&mut self) -> Result<(), RuntimeError> {
         let mut fs_notify = NotifyStream::try_default().unwrap();
         for (watch_path, _) in self.messages.get_watch_dirs().iter() {
-            fs_notify
-                .add_watcher(
-                    watch_path,
-                    None,
-                    &[
-                        FsEvent::Modified,
-                        FsEvent::FileDeleted,
-                        FsEvent::FileCreated,
-                    ],
-                )
-                .unwrap();
+            fs_notify.add_watcher(watch_path).unwrap();
         }
 
         loop {

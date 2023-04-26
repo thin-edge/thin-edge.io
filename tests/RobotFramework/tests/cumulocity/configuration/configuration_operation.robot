@@ -70,9 +70,6 @@ Update configuration plugin config via cloud
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
 
 Modify configuration plugin config via local filesystem modify inplace
-    [Documentation]    Editing the c8y-configuration-plugin.toml locally requires the
-    ...                c8y-configuration-plugin service to be restarted
-    Skip    msg="Fails due to https://github.com/thin-edge/thin-edge.io/issues/1896"
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1
     Execute Command    sed -i 's/CONFIG1/CONFIG3/g' /etc/tedge/c8y/c8y-configuration-plugin.toml
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG3
@@ -96,7 +93,6 @@ Update configuration plugin config via local filesystem move (different director
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
 
 Update configuration plugin config via local filesystem move (same directory)
-    Skip    msg="Fails due to https://github.com/thin-edge/thin-edge.io/issues/1896"
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1
     Transfer To Device    ${CURDIR}/c8y-configuration-plugin-updated.toml    /etc/tedge/c8y/
     Execute Command    mv /etc/tedge/c8y/c8y-configuration-plugin-updated.toml /etc/tedge/c8y/c8y-configuration-plugin.toml

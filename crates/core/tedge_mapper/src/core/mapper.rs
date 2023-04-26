@@ -156,16 +156,7 @@ impl Mapper {
 
 async fn process_messages(mapper: &mut Mapper, ops_dir: Option<&Path>) -> Result<(), MapperError> {
     if let Some(path) = ops_dir {
-        let mut fs_notification_stream = fs_notify_stream(&[(
-            path,
-            None,
-            &[
-                FsEvent::DirectoryCreated,
-                FsEvent::FileCreated,
-                FsEvent::FileDeleted,
-                FsEvent::Modified,
-            ],
-        )])?;
+        let mut fs_notification_stream = fs_notify_stream(&[path])?;
 
         // Send health status to confirm the mapper initialization is completed
         send_health_status(&mut mapper.output, &mapper.mapper_name).await;
