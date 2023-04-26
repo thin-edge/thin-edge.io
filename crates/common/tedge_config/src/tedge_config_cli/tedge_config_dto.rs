@@ -574,10 +574,12 @@ impl ServiceTypeConfigDto {
 pub(crate) struct MqttClientAuthConfig {
     /// Path to the client certificate
     #[doku(example = "/path/to/client.crt", as = "PathBuf")]
+    #[serde(alias = "certfile")]
     pub cert_file: Option<Fakeable<Utf8PathBuf>>,
 
     /// Path to the client private key
     #[doku(example = "/path/to/client.key", as = "PathBuf")]
+    #[serde(alias = "keyfile")]
     pub key_file: Option<Fakeable<Utf8PathBuf>>,
 }
 
