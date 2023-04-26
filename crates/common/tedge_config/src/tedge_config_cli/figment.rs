@@ -5,10 +5,12 @@ use std::path::PathBuf;
 
 use figment::providers::Format;
 use figment::providers::Toml;
+use figment::value::Uncased;
 use figment::Figment;
 use figment::Metadata;
 use serde::de::DeserializeOwned;
 
+use crate::normalize_key;
 use crate::TEdgeConfigError;
 
 pub trait ConfigSources {
@@ -148,21 +150,17 @@ impl Display for ConfigurationSource {
 
 struct TEdgeEnv {
     prefix: &'static str,
-    separator: &'static str,
 }
 
 impl Default for TEdgeEnv {
     fn default() -> Self {
-        Self {
-            prefix: "TEDGE_",
-            separator: "_",
-        }
+        Self { prefix: "TEDGE_" }
     }
 }
 
 impl TEdgeEnv {
     fn variable_name(&self, key: &str) -> Option<String> {
-        let desired_key = key.replace('.', self.separator);
+        let desired_key = key.replace('.', "_");
         std::env::vars_os().find_map(|(k, _)| {
             k.to_str()?
                 .strip_prefix(self.prefix)
@@ -172,9 +170,8 @@ impl TEdgeEnv {
     }
 
     fn provider(&self) -> figment::providers::Env {
-        let pattern = self.separator;
         figment::providers::Env::prefixed(self.prefix)
-            .map(move |name| name.as_str().replacen(pattern, ".", 1).into())
+            .map(move |name| Uncased::new(normalize_key(&name.as_str().to_lowercase(), false)))
     }
 }
 

@@ -192,7 +192,7 @@ impl From<WritableKey> for ReadableKey {
 impl<'a> Provider for TEdgeConfigUpdate<'a> {
     fn metadata(&self) -> figment::Metadata {
         Metadata::named(format!("tedge config value: {}", self.key))
-            .interpolater(move |_: &Profile, k: &[&str]| normalize_key(&k.join(".")))
+            .interpolater(move |_: &Profile, k: &[&str]| normalize_key(&k.join("."), true))
     }
 
     fn data(&self) -> Result<Map<Profile, Dict>, figment::Error> {
@@ -480,7 +480,7 @@ macro_rules! configuration_keys {
                 type Err = ConfigSettingError;
 
                 fn from_str(input: &str) -> Result<Self, Self::Err> {
-                    match normalize_key(input).as_str() {
+                    match normalize_key(input, true).as_str() {
                         $(
                             key_name_for!($($ro_config_path),+) => Ok(Self::ReadOnly(ReadOnlyKey::[< $($ro_config_path:camel)+ >])),
                         )*
@@ -519,7 +519,7 @@ macro_rules! configuration_keys {
                 type Err = ConfigSettingError;
 
                 fn from_str(input: &str) -> Result<Self, Self::Err> {
-                    match normalize_key(input).as_str() {
+                    match normalize_key(input, true).as_str() {
                         $(
                             key_name_for!($($ro_config_path),+) => Ok(Self::[< $($ro_config_path:camel)+ >]),
                         )+
@@ -534,7 +534,7 @@ macro_rules! configuration_keys {
                 type Err = ConfigSettingError;
 
                 fn from_str(input: &str) -> Result<Self, Self::Err> {
-                    match normalize_key(input).as_str() {
+                    match normalize_key(input, true).as_str() {
                         $(
                             key_name_for!($($ro_config_path),+) => Err(Self::Err::WriteToReadOnlySetting {
                                 message: ReadOnlyKey::[< $($ro_config_path:camel)+ >].read_only_error()
@@ -774,14 +774,14 @@ fn emit_warning_if_necessary(normalized: &str, input: &str) {
 /// Previously, keys had many dots, e.g. `mqtt.external.port`, but this mapped
 /// to `mqtt.external_port` in the toml, which is confuing. This removes
 /// unnecessary dots
-fn normalize_key(input: &str) -> String {
+pub(crate) fn normalize_key(input: &str, enable_warnings: bool) -> String {
     let normalized = replace_aliases(input.replace('.', "_"));
     let dotted = redot_key(normalized);
     // We removed all dots, the only way they could be reintroduced is through
     // redot_key recognising the key. We only want to warn the (tedge config)
     // user if the key is valid, as they'll get an error to say the key is
     // unrecognised when that's the case.
-    if dotted.contains('.') {
+    if dotted.contains('.') && enable_warnings {
         // TODO test that the warning is emitted
         emit_warning_if_necessary(&dotted, input);
     }
