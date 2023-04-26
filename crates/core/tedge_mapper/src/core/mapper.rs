@@ -2,6 +2,7 @@ use crate::c8y::dynamic_discovery::*;
 use crate::core::converter::*;
 use crate::core::error::*;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
+use mqtt_channel::BrokerConfig;
 #[cfg(test)]
 use mqtt_channel::Connection;
 use mqtt_channel::Message;
@@ -12,22 +13,17 @@ use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use mqtt_channel::UnboundedReceiver;
 use mqtt_channel::UnboundedSender;
+use std::path::Path;
+use std::time::Duration;
 use tedge_actors::Runtime;
+use tedge_api::health::health_check_topics;
+use tedge_api::health::health_status_down_message;
 use tedge_api::health::health_status_up_message;
-use tedge_config::ConfigSettingAccessor;
-use tedge_config::MqttClientHostSetting;
-use tedge_config::MqttClientPortSetting;
+use tedge_api::health::send_health_status;
 use tedge_config::TEdgeConfig;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
-use tedge_mqtt_ext::MqttConfig;
 use tedge_signal_ext::SignalActor;
-
-use std::path::Path;
-use std::time::Duration;
-use tedge_api::health::health_check_topics;
-use tedge_api::health::health_status_down_message;
-use tedge_api::health::send_health_status;
 use tedge_utils::notify::fs_notify_stream;
 use tedge_utils::notify::FsEvent;
 
@@ -41,8 +37,7 @@ use std::result::Result::Ok;
 #[cfg(test)]
 pub async fn create_mapper(
     app_name: &str,
-    mqtt_host: String,
-    mqtt_port: u16,
+    broker_config: BrokerConfig,
     converter: Box<dyn Converter<Error = ConversionError>>,
 ) -> Result<Mapper, anyhow::Error> {
     let health_check_topics: TopicFilter = health_check_topics(app_name);
@@ -51,8 +46,7 @@ pub async fn create_mapper(
     let mut topic_filter = mapper_config.in_topic_filter.clone();
     topic_filter.add_all(health_check_topics.clone());
 
-    let mqtt_client =
-        Connection::new(&mqtt_config(app_name, &mqtt_host, mqtt_port, topic_filter)?).await?;
+    let mqtt_client = Connection::new(&mqtt_config(app_name, broker_config, topic_filter)?).await?;
 
     Ok(Mapper::new(
         app_name.to_string(),
@@ -65,19 +59,18 @@ pub async fn create_mapper(
 
 pub fn mqtt_config(
     name: &str,
-    host: &str,
-    port: u16,
+    broker_config: BrokerConfig,
     topic_filter: TopicFilter,
 ) -> Result<mqtt_channel::Config, anyhow::Error> {
     let name_str = name.to_string();
-    Ok(mqtt_channel::Config::default()
-        .with_host(host)
-        .with_port(port)
+    let mqtt_config = mqtt_channel::Config::with_broker(broker_config)
         .with_session_name(name)
         .with_subscriptions(topic_filter)
         .with_max_packet_size(10 * 1024 * 1024)
         .with_initial_message(move || health_status_up_message(&name_str))
-        .with_last_will_message(health_status_down_message(name)))
+        .with_last_will_message(health_status_down_message(name));
+
+    Ok(mqtt_config)
 }
 
 pub struct Mapper {
@@ -241,12 +234,7 @@ async fn get_mqtt_actor(
     session_name: &str,
     tedge_config: &TEdgeConfig,
 ) -> Result<MqttActorBuilder, anyhow::Error> {
-    let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
-    let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
-
-    let mqtt_config = MqttConfig::default()
-        .with_host(mqtt_host)
-        .with_port(mqtt_port);
+    let mqtt_config = tedge_config.mqtt_config()?;
 
     Ok(MqttActorBuilder::new(
         mqtt_config.with_session_name(session_name),
@@ -271,15 +259,16 @@ mod tests {
         // Given an MQTT broker
         let broker = mqtt_tests::test_mqtt_broker();
 
+        let broker_config = BrokerConfig {
+            host: "localhost".to_string(),
+            port: broker.port,
+            authentication: None,
+        };
+
         // Given a mapper
         let name = "mapper_under_test";
-        let mut mapper = create_mapper(
-            name,
-            "localhost".into(),
-            broker.port,
-            Box::new(UppercaseConverter::new()),
-        )
-        .await?;
+        let mut mapper =
+            create_mapper(name, broker_config, Box::new(UppercaseConverter::new())).await?;
 
         // Let's run the mapper in the background
         tokio::spawn(async move {
@@ -320,13 +309,14 @@ mod tests {
         // Given a mapper
         let name = "mapper_under_test";
 
-        let mut mapper = create_mapper(
-            name,
-            "localhost".to_string(),
-            broker.port,
-            Box::new(UppercaseConverter::new()),
-        )
-        .await?;
+        let broker_config = BrokerConfig {
+            host: "localhost".to_string(),
+            port: broker.port,
+            authentication: None,
+        };
+
+        let mut mapper =
+            create_mapper(name, broker_config, Box::new(UppercaseConverter::new())).await?;
 
         // Let's run the mapper in the background
         tokio::spawn(async move {

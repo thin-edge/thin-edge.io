@@ -3,17 +3,17 @@ FROM debian:11-slim
 # Install
 RUN apt-get -y update \
     && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install \
-        wget \
-        curl \
-        gnupg2 \
-        sudo \
-        apt-transport-https \
-        ca-certificates \
-        systemd \
-        ssh \
-        mosquitto \
-        mosquitto-clients \
-        vim.tiny
+    wget \
+    curl \
+    gnupg2 \
+    sudo \
+    apt-transport-https \
+    ca-certificates \
+    systemd \
+    ssh \
+    mosquitto \
+    mosquitto-clients \
+    vim.tiny
 
 # Remove unnecessary systemd services
 RUN rm -f /lib/systemd/system/multi-user.target.wants/* \
@@ -39,6 +39,7 @@ RUN systemctl enable mqtt-logger.service
 
 # Custom mosquitto config
 COPY files/mosquitto.conf /etc/mosquitto/conf.d/
+COPY files/secure-listener.conf .
 
 # Reference: https://developers.redhat.com/blog/2019/04/24/how-to-run-systemd-in-a-container#enter_podman
 # STOPSIGNAL SIGRTMIN+3 (=37)

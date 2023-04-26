@@ -14,23 +14,23 @@ install-tools:
 [private]
 check-tools:
     #!/usr/bin/env bash
-    if ! cargo +nightly fmt --help &> /dev/null; then 
+    if ! cargo +nightly fmt --help &> /dev/null; then
         echo "cargo +nightly fmt is not installed, use just install-tools or install it manually"
         exit 1
     fi
-    
-    if ! cargo sort --help &> /dev/null; then 
+
+    if ! cargo sort --help &> /dev/null; then
         echo "cargo sort is not installed, use just install-tools or install it manually"
         exit 1
     fi
 
 # Format code
-format: check-tools 
-    cargo +nightly fmt 
-    cargo sort -w . 
+format: check-tools
+    cargo +nightly fmt
+    cargo sort -w .
 
 # Check code formatting
-format-check: check-tools 
+format-check: check-tools
     cargo +nightly fmt -- --check
     cargo sort -w . --check
 
@@ -45,7 +45,15 @@ release *ARGS:
 
 # Run unit tests
 test:
-    cargo test --no-fail-fast --all-features
+    cargo test --no-fail-fast --all-features --all-targets
+
+integration-test:
+    #!/usr/bin/env bash
+    ci/build_scripts/build.sh x86_64-unknown-linux-musl
+    cd tests/RobotFramework
+    source .venv/bin/activate
+    invoke build --local
+    invoke tests
 
 # Generate docs and start web server
 docs:

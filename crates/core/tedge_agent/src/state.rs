@@ -46,11 +46,7 @@ impl StateRepository for AgentStateRepository {
             fs::create_dir(&self.state_repo_root).await?;
         }
 
-        let mut temppath = self.state_repo_path.clone();
-        temppath.set_extension("tmp");
-
-        let () =
-            atomically_write_file_async(temppath, &self.state_repo_path, toml.as_bytes()).await?;
+        let () = atomically_write_file_async(&self.state_repo_path, toml.as_bytes()).await?;
 
         Ok(())
     }

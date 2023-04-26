@@ -35,6 +35,8 @@ use tedge_mqtt_ext::Topic;
 use tedge_timer_ext::SetTimeout;
 use tedge_utils::file::create_directory_with_user_group;
 use tedge_utils::file::create_file_with_user_group;
+use tedge_utils::file::move_file;
+use tedge_utils::file::PermissionEntry;
 
 pub struct ConfigUploadManager {
     config: ConfigManagerConfig,
@@ -299,7 +301,7 @@ impl ConfigUploadManager {
                     config_response.get_child_id()
                 );
                 let path_to = Path::new(path_to);
-                std::fs::rename(path_from, path_to)?;
+                move_file(path_from, path_to, PermissionEntry::default()).await?;
             }
             // send 119
             let child_plugin_config = PluginConfig::new(Path::new(&format!(

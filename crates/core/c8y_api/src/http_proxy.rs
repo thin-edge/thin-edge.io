@@ -26,8 +26,6 @@ use tedge_config::C8yUrlSetting;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::ConfigSettingAccessorStringExt;
 use tedge_config::DeviceIdSetting;
-use tedge_config::MqttClientHostSetting;
-use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file::PermissionEntry;
 use time::OffsetDateTime;
@@ -187,13 +185,10 @@ pub struct C8yMqttJwtTokenRetriever {
 
 impl C8yMqttJwtTokenRetriever {
     pub async fn try_new(tedge_config: &TEdgeConfig) -> Result<Self, SMCumulocityMapperError> {
-        let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
-        let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
         let topic = TopicFilter::new("c8y/s/dat")?;
-        let mqtt_config = mqtt_channel::Config::default()
-            .with_port(mqtt_port)
+        let mqtt_config = tedge_config
+            .mqtt_config()?
             .with_clean_session(true)
-            .with_host(mqtt_host)
             .with_subscriptions(topic);
 
         Ok(C8yMqttJwtTokenRetriever { mqtt_config })

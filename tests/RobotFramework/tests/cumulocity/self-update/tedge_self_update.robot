@@ -19,7 +19,7 @@ Update tedge version from previous using Cumulocity
     Execute Command    systemctl stop tedge-mapper-az && systemctl disable tedge-mapper-az
 
     # Register device (using already installed version)
-    Execute Command    cmd=test -f ./bootstrap.sh && env DEVICE_ID=${DEVICE_SN} ./bootstrap.sh --no-install || true
+    Execute Command    cmd=test -f ./bootstrap.sh && env DEVICE_ID=${DEVICE_SN} ./bootstrap.sh --no-install --no-secure || true
     Device Should Exist                      ${DEVICE_SN}
 
     Restart Service    tedge-mapper-c8y    # WORKAROUND: #1731 Restart service to avoid suspected race condition causing software list message to be lost

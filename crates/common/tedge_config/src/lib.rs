@@ -1,3 +1,4 @@
+pub mod mqtt_config;
 pub mod system_services;
 pub mod tedge_config_cli;
 

@@ -6,7 +6,6 @@ use crate::ConfigError;
 use camino::Utf8PathBuf;
 use rumqttc::Event;
 use rumqttc::Incoming;
-use rumqttc::MqttOptions;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::QoS::AtLeastOnce;
@@ -86,7 +85,7 @@ impl Command for ConnectCommand {
             .common_mosquitto_config
             .clone()
             // TODO should this be client host? or should it really be bind_address
-            .with_internal_opts(config.mqtt_port(), config.mqtt_client_host())
+            .with_internal_opts(config.mqtt_port(), config.mqtt_bind_address())
             .with_external_opts(
                 config.mqtt_external_port().ok(),
                 config.mqtt_external_bind_address().ok(),
@@ -131,11 +130,7 @@ impl Command for ConnectCommand {
         }
 
         if let Cloud::C8y = self.cloud {
-            check_connected_c8y_tenant_as_configured(
-                &config.c8y_url()?,
-                config.mqtt_port(),
-                config.mqtt_bind_address(),
-            );
+            check_connected_c8y_tenant_as_configured(&config, &config.c8y_url()?);
             enable_software_management(&bridge_config, self.service_manager.as_ref());
         }
 
@@ -189,21 +184,15 @@ impl ConnectCommand {
         }
     }
 
-    fn check_connection(
-        &self,
-        config: &tedge_config::tedge_config_cli::new_tedge_config::NewTEdgeConfig,
-    ) -> Result<DeviceStatus, ConnectError> {
-        let port = config.mqtt_port();
-        let host = config.mqtt_client_host();
-
+    fn check_connection(&self, config: &NewTEdgeConfig) -> Result<DeviceStatus, ConnectError> {
         println!(
             "Sending packets to check connection. This may take up to {} seconds.\n",
             WAIT_FOR_CHECK_SECONDS
         );
         match self.cloud {
-            Cloud::Azure => check_device_status_azure(port, host),
-            Cloud::Aws => check_device_status_aws(port, host),
-            Cloud::C8y => check_device_status_c8y(port, host),
+            Cloud::Azure => check_device_status_azure(config),
+            Cloud::Aws => check_device_status_aws(config),
+            Cloud::C8y => check_device_status_c8y(config),
         }
     }
 
@@ -220,17 +209,20 @@ impl ConnectCommand {
 
 // Check the connection by using the jwt token retrieval over the mqtt.
 // If successful in getting the jwt token '71,xxxxx', the connection is established.
-fn check_device_status_c8y(port: u16, host: String) -> Result<DeviceStatus, ConnectError> {
+fn check_device_status_c8y(tedge_config: &NewTEdgeConfig) -> Result<DeviceStatus, ConnectError> {
     const C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM: &str = "c8y/s/dat";
     const C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM: &str = "c8y/s/uat";
     const CLIENT_ID: &str = "check_connection_c8y";
 
-    let mut options = MqttOptions::new(CLIENT_ID, host, port);
+    let mut mqtt_options = tedge_config
+        .mqtt_config()?
+        .with_session_name(CLIENT_ID)
+        .rumqttc_options()?;
 
-    options.set_keep_alive(RESPONSE_TIMEOUT);
-    options.set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
+    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
+    mqtt_options.set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
 
-    let (mut client, mut connection) = rumqttc::Client::new(options, 10);
+    let (mut client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
     let mut acknowledged = false;
 
     client.subscribe(C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM, AtLeastOnce)?;
@@ -285,17 +277,21 @@ fn check_device_status_c8y(port: u16, host: String) -> Result<DeviceStatus, Conn
 // Empty payload will be published to az/$iothub/twin/GET/?$rid=1, here 1 is request ID.
 // The result will be published by the iothub on the az/$iothub/twin/res/{status}/?$rid={request id}.
 // Here if the status is 200 then it's success.
-fn check_device_status_azure(port: u16, host: String) -> Result<DeviceStatus, ConnectError> {
+fn check_device_status_azure(tedge_config: &NewTEdgeConfig) -> Result<DeviceStatus, ConnectError> {
     const AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM: &str = r##"az/twin/res/#"##;
     const AZURE_TOPIC_DEVICE_TWIN_UPSTREAM: &str = r#"az/twin/GET/?$rid=1"#;
     const CLIENT_ID: &str = "check_connection_az";
     const REGISTRATION_PAYLOAD: &[u8] = b"";
     const REGISTRATION_OK: &str = "200";
 
-    let mut options = MqttOptions::new(CLIENT_ID, host, port);
-    options.set_keep_alive(RESPONSE_TIMEOUT);
+    let mut mqtt_options = tedge_config
+        .mqtt_config()?
+        .with_session_name(CLIENT_ID)
+        .rumqttc_options()?;
 
-    let (mut client, mut connection) = rumqttc::Client::new(options, 10);
+    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
+
+    let (mut client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
     let mut acknowledged = false;
 
     client.subscribe(AZURE_TOPIC_DEVICE_TWIN_DOWNSTREAM, AtLeastOnce)?;
@@ -351,16 +347,19 @@ fn check_device_status_azure(port: u16, host: String) -> Result<DeviceStatus, Co
     }
 }
 
-fn check_device_status_aws(port: u16, host: String) -> Result<DeviceStatus, ConnectError> {
+fn check_device_status_aws(tedge_config: &NewTEdgeConfig) -> Result<DeviceStatus, ConnectError> {
     const AWS_TOPIC_PUB_CHECK_CONNECTION: &str = r#"aws/test-connection"#;
     const AWS_TOPIC_SUB_CHECK_CONNECTION: &str = r#"aws/connection-success"#;
     const CLIENT_ID: &str = "check_connection_aws";
     const REGISTRATION_PAYLOAD: &[u8] = b"";
 
-    let mut options = MqttOptions::new(CLIENT_ID, host, port);
-    options.set_keep_alive(RESPONSE_TIMEOUT);
+    let mut mqtt_options = tedge_config
+        .mqtt_config()?
+        .with_session_name(CLIENT_ID)
+        .rumqttc_options()?;
+    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
 
-    let (mut client, mut connection) = rumqttc::Client::new(options, 10);
+    let (mut client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
     let mut acknowledged = false;
 
     client.subscribe(AWS_TOPIC_SUB_CHECK_CONNECTION, AtLeastOnce)?;
@@ -584,11 +583,10 @@ fn get_common_mosquitto_config_file_path(
 
 // To confirm the connected c8y tenant is the one that user configured.
 fn check_connected_c8y_tenant_as_configured(
+    tedge_config: &NewTEdgeConfig,
     configured_url: &ConnectUrl,
-    port: u16,
-    host: IpAddress,
 ) {
-    match get_connected_c8y_url(port, host) {
+    match get_connected_c8y_url(tedge_config) {
         Ok(url) if url == configured_url.as_str() => {}
         Ok(url) => println!(
             "Warning: Connecting to {}, but the configured URL is {}.\n\

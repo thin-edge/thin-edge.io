@@ -30,8 +30,10 @@ use super::tedge_config_dto::TEdgeConfigDto;
 
 /// The configuration of thin-edge
 ///
-/// This handles fetching values from [TedgeConfigDto](super::tedge_config_dto::TEdgeConfigDto) as well as from the system
-/// (see [device_id](Self::device_id)). It has getter methods for each field, e.g. [c8y_url](Self::c8y_url), [logs_path](Self::logs_path) etc.
+/// This handles fetching values from
+/// [TedgeConfigDto](super::tedge_config_dto::TEdgeConfigDto) as well as from
+/// the system (see [device_id](Self::device_id)). It has getter methods for
+/// each field, e.g. [c8y_url](Self::c8y_url), [logs_path](Self::logs_path) etc.
 ///
 /// ```
 /// # use tedge_test_utils::fs::TempTedgeDir;
@@ -74,8 +76,9 @@ impl NewTEdgeConfig {
     /// Read an arbitrary key as a string
     ///
     /// This is generally useful for the `tedge` CLI. Other crates should use
-    /// the getter methods documented below, such as [device_id](Self::device_id),
-    /// [c8y_url](Self::c8y_url) and [az_mapper_timestamp](Self::az_mapper_timestamp).
+    /// the getter methods documented below, such as
+    /// [device_id](Self::device_id), [c8y_url](Self::c8y_url) and
+    /// [az_mapper_timestamp](Self::az_mapper_timestamp).
     pub fn read(&self, key: ReadableKey) -> Result<Option<String>, ConfigSettingError> {
         use ReadOnlyKey::*;
         use ReadableKey::*;
@@ -166,7 +169,8 @@ impl<'a> TEdgeConfigUpdate<'a> {
     /// Applies this update to the provided dto, returning the updated dto
     ///
     /// # Errors
-    /// This will fail if attempting to write to an unrecognised key or a read-only key
+    /// This will fail if attempting to write to an unrecognised key or a
+    /// read-only key
     pub fn apply_to(&self, config: &TEdgeConfigDto) -> Result<TEdgeConfigDto, ConfigSettingError> {
         Figment::new()
             .merge(Serialized::defaults(config))
@@ -211,7 +215,7 @@ macro_rules! key_name_for {
         stringify!($single)
     };
     ($first:ident, $($rest:ident),+) => {
-        concat!(stringify!($first), ".", key_name_for!($($rest).+))
+        concat!(stringify!($first), ".", key_name_for!($($rest),+))
     }
 }
 
@@ -317,7 +321,8 @@ macro_rules! make_getters {
 
 /// A macro to generate a bunch of configuration accessors
 ///
-/// This generates a few different enums ([ReadableKey], [WritableKey], [ReadOnlyKey], [ConfigurationUpdate])
+/// This generates a few different enums ([ReadableKey], [WritableKey],
+/// [ReadOnlyKey], [ConfigurationUpdate])
 macro_rules! configuration_keys {
     { $(@readonly $($ro_config_path:ident).+;)* $($(#$tag:ident)? $($config_path:ident).+: $ty:ty $(, field $accessor:literal)? $(, with getter $($getter:ident).+)? $(, renamed to $literal_name:literal)? $(, with default $default:literal)?);+ $(;)? } => {
         make_getters! {
@@ -327,7 +332,8 @@ macro_rules! configuration_keys {
 
         paste::paste! {
             #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-            /// A configuration setting that can be read using [NewTEdgeConfig::read]
+            /// A configuration setting that can be read using
+            /// [NewTEdgeConfig::read]
             pub enum ReadableKey {
                 /// A setting that's derived from other configuration
                 ReadOnly(ReadOnlyKey),
@@ -360,13 +366,16 @@ macro_rules! configuration_keys {
             #[derive(Debug, Hash, Copy, Clone, PartialEq, Eq)]
             /// A configuration key that can be written to as well as read from
             ///
-            /// This can be used by [unset](crate::TEdgeConfigRepository::unset) to unset a configuration,
-            /// and [update_string](crate::TEdgeConfigRepository::update_string) to set a configuration
-            /// using a string slice as the value.
+            /// This can be used by [unset](crate::TEdgeConfigRepository::unset)
+            /// to unset a configuration, and
+            /// [update_string](crate::TEdgeConfigRepository::update_string) to
+            /// set a configuration using a string slice as the value.
             ///
-            /// It also implements [FromStr](std::str::FromStr), so it can be parsed from a string, such
-            /// as the first argument to `tedge config set`. This implementation will automatically warn
-            /// about a deprecated key if the key has been renamed at some point in the past.
+            /// It also implements [FromStr](std::str::FromStr), so it can be
+            /// parsed from a string, such as the first argument to `tedge
+            /// config set`. This implementation will automatically warn about a
+            /// deprecated key if the key has been renamed at some point in the
+            /// past.
             ///
             /// ```
             /// use tedge_config::WritableKey;
@@ -659,31 +668,29 @@ configuration_keys! {
     @readonly device.id;
     @readonly http.address;
 
-    // The defaults for these keys depend on config location,
-    // so the getters are generated with that in mind
+    // The defaults for these keys depend on config location, so the getters are
+    // generated with that in mind
     #requires_config_location device.key_path: Utf8PathBuf;
     #requires_config_location device.cert_path: Utf8PathBuf;
 
-    // `renamed to` changes the key that is used with `tedge config`,
-    // which is otherwise derived from the DTO path.
+    // `renamed to` changes the key that is used with `tedge config`, which is
+    // otherwise derived from the DTO path.
     // TODO automatically test that this matches the field name according to serde
     device.device_type: String, renamed to "device.type";
 
-    // Optional fields have fallible getters that return an error
-    // when the value is not set. An error is returned rather than
-    // option so the error message automatically includes the name
-    // of the key that is causing the failure.
+    // Optional fields have fallible getters that return an error when the value
+    // is not set. An error is returned rather than option so the error message
+    // automatically includes the name of the key that is causing the failure.
     #optional c8y.url: ConnectUrl, with default "example.com";
     c8y.root_cert_path: Utf8PathBuf;
     c8y.smartrest_templates: TemplatesSet;
 
-    // Some types, like `ConnectUrl` don't have a default. We need
-    // to generate values for testing (ConfigurationUpdate::iter)
-    // so we have to supply a dummy default value for any settings
-    // that don't have a type that implements Default. The value of
-    // this really doesn't matter, the test in question just sets and
-    // unsets each setting in turn and check they both modify the same
-    // DTO field.
+    // Some types, like `ConnectUrl` don't have a default. We need to generate
+    // values for testing (ConfigurationUpdate::iter) so we have to supply a
+    // dummy default value for any settings that don't have a type that
+    // implements Default. The value of this really doesn't matter, the test in
+    // question just sets and unsets each setting in turn and check they both
+    // modify the same DTO field.
     #optional az.url: ConnectUrl, with default "example.com";
     az.root_cert_path: Utf8PathBuf;
     az.mapper_timestamp: bool;
@@ -700,6 +707,8 @@ configuration_keys! {
     #optional mqtt.external_key_file: Utf8PathBuf;
     mqtt.client_host: String;
     mqtt.client_port: NonZeroU16, with default 8080;
+    #optional mqtt.client_auth.cert_file: Utf8PathBuf;
+    #optional mqtt.client_auth.key_file: Utf8PathBuf;
     #optional mqtt.client_ca_file: Utf8PathBuf;
     #optional mqtt.client_ca_path: Utf8PathBuf;
     http.port: u16;
@@ -1368,11 +1377,7 @@ mod tests {
     }
 
     fn example_data() -> impl Iterator<Item = (WritableKey, String)> {
-        let mut dummy_configuration = NewTEdgeConfig {
-            stored: TEdgeConfigDto::dummy(&Faker),
-            device_id: <_>::default(),
-            config_location: <_>::default(),
-        };
+        let mut dummy_configuration = default_tedge_config(TEdgeConfigDto::dummy(&Faker));
         let config = default_tedge_config(TEdgeConfigDto::default());
 
         WritableKey::iter().map(move |key| {
@@ -1387,14 +1392,15 @@ mod tests {
                 }
             };
 
-            // [fake] generates None sometimes for Options
-            // which is annoying in our case. So if the value is None,
-            // regenerate the data until that isn't the case
+            // [fake] generates None sometimes for Options which is annoying in
+            // our case. So if the value is None, regenerate the data until that
+            // isn't the case
             let example_value = loop {
                 let value = dummy_configuration.read_configured_value_string(key);
                 match value {
                     value if value == config.read_configured_value_string(key) => {
-                        // If the value has a default, it will match the value in the default config, we don't want this
+                        // If the value has a default, it will match the value
+                        // in the default config, we don't want this
                         count_failure();
                     }
                     None => {

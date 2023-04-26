@@ -19,7 +19,7 @@ pub async fn init_session(config: &Config) -> Result<(), MqttError> {
         return Err(MqttError::InvalidSessionConfig);
     }
 
-    let mqtt_options = config.mqtt_options();
+    let mqtt_options = config.rumqttc_options()?;
     let (mqtt_client, mut event_loop) = AsyncClient::new(mqtt_options, config.queue_capacity);
 
     loop {
@@ -66,7 +66,7 @@ pub async fn clear_session(config: &Config) -> Result<(), MqttError> {
     if config.session_name.is_none() {
         return Err(MqttError::InvalidSessionConfig);
     }
-    let mut mqtt_options = config.mqtt_options();
+    let mut mqtt_options = config.rumqttc_options()?;
     mqtt_options.set_clean_session(true);
     let (mqtt_client, mut event_loop) = AsyncClient::new(mqtt_options, config.queue_capacity);
 

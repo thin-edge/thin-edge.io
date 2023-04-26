@@ -1,5 +1,5 @@
 /// An enumeration of all supported system services.
-#[derive(Debug, Copy, Clone, strum_macros::Display, strum_macros::IntoStaticStr)]
+#[derive(Debug, Copy, Clone, strum::Display, strum::IntoStaticStr)]
 pub enum SystemService {
     #[strum(serialize = "mosquitto")]
     /// Mosquitto broker

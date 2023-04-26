@@ -404,8 +404,24 @@ class ThinEdgeIO(DeviceLibrary):
         return self._assert_health_status(service, status=status)
 
     def _assert_health_status(self, service: str, status: str) -> Dict[str, Any]:
+        # if mqtt.client.auth.cafile or mqtt.client.auth.cadir is set, we pass setting
+        # value to mosquitto_sub
+        mqtt_config_options = self.execute_command(f"tedge config list",
+            stdout=True,
+            stderr=False,
+            ignore_exit_code=True
+        )
+        
+        server_auth = ""
+        if "mqtt.client.auth.ca" in mqtt_config_options:
+            server_auth = "--cafile /etc/mosquitto/ca_certificates/ca.crt"
+
+        client_auth = ""
+        if "mqtt.client.auth.certfile" in mqtt_config_options:
+            client_auth = "--cert /setup/client.crt --key /setup/client.key"
+
         message = self.execute_command(
-            f"mosquitto_sub -t 'tedge/health/{service}' --retained-only -C 1 -W 5",
+            f"mosquitto_sub -t 'tedge/health/{service}' --retained-only -C 1 -W 5 -p $(tedge config get mqtt.client.port) {server_auth} {client_auth}",
             stdout=True,
             stderr=False,
         )

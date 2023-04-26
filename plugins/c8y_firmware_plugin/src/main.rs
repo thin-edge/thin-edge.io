@@ -10,15 +10,11 @@ use tedge_config::system_services::set_log_level;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::DataPathSetting;
-use tedge_config::MqttClientHostSetting;
-use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigError;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
-use tedge_mqtt_ext::MqttConfig;
 use tedge_signal_ext::SignalActor;
 use tedge_timer_ext::TimerActor;
 
@@ -87,7 +83,7 @@ async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
     // Create actor instances
-    let mqtt_config = mqtt_config(&tedge_config)?;
+    let mqtt_config = tedge_config.mqtt_config()?;
     let mut jwt_actor = C8YJwtRetriever::builder(mqtt_config.clone());
     let mut timer_actor = TimerActor::builder();
     let mut downloader_actor = DownloaderActor::new().builder();
@@ -127,13 +123,4 @@ fn init(tedge_config: &TEdgeConfig) -> Result<(), anyhow::Error> {
     let data_dir: PathBuf = tedge_config.query(DataPathSetting)?.into();
     create_directories(data_dir)?;
     Ok(())
-}
-
-fn mqtt_config(tedge_config: &TEdgeConfig) -> Result<MqttConfig, TEdgeConfigError> {
-    let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
-    let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
-    let config = MqttConfig::default()
-        .with_host(mqtt_host)
-        .with_port(mqtt_port);
-    Ok(config)
 }

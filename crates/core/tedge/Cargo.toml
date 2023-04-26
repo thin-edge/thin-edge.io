@@ -31,11 +31,10 @@ reqwest = { version = "0.11", default-features = false, features = [
     "stream",
 ] }
 rpassword = "5.0"
-rumqttc = "0.17"
+rumqttc = "0.18"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-strum = { version = "0.24.1", features = ["derive"] }
-strum_macros = "0.24.1"
+strum = { version = "0.24", features = ["derive"] }
 tedge_config = { path = "../../common/tedge_config" }
 tedge_utils = { path = "../../common/tedge_utils" }
 thiserror = "1.0"

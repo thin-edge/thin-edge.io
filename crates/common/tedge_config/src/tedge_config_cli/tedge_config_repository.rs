@@ -86,7 +86,6 @@ impl TEdgeConfigRepository {
         }
 
         atomically_write_file_sync(
-            self.config_location.temporary_tedge_config_file_path(),
             self.config_location.tedge_config_file_path(),
             toml.as_bytes(),
         )?;

@@ -320,6 +320,11 @@ pub(crate) struct MqttConfigDto {
     #[doku(example = "/etc/mosquitto/ca_certificates", as = "PathBuf")]
     pub(crate) client_ca_path: Option<Fakeable<Utf8PathBuf>>,
 
+    /// MQTT client authentication configuration, containing a path to a client
+    /// certificate and a private key.
+    #[serde(skip_serializing_if = "MqttClientAuthConfig::is_empty")]
+    pub(crate) client_auth: MqttClientAuthConfig,
+
     /// The port mosquitto binds to for external use
     #[doku(example = "8883")]
     pub(crate) external_port: Option<u16>,
@@ -332,8 +337,10 @@ pub(crate) struct MqttConfigDto {
     #[doku(example = "wlan0")]
     pub(crate) external_bind_interface: Option<String>,
 
-    // All the paths relating to mosquitto are strings as they need to be safe to write to a configuration file (i.e. probably valid utf-8 at the least)
-    /// Path to a file containing the PEM encoded CA certificates that are trusted when checking incoming client certificates.
+    // All the paths relating to mosquitto are strings as they need to be safe
+    // to write to a configuration file (i.e. probably valid utf-8 at the least)
+    /// Path to a file containing the PEM encoded CA certificates that are
+    /// trusted when checking incoming client certificates
     #[doku(example = "/etc/ssl/certs", as = "PathBuf")]
     #[serde(alias = "external_capath")]
     pub(crate) external_ca_path: Option<Fakeable<Utf8PathBuf>>,
@@ -382,6 +389,10 @@ impl MqttConfigDto {
 
     pub(crate) fn client_ca_path(&self) -> Option<&Utf8Path> {
         self.client_ca_path.as_deref()
+    }
+
+    pub(crate) fn client_auth(&self) -> &MqttClientAuthConfig {
+        &self.client_auth
     }
 
     pub(crate) fn external_port(&self) -> Option<u16> {
@@ -545,6 +556,42 @@ pub struct ServiceTypeConfigDto {
 impl ServiceTypeConfigDto {
     pub(crate) fn service_type(&self) -> &str {
         self.service_type.as_deref().unwrap_or("service")
+    }
+}
+
+/// Contains MQTT client authentication configuration.
+///
+// Despite both cert_file and key_file being required for client authentication,
+// fields in this struct are optional because `tedge config set` needs to
+// successfully parse the configuration, update it in memory, and then save
+// deserialized object. If the upcoming configuration refactor discussed in [1]
+// ends up supporting partial updates to such objects, then these fields could
+// be made non-optional.
+//
+// [1]: https://github.com/thin-edge/thin-edge.io/issues/1812
+#[derive(Debug, Default, Deserialize, Serialize, Document, PartialEq, Eq)]
+#[cfg_attr(test, derive(fake::Dummy))]
+pub(crate) struct MqttClientAuthConfig {
+    /// Path to the client certificate
+    #[doku(example = "/path/to/client.crt", as = "PathBuf")]
+    pub cert_file: Option<Fakeable<Utf8PathBuf>>,
+
+    /// Path to the client private key
+    #[doku(example = "/path/to/client.key", as = "PathBuf")]
+    pub key_file: Option<Fakeable<Utf8PathBuf>>,
+}
+
+impl MqttClientAuthConfig {
+    fn is_empty(&self) -> bool {
+        self == &MqttClientAuthConfig::default()
+    }
+
+    pub(crate) fn cert_file(&self) -> Option<&Utf8Path> {
+        self.cert_file.as_deref()
+    }
+
+    pub(crate) fn key_file(&self) -> Option<&Utf8Path> {
+        self.key_file.as_deref()
     }
 }
 
