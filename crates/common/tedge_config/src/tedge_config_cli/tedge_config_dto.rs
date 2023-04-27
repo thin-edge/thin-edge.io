@@ -313,13 +313,13 @@ pub(crate) struct MqttConfigDto {
 
     /// Path to the CA certificate used by MQTT clients to use when authenticating the MQTT broker.
     #[doku(example = "/etc/mosquitto/ca_certificates/ca.crt", as = "PathBuf")]
-    #[serde(alias = "client_cafile")]
+    #[serde(alias = "client_auth_cafile")]
     pub(crate) client_ca_file: Option<Fakeable<Utf8PathBuf>>,
 
     /// Path to the directory containing the CA certificates used by MQTT
     /// clients when authenticating the MQTT broker.
     #[doku(example = "/etc/mosquitto/ca_certificates", as = "PathBuf")]
-    #[serde(alias = "client_capath")]
+    #[serde(alias = "client_auth_cadir")]
     pub(crate) client_ca_path: Option<Fakeable<Utf8PathBuf>>,
 
     /// MQTT client authentication configuration, containing a path to a client
