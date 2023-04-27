@@ -413,11 +413,11 @@ class ThinEdgeIO(DeviceLibrary):
         )
         
         server_auth = ""
-        if "mqtt.client.auth.ca" in mqtt_config_options:
+        if "mqtt.client_auth.ca" in mqtt_config_options:
             server_auth = "--cafile /etc/mosquitto/ca_certificates/ca.crt"
 
         client_auth = ""
-        if "mqtt.client.auth.certfile" in mqtt_config_options:
+        if "mqtt.client_auth.cert_file" in mqtt_config_options:
             client_auth = "--cert /setup/client.crt --key /setup/client.key"
 
         message = self.execute_command(
