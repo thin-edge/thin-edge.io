@@ -28,10 +28,8 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
-use tedge_actors::MessageSource;
 use tedge_actors::NoMessage;
 use tedge_actors::Sender;
-use tedge_actors::ServiceConsumer;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::SoftwareUpdateResponse;
@@ -41,7 +39,6 @@ use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_timer_ext::Timeout;
-use tokio::task::JoinHandle;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
@@ -49,8 +46,8 @@ const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 #[serial]
 async fn mapper_publishes_init_messages_on_startup() {
     // Start SM Mapper
-    let mut cfg_dir = TempTedgeDir::new();
-    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&mut cfg_dir, true).await;
+    let cfg_dir = TempTedgeDir::new();
+    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
@@ -88,8 +85,7 @@ async fn mapper_publishes_init_messages_on_startup() {
 async fn mapper_publishes_software_update_request() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
     // and converts it to thin-edge json message published on `tedge/commands/req/software/update`.
-    let (mqtt, mut http, _fs, _timer) =
-        spawn_c8y_mapper_actor(&mut TempTedgeDir::new(), true).await;
+    let (mqtt, http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -134,7 +130,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     // and publishes status of the operation `501` on `c8y/s/us`
 
     // Start SM Mapper
-    let (mqtt, http, _fs, _timer) = spawn_c8y_mapper_actor(&mut TempTedgeDir::new(), true).await;
+    let (mqtt, http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -186,7 +182,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
 #[serial]
 async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     // Start SM Mapper
-    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&mut TempTedgeDir::new(), true).await;
+    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     mqtt.skip(6).await;
@@ -336,7 +332,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     // Then SM Mapper publishes an operation status message as failed `502,c8y_SoftwareUpdate,Action remove is not recognized. It must be install or delete.` on `c8/s/us`.
     // Then the subscriber that subscribed for messages on `c8/s/us` receives these messages and verifies them.
 
-    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&mut TempTedgeDir::new(), true).await;
+    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     mqtt.skip(6).await;
@@ -367,8 +363,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
 #[tokio::test]
 #[serial]
 async fn c8y_mapper_alarm_mapping_to_smartrest() {
-    let (mqtt, _http, _fs, mut timer) =
-        spawn_c8y_mapper_actor(&mut TempTedgeDir::new(), true).await;
+    let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -1404,7 +1399,7 @@ async fn test_convert_small_measurement_for_child_device() {
 #[serial]
 async fn mapper_handles_multiline_sm_requests() {
     // The test assures if Mapper can handle multiline smartrest messages arrived on `c8y/s/ds`
-    let (mqtt, http, _fs, _timer) = spawn_c8y_mapper_actor(&mut TempTedgeDir::new(), true).await;
+    let (mqtt, http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -1464,10 +1459,10 @@ async fn mapper_publishes_supported_operations() {
     // The test assures tede-mapper reads/parses the operations from operations directory and
     // correctly publishes the supported operations message on `c8y/s/us`
     // and verifies the supported operations that are published by the tedge-mapper.
-    let mut cfg_dir = TempTedgeDir::new();
+    let cfg_dir = TempTedgeDir::new();
     create_thin_edge_operations(&cfg_dir, vec!["c8y_TestOp1", "c8y_TestOp2"]);
 
-    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&mut cfg_dir, false).await;
+    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
     mqtt.skip(1).await;
@@ -1482,10 +1477,10 @@ async fn mapper_publishes_child_device_create_message() {
     // The test assures tedge-mapper checks if there is a directory for operations for child devices, then it reads and
     // correctly publishes the child device create message on to `c8y/s/us`
     // and verifies the device create message.
-    let mut cfg_dir = TempTedgeDir::new();
+    let cfg_dir = TempTedgeDir::new();
     create_thin_edge_child_devices(&cfg_dir, vec!["child1", "child2"]);
 
-    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&mut cfg_dir, false).await;
+    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     mqtt.skip(6).await;
 
@@ -1805,12 +1800,6 @@ fn create_thin_edge_child_operations(cfg_dir: &TempTedgeDir, child_id: &str, ops
     for op in ops {
         child_ops_dir.file(op);
     }
-}
-
-fn remove_whitespace(s: &str) -> String {
-    let mut s = String::from(s);
-    s.retain(|c| !c.is_whitespace());
-    s
 }
 
 async fn spawn_c8y_mapper_actor(

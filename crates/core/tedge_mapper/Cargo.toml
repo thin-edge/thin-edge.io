@@ -62,9 +62,9 @@ async-trait = "0.1"
 aws_mapper_ext = { path = "../../extensions/aws_mapper_ext" }
 az_mapper_ext = { path = "../../extensions/az_mapper_ext" }
 batcher = { path = "../../common/batcher" }
-camino = "1.1.4"
 c8y_api = { path = "../c8y_api" }
 c8y_http_proxy = { path = "../../extensions/c8y_http_proxy" }
+camino = "1.1"
 clap = { version = "3.2", features = ["cargo", "derive"] }
 clock = { path = "../../common/clock" }
 collectd_ext = { path = "../../extensions/collectd_ext" }
@@ -85,15 +85,14 @@ serde_json = "1.0"
 tedge_actors = { path = "../../core/tedge_actors" }
 tedge_api = { path = "../tedge_api" }
 tedge_config = { path = "../../common/tedge_config" }
+tedge_file_system_ext = { path = "../../extensions/tedge_file_system_ext" }
 tedge_health_ext = { path = "../../extensions/tedge_health_ext" }
 tedge_http_ext = { path = "../../extensions/tedge_http_ext" }
 tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
-tedge_file_system_ext = { path = "../../extensions/tedge_file_system_ext" }
 tedge_signal_ext = { path = "../../extensions/tedge_signal_ext" }
 tedge_timer_ext = { path = "../../extensions/tedge_timer_ext" }
 tedge_utils = { path = "../../common/tedge_utils", features = [
     "logging",
-    "fs-notify",
 ] }
 thiserror = "1.0"
 time = "0.3"

@@ -67,7 +67,7 @@ impl HttpRequestBuilder {
         }
     }
 
-    /// Start to build a POST request
+    /// Start to build a PUT request
     pub fn put<T>(uri: T) -> Self
     where
         hyper::Uri: TryFrom<T>,
