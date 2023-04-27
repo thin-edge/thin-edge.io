@@ -43,7 +43,7 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
 
-const SYNC_WINDOW: Duration = Duration::from_secs(3);
+const SYNC_WINDOW: Duration = Duration::from_secs(300);
 
 pub type SyncStart = SetTimeout<()>;
 pub type SyncComplete = Timeout<()>;
