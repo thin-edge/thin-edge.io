@@ -69,8 +69,7 @@ impl TEdgeComponent for CumulocityMapper {
         create_directories(cfg_dir)?;
 
         // HIPPO: Are these subscriptions still needed on init?
-        let operations = Operations::try_new(format!("{}/operations/c8y", cfg_dir.display()))?;
-        self.init_session(CumulocityMapper::subscriptions(&operations)?)
+        self.init_session(C8yMapperConfig::subscriptions(cfg_dir)?)
             .await?;
         Ok(())
     }
@@ -90,13 +89,13 @@ impl TEdgeComponent for CumulocityMapper {
         let mut timer_actor = TimerActor::builder();
 
         let c8y_mapper_config = C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config)?;
-        let mut c8y_mapper_actor = C8yMapperBuilder::new(c8y_mapper_config);
-
-        // Connect other actor instances to config manager actor
-        c8y_mapper_actor.set_connection(&mut mqtt_actor);
-        c8y_mapper_actor.set_connection(&mut timer_actor);
-        fs_watch_actor.add_sink(&c8y_mapper_actor);
-        c8y_mapper_actor.with_c8y_http_proxy(&mut c8y_http_proxy_actor)?;
+        let c8y_mapper_actor = C8yMapperBuilder::new(
+            c8y_mapper_config,
+            &mut mqtt_actor,
+            &mut c8y_http_proxy_actor,
+            &mut timer_actor,
+            &mut fs_watch_actor,
+        );
 
         runtime.spawn(mqtt_actor).await?;
         runtime.spawn(jwt_actor).await?;

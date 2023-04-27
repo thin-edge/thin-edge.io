@@ -8,6 +8,7 @@ use crate::core::converter::Converter;
 use crate::core::converter::MapperConfig;
 use crate::core::size_threshold::SizeThreshold;
 use async_trait::async_trait;
+use c8y_api::http_proxy;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use c8y_http_proxy::handle::C8YHttpProxy;
@@ -26,6 +27,7 @@ use tedge_actors::LinkError;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSink;
+use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
@@ -168,75 +170,36 @@ impl C8yMapperActor {
 pub struct C8yMapperBuilder {
     config: C8yMapperConfig,
     box_builder: SimpleMessageBoxBuilder<C8yMapperInput, C8yMapperOutput>,
-    mqtt_publisher: Option<DynSender<MqttMessage>>,
-    http_proxy: Option<C8YHttpProxy>,
-    timer_sender: Option<DynSender<SyncStart>>,
+    mqtt_publisher: DynSender<MqttMessage>,
+    http_proxy: C8YHttpProxy,
+    timer_sender: DynSender<SyncStart>,
 }
 
 impl C8yMapperBuilder {
-    //HIPPO: Accept all the providers as arguments
-    pub fn new(config: C8yMapperConfig) -> Self {
+    pub fn new(
+        config: C8yMapperConfig,
+        mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
+        http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
+        timer: &mut impl ServiceProvider<SyncStart, SyncComplete, NoConfig>,
+        fs_watcher: &mut impl MessageSource<FsWatchEvent, PathBuf>,
+    ) -> Self {
         let box_builder = SimpleMessageBoxBuilder::new("CumulocityMapper", 16);
+
+        let mqtt_publisher = mqtt.connect_consumer(
+            C8yMapperConfig::subscriptions(&config.config_dir).unwrap(),
+            adapt(&box_builder.get_sender()),
+        );
+        let http_proxy = C8YHttpProxy::new("C8yMapper => C8YHttpProxy", http);
+        let timer_sender = timer.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
+        fs_watcher.register_peer(config.ops_dir.clone(), adapt(&box_builder.get_sender()));
 
         Self {
             config,
             box_builder,
-            mqtt_publisher: None,
-            http_proxy: None,
-            timer_sender: None,
+            mqtt_publisher,
+            http_proxy,
+            timer_sender,
         }
-    }
-
-    pub fn with_c8y_http_proxy(
-        &mut self,
-        http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
-    ) -> Result<(), LinkError> {
-        self.http_proxy = Some(C8YHttpProxy::new("C8yMapper => C8Y", http));
-        Ok(())
-    }
-}
-
-impl ServiceConsumer<MqttMessage, MqttMessage, TopicFilter> for C8yMapperBuilder {
-    fn get_config(&self) -> TopicFilter {
-        let operations = Operations::try_new(format!(
-            "{}/operations/c8y",
-            self.config.config_dir.display()
-        ))
-        .unwrap(); //HIPPO change the get_config API or panic is fine as the failure is during the initialization?
-
-        CumulocityMapper::subscriptions(&operations).unwrap() //HIPPO
-    }
-
-    fn set_request_sender(&mut self, sender: DynSender<MqttMessage>) {
-        self.mqtt_publisher = Some(sender);
-    }
-
-    fn get_response_sender(&self) -> DynSender<MqttMessage> {
-        adapt(&self.box_builder.get_sender())
-    }
-}
-
-impl ServiceConsumer<SetTimeout<()>, Timeout<()>, NoConfig> for C8yMapperBuilder {
-    fn get_config(&self) -> NoConfig {
-        NoConfig
-    }
-
-    fn set_request_sender(&mut self, sender: DynSender<SetTimeout<()>>) {
-        self.timer_sender = Some(sender);
-    }
-
-    fn get_response_sender(&self) -> DynSender<Timeout<()>> {
-        adapt(&self.box_builder.get_sender())
-    }
-}
-
-impl MessageSink<FsWatchEvent, PathBuf> for C8yMapperBuilder {
-    fn get_config(&self) -> PathBuf {
-        self.config.ops_dir.clone()
-    }
-
-    fn get_sender(&self) -> DynSender<FsWatchEvent> {
-        tedge_actors::adapt(&self.box_builder.get_sender())
     }
 }
 
@@ -250,27 +213,9 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
     type Error = RuntimeError;
 
     fn try_build(self) -> Result<C8yMapperActor, Self::Error> {
-        let mqtt_publisher = self
-            .mqtt_publisher
-            .ok_or_else(|| LinkError::MissingPeer {
-                role: "mqtt".into(),
-            })
-            .map(|mqtt_publisher| {
-                LoggingSender::new("CumulocityMapper MQTT".into(), mqtt_publisher)
-            })?;
-
-        let http_proxy = self.http_proxy.ok_or_else(|| LinkError::MissingPeer {
-            role: "http".to_string(),
-        })?;
-
-        let timer_sender = self
-            .timer_sender
-            .ok_or_else(|| LinkError::MissingPeer {
-                role: "timer".to_string(),
-            })
-            .map(|timer_sender| {
-                LoggingSender::new("CumulocityMapper Timer".into(), timer_sender)
-            })?;
+        let mqtt_publisher = LoggingSender::new("C8yMapper => Mqtt".into(), self.mqtt_publisher);
+        let timer_sender = LoggingSender::new("C8yMapper => Timer".into(), self.timer_sender);
+        let http_proxy = self.http_proxy;
 
         let operations = Operations::try_new(self.config.ops_dir.clone())
             .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;

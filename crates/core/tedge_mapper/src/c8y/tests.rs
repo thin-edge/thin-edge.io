@@ -26,6 +26,7 @@ use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSource;
 use tedge_actors::NoMessage;
@@ -1770,7 +1771,7 @@ async fn create_c8y_converter() -> (
     let converter = CumulocityConverter::new(
         size_threshold,
         device_info,
-        mqtt_builder.build().output_sender,
+        LoggingSender::new("MQTT".into(), mqtt_builder.build().sender_clone()),
         http_proxy,
         tmp_dir.path(),
         tmp_dir.to_path_buf().try_into().unwrap(),
@@ -1839,7 +1840,6 @@ async fn spawn_c8y_mapper_actor(
         service_type,
         c8y_host,
     );
-    let mut c8y_mapper_builder = C8yMapperBuilder::new(config);
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 10);
@@ -1850,12 +1850,13 @@ async fn spawn_c8y_mapper_actor(
     let mut timer_builder: SimpleMessageBoxBuilder<SyncStart, SyncComplete> =
         SimpleMessageBoxBuilder::new("Timer", 5);
 
-    c8y_mapper_builder.set_connection(&mut mqtt_builder);
-    c8y_mapper_builder
-        .with_c8y_http_proxy(&mut c8y_proxy_builder)
-        .unwrap();
-    fs_watcher_builder.add_sink(&c8y_mapper_builder);
-    c8y_mapper_builder.set_connection(&mut timer_builder);
+    let c8y_mapper_builder = C8yMapperBuilder::new(
+        config,
+        &mut mqtt_builder,
+        &mut c8y_proxy_builder,
+        &mut timer_builder,
+        &mut fs_watcher_builder,
+    );
 
     let mut actor = c8y_mapper_builder.build();
     tokio::spawn(async move { actor.run().await });

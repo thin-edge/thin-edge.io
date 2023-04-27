@@ -1,6 +1,11 @@
+use c8y_api::smartrest::error::OperationsError;
+use c8y_api::smartrest::operations::Operations;
+use c8y_api::smartrest::topic::C8yTopic;
 use camino::Utf8PathBuf;
+use mqtt_channel::TopicFilter;
 use std::path::Path;
 use std::path::PathBuf;
+use tedge_api::topic::ResponseTopic;
 use tedge_config::C8yUrlSetting;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::DeviceIdSetting;
@@ -65,4 +70,41 @@ impl C8yMapperConfig {
             c8y_host,
         ))
     }
+
+    pub fn subscriptions(config_dir: &Path) -> Result<TopicFilter, C8yMapperConfigError> {
+        let operations = Operations::try_new(config_dir.join("operations/c8y"))?;
+        let mut topic_filter: TopicFilter = vec![
+            "tedge/measurements",
+            "tedge/measurements/+",
+            "tedge/alarms/+/+",
+            "tedge/alarms/+/+/+",
+            "c8y-internal/alarms/+/+",
+            "c8y-internal/alarms/+/+/+",
+            "tedge/events/+",
+            "tedge/events/+/+",
+            "tedge/health/+",
+            "tedge/health/+/+",
+            C8yTopic::SmartRestRequest.to_string().as_str(),
+            ResponseTopic::SoftwareListResponse.as_str(),
+            ResponseTopic::SoftwareUpdateResponse.as_str(),
+            ResponseTopic::RestartResponse.as_str(),
+        ]
+        .try_into()
+        .expect("topics that mapper should subscribe to");
+
+        for topic in operations.topics_for_operations() {
+            topic_filter.add(&topic)?;
+        }
+
+        Ok(topic_filter)
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum C8yMapperConfigError {
+    #[error(transparent)]
+    FromOperationsError(#[from] OperationsError),
+
+    #[error(transparent)]
+    FromMqttError(#[from] mqtt_channel::MqttError),
 }

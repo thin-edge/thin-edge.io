@@ -219,7 +219,7 @@ pub fn log_message_sent<I: Debug>(target: &str, message: I) {
 /// The basic message box
 pub struct SimpleMessageBox<Input: Debug, Output> {
     input_receiver: LoggingReceiver<Input>,
-    pub output_sender: LoggingSender<Output>,
+    output_sender: LoggingSender<Output>,
 }
 
 impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
