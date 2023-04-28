@@ -16,10 +16,6 @@ pub enum MapperError {
     #[error(transparent)]
     FromMqttClient(#[from] MqttError),
 
-    #[cfg(test)] // this error is only used in a test so far
-    #[error("Home directory is not found.")]
-    HomeDirNotFound,
-
     #[error(transparent)]
     FromTEdgeConfig(#[from] TEdgeConfigError),
 

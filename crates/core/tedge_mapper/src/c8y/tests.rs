@@ -90,7 +90,7 @@ async fn mapper_publishes_software_update_request() {
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-    mqtt.skip(6).await;
+    mqtt.skip(6).await; //Skip all init messages
 
     // Simulate c8y_SoftwareUpdate SmartREST request
     mqtt.send(MqttMessage::new(
@@ -134,7 +134,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    mqtt.skip(6).await;
+    mqtt.skip(6).await; //Skip all init messages
 
     // Prepare and publish a software update status response message `executing` on `tedge/commands/res/software/update`.
     mqtt.send(MqttMessage::new(
@@ -185,7 +185,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    mqtt.skip(6).await;
+    mqtt.skip(6).await; //Skip all init messages
 
     // The agent publish an error
     let json_response = r#"
@@ -335,7 +335,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
     let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    mqtt.skip(6).await;
+    mqtt.skip(6).await; //Skip all init messages
 
     // Prepare and publish a c8y_SoftwareUpdate smartrest request on `c8y/s/ds` that contains a wrong action `remove`, that is not known by c8y.
     let smartrest = r#"528,test-device,nodered,1.0.0::debian,,remove"#;
@@ -365,9 +365,7 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
 async fn c8y_mapper_alarm_mapping_to_smartrest() {
     let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
-
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
     mqtt.skip(6).await; //Skip all init messages
 
     mqtt.send(MqttMessage::new(
@@ -384,179 +382,186 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
     .await;
 }
 
-/*
 #[tokio::test]
 #[serial]
 async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
-    let broker = mqtt_tests::test_mqtt_broker();
+    let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
+    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    mqtt.skip(6).await; //Skip all init messages
 
-    let mut messages = broker
-        .messages_published_on("c8y/s/us/external_sensor")
-        .await;
-    let cfg_dir = TempTedgeDir::new();
-    // Start the C8Y Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("tedge/alarms/minor/temperature_high/external_sensor"),
+        json!({ "text": "Temperature high" }).to_string(),
+    ))
+    .await
+    .unwrap();
 
-    broker
-        .publish_with_opts(
-            "tedge/alarms/minor/temperature_high/external_sensor",
-            r#"{ "text": "Temperature high" }"#,
-            mqtt_channel::QoS::AtLeastOnce,
-            true,
-        )
-        .await
-        .unwrap();
-
-    broker
-        .publish_with_opts(
-            "tedge/alarms/minor/temperature_high/external_sensor",
-            r#"{ "text": "Temperature high" }"#,
-            mqtt_channel::QoS::AtLeastOnce,
-            true,
-        )
-        .await
-        .unwrap();
-
-    // Expect converted temperature alarm message
-    mqtt_tests::assert_received_all_expected(
-        &mut messages,
-        TEST_TIMEOUT_MS,
-        &["303,temperature_high"],
+    // Expect child device creation and converted temperature alarm messages
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            (
+                "c8y/s/us",
+                "101,external_sensor,external_sensor,thin-edge.io-child",
+            ),
+            (
+                "c8y/s/us/external_sensor",
+                "303,temperature_high,\"Temperature high\"",
+            ),
+        ],
     )
     .await;
-
-    //Clear the previously published alarm
-    broker
-        .publish_with_opts(
-            "tedge/alarms/minor/temperature_high/external_sensor",
-            "",
-            mqtt_channel::QoS::AtLeastOnce,
-            true,
-        )
-        .await
-        .unwrap();
-
-    sm_mapper.abort();
 }
 
 #[tokio::test]
 #[serial]
 async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
-    let broker = mqtt_tests::test_mqtt_broker();
+    let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
+    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    mqtt.skip(6).await; //Skip all init messages
 
-    let mut messages = broker
-        .messages_published_on("c8y/alarm/alarms/create")
-        .await;
-    let cfg_dir = TempTedgeDir::new();
-    // Start the C8Y Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
-
-    broker
-        .publish_with_opts(
-            "tedge/alarms/major/custom_temperature_alarm",
-            r#"{ "text": "Temperature high","time":"2023-01-25T18:41:14.776170774Z","customFragment": {"nested":{"value": "extra info"}} }"#,
-            mqtt_channel::QoS::AtLeastOnce,
-            true,
-        )
-        .await
-        .unwrap();
-
-    let expected_msg = r#"{"severity":"MAJOR","type":"custom_temperature_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Temperature high","customFragment":{"nested":{"value":"extra info"}}}"#;
+    mqtt.send(MqttMessage::new(
+        &"tedge/alarms/major/custom_temperature_alarm"
+            .try_into()
+            .unwrap(),
+        json!({
+            "text": "Temperature high",
+            "time":"2023-01-25T18:41:14.776170774Z",
+            "customFragment": {
+                "nested": {
+                    "value": "extra info"
+                }
+            }
+        })
+        .to_string(),
+    ))
+    .await
+    .unwrap();
 
     // Expect converted temperature alarm message
-    mqtt_tests::assert_received_all_expected(&mut messages, TEST_TIMEOUT_MS, &[expected_msg]).await;
-    //Clear the previously published alarm
-    broker
-        .publish_with_opts(
-            "tedge/alarms/major/custom_temperature_alarm",
-            "",
-            mqtt_channel::QoS::AtLeastOnce,
-            true,
-        )
-        .await
-        .unwrap();
-
-    sm_mapper.abort();
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "c8y/alarm/alarms/create",
+            json!({
+                "type":"custom_temperature_alarm",
+                "severity":"MAJOR",
+                "time":"2023-01-25T18:41:14.776170774Z",
+                "text":"Temperature high",
+                "customFragment": {
+                    "nested": {
+                        "value":"extra info"
+                    }
+                }
+            }),
+        )],
+    )
+    .await;
 }
 
 #[tokio::test]
 #[serial]
 async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
-    let broker = mqtt_tests::test_mqtt_broker();
+    let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
+    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    mqtt.skip(6).await; //Skip all init messages
 
-    let mut messages = broker
-        .messages_published_on("c8y/alarm/alarms/create")
-        .await;
-    let cfg_dir = TempTedgeDir::new();
-    // Start the C8Y Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
+    mqtt.send(MqttMessage::new(
+        &"tedge/alarms/major/custom_temperature_alarm/external_sensor"
+            .try_into()
+            .unwrap(),
+        json!({
+            "text": "Temperature high",
+            "time":"2023-01-25T18:41:14.776170774Z",
+            "customFragment": {
+                "nested": {
+                    "value": "extra info"
+                }
+            }
+        })
+        .to_string(),
+    ))
+    .await
+    .unwrap();
 
-    broker
-        .publish_with_opts(
-            "tedge/alarms/major/temperature_alarm/external_sensor",
-            r#"{ "text":"Temperature high","time":"2023-01-25T18:41:14.776170774Z","customFragment":{"nested":{"value":"extra info"}}}"#,
-            mqtt_channel::QoS::AtLeastOnce,
-            true,
-        )
-        .await
-        .unwrap();
+    // Expect child device creation message
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
+            "101,external_sensor,external_sensor,thin-edge.io-child",
+        )],
+    )
+    .await;
 
-    let expected_msg = r#"{"externalSource":{"externalId":"external_sensor","type":"c8y_Serial"},"severity":"MAJOR","type":"temperature_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Temperature high","customFragment":{"nested":{"value":"extra info"}}}"#;
     // Expect converted temperature alarm message
-    mqtt_tests::assert_received_all_expected(&mut messages, TEST_TIMEOUT_MS, &[expected_msg]).await;
-    //Clear the previously published alarm
-    broker
-        .publish_with_opts(
-            "tedge/alarms/major/temperature_alarm/external_sensor",
-            "",
-            mqtt_channel::QoS::AtLeastOnce,
-            true,
-        )
-        .await
-        .unwrap();
-
-    sm_mapper.abort();
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "c8y/alarm/alarms/create",
+            json!({
+                "type":"custom_temperature_alarm",
+                "severity":"MAJOR",
+                "time":"2023-01-25T18:41:14.776170774Z",
+                "text":"Temperature high",
+                "customFragment": {
+                    "nested": {
+                        "value":"extra info"
+                    }
+                },
+                "externalSource": {
+                    "externalId":"external_sensor",
+                    "type":"c8y_Serial"
+                }
+            }),
+        )],
+    )
+    .await;
 }
 
 #[tokio::test]
 #[serial]
 async fn c8y_mapper_alarm_with_message_as_custom_fragment_mapping_to_c8y_json() {
-    let broker = mqtt_tests::test_mqtt_broker();
+    let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
+    timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    mqtt.skip(6).await; //Skip all init messages
 
-    let mut messages = broker
-        .messages_published_on("c8y/alarm/alarms/create")
-        .await;
-    let cfg_dir = TempTedgeDir::new();
-    // Start the C8Y Mapper
-    let (_tmp_dir, sm_mapper) = start_c8y_mapper(broker.port, &cfg_dir).await.unwrap();
+    mqtt.send(MqttMessage::new(
+        &"tedge/alarms/major/custom_msg_pressure_alarm"
+            .try_into()
+            .unwrap(),
+        json!({
+            "text": "Pressure high",
+            "time":"2023-01-25T18:41:14.776170774Z",
+            "message":"custom message"
+        })
+        .to_string(),
+    ))
+    .await
+    .unwrap();
 
-    broker
-        .publish_with_opts(
-            "tedge/alarms/major/custom_msg_pressure_alarm",
-            r#"{ "text":"Pressure high","time":"2023-01-25T18:41:14.776170774Z","message":"custom message"}"#,
-            mqtt_channel::QoS::AtLeastOnce,
-            true,
-        )
-        .await
-        .unwrap();
-
-    let expected_msg = r#"{"severity":"MAJOR","type":"custom_msg_pressure_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Pressure high","message":"custom message"}"#;
-
-    mqtt_tests::assert_received_all_expected(&mut messages, TEST_TIMEOUT_MS, &[expected_msg]).await;
-    //Clear the previously published alarm
-    broker
-        .publish_with_opts(
-            "tedge/alarms/major/custom_msg_pressure_alarm",
-            "",
-            mqtt_channel::QoS::AtLeastOnce,
-            true,
-        )
-        .await
-        .unwrap();
-
-    sm_mapper.abort();
+    // Expect converted temperature alarm message
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "c8y/alarm/alarms/create",
+            json!({
+                "type":"custom_msg_pressure_alarm",
+                "severity":"MAJOR",
+                "time":"2023-01-25T18:41:14.776170774Z",
+                "text":"Pressure high",
+                "message":"custom message"
+            }),
+        )],
+    )
+    .await;
 }
 
+/*
 #[tokio::test]
 #[serial]
 async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json() {
@@ -1403,7 +1408,7 @@ async fn mapper_handles_multiline_sm_requests() {
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    mqtt.skip(6).await;
+    mqtt.skip(6).await; //Skip all init messages
 
     // Prepare and publish multiline software update smartrest requests on `c8y/s/ds`.
     let smartrest = "528,test-device,nodered,1.0.0::debian,,install\n528,test-device,rolldice,2.0.0::debian,,install".to_string();
@@ -1482,7 +1487,7 @@ async fn mapper_publishes_child_device_create_message() {
 
     let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    mqtt.skip(6).await;
+    mqtt.skip(6).await; //Skip all init messages
 
     mqtt.send(MqttMessage::new(
         &C8yTopic::downstream_topic(),
@@ -1517,7 +1522,7 @@ async fn mapper_publishes_supported_operations_for_child_device() {
 
     let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    mqtt.skip(6).await;
+    mqtt.skip(6).await; //Skip all init messages
 
     mqtt.send(MqttMessage::new(
         &C8yTopic::downstream_topic(),
@@ -1549,7 +1554,7 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
 
     let (mqtt, _http, mut fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    mqtt.skip(6).await;
+    mqtt.skip(6).await; //Skip all init messages
 
     // Simulate FsEvent for the creation of a new operation file
     fs.send(FsWatchEvent::FileCreated(
@@ -1585,7 +1590,7 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
 
     let (mqtt, _http, mut fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    mqtt.skip(6).await;
+    mqtt.skip(6).await; //Skip all init messages
 
     // Add a new operation for the child device
     // Simulate FsEvent for the creation of a new operation file
