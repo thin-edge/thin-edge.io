@@ -41,7 +41,7 @@ Set configuration via environment variables
 Set unknown configuration via environment variables
     ${stdout}    ${stderr}=    Execute Command    env TEDGE_C8Y_UNKNOWN_CONFIGURATION\=dummy TEDGE_C8Y_URL\=example.com tedge config get c8y.url    stdout=${True}    stderr=${True}
     Should Be Equal    ${stdout}    example.com\n
-    Should Contain    ${stderr}    Unknown configuration field "c8y.unknown_configuration" from environment variable TEDGE_C8Y_UNKNOWN_CONFIGURATION
+    Should Contain    ${stderr}    Unknown configuration field "c8y_unknown_configuration" from environment variable TEDGE_C8Y_UNKNOWN_CONFIGURATION
 
 
 *** Keywords ***
