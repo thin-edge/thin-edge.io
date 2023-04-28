@@ -1,123 +1,190 @@
 #[doc(inline)]
 pub use tedge_config_macros_macro::define_tedge_config;
 
+extern crate self as tedge_config_macros;
+
+use camino::Utf8PathBuf;
+pub use connect_url::*;
+use default::*;
+use doku_aliases::*;
+pub use option::*;
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
+use std::num::NonZeroU16;
+use std::path::PathBuf;
+
+mod connect_url;
 mod default;
 mod doku_aliases;
-use default::{TEdgeConfigDefault, TEdgeConfigLocation};
-use doku_aliases::*;
+mod option;
 
-#[derive(serde::Deserialize, serde::Serialize, Clone, Copy)]
-#[serde(
-    from = "Option<T>",
-    into = "Option<T>",
-    bound = "T: Clone + serde::Serialize + serde::de::DeserializeOwned"
-)]
-pub enum OptionalConfig<T> {
-    Present(T),
-    Empty(&'static str),
-}
-
-impl<T> From<Option<T>> for OptionalConfig<T> {
-    fn from(value: Option<T>) -> Self {
-        value.map_or(Self::Empty(""), Self::Present)
-    }
-}
-
-impl<T> From<OptionalConfig<T>> for Option<T> {
-    fn from(value: OptionalConfig<T>) -> Self {
-        match value {
-            OptionalConfig::Present(t) => Some(t),
-            OptionalConfig::Empty(_key_name) => None,
-        }
-    }
-}
-
-pub enum OptionalConfigGroup<T> {
-    Present(T),
-    Empty(&'static str),
-    Partial(String),
-}
-
-#[derive(thiserror::Error, Debug)]
-#[error(
-    r#"A value for '{key}' is missing.\n\
-    A value can be set with `tedge config set {key} <value>`"#
-)]
-pub struct ConfigNotSet {
-    key: &'static str,
-}
-
-impl<T> OptionalConfig<T> {
-    pub fn or_none(&self) -> Option<&T> {
-        match self {
-            Self::Present(value) => Some(value),
-            Self::Empty(_) => None,
-        }
-    }
-
-    pub fn or_err(&self) -> Result<&T, ConfigNotSet> {
-        match self {
-            Self::Present(value) => Ok(value),
-            Self::Empty(key) => Err(ConfigNotSet { key }),
-        }
-    }
-}
-
-impl<T: doku::Document> doku::Document for OptionalConfig<T> {
-    fn ty() -> doku::Type {
-        Option::<T>::ty()
-    }
-}
-
-impl<T: doku::Document> doku::Document for OptionalConfigGroup<T> {
-    fn ty() -> doku::Type {
-        Option::<T>::ty()
-    }
-}
-
-use std::num::NonZeroU16;
+static DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 
 define_tedge_config! {
     device: {
-        #[serde(alias = "alias")]
-        nested_thing: {
-            /// A doc comment
-            #[tedge_config(example = "2", example = "12345")]
-            id: i32,
-            #[tedge_config(default(value = 1883_u16))]
-            test: u16,
-            #[tedge_config(default(function = "default_port"))]
-            #[serde(alias = "test222")]
+        /// Path where the device's private key is stored
+        #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem", default(function = "default_device_key"))]
+        #[doku(as = "PathBuf")]
+        key_path: Utf8PathBuf,
+
+        /// Path where the device's certificate is stored
+        #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem", default(function = "default_device_cert"))]
+        #[doku(as = "PathBuf")]
+        cert_path: Utf8PathBuf,
+
+        /// The default device type
+        #[tedge_config(example = "thin-edge.io")]
+        #[serde(rename = "type")]
+        device_type: String,
+    },
+
+    #[serde(alias = "azure")] // for 0.1.0 compatibility
+    az: {
+        /// Endpoint URL of Azure IoT tenant
+        #[tedge_config(example = "myazure.azure-devices.net")]
+        url: ConnectUrl,
+
+        /// The path where Azure IoT root certificate(s) are stared
+        #[tedge_config(note = "The value can be a directory path as well as the path of the direct certificate file.")]
+        #[tedge_config(example = "/etc/tedge/az-trusted-root-certificates.pem", default(variable = "DEFAULT_ROOT_CERT_PATH"))]
+        #[doku(as = "PathBuf")]
+        root_cert_path: Utf8PathBuf,
+
+        mapper: {
+            /// Whether the Azure IoT mapper should add a timestamp or not
+            #[tedge_config(example = "true")]
+            #[tedge_config(default(value = true))]
+            timestamp: bool,
+        }
+    },
+
+    mqtt: {
+        bind: {
+            /// The address mosquitto binds to for internal use
+            #[tedge_config(example = "127.0.0.1", default(variable = "Ipv4Addr::LOCALHOST"))]
+            address: IpAddr,
+
+            /// The port mosquitto binds to for internal use
+            #[tedge_config(example = "1883", default(function = "default_mqtt_port"))]
             #[doku(as = "u16")]
-            test2: NonZeroU16,
+            // This was originally u16, but I can't think of any way in which
+            // tedge could actually connect to mosquitto if it bound to a random
+            // free port, so I don't think 0 is *really* valid here
+            port: NonZeroU16,
         },
-        // #[tedge_config(reader(all_or_nothing))]
-        other_thing: {
-            // #[tedge_config(readonly)]
-            test2: u16,
+
+        client: {
+            /// The host that the thin-edge MQTT client should connect to
+            #[tedge_config(example = "localhost", default(value = "localhost"))]
+            host: String,
+
+            /// The port that the thin-edge MQTT client should connect to
+            #[tedge_config(default(from_path = "mqtt.bind.port"))]
+            #[doku(as = "u16")]
+            port: NonZeroU16,
+
+            auth: {
+                /// Path to the CA certificate used by MQTT clients to use when authenticating the MQTT broker
+                #[tedge_config(example = "/etc/mosquitto/ca_certificates/ca.crt")]
+                #[doku(as = "PathBuf")]
+                #[serde(alias = "cafile")]
+                ca_file: Utf8PathBuf,
+
+                /// Path to the directory containing the CA certificates used by MQTT
+                /// clients when authenticating the MQTT broker
+                #[tedge_config(example = "/etc/mosquitto/ca_certificates")]
+                #[doku(as = "PathBuf")]
+                #[serde(alias = "capath")]
+                ca_path: Utf8PathBuf,
+
+                /// Path to the client certficate
+                #[doku(as = "PathBuf")]
+                #[serde(alias = "certfile")]
+                cert_file: Utf8PathBuf,
+
+                /// Path to the client private key
+                #[doku(as = "PathBuf")]
+                #[serde(alias = "keyfile")]
+                key_file: Utf8PathBuf,
+            }
+        },
+
+        external: {
+            bind: {
+                /// The port mosquitto binds to for external use
+                #[tedge_config(example = "8883")]
+                port: u16,
+
+                /// The address mosquitto binds to for external use
+                #[tedge_config(example = "0.0.0.0")]
+                address: IpAddr,
+
+                /// Name of the network interface which mosquitto limits incoming connections on
+                #[tedge_config(example = "wlan0")]
+                interface: String,
+            },
+
+            /// Path to a file containing the PEM encoded CA certificates that are
+            /// trusted when checking incoming client certificates
+            #[tedge_config(example = "/etc/ssl/certs")]
+            #[doku(as = "PathBuf")]
+            #[serde(alias = "capath")]
+            ca_path: Utf8PathBuf,
+
+            /// Path to the certificate file which is used by the external MQTT listener
+            #[tedge_config(note = "This setting shall be used together with `mqtt.external.key_file` for external connections.")]
+            #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem")]
+            #[doku(as = "PathBuf")]
+            #[serde(alias = "certfile")]
+            cert_file: Utf8PathBuf,
+
+            /// Path to the key file which is used by the external MQTT listener
+            #[tedge_config(note = "This setting shall be used together with `mqtt.external.cert_file` for external connections.")]
+            #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem")]
+            #[doku(as = "PathBuf")]
+            #[serde(alias = "keyfile")]
+            key_file: Utf8PathBuf,
         }
     }
 }
 
-fn default_port(_: &TEdgeConfigDto) -> NonZeroU16 {
-    NonZeroU16::try_from(183).unwrap()
+fn default_device_key(location: &TEdgeConfigLocation) -> Utf8PathBuf {
+    location
+        .tedge_config_root_path()
+        .join("device-certs")
+        .join("tedge-private-key.pem")
+}
+
+fn default_device_cert(location: &TEdgeConfigLocation) -> Utf8PathBuf {
+    location
+        .tedge_config_root_path()
+        .join("device-certs")
+        .join("tedge-certificate.pem")
+}
+
+fn default_mqtt_port() -> NonZeroU16 {
+    NonZeroU16::try_from(1883).unwrap()
+}
+
+#[test]
+fn root_cert_path_default() {
+    let dto = TEdgeConfigDto::default();
+    let reader = TEdgeConfigReader::from_dto(&dto, &TEdgeConfigLocation);
+    assert_eq!(reader.az.root_cert_path, "/etc/ssl/certs");
 }
 
 #[test]
 fn writable_keys_can_be_parsed_from_aliases() {
-    let _: WritableKey = "device.alias.test222".parse().unwrap();
-    let _: WritableKey = "device.nested_thing.test222".parse().unwrap();
-    let _: WritableKey = "device.nested_thing.test2".parse().unwrap();
-    let _: WritableKey = "device.alias.test2".parse().unwrap();
+    let _: WritableKey = "az.mapper.timestamp".parse().unwrap();
+    let _: WritableKey = "azure.mapper.timestamp".parse().unwrap();
 }
 
 #[test]
 fn readable_keys_can_be_parsed_from_aliases() {
-    let _: ReadableKey = "device.alias.test222".parse().unwrap();
-    let _: ReadableKey = "device.nested_thing.test222".parse().unwrap();
-    let _: ReadableKey = "device.nested_thing.test2".parse().unwrap();
-    let _: ReadableKey = "device.alias.test2".parse().unwrap();
+    let _: ReadableKey = "az.mapper.timestamp".parse().unwrap();
+    let _: ReadableKey = "azure.mapper.timestamp".parse().unwrap();
 }
+
 #[test]
 fn default_from_path_uses_the_correct_default() {
     #![allow(unused_variables)]

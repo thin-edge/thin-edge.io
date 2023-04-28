@@ -4,7 +4,8 @@ use quote::quote;
 use std::collections::VecDeque;
 use syn::parse_quote;
 
-use crate::input::{ConfigurableField, FieldOrGroup};
+use crate::input::ConfigurableField;
+use crate::input::FieldOrGroup;
 
 pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     let paths = configuration_paths_from(items);

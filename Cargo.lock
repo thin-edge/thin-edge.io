@@ -3864,14 +3864,14 @@ dependencies = [
 name = "tedge_config_macros"
 version = "0.1.0"
 dependencies = [
+ "camino",
  "doku 0.21.0",
  "once_cell",
  "serde",
- "tedge_config_macros-impl",
  "tedge_config_macros-macro",
  "thiserror",
  "tracing",
- "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

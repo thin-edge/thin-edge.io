@@ -2,8 +2,15 @@
 //!
 //! This is designed to take a [proc_macro2::TokenStream] and turn it into
 //! something useful with the aid of [syn].
-use darling::{util::SpannedValue, FromAttributes, FromField, FromMeta};
-use syn::{parse::Parse, punctuated::Punctuated, spanned::Spanned, Attribute, Token};
+use darling::util::SpannedValue;
+use darling::FromAttributes;
+use darling::FromField;
+use darling::FromMeta;
+use syn::parse::Parse;
+use syn::punctuated::Punctuated;
+use syn::spanned::Spanned;
+use syn::Attribute;
+use syn::Token;
 
 #[derive(Debug)]
 pub struct Configuration {
@@ -103,6 +110,8 @@ pub struct ConfigurableField {
     pub rename: Option<String>,
     #[darling(default)]
     pub default: Option<FieldDefault>,
+    #[darling(default)]
+    pub note: Option<SpannedValue<String>>,
     #[darling(multiple, rename = "example")]
     pub examples: Vec<SpannedValue<String>>,
     pub ident: Option<syn::Ident>,
@@ -111,6 +120,7 @@ pub struct ConfigurableField {
 
 #[derive(Debug, FromMeta, PartialEq, Eq)]
 pub enum FieldDefault {
+    Variable(syn::Path),
     Function(syn::Expr),
     FromPath(Punctuated<syn::Ident, syn::Token![.]>),
     Value(syn::Lit),
@@ -120,6 +130,7 @@ pub enum FieldDefault {
 impl FieldDefault {
     pub fn possible_span(&self) -> Option<proc_macro2::Span> {
         match self {
+            Self::Variable(v) => Some(v.span()),
             Self::FromPath(p) => Some(p.span()),
             Self::Function(f) => Some(f.span()),
             Self::Value(v) => Some(v.span()),

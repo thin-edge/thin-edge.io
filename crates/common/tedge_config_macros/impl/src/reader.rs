@@ -4,13 +4,17 @@
 //! been configured
 use optional_error::OptionalError;
 use proc_macro2::TokenStream;
-use quote::{quote, quote_spanned};
-use syn::{parse_quote_spanned, punctuated::Punctuated, spanned::Spanned, Token};
+use quote::quote;
+use quote::quote_spanned;
+use syn::parse_quote_spanned;
+use syn::punctuated::Punctuated;
+use syn::spanned::Spanned;
+use syn::Token;
 
-use crate::{
-    input::{ConfigurableField, FieldDefault, FieldOrGroup},
-    prefixed_type_name,
-};
+use crate::input::ConfigurableField;
+use crate::input::FieldDefault;
+use crate::input::FieldOrGroup;
+use crate::prefixed_type_name;
 
 pub fn try_generate(
     root_name: proc_macro2::Ident,
@@ -161,7 +165,7 @@ fn reader_value_for_field(
             .join(".");
         match &field.default {
             FieldDefault::None => quote! {
-                match dto.#(#parents).*.#name {
+                match &dto.#(#parents).*.#name {
                     None => OptionalConfig::Empty(#key),
                     Some(value) => OptionalConfig::Present(value.clone()),
                 }
@@ -190,6 +194,12 @@ fn reader_value_for_field(
                 }
             },
             FieldDefault::Value(default) => quote_spanned! {name.span()=>
+                match &dto.#(#parents).*.#name {
+                    None => #default.into(),
+                    Some(value) => value.clone(),
+                }
+            },
+            FieldDefault::Variable(default) => quote_spanned! {name.span()=>
                 match &dto.#(#parents).*.#name {
                     None => #default.into(),
                     Some(value) => value.clone(),

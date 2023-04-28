@@ -2,15 +2,14 @@
 name = "tedge_config_macros"
 version = "0.1.0"
 edition = "2021"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-once_cell = "*"
-tedge_config_macros-macro = { path = "macro" }
-tedge_config_macros-impl = { path = "impl" }
+camino = { version = "*", features = ["serde1"] }
 doku = "0.21.0"
-thiserror = "1.0"
+once_cell = "*"
 serde = "*"
+tedge_config_macros-macro = { path = "macro" }
+thiserror = "1.0"
 tracing = "*"
-tracing-subscriber = "*"
+url = "*"

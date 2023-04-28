@@ -1,8 +1,10 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse_quote, parse_quote_spanned};
+use syn::parse_quote_spanned;
+use syn::spanned::Spanned;
 
-use crate::{input::FieldOrGroup, prefixed_type_name, utils::extract_type_from_option};
+use crate::input::FieldOrGroup;
+use crate::prefixed_type_name;
 
 pub fn generate(name: proc_macro2::Ident, items: &[FieldOrGroup]) -> TokenStream {
     let mut idents = Vec::new();
@@ -15,7 +17,10 @@ pub fn generate(name: proc_macro2::Ident, items: &[FieldOrGroup]) -> TokenStream
             FieldOrGroup::Field(field) => {
                 if !field.dto().skip && field.read_only().is_none() {
                     idents.push(field.ident());
-                    tys.push(make_optional(field.ty()));
+                    tys.push({
+                        let ty = field.ty();
+                        parse_quote_spanned!(ty.span()=> Option<#ty>)
+                    });
                     sub_dtos.push(None);
                     attrs.push(field.attrs().iter().filter(is_preserved).collect());
                 }
@@ -46,11 +51,6 @@ pub fn generate(name: proc_macro2::Ident, items: &[FieldOrGroup]) -> TokenStream
     }
 }
 
-fn make_optional(ty: &syn::Type) -> syn::Type {
-    let non_optional = extract_type_from_option(ty).unwrap_or(ty);
-    parse_quote!(Option<#non_optional>)
-}
-
 fn is_preserved(attr: &&syn::Attribute) -> bool {
     match attr.parse_meta() {
         // Maybe cfg is useful. Certainly seems sensible to preserve it
@@ -62,23 +62,9 @@ fn is_preserved(attr: &&syn::Attribute) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use syn::parse_quote;
+
     use super::*;
-
-    #[test]
-    fn existing_options_are_preserved_in_dto_field() {
-        assert_eq!(
-            make_optional(&parse_quote!(Option<String>)),
-            parse_quote!(Option<String>)
-        );
-    }
-
-    #[test]
-    fn fields_without_option_are_wrapped_in_dto_field() {
-        assert_eq!(
-            make_optional(&parse_quote!(String)),
-            parse_quote!(Option<String>),
-        );
-    }
 
     #[test]
     fn doc_comments_are_preserved() {

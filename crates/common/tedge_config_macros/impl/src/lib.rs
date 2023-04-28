@@ -2,14 +2,16 @@
 
 use heck::ToUpperCamelCase;
 use optional_error::OptionalError;
-use proc_macro2::{Span, TokenStream};
-use quote::{quote, quote_spanned};
+use proc_macro2::Span;
+use proc_macro2::TokenStream;
+use quote::quote;
+use quote::quote_spanned;
 
 mod dto;
+mod error;
 mod input;
 mod query;
 mod reader;
-mod utils;
 
 #[doc(hidden)]
 pub fn generate_configuration(tokens: TokenStream) -> Result<TokenStream, syn::Error> {

@@ -1,13 +1,22 @@
+use camino::Utf8Path;
+
 /// An abstraction over the possible default functions for tedge config values
 ///
 /// Some configuration defaults are relative to the config location, and
-/// this trait allows us to pass that i
+/// this trait allows us to pass that in, or the DTO, both, or neither!
 pub trait TEdgeConfigDefault<T, Args> {
     type Output;
     fn call(self, data: &T, location: &TEdgeConfigLocation) -> Self::Output;
 }
 
+/// A dummy tedge config location
 pub struct TEdgeConfigLocation;
+
+impl TEdgeConfigLocation {
+    pub fn tedge_config_root_path(&self) -> &Utf8Path {
+        "/etc/tedge".into()
+    }
+}
 
 impl<F, Out, T> TEdgeConfigDefault<T, ()> for F
 where

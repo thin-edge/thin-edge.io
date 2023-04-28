@@ -1,9 +1,13 @@
 use darling::util::SpannedValue;
 use optional_error::OptionalError;
+use syn::parse_quote_spanned;
 
-use crate::utils::combine_errors;
+use crate::error::combine_errors;
 
-pub use super::parse::{FieldDefault, FieldDtoSettings, GroupDtoSettings, ReaderSettings};
+pub use super::parse::FieldDefault;
+pub use super::parse::FieldDtoSettings;
+pub use super::parse::GroupDtoSettings;
+pub use super::parse::ReaderSettings;
 
 pub struct Configuration {
     pub groups: Vec<FieldOrGroup>,
@@ -171,7 +175,7 @@ impl ConfigurableField {
 
 impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
     type Error = syn::Error;
-    fn try_from(value: super::parse::ConfigurableField) -> Result<Self, Self::Error> {
+    fn try_from(mut value: super::parse::ConfigurableField) -> Result<Self, Self::Error> {
         if *value.readonly {
             let mut error = OptionalError::default();
             for example in &value.examples {
@@ -179,6 +183,10 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
                     example.span(),
                     "Cannot use `example` on read only field",
                 ))
+            }
+
+            if let Some(note) = value.note {
+                value.attrs.push(tedge_note_to_doku_meta(&note));
             }
 
             error.try_throw().map(|_| {
@@ -192,6 +200,10 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
                 })
             })
         } else {
+            if let Some(note) = value.note {
+                value.attrs.push(tedge_note_to_doku_meta(&note));
+            }
+
             Ok(Self::ReadWrite(ReadWriteField {
                 attrs: value.attrs,
                 rename: value.rename,
@@ -204,6 +216,11 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
             }))
         }
     }
+}
+
+fn tedge_note_to_doku_meta(note: &SpannedValue<String>) -> syn::Attribute {
+    let meta = format!("note = {}", note.as_str());
+    parse_quote_spanned!(note.span()=> #[doku(meta(#meta))])
 }
 
 #[cfg(test)]
