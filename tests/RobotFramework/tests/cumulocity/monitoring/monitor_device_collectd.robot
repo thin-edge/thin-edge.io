@@ -20,7 +20,6 @@ Documentation      With thin-edge.io device monitoring, you can collect metrics 
 Resource        ../../../resources/common.resource
 Library         ThinEdgeIO
 Library         Cumulocity
-Library        JSONLibrary
 
 Suite Setup     Custom Setup
 Test Teardown    Get Logs
