@@ -41,56 +41,56 @@ set/unset device.type
 set/unset device.key.path
     Execute Command    sudo tedge config set device.key.path /etc/tedge/device-certs1/tedge-private-key.pem    #Changing device.key.path
     ${set}     Execute Command    tedge config list
-    Should Contain    ${set}    device.key.path=/etc/tedge/device-certs1/tedge-private-key.pem
+    Should Contain    ${set}    device.key_path=/etc/tedge/device-certs1/tedge-private-key.pem
 
     Execute Command    sudo tedge config unset device.key.path    #Undo the change by using the 'unset' command, value returns to default one
     ${unset}     Execute Command    tedge config list
-    Should Contain    ${unset}    device.key.path=/etc/tedge/device-certs/tedge-private-key.pem
+    Should Contain    ${unset}    device.key_path=/etc/tedge/device-certs/tedge-private-key.pem
 
 set/unset device.cert.path
     Execute Command    sudo tedge config set device.cert.path /etc/tedge/device-certs1/tedge-certificate.pem   #Changing device.cert.path
     ${set}     Execute Command    tedge config list
-    Should Contain    ${set}    device.cert.path=/etc/tedge/device-certs1/tedge-certificate.pem
+    Should Contain    ${set}    device.cert_path=/etc/tedge/device-certs1/tedge-certificate.pem
 
     Execute Command    sudo tedge config unset device.cert.path    #Undo the change by using the 'unset' command, value returns to default one
     ${unset}     Execute Command    tedge config list
-    Should Contain    ${unset}    device.cert.path=/etc/tedge/device-certs/tedge-certificate.pem
+    Should Contain    ${unset}    device.cert_path=/etc/tedge/device-certs/tedge-certificate.pem
 
 set/unset c8y.root.cert.path
     Execute Command    sudo tedge config set c8y.root.cert.path /etc/ssl/certs1   #Changing c8y.root.cert.path
     ${set}     Execute Command    tedge config list
-    Should Contain    ${set}    c8y.root.cert.path=/etc/ssl/certs1
+    Should Contain    ${set}    c8y.root_cert_path=/etc/ssl/certs1
 
     Execute Command    sudo tedge config unset c8y.root.cert.path    #Undo the change by using the 'unset' command, value returns to default one
     ${unset}     Execute Command    tedge config list
-    Should Contain    ${unset}    c8y.root.cert.path=/etc/ssl/certs
+    Should Contain    ${unset}    c8y.root_cert_path=/etc/ssl/certs
 
 set/unset c8y.smartrest.templates
-    Execute Command    sudo tedge config set c8y.smartrest.templates 1   #Changing c8y.smartrest.templates
+    Execute Command    sudo tedge config set c8y.smartrest.templates id1   #Changing c8y.smartrest.templates
     ${set}     Execute Command    tedge config list
-    Should Contain    ${set}    c8y.smartrest.templates=["1"]
+    Should Contain    ${set}    c8y.smartrest_templates=["id1"]
 
     Execute Command    sudo tedge config unset c8y.smartrest.templates    #Undo the change by using the 'unset' command, value returns to default one
     ${unset}     Execute Command    tedge config list
-    Should Contain    ${unset}    c8y.smartrest.templates=[]
+    Should Contain    ${unset}    c8y.smartrest_templates=[]
 
 set/unset az.root.cert.path
     Execute Command    sudo tedge config set az.root.cert.path /etc/ssl/certs1   #Changing az.root.cert.path
     ${set}     Execute Command    tedge config list
-    Should Contain    ${set}    az.root.cert.path=/etc/ssl/certs1
+    Should Contain    ${set}    az.root_cert_path=/etc/ssl/certs1
 
     Execute Command    sudo tedge config unset az.root.cert.path    #Undo the change by using the 'unset' command, value returns to default one
     ${unset}     Execute Command    tedge config list
-    Should Contain    ${unset}    az.root.cert.path=/etc/ssl/certs
+    Should Contain    ${unset}    az.root_cert_path=/etc/ssl/certs
 
 set/unset az.mapper.timestamp
     Execute Command    sudo tedge config set az.mapper.timestamp false  #Changing az.mapper.timestamp
     ${set}     Execute Command    tedge config list
-    Should Contain    ${set}    az.mapper.timestamp=false
+    Should Contain    ${set}    az.mapper_timestamp=false
 
     Execute Command    sudo tedge config unset az.mapper.timestamp    #Undo the change by using the 'unset' command, value returns to default one
     ${unset}     Execute Command    tedge config list
-    Should Contain    ${unset}    az.mapper.timestamp=true
+    Should Contain    ${unset}    az.mapper_timestamp=true
 
 set/unset mqtt.bind_address
     Execute Command    sudo tedge config set mqtt.bind_address 127.1.1.1  #Changing mqtt.bind_address
