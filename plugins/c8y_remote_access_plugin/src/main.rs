@@ -38,7 +38,10 @@ async fn main() -> miette::Result<()> {
     let command = input::parse_arguments()?;
 
     match command {
-        Command::Init => declare_supported_operation(config_dir.tedge_config_root_path()),
+        Command::Init => declare_supported_operation(config_dir.tedge_config_root_path())
+            .with_context(|| {
+                "Failed to initialize c8y-remote-access-plugin. You have to run the command with sudo."
+            }),
         Command::Cleanup => {
             remove_supported_operation(config_dir.tedge_config_root_path());
             Ok(())

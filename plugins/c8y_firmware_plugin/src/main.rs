@@ -1,3 +1,4 @@
+use anyhow::Context;
 use c8y_firmware_manager::create_directories;
 use c8y_firmware_manager::FirmwareManagerBuilder;
 use c8y_firmware_manager::FirmwareManagerConfig;
@@ -72,7 +73,12 @@ async fn main() -> Result<(), anyhow::Error> {
     let tedge_config = config_repository.load()?;
 
     if firmware_plugin_opt.init {
-        init(&tedge_config)
+        init(&tedge_config).with_context(|| {
+            format!(
+                "Failed to initialize {}. You have to run the command with sudo.",
+                PLUGIN_NAME
+            )
+        })
     } else {
         run(tedge_config).await
     }
