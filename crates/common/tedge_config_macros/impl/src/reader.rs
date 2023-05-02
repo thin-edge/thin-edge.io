@@ -80,7 +80,7 @@ fn generate_structs(
     }
 
     Ok(quote! {
-        #[derive(::doku::Document, ::serde::Serialize)]
+        #[derive(::doku::Document, ::serde::Serialize, Debug)]
         #[non_exhaustive]
         pub struct #name {
             #(
@@ -170,7 +170,7 @@ fn reader_value_for_field(
             FieldDefault::None => quote! {
                 match &dto.#(#parents).*.#name {
                     None => OptionalConfig::Empty(#key),
-                    Some(value) => OptionalConfig::Present(value.clone()),
+                    Some(value) => OptionalConfig::Present { value: value.clone(), key: #key },
                 }
             },
             FieldDefault::FromPath(path) => {
