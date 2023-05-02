@@ -101,7 +101,7 @@ jobs:
       - name: Run cargo-udeps
         uses: aig787/cargo-udeps-action@v1
         with:
-          version: 'latest'
+          version: 'v0.1.35'
           args: '--all-features'
 
   mdbook-build-check:
