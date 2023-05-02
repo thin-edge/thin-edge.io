@@ -11,6 +11,7 @@ use tedge_actors::Actor;
 use tedge_actors::ClientId;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
+use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
 use tedge_actors::ServerMessageBox;
 use tokio::time::sleep_until;
@@ -162,6 +163,17 @@ impl PartialEq for TimerEntry {
     }
 }
 
+impl From<TimerEntry> for (ClientId, Timeout<AnyPayload>) {
+    fn from(request: TimerEntry) -> Self {
+        (
+            request.client_id,
+            Timeout {
+                event: request.event_id,
+            },
+        )
+    }
+}
+
 /// A pending timer along a future that will awake when the requested time elapses
 struct SleepHandle {
     timer: TimerEntry,
@@ -174,6 +186,16 @@ impl Actor for TimerActor {
         "Timer"
     }
 
+    /// Process [SetTimeout] requests,
+    /// waiting for each the specified amount of time
+    /// and sending a [Timeout] to caller when time elapses.
+    ///
+    /// When the stream of requests is closed,
+    /// process all the pending timers to completion,
+    /// before terminating.
+    ///
+    /// When an explicit [RuntimeRequest::Shutdown] is received,
+    /// all the pending timers are simply aborted.
     async fn run(&mut self) -> Result<(), RuntimeError> {
         loop {
             if let Some(current) = self.current_timer.take() {
@@ -182,19 +204,28 @@ impl Actor for TimerActor {
                 // Wait either for a new request or the current timer to elapse
                 tokio::select! {
                     () = time_elapsed => {
-                        let caller = current_timer.client_id;
-                        let response = Timeout {
-                            event: current_timer.event_id
-                        };
-                        self.messages.send((caller, response)).await?;
+                        self.messages.send(current_timer.into()).await?;
                         self.start_next_timer()
                     },
-                    maybe_message = self.messages.recv() => {
-                        // The current timer has to be restarted
-                        self.start_timer(current_timer);
-
-                        if let Some(timer_request) = maybe_message {
-                            self.push(timer_request);
+                    maybe_message = self.messages.try_recv() => {
+                        match maybe_message {
+                            Ok(Some(timer_request)) => {
+                                // The current timer has to be restarted,
+                                // before the new one is pushed.
+                                self.start_timer(current_timer);
+                                self.push(timer_request);
+                            }
+                            Ok(None) => {
+                                // There is no more input.
+                                // The current timer has to be restarted,
+                                // Before terminating by awaiting all the pending timers.
+                                self.start_timer(current_timer);
+                                break;
+                            }
+                            Err(RuntimeRequest::Shutdown) => {
+                                // Stop immediately
+                                return Ok(());
+                            }
                         }
                     },
                 }
@@ -209,6 +240,14 @@ impl Actor for TimerActor {
                     Some(timer_request) => self.push(timer_request),
                 }
             }
+        }
+
+        // There is no more inputs
+        // So simply await all the pending timers in turn
+        while let Some(SleepHandle { sleep, timer }) = self.current_timer.take() {
+            sleep.await;
+            self.messages.send(timer.into()).await?;
+            self.start_next_timer()
         }
 
         Ok(())
