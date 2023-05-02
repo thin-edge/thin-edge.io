@@ -3,16 +3,12 @@ use super::actor::SyncComplete;
 use super::actor::SyncStart;
 use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
-use super::converter::CumulocityDeviceInfo;
 use crate::core::converter::Converter;
-use crate::core::converter::MapperConfig;
 use crate::core::error::ConversionError;
-use crate::core::size_threshold::SizeThreshold;
 use crate::core::size_threshold::SizeThresholdExceededError;
 use anyhow::Result;
 use assert_json_diff::assert_json_include;
 use assert_matches::assert_matches;
-use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
@@ -20,7 +16,6 @@ use c8y_http_proxy::messages::C8YRestResult;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 use serde_json::json;
-use std::collections::HashMap;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::Actor;
@@ -1068,7 +1063,7 @@ async fn test_convert_big_measurement() {
     assert!(payload.starts_with(
         r#"The payload {"temperature0":0,"temperature1":1,"temperature10" received on tedge/measurements after translation is"#
     ));
-    assert!(payload.ends_with("greater than the threshold size of 16384."));
+    assert!(payload.ends_with("greater than the threshold size of 16184."));
 }
 
 #[tokio::test]
@@ -1106,7 +1101,7 @@ async fn test_convert_big_measurement_for_child_device() {
     assert!(payload.starts_with(
         r#"The payload {"temperature0":0,"temperature1":1,"temperature10" received on tedge/measurements/child1 after translation is"#
     ));
-    assert!(payload.ends_with("greater than the threshold size of 16384."));
+    assert!(payload.ends_with("greater than the threshold size of 16184."));
 }
 
 #[tokio::test]
@@ -1456,47 +1451,32 @@ async fn create_c8y_converter() -> (
     CumulocityConverter,
     SimpleMessageBox<C8YRestRequest, C8YRestResult>,
 ) {
-    let size_threshold = SizeThreshold(16 * 1024);
-    let device_name = "test-device".into();
+    let device_id = "test-device".into();
     let device_type = "test-device-type".into();
-    let operations = Operations::default();
     let service_type = "service".into();
     let c8y_host = "test.c8y.io".into();
 
     let tmp_dir = TempTedgeDir::new();
+    tmp_dir.dir("operations").dir("c8y");
+
+    let config = C8yMapperConfig::new(
+        tmp_dir.to_path_buf(),
+        tmp_dir.utf8_path_buf(),
+        device_id,
+        device_type,
+        service_type,
+        c8y_host,
+    );
 
     let mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
+    let mqtt_publisher = LoggingSender::new("MQTT".into(), mqtt_builder.build().sender_clone());
+
     let mut c8y_proxy_builder: SimpleMessageBoxBuilder<C8YRestRequest, C8YRestResult> =
         SimpleMessageBoxBuilder::new("C8Y", 1);
-
     let http_proxy = C8YHttpProxy::new("C8Y", &mut c8y_proxy_builder);
-    let mapper_config = MapperConfig {
-        out_topic: Topic::new_unchecked("c8y/measurement/measurements/create"),
-        errors_topic: Topic::new_unchecked("tedge/errors"),
-    };
 
-    let device_info = CumulocityDeviceInfo {
-        device_name,
-        device_type,
-        operations,
-        service_type,
-        c8y_host,
-    };
-
-    let child_ops: HashMap<String, Operations> = HashMap::new();
-
-    let converter = CumulocityConverter::new(
-        size_threshold,
-        device_info,
-        LoggingSender::new("MQTT".into(), mqtt_builder.build().sender_clone()),
-        http_proxy,
-        tmp_dir.path(),
-        tmp_dir.to_path_buf().try_into().unwrap(),
-        child_ops,
-        mapper_config,
-    )
-    .unwrap();
+    let converter = CumulocityConverter::new(config, mqtt_publisher, http_proxy).unwrap();
 
     (tmp_dir, converter, c8y_proxy_builder.build())
 }
@@ -1540,8 +1520,7 @@ async fn spawn_c8y_mapper_actor(
     let c8y_host = "test.c8y.io".into();
 
     if init {
-        let ops_dir = config_dir.dir("operations").dir("c8y");
-        assert!(ops_dir.path().is_dir(), "operatios directory not created");
+        config_dir.dir("operations").dir("c8y");
     }
 
     let config = C8yMapperConfig::new(

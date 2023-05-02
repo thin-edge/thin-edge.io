@@ -1,13 +1,8 @@
 use super::config::C8yMapperConfig;
-use super::config::MQTT_MESSAGE_SIZE_THRESHOLD;
 use super::converter::CumulocityConverter;
-use super::converter::CumulocityDeviceInfo;
 use super::dynamic_discovery::process_inotify_events;
 use crate::core::converter::Converter;
-use crate::core::converter::MapperConfig;
-use crate::core::size_threshold::SizeThreshold;
 use async_trait::async_trait;
-use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
@@ -211,37 +206,10 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
     fn try_build(self) -> Result<C8yMapperActor, Self::Error> {
         let mqtt_publisher = LoggingSender::new("C8yMapper => Mqtt".into(), self.mqtt_publisher);
         let timer_sender = LoggingSender::new("C8yMapper => Timer".into(), self.timer_sender);
-        let http_proxy = self.http_proxy;
 
-        let operations = Operations::try_new(self.config.ops_dir.clone())
-            .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
-        let child_ops = Operations::get_child_ops(self.config.ops_dir.clone())
-            .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
-        let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
-        let device_info = CumulocityDeviceInfo {
-            device_name: self.config.device_id.clone(),
-            device_type: self.config.device_type.clone(),
-            operations,
-            service_type: self.config.service_type.clone(),
-            c8y_host: self.config.c8y_host.clone(),
-        };
-
-        let mapper_config = MapperConfig {
-            out_topic: Topic::new_unchecked("c8y/measurement/measurements/create"),
-            errors_topic: Topic::new_unchecked("tedge/errors"),
-        };
-
-        let converter = CumulocityConverter::new(
-            size_threshold,
-            device_info,
-            mqtt_publisher.clone(),
-            http_proxy,
-            &self.config.config_dir,
-            self.config.logs_path.clone(),
-            child_ops,
-            mapper_config,
-        )
-        .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
+        let converter =
+            CumulocityConverter::new(self.config, mqtt_publisher.clone(), self.http_proxy)
+                .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
 
         let message_box = self.box_builder.build();
 

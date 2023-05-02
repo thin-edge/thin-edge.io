@@ -1,4 +1,6 @@
 use super::alarm_converter::AlarmConverter;
+use super::config::C8yMapperConfig;
+use super::config::MQTT_MESSAGE_SIZE_THRESHOLD;
 use super::error::CumulocityMapperError;
 use super::fragments::C8yAgentFragment;
 use super::fragments::C8yDeviceDataFragment;
@@ -12,6 +14,7 @@ use async_trait::async_trait;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
+use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::error::SmartRestDeserializerError;
 use c8y_api::smartrest::message::collect_smartrest_messages;
 use c8y_api::smartrest::message::get_failure_reason_for_smartrest;
@@ -36,7 +39,6 @@ use c8y_api::smartrest::topic::MapperSubscribeTopic;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use c8y_api::utils::child_device::new_child_device_message;
 use c8y_http_proxy::handle::C8YHttpProxy;
-use camino::Utf8PathBuf;
 use logged_command::LoggedCommand;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
@@ -83,16 +85,6 @@ const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "c8y/event/events/create";
 const TEDGE_AGENT_LOG_DIR: &str = "tedge/agent";
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
 
-#[derive(Debug)]
-pub struct CumulocityDeviceInfo {
-    pub device_name: String,
-    pub device_type: String,
-    pub operations: Operations,
-    pub service_type: String,
-    pub c8y_host: String,
-}
-
-// #[derive(Debug)]
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
     pub(crate) mapper_config: MapperConfig,
@@ -110,29 +102,32 @@ pub struct CumulocityConverter {
 }
 
 impl CumulocityConverter {
-    //HIPPO Simplify this constructor to take minimal inputs
     pub fn new(
-        size_threshold: SizeThreshold,
-        device_info: CumulocityDeviceInfo,
+        config: C8yMapperConfig,
         mqtt_publisher: LoggingSender<MqttMessage>,
         http_proxy: C8YHttpProxy,
-        cfg_dir: &Path,
-        logs_path: Utf8PathBuf,
-        children: HashMap<String, Operations>,
-        mapper_config: MapperConfig,
     ) -> Result<Self, CumulocityConverterBuildError> {
+        let device_name = config.device_id.clone();
+        let device_type = config.device_type.clone();
+        let service_type = config.service_type.clone();
+        let c8y_host = config.c8y_host.clone();
+
+        let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
+
+        let operations = Operations::try_new(config.ops_dir.clone())?;
+        let children = Operations::get_child_ops(config.ops_dir.clone())?;
+
         let alarm_converter = AlarmConverter::new();
 
-        let log_dir = PathBuf::from(&format!("{}/{TEDGE_AGENT_LOG_DIR}", logs_path));
+        let log_dir = config.logs_path.join(TEDGE_AGENT_LOG_DIR);
+        let operation_logs = OperationLogs::try_new(log_dir.into())?;
 
-        let operation_logs = OperationLogs::try_new(log_dir)?;
+        let c8y_endpoint = C8yEndPoint::new(&c8y_host, &device_name, "");
 
-        let device_name = device_info.device_name;
-        let device_type = device_info.device_type;
-        let operations = device_info.operations;
-        let service_type = device_info.service_type;
-
-        let c8y_endpoint = C8yEndPoint::new(&device_info.c8y_host, &device_name, "");
+        let mapper_config = MapperConfig {
+            out_topic: Topic::new_unchecked("c8y/measurement/measurements/create"),
+            errors_topic: Topic::new_unchecked("tedge/errors"),
+        };
 
         Ok(CumulocityConverter {
             size_threshold,
@@ -143,7 +138,7 @@ impl CumulocityConverter {
             operations,
             operation_logs,
             http_proxy,
-            cfg_dir: cfg_dir.to_path_buf(),
+            cfg_dir: config.config_dir,
             children,
             mqtt_publisher,
             service_type,
@@ -324,6 +319,9 @@ impl CumulocityConverter {
 pub enum CumulocityConverterBuildError {
     #[error(transparent)]
     InvalidConfig(#[from] TEdgeConfigError),
+
+    #[error(transparent)]
+    OperationsError(#[from] OperationsError),
 
     #[error(transparent)]
     OperationLogsError(#[from] OperationLogsError),
@@ -1023,7 +1021,11 @@ mod tests {
     use rand::SeedableRng;
     use serial_test::serial;
     use std::collections::HashMap;
-    use tedge_actors::{Builder, LoggingSender, Sender, SimpleMessageBox, SimpleMessageBoxBuilder};
+    use tedge_actors::Builder;
+    use tedge_actors::LoggingSender;
+    use tedge_actors::Sender;
+    use tedge_actors::SimpleMessageBox;
+    use tedge_actors::SimpleMessageBoxBuilder;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
