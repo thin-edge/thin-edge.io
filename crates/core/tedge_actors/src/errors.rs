@@ -1,6 +1,9 @@
 use thiserror::Error;
 use tokio::task::JoinError;
 
+/// A wrapper for errors raised from actors to the runtime.
+///
+/// Boxing is required as the errors of different actors would be of different sizes.
 pub type DynError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 /// Error raised while exchanging messages

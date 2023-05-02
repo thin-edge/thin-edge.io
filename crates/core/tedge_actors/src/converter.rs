@@ -1,3 +1,59 @@
+//! Actors that convert each input message into a sequence of output messages
+//!
+//! A [Converter] :
+//! - emits on start a sequence of output messages - the initialization messages
+//! - converts each received input message into a sequence of output messages,
+//! - emits on shutdown a sequence of output messages - the termination messages.
+//!
+//! Such a [Converter] is used as an actor, a [ConvertingActor], built and connected to peer actors
+//! using a [ConvertingActorBuilder].
+//!
+//! ```
+//! # use std::convert::Infallible;
+//! # use crate::tedge_actors::Converter;
+//! # use crate::tedge_actors::ConvertingActor;
+//! # use crate::tedge_actors::RuntimeError;
+//! # use crate::tedge_actors::SimpleMessageBoxBuilder;
+//! # use crate::tedge_actors::ServiceConsumer;
+//! struct Repeater;
+//!
+//! impl Converter for Repeater {
+//!     type Input = (u8,i32);
+//!     type Output = i32;
+//!     type Error = Infallible;
+//!
+//!     fn convert(&mut self, input: &Self::Input) -> Result<Vec<Self::Output>, Self::Error> {
+//!         let (n,msg) = *input;
+//!         let mut output = vec![];
+//!         for _i in 0..n {
+//!             output.push(msg);
+//!         }
+//!         Ok(output)
+//!     }
+//! }
+//!
+//! # #[tokio::main]
+//! # async fn main() -> Result<(),RuntimeError> {
+//! # use std::time::Duration;
+//! # use tedge_actors::{Actor, Builder, MessageReceiver, MessageSource, NoConfig, Sender};
+//! # use tedge_actors::test_helpers::MessageReceiverExt;
+//! let mut actor = ConvertingActor::builder("Repeater", Repeater, NoConfig);
+//! let mut test_box = SimpleMessageBoxBuilder::new("Test", 16).with_connection(&mut actor).build().with_timeout(Duration::from_millis(100));
+//! tokio::spawn(async move { actor.build().run().await });
+//!
+//! test_box.send((3, 42)).await?;
+//! test_box.assert_received([42,42,42]).await;
+//!
+//! test_box.send((0, 55)).await?;
+//! test_box.send((2, 1234)).await?;
+//! test_box.assert_received([1234,1234]).await;
+//!
+//! assert_eq!(test_box.recv().await, None);
+//!
+//! # Ok(())
+//! # }
+//! ```
+
 use crate::Actor;
 use crate::Builder;
 use crate::DynSender;
@@ -16,56 +72,18 @@ use crate::SimpleMessageBoxBuilder;
 use async_trait::async_trait;
 use std::convert::Infallible;
 
-/// An actor that converts input messages into output messages
+/// An actor that converts each input message into a sequence of output messages
 ///
-/// ```
-/// # use std::convert::Infallible;
-/// # use crate::tedge_actors::Converter;
-/// # use crate::tedge_actors::ConvertingActor;
-/// # use crate::tedge_actors::RuntimeError;
-/// # use crate::tedge_actors::SimpleMessageBoxBuilder;
-/// # use crate::tedge_actors::ServiceConsumer;
-/// struct Repeater;
-///
-/// impl Converter for Repeater {
-///     type Input = (u8,i32);
-///     type Output = i32;
-///     type Error = Infallible;
-///
-///     fn convert(&mut self, input: &Self::Input) -> Result<Vec<Self::Output>, Self::Error> {
-///         let (n,msg) = *input;
-///         let mut output = vec![];
-///         for _i in 0..n {
-///             output.push(msg);
-///         }
-///         Ok(output)
-///     }
-/// }
-///
-/// # #[tokio::main]
-/// # async fn main() -> Result<(),RuntimeError> {
-/// # use std::time::Duration;
-/// # use tedge_actors::{Actor, Builder, MessageReceiver, MessageSource, NoConfig, Sender};
-/// # use tedge_actors::test_helpers::MessageReceiverExt;
-/// let mut actor = ConvertingActor::builder("Repeater", Repeater, NoConfig);
-/// let mut test_box = SimpleMessageBoxBuilder::new("Test", 16).with_connection(&mut actor).build().with_timeout(Duration::from_millis(100));
-/// tokio::spawn(async move { actor.build().run().await });
-///
-/// test_box.send((3, 42)).await?;
-/// test_box.assert_received([42,42,42]).await;
-///
-/// test_box.send((0, 55)).await?;
-/// test_box.send((2, 1234)).await?;
-/// test_box.assert_received([1234,1234]).await;
-///
-/// assert_eq!(test_box.recv().await, None);
-///
-/// # Ok(())
-/// # }
-/// ```
 pub trait Converter: 'static + Send + Sync {
+    /// The input message type
     type Input: Message;
+
+    /// The output message type
     type Output: Message;
+
+    /// The type of conversion error
+    ///
+    /// The [Converter::convert_error] method is used to convert these errors into output messages
     type Error: std::error::Error + Send + Sync;
 
     /// Convert an input message into a vector of output messages
@@ -89,6 +107,7 @@ pub trait Converter: 'static + Send + Sync {
     }
 }
 
+/// Make an [Actor] from a [Converter]
 pub struct ConvertingActor<C: Converter> {
     name: String,
     converter: C,
@@ -158,6 +177,57 @@ impl<C: Converter> ConvertingActor<C> {
     }
 }
 
+/// Connect and build a [ConvertingActor] wrapping a [Converter] with some `Config`.
+///
+/// The config can be any value that can be converted into the configuration expected by the message source.
+/// For instance, a converter that consumes MQTT messages needs to provide subscription topics.
+///
+/// ```no_run
+/// # use std::convert::Infallible;
+/// # use tedge_actors::Builder;
+/// # use tedge_actors::Converter;
+/// # use tedge_actors::ConvertingActor;
+/// # use tedge_actors::MessageSink;
+/// # use tedge_actors::MessageSource;
+/// # use tedge_actors::NoConfig;
+/// # use tedge_actors::ServiceProvider;
+/// # #[derive(Debug)]
+/// # struct MqttMessage;
+/// # #[derive(Clone)]
+/// # struct TopicFilter(&'static str);
+/// /// A Converter that translates MQTT messages
+/// struct MyConverter;
+///
+/// impl Converter for MyConverter {
+///     type Input = MqttMessage;
+///     type Output = MqttMessage;
+///     type Error = Infallible;
+///
+///     fn convert(&mut self, input: &Self::Input) -> Result<Vec<Self::Output>, Self::Error> {
+///         todo!()
+///     }
+/// }
+///
+/// /// Return a converting actor connected to a peer that is both a source and sink of MQTT messages
+/// fn new_converter(
+///     mut mqtt_builder: impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage, NoConfig>
+/// ) -> ConvertingActor<MyConverter> {
+///     // Use a builder to connect and build the actor
+///     let mut converter_builder = ConvertingActor::builder(
+///         "MyConverter",
+///         MyConverter,
+///         TopicFilter("some/mqtt/topics/#"));
+///
+///     // Connect this actor as a sink of the mqtt actor, to receive input messages from it
+///     converter_builder.add_input(&mut mqtt_builder);
+///
+///     // Connect the same mqtt actor as a sink of this actor, to send output messages to it
+///     converter_builder.add_sink(&mut mqtt_builder);
+///
+///     // Finally build the actor
+///     converter_builder.build()
+/// }
+/// ```
 pub struct ConvertingActorBuilder<C: Converter, Config> {
     name: String,
     converter: C,

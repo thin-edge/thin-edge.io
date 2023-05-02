@@ -1,3 +1,4 @@
+//! Sending and receiving messages
 use crate::ChannelError;
 use crate::Message;
 use async_trait::async_trait;

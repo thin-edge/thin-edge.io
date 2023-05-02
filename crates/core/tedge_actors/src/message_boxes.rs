@@ -1,7 +1,7 @@
 //! Message boxes are the only way for actors to interact with each others.
 //!
 //! When an [Actor](crate::Actor) instance is spawned,
-//! this actor is given a [MessageBox](crate::MessageBox)
+//! this actor is given a [message box](crate::message_boxes)
 //! to collect its input [Messages](crate::Message) and to forward its output [Messages](crate::Message).
 //!
 //! Conceptually, a message box is a receiver of input messages combined with a sender of output messages.
@@ -70,7 +70,7 @@
 //!
 //! To address this diversity of message priority requirements,
 //! but also to add specific coordination among input and output channels,
-//! each [Actor](crate::Actor) is free to choose its own [MessageBox](crate::MessageBox) implementation:
+//! each [Actor](crate::Actor) is free to choose its own [message box](crate::message_boxes) implementation:
 //!
 //! ```no_run
 //! trait Actor {
@@ -85,17 +85,15 @@
 //! - [ClientMessageBox](crate::ClientMessageBox) for client actors that use a request-response service from a server actor,
 //!
 //!
-
+//! ## Implementing specific message boxes
+//!
+//! TODO
+//!
 use crate::channels::Sender;
-use crate::Builder;
 use crate::ChannelError;
 use crate::DynSender;
 use crate::Message;
-use crate::NoConfig;
 use crate::RuntimeRequest;
-use crate::ServiceConsumer;
-use crate::ServiceProvider;
-use crate::SimpleMessageBoxBuilder;
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::StreamExt;
@@ -216,7 +214,13 @@ pub fn log_message_sent<I: Debug>(target: &str, message: I) {
     info!(target: target, "send {message:?}");
 }
 
-/// The basic message box
+/// The basic message box to send and receive messages
+///
+/// - Handle runtime messages along regular ones
+/// - Log received messages when pull out of the box
+/// - Log sent messages when pushed into the target box
+///
+/// Such a box is connected to peer actors using a [SimpleMessageBoxBuilder](crate::SimpleMessageBoxBuilder).
 pub struct SimpleMessageBox<Input: Debug, Output> {
     input_receiver: LoggingReceiver<Input>,
     output_sender: LoggingSender<Output>,
@@ -310,116 +314,5 @@ impl<Input: Send> MessageReceiver<Input> for CombinedReceiver<Input> {
             Some(WrappedInput::Message(message)) => Some(message),
             _ => None,
         }
-    }
-}
-
-/// A message box for a request-response server
-pub type ServerMessageBox<Request, Response> =
-    SimpleMessageBox<(ClientId, Request), (ClientId, Response)>;
-
-/// Internal id assigned to a client actor of a server actor
-pub type ClientId = usize;
-
-/// A message box for services that handles requests concurrently
-pub struct ConcurrentServerMessageBox<Request: Debug, Response> {
-    /// Max concurrent requests
-    max_concurrency: usize,
-
-    /// Message box to interact with clients of this service
-    clients: ServerMessageBox<Request, Response>,
-
-    /// Pending responses
-    pending_responses: futures::stream::FuturesUnordered<PendingResult<(usize, Response)>>,
-}
-
-type PendingResult<R> = tokio::task::JoinHandle<R>;
-
-impl<Request: Message, Response: Message> ConcurrentServerMessageBox<Request, Response> {
-    pub(crate) fn new(
-        max_concurrency: usize,
-        clients: ServerMessageBox<Request, Response>,
-    ) -> Self {
-        ConcurrentServerMessageBox {
-            max_concurrency,
-            clients,
-            pending_responses: futures::stream::FuturesUnordered::new(),
-        }
-    }
-
-    pub async fn recv(&mut self) -> Option<(ClientId, Request)> {
-        self.next_request().await
-    }
-
-    pub async fn send(&mut self, message: (ClientId, Response)) -> Result<(), ChannelError> {
-        self.clients.send(message).await
-    }
-
-    async fn next_request(&mut self) -> Option<(usize, Request)> {
-        self.await_idle_processor().await;
-        loop {
-            tokio::select! {
-                Some(request) = self.clients.recv() => {
-                    return Some(request);
-                }
-                Some(result) = self.pending_responses.next() => {
-                    self.send_result(result).await;
-                }
-                else => {
-                    return None
-                }
-            }
-        }
-    }
-
-    async fn await_idle_processor(&mut self) {
-        if self.pending_responses.len() >= self.max_concurrency {
-            if let Some(result) = self.pending_responses.next().await {
-                self.send_result(result).await;
-            }
-        }
-    }
-
-    pub fn send_response_once_done(&mut self, pending_result: PendingResult<(ClientId, Response)>) {
-        self.pending_responses.push(pending_result);
-    }
-
-    async fn send_result(&mut self, result: Result<(usize, Response), tokio::task::JoinError>) {
-        if let Ok(response) = result {
-            let _ = self.clients.send(response).await;
-        }
-        // TODO handle error cases:
-        // - cancelled task
-        // - task panics
-        // - send fails
-    }
-}
-
-/// Client side handler of requests/responses sent to an actor
-///
-/// Note that this message box sends requests and receive responses.
-pub struct ClientMessageBox<Request, Response: Debug> {
-    messages: SimpleMessageBox<Response, Request>,
-}
-
-impl<Request: Message, Response: Message> ClientMessageBox<Request, Response> {
-    /// Create a new `ClientMessageBox` connected to the service.
-    pub fn new(
-        client_name: &str,
-        service: &mut impl ServiceProvider<Request, Response, NoConfig>,
-    ) -> Self {
-        let capacity = 1; // At most one response is ever expected
-        let messages = SimpleMessageBoxBuilder::new(client_name, capacity)
-            .with_connection(service)
-            .build();
-        ClientMessageBox { messages }
-    }
-
-    /// Send the request and await for a response
-    pub async fn await_response(&mut self, request: Request) -> Result<Response, ChannelError> {
-        self.messages.send(request).await?;
-        self.messages
-            .recv()
-            .await
-            .ok_or(ChannelError::ReceiveError())
     }
 }
