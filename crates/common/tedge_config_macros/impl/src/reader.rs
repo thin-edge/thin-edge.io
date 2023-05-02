@@ -2,6 +2,8 @@
 //!
 //! When reading the configuration, we want to see default values if nothing has
 //! been configured
+use std::iter;
+
 use optional_error::OptionalError;
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -161,6 +163,7 @@ fn reader_value_for_field(
         let key = parents
             .iter()
             .map(|p| p.to_string())
+            .chain(iter::once(name.to_string()))
             .collect::<Vec<_>>()
             .join(".");
         match &field.default {

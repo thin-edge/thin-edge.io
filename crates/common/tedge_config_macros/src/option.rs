@@ -4,12 +4,8 @@
 //! values, but with the addition of metadata (such as the relevant
 //! configuration key) to aid in producing informative error messages.
 
-#[derive(serde::Deserialize, serde::Serialize, Clone, Copy)]
-#[serde(
-    from = "Option<T>",
-    into = "Option<T>",
-    bound = "T: Clone + serde::Serialize + serde::de::DeserializeOwned"
-)]
+#[derive(serde::Serialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(into = "Option<T>", bound = "T: Clone + serde::Serialize")]
 /// The value for an optional configuration (i.e. one without a default value)
 pub enum OptionalConfig<T> {
     /// Equivalent to `Some(T)`
@@ -17,12 +13,6 @@ pub enum OptionalConfig<T> {
     /// Equivalent to `None`, but stores the configuration key to create a
     /// better error message
     Empty(&'static str),
-}
-
-impl<T> From<Option<T>> for OptionalConfig<T> {
-    fn from(value: Option<T>) -> Self {
-        value.map_or(Self::Empty(""), Self::Present)
-    }
 }
 
 impl<T> From<OptionalConfig<T>> for Option<T> {
