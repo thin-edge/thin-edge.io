@@ -1,0 +1,6 @@
+[exec]
+topic = "c8y/s/ds"
+on_message = "511"
+command = "/etc/tedge/operations/customop_handler.sh"
+timeout = 10
+forceful_timeout = 2

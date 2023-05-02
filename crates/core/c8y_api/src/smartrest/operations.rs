@@ -8,8 +8,13 @@ use crate::smartrest::error::OperationsError;
 use crate::smartrest::smartrest_serializer::SmartRestSerializer;
 use crate::smartrest::smartrest_serializer::SmartRestSetSupportedOperations;
 use serde::Deserialize;
+use serde::Deserializer;
 
 use super::error::SmartRestSerializerError;
+use std::time::Duration;
+
+const DEFAULT_GRACEFUL_TIMEOUT: Duration = Duration::from_secs(3600);
+const DEFAULT_FORCEFUL_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Operations are derived by reading files subdirectories per cloud /etc/tedge/operations directory
 /// Each operation is a file name in one of the subdirectories
@@ -22,6 +27,33 @@ pub struct OnMessageExec {
     on_message: Option<String>,
     topic: Option<String>,
     user: Option<String>,
+    #[serde(rename = "timeout")]
+    #[serde(default = "default_graceful_timeout", deserialize_with = "to_duration")]
+    pub graceful_timeout: Duration,
+    #[serde(default = "default_forceful_timeout", deserialize_with = "to_duration")]
+    pub forceful_timeout: Duration,
+}
+
+fn default_graceful_timeout() -> Duration {
+    DEFAULT_GRACEFUL_TIMEOUT
+}
+
+fn default_forceful_timeout() -> Duration {
+    DEFAULT_FORCEFUL_TIMEOUT
+}
+
+fn to_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let timeout = Deserialize::deserialize(deserializer)?;
+    Ok(Duration::from_secs(timeout))
+}
+
+impl OnMessageExec {
+    pub fn set_time_out(&mut self, timeout: Duration) {
+        self.graceful_timeout = timeout;
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq)]
@@ -47,6 +79,18 @@ impl Operation {
 
     pub fn template(&self) -> Option<String> {
         self.exec().and_then(|exec| exec.on_message.clone())
+    }
+
+    pub fn graceful_timeout(&self) -> Duration {
+        self.exec()
+            .map(|exec| exec.graceful_timeout)
+            .unwrap_or(DEFAULT_GRACEFUL_TIMEOUT)
+    }
+
+    pub fn forceful_timeout(&self) -> Duration {
+        self.exec()
+            .map(|exec| exec.forceful_timeout)
+            .unwrap_or(DEFAULT_FORCEFUL_TIMEOUT)
     }
 }
 
@@ -130,7 +174,6 @@ pub fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsErr
             let mut details = match fs::read(&path) {
                 Ok(bytes) => toml::from_slice::<Operation>(bytes.as_slice())
                     .map_err(|e| OperationsError::TomlError(path.to_path_buf(), e))?,
-
                 Err(err) => return Err(OperationsError::FromIo(err)),
             };
 
@@ -139,6 +182,7 @@ pub fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsErr
                 .and_then(|filename| filename.to_str())
                 .ok_or_else(|| OperationsError::InvalidOperationName(path.to_owned()))?
                 .to_owned();
+
             operations.add_operation(details);
         }
     }

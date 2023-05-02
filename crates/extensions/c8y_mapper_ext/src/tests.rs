@@ -6,6 +6,10 @@ use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
 use serde_json::json;
+use std::fs;
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::Actor;
@@ -21,6 +25,7 @@ use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
+use tedge_test_utils::fs::with_exec_permission;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_timer_ext::Timeout;
 
@@ -881,6 +886,323 @@ async fn mapper_updating_the_inventory_fragments_from_file() {
         )],
     )
     .await;
+}
+
+#[tokio::test]
+async fn custom_operation_without_timeout_successful() {
+    // The test assures SM Mapper correctly receives custom operation on `c8y/s/ds`
+    // and executes the custom operation successfully, no timeout given here.
+
+    let cfg_dir = TempTedgeDir::new();
+
+    let cmd_file = cfg_dir.path().join("command");
+    //create custom operation file
+    create_custom_op_file(&cfg_dir, cmd_file.as_path(), None, None);
+    //create command
+    let content = r#"#!/usr/bin/bash    
+    for i in {1..2}
+    do
+        sleep 1
+    done
+    echo "Executed successfully without timeout"
+    "#;
+    create_custom_cmd(cmd_file.as_path(), content);
+
+    let (mqtt, http, _fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.skip(6).await; //Skip all init messages
+
+    // Simulate c8y_Command SmartREST request
+    mqtt.send(MqttMessage::new(
+        &C8yTopic::downstream_topic(),
+        "511,test-device,c8y_Command",
+    ))
+    .await
+    .expect("Send failed");
+
+    // Expect `501` smartrest message on `c8y/s/us`.
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
+
+    // Expect `503` smartrest message on `c8y/s/us`.
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
+            "503,c8y_Command,\"Executed successfully without timeout\n\"",
+        )],
+    )
+    .await;
+
+    // assert the signterm is handled
+    let expected_content = "command \"511,test-device,c8y_Command\"
+exit status: 0
+
+stdout <<EOF
+Executed successfully without timeout
+EOF
+
+stderr <<EOF
+EOF
+";
+
+    assert_command_exec_log_content(cfg_dir, expected_content);
+}
+
+#[tokio::test]
+async fn custom_operation_with_timeout_successful() {
+    // The test assures SM Mapper correctly receives custom operation on `c8y/s/ds`
+    // and executes the custom operation within the timeout period
+
+    let cfg_dir = TempTedgeDir::new();
+    let cmd_file = cfg_dir.path().join("command");
+    //create custom operation file
+    create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(4), Some(2));
+    //create command
+    let content = r#"#!/usr/bin/bash
+    for i in {1..2}
+    do
+        sleep 1
+    done
+    echo "Successfully Executed"
+    "#;
+    create_custom_cmd(cmd_file.as_path(), content);
+
+    let (mqtt, http, _fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.skip(6).await; //Skip all init messages
+
+    // Simulate c8y_Command SmartREST request
+    mqtt.send(MqttMessage::new(
+        &C8yTopic::downstream_topic(),
+        "511,test-device,c8y_Command",
+    ))
+    .await
+    .expect("Send failed");
+
+    // Expect `501` smartrest message on `c8y/s/us`.
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
+
+    // Expect `503` smartrest message on `c8y/s/us`.
+    assert_received_contains_str(
+        &mut mqtt,
+        [("c8y/s/us", "503,c8y_Command,\"Successfully Executed\n\"")],
+    )
+    .await;
+
+    // assert the signterm is handled
+    let expected_content = "command \"511,test-device,c8y_Command\"
+exit status: 0
+
+stdout <<EOF
+Successfully Executed
+EOF
+
+stderr <<EOF
+EOF
+";
+
+    assert_command_exec_log_content(cfg_dir, expected_content);
+}
+
+#[tokio::test]
+
+async fn custom_operation_timeout_sigterm() {
+    // The test assures SM Mapper correctly receives custom operation on `c8y/s/ds`
+    // and executes the custom operation, it will timeout because it will not complete before given timeout
+    // sigterm is sent to stop the custom operation
+
+    let cfg_dir = TempTedgeDir::new();
+    let cmd_file = cfg_dir.path().join("command");
+    //create custom operation file
+    create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(1), Some(2));
+    //create command
+    let content = r#"#!/usr/bin/bash
+    handle_term() {
+        for i in {1..1}
+        do
+            echo "sigterm $i"
+            sleep 1
+        done
+        exit 124
+    }
+    trap handle_term SIGTERM
+    for i in {1..10}
+    do
+        echo "main $i"
+        sleep 1
+    done
+    "#;
+    create_custom_cmd(cmd_file.as_path(), content);
+
+    let (mqtt, http, _fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.skip(6).await; //Skip all init messages
+
+    // Simulate c8y_Command SmartREST request
+    mqtt.send(MqttMessage::new(
+        &C8yTopic::downstream_topic(),
+        "511,test-device,c8y_Command",
+    ))
+    .await
+    .expect("Send failed");
+
+    // Expect `501` smartrest message on `c8y/s/us`.
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
+
+    // Expect `501` smartrest message on `c8y/s/us`.
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
+            "502,c8y_Command,\"operation failed due to timeout: duration=1s\"",
+        )],
+    )
+    .await;
+
+    // assert the signterm is handled
+    let expected_content = "command \"511,test-device,c8y_Command\"
+exit status: 124
+
+stdout <<EOF
+main 1
+sigterm 1
+EOF
+
+stderr <<EOF
+operation failed due to timeout: duration=1sEOF";
+
+    assert_command_exec_log_content(cfg_dir, expected_content);
+}
+
+#[tokio::test]
+
+async fn custom_operation_timeout_sigkill() {
+    // The test assures SM Mapper correctly receives custom operation on `c8y/s/ds`
+    // and executes the custom operation, it will timeout because it will not complete before given timeout
+    // sigterm sent first, still the operation did not stop, so sigkill will be sent to stop the operation
+
+    let cfg_dir = TempTedgeDir::new();
+
+    let cmd_file = cfg_dir.path().join("command");
+    //create custom operation file
+    create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(1), Some(2));
+    //create command
+    let content = r#"#!/usr/bin/bash
+    handle_term() {
+        for i in {1..50}
+        do
+            echo "sigterm $i"
+            sleep 1
+        done
+        exit 124
+    }
+    trap handle_term SIGTERM
+    for i in {1..50}
+    do
+        echo "main $i"
+        sleep 1
+    done
+    "#;
+    create_custom_cmd(cmd_file.as_path(), content);
+
+    let (mqtt, http, _fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.skip(6).await; //Skip all init messages
+
+    // Simulate c8y_Command SmartREST request
+    mqtt.send(MqttMessage::new(
+        &C8yTopic::downstream_topic(),
+        "511,test-device,c8y_Command",
+    ))
+    .await
+    .expect("Send failed");
+
+    // Expect `501` smartrest message on `c8y/s/us`.
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
+
+    // Expect `502` smartrest message on `c8y/s/us`.
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
+            "502,c8y_Command,\"operation failed due to timeout: duration=1s\"",
+        )],
+    )
+    .await;
+
+    // assert the signterm is handled
+    let expected_content = "command \"511,test-device,c8y_Command\"
+exit status: unknown
+
+stdout <<EOF
+main 1
+sigterm 1
+sigterm 2
+EOF
+
+stderr <<EOF
+operation failed due to timeout: duration=1sEOF
+";
+
+    assert_command_exec_log_content(cfg_dir, expected_content);
+}
+
+fn assert_command_exec_log_content(cfg_dir: TempTedgeDir, expected_contents: &str) {
+    let paths = fs::read_dir(cfg_dir.to_path_buf().join("tedge/agent")).unwrap();
+    for path in paths {
+        let mut file =
+            File::open(path.unwrap().path()).expect("Unable to open the command exec log file");
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)
+            .expect("Unable to read the file");
+        dbg!(&expected_contents);
+        dbg!(&contents);
+        assert!(contents.contains(expected_contents));
+    }
+}
+fn create_custom_op_file(
+    cfg_dir: &TempTedgeDir,
+    cmd_file: &Path,
+    graceful_timeout: Option<i64>,
+    forceful_timeout: Option<i64>,
+) {
+    let custom_op_file = cfg_dir.dir("operations").dir("c8y").file("c8y_Command");
+    let mut custom_content = toml::map::Map::new();
+    custom_content.insert("name".into(), toml::Value::String("c8y_Command".into()));
+    custom_content.insert("topic".into(), toml::Value::String("c8y/s/ds".into()));
+    custom_content.insert("on_message".into(), toml::Value::String("511".into()));
+    if let Some(timeout) = graceful_timeout {
+        custom_content.insert("timeout".into(), toml::Value::Integer(timeout));
+    }
+    if let Some(timeout) = forceful_timeout {
+        custom_content.insert("forceful_timeout".into(), toml::Value::Integer(timeout));
+    }
+    custom_content.insert(
+        "command".into(),
+        toml::Value::String(cmd_file.display().to_string()),
+    );
+
+    let mut map = toml::map::Map::new();
+    map.insert("exec".into(), toml::Value::Table(custom_content));
+    let toml_content = toml::Value::Table(map);
+
+    custom_op_file.with_toml_content(toml_content);
+}
+
+fn create_custom_cmd(custom_cmd: &Path, content: &str) {
+    with_exec_permission(custom_cmd, content);
 }
 
 fn create_inventroy_json_file_with_content(cfg_dir: &TempTedgeDir, content: &str) {

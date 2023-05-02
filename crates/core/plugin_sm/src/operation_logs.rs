@@ -131,7 +131,7 @@ fn remove_old_logs(
         if let Some(rname) = log_tracker.pop() {
             let name = rname.0;
             let path = dir_path.join(name.clone());
-            if let Err(err) = std::fs::remove_file(&path) {
+            if let Err(err) = std::fs::remove_file(path) {
                 log::warn!("Fail to remove out-dated log file {} : {}", name, err);
             }
         }

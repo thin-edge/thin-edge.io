@@ -72,6 +72,7 @@ use tedge_mqtt_ext::Topic;
 use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
 use time::format_description::well_known::Rfc3339;
+use tokio::time::Duration;
 use tracing::debug;
 use tracing::info;
 use tracing::log::error;
@@ -492,8 +493,14 @@ impl CumulocityConverter {
     ) -> Result<Vec<Message>, CumulocityMapperError> {
         if let Some(operation) = self.operations.matching_smartrest_template(template) {
             if let Some(command) = operation.command() {
-                self.execute_operation(payload, command.as_str(), &operation.name)
-                    .await?;
+                self.execute_operation(
+                    payload,
+                    command.as_str(),
+                    &operation.name,
+                    operation.graceful_timeout(),
+                    operation.forceful_timeout(),
+                )
+                .await?;
             }
         }
         // MQTT messages will be sent during the operation execution
@@ -505,6 +512,8 @@ impl CumulocityConverter {
         payload: &str,
         command: &str,
         operation_name: &str,
+        graceful_timeout: Duration,
+        forceful_timeout: Duration,
     ) -> Result<(), CumulocityMapperError> {
         let command = command.to_owned();
         let payload = payload.to_string();
@@ -548,7 +557,10 @@ impl CumulocityConverter {
 
                     // execute the command and wait until it finishes
                     // mqtt client publishes failed or successful depending on the exit code
-                    if let Ok(output) = child_process.wait_with_output(logger).await {
+                    if let Ok(output) = child_process
+                        .wait_for_output_with_timeout(logger, graceful_timeout, forceful_timeout)
+                        .await
+                    {
                         match output.status.code() {
                             Some(0) => {
                                 let sanitized_stdout = sanitize_for_smartrest(
@@ -1529,11 +1541,23 @@ mod tests {
 
         let now = std::time::Instant::now();
         converter
-            .execute_operation("5", "sleep", "sleep_one")
+            .execute_operation(
+                "5",
+                "sleep",
+                "sleep_ten",
+                tokio::time::Duration::from_secs(10),
+                tokio::time::Duration::from_secs(1),
+            )
             .await
             .unwrap();
         converter
-            .execute_operation("5", "sleep", "sleep_two")
+            .execute_operation(
+                "5",
+                "sleep",
+                "sleep_twenty",
+                tokio::time::Duration::from_secs(20),
+                tokio::time::Duration::from_secs(1),
+            )
             .await
             .unwrap();
 
