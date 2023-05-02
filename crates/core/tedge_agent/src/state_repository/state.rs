@@ -18,9 +18,9 @@ pub struct AgentStateRepository {
 pub trait StateRepository {
     type Error;
     async fn load(&self) -> Result<State, Self::Error>;
-    async fn store(&self, state: &State) -> Result<(), Self::Error>;
+    async fn store(&self, state: &State) -> Result<State, Self::Error>;
     async fn clear(&self) -> Result<State, Self::Error>;
-    async fn update(&self, status: &StateStatus) -> Result<(), Self::Error>;
+    async fn update(&self, status: &StateStatus) -> Result<State, Self::Error>;
 }
 
 #[async_trait]
@@ -38,7 +38,7 @@ impl StateRepository for AgentStateRepository {
         }
     }
 
-    async fn store(&self, state: &State) -> Result<(), StateError> {
+    async fn store(&self, state: &State) -> Result<State, StateError> {
         let toml = toml::to_string_pretty(&state)?;
 
         // Create in path given through `config-dir` or `/etc/tedge` directory in case it does not exist yet
@@ -48,7 +48,7 @@ impl StateRepository for AgentStateRepository {
 
         let () = atomically_write_file_async(&self.state_repo_path, toml.as_bytes()).await?;
 
-        Ok(())
+        Ok(state.clone())
     }
 
     async fn clear(&self) -> Result<State, Self::Error> {
@@ -61,13 +61,13 @@ impl StateRepository for AgentStateRepository {
         Ok(state)
     }
 
-    async fn update(&self, status: &StateStatus) -> Result<(), Self::Error> {
+    async fn update(&self, status: &StateStatus) -> Result<State, Self::Error> {
         let mut state = self.load().await?;
         state.operation = Some(status.to_owned());
 
         self.store(&state).await?;
 
-        Ok(())
+        Ok(state)
     }
 }
 
@@ -107,7 +107,7 @@ pub enum RestartOperationStatus {
     Restarting,
 }
 
-#[derive(Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Debug, Default, Deserialize, Eq, PartialEq, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct State {
     pub operation_id: Option<String>,
@@ -116,12 +116,13 @@ pub struct State {
 
 #[cfg(test)]
 mod tests {
-    use crate::state::AgentStateRepository;
-    use crate::state::RestartOperationStatus;
-    use crate::state::SoftwareOperationVariants;
-    use crate::state::State;
-    use crate::state::StateRepository;
-    use crate::state::StateStatus;
+    use super::*;
+    use crate::state_repository::state::AgentStateRepository;
+    use crate::state_repository::state::RestartOperationStatus;
+    use crate::state_repository::state::SoftwareOperationVariants;
+    use crate::state_repository::state::State;
+    use crate::state_repository::state::StateRepository;
+    use crate::state_repository::state::StateStatus;
 
     use tedge_test_utils::fs::TempTedgeDir;
 

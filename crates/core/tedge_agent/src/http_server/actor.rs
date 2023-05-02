@@ -1,5 +1,5 @@
-use crate::http_rest;
-use crate::http_rest::HttpConfig;
+use crate::http_server::http_rest::http_file_transfer_server;
+use crate::http_server::http_rest::HttpConfig;
 use async_trait::async_trait;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
@@ -28,7 +28,7 @@ impl Actor for HttpServerActor {
     }
 
     async fn run(&mut self) -> Result<(), RuntimeError> {
-        let server = http_rest::http_file_transfer_server(&self.config);
+        let server = http_file_transfer_server(&self.config);
 
         match server {
             Ok(server) => {
@@ -47,21 +47,21 @@ pub struct NoMessage;
 
 pub struct HttpServerBuilder {
     config: HttpConfig,
-    message_box: SimpleMessageBoxBuilder<NoMessage, NoMessage>,
+    box_builder: SimpleMessageBoxBuilder<NoMessage, NoMessage>,
 }
 
 impl HttpServerBuilder {
     pub fn new(config: HttpConfig) -> Self {
         Self {
             config,
-            message_box: SimpleMessageBoxBuilder::new("HttpFileTransferServer", 4),
+            box_builder: SimpleMessageBoxBuilder::new("HttpFileTransferServer", 4),
         }
     }
 }
 
 impl RuntimeRequestSink for HttpServerBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
-        self.message_box.get_signal_sender()
+        self.box_builder.get_signal_sender()
     }
 }
 
