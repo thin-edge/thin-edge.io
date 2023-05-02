@@ -3,7 +3,6 @@ use crate::messages::C8YRestRequest;
 use crate::messages::C8YRestResponse;
 use crate::messages::C8YRestResult;
 use crate::messages::GetJwtToken;
-use crate::messages::IsUrlInCurrentDomain;
 use crate::messages::UploadConfigFile;
 use crate::messages::UploadLogBinary;
 use c8y_api::json_c8y::C8yCreateEvent;
@@ -35,14 +34,6 @@ impl C8YHttpProxy {
         let request: C8YRestRequest = GetJwtToken.into();
         match self.c8y.await_response(request).await? {
             Ok(C8YRestResponse::EventId(id)) => Ok(id),
-            unexpected => Err(unexpected.into()),
-        }
-    }
-
-    pub async fn url_is_in_my_tenant_domain(&mut self, url: &str) -> Result<bool, C8YRestError> {
-        let request: C8YRestRequest = IsUrlInCurrentDomain { url: url.into() }.into();
-        match self.c8y.await_response(request).await? {
-            Ok(C8YRestResponse::Bool(is)) => Ok(is),
             unexpected => Err(unexpected.into()),
         }
     }

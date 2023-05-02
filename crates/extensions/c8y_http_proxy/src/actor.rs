@@ -6,7 +6,6 @@ use crate::messages::C8YRestRequest;
 use crate::messages::C8YRestResult;
 use crate::messages::DownloadFile;
 use crate::messages::EventId;
-use crate::messages::IsUrlInCurrentDomain;
 use crate::messages::Unit;
 use crate::messages::UploadConfigFile;
 use crate::messages::UploadLogBinary;
@@ -82,11 +81,6 @@ impl Actor for C8YHttpProxyActor {
                 C8YRestRequest::GetJwtToken(_) => {
                     self.get_jwt_token().await.map(|response| response.into())
                 }
-
-                C8YRestRequest::IsUrlInCurrentDomain(request) => self
-                    .url_is_in_my_tenant_domain(request)
-                    .await
-                    .map(|response| response.into()),
 
                 C8YRestRequest::C8yCreateEvent(request) => self
                     .create_event(request)
@@ -291,13 +285,6 @@ impl C8YHttpProxyActor {
         } else {
             Err(C8YRestError::CustomError("JWT token not available".into()))
         }
-    }
-
-    async fn url_is_in_my_tenant_domain(
-        &mut self,
-        request: IsUrlInCurrentDomain,
-    ) -> Result<bool, C8YRestError> {
-        Ok(self.end_point.url_is_in_my_tenant_domain(&request.url))
     }
 
     async fn download_file(&mut self, request: DownloadFile) -> Result<Unit, C8YRestError> {

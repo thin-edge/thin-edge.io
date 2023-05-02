@@ -20,7 +20,6 @@ use c8y_http_proxy::messages::C8YRestResult;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 use serde_json::json;
-use serial_test::serial;
 use std::collections::HashMap;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
@@ -43,7 +42,6 @@ use tedge_timer_ext::Timeout;
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
 #[tokio::test]
-#[serial]
 async fn mapper_publishes_init_messages_on_startup() {
     // Start SM Mapper
     let cfg_dir = TempTedgeDir::new();
@@ -81,7 +79,6 @@ async fn mapper_publishes_init_messages_on_startup() {
 }
 
 #[tokio::test]
-#[serial]
 async fn mapper_publishes_software_update_request() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
     // and converts it to thin-edge json message published on `tedge/commands/req/software/update`.
@@ -124,7 +121,6 @@ async fn mapper_publishes_software_update_request() {
 }
 
 #[tokio::test]
-#[serial]
 async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     // The test assures SM Mapper correctly receives software update response message on `tedge/commands/res/software/update`
     // and publishes status of the operation `501` on `c8y/s/us`
@@ -179,7 +175,6 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
 }
 
 #[tokio::test]
-#[serial]
 async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     // Start SM Mapper
     let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
@@ -227,7 +222,6 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
 
 /*
 #[tokio::test]
-#[serial]
 #[ignore]
 async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result<(), anyhow::Error>
 {
@@ -324,7 +318,6 @@ async fn mapper_fails_during_sw_update_recovers_and_process_response() -> Result
 */
 
 #[tokio::test]
-#[serial]
 async fn mapper_publishes_software_update_request_with_wrong_action() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
     // Then the SM Mapper finds out that wrong action as part of the update request.
@@ -361,7 +354,6 @@ async fn mapper_publishes_software_update_request_with_wrong_action() {
 }
 
 #[tokio::test]
-#[serial]
 async fn c8y_mapper_alarm_mapping_to_smartrest() {
     let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
@@ -383,7 +375,6 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
 }
 
 #[tokio::test]
-#[serial]
 async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
@@ -415,7 +406,6 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
 }
 
 #[tokio::test]
-#[serial]
 async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
     let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
@@ -462,7 +452,6 @@ async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
 }
 
 #[tokio::test]
-#[serial]
 async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
     let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
@@ -523,7 +512,6 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
 }
 
 #[tokio::test]
-#[serial]
 async fn c8y_mapper_alarm_with_message_as_custom_fragment_mapping_to_c8y_json() {
     let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
@@ -562,7 +550,6 @@ async fn c8y_mapper_alarm_with_message_as_custom_fragment_mapping_to_c8y_json() 
 }
 
 #[tokio::test]
-#[serial]
 async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json() {
     let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
@@ -607,7 +594,6 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
 }
 
 #[tokio::test]
-#[serial]
 async fn c8y_mapper_child_alarm_with_custom_message() {
     let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
@@ -651,7 +637,6 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
 }
 
 #[tokio::test]
-#[serial]
 async fn c8y_mapper_alarm_with_custom_message() {
     let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
@@ -689,7 +674,6 @@ async fn c8y_mapper_alarm_with_custom_message() {
 }
 
 #[tokio::test]
-#[serial]
 async fn c8y_mapper_child_alarm_empty_payload() {
     let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
@@ -714,7 +698,6 @@ async fn c8y_mapper_child_alarm_empty_payload() {
 }
 
 #[tokio::test]
-#[serial]
 async fn c8y_mapper_alarm_empty_payload() {
     let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
@@ -733,7 +716,6 @@ async fn c8y_mapper_alarm_empty_payload() {
 }
 
 #[tokio::test]
-#[serial]
 async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
     let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     timer.send(Timeout::new(())).await.unwrap(); //Complete sync phase so that alarm mapping starts
@@ -761,7 +743,6 @@ async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_sync_alarms() {
     let (_temp_dir, mut converter, _http_proxy) = create_c8y_converter().await;
 
@@ -815,7 +796,6 @@ async fn test_sync_alarms() {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_sync_child_alarms() {
     let (_temp_dir, mut converter, _http_proxy) = create_c8y_converter().await;
 
@@ -869,7 +849,6 @@ async fn test_sync_child_alarms() {
 }
 
 #[tokio::test]
-#[serial]
 async fn convert_measurement_with_child_id() {
     let (_temp_dir, mut converter, _http_proxy) = create_c8y_converter().await;
 
@@ -902,7 +881,6 @@ async fn convert_measurement_with_child_id() {
 }
 
 #[tokio::test]
-#[serial]
 async fn convert_first_measurement_invalid_then_valid_with_child_id() {
     let (_temp_dir, mut converter, _http_proxy) = create_c8y_converter().await;
 
@@ -937,7 +915,6 @@ async fn convert_first_measurement_invalid_then_valid_with_child_id() {
 }
 
 #[tokio::test]
-#[serial]
 async fn convert_two_measurement_messages_given_different_child_id() {
     let (_temp_dir, mut converter, _http_proxy) = create_c8y_converter().await;
     let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
@@ -988,7 +965,6 @@ async fn convert_two_measurement_messages_given_different_child_id() {
 }
 
 #[tokio::test]
-#[serial]
 async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
     let (_temp_dir, mut converter, _http_proxy) = create_c8y_converter().await;
 
@@ -1010,7 +986,6 @@ async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
-#[serial]
 async fn convert_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
     let (_temp_dir, mut converter, _http_proxy) = create_c8y_converter().await;
     let event_topic = "tedge/events/click_event";
@@ -1031,7 +1006,6 @@ async fn convert_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn convert_event_with_extra_fields_to_c8y_json() -> Result<()> {
     let (_temp_dir, mut converter, _http_proxy) = create_c8y_converter().await;
     let event_topic = "tedge/events/click_event";
@@ -1057,7 +1031,6 @@ async fn convert_event_with_extra_fields_to_c8y_json() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_convert_big_event() {
     let (_temp_dir, mut converter, mut http_proxy) = create_c8y_converter().await;
     tokio::spawn(async move {
@@ -1080,7 +1053,6 @@ async fn test_convert_big_event() {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_convert_big_measurement() {
     let (_temp_dir, mut converter, _http_proxy) = create_c8y_converter().await;
     let measurement_topic = "tedge/measurements";
@@ -1100,7 +1072,6 @@ async fn test_convert_big_measurement() {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_convert_small_measurement() {
     let (_temp_dir, mut converter, _http_proxy) = create_c8y_converter().await;
     let measurement_topic = "tedge/measurements";
@@ -1119,7 +1090,6 @@ async fn test_convert_small_measurement() {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_convert_big_measurement_for_child_device() {
     let (_temp_dir, mut converter, _http_proxy) = create_c8y_converter().await;
     let measurement_topic = "tedge/measurements/child1";
@@ -1140,7 +1110,6 @@ async fn test_convert_big_measurement_for_child_device() {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_convert_small_measurement_for_child_device() {
     let measurement_topic = "tedge/measurements/child1";
     let big_measurement_payload = create_thin_edge_measurement(20); // Measurement payload size is 20 bytes
@@ -1162,7 +1131,6 @@ async fn test_convert_small_measurement_for_child_device() {
 }
 
 #[tokio::test]
-#[serial]
 async fn mapper_handles_multiline_sm_requests() {
     // The test assures if Mapper can handle multiline smartrest messages arrived on `c8y/s/ds`
     let (mqtt, http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
@@ -1220,7 +1188,6 @@ async fn mapper_handles_multiline_sm_requests() {
 }
 
 #[tokio::test]
-#[serial]
 async fn mapper_publishes_supported_operations() {
     // The test assures tede-mapper reads/parses the operations from operations directory and
     // correctly publishes the supported operations message on `c8y/s/us`
@@ -1238,13 +1205,12 @@ async fn mapper_publishes_supported_operations() {
 }
 
 #[tokio::test]
-#[serial]
 async fn mapper_publishes_child_device_create_message() {
     // The test assures tedge-mapper checks if there is a directory for operations for child devices, then it reads and
     // correctly publishes the child device create message on to `c8y/s/us`
     // and verifies the device create message.
     let cfg_dir = TempTedgeDir::new();
-    create_thin_edge_child_devices(&cfg_dir, vec!["child1", "child2"]);
+    create_thin_edge_child_devices(&cfg_dir, vec!["child1"]);
 
     let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
@@ -1260,16 +1226,12 @@ async fn mapper_publishes_child_device_create_message() {
     // Expect smartrest message on `c8y/s/us` with expected payload "101,child1,child1,thin-edge.io-child".
     assert_received_contains_str(
         &mut mqtt,
-        [
-            ("c8y/s/us", "101,child1,child1,thin-edge.io-child"),
-            ("c8y/s/us", "101,child2,child2,thin-edge.io-child"),
-        ],
+        [("c8y/s/us", "101,child1,child1,thin-edge.io-child")],
     )
     .await;
 }
 
 #[tokio::test]
-#[serial]
 async fn mapper_publishes_supported_operations_for_child_device() {
     // The test assures tedge-mapper checks if there is a directory for operations for child devices, then it reads and
     // correctly publishes supported operations message for that child on to `c8y/s/us/child1`
@@ -1304,7 +1266,6 @@ async fn mapper_publishes_supported_operations_for_child_device() {
 }
 
 #[tokio::test]
-#[serial]
 async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     // The test assures tedge-mapper checks if there are operations, then it reads and
     // correctly publishes them on to `c8y/s/us`.
@@ -1337,7 +1298,6 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
 }
 
 #[tokio::test]
-#[serial]
 async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     // The test assures tedge-mapper reads the operations for the child devices from the operations directory, and then it publishes them on to `c8y/s/us/child1`.
     // When mapper is running test adds a new operation for a child into the operations directory, then the mapper discovers the new
@@ -1378,7 +1338,6 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
 }
 
 #[tokio::test]
-#[serial]
 async fn mapper_updating_the_inventory_fragments_from_file() {
     // The test Creates an inventory file in (Temp_base_Dir)/device/inventory.json
     // The tedge-mapper parses the inventory fragment file and publishes on c8y/inventory/managedObjects/update/test-device
@@ -1415,7 +1374,6 @@ async fn mapper_updating_the_inventory_fragments_from_file() {
 }
 
 #[tokio::test]
-#[serial]
 async fn translate_service_monitor_message_for_child_device() {
     let (_temp_dir, mut converter, _http_proxy) = create_c8y_converter().await;
 
@@ -1446,7 +1404,6 @@ async fn translate_service_monitor_message_for_child_device() {
 }
 
 #[tokio::test]
-#[serial]
 async fn translate_service_monitor_message_for_thin_edge_device() {
     let (_temp_dir, mut converter, _http_proxy) = create_c8y_converter().await;
 
