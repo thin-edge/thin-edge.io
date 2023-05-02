@@ -1010,18 +1010,21 @@ fn get_inventory_fragments(
     }
 }
 
-/*
 #[cfg(test)]
 mod tests {
-    use crate::c8y::tests::create_test_mqtt_client_with_empty_operations;
-    use crate::c8y::tests::FakeC8YHttpProxy;
+    use c8y_api::http_proxy::C8yEndPoint;
     use c8y_api::smartrest::operations::Operations;
+    use c8y_http_proxy::handle::C8YHttpProxy;
+    use c8y_http_proxy::messages::C8YRestRequest;
+    use c8y_http_proxy::messages::C8YRestResult;
     use plugin_sm::operation_logs::OperationLogs;
     use rand::prelude::Distribution;
     use rand::seq::SliceRandom;
     use rand::SeedableRng;
     use serial_test::serial;
     use std::collections::HashMap;
+    use tedge_actors::{Builder, LoggingSender, Sender, SimpleMessageBox, SimpleMessageBoxBuilder};
+    use tedge_mqtt_ext::MqttMessage;
     use tedge_test_utils::fs::TempTedgeDir;
     use test_case::test_case;
 
@@ -1040,7 +1043,9 @@ mod tests {
         let log_dir = TempTedgeDir::new();
         let operation_logs = OperationLogs::try_new(log_dir.path().to_path_buf()).unwrap();
 
-        let mqtt_client = create_test_mqtt_client_with_empty_operations().await;
+        let mqtt_box: SimpleMessageBox<MqttMessage, MqttMessage> =
+            SimpleMessageBoxBuilder::new("MQTT", 5).build();
+        let mut mqtt_publisher = LoggingSender::new("MQTT".into(), mqtt_box.sender_clone());
 
         let now = std::time::Instant::now();
         super::execute_operation(
@@ -1048,7 +1053,7 @@ mod tests {
             "sleep",
             "sleep_one",
             &operation_logs,
-            &mqtt_client.published,
+            &mut mqtt_publisher,
         )
         .await
         .unwrap();
@@ -1057,7 +1062,7 @@ mod tests {
             "sleep",
             "sleep_two",
             &operation_logs,
-            &mqtt_client.published,
+            &mut mqtt_publisher,
         )
         .await
         .unwrap();
@@ -1070,18 +1075,20 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn ignore_operations_for_child_device() {
-        let mqtt_client = create_test_mqtt_client_with_empty_operations().await;
+        let (mut mqtt_publisher, mut http_proxy, c8y_endpoint) = prepare();
+
         let output = super::process_smartrest(
             "528,childId,software_a,version_a,url_a,install",
             &Default::default(),
-            &mut FakeC8YHttpProxy {},
+            &mut http_proxy,
             &OperationLogs {
                 log_dir: Default::default(),
             },
             "testDevice",
             std::path::Path::new(""),
             &mut std::collections::HashMap::default(),
-            &mqtt_client.published,
+            &mut mqtt_publisher,
+            &c8y_endpoint,
         )
         .await
         .unwrap();
@@ -1147,19 +1154,21 @@ mod tests {
         let dir = ttd.dir("operations").dir("c8y");
         make_n_child_devices_with_k_operations(4, &dir);
         let mut hm: HashMap<String, Operations> = HashMap::default();
-        let mqtt_client = create_test_mqtt_client_with_empty_operations().await;
+
+        let (mut mqtt_publisher, mut http_proxy, c8y_endpoint) = prepare();
 
         let output_messages = super::process_smartrest(
             cloud_child_devices,
             &Default::default(),
-            &mut FakeC8YHttpProxy {},
+            &mut http_proxy,
             &OperationLogs {
                 log_dir: Default::default(),
             },
             "testDevice",
             ttd.path(),
             &mut hm,
-            &mqtt_client.published,
+            &mut mqtt_publisher,
+            &c8y_endpoint,
         )
         .await
         .unwrap();
@@ -1194,5 +1203,18 @@ mod tests {
         // no matter what, we expected 114 to happen for all 4 child devices.
         assert_eq!(supported_operations_counter, 4);
     }
+
+    fn prepare() -> (LoggingSender<MqttMessage>, C8YHttpProxy, C8yEndPoint) {
+        let mqtt_box: SimpleMessageBox<MqttMessage, MqttMessage> =
+            SimpleMessageBoxBuilder::new("MQTT", 5).build();
+        let mqtt_publisher = LoggingSender::new("MQTT".into(), mqtt_box.sender_clone());
+
+        let mut c8y_proxy_builder: SimpleMessageBoxBuilder<C8YRestRequest, C8YRestResult> =
+            SimpleMessageBoxBuilder::new("C8Y", 1);
+        let http_proxy = C8YHttpProxy::new("C8Y", &mut c8y_proxy_builder);
+
+        let c8y_endpoint = C8yEndPoint::new("test.c8y.io", "tedge-device", "");
+
+        (mqtt_publisher, http_proxy, c8y_endpoint)
+    }
 }
- */
