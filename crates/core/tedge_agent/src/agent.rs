@@ -1,14 +1,15 @@
 use crate::error::AgentError;
-use crate::http_rest::HttpConfig;
-use crate::http_server::HttpServerBuilder;
-use crate::restart_operation_handler::restart_operation;
-use crate::state::AgentStateRepository;
-use crate::state::RestartOperationStatus;
-use crate::state::SoftwareOperationVariants;
-use crate::state::State;
-use crate::state::StateRepository;
-use crate::state::StateStatus;
-use camino::Utf8Path;
+use crate::http_server::actor::HttpServerBuilder;
+use crate::http_server::http_rest::HttpConfig;
+use crate::mqtt_operation_converter::builder::MqttOperationConverterBuilder;
+use crate::restart_manager::actor::RestartManagerConfig;
+use crate::restart_manager::builder::RestartManagerBuilder;
+use crate::state_repository::state::AgentStateRepository;
+use crate::state_repository::state::RestartOperationStatus;
+use crate::state_repository::state::SoftwareOperationVariants;
+use crate::state_repository::state::State;
+use crate::state_repository::state::StateRepository;
+use crate::state_repository::state::StateStatus;
 use camino::Utf8PathBuf;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
@@ -25,11 +26,11 @@ use plugin_sm::plugin_manager::ExternalPlugins;
 use plugin_sm::plugin_manager::Plugins;
 use std::convert::TryInto;
 use std::fmt::Debug;
-use std::process::Command;
 use std::sync::Arc;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
-use tedge_api::control_filter_topic;
+use tedge_actors::Runtime;
+use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::health::health_check_topics;
 use tedge_api::health::health_status_down_message;
 use tedge_api::health::health_status_up_message;
@@ -46,7 +47,6 @@ use tedge_api::SoftwareRequestResponse;
 use tedge_api::SoftwareType;
 use tedge_api::SoftwareUpdateRequest;
 use tedge_api::SoftwareUpdateResponse;
-use tedge_config::system_services::SystemConfig;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::ConfigSettingAccessorStringExt;
@@ -64,6 +64,9 @@ use tedge_config::DEFAULT_DATA_PATH;
 use tedge_config::DEFAULT_LOG_PATH;
 use tedge_config::DEFAULT_RUN_PATH;
 use tedge_config::DEFAULT_TMP_PATH;
+use tedge_mqtt_ext::MqttActorBuilder;
+use tedge_mqtt_ext::MqttConfig;
+use tedge_signal_ext::SignalActor;
 use tedge_utils::file::create_directory_with_user_group;
 use tokio::sync::Mutex;
 use tracing::debug;
@@ -113,7 +116,7 @@ impl Default for SmAgentConfig {
 
         let mqtt_config = mqtt_channel::Config::default();
 
-        let mut request_topics: TopicFilter = vec![software_filter_topic(), control_filter_topic()]
+        let mut request_topics: TopicFilter = vec![software_filter_topic()]
             .try_into()
             .expect("Invalid topic filter");
 
@@ -341,51 +344,99 @@ impl SmAgent {
     }
 
     #[instrument(skip(self), name = "sm-agent")]
-    pub async fn start(&mut self) -> Result<(), AgentError> {
+    pub async fn start(&mut self) -> Result<(), anyhow::Error> {
         info!("Starting tedge agent");
 
-        let mut mqtt = Connection::new(&self.config.mqtt_config).await?;
-        let sm_plugins_path = self.config.sm_home.join(SM_PLUGINS);
+        // let mut mqtt = Connection::new(&self.config.mqtt_config).await?;
+        // let sm_plugins_path = self.config.sm_home.join(SM_PLUGINS);
+        //
+        // let plugins = Arc::new(Mutex::new(ExternalPlugins::open(
+        //     &sm_plugins_path,
+        //     get_default_plugin(&self.config.config_location)?,
+        //     Some(SUDO.into()),
+        // )?));
+        //
+        // if plugins.lock().await.empty() {
+        //     warn!(
+        //         "{}",
+        //         AgentError::NoPlugins {
+        //             plugins_path: sm_plugins_path,
+        //         }
+        //     );
+        // }
+        //
+        // let mut mqtt_errors = mqtt.errors;
+        // tokio::spawn(async move {
+        //     while let Some(error) = mqtt_errors.next().await {
+        //         error!("{}", error);
+        //     }
+        // });
+        //
+        // self.process_pending_operation(&mut mqtt.published).await?;
+        //
+        // send_health_status(&mut mqtt.published, TEDGE_AGENT).await;
 
-        let plugins = Arc::new(Mutex::new(ExternalPlugins::open(
-            &sm_plugins_path,
-            get_default_plugin(&self.config.config_location)?,
-            Some(SUDO.into()),
-        )?));
+        // Actor stuff
+        let runtime_events_logger = None;
+        let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
-        if plugins.lock().await.empty() {
-            warn!(
-                "{}",
-                AgentError::NoPlugins {
-                    plugins_path: sm_plugins_path,
-                }
-            );
-        }
-
-        let mut mqtt_errors = mqtt.errors;
-        tokio::spawn(async move {
-            while let Some(error) = mqtt_errors.next().await {
-                error!("{}", error);
-            }
-        });
-
-        self.process_pending_operation(&mut mqtt.published).await?;
-
-        send_health_status(&mut mqtt.published, TEDGE_AGENT).await;
-
+        // File transfer server actor
         let http_config = self.config.http_config.clone();
+        let mut http_server_builder = HttpServerBuilder::new(http_config);
 
-        // spawning file transfer server
-        let http_server_builder = HttpServerBuilder::new(http_config);
-        let mut http_server_actor = http_server_builder.build();
-        tokio::spawn(async move { http_server_actor.run().await });
+        // Restart actor
+        let restart_config = RestartManagerConfig::new(
+            self.config.tmp_dir.clone(),
+            self.config.sm_home.clone(),
+            self.config.config_location.tedge_config_root_path.clone(),
+        );
+        let mut restart_actor_builder = RestartManagerBuilder::new(restart_config);
 
-        while let Err(error) = self
-            .process_subscribed_messages(&mut mqtt.received, &mut mqtt.published, &plugins)
-            .await
-        {
-            error!("{}", error);
-        }
+        // Mqtt actor
+        let mut mqtt_actor_builder = MqttActorBuilder::new(
+            self.config
+                .mqtt_config
+                .clone()
+                .with_session_name(TEDGE_AGENT),
+        );
+
+        // TBD
+        let mut software_list_builder: SimpleMessageBoxBuilder<
+            SoftwareListRequest,
+            SoftwareListResponse,
+        > = SimpleMessageBoxBuilder::new("SoftwareList", 5);
+        let mut software_update_builder: SimpleMessageBoxBuilder<
+            SoftwareUpdateRequest,
+            SoftwareUpdateResponse,
+        > = SimpleMessageBoxBuilder::new("SoftwareUpdate", 5);
+        // Converter actor
+        let converter_actor_builder = MqttOperationConverterBuilder::new(
+            &mut software_list_builder,
+            &mut software_update_builder,
+            &mut restart_actor_builder,
+            &mut mqtt_actor_builder,
+        );
+
+        // Shutdown on SIGINT
+        let signal_actor_builder = SignalActor::builder(&runtime.get_handle());
+
+        // Spawn
+        runtime.spawn(signal_actor_builder).await?;
+        runtime.spawn(http_server_builder).await?;
+        runtime.spawn(mqtt_actor_builder).await?;
+        runtime.spawn(restart_actor_builder).await?;
+        // runtime.spawn(software_list_builder).await?;
+        // runtime.spawn(software_update_builder).await?;
+        runtime.spawn(converter_actor_builder).await?;
+
+        runtime.run_to_completion().await?;
+
+        // while let Err(error) = self
+        //     .process_subscribed_messages(&mut mqtt.received, &mut mqtt.published, &plugins)
+        //     .await
+        // {
+        //     error!("{}", error);
+        // }
         Ok(())
     }
 
@@ -434,28 +485,6 @@ impl SmAgent {
                         .map_err(|err| {
                             error!("{:?}", err); // log error and discard such that the agent doesn't exit.
                         });
-                }
-
-                topic if topic == &self.config.request_topic_restart => {
-                    let request = self
-                        .match_restart_operation_payload(responses, &message)
-                        .await?;
-                    if let Err(error) = self
-                        .handle_restart_operation(responses, &self.config.response_topic_restart)
-                        .await
-                    {
-                        error!("{}", error);
-
-                        self.persistence_store.clear().await?;
-                        let status = OperationStatus::Failed;
-                        let response = RestartOperationResponse::new(&request).with_status(status);
-                        responses
-                            .publish(Message::new(
-                                &self.config.response_topic_restart,
-                                response.to_bytes()?,
-                            ))
-                            .await?;
-                    }
                 }
 
                 _ => error!("Unknown operation. Discarded."),
@@ -633,46 +662,12 @@ impl SmAgent {
         Ok(request)
     }
 
-    async fn handle_restart_operation(
-        &self,
-        responses: &mut impl PubChannel,
-        topic: &Topic,
-    ) -> Result<(), AgentError> {
-        self.persistence_store
-            .update(&StateStatus::Restart(RestartOperationStatus::Restarting))
-            .await?;
-
-        // update status to executing.
-        let executing_response = RestartOperationResponse::new(&RestartOperationRequest::default());
-        responses
-            .publish(Message::new(topic, executing_response.to_bytes()?))
-            .await?;
-        restart_operation::create_tmp_restart_file(&self.config.tmp_dir)?;
-
-        let command_vec =
-            get_restart_operation_commands(&self.config.config_location.tedge_config_root_path)?;
-        for mut command in command_vec {
-            match command.status() {
-                Ok(status) => {
-                    if !status.success() {
-                        return Err(AgentError::CommandFailed);
-                    }
-                }
-                Err(e) => {
-                    return Err(AgentError::FromIo(e));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     async fn process_pending_operation(
         &self,
         responses: &mut impl PubChannel,
     ) -> Result<(), AgentError> {
         let state: Result<State, _> = self.persistence_store.load().await;
-        let mut status = OperationStatus::Failed;
+        let status = OperationStatus::Failed;
 
         if let State {
             operation_id: Some(id),
@@ -693,22 +688,12 @@ impl SmAgent {
                     &self.config.response_topic_update
                 }
 
-                StateStatus::Restart(RestartOperationStatus::Pending) => {
-                    &self.config.response_topic_restart
-                }
-
-                StateStatus::Restart(RestartOperationStatus::Restarting) => {
-                    let _state = self.persistence_store.clear().await?;
-                    if restart_operation::has_rebooted(&self.config.tmp_dir)? {
-                        info!("Device restart successful.");
-                        status = OperationStatus::Successful;
-                    }
-                    &self.config.response_topic_restart
-                }
-
                 StateStatus::UnknownOperation => {
                     error!("UnknownOperation in store.");
                     &self.config.errors_topic
+                }
+                _ => {
+                    unimplemented!()
                 }
             };
 
@@ -721,24 +706,6 @@ impl SmAgent {
 
         Ok(())
     }
-}
-
-fn get_restart_operation_commands(
-    system_config_path: &Utf8Path,
-) -> Result<Vec<Command>, AgentError> {
-    let mut vec = vec![];
-    // sync first
-    let mut sync_command = std::process::Command::new(SUDO);
-    sync_command.arg(SYNC);
-    vec.push(sync_command);
-
-    // reading `system_config_path` to get the restart command or defaulting to `["init", "6"]'
-    let system_config = SystemConfig::try_new(system_config_path)?;
-
-    let mut command = std::process::Command::new(SUDO);
-    command.args(system_config.system.reboot);
-    vec.push(command);
-    Ok(vec)
 }
 
 fn get_default_plugin(
@@ -762,30 +729,30 @@ mod tests {
 
     const TEDGE_AGENT_RESTART: &str = "tedge_agent_restart";
 
-    #[tokio::test]
-    async fn check_agent_restart_file_is_created() -> Result<(), AgentError> {
-        let (dir, tedge_config_location) = create_temp_tedge_config().unwrap();
-        let agent = SmAgent::try_new(
-            "tedge_agent_test",
-            SmAgentConfig::try_new(tedge_config_location).unwrap(),
-        )
-        .unwrap();
-
-        // calling handle_restart_operation should create a file in /tmp/tedge_agent_restart
-        let (_output, mut output_stream) = mqtt_tests::output_stream();
-        let response_topic_restart = RestartOperationResponse::topic();
-
-        agent
-            .handle_restart_operation(&mut output_stream, &response_topic_restart)
-            .await?;
-
-        assert!(
-            std::path::Path::new(&dir.temp_dir.path().join("tmp").join(TEDGE_AGENT_RESTART))
-                .exists()
-        );
-
-        Ok(())
-    }
+    // #[tokio::test]
+    // async fn check_agent_restart_file_is_created() -> Result<(), AgentError> {
+    //     let (dir, tedge_config_location) = create_temp_tedge_config().unwrap();
+    //     let agent = SmAgent::try_new(
+    //         "tedge_agent_test",
+    //         SmAgentConfig::try_new(tedge_config_location).unwrap(),
+    //     )
+    //     .unwrap();
+    //
+    //     // calling handle_restart_operation should create a file in /tmp/tedge_agent_restart
+    //     let (_output, mut output_stream) = mqtt_tests::output_stream();
+    //     let response_topic_restart = RestartOperationResponse::topic();
+    //
+    //     agent
+    //         .handle_restart_operation(&mut output_stream, &response_topic_restart)
+    //         .await?;
+    //
+    //     assert!(
+    //         std::path::Path::new(&dir.temp_dir.path().join("tmp").join(TEDGE_AGENT_RESTART))
+    //             .exists()
+    //     );
+    //
+    //     Ok(())
+    // }
 
     fn message(t: &str, p: &str) -> Message {
         let topic = Topic::new(t).expect("a valid topic");

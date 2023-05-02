@@ -1,6 +1,8 @@
+use crate::http_server::error::FileTransferError;
 use camino::Utf8PathBuf;
 use flockfile::FlockfileError;
 use mqtt_channel::MqttError;
+use tedge_actors::RuntimeError;
 use tedge_api::SoftwareError;
 use tedge_config::ConfigSettingError;
 use tedge_config::TEdgeConfigError;
@@ -58,30 +60,9 @@ pub enum AgentError {
 
     #[error(transparent)]
     FromFileTransferError(#[from] FileTransferError),
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum FileTransferError {
-    #[error(transparent)]
-    FromIo(#[from] std::io::Error),
 
     #[error(transparent)]
-    FromHyperError(#[from] hyper::Error),
-
-    #[error("Invalid URI: {value:?}")]
-    InvalidURI { value: String },
-
-    #[error(transparent)]
-    FromRouterServer(#[from] routerify::RouteError),
-
-    #[error(transparent)]
-    FromAddressParseError(#[from] std::net::AddrParseError),
-
-    #[error(transparent)]
-    FromUtf8Error(#[from] std::string::FromUtf8Error),
-
-    #[error("Could not bind to address: {address}. Address already in use.")]
-    BindingAddressInUse { address: std::net::SocketAddr },
+    FromRestartManagerError(#[from] crate::restart_manager::error::RestartManagerError),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -95,4 +76,10 @@ pub enum StateError {
 
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
+}
+
+impl From<AgentError> for RuntimeError {
+    fn from(error: AgentError) -> Self {
+        RuntimeError::ActorError(Box::new(error))
+    }
 }

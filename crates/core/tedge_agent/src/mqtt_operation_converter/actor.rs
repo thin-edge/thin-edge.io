@@ -111,7 +111,7 @@ impl MqttOperationConverterActor {
         response: SoftwareUpdateResponse,
     ) -> Result<(), MqttRequestConverterError> {
         let message = MqttMessage::new(
-            &Topic::new_unchecked("tedge/commands/res/control/restart"),
+            &Topic::new_unchecked("tedge/commands/res/software/update"),
             response.to_bytes()?,
         );
         self.mqtt_publisher.send(message).await?;
@@ -123,7 +123,7 @@ impl MqttOperationConverterActor {
         response: RestartOperationResponse,
     ) -> Result<(), MqttRequestConverterError> {
         let message = MqttMessage::new(
-            &Topic::new_unchecked("tedge/commands/res/software/list"),
+            &Topic::new_unchecked("tedge/commands/res/control/restart"),
             response.to_bytes()?,
         );
         self.mqtt_publisher.send(message).await?;

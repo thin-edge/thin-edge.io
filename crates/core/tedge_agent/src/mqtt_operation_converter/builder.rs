@@ -93,14 +93,16 @@ impl Builder<MqttOperationConverterActor> for MqttOperationConverterBuilder {
     type Error = LinkError;
 
     fn try_build(self) -> Result<MqttOperationConverterActor, Self::Error> {
-        let peers = self.mqtt_publisher;
+        Ok(self.build())
+    }
 
-        Ok(MqttOperationConverterActor::new(
+    fn build(self) -> MqttOperationConverterActor {
+        MqttOperationConverterActor::new(
             self.input_receiver,
             self.software_list_sender,
             self.software_update_sender,
             self.restart_sender,
-            peers,
-        ))
+            self.mqtt_publisher,
+        )
     }
 }

@@ -7,10 +7,10 @@ use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 mod agent;
 mod error;
-mod http_rest;
 mod http_server;
-mod restart_operation_handler;
-mod state;
+mod mqtt_operation_converter;
+mod restart_manager;
+mod state_repository;
 
 #[derive(Debug, clap::Parser)]
 #[clap(
