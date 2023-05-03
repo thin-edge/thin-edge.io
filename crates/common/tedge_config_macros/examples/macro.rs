@@ -9,6 +9,13 @@ static DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 
 define_tedge_config! {
     device: {
+        #[tedge_config(readonly(
+            write_error = "Device id is inferred from the certificate",
+            function = "device_id",
+        ))]
+        #[doku(as = "String")]
+        id: Result<String, String>,
+
         /// Path where the device's private key is stored
         #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem", default(function = "default_device_key"))]
         #[doku(as = "PathBuf")]
@@ -21,7 +28,7 @@ define_tedge_config! {
 
         /// The default device type
         #[tedge_config(example = "thin-edge.io")]
-        #[serde(rename = "type")]
+        #[tedge_config(rename = "type")]
         device_type: String,
     },
 
@@ -135,6 +142,10 @@ define_tedge_config! {
     }
 }
 
+fn device_id(_reader: &TEdgeConfigReader) -> Result<String, String> {
+    Ok("dummy-device-id".to_owned())
+}
+
 fn default_device_key(location: &TEdgeConfigLocation) -> Utf8PathBuf {
     location
         .tedge_config_root_path()
@@ -154,9 +165,14 @@ fn default_mqtt_port() -> NonZeroU16 {
 }
 
 fn main() {
-    // TODO this should actually have some instructive output
     let dto = TEdgeConfigDto::default();
     let config = TEdgeConfigReader::from_dto(&dto, &TEdgeConfigLocation);
+    println!(
+        "Device id is {}.",
+        // We have to pass the config into read to avoid TEdgeConfigReader being
+        // self-referential
+        config.device.id.read(&config).as_ref().unwrap()
+    );
     assert_eq!(u16::from(config.mqtt.bind.port), 1883);
     assert_eq!(config.mqtt.external.bind.port.or_none(), None);
 }

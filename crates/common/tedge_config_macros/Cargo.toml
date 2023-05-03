@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 camino = { version = "*", features = ["serde1"] }
-doku = "0.21.0"
+doku = "0.21"
 once_cell = "*"
 serde = "*"
 tedge_config_macros-macro = { path = "macro" }

@@ -3,21 +3,55 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use std::collections::VecDeque;
 use syn::parse_quote;
+use syn::Field;
 
 use crate::input::ConfigurableField;
 use crate::input::FieldOrGroup;
 
 pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     let paths = configuration_paths_from(items);
-    let readable_keys = keys_enum(parse_quote!(ReadableKey), paths.iter());
-    let writable_keys = keys_enum(
-        parse_quote!(WritableKey),
-        paths.iter().filter(|path| is_read_write(path)),
-    );
+    let (readonly_variant, write_error) = paths
+        .iter()
+        .filter_map(|field| {
+            Some((
+                variant_name(field),
+                field
+                    .back()?
+                    .field()?
+                    .read_only()?
+                    .readonly
+                    .write_error
+                    .as_str(),
+            ))
+        })
+        .unzip::<_, _, Vec<_>, Vec<_>>();
+    let readable_args = configuration_strings(paths.iter());
+    let readonly_args = configuration_strings(paths.iter().filter(|path| !is_read_write(path)));
+    let writable_args = configuration_strings(paths.iter().filter(|path| is_read_write(path)));
+    let readable_keys = keys_enum(parse_quote!(ReadableKey), &readable_args);
+    let readonly_keys = keys_enum(parse_quote!(ReadonlyKey), &readonly_args);
+    let writable_keys = keys_enum(parse_quote!(WritableKey), &writable_args);
+    let fromstr_readable = generate_fromstr_readable(parse_quote!(ReadableKey), &readable_args);
+    let fromstr_readonly = generate_fromstr_readable(parse_quote!(ReadonlyKey), &readonly_args);
+    let fromstr_writable = generate_fromstr_writable(parse_quote!(WritableKey), &writable_args);
 
     quote! {
         #readable_keys
+        #readonly_keys
         #writable_keys
+        #fromstr_readable
+        #fromstr_readonly
+        #fromstr_writable
+
+        impl ReadonlyKey {
+            fn write_error(self) -> &'static str {
+                match self {
+                    #(
+                        Self::#readonly_variant => #write_error,
+                    )*
+                }
+            }
+        }
 
         fn replace_aliases(key: String) -> String {
             use ::once_cell::sync::Lazy;
@@ -40,40 +74,31 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     }
 }
 
-fn keys_enum<'a>(
-    type_name: syn::Ident,
+fn configuration_strings<'a>(
     variants: impl Iterator<Item = &'a VecDeque<&'a FieldOrGroup>>,
-) -> TokenStream {
-    let (configuration_string, variant_name): (Vec<_>, Vec<_>) = variants
+) -> (Vec<String>, Vec<syn::Ident>) {
+    variants
         .map(|segments| {
             (
                 segments
                     .iter()
-                    .map(|variant| variant.ident().to_string())
+                    .map(|variant| variant.name())
                     .collect::<Vec<_>>()
                     .join("."),
-                syn::Ident::new(
-                    &segments
-                        .iter()
-                        .map(|segment| segment.ident().to_string().to_upper_camel_case())
-                        .collect::<String>(),
-                    segments.iter().last().unwrap().ident().span(),
-                ),
+                variant_name(segments),
             )
         })
-        .unzip();
+        .unzip()
+}
+
+fn generate_fromstr(
+    type_name: syn::Ident,
+    (configuration_string, variant_name): &(Vec<String>, Vec<syn::Ident>),
+    error_case: syn::Arm,
+) -> TokenStream {
     let simplified_configuration_string = configuration_string.iter().map(|s| s.replace('.', "_"));
 
     quote! {
-        #[derive(Copy, Clone)]
-        #[non_exhaustive]
-        #[allow(unused)]
-        pub enum #type_name {
-            #(
-                #variant_name,
-            )*
-        }
-
         impl ::std::str::FromStr for #type_name {
             type Err = String;
             fn from_str(value: &str) -> Result<Self, Self::Err> {
@@ -86,9 +111,54 @@ fn keys_enum<'a>(
                             Ok(Self::#variant_name)
                         },
                     )*
-                    _ => Err(format!("unknown key: '{}'", value)),
+                    #error_case
                 }
             }
+        }
+    }
+}
+
+fn generate_fromstr_readable<'a>(
+    type_name: syn::Ident,
+    fields: &(Vec<String>, Vec<syn::Ident>),
+) -> TokenStream {
+    generate_fromstr(
+        type_name,
+        fields,
+        parse_quote! { _ => Err(format!("unknown key: '{}'", value)) },
+    )
+}
+
+// TODO test the error messages actually appear
+fn generate_fromstr_writable<'a>(
+    type_name: syn::Ident,
+    fields: &(Vec<String>, Vec<syn::Ident>),
+) -> TokenStream {
+    generate_fromstr(
+        type_name,
+        fields,
+        parse_quote! {
+            _ => if let Ok(key) = <ReadonlyKey as ::std::str::FromStr>::from_str(value) {
+                Err(key.write_error().to_owned())
+            } else {
+                Err(format!("unknown key: '{}'", value))
+            },
+        },
+    )
+}
+
+fn keys_enum<'a>(
+    type_name: syn::Ident,
+    (configuration_string, variant_name): &(Vec<String>, Vec<syn::Ident>),
+) -> TokenStream {
+    quote! {
+        #[derive(Copy, Clone)]
+        #[non_exhaustive]
+        #[allow(unused)]
+        pub enum #type_name {
+            #(
+                #variant_name,
+            )*
         }
 
         impl #type_name {
@@ -101,6 +171,16 @@ fn keys_enum<'a>(
             }
         }
     }
+}
+
+fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> syn::Ident {
+    syn::Ident::new(
+        &segments
+            .iter()
+            .map(|segment| segment.name().to_upper_camel_case())
+            .collect::<String>(),
+        segments.iter().last().unwrap().ident().span(),
+    )
 }
 
 /// Generates a list of the toml paths for each of the keys in the provided

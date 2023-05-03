@@ -4,7 +4,6 @@
 //! been configured
 use std::iter;
 
-use optional_error::OptionalError;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
@@ -16,13 +15,14 @@ use syn::Token;
 use crate::input::ConfigurableField;
 use crate::input::FieldDefault;
 use crate::input::FieldOrGroup;
+use crate::optional_error::OptionalError;
 use crate::prefixed_type_name;
 
 pub fn try_generate(
     root_name: proc_macro2::Ident,
     items: &[FieldOrGroup],
 ) -> syn::Result<TokenStream> {
-    let structs = generate_structs(&root_name, items)?;
+    let structs = generate_structs(&root_name, items, Vec::new())?;
     let conversions = generate_conversions(&root_name, items, vec![], items)?;
     Ok(quote! {
         #structs
@@ -30,11 +30,17 @@ pub fn try_generate(
     })
 }
 
-fn generate_structs(name: &proc_macro2::Ident, items: &[FieldOrGroup]) -> syn::Result<TokenStream> {
+fn generate_structs(
+    name: &proc_macro2::Ident,
+    items: &[FieldOrGroup],
+    parents: Vec<syn::Ident>,
+) -> syn::Result<TokenStream> {
     let mut idents = Vec::new();
     let mut tys = Vec::<syn::Type>::new();
     let mut sub_readers = Vec::new();
     let mut attrs: Vec<Vec<syn::Attribute>> = Vec::new();
+    let mut lazy_readers = Vec::new();
+    let mut lazy_reader_functions = Vec::new();
 
     for item in items {
         match item {
@@ -44,6 +50,11 @@ fn generate_structs(name: &proc_macro2::Ident, items: &[FieldOrGroup]) -> syn::R
                 idents.push(field.ident());
                 if Some(&FieldDefault::None) == field.read_write().map(|f| &f.default) {
                     tys.push(parse_quote_spanned!(ty.span()=> OptionalConfig<#ty>));
+                } else if let Some(field) = field.read_only() {
+                    let name = field.lazy_reader_name(&parents);
+                    tys.push(parse_quote_spanned!(field.ty.span()=> #name));
+                    lazy_readers.push((name, &field.ty));
+                    lazy_reader_functions.push(&field.readonly.function);
                 } else {
                     tys.push(ty.to_owned());
                 }
@@ -53,11 +64,19 @@ fn generate_structs(name: &proc_macro2::Ident, items: &[FieldOrGroup]) -> syn::R
                 let sub_reader_name = prefixed_type_name(name, group);
                 idents.push(&group.ident);
                 tys.push(parse_quote_spanned!(group.ident.span()=> #sub_reader_name));
-                sub_readers.push(Some(generate_structs(&sub_reader_name, &group.contents)?));
+                let mut parents = parents.clone();
+                parents.push(group.ident.clone());
+                sub_readers.push(Some(generate_structs(
+                    &sub_reader_name,
+                    &group.contents,
+                    parents,
+                )?));
                 attrs.push(group.attrs.to_vec());
             }
         }
     }
+
+    let (lr_names, lr_tys): (Vec<_>, Vec<_>) = lazy_readers.into_iter().unzip();
 
     Ok(quote! {
         #[derive(::doku::Document, ::serde::Serialize, Debug)]
@@ -68,6 +87,25 @@ fn generate_structs(name: &proc_macro2::Ident, items: &[FieldOrGroup]) -> syn::R
                 pub #idents: #tys,
             )*
         }
+
+        #(
+            #[derive(::serde::Serialize, Clone, Debug, Default)]
+            #[serde(into = "()")]
+            pub struct #lr_names(::once_cell::sync::OnceCell<#lr_tys>);
+
+            impl From<#lr_names> for () {
+                fn from(_: #lr_names) -> () {
+                    ()
+                }
+            }
+
+            impl #lr_names {
+                // TODO don't just guess we're called tedgeconfigreader
+                pub fn read(&self, reader: &TEdgeConfigReader) -> &#lr_tys {
+                    self.0.get_or_init(|| #lazy_reader_functions(reader))
+                }
+            }
+        )*
 
         #(#sub_readers)*
     })
@@ -100,21 +138,13 @@ fn find_field<'a>(
             FieldOrGroup::Group(group) => fields = &group.contents,
             FieldOrGroup::Field(_) if is_last_segment => (),
             _ => {
-                let subfields = path
-                    .iter()
-                    .skip(i + 1)
-                    .map(<_>::to_string)
-                    .collect::<Vec<_>>()
-                    .join(".");
-                let segments = path
-                    .iter()
-                    .take(i + 1)
-                    .map(<_>::to_string)
-                    .collect::<Vec<_>>()
-                    .join(".");
+                let string_path = path.iter().map(<_>::to_string).collect::<Vec<_>>();
+                let (successful_segments, subfields) = string_path.split_at(i + 1);
+                let successful_segments = successful_segments.join(".");
+                let subfields = subfields.join(".");
                 return Err(syn::Error::new(
                     segment.span(),
-                    format!("cannot access `{subfields}` because `{segments}` is a configuration field, not a group"),
+                    format!("cannot access `{subfields}` because `{successful_segments}` is a configuration field, not a group"),
                 ));
             }
         };
@@ -133,66 +163,95 @@ fn find_field<'a>(
     }
 }
 
-fn reader_value_for_field(
-    field: &ConfigurableField,
+fn reader_value_for_field<'a>(
+    field: &'a ConfigurableField,
     parents: &[syn::Ident],
     root_fields: &[FieldOrGroup],
+    mut observed_paths: Vec<&'a Punctuated<syn::Ident, Token![.]>>,
 ) -> syn::Result<TokenStream> {
     let name = field.ident();
-    Ok(if let Some(field) = field.read_write() {
-        let key = parents
-            .iter()
-            .map(|p| p.to_string())
-            .chain(iter::once(name.to_string()))
-            .collect::<Vec<_>>()
-            .join(".");
-        match &field.default {
-            FieldDefault::None => quote! {
-                match &dto.#(#parents).*.#name {
-                    None => OptionalConfig::Empty(#key),
-                    Some(value) => OptionalConfig::Present { value: value.clone(), key: #key },
-                }
-            },
-            FieldDefault::FromPath(path) => {
-                let default = reader_value_for_field(
-                    find_field(root_fields, path)?,
-                    &path
-                        .iter()
-                        .take(path.len() - 1)
-                        .map(<_>::to_owned)
-                        .collect::<Vec<_>>(),
-                    root_fields,
-                )?;
-                quote_spanned! {name.span()=>
+    Ok(match field {
+        ConfigurableField::ReadWrite(field) => {
+            let key = parents
+                .iter()
+                .map(|p| p.to_string())
+                .chain(iter::once(name.to_string()))
+                .collect::<Vec<_>>()
+                .join(".");
+            match &field.default {
+                FieldDefault::None => quote! {
                     match &dto.#(#parents).*.#name {
-                        Some(value) => value.clone(),
-                        None => #default,
+                        None => OptionalConfig::Empty(#key),
+                        Some(value) => OptionalConfig::Present { value: value.clone(), key: #key },
+                    }
+                },
+                FieldDefault::FromPath(path) if observed_paths.contains(&path) => {
+                    let string_paths = observed_paths
+                        .iter()
+                        .map(|path| {
+                            path.iter()
+                                .map(<_>::to_string)
+                                .collect::<Vec<_>>()
+                                .join(".")
+                        })
+                        .collect::<Vec<_>>();
+                    let error =
+                        format!("this path's default is part of a cycle ({string_paths:?})");
+                    // Safe to unwrap the error since observed_paths.len() >= 1
+                    return Err(observed_paths
+                        .into_iter()
+                        .map(|path| syn::Error::new(path.span(), &error))
+                        .fold(OptionalError::default(), |mut errors, error| {
+                            errors.combine(error);
+                            errors
+                        })
+                        .take()
+                        .unwrap());
+                }
+                FieldDefault::FromPath(path) => {
+                    observed_paths.push(&path);
+                    let default = reader_value_for_field(
+                        find_field(root_fields, path)?,
+                        &path
+                            .iter()
+                            .take(path.len() - 1)
+                            .map(<_>::to_owned)
+                            .collect::<Vec<_>>(),
+                        root_fields,
+                        observed_paths,
+                    )?;
+                    quote_spanned! {name.span()=>
+                        match &dto.#(#parents).*.#name {
+                            Some(value) => value.clone(),
+                            None => #default,
+                        }
                     }
                 }
+                FieldDefault::Function(function) => quote_spanned! {function.span()=>
+                    match &dto.#(#parents).*.#name {
+                        None => TEdgeConfigDefault::<TEdgeConfigDto, _>::call(#function, dto, location),
+                        Some(value) => value.clone(),
+                    }
+                },
+                FieldDefault::Value(default) => quote_spanned! {name.span()=>
+                    match &dto.#(#parents).*.#name {
+                        None => #default.into(),
+                        Some(value) => value.clone(),
+                    }
+                },
+                FieldDefault::Variable(default) => quote_spanned! {name.span()=>
+                    match &dto.#(#parents).*.#name {
+                        None => #default.into(),
+                        Some(value) => value.clone(),
+                    }
+                },
             }
-            FieldDefault::Function(function) => quote_spanned! {function.span()=>
-                match &dto.#(#parents).*.#name {
-                    None => TEdgeConfigDefault::<TEdgeConfigDto, _>::call(#function, dto, location),
-                    Some(value) => value.clone(),
-                }
-            },
-            FieldDefault::Value(default) => quote_spanned! {name.span()=>
-                match &dto.#(#parents).*.#name {
-                    None => #default.into(),
-                    Some(value) => value.clone(),
-                }
-            },
-            FieldDefault::Variable(default) => quote_spanned! {name.span()=>
-                match &dto.#(#parents).*.#name {
-                    None => #default.into(),
-                    Some(value) => value.clone(),
-                }
-            },
         }
-    } else {
-        // TODO deal with read only stuff
-        quote! {
-            todo!()
+        ConfigurableField::ReadOnly(field) => {
+            let name = field.lazy_reader_name(parents);
+            quote! {
+                #name::default()
+            }
         }
     })
 }
@@ -202,7 +261,6 @@ fn generate_conversions(
     name: &proc_macro2::Ident,
     items: &[FieldOrGroup],
     parents: Vec<syn::Ident>,
-    // TODO this is really confusing passing the same thing in twice
     root_fields: &[FieldOrGroup],
 ) -> syn::Result<TokenStream> {
     let mut field_conversions = Vec::new();
@@ -212,7 +270,7 @@ fn generate_conversions(
         match item {
             FieldOrGroup::Field(field) => {
                 let name = field.ident();
-                let value = reader_value_for_field(field, &parents, root_fields)?;
+                let value = reader_value_for_field(field, &parents, root_fields, Vec::new())?;
                 field_conversions.push(quote!(#name: #value));
             }
             FieldOrGroup::Group(group) => {
@@ -233,6 +291,7 @@ fn generate_conversions(
         impl #name {
             #[allow(unused, clippy::clone_on_copy, clippy::useless_conversion)]
             #[automatically_derived]
+            /// Converts the provided [TEdgeConfigDto] into a reader
             pub fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation) -> Self {
                 Self {
                     #(#field_conversions),*

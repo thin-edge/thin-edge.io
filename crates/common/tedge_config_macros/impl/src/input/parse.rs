@@ -20,7 +20,7 @@ pub struct Configuration {
 impl Parse for Configuration {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         Ok(Self {
-            groups: input.parse_terminated(<_>::parse)?,
+            groups: input.parse_terminated(<_>::parse, Token![,])?,
         })
     }
 }
@@ -40,6 +40,7 @@ pub struct ConfigurationGroup {
     pub attrs: Vec<syn::Attribute>,
     pub dto: GroupDtoSettings,
     pub reader: ReaderSettings,
+    pub rename: Option<SpannedValue<String>>,
     pub ident: syn::Ident,
     pub colon_token: Token![:],
     pub brace: syn::token::Brace,
@@ -55,17 +56,19 @@ impl Parse for ConfigurationGroup {
             attrs: attributes.into_iter().filter(not_tedge_config).collect(),
             dto: known_attributes.dto,
             reader: known_attributes.reader,
+            // TODO support me
+            rename: None,
             ident: input.parse()?,
             colon_token: input.parse()?,
             brace: syn::braced!(content in input),
-            content: content.parse_terminated(<_>::parse)?,
+            content: content.parse_terminated(<_>::parse, Token![,])?,
         })
     }
 }
 
 fn not_tedge_config(attr: &syn::Attribute) -> bool {
-    let is_tedge_config = match attr.parse_meta() {
-        Ok(syn::Meta::List(list)) => list.path.is_ident("tedge_config"),
+    let is_tedge_config = match &attr.meta {
+        syn::Meta::List(list) => list.path.is_ident("tedge_config"),
         _ => false,
     };
 
@@ -100,14 +103,14 @@ impl Parse for FieldOrGroup {
 pub struct ConfigurableField {
     pub attrs: Vec<syn::Attribute>,
     #[darling(default)]
-    pub readonly: SpannedValue<bool>,
+    pub readonly: Option<ReadonlySettings>,
     #[darling(default)]
     pub dto: FieldDtoSettings,
     #[darling(default)]
+    pub rename: Option<SpannedValue<String>>,
+    #[darling(default)]
     // TODO remove this or separate it from the group ones
     pub reader: ReaderSettings,
-    #[darling(default)]
-    pub rename: Option<String>,
     #[darling(default)]
     pub default: Option<FieldDefault>,
     #[darling(default)]
@@ -160,4 +163,13 @@ pub struct FieldDtoSettings {
 }
 
 #[derive(FromMeta, Debug, Default)]
-pub struct ReaderSettings {}
+pub struct ReaderSettings {
+    #[darling(default)]
+    pub private: bool,
+}
+
+#[derive(FromMeta, Debug)]
+pub struct ReadonlySettings {
+    pub write_error: String,
+    pub function: syn::Path,
+}

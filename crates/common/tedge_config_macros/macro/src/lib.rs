@@ -5,7 +5,12 @@ use proc_macro::TokenStream;
 use syn::parse_macro_input;
 
 #[proc_macro]
-/// Document your macro here.
+/// Defines the necessary structures to create a tedge config struct
+///
+/// # Output
+/// This macro outputs a few different types:
+/// - `TEdgeConfigDto` --- A data-transfer object, used for reading and writing to toml
+/// - `TEdgeConfigReader` --- A struct to read configured values from, populating values with defaults if they exist
 pub fn define_tedge_config(item: TokenStream) -> TokenStream {
     let item = parse_macro_input!(item as proc_macro2::TokenStream);
 

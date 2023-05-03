@@ -1,13 +1,20 @@
+use std::borrow::Cow;
+
+use darling::export::NestedMeta;
 use darling::util::SpannedValue;
-use optional_error::OptionalError;
+use heck::ToUpperCamelCase;
+use quote::format_ident;
 use syn::parse_quote_spanned;
+use syn::spanned::Spanned;
 
 use crate::error::combine_errors;
+use crate::optional_error::OptionalError;
 
 pub use super::parse::FieldDefault;
 pub use super::parse::FieldDtoSettings;
 pub use super::parse::GroupDtoSettings;
 pub use super::parse::ReaderSettings;
+use super::parse::ReadonlySettings;
 
 pub struct Configuration {
     pub groups: Vec<FieldOrGroup>,
@@ -32,6 +39,7 @@ impl TryFrom<super::parse::Configuration> for Configuration {
 #[derive(Debug)]
 pub struct ConfigurationGroup {
     pub attrs: Vec<syn::Attribute>,
+    pub rename: Option<SpannedValue<String>>,
     pub dto: GroupDtoSettings,
     pub reader: ReaderSettings,
     pub ident: syn::Ident,
@@ -44,6 +52,7 @@ impl TryFrom<super::parse::ConfigurationGroup> for ConfigurationGroup {
     fn try_from(value: super::parse::ConfigurationGroup) -> Result<Self, Self::Error> {
         Ok(Self {
             attrs: value.attrs,
+            rename: value.rename,
             dto: value.dto,
             reader: value.reader,
             ident: value.ident,
@@ -59,6 +68,15 @@ pub enum FieldOrGroup {
 }
 
 impl FieldOrGroup {
+    pub fn name(&self) -> Cow<str> {
+        let rename = match self {
+            Self::Group(group) => group.rename.as_ref().map(|s| s.as_str()),
+            Self::Field(field) => field.rename(),
+        };
+
+        rename.map_or_else(|| Cow::Owned(self.ident().to_string()), Cow::Borrowed)
+    }
+
     pub fn ident(&self) -> &syn::Ident {
         match self {
             Self::Field(field) => field.ident(),
@@ -73,6 +91,13 @@ impl FieldOrGroup {
                 // Groups don't support renaming at the moment
                 Self::Group(_) => false,
             }
+    }
+
+    pub fn field(&self) -> Option<&ConfigurableField> {
+        match self {
+            Self::Field(field) => Some(field),
+            Self::Group(..) => None,
+        }
     }
 }
 
@@ -95,17 +120,39 @@ pub enum ConfigurableField {
 #[derive(Debug)]
 pub struct ReadOnlyField {
     pub attrs: Vec<syn::Attribute>,
-    pub rename: Option<String>,
+    pub readonly: ReadonlySettings,
+    pub rename: Option<SpannedValue<String>>,
     pub dto: FieldDtoSettings,
     pub reader: ReaderSettings,
     pub ident: syn::Ident,
     pub ty: syn::Type,
 }
 
+impl ReadOnlyField {
+    pub fn lazy_reader_name(&self, parents: &[syn::Ident]) -> syn::Ident {
+        format_ident!(
+            "LazyReader{}{}",
+            parents
+                .iter()
+                .map(|p| p.to_string().to_upper_camel_case())
+                .collect::<Vec<_>>()
+                .join("."),
+            self.rename()
+                .map(<_>::to_owned)
+                .unwrap_or_else(|| self.ident.to_string())
+                .to_upper_camel_case()
+        )
+    }
+
+    pub fn rename(&self) -> Option<&str> {
+        Some(self.rename.as_ref()?.as_str())
+    }
+}
+
 #[derive(Debug)]
 pub struct ReadWriteField {
     pub attrs: Vec<syn::Attribute>,
-    pub rename: Option<String>,
+    pub rename: Option<SpannedValue<String>>,
     pub dto: FieldDtoSettings,
     pub reader: ReaderSettings,
     pub examples: Vec<SpannedValue<String>>,
@@ -132,7 +179,7 @@ impl ConfigurableField {
     pub fn rename(&self) -> Option<&str> {
         match self {
             Self::ReadOnly(ReadOnlyField { rename, .. })
-            | Self::ReadWrite(ReadWriteField { rename, .. }) => rename.as_deref(),
+            | Self::ReadWrite(ReadWriteField { rename, .. }) => Some(rename.as_ref()?.as_str()),
         }
     }
 
@@ -176,7 +223,31 @@ impl ConfigurableField {
 impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
     type Error = syn::Error;
     fn try_from(mut value: super::parse::ConfigurableField) -> Result<Self, Self::Error> {
-        if *value.readonly {
+        value
+            .attrs
+            .iter()
+            .filter(|attr| attr.path().is_ident("serde"))
+            .filter_map(|attr| attr.meta.require_list().ok())
+            .filter_map(|attr| darling::ast::NestedMeta::parse_meta_list(attr.tokens.clone()).ok())
+            .flatten()
+            .filter_map(|attr| match attr {
+                NestedMeta::Meta(m) => Some(m),
+                _ => None,
+            })
+            .filter_map(|meta| Some(meta.require_name_value().ok()?.to_owned()))
+            .filter(|attr| attr.path.is_ident("rename"))
+            .map(|attr| {
+                syn::Error::new(
+                    attr.span(),
+                    "use #[tedge_config(rename)] instead of #[serde(rename)] to rename fields",
+                )
+            })
+            .fold(OptionalError::default(), |errors, e| {
+                errors.combine_owned(e)
+            })
+            .try_throw()?;
+
+        if let Some(readonly) = value.readonly {
             let mut error = OptionalError::default();
             for example in &value.examples {
                 error.combine(syn::Error::new(
@@ -194,6 +265,7 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
                     attrs: value.attrs,
                     rename: value.rename,
                     ident: value.ident.unwrap(),
+                    readonly,
                     ty: value.ty,
                     dto: value.dto,
                     reader: value.reader,
@@ -232,7 +304,7 @@ mod tests {
     fn examples_denied_for_read_only_fields() {
         let input: super::super::parse::Configuration = syn::parse2(quote! {
             device: {
-                #[tedge_config(readonly, example = "test")]
+                #[tedge_config(readonly(write_error = "Field is read only", function = "device_id"), example = "test")]
                 id: String,
             },
         })

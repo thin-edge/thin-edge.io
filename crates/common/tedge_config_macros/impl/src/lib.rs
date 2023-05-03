@@ -10,6 +10,7 @@ use quote::quote_spanned;
 mod dto;
 mod error;
 mod input;
+mod optional_error;
 mod query;
 mod reader;
 
@@ -60,15 +61,24 @@ pub fn generate_configuration(tokens: TokenStream) -> Result<TokenStream, syn::E
         })
         .collect::<Vec<_>>();
 
+    let reader_name = proc_macro2::Ident::new("TEdgeConfigReader", Span::call_site());
+    let dto_doc_comment = format!(
+        "A data-transfer object, designed for reading and writing to
+        `tedge.toml`
+\n\
+        All the configurations inside this are optional to represent whether
+        the value is or isn't configured in the TOML file. Any defaults are
+        populated when this is converted to [{reader_name}] (via
+        [from_dto]({reader_name}::from_dto))."
+    );
+
     let dto = dto::generate(
         proc_macro2::Ident::new("TEdgeConfigDto", Span::call_site()),
         &input.groups,
+        &dto_doc_comment,
     );
 
-    let reader = reader::try_generate(
-        proc_macro2::Ident::new("TEdgeConfigReader", Span::call_site()),
-        &input.groups,
-    )?;
+    let reader = reader::try_generate(reader_name, &input.groups)?;
 
     let enums = query::generate_writable_keys(&input.groups);
 
@@ -128,7 +138,7 @@ mod tests {
         assert!(generate_configuration(quote! {
             device: {
                 /// The id of the device
-                #[tedge_config(readonly)]
+                #[tedge_config(readonly(write_error = "Device id is derived from the certificate and cannot be written to", function = "device_id"))]
                 id: String,
                 /// The key path
                 #[tedge_config(example = "test")]
@@ -150,5 +160,16 @@ mod tests {
             },
         })
         .is_ok());
+    }
+
+    #[test]
+    fn serde_rename_is_not_allowd() {
+        assert!(generate_configuration(quote! {
+            device: {
+                #[serde(rename = "type")]
+                ty: String,
+            },
+        })
+        .is_err());
     }
 }

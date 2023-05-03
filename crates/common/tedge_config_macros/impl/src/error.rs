@@ -1,4 +1,4 @@
-use optional_error::OptionalError;
+use crate::optional_error::OptionalError;
 
 pub fn combine_errors<T>(
     items: impl Iterator<Item = Result<T, syn::Error>>,

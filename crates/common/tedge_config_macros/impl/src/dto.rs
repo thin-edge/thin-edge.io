@@ -6,7 +6,11 @@ use syn::spanned::Spanned;
 use crate::input::FieldOrGroup;
 use crate::prefixed_type_name;
 
-pub fn generate(name: proc_macro2::Ident, items: &[FieldOrGroup]) -> TokenStream {
+pub fn generate(
+    name: proc_macro2::Ident,
+    items: &[FieldOrGroup],
+    doc_comment: &str,
+) -> TokenStream {
     let mut idents = Vec::new();
     let mut tys = Vec::<syn::Type>::new();
     let mut sub_dtos = Vec::new();
@@ -30,7 +34,7 @@ pub fn generate(name: proc_macro2::Ident, items: &[FieldOrGroup]) -> TokenStream
                     let sub_dto_name = prefixed_type_name(&name, group);
                     idents.push(&group.ident);
                     tys.push(parse_quote_spanned!(group.ident.span()=> #sub_dto_name));
-                    sub_dtos.push(Some(generate(sub_dto_name, &group.contents)));
+                    sub_dtos.push(Some(generate(sub_dto_name, &group.contents, "")));
                     attrs.push(Vec::new());
                 }
             }
@@ -39,11 +43,17 @@ pub fn generate(name: proc_macro2::Ident, items: &[FieldOrGroup]) -> TokenStream
 
     quote! {
         #[derive(Debug, Default, ::serde::Deserialize, ::serde::Serialize)]
+        // We will add more configurations in the future, so this is
+        // non_exhaustive (see
+        // https://doc.rust-lang.org/reference/attributes/type_system.html)
         #[non_exhaustive]
+        #[doc = #doc_comment]
         pub struct #name {
             #(
+                // The fields are pub as that allows people to easily modify the
+                // dto via a mutable borrow
                 #(#attrs)*
-                #idents: #tys,
+                pub #idents: #tys,
             )*
         }
 
@@ -52,10 +62,10 @@ pub fn generate(name: proc_macro2::Ident, items: &[FieldOrGroup]) -> TokenStream
 }
 
 fn is_preserved(attr: &&syn::Attribute) -> bool {
-    match attr.parse_meta() {
+    match &attr.meta {
         // Maybe cfg is useful. Certainly seems sensible to preserve it
-        Ok(syn::Meta::List(list)) => list.path.is_ident("serde") || list.path.is_ident("cfg"),
-        Ok(syn::Meta::NameValue(nv)) => nv.path.is_ident("doc"),
+        syn::Meta::List(list) => list.path.is_ident("serde") || list.path.is_ident("cfg"),
+        syn::Meta::NameValue(nv) => nv.path.is_ident("doc"),
         _ => false,
     }
 }
@@ -76,7 +86,7 @@ mod tests {
     #[test]
     fn serde_attributes_are_preserved() {
         assert!(is_preserved(&&parse_quote!(
-            #[serde(rename = "something")]
+            #[serde(alias = "something")]
         )))
     }
 
