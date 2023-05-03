@@ -19,6 +19,14 @@ impl C8yTopic {
     pub fn to_topic(&self) -> Result<Topic, MqttError> {
         Topic::new(self.to_string().as_str())
     }
+
+    pub fn upstream_topic() -> Topic {
+        Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC)
+    }
+
+    pub fn downstream_topic() -> Topic {
+        Topic::new_unchecked(SMARTREST_SUBSCRIBE_TOPIC)
+    }
 }
 
 impl ToString for C8yTopic {

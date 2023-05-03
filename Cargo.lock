@@ -712,6 +712,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "c8y_mapper_ext"
+version = "0.10.0"
+dependencies = [
+ "anyhow",
+ "assert-json-diff",
+ "assert_cmd",
+ "assert_matches",
+ "async-trait",
+ "c8y_api",
+ "c8y_http_proxy",
+ "camino",
+ "clock",
+ "json-writer",
+ "logged_command",
+ "plugin_sm",
+ "proptest",
+ "rand",
+ "serde",
+ "serde_json",
+ "tedge_actors",
+ "tedge_api",
+ "tedge_config",
+ "tedge_file_system_ext",
+ "tedge_http_ext",
+ "tedge_mqtt_ext",
+ "tedge_test_utils",
+ "tedge_timer_ext",
+ "tedge_utils",
+ "test-case",
+ "thiserror",
+ "time",
+ "tokio",
+ "toml 0.5.11",
+ "tracing",
+]
+
+[[package]]
 name = "cache-padded"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3664,48 +3701,27 @@ name = "tedge-mapper"
 version = "0.10.0"
 dependencies = [
  "anyhow",
- "assert-json-diff",
- "assert_cmd",
- "assert_matches",
  "async-trait",
  "aws_mapper_ext",
  "az_mapper_ext",
  "batcher",
- "c8y_api",
+ "c8y_http_proxy",
+ "c8y_mapper_ext",
  "clap 3.2.23",
  "clock",
  "collectd_ext",
- "csv",
- "download",
  "flockfile",
- "futures",
- "json-writer",
- "logged_command",
- "mockall",
- "mockito",
  "mqtt_channel",
- "mqtt_tests",
- "plugin_sm",
- "proptest",
- "rand",
- "reqwest",
- "serde",
- "serde_json",
- "serial_test",
  "tedge_actors",
- "tedge_api",
  "tedge_config",
+ "tedge_file_system_ext",
  "tedge_health_ext",
+ "tedge_http_ext",
  "tedge_mqtt_ext",
  "tedge_signal_ext",
- "tedge_test_utils",
+ "tedge_timer_ext",
  "tedge_utils",
- "test-case",
- "thiserror",
- "time",
  "tokio",
- "tokio-test",
- "toml 0.5.11",
  "tracing",
 ]
 
@@ -3855,9 +3871,11 @@ dependencies = [
 name = "tedge_mqtt_ext"
 version = "0.10.0"
 dependencies = [
+ "assert-json-diff",
  "async-trait",
  "mqtt_channel",
  "mqtt_tests",
+ "serde_json",
  "tedge_actors",
  "tokio",
 ]
@@ -3908,6 +3926,7 @@ dependencies = [
  "assert_matches",
  "futures",
  "maplit",
+ "mqtt_channel",
  "nix",
  "notify",
  "strum_macros",

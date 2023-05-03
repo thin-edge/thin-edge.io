@@ -17,6 +17,7 @@ fs-notify = ["strum_macros", "notify"]
 
 [dependencies]
 futures = "0.3"
+mqtt_channel = { path = "../mqtt_channel" }
 nix = "0.24"
 notify = { version = "5.0", optional = true, default-features = false }
 strum_macros = { version = "0.24", optional = true }

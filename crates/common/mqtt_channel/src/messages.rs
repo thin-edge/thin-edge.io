@@ -126,6 +126,16 @@ impl From<Publish> for Message {
     }
 }
 
+impl<T, U> From<(T, U)> for Message
+where
+    T: AsRef<str>,
+    U: AsRef<str>,
+{
+    fn from(value: (T, U)) -> Self {
+        Message::new(&Topic::new_unchecked(value.0.as_ref()), value.1.as_ref())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

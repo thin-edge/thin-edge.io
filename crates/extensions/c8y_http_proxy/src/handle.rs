@@ -2,8 +2,11 @@ use crate::messages::C8YRestError;
 use crate::messages::C8YRestRequest;
 use crate::messages::C8YRestResponse;
 use crate::messages::C8YRestResult;
+use crate::messages::GetJwtToken;
 use crate::messages::UploadConfigFile;
 use crate::messages::UploadLogBinary;
+use c8y_api::json_c8y::C8yCreateEvent;
+use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::ClientMessageBox;
@@ -27,16 +30,22 @@ impl C8YHttpProxy {
         C8YHttpProxy { c8y }
     }
 
-    /* Will be used by the mapper
+    pub async fn get_jwt_token(&mut self) -> Result<String, C8YRestError> {
+        let request: C8YRestRequest = GetJwtToken.into();
+        match self.c8y.await_response(request).await? {
+            Ok(C8YRestResponse::EventId(id)) => Ok(id),
+            unexpected => Err(unexpected.into()),
+        }
+    }
+
     pub async fn send_event(&mut self, c8y_event: C8yCreateEvent) -> Result<String, C8YRestError> {
         let request: C8YRestRequest = c8y_event.into();
         match self.c8y.await_response(request).await? {
             Ok(C8YRestResponse::EventId(id)) => Ok(id),
             unexpected => Err(unexpected.into()),
         }
-    } */
+    }
 
-    /* Will be used by the mapper
     pub async fn send_software_list_http(
         &mut self,
         c8y_software_list: C8yUpdateSoftwareListResponse,
@@ -46,7 +55,7 @@ impl C8YHttpProxy {
             Ok(C8YRestResponse::Unit(_)) => Ok(()),
             unexpected => Err(unexpected.into()),
         }
-    } */
+    }
 
     pub async fn upload_log_binary(
         &mut self,

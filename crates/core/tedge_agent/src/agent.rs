@@ -121,23 +121,17 @@ impl Default for SmAgentConfig {
 
         let response_topic_health = Topic::new_unchecked("tedge/health/tedge-agent");
 
-        let request_topic_list =
-            Topic::new(SoftwareListRequest::topic_name()).expect("Invalid topic");
+        let request_topic_list = SoftwareListRequest::topic();
 
-        let request_topic_update =
-            Topic::new(SoftwareUpdateRequest::topic_name()).expect("Invalid topic");
+        let request_topic_update = SoftwareUpdateRequest::topic();
 
-        let response_topic_list =
-            Topic::new(SoftwareListResponse::topic_name()).expect("Invalid topic");
+        let response_topic_list = SoftwareListResponse::topic();
 
-        let response_topic_update =
-            Topic::new(SoftwareUpdateResponse::topic_name()).expect("Invalid topic");
+        let response_topic_update = SoftwareUpdateResponse::topic();
 
-        let request_topic_restart =
-            Topic::new(RestartOperationRequest::topic_name()).expect("Invalid topic");
+        let request_topic_restart = RestartOperationRequest::topic();
 
-        let response_topic_restart =
-            Topic::new(RestartOperationResponse::topic_name()).expect("Invalid topic");
+        let response_topic_restart = RestartOperationResponse::topic();
 
         let sm_home = Utf8PathBuf::from("/etc/tedge");
 
@@ -790,8 +784,7 @@ mod tests {
 
         // calling handle_restart_operation should create a file in /tmp/tedge_agent_restart
         let (_output, mut output_stream) = mqtt_tests::output_stream();
-        let response_topic_restart =
-            Topic::new(RestartOperationResponse::topic_name()).expect("Invalid topic");
+        let response_topic_restart = RestartOperationResponse::topic();
 
         agent
             .handle_restart_operation(&mut output_stream, &response_topic_restart)
@@ -866,8 +859,7 @@ mod tests {
             )
             .unwrap();
 
-            let response_topic_restart =
-                Topic::new(SoftwareListResponse::topic_name()).expect("Invalid topic");
+            let response_topic_restart = SoftwareListResponse::topic();
 
             let plugins = Arc::new(Mutex::new(
                 ExternalPlugins::open(

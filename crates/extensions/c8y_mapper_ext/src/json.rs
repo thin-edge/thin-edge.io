@@ -4,7 +4,7 @@
 //! # Examples
 //!
 //! ```
-//! use c8y_mapper::c8y::json::from_thin_edge_json;
+//! use c8y_mapper_ext::json::from_thin_edge_json;
 //! let single_value_thin_edge_json = r#"{
 //!        "time": "2020-06-22T17:03:14.000+02:00",
 //!        "temperature": 23,
@@ -13,7 +13,7 @@
 //! let output = from_thin_edge_json(single_value_thin_edge_json);
 //! ```
 
-use crate::c8y::serializer;
+use crate::serializer;
 use clock::Clock;
 use clock::WallClock;
 use tedge_api::parser::*;

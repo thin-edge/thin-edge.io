@@ -67,6 +67,18 @@ impl HttpRequestBuilder {
         }
     }
 
+    /// Start to build a PUT request
+    pub fn put<T>(uri: T) -> Self
+    where
+        hyper::Uri: TryFrom<T>,
+        <hyper::Uri as TryFrom<T>>::Error: Into<http::Error>,
+    {
+        HttpRequestBuilder {
+            inner: hyper::Request::put(uri),
+            body: Ok(hyper::Body::empty()),
+        }
+    }
+
     /// Add an HTTP header to this request
     pub fn header<K, V>(self, key: K, value: V) -> Self
     where

@@ -32,6 +32,7 @@ pub use software::*;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mqtt_channel::Topic;
     use regex::Regex;
 
     #[test]
@@ -39,20 +40,28 @@ mod tests {
         // There are two topics for each kind of requests,
         // one for the requests, the other for the responses
         assert_eq!(
-            SoftwareListRequest::topic_name(),
-            "tedge/commands/req/software/list"
+            SoftwareListRequest::topic(),
+            Topic::new_unchecked("tedge/commands/req/software/list")
         );
         assert_eq!(
-            SoftwareListResponse::topic_name(),
-            "tedge/commands/res/software/list"
+            SoftwareListResponse::topic(),
+            Topic::new_unchecked("tedge/commands/res/software/list")
         );
         assert_eq!(
-            SoftwareUpdateRequest::topic_name(),
-            "tedge/commands/req/software/update"
+            SoftwareUpdateRequest::topic(),
+            Topic::new_unchecked("tedge/commands/req/software/update")
         );
         assert_eq!(
-            SoftwareUpdateResponse::topic_name(),
-            "tedge/commands/res/software/update"
+            SoftwareUpdateResponse::topic(),
+            Topic::new_unchecked("tedge/commands/res/software/update")
+        );
+        assert_eq!(
+            RestartOperationRequest::topic(),
+            Topic::new_unchecked("tedge/commands/req/control/restart")
+        );
+        assert_eq!(
+            RestartOperationResponse::topic(),
+            Topic::new_unchecked("tedge/commands/res/control/restart")
         );
     }
 
