@@ -1,5 +1,6 @@
 use crate::Config;
 use crate::MqttError;
+use log::warn;
 use rumqttc::AsyncClient;
 use rumqttc::ConnectReturnCode;
 use rumqttc::Event;
@@ -43,7 +44,8 @@ pub async fn init_session(config: &Config) -> Result<(), MqttError> {
             Err(err) => match err {
                 rumqttc::ConnectionError::ConnectionRefused(ConnectReturnCode::Success) => {}
                 _ => {
-                    return Err(MqttError::from_connection_error(err));
+                    warn!("{}", MqttError::from_connection_error(err));
+                    break;
                 }
             },
             _ => (),
