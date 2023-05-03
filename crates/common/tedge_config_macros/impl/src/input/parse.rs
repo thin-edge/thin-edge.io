@@ -160,7 +160,4 @@ pub struct FieldDtoSettings {
 }
 
 #[derive(FromMeta, Debug, Default)]
-pub struct ReaderSettings {
-    #[darling(default)]
-    pub all_or_nothing: bool,
-}
+pub struct ReaderSettings {}

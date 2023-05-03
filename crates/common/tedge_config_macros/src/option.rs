@@ -24,12 +24,6 @@ impl<T> From<OptionalConfig<T>> for Option<T> {
     }
 }
 
-pub enum OptionalConfigGroup<T> {
-    Present(T),
-    Empty(&'static str),
-    Partial(String),
-}
-
 #[derive(thiserror::Error, Debug)]
 #[error(
     r#"A value for '{key}' is missing.\n\
@@ -53,15 +47,30 @@ impl<T> OptionalConfig<T> {
             Self::Empty(key) => Err(ConfigNotSet { key }),
         }
     }
-}
 
-impl<T: doku::Document> doku::Document for OptionalConfig<T> {
-    fn ty() -> doku::Type {
-        Option::<T>::ty()
+    pub fn key(&self) -> &'static str {
+        match self {
+            Self::Present { key, .. } => key,
+            Self::Empty(key) => key,
+        }
+    }
+
+    pub fn key_if_present(&self) -> Option<&'static str> {
+        match self {
+            Self::Present { key, .. } => Some(key),
+            Self::Empty(..) => None,
+        }
+    }
+
+    pub fn key_if_empty(&self) -> Option<&'static str> {
+        match self {
+            Self::Empty(key) => Some(key),
+            Self::Present { .. } => None,
+        }
     }
 }
 
-impl<T: doku::Document> doku::Document for OptionalConfigGroup<T> {
+impl<T: doku::Document> doku::Document for OptionalConfig<T> {
     fn ty() -> doku::Type {
         Option::<T>::ty()
     }
