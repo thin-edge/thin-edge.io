@@ -57,33 +57,18 @@ stop-on-upgrade = false
 
 [dependencies]
 anyhow = "1.0"
-assert_cmd = "2.0"
 async-trait = "0.1"
 aws_mapper_ext = { path = "../../extensions/aws_mapper_ext" }
 az_mapper_ext = { path = "../../extensions/az_mapper_ext" }
 batcher = { path = "../../common/batcher" }
-c8y_api = { path = "../c8y_api" }
 c8y_http_proxy = { path = "../../extensions/c8y_http_proxy" }
-camino = "1.1"
+c8y_mapper_ext = { path = "../../extensions/c8y_mapper_ext" }
 clap = { version = "3.2", features = ["cargo", "derive"] }
 clock = { path = "../../common/clock" }
 collectd_ext = { path = "../../extensions/collectd_ext" }
-csv = "1.1"
-download = { path = "../../common/download" }
 flockfile = { path = "../../common/flockfile" }
-futures = "0.3"
-json-writer = { path = "../../common/json_writer" }
-logged_command = { path = "../../common/logged_command" }
 mqtt_channel = { path = "../../common/mqtt_channel" }
-plugin_sm = { path = "../plugin_sm" }
-reqwest = { version = "0.11", default-features = false, features = [
-    "json",
-    "rustls-tls-native-roots",
-] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 tedge_actors = { path = "../../core/tedge_actors" }
-tedge_api = { path = "../tedge_api" }
 tedge_config = { path = "../../common/tedge_config" }
 tedge_file_system_ext = { path = "../../extensions/tedge_file_system_ext" }
 tedge_health_ext = { path = "../../extensions/tedge_health_ext" }
@@ -94,8 +79,6 @@ tedge_timer_ext = { path = "../../extensions/tedge_timer_ext" }
 tedge_utils = { path = "../../common/tedge_utils", features = [
     "logging",
 ] }
-thiserror = "1.0"
-time = "0.3"
 tokio = { version = "1.23", features = [
     "process",
     "rt",
@@ -103,23 +86,7 @@ tokio = { version = "1.23", features = [
     "sync",
     "time",
 ] }
-toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
-
-[dev-dependencies]
-assert-json-diff = "2.0"
-assert_matches = "1.5"
-mockito = "0.31"
-mqtt_tests = { path = "../../tests/mqtt_tests" }
-proptest = "1.0"
-rand = "0.8"
-serde = "1.0"
-serde_json = "1.0"
-serial_test = "0.8"
-tedge_test_utils = { path = "../../tests/tedge_test_utils" }
-test-case = "2.2"
-time = { version = "0.3", features = ["macros"] }
-tokio-test = "0.4"
 
 [features]
 integration-test = []

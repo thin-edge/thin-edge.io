@@ -1,10 +1,10 @@
 use c8y_api::smartrest::message::sanitize_for_smartrest;
 use c8y_api::smartrest::message::MAX_PAYLOAD_LIMIT_IN_BYTES;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
-use mqtt_channel::Message;
-use mqtt_channel::Topic;
 use serde::Deserialize;
 use serde::Serialize;
+use tedge_mqtt_ext::Message;
+use tedge_mqtt_ext::Topic;
 
 const DEFAULT_SERVICE_TYPE: &str = "service";
 
@@ -116,7 +116,7 @@ pub fn service_monitor_status_message(
                 "102,{device_name}_{cid}_{daemon_name},\"{sanitized_type}\",{daemon_name},\"{sanitized_status}\""
             )
             .into(),
-            qos: mqtt_channel::QoS::AtLeastOnce,
+            qos: tedge_mqtt_ext::QoS::AtLeastOnce,
             retain: false,
         },
         None => Message {
@@ -125,7 +125,7 @@ pub fn service_monitor_status_message(
                 "102,{device_name}_{daemon_name},\"{sanitized_type}\",{daemon_name},\"{sanitized_status}\""
             )
             .into(),
-            qos: mqtt_channel::QoS::AtLeastOnce,
+            qos: tedge_mqtt_ext::QoS::AtLeastOnce,
             retain: false,
         },
     }

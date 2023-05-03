@@ -1,9 +1,8 @@
-use std::path::Path;
-use std::path::PathBuf;
-
 use c8y_api::smartrest::operations::is_valid_operation_name;
 use serde::Deserialize;
 use serde::Serialize;
+use std::path::Path;
+use std::path::PathBuf;
 use tedge_file_system_ext::FsWatchEvent;
 
 #[derive(Serialize, Deserialize, Debug)]

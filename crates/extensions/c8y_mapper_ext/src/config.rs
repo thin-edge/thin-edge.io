@@ -2,7 +2,6 @@ use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
 use camino::Utf8PathBuf;
-use mqtt_channel::TopicFilter;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_api::topic::ResponseTopic;
@@ -14,6 +13,7 @@ use tedge_config::LogPathSetting;
 use tedge_config::ServiceTypeSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
+use tedge_mqtt_ext::TopicFilter;
 
 pub const MQTT_MESSAGE_SIZE_THRESHOLD: usize = 16184;
 
@@ -106,5 +106,5 @@ pub enum C8yMapperConfigError {
     FromOperationsError(#[from] OperationsError),
 
     #[error(transparent)]
-    FromMqttError(#[from] mqtt_channel::MqttError),
+    FromMqttError(#[from] tedge_mqtt_ext::MqttError),
 }

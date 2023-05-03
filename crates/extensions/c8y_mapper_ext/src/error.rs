@@ -1,12 +1,14 @@
-use std::path::PathBuf;
-
-use crate::c8y::error::CumulocityMapperError;
-
 use c8y_api::smartrest::error::OperationsError;
+use c8y_api::smartrest::error::SMCumulocityMapperError;
+use c8y_api::smartrest::error::SmartRestDeserializerError;
+use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_http_proxy::messages::C8YRestError;
-use mqtt_channel::MqttError;
+use plugin_sm::operation_logs::OperationLogsError;
+use std::path::PathBuf;
 use tedge_api::serialize::ThinEdgeJsonSerializationError;
 use tedge_config::TEdgeConfigError;
+use tedge_mqtt_ext::MqttError;
+use tedge_utils::size_threshold::SizeThresholdExceededError;
 
 // allowing enum_variant_names due to a False positive where it is
 // detected that "all variants have the same prefix: `From`"
@@ -23,9 +25,6 @@ pub enum MapperError {
     FromConfigSetting(#[from] tedge_config::ConfigSettingError),
 
     #[error(transparent)]
-    FromFlockfile(#[from] flockfile::FlockfileError),
-
-    #[error(transparent)]
     FromNotifyFs(#[from] tedge_utils::notify::NotifyStreamError),
 
     #[error(transparent)]
@@ -38,7 +37,7 @@ pub enum ConversionError {
     FromMapper(#[from] MapperError),
 
     #[error(transparent)]
-    FromCumulocityJsonError(#[from] crate::c8y::json::CumulocityJsonError),
+    FromCumulocityJsonError(#[from] crate::json::CumulocityJsonError),
 
     #[error(transparent)]
     FromCumulocityMapperError(#[from] CumulocityMapperError),
@@ -61,7 +60,7 @@ pub enum ConversionError {
     FromThinEdgeJsonParser(#[from] tedge_api::parser::ThinEdgeJsonParserError),
 
     #[error(transparent)]
-    SizeThresholdExceeded(#[from] super::size_threshold::SizeThresholdExceededError),
+    SizeThresholdExceeded(#[from] SizeThresholdExceededError),
 
     #[error(transparent)]
     FromMqttClient(#[from] MqttError),
@@ -106,6 +105,68 @@ pub enum ConversionError {
 
     #[error("Failed to extract the child device name from file path : {dir}")]
     DirPathComponentError { dir: PathBuf },
+
+    #[error(transparent)]
+    FromC8YRestError(#[from] C8YRestError),
+}
+
+#[derive(thiserror::Error, Debug)]
+#[allow(clippy::enum_variant_names)]
+pub enum CumulocityMapperError {
+    #[error(transparent)]
+    InvalidTopicError(#[from] tedge_api::TopicError),
+
+    #[error(transparent)]
+    InvalidThinEdgeJson(#[from] tedge_api::SoftwareError),
+
+    #[error(transparent)]
+    FromElapsed(#[from] tokio::time::error::Elapsed),
+
+    #[error(transparent)]
+    FromMqttClient(#[from] tedge_mqtt_ext::MqttError),
+
+    #[error(transparent)]
+    FromSmartRestSerializer(#[from] SmartRestSerializerError),
+
+    #[error(transparent)]
+    FromSmartRestDeserializer(#[from] SmartRestDeserializerError),
+
+    #[error(transparent)]
+    FromSmCumulocityMapperError(#[from] SMCumulocityMapperError),
+
+    #[error(transparent)]
+    FromTedgeConfig(#[from] tedge_config::ConfigSettingError),
+
+    #[error(transparent)]
+    FromTimeFormat(#[from] time::error::Format),
+
+    #[error(transparent)]
+    FromTimeParse(#[from] time::error::Parse),
+
+    #[error(transparent)]
+    FromIo(#[from] std::io::Error),
+
+    #[error(transparent)]
+    FromSerde(#[from] serde_json::Error),
+
+    #[error("Operation execution failed: {error_message}. Command: {command}. Operation name: {operation_name}")]
+    ExecuteFailed {
+        error_message: String,
+        command: String,
+        operation_name: String,
+    },
+
+    #[error("Failed to read the child device operations in directory: {dir}")]
+    ReadDirError { dir: std::path::PathBuf },
+
+    #[error(transparent)]
+    FromOperationsError(#[from] OperationsError),
+
+    #[error(transparent)]
+    FromOperationLogs(#[from] OperationLogsError),
+
+    #[error(transparent)]
+    TedgeConfig(#[from] tedge_config::TEdgeConfigError),
 
     #[error(transparent)]
     FromC8YRestError(#[from] C8YRestError),

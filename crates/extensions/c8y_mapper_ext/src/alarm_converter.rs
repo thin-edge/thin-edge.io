@@ -1,15 +1,14 @@
 use c8y_api::json_c8y::C8yCreateAlarm;
+use c8y_api::smartrest::alarm;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-
-use c8y_api::smartrest::alarm;
-use mqtt_channel::Message;
-use mqtt_channel::Topic;
 use tedge_api::alarm::ThinEdgeAlarm;
 use tedge_api::alarm::ThinEdgeJsonDeserializerError;
+use tedge_mqtt_ext::Message;
+use tedge_mqtt_ext::Topic;
 
-use crate::core::error::ConversionError;
+use crate::error::ConversionError;
 
 const TEDGE_ALARMS_TOPIC: &str = "tedge/alarms/";
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";

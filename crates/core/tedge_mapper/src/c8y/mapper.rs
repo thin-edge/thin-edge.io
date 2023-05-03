@@ -1,11 +1,11 @@
-use super::actor::C8yMapperBuilder;
-use super::config::C8yMapperConfig;
-use super::service_monitor::service_monitor_status_message;
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
 use async_trait::async_trait;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
+use c8y_mapper_ext::actor::C8yMapperBuilder;
+use c8y_mapper_ext::config::C8yMapperConfig;
+use c8y_mapper_ext::service_monitor::service_monitor_status_message;
 use mqtt_channel::Config;
 use std::path::Path;
 use tedge_config::ConfigSettingAccessor;
@@ -33,7 +33,6 @@ impl TEdgeComponent for CumulocityMapper {
         info!("Initialize tedge mapper c8y");
         create_directories(cfg_dir)?;
 
-        // HIPPO: Are these subscriptions still needed on init?
         self.init_session(C8yMapperConfig::subscriptions(cfg_dir)?)
             .await?;
         Ok(())

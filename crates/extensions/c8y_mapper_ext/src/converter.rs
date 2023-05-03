@@ -5,11 +5,10 @@ use super::error::CumulocityMapperError;
 use super::fragments::C8yAgentFragment;
 use super::fragments::C8yDeviceDataFragment;
 use super::service_monitor;
-use crate::c8y::dynamic_discovery::*;
-use crate::c8y::json;
-use crate::core::converter::*;
-use crate::core::error::*;
-use crate::core::size_threshold::SizeThreshold;
+use crate::dynamic_discovery::DiscoverOp;
+use crate::dynamic_discovery::EventType;
+use crate::error::ConversionError;
+use crate::json;
 use async_trait::async_trait;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
@@ -40,12 +39,11 @@ use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use c8y_api::utils::child_device::new_child_device_message;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use logged_command::LoggedCommand;
-use mqtt_channel::Message;
-use mqtt_channel::Topic;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
 use service_monitor::convert_health_status_message;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
@@ -68,7 +66,10 @@ use tedge_api::SoftwareListRequest;
 use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareUpdateResponse;
 use tedge_config::TEdgeConfigError;
+use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
+use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
 use time::format_description::well_known::Rfc3339;
 use tracing::debug;
@@ -84,6 +85,86 @@ const TEDGE_EVENTS_TOPIC: &str = "tedge/events/";
 const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "c8y/event/events/create";
 const TEDGE_AGENT_LOG_DIR: &str = "tedge/agent";
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
+
+#[derive(Debug)]
+pub struct MapperConfig {
+    pub out_topic: Topic,
+    pub errors_topic: Topic,
+}
+
+#[async_trait]
+pub trait Converter: Send + Sync {
+    type Error: Display;
+
+    fn get_mapper_config(&self) -> &MapperConfig;
+
+    async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error>;
+
+    async fn convert(&mut self, input: &Message) -> Vec<Message> {
+        let messages_or_err = self.try_convert(input).await;
+        self.wrap_errors(messages_or_err)
+    }
+
+    fn wrap_errors(&self, messages_or_err: Result<Vec<Message>, Self::Error>) -> Vec<Message> {
+        messages_or_err.unwrap_or_else(|error| vec![self.new_error_message(error)])
+    }
+
+    fn wrap_error(&self, message_or_err: Result<Message, Self::Error>) -> Message {
+        message_or_err.unwrap_or_else(|error| self.new_error_message(error))
+    }
+
+    fn new_error_message(&self, error: Self::Error) -> Message {
+        error!("Mapping error: {}", error);
+        Message::new(&self.get_mapper_config().errors_topic, error.to_string())
+    }
+
+    fn try_init_messages(&mut self) -> Result<Vec<Message>, Self::Error> {
+        Ok(vec![])
+    }
+
+    /// This function will be the first method that's called on the converter after it's instantiated.
+    /// Return any initialization messages that must be processed before the converter starts converting regular messages.
+    fn init_messages(&mut self) -> Vec<Message> {
+        match self.try_init_messages() {
+            Ok(messages) => messages,
+            Err(error) => {
+                error!("Mapping error: {}", error);
+                vec![Message::new(
+                    &self.get_mapper_config().errors_topic,
+                    error.to_string(),
+                )]
+            }
+        }
+    }
+
+    /// This function will be the called after a brief period(sync window) after the converter starts converting messages.
+    /// This gives the converter an opportunity to process the messages received during the sync window and
+    /// produce any additional messages as "sync messages" as a result of this processing.
+    /// These sync messages will be processed by the mapper right after the sync window before it starts converting further messages.
+    /// Typically used to do some processing on all messages received on mapper startup and derive additional messages out of those.
+    fn sync_messages(&mut self) -> Vec<Message> {
+        vec![]
+    }
+
+    fn try_process_operation_update_message(
+        &mut self,
+        _input: &DiscoverOp,
+    ) -> Result<Option<Message>, Self::Error> {
+        Ok(None)
+    }
+
+    fn process_operation_update_message(&mut self, message: DiscoverOp) -> Message {
+        let message_or_err = self.try_process_operation_update_message(&message);
+        match message_or_err {
+            Ok(Some(msg)) => msg,
+            Ok(None) => Message::new(
+                &self.get_mapper_config().errors_topic,
+                "No operation update required",
+            ),
+            Err(err) => self.new_error_message(err),
+        }
+    }
+}
 
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
@@ -962,11 +1043,6 @@ async fn forward_operation_request(
 }
 
 /// reads a json file to serde_json::Value
-///
-/// # Example
-/// ```
-/// let json_value = read_json_from_file("/path/to/a/file").unwrap();
-/// ```
 fn read_json_from_file(file_path: &str) -> Result<serde_json::Value, ConversionError> {
     let mut file = File::open(Path::new(file_path))?;
     let mut data = String::new();
@@ -1019,7 +1095,6 @@ mod tests {
     use rand::prelude::Distribution;
     use rand::seq::SliceRandom;
     use rand::SeedableRng;
-    use serial_test::serial;
     use std::collections::HashMap;
     use tedge_actors::Builder;
     use tedge_actors::LoggingSender;
@@ -1040,7 +1115,6 @@ mod tests {
     const EXPECTED_CHILD_DEVICES: &[&str] = &["child-0", "child-1", "child-2", "child-3"];
 
     #[tokio::test]
-    #[serial]
     async fn test_execute_operation_is_not_blocked() {
         let log_dir = TempTedgeDir::new();
         let operation_logs = OperationLogs::try_new(log_dir.path().to_path_buf()).unwrap();
@@ -1075,7 +1149,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn ignore_operations_for_child_device() {
         let (mut mqtt_publisher, mut http_proxy, c8y_endpoint) = prepare();
 
