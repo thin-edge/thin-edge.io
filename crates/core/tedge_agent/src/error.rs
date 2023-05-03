@@ -29,7 +29,7 @@ pub enum AgentError {
     FromSoftware(#[from] SoftwareError),
 
     #[error(transparent)]
-    FromState(#[from] StateError),
+    FromState(#[from] crate::state_repository::error::StateError),
 
     #[error(transparent)]
     FromTedgeConfig(#[from] TEdgeConfigError),
@@ -63,19 +63,6 @@ pub enum AgentError {
 
     #[error(transparent)]
     FromRestartManagerError(#[from] crate::restart_manager::error::RestartManagerError),
-}
-
-#[derive(Debug, thiserror::Error)]
-#[allow(clippy::enum_variant_names)]
-pub enum StateError {
-    #[error(transparent)]
-    FromTOMLParse(#[from] toml::de::Error),
-
-    #[error(transparent)]
-    FromInvalidTOML(#[from] toml::ser::Error),
-
-    #[error(transparent)]
-    FromIo(#[from] std::io::Error),
 }
 
 impl From<AgentError> for RuntimeError {

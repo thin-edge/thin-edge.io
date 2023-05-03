@@ -1,4 +1,4 @@
-use crate::error::StateError;
+use crate::state_repository::error::StateError;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use serde::Deserialize;
@@ -116,7 +116,6 @@ pub struct State {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::state_repository::state::AgentStateRepository;
     use crate::state_repository::state::RestartOperationStatus;
     use crate::state_repository::state::SoftwareOperationVariants;

@@ -20,7 +20,7 @@ pub enum RestartManagerError {
     FromChannelError(#[from] tedge_actors::ChannelError),
 
     #[error(transparent)]
-    FromState(#[from] crate::error::StateError),
+    FromState(#[from] crate::state_repository::error::StateError),
 
     #[error("Could not convert {timestamp:?} to unix timestamp. Error message: {error_msg}")]
     TimestampConversionError { timestamp: i64, error_msg: String },
