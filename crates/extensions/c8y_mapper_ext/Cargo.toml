@@ -10,15 +10,14 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-async-trait = "0.1"
 assert_cmd = "2.0"
+async-trait = "0.1"
 c8y_api = { path = "../../core/c8y_api" }
 c8y_http_proxy = { path = "../c8y_http_proxy" }
 camino = "1.1"
 clock = { path = "../../common/clock" }
 json-writer = { path = "../../common/json_writer" }
 logged_command = { path = "../../common/logged_command" }
-# mqtt_channel = { path = "../../common/mqtt_channel" }
 plugin_sm = { path = "../../core/plugin_sm" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
