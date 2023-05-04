@@ -7,23 +7,35 @@ if [ ! -e /usr/bin/tedge_agent ]; then
     ln -s /usr/bin/tedge-agent /usr/bin/tedge_agent
 fi
 
+# Use service manager agnostic tools (e.g. ps or pgrep) to determine if a process is running or not
+process_running() {
+    name="$1"
+    if command -v ps >/dev/null 2>&1; then
+        if ps -C "$name" >/dev/null; then
+            return 0
+        fi
+    elif command -v pgrep >/dev/null 2>&1; then
+        if pgrep -x "$name" >/dev/null; then
+            return 0
+        fi
+    fi
+    # Assume process is not running
+    return 1
+}
+
 # Initialize the agent __only__ if not when agent is running.
 # Indeed, during an OTA self-update, the previous version of the  `agent` is kept running
 # to monitor the installation of the new version up to completion.
-if command -v systemctl >/dev/null; then
-    if ! systemctl is-active --quiet tedge-agent ; then
-         # Flock file should be removed as `tedge-agent --init` must run as root
-         # although the flockfile is owned by `tedge`.
-         if [ -f "/run/lock/tedge_agent.lock" ]; then
-                rm /run/lock/tedge_agent.lock
-         fi
+# Note: Check for both tedge-agent and tedge_agent for backwards compatibility
+if ! (process_running tedge-agent || process_running tedge_agent); then
+    # Flock file should be removed as `tedge-agent --init` must run as root
+    # although the flockfile is owned by `tedge`. rm will ignore the files if they don't exist
+    rm -f /run/lock/tedge_agent.lock
+    rm -f /run/lock/tedge-agent.lock
 
-         if [ -f "/run/lock/tedge-agent.lock" ]; then
-                rm /run/lock/tedge-agent.lock
-         fi
-         # It must be run as root to create the directory `/var/tedge`.
-         tedge-agent --init
-    fi
+    # It must be run as root to create the directory `/var/tedge`.
+    # Ignore any errors during init so the installatino does not fail
+    tedge-agent --init ||:
 fi
 
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
