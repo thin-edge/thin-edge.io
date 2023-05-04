@@ -47,13 +47,13 @@ release *ARGS:
 test:
     cargo test --no-fail-fast --all-features --all-targets
 
-integration-test:
-    #!/usr/bin/env bash
-    ci/build_scripts/build.sh x86_64-unknown-linux-musl
-    cd tests/RobotFramework
-    source .venv/bin/activate
-    invoke build --local
-    invoke tests
+# Install integration test dependencies
+setup-integration-test *ARGS:
+    tests/RobotFramework/bin/setup.sh {{ARGS}}
+
+# Run integration tests (using local build)
+integration-test *ARGS: release
+    cd tests/RobotFramework && .venv/bin/python3 -m invoke build --local tests {{ARGS}}
 
 # Generate docs and start web server
 docs:
