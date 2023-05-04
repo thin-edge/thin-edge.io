@@ -40,10 +40,10 @@ Check thin-edge monitoring
     Execute Command    sudo systemctl start tedge-mapper-collectd
     # Check thin-edge monitoring
     ${tedge_messages}=    Should Have MQTT Messages    topic=tedge/measurements    minimum=1    maximum=None
-    Should Contain    @{tedge_messages}   "time"
-    Should Contain Any    @{tedge_messages}    "memory"    "cpu"    "df-root"
+    Should Contain    ${tedge_messages[0]}   "time"
+    Should Contain Any    ${tedge_messages[0]}    "memory"    "cpu"    "df-root"
     ${c8y_messages}=    Should Have MQTT Messages    topic=c8y/measurement/measurements/create    minimum=1    maximum=None
-    Should Contain    @{c8y_messages}    "type":"ThinEdgeMeasurement"
+    Should Contain    ${c8y_messages[0]}    "type":"ThinEdgeMeasurement"
 
 Check grouping of measurements 
     # This test step is only partially checking the grouping of the messages, because of the timeouts and the current design
@@ -54,7 +54,7 @@ Check grouping of measurements
     ${start_time}=    Get Unix Timestamp
     Execute Command    tedge mqtt pub collectd/localhost/temperature/temp1 "`date +%s.%N`:50" && tedge mqtt pub collectd/localhost/temperature/temp2 "`date +%s.%N`:40" && tedge mqtt pub collectd/localhost/pressure/pres1 "`date +%s.%N`:10" && tedge mqtt pub collectd/localhost/pressure/pres2 "`date +%s.%N`:20"
     ${c8y_messages}    Should Have MQTT Messages    c8y/measurement/measurements/create    maximum=4    date_from=${start_time}
-    Should Contain Any   @{c8y_messages}    "temp1":{"value":50.0}    "temp2":{"value":40.0}    "pres1":{"value":10.0}    "pres2":{"value":20.0}
+    Should Contain Any   ${c8y_messages[0]}    "temp1":{"value":50.0}    "temp2":{"value":40.0}    "pres1":{"value":10.0}    "pres2":{"value":20.0}
 
 
 *** Keywords ***
