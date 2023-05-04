@@ -65,6 +65,7 @@ tracing = { version = "0.1", features = ["attributes", "log"] }
 # from here for actors
 tedge_actors = { path = "../../core/tedge_actors" }
 tedge_signal_ext = { path = "../../extensions/tedge_signal_ext" }
+tedge_health_ext = { path = "../../extensions/tedge_health_ext" }
 
 [dev-dependencies]
 anyhow = "1.0"

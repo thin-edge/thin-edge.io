@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
+use tedge_actors::NoMessage;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
@@ -41,9 +42,6 @@ impl Actor for HttpServerActor {
         Ok(())
     }
 }
-
-#[derive(Debug)]
-pub struct NoMessage;
 
 pub struct HttpServerBuilder {
     config: HttpConfig,

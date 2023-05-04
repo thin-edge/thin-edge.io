@@ -4,6 +4,8 @@ use crate::http_server::http_rest::HttpConfig;
 use crate::mqtt_operation_converter::builder::MqttOperationConverterBuilder;
 use crate::restart_manager::actor::RestartManagerConfig;
 use crate::restart_manager::builder::RestartManagerBuilder;
+use crate::software_list_manager::actor::SoftwareListManagerConfig;
+use crate::software_list_manager::builder::SoftwareListManagerBuilder;
 use crate::state_repository::state::AgentStateRepository;
 use crate::state_repository::state::RestartOperationStatus;
 use crate::state_repository::state::SoftwareOperationVariants;
@@ -64,6 +66,7 @@ use tedge_config::DEFAULT_DATA_PATH;
 use tedge_config::DEFAULT_LOG_PATH;
 use tedge_config::DEFAULT_RUN_PATH;
 use tedge_config::DEFAULT_TMP_PATH;
+use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_signal_ext::SignalActor;
@@ -400,15 +403,23 @@ impl SmAgent {
                 .with_session_name(TEDGE_AGENT),
         );
 
+        // Software list actor
+        let sm_config = SoftwareListManagerConfig::new(
+            self.config.tmp_dir.clone(),
+            self.config.sm_home.clone(),
+            self.config.config_location.tedge_config_root_path.clone(),
+            self.config.sm_home.join(SM_PLUGINS),
+            self.config.log_dir.clone(),
+            None, // TODO: Change it to read SoftwarePluginDefaultSetting
+        );
+        let mut software_list_builder = SoftwareListManagerBuilder::new(sm_config);
+
         // TBD
-        let mut software_list_builder: SimpleMessageBoxBuilder<
-            SoftwareListRequest,
-            SoftwareListResponse,
-        > = SimpleMessageBoxBuilder::new("SoftwareList", 5);
         let mut software_update_builder: SimpleMessageBoxBuilder<
             SoftwareUpdateRequest,
             SoftwareUpdateResponse,
         > = SimpleMessageBoxBuilder::new("SoftwareUpdate", 5);
+
         // Converter actor
         let converter_actor_builder = MqttOperationConverterBuilder::new(
             &mut software_list_builder,
@@ -420,14 +431,18 @@ impl SmAgent {
         // Shutdown on SIGINT
         let signal_actor_builder = SignalActor::builder(&runtime.get_handle());
 
+        // Health actor
+        let health_actor = HealthMonitorBuilder::new(TEDGE_AGENT, &mut mqtt_actor_builder);
+
         // Spawn
         runtime.spawn(signal_actor_builder).await?;
         runtime.spawn(http_server_builder).await?;
         runtime.spawn(mqtt_actor_builder).await?;
         runtime.spawn(restart_actor_builder).await?;
-        // runtime.spawn(software_list_builder).await?;
+        runtime.spawn(software_list_builder).await?;
         // runtime.spawn(software_update_builder).await?;
         runtime.spawn(converter_actor_builder).await?;
+        runtime.spawn(health_actor).await?;
 
         runtime.run_to_completion().await?;
 
@@ -449,10 +464,6 @@ impl SmAgent {
         while let Some(message) = requests.next().await {
             debug!("Request {:?}", message);
             match &message.topic {
-                topic if self.config.request_topics_health.accept_topic(topic) => {
-                    send_health_status(responses, "tedge-agent").await;
-                }
-
                 topic if topic == &self.config.request_topic_list => {
                     let _success = self
                         .handle_software_list_request(
