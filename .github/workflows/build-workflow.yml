@@ -65,6 +65,13 @@ jobs:
           name: debian-packages-${{ matrix.job.target }}
           path: target/${{ matrix.job.target }}/debian/*.deb
 
+      - name: Upload binaries as tarball
+        # https://github.com/marketplace/actions/upload-a-build-artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: archive-${{ matrix.job.target }}
+          path: target/${{ matrix.job.target }}/*.tar.gz
+
   publish:
     name: Publish ${{ matrix.job.target }}
     runs-on: Ubuntu-20.04

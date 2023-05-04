@@ -227,3 +227,11 @@ do
     cargo zigbuild --release -p "$PACKAGE" "${TARGET[@]}"
     cargo deb -p "$PACKAGE" --no-strip --no-build "${DEB_OPTIONS[@]}" "${TARGET[@]}"
 done
+
+# Create tarball with just the binaries
+echo -e "\nCreating tarball"
+rm -f "target/$ARCH/"*tar.gz
+# Use underscores as a delimiter between version and target/arch to make it easier to parse
+TAR_FILE="target/$ARCH/tedge_${GIT_SEMVER}_$ARCH.tar.gz"
+tar cfvz "$TAR_FILE" -C "target/$ARCH/release" --files-from <(printf "%s\n" "${RELEASE_PACKAGES[@]}")
+echo -e "\nCreated tarball: $TAR_FILE\n"
