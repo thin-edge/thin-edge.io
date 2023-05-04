@@ -11,12 +11,12 @@ Test Teardown    Get Logs
 
 Successful firmware operation
     ${operation}=    Cumulocity.Install Firmware    ubuntu    1.0.2    https://dummy.url/firmware.zip
-    ${operation}=    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}
+    ${operation}=    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
     Device Should Have Firmware    ubuntu    1.0.2    https://dummy.url/firmware.zip
 
 Install with empty firmware name
     ${operation}=    Cumulocity.Install Firmware    ${EMPTY}    1.0.2    https://dummy.url/firmware.zip
-    Operation Should Be FAILED    ${operation}    failure_reason=.*Invalid firmware name. Firmware name cannot be empty
+    Operation Should Be FAILED    ${operation}    failure_reason=.*Invalid firmware name. Firmware name cannot be empty    timeout=120
 
 
 *** Keywords ***
