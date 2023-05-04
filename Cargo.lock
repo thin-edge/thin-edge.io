@@ -2194,6 +2194,7 @@ dependencies = [
  "certificate",
  "fastrand",
  "futures",
+ "log",
  "mqtt_tests",
  "rumqttc",
  "serial_test",
