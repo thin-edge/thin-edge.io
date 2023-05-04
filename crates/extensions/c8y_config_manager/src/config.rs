@@ -21,7 +21,6 @@ pub struct ConfigManagerConfig {
     pub device_id: String,
     pub mqtt_host: String,
     pub mqtt_port: u16,
-    pub c8y_url: ConnectUrl,
     pub tedge_http_host: String,
     pub plugin_config_path: PathBuf,
     pub plugin_config: PluginConfig,
@@ -39,7 +38,6 @@ impl ConfigManagerConfig {
         device_id: String,
         mqtt_host: String,
         mqtt_port: u16,
-        c8y_url: ConnectUrl,
         tedge_http_address: IpAddress,
         tedge_http_port: u16,
     ) -> Self {
@@ -66,7 +64,6 @@ impl ConfigManagerConfig {
             device_id,
             mqtt_host,
             mqtt_port,
-            c8y_url,
             tedge_http_host,
             plugin_config_path,
             plugin_config,
@@ -86,7 +83,6 @@ impl ConfigManagerConfig {
         let data_dir: PathBuf = tedge_config.query(DataPathSetting)?.into();
         let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
         let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
-        let c8y_url = tedge_config.query(C8yUrlSetting)?;
         let tedge_http_address = tedge_config.query(HttpBindAddressSetting)?;
         let tedge_http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
 
@@ -97,7 +93,6 @@ impl ConfigManagerConfig {
             device_id,
             mqtt_host,
             mqtt_port,
-            c8y_url,
             tedge_http_address,
             tedge_http_port,
         ))

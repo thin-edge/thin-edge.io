@@ -84,6 +84,34 @@ impl ConfigSetting for C8yUrlSetting {
     type Value = ConnectUrl;
 }
 
+/// HTTP endpoint for the Cumulocity tenant.
+///
+/// Example: http.your-tenant.cumulocity.com:1234
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct C8yHttpSetting;
+
+impl ConfigSetting for C8yHttpSetting {
+    const KEY: &'static str = "c8y.http";
+
+    const DESCRIPTION: &'static str = "HTTP endpoint for the Cumulocity tenant. \
+        Example: http.your-tenant.cumulocity.com:1234";
+    type Value = ConnectUrl;
+}
+
+/// MQTT endpoint for the Cumulocity tenant.
+///
+/// Example: mqtt.your-tenant.cumulocity.com:1234
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct C8yMqttSetting;
+
+impl ConfigSetting for C8yMqttSetting {
+    const KEY: &'static str = "c8y.mqtt";
+
+    const DESCRIPTION: &'static str = "MQTT endpoint for the Cumulocity tenant. \
+        Example: mqtt.your-tenant.cumulocity.com:1234";
+    type Value = ConnectUrl;
+}
+
 ///
 /// Path where Cumulocity root certificate(s) are located.
 ///

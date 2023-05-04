@@ -134,7 +134,10 @@ impl Command for ConnectCommand {
         }
 
         if let Cloud::C8y = self.cloud {
-            check_connected_c8y_tenant_as_configured(&config, &config.query_string(C8yUrlSetting)?);
+            check_connected_c8y_tenant_as_configured(
+                &config,
+                &config.query_string(C8yMqttSetting)?,
+            );
             enable_software_management(&bridge_config, self.service_manager.as_ref());
         }
 
@@ -173,7 +176,7 @@ impl ConnectCommand {
             }
             Cloud::C8y => {
                 let params = BridgeConfigC8yParams {
-                    connect_url: config.query(C8yUrlSetting)?,
+                    connect_url: config.query(C8yMqttSetting)?,
                     mqtt_tls_port: MQTT_TLS_PORT,
                     config_file: C8Y_CONFIG_FILENAME.into(),
                     bridge_root_cert_path: config.query(C8yRootCertPathSetting)?,

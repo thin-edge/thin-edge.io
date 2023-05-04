@@ -5,7 +5,7 @@ use camino::Utf8PathBuf;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_api::topic::ResponseTopic;
-use tedge_config::C8yUrlSetting;
+use tedge_config::C8yHttpSetting;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::DeviceIdSetting;
 use tedge_config::DeviceTypeSetting;
@@ -59,7 +59,7 @@ impl C8yMapperConfig {
         let device_id = tedge_config.query(DeviceIdSetting)?;
         let device_type = tedge_config.query(DeviceTypeSetting)?;
         let service_type = tedge_config.query(ServiceTypeSetting)?;
-        let c8y_host = tedge_config.query(C8yUrlSetting)?.into();
+        let c8y_host = tedge_config.query(C8yHttpSetting)?.into();
 
         Ok(C8yMapperConfig::new(
             config_dir,

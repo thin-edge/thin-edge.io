@@ -160,7 +160,7 @@ impl ConfigSettingAccessor<C8yUrlSetting> for TEdgeConfig {
             .clone()
             .ok_or(ConfigSettingError::ConfigNotSet {
                 key: C8yUrlSetting::KEY,
-            })
+        })
     }
 
     fn update(&mut self, _setting: C8yUrlSetting, value: ConnectUrl) -> ConfigSettingResult<()> {
@@ -170,6 +170,54 @@ impl ConfigSettingAccessor<C8yUrlSetting> for TEdgeConfig {
 
     fn unset(&mut self, _setting: C8yUrlSetting) -> ConfigSettingResult<()> {
         self.data.c8y.url = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<C8yHttpSetting> for TEdgeConfig {
+    fn query(&self, _setting: C8yHttpSetting) -> ConfigSettingResult<ConnectUrl> {
+        self.data
+            .c8y
+            .http
+            .as_ref()
+            .or(self.data.c8y.url.as_ref())
+            .cloned()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: C8yUrlSetting::KEY,
+            })
+    }
+
+    fn update(&mut self, _setting: C8yHttpSetting, value: ConnectUrl) -> ConfigSettingResult<()> {
+        self.data.c8y.http = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: C8yHttpSetting) -> ConfigSettingResult<()> {
+        self.data.c8y.http = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<C8yMqttSetting> for TEdgeConfig {
+    fn query(&self, _setting: C8yMqttSetting) -> ConfigSettingResult<ConnectUrl> {
+        self.data
+            .c8y
+            .mqtt
+            .as_ref()
+            .or(self.data.c8y.url.as_ref())
+            .cloned()
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: C8yUrlSetting::KEY,
+            })
+    }
+
+    fn update(&mut self, _setting: C8yMqttSetting, value: ConnectUrl) -> ConfigSettingResult<()> {
+        self.data.c8y.mqtt = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: C8yMqttSetting) -> ConfigSettingResult<()> {
+        self.data.c8y.mqtt = None;
         Ok(())
     }
 }

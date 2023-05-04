@@ -65,7 +65,11 @@ path = "/some/data/path"
     );
 
     assert_eq!(
-        config.query(C8yUrlSetting)?.as_str(),
+        config.query(C8yHttpSetting)?.as_str(),
+        "your-tenant.cumulocity.com"
+    );
+    assert_eq!(
+        config.query(C8yMqttSetting)?.as_str(),
         "your-tenant.cumulocity.com"
     );
     assert_eq!(
@@ -199,7 +203,11 @@ bind_address = "0.0.0.0"
         );
 
         assert_eq!(
-            config.query(C8yUrlSetting)?.as_str(),
+            config.query(C8yHttpSetting)?.as_str(),
+            "your-tenant.cumulocity.com"
+        );
+        assert_eq!(
+            config.query(C8yMqttSetting)?.as_str(),
             "your-tenant.cumulocity.com"
         );
         assert_eq!(
@@ -278,7 +286,8 @@ bind_address = "0.0.0.0"
             Utf8PathBuf::from("/path/to/cert")
         );
 
-        assert_eq!(config.query(C8yUrlSetting)?.as_str(), updated_c8y_url);
+        assert_eq!(config.query(C8yHttpSetting)?.as_str(), updated_c8y_url);
+        assert_eq!(config.query(C8yMqttSetting)?.as_str(), updated_c8y_url);
         assert_eq!(
             config.query(C8yRootCertPathSetting)?,
             Utf8PathBuf::from("default_c8y_root_cert_path")
@@ -358,7 +367,8 @@ fn test_parse_config_with_only_device_configuration() -> Result<(), TEdgeConfigE
         Utf8PathBuf::from("/etc/ssl/certs/tedge-private-key.pem")
     );
 
-    assert!(config.query_optional(C8yUrlSetting)?.is_none());
+    assert!(config.query_optional(C8yHttpSetting)?.is_none());
+    assert!(config.query_optional(C8yMqttSetting)?.is_none());
     assert_eq!(
         config.query(C8yRootCertPathSetting)?,
         Utf8PathBuf::from("/etc/ssl/certs")
@@ -408,7 +418,11 @@ url = "your-tenant.cumulocity.com"
     );
 
     assert_eq!(
-        config.query(C8yUrlSetting)?.as_str(),
+        config.query(C8yHttpSetting)?.as_str(),
+        "your-tenant.cumulocity.com"
+    );
+    assert_eq!(
+        config.query(C8yMqttSetting)?.as_str(),
         "your-tenant.cumulocity.com"
     );
     assert_eq!(
@@ -459,7 +473,8 @@ url = "MyAzure.azure-devices.net"
         Utf8PathBuf::from("/etc/ssl/certs/tedge-private-key.pem"),
     );
 
-    assert!(config.query_optional(C8yUrlSetting)?.is_none());
+    assert!(config.query_optional(C8yHttpSetting)?.is_none());
+    assert!(config.query_optional(C8yMqttSetting)?.is_none());
     assert_eq!(
         config.query(C8yRootCertPathSetting)?,
         Utf8PathBuf::from("/dev/null")
@@ -512,7 +527,8 @@ bind_address = "1.2.3.4"
         Utf8PathBuf::from("/etc/ssl/certs/tedge-private-key.pem"),
     );
 
-    assert!(config.query_optional(C8yUrlSetting)?.is_none());
+    assert!(config.query_optional(C8yHttpSetting)?.is_none());
+    assert!(config.query_optional(C8yMqttSetting)?.is_none());
     assert_eq!(
         config.query(C8yRootCertPathSetting)?,
         Utf8PathBuf::from("/dev/null")
@@ -635,7 +651,8 @@ fn test_parse_config_empty_file() -> Result<(), TEdgeConfigError> {
         Utf8PathBuf::from("/etc/ssl/certs/tedge-private-key.pem"),
     );
 
-    assert!(config.query_optional(C8yUrlSetting)?.is_none());
+    assert!(config.query_optional(C8yHttpSetting)?.is_none());
+    assert!(config.query_optional(C8yMqttSetting)?.is_none());
     assert_eq!(
         config.query(C8yRootCertPathSetting)?,
         Utf8PathBuf::from("/etc/ssl/certs")
@@ -684,7 +701,8 @@ fn test_parse_config_no_config_file() -> Result<(), TEdgeConfigError> {
         Utf8PathBuf::from("/non/existent/path/device-certs/tedge-private-key.pem"),
     );
 
-    assert!(config.query_optional(C8yUrlSetting)?.is_none());
+    assert!(config.query_optional(C8yHttpSetting)?.is_none());
+    assert!(config.query_optional(C8yMqttSetting)?.is_none());
     assert_eq!(
         config.query(C8yRootCertPathSetting)?,
         Utf8PathBuf::from("/etc/ssl/certs")
@@ -799,7 +817,8 @@ port = 1024
 
     let original_c8y_url = ConnectUrl::try_from("your-tenant.cumulocity.com")?;
     let original_c8y_root_cert_path = Utf8PathBuf::from("/path/to/c8y/root/cert");
-    assert_eq!(config.query(C8yUrlSetting)?, original_c8y_url);
+    assert_eq!(config.query(C8yHttpSetting)?, original_c8y_url);
+    assert_eq!(config.query(C8yMqttSetting)?, original_c8y_url);
     assert_eq!(
         config.query(C8yRootCertPathSetting)?,
         original_c8y_root_cert_path
@@ -837,7 +856,8 @@ port = 1024
         original_device_cert_path
     );
 
-    assert_eq!(config.query(C8yUrlSetting)?, updated_c8y_url);
+    assert_eq!(config.query(C8yHttpSetting)?, updated_c8y_url);
+    assert_eq!(config.query(C8yMqttSetting)?, updated_c8y_url);
     assert_eq!(
         config.query(C8yRootCertPathSetting)?,
         Utf8PathBuf::from("/etc/ssl/certs")

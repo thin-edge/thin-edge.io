@@ -81,6 +81,14 @@ pub(crate) struct CumulocityConfigDto {
     #[doku(example = "your-tenant.cumulocity.com", as = "String")]
     pub(crate) url: Option<ConnectUrl>,
 
+    /// HTTP Endpoint for the Cumulocity tenant, with optional port.
+    #[doku(example = "http.your-tenant.cumulocity.com:1234", as = "String")]
+    pub(crate) http: Option<ConnectUrl>,
+
+    /// MQTT Endpoint for the Cumulocity tenant, with optional port.
+    #[doku(example = "mqtt.your-tenant.cumulocity.com:1234", as = "String")]
+    pub(crate) mqtt: Option<ConnectUrl>,
+
     /// The path where Cumulocity root certificate(s) are stored. The value can
     /// be a directory path as well as the path of the direct certificate file.
     #[doku(example = "/etc/tedge/c8y-trusted-root-certificates.pem")]

@@ -521,7 +521,6 @@ mod tests {
             device_id: "SUT".to_string(),
             mqtt_host: "127.0.0.1".to_string(),
             mqtt_port: 1883,
-            c8y_url: "mytenant.c8y.com".try_into().unwrap(),
             tedge_http_host: "127.0.0.1".try_into().unwrap(),
             tedge_http_port: 80,
             plugin_config_path: temp_dir.join("c8y-log-plugin.toml"),

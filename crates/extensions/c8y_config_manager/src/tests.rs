@@ -977,7 +977,6 @@ async fn spawn_config_manager(
     DynError,
 > {
     let tedge_host = "127.0.0.1";
-    let c8y_host = "test.c8y.io";
     let mqtt_port = 1234;
     let tedge_http_port = 9876;
 
