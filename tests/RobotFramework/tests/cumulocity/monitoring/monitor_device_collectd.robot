@@ -40,10 +40,10 @@ Check thin-edge monitoring
     Execute Command    sudo systemctl start tedge-mapper-collectd
     # Check thin-edge monitoring
     ${tedge_messages}=    Should Have MQTT Messages    topic=tedge/measurements    minimum=1    maximum=None
-    Should Contain    @{tedge_messages}   "time"
+    Should Contain    ${tedge_messages[0]}   "time"
     Should Contain Any    @{tedge_messages}    "memory"    "cpu"    "df-root"
     ${c8y_messages}=    Should Have MQTT Messages    topic=c8y/measurement/measurements/create    minimum=1    maximum=None
-    Should Contain    @{c8y_messages}    "type":"ThinEdgeMeasurement"
+    Should Contain    ${c8y_messages[0]}    "type":"ThinEdgeMeasurement"
 
 Check grouping of measurements 
     # This test step is only partially checking the grouping of the messages, because of the timeouts and the current design
