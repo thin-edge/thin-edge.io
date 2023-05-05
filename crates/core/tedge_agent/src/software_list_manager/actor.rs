@@ -1,7 +1,6 @@
 use crate::software_list_manager::error::SoftwareListManagerError;
 use crate::software_list_manager::error::SoftwareListManagerError::NoPlugins;
 use crate::state_repository::state::AgentStateRepository;
-use crate::state_repository::state::RestartOperationStatus;
 use crate::state_repository::state::SoftwareOperationVariants;
 use crate::state_repository::state::State;
 use crate::state_repository::state::StateRepository;
@@ -13,33 +12,17 @@ use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::plugin_manager::ExternalPlugins;
 use std::sync::Arc;
 use tedge_actors::Actor;
-use tedge_actors::DynSender;
-use tedge_actors::LoggingReceiver;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
-use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::OperationStatus;
-use tedge_api::RestartOperationRequest;
-use tedge_api::RestartOperationResponse;
 use tedge_api::SoftwareListRequest;
 use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareRequestResponse;
-use tedge_api::SoftwareType;
-use tedge_api::SoftwareUpdateResponse;
-use tedge_config::system_services::SystemConfig;
-use tedge_config::ConfigRepository;
-use tedge_config::ConfigSettingAccessorStringExt;
-use tedge_config::SoftwarePluginDefaultSetting;
-use tedge_config::TEdgeConfigLocation;
-use tokio::process::Command;
 use tokio::sync::Mutex;
 use tracing::error;
-use tracing::info;
 use tracing::log::warn;
-
-const SYNC: &str = "sync";
 
 #[cfg(not(test))]
 const SUDO: &str = "sudo";
@@ -142,8 +125,6 @@ impl SoftwareListManagerActor {
     async fn process_pending_sm_list_operation(&mut self) -> Result<(), SoftwareListManagerError> {
         let state: Result<State, _> = self.state_repository.load().await;
 
-        let mut status = OperationStatus::Failed;
-
         if let State {
             operation_id: Some(id),
             operation: Some(operation),
@@ -156,7 +137,7 @@ impl SoftwareListManagerActor {
         } {
             match operation {
                 StateStatus::Software(SoftwareOperationVariants::List) => {
-                    let response = SoftwareRequestResponse::new(&id, status);
+                    let response = SoftwareRequestResponse::new(&id, OperationStatus::Failed);
                     self.message_box
                         .send(SoftwareListResponse { response })
                         .await?;
@@ -185,7 +166,7 @@ impl SoftwareListManagerActor {
             .await?;
 
         // Send 'executing'
-        let mut executing_response = SoftwareListResponse::new(&request);
+        let executing_response = SoftwareListResponse::new(&request);
         self.message_box.send(executing_response).await?;
 
         let response = match self

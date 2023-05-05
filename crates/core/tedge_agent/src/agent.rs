@@ -1,6 +1,6 @@
 use crate::error::AgentError;
-use crate::http_server::actor::HttpServerBuilder;
-use crate::http_server::http_rest::HttpConfig;
+use crate::file_transfer_server::actor::FileTransferServerBuilder;
+use crate::file_transfer_server::http_rest::HttpConfig;
 use crate::mqtt_operation_converter::builder::MqttOperationConverterBuilder;
 use crate::restart_manager::actor::RestartManagerConfig;
 use crate::restart_manager::builder::RestartManagerBuilder;
@@ -249,7 +249,7 @@ impl SmAgent {
 
         // File transfer server actor
         let http_config = self.config.http_config.clone();
-        let http_server_builder = HttpServerBuilder::new(http_config);
+        let file_transfer_server_builder = FileTransferServerBuilder::new(http_config);
 
         // Restart actor
         let restart_config = RestartManagerConfig::new(
@@ -307,7 +307,7 @@ impl SmAgent {
 
         // Spawn
         runtime.spawn(signal_actor_builder).await?;
-        runtime.spawn(http_server_builder).await?;
+        runtime.spawn(file_transfer_server_builder).await?;
         runtime.spawn(mqtt_actor_builder).await?;
         runtime.spawn(restart_actor_builder).await?;
         runtime.spawn(software_list_builder).await?;

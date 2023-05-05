@@ -1,5 +1,5 @@
-use crate::http_server::http_rest::http_file_transfer_server;
-use crate::http_server::http_rest::HttpConfig;
+use crate::file_transfer_server::http_rest::http_file_transfer_server;
+use crate::file_transfer_server::http_rest::HttpConfig;
 use async_trait::async_trait;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
@@ -11,19 +11,19 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tracing::log::error;
 
-pub struct HttpServerActor {
+pub struct FileTransferServerActor {
     config: HttpConfig,
 }
 
-impl HttpServerActor {
+impl FileTransferServerActor {
     pub fn new(config: HttpConfig) -> Self {
-        HttpServerActor { config }
+        FileTransferServerActor { config }
     }
 }
 
-/// HTTP file transfer server is stand-alone, therefore, no input or output.
+/// HTTP file transfer server is stand-alone.
 #[async_trait]
-impl Actor for HttpServerActor {
+impl Actor for FileTransferServerActor {
     fn name(&self) -> &str {
         "HttpFileTransferServer"
     }
@@ -43,12 +43,12 @@ impl Actor for HttpServerActor {
     }
 }
 
-pub struct HttpServerBuilder {
+pub struct FileTransferServerBuilder {
     config: HttpConfig,
     box_builder: SimpleMessageBoxBuilder<NoMessage, NoMessage>,
 }
 
-impl HttpServerBuilder {
+impl FileTransferServerBuilder {
     pub fn new(config: HttpConfig) -> Self {
         Self {
             config,
@@ -57,21 +57,21 @@ impl HttpServerBuilder {
     }
 }
 
-impl RuntimeRequestSink for HttpServerBuilder {
+impl RuntimeRequestSink for FileTransferServerBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.box_builder.get_signal_sender()
     }
 }
 
-impl Builder<HttpServerActor> for HttpServerBuilder {
+impl Builder<FileTransferServerActor> for FileTransferServerBuilder {
     type Error = RuntimeError;
 
-    fn try_build(self) -> Result<HttpServerActor, Self::Error> {
+    fn try_build(self) -> Result<FileTransferServerActor, Self::Error> {
         Ok(self.build())
     }
 
-    fn build(self) -> HttpServerActor {
-        HttpServerActor::new(self.config)
+    fn build(self) -> FileTransferServerActor {
+        FileTransferServerActor::new(self.config)
     }
 }
 
@@ -96,7 +96,7 @@ mod tests {
             .with_port(4000);
 
         // Spawn HTTP file transfer server
-        let builder = HttpServerBuilder::new(http_config);
+        let builder = FileTransferServerBuilder::new(http_config);
         let mut actor = builder.build();
         tokio::spawn(async move { actor.run().await });
 

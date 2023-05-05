@@ -1,6 +1,5 @@
 use crate::mqtt_operation_converter::actor::AgentInput;
 use crate::mqtt_operation_converter::actor::MqttOperationConverterActor;
-use mqtt_channel::TopicFilter;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
@@ -17,6 +16,7 @@ use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareUpdateRequest;
 use tedge_api::SoftwareUpdateResponse;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::TopicFilter;
 
 pub struct MqttOperationConverterBuilder {
     input_receiver: LoggingReceiver<AgentInput>,

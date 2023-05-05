@@ -1,16 +1,12 @@
 use crate::restart_manager::actor::RestartManagerActor;
 use crate::restart_manager::actor::RestartManagerConfig;
-use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
-use tedge_actors::LoggingReceiver;
-use tedge_actors::LoggingSender;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
-use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::RestartOperationRequest;
 use tedge_api::RestartOperationResponse;

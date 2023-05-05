@@ -7,7 +7,7 @@ use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 mod agent;
 mod error;
-mod http_server;
+mod file_transfer_server;
 mod mqtt_operation_converter;
 mod restart_manager;
 mod software_list_manager;

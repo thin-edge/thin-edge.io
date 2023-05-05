@@ -1,6 +1,5 @@
 use crate::mqtt_operation_converter::error::MqttRequestConverterError;
 use async_trait::async_trait;
-use mqtt_channel::Topic;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::DynSender;
@@ -16,6 +15,7 @@ use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareUpdateRequest;
 use tedge_api::SoftwareUpdateResponse;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 
 fan_in_message_type!(AgentInput[MqttMessage, SoftwareListResponse, SoftwareUpdateResponse, RestartOperationResponse] : Debug);
 

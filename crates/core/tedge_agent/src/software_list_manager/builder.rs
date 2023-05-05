@@ -1,16 +1,12 @@
 use crate::software_list_manager::actor::SoftwareListManagerActor;
 use crate::software_list_manager::actor::SoftwareListManagerConfig;
-use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
-use tedge_actors::LoggingReceiver;
-use tedge_actors::LoggingSender;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
-use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::SoftwareListRequest;
 use tedge_api::SoftwareListResponse;

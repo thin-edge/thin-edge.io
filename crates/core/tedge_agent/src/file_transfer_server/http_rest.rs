@@ -1,4 +1,4 @@
-use crate::http_server::error::FileTransferError;
+use crate::file_transfer_server::error::FileTransferServerError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use futures::StreamExt;
@@ -70,13 +70,13 @@ impl HttpConfig {
     /// Check that:
     /// * the `uri` is related to the file-transfer i.e a sub-uri of `self.file_transfer_uri`
     /// * the `path`, once normalized, is actually under `self.file_transfer_dir`
-    pub fn local_path_for_uri(&self, uri: String) -> Result<Utf8PathBuf, FileTransferError> {
+    pub fn local_path_for_uri(&self, uri: String) -> Result<Utf8PathBuf, FileTransferServerError> {
         let ref_uri = uri.clone();
 
         // The file transfer prefix has to be removed from the uri to get the target path
         let path = uri
             .strip_prefix(&self.file_transfer_uri)
-            .ok_or(FileTransferError::InvalidURI { value: ref_uri })?;
+            .ok_or(FileTransferServerError::InvalidURI { value: ref_uri })?;
 
         // This path is relative to the file transfer dir
         let full_path = self.data_dir.join(path);
@@ -87,7 +87,7 @@ impl HttpConfig {
         if clean_path.starts_with(&self.data_dir) {
             Ok(clean_path)
         } else {
-            Err(FileTransferError::InvalidURI {
+            Err(FileTransferServerError::InvalidURI {
                 value: clean_path.to_string(),
             })
         }
@@ -108,7 +108,7 @@ fn separate_path_and_file_name(input: &Utf8Path) -> Option<(Utf8PathBuf, String)
 async fn put(
     mut request: Request<Body>,
     file_transfer: &HttpConfig,
-) -> Result<Response<Body>, FileTransferError> {
+) -> Result<Response<Body>, FileTransferServerError> {
     let full_path = file_transfer.local_path_for_uri(request.uri().to_string())?;
 
     let mut response = Response::new(Body::empty());
@@ -140,7 +140,7 @@ async fn put(
 async fn get(
     request: Request<Body>,
     file_transfer: &HttpConfig,
-) -> Result<Response<Body>, FileTransferError> {
+) -> Result<Response<Body>, FileTransferServerError> {
     let full_path = file_transfer.local_path_for_uri(request.uri().to_string())?;
 
     if !full_path.exists() || full_path.is_dir() {
@@ -162,7 +162,7 @@ async fn get(
 async fn delete(
     request: Request<Body>,
     file_transfer: &HttpConfig,
-) -> Result<Response<Body>, FileTransferError> {
+) -> Result<Response<Body>, FileTransferServerError> {
     let full_path = file_transfer.local_path_for_uri(request.uri().to_string())?;
 
     let mut response = Response::new(Body::empty());
@@ -187,7 +187,7 @@ async fn delete(
 async fn stream_request_body_to_path(
     path: &Utf8Path,
     body_stream: &mut hyper::Body,
-) -> Result<(), FileTransferError> {
+) -> Result<(), FileTransferServerError> {
     let mut buffer = tokio::fs::File::create(path).await?;
     while let Some(data) = body_stream.next().await {
         let data = data?;
@@ -198,8 +198,10 @@ async fn stream_request_body_to_path(
 
 pub fn http_file_transfer_server(
     config: &HttpConfig,
-) -> Result<Server<AddrIncoming, RouterService<hyper::Body, FileTransferError>>, FileTransferError>
-{
+) -> Result<
+    Server<AddrIncoming, RouterService<hyper::Body, FileTransferServerError>>,
+    FileTransferServerError,
+> {
     let file_transfer_end_point = config.file_transfer_end_point();
     let get_config = config.clone();
     let put_config = config.clone();
@@ -224,7 +226,7 @@ pub fn http_file_transfer_server(
     let server_builder = Server::try_bind(&config.bind_address);
     match server_builder {
         Ok(server) => Ok(server.serve(router_service)),
-        Err(_err) => Err(FileTransferError::BindingAddressInUse {
+        Err(_err) => Err(FileTransferServerError::BindingAddressInUse {
             address: config.bind_address,
         }),
     }
@@ -234,7 +236,7 @@ pub fn http_file_transfer_server(
 mod test {
     use super::http_file_transfer_server;
     use super::separate_path_and_file_name;
-    use crate::http_server::error::FileTransferError;
+    use crate::http_server::error::FileTransferServerError;
     use crate::http_server::http_rest::HttpConfig;
     use camino::Utf8Path;
     use camino::Utf8PathBuf;
@@ -342,7 +344,7 @@ mod test {
 
     fn server() -> (
         TempTedgeDir,
-        Server<AddrIncoming, RouterService<Body, FileTransferError>>,
+        Server<AddrIncoming, RouterService<Body, FileTransferServerError>>,
     ) {
         let ttd = TempTedgeDir::new();
         let tempdir_path = ttd.utf8_path_buf();
