@@ -1,6 +1,6 @@
 #[derive(Debug, thiserror::Error)]
 #[allow(clippy::enum_variant_names)]
-pub enum SoftwareManagerError {
+pub enum SoftwareUpdateManagerError {
     #[error("Couldn't load plugins from {plugins_path}")]
     NoPlugins { plugins_path: camino::Utf8PathBuf },
 
@@ -13,6 +13,12 @@ pub enum SoftwareManagerError {
     #[error(transparent)]
     FromOperationsLogs(#[from] plugin_sm::operation_logs::OperationLogsError),
 
+    #[error(transparent)]
+    FromIo(#[from] std::io::Error),
+
+    #[error(transparent)]
+    FromSoftware(#[from] tedge_api::SoftwareError),
+
     // Suspicious
     #[error(transparent)]
     FromTedgeConfig(#[from] tedge_config::TEdgeConfigError),
@@ -22,8 +28,8 @@ pub enum SoftwareManagerError {
     FromConfigSetting(#[from] tedge_config::ConfigSettingError),
 }
 
-impl From<SoftwareManagerError> for tedge_actors::RuntimeError {
-    fn from(error: SoftwareManagerError) -> Self {
+impl From<SoftwareUpdateManagerError> for tedge_actors::RuntimeError {
+    fn from(error: SoftwareUpdateManagerError) -> Self {
         tedge_actors::RuntimeError::ActorError(Box::new(error))
     }
 }

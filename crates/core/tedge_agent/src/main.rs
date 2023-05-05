@@ -11,8 +11,8 @@ mod http_server;
 mod mqtt_operation_converter;
 mod restart_manager;
 mod software_list_manager;
+mod software_update_manager;
 mod state_repository;
-// mod software_update_manager;
 
 #[derive(Debug, clap::Parser)]
 #[clap(
