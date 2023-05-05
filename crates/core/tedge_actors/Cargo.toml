@@ -9,6 +9,11 @@ license = { workspace = true }
 homepage = { workspace = true }
 repository = { workspace = true }
 
+[features]
+# No features on by default
+default = []
+test-helpers = []
+
 [dependencies]
 async-trait = "0.1"
 futures = { version = "0.3" }

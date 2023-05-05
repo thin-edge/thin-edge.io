@@ -51,11 +51,12 @@
 //!
 //! ```
 //! # use tedge_actors::{Actor, Builder, NoConfig, MessageReceiver, Sender, ServerActor, SimpleMessageBox, SimpleMessageBoxBuilder};
-//! use tedge_actors::test_helpers::ServiceProviderExt;
 //! # use crate::tedge_actors::examples::calculator_server::*;
 //! #
+//! #[cfg(feature = "test-helpers")]
 //! # #[tokio::main]
 //! # async fn main_test() {
+//! # use tedge_actors::test_helpers::ServiceProviderExt;
 //! #
 //! // As for any actor, one needs a bidirectional channel to the message box of the server.
 //! let mut actor_box_builder = SimpleMessageBoxBuilder::new("Actor", 10);
