@@ -743,7 +743,7 @@ impl Converter for CumulocityConverter {
     ) -> Result<Option<Message>, ConversionError> {
         match message.ops_dir.parent() {
             Some(parent_dir) => {
-                if parent_dir.eq(&self.cfg_dir.join("operations").join("c8y")) {
+                if parent_dir.eq(&self.cfg_dir.join("operations")) {
                     // operation for parent
                     add_or_remove_operation(message, &mut self.operations)?;
                     Ok(Some(create_supported_operations(&message.ops_dir)?))
@@ -776,6 +776,7 @@ fn get_child_id(dir_path: &PathBuf) -> Result<String, ConversionError> {
         }),
     }
 }
+
 fn add_or_remove_operation(
     message: &DiscoverOp,
     ops: &mut Operations,

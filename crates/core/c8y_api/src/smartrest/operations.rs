@@ -64,7 +64,12 @@ pub fn is_valid_operation_name(operation: &str) -> bool {
 
 impl Operations {
     pub fn add_operation(&mut self, operation: Operation) {
-        if self.operations.iter().any(|o| o.name.eq(&operation.name)) {
+        if let Some(index) = self
+            .operations
+            .iter()
+            .position(|o| o.name.eq(&operation.name))
+        {
+            self.operations[index] = operation;
         } else {
             if let Some(detail) = operation.exec() {
                 if let Some(on_message) = &detail.on_message {
