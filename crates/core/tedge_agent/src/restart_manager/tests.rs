@@ -1,6 +1,5 @@
-use crate::restart_manager::actor::RestartManagerConfig;
 use crate::restart_manager::builder::RestartManagerBuilder;
-
+use crate::restart_manager::config::RestartManagerConfig;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
@@ -25,7 +24,7 @@ async fn test_pending_restart_operation() -> Result<(), DynError> {
     let content = "operation_id = \'1234\'\noperation = \"Restarting\"";
     temp_dir
         .dir(".agent")
-        .file("current-operation")
+        .file("restart-current-operation")
         .with_raw_content(content);
 
     let mut converter_box = spawn_restart_manager(&temp_dir).await?;
@@ -46,7 +45,7 @@ async fn test_pending_restart_operation_failed() -> Result<(), DynError> {
     let content = "operation_id = \'1234\'\noperation = \"Pending\"";
     temp_dir
         .dir(".agent")
-        .file("current-operation")
+        .file("restart-current-operation")
         .with_raw_content(content);
 
     let mut converter_box = spawn_restart_manager(&temp_dir).await?;
@@ -55,6 +54,27 @@ async fn test_pending_restart_operation_failed() -> Result<(), DynError> {
         .assert_received([RestartOperationResponse {
             id: "1234".to_string(),
             status: OperationStatus::Failed,
+        }])
+        .await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_pending_restart_operation_successful() -> Result<(), DynError> {
+    let temp_dir = TempTedgeDir::new();
+    let content = "operation_id = \'1234\'\noperation = \"Restarting\"";
+    temp_dir
+        .dir(".agent")
+        .file("restart-current-operation")
+        .with_raw_content(content);
+
+    let mut converter_box = spawn_restart_manager(&temp_dir).await?;
+
+    converter_box
+        .assert_received([RestartOperationResponse {
+            id: "1234".to_string(),
+            status: OperationStatus::Successful,
         }])
         .await;
 
@@ -93,11 +113,7 @@ async fn spawn_restart_manager(
         RestartOperationRequest,
     > = SimpleMessageBoxBuilder::new("Converter", 5);
 
-    let config = RestartManagerConfig::new(
-        tmp_dir.utf8_path_buf(),
-        tmp_dir.utf8_path_buf(),
-        tmp_dir.utf8_path_buf(),
-    );
+    let config = RestartManagerConfig::new(&tmp_dir.utf8_path_buf(), &tmp_dir.utf8_path_buf());
 
     let mut restart_actor_builder = RestartManagerBuilder::new(config);
     converter_builder.set_connection(&mut restart_actor_builder);

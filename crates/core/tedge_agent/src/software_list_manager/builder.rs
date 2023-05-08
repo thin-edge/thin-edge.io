@@ -1,5 +1,5 @@
 use crate::software_list_manager::actor::SoftwareListManagerActor;
-use crate::software_list_manager::actor::SoftwareListManagerConfig;
+use crate::software_list_manager::config::SoftwareListManagerConfig;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;

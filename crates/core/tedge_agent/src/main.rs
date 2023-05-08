@@ -1,4 +1,4 @@
-use agent::SmAgentConfig;
+use agent::AgentConfig;
 use camino::Utf8PathBuf;
 use clap::Parser;
 use tedge_config::system_services::get_log_level;
@@ -32,12 +32,6 @@ pub struct AgentOpt {
     #[clap(short, long)]
     pub init: bool,
 
-    /// Start the agent with clean session on, drop the previous session and subscriptions
-    ///
-    /// WARNING: All pending messages will be lost.
-    #[clap(short, long)]
-    pub clear: bool,
-
     /// Start the agent from custom path
     ///
     /// WARNING: This is mostly used in testing.
@@ -61,15 +55,12 @@ async fn main() -> Result<(), anyhow::Error> {
 
     set_log_level(log_level);
 
-    let mut agent = agent::SmAgent::try_new(
+    let mut agent = agent::Agent::try_new(
         "tedge-agent",
-        SmAgentConfig::try_new(tedge_config_location)?,
+        AgentConfig::from_tedge_config(&tedge_config_location)?,
     )?;
-
     if agent_opt.init {
         agent.init(agent_opt.config_dir).await?;
-    } else if agent_opt.clear {
-        agent.clear_session().await?;
     } else {
         agent.start().await?;
     }

@@ -1,13 +1,11 @@
-use crate::software_update_manager::actor::SoftwareUpdateManagerConfig;
 use crate::software_update_manager::builder::SoftwareUpdateManagerBuilder;
+use crate::software_update_manager::config::SoftwareUpdateManagerConfig;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynError;
-use tedge_actors::MessageReceiver;
-use tedge_actors::Sender;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
@@ -26,7 +24,7 @@ async fn test_pending_software_update_operation() -> Result<(), DynError> {
     let content = "operation_id = \'1234\'\noperation = \"update\"";
     temp_dir
         .dir(".agent")
-        .file("current-operation")
+        .file("software-update-current-operation")
         .with_raw_content(content);
 
     let mut converter_box = spawn_software_update_manager(&temp_dir).await?;
@@ -75,14 +73,12 @@ async fn spawn_software_update_manager(
     > = SimpleMessageBoxBuilder::new("Converter", 5);
 
     let config = SoftwareUpdateManagerConfig::new(
-        tmp_dir.utf8_path_buf(),
-        tmp_dir.utf8_path_buf(),
-        tmp_dir.utf8_path_buf(),
-        tmp_dir.utf8_path_buf(),
-        tmp_dir.utf8_path_buf(),
-        tmp_dir.utf8_path_buf(),
+        &tmp_dir.utf8_path_buf(),
+        &tmp_dir.utf8_path_buf(),
+        &tmp_dir.utf8_path_buf(),
+        &tmp_dir.utf8_path_buf(),
         None,
-        TEdgeConfigLocation::from_custom_root(tmp_dir.utf8_path_buf()),
+        &TEdgeConfigLocation::from_custom_root(tmp_dir.utf8_path_buf()),
     );
 
     let mut software_update_actor_builder = SoftwareUpdateManagerBuilder::new(config);

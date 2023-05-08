@@ -2,12 +2,12 @@ use crate::error::AgentError;
 use crate::file_transfer_server::actor::FileTransferServerBuilder;
 use crate::file_transfer_server::http_rest::HttpConfig;
 use crate::mqtt_operation_converter::builder::MqttOperationConverterBuilder;
-use crate::restart_manager::actor::RestartManagerConfig;
 use crate::restart_manager::builder::RestartManagerBuilder;
-use crate::software_list_manager::actor::SoftwareListManagerConfig;
+use crate::restart_manager::config::RestartManagerConfig;
 use crate::software_list_manager::builder::SoftwareListManagerBuilder;
-use crate::software_update_manager::actor::SoftwareUpdateManagerConfig;
+use crate::software_list_manager::config::SoftwareListManagerConfig;
 use crate::software_update_manager::builder::SoftwareUpdateManagerBuilder;
+use crate::software_update_manager::config::SoftwareUpdateManagerConfig;
 use camino::Utf8PathBuf;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
@@ -15,7 +15,7 @@ use std::fmt::Debug;
 use tedge_actors::Runtime;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
-use tedge_config::ConfigSettingAccessorStringExt;
+
 use tedge_config::DataPathSetting;
 use tedge_config::Flag;
 use tedge_config::HttpBindAddressSetting;
@@ -23,76 +23,35 @@ use tedge_config::HttpPortSetting;
 use tedge_config::LockFilesSetting;
 use tedge_config::LogPathSetting;
 use tedge_config::RunPathSetting;
+use tedge_config::TEdgeConfigError;
 use tedge_config::TEdgeConfigLocation;
-use tedge_config::TmpPathSetting;
-use tedge_config::DEFAULT_DATA_PATH;
-use tedge_config::DEFAULT_LOG_PATH;
-use tedge_config::DEFAULT_RUN_PATH;
-use tedge_config::DEFAULT_TMP_PATH;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
+use tedge_mqtt_ext::MqttConfig;
 use tedge_signal_ext::SignalActor;
 use tedge_utils::file::create_directory_with_user_group;
 use tracing::info;
 use tracing::instrument;
 
-const SM_PLUGINS: &str = "sm-plugins";
-const AGENT_LOG_PATH: &str = "tedge/agent";
 const TEDGE_AGENT: &str = "tedge-agent";
 
 #[derive(Debug, Clone)]
-pub struct SmAgentConfig {
-    pub mqtt_config: mqtt_channel::Config,
-    pub sm_home: Utf8PathBuf,
-    pub log_dir: Utf8PathBuf,
-    pub run_dir: Utf8PathBuf,
-    pub tmp_dir: Utf8PathBuf,
-    pub data_dir: Utf8PathBuf,
-    pub config_location: TEdgeConfigLocation,
-    pub download_dir: Utf8PathBuf,
+pub struct AgentConfig {
+    pub mqtt_config: MqttConfig,
     pub http_config: HttpConfig,
+    pub restart_config: RestartManagerConfig,
+    pub sw_list_config: SoftwareListManagerConfig,
+    pub sw_update_config: SoftwareUpdateManagerConfig,
+    pub run_dir: Utf8PathBuf,
     pub use_lock: Flag,
+    pub log_dir: Utf8PathBuf,
+    pub data_dir: Utf8PathBuf,
 }
 
-impl Default for SmAgentConfig {
-    fn default() -> Self {
-        let mqtt_config = mqtt_channel::Config::default();
-
-        let sm_home = Utf8PathBuf::from("/etc/tedge");
-
-        let log_dir = Utf8PathBuf::from(&format!("{DEFAULT_LOG_PATH}/{AGENT_LOG_PATH}"));
-
-        let run_dir = Utf8PathBuf::from(DEFAULT_RUN_PATH);
-
-        let tmp_dir = Utf8PathBuf::from(DEFAULT_TMP_PATH);
-
-        let config_location = TEdgeConfigLocation::default();
-
-        let download_dir = Utf8PathBuf::from(DEFAULT_TMP_PATH);
-
-        let use_lock = Flag(true);
-
-        let data_dir = Utf8PathBuf::from(DEFAULT_DATA_PATH);
-
-        let http_config = HttpConfig::default().with_data_dir(data_dir.clone());
-
-        Self {
-            mqtt_config,
-            sm_home,
-            log_dir,
-            run_dir,
-            tmp_dir,
-            data_dir,
-            config_location,
-            download_dir,
-            http_config,
-            use_lock,
-        }
-    }
-}
-
-impl SmAgentConfig {
-    pub fn try_new(tedge_config_location: TEdgeConfigLocation) -> Result<Self, anyhow::Error> {
+impl AgentConfig {
+    pub fn from_tedge_config(
+        tedge_config_location: &TEdgeConfigLocation,
+    ) -> Result<Self, TEdgeConfigError> {
         let config_repository =
             tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
         let tedge_config = config_repository.load()?;
@@ -102,102 +61,57 @@ impl SmAgentConfig {
             .with_max_packet_size(10 * 1024 * 1024)
             .with_session_name(TEDGE_AGENT);
 
-        let tedge_config_path = config_repository
-            .get_config_location()
-            .tedge_config_root_path()
-            .to_path_buf();
-
-        let tedge_download_dir = tedge_config.query_string(TmpPathSetting)?.into();
-
-        let tedge_log_dir: String = tedge_config.query_string(LogPathSetting)?;
-        let tedge_log_dir = Utf8PathBuf::from(&format!("{tedge_log_dir}/{AGENT_LOG_PATH}"));
-        let tedge_run_dir = tedge_config.query_string(RunPathSetting)?.into();
-        let tedge_tmp_dir = tedge_config.query_string(TmpPathSetting)?.into();
-        let tedge_data_dir = tedge_config.query(DataPathSetting)?;
-
-        let mut http_config = HttpConfig::default().with_data_dir(tedge_data_dir.clone());
-
+        // HTTP config
+        let data_dir = tedge_config.query(DataPathSetting)?;
         let http_bind_address = tedge_config.query(HttpBindAddressSetting)?;
-        http_config = http_config
-            .with_port(tedge_config.query(HttpPortSetting)?.0)
+        let http_port = tedge_config.query(HttpPortSetting)?.0;
+        let http_config = HttpConfig::default()
+            .with_data_dir(data_dir.clone())
+            .with_port(http_port)
             .with_ip_address(http_bind_address.into());
 
+        // Restart config
+        let restart_config = RestartManagerConfig::from_tedge_config(tedge_config_location)?;
+
+        // Software list config
+        let sw_list_config = SoftwareListManagerConfig::from_tedge_config(tedge_config_location)?;
+
+        // Software update config
+        let sw_update_config =
+            SoftwareUpdateManagerConfig::from_tedge_config(tedge_config_location)?;
+
+        // For flockfile
+        let run_dir = tedge_config.query(RunPathSetting)?;
         let use_lock = tedge_config.query(LockFilesSetting)?;
 
-        Ok(SmAgentConfig::default()
-            .with_sm_home(tedge_config_path)
-            .with_mqtt_config(mqtt_config)
-            .with_config_location(tedge_config_location)
-            .with_download_directory(tedge_download_dir)
-            .with_log_directory(tedge_log_dir)
-            .with_run_directory(tedge_run_dir)
-            .with_tmp_directory(tedge_tmp_dir)
-            .with_data_directory(tedge_data_dir)
-            .with_http_config(http_config)
-            .with_use_lock(use_lock))
-    }
+        // For agent specific
+        let log_dir = tedge_config
+            .query(LogPathSetting)?
+            .join("tedge")
+            .join("agent");
 
-    pub fn with_sm_home(self, sm_home: Utf8PathBuf) -> Self {
-        Self { sm_home, ..self }
-    }
-
-    pub fn with_mqtt_config(self, mqtt_config: mqtt_channel::Config) -> Self {
-        Self {
+        Ok(Self {
             mqtt_config,
-            ..self
-        }
-    }
-
-    pub fn with_config_location(self, config_location: TEdgeConfigLocation) -> Self {
-        Self {
-            config_location,
-            ..self
-        }
-    }
-
-    pub fn with_download_directory(self, tmp_dir: Utf8PathBuf) -> Self {
-        Self {
-            download_dir: tmp_dir,
-            ..self
-        }
-    }
-
-    pub fn with_log_directory(self, log_dir: Utf8PathBuf) -> Self {
-        Self { log_dir, ..self }
-    }
-
-    pub fn with_run_directory(self, run_dir: Utf8PathBuf) -> Self {
-        Self { run_dir, ..self }
-    }
-
-    pub fn with_tmp_directory(self, tmp_dir: Utf8PathBuf) -> Self {
-        Self { tmp_dir, ..self }
-    }
-
-    pub fn with_data_directory(self, data_dir: Utf8PathBuf) -> Self {
-        Self { data_dir, ..self }
-    }
-
-    pub fn with_http_config(self, http_config: HttpConfig) -> Self {
-        Self {
             http_config,
-            ..self
-        }
-    }
-
-    pub fn with_use_lock(self, use_lock: Flag) -> Self {
-        Self { use_lock, ..self }
+            restart_config,
+            sw_list_config,
+            sw_update_config,
+            run_dir,
+            use_lock,
+            data_dir,
+            log_dir,
+        })
     }
 }
 
 #[derive(Debug)]
-pub struct SmAgent {
-    config: SmAgentConfig,
+pub struct Agent {
+    config: AgentConfig,
     _flock: Option<Flockfile>,
 }
 
-impl SmAgent {
-    pub fn try_new(name: &str, config: SmAgentConfig) -> Result<Self, AgentError> {
+impl Agent {
+    pub fn try_new(name: &str, config: AgentConfig) -> Result<Self, AgentError> {
         let mut flock = None;
         if config.use_lock.is_set() {
             flock = Some(check_another_instance_is_not_running(
@@ -226,16 +140,7 @@ impl SmAgent {
             "tedge",
             0o775,
         )?;
-        info!("Initializing the tedge agent session");
-        mqtt_channel::init_session(&self.config.mqtt_config).await?;
 
-        Ok(())
-    }
-
-    #[instrument(skip(self), name = "sm-agent")]
-    pub async fn clear_session(&mut self) -> Result<(), AgentError> {
-        info!("Cleaning the tedge agent session");
-        todo!();
         Ok(())
     }
 
@@ -243,21 +148,17 @@ impl SmAgent {
     pub async fn start(&mut self) -> Result<(), anyhow::Error> {
         info!("Starting tedge agent");
 
-        // Actor stuff
+        // Runtime
         let runtime_events_logger = None;
         let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
         // File transfer server actor
-        let http_config = self.config.http_config.clone();
-        let file_transfer_server_builder = FileTransferServerBuilder::new(http_config);
+        let file_transfer_server_builder =
+            FileTransferServerBuilder::new(self.config.http_config.clone());
 
         // Restart actor
-        let restart_config = RestartManagerConfig::new(
-            self.config.tmp_dir.clone(),
-            self.config.sm_home.clone(),
-            self.config.config_location.tedge_config_root_path.clone(),
-        );
-        let mut restart_actor_builder = RestartManagerBuilder::new(restart_config);
+        let mut restart_actor_builder =
+            RestartManagerBuilder::new(self.config.restart_config.clone());
 
         // Mqtt actor
         let mut mqtt_actor_builder = MqttActorBuilder::new(
@@ -268,28 +169,12 @@ impl SmAgent {
         );
 
         // Software list actor
-        let sm_list_config = SoftwareListManagerConfig::new(
-            self.config.tmp_dir.clone(),
-            self.config.sm_home.clone(),
-            self.config.config_location.tedge_config_root_path.clone(),
-            self.config.sm_home.join(SM_PLUGINS),
-            self.config.log_dir.clone(),
-            None, // TODO: Change it to read SoftwarePluginDefaultSetting
-        );
-        let mut software_list_builder = SoftwareListManagerBuilder::new(sm_list_config);
+        let mut software_list_builder =
+            SoftwareListManagerBuilder::new(self.config.sw_list_config.clone());
 
         // Software update actor
-        let sm_update_config = SoftwareUpdateManagerConfig::new(
-            self.config.tmp_dir.clone(),
-            self.config.sm_home.clone(),
-            self.config.config_location.tedge_config_root_path.clone(),
-            self.config.sm_home.join(SM_PLUGINS),
-            self.config.log_dir.clone(),
-            self.config.download_dir.clone(),
-            None, // TODO: Change it to read SoftwarePluginDefaultSetting,
-            self.config.config_location.clone(),
-        );
-        let mut software_update_builder = SoftwareUpdateManagerBuilder::new(sm_update_config);
+        let mut software_update_builder =
+            SoftwareUpdateManagerBuilder::new(self.config.sw_update_config.clone());
 
         // Converter actor
         let converter_actor_builder = MqttOperationConverterBuilder::new(
@@ -305,7 +190,7 @@ impl SmAgent {
         // Health actor
         let health_actor = HealthMonitorBuilder::new(TEDGE_AGENT, &mut mqtt_actor_builder);
 
-        // Spawn
+        // Spawn all
         runtime.spawn(signal_actor_builder).await?;
         runtime.spawn(file_transfer_server_builder).await?;
         runtime.spawn(mqtt_actor_builder).await?;
@@ -323,13 +208,13 @@ impl SmAgent {
 
 #[cfg(test)]
 mod tests {
-    use assert_json_diff::assert_json_include;
-    use serde_json::json;
-    use serde_json::Value;
-
-    use super::*;
-
-    use tedge_test_utils::fs::TempTedgeDir;
+    // use assert_json_diff::assert_json_include;
+    // use serde_json::json;
+    // use serde_json::Value;
+    //
+    // use super::*;
+    //
+    // use tedge_test_utils::fs::TempTedgeDir;
 
     const TEDGE_AGENT_RESTART: &str = "tedge_agent_restart";
 

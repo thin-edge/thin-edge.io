@@ -1,5 +1,5 @@
 use crate::software_update_manager::actor::SoftwareUpdateManagerActor;
-use crate::software_update_manager::actor::SoftwareUpdateManagerConfig;
+use crate::software_update_manager::config::SoftwareUpdateManagerConfig;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;

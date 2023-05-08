@@ -1,5 +1,4 @@
 use crate::mqtt_operation_converter::builder::MqttOperationConverterBuilder;
-use mqtt_channel::Topic;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
@@ -20,6 +19,7 @@ use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareUpdateRequest;
 use tedge_api::SoftwareUpdateResponse;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::Topic;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 

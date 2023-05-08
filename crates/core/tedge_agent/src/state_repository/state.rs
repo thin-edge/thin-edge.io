@@ -17,9 +17,9 @@ pub struct AgentStateRepository {
 pub trait StateRepository {
     type Error;
     async fn load(&self) -> Result<State, Self::Error>;
-    async fn store(&self, state: &State) -> Result<State, Self::Error>;
+    async fn store(&self, state: &State) -> Result<(), Self::Error>;
     async fn clear(&self) -> Result<State, Self::Error>;
-    async fn update(&self, status: &StateStatus) -> Result<State, Self::Error>;
+    async fn update(&self, status: &StateStatus) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -33,7 +33,7 @@ impl StateRepository for AgentStateRepository {
         }
     }
 
-    async fn store(&self, state: &State) -> Result<State, StateError> {
+    async fn store(&self, state: &State) -> Result<(), StateError> {
         let toml = toml::to_string_pretty(&state)?;
 
         // Create in path given through `config-dir` or `/etc/tedge` directory in case it does not exist yet
@@ -43,7 +43,7 @@ impl StateRepository for AgentStateRepository {
 
         let () = atomically_write_file_async(&self.state_repo_path, toml.as_bytes()).await?;
 
-        Ok(state.clone())
+        Ok(())
     }
 
     async fn clear(&self) -> Result<State, Self::Error> {
@@ -56,13 +56,13 @@ impl StateRepository for AgentStateRepository {
         Ok(state)
     }
 
-    async fn update(&self, status: &StateStatus) -> Result<State, Self::Error> {
+    async fn update(&self, status: &StateStatus) -> Result<(), Self::Error> {
         let mut state = self.load().await?;
         state.operation = Some(status.to_owned());
 
         self.store(&state).await?;
 
-        Ok(state)
+        Ok(())
     }
 }
 

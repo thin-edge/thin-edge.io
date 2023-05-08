@@ -1,5 +1,5 @@
 #[derive(Debug, thiserror::Error)]
-pub enum FileTransferServerError {
+pub enum FileTransferError {
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
 

@@ -1,5 +1,5 @@
 use crate::restart_manager::actor::RestartManagerActor;
-use crate::restart_manager::actor::RestartManagerConfig;
+use crate::restart_manager::config::RestartManagerConfig;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;

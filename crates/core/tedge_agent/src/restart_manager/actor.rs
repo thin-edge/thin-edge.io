@@ -1,3 +1,4 @@
+use crate::restart_manager::config::RestartManagerConfig;
 use crate::restart_manager::error::RestartManagerError;
 use crate::restart_manager::restart_operation_handler::restart_operation::create_tmp_restart_file;
 use crate::restart_manager::restart_operation_handler::restart_operation::has_rebooted;
@@ -7,7 +8,6 @@ use crate::state_repository::state::State;
 use crate::state_repository::state::StateRepository;
 use crate::state_repository::state::StateStatus;
 use async_trait::async_trait;
-use camino::Utf8PathBuf;
 use tedge_actors::Actor;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
@@ -27,27 +27,6 @@ const SYNC: &str = "sync";
 const SUDO: &str = "sudo";
 #[cfg(test)]
 const SUDO: &str = "echo";
-
-#[derive(Debug)]
-pub struct RestartManagerConfig {
-    pub tmp_dir: Utf8PathBuf,
-    pub tedge_root_path: Utf8PathBuf,
-    pub system_config_path: Utf8PathBuf,
-}
-
-impl RestartManagerConfig {
-    pub fn new(
-        tmp_dir: Utf8PathBuf,
-        tedge_root_path: Utf8PathBuf,
-        system_config_path: Utf8PathBuf,
-    ) -> Self {
-        Self {
-            tmp_dir,
-            tedge_root_path,
-            system_config_path,
-        }
-    }
-}
 
 pub struct RestartManagerActor {
     config: RestartManagerConfig,
@@ -80,7 +59,7 @@ impl RestartManagerActor {
         message_box: SimpleMessageBox<RestartOperationRequest, RestartOperationResponse>,
     ) -> Self {
         let state_repository = AgentStateRepository::new_with_file_name(
-            config.tedge_root_path.clone(),
+            config.config_dir.clone(),
             "restart-current-operation",
         );
         Self {
@@ -115,17 +94,16 @@ impl RestartManagerActor {
                     }
                 }
                 StateStatus::Restart(RestartOperationStatus::Pending) => {}
+                StateStatus::Software(_) => {
+                    error!("SoftwareOperation in store.");
+                }
                 StateStatus::UnknownOperation => {
                     error!("UnknownOperation in store.");
-                }
-                _ => {
-                    unimplemented!()
                 }
             };
             self.message_box
                 .send(RestartOperationResponse { id, status })
-                .await
-                .unwrap();
+                .await?;
         }
         Ok(())
     }
@@ -170,7 +148,7 @@ impl RestartManagerActor {
     ) -> Result<(), RestartManagerError> {
         self.state_repository.clear().await?;
         let status = OperationStatus::Failed;
-        let response = RestartOperationResponse::new(&request).with_status(status);
+        let response = RestartOperationResponse::new(request).with_status(status);
         self.message_box.send(response).await?;
         Ok(())
     }
@@ -182,8 +160,8 @@ impl RestartManagerActor {
         sync_command.arg(SYNC);
         vec.push(sync_command);
 
-        // reading `system_config_path` to get the restart command or defaulting to `["init", "6"]'
-        let system_config = SystemConfig::try_new(&self.config.system_config_path)?;
+        // reading `config_dir` to get the restart command or defaulting to `["init", "6"]'
+        let system_config = SystemConfig::try_new(&self.config.config_dir)?;
 
         let mut command = Command::new(SUDO);
         command.args(system_config.system.reboot);

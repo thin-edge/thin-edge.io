@@ -1,5 +1,5 @@
-use crate::software_list_manager::actor::SoftwareListManagerConfig;
 use crate::software_list_manager::builder::SoftwareListManagerBuilder;
+use crate::software_list_manager::config::SoftwareListManagerConfig;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
@@ -15,7 +15,6 @@ use tedge_api::OperationStatus;
 use tedge_api::SoftwareListRequest;
 use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareRequestResponse;
-use tedge_config::TEdgeConfigLocation;
 use tedge_test_utils::fs::TempTedgeDir;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
@@ -26,7 +25,7 @@ async fn test_pending_software_list_operation() -> Result<(), DynError> {
     let content = "operation_id = \'1234\'\noperation = \"list\"";
     temp_dir
         .dir(".agent")
-        .file("current-operation")
+        .file("software-list-current-operation")
         .with_raw_content(content);
 
     let mut converter_box = spawn_software_list_manager(&temp_dir).await?;
@@ -73,11 +72,10 @@ async fn spawn_software_list_manager(
         SimpleMessageBoxBuilder::new("Converter", 5);
 
     let config = SoftwareListManagerConfig::new(
-        tmp_dir.utf8_path_buf(),
-        tmp_dir.utf8_path_buf(),
-        tmp_dir.utf8_path_buf(),
-        tmp_dir.utf8_path_buf(),
-        tmp_dir.utf8_path_buf(),
+        &tmp_dir.utf8_path_buf(),
+        &tmp_dir.utf8_path_buf(),
+        &tmp_dir.utf8_path_buf(),
+        &tmp_dir.utf8_path_buf(),
         None,
     );
 
