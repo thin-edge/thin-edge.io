@@ -1,6 +1,7 @@
 use crate::file_transfer_server::http_rest::http_file_transfer_server;
 use crate::file_transfer_server::http_rest::HttpConfig;
 use async_trait::async_trait;
+use std::convert::Infallible;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
@@ -15,12 +16,6 @@ pub struct FileTransferServerActor {
     config: HttpConfig,
 }
 
-impl FileTransferServerActor {
-    pub fn new(config: HttpConfig) -> Self {
-        FileTransferServerActor { config }
-    }
-}
-
 /// HTTP file transfer server is stand-alone.
 #[async_trait]
 impl Actor for FileTransferServerActor {
@@ -29,17 +24,32 @@ impl Actor for FileTransferServerActor {
     }
 
     async fn run(&mut self) -> Result<(), RuntimeError> {
-        let server = http_file_transfer_server(&self.config);
+        let http_config = self.config.clone();
 
-        match server {
-            Ok(server) => {
-                if let Err(err) = server.await {
-                    error!("{}", err);
-                }
-            }
-            Err(err) => error!("{}", err),
-        }
+        // Spawn from actor? Ask Didier
+        tokio::spawn(async move {
+            start_http_file_transfer_server(&http_config).await;
+        });
+
         Ok(())
+    }
+}
+
+impl FileTransferServerActor {
+    pub fn new(config: HttpConfig) -> Self {
+        FileTransferServerActor { config }
+    }
+}
+
+async fn start_http_file_transfer_server(config: &HttpConfig) {
+    let server = http_file_transfer_server(config);
+    match server {
+        Ok(server) => {
+            if let Err(err) = server.await {
+                error!("{}", err)
+            }
+        }
+        Err(err) => error!("{}", err),
     }
 }
 
@@ -64,7 +74,7 @@ impl RuntimeRequestSink for FileTransferServerBuilder {
 }
 
 impl Builder<FileTransferServerActor> for FileTransferServerBuilder {
-    type Error = RuntimeError;
+    type Error = Infallible;
 
     fn try_build(self) -> Result<FileTransferServerActor, Self::Error> {
         Ok(self.build())

@@ -236,8 +236,8 @@ pub fn http_file_transfer_server(
 mod test {
     use super::http_file_transfer_server;
     use super::separate_path_and_file_name;
-    use crate::http_server::error::FileTransferServerError;
-    use crate::http_server::http_rest::HttpConfig;
+    use crate::file_transfer_server::error::FileTransferServerError;
+    use crate::file_transfer_server::http_rest::HttpConfig;
     use camino::Utf8Path;
     use camino::Utf8PathBuf;
     use hyper::server::conn::AddrIncoming;
