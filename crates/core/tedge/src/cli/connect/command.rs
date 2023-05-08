@@ -176,8 +176,7 @@ impl ConnectCommand {
             }
             Cloud::C8y => {
                 let params = BridgeConfigC8yParams {
-                    connect_url: config.query(C8yMqttSetting)?,
-                    mqtt_tls_port: MQTT_TLS_PORT,
+                    mqtt_host: config.query(C8yMqttSetting)?,
                     config_file: C8Y_CONFIG_FILENAME.into(),
                     bridge_root_cert_path: config.query(C8yRootCertPathSetting)?,
                     remote_clientid: config.query(DeviceIdSetting)?,

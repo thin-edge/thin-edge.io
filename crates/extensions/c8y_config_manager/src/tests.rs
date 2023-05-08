@@ -987,7 +987,6 @@ async fn spawn_config_manager(
         device_id.to_string(),
         tedge_host.to_string(),
         mqtt_port,
-        c8y_host.to_string().try_into().unwrap(),
         tedge_host.to_string().try_into().unwrap(),
         tedge_http_port,
     );

@@ -1,12 +1,11 @@
 use crate::cli::connect::BridgeConfig;
 use camino::Utf8PathBuf;
-use tedge_config::ConnectUrl;
+use tedge_config::HostPort;
 use tedge_config::TemplatesSet;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfigC8yParams {
-    pub connect_url: ConnectUrl,
-    pub mqtt_tls_port: u16,
+    pub mqtt_host: HostPort<8883>,
     pub config_file: String,
     pub remote_clientid: String,
     pub bridge_root_cert_path: Utf8PathBuf,
@@ -18,8 +17,7 @@ pub struct BridgeConfigC8yParams {
 impl From<BridgeConfigC8yParams> for BridgeConfig {
     fn from(params: BridgeConfigC8yParams) -> Self {
         let BridgeConfigC8yParams {
-            connect_url,
-            mqtt_tls_port,
+            mqtt_host,
             config_file,
             bridge_root_cert_path,
             remote_clientid,
@@ -27,7 +25,6 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             bridge_keyfile,
             smartrest_templates,
         } = params;
-        let address = format!("{}:{}", connect_url.as_str(), mqtt_tls_port);
 
         let mut topics: Vec<String> = vec![
             // Registration
@@ -81,7 +78,11 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             cloud_name: "c8y".into(),
             config_file,
             connection: "edge_to_c8y".into(),
-            address,
+            address: format!(
+                "{host}:{port}",
+                host = mqtt_host.host(),
+                port = mqtt_host.port().0
+            ),
             remote_username: None,
             bridge_root_cert_path,
             remote_clientid,
@@ -106,8 +107,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
 fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
     use std::convert::TryFrom;
     let params = BridgeConfigC8yParams {
-        connect_url: ConnectUrl::try_from("test.test.io")?,
-        mqtt_tls_port: 8883,
+        mqtt_host: HostPort::<8883>::try_from("test.test.io".to_string())?,
         config_file: "c8y-bridge.conf".into(),
         remote_clientid: "alpha".into(),
         bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),
