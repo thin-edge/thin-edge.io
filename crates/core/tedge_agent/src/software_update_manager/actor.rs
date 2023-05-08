@@ -122,7 +122,10 @@ impl SoftwareUpdateManagerActor {
         config: SoftwareUpdateManagerConfig,
         message_box: SimpleMessageBox<SoftwareUpdateRequest, SoftwareUpdateResponse>,
     ) -> Self {
-        let state_repository = AgentStateRepository::new(config.tedge_root_path.clone());
+        let state_repository = AgentStateRepository::new_with_file_name(
+            config.tedge_root_path.clone(),
+            "software-update-current-operation",
+        );
         let operation_logs = OperationLogs::try_new(config.log_dir.clone().into()).unwrap();
 
         Self {

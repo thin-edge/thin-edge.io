@@ -53,8 +53,6 @@ pub struct RestartManagerActor {
     config: RestartManagerConfig,
     state_repository: AgentStateRepository,
     message_box: SimpleMessageBox<RestartOperationRequest, RestartOperationResponse>,
-    // input_receiver: LoggingReceiver<RestartOperationRequest>,
-    // converter_sender: DynSender<RestartOperationResponse>,
 }
 
 #[async_trait]
@@ -64,12 +62,11 @@ impl Actor for RestartManagerActor {
     }
 
     async fn run(&mut self) -> Result<(), RuntimeError> {
-        // kind of 'init'
         self.process_pending_restart_operation().await?;
 
         while let Some(request) = self.message_box.recv().await {
             if let Err(err) = self.handle_restart_operation(&request).await {
-                error!("{:?}", err);
+                error!("{}", err);
                 self.handle_error(&request).await?;
             }
         }
@@ -82,7 +79,10 @@ impl RestartManagerActor {
         config: RestartManagerConfig,
         message_box: SimpleMessageBox<RestartOperationRequest, RestartOperationResponse>,
     ) -> Self {
-        let state_repository = AgentStateRepository::new(config.tedge_root_path.clone());
+        let state_repository = AgentStateRepository::new_with_file_name(
+            config.tedge_root_path.clone(),
+            "restart-current-operation",
+        );
         Self {
             config,
             state_repository,

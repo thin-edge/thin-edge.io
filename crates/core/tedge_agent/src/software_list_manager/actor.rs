@@ -110,8 +110,10 @@ impl SoftwareListManagerActor {
         config: SoftwareListManagerConfig,
         message_box: SimpleMessageBox<SoftwareListRequest, SoftwareListResponse>,
     ) -> Self {
-        // TODO: Modify AgentStateRepository to set different file name for each operation
-        let state_repository = AgentStateRepository::new(config.tedge_root_path.clone());
+        let state_repository = AgentStateRepository::new_with_file_name(
+            config.tedge_root_path.clone(),
+            "software-list-current-operation",
+        );
         let operation_logs = OperationLogs::try_new(config.log_dir.clone().into()).unwrap();
 
         Self {
