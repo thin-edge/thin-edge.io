@@ -35,12 +35,6 @@ impl Actor for FileTransferServerActor {
     }
 }
 
-impl FileTransferServerActor {
-    pub fn new(config: HttpConfig) -> Self {
-        FileTransferServerActor { config }
-    }
-}
-
 async fn start_http_file_transfer_server(config: &HttpConfig) {
     let server = http_file_transfer_server(config);
     match server {
@@ -81,7 +75,9 @@ impl Builder<FileTransferServerActor> for FileTransferServerBuilder {
     }
 
     fn build(self) -> FileTransferServerActor {
-        FileTransferServerActor::new(self.config)
+        FileTransferServerActor {
+            config: self.config,
+        }
     }
 }
 
@@ -121,6 +117,8 @@ mod tests {
                 .expect("request builder");
             client.request(req).await.unwrap()
         });
+
+        // FIXME: start failing
         let put_response = put_handler.await.unwrap();
         assert_eq!(put_response.status(), hyper::StatusCode::CREATED);
 

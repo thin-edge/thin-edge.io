@@ -60,7 +60,7 @@ impl MqttOperationConverterBuilder {
             software_update_actor.connect_consumer(NoConfig, input_sender.clone().into());
         let restart_sender = restart_actor.connect_consumer(NoConfig, input_sender.clone().into());
         let mqtt_publisher =
-            mqtt_actor.connect_consumer(Self::subscriptions(), input_sender.clone().into());
+            mqtt_actor.connect_consumer(Self::subscriptions(), input_sender.into());
 
         Self {
             input_receiver,

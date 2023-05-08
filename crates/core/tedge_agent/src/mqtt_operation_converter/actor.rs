@@ -75,8 +75,8 @@ impl MqttOperationConverterActor {
         &mut self,
         message: MqttMessage,
     ) -> Result<(), MqttRequestConverterError> {
-        // TODO: Update after Albin's mapper PR.
         match message.topic.name.as_str() {
+            // TODO!: Replace topics by the ones defined in tedge_api after merging upstream.
             "tedge/commands/req/software/list" => {
                 let request = SoftwareListRequest::from_slice(message.payload_bytes())?;
                 self.software_list_sender.send(request).await?;
@@ -89,7 +89,7 @@ impl MqttOperationConverterActor {
                 let request = RestartOperationRequest::from_slice(message.payload_bytes())?;
                 self.restart_sender.send(request).await?;
             }
-            _ => unimplemented!(),
+            _ => unreachable!(),
         }
         Ok(())
     }

@@ -10,6 +10,9 @@ use tedge_actors::MessageReceiver;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::messages::SoftwareModuleAction;
+use tedge_api::messages::SoftwareModuleItem;
+use tedge_api::messages::SoftwareRequestResponseSoftwareList;
 use tedge_api::RestartOperationRequest;
 use tedge_api::RestartOperationResponse;
 use tedge_api::SoftwareListRequest;
@@ -55,9 +58,27 @@ async fn convert_incoming_software_update_request() -> Result<(), DynError> {
     );
     mqtt_box.send(mqtt_message).await?;
 
-    // TODO: Assert SoftwareListRequest properly?
-    let aaa = software_update_box.recv().await.unwrap();
-    dbg!(&aaa);
+    // The output of converter => SoftwareUpdateRequest
+    let request = software_update_box.recv().await.unwrap();
+
+    // Create expected request
+    let debian_module1 = SoftwareModuleItem {
+        name: "debian1".into(),
+        version: Some("0.0.1".into()),
+        action: Some(SoftwareModuleAction::Install),
+        url: None,
+        reason: None,
+    };
+    let debian_list = SoftwareRequestResponseSoftwareList {
+        plugin_type: "debian".into(),
+        modules: vec![debian_module1],
+    };
+    let expected_request = SoftwareUpdateRequest {
+        id: "1234".to_string(),
+        update_list: vec![debian_list],
+    };
+
+    assert_eq!(request, expected_request);
 
     Ok(())
 }
@@ -98,13 +119,38 @@ async fn convert_outgoing_software_list_response() -> Result<(), DynError> {
         .send(software_list_response.into())
         .await?;
 
-    let aaaa = mqtt_box.recv().await;
-    dbg!(&aaaa);
+    mqtt_box
+        .assert_received([MqttMessage::new(
+            &Topic::new_unchecked("tedge/commands/res/software/list"),
+            r#"{"id":"1234","status":"executing"}"#,
+        )])
+        .await;
 
     Ok(())
 }
 
-// TODO: convert_outgoing_software_update_response
+#[tokio::test]
+async fn convert_outgoing_software_update_response() -> Result<(), DynError> {
+    // Spawn outgoing mqtt message converter
+    let (_software_list_box, mut software_update_box, _restart_box, mut mqtt_box) =
+        spawn_mqtt_operation_converter().await?;
+
+    // Simulate SoftwareUpdate response message received.
+    let software_update_request = SoftwareUpdateRequest::new_with_id("1234");
+    let software_update_response = SoftwareUpdateResponse::new(&software_update_request);
+    software_update_box
+        .send(software_update_response.into())
+        .await?;
+
+    mqtt_box
+        .assert_received([MqttMessage::new(
+            &Topic::new_unchecked("tedge/commands/res/software/update"),
+            r#"{"id":"1234","status":"executing"}"#,
+        )])
+        .await;
+
+    Ok(())
+}
 
 #[tokio::test]
 async fn convert_outgoing_restart_response() -> Result<(), DynError> {
@@ -116,8 +162,13 @@ async fn convert_outgoing_restart_response() -> Result<(), DynError> {
     let executing_response = RestartOperationResponse::new(&RestartOperationRequest::default());
     restart_box.send(executing_response.into()).await?;
 
-    let aaaa = mqtt_box.recv().await;
-    dbg!(&aaaa);
+    let (topic, payload) = mqtt_box
+        .recv()
+        .await
+        .map(|msg| (msg.topic, msg.payload))
+        .expect("MqttMessage");
+    assert_eq!(topic.name, "tedge/commands/res/control/restart");
+    assert!(format!("{:?}", payload).contains(r#"status":"executing"#));
 
     Ok(())
 }
