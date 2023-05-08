@@ -478,7 +478,7 @@ dependencies = [
  "anyhow",
  "c8y_config_manager",
  "c8y_http_proxy",
- "clap 3.2.23",
+ "clap 3.2.25",
  "tedge_actors",
  "tedge_config",
  "tedge_file_system_ext",
@@ -522,7 +522,7 @@ dependencies = [
  "anyhow",
  "c8y_firmware_manager",
  "c8y_http_proxy",
- "clap 3.2.23",
+ "clap 3.2.25",
  "tedge_actors",
  "tedge_config",
  "tedge_downloader_ext",
@@ -541,7 +541,7 @@ dependencies = [
  "anyhow",
  "c8y_http_proxy",
  "c8y_log_manager",
- "clap 3.2.23",
+ "clap 3.2.25",
  "tedge_actors",
  "tedge_config",
  "tedge_file_system_ext",
@@ -819,13 +819,13 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.2.23"
+version = "3.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71655c45cb9845d3270c9d6df84ebe72b4dad3c2ba3f7023ad47c144e4e473a5"
+checksum = "4ea181bf566f71cb9a5d17a59e1871af638180a18fb0035c92ae62b705207123"
 dependencies = [
  "atty",
  "bitflags",
- "clap_derive 3.2.18",
+ "clap_derive 3.2.25",
  "clap_lex 0.2.4",
  "indexmap",
  "once_cell",
@@ -861,9 +861,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "3.2.18"
+version = "3.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea0c8bce528c4be4da13ea6fead8965e95b6073585a2f05204bd8f4119f82a65"
+checksum = "ae6371b8bdc8b7d3959e9cf7b22d4435ef3e79e138688421ec654acf8c81b008"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -3610,7 +3610,7 @@ dependencies = [
  "base64 0.13.1",
  "camino",
  "certificate",
- "clap 3.2.23",
+ "clap 3.2.25",
  "hyper",
  "mockito",
  "mqtt_tests",
@@ -3644,7 +3644,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "camino",
- "clap 3.2.23",
+ "clap 3.2.25",
  "flockfile",
  "futures",
  "futures-util",
@@ -3678,7 +3678,7 @@ name = "tedge-apt-plugin"
 version = "0.10.0"
 dependencies = [
  "anyhow",
- "clap 3.2.23",
+ "clap 3.2.25",
  "csv",
  "hamcrest2",
  "reqwest",
@@ -3693,7 +3693,7 @@ dependencies = [
 name = "tedge-dummy-plugin"
 version = "0.10.0"
 dependencies = [
- "clap 3.2.23",
+ "clap 3.2.25",
  "thiserror",
 ]
 
@@ -3708,7 +3708,7 @@ dependencies = [
  "batcher",
  "c8y_http_proxy",
  "c8y_mapper_ext",
- "clap 3.2.23",
+ "clap 3.2.25",
  "clock",
  "collectd_ext",
  "flockfile",
@@ -3731,7 +3731,7 @@ name = "tedge-watchdog"
 version = "0.10.0"
 dependencies = [
  "anyhow",
- "clap 3.2.23",
+ "clap 3.2.25",
  "freedesktop_entry_parser",
  "futures",
  "mqtt_channel",
