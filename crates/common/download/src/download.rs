@@ -277,6 +277,10 @@ mod tests {
     use tempfile::NamedTempFile;
     use tempfile::TempDir;
     use test_case::test_case;
+    use tokio::io::AsyncBufReadExt;
+    use tokio::io::AsyncWriteExt;
+    use tokio::io::BufReader;
+    use tokio::net::TcpListener;
 
     #[test]
     fn construct_downloader_filename() {
@@ -555,6 +559,83 @@ mod tests {
                 assert!(err.to_string().contains(expected_err));
             }
         };
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn resume_download_when_disconnected() -> anyhow::Result<()> {
+        let chunk_size = 4;
+        let file = "AAAABBBBCCCCDDDD";
+
+        // Send only one character of the response at a time. The client will
+        // have to send request 3 times to receive the entire response.
+        // TODO: use larger file, parse Range
+        let server_task = tokio::spawn(async move {
+            let listener = TcpListener::bind("localhost:3000").await.unwrap();
+
+            while let Ok((mut stream, _addr)) = listener.accept().await {
+                let response_task = tokio::time::timeout(Duration::from_secs(1), async move {
+                    let (reader, mut writer) = stream.split();
+                    let mut lines = BufReader::new(reader).lines();
+                    let mut range: Option<std::ops::Range<usize>> = None;
+
+                    'inner: while let Ok(Some(line)) = lines.next_line().await {
+                        if line.to_ascii_lowercase().contains("range:") {
+                            let (_, bytes) = line.split_once('=').unwrap();
+                            let (start, end) = bytes.split_once('-').unwrap();
+                            range = Some(start.parse().unwrap()..end.parse().unwrap())
+                        }
+                        if line.is_empty() {
+                            break 'inner;
+                        }
+                    }
+
+                    if let Some(range) = range {
+                        let start = range.start;
+                        let end = range.end;
+                        let size = end - start;
+                        let header = format!(
+                            "HTTP/1.1 206 Partial Content\r\n\
+                    connection: close\r\n\
+                    content-type: application/octet-stream\r\n\
+                    content-length: {size}\r\n\
+                    content-range: bytes {start}-{end}/16
+                    accept-ranges: bytes\r\n\r\n"
+                        );
+                        let next = (start + chunk_size).min(file.len());
+                        let body = &file[start..next];
+
+                        writer.write_all(header.as_bytes()).await.unwrap();
+                        writer.write_all(body.as_bytes()).await.unwrap();
+                    } else {
+                        let header = "HTTP/1.1 200 OK\r\n\
+                    connection: close\r\n\
+                    content-type: application/octet-stream\r\n\
+                    content-length: 16\r\n\
+                    accept-ranges: bytes\r\n\r\n";
+
+                        writer.write_all(header.as_bytes()).await.unwrap();
+                        writer.write_all(b"AAAA").await.unwrap();
+                    }
+                    writer.flush().await.unwrap();
+                });
+                tokio::task::spawn(response_task).await.unwrap().unwrap();
+            }
+        });
+
+        let tmpdir = TempDir::new()?;
+        let downloader = Downloader::new_sm("partial_download", &None, &tmpdir);
+        let url = DownloadInfo::new("http://localhost:3000/");
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        downloader.download(&url).await?;
+        let saved_file = std::fs::read_to_string(downloader.filename())?;
+        assert_eq!(saved_file, file);
+
+        downloader.cleanup().await?;
+
+        server_task.abort();
+
         Ok(())
     }
 

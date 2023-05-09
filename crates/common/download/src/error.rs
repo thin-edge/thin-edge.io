@@ -12,7 +12,7 @@ pub enum DownloadError {
     FromIo { reason: String },
 
     #[error("JSON parse error: {reason:?}")]
-    FromReqwest { reason: String },
+    JsonParse { reason: String },
 
     #[error(transparent)]
     FromUrlParse(#[from] url::ParseError),
@@ -28,14 +28,9 @@ pub enum DownloadError {
 
     #[error("No write access to {path:?}")]
     NoWriteAccess { path: PathBuf },
-}
 
-impl From<reqwest::Error> for DownloadError {
-    fn from(err: reqwest::Error) -> Self {
-        DownloadError::FromReqwest {
-            reason: format!("{}", err),
-        }
-    }
+    #[error("From reqwest")]
+    FromReqwest(#[from] reqwest::Error),
 }
 
 impl From<std::io::Error> for DownloadError {

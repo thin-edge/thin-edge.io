@@ -24,10 +24,10 @@ tokio = { version = "1.23", features = ["fs"] }
 url = "2.2"
 
 [dev-dependencies]
-anyhow = "1.0"
+anyhow = { version = "1.0", features = ["backtrace"] }
 mockito = "0.31"
 regex = "1.5"
 tempfile = "3.2"
 test-case = "2.2"
-tokio = { version = "1.23", features = ["macros"] }
+tokio = { version = "1.23", features = ["macros", "rt-multi-thread"] }
 tokio-test = "0.4"
