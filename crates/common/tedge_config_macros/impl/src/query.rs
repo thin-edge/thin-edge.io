@@ -35,8 +35,8 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     let fromstr_readable = generate_fromstr_readable(parse_quote!(ReadableKey), &readable_args);
     let fromstr_readonly = generate_fromstr_readable(parse_quote!(ReadOnlyKey), &readonly_args);
     let fromstr_writable = generate_fromstr_writable(parse_quote!(WritableKey), &writable_args);
-    let read_string = generate_readers(&paths);
-    let write_string = generate_writers(
+    let read_string = generate_string_readers(&paths);
+    let write_string = generate_string_writers(
         &paths
             .iter()
             .filter(|path| is_read_write(path))
@@ -241,7 +241,7 @@ fn keys_enum(
     }
 }
 
-fn generate_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
+fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     let variant_names = paths.iter().map(variant_name);
     let arms = paths
         .iter()
@@ -288,26 +288,37 @@ fn generate_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     }
 }
 
-fn generate_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
+fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     let variant_names = paths.iter().map(variant_name);
-    let arms = paths
+    let (update_arms, unset_arms): (Vec<syn::Arm>, Vec<syn::Arm>) = paths
         .iter()
         .zip(variant_names)
-        .map(|(path, variant_name)| -> syn::Arm {
-            let segments = path.iter().map(|thing| thing.ident());
+        .map(|(path, variant_name)| {
+            let segments = path.iter().map(|thing| thing.ident()).collect::<Vec<_>>();
 
-            // TODO this should probably be spanned to the field type
-            parse_quote! {
-                WritableKey::#variant_name => self.#(#segments).* = Some(value.parse().map_err(|e| WriteError::ParseValue(Box::new(e)))?),
-            }
-        });
+            (
+                // TODO this should probably be spanned to the field type
+                parse_quote! {
+                    WritableKey::#variant_name => self.#(#segments).* = Some(value.parse().map_err(|e| WriteError::ParseValue(Box::new(e)))?),
+                },
+                parse_quote! {
+                    WritableKey::#variant_name => self.#(#segments).* = None,
+                }
+            )
+        }).unzip();
     quote! {
         impl TEdgeConfigDto {
             pub fn try_update_str(&mut self, key: WritableKey, value: &str) -> Result<(), WriteError> {
                 match key {
-                    #(#arms)*
+                    #(#update_arms)*
                 };
                 Ok(())
+            }
+
+            pub fn unset_key(&mut self, key: WritableKey) {
+                match key {
+                    #(#unset_arms)*
+                }
             }
         }
     }

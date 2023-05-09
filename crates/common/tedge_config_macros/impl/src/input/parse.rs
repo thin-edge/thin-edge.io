@@ -33,7 +33,6 @@ pub struct ConfigurationAttributes {
     pub reader: ReaderSettings,
 }
 
-// TODO groups need to support attrs
 #[derive(Debug)]
 pub struct ConfigurationGroup {
     pub attrs: Vec<syn::Attribute>,

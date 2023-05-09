@@ -26,7 +26,7 @@ pub enum ConfigCmd {
     /// Unset the provided configuration key
     Unset {
         /// Configuration key. Run `tedge config list --doc` for available keys
-        key: ConfigKey,
+        key: WritableKey,
     },
 
     /// Print the configuration keys and their values
@@ -58,7 +58,7 @@ impl BuildCommand for ConfigCmd {
             }
             .into_boxed()),
             ConfigCmd::Unset { key } => Ok(UnsetConfigCommand {
-                config_key: key,
+                key,
                 config_repository,
             }
             .into_boxed()),
