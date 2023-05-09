@@ -74,8 +74,10 @@ impl ConfigSetting for DeviceCertPathSetting {
 /// Example: your-tenant.cumulocity.com
 ///
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[deprecated = "Use `C8yHttpSetting` or `C8yMqttSetting` instead"]
 pub struct C8yUrlSetting;
 
+#[allow(deprecated)]
 impl ConfigSetting for C8yUrlSetting {
     const KEY: &'static str = "c8y.url";
 

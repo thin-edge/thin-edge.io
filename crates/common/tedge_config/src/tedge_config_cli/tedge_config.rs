@@ -152,6 +152,7 @@ impl ConfigSettingAccessor<AwsUrlSetting> for TEdgeConfig {
     }
 }
 
+#[allow(deprecated)]
 impl ConfigSettingAccessor<C8yUrlSetting> for TEdgeConfig {
     fn query(&self, _setting: C8yUrlSetting) -> ConfigSettingResult<ConnectUrl> {
         self.data
@@ -175,6 +176,7 @@ impl ConfigSettingAccessor<C8yUrlSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<C8yHttpSetting> for TEdgeConfig {
+    #[allow(deprecated)]
     fn query(&self, _setting: C8yHttpSetting) -> ConfigSettingResult<HostPort<443>> {
         self.data
             .c8y
@@ -203,6 +205,7 @@ impl ConfigSettingAccessor<C8yHttpSetting> for TEdgeConfig {
 }
 
 impl ConfigSettingAccessor<C8yMqttSetting> for TEdgeConfig {
+    #[allow(deprecated)]
     fn query(&self, _setting: C8yMqttSetting) -> ConfigSettingResult<HostPort<8883>> {
         self.data
             .c8y

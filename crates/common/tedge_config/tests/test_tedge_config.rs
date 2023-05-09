@@ -229,6 +229,7 @@ bind_address = "0.0.0.0"
 
         assert_eq!(config.query(ServiceTypeSetting)?, "service");
 
+        #[allow(deprecated)]
         config.update(
             C8yUrlSetting,
             ConnectUrl::try_from(updated_c8y_url).unwrap(),
@@ -837,6 +838,7 @@ port = 1024
     assert_eq!(config.query(MqttPortSetting)?, Port(1024));
 
     let updated_c8y_url = ConnectUrl::try_from("other-tenant.cumulocity.com")?;
+    #[allow(deprecated)]
     config.update(C8yUrlSetting, updated_c8y_url)?;
 
     config

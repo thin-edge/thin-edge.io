@@ -37,6 +37,7 @@ macro_rules! config_key {
 }
 
 impl ConfigKey {
+    #[allow(deprecated)]
     pub fn list_all() -> Vec<ConfigKey> {
         vec![
             config_key!(DeviceIdSetting),
