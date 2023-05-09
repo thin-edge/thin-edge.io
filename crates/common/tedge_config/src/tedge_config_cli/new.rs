@@ -460,6 +460,10 @@ define_tedge_config! {
             /// The default software plugin to be used for software management on the device
             #[tedge_config(example = "apt")]
             default: String,
+
+            /// The maximum number of software packages reported for each type of software package
+            #[tedge_config(example = "1000", default(value = 1000u32))]
+            max_packages: u32
         }
     },
 
@@ -665,6 +669,7 @@ mod tests {
     #[test_case::test_case("mqtt.external.certfile")]
     #[test_case::test_case("mqtt.external.keyfile")]
     #[test_case::test_case("software.plugin.default")]
+    #[test_case::test_case("software.plugin.max_packages")]
     #[test_case::test_case("tmp.path")]
     #[test_case::test_case("logs.path")]
     #[test_case::test_case("run.path")]

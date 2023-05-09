@@ -12,6 +12,12 @@ pub fn get_tedge_config() -> Result<TEdgeConfig, TEdgeConfigError> {
     TEdgeConfigRepository::new(tedge_config_location).load()
 }
 
+/// loads the new tedge config from system default
+pub fn get_new_tedge_config() -> Result<new::TEdgeConfig, TEdgeConfigError> {
+    let tedge_config_location = TEdgeConfigLocation::default();
+    TEdgeConfigRepository::new(tedge_config_location).load_new()
+}
+
 /// Represents the complete configuration of a thin edge device.
 /// This configuration is a wrapper over the device specific configurations
 /// as well as the IoT cloud provider specific configurations.
