@@ -15,6 +15,7 @@ use tedge_config_macros::define_tedge_config;
 use tedge_config_macros::struct_field_aliases;
 use tedge_config_macros::ConfigNotSet;
 use tedge_config_macros::OptionalConfig;
+use toml::Table;
 
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 
@@ -85,6 +86,56 @@ pub enum TomlMigrationStep {
         original: &'static str,
         target: &'static str,
     },
+}
+
+impl TomlMigrationStep {
+    pub fn apply_to(self, mut toml: toml::Value) -> toml::Value {
+        match self {
+            TomlMigrationStep::MoveKey { original, target } => {
+                let mut doc = &mut toml;
+                let (tables, field) = original.rsplit_once('.').unwrap();
+                for key in tables.split('.') {
+                    if doc.as_table().map(|table| table.contains_key(key)) == Some(true) {
+                        doc = &mut doc[key];
+                    } else {
+                        return toml;
+                    }
+                }
+                let value = doc.as_table_mut().unwrap().remove(field);
+
+                if let Some(value) = value {
+                    let mut doc = &mut toml;
+                    let (tables, field) = target.rsplit_once('.').unwrap();
+                    for key in tables.split('.') {
+                        let table = doc.as_table_mut().unwrap();
+                        if !table.contains_key(key) {
+                            table.insert(key.to_owned(), toml::Value::Table(Table::new()));
+                        }
+                        doc = &mut doc[key];
+                    }
+                    let table = doc.as_table_mut().unwrap();
+                    // TODO if this returns Some, something is going wrong? Maybe this could be an error, or maybe it doesn't matter
+                    table.insert(field.to_owned(), value);
+                }
+            }
+            TomlMigrationStep::UpdateFieldValue { key, value } => {
+                let mut doc = &mut toml;
+                let (tables, field) = key.rsplit_once('.').unwrap();
+                for key in tables.split('.') {
+                    let table = doc.as_table_mut().unwrap();
+                    if !table.contains_key(key) {
+                        table.insert(key.to_owned(), toml::Value::Table(Table::new()));
+                    }
+                    doc = &mut doc[key];
+                }
+                let table = doc.as_table_mut().unwrap();
+                // TODO if this returns Some, something is going wrong? Maybe this could be an error, or maybe it doesn't matter
+                table.insert(field.to_owned(), value);
+            }
+        }
+
+        toml
+    }
 }
 
 impl TEdgeTomlVersion {
@@ -390,7 +441,7 @@ impl fmt::Display for Seconds {
 }
 
 fn device_id(reader: &TEdgeConfigReader) -> Result<String, ReadError> {
-    let pem = PemCertificate::from_pem_file(&reader.device.cert_path)
+    let pem = PemCertificate::from_pem_file(dbg!(&reader.device.cert_path))
         .map_err(|err| cert_error_into_config_error(ReadOnlyKey::DeviceId.as_str(), err))?;
     let device_id = pem
         .subject_common_name()

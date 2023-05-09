@@ -14,7 +14,7 @@ pub fn generate(
     let mut idents = Vec::new();
     let mut tys = Vec::<syn::Type>::new();
     let mut sub_dtos = Vec::new();
-    let mut preserved_attrs = Vec::new();
+    let mut preserved_attrs: Vec<Vec<&syn::Attribute>> = Vec::new();
     let mut extra_attrs = Vec::new();
 
     for item in items {
@@ -38,7 +38,7 @@ pub fn generate(
                     idents.push(&group.ident);
                     tys.push(parse_quote_spanned!(group.ident.span()=> #sub_dto_name));
                     sub_dtos.push(Some(generate(sub_dto_name, &group.contents, "")));
-                    preserved_attrs.push(Vec::new());
+                    preserved_attrs.push(group.attrs.iter().filter(is_preserved).collect());
                     extra_attrs.push(quote! {
                         #[serde(default)]
                         #[serde(skip_serializing_if = #is_default)]

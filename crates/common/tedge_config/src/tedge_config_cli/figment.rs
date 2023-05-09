@@ -32,7 +32,7 @@ impl ConfigSources for FileOnly {
     const INCLUDE_ENVIRONMENT: bool = false;
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[must_use]
 pub struct UnusedValueWarnings(Vec<String>);
 

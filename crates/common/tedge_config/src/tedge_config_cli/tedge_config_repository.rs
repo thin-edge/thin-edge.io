@@ -1,14 +1,13 @@
-use crate::new::TomlMigrationStep;
 use crate::*;
+use camino::Utf8Path;
 use serde::Serialize;
 use std::fs;
-use std::path::PathBuf;
 use tedge_utils::fs::atomically_write_file_sync;
-use toml::Table;
 
 use super::figment::ConfigSources;
 use super::figment::FileAndEnvironment;
 use super::figment::FileOnly;
+use super::figment::UnusedValueWarnings;
 use super::new;
 
 /// TEdgeConfigRepository is responsible for loading and storing TEdgeConfig entities.
@@ -31,7 +30,8 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
     type Error = TEdgeConfigError;
 
     fn load(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let config = self.make_tedge_config(self.load_dto()?)?;
+        let config =
+            self.make_tedge_config(self.load_dto::<FileAndEnvironment>(self.toml_path())?)?;
         Ok(config)
     }
 
@@ -39,9 +39,7 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
         &self,
         update: &impl Fn(&mut TEdgeConfig) -> ConfigSettingResult<()>,
     ) -> Result<(), Self::Error> {
-        let mut config = self.read_file_or_default::<FileOnly>(
-            self.config_location.tedge_config_file_path().into(),
-        )?;
+        let mut config = self.read_file_or_default::<FileOnly>(self.toml_path())?;
         update(&mut config)?;
 
         self.store(&config.data)
@@ -49,6 +47,10 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
 }
 
 impl TEdgeConfigRepository {
+    fn toml_path(&self) -> &Utf8Path {
+        self.config_location.tedge_config_file_path()
+    }
+
     pub fn new(config_location: TEdgeConfigLocation) -> Self {
         let config_defaults = TEdgeConfigDefaults::from(&config_location);
         Self::new_with_defaults(config_location, config_defaults)
@@ -65,72 +67,32 @@ impl TEdgeConfigRepository {
     }
 
     pub fn load_new(&self) -> Result<new::TEdgeConfig, TEdgeConfigError> {
-        let dto = self.load_dto()?;
+        let dto = self.load_dto::<FileAndEnvironment>(self.toml_path())?;
         Ok(new::TEdgeConfig::from_dto(&dto, &self.config_location))
     }
 
-    fn load_dto(&self) -> Result<new::TEdgeConfigDto, TEdgeConfigError> {
-        let (mut dto, mut warnings) = super::figment::extract_data::<
-            new::TEdgeConfigDto,
-            FileAndEnvironment,
-        >(self.config_location.tedge_config_file_path())?;
+    fn load_dto<Sources: ConfigSources>(
+        &self,
+        path: &Utf8Path,
+    ) -> Result<new::TEdgeConfigDto, TEdgeConfigError> {
+        let (mut dto, mut warnings): (new::TEdgeConfigDto, UnusedValueWarnings) =
+            super::figment::extract_data::<_, Sources>(path)?;
 
         if let Some(migrations) = dto.config.version.unwrap_or_default().migrations() {
-            tracing::info!("Migrating tedge.toml configuration to version 2");
-            let config = std::fs::read_to_string(self.config_location.tedge_config_file_path())?;
-            let mut toml: toml::Value = toml::de::from_str(&config)?;
-            'migration: for migration in migrations {
-                match migration {
-                    TomlMigrationStep::MoveKey { original, target } => {
-                        let mut doc = &mut toml;
-                        let (tables, field) = original.rsplit_once('.').unwrap();
-                        for key in tables.split('.') {
-                            if doc.as_table().map(|table| table.contains_key(key)) == Some(true) {
-                                doc = &mut doc[key];
-                            } else {
-                                continue 'migration;
-                            }
-                        }
-                        let value = doc.as_table_mut().unwrap().remove(field);
+            'migrate_toml: {
+                tracing::info!("Migrating tedge.toml configuration to version 2");
+                let Ok(config) = std::fs::read_to_string(self.toml_path()) else { break 'migrate_toml };
 
-                        if let Some(value) = value {
-                            let mut doc = &mut toml;
-                            let (tables, field) = target.rsplit_once('.').unwrap();
-                            for key in tables.split('.') {
-                                let table = doc.as_table_mut().unwrap();
-                                if !table.contains_key(key) {
-                                    table.insert(key.to_owned(), toml::Value::Table(Table::new()));
-                                }
-                                doc = &mut doc[key];
-                            }
-                            let table = doc.as_table_mut().unwrap();
-                            // TODO if this returns Some, something is going wrong? Maybe this could be an error, or maybe it doesn't matter
-                            table.insert(field.to_owned(), value);
-                        }
-                    }
-                    TomlMigrationStep::UpdateFieldValue { key, value } => {
-                        let mut doc = &mut toml;
-                        let (tables, field) = key.rsplit_once('.').unwrap();
-                        for key in tables.split('.') {
-                            let table = doc.as_table_mut().unwrap();
-                            if !table.contains_key(key) {
-                                table.insert(key.to_owned(), toml::Value::Table(Table::new()));
-                            }
-                            doc = &mut doc[key];
-                        }
-                        let table = doc.as_table_mut().unwrap();
-                        // TODO if this returns Some, something is going wrong? Maybe this could be an error, or maybe it doesn't matter
-                        table.insert(field.to_owned(), value);
-                    }
-                }
+                let toml = toml::de::from_str(&config)?;
+                let migrated_toml = migrations
+                    .into_iter()
+                    .fold(toml, |toml, migration| migration.apply_to(toml));
+
+                self.store(&migrated_toml)?;
+
+                // Reload DTO to get the settings in the right place
+                (dto, warnings) = super::figment::extract_data::<_, Sources>(self.toml_path())?;
             }
-
-            self.store(&toml)?;
-
-            // Reload DTO to get the settings in the right place
-            (dto, warnings) = super::figment::extract_data::<_, FileAndEnvironment>(
-                self.config_location.tedge_config_file_path(),
-            )?;
         }
 
         warnings.emit();
@@ -144,13 +106,11 @@ impl TEdgeConfigRepository {
 
     fn read_file_or_default<Sources: ConfigSources>(
         &self,
-        path: PathBuf,
+        path: &Utf8Path,
     ) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let (data, warnings) = super::figment::extract_data::<new::TEdgeConfigDto, Sources>(path)?;
+        let dto = self.load_dto::<Sources>(path)?;
 
-        warnings.emit();
-
-        self.make_tedge_config(data)
+        self.make_tedge_config(dto)
     }
 
     fn make_tedge_config(
@@ -172,10 +132,7 @@ impl TEdgeConfigRepository {
             fs::create_dir(self.config_location.tedge_config_root_path())?;
         }
 
-        atomically_write_file_sync(
-            self.config_location.tedge_config_file_path(),
-            toml.as_bytes(),
-        )?;
+        atomically_write_file_sync(self.toml_path(), toml.as_bytes())?;
         Ok(())
     }
 }

@@ -88,7 +88,7 @@ mod tests {
         get_device_id_cmd
             .assert()
             .success()
-            .stderr(predicate::str::contains("'device.id' is not configurable"));
+            .stderr(predicate::str::contains("'device.id' is not configured"));
 
         // The create command created a certificate
         create_cmd.assert().success();
