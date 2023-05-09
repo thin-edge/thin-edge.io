@@ -237,6 +237,20 @@ fn keys_enum(
                     )*
                 }
             }
+
+            pub fn iter() -> impl Iterator<Item = Self> {
+                [
+                    #(
+                        Self::#variant_name,
+                    )*
+                ].into_iter()
+            }
+        }
+
+        impl ::std::fmt::Display for #type_name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> Result<(), ::std::fmt::Error> {
+                self.as_str().fmt(f)
+            }
         }
     }
 }

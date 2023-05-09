@@ -84,7 +84,7 @@ fn conventional_sub_paths(
         .collect()
 }
 
-pub(crate) fn struct_field_paths(
+pub fn struct_field_paths(
     prefix: Option<&str>,
     fields: &[(&'static str, doku::Field)],
 ) -> Vec<(Cow<'static, str>, doku::Type)> {

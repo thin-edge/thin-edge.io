@@ -52,7 +52,7 @@ mod tests {
             home_dir,
             "config",
             "set",
-            "device.cert.path",
+            "device.cert_path",
             &cert_path,
         ])?;
         let mut set_key_path_cmd = tedge_command_with_test_home([
@@ -60,7 +60,7 @@ mod tests {
             home_dir,
             "config",
             "set",
-            "device.key.path",
+            "device.key_path",
             &key_path,
         ])?;
 
@@ -294,7 +294,7 @@ mod tests {
             test_home_str,
             "config",
             "get",
-            "device.cert.path",
+            "device.cert_path",
         ])?;
 
         get_cert_path_cmd
@@ -307,7 +307,7 @@ mod tests {
             test_home_str,
             "config",
             "get",
-            "device.key.path",
+            "device.key_path",
         ])?;
 
         get_key_path_cmd
@@ -358,22 +358,21 @@ mod tests {
         let output = assert.get_output().clone();
         let output_str = String::from_utf8(output.stdout).unwrap();
 
-        let key_path = extract_config_value(&output_str, "device.key.path");
+        let key_path = extract_config_value(&output_str, "device.key_path");
         assert!(key_path.ends_with("tedge-private-key.pem"));
         assert!(key_path.contains(test_home_str));
 
-        let cert_path = extract_config_value(&output_str, "device.cert.path");
+        let cert_path = extract_config_value(&output_str, "device.cert_path");
         assert!(cert_path.ends_with("tedge-certificate.pem"));
         assert!(cert_path.contains(test_home_str));
     }
 
-    fn extract_config_value(output: &str, key: &str) -> String {
+    fn extract_config_value<'a>(output: &'a str, key: &str) -> &'a str {
         output
             .lines()
             .map(|line| line.splitn(2, '=').collect::<Vec<_>>())
             .find(|pair| pair[0] == key)
-            .unwrap()[1]
-            .into()
+            .unwrap_or_else(|| panic!("couldn't find config value for '{key}'"))[1]
     }
 
     #[test]
@@ -401,16 +400,19 @@ mod tests {
         let output = assert.get_output();
         let output_str = String::from_utf8(output.clone().stdout).unwrap();
 
-        let key_path = extract_config_value(&output_str, "device.key.path");
+        let key_path = extract_config_value(&output_str, "device.key_path");
         assert!(key_path.ends_with("tedge-private-key.pem"));
         assert!(key_path.contains(test_home_str));
 
-        let cert_path = extract_config_value(&output_str, "device.cert.path");
+        let cert_path = extract_config_value(&output_str, "device.cert_path");
         assert!(cert_path.ends_with("tedge-certificate.pem"));
         assert!(cert_path.contains(test_home_str));
 
         for key in get_tedge_config_keys() {
-            assert!(output_str.contains(key));
+            assert!(
+                output_str.contains(key),
+                "couldn't find '{key}' in output of tedge config list --all"
+            );
         }
     }
 
@@ -432,7 +434,10 @@ mod tests {
         let output_str = String::from_utf8(output.stdout).unwrap();
 
         for key in get_tedge_config_keys() {
-            assert!(output_str.contains(key));
+            assert!(
+                output_str.contains(key),
+                "couldn't find '{key}' in output of tedge config list --doc"
+            );
         }
         assert!(output_str.contains("Example"));
     }
@@ -455,10 +460,10 @@ mod tests {
     fn get_tedge_config_keys() -> Vec<&'static str> {
         let vec = vec![
             "device.id",
-            "device.key.path",
-            "device.cert.path",
+            "device.key_path",
+            "device.cert_path",
             "c8y.url",
-            "c8y.root.cert.path",
+            "c8y.root_cert_path",
         ];
         vec
     }

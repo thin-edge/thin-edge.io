@@ -4,6 +4,9 @@ use crate::TemplatesSet;
 use camino::Utf8PathBuf;
 use certificate::CertificateError;
 use certificate::PemCertificate;
+use doku::Document;
+use once_cell::sync::Lazy;
+use std::borrow::Cow;
 use std::fmt;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
@@ -13,6 +16,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use tedge_config_macros::define_tedge_config;
 use tedge_config_macros::struct_field_aliases;
+use tedge_config_macros::struct_field_paths;
 use tedge_config_macros::ConfigNotSet;
 use tedge_config_macros::OptionalConfig;
 use toml::Table;
@@ -137,6 +141,14 @@ impl TomlMigrationStep {
         toml
     }
 }
+
+/// The keys that can be read from the configuration
+pub static READABLE_KEYS: Lazy<Vec<(Cow<'static, str>, doku::Type)>> = Lazy::new(|| {
+    let ty = TEdgeConfigReader::ty();
+    let doku::TypeKind::Struct { fields, transparent: false } = ty.kind else { panic!("Expected struct but got {:?}", ty.kind) };
+    let doku::Fields::Named { fields } = fields else { panic!("Expected named fields but got {:?}", fields)};
+    struct_field_paths(None, &fields)
+});
 
 impl TEdgeTomlVersion {
     pub fn migrations(self) -> Option<Vec<TomlMigrationStep>> {
@@ -441,7 +453,7 @@ impl fmt::Display for Seconds {
 }
 
 fn device_id(reader: &TEdgeConfigReader) -> Result<String, ReadError> {
-    let pem = PemCertificate::from_pem_file(dbg!(&reader.device.cert_path))
+    let pem = PemCertificate::from_pem_file(&reader.device.cert_path)
         .map_err(|err| cert_error_into_config_error(ReadOnlyKey::DeviceId.as_str(), err))?;
     let device_id = pem
         .subject_common_name()
