@@ -280,6 +280,14 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
             })
             .try_throw()?;
 
+        if let Some(renamed_to) = &value.rename {
+            let span = renamed_to.span();
+            let literal = renamed_to.as_str();
+            value
+                .attrs
+                .push(parse_quote_spanned!(span=> #[serde(rename = #literal)]))
+        }
+
         if let Some(readonly) = value.readonly {
             let mut error = OptionalError::default();
             for example in &value.examples {
