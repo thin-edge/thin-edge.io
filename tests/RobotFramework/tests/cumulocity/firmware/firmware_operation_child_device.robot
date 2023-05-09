@@ -1,19 +1,19 @@
 *** Settings ***
-Resource    ../../../resources/common.resource
-Library    Cumulocity
-Library    ThinEdgeIO
-Library    JSONLibrary
-Library    String
+Resource            ../../../resources/common.resource
+Library             Cumulocity
+Library             ThinEdgeIO
+Library             JSONLibrary
+Library             String
 
-Suite Setup    Custom Setup
-Test Teardown    Get Logs    name=${PARENT_SN}
+Suite Setup         Custom Setup
+Test Teardown       Get Logs    name=${PARENT_SN}
 
-Force Tags    theme:firmware    theme:childdevices
+Force Tags          theme:firmware    theme:childdevices
+
 
 *** Variables ***
-
 ${PARENT_IP}
-${HTTP_PORT}    8000
+${HTTP_PORT}                8000
 
 ${PARENT_SN}
 ${CHILD_SN}
@@ -23,6 +23,7 @@ ${cache_key}
 ${file_url}
 ${file_transfer_url}
 ${file_creation_time}
+
 
 *** Test Cases ***
 Prerequisite Parent
@@ -59,10 +60,11 @@ Child device firmware update with cache
     Validate Cumulocity operation status and MO
     Validate if file is not newly downloaded
 
+
 *** Keywords ***
 Delete child related content
-    Execute Command    sudo rm -rf /etc/tedge/operations/c8y/TST*         #if folder exists, child device will be created
-    Execute Command    sudo rm -rf /etc/tedge/c8y/TST*                    #if folder exists, child device will be created
+    Execute Command    sudo rm -rf /etc/tedge/operations/c8y/TST*    #if folder exists, child device will be created
+    Execute Command    sudo rm -rf /etc/tedge/c8y/TST*    #if folder exists, child device will be created
     Execute Command    sudo rm -rf /var/tedge/file-transfer/*
     Execute Command    sudo rm -rf /var/tedge/cache/*
     Execute Command    sudo rm -rf /var/tedge/firmware/*
@@ -77,11 +79,11 @@ Check for child related content
 
 Set external MQTT bind address
     Set Device Context    ${PARENT_SN}
-    Execute Command    sudo tedge config set mqtt.external.bind_address ${PARENT_IP}
+    Execute Command    sudo tedge config set mqtt.external.bind.address ${PARENT_IP}
 
 Set external MQTT port
     Set Device Context    ${PARENT_SN}
-    Execute Command    sudo tedge config set mqtt.external.port 1883
+    Execute Command    sudo tedge config set mqtt.external.bind.port 1883
 
 Restart Firmware plugin
     ThinEdgeIO.Restart Service    c8y-firmware-plugin.service
@@ -103,7 +105,7 @@ Create child device
 
 Validate child Name
     ${child_mo}=    Cumulocity.Device Should Have Fragments    name
-    Should Be Equal    device_${PARENT_SN}     ${child_mo["owner"]}    # The parent is the owner of the child
+    Should Be Equal    device_${PARENT_SN}    ${child_mo["owner"]}    # The parent is the owner of the child
 
 Get timestamp of cache
     Set Device Context    ${PARENT_SN}
@@ -111,7 +113,7 @@ Get timestamp of cache
     Set Suite Variable    $file_creation_time
 
 Upload binary to Cumulocity
-    ${file_url}=     Cumulocity.Create Inventory Binary    firmware1.txt    firmware1    file=${CURDIR}/firmware1.txt
+    ${file_url}=    Cumulocity.Create Inventory Binary    firmware1.txt    firmware1    file=${CURDIR}/firmware1.txt
     Set Suite Variable    $file_url
 
 Create c8y_Firmware operation
@@ -126,7 +128,9 @@ Validate if file is not newly downloaded
 
 Validate firmware update request
     Set Device Context    ${PARENT_SN}
-    ${listen}=    ThinEdgeIO.Should Have MQTT Messages    topic=tedge/${CHILD_SN}/commands/req/firmware_update    date_from=-5s
+    ${listen}=    ThinEdgeIO.Should Have MQTT Messages
+    ...    topic=tedge/${CHILD_SN}/commands/req/firmware_update
+    ...    date_from=-5s
     ${message}=    JSONLibrary.Convert String To Json    ${listen[0]}
 
     Should Not Be Empty    ${message["id"]}
@@ -134,9 +138,14 @@ Validate firmware update request
     Should Be Equal    ${message["name"]}    firmware1
     Should Be Equal    ${message["version"]}    1.0
     Should Be Equal    ${message["sha256"]}    4b0126519dfc1a3023851bfcc5b312b20fc80452256f7f40a5d8722765500ba9
-    Should Match Regexp    ${message["url"]}    ^http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/firmware_update/[0-9A-Za-z]+$
+    Should Match Regexp
+    ...    ${message["url"]}
+    ...    ^http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/firmware_update/[0-9A-Za-z]+$
 
-    ${cache_key}=    Get Regexp Matches    ${message["url"]}    ^http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/firmware_update/([0-9A-Za-z]+)$    1
+    ${cache_key}=    Get Regexp Matches
+    ...    ${message["url"]}
+    ...    ^http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/firmware_update/([0-9A-Za-z]+)$
+    ...    1
 
     Set Suite Variable    $op_id    ${message["id"]}
     Set Suite Variable    $file_transfer_url    ${message["url"]}
@@ -164,4 +173,4 @@ Custom Setup
 
     # Child
     ${child_sn}=    Setup    skip_bootstrap=True
-    Set Suite Variable    $CHILD_SN         ${child_sn}
+    Set Suite Variable    $CHILD_SN    ${child_sn}

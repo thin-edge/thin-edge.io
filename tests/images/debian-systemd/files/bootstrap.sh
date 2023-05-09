@@ -716,9 +716,9 @@ EOF
     chown tedge:tedge /setup/client.*
 
     tedge config set mqtt.client.port 8883
-    tedge config set mqtt.client.auth.cafile /etc/mosquitto/ca_certificates/ca.crt
-    tedge config set mqtt.client.auth.certfile /setup/client.crt
-    tedge config set mqtt.client.auth.keyfile /setup/client.key
+    tedge config set mqtt.client.auth.ca_file /etc/mosquitto/ca_certificates/ca.crt
+    tedge config set mqtt.client.auth.cert_file /setup/client.crt
+    tedge config set mqtt.client.auth.key_file /setup/client.key
 
     systemctl restart mosquitto
 }

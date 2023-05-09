@@ -13,9 +13,9 @@ Files can be uploaded, downloaded and deleted from this repository via the follo
 The `tedge-ip` is derived from the following tedge configurations:
 
 * mqtt.bind_address
-* mqtt.external.bind_address
+* mqtt.external.bind.address
 
-If the `mqtt.external.bind_address` is configured, then the `tedge-ip` is set to that value,
+If the `mqtt.external.bind.address` is configured, then the `tedge-ip` is set to that value,
 else the `mqtt.bind_address` is used with the default value of `127.0.0.1`.
 
 The files uploaded to this repository are stored at `/var/tedge/file-transfer` directory.

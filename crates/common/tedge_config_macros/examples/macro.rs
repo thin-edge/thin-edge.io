@@ -86,7 +86,7 @@ define_tedge_config! {
             /// The port mosquitto binds to for internal use
             #[tedge_config(example = "1883", default(function = "default_mqtt_port"))]
             #[doku(as = "u16")]
-            #[tedge_config(alternate_key = "mqtt.port")]
+            #[tedge_config(alternate_key = "mqtt.bind.port")]
             // This was originally u16, but I can't think of any way in which
             // tedge could actually connect to mosquitto if it bound to a random
             // free port, so I don't think 0 is *really* valid here

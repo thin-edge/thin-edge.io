@@ -258,7 +258,7 @@ The behavior of the `c8y-configuration-plugin` is also controlled
 by the configuration of thin-edge:
 
 * `tedge config get mqtt.bind_address`: the address of the local MQTT bus.
-* `tedge config get mqtt.port`: the TCP port of the local MQTT bus.
+* `tedge config get mqtt.bind.port`: the TCP port of the local MQTT bus.
 * `tedge config get tmp.path`: the directory where the files are updated
   before being copied atomically to their targets.
 
@@ -339,11 +339,11 @@ From a TCP point of view, the child devices act as clients
 and all the connections to thin-edge are established by the child devices.
 * Thin-edge opens two ports for MQTT and HTTP over the local network.
   These ports are controlled on the main device `tedge config`:
-  * `mqtt.external.bind_address`
-  * `mqtt.external.port`
+  * `mqtt.external.bind.address`
+  * `mqtt.external.bind.port`
   * `http.external.port`
 * The child devices must know the main device IP address.
-  * This is the address set for `mqtt.external.bind_address` on the main device.
+  * This is the address set for `mqtt.external.bind.address` on the main device.
   * For the very specific case, where the child-device agent runs on the main device,
     this connection address can be the `localhost`.
 * On start, the child-device agent for configuration management,

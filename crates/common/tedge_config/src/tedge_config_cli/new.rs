@@ -242,7 +242,9 @@ define_tedge_config! {
         #[doku(as = "PathBuf")]
         root_cert_path: Utf8PathBuf,
 
-        smartrest_templates: TemplatesSet,
+        smartrest: {
+            templates: TemplatesSet,
+        },
     },
 
     #[serde(alias = "azure")] // for 0.1.0 compatibility

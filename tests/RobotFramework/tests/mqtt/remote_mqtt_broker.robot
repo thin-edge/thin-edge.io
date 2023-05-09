@@ -1,15 +1,18 @@
 *** Settings ***
-Resource    ../../resources/common.resource
-Library    ThinEdgeIO
-Library    Cumulocity
+Resource            ../../resources/common.resource
+Library             ThinEdgeIO
+Library             Cumulocity
 
-Test Tags    theme:mqtt    theme:c8y    adapter:docker
-Suite Setup    Custom Setup
-Suite Teardown    Get Logs    name=${CONTAINER_1}
+Suite Setup         Custom Setup
+Suite Teardown      Get Logs    name=${CONTAINER_1}
+
+Force Tags          theme:mqtt    theme:c8y    adapter:docker
+
 
 *** Variables ***
 ${CONTAINER_1}
 ${CONTAINER_2}
+
 
 *** Test Cases ***
 Check remote mqtt broker #1773
@@ -50,8 +53,8 @@ Check remote mqtt broker #1773
     Cumulocity.Should Have Services    name=c8y-firmware-plugin    status=up
     Cumulocity.Should Have Services    name=c8y-log-plugin    status=up
 
-*** Keywords ***
 
+*** Keywords ***
 Custom Setup
     # Container 1 running mqtt host and mapper
     ${CONTAINER_1}=    Setup    skip_bootstrap=${True}
@@ -72,21 +75,21 @@ Custom Setup
 
     # Copy files form one device to another (use base64 encoding to prevent quoting issues)
     ${tedge_toml_encoded}=    Execute Command    cat /etc/tedge/tedge.toml | base64
-    ${pem}=    Execute Command    cat "$(tedge config get device.cert.path)"
+    ${pem}=    Execute Command    cat "$(tedge config get device.cert_path)"
 
     # container 2 running all other services
     ${CONTAINER_2}=    Setup    skip_bootstrap=${True}
     Execute Command    ./bootstrap.sh --no-connect --no-bootstrap --no-secure
     Set Suite Variable    $CONTAINER_2
-    
+
     # Stop services that don't need to be running on the second device
-    Stop Service       mosquitto
-    Stop Service       tedge-mapper-c8y
+    Stop Service    mosquitto
+    Stop Service    tedge-mapper-c8y
 
     Execute Command    echo -n "${tedge_toml_encoded}" | base64 --decode | sudo tee /etc/tedge/tedge.toml
     Execute Command    sudo tedge config set mqtt.client.host ${CONTAINER_1_IP}
     Execute Command    sudo tedge config set mqtt.client.port 1883
-    Execute Command    echo "${pem}" | sudo tee "$(tedge config get device.cert.path)"
+    Execute Command    echo "${pem}" | sudo tee "$(tedge config get device.cert_path)"
     Restart Service    c8y-firmware-plugin
     Restart Service    c8y-log-plugin
     Restart Service    c8y-configuration-plugin

@@ -8,7 +8,7 @@ from pysys.basetest import BaseTest
 Validate changing the mqtt port using the tedge command that fails without restarting the mqtt server
 
 Given a configured system, that is configured with certificate created and registered in a cloud
-When `tedge mqtt.port set` with `sudo`
+When `tedge mqtt.bind.port set` with `sudo`
 When the `sudo tedge mqtt sub` tries to subscribe for a topic and fails to connect to mqtt server
 When the `sudo tedge mqtt pub` tries to publish a message and fails to connect to mqtt server
 
@@ -26,7 +26,7 @@ class MqttPortChangeConnectionFails(BaseTest):
         # set a new mqtt port for local communication
         mqtt_port = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "config", "set", "mqtt.port", "8880"],
+            arguments=[self.tedge, "config", "set", "mqtt.bind.port", "8880"],
             stdouterr="mqtt_port_set",
         )
 
@@ -57,6 +57,6 @@ class MqttPortChangeConnectionFails(BaseTest):
         # unset a new mqtt port, falls back to default port (1883)
         mqtt_port = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "config", "unset", "mqtt.port"],
+            arguments=[self.tedge, "config", "unset", "mqtt.bind.port"],
             stdouterr="mqtt_port_unset",
         )

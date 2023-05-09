@@ -179,7 +179,8 @@ impl ConfigSettingAccessor<C8ySmartRestTemplates> for TEdgeConfig {
         Ok(self
             .data
             .c8y
-            .smartrest_templates
+            .smartrest
+            .templates
             .clone()
             .unwrap_or_else(|| self.config_defaults.default_c8y_smartrest_templates.clone()))
     }
@@ -189,12 +190,12 @@ impl ConfigSettingAccessor<C8ySmartRestTemplates> for TEdgeConfig {
         _setting: C8ySmartRestTemplates,
         value: TemplatesSet,
     ) -> ConfigSettingResult<()> {
-        self.data.c8y.smartrest_templates = Some(value);
+        self.data.c8y.smartrest.templates = Some(value);
         Ok(())
     }
 
     fn unset(&mut self, _setting: C8ySmartRestTemplates) -> ConfigSettingResult<()> {
-        self.data.c8y.smartrest_templates = None;
+        self.data.c8y.smartrest.templates = None;
         Ok(())
     }
 }
@@ -429,7 +430,7 @@ impl ConfigSettingAccessor<MqttClientCafileSetting> for TEdgeConfig {
             .ca_file
             .clone()
             .ok_or(ConfigSettingError::ConfigNotSet {
-                key: "mqtt.client.auth.cafile",
+                key: "mqtt.client.auth.ca_file",
             })
     }
 
@@ -457,7 +458,7 @@ impl ConfigSettingAccessor<MqttClientCapathSetting> for TEdgeConfig {
             .ca_dir
             .clone()
             .ok_or(ConfigSettingError::ConfigNotSet {
-                key: "mqtt.client.auth.cadir",
+                key: "mqtt.client.auth.ca_dir",
             })
     }
 
@@ -485,7 +486,7 @@ impl ConfigSettingAccessor<MqttClientAuthCertSetting> for TEdgeConfig {
             .cert_file
             .clone()
             .ok_or(ConfigSettingError::ConfigNotSet {
-                key: "mqtt.client.auth.certfile",
+                key: "mqtt.client.auth.cert_file",
             })
     }
 
@@ -515,7 +516,7 @@ impl ConfigSettingAccessor<MqttClientAuthKeySetting> for TEdgeConfig {
             .key_file
             .clone()
             .ok_or(ConfigSettingError::ConfigNotSet {
-                key: "mqtt.client.auth.keyfile",
+                key: "mqtt.client.auth.key_file",
             })
     }
 

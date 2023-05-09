@@ -39,7 +39,7 @@ class InvalidDeviceId(BaseTest):
                 self.tedge,
                 "config",
                 "set",
-                "device.cert.path",
+                "device.cert_path",
                 "/tmp/test-device-certs/tedge-certificate.pem",
             ],
             stdouterr="set_cert_path",
@@ -52,7 +52,7 @@ class InvalidDeviceId(BaseTest):
                 self.tedge,
                 "config",
                 "set",
-                "device.key.path",
+                "device.key_path",
                 "/tmp/test-device-certs/tedge-private-key.pem",
             ],
             stdouterr="set_key_path",
@@ -80,17 +80,17 @@ class InvalidDeviceId(BaseTest):
         self.assertGrep("cert_create.err", "DeviceID Error", contains=True)
 
     def device_id_cleanup(self):
-        # unset the custom device.cert.path
+        # unset the custom device.cert_path
         unset_cert_path = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "config", "unset", "device.cert.path"],
+            arguments=[self.tedge, "config", "unset", "device.cert_path"],
             stdouterr="unset_cert_path",
         )
 
-        # unset the custom device.key.path
+        # unset the custom device.key_path
         unset_key_path = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "config", "unset", "device.key.path"],
+            arguments=[self.tedge, "config", "unset", "device.key_path"],
             stdouterr="unset_key_path",
         )
 

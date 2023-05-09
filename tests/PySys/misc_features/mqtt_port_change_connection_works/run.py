@@ -10,7 +10,7 @@ Validate changing the mqtt port using the tedge command
 
 Given a configured system, that is configured with certificate created and registered in a cloud
 When the thin edge device is disconnected from cloud, `sudo tedge disconnect c8y`
-When `tedge mqtt.port set` with sudo
+When `tedge mqtt.bind.port set` with sudo
 When the thin edge device is connected to cloud, `sudo tedge connect c8y`
 Now validate the services that use the mqtt port
    Validate tedge mqtt pub/sub
@@ -32,7 +32,7 @@ class MqttPortChangeConnectionWorks(TedgeEnvironment):
         # set a new mqtt port for local communication
         mqtt_port = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "config", "set", "mqtt.port", "8889"],
+            arguments=[self.tedge, "config", "set", "mqtt.bind.port", "8889"],
             stdouterr="mqtt_port",
         )
         self.addCleanupFunction(self.mqtt_cleanup)
@@ -177,7 +177,7 @@ class MqttPortChangeConnectionWorks(TedgeEnvironment):
         # unset a new mqtt port, falls back to default port (1883)
         mqtt_port = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "config", "unset", "mqtt.port"],
+            arguments=[self.tedge, "config", "unset", "mqtt.bind.port"],
             stdouterr="mqtt_port_unset",
         )
 

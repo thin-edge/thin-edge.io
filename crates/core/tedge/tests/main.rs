@@ -187,7 +187,7 @@ mod tests {
         "The provided config key: \'c8y.url\' is not set\n",
         false
     )]
-    #[test_case("mqtt.port", "8880", "1883", true)]
+    #[test_case("mqtt.bind.port", "8880", "1883", true)]
     fn run_config_set_get_unset_read_write_key(
         config_key: &str,
         config_value: &str,
@@ -335,7 +335,7 @@ mod tests {
             test_home_str,
             "config",
             "get",
-            "c8y.root.cert.path",
+            "c8y.root_cert_path",
         ])?;
 
         get_c8y_root_cert_path_cmd

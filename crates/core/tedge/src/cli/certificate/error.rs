@@ -46,10 +46,10 @@ pub enum CertError {
     #[error("I/O error")]
     IoError(#[from] std::io::Error),
 
-    #[error("Invalid device.cert.path path: {0}")]
+    #[error("Invalid device.cert_path path: {0}")]
     CertPathError(PathsError),
 
-    #[error("Invalid device.key.path path: {0}")]
+    #[error("Invalid device.key_path path: {0}")]
     KeyPathError(PathsError),
 
     #[error(transparent)]

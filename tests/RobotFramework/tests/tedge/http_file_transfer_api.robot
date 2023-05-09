@@ -1,23 +1,26 @@
+*** Comments ***
 #Command to execute:    robot -d \results --timestampoutputs --log http_file_transfer_api.html --report NONE -v BUILD:840 -v HOST:192.168.1.130 thin-edge.io/tests/RobotFramework/tedge/http_file_transfer_api.robot
+
+
 *** Settings ***
+Resource            ../../resources/common.resource
+Library             ThinEdgeIO
 
-Resource    ../../resources/common.resource
-Library    ThinEdgeIO
+Suite Setup         Custom Setup
+Suite Teardown      Custom Teardown
 
-Test Tags    theme:cli    theme:configuration    theme:childdevices
-Suite Setup            Custom Setup
-Suite Teardown         Custom Teardown
+Force Tags          theme:cli    theme:configuration    theme:childdevices
+
 
 *** Variables ***
+${DEVICE_SN}    # Parent device serial number
+${DEVICE_IP}    # Parent device host name which is reachable
+${PORT}=        8000
 
-${DEVICE_SN}        # Parent device serial number
-${DEVICE_IP}        # Parent device host name which is reachable
-${PORT}=    8000
 
 *** Test Cases ***
-
 Get Put Delete
-    Setup    skip_bootstrap=True        # Setup child device
+    Setup    skip_bootstrap=True    # Setup child device
 
     Execute Command    curl -X PUT -d "test of put" http://${DEVICE_IP}:${PORT}/tedge/file-transfer/file_a
     ${get}=    Execute Command    curl --silent http://${DEVICE_IP}:${PORT}/tedge/file-transfer/file_a
@@ -26,7 +29,6 @@ Get Put Delete
 
 
 *** Keywords ***
-
 Custom Setup
     ${DEVICE_SN}=    Setup    skip_bootstrap=False
     Set Suite Variable    $DEVICE_SN    ${DEVICE_SN}
@@ -34,8 +36,8 @@ Custom Setup
     ${DEVICE_IP}=    Get IP Address
     Set Suite Variable    ${DEVICE_IP}
 
-    Execute Command    sudo tedge config set mqtt.external.bind_address ${DEVICE_IP}
-    ${bind}=    Execute Command    tedge config get mqtt.external.bind_address    strip=True
+    Execute Command    sudo tedge config set mqtt.external.bind.address ${DEVICE_IP}
+    ${bind}=    Execute Command    tedge config get mqtt.external.bind.address    strip=True
     Should Be Equal    ${bind}    ${DEVICE_IP}
     Execute Command    sudo -u tedge mkdir -p /var/tedge
     Restart Service    tedge-agent
