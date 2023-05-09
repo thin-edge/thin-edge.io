@@ -36,6 +36,13 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     let fromstr_readonly = generate_fromstr_readable(parse_quote!(ReadOnlyKey), &readonly_args);
     let fromstr_writable = generate_fromstr_writable(parse_quote!(WritableKey), &writable_args);
     let read_string = generate_readers(&paths);
+    let write_string = generate_writers(
+        &paths
+            .iter()
+            .filter(|path| is_read_write(path))
+            .cloned()
+            .collect::<Vec<_>>(),
+    );
     let (static_alias, updated_key) = alternate_keys(paths.iter());
 
     quote! {
@@ -46,6 +53,13 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
         #fromstr_readonly
         #fromstr_writable
         #read_string
+        #write_string
+
+        #[derive(::thiserror::Error, Debug)]
+        pub enum WriteError {
+            #[error("Failed to parse input")]
+            ParseValue(#[from] Box<dyn ::std::error::Error + Send + Sync>),
+        }
 
         impl ReadOnlyKey {
             fn write_error(self) -> &'static str {
@@ -269,6 +283,31 @@ fn generate_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 match key {
                     #(#arms)*
                 }
+            }
+        }
+    }
+}
+
+fn generate_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
+    let variant_names = paths.iter().map(variant_name);
+    let arms = paths
+        .iter()
+        .zip(variant_names)
+        .map(|(path, variant_name)| -> syn::Arm {
+            let segments = path.iter().map(|thing| thing.ident());
+
+            // TODO this should probably be spanned to the field type
+            parse_quote! {
+                WritableKey::#variant_name => self.#(#segments).* = Some(value.parse().map_err(|e| WriteError::ParseValue(Box::new(e)))?),
+            }
+        });
+    quote! {
+        impl TEdgeConfigDto {
+            pub fn try_update_str(&mut self, key: WritableKey, value: &str) -> Result<(), WriteError> {
+                match key {
+                    #(#arms)*
+                };
+                Ok(())
             }
         }
     }

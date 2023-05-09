@@ -5,31 +5,9 @@ use syn::Error;
 pub struct OptionalError(Option<Error>);
 
 impl OptionalError {
-    /// Create a new [`OptionalError`] with the given [error](Error).
-    pub fn new(error: Error) -> Self {
-        Self(Some(error))
-    }
-
-    /// Returns a reference to the contained [error](Error), if any.
-    pub fn error(&self) -> Option<&Error> {
-        self.0.as_ref()
-    }
-
-    /// Returns a mutable reference to the contained [error](Error), if any.
-    pub fn error_mut(&mut self) -> Option<&mut Error> {
-        self.0.as_mut()
-    }
-
     /// Removes the contained [error](Error) and returns it, if any.
     pub fn take(&mut self) -> Option<Error> {
         self.0.take()
-    }
-
-    /// Replaces the contained [error](Error) with the given one.
-    ///
-    /// Returns the previous error, if any.
-    pub fn replace(&mut self, error: Error) -> Option<Error> {
-        self.0.replace(error)
     }
 
     /// Combine the given [error](Error) with the existing one,
@@ -69,7 +47,7 @@ mod tests {
 
     #[test]
     fn should_combine() {
-        let mut collector = OptionalError::new(Error::new(Span::call_site(), "First Error"));
+        let mut collector = OptionalError(Some(Error::new(Span::call_site(), "First Error")));
         collector.combine(Error::new(Span::call_site(), "Second Error"));
 
         let expected = r#":: core :: compile_error ! { "First Error" } :: core :: compile_error ! { "Second Error" }"#;
@@ -82,29 +60,8 @@ mod tests {
     }
 
     #[test]
-    fn should_replace() {
-        let mut collector = OptionalError::new(Error::new(Span::call_site(), "First Error"));
-        let existing = collector.replace(Error::new(Span::call_site(), "Second Error"));
-
-        let expected = r#":: core :: compile_error ! { "First Error" }"#;
-        let received = existing
-            .expect("expected error")
-            .to_compile_error()
-            .to_string();
-        assert_eq!(expected, received);
-
-        let expected = r#":: core :: compile_error ! { "Second Error" }"#;
-        let received = collector
-            .try_throw()
-            .expect_err("expected error")
-            .to_compile_error()
-            .to_string();
-        assert_eq!(expected, received);
-    }
-
-    #[test]
     fn should_take() {
-        let mut collector = OptionalError::new(Error::new(Span::call_site(), "First Error"));
+        let mut collector = OptionalError(Some(Error::new(Span::call_site(), "First Error")));
         let existing = collector.take();
 
         let expected = r#":: core :: compile_error ! { "First Error" }"#;

@@ -2,7 +2,8 @@ use crate::cli::config::commands::*;
 use crate::cli::config::config_key::*;
 use crate::command::*;
 use crate::ConfigError;
-use tedge_config::tedge_config_cli::new::ReadableKey;
+use tedge_config::new::ReadableKey;
+use tedge_config::new::WritableKey;
 use tedge_config::ConfigRepository;
 
 #[derive(clap::Subcommand, Debug)]
@@ -16,7 +17,7 @@ pub enum ConfigCmd {
     /// Set or update the provided configuration key with the given value
     Set {
         /// Configuration key. Run `tedge config list --doc` for available keys
-        key: ConfigKey,
+        key: WritableKey,
 
         /// Configuration value.
         value: String,
@@ -51,7 +52,7 @@ impl BuildCommand for ConfigCmd {
             }
             .into_boxed()),
             ConfigCmd::Set { key, value } => Ok(SetConfigCommand {
-                config_key: key,
+                key,
                 value,
                 config_repository,
             }

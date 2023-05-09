@@ -8,7 +8,6 @@ use darling::FromField;
 use darling::FromMeta;
 use syn::parse::Parse;
 use syn::punctuated::Punctuated;
-use syn::spanned::Spanned;
 use syn::Attribute;
 use syn::Token;
 
@@ -131,19 +130,6 @@ pub enum FieldDefault {
     FromOptionalPath(Punctuated<syn::Ident, syn::Token![.]>),
     Value(syn::Lit),
     None,
-}
-
-impl FieldDefault {
-    pub fn possible_span(&self) -> Option<proc_macro2::Span> {
-        match self {
-            Self::Variable(v) => Some(v.span()),
-            Self::FromPath(p) => Some(p.span()),
-            Self::FromOptionalPath(p) => Some(p.span()),
-            Self::Function(f) => Some(f.span()),
-            Self::Value(v) => Some(v.span()),
-            Self::None => None,
-        }
-    }
 }
 
 impl Parse for ConfigurableField {

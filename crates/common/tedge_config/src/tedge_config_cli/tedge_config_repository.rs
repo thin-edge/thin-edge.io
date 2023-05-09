@@ -47,6 +47,16 @@ impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
 }
 
 impl TEdgeConfigRepository {
+    pub fn update_toml_new(
+        &self,
+        update: &impl Fn(&mut new::TEdgeConfigDto) -> ConfigSettingResult<()>,
+    ) -> Result<(), TEdgeConfigError> {
+        let mut config = self.load_dto::<FileOnly>(self.toml_path())?;
+        update(&mut config)?;
+
+        self.store(&config)
+    }
+
     fn toml_path(&self) -> &Utf8Path {
         self.config_location.tedge_config_file_path()
     }
