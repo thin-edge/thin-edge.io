@@ -1,9 +1,17 @@
 use crate::error::SoftwareError;
 use crate::software::*;
 use download::DownloadInfo;
+use mqtt_channel::Topic;
 use nanoid::nanoid;
 use serde::Deserialize;
 use serde::Serialize;
+
+const SOFTWARE_LIST_REQUEST_TOPIC: &str = "tedge/commands/req/software/list";
+const SOFTWARE_LIST_RESPONSE_TOPIC: &str = "tedge/commands/res/software/list";
+const SOFTWARE_UPDATE_REQUEST_TOPIC: &str = "tedge/commands/req/software/update";
+const SOFTWARE_UPDATE_RESPONSE_TOPIC: &str = "tedge/commands/res/software/update";
+const DEVICE_RESTART_REQUEST_TOPIC: &str = "tedge/commands/req/control/restart";
+const DEVICE_RESTART_RESPONSE_TOPIC: &str = "tedge/commands/res/control/restart";
 
 /// All the messages are serialized using json.
 pub trait Jsonify<'a>
@@ -57,8 +65,8 @@ impl SoftwareListRequest {
         SoftwareListRequest { id: id.to_string() }
     }
 
-    pub fn topic_name() -> &'static str {
-        "tedge/commands/req/software/list"
+    pub fn topic() -> Topic {
+        Topic::new_unchecked(SOFTWARE_LIST_REQUEST_TOPIC)
     }
 }
 
@@ -91,8 +99,8 @@ impl SoftwareUpdateRequest {
         }
     }
 
-    pub fn topic_name() -> &'static str {
-        "tedge/commands/req/software/update"
+    pub fn topic() -> Topic {
+        Topic::new_unchecked(SOFTWARE_UPDATE_REQUEST_TOPIC)
     }
 
     pub fn add_update(&mut self, mut update: SoftwareModuleUpdate) {
@@ -204,8 +212,8 @@ impl SoftwareListResponse {
         }
     }
 
-    pub fn topic_name() -> &'static str {
-        "tedge/commands/res/software/list"
+    pub fn topic() -> Topic {
+        Topic::new_unchecked(SOFTWARE_LIST_RESPONSE_TOPIC)
     }
 
     pub fn add_modules(&mut self, plugin_type: &str, modules: Vec<SoftwareModule>) {
@@ -256,8 +264,8 @@ impl SoftwareUpdateResponse {
         }
     }
 
-    pub fn topic_name() -> &'static str {
-        "tedge/commands/res/software/update"
+    pub fn topic() -> Topic {
+        Topic::new_unchecked(SOFTWARE_UPDATE_RESPONSE_TOPIC)
     }
 
     pub fn add_modules(&mut self, plugin_type: &str, modules: Vec<SoftwareModule>) {
@@ -492,8 +500,8 @@ impl RestartOperationRequest {
         RestartOperationRequest { id: id.to_string() }
     }
 
-    pub fn topic_name() -> &'static str {
-        "tedge/commands/req/control/restart"
+    pub fn topic() -> Topic {
+        Topic::new_unchecked(DEVICE_RESTART_REQUEST_TOPIC)
     }
 }
 
@@ -517,8 +525,8 @@ impl RestartOperationResponse {
         Self { status, ..self }
     }
 
-    pub fn topic_name() -> &'static str {
-        "tedge/commands/res/control/restart"
+    pub fn topic() -> Topic {
+        Topic::new_unchecked(DEVICE_RESTART_RESPONSE_TOPIC)
     }
 
     pub fn status(&self) -> OperationStatus {

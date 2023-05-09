@@ -291,7 +291,12 @@ pub fn change_user_and_group(file: &Path, user: &str, group: &str) -> Result<(),
 
     // if user and group are same as existing, then do not change
     if (ud != uid) && (gd != gid) {
-        chown(file, Some(Uid::from_raw(ud)), Some(Gid::from_raw(gd)))?;
+        chown(file, Some(Uid::from_raw(ud)), Some(Gid::from_raw(gd))).map_err(|e| {
+            FileError::MetaDataError {
+                name: file.display().to_string(),
+                from: e.into(),
+            }
+        })?;
     }
 
     Ok(())
@@ -306,7 +311,10 @@ fn change_user(file: &Path, user: &str) -> Result<(), FileError> {
 
     // if user is same as existing, then do not change
     if ud != uid {
-        chown(file, Some(Uid::from_raw(ud)), None)?;
+        chown(file, Some(Uid::from_raw(ud)), None).map_err(|e| FileError::MetaDataError {
+            name: file.display().to_string(),
+            from: e.into(),
+        })?;
     }
 
     Ok(())
@@ -323,7 +331,10 @@ fn change_group(file: &Path, group: &str) -> Result<(), FileError> {
 
     // if group is same as existing, then do not change
     if gd != gid {
-        chown(file, None, Some(Gid::from_raw(gd)))?;
+        chown(file, None, Some(Gid::from_raw(gd))).map_err(|e| FileError::MetaDataError {
+            name: file.display().to_string(),
+            from: e.into(),
+        })?;
     }
 
     Ok(())

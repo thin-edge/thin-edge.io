@@ -137,6 +137,10 @@ impl MeasurementVisitor for ThinEdgeJsonSerializer {
         self.is_within_group = false;
         Ok(())
     }
+
+    fn visit_text_property(&mut self, _name: &str, _value: &str) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

@@ -1,4 +1,0 @@
-Invalid JSON: Invalid measurement name: "type" is a reserved word. at line 3 column 8: `": 40,
-  "pressure": 220
-}
-`

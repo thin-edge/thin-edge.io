@@ -25,7 +25,8 @@ fn main() -> anyhow::Result<()> {
     let opt = cli::Opt::parse();
 
     if opt.init {
-        initialize_tedge(&opt.config_dir)?;
+        initialize_tedge(&opt.config_dir)
+            .with_context(|| "Failed to initialize tedge. You have to run tedge with sudo.")?;
         return Ok(());
     }
 

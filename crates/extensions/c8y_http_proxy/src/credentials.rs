@@ -29,7 +29,9 @@ impl C8YJwtRetriever {
         mqtt_config: mqtt_channel::Config,
     ) -> ServerActorBuilder<C8YJwtRetriever, Sequential> {
         let server = C8YJwtRetriever {
-            mqtt_config: mqtt_config.with_subscriptions(TopicFilter::new_unchecked("c8y/s/dat")),
+            mqtt_config: mqtt_config
+                .with_no_session() // Ignore any already published tokens, possibly stale.
+                .with_subscriptions(TopicFilter::new_unchecked("c8y/s/dat")),
         };
         ServerActorBuilder::new(server, &ServerConfig::default(), Sequential)
     }

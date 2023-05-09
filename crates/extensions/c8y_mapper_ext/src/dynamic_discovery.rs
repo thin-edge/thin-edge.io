@@ -1,10 +1,9 @@
-use std::path::Path;
-use std::path::PathBuf;
-
 use c8y_api::smartrest::operations::is_valid_operation_name;
 use serde::Deserialize;
 use serde::Serialize;
-use tedge_utils::notify::FsEvent;
+use std::path::Path;
+use std::path::PathBuf;
+use tedge_file_system_ext::FsWatchEvent;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum EventType {
@@ -30,7 +29,7 @@ pub enum DynamicDiscoverOpsError {
 
 pub fn process_inotify_events(
     path: &Path,
-    mask: FsEvent,
+    mask: FsWatchEvent,
 ) -> Result<Option<DiscoverOp>, DynamicDiscoverOpsError> {
     let operation_name = path
         .file_name()
@@ -43,12 +42,12 @@ pub fn process_inotify_events(
 
     if is_valid_operation_name(operation_name) {
         match mask {
-            FsEvent::FileDeleted => Ok(Some(DiscoverOp {
+            FsWatchEvent::FileDeleted(_) => Ok(Some(DiscoverOp {
                 ops_dir: parent_dir.to_path_buf(),
                 event_type: EventType::Remove,
                 operation_name: operation_name.to_string(),
             })),
-            FsEvent::FileCreated | FsEvent::Modified => Ok(Some(DiscoverOp {
+            FsWatchEvent::FileCreated(_) | FsWatchEvent::Modified(_) => Ok(Some(DiscoverOp {
                 ops_dir: parent_dir.to_path_buf(),
                 event_type: EventType::Add,
                 operation_name: operation_name.to_string(),

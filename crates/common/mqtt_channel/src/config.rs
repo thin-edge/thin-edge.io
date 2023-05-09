@@ -180,6 +180,15 @@ impl Config {
         }
     }
 
+    /// Unset the session name and clear the session
+    pub fn with_no_session(self) -> Self {
+        Self {
+            session_name: None,
+            clean_session: true,
+            ..self
+        }
+    }
+
     /// Add a list of topics to subscribe to on connect
     ///
     /// Can be called several times to subscribe to many topics.

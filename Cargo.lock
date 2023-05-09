@@ -478,7 +478,7 @@ dependencies = [
  "anyhow",
  "c8y_config_manager",
  "c8y_http_proxy",
- "clap 3.2.23",
+ "clap 3.2.25",
  "tedge_actors",
  "tedge_config",
  "tedge_file_system_ext",
@@ -522,7 +522,7 @@ dependencies = [
  "anyhow",
  "c8y_firmware_manager",
  "c8y_http_proxy",
- "clap 3.2.23",
+ "clap 3.2.25",
  "tedge_actors",
  "tedge_config",
  "tedge_downloader_ext",
@@ -541,7 +541,7 @@ dependencies = [
  "anyhow",
  "c8y_http_proxy",
  "c8y_log_manager",
- "clap 3.2.23",
+ "clap 3.2.25",
  "tedge_actors",
  "tedge_config",
  "tedge_file_system_ext",
@@ -712,6 +712,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "c8y_mapper_ext"
+version = "0.10.0"
+dependencies = [
+ "anyhow",
+ "assert-json-diff",
+ "assert_cmd",
+ "assert_matches",
+ "async-trait",
+ "c8y_api",
+ "c8y_http_proxy",
+ "camino",
+ "clock",
+ "json-writer",
+ "logged_command",
+ "plugin_sm",
+ "proptest",
+ "rand",
+ "serde",
+ "serde_json",
+ "tedge_actors",
+ "tedge_api",
+ "tedge_config",
+ "tedge_file_system_ext",
+ "tedge_http_ext",
+ "tedge_mqtt_ext",
+ "tedge_test_utils",
+ "tedge_timer_ext",
+ "tedge_utils",
+ "test-case",
+ "thiserror",
+ "time",
+ "tokio",
+ "toml 0.5.11",
+ "tracing",
+]
+
+[[package]]
 name = "cache-padded"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -782,13 +819,13 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.2.23"
+version = "3.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71655c45cb9845d3270c9d6df84ebe72b4dad3c2ba3f7023ad47c144e4e473a5"
+checksum = "4ea181bf566f71cb9a5d17a59e1871af638180a18fb0035c92ae62b705207123"
 dependencies = [
  "atty",
  "bitflags",
- "clap_derive 3.2.18",
+ "clap_derive 3.2.25",
  "clap_lex 0.2.4",
  "indexmap",
  "once_cell",
@@ -824,9 +861,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "3.2.18"
+version = "3.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea0c8bce528c4be4da13ea6fead8965e95b6073585a2f05204bd8f4119f82a65"
+checksum = "ae6371b8bdc8b7d3959e9cf7b22d4435ef3e79e138688421ec654acf8c81b008"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -2192,6 +2229,7 @@ dependencies = [
  "certificate",
  "fastrand",
  "futures",
+ "log",
  "mqtt_tests",
  "rumqttc",
  "serial_test",
@@ -3607,7 +3645,7 @@ dependencies = [
  "base64 0.13.1",
  "camino",
  "certificate",
- "clap 3.2.23",
+ "clap 3.2.25",
  "hyper",
  "mockito",
  "mqtt_tests",
@@ -3641,7 +3679,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "camino",
- "clap 3.2.23",
+ "clap 3.2.25",
  "flockfile",
  "futures",
  "futures-util",
@@ -3675,7 +3713,7 @@ name = "tedge-apt-plugin"
 version = "0.10.0"
 dependencies = [
  "anyhow",
- "clap 3.2.23",
+ "clap 3.2.25",
  "csv",
  "hamcrest2",
  "reqwest",
@@ -3690,7 +3728,7 @@ dependencies = [
 name = "tedge-dummy-plugin"
 version = "0.10.0"
 dependencies = [
- "clap 3.2.23",
+ "clap 3.2.25",
  "thiserror",
 ]
 
@@ -3699,48 +3737,27 @@ name = "tedge-mapper"
 version = "0.10.0"
 dependencies = [
  "anyhow",
- "assert-json-diff",
- "assert_cmd",
- "assert_matches",
  "async-trait",
  "aws_mapper_ext",
  "az_mapper_ext",
  "batcher",
- "c8y_api",
- "clap 3.2.23",
+ "c8y_http_proxy",
+ "c8y_mapper_ext",
+ "clap 3.2.25",
  "clock",
  "collectd_ext",
- "csv",
- "download",
  "flockfile",
- "futures",
- "json-writer",
- "logged_command",
- "mockall",
- "mockito",
  "mqtt_channel",
- "mqtt_tests",
- "plugin_sm",
- "proptest",
- "rand",
- "reqwest",
- "serde",
- "serde_json",
- "serial_test",
  "tedge_actors",
- "tedge_api",
  "tedge_config",
+ "tedge_file_system_ext",
  "tedge_health_ext",
+ "tedge_http_ext",
  "tedge_mqtt_ext",
  "tedge_signal_ext",
- "tedge_test_utils",
+ "tedge_timer_ext",
  "tedge_utils",
- "test-case",
- "thiserror",
- "time",
  "tokio",
- "tokio-test",
- "toml 0.5.11",
  "tracing",
 ]
 
@@ -3749,7 +3766,7 @@ name = "tedge-watchdog"
 version = "0.10.0"
 dependencies = [
  "anyhow",
- "clap 3.2.23",
+ "clap 3.2.25",
  "freedesktop_entry_parser",
  "futures",
  "mqtt_channel",
@@ -3927,9 +3944,11 @@ dependencies = [
 name = "tedge_mqtt_ext"
 version = "0.10.0"
 dependencies = [
+ "assert-json-diff",
  "async-trait",
  "mqtt_channel",
  "mqtt_tests",
+ "serde_json",
  "tedge_actors",
  "tokio",
 ]
@@ -3980,6 +3999,7 @@ dependencies = [
  "assert_matches",
  "futures",
  "maplit",
+ "mqtt_channel",
  "nix",
  "notify",
  "strum_macros",

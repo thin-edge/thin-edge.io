@@ -78,6 +78,10 @@ impl Actor for C8YHttpProxyActor {
 
         while let Some((client_id, request)) = self.peers.clients.recv().await {
             let result = match request {
+                C8YRestRequest::GetJwtToken(_) => {
+                    self.get_jwt_token().await.map(|response| response.into())
+                }
+
                 C8YRestRequest::C8yCreateEvent(request) => self
                     .create_event(request)
                     .await
@@ -203,9 +207,16 @@ impl C8YHttpProxyActor {
 
     async fn send_software_list_http(
         &mut self,
-        _request: C8yUpdateSoftwareListResponse,
+        software_list: C8yUpdateSoftwareListResponse,
     ) -> Result<Unit, C8YRestError> {
-        todo!()
+        let url = self.end_point.get_url_for_sw_list();
+        let req_builder = HttpRequestBuilder::put(url)
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .json(&software_list);
+        let http_result = self.execute(req_builder).await?;
+        let _ = http_result.error_for_status()?;
+        Ok(())
     }
 
     async fn upload_log_binary(

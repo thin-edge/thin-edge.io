@@ -461,14 +461,19 @@ class ThinEdgeIO(DeviceLibrary):
         minimum: int = 1,
         maximum: int = None,
         message_pattern: str = None,
+        message_contains: str = None,
         **kwargs,
     ) -> List[Dict[str, Any]]:
         # log.info("Checking mqtt messages for topic: %s", topic)
+        if message_contains:
+            message_pattern = re.escape(message_contains)
+
         items = self.mqtt_match_messages(
             topic=topic,
             date_from=date_from,
             date_to=date_to,
             message_pattern=message_pattern,
+            message_contains=message_contains,
             **kwargs,
         )
 
@@ -496,6 +501,8 @@ class ThinEdgeIO(DeviceLibrary):
         topic: str,
         date_from: relativetime_ = None,
         date_to: relativetime_ = None,
+        message_pattern: str = None,
+        message_contains: str = None,
         minimum: int = 1,
         maximum: int = None,
         **kwargs,
@@ -503,10 +510,25 @@ class ThinEdgeIO(DeviceLibrary):
         """
         Check for the presence of a topic
 
+        Note: If any argument is set to None, then it will be ignored in the filtering.
+
+        Args:
+            topic (str): Filter by topic. Supports MQTT wildcard patterns
+            date_from (relativetime_, optional): Date from filter. Accepts
+                relative or epoch time
+            date_to (relativetime_, optional): Date to filter. Accepts
+                relative or epoch time
+            message_pattern (str, optional): Only include MQTT messages matching a regular expression
+            message_contains (str, optional): Only include MQTT messages containing a given string
+            minimum (int, optional): Minimum number of message to expect. Defaults to 1
+            maximum (int, optional): Maximum number of message to expect. Defaults to None
+
         *Examples:*
 
-        | ${listen}= | | | | | `Should Have MQTT Message` | | | | |  topic=tedge/${CHILD_SN}/commands/req/config_snapshot | | | | | date_from=-5s |
-        | ${messages}= | | | | | `Should Have MQTT Message` | | | | |  tedge/health/c8y-log-plugin | | | | | minimum=1 | | | | |minimum=2 |
+        | ${listen}= | `Should Have MQTT Message` | topic=tedge/${CHILD_SN}/commands/req/config_snapshot | date_from=-5s |
+        | ${messages}= | `Should Have MQTT Message` | tedge/health/c8y-log-plugin | minimum=1 | minimum=2 |
+        | ${messages}= | `Should Have MQTT Message` | tedge/health/c8y-log-plugin | minimum=1 | minimum=2 | message_contains="time" |
+        | ${messages}= | `Should Have MQTT Message` | tedge/health/c8y-log-plugin | minimum=1 | minimum=2 | message_pattern="value":\s*\d+ |
         """
         result = self._assert_mqtt_topic_messages(
             topic,
@@ -514,6 +536,8 @@ class ThinEdgeIO(DeviceLibrary):
             date_to=date_to,
             minimum=minimum,
             maximum=maximum,
+            message_pattern=message_pattern,
+            message_contains=message_contains,
             **kwargs,
         )
         return result

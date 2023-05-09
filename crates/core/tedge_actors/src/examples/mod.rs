@@ -1,4 +1,4 @@
-//! Let's start by implementing a client actor for the calculator server actor.
+//! Let's implement a client actor for the calculator server actor.
 //!
 //! ```
 //! # use async_trait::async_trait;
@@ -44,7 +44,7 @@
 //!
 //! ```
 //! # use tedge_actors::{Actor, Builder, ChannelError, MessageReceiver, Sender, ServiceConsumer, NoConfig, ServerActor, ServerMessageBox, ServerMessageBoxBuilder, SimpleMessageBox, SimpleMessageBoxBuilder};
-//! # use crate::tedge_actors::examples::calculator::*;
+//! # use crate::tedge_actors::examples::calculator_server::*;
 //! # #[tokio::main]
 //! # async fn main_test() -> Result<(),ChannelError> {
 //! #
@@ -73,14 +73,7 @@
 //! let mut player_2_box = player_2_box_builder.build();
 //!
 //! // Then spawn the server
-//! // TODO: Speak to Didier
-//! //   I've moved the message box from the actor trait and the run method no longer takes a message box  
-//! //   the Calculator impls actor so I've added a new that takes a message box but it also impls server
-//! //   using server means the Calculator can handle requests without having a message box
-//! //   which is a problem because if you want to use Calculator as a server then you shouldn't need to have a message box to construct the Calculator
-//! //   but if you construct without a message box then using calculator by calling Actor::run wont work so what should be done?
-//! let mut calculator_box = SimpleMessageBoxBuilder::new("Calculator - REMOVE ME", 16).build();
-//! let server = Calculator::new(calculator_box);
+//! let server = Calculator::default();
 //! tokio::spawn(async move { ServerActor::new(server, server_box).run().await } );
 //!
 //! // And use the players' boxes to interact with the server actor.
@@ -105,3 +98,4 @@
 //! # }
 //! ```
 pub mod calculator;
+pub mod calculator_server;

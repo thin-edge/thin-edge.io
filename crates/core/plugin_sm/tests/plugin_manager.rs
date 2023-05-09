@@ -93,7 +93,6 @@ mod tests {
         let (_, _path) = plugin2.keep().unwrap();
 
         let plugin_dir = temp_dir.path().to_owned();
-        dbg!(&plugin_dir);
 
         // Call open and load to register all plugins from given directory.
         let mut plugins = ExternalPlugins::open(plugin_dir, None, None).unwrap();
