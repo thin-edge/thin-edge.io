@@ -1,6 +1,12 @@
 use camino::Utf8PathBuf;
 use tedge_config_macros::*;
 
+#[derive(thiserror::Error, Debug)]
+pub enum ReadError {
+    #[error(transparent)]
+    ConfigNotSet(#[from] ConfigNotSet),
+}
+
 #[test]
 fn root_cert_path_default() {
     const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";

@@ -1,35 +1,33 @@
-use crate::cli::config::ConfigKey;
+use tedge_config::tedge_config_cli::new::ReadableKey;
+
 use crate::command::Command;
 
 pub struct GetConfigCommand {
-    pub config_key: ConfigKey,
-    pub config: tedge_config::TEdgeConfig,
+    pub key: ReadableKey,
+    pub config: tedge_config::new::TEdgeConfig,
 }
 
 impl Command for GetConfigCommand {
     fn description(&self) -> String {
         format!(
-            "get the configuration value for key: {}",
-            self.config_key.key
+            "get the configuration value for key: '{}'",
+            self.key.as_str()
         )
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        match (self.config_key.get)(&self.config) {
+        match self.config.read_string(self.key) {
             Ok(value) => {
                 println!("{}", value);
             }
-            Err(tedge_config::ConfigSettingError::ConfigNotSet { .. }) => {
+            Err(tedge_config::new::ReadError::ConfigNotSet { .. }) => {
                 eprintln!(
                     "The provided config key: '{}' is not set",
-                    self.config_key.key
+                    self.key.as_str()
                 );
             }
-            Err(tedge_config::ConfigSettingError::SettingIsNotConfigurable { .. }) => {
-                eprintln!(
-                    "The provided config key: '{}' is not configurable",
-                    self.config_key.key
-                );
+            Err(tedge_config::new::ReadError::ReadOnlyNotFound { message, key }) => {
+                eprintln!("The provided config key: '{key}' is not configured: {message}",);
             }
             Err(err) => return Err(err.into()),
         }

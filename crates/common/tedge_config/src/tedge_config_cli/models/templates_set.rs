@@ -7,6 +7,12 @@ use std::convert::TryInto;
 #[serde(from = "FromTomlOrCli")]
 pub struct TemplatesSet(pub Vec<String>);
 
+impl doku::Document for TemplatesSet {
+    fn ty() -> doku::Type {
+        Vec::<String>::ty()
+    }
+}
+
 #[derive(serde::Deserialize)]
 #[serde(from = "String")]
 struct CommaDelimited(Vec<String>);

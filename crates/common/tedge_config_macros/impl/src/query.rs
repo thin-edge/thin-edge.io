@@ -1,10 +1,11 @@
 use heck::ToUpperCamelCase;
 use proc_macro2::TokenStream;
 use quote::quote;
+use quote::quote_spanned;
 use std::collections::VecDeque;
 use syn::parse_quote;
-use syn::Field;
 
+use crate::error::extract_type_from_result;
 use crate::input::ConfigurableField;
 use crate::input::FieldOrGroup;
 
@@ -29,11 +30,13 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     let readonly_args = configuration_strings(paths.iter().filter(|path| !is_read_write(path)));
     let writable_args = configuration_strings(paths.iter().filter(|path| is_read_write(path)));
     let readable_keys = keys_enum(parse_quote!(ReadableKey), &readable_args);
-    let readonly_keys = keys_enum(parse_quote!(ReadonlyKey), &readonly_args);
+    let readonly_keys = keys_enum(parse_quote!(ReadOnlyKey), &readonly_args);
     let writable_keys = keys_enum(parse_quote!(WritableKey), &writable_args);
     let fromstr_readable = generate_fromstr_readable(parse_quote!(ReadableKey), &readable_args);
-    let fromstr_readonly = generate_fromstr_readable(parse_quote!(ReadonlyKey), &readonly_args);
+    let fromstr_readonly = generate_fromstr_readable(parse_quote!(ReadOnlyKey), &readonly_args);
     let fromstr_writable = generate_fromstr_writable(parse_quote!(WritableKey), &writable_args);
+    let read_string = generate_readers(&paths);
+    let (static_alias, updated_key) = alternate_keys(paths.iter());
 
     quote! {
         #readable_keys
@@ -42,8 +45,9 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
         #fromstr_readable
         #fromstr_readonly
         #fromstr_writable
+        #read_string
 
-        impl ReadonlyKey {
+        impl ReadOnlyKey {
             fn write_error(self) -> &'static str {
                 match self {
                     #(
@@ -51,6 +55,14 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
                     )*
                 }
             }
+        }
+
+        #[derive(Debug, ::thiserror::Error)]
+        pub enum ParseKeyError {
+            #[error("{}", .0.write_error())]
+            ReadOnly(ReadOnlyKey),
+            #[error("Unknown key: '{0}'")]
+            Unrecognised(String),
         }
 
         fn replace_aliases(key: String) -> String {
@@ -63,13 +75,32 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
                 let ty = TEdgeConfigReader::ty();
                 let TypeKind::Struct { fields, transparent: false } = ty.kind else { panic!("Expected struct but got {:?}", ty.kind) };
                 let Fields::Named { fields } = fields else { panic!("Expected named fields but got {:?}", fields)};
-                struct_field_aliases(None, &fields)
+                let mut aliases = struct_field_aliases(None, &fields);
+                #(
+                    if let Some(alias) = aliases.insert(Cow::Borrowed(#static_alias), Cow::Borrowed(ReadableKey::#updated_key.as_str())) {
+                        panic!("Duplicate configuration alias for '{}'. It maps to both '{}' and '{}'. Perhaps you provided an incorrect `alternate_key` for one of these configurations?", #static_alias, alias, ReadableKey::#updated_key.as_str());
+                    }
+                )*
+                aliases
             });
 
             ALIASES
                 .get(&Cow::Borrowed(key.as_str()))
                 .map(|c| c.clone().into_owned())
                 .unwrap_or(key)
+        }
+
+        fn warn_about_deprecated_key(deprecated_key: String, updated_key: &'static str) {
+            use ::once_cell::sync::Lazy;
+            use ::std::sync::Mutex;
+            use ::std::collections::HashSet;
+
+            static WARNINGS: Lazy<Mutex<HashSet<String>>> = Lazy::new(<_>::default);
+
+            let warning = format!("The key '{}' is deprecated. Use '{}' instead.", deprecated_key, updated_key);
+            if WARNINGS.lock().unwrap().insert(deprecated_key) {
+                ::tracing::warn!("{}", warning);
+            }
         }
     }
 }
@@ -91,22 +122,45 @@ fn configuration_strings<'a>(
         .unzip()
 }
 
+fn alternate_keys<'a>(
+    variants: impl Iterator<Item = &'a VecDeque<&'a FieldOrGroup>>,
+) -> (Vec<&'a str>, Vec<syn::Ident>) {
+    variants
+        .flat_map(|segments| {
+            segments
+                .back()
+                .unwrap()
+                .field()
+                .unwrap()
+                .alternate_keys()
+                .iter()
+                .map(|key| (key.as_str(), variant_name(segments)))
+        })
+        .unzip()
+}
+
 fn generate_fromstr(
     type_name: syn::Ident,
     (configuration_string, variant_name): &(Vec<String>, Vec<syn::Ident>),
     error_case: syn::Arm,
 ) -> TokenStream {
-    let simplified_configuration_string = configuration_string.iter().map(|s| s.replace('.', "_"));
+    let simplified_configuration_string = configuration_string
+        .iter()
+        .map(|s| s.replace('.', "_"))
+        .zip(variant_name.iter())
+        .map(|(s, v)| quote_spanned!(v.span()=> #s));
 
     quote! {
         impl ::std::str::FromStr for #type_name {
-            type Err = String;
+            type Err = ParseKeyError;
             fn from_str(value: &str) -> Result<Self, Self::Err> {
+                // If we get an unreachable pattern, it means we have the same key twice
+                #[deny(unreachable_patterns)]
                 match replace_aliases(value.to_owned()).replace(".", "_").as_str() {
                     #(
                         #simplified_configuration_string => {
                             if (value != #configuration_string) {
-                                ::tracing::warn!("The key '{}' is deprecated. Use '{}' instead.", value, #configuration_string);
+                                warn_about_deprecated_key(value.to_owned(), #configuration_string);
                             }
                             Ok(Self::#variant_name)
                         },
@@ -118,19 +172,19 @@ fn generate_fromstr(
     }
 }
 
-fn generate_fromstr_readable<'a>(
+fn generate_fromstr_readable(
     type_name: syn::Ident,
     fields: &(Vec<String>, Vec<syn::Ident>),
 ) -> TokenStream {
     generate_fromstr(
         type_name,
         fields,
-        parse_quote! { _ => Err(format!("unknown key: '{}'", value)) },
+        parse_quote! { _ => Err(ParseKeyError::Unrecognised(value.to_owned())) },
     )
 }
 
 // TODO test the error messages actually appear
-fn generate_fromstr_writable<'a>(
+fn generate_fromstr_writable(
     type_name: syn::Ident,
     fields: &(Vec<String>, Vec<syn::Ident>),
 ) -> TokenStream {
@@ -138,21 +192,21 @@ fn generate_fromstr_writable<'a>(
         type_name,
         fields,
         parse_quote! {
-            _ => if let Ok(key) = <ReadonlyKey as ::std::str::FromStr>::from_str(value) {
-                Err(key.write_error().to_owned())
+            _ => if let Ok(key) = <ReadOnlyKey as ::std::str::FromStr>::from_str(value) {
+                Err(ParseKeyError::ReadOnly(key))
             } else {
-                Err(format!("unknown key: '{}'", value))
+                Err(ParseKeyError::Unrecognised(value.to_owned()))
             },
         },
     )
 }
 
-fn keys_enum<'a>(
+fn keys_enum(
     type_name: syn::Ident,
     (configuration_string, variant_name): &(Vec<String>, Vec<syn::Ident>),
 ) -> TokenStream {
     quote! {
-        #[derive(Copy, Clone)]
+        #[derive(Copy, Clone, Debug, PartialEq, Eq)]
         #[non_exhaustive]
         #[allow(unused)]
         pub enum #type_name {
@@ -173,6 +227,53 @@ fn keys_enum<'a>(
     }
 }
 
+fn generate_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
+    let variant_names = paths.iter().map(variant_name);
+    let arms = paths
+        .iter()
+        .zip(variant_names)
+        .map(|(path, variant_name)| -> syn::Arm {
+            let field = path
+                .back()
+                .expect("Path must have a back as it is nonempty")
+                .field()
+                .expect("Back of path is guaranteed to be a field");
+            let segments = path.iter().map(|thing| thing.ident());
+            if field.read_only().is_some() {
+                if extract_type_from_result(field.ty()).is_some() {
+                    parse_quote! {
+                        // Probably where the compiler error appears
+                        // TODO why do we need to unwrap
+                        ReadableKey::#variant_name => Ok(self.#(#segments).*.try_read(self)?.to_string()),
+                    }
+                } else {
+                    parse_quote! {
+                        // Probably where the compiler error appears
+                        // TODO why do we need to unwrap
+                        ReadableKey::#variant_name => Ok(self.#(#segments).*.read(self).to_string()),
+                    }
+                }
+            } else if field.has_guaranteed_default() {
+                parse_quote! {
+                    ReadableKey::#variant_name => Ok(self.#(#segments).*.to_string()),
+                }
+            } else {
+                parse_quote! {
+                    ReadableKey::#variant_name => Ok(self.#(#segments).*.or_err()?.to_string()),
+                }
+            }
+        });
+    quote! {
+        impl TEdgeConfigReader {
+            pub fn read_string(&self, key: ReadableKey) -> Result<String, ReadError> {
+                match key {
+                    #(#arms)*
+                }
+            }
+        }
+    }
+}
+
 fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> syn::Ident {
     syn::Ident::new(
         &segments
@@ -187,7 +288,7 @@ fn variant_name(segments: &VecDeque<&FieldOrGroup>) -> syn::Ident {
 /// configuration
 fn configuration_paths_from(items: &[FieldOrGroup]) -> Vec<VecDeque<&FieldOrGroup>> {
     let mut res = vec![];
-    for item in items {
+    for item in items.iter().filter(|item| !item.reader().skip) {
         match item {
             FieldOrGroup::Field(_) => res.push(VecDeque::from([item])),
             FieldOrGroup::Group(group) => {

@@ -108,6 +108,8 @@ pub struct ConfigurableField {
     pub dto: FieldDtoSettings,
     #[darling(default)]
     pub rename: Option<SpannedValue<String>>,
+    #[darling(multiple, rename = "alternate_key")]
+    pub alternate_keys: Vec<String>,
     #[darling(default)]
     // TODO remove this or separate it from the group ones
     pub reader: ReaderSettings,
@@ -126,6 +128,7 @@ pub enum FieldDefault {
     Variable(syn::Path),
     Function(syn::Expr),
     FromPath(Punctuated<syn::Ident, syn::Token![.]>),
+    FromOptionalPath(Punctuated<syn::Ident, syn::Token![.]>),
     Value(syn::Lit),
     None,
 }
@@ -135,6 +138,7 @@ impl FieldDefault {
         match self {
             Self::Variable(v) => Some(v.span()),
             Self::FromPath(p) => Some(p.span()),
+            Self::FromOptionalPath(p) => Some(p.span()),
             Self::Function(f) => Some(f.span()),
             Self::Value(v) => Some(v.span()),
             Self::None => None,
@@ -166,6 +170,8 @@ pub struct FieldDtoSettings {
 pub struct ReaderSettings {
     #[darling(default)]
     pub private: bool,
+    #[darling(default)]
+    pub skip: bool,
 }
 
 #[derive(FromMeta, Debug)]

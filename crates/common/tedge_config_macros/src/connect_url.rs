@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::fmt;
 use std::str::FromStr;
 use url::Host;
 
@@ -47,6 +48,12 @@ impl FromStr for ConnectUrl {
 impl ConnectUrl {
     pub fn as_str(&self) -> &str {
         self.input.as_str()
+    }
+}
+
+impl fmt::Display for ConnectUrl {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.input.fmt(f)
     }
 }
 

@@ -1,5 +1,11 @@
 use tedge_config_macros::*;
 
+#[derive(thiserror::Error, Debug)]
+pub enum ReadError {
+    #[error(transparent)]
+    ConfigNotSet(#[from] ConfigNotSet),
+}
+
 #[test]
 fn vacant_optional_configurations_contain_the_relevant_key() {
     define_tedge_config! {

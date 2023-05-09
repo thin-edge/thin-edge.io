@@ -12,6 +12,7 @@ use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::Token;
 
+use crate::error::extract_type_from_result;
 use crate::input::ConfigurableField;
 use crate::input::FieldDefault;
 use crate::input::FieldOrGroup;
@@ -40,7 +41,6 @@ fn generate_structs(
     let mut sub_readers = Vec::new();
     let mut attrs: Vec<Vec<syn::Attribute>> = Vec::new();
     let mut lazy_readers = Vec::new();
-    let mut lazy_reader_functions = Vec::new();
 
     for item in items {
         match item {
@@ -48,19 +48,18 @@ fn generate_structs(
                 let ty = field.ty();
                 attrs.push(field.attrs().to_vec());
                 idents.push(field.ident());
-                if Some(&FieldDefault::None) == field.read_write().map(|f| &f.default) {
+                if field.is_optional() {
                     tys.push(parse_quote_spanned!(ty.span()=> OptionalConfig<#ty>));
                 } else if let Some(field) = field.read_only() {
                     let name = field.lazy_reader_name(&parents);
                     tys.push(parse_quote_spanned!(field.ty.span()=> #name));
-                    lazy_readers.push((name, &field.ty));
-                    lazy_reader_functions.push(&field.readonly.function);
+                    lazy_readers.push((name, &field.ty, &field.readonly.function));
                 } else {
                     tys.push(ty.to_owned());
                 }
                 sub_readers.push(None);
             }
-            FieldOrGroup::Group(group) => {
+            FieldOrGroup::Group(group) if !group.reader.skip => {
                 let sub_reader_name = prefixed_type_name(name, group);
                 idents.push(&group.ident);
                 tys.push(parse_quote_spanned!(group.ident.span()=> #sub_reader_name));
@@ -73,10 +72,43 @@ fn generate_structs(
                 )?));
                 attrs.push(group.attrs.to_vec());
             }
+            FieldOrGroup::Group(_) => {
+                // Skipped
+            }
         }
     }
 
-    let (lr_names, lr_tys): (Vec<_>, Vec<_>) = lazy_readers.into_iter().unzip();
+    let lazy_reader_impls = lazy_readers
+        .iter()
+        .map(|(name, ty, function)| -> syn::ItemImpl {
+            if let Some((ok, err)) = extract_type_from_result(ty) {
+                parse_quote_spanned! {name.span()=>
+                    impl #name {
+                        // TODO don't just guess we're called tedgeconfigreader
+                        pub fn try_read(&self, reader: &TEdgeConfigReader) -> Result<&#ok, #err> {
+                            self.0.get_or_try_init(|| #function(reader))
+                        }
+                    }
+                }
+            } else {
+                parse_quote_spanned! {name.span()=>
+                    impl #name {
+                        // TODO don't just guess we're called tedgeconfigreader
+                        pub fn read(&self, reader: &TEdgeConfigReader) -> &#ty {
+                            self.0.get_or_init(|| #function(reader))
+                        }
+                    }
+                }
+            }
+        });
+
+    let (lr_names, lr_tys): (Vec<_>, Vec<_>) = lazy_readers
+        .iter()
+        .map(|(name, ty, _)| match extract_type_from_result(ty) {
+            Some((ok, _err)) => (name, ok),
+            None => (name, *ty),
+        })
+        .unzip();
 
     Ok(quote! {
         #[derive(::doku::Document, ::serde::Serialize, Debug)]
@@ -94,17 +126,10 @@ fn generate_structs(
             pub struct #lr_names(::once_cell::sync::OnceCell<#lr_tys>);
 
             impl From<#lr_names> for () {
-                fn from(_: #lr_names) -> () {
-                    ()
-                }
+                fn from(_: #lr_names) -> () {}
             }
 
-            impl #lr_names {
-                // TODO don't just guess we're called tedgeconfigreader
-                pub fn read(&self, reader: &TEdgeConfigReader) -> &#lr_tys {
-                    self.0.get_or_init(|| #lazy_reader_functions(reader))
-                }
-            }
+            #lazy_reader_impls
         )*
 
         #(#sub_readers)*
@@ -208,8 +233,8 @@ fn reader_value_for_field<'a>(
                         .take()
                         .unwrap());
                 }
-                FieldDefault::FromPath(path) => {
-                    observed_paths.push(&path);
+                FieldDefault::FromPath(path) | FieldDefault::FromOptionalPath(path) => {
+                    observed_paths.push(path);
                     let default = reader_value_for_field(
                         find_field(root_fields, path)?,
                         &path
@@ -220,9 +245,16 @@ fn reader_value_for_field<'a>(
                         root_fields,
                         observed_paths,
                     )?;
+
+                    let value = if matches!(&field.default, FieldDefault::FromOptionalPath(_)) {
+                        quote!(OptionalConfig::Present { value: value.clone(), key: #key })
+                    } else {
+                        quote!(value.clone())
+                    };
+
                     quote_spanned! {name.span()=>
                         match &dto.#(#parents).*.#name {
-                            Some(value) => value.clone(),
+                            Some(value) => #value,
                             None => #default,
                         }
                     }
@@ -273,7 +305,7 @@ fn generate_conversions(
                 let value = reader_value_for_field(field, &parents, root_fields, Vec::new())?;
                 field_conversions.push(quote!(#name: #value));
             }
-            FieldOrGroup::Group(group) => {
+            FieldOrGroup::Group(group) if !group.reader.skip => {
                 let sub_reader_name = prefixed_type_name(name, group);
                 let name = &group.ident;
 
@@ -283,6 +315,9 @@ fn generate_conversions(
                 let sub_conversions =
                     generate_conversions(&sub_reader_name, &group.contents, parents, root_fields)?;
                 rest.push(sub_conversions);
+            }
+            FieldOrGroup::Group(_) => {
+                // Skipped
             }
         }
     }

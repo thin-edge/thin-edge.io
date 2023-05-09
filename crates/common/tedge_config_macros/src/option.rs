@@ -68,6 +68,13 @@ impl<T> OptionalConfig<T> {
             Self::Present { .. } => None,
         }
     }
+
+    pub fn as_ref(&self) -> OptionalConfig<&T> {
+        match self {
+            Self::Present { value, key } => OptionalConfig::Present { value, key },
+            Self::Empty(key) => OptionalConfig::Empty(key),
+        }
+    }
 }
 
 impl<T: doku::Document> doku::Document for OptionalConfig<T> {

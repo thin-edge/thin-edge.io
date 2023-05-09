@@ -1216,36 +1216,13 @@ checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "doku"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "966b1227ac4d9d77f4d7e9507dd01c56ceaec6e35888661b54319123da47b159"
-dependencies = [
- "doku-derive 0.20.0",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "doku"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b738a9a7942e6996e6df51b8a58db17105fe5a448112add828fc9ff93fcd6c8e"
 dependencies = [
- "doku-derive 0.21.0",
+ "doku-derive",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "doku-derive"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "252ec56116f931b050b5d80512c2c76f4807a297dd95a93f37593dd7650868a5"
-dependencies = [
- "darling 0.13.4",
- "proc-macro2 1.0.56",
- "quote 1.0.26",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -3834,12 +3811,14 @@ dependencies = [
  "assert_matches",
  "camino",
  "certificate",
- "doku 0.20.0",
+ "doku",
  "figment",
  "mqtt_channel",
+ "once_cell",
  "serde",
  "serde_ignored",
  "strum_macros",
+ "tedge_config_macros",
  "tedge_test_utils",
  "tedge_utils",
  "tempfile",
@@ -3856,7 +3835,7 @@ name = "tedge_config_macros"
 version = "0.1.0"
 dependencies = [
  "camino",
- "doku 0.21.0",
+ "doku",
  "once_cell",
  "serde",
  "tedge_config_macros-macro",

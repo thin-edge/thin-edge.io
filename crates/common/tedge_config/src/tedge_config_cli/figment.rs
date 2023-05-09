@@ -1,12 +1,16 @@
 use std::borrow::Cow;
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use figment::providers::Format;
 use figment::providers::Toml;
+use figment::value::Uncased;
 use figment::Figment;
 use figment::Metadata;
+use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 
 use crate::TEdgeConfigError;
@@ -28,10 +32,22 @@ impl ConfigSources for FileOnly {
     const INCLUDE_ENVIRONMENT: bool = false;
 }
 
+#[derive(Default)]
+#[must_use]
+pub struct UnusedValueWarnings(Vec<String>);
+
+impl UnusedValueWarnings {
+    pub fn emit(self) {
+        for warning in self.0 {
+            tracing::warn!("{warning}");
+        }
+    }
+}
+
 /// Extract the configuration data from the provided TOML path and `TEDGE_` prefixed environment variables
 pub fn extract_data<T: DeserializeOwned, Sources: ConfigSources>(
     path: impl AsRef<Path>,
-) -> Result<T, TEdgeConfigError> {
+) -> Result<(T, UnusedValueWarnings), TEdgeConfigError> {
     let env = TEdgeEnv::default();
     let figment = Figment::new().merge(Toml::file(path));
 
@@ -43,14 +59,18 @@ pub fn extract_data<T: DeserializeOwned, Sources: ConfigSources>(
 
     let data = extract_exact(&figment, &env);
 
-    for warning in unused_value_warnings::<T>(&figment, &env)
+    let warnings = unused_value_warnings::<T>(&figment, &env)
         .ok()
-        .unwrap_or_default()
-    {
-        tracing::warn!("{warning}");
-    }
+        .map(UnusedValueWarnings)
+        .unwrap_or_default();
 
-    data
+    match data {
+        Ok(data) => Ok((data, warnings)),
+        Err(e) => {
+            warnings.emit();
+            Err(e)
+        }
+    }
 }
 
 fn unused_value_warnings<T: DeserializeOwned>(
@@ -172,9 +192,27 @@ impl TEdgeEnv {
     }
 
     fn provider(&self) -> figment::providers::Env {
-        let pattern = self.separator;
-        figment::providers::Env::prefixed(self.prefix)
-            .map(move |name| name.as_str().replacen(pattern, ".", 1).into())
+        static WARNINGS: Lazy<Mutex<HashSet<String>>> = Lazy::new(<_>::default);
+        figment::providers::Env::prefixed(self.prefix).map(move |name| {
+            let lowercase_name = name.as_str().to_ascii_lowercase();
+            Uncased::new(
+                tracing::subscriber::with_default(
+                    tracing::subscriber::NoSubscriber::default(),
+                    || lowercase_name.parse::<crate::new::WritableKey>(),
+                )
+                .map(|key| key.as_str().to_owned())
+                .map_err(|err| {
+                    let is_read_only_key = matches!(err, crate::new::ParseKeyError::ReadOnly(_));
+                    if is_read_only_key && !WARNINGS.lock().unwrap().insert(lowercase_name.clone()) {
+                            tracing::error!(
+                                "Failed to configure tedge with environment variable `TEDGE_{name}`: {}",
+                                err.to_string().replace('\n', " ")
+                            )
+         }
+                })
+                .unwrap_or(lowercase_name),
+            )
+        })
     }
 }
 
@@ -212,6 +250,7 @@ mod tests {
             assert_eq!(
                 extract_data::<Config, FileAndEnvironment>(&PathBuf::from("tedge.toml"))
                     .unwrap()
+                    .0
                     .c8y
                     .url,
                 "override.c8y.io"
@@ -298,7 +337,7 @@ mod tests {
             jail.set_env(variable_name, "environment");
 
             let data = extract_data::<Config, FileOnly>("tedge.toml").unwrap();
-            assert_eq!(data.value, "config");
+            assert_eq!(data.0.value, "config");
             Ok(())
         })
     }

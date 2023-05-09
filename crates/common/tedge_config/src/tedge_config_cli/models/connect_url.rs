@@ -1,4 +1,6 @@
 use std::convert::TryFrom;
+use std::fmt;
+use std::str::FromStr;
 use url::Host;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
@@ -26,6 +28,26 @@ impl TryFrom<String> for ConnectUrl {
             Ok(host) => Ok(Self { input, host }),
             Err(error) => Err(InvalidConnectUrl { input, error }),
         }
+    }
+}
+
+impl FromStr for ConnectUrl {
+    type Err = InvalidConnectUrl;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        ConnectUrl::try_from(input.to_string())
+    }
+}
+
+impl fmt::Display for ConnectUrl {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.input.fmt(f)
+    }
+}
+
+impl doku::Document for ConnectUrl {
+    fn ty() -> doku::Type {
+        String::ty()
     }
 }
 

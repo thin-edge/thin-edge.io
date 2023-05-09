@@ -99,6 +99,13 @@ impl FieldOrGroup {
             Self::Group(..) => None,
         }
     }
+
+    pub fn reader(&self) -> &ReaderSettings {
+        match self {
+            Self::Field(field) => field.reader(),
+            Self::Group(group) => &group.reader,
+        }
+    }
 }
 
 impl TryFrom<super::parse::FieldOrGroup> for FieldOrGroup {
@@ -120,6 +127,7 @@ pub enum ConfigurableField {
 #[derive(Debug)]
 pub struct ReadOnlyField {
     pub attrs: Vec<syn::Attribute>,
+    pub alternate_keys: Vec<String>,
     pub readonly: ReadonlySettings,
     pub rename: Option<SpannedValue<String>>,
     pub dto: FieldDtoSettings,
@@ -152,6 +160,7 @@ impl ReadOnlyField {
 #[derive(Debug)]
 pub struct ReadWriteField {
     pub attrs: Vec<syn::Attribute>,
+    pub alternate_keys: Vec<String>,
     pub rename: Option<SpannedValue<String>>,
     pub dto: FieldDtoSettings,
     pub reader: ReaderSettings,
@@ -167,6 +176,23 @@ impl ConfigurableField {
             Self::ReadOnly(ReadOnlyField { attrs, .. })
             | Self::ReadWrite(ReadWriteField { attrs, .. }) => attrs,
         }
+    }
+
+    pub fn has_guaranteed_default(&self) -> bool {
+        match self {
+            Self::ReadWrite(_) => !self.is_optional(),
+            Self::ReadOnly(..) => false,
+        }
+    }
+
+    pub fn is_optional(&self) -> bool {
+        matches!(
+            self,
+            Self::ReadWrite(ReadWriteField {
+                default: FieldDefault::FromOptionalPath(_) | FieldDefault::None,
+                ..
+            })
+        )
     }
 
     pub fn ident(&self) -> &syn::Ident {
@@ -218,6 +244,13 @@ impl ConfigurableField {
             Self::ReadWrite(_) => None,
         }
     }
+
+    pub fn alternate_keys(&self) -> &[String] {
+        match self {
+            Self::ReadOnly(field) => &field.alternate_keys,
+            Self::ReadWrite(field) => &field.alternate_keys,
+        }
+    }
 }
 
 impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
@@ -263,6 +296,7 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
             error.try_throw().map(|_| {
                 Self::ReadOnly(ReadOnlyField {
                     attrs: value.attrs,
+                    alternate_keys: value.alternate_keys,
                     rename: value.rename,
                     ident: value.ident.unwrap(),
                     readonly,
@@ -278,6 +312,7 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
 
             Ok(Self::ReadWrite(ReadWriteField {
                 attrs: value.attrs,
+                alternate_keys: value.alternate_keys,
                 rename: value.rename,
                 examples: value.examples,
                 ident: value.ident.unwrap(),

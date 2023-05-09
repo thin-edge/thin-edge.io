@@ -7,14 +7,30 @@ use tedge_config_macros::*;
 
 static DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 
+#[derive(thiserror::Error, Debug)]
+pub enum ReadError {
+    #[error(transparent)]
+    ConfigNotSet(#[from] ConfigNotSet),
+    #[error("Something went wrong: {0}")]
+    GenericError(String),
+}
+
 define_tedge_config! {
+    #[tedge_config(reader(skip))]
+    config: {
+        #[tedge_config(default(value = 1))]
+        version: u32,
+    },
+
     device: {
         #[tedge_config(readonly(
-            write_error = "Device id is inferred from the certificate",
+            write_error = "\
+                The device id is read from the device certificate and cannot be set directly.\n\
+                To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",
             function = "device_id",
         ))]
         #[doku(as = "String")]
-        id: Result<String, String>,
+        id: Result<String, ReadError>,
 
         /// Path where the device's private key is stored
         #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem", default(function = "default_device_key"))]
@@ -52,6 +68,15 @@ define_tedge_config! {
         }
     },
 
+    c8y: {
+        url: String,
+
+        http: {
+            #[tedge_config(default(from_optional_path = "c8y.url"))]
+            url: String,
+        }
+    },
+
     mqtt: {
         bind: {
             /// The address mosquitto binds to for internal use
@@ -61,6 +86,7 @@ define_tedge_config! {
             /// The port mosquitto binds to for internal use
             #[tedge_config(example = "1883", default(function = "default_mqtt_port"))]
             #[doku(as = "u16")]
+            #[tedge_config(alternate_key = "mqtt.port")]
             // This was originally u16, but I can't think of any way in which
             // tedge could actually connect to mosquitto if it bound to a random
             // free port, so I don't think 0 is *really* valid here
@@ -142,7 +168,7 @@ define_tedge_config! {
     }
 }
 
-fn device_id(_reader: &TEdgeConfigReader) -> Result<String, String> {
+fn device_id(_reader: &TEdgeConfigReader) -> Result<String, ReadError> {
     Ok("dummy-device-id".to_owned())
 }
 
@@ -165,14 +191,22 @@ fn default_mqtt_port() -> NonZeroU16 {
 }
 
 fn main() {
-    let dto = TEdgeConfigDto::default();
+    let mut dto = TEdgeConfigDto::default();
+    dto.mqtt.bind.address = Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)));
+
     let config = TEdgeConfigReader::from_dto(&dto, &TEdgeConfigLocation);
+
+    // Typed reads
     println!(
         "Device id is {}.",
-        // We have to pass the config into read to avoid TEdgeConfigReader being
+        // We have to pass the config into try_read to avoid TEdgeConfigReader being
         // self-referential
-        config.device.id.read(&config).as_ref().unwrap()
+        config.device.id.try_read(&config).as_ref().unwrap()
     );
     assert_eq!(u16::from(config.mqtt.bind.port), 1883);
     assert_eq!(config.mqtt.external.bind.port.or_none(), None);
+    assert_eq!(
+        config.read_string(ReadableKey::DeviceId).unwrap(),
+        "dummy-device-id"
+    );
 }

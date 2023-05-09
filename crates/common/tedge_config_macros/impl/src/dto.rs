@@ -14,7 +14,8 @@ pub fn generate(
     let mut idents = Vec::new();
     let mut tys = Vec::<syn::Type>::new();
     let mut sub_dtos = Vec::new();
-    let mut attrs = Vec::new();
+    let mut preserved_attrs = Vec::new();
+    let mut extra_attrs = Vec::new();
 
     for item in items {
         match item {
@@ -26,23 +27,29 @@ pub fn generate(
                         parse_quote_spanned!(ty.span()=> Option<#ty>)
                     });
                     sub_dtos.push(None);
-                    attrs.push(field.attrs().iter().filter(is_preserved).collect());
+                    preserved_attrs.push(field.attrs().iter().filter(is_preserved).collect());
+                    extra_attrs.push(quote! {});
                 }
             }
             FieldOrGroup::Group(group) => {
                 if !group.dto.skip {
                     let sub_dto_name = prefixed_type_name(&name, group);
+                    let is_default = format!("{sub_dto_name}::is_default");
                     idents.push(&group.ident);
                     tys.push(parse_quote_spanned!(group.ident.span()=> #sub_dto_name));
                     sub_dtos.push(Some(generate(sub_dto_name, &group.contents, "")));
-                    attrs.push(Vec::new());
+                    preserved_attrs.push(Vec::new());
+                    extra_attrs.push(quote! {
+                        #[serde(default)]
+                        #[serde(skip_serializing_if = #is_default)]
+                    });
                 }
             }
         }
     }
 
     quote! {
-        #[derive(Debug, Default, ::serde::Deserialize, ::serde::Serialize)]
+        #[derive(Debug, Default, ::serde::Deserialize, ::serde::Serialize, PartialEq)]
         // We will add more configurations in the future, so this is
         // non_exhaustive (see
         // https://doc.rust-lang.org/reference/attributes/type_system.html)
@@ -52,9 +59,16 @@ pub fn generate(
             #(
                 // The fields are pub as that allows people to easily modify the
                 // dto via a mutable borrow
-                #(#attrs)*
+                #(#preserved_attrs)*
+                #extra_attrs
                 pub #idents: #tys,
             )*
+        }
+
+        impl #name {
+            fn is_default(&self) -> bool {
+                self == &Self::default()
+            }
         }
 
         #(#sub_dtos)*
