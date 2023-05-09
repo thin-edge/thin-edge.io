@@ -1193,7 +1193,7 @@ mod tests {
         );
         let expected_c8y_json_message = Message::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
-            r#"{"type":"ThinEdgeMeasurement","externalSource":{"externalId":"child1","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00"}"#,
+            r#"{"externalSource":{"externalId":"child1","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"ThinEdgeMeasurement"}"#,
         );
 
         // Test the first output messages contains SmartREST and C8Y JSON.
@@ -1238,7 +1238,7 @@ mod tests {
         );
         let expected_c8y_json_message = Message::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
-            r#"{"type":"ThinEdgeMeasurement","externalSource":{"externalId":"child1","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00"}"#,
+            r#"{"externalSource":{"externalId":"child1","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"ThinEdgeMeasurement"}"#,
         );
         assert_eq!(
             out_second_messages,
@@ -1264,7 +1264,7 @@ mod tests {
         );
         let expected_first_c8y_json_message = Message::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
-            r#"{"type":"ThinEdgeMeasurement","externalSource":{"externalId":"child1","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00"}"#,
+            r#"{"externalSource":{"externalId":"child1","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"ThinEdgeMeasurement"}"#,
         );
         assert_eq!(
             out_first_messages,
@@ -1286,7 +1286,7 @@ mod tests {
         );
         let expected_second_c8y_json_message = Message::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
-            r#"{"type":"ThinEdgeMeasurement","externalSource":{"externalId":"child2","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00"}"#,
+            r#"{"externalSource":{"externalId":"child2","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"ThinEdgeMeasurement"}"#,
         );
         assert_eq!(
             out_second_messages,
@@ -1423,9 +1423,14 @@ mod tests {
 
         let result = converter.convert(&big_measurement_message).await;
 
-        assert!(result[0].payload_str().unwrap().contains(
-            r#"{"type":"ThinEdgeMeasurement","temperature0":{"temperature0":{"value":0.0}}"#
-        ));
+        assert!(result[0]
+            .payload_str()
+            .unwrap()
+            .contains(r#"{"temperature0":{"temperature0":{"value":0.0}}"#));
+        assert!(result[0]
+            .payload_str()
+            .unwrap()
+            .contains(r#""type":"ThinEdgeMeasurement""#));
     }
 
     #[tokio::test]
@@ -1467,8 +1472,9 @@ mod tests {
 
         assert!(payload1.contains("101,child1,child1,thin-edge.io-child"));
         assert!(payload2 .contains(
-        r#"{"type":"ThinEdgeMeasurement","externalSource":{"externalId":"child1","type":"c8y_Serial"},"temperature0":{"temperature0":{"value":0.0}},"#
+        r#"{"externalSource":{"externalId":"child1","type":"c8y_Serial"},"temperature0":{"temperature0":{"value":0.0}},"#
     ));
+        assert!(payload2.contains(r#""type":"ThinEdgeMeasurement""#));
     }
 
     #[tokio::test]
