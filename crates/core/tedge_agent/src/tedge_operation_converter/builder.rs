@@ -7,6 +7,7 @@ use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingReceiver;
+use tedge_actors::LoggingSender;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
@@ -18,9 +19,9 @@ use tedge_mqtt_ext::TopicFilter;
 
 pub struct TedgeOperationConverterBuilder {
     input_receiver: LoggingReceiver<AgentInput>,
-    software_sender: DynSender<SoftwareRequest>,
-    restart_sender: DynSender<RestartOperationRequest>,
-    mqtt_publisher: DynSender<MqttMessage>,
+    software_sender: LoggingSender<SoftwareRequest>,
+    restart_sender: LoggingSender<RestartOperationRequest>,
+    mqtt_publisher: LoggingSender<MqttMessage>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
 }
 
@@ -45,9 +46,14 @@ impl TedgeOperationConverterBuilder {
 
         let software_sender =
             software_actor.connect_consumer(NoConfig, input_sender.clone().into());
+        let software_sender = LoggingSender::new("SoftwareSender".into(), software_sender);
+
         let restart_sender = restart_actor.connect_consumer(NoConfig, input_sender.clone().into());
+        let restart_sender = LoggingSender::new("RestartSender".into(), restart_sender);
+
         let mqtt_publisher =
             mqtt_actor.connect_consumer(Self::subscriptions(), input_sender.into());
+        let mqtt_publisher = LoggingSender::new("MqttPublisher".into(), mqtt_publisher);
 
         Self {
             input_receiver,

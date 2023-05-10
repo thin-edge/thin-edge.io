@@ -19,11 +19,9 @@ pub enum SoftwareManagerError {
     #[error(transparent)]
     FromSoftware(#[from] tedge_api::SoftwareError),
 
-    // Suspicious
     #[error(transparent)]
     FromTedgeConfig(#[from] tedge_config::TEdgeConfigError),
 
-    // Suspicious
     #[error(transparent)]
     FromConfigSetting(#[from] tedge_config::ConfigSettingError),
 }

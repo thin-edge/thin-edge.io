@@ -70,20 +70,14 @@ async fn convert_incoming_software_update_request() -> Result<(), DynError> {
         plugin_type: "debian".into(),
         modules: vec![debian_module1],
     };
-    let expected_request = SoftwareUpdateRequest {
-        id: "1234".to_string(),
-        update_list: vec![debian_list],
-    };
 
     // The output of converter => SoftwareUpdateRequest
-    match software_box.recv().await.unwrap() {
-        SoftwareRequest::SoftwareUpdateRequest(request) => {
-            assert_eq!(request, expected_request);
-        }
-        SoftwareRequest::SoftwareListRequest(_) => {
-            assert!(false, "Received SoftwareListRequest")
-        }
-    }
+    software_box
+        .assert_received([SoftwareUpdateRequest {
+            id: "1234".to_string(),
+            update_list: vec![debian_list],
+        }])
+        .await;
 
     Ok(())
 }
@@ -157,7 +151,7 @@ async fn convert_outgoing_restart_response() -> Result<(), DynError> {
 
     // Simulate SoftwareList response message received.
     let executing_response = RestartOperationResponse::new(&RestartOperationRequest::default());
-    restart_box.send(executing_response.into()).await?;
+    restart_box.send(executing_response).await?;
 
     let (topic, payload) = mqtt_box
         .recv()

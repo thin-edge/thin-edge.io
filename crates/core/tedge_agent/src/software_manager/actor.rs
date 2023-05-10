@@ -44,7 +44,6 @@ fan_in_message_type!(SoftwareResponse[SoftwareUpdateResponse, SoftwareListRespon
 pub struct SoftwareManagerActor {
     config: SoftwareManagerConfig,
     state_repository: AgentStateRepository,
-    operation_logs: OperationLogs,
     message_box: SimpleMessageBox<SoftwareRequest, SoftwareResponse>,
 }
 
@@ -55,6 +54,9 @@ impl Actor for SoftwareManagerActor {
     }
 
     async fn run(&mut self) -> Result<(), RuntimeError> {
+        let operation_logs = OperationLogs::try_new(self.config.log_dir.clone().into())
+            .map_err(SoftwareManagerError::FromOperationsLogs)?;
+
         let plugins = Arc::new(Mutex::new(
             ExternalPlugins::open(
                 &self.config.sm_plugins_dir,
@@ -79,7 +81,11 @@ impl Actor for SoftwareManagerActor {
             match request {
                 SoftwareRequest::SoftwareUpdateRequest(request) => {
                     if let Err(err) = self
-                        .handle_software_update_operation(&request, plugins.clone())
+                        .handle_software_update_operation(
+                            &request,
+                            plugins.clone(),
+                            &operation_logs,
+                        )
                         .await
                     {
                         error!("{:?}", err);
@@ -87,7 +93,7 @@ impl Actor for SoftwareManagerActor {
                 }
                 SoftwareRequest::SoftwareListRequest(request) => {
                     if let Err(err) = self
-                        .handle_software_list_operation(&request, plugins.clone())
+                        .handle_software_list_operation(&request, plugins.clone(), &operation_logs)
                         .await
                     {
                         error!("{:?}", err);
@@ -108,12 +114,10 @@ impl SoftwareManagerActor {
             config.config_dir.clone(),
             "software-current-operation",
         );
-        let operation_logs = OperationLogs::try_new(config.log_dir.clone().into()).unwrap(); // TODO: Fix this unwrap
 
         Self {
             config,
             state_repository,
-            operation_logs,
             message_box,
         }
     }
@@ -159,6 +163,7 @@ impl SoftwareManagerActor {
         &mut self,
         request: &SoftwareUpdateRequest,
         plugins: Arc<Mutex<ExternalPlugins>>,
+        operation_logs: &OperationLogs,
     ) -> Result<(), SoftwareManagerError> {
         plugins.lock().await.load()?;
         plugins
@@ -177,11 +182,7 @@ impl SoftwareManagerActor {
         let executing_response = SoftwareUpdateResponse::new(request);
         self.message_box.send(executing_response.into()).await?;
 
-        let response = match self
-            .operation_logs
-            .new_log_file(LogKind::SoftwareUpdate)
-            .await
-        {
+        let response = match operation_logs.new_log_file(LogKind::SoftwareUpdate).await {
             Ok(log_file) => {
                 plugins
                     .lock()
@@ -207,6 +208,7 @@ impl SoftwareManagerActor {
         &mut self,
         request: &SoftwareListRequest,
         plugins: Arc<Mutex<ExternalPlugins>>,
+        operation_logs: &OperationLogs,
     ) -> Result<(), SoftwareManagerError> {
         self.state_repository
             .store(&State {
@@ -219,11 +221,7 @@ impl SoftwareManagerActor {
         let executing_response = SoftwareListResponse::new(request);
         self.message_box.send(executing_response.into()).await?;
 
-        let response = match self
-            .operation_logs
-            .new_log_file(LogKind::SoftwareList)
-            .await
-        {
+        let response = match operation_logs.new_log_file(LogKind::SoftwareList).await {
             Ok(log_file) => plugins.lock().await.list(request, log_file).await,
             Err(err) => {
                 error!("{}", err);

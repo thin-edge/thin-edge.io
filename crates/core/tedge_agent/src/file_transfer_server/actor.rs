@@ -32,7 +32,7 @@ impl Actor for FileTransferServerActor {
         tokio::select! {
             result = server => {
                 info!("Done");
-                return Ok(result.map_err(|err| FileTransferError::FromHyperError(err))?);
+                return Ok(result.map_err(FileTransferError::FromHyperError)?);
             }
             Some(RuntimeRequest::Shutdown) = self.signal_receiver.next() => {
                 info!("Shutdown");
@@ -89,8 +89,6 @@ mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
     use tokio::fs;
 
-    // HELP ME HERE: This test fails with multi thread due to connection refused. Why?
-    // #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     #[tokio::test]
     async fn http_server_put_and_get() {
         let test_url = "http://127.0.0.1:4000/tedge/file-transfer/test-file";
@@ -112,12 +110,11 @@ mod tests {
             let req = Request::builder()
                 .method(Method::PUT)
                 .uri(test_url)
-                .body(Body::from(String::from("file").clone()))
+                .body(Body::from(String::from("file")))
                 .expect("request builder");
             client.request(req).await.unwrap()
         });
 
-        // FIXME: start failing
         let put_response = put_handler.await.unwrap();
         assert_eq!(put_response.status(), hyper::StatusCode::CREATED);
 

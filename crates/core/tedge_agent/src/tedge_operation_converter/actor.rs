@@ -4,8 +4,8 @@ use crate::tedge_operation_converter::error::TedgeOperationConverterError;
 use async_trait::async_trait;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
-use tedge_actors::DynSender;
 use tedge_actors::LoggingReceiver;
+use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
@@ -23,9 +23,9 @@ fan_in_message_type!(AgentInput[MqttMessage, SoftwareResponse, RestartOperationR
 
 pub struct TedgeOperationConverterActor {
     input_receiver: LoggingReceiver<AgentInput>,
-    software_sender: DynSender<SoftwareRequest>,
-    restart_sender: DynSender<RestartOperationRequest>,
-    mqtt_publisher: DynSender<MqttMessage>,
+    software_sender: LoggingSender<SoftwareRequest>,
+    restart_sender: LoggingSender<RestartOperationRequest>,
+    mqtt_publisher: LoggingSender<MqttMessage>,
 }
 
 #[async_trait]
@@ -58,9 +58,9 @@ impl Actor for TedgeOperationConverterActor {
 impl TedgeOperationConverterActor {
     pub fn new(
         input_receiver: LoggingReceiver<AgentInput>,
-        software_sender: DynSender<SoftwareRequest>,
-        restart_sender: DynSender<RestartOperationRequest>,
-        mqtt_publisher: DynSender<MqttMessage>,
+        software_sender: LoggingSender<SoftwareRequest>,
+        restart_sender: LoggingSender<RestartOperationRequest>,
+        mqtt_publisher: LoggingSender<MqttMessage>,
     ) -> Self {
         Self {
             input_receiver,

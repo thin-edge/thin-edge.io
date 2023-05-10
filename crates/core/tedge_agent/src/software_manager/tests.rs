@@ -105,13 +105,12 @@ async fn test_new_software_list_operation() -> Result<(), DynError> {
         )
         .await?;
 
-    let response = converter_box.recv().await.unwrap();
-    match response {
+    match converter_box.recv().await.unwrap() {
         SoftwareResponse::SoftwareListResponse(res) => {
             assert_eq!(res.response.status, OperationStatus::Executing);
         }
         SoftwareResponse::SoftwareUpdateResponse(_) => {
-            assert!(false, "Received SoftwareUpdateResponse")
+            panic!("Received SoftwareUpdateResponse")
         }
     }
 
