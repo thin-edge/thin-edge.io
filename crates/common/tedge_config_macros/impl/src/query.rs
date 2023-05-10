@@ -287,7 +287,7 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
                 }
             } else {
                 parse_quote! {
-                    ReadableKey::#variant_name => Ok(self.#(#segments).*.or_err()?.to_string()),
+                    ReadableKey::#variant_name => Ok(self.#(#segments).*.or_config_not_set()?.to_string()),
                 }
             }
         });

@@ -17,11 +17,21 @@ use std::time::Duration;
 use tedge_config_macros::define_tedge_config;
 use tedge_config_macros::struct_field_aliases;
 use tedge_config_macros::struct_field_paths;
-use tedge_config_macros::ConfigNotSet;
+pub use tedge_config_macros::ConfigNotSet;
 use tedge_config_macros::OptionalConfig;
 use toml::Table;
 
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
+
+pub trait OptionalConfigError<T> {
+    fn or_err(&self) -> Result<&T, ReadError>;
+}
+
+impl<T> OptionalConfigError<T> for OptionalConfig<T> {
+    fn or_err(&self) -> Result<&T, ReadError> {
+        self.or_config_not_set().map_err(ReadError::from)
+    }
+}
 
 pub struct TEdgeConfig(TEdgeConfigReader);
 
@@ -185,6 +195,7 @@ impl TEdgeTomlVersion {
                 mv("software.default_plugin_type", SoftwarePluginDefault),
                 mv("run.lock_files", RunLockFiles),
                 mv("firmware.child_update_timeout", FirmwareChildUpdateTimeout),
+                mv("c8y.smartrest_templates", C8ySmartrestTemplates),
                 update_version_field,
             ])
         } else {

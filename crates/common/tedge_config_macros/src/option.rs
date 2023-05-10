@@ -41,7 +41,7 @@ impl<T> OptionalConfig<T> {
         }
     }
 
-    pub fn or_err(&self) -> Result<&T, ConfigNotSet> {
+    pub fn or_config_not_set(&self) -> Result<&T, ConfigNotSet> {
         match self {
             Self::Present { value, .. } => Ok(value),
             Self::Empty(key) => Err(ConfigNotSet { key }),
