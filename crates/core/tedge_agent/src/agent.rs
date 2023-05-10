@@ -1,4 +1,3 @@
-use crate::error::AgentError;
 use crate::file_transfer_server::actor::FileTransferServerBuilder;
 use crate::file_transfer_server::http_rest::HttpConfig;
 use crate::restart_manager::builder::RestartManagerBuilder;
@@ -11,6 +10,7 @@ use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
 use camino::Utf8PathBuf;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
+use flockfile::FlockfileError;
 use std::fmt::Debug;
 use tedge_actors::Runtime;
 use tedge_config::ConfigRepository;
@@ -109,7 +109,7 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn try_new(name: &str, config: AgentConfig) -> Result<Self, AgentError> {
+    pub fn try_new(name: &str, config: AgentConfig) -> Result<Self, FlockfileError> {
         let mut flock = None;
         if config.use_lock.is_set() {
             flock = Some(check_another_instance_is_not_running(

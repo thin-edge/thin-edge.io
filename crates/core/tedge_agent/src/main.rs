@@ -6,7 +6,6 @@ use tedge_config::system_services::set_log_level;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 mod agent;
-mod error;
 mod file_transfer_server;
 mod restart_manager;
 mod software_list_manager;
