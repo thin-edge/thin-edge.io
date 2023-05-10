@@ -74,14 +74,44 @@ impl ConfigSetting for DeviceCertPathSetting {
 /// Example: your-tenant.cumulocity.com
 ///
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[deprecated = "Use `C8yHttpSetting` or `C8yMqttSetting` instead"]
 pub struct C8yUrlSetting;
 
+#[allow(deprecated)]
 impl ConfigSetting for C8yUrlSetting {
     const KEY: &'static str = "c8y.url";
 
     const DESCRIPTION: &'static str =
         "Tenant endpoint URL of Cumulocity tenant. Example: your-tenant.cumulocity.com";
     type Value = ConnectUrl;
+}
+
+/// HTTP endpoint for the Cumulocity tenant.
+///
+/// Example: http.your-tenant.cumulocity.com:1234
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct C8yHttpSetting;
+
+impl ConfigSetting for C8yHttpSetting {
+    const KEY: &'static str = "c8y.http";
+
+    const DESCRIPTION: &'static str = "HTTP endpoint for the Cumulocity tenant. \
+        Example: http.your-tenant.cumulocity.com:1234";
+    type Value = HostPort<HTTPS_PORT>;
+}
+
+/// MQTT endpoint for the Cumulocity tenant.
+///
+/// Example: mqtt.your-tenant.cumulocity.com:1234
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct C8yMqttSetting;
+
+impl ConfigSetting for C8yMqttSetting {
+    const KEY: &'static str = "c8y.mqtt";
+
+    const DESCRIPTION: &'static str = "MQTT endpoint for the Cumulocity tenant. \
+        Example: mqtt.your-tenant.cumulocity.com:1234";
+    type Value = HostPort<MQTT_TLS_PORT>;
 }
 
 ///

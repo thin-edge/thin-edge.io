@@ -7,7 +7,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_api::health::health_check_topics;
-use tedge_config::C8yUrlSetting;
+use tedge_config::C8yHttpSetting;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::DataPathSetting;
 use tedge_config::DeviceIdSetting;
@@ -90,7 +90,7 @@ impl FirmwareManagerConfig {
                 .query(FirmwareChildUpdateTimeoutSetting)?
                 .into(),
         );
-        let c8y_url = tedge_config.query(C8yUrlSetting)?.into();
+        let c8y_url = tedge_config.query(C8yHttpSetting)?.into();
 
         Ok(Self::new(
             tedge_device_id,

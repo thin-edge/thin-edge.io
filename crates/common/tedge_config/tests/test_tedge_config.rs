@@ -65,7 +65,11 @@ path = "/some/data/path"
     );
 
     assert_eq!(
-        config.query(C8yUrlSetting)?.as_str(),
+        config.query(C8yHttpSetting)?.as_str(),
+        "your-tenant.cumulocity.com"
+    );
+    assert_eq!(
+        config.query(C8yMqttSetting)?.as_str(),
         "your-tenant.cumulocity.com"
     );
     assert_eq!(
@@ -199,7 +203,11 @@ bind_address = "0.0.0.0"
         );
 
         assert_eq!(
-            config.query(C8yUrlSetting)?.as_str(),
+            config.query(C8yHttpSetting)?.as_str(),
+            "your-tenant.cumulocity.com"
+        );
+        assert_eq!(
+            config.query(C8yMqttSetting)?.as_str(),
             "your-tenant.cumulocity.com"
         );
         assert_eq!(
@@ -221,6 +229,7 @@ bind_address = "0.0.0.0"
 
         assert_eq!(config.query(ServiceTypeSetting)?, "service");
 
+        #[allow(deprecated)]
         config.update(
             C8yUrlSetting,
             ConnectUrl::try_from(updated_c8y_url).unwrap(),
@@ -278,7 +287,8 @@ bind_address = "0.0.0.0"
             Utf8PathBuf::from("/path/to/cert")
         );
 
-        assert_eq!(config.query(C8yUrlSetting)?.as_str(), updated_c8y_url);
+        assert_eq!(config.query(C8yHttpSetting)?.as_str(), updated_c8y_url);
+        assert_eq!(config.query(C8yMqttSetting)?.as_str(), updated_c8y_url);
         assert_eq!(
             config.query(C8yRootCertPathSetting)?,
             Utf8PathBuf::from("default_c8y_root_cert_path")
@@ -358,7 +368,8 @@ fn test_parse_config_with_only_device_configuration() -> Result<(), TEdgeConfigE
         Utf8PathBuf::from("/etc/ssl/certs/tedge-private-key.pem")
     );
 
-    assert!(config.query_optional(C8yUrlSetting)?.is_none());
+    assert!(config.query_optional(C8yHttpSetting)?.is_none());
+    assert!(config.query_optional(C8yMqttSetting)?.is_none());
     assert_eq!(
         config.query(C8yRootCertPathSetting)?,
         Utf8PathBuf::from("/etc/ssl/certs")
@@ -408,7 +419,11 @@ url = "your-tenant.cumulocity.com"
     );
 
     assert_eq!(
-        config.query(C8yUrlSetting)?.as_str(),
+        config.query(C8yHttpSetting)?.as_str(),
+        "your-tenant.cumulocity.com"
+    );
+    assert_eq!(
+        config.query(C8yMqttSetting)?.as_str(),
         "your-tenant.cumulocity.com"
     );
     assert_eq!(
@@ -459,7 +474,8 @@ url = "MyAzure.azure-devices.net"
         Utf8PathBuf::from("/etc/ssl/certs/tedge-private-key.pem"),
     );
 
-    assert!(config.query_optional(C8yUrlSetting)?.is_none());
+    assert!(config.query_optional(C8yHttpSetting)?.is_none());
+    assert!(config.query_optional(C8yMqttSetting)?.is_none());
     assert_eq!(
         config.query(C8yRootCertPathSetting)?,
         Utf8PathBuf::from("/dev/null")
@@ -512,7 +528,8 @@ bind_address = "1.2.3.4"
         Utf8PathBuf::from("/etc/ssl/certs/tedge-private-key.pem"),
     );
 
-    assert!(config.query_optional(C8yUrlSetting)?.is_none());
+    assert!(config.query_optional(C8yHttpSetting)?.is_none());
+    assert!(config.query_optional(C8yMqttSetting)?.is_none());
     assert_eq!(
         config.query(C8yRootCertPathSetting)?,
         Utf8PathBuf::from("/dev/null")
@@ -635,7 +652,8 @@ fn test_parse_config_empty_file() -> Result<(), TEdgeConfigError> {
         Utf8PathBuf::from("/etc/ssl/certs/tedge-private-key.pem"),
     );
 
-    assert!(config.query_optional(C8yUrlSetting)?.is_none());
+    assert!(config.query_optional(C8yHttpSetting)?.is_none());
+    assert!(config.query_optional(C8yMqttSetting)?.is_none());
     assert_eq!(
         config.query(C8yRootCertPathSetting)?,
         Utf8PathBuf::from("/etc/ssl/certs")
@@ -684,7 +702,8 @@ fn test_parse_config_no_config_file() -> Result<(), TEdgeConfigError> {
         Utf8PathBuf::from("/non/existent/path/device-certs/tedge-private-key.pem"),
     );
 
-    assert!(config.query_optional(C8yUrlSetting)?.is_none());
+    assert!(config.query_optional(C8yHttpSetting)?.is_none());
+    assert!(config.query_optional(C8yMqttSetting)?.is_none());
     assert_eq!(
         config.query(C8yRootCertPathSetting)?,
         Utf8PathBuf::from("/etc/ssl/certs")
@@ -797,9 +816,11 @@ port = 1024
         original_device_cert_path
     );
 
-    let original_c8y_url = ConnectUrl::try_from("your-tenant.cumulocity.com")?;
     let original_c8y_root_cert_path = Utf8PathBuf::from("/path/to/c8y/root/cert");
-    assert_eq!(config.query(C8yUrlSetting)?, original_c8y_url);
+    let c8y_http_host = config.query(C8yHttpSetting).unwrap();
+    let c8y_mqtt_host = config.query(C8yMqttSetting).unwrap();
+    assert_eq!(c8y_http_host.port(), Port(443));
+    assert_eq!(c8y_mqtt_host.port(), Port(8883));
     assert_eq!(
         config.query(C8yRootCertPathSetting)?,
         original_c8y_root_cert_path
@@ -817,7 +838,29 @@ port = 1024
     assert_eq!(config.query(MqttPortSetting)?, Port(1024));
 
     let updated_c8y_url = ConnectUrl::try_from("other-tenant.cumulocity.com")?;
-    config.update(C8yUrlSetting, updated_c8y_url.clone())?;
+    #[allow(deprecated)]
+    config.update(C8yUrlSetting, updated_c8y_url)?;
+
+    config
+        .update(
+            C8yHttpSetting,
+            HostPort::<HTTPS_PORT>::try_from("http.other-tenant.cumulocity.com:1234".to_string())
+                .unwrap(),
+        )
+        .unwrap();
+    assert_eq!(config.query(C8yHttpSetting).unwrap().port(), Port(1234));
+
+    config
+        .update(
+            C8yMqttSetting,
+            HostPort::<MQTT_TLS_PORT>::try_from(
+                "http.other-tenant.cumulocity.com:2137".to_string(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    assert_eq!(config.query(C8yMqttSetting).unwrap().port(), Port(2137));
+
     config.unset(C8yRootCertPathSetting)?;
 
     let updated_azure_url = ConnectUrl::try_from("OtherAzure.azure-devices.net")?;
@@ -837,7 +880,6 @@ port = 1024
         original_device_cert_path
     );
 
-    assert_eq!(config.query(C8yUrlSetting)?, updated_c8y_url);
     assert_eq!(
         config.query(C8yRootCertPathSetting)?,
         Utf8PathBuf::from("/etc/ssl/certs")
@@ -934,6 +976,52 @@ cert_path = "/path/to/cert"
     assert_eq!(config.query(DeviceIdSetting)?, device_id);
 
     Ok(())
+}
+
+#[test]
+fn http_and_mqtt_hosts_serialize_and_deserialize_correctly() {
+    let no_ports = r#"
+[c8y]
+url = "tenant.cumulocity.com"
+http = "http.tenant.cumulocity.com"
+mqtt = "mqtt.tenant.cumulocity.com"
+"#;
+
+    let (_tempdir, config_location) = create_temp_tedge_config(no_ports).unwrap();
+    let repository =
+        TEdgeConfigRepository::new_with_defaults(config_location, dummy_tedge_config_defaults());
+    let config = repository.load().unwrap();
+
+    assert_eq!(config.query(C8yHttpSetting).unwrap().port().0, 443);
+    assert_eq!(config.query(C8yMqttSetting).unwrap().port().0, 8883);
+
+    // test updating C8yHttpSetting
+    repository
+        .update_toml(&|config| {
+            let new_c8y_http =
+                HostPort::<HTTPS_PORT>::try_from("custom.domain.com:8080".to_string()).unwrap();
+            config.update(C8yHttpSetting, new_c8y_http)
+        })
+        .unwrap();
+
+    let toml_content =
+        std::fs::read_to_string(&repository.get_config_location().tedge_config_file_path).unwrap();
+    assert!(toml_content.contains("http = \"custom.domain.com:8080\""));
+    assert!(toml_content.contains("mqtt = \"mqtt.tenant.cumulocity.com\""));
+
+    // test updating C8yMqttSetting
+    repository
+        .update_toml(&|config| {
+            let new_c8y_mqtt =
+                HostPort::<MQTT_TLS_PORT>::try_from("custom.domain.com:1883".to_string()).unwrap();
+            config.update(C8yMqttSetting, new_c8y_mqtt)
+        })
+        .unwrap();
+
+    let toml_content =
+        std::fs::read_to_string(&repository.get_config_location().tedge_config_file_path).unwrap();
+    assert!(toml_content.contains("http = \"custom.domain.com:8080\""));
+    assert!(toml_content.contains("mqtt = \"custom.domain.com:1883\""));
 }
 
 fn create_temp_tedge_config(content: &str) -> std::io::Result<(TempTedgeDir, TEdgeConfigLocation)> {

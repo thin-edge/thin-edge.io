@@ -6,7 +6,7 @@ use futures::future::try_select;
 use futures::future::Either;
 use miette::Context;
 use miette::IntoDiagnostic;
-use tedge_config::C8yUrlSetting;
+use tedge_config::C8yHttpSetting;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::TEdgeConfig;
@@ -143,7 +143,7 @@ async fn spawn_child(command: String) -> miette::Result<()> {
 }
 
 async fn proxy(command: RemoteAccessConnect, config: TEdgeConfig) -> miette::Result<()> {
-    let host = config.query(C8yUrlSetting).into_diagnostic()?;
+    let host = config.query(C8yHttpSetting).into_diagnostic()?;
     let url = build_proxy_url(host.as_str(), command.key())?;
     let jwt = Jwt::retrieve(&config)
         .await

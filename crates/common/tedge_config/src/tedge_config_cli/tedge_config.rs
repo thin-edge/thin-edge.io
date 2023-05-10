@@ -152,6 +152,7 @@ impl ConfigSettingAccessor<AwsUrlSetting> for TEdgeConfig {
     }
 }
 
+#[allow(deprecated)]
 impl ConfigSettingAccessor<C8yUrlSetting> for TEdgeConfig {
     fn query(&self, _setting: C8yUrlSetting) -> ConfigSettingResult<ConnectUrl> {
         self.data
@@ -170,6 +171,64 @@ impl ConfigSettingAccessor<C8yUrlSetting> for TEdgeConfig {
 
     fn unset(&mut self, _setting: C8yUrlSetting) -> ConfigSettingResult<()> {
         self.data.c8y.url = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<C8yHttpSetting> for TEdgeConfig {
+    #[allow(deprecated)]
+    fn query(&self, _setting: C8yHttpSetting) -> ConfigSettingResult<HostPort<HTTPS_PORT>> {
+        self.data
+            .c8y
+            .http
+            .as_ref()
+            .cloned()
+            .or(self.data.c8y.url.as_ref().cloned().map(ConnectUrl::into))
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: C8yUrlSetting::KEY,
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: C8yHttpSetting,
+        value: HostPort<HTTPS_PORT>,
+    ) -> ConfigSettingResult<()> {
+        self.data.c8y.http = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: C8yHttpSetting) -> ConfigSettingResult<()> {
+        self.data.c8y.http = None;
+        Ok(())
+    }
+}
+
+impl ConfigSettingAccessor<C8yMqttSetting> for TEdgeConfig {
+    #[allow(deprecated)]
+    fn query(&self, _setting: C8yMqttSetting) -> ConfigSettingResult<HostPort<MQTT_TLS_PORT>> {
+        self.data
+            .c8y
+            .mqtt
+            .as_ref()
+            .cloned()
+            .or(self.data.c8y.url.as_ref().cloned().map(ConnectUrl::into))
+            .ok_or(ConfigSettingError::ConfigNotSet {
+                key: C8yUrlSetting::KEY,
+            })
+    }
+
+    fn update(
+        &mut self,
+        _setting: C8yMqttSetting,
+        value: HostPort<MQTT_TLS_PORT>,
+    ) -> ConfigSettingResult<()> {
+        self.data.c8y.mqtt = Some(value);
+        Ok(())
+    }
+
+    fn unset(&mut self, _setting: C8yMqttSetting) -> ConfigSettingResult<()> {
+        self.data.c8y.mqtt = None;
         Ok(())
     }
 }

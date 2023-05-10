@@ -7,9 +7,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
-use tedge_config::C8yUrlSetting;
 use tedge_config::ConfigSettingAccessor;
-use tedge_config::ConnectUrl;
 use tedge_config::DeviceIdSetting;
 use tedge_config::HttpBindAddressSetting;
 use tedge_config::HttpPortSetting;
@@ -32,7 +30,6 @@ pub struct LogManagerConfig {
     pub device_id: String,
     pub mqtt_host: String,
     pub mqtt_port: u16,
-    pub c8y_url: ConnectUrl,
     pub tedge_http_host: IpAddress,
     pub tedge_http_port: u16,
     pub plugin_config_path: PathBuf,
@@ -51,8 +48,6 @@ impl LogManagerConfig {
         let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
         let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
 
-        let c8y_url = tedge_config.query(C8yUrlSetting)?;
-
         let tedge_http_host = tedge_config.query(HttpBindAddressSetting)?;
         let tedge_http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
 
@@ -68,7 +63,6 @@ impl LogManagerConfig {
             device_id,
             mqtt_host,
             mqtt_port,
-            c8y_url,
             tedge_http_host,
             tedge_http_port,
             plugin_config_path,

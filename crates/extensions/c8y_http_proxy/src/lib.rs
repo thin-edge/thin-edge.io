@@ -14,7 +14,7 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServerMessageBoxBuilder;
 use tedge_actors::ServiceProvider;
-use tedge_config::C8yUrlSetting;
+use tedge_config::C8yHttpSetting;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::DeviceIdSetting;
 use tedge_config::TEdgeConfig;
@@ -43,7 +43,7 @@ impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
     type Error = TEdgeConfigError;
 
     fn try_from(tedge_config: &TEdgeConfig) -> Result<Self, Self::Error> {
-        let c8y_host = tedge_config.query(C8yUrlSetting)?;
+        let c8y_host = tedge_config.query(C8yHttpSetting)?;
         let device_id = tedge_config.query(DeviceIdSetting)?;
         let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
         Ok(Self {

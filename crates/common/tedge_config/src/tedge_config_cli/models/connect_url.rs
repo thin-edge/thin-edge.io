@@ -4,8 +4,8 @@ use url::Host;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
 #[serde(try_from = "String", into = "String")]
 pub struct ConnectUrl {
-    input: String,
-    host: Host,
+    pub(crate) input: String,
+    pub(crate) host: Host,
 }
 
 #[derive(thiserror::Error, Debug)]
