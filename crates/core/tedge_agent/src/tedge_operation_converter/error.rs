@@ -2,7 +2,7 @@ use tedge_actors::RuntimeError;
 
 #[derive(Debug, thiserror::Error)]
 #[allow(clippy::enum_variant_names)]
-pub enum MqttRequestConverterError {
+pub enum TedgeOperationConverterError {
     #[error(transparent)]
     FromSerdeJson(#[from] serde_json::Error),
 
@@ -10,8 +10,8 @@ pub enum MqttRequestConverterError {
     FromChannelError(#[from] tedge_actors::ChannelError),
 }
 
-impl From<MqttRequestConverterError> for RuntimeError {
-    fn from(error: MqttRequestConverterError) -> Self {
+impl From<TedgeOperationConverterError> for RuntimeError {
+    fn from(error: TedgeOperationConverterError) -> Self {
         RuntimeError::ActorError(Box::new(error))
     }
 }

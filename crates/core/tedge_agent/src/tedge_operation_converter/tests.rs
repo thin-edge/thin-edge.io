@@ -1,4 +1,4 @@
-use crate::mqtt_operation_converter::builder::MqttOperationConverterBuilder;
+use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
@@ -197,7 +197,7 @@ async fn spawn_mqtt_operation_converter() -> Result<
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
 
-    let converter_actor_builder = MqttOperationConverterBuilder::new(
+    let converter_actor_builder = TedgeOperationConverterBuilder::new(
         &mut software_list_builder,
         &mut software_update_builder,
         &mut restart_builder,

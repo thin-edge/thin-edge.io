@@ -1,4 +1,4 @@
-use crate::mqtt_operation_converter::error::MqttRequestConverterError;
+use crate::tedge_operation_converter::error::TedgeOperationConverterError;
 use async_trait::async_trait;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
@@ -19,7 +19,7 @@ use tedge_mqtt_ext::Topic;
 
 fan_in_message_type!(AgentInput[MqttMessage, SoftwareListResponse, SoftwareUpdateResponse, RestartOperationResponse] : Debug);
 
-pub struct MqttOperationConverterActor {
+pub struct TedgeOperationConverterActor {
     input_receiver: LoggingReceiver<AgentInput>,
     software_list_sender: DynSender<SoftwareListRequest>,
     software_update_sender: DynSender<SoftwareUpdateRequest>,
@@ -28,9 +28,9 @@ pub struct MqttOperationConverterActor {
 }
 
 #[async_trait]
-impl Actor for MqttOperationConverterActor {
+impl Actor for TedgeOperationConverterActor {
     fn name(&self) -> &str {
-        "MqttOperationConverter"
+        "TedgeOperationConverter"
     }
 
     async fn run(&mut self) -> Result<(), RuntimeError> {
@@ -54,7 +54,7 @@ impl Actor for MqttOperationConverterActor {
     }
 }
 
-impl MqttOperationConverterActor {
+impl TedgeOperationConverterActor {
     pub fn new(
         input_receiver: LoggingReceiver<AgentInput>,
         software_list_sender: DynSender<SoftwareListRequest>,
@@ -74,9 +74,8 @@ impl MqttOperationConverterActor {
     async fn process_mqtt_message(
         &mut self,
         message: MqttMessage,
-    ) -> Result<(), MqttRequestConverterError> {
+    ) -> Result<(), TedgeOperationConverterError> {
         match message.topic.name.as_str() {
-            // TODO!: Replace topics by the ones defined in tedge_api after merging upstream.
             "tedge/commands/req/software/list" => {
                 let request = SoftwareListRequest::from_slice(message.payload_bytes())?;
                 self.software_list_sender.send(request).await?;
@@ -97,7 +96,7 @@ impl MqttOperationConverterActor {
     async fn process_software_list_response(
         &mut self,
         response: SoftwareListResponse,
-    ) -> Result<(), MqttRequestConverterError> {
+    ) -> Result<(), TedgeOperationConverterError> {
         let message = MqttMessage::new(
             &Topic::new_unchecked("tedge/commands/res/software/list"),
             response.to_bytes()?,
@@ -109,7 +108,7 @@ impl MqttOperationConverterActor {
     async fn process_software_update_response(
         &mut self,
         response: SoftwareUpdateResponse,
-    ) -> Result<(), MqttRequestConverterError> {
+    ) -> Result<(), TedgeOperationConverterError> {
         let message = MqttMessage::new(
             &Topic::new_unchecked("tedge/commands/res/software/update"),
             response.to_bytes()?,
@@ -121,7 +120,7 @@ impl MqttOperationConverterActor {
     async fn process_restart_response(
         &mut self,
         response: RestartOperationResponse,
-    ) -> Result<(), MqttRequestConverterError> {
+    ) -> Result<(), TedgeOperationConverterError> {
         let message = MqttMessage::new(
             &Topic::new_unchecked("tedge/commands/res/control/restart"),
             response.to_bytes()?,

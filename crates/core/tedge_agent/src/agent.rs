@@ -1,13 +1,13 @@
 use crate::error::AgentError;
 use crate::file_transfer_server::actor::FileTransferServerBuilder;
 use crate::file_transfer_server::http_rest::HttpConfig;
-use crate::mqtt_operation_converter::builder::MqttOperationConverterBuilder;
 use crate::restart_manager::builder::RestartManagerBuilder;
 use crate::restart_manager::config::RestartManagerConfig;
 use crate::software_list_manager::builder::SoftwareListManagerBuilder;
 use crate::software_list_manager::config::SoftwareListManagerConfig;
 use crate::software_update_manager::builder::SoftwareUpdateManagerBuilder;
 use crate::software_update_manager::config::SoftwareUpdateManagerConfig;
+use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
 use camino::Utf8PathBuf;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
@@ -175,7 +175,7 @@ impl Agent {
             SoftwareUpdateManagerBuilder::new(self.config.sw_update_config.clone());
 
         // Converter actor
-        let converter_actor_builder = MqttOperationConverterBuilder::new(
+        let converter_actor_builder = TedgeOperationConverterBuilder::new(
             &mut software_list_builder,
             &mut software_update_builder,
             &mut restart_actor_builder,
@@ -214,7 +214,7 @@ mod tests {
     //
     // use tedge_test_utils::fs::TempTedgeDir;
 
-    const TEDGE_AGENT_RESTART: &str = "tedge_agent_restart";
+    // const TEDGE_AGENT_RESTART: &str = "tedge_agent_restart";
 
     // #[tokio::test]
     // async fn check_agent_restart_file_is_created() -> Result<(), AgentError> {

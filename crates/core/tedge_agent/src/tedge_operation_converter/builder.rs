@@ -1,5 +1,5 @@
-use crate::mqtt_operation_converter::actor::AgentInput;
-use crate::mqtt_operation_converter::actor::MqttOperationConverterActor;
+use crate::tedge_operation_converter::actor::AgentInput;
+use crate::tedge_operation_converter::actor::TedgeOperationConverterActor;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
@@ -18,7 +18,7 @@ use tedge_api::SoftwareUpdateResponse;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 
-pub struct MqttOperationConverterBuilder {
+pub struct TedgeOperationConverterBuilder {
     input_receiver: LoggingReceiver<AgentInput>,
     software_list_sender: DynSender<SoftwareListRequest>,
     software_update_sender: DynSender<SoftwareUpdateRequest>,
@@ -27,7 +27,7 @@ pub struct MqttOperationConverterBuilder {
     signal_sender: mpsc::Sender<RuntimeRequest>,
 }
 
-impl MqttOperationConverterBuilder {
+impl TedgeOperationConverterBuilder {
     pub fn new(
         software_list_actor: &mut impl ServiceProvider<
             SoftwareListRequest,
@@ -83,21 +83,21 @@ impl MqttOperationConverterBuilder {
     }
 }
 
-impl RuntimeRequestSink for MqttOperationConverterBuilder {
+impl RuntimeRequestSink for TedgeOperationConverterBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         Box::new(self.signal_sender.clone())
     }
 }
 
-impl Builder<MqttOperationConverterActor> for MqttOperationConverterBuilder {
+impl Builder<TedgeOperationConverterActor> for TedgeOperationConverterBuilder {
     type Error = LinkError;
 
-    fn try_build(self) -> Result<MqttOperationConverterActor, Self::Error> {
+    fn try_build(self) -> Result<TedgeOperationConverterActor, Self::Error> {
         Ok(self.build())
     }
 
-    fn build(self) -> MqttOperationConverterActor {
-        MqttOperationConverterActor::new(
+    fn build(self) -> TedgeOperationConverterActor {
+        TedgeOperationConverterActor::new(
             self.input_receiver,
             self.software_list_sender,
             self.software_update_sender,
