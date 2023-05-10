@@ -1,19 +1,21 @@
+use crate::file_transfer_server::error::FileTransferError;
 use crate::file_transfer_server::http_rest::http_file_transfer_server;
 use crate::file_transfer_server::http_rest::HttpConfig;
 use async_trait::async_trait;
 use std::convert::Infallible;
+use tedge_actors::futures::channel::mpsc;
+use tedge_actors::futures::StreamExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
-use tedge_actors::NoMessage;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
-use tedge_actors::SimpleMessageBoxBuilder;
-use tracing::log::error;
+use tracing::log::info;
 
 pub struct FileTransferServerActor {
     config: HttpConfig,
+    signal_receiver: mpsc::Receiver<RuntimeRequest>,
 }
 
 /// HTTP file transfer server is stand-alone.
@@ -25,45 +27,41 @@ impl Actor for FileTransferServerActor {
 
     async fn run(&mut self) -> Result<(), RuntimeError> {
         let http_config = self.config.clone();
+        let server = http_file_transfer_server(&http_config)?;
 
-        // Spawn from actor? Ask Didier
-        tokio::spawn(async move {
-            start_http_file_transfer_server(&http_config).await;
-        });
-
-        Ok(())
-    }
-}
-
-async fn start_http_file_transfer_server(config: &HttpConfig) {
-    let server = http_file_transfer_server(config);
-    match server {
-        Ok(server) => {
-            if let Err(err) = server.await {
-                error!("{}", err)
+        tokio::select! {
+            result = server => {
+                info!("Done");
+                return Ok(result.map_err(|err| FileTransferError::FromHyperError(err))?);
+            }
+            Some(RuntimeRequest::Shutdown) = self.signal_receiver.next() => {
+                info!("Shutdown");
+                return Ok(());
             }
         }
-        Err(err) => error!("{}", err),
     }
 }
 
 pub struct FileTransferServerBuilder {
     config: HttpConfig,
-    box_builder: SimpleMessageBoxBuilder<NoMessage, NoMessage>,
+    signal_sender: mpsc::Sender<RuntimeRequest>,
+    signal_receiver: mpsc::Receiver<RuntimeRequest>,
 }
 
 impl FileTransferServerBuilder {
     pub fn new(config: HttpConfig) -> Self {
+        let (signal_sender, signal_receiver) = mpsc::channel(10);
         Self {
             config,
-            box_builder: SimpleMessageBoxBuilder::new("HttpFileTransferServer", 4),
+            signal_sender,
+            signal_receiver,
         }
     }
 }
 
 impl RuntimeRequestSink for FileTransferServerBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
-        self.box_builder.get_signal_sender()
+        Box::new(self.signal_sender.clone())
     }
 }
 
@@ -77,6 +75,7 @@ impl Builder<FileTransferServerActor> for FileTransferServerBuilder {
     fn build(self) -> FileTransferServerActor {
         FileTransferServerActor {
             config: self.config,
+            signal_receiver: self.signal_receiver,
         }
     }
 }

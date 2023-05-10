@@ -1,3 +1,5 @@
+use tedge_actors::RuntimeError;
+
 #[derive(Debug, thiserror::Error)]
 pub enum FileTransferError {
     #[error(transparent)]
@@ -20,4 +22,10 @@ pub enum FileTransferError {
 
     #[error("Could not bind to address: {address}. Address already in use.")]
     BindingAddressInUse { address: std::net::SocketAddr },
+}
+
+impl From<FileTransferError> for RuntimeError {
+    fn from(error: FileTransferError) -> Self {
+        RuntimeError::ActorError(Box::new(error))
+    }
 }
