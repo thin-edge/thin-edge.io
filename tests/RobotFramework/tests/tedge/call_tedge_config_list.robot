@@ -8,7 +8,7 @@ Documentation       Purpose of this test is to verify that the tedge config list
 ...                 Set new c8y.smartrest.templates and return to default value
 ...                 Set new az.root_cert_path and return to default value
 ...                 Set new az.mapper.timestamp and return to default value
-...                 Set new mqtt.bind_address and return to default value
+...                 Set new mqtt.bind.address and return to default value
 ...                 Set new mqtt.bind.port and return to default value
 ...                 Set new tmp.path and return to default value
 ...                 Set new logs.path and return to default value
@@ -111,16 +111,16 @@ set/unset az.mapper.timestamp
     ${unset}    Execute Command    tedge config list
     Should Contain    ${unset}    az.mapper.timestamp=true
 
-set/unset mqtt.bind_address
-    Execute Command    sudo tedge config set mqtt.bind_address 127.1.1.1    #Changing mqtt.bind_address
+set/unset mqtt.bind.address
+    Execute Command    sudo tedge config set mqtt.bind.address 127.1.1.1    #Changing mqtt.bind.address
     ${set}    Execute Command    tedge config list
-    Should Contain    ${set}    mqtt.bind_address=127.1.1.1
+    Should Contain    ${set}    mqtt.bind.address=127.1.1.1
 
     #Undo the change by using the 'unset' command, value returns to default one
     Execute Command
-    ...    sudo tedge config unset mqtt.bind_address
+    ...    sudo tedge config unset mqtt.bind.address
     ${unset}    Execute Command    tedge config list
-    Should Contain    ${unset}    mqtt.bind_address=127.0.0.1
+    Should Contain    ${unset}    mqtt.bind.address=127.0.0.1
 
 set/unset mqtt.bind.port
     Execute Command    sudo tedge config set mqtt.bind.port 8888    #Changing mqtt.bind.port

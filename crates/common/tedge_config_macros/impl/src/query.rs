@@ -43,7 +43,7 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
             .cloned()
             .collect::<Vec<_>>(),
     );
-    let (static_alias, updated_key) = alternate_keys(paths.iter());
+    let (static_alias, updated_key) = deprecated_keys(paths.iter());
 
     quote! {
         #readable_keys
@@ -92,7 +92,7 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
                 let mut aliases = struct_field_aliases(None, &fields);
                 #(
                     if let Some(alias) = aliases.insert(Cow::Borrowed(#static_alias), Cow::Borrowed(ReadableKey::#updated_key.as_str())) {
-                        panic!("Duplicate configuration alias for '{}'. It maps to both '{}' and '{}'. Perhaps you provided an incorrect `alternate_key` for one of these configurations?", #static_alias, alias, ReadableKey::#updated_key.as_str());
+                        panic!("Duplicate configuration alias for '{}'. It maps to both '{}' and '{}'. Perhaps you provided an incorrect `deprecated_key` for one of these configurations?", #static_alias, alias, ReadableKey::#updated_key.as_str());
                     }
                 )*
                 aliases
@@ -136,7 +136,7 @@ fn configuration_strings<'a>(
         .unzip()
 }
 
-fn alternate_keys<'a>(
+fn deprecated_keys<'a>(
     variants: impl Iterator<Item = &'a VecDeque<&'a FieldOrGroup>>,
 ) -> (Vec<&'a str>, Vec<syn::Ident>) {
     variants
@@ -146,9 +146,8 @@ fn alternate_keys<'a>(
                 .unwrap()
                 .field()
                 .unwrap()
-                .alternate_keys()
-                .iter()
-                .map(|key| (key.as_str(), variant_name(segments)))
+                .deprecated_keys()
+                .map(|key| (key, variant_name(segments)))
         })
         .unzip()
 }

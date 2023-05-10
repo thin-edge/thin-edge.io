@@ -33,7 +33,7 @@ Set configuration via environment variables
     TEDGE_C8Y_URL    c8y.url    example.com
     TEDGE_DEVICE_KEY_PATH    device.key_path    /etc/example.key
     TEDGE_DEVICE_CERT_PATH    device.cert_path    /etc/example.pem
-    TEDGE_MQTT_BIND_ADDRESS    mqtt.bind_address    0.0.0.1
+    TEDGE_MQTT_BIND_ADDRESS    mqtt.bind.address    0.0.0.1
     TEDGE_MQTT_CLIENT_HOST    mqtt.client.host    custom_host_name
     TEDGE_MQTT_CLIENT_PORT    mqtt.client.port    8888
 
@@ -45,7 +45,7 @@ Set unknown configuration via environment variables
     Should Be Equal    ${stdout}    example.com\n
     Should Contain
     ...    ${stderr}
-    ...    Unknown configuration field "c8y.unknown_configuration" from environment variable TEDGE_C8Y_UNKNOWN_CONFIGURATION
+    ...    Unknown configuration field "c8y_unknown_configuration" from environment variable TEDGE_C8Y_UNKNOWN_CONFIGURATION
 
 
 *** Keywords ***

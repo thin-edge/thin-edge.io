@@ -49,7 +49,15 @@ pub struct ConfigurationGroup {
 impl TryFrom<super::parse::ConfigurationGroup> for ConfigurationGroup {
     type Error = syn::Error;
 
-    fn try_from(value: super::parse::ConfigurationGroup) -> Result<Self, Self::Error> {
+    fn try_from(mut value: super::parse::ConfigurationGroup) -> Result<Self, Self::Error> {
+        for name in value.deprecated_names {
+            // TODO similar errors to fields?
+            let name_str = name.as_str();
+            value
+                .attrs
+                .push(parse_quote_spanned! {name.span() => #[serde(alias = #name_str)]})
+        }
+
         Ok(Self {
             attrs: value.attrs,
             rename: value.rename,
@@ -127,7 +135,7 @@ pub enum ConfigurableField {
 #[derive(Debug)]
 pub struct ReadOnlyField {
     pub attrs: Vec<syn::Attribute>,
-    pub alternate_keys: Vec<String>,
+    pub deprecated_keys: Vec<SpannedValue<String>>,
     pub readonly: ReadonlySettings,
     pub rename: Option<SpannedValue<String>>,
     pub dto: FieldDtoSettings,
@@ -160,7 +168,7 @@ impl ReadOnlyField {
 #[derive(Debug)]
 pub struct ReadWriteField {
     pub attrs: Vec<syn::Attribute>,
-    pub alternate_keys: Vec<String>,
+    pub deprecated_keys: Vec<SpannedValue<String>>,
     pub rename: Option<SpannedValue<String>>,
     pub dto: FieldDtoSettings,
     pub reader: ReaderSettings,
@@ -245,47 +253,63 @@ impl ConfigurableField {
         }
     }
 
-    pub fn alternate_keys(&self) -> &[String] {
-        match self {
-            Self::ReadOnly(field) => &field.alternate_keys,
-            Self::ReadWrite(field) => &field.alternate_keys,
-        }
+    pub fn deprecated_keys<'a>(&'a self) -> impl Iterator<Item = &'a str> {
+        let keys = match self {
+            Self::ReadOnly(field) => &field.deprecated_keys,
+            Self::ReadWrite(field) => &field.deprecated_keys,
+        };
+        keys.iter().map(|key| key.as_str())
     }
 }
 
 impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
     type Error = syn::Error;
     fn try_from(mut value: super::parse::ConfigurableField) -> Result<Self, Self::Error> {
-        value
-            .attrs
-            .iter()
-            .filter(|attr| attr.path().is_ident("serde"))
-            .filter_map(|attr| attr.meta.require_list().ok())
-            .filter_map(|attr| darling::ast::NestedMeta::parse_meta_list(attr.tokens.clone()).ok())
-            .flatten()
-            .filter_map(|attr| match attr {
-                NestedMeta::Meta(m) => Some(m),
-                _ => None,
-            })
-            .filter_map(|meta| Some(meta.require_name_value().ok()?.to_owned()))
-            .filter(|attr| attr.path.is_ident("rename"))
-            .map(|attr| {
-                syn::Error::new(
-                    attr.span(),
-                    "use #[tedge_config(rename)] instead of #[serde(rename)] to rename fields",
-                )
-            })
-            .fold(OptionalError::default(), |errors, e| {
-                errors.combine_owned(e)
-            })
-            .try_throw()?;
-
+        deny_attribute(&value.attrs, "serde", "rename", "tedge_config(rename)")?;
+        deny_attribute(
+            &value.attrs,
+            "serde",
+            "alias",
+            "tedge_config(deprecated_name)",
+        )?;
         if let Some(renamed_to) = &value.rename {
             let span = renamed_to.span();
             let literal = renamed_to.as_str();
             value
                 .attrs
                 .push(parse_quote_spanned!(span=> #[serde(rename = #literal)]))
+        }
+
+        let mut deprecated_name_errors = OptionalError::default();
+        for name in value.deprecated_names {
+            let name_str = name.as_str();
+            if name.contains(".") {
+                deprecated_name_errors.combine(syn::Error::new(
+                    name.span(),
+                    format!("this a path rather than a field or group name. Did you mean to use #[tedge_config(deprecated_key = \"{name_str}\")] instead?")
+                ));
+            }
+            value
+                .attrs
+                .push(parse_quote_spanned! {name.span()=> #[serde(alias = #name_str)]})
+        }
+
+        for key in &value.deprecated_keys {
+            if !key.contains(".") {
+                deprecated_name_errors.combine(syn::Error::new(
+                    key.span(),
+                    format!("this is just a field or group name, not a key (which would contain one or more `.`s). Did you mean to use #[tedge_config(deprecated_name = \"{}\"] instead?", key.as_str())
+                ));
+            }
+        }
+
+        deprecated_name_errors.try_throw()?;
+
+        for example in &value.examples {
+            let example_str = example.as_str();
+            value
+                .attrs
+                .push(parse_quote_spanned! {example.span()=> #[doku(example = #example_str)]});
         }
 
         if let Some(readonly) = value.readonly {
@@ -304,7 +328,7 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
             error.try_throw().map(|_| {
                 Self::ReadOnly(ReadOnlyField {
                     attrs: value.attrs,
-                    alternate_keys: value.alternate_keys,
+                    deprecated_keys: value.deprecated_keys,
                     rename: value.rename,
                     ident: value.ident.unwrap(),
                     readonly,
@@ -320,7 +344,7 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
 
             Ok(Self::ReadWrite(ReadWriteField {
                 attrs: value.attrs,
-                alternate_keys: value.alternate_keys,
+                deprecated_keys: value.deprecated_keys,
                 rename: value.rename,
                 examples: value.examples,
                 ident: value.ident.unwrap(),
@@ -331,6 +355,36 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
             }))
         }
     }
+}
+
+fn deny_attribute(
+    attrs: &[syn::Attribute],
+    krate: &str,
+    attribute: &str,
+    our_name: &str,
+) -> Result<(), syn::Error> {
+    attrs
+        .iter()
+        .filter(|attr| attr.path().is_ident(krate))
+        .filter_map(|attr| attr.meta.require_list().ok())
+        .filter_map(|attr| darling::ast::NestedMeta::parse_meta_list(attr.tokens.clone()).ok())
+        .flatten()
+        .filter_map(|attr| match attr {
+            NestedMeta::Meta(m) => Some(m),
+            _ => None,
+        })
+        .filter_map(|meta| Some(meta.require_name_value().ok()?.to_owned()))
+        .filter(|attr| attr.path.is_ident(attribute))
+        .map(|attr| {
+            syn::Error::new(
+                attr.span(),
+                format!("use #[{our_name}] instead of #[{krate}({attribute})] to rename fields"),
+            )
+        })
+        .fold(OptionalError::default(), |errors, e| {
+            errors.combine_owned(e)
+        })
+        .try_throw()
 }
 
 fn tedge_note_to_doku_meta(note: &SpannedValue<String>) -> syn::Attribute {

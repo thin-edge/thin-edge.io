@@ -1,4 +1,3 @@
-use crate::seconds::Seconds;
 use crate::*;
 use camino::Utf8PathBuf;
 use certificate::CertificateError;
@@ -82,7 +81,7 @@ fn http_bind_address_read_only_error() -> ConfigSettingError {
     ConfigSettingError::ReadonlySetting {
         message: concat!(
             "The http address cannot be set directly. It is read from the mqtt bind address.\n",
-            "To set 'http.bind_address' to some <address>, you can `tedge config set mqtt.bind_address <address>`.",
+            "To set 'http.bind_address' to some <address>, you can `tedge config set mqtt.bind.address <address>`.",
         ),
     }
 }
@@ -969,12 +968,12 @@ impl ConfigSettingAccessor<FirmwareChildUpdateTimeoutSetting> for TEdgeConfig {
         _setting: FirmwareChildUpdateTimeoutSetting,
         value: Seconds,
     ) -> ConfigSettingResult<()> {
-        self.data.firmware.child.update.timeout = Some(new::Seconds(value.into()));
+        self.data.firmware.child.update.timeout = Some(Seconds(value.into()));
         Ok(())
     }
 
     fn unset(&mut self, _setting: FirmwareChildUpdateTimeoutSetting) -> ConfigSettingResult<()> {
-        self.data.firmware.child.update.timeout = Some(new::Seconds(
+        self.data.firmware.child.update.timeout = Some(Seconds(
             self.config_defaults
                 .default_firmware_child_update_timeout
                 .into(),

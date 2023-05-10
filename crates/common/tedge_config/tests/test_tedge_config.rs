@@ -655,7 +655,7 @@ fn test_parse_config_empty_file() -> Result<(), TEdgeConfigError> {
     );
     assert_eq!(
         config.query(FirmwareChildUpdateTimeoutSetting)?,
-        Seconds(3600)
+        Seconds::from(3600)
     );
     assert_eq!(config.query(ServiceTypeSetting)?, "service".to_string());
     assert_eq!(config.query(TmpPathSetting)?, Utf8PathBuf::from("/tmp"));
@@ -962,7 +962,7 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_mqtt_bind_address: IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST)),
         default_http_bind_address: IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST)),
         default_c8y_smartrest_templates: TemplatesSet::default(),
-        default_firmware_child_update_timeout: Seconds(3600),
+        default_firmware_child_update_timeout: Seconds::from(3600),
         default_service_type: String::from("service"),
         default_lock_files: Flag(true),
     }

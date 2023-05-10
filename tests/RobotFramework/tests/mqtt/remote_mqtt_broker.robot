@@ -64,7 +64,7 @@ Custom Setup
     Disconnect Mapper    c8y
     Execute Command    sudo tedge config set mqtt.client.host ${CONTAINER_1_IP}
     Execute Command    sudo tedge config set mqtt.client.port 1883
-    Execute Command    sudo tedge config set mqtt.bind_address ${CONTAINER_1_IP}
+    Execute Command    sudo tedge config set mqtt.bind.address ${CONTAINER_1_IP}
     Connect Mapper    c8y
     Restart Service    mqtt-logger
 

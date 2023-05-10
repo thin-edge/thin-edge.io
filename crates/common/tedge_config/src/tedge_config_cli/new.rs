@@ -1,4 +1,5 @@
 use crate::ConnectUrl;
+use crate::Seconds;
 use crate::TEdgeConfigLocation;
 use crate::TemplatesSet;
 use camino::Utf8PathBuf;
@@ -7,13 +8,10 @@ use certificate::PemCertificate;
 use doku::Document;
 use once_cell::sync::Lazy;
 use std::borrow::Cow;
-use std::fmt;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::num::NonZeroU16;
 use std::path::PathBuf;
-use std::str::FromStr;
-use std::time::Duration;
 use tedge_config_macros::define_tedge_config;
 use tedge_config_macros::struct_field_aliases;
 use tedge_config_macros::struct_field_paths;
@@ -100,6 +98,10 @@ pub enum TomlMigrationStep {
         original: &'static str,
         target: &'static str,
     },
+
+    RemoveTableIfEmpty {
+        key: &'static str,
+    },
 }
 
 impl TomlMigrationStep {
@@ -146,6 +148,26 @@ impl TomlMigrationStep {
                 // TODO if this returns Some, something is going wrong? Maybe this could be an error, or maybe it doesn't matter
                 table.insert(field.to_owned(), value);
             }
+            TomlMigrationStep::RemoveTableIfEmpty { key } => {
+                let mut doc = &mut toml;
+                let (parents, target) = key.rsplit_once('.').unwrap();
+                for key in parents.split('.') {
+                    let table = doc.as_table_mut().unwrap();
+                    if !table.contains_key(key) {
+                        table.insert(key.to_owned(), toml::Value::Table(Table::new()));
+                    }
+                    doc = &mut doc[key];
+                }
+                let table = doc.as_table_mut().unwrap();
+                if let Some(table) = table.get(target) {
+                    let table = table.as_table().unwrap();
+                    // TODO make sure this is covered in toml migration test
+                    if !table.is_empty() {
+                        return toml;
+                    }
+                }
+                table.remove(target);
+            }
         }
 
         toml
@@ -161,27 +183,35 @@ pub static READABLE_KEYS: Lazy<Vec<(Cow<'static, str>, doku::Type)>> = Lazy::new
 });
 
 impl TEdgeTomlVersion {
+    fn next(self) -> Self {
+        match self {
+            Self::One => Self::Two,
+            Self::Two => Self::Two,
+        }
+    }
     pub fn migrations(self) -> Option<Vec<TomlMigrationStep>> {
         use WritableKey::*;
-        if Self::One == self {
-            let mv = |original, target: WritableKey| TomlMigrationStep::MoveKey {
-                original,
-                target: target.as_str(),
-            };
-            let update_version_field = TomlMigrationStep::UpdateFieldValue {
-                key: "config.version",
-                value: TEdgeTomlVersion::Two.into(),
-            };
+        let mv = |original, target: WritableKey| TomlMigrationStep::MoveKey {
+            original,
+            target: target.as_str(),
+        };
+        let update_version_field = || TomlMigrationStep::UpdateFieldValue {
+            key: "config.version",
+            value: self.next().into(),
+        };
+        let rm = |key| TomlMigrationStep::RemoveTableIfEmpty { key };
 
-            Some(vec![
+        match self {
+            Self::One => Some(vec![
                 mv("mqtt.port", MqttBindPort),
                 mv("mqtt.bind_address", MqttBindAddress),
                 mv("mqtt.client_host", MqttClientHost),
                 mv("mqtt.client_port", MqttClientPort),
-                mv("mqtt.client_cafile", MqttClientAuthCaFile),
-                mv("mqtt.client_capath", MqttClientAuthCaDir),
+                mv("mqtt.client_ca_file", MqttClientAuthCaFile),
+                mv("mqtt.client_ca_path", MqttClientAuthCaDir),
                 mv("mqtt.client_auth.cert_file", MqttClientAuthCertFile),
                 mv("mqtt.client_auth.key_file", MqttClientAuthKeyFile),
+                rm("mqtt.client_auth"),
                 mv("mqtt.external_port", MqttExternalBindPort),
                 mv("mqtt.external_bind_address", MqttExternalBindAddress),
                 mv("mqtt.external_bind_interface", MqttExternalBindInterface),
@@ -196,10 +226,9 @@ impl TEdgeTomlVersion {
                 mv("run.lock_files", RunLockFiles),
                 mv("firmware.child_update_timeout", FirmwareChildUpdateTimeout),
                 mv("c8y.smartrest_templates", C8ySmartrestTemplates),
-                update_version_field,
-            ])
-        } else {
-            None
+                update_version_field(),
+            ]),
+            Self::Two => None,
         }
     }
 }
@@ -220,7 +249,7 @@ define_tedge_config! {
                 To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",
             function = "device_id",
         ))]
-        // TODO should tedge config support examples for read-only values
+        // TODO should tedge_config support read only examples?
         #[doku(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
         #[tedge_config(note = "This setting is derived from the device certificate and is therefore read only.")]
         #[doku(as = "String")]
@@ -237,28 +266,30 @@ define_tedge_config! {
         cert_path: Utf8PathBuf,
 
         /// The default device type
-        #[tedge_config(example = "thin-edge.io")]
+        #[tedge_config(example = "thin-edge.io", default(value = "thin-edge.io"))]
         #[tedge_config(rename = "type")]
         ty: String,
     },
 
     c8y: {
-        /// Endpoint URL of Azure IoT tenant
-        #[tedge_config(example = "myazure.azure-devices.net")]
+        /// Endpoint URL of Cumulocity tenant
+        #[tedge_config(example = "your-tenant.cumulocity.com")]
         url: ConnectUrl,
 
-        /// The path where Azure IoT root certificate(s) are stared
+        /// The path where Cumulocity root certificate(s) are stared
         #[tedge_config(note = "The value can be a directory path as well as the path of the direct certificate file.")]
         #[tedge_config(example = "/etc/tedge/az-trusted-root-certificates.pem", default(variable = "DEFAULT_ROOT_CERT_PATH"))]
         #[doku(as = "PathBuf")]
         root_cert_path: Utf8PathBuf,
 
         smartrest: {
+            /// Set of SmartREST template IDs the device should subscribe to
+            #[tedge_config(example = "templateId1,templateId2", default(function = "TemplatesSet::default"))]
             templates: TemplatesSet,
         },
     },
 
-    #[serde(alias = "azure")] // for 0.1.0 compatibility
+    #[tedge_config(deprecated_name = "azure")] // for 0.1.0 compatibility
     az: {
         /// Endpoint URL of Azure IoT tenant
         #[tedge_config(example = "myazure.azure-devices.net")]
@@ -304,7 +335,7 @@ define_tedge_config! {
             address: IpAddr,
 
             /// The port mosquitto binds to for internal use
-            #[tedge_config(example = "1883", default(function = "default_mqtt_port"), alternate_key = "mqtt.port")]
+            #[tedge_config(example = "1883", default(function = "default_mqtt_port"), deprecated_key = "mqtt.port")]
             #[doku(as = "u16")]
             // This was originally u16, but I can't think of any way in which
             // tedge could actually connect to mosquitto if it bound to a random
@@ -326,24 +357,26 @@ define_tedge_config! {
                 /// Path to the CA certificate used by MQTT clients to use when authenticating the MQTT broker
                 #[tedge_config(example = "/etc/mosquitto/ca_certificates/ca.crt")]
                 #[doku(as = "PathBuf")]
-                #[serde(alias = "cafile")]
+                #[tedge_config(deprecated_name = "cafile")]
                 ca_file: Utf8PathBuf,
 
                 /// Path to the directory containing the CA certificates used by MQTT
                 /// clients when authenticating the MQTT broker
                 #[tedge_config(example = "/etc/mosquitto/ca_certificates")]
                 #[doku(as = "PathBuf")]
-                #[serde(alias = "capath")]
+                #[tedge_config(deprecated_name = "cadir")]
                 ca_dir: Utf8PathBuf,
 
                 /// Path to the client certficate
                 #[doku(as = "PathBuf")]
-                #[serde(alias = "certfile")]
+                #[tedge_config(example = "/etc/mosquitto/auth_certificates/cert.pem")]
+                #[tedge_config(deprecated_name = "certfile")]
                 cert_file: Utf8PathBuf,
 
                 /// Path to the client private key
                 #[doku(as = "PathBuf")]
-                #[serde(alias = "keyfile")]
+                #[tedge_config(example = "/etc/mosquitto/auth_certificates/key.pem")]
+                #[tedge_config(deprecated_name = "keyfile")]
                 key_file: Utf8PathBuf,
             }
         },
@@ -351,7 +384,7 @@ define_tedge_config! {
         external: {
             bind: {
                 /// The port mosquitto binds to for external use
-                #[tedge_config(example = "8883", alternate_key = "mqtt.external.port")]
+                #[tedge_config(example = "8883", deprecated_key = "mqtt.external.port")]
                 port: u16,
 
                 /// The address mosquitto binds to for external use
@@ -367,59 +400,74 @@ define_tedge_config! {
             /// trusted when checking incoming client certificates
             #[tedge_config(example = "/etc/ssl/certs")]
             #[doku(as = "PathBuf")]
-            #[serde(alias = "capath")]
+            #[tedge_config(deprecated_key = "mqtt.external.capath")]
             ca_path: Utf8PathBuf,
 
             /// Path to the certificate file which is used by the external MQTT listener
             #[tedge_config(note = "This setting shall be used together with `mqtt.external.key_file` for external connections.")]
             #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem")]
             #[doku(as = "PathBuf")]
-            #[serde(alias = "certfile")]
+            #[tedge_config(deprecated_key = "mqtt.external.certfile")]
             cert_file: Utf8PathBuf,
 
             /// Path to the key file which is used by the external MQTT listener
             #[tedge_config(note = "This setting shall be used together with `mqtt.external.cert_file` for external connections.")]
             #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem")]
             #[doku(as = "PathBuf")]
-            #[serde(alias = "keyfile")]
+            #[tedge_config(deprecated_key = "mqtt.external.keyfile")]
             key_file: Utf8PathBuf,
         }
     },
 
     http: {
         bind: {
-            #[tedge_config(example = "8000", alternate_key = "http.port")]
+            /// Http server port used by the File Transfer Service
+            #[tedge_config(example = "8000", deprecated_key = "http.port")]
             port: u16,
 
+            /// Http server address used by the File Transfer Service
+            #[tedge_config(default(function = "default_http_address"), deprecated_key = "http.address")]
+            #[tedge_config(example = "127.0.0.1", example = "192.168.1.2")]
             address: IpAddr,
         },
     },
 
     software: {
         plugin: {
+            /// The default software plugin to be used for software management on the device
             #[tedge_config(example = "apt")]
             default: String,
         }
     },
 
     run: {
+        /// The directory used to store runtime information, such as file locks
         #[doku(as = "PathBuf")]
+        #[tedge_config(example = "/run", default(value = "/run"))]
         path: Utf8PathBuf,
 
+        /// Whether to create a lock file or not
+        #[tedge_config(example = "true", default(value = true))]
         lock_files: bool,
     },
 
     logs: {
+        /// The directory used to store logs
+        #[tedge_config(example = "/var/log", default(value = "/var/log"))]
         #[doku(as = "PathBuf")]
         path: Utf8PathBuf,
     },
 
     tmp: {
+        /// The temporary directory used to download files to the device
+        #[tedge_config(example = "/tmp", default(value = "/tmp"))]
         #[doku(as = "PathBuf")]
         path: Utf8PathBuf,
     },
 
     data: {
+        /// The directory used to store data like cached files, runtime metadata, etc.
+        #[tedge_config(example = "/var/tedge", default(value = "/var/tedge"))]
         #[doku(as = "PathBuf")]
         path: Utf8PathBuf,
     },
@@ -427,42 +475,25 @@ define_tedge_config! {
     firmware: {
         child: {
             update: {
-                #[tedge_config(example = "3600")]
+                /// The timeout limit in seconds for firmware update operations on child devices
+                #[tedge_config(example = "3600", default(value = 3600_u64))]
                 timeout: Seconds,
             }
         }
     },
 
     service: {
-        #[tedge_config(rename = "type")]
+        /// The thin-edge.io service's service type
+        #[tedge_config(rename = "type", example = "systemd", default(value = "service"))]
         ty: String,
     },
 }
 
-#[derive(
-    Copy, Clone, Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq, doku::Document,
-)]
-#[serde(transparent)]
-pub struct Seconds(pub(crate) u64);
-
-impl Seconds {
-    pub fn duration(self) -> Duration {
-        Duration::from_secs(self.0)
-    }
-}
-
-impl FromStr for Seconds {
-    type Err = <u64 as FromStr>::Err;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        u64::from_str(s).map(Self)
-    }
-}
-
-impl fmt::Display for Seconds {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
+fn default_http_address(dto: &TEdgeConfigDto) -> IpAddr {
+    let external_address = dto.mqtt.external.bind.address;
+    external_address
+        .or(dto.mqtt.bind.address)
+        .unwrap_or(Ipv4Addr::LOCALHOST.into())
 }
 
 fn device_id(reader: &TEdgeConfigReader) -> Result<String, ReadError> {
@@ -574,5 +605,51 @@ where
     type Output = Out;
     fn call(self, data: &T, location: &TEdgeConfigLocation) -> Self::Output {
         (self)(data, location)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test_case::test_case("device.id")]
+    #[test_case::test_case("device.type")]
+    #[test_case::test_case("device.key.path")]
+    #[test_case::test_case("device.cert.path")]
+    #[test_case::test_case("c8y.url")]
+    #[test_case::test_case("c8y.root.cert.path")]
+    #[test_case::test_case("c8y.smartrest.templates")]
+    #[test_case::test_case("az.url")]
+    #[test_case::test_case("az.root.cert.path")]
+    #[test_case::test_case("aws.url")]
+    #[test_case::test_case("aws.root.cert.path")]
+    #[test_case::test_case("aws.mapper.timestamp")]
+    #[test_case::test_case("az.mapper.timestamp")]
+    #[test_case::test_case("mqtt.bind_address")]
+    #[test_case::test_case("http.address")]
+    #[test_case::test_case("mqtt.client.host")]
+    #[test_case::test_case("mqtt.client.port")]
+    #[test_case::test_case("mqtt.client.auth.cafile")]
+    #[test_case::test_case("mqtt.client.auth.cadir")]
+    #[test_case::test_case("mqtt.client.auth.certfile")]
+    #[test_case::test_case("mqtt.client.auth.keyfile")]
+    #[test_case::test_case("mqtt.port")]
+    #[test_case::test_case("http.port")]
+    #[test_case::test_case("mqtt.external.port")]
+    #[test_case::test_case("mqtt.external.bind_address")]
+    #[test_case::test_case("mqtt.external.bind_interface")]
+    #[test_case::test_case("mqtt.external.capath")]
+    #[test_case::test_case("mqtt.external.certfile")]
+    #[test_case::test_case("mqtt.external.keyfile")]
+    #[test_case::test_case("software.plugin.default")]
+    #[test_case::test_case("tmp.path")]
+    #[test_case::test_case("logs.path")]
+    #[test_case::test_case("run.path")]
+    #[test_case::test_case("data.path")]
+    #[test_case::test_case("firmware.child.update.timeout")]
+    #[test_case::test_case("service.type")]
+    #[test_case::test_case("run.lock_files")]
+    fn all_0_10_keys_can_be_deserialised(key: &str) {
+        key.parse::<ReadableKey>().unwrap();
     }
 }

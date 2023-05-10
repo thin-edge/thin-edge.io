@@ -31,6 +31,8 @@ pub struct ConfigurationAttributes {
     pub dto: GroupDtoSettings,
     #[darling(default)]
     pub reader: ReaderSettings,
+    #[darling(default, multiple, rename = "deprecated_name")]
+    pub deprecated_names: Vec<SpannedValue<String>>,
 }
 
 #[derive(Debug)]
@@ -38,6 +40,7 @@ pub struct ConfigurationGroup {
     pub attrs: Vec<syn::Attribute>,
     pub dto: GroupDtoSettings,
     pub reader: ReaderSettings,
+    pub deprecated_names: Vec<SpannedValue<String>>,
     pub rename: Option<SpannedValue<String>>,
     pub ident: syn::Ident,
     pub colon_token: Token![:],
@@ -54,6 +57,7 @@ impl Parse for ConfigurationGroup {
             attrs: attributes.into_iter().filter(not_tedge_config).collect(),
             dto: known_attributes.dto,
             reader: known_attributes.reader,
+            deprecated_names: known_attributes.deprecated_names,
             // TODO support me
             rename: None,
             ident: input.parse()?,
@@ -106,8 +110,10 @@ pub struct ConfigurableField {
     pub dto: FieldDtoSettings,
     #[darling(default)]
     pub rename: Option<SpannedValue<String>>,
-    #[darling(multiple, rename = "alternate_key")]
-    pub alternate_keys: Vec<String>,
+    #[darling(multiple, rename = "deprecated_key")]
+    pub deprecated_keys: Vec<SpannedValue<String>>,
+    #[darling(multiple, rename = "deprecated_name")]
+    pub deprecated_names: Vec<SpannedValue<String>>,
     #[darling(default)]
     // TODO remove this or separate it from the group ones
     pub reader: ReaderSettings,

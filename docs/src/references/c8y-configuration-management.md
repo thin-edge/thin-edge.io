@@ -257,7 +257,7 @@ Note that:
 The behavior of the `c8y-configuration-plugin` is also controlled
 by the configuration of thin-edge:
 
-* `tedge config get mqtt.bind_address`: the address of the local MQTT bus.
+* `tedge config get mqtt.bind.address`: the address of the local MQTT bus.
 * `tedge config get mqtt.bind.port`: the TCP port of the local MQTT bus.
 * `tedge config get tmp.path`: the directory where the files are updated
   before being copied atomically to their targets.

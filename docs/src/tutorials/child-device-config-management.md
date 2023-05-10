@@ -61,7 +61,7 @@ The rest of the MQTT and HTTP interactions would remain the same.
 Since child-device connectors typically run on thin-edge.io device itself, these APIs can be accessed via a local IP or even 127.0.0.1.
 In cases where the child-device connector is deployed on the external child-device itself,
 the MQTT and HTTP APIs of thin-edge.io need to be accessed over the network using its IP address, 
-which is configured using the thin-edge.io configuration settings `mqtt.external.bind.address` or `mqtt.bind_address`.
+which is configured using the thin-edge.io configuration settings `mqtt.external.bind.address` or `mqtt.bind.address`.
 The MQTT APIs are exposed via port 1883 and the HTTP APIs are exposed via port 8000.
 
 In this tutorial 127.0.0.1. is used.
@@ -145,7 +145,7 @@ Follow these steps to bootstrap the child device:
    The child-device connector needs to upload this file to thin-edge.io with an HTTP PUT request to the URL:
    `http://{tedge-ip}:8000/tedge/file-transfer/{child-id}/c8y-configuration-plugin`
    
-   * `{tedge-ip}` is the IP of the thin-edge.io device which is configured as `mqtt.external.bind.address` or `mqtt.bind_address` or
+   * `{tedge-ip}` is the IP of the thin-edge.io device which is configured as `mqtt.external.bind.address` or `mqtt.bind.address` or
      `127.0.0.1` if neither is configured.
    * `{child-id}` is the child-device-id.
    

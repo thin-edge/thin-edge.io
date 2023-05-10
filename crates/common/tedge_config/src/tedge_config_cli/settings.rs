@@ -359,7 +359,7 @@ impl ConfigSetting for HttpBindAddressSetting {
 pub struct MqttBindAddressSetting;
 
 impl ConfigSetting for MqttBindAddressSetting {
-    const KEY: &'static str = "mqtt.bind_address";
+    const KEY: &'static str = "mqtt.bind.address";
 
     const DESCRIPTION: &'static str = concat!(
         "Mqtt bind address, which is used by the mqtt clients to publish or subscribe. ",

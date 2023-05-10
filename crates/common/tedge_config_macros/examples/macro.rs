@@ -48,7 +48,7 @@ define_tedge_config! {
         device_type: String,
     },
 
-    #[serde(alias = "azure")] // for 0.1.0 compatibility
+    #[tedge_config(deprecated_name = "azure")] // for 0.1.0 compatibility
     az: {
         /// Endpoint URL of Azure IoT tenant
         #[tedge_config(example = "myazure.azure-devices.net")]
@@ -86,7 +86,7 @@ define_tedge_config! {
             /// The port mosquitto binds to for internal use
             #[tedge_config(example = "1883", default(function = "default_mqtt_port"))]
             #[doku(as = "u16")]
-            #[tedge_config(alternate_key = "mqtt.bind.port")]
+            #[tedge_config(deprecated_key = "mqtt.bind.port")]
             // This was originally u16, but I can't think of any way in which
             // tedge could actually connect to mosquitto if it bound to a random
             // free port, so I don't think 0 is *really* valid here
@@ -107,24 +107,24 @@ define_tedge_config! {
                 /// Path to the CA certificate used by MQTT clients to use when authenticating the MQTT broker
                 #[tedge_config(example = "/etc/mosquitto/ca_certificates/ca.crt")]
                 #[doku(as = "PathBuf")]
-                #[serde(alias = "cafile")]
+                #[tedge_config(deprecated_name = "cafile")]
                 ca_file: Utf8PathBuf,
 
                 /// Path to the directory containing the CA certificates used by MQTT
                 /// clients when authenticating the MQTT broker
                 #[tedge_config(example = "/etc/mosquitto/ca_certificates")]
                 #[doku(as = "PathBuf")]
-                #[serde(alias = "capath")]
+                #[tedge_config(deprecated_name = "capath")]
                 ca_path: Utf8PathBuf,
 
                 /// Path to the client certficate
                 #[doku(as = "PathBuf")]
-                #[serde(alias = "certfile")]
+                #[tedge_config(deprecated_name = "certfile")]
                 cert_file: Utf8PathBuf,
 
                 /// Path to the client private key
                 #[doku(as = "PathBuf")]
-                #[serde(alias = "keyfile")]
+                #[tedge_config(deprecated_name = "keyfile")]
                 key_file: Utf8PathBuf,
             }
         },
@@ -148,21 +148,21 @@ define_tedge_config! {
             /// trusted when checking incoming client certificates
             #[tedge_config(example = "/etc/ssl/certs")]
             #[doku(as = "PathBuf")]
-            #[serde(alias = "capath")]
+            #[tedge_config(deprecated_name = "capath")]
             ca_path: Utf8PathBuf,
 
             /// Path to the certificate file which is used by the external MQTT listener
             #[tedge_config(note = "This setting shall be used together with `mqtt.external.key_file` for external connections.")]
             #[tedge_config(example = "/etc/tedge/device-certs/tedge-certificate.pem")]
             #[doku(as = "PathBuf")]
-            #[serde(alias = "certfile")]
+            #[tedge_config(deprecated_name = "certfile")]
             cert_file: Utf8PathBuf,
 
             /// Path to the key file which is used by the external MQTT listener
             #[tedge_config(note = "This setting shall be used together with `mqtt.external.cert_file` for external connections.")]
             #[tedge_config(example = "/etc/tedge/device-certs/tedge-private-key.pem")]
             #[doku(as = "PathBuf")]
-            #[serde(alias = "keyfile")]
+            #[tedge_config(deprecated_name = "keyfile")]
             key_file: Utf8PathBuf,
         }
     }
