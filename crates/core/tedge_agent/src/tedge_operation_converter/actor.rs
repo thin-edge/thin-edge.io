@@ -1,3 +1,5 @@
+use crate::software_manager::actor::SoftwareRequest;
+use crate::software_manager::actor::SoftwareResponse;
 use crate::tedge_operation_converter::error::TedgeOperationConverterError;
 use async_trait::async_trait;
 use tedge_actors::fan_in_message_type;
@@ -17,12 +19,11 @@ use tedge_api::SoftwareUpdateResponse;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 
-fan_in_message_type!(AgentInput[MqttMessage, SoftwareListResponse, SoftwareUpdateResponse, RestartOperationResponse] : Debug);
+fan_in_message_type!(AgentInput[MqttMessage, SoftwareResponse, RestartOperationResponse] : Debug);
 
 pub struct TedgeOperationConverterActor {
     input_receiver: LoggingReceiver<AgentInput>,
-    software_list_sender: DynSender<SoftwareListRequest>,
-    software_update_sender: DynSender<SoftwareUpdateRequest>,
+    software_sender: DynSender<SoftwareRequest>,
     restart_sender: DynSender<RestartOperationRequest>,
     mqtt_publisher: DynSender<MqttMessage>,
 }
@@ -39,10 +40,10 @@ impl Actor for TedgeOperationConverterActor {
                 AgentInput::MqttMessage(message) => {
                     self.process_mqtt_message(message).await?;
                 }
-                AgentInput::SoftwareListResponse(res) => {
+                AgentInput::SoftwareResponse(SoftwareResponse::SoftwareListResponse(res)) => {
                     self.process_software_list_response(res).await?;
                 }
-                AgentInput::SoftwareUpdateResponse(res) => {
+                AgentInput::SoftwareResponse(SoftwareResponse::SoftwareUpdateResponse(res)) => {
                     self.process_software_update_response(res).await?;
                 }
                 AgentInput::RestartOperationResponse(res) => {
@@ -57,15 +58,13 @@ impl Actor for TedgeOperationConverterActor {
 impl TedgeOperationConverterActor {
     pub fn new(
         input_receiver: LoggingReceiver<AgentInput>,
-        software_list_sender: DynSender<SoftwareListRequest>,
-        software_update_sender: DynSender<SoftwareUpdateRequest>,
+        software_sender: DynSender<SoftwareRequest>,
         restart_sender: DynSender<RestartOperationRequest>,
         mqtt_publisher: DynSender<MqttMessage>,
     ) -> Self {
         Self {
             input_receiver,
-            software_list_sender,
-            software_update_sender,
+            software_sender,
             restart_sender,
             mqtt_publisher,
         }
@@ -78,11 +77,15 @@ impl TedgeOperationConverterActor {
         match message.topic.name.as_str() {
             "tedge/commands/req/software/list" => {
                 let request = SoftwareListRequest::from_slice(message.payload_bytes())?;
-                self.software_list_sender.send(request).await?;
+                self.software_sender
+                    .send(SoftwareRequest::SoftwareListRequest(request))
+                    .await?;
             }
             "tedge/commands/req/software/update" => {
                 let request = SoftwareUpdateRequest::from_slice(message.payload_bytes())?;
-                self.software_update_sender.send(request).await?;
+                self.software_sender
+                    .send(SoftwareRequest::SoftwareUpdateRequest(request))
+                    .await?;
             }
             "tedge/commands/req/control/restart" => {
                 let request = RestartOperationRequest::from_slice(message.payload_bytes())?;

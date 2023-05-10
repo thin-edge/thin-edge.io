@@ -2,10 +2,8 @@ use crate::file_transfer_server::actor::FileTransferServerBuilder;
 use crate::file_transfer_server::http_rest::HttpConfig;
 use crate::restart_manager::builder::RestartManagerBuilder;
 use crate::restart_manager::config::RestartManagerConfig;
-use crate::software_list_manager::builder::SoftwareListManagerBuilder;
-use crate::software_list_manager::config::SoftwareListManagerConfig;
-use crate::software_update_manager::builder::SoftwareUpdateManagerBuilder;
-use crate::software_update_manager::config::SoftwareUpdateManagerConfig;
+use crate::software_manager::builder::SoftwareManagerBuilder;
+use crate::software_manager::config::SoftwareManagerConfig;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
 use camino::Utf8PathBuf;
 use flockfile::check_another_instance_is_not_running;
@@ -38,8 +36,7 @@ pub struct AgentConfig {
     pub mqtt_config: MqttConfig,
     pub http_config: HttpConfig,
     pub restart_config: RestartManagerConfig,
-    pub sw_list_config: SoftwareListManagerConfig,
-    pub sw_update_config: SoftwareUpdateManagerConfig,
+    pub sw_update_config: SoftwareManagerConfig,
     pub run_dir: Utf8PathBuf,
     pub use_lock: Flag,
     pub log_dir: Utf8PathBuf,
@@ -71,12 +68,8 @@ impl AgentConfig {
         // Restart config
         let restart_config = RestartManagerConfig::from_tedge_config(tedge_config_location)?;
 
-        // Software list config
-        let sw_list_config = SoftwareListManagerConfig::from_tedge_config(tedge_config_location)?;
-
         // Software update config
-        let sw_update_config =
-            SoftwareUpdateManagerConfig::from_tedge_config(tedge_config_location)?;
+        let sw_update_config = SoftwareManagerConfig::from_tedge_config(tedge_config_location)?;
 
         // For flockfile
         let run_dir = tedge_config.query(RunPathSetting)?;
@@ -92,7 +85,6 @@ impl AgentConfig {
             mqtt_config,
             http_config,
             restart_config,
-            sw_list_config,
             sw_update_config,
             run_dir,
             use_lock,
@@ -166,17 +158,12 @@ impl Agent {
                 .with_session_name(TEDGE_AGENT),
         );
 
-        // Software list actor
-        let mut software_list_builder =
-            SoftwareListManagerBuilder::new(self.config.sw_list_config.clone());
-
         // Software update actor
         let mut software_update_builder =
-            SoftwareUpdateManagerBuilder::new(self.config.sw_update_config.clone());
+            SoftwareManagerBuilder::new(self.config.sw_update_config.clone());
 
         // Converter actor
         let converter_actor_builder = TedgeOperationConverterBuilder::new(
-            &mut software_list_builder,
             &mut software_update_builder,
             &mut restart_actor_builder,
             &mut mqtt_actor_builder,
@@ -193,7 +180,6 @@ impl Agent {
         runtime.spawn(file_transfer_server_builder).await?;
         runtime.spawn(mqtt_actor_builder).await?;
         runtime.spawn(restart_actor_builder).await?;
-        runtime.spawn(software_list_builder).await?;
         runtime.spawn(software_update_builder).await?;
         runtime.spawn(converter_actor_builder).await?;
         runtime.spawn(health_actor).await?;

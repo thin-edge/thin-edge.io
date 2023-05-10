@@ -9,7 +9,7 @@ use tedge_config::TEdgeConfigLocation;
 use tedge_config::TmpPathSetting;
 
 #[derive(Debug, Clone)]
-pub struct SoftwareUpdateManagerConfig {
+pub struct SoftwareManagerConfig {
     pub tmp_dir: Utf8PathBuf,
     pub config_dir: Utf8PathBuf,
     pub sm_plugins_dir: Utf8PathBuf,
@@ -18,7 +18,7 @@ pub struct SoftwareUpdateManagerConfig {
     pub config_location: TEdgeConfigLocation,
 }
 
-impl SoftwareUpdateManagerConfig {
+impl SoftwareManagerConfig {
     pub fn new(
         tmp_dir: &Utf8PathBuf,
         config_dir: &Utf8PathBuf,
@@ -39,7 +39,7 @@ impl SoftwareUpdateManagerConfig {
 
     pub fn from_tedge_config(
         tedge_config_location: &TEdgeConfigLocation,
-    ) -> Result<SoftwareUpdateManagerConfig, TEdgeConfigError> {
+    ) -> Result<SoftwareManagerConfig, TEdgeConfigError> {
         let config_repository =
             tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
         let tedge_config = config_repository.load()?;

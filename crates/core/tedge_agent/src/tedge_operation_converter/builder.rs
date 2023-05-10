@@ -1,3 +1,5 @@
+use crate::software_manager::actor::SoftwareRequest;
+use crate::software_manager::actor::SoftwareResponse;
 use crate::tedge_operation_converter::actor::AgentInput;
 use crate::tedge_operation_converter::actor::TedgeOperationConverterActor;
 use tedge_actors::futures::channel::mpsc;
@@ -11,17 +13,12 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
 use tedge_api::RestartOperationRequest;
 use tedge_api::RestartOperationResponse;
-use tedge_api::SoftwareListRequest;
-use tedge_api::SoftwareListResponse;
-use tedge_api::SoftwareUpdateRequest;
-use tedge_api::SoftwareUpdateResponse;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 
 pub struct TedgeOperationConverterBuilder {
     input_receiver: LoggingReceiver<AgentInput>,
-    software_list_sender: DynSender<SoftwareListRequest>,
-    software_update_sender: DynSender<SoftwareUpdateRequest>,
+    software_sender: DynSender<SoftwareRequest>,
     restart_sender: DynSender<RestartOperationRequest>,
     mqtt_publisher: DynSender<MqttMessage>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
@@ -29,16 +26,7 @@ pub struct TedgeOperationConverterBuilder {
 
 impl TedgeOperationConverterBuilder {
     pub fn new(
-        software_list_actor: &mut impl ServiceProvider<
-            SoftwareListRequest,
-            SoftwareListResponse,
-            NoConfig,
-        >,
-        software_update_actor: &mut impl ServiceProvider<
-            SoftwareUpdateRequest,
-            SoftwareUpdateResponse,
-            NoConfig,
-        >,
+        software_actor: &mut impl ServiceProvider<SoftwareRequest, SoftwareResponse, NoConfig>,
         restart_actor: &mut impl ServiceProvider<
             RestartOperationRequest,
             RestartOperationResponse,
@@ -54,18 +42,16 @@ impl TedgeOperationConverterBuilder {
             input_receiver,
             signal_receiver,
         );
-        let software_list_sender =
-            software_list_actor.connect_consumer(NoConfig, input_sender.clone().into());
-        let software_update_sender =
-            software_update_actor.connect_consumer(NoConfig, input_sender.clone().into());
+
+        let software_sender =
+            software_actor.connect_consumer(NoConfig, input_sender.clone().into());
         let restart_sender = restart_actor.connect_consumer(NoConfig, input_sender.clone().into());
         let mqtt_publisher =
             mqtt_actor.connect_consumer(Self::subscriptions(), input_sender.into());
 
         Self {
             input_receiver,
-            software_list_sender,
-            software_update_sender,
+            software_sender,
             restart_sender,
             mqtt_publisher,
             signal_sender,
@@ -99,8 +85,7 @@ impl Builder<TedgeOperationConverterActor> for TedgeOperationConverterBuilder {
     fn build(self) -> TedgeOperationConverterActor {
         TedgeOperationConverterActor::new(
             self.input_receiver,
-            self.software_list_sender,
-            self.software_update_sender,
+            self.software_sender,
             self.restart_sender,
             self.mqtt_publisher,
         )

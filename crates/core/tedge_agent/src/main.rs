@@ -8,8 +8,7 @@ use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 mod agent;
 mod file_transfer_server;
 mod restart_manager;
-mod software_list_manager;
-mod software_update_manager;
+mod software_manager;
 mod state_repository;
 mod tedge_operation_converter;
 

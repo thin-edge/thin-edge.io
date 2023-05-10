@@ -1,3 +1,5 @@
+use crate::software_manager::actor::SoftwareRequest;
+use crate::software_manager::actor::SoftwareResponse;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
@@ -26,8 +28,7 @@ const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 #[tokio::test]
 async fn convert_incoming_software_list_request() -> Result<(), DynError> {
     // Spawn incoming mqtt message converter
-    let (mut software_list_box, _software_update_box, _restart_box, mut mqtt_box) =
-        spawn_mqtt_operation_converter().await?;
+    let (mut software_box, _restart_box, mut mqtt_box) = spawn_mqtt_operation_converter().await?;
 
     // Simulate SoftwareList MQTT message received.
     let mqtt_message = MqttMessage::new(
@@ -37,7 +38,7 @@ async fn convert_incoming_software_list_request() -> Result<(), DynError> {
     mqtt_box.send(mqtt_message).await?;
 
     // Assert SoftwareListRequest
-    software_list_box
+    software_box
         .assert_received([SoftwareListRequest {
             id: "random".to_string(),
         }])
@@ -48,8 +49,7 @@ async fn convert_incoming_software_list_request() -> Result<(), DynError> {
 #[tokio::test]
 async fn convert_incoming_software_update_request() -> Result<(), DynError> {
     // Spawn incoming mqtt message converter
-    let (_software_list_box, mut software_update_box, _restart_box, mut mqtt_box) =
-        spawn_mqtt_operation_converter().await?;
+    let (mut software_box, _restart_box, mut mqtt_box) = spawn_mqtt_operation_converter().await?;
 
     // Simulate SoftwareUpdate MQTT message received.
     let mqtt_message = MqttMessage::new(
@@ -57,9 +57,6 @@ async fn convert_incoming_software_update_request() -> Result<(), DynError> {
         r#"{"id":"1234","updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"}]}]}"#,
     );
     mqtt_box.send(mqtt_message).await?;
-
-    // The output of converter => SoftwareUpdateRequest
-    let request = software_update_box.recv().await.unwrap();
 
     // Create expected request
     let debian_module1 = SoftwareModuleItem {
@@ -78,7 +75,15 @@ async fn convert_incoming_software_update_request() -> Result<(), DynError> {
         update_list: vec![debian_list],
     };
 
-    assert_eq!(request, expected_request);
+    // The output of converter => SoftwareUpdateRequest
+    match software_box.recv().await.unwrap() {
+        SoftwareRequest::SoftwareUpdateRequest(request) => {
+            assert_eq!(request, expected_request);
+        }
+        SoftwareRequest::SoftwareListRequest(_) => {
+            assert!(false, "Received SoftwareListRequest")
+        }
+    }
 
     Ok(())
 }
@@ -86,8 +91,7 @@ async fn convert_incoming_software_update_request() -> Result<(), DynError> {
 #[tokio::test]
 async fn convert_incoming_restart_request() -> Result<(), DynError> {
     // Spawn incoming mqtt message converter
-    let (_software_list_box, _software_update_box, mut restart_box, mut mqtt_box) =
-        spawn_mqtt_operation_converter().await?;
+    let (_software_box, mut restart_box, mut mqtt_box) = spawn_mqtt_operation_converter().await?;
 
     // Simulate Restart MQTT message received.
     let mqtt_message = MqttMessage::new(
@@ -109,15 +113,12 @@ async fn convert_incoming_restart_request() -> Result<(), DynError> {
 #[tokio::test]
 async fn convert_outgoing_software_list_response() -> Result<(), DynError> {
     // Spawn outgoing mqtt message converter
-    let (mut software_list_box, _software_update_box, _restart_box, mut mqtt_box) =
-        spawn_mqtt_operation_converter().await?;
+    let (mut software_box, _restart_box, mut mqtt_box) = spawn_mqtt_operation_converter().await?;
 
     // Simulate SoftwareList response message received.
     let software_list_request = SoftwareListRequest::new_with_id("1234");
     let software_list_response = SoftwareListResponse::new(&software_list_request);
-    software_list_box
-        .send(software_list_response.into())
-        .await?;
+    software_box.send(software_list_response.into()).await?;
 
     mqtt_box
         .assert_received([MqttMessage::new(
@@ -132,15 +133,12 @@ async fn convert_outgoing_software_list_response() -> Result<(), DynError> {
 #[tokio::test]
 async fn convert_outgoing_software_update_response() -> Result<(), DynError> {
     // Spawn outgoing mqtt message converter
-    let (_software_list_box, mut software_update_box, _restart_box, mut mqtt_box) =
-        spawn_mqtt_operation_converter().await?;
+    let (mut software_box, _restart_box, mut mqtt_box) = spawn_mqtt_operation_converter().await?;
 
     // Simulate SoftwareUpdate response message received.
     let software_update_request = SoftwareUpdateRequest::new_with_id("1234");
     let software_update_response = SoftwareUpdateResponse::new(&software_update_request);
-    software_update_box
-        .send(software_update_response.into())
-        .await?;
+    software_box.send(software_update_response.into()).await?;
 
     mqtt_box
         .assert_received([MqttMessage::new(
@@ -155,8 +153,7 @@ async fn convert_outgoing_software_update_response() -> Result<(), DynError> {
 #[tokio::test]
 async fn convert_outgoing_restart_response() -> Result<(), DynError> {
     // Spawn outgoing mqtt message converter
-    let (_software_list_box, _software_update_box, mut restart_box, mut mqtt_box) =
-        spawn_mqtt_operation_converter().await?;
+    let (_software_box, mut restart_box, mut mqtt_box) = spawn_mqtt_operation_converter().await?;
 
     // Simulate SoftwareList response message received.
     let executing_response = RestartOperationResponse::new(&RestartOperationRequest::default());
@@ -175,21 +172,14 @@ async fn convert_outgoing_restart_response() -> Result<(), DynError> {
 
 async fn spawn_mqtt_operation_converter() -> Result<
     (
-        TimedMessageBox<SimpleMessageBox<SoftwareListRequest, SoftwareListResponse>>,
-        TimedMessageBox<SimpleMessageBox<SoftwareUpdateRequest, SoftwareUpdateResponse>>,
+        TimedMessageBox<SimpleMessageBox<SoftwareRequest, SoftwareResponse>>,
         TimedMessageBox<SimpleMessageBox<RestartOperationRequest, RestartOperationResponse>>,
         TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
     ),
     DynError,
 > {
-    let mut software_list_builder: SimpleMessageBoxBuilder<
-        SoftwareListRequest,
-        SoftwareListResponse,
-    > = SimpleMessageBoxBuilder::new("SoftwareList", 5);
-    let mut software_update_builder: SimpleMessageBoxBuilder<
-        SoftwareUpdateRequest,
-        SoftwareUpdateResponse,
-    > = SimpleMessageBoxBuilder::new("SoftwareUpdate", 5);
+    let mut software_builder: SimpleMessageBoxBuilder<SoftwareRequest, SoftwareResponse> =
+        SimpleMessageBoxBuilder::new("Software", 5);
     let mut restart_builder: SimpleMessageBoxBuilder<
         RestartOperationRequest,
         RestartOperationResponse,
@@ -198,26 +188,17 @@ async fn spawn_mqtt_operation_converter() -> Result<
         SimpleMessageBoxBuilder::new("MQTT", 5);
 
     let converter_actor_builder = TedgeOperationConverterBuilder::new(
-        &mut software_list_builder,
-        &mut software_update_builder,
+        &mut software_builder,
         &mut restart_builder,
         &mut mqtt_builder,
     );
 
-    let software_list_box = software_list_builder.build().with_timeout(TEST_TIMEOUT_MS);
-    let software_update_box = software_update_builder
-        .build()
-        .with_timeout(TEST_TIMEOUT_MS);
+    let software_box = software_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let restart_box = restart_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let mqtt_message_box = mqtt_builder.build().with_timeout(TEST_TIMEOUT_MS);
 
     let mut converter_actor = converter_actor_builder.build();
     tokio::spawn(async move { converter_actor.run().await });
 
-    Ok((
-        software_list_box,
-        software_update_box,
-        restart_box,
-        mqtt_message_box,
-    ))
+    Ok((software_box, restart_box, mqtt_message_box))
 }
