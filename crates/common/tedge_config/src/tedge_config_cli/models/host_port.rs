@@ -9,7 +9,7 @@ use url::Host;
 ///
 /// This type is used for serializing and deserializing host strings with a port
 /// optionally present, like `my-tenant.cumulocity.com` or
-/// `mqtt.my-tenant.cumulocity.com:2137`. The port can be omitted in the parsed
+/// `mqtt.my-tenant.cumulocity.com:1234`. The port can be omitted in the parsed
 /// string, because user code can easily derive a reasonable default port number
 /// from the context this type is used in, e.g. 443 for HTTPS or 8883 for MQTT
 /// TLS. To easily specify this fallback port, a const type parameter is used.
@@ -17,19 +17,20 @@ use url::Host;
 /// # Examples
 ///
 /// ```
-/// # use tedge_config::{HostPort, Port};
+/// # use tedge_config::{HostPort, Port, HTTPS_PORT};
+///
 /// // use a fallback port if not present in string
-/// let http = HostPort::<443>::try_from("my-tenant.cumulocity.com".to_string()).unwrap();
-/// assert_eq!(http.port(), Port(443));
+/// let http = HostPort::<HTTPS_PORT>::try_from("my-tenant.cumulocity.com".to_string()).unwrap();
+/// assert_eq!(http.port(), Port(HTTPS_PORT));
 ///
 /// // allow port to be overridden using standard `:PORT` notation
-/// let http = HostPort::<443>::try_from("my-tenant.cumulocity.com:8080".to_string()).unwrap();
+/// let http = HostPort::<HTTPS_PORT>::try_from("my-tenant.cumulocity.com:8080".to_string()).unwrap();
 /// assert_eq!(http.port(), Port(8080));
 ///
 /// // return error for malformed host strings
-/// assert!(HostPort::<443>::try_from("my-tenant.cumulocity.com:8080:443".to_string()).is_err());
-/// assert!(HostPort::<443>::try_from(":8080".to_string()).is_err());
-/// assert!(HostPort::<443>::try_from("[:::1]:8080".to_string()).is_err());
+/// assert!(HostPort::<HTTPS_PORT>::try_from("my-tenant.cumulocity.com:8080:443".to_string()).is_err());
+/// assert!(HostPort::<HTTPS_PORT>::try_from(":8080".to_string()).is_err());
+/// assert!(HostPort::<HTTPS_PORT>::try_from("[:::1]:8080".to_string()).is_err());
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(into = "String", try_from = "String")]

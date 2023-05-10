@@ -177,7 +177,7 @@ impl ConfigSettingAccessor<C8yUrlSetting> for TEdgeConfig {
 
 impl ConfigSettingAccessor<C8yHttpSetting> for TEdgeConfig {
     #[allow(deprecated)]
-    fn query(&self, _setting: C8yHttpSetting) -> ConfigSettingResult<HostPort<443>> {
+    fn query(&self, _setting: C8yHttpSetting) -> ConfigSettingResult<HostPort<HTTPS_PORT>> {
         self.data
             .c8y
             .http
@@ -192,7 +192,7 @@ impl ConfigSettingAccessor<C8yHttpSetting> for TEdgeConfig {
     fn update(
         &mut self,
         _setting: C8yHttpSetting,
-        value: HostPort<443>,
+        value: HostPort<HTTPS_PORT>,
     ) -> ConfigSettingResult<()> {
         self.data.c8y.http = Some(value);
         Ok(())
@@ -206,7 +206,7 @@ impl ConfigSettingAccessor<C8yHttpSetting> for TEdgeConfig {
 
 impl ConfigSettingAccessor<C8yMqttSetting> for TEdgeConfig {
     #[allow(deprecated)]
-    fn query(&self, _setting: C8yMqttSetting) -> ConfigSettingResult<HostPort<8883>> {
+    fn query(&self, _setting: C8yMqttSetting) -> ConfigSettingResult<HostPort<MQTT_TLS_PORT>> {
         self.data
             .c8y
             .mqtt
@@ -221,7 +221,7 @@ impl ConfigSettingAccessor<C8yMqttSetting> for TEdgeConfig {
     fn update(
         &mut self,
         _setting: C8yMqttSetting,
-        value: HostPort<8883>,
+        value: HostPort<MQTT_TLS_PORT>,
     ) -> ConfigSettingResult<()> {
         self.data.c8y.mqtt = Some(value);
         Ok(())

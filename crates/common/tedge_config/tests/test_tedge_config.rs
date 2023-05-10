@@ -844,7 +844,8 @@ port = 1024
     config
         .update(
             C8yHttpSetting,
-            HostPort::<443>::try_from("http.other-tenant.cumulocity.com:1234".to_string()).unwrap(),
+            HostPort::<HTTPS_PORT>::try_from("http.other-tenant.cumulocity.com:1234".to_string())
+                .unwrap(),
         )
         .unwrap();
     assert_eq!(config.query(C8yHttpSetting).unwrap().port(), Port(1234));
@@ -852,8 +853,10 @@ port = 1024
     config
         .update(
             C8yMqttSetting,
-            HostPort::<8883>::try_from("http.other-tenant.cumulocity.com:2137".to_string())
-                .unwrap(),
+            HostPort::<MQTT_TLS_PORT>::try_from(
+                "http.other-tenant.cumulocity.com:2137".to_string(),
+            )
+            .unwrap(),
         )
         .unwrap();
     assert_eq!(config.query(C8yMqttSetting).unwrap().port(), Port(2137));
@@ -996,7 +999,7 @@ mqtt = "mqtt.tenant.cumulocity.com"
     repository
         .update_toml(&|config| {
             let new_c8y_http =
-                HostPort::<443>::try_from("custom.domain.com:8080".to_string()).unwrap();
+                HostPort::<HTTPS_PORT>::try_from("custom.domain.com:8080".to_string()).unwrap();
             config.update(C8yHttpSetting, new_c8y_http)
         })
         .unwrap();
@@ -1010,7 +1013,7 @@ mqtt = "mqtt.tenant.cumulocity.com"
     repository
         .update_toml(&|config| {
             let new_c8y_mqtt =
-                HostPort::<8883>::try_from("custom.domain.com:1883".to_string()).unwrap();
+                HostPort::<MQTT_TLS_PORT>::try_from("custom.domain.com:1883".to_string()).unwrap();
             config.update(C8yMqttSetting, new_c8y_mqtt)
         })
         .unwrap();

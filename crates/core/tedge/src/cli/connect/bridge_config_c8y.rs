@@ -2,10 +2,11 @@ use crate::cli::connect::BridgeConfig;
 use camino::Utf8PathBuf;
 use tedge_config::HostPort;
 use tedge_config::TemplatesSet;
+use tedge_config::MQTT_TLS_PORT;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfigC8yParams {
-    pub mqtt_host: HostPort<8883>,
+    pub mqtt_host: HostPort<MQTT_TLS_PORT>,
     pub config_file: String,
     pub remote_clientid: String,
     pub bridge_root_cert_path: Utf8PathBuf,
@@ -107,7 +108,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
 fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
     use std::convert::TryFrom;
     let params = BridgeConfigC8yParams {
-        mqtt_host: HostPort::<8883>::try_from("test.test.io".to_string())?,
+        mqtt_host: HostPort::<MQTT_TLS_PORT>::try_from("test.test.io".to_string())?,
         config_file: "c8y-bridge.conf".into(),
         remote_clientid: "alpha".into(),
         bridge_root_cert_path: Utf8PathBuf::from("./test_root.pem"),

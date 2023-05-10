@@ -97,7 +97,7 @@ impl ConfigSetting for C8yHttpSetting {
 
     const DESCRIPTION: &'static str = "HTTP endpoint for the Cumulocity tenant. \
         Example: http.your-tenant.cumulocity.com:1234";
-    type Value = HostPort<443>;
+    type Value = HostPort<HTTPS_PORT>;
 }
 
 /// MQTT endpoint for the Cumulocity tenant.
@@ -111,7 +111,7 @@ impl ConfigSetting for C8yMqttSetting {
 
     const DESCRIPTION: &'static str = "MQTT endpoint for the Cumulocity tenant. \
         Example: mqtt.your-tenant.cumulocity.com:1234";
-    type Value = HostPort<8883>;
+    type Value = HostPort<MQTT_TLS_PORT>;
 }
 
 ///

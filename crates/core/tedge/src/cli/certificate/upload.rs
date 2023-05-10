@@ -25,7 +25,7 @@ struct UploadCertBody {
 pub struct UploadCertCmd {
     pub device_id: String,
     pub path: Utf8PathBuf,
-    pub host: HostPort<443>,
+    pub host: HostPort<HTTPS_PORT>,
     pub username: String,
 }
 
