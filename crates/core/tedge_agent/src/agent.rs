@@ -15,7 +15,6 @@ use std::fmt::Debug;
 use tedge_actors::Runtime;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
-
 use tedge_config::DataPathSetting;
 use tedge_config::Flag;
 use tedge_config::HttpBindAddressSetting;
@@ -23,7 +22,6 @@ use tedge_config::HttpPortSetting;
 use tedge_config::LockFilesSetting;
 use tedge_config::LogPathSetting;
 use tedge_config::RunPathSetting;
-use tedge_config::TEdgeConfigError;
 use tedge_config::TEdgeConfigLocation;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
@@ -51,7 +49,7 @@ pub struct AgentConfig {
 impl AgentConfig {
     pub fn from_tedge_config(
         tedge_config_location: &TEdgeConfigLocation,
-    ) -> Result<Self, TEdgeConfigError> {
+    ) -> Result<Self, anyhow::Error> {
         let config_repository =
             tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
         let tedge_config = config_repository.load()?;
