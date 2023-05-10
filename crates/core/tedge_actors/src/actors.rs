@@ -29,6 +29,7 @@ pub trait Actor: 'static + Send + Sync {
 }
 
 #[cfg(test)]
+#[cfg(feature = "test-helpers")]
 pub mod tests {
     use crate::test_helpers::ServiceProviderExt;
     use crate::*;
