@@ -1,4 +1,3 @@
-use c8y_api::http_proxy::C8yJwtTokenRetriever;
 use c8y_api::http_proxy::C8yMqttJwtTokenRetriever;
 use miette::IntoDiagnostic;
 use tedge_config::TEdgeConfig;

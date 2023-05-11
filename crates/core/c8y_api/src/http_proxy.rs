@@ -1,7 +1,5 @@
 use crate::smartrest::error::SMCumulocityMapperError;
 use crate::smartrest::smartrest_deserializer::SmartRestJwtResponse;
-use async_trait::async_trait;
-use mockall::automock;
 use mqtt_channel::Connection;
 use mqtt_channel::PubChannel;
 use mqtt_channel::StreamExt;
@@ -103,12 +101,6 @@ impl C8yEndPoint {
     }
 }
 
-#[automock]
-#[async_trait]
-pub trait C8yJwtTokenRetriever: Send + Sync {
-    async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError>;
-}
-
 pub struct C8yMqttJwtTokenRetriever {
     mqtt_config: mqtt_channel::Config,
 }
@@ -123,11 +115,8 @@ impl C8yMqttJwtTokenRetriever {
 
         Ok(C8yMqttJwtTokenRetriever { mqtt_config })
     }
-}
 
-#[async_trait]
-impl C8yJwtTokenRetriever for C8yMqttJwtTokenRetriever {
-    async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
+    pub async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
         let mut mqtt_con = Connection::new(&self.mqtt_config).await?;
 
         // Ignore errors on this connection
