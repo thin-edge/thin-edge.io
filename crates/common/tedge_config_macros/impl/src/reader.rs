@@ -7,6 +7,7 @@ use std::iter;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
+use syn::parse_quote;
 use syn::parse_quote_spanned;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
@@ -41,6 +42,7 @@ fn generate_structs(
     let mut sub_readers = Vec::new();
     let mut attrs: Vec<Vec<syn::Attribute>> = Vec::new();
     let mut lazy_readers = Vec::new();
+    let mut vis: Vec<syn::Visibility> = Vec::new();
 
     for item in items {
         match item {
@@ -58,6 +60,10 @@ fn generate_structs(
                     tys.push(ty.to_owned());
                 }
                 sub_readers.push(None);
+                vis.push(match field.reader().private {
+                    true => parse_quote!(),
+                    false => parse_quote!(pub),
+                });
             }
             FieldOrGroup::Group(group) if !group.reader.skip => {
                 let sub_reader_name = prefixed_type_name(name, group);
@@ -71,6 +77,10 @@ fn generate_structs(
                     parents,
                 )?));
                 attrs.push(group.attrs.to_vec());
+                vis.push(match group.reader.private {
+                    true => parse_quote!(),
+                    false => parse_quote!(pub),
+                });
             }
             FieldOrGroup::Group(_) => {
                 // Skipped
@@ -116,7 +126,7 @@ fn generate_structs(
         pub struct #name {
             #(
                 #(#attrs)*
-                pub #idents: #tys,
+                #vis #idents: #tys,
             )*
         }
 
@@ -246,11 +256,15 @@ fn reader_value_for_field<'a>(
                         observed_paths,
                     )?;
 
-                    let value = if matches!(&field.default, FieldDefault::FromOptionalPath(_)) {
-                        quote!(OptionalConfig::Present { value: value.clone(), key: #key })
-                    } else {
-                        quote!(value.clone())
-                    };
+                    let (default, value) =
+                        if matches!(&field.default, FieldDefault::FromOptionalPath(_)) {
+                            (
+                                quote!(#default.map(|v| v.into())),
+                                quote!(OptionalConfig::Present { value: value.clone(), key: #key }),
+                            )
+                        } else {
+                            (quote!(#default.into()), quote!(value.clone()))
+                        };
 
                     quote_spanned! {name.span()=>
                         match &dto.#(#parents).*.#name {

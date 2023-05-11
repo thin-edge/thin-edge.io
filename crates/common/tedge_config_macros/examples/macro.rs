@@ -69,6 +69,7 @@ define_tedge_config! {
     },
 
     c8y: {
+        #[tedge_config(reader(private))]
         url: String,
 
         http: {
