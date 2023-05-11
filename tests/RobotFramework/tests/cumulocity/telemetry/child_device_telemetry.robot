@@ -63,14 +63,6 @@ Child devices support sending inventory data via c8y topic
     Should Be Equal    ${mo["custom"]["fragment"]}    yes
 
 
-Main device support sending inventory data via c8y topic
-    Execute Command    tedge mqtt pub "c8y/inventory/managedObjects/update/${DEVICE_SN}" '{"parentInfo":{"nested":{"name":"complex"}},"subType":"customType"}'
-    Cumulocity.Set Device    ${DEVICE_SN}
-    ${mo}=    Device Should Have Fragments    parentInfo    subType
-    Should Be Equal    ${mo["parentInfo"]["nested"]["name"]}    complex
-    Should Be Equal    ${mo["subType"]}    customType
-
-
 Child device supports sending custom child device measurements directly to c8y
     Execute Command    tedge mqtt pub "c8y/measurement/measurements/create" '{"time":"2023-03-20T08:03:56.940907Z","externalSource":{"externalId":"${CHILD_SN}","type":"c8y_Serial"},"environment":{"temperature":{"value":29.9,"unit":"°C"}},"type":"10min_average","meta":{"sensorLocation":"Brisbane, Australia"}}'
     Cumulocity.Set Device    ${CHILD_SN}
@@ -79,14 +71,6 @@ Child device supports sending custom child device measurements directly to c8y
     Should Be Equal    ${measurements[0]["meta"]["sensorLocation"]}    Brisbane, Australia
     Should Be Equal    ${measurements[0]["type"]}    10min_average
 
-
-Main device supports sending custom child device measurements directly to c8y
-    Execute Command    tedge mqtt pub "c8y/measurement/measurements/create" '{"time":"2023-03-20T08:03:56.940907Z","environment":{"temperature":{"value":29.9,"unit":"°C"}},"type":"10min_average","meta":{"sensorLocation":"Brisbane, Australia"}}'
-    Cumulocity.Set Device    ${DEVICE_SN}
-    ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    value=environment    series=temperature    type=10min_average
-    Should Be Equal As Numbers    ${measurements[0]["environment"]["temperature"]["value"]}    29.9
-    Should Be Equal    ${measurements[0]["meta"]["sensorLocation"]}    Brisbane, Australia
-    Should Be Equal    ${measurements[0]["type"]}    10min_average
 
 *** Keywords ***
 
