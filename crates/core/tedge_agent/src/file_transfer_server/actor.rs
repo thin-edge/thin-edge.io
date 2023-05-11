@@ -139,4 +139,34 @@ mod tests {
         let get_response = get_handler.await.unwrap();
         assert_eq!(get_response.status(), hyper::StatusCode::OK);
     }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn check_server_does_not_panic_when_port_is_in_use() -> Result<(), anyhow::Error> {
+        let ttd = TempTedgeDir::new();
+
+        let http_config = HttpConfig::default()
+            .with_data_dir(ttd.utf8_path_buf())
+            .with_port(3746);
+        let config_clone = http_config.clone();
+
+        // Spawn HTTP file transfer server
+        // handle_one uses port 3000.
+        let builder_one = FileTransferServerBuilder::new(http_config);
+        let handle_one = tokio::spawn(async move { builder_one.build().run().await });
+
+        // handle_two will not be able to bind to the same port.
+        let builder_two = FileTransferServerBuilder::new(config_clone);
+        let handle_two = tokio::spawn(async move { builder_two.build().run().await });
+
+        // although the code inside handle_two throws an error it does not panic.
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        // to check for the error, we assert that handle_one is still running
+        // while handle_two is finished.
+        assert!(!handle_one.is_finished());
+        assert!(handle_two.is_finished());
+
+        Ok(())
+    }
 }

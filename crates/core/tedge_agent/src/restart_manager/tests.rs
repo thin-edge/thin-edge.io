@@ -84,12 +84,12 @@ async fn test_pending_restart_operation_successful() -> Result<(), DynError> {
 #[tokio::test]
 async fn test_new_restart_operation() -> Result<(), DynError> {
     let temp_dir = TempTedgeDir::new();
-    temp_dir.dir(".agent").file("current-operation");
+    temp_dir.dir(".agent").file("restart-current-operation");
 
     // Spawn restart manager
     let mut converter_box = spawn_restart_manager(&temp_dir).await?;
 
-    // Simulate RestartOperationRe
+    // Simulate RestartOperationRequest
     converter_box
         .send(RestartOperationRequest {
             id: "random".to_string(),
@@ -98,6 +98,9 @@ async fn test_new_restart_operation() -> Result<(), DynError> {
 
     let status = converter_box.recv().await.unwrap().status;
     assert_eq!(status, OperationStatus::Executing);
+
+    // Check the agent restart temp file is created
+    assert!(temp_dir.path().join("tedge_agent_restart").exists());
 
     Ok(())
 }

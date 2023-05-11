@@ -13,10 +13,14 @@ use tedge_actors::Sender;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::messages::SoftwareModuleAction;
+use tedge_api::messages::SoftwareModuleItem;
+use tedge_api::messages::SoftwareRequestResponseSoftwareList;
 use tedge_api::OperationStatus;
 use tedge_api::SoftwareListRequest;
 use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareRequestResponse;
+use tedge_api::SoftwareUpdateRequest;
 use tedge_api::SoftwareUpdateResponse;
 use tedge_config::TEdgeConfigLocation;
 use tedge_test_utils::fs::TempTedgeDir;
@@ -44,27 +48,47 @@ async fn test_pending_software_update_operation() -> Result<(), DynError> {
     Ok(())
 }
 
-// #[tokio::test]
-// async fn test_new_software_list_operation() -> Result<(), DynError> {
-//     let temp_dir = TempTedgeDir::new();
-//     temp_dir.dir(".agent").file("current-operation");
-//
-//     // Spawn restart manager
-//     let mut converter_box = spawn_software_manager(&temp_dir).await?;
-//
-//     // Simulate RestartOperationRe
-//     converter_box
-//         .send(SoftwareUpdateRequest {
-//             id: "random".to_string(),
-//             update_list: vec![]
-//         })
-//         .await?;
-//
-//     let status = converter_box.recv().await.unwrap().status;
-//     assert_eq!(status, OperationStatus::Executing);
-//
-//     Ok(())
-// }
+#[tokio::test]
+async fn test_new_software_update_operation() -> Result<(), DynError> {
+    let temp_dir = TempTedgeDir::new();
+    temp_dir.dir(".agent");
+
+    let mut converter_box = spawn_software_manager(&temp_dir).await?;
+
+    let debian_module1 = SoftwareModuleItem {
+        name: "debian1".into(),
+        version: Some("0.0.1".into()),
+        action: Some(SoftwareModuleAction::Install),
+        url: None,
+        reason: None,
+    };
+    let debian_list = SoftwareRequestResponseSoftwareList {
+        plugin_type: "debian".into(),
+        modules: vec![debian_module1],
+    };
+
+    converter_box
+        .send(
+            SoftwareUpdateRequest {
+                id: "random".to_string(),
+                update_list: vec![debian_list],
+            }
+            .into(),
+        )
+        .await?;
+
+    match converter_box.recv().await.unwrap() {
+        SoftwareResponse::SoftwareUpdateResponse(res) => {
+            dbg!(&res);
+            assert_eq!(res.response.status, OperationStatus::Executing);
+        }
+        SoftwareResponse::SoftwareListResponse(_) => {
+            panic!("Received SoftwareListResponse")
+        }
+    }
+
+    Ok(())
+}
 
 #[tokio::test]
 async fn test_pending_software_list_operation() -> Result<(), DynError> {
@@ -88,31 +112,36 @@ async fn test_pending_software_list_operation() -> Result<(), DynError> {
 }
 
 #[tokio::test]
+// testing that tedge-agent returns an empty software list when there is no sm plugin
 async fn test_new_software_list_operation() -> Result<(), DynError> {
     let temp_dir = TempTedgeDir::new();
     temp_dir.dir(".agent");
 
-    // Spawn restart manager
     let mut converter_box = spawn_software_manager(&temp_dir).await?;
 
-    // Simulate RestartOperationRe
     converter_box
         .send(
             SoftwareListRequest {
-                id: "random".to_string(),
+                id: "1234".to_string(),
             }
             .into(),
         )
         .await?;
 
-    match converter_box.recv().await.unwrap() {
-        SoftwareResponse::SoftwareListResponse(res) => {
-            assert_eq!(res.response.status, OperationStatus::Executing);
-        }
-        SoftwareResponse::SoftwareUpdateResponse(_) => {
-            panic!("Received SoftwareUpdateResponse")
-        }
-    }
+    let executing_response = SoftwareRequestResponse::new("1234", OperationStatus::Executing);
+    let mut successful_response = SoftwareRequestResponse::new("1234", OperationStatus::Successful);
+    successful_response.add_modules("".to_string(), vec![]);
+
+    converter_box
+        .assert_received([
+            SoftwareListResponse {
+                response: executing_response,
+            },
+            SoftwareListResponse {
+                response: successful_response,
+            },
+        ])
+        .await;
 
     Ok(())
 }
