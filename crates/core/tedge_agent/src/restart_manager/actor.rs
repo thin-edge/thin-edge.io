@@ -8,16 +8,20 @@ use crate::state_repository::state::State;
 use crate::state_repository::state::StateRepository;
 use crate::state_repository::state::StateStatus;
 use async_trait::async_trait;
+use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
+use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
+use tedge_actors::WrappedInput;
 use tedge_api::OperationStatus;
 use tedge_api::RestartOperationRequest;
 use tedge_api::RestartOperationResponse;
 use tedge_config::system_services::SystemConfig;
 use tokio::process::Command;
+use tokio::time::timeout;
 use tracing::error;
 use tracing::info;
 
@@ -44,11 +48,26 @@ impl Actor for RestartManagerActor {
         self.process_pending_restart_operation().await?;
 
         while let Some(request) = self.message_box.recv().await {
-            if let Err(err) = self.handle_restart_operation(&request).await {
-                error!("{}", err);
-                self.handle_error(&request).await?;
+            let maybe_error = self.handle_restart_operation(&request).await;
+
+            match timeout(Duration::from_secs(5), self.message_box.recv_message()).await {
+                Ok(Some(WrappedInput::RuntimeRequest(RuntimeRequest::Shutdown))) => return Ok(()),
+                Ok(Some(WrappedInput::Message(second_request))) => {
+                    if let Err(err) = maybe_error {
+                        error!("{}", err);
+                    }
+                    self.handle_error(&request).await?;
+                    self.handle_error(&second_request).await?;
+                }
+                _ => {
+                    if let Err(err) = maybe_error {
+                        error!("{}", err);
+                    }
+                    self.handle_error(&request).await?;
+                }
             }
         }
+
         Ok(())
     }
 }
@@ -121,7 +140,7 @@ impl RestartManagerActor {
 
         // Send 'executing'
         let executing_response = RestartOperationResponse::new(&RestartOperationRequest::default());
-        self.message_box.send(executing_response).await.unwrap();
+        self.message_box.send(executing_response).await?;
 
         create_tmp_restart_file(&self.config.tmp_dir)?;
 
