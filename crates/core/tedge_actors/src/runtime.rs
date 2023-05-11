@@ -208,7 +208,12 @@ impl RuntimeActor {
         }
 
         tokio::select! {
-            _ = tokio::time::sleep(self.cleanup_duration) => error!(target: "Runtime", "Timeout waiting for all actors to shutdown"),
+            _ = tokio::time::sleep(self.cleanup_duration) => {
+                error!(target: "Runtime", "Timeout waiting for all actors to shutdown");
+                for still_running in self.running_actors.keys() {
+                     error!(target: "Runtime", "Failed to shutdown: {still_running}")
+                }
+            }
             _ = self.wait_for_actors_to_finish() => info!(target: "Runtime", "All actors have finished")
         }
     }
