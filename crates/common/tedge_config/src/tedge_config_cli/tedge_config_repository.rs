@@ -101,8 +101,9 @@ impl TEdgeConfigRepository {
 
         if let Some(migrations) = dto.config.version.unwrap_or_default().migrations() {
             'migrate_toml: {
-                tracing::info!("Migrating tedge.toml configuration to version 2");
                 let Ok(config) = std::fs::read_to_string(self.toml_path()) else { break 'migrate_toml };
+
+                tracing::info!("Migrating tedge.toml configuration to version 2");
 
                 let toml = toml::de::from_str(&config)?;
                 let migrated_toml = migrations
