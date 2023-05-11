@@ -1,7 +1,6 @@
-use crate::error::FileTransferError;
+use crate::file_transfer_server::error::FileTransferError;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use futures::StreamExt;
 use hyper::server::conn::AddrIncoming;
 use hyper::Body;
 use hyper::Request;
@@ -11,6 +10,7 @@ use routerify::Router;
 use routerify::RouterService;
 use std::net::IpAddr;
 use std::net::SocketAddr;
+use tedge_actors::futures::StreamExt;
 use tedge_config::DEFAULT_DATA_PATH;
 use tedge_config::DEFAULT_FILE_TRANSFER_DIR_NAME;
 use tedge_utils::paths::create_directories;
@@ -234,8 +234,8 @@ pub fn http_file_transfer_server(
 mod test {
     use super::http_file_transfer_server;
     use super::separate_path_and_file_name;
-    use crate::error::FileTransferError;
-    use crate::http_rest::HttpConfig;
+    use crate::file_transfer_server::error::FileTransferError;
+    use crate::file_transfer_server::http_rest::HttpConfig;
     use camino::Utf8Path;
     use camino::Utf8PathBuf;
     use hyper::server::conn::AddrIncoming;
