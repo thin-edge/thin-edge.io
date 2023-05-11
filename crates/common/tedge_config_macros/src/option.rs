@@ -75,6 +75,16 @@ impl<T> OptionalConfig<T> {
             Self::Empty(key) => OptionalConfig::Empty(key),
         }
     }
+
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> OptionalConfig<U> {
+        match self {
+            Self::Present { value, key } => OptionalConfig::Present {
+                value: f(value),
+                key,
+            },
+            Self::Empty(key) => OptionalConfig::Empty(key),
+        }
+    }
 }
 
 impl<T: doku::Document> doku::Document for OptionalConfig<T> {

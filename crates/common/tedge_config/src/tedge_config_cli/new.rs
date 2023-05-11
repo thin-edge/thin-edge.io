@@ -1,7 +1,10 @@
 use crate::ConnectUrl;
+use crate::HostPort;
 use crate::Seconds;
 use crate::TEdgeConfigLocation;
 use crate::TemplatesSet;
+use crate::HTTPS_PORT;
+use crate::MQTT_TLS_PORT;
 use camino::Utf8PathBuf;
 use certificate::CertificateError;
 use certificate::PemCertificate;
@@ -274,6 +277,7 @@ define_tedge_config! {
     c8y: {
         /// Endpoint URL of Cumulocity tenant
         #[tedge_config(example = "your-tenant.cumulocity.com")]
+        #[tedge_config(reader(private))]
         url: ConnectUrl,
 
         /// The path where Cumulocity root certificate(s) are stared
@@ -287,6 +291,18 @@ define_tedge_config! {
             #[tedge_config(example = "templateId1,templateId2", default(function = "TemplatesSet::default"))]
             templates: TemplatesSet,
         },
+
+
+        /// HTTP Endpoint for the Cumulocity tenant, with optional port.
+        #[tedge_config(example = "http.your-tenant.cumulocity.com:1234")]
+        #[tedge_config(default(from_optional_path = "c8y.url"))]
+        http: HostPort<HTTPS_PORT>,
+
+        /// MQTT Endpoint for the Cumulocity tenant, with optional port.
+        #[tedge_config(example = "mqtt.your-tenant.cumulocity.com:1234")]
+        #[tedge_config(default(from_optional_path = "c8y.url"))]
+        mqtt: HostPort<MQTT_TLS_PORT>,
+
     },
 
     #[tedge_config(deprecated_name = "azure")] // for 0.1.0 compatibility
@@ -353,6 +369,7 @@ define_tedge_config! {
             #[doku(as = "u16")]
             port: NonZeroU16,
 
+            #[tedge_config(reader(private))]
             auth: {
                 /// Path to the CA certificate used by MQTT clients to use when authenticating the MQTT broker
                 #[tedge_config(example = "/etc/mosquitto/ca_certificates/ca.crt")]
@@ -651,5 +668,14 @@ mod tests {
     #[test_case::test_case("run.lock_files")]
     fn all_0_10_keys_can_be_deserialised(key: &str) {
         key.parse::<ReadableKey>().unwrap();
+    }
+
+    #[test]
+    fn missing_c8y_http_directs_user_towards_setting_c8y_url() {
+        let dto = TEdgeConfigDto::default();
+
+        let reader = TEdgeConfigReader::from_dto(&dto, &TEdgeConfigLocation::default());
+
+        assert_eq!(reader.c8y.http.key(), "c8y.url");
     }
 }

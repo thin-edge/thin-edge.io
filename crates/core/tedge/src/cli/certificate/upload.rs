@@ -25,7 +25,7 @@ struct UploadCertBody {
 pub struct UploadCertCmd {
     pub device_id: String,
     pub path: Utf8PathBuf,
-    pub host: ConnectUrl,
+    pub host: HostPort<HTTPS_PORT>,
     pub username: String,
 }
 
@@ -61,8 +61,8 @@ impl UploadCertCmd {
         };
 
         // To post certificate c8y requires one of the following endpoints:
-        // https://<tenant_id>.cumulocity.url.io/tenant/tenants/<tenant_id>/trusted-certificates
-        // https://<tenant_domain>.cumulocity.url.io/tenant/tenants/<tenant_id>/trusted-certificates
+        // https://<tenant_id>.cumulocity.url.io[:port]/tenant/tenants/<tenant_id>/trusted-certificates
+        // https://<tenant_domain>.cumulocity.url.io[:port]/tenant/tenants/<tenant_id>/trusted-certificates
         // and therefore we need to get tenant_id.
         let tenant_id = get_tenant_id_blocking(
             &client,

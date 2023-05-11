@@ -37,6 +37,7 @@ macro_rules! config_key {
 }
 
 impl ConfigKey {
+    #[allow(deprecated)]
     pub fn list_all() -> Vec<ConfigKey> {
         vec![
             config_key!(DeviceIdSetting),
@@ -44,6 +45,8 @@ impl ConfigKey {
             config_key!(DeviceKeyPathSetting),
             config_key!(DeviceCertPathSetting),
             config_key!(C8yUrlSetting),
+            config_key!(C8yHttpSetting),
+            config_key!(C8yMqttSetting),
             config_key!(C8yRootCertPathSetting),
             config_key!(C8ySmartRestTemplates),
             config_key!(AzureUrlSetting),

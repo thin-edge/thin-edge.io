@@ -64,7 +64,7 @@ impl BuildCommand for TEdgeCertCli {
                     UploadCertCli::C8y { username } => UploadCertCmd {
                         device_id: config.device.id.try_read(&config)?.clone(),
                         path: config.device.cert_path.clone(),
-                        host: config.c8y.url.or_err()?.to_owned(),
+                        host: config.c8y.http.or_err()?.to_owned(),
                         username,
                     },
                 };
