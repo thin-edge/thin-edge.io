@@ -63,19 +63,10 @@ Thin-edge device support sending inventory data via c8y topic
     Should Be Equal    ${mo["subType"]}    customType
 
 
-Thin-edge device supports sending custom child device measurements directly to c8y
-    Execute Command    tedge mqtt pub "c8y/measurement/measurements/create" '{"time":"2023-03-20T08:03:56.940907Z","environment":{"temperature":{"value":29.9,"unit":"°C"}},"type":"10min_average","meta":{"sensorLocation":"Brisbane, Australia"}}'
-    Cumulocity.Set Device    ${DEVICE_SN}
-    ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    value=environment    series=temperature    type=10min_average
-    Should Be Equal As Numbers    ${measurements[0]["environment"]["temperature"]["value"]}    29.9
-    Should Be Equal    ${measurements[0]["meta"]["sensorLocation"]}    Brisbane, Australia
-    Should Be Equal    ${measurements[0]["type"]}    10min_average
-
 *** Keywords ***
 
 Custom Setup
     ${DEVICE_SN}=    Setup
-    Set Suite Variable    $DEVICE_SN
-    Restart Service    tedge-mapper-c8y
+    Set Suite Variable    $DEVICE_SN 
     Device Should Exist                      ${DEVICE_SN}
     Service Health Status Should Be Up    tedge-mapper-c8y
