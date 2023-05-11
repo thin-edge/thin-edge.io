@@ -741,24 +741,30 @@ impl Converter for CumulocityConverter {
         &mut self,
         message: &DiscoverOp,
     ) -> Result<Option<Message>, ConversionError> {
-        match message.ops_dir.parent() {
-            Some(parent_dir) => {
-                if parent_dir.eq(&self.cfg_dir.join("operations")) {
-                    // operation for parent
-                    add_or_remove_operation(message, &mut self.operations)?;
-                    Ok(Some(create_supported_operations(&message.ops_dir)?))
-                } else {
-                    // operation for child
-                    let child_op = self
-                        .children
-                        .entry(get_child_id(&message.ops_dir)?)
-                        .or_insert_with(Operations::default);
+        // operation for parent
+        if message
+            .ops_dir
+            .eq(&self.cfg_dir.join("operations").join("c8y"))
+        {
+            add_or_remove_operation(message, &mut self.operations)?;
+            Ok(Some(create_supported_operations(&message.ops_dir)?))
 
-                    add_or_remove_operation(message, child_op)?;
-                    Ok(Some(create_supported_operations(&message.ops_dir)?))
-                }
-            }
-            None => Ok(None),
+        // operation for child
+        } else if message.ops_dir.eq(&self
+            .cfg_dir
+            .join("operations")
+            .join("c8y")
+            .join(get_child_id(&message.ops_dir)?))
+        {
+            let child_op = self
+                .children
+                .entry(get_child_id(&message.ops_dir)?)
+                .or_insert_with(Operations::default);
+
+            add_or_remove_operation(message, child_op)?;
+            Ok(Some(create_supported_operations(&message.ops_dir)?))
+        } else {
+            Ok(None)
         }
     }
 }
