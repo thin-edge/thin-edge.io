@@ -3,16 +3,22 @@ set -e
 
 MQTT_HOST=${MQTT_HOST:-}
 MQTT_PORT=${MQTT_PORT:-}
+MQTT_CA_FILE=${MQTT_CA_FILE:-}
+MQTT_CERT_FILE=${MQTT_CERT_FILE:-}
+MQTT_KEY_FILE=${MQTT_KEY_FILE:-}
 OUTPUT_LOG=${OUTPUT_LOG:-}
 WAIT=${WAIT:-1}
 
 usage() {
     echo "
-        $0 [--host <host>] [--port <port>] [--log <path>] [--wait <seconds>]
+        $0 [--host <host>] [--port <port>] [--cafile <file>] [--key <file>] [--cert <file>] [--log <path>] [--wait <seconds>]
     
     FLAGS
         --host <host>       MQTT broker host
         --port <port>       MQTT broker port
+        --cafile <file>     (Mosquitto setting) Path to a file containing trusted CA certificates to enable encrypted certificate based communication
+        --key <file>        (Mosquitto setting) client private key for authentication, if required by server.
+        --cert <file>       (Mosquitto setting) client certificate for authentication, if required by server.
         --log <path>        File path to write the mqtt messages to. The messages will be written to stdout and the given file
         --wait <sec>        Seconds to wait before trying to reconnect if the mqtt client gets disconnected
     
@@ -22,6 +28,9 @@ usage() {
 
         $0 --log /var/log/mqtt-messages.log
         # Subscribe to all topics and write the messages to file
+
+        $0 --log /var/log/mqtt-messages.log --port 8883 --cafile myca.crt --key client.key --cert client.crt
+        # Subscribe to all topics and write the messages to file. Connect to the secure MQTT port using certificates
     "
 }
 
@@ -33,6 +42,15 @@ if command -v tedge >/dev/null 2>&1; then
     if [ -z "$MQTT_PORT" ]; then
         MQTT_PORT=$(tedge config get mqtt.client.port)
     fi
+    if [ -z "$MQTT_CA_FILE" ]; then
+        MQTT_CA_FILE=$(tedge config get mqtt.client.auth.cafile)
+    fi
+    if [ -z "$MQTT_KEY_FILE" ]; then
+        MQTT_KEY_FILE=$(tedge config get mqtt.client.auth.keyfile)
+    fi
+    if [ -z "$MQTT_CERT_FILE" ]; then
+        MQTT_CERT_FILE=$(tedge config get mqtt.client.auth.certfile)
+    fi
 fi
 
 while [ $# -gt 0 ]; do
@@ -43,6 +61,18 @@ while [ $# -gt 0 ]; do
             ;;
         --port)
             MQTT_PORT="$2"
+            shift
+            ;;
+        --cafile)
+            MQTT_CA_FILE="$2"
+            shift
+            ;;
+        --key)
+            MQTT_KEY_FILE="$2"
+            shift
+            ;;
+        --cert)
+            MQTT_CERT_FILE="$2"
             shift
             ;;
         --wait)
@@ -75,7 +105,25 @@ log() {
 }
 
 subscribe() {
-    mosquitto_sub --nodelay -h "$MQTT_HOST" -p "$MQTT_PORT" -t '#' -F '{"timestamp":%U,"message":%j,"payload_hex":"%x"}'
+    if [ -n "$MQTT_CA_FILE" ] && [ -n "$MQTT_KEY_FILE" ] && [ -n "$MQTT_CERT_FILE" ]; then
+        log "Connecting to broker using certificate"
+        mosquitto_sub \
+            --nodelay \
+            -h "$MQTT_HOST" \
+            -p "$MQTT_PORT" \
+            --cafile "$MQTT_CA_FILE" \
+            --key "$MQTT_KEY_FILE" \
+            --cert "$MQTT_CERT_FILE" \
+            -t '#' \
+            -F '{"timestamp":%U,"message":%j,"payload_hex":"%x"}'
+    else
+        mosquitto_sub \
+            --nodelay \
+            -h "$MQTT_HOST" \
+            -p "$MQTT_PORT" \
+            -t '#' \
+            -F '{"timestamp":%U,"message":%j,"payload_hex":"%x"}'
+    fi
 }
 
 # Wait for mosquitto process to start up (to reduce spamming logs with uninteresting info)
