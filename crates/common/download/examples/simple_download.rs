@@ -11,6 +11,7 @@ async fn main() -> Result<()> {
     );
 
     // Create downloader instance with desired file path and target directory.
+    #[allow(deprecated)]
     let downloader = Downloader::new_sm("test_download", &None, "/tmp");
 
     // Call `download` method to get data from url.

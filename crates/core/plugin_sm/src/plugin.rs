@@ -153,6 +153,7 @@ pub trait Plugin {
         logger: &mut BufWriter<File>,
         download_path: &Path,
     ) -> Result<Downloader, SoftwareError> {
+        #[allow(deprecated)]
         let downloader = Downloader::new_sm(&module.name, &module.version, download_path);
 
         logger

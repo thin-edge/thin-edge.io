@@ -2,10 +2,6 @@ use crate::error::DownloadError;
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
 use log::debug;
-#[cfg(target_os = "linux")]
-use nix::fcntl::fallocate;
-#[cfg(target_os = "linux")]
-use nix::fcntl::FallocateFlags;
 use nix::sys::statvfs;
 use serde::Deserialize;
 use serde::Serialize;
@@ -20,6 +16,12 @@ use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
 
+#[cfg(target_os = "linux")]
+use nix::fcntl::fallocate;
+#[cfg(target_os = "linux")]
+use nix::fcntl::FallocateFlags;
+
+/// Describes a request used to retrieve the file.
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
@@ -36,6 +38,7 @@ impl From<&str> for DownloadInfo {
 }
 
 impl DownloadInfo {
+    /// Creates new [`DownloadInfo`] from a URL.
     pub fn new(url: &str) -> Self {
         Self {
             url: url.into(),
@@ -43,6 +46,7 @@ impl DownloadInfo {
         }
     }
 
+    /// Creates new [`DownloadInfo`] from a URL with authentication.
     pub fn with_auth(self, auth: Auth) -> Self {
         Self {
             auth: Some(auth),
@@ -55,10 +59,12 @@ impl DownloadInfo {
     }
 }
 
+/// Possible authentication schemes
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub enum Auth {
+    /// HTTP Bearer authentication
     Bearer(String),
 }
 
@@ -68,6 +74,7 @@ impl Auth {
     }
 }
 
+/// A struct which manages file downloads.
 #[derive(Debug)]
 pub struct Downloader {
     target_filename: PathBuf,
@@ -84,6 +91,8 @@ impl From<PathBuf> for Downloader {
 }
 
 impl Downloader {
+    /// Creates a new downloader which downloads to a target directory and sets
+    /// specified permissions the downloaded file.
     pub fn new(target_path: &Path, target_permission: PermissionEntry) -> Self {
         Self {
             target_filename: target_path.to_path_buf(),
@@ -91,6 +100,8 @@ impl Downloader {
         }
     }
 
+    /// Creates a new downloader which renames downloaded files as software modules.
+    #[deprecated(note = "Use `new` instead")]
     pub fn new_sm(name: &str, version: &Option<String>, target_dir_path: impl AsRef<Path>) -> Self {
         let mut filename = name.to_string();
         if let Some(version) = version {
@@ -103,6 +114,10 @@ impl Downloader {
         target_filename.into()
     }
 
+    /// Downloads a file.
+    ///
+    /// Uses an exponential backoff strategy with initial retry of 30s, up to 5
+    /// min.
     pub async fn download(&self, url: &DownloadInfo) -> Result<(), DownloadError> {
         if self.target_filename.exists() {
             // Confirm that the file has write access before any http request attempt
@@ -129,7 +144,6 @@ impl Downloader {
 
         // Default retry is an exponential retry with a limit of 15 minutes total.
         // Let's set some more reasonable retry policy so we don't block the downloads for too long.
-
         let backoff = ExponentialBackoff {
             initial_interval: Duration::from_secs(30),
             max_elapsed_time: Some(Duration::from_secs(300)),
@@ -196,6 +210,7 @@ impl Downloader {
         Ok(())
     }
 
+    /// Returns the filename.
     pub fn filename(&self) -> &Path {
         self.target_filename.as_path()
     }
@@ -263,6 +278,7 @@ fn create_file_and_try_pre_allocate_space(
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use crate::DownloadError;
 
