@@ -122,6 +122,7 @@ impl Agent {
     pub async fn init(&mut self, config_dir: Utf8PathBuf) -> Result<(), anyhow::Error> {
         // `config_dir` by default is `/etc/tedge` (or whatever the user sets with --config-dir)
         create_directory_with_user_group(format!("{config_dir}/.agent"), "tedge", "tedge", 0o775)?;
+        std::fs::create_dir_all(self.config.log_dir.clone())?;
         create_directory_with_user_group(self.config.log_dir.clone(), "tedge", "tedge", 0o775)?;
         create_directory_with_user_group(self.config.data_dir.clone(), "tedge", "tedge", 0o775)?;
         create_directory_with_user_group(
