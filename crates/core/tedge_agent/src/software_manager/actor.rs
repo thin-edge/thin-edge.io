@@ -11,7 +11,6 @@ use plugin_sm::operation_logs::LogKind;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::plugin_manager::ExternalPlugins;
 use plugin_sm::plugin_manager::Plugins;
-use std::sync::Arc;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::MessageReceiver;
@@ -29,7 +28,6 @@ use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessorStringExt;
 use tedge_config::SoftwarePluginDefaultSetting;
 use tedge_config::TEdgeConfigLocation;
-use tokio::sync::Mutex;
 use tracing::error;
 use tracing::log::warn;
 
@@ -57,16 +55,14 @@ impl Actor for SoftwareManagerActor {
         let operation_logs = OperationLogs::try_new(self.config.log_dir.clone().into())
             .map_err(SoftwareManagerError::FromOperationsLogs)?;
 
-        let plugins = Arc::new(Mutex::new(
-            ExternalPlugins::open(
-                &self.config.sm_plugins_dir,
-                self.config.default_plugin_type.clone(),
-                Some(SUDO.into()),
-            )
-            .map_err(|err| RuntimeError::ActorError(Box::new(err)))?,
-        ));
+        let mut plugins = ExternalPlugins::open(
+            &self.config.sm_plugins_dir,
+            self.config.default_plugin_type.clone(),
+            Some(SUDO.into()),
+        )
+        .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
 
-        if plugins.lock().await.empty() {
+        if plugins.empty() {
             warn!(
                 "{}",
                 NoPlugins {
@@ -81,11 +77,7 @@ impl Actor for SoftwareManagerActor {
             match request {
                 SoftwareRequest::SoftwareUpdateRequest(request) => {
                     if let Err(err) = self
-                        .handle_software_update_operation(
-                            &request,
-                            plugins.clone(),
-                            &operation_logs,
-                        )
+                        .handle_software_update_operation(&request, &mut plugins, &operation_logs)
                         .await
                     {
                         error!("{:?}", err);
@@ -93,7 +85,7 @@ impl Actor for SoftwareManagerActor {
                 }
                 SoftwareRequest::SoftwareListRequest(request) => {
                     if let Err(err) = self
-                        .handle_software_list_operation(&request, plugins.clone(), &operation_logs)
+                        .handle_software_list_operation(&request, &plugins, &operation_logs)
                         .await
                     {
                         error!("{:?}", err);
@@ -162,14 +154,11 @@ impl SoftwareManagerActor {
     async fn handle_software_update_operation(
         &mut self,
         request: &SoftwareUpdateRequest,
-        plugins: Arc<Mutex<ExternalPlugins>>,
+        plugins: &mut ExternalPlugins,
         operation_logs: &OperationLogs,
     ) -> Result<(), SoftwareManagerError> {
-        plugins.lock().await.load()?;
-        plugins
-            .lock()
-            .await
-            .update_default(&get_default_plugin(&self.config.config_location)?)?;
+        plugins.load()?;
+        plugins.update_default(&get_default_plugin(&self.config.config_location)?)?;
 
         self.state_repository
             .store(&State {
@@ -185,8 +174,6 @@ impl SoftwareManagerActor {
         let response = match operation_logs.new_log_file(LogKind::SoftwareUpdate).await {
             Ok(log_file) => {
                 plugins
-                    .lock()
-                    .await
                     .process(request, log_file, self.config.tmp_dir.as_std_path())
                     .await
             }
@@ -207,7 +194,7 @@ impl SoftwareManagerActor {
     async fn handle_software_list_operation(
         &mut self,
         request: &SoftwareListRequest,
-        plugins: Arc<Mutex<ExternalPlugins>>,
+        plugins: &ExternalPlugins,
         operation_logs: &OperationLogs,
     ) -> Result<(), SoftwareManagerError> {
         self.state_repository
@@ -222,7 +209,7 @@ impl SoftwareManagerActor {
         self.message_box.send(executing_response.into()).await?;
 
         let response = match operation_logs.new_log_file(LogKind::SoftwareList).await {
-            Ok(log_file) => plugins.lock().await.list(request, log_file).await,
+            Ok(log_file) => plugins.list(request, log_file).await,
             Err(err) => {
                 error!("{}", err);
                 let mut failed_response = SoftwareListResponse::new(request);
