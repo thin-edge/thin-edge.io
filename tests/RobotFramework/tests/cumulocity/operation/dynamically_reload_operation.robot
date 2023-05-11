@@ -9,6 +9,7 @@ Test Teardown    Get Logs
 
 *** Test Cases ***
 Update the custom operation dynamically
+    # Add a new custom operation and trigger it.
     ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y_Command_1     /etc/tedge/operations/c8y/c8y_Command  
     ${operation}=    Cumulocity.Create Operation    description=do something    fragments={"c8y_Command":{"text":""}}
     Operation Should Be SUCCESSFUL    ${operation}
