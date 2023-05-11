@@ -10,6 +10,10 @@ pub trait TEdgeConfigDefault<T, Args> {
 }
 
 /// A dummy tedge config location
+///
+/// In practice, we use `TEdgeConfigLocation` from the `tedge_config` crate.
+/// This is defined simply to allow us to create examples in this crate.
+#[derive(Default)]
 pub struct TEdgeConfigLocation;
 
 impl TEdgeConfigLocation {

@@ -7,7 +7,7 @@ pub enum ReadError {
 }
 
 define_tedge_config! {
-    #[serde(alias = "azure")]
+    #[tedge_config(deprecated_name = "azure")]
     az: {
         mapper: {
             timestamp: bool,

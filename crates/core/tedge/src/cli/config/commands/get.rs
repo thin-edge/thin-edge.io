@@ -9,10 +9,7 @@ pub struct GetConfigCommand {
 
 impl Command for GetConfigCommand {
     fn description(&self) -> String {
-        format!(
-            "get the configuration value for key: '{}'",
-            self.key.as_str()
-        )
+        format!("get the configuration value for key: '{}'", self.key)
     }
 
     fn execute(&self) -> anyhow::Result<()> {
@@ -21,10 +18,7 @@ impl Command for GetConfigCommand {
                 println!("{}", value);
             }
             Err(tedge_config::new::ReadError::ConfigNotSet { .. }) => {
-                eprintln!(
-                    "The provided config key: '{}' is not set",
-                    self.key.as_str()
-                );
+                eprintln!("The provided config key: '{}' is not set", self.key);
             }
             Err(tedge_config::new::ReadError::ReadOnlyNotFound { message, key }) => {
                 eprintln!("The provided config key: '{key}' is not configured: {message}",);

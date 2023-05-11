@@ -9,6 +9,7 @@ use syn::spanned::Spanned;
 
 use crate::error::combine_errors;
 use crate::optional_error::OptionalError;
+use crate::optional_error::SynResultExt;
 
 pub use super::parse::FieldDefault;
 pub use super::parse::FieldDtoSettings;
@@ -16,6 +17,7 @@ pub use super::parse::GroupDtoSettings;
 pub use super::parse::ReaderSettings;
 use super::parse::ReadonlySettings;
 
+#[derive(Debug)]
 pub struct Configuration {
     pub groups: Vec<FieldOrGroup>,
 }
@@ -50,6 +52,21 @@ impl TryFrom<super::parse::ConfigurationGroup> for ConfigurationGroup {
     type Error = syn::Error;
 
     fn try_from(mut value: super::parse::ConfigurationGroup) -> Result<Self, Self::Error> {
+        deny_attribute(
+            &value.attrs,
+            "serde",
+            "rename",
+            "tedge_config(rename)",
+            "rename a group",
+        )?;
+        deny_attribute(
+            &value.attrs,
+            "serde",
+            "alias",
+            "tedge_config(deprecated_name)",
+            "supply an alias for a group",
+        )?;
+
         for name in value.deprecated_names {
             // TODO similar errors to fields?
             let name_str = name.as_str();
@@ -253,7 +270,7 @@ impl ConfigurableField {
         }
     }
 
-    pub fn deprecated_keys<'a>(&'a self) -> impl Iterator<Item = &'a str> {
+    pub fn deprecated_keys(&self) -> impl Iterator<Item = &str> {
         let keys = match self {
             Self::ReadOnly(field) => &field.deprecated_keys,
             Self::ReadWrite(field) => &field.deprecated_keys,
@@ -265,13 +282,34 @@ impl ConfigurableField {
 impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
     type Error = syn::Error;
     fn try_from(mut value: super::parse::ConfigurableField) -> Result<Self, Self::Error> {
-        deny_attribute(&value.attrs, "serde", "rename", "tedge_config(rename)")?;
+        let mut custom_errors = OptionalError::default();
+
+        let attrs = &value.attrs;
         deny_attribute(
-            &value.attrs,
+            attrs,
+            "serde",
+            "rename",
+            "tedge_config(rename)",
+            "rename a field",
+        )
+        .append_err_to(&mut custom_errors);
+        deny_attribute(
+            attrs,
             "serde",
             "alias",
             "tedge_config(deprecated_name)",
-        )?;
+            "create an alias for a field",
+        )
+        .append_err_to(&mut custom_errors);
+        deny_attribute(
+            attrs,
+            "doku",
+            "example",
+            "tedge_config(example)",
+            "supply an example value for a field",
+        )
+        .append_err_to(&mut custom_errors);
+
         if let Some(renamed_to) = &value.rename {
             let span = renamed_to.span();
             let literal = renamed_to.as_str();
@@ -280,11 +318,10 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
                 .push(parse_quote_spanned!(span=> #[serde(rename = #literal)]))
         }
 
-        let mut deprecated_name_errors = OptionalError::default();
         for name in value.deprecated_names {
             let name_str = name.as_str();
-            if name.contains(".") {
-                deprecated_name_errors.combine(syn::Error::new(
+            if name.contains('.') {
+                custom_errors.combine(syn::Error::new(
                     name.span(),
                     format!("this a path rather than a field or group name. Did you mean to use #[tedge_config(deprecated_key = \"{name_str}\")] instead?")
                 ));
@@ -295,15 +332,13 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
         }
 
         for key in &value.deprecated_keys {
-            if !key.contains(".") {
-                deprecated_name_errors.combine(syn::Error::new(
+            if !key.contains('.') {
+                custom_errors.combine(syn::Error::new(
                     key.span(),
                     format!("this is just a field or group name, not a key (which would contain one or more `.`s). Did you mean to use #[tedge_config(deprecated_name = \"{}\"] instead?", key.as_str())
                 ));
             }
         }
-
-        deprecated_name_errors.try_throw()?;
 
         for example in &value.examples {
             let example_str = example.as_str();
@@ -312,36 +347,24 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
                 .push(parse_quote_spanned! {example.span()=> #[doku(example = #example_str)]});
         }
 
+        if let Some(note) = value.note {
+            value.attrs.push(tedge_note_to_doku_meta(&note));
+        }
+
+        custom_errors.try_throw()?;
+
         if let Some(readonly) = value.readonly {
-            let mut error = OptionalError::default();
-            for example in &value.examples {
-                error.combine(syn::Error::new(
-                    example.span(),
-                    "Cannot use `example` on read only field",
-                ))
-            }
-
-            if let Some(note) = value.note {
-                value.attrs.push(tedge_note_to_doku_meta(&note));
-            }
-
-            error.try_throw().map(|_| {
-                Self::ReadOnly(ReadOnlyField {
-                    attrs: value.attrs,
-                    deprecated_keys: value.deprecated_keys,
-                    rename: value.rename,
-                    ident: value.ident.unwrap(),
-                    readonly,
-                    ty: value.ty,
-                    dto: value.dto,
-                    reader: value.reader,
-                })
-            })
+            Ok(Self::ReadOnly(ReadOnlyField {
+                attrs: value.attrs,
+                deprecated_keys: value.deprecated_keys,
+                rename: value.rename,
+                ident: value.ident.unwrap(),
+                readonly,
+                ty: value.ty,
+                dto: value.dto,
+                reader: value.reader,
+            }))
         } else {
-            if let Some(note) = value.note {
-                value.attrs.push(tedge_note_to_doku_meta(&note));
-            }
-
             Ok(Self::ReadWrite(ReadWriteField {
                 attrs: value.attrs,
                 deprecated_keys: value.deprecated_keys,
@@ -362,6 +385,7 @@ fn deny_attribute(
     krate: &str,
     attribute: &str,
     our_name: &str,
+    action: &str,
 ) -> Result<(), syn::Error> {
     attrs
         .iter()
@@ -378,7 +402,7 @@ fn deny_attribute(
         .map(|attr| {
             syn::Error::new(
                 attr.span(),
-                format!("use #[{our_name}] instead of #[{krate}({attribute})] to rename fields"),
+                format!("use #[{our_name}] instead of #[{krate}({attribute})] to {action}"),
             )
         })
         .fold(OptionalError::default(), |errors, e| {
@@ -395,18 +419,191 @@ fn tedge_note_to_doku_meta(note: &SpannedValue<String>) -> syn::Attribute {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proc_macro2::Span;
     use quote::quote;
+    use syn::parse_quote;
 
     #[test]
-    fn examples_denied_for_read_only_fields() {
+    fn doku_examples_are_denied() {
         let input: super::super::parse::Configuration = syn::parse2(quote! {
             device: {
-                #[tedge_config(readonly(write_error = "Field is read only", function = "device_id"), example = "test")]
+                #[doku(example = "test")]
                 id: String,
             },
         })
         .unwrap();
 
         assert!(Configuration::try_from(input).is_err());
+    }
+
+    #[test]
+    fn tedge_note_is_converted_to_doku_meta() {
+        let note = SpannedValue::new("A note".to_owned(), Span::call_site());
+        assert_eq!(
+            tedge_note_to_doku_meta(&note),
+            parse_quote!(
+                #[doku(meta("note = A note"))]
+            )
+        );
+    }
+
+    #[test]
+    fn serde_rename_is_denied_for_fields() {
+        let input: super::super::parse::Configuration = syn::parse2(quote! {
+            device: {
+                #[serde(rename = "type")]
+                ty: String,
+            },
+        })
+        .unwrap();
+
+        let error = Configuration::try_from(input).unwrap_err();
+        assert!(error.to_string().contains("#[tedge_config(rename)]"))
+    }
+
+    #[test]
+    fn serde_alias_is_denied_for_fields() {
+        let input: super::super::parse::Configuration = syn::parse2(quote! {
+            device: {
+                #[serde(alias = "type")]
+                ty: String,
+            },
+        })
+        .unwrap();
+
+        let error = Configuration::try_from(input).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("#[tedge_config(deprecated_name)]"))
+    }
+
+    #[test]
+    fn serde_alias_is_denied_for_groups() {
+        let input: super::super::parse::Configuration = syn::parse2(quote! {
+            #[serde(alias = "dev")]
+            device: {
+                ty: String,
+            },
+        })
+        .unwrap();
+
+        let error = Configuration::try_from(input).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("#[tedge_config(deprecated_name)]"))
+    }
+
+    #[test]
+    fn deprecated_key_accepts_valid_keys_for_fields() {
+        let input: super::super::parse::Configuration = syn::parse2(quote! {
+            mqtt: {
+                bind: {
+                    #[tedge_config(deprecated_key = "mqtt.port")]
+                    port: u16,
+                }
+            },
+        })
+        .unwrap();
+
+        Configuration::try_from(input).unwrap();
+    }
+
+    #[test]
+    fn deprecated_name_accepts_valid_names_for_fields() {
+        let input: super::super::parse::Configuration = syn::parse2(quote! {
+            mqtt: {
+                auth: {
+                    #[tedge_config(deprecated_name = "cafile")]
+                    ca_file: u16,
+                }
+            },
+        })
+        .unwrap();
+
+        Configuration::try_from(input).unwrap();
+    }
+
+    #[test]
+    fn rename_accepts_valid_keys_for_groups() {
+        let input: super::super::parse::Configuration = syn::parse2(quote! {
+            mqtt: {
+                #[tedge_config(rename = "notbind")]
+                bind: {
+                    port: u16,
+                }
+            },
+        })
+        .unwrap();
+
+        Configuration::try_from(input).unwrap();
+    }
+
+    #[test]
+    fn deprecated_name_accepts_valid_names_for_groups() {
+        let input: super::super::parse::Configuration = syn::parse2(quote! {
+            mqtt: {
+                #[tedge_config(deprecated_name = "old_auth")]
+                auth: {
+                    ca_file: u16,
+                }
+            },
+        })
+        .unwrap();
+
+        Configuration::try_from(input).unwrap();
+    }
+
+    #[test]
+    fn group_name_is_derived_from_ident_if_not_renamed() {
+        let input: super::super::parse::Configuration = syn::parse2(quote! {
+            c8y: {
+                url: String,
+            }
+        })
+        .unwrap();
+
+        let configuration = Configuration::try_from(input).unwrap();
+
+        assert_eq!(configuration.groups[0].name(), "c8y")
+    }
+
+    #[test]
+    fn group_can_be_renamed() {
+        let input: super::super::parse::Configuration = syn::parse2(quote! {
+            #[tedge_config(rename = "cumulocity")]
+            c8y: {
+                url: String,
+            }
+        })
+        .unwrap();
+
+        let configuration = Configuration::try_from(input).unwrap();
+
+        assert_eq!(configuration.groups[0].name(), "cumulocity")
+    }
+
+    #[test]
+    fn field_name_is_derived_from_ident_if_not_renamed() {
+        let input: super::super::parse::ConfigurableField = syn::parse2(quote! {
+            ty: String
+        })
+        .unwrap();
+
+        let field = FieldOrGroup::Field(ConfigurableField::try_from(input).unwrap());
+
+        assert_eq!(field.name(), "ty")
+    }
+
+    #[test]
+    fn field_can_be_renamed() {
+        let input: super::super::parse::ConfigurableField = syn::parse2(quote! {
+            #[tedge_config(rename = "type")]
+            ty: String
+        })
+        .unwrap();
+
+        let field = FieldOrGroup::Field(ConfigurableField::try_from(input).unwrap());
+
+        assert_eq!(field.name(), "type")
     }
 }

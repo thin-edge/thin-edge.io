@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-/// A map from aliases to canonical keys
 fn dot_separate(prefix: Option<&str>, field: &str, sub_path: &str) -> Cow<'static, str> {
     Cow::Owned(
         prefix
@@ -12,6 +11,7 @@ fn dot_separate(prefix: Option<&str>, field: &str, sub_path: &str) -> Cow<'stati
     )
 }
 
+/// Creates a map from aliases to canonical keys
 pub fn struct_field_aliases(
     prefix: Option<&str>,
     fields: &[(&'static str, doku::Field)],
@@ -84,6 +84,7 @@ fn conventional_sub_paths(
         .collect()
 }
 
+/// Creates a "map" from keys to their doku type information
 pub fn struct_field_paths(
     prefix: Option<&str>,
     fields: &[(&'static str, doku::Field)],

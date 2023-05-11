@@ -40,6 +40,18 @@ impl OptionalError {
     }
 }
 
+pub trait SynResultExt: Sized {
+    fn append_err_to(self, errors: &mut OptionalError);
+}
+
+impl SynResultExt for Result<(), syn::Error> {
+    fn append_err_to(self, errors: &mut OptionalError) {
+        if let Err(error) = self {
+            errors.combine(error);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

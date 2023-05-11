@@ -29,11 +29,17 @@ impl<T> From<OptionalConfig<T>> for Option<T> {
     r#"A value for '{key}' is missing.\n\
     A value can be set with `tedge config set {key} <value>`"#
 )]
+/// A descriptive error for missing configurations
+///
+/// When a configuration is missing, it can be converted to this via
+/// [OptionalConfig::or_config_not_set], and this will convert to a descriptive
+/// error message telling the user which key to set.
 pub struct ConfigNotSet {
     key: &'static str,
 }
 
 impl<T> OptionalConfig<T> {
+    /// Converts the value to an [Option]
     pub fn or_none(&self) -> Option<&T> {
         match self {
             Self::Present { value, .. } => Some(value),
@@ -41,6 +47,8 @@ impl<T> OptionalConfig<T> {
         }
     }
 
+    /// Converts the value to a [Result] with an error that contains the missing
+    /// key name
     pub fn or_config_not_set(&self) -> Result<&T, ConfigNotSet> {
         match self {
             Self::Present { value, .. } => Ok(value),

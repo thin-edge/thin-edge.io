@@ -29,9 +29,13 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     let readable_args = configuration_strings(paths.iter());
     let readonly_args = configuration_strings(paths.iter().filter(|path| !is_read_write(path)));
     let writable_args = configuration_strings(paths.iter().filter(|path| is_read_write(path)));
-    let readable_keys = keys_enum(parse_quote!(ReadableKey), &readable_args);
-    let readonly_keys = keys_enum(parse_quote!(ReadOnlyKey), &readonly_args);
-    let writable_keys = keys_enum(parse_quote!(WritableKey), &writable_args);
+    let readable_keys = keys_enum(parse_quote!(ReadableKey), &readable_args, "read from");
+    let readonly_keys = keys_enum(
+        parse_quote!(ReadOnlyKey),
+        &readonly_args,
+        "read from, but not written to,",
+    );
+    let writable_keys = keys_enum(parse_quote!(WritableKey), &writable_args, "written to");
     let fromstr_readable = generate_fromstr_readable(parse_quote!(ReadableKey), &readable_args);
     let fromstr_readonly = generate_fromstr_readable(parse_quote!(ReadOnlyKey), &readonly_args);
     let fromstr_writable = generate_fromstr_writable(parse_quote!(WritableKey), &writable_args);
@@ -56,6 +60,8 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
         #write_string
 
         #[derive(::thiserror::Error, Debug)]
+        /// An error encountered when writing to a configuration value from a
+        /// string
         pub enum WriteError {
             #[error("Failed to parse input")]
             ParseValue(#[from] Box<dyn ::std::error::Error + Send + Sync>),
@@ -72,6 +78,7 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
         }
 
         #[derive(Debug, ::thiserror::Error)]
+        /// An error encountered when parsing a configuration key from a string
         pub enum ParseKeyError {
             #[error("{}", .0.write_error())]
             ReadOnly(ReadOnlyKey),
@@ -217,18 +224,46 @@ fn generate_fromstr_writable(
 fn keys_enum(
     type_name: syn::Ident,
     (configuration_string, variant_name): &(Vec<String>, Vec<syn::Ident>),
+    doc_fragment: &'static str,
 ) -> TokenStream {
+    let as_str_example = variant_name
+        .iter()
+        .zip(configuration_string.iter())
+        .map(|(ident, value)| format!("assert_eq!({type_name}::{ident}.as_str(), \"{value}\");\n"))
+        .take(10)
+        .collect::<Vec<_>>();
+    let as_str_example = (!as_str_example.is_empty()).then(|| {
+        quote! {
+            /// ```compile_fail
+            /// // This doctest is compile_fail because we have no way import the
+            /// // current type, but the example is still valuable
+            #(
+                #[doc = #as_str_example]
+            )*
+            /// ```
+        }
+    });
+    let type_name_str = type_name.to_string();
+
     quote! {
         #[derive(Copy, Clone, Debug, PartialEq, Eq)]
         #[non_exhaustive]
         #[allow(unused)]
+        #[doc = concat!("A key that can be *", #doc_fragment, "* the configuration\n\n")]
+        #[doc = concat!("This can be converted to `&'static str` using [`", #type_name_str, "::as_str`], and")]
+        #[doc = "parsed using [`FromStr`](::std::str::FromStr). The `FromStr` implementation also"]
+        #[doc = "automatically emits warnings about deprecated keys. It also implements [Display](std::fmt::Display),"]
+        #[doc = "so you can also use it in format strings."]
         pub enum #type_name {
             #(
+                #[doc = concat!("`", #configuration_string, "`")]
                 #variant_name,
             )*
         }
 
         impl #type_name {
+            /// Converts this key to the canonical key used by `tedge config` and `tedge.toml`
+            #as_str_example
             pub fn as_str(self) -> &'static str {
                 match self {
                     #(
@@ -237,6 +272,7 @@ fn keys_enum(
                 }
             }
 
+            /// Iterates through all the variants of this enum
             pub fn iter() -> impl Iterator<Item = Self> {
                 [
                     #(

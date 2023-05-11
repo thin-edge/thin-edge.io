@@ -69,7 +69,12 @@ pub fn generate_configuration(tokens: TokenStream) -> Result<TokenStream, syn::E
         All the configurations inside this are optional to represent whether
         the value is or isn't configured in the TOML file. Any defaults are
         populated when this is converted to [{reader_name}] (via
-        [from_dto]({reader_name}::from_dto))."
+        [from_dto]({reader_name}::from_dto)).
+\n\
+        For simplicity when using this struct, only the fields are optional.
+        Any configuration groups (e.g. `device`, `c8y`, `mqtt.external`) are
+        always present. Groups that have no value set will be omitted in the
+        serialized output to avoid polluting `tedge.toml`."
     );
 
     let dto = dto::generate(
@@ -78,7 +83,18 @@ pub fn generate_configuration(tokens: TokenStream) -> Result<TokenStream, syn::E
         &dto_doc_comment,
     );
 
-    let reader = reader::try_generate(reader_name, &input.groups)?;
+    let reader_doc_comment = "A struct to read configured values from, designed to be accessed only
+        via an immutable borrow
+\n\
+        The configurations inside this struct are optional only if the field
+        does not have a default value configured. This ensures that thin-edge
+        code only needs to handle possible errors where a field may not be
+        set.
+\n\
+        Where fields are optional, they are stored using [OptionalConfig] to
+        produce a descriptive error message that directs the user to set the
+        relevant key.";
+    let reader = reader::try_generate(reader_name, &input.groups, reader_doc_comment)?;
 
     let enums = query::generate_writable_keys(&input.groups);
 

@@ -9,7 +9,7 @@ pub struct UnsetConfigCommand {
 
 impl Command for UnsetConfigCommand {
     fn description(&self) -> String {
-        format!("unset the configuration value for '{}'", self.key.as_str())
+        format!("unset the configuration value for '{}'", self.key)
     }
 
     fn execute(&self) -> anyhow::Result<()> {

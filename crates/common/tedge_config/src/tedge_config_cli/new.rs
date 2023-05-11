@@ -52,6 +52,7 @@ impl TEdgeConfig {
 
 #[derive(serde::Deserialize, serde::Serialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(into = "&'static str", try_from = "String")]
+/// A version of tedge.toml, used to manage migrations (see [Self::migrations])
 pub enum TEdgeTomlVersion {
     One,
     Two,
@@ -90,6 +91,7 @@ impl From<TEdgeTomlVersion> for toml::Value {
         toml::Value::String(str.to_owned())
     }
 }
+
 
 pub enum TomlMigrationStep {
     UpdateFieldValue {
@@ -192,6 +194,12 @@ impl TEdgeTomlVersion {
             Self::Two => Self::Two,
         }
     }
+
+    /// The migrations to upgrade `tedge.toml` from its current version to the
+    /// next version.
+    ///
+    /// If this returns `None`, the version of `tedge.toml` is the latest
+    /// version, and no migrations need to be applied.
     pub fn migrations(self) -> Option<Vec<TomlMigrationStep>> {
         use WritableKey::*;
         let mv = |original, target: WritableKey| TomlMigrationStep::MoveKey {
@@ -253,7 +261,7 @@ define_tedge_config! {
             function = "device_id",
         ))]
         // TODO should tedge_config support read only examples?
-        #[doku(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
+        #[tedge_config(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
         #[tedge_config(note = "This setting is derived from the device certificate and is therefore read only.")]
         #[doku(as = "String")]
         id: Result<String, ReadError>,

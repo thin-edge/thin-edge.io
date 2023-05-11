@@ -97,18 +97,18 @@ impl<const P: u16> doku::Document for HostPort<P> {
 impl<const P: u16> TryFrom<String> for HostPort<P> {
     type Error = ParseHostPortError;
 
-    fn try_from(s: String) -> Result<Self, Self::Error> {
-        let (hostname, port) = if let Some((hostname, port)) = s.split_once(':') {
+    fn try_from(input: String) -> Result<Self, Self::Error> {
+        let (hostname, port) = if let Some((hostname, port)) = input.split_once(':') {
             let port = Port(port.parse()?);
             let hostname: Host<String> = Host::parse(hostname)?;
             (hostname, port)
         } else {
-            let hostname: Host<String> = Host::parse(&s)?;
+            let hostname: Host<String> = Host::parse(&input)?;
             (hostname, Port(P))
         };
 
         Ok(HostPort {
-            input: s.to_owned(),
+            input,
             hostname,
             port,
         })

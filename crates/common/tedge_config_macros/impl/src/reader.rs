@@ -23,8 +23,9 @@ use crate::prefixed_type_name;
 pub fn try_generate(
     root_name: proc_macro2::Ident,
     items: &[FieldOrGroup],
+    doc_comment: &str,
 ) -> syn::Result<TokenStream> {
-    let structs = generate_structs(&root_name, items, Vec::new())?;
+    let structs = generate_structs(&root_name, items, Vec::new(), doc_comment)?;
     let conversions = generate_conversions(&root_name, items, vec![], items)?;
     Ok(quote! {
         #structs
@@ -36,6 +37,7 @@ fn generate_structs(
     name: &proc_macro2::Ident,
     items: &[FieldOrGroup],
     parents: Vec<syn::Ident>,
+    doc_comment: &str,
 ) -> syn::Result<TokenStream> {
     let mut idents = Vec::new();
     let mut tys = Vec::<syn::Type>::new();
@@ -75,6 +77,7 @@ fn generate_structs(
                     &sub_reader_name,
                     &group.contents,
                     parents,
+                    "",
                 )?));
                 attrs.push(group.attrs.to_vec());
                 vis.push(match group.reader.private {
@@ -123,6 +126,7 @@ fn generate_structs(
     Ok(quote! {
         #[derive(::doku::Document, ::serde::Serialize, Debug)]
         #[non_exhaustive]
+        #[doc = #doc_comment]
         pub struct #name {
             #(
                 #(#attrs)*

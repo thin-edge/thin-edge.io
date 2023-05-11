@@ -1,5 +1,10 @@
 use crate::OptionalConfig;
 
+/// An abstraction over "all or nothing" configurations
+///
+/// This is designed to be used with [all_or_nothing] to generate helpful error
+/// messages in cases where configuration values are mutually optional. See
+/// [all_or_nothing] for more information.
 pub trait MultiOption {
     type Output;
     fn extract_all(self) -> Result<Option<Self::Output>, PartialConfiguration>;
@@ -48,6 +53,55 @@ impl<T, U> MultiOption for (OptionalConfig<T>, OptionalConfig<U>) {
     }
 }
 
+/// Combine a set of optional configurations into a single option
+///  
+/// # Errors
+/// This will fail in the case that some, but not all the configurations are provided.
+///
+/// ```
+/// use tedge_config_macros::*;
+/// use camino::Utf8PathBuf;
+/// use std::path::PathBuf;
+///
+/// #[derive(thiserror::Error, Debug)]
+/// pub enum ReadError {
+///     #[error(transparent)]
+///     ConfigNotSet(#[from] ConfigNotSet),
+/// }
+///
+/// define_tedge_config! {
+///     mqtt: {
+///         auth: {
+///             #[doku(as = "PathBuf")]
+///             cert_file: Utf8PathBuf,
+///
+///             #[doku(as = "PathBuf")]
+///             key_file: Utf8PathBuf,
+///         }
+///     }
+/// }
+///
+/// let mut dto = TEdgeConfigDto::default();
+/// let reader = TEdgeConfigReader::from_dto(&dto, &TEdgeConfigLocation::default());
+/// assert!(matches!(
+///     all_or_nothing((reader.mqtt.auth.cert_file.as_ref(), reader.mqtt.auth.key_file.as_ref())),
+///     Ok(None)
+/// ));
+///
+/// dto.mqtt.auth.cert_file = Some("/etc/tedge/mqtt-certs/auth.crt".into());
+/// let reader = TEdgeConfigReader::from_dto(&dto, &TEdgeConfigLocation::default());
+/// assert!(matches!(
+///     all_or_nothing((reader.mqtt.auth.cert_file.as_ref(), reader.mqtt.auth.key_file.as_ref())),
+///     Err(_)
+/// ));
+///
+/// dto.mqtt.auth.key_file = Some("/etc/tedge/mqtt-certs/key.cert".into());
+/// let reader = TEdgeConfigReader::from_dto(&dto, &TEdgeConfigLocation::default());
+/// assert!(matches!(
+///     all_or_nothing((reader.mqtt.auth.cert_file.as_ref(), reader.mqtt.auth.key_file.as_ref())),
+///     Ok(Some((_, _)))
+/// ));
+/// ```
 pub fn all_or_nothing<Configs: MultiOption>(
     input: Configs,
 ) -> Result<Option<Configs::Output>, String> {
