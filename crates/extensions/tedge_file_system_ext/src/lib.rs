@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use log::error;
 use std::path::PathBuf;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::futures::StreamExt;
@@ -121,9 +122,14 @@ impl Actor for FsWatchActor {
     }
 
     async fn run(&mut self) -> Result<(), RuntimeError> {
-        let mut fs_notify = NotifyStream::try_default().unwrap();
+        let mut fs_notify = NotifyStream::try_default().map_err(Box::new)?;
         for (watch_path, _) in self.messages.get_watch_dirs().iter() {
-            fs_notify.add_watcher(watch_path).unwrap();
+            if let Err(err) = fs_notify.add_watcher(watch_path) {
+                error!(
+                    "Failed to add file watcher to the {} due to: {err}",
+                    watch_path.display()
+                );
+            }
         }
 
         loop {

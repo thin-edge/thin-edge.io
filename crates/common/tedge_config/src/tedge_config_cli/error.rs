@@ -26,6 +26,9 @@ pub enum TEdgeConfigError {
 
     #[error(transparent)]
     Multi(#[from] Multi),
+
+    #[error(transparent)]
+    DirNotFound(#[from] tedge_utils::paths::PathsError),
 }
 
 impl TEdgeConfigError {
