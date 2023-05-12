@@ -25,13 +25,13 @@ fn root_cert_path_default() {
 }
 
 #[test]
-fn default_from_path_uses_the_correct_default() {
+fn default_from_key_uses_the_correct_default() {
     #![allow(unused_variables)]
     define_tedge_config! {
         test: {
             #[tedge_config(default(value = "DEFAULT_VALUE_FOR_ONE"))]
             one: String,
-            #[tedge_config(default(from_path = "test.one"))]
+            #[tedge_config(default(from_key = "test.one"))]
             two: String,
         }
     }
@@ -45,13 +45,13 @@ fn default_from_path_uses_the_correct_default() {
 }
 
 #[test]
-fn default_from_path_uses_the_value_of_other_field_if_set() {
+fn default_from_key_uses_the_value_of_other_field_if_set() {
     #![allow(unused_variables)]
     define_tedge_config! {
         test: {
             #[tedge_config(default(value = "DEFAULT_VALUE_FOR_ONE"))]
             one: String,
-            #[tedge_config(default(from_path = "test.one"))]
+            #[tedge_config(default(from_key = "test.one"))]
             two: String,
         }
     }
@@ -66,13 +66,13 @@ fn default_from_path_uses_the_value_of_other_field_if_set() {
 }
 
 #[test]
-fn default_from_path_uses_its_own_value_if_both_are_set() {
+fn default_from_key_uses_its_own_value_if_both_are_set() {
     #![allow(unused_variables)]
     define_tedge_config! {
         test: {
             #[tedge_config(default(value = "DEFAULT_VALUE_FOR_ONE"))]
             one: String,
-            #[tedge_config(default(from_path = "test.one"))]
+            #[tedge_config(default(from_key = "test.one"))]
             two: String,
         }
     }
@@ -88,13 +88,13 @@ fn default_from_path_uses_its_own_value_if_both_are_set() {
 }
 
 #[test]
-fn default_from_path_uses_its_own_value_if_only_it_is_set() {
+fn default_from_key_uses_its_own_value_if_only_it_is_set() {
     #![allow(unused_variables)]
     define_tedge_config! {
         test: {
             #[tedge_config(default(value = "DEFAULT_VALUE_FOR_ONE"))]
             one: String,
-            #[tedge_config(default(from_path = "test.one"))]
+            #[tedge_config(default(from_key = "test.one"))]
             two: String,
         }
     }

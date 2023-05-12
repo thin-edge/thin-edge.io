@@ -92,7 +92,6 @@ impl From<TEdgeTomlVersion> for toml::Value {
     }
 }
 
-
 pub enum TomlMigrationStep {
     UpdateFieldValue {
         key: &'static str,
@@ -260,7 +259,6 @@ define_tedge_config! {
                 To set 'device.id' to some <id>, you can use `tedge cert create --device-id <id>`.",
             function = "device_id",
         ))]
-        // TODO should tedge_config support read only examples?
         #[tedge_config(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
         #[tedge_config(note = "This setting is derived from the device certificate and is therefore read only.")]
         #[doku(as = "String")]
@@ -303,12 +301,12 @@ define_tedge_config! {
 
         /// HTTP Endpoint for the Cumulocity tenant, with optional port.
         #[tedge_config(example = "http.your-tenant.cumulocity.com:1234")]
-        #[tedge_config(default(from_optional_path = "c8y.url"))]
+        #[tedge_config(default(from_optional_key = "c8y.url"))]
         http: HostPort<HTTPS_PORT>,
 
         /// MQTT Endpoint for the Cumulocity tenant, with optional port.
         #[tedge_config(example = "mqtt.your-tenant.cumulocity.com:1234")]
-        #[tedge_config(default(from_optional_path = "c8y.url"))]
+        #[tedge_config(default(from_optional_key = "c8y.url"))]
         mqtt: HostPort<MQTT_TLS_PORT>,
 
     },
@@ -373,7 +371,7 @@ define_tedge_config! {
             host: String,
 
             /// The port that the thin-edge MQTT client should connect to
-            #[tedge_config(default(from_path = "mqtt.bind.port"))]
+            #[tedge_config(default(from_key = "mqtt.bind.port"))]
             #[doku(as = "u16")]
             port: NonZeroU16,
 

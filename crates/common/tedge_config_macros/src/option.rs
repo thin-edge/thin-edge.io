@@ -7,6 +7,15 @@
 #[derive(serde::Serialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(into = "Option<T>", bound = "T: Clone + serde::Serialize")]
 /// The value for an optional configuration (i.e. one without a default value)
+///
+/// ```
+/// use tedge_config_macros::*;
+///
+/// assert_eq!(
+///     OptionalConfig::Present { value: "test", key: "device.type" }.or_none(),
+///     Some(&"test"),
+/// );
+/// ```
 pub enum OptionalConfig<T> {
     /// Equivalent to `Some(T)`
     Present { value: T, key: &'static str },
@@ -40,6 +49,17 @@ pub struct ConfigNotSet {
 
 impl<T> OptionalConfig<T> {
     /// Converts the value to an [Option]
+    ///
+    /// ```
+    /// use tedge_config_macros::*;
+    ///
+    /// assert_eq!(
+    ///     OptionalConfig::Present { value: "test", key: "device.type" }.or_none(),
+    ///     Some(&"test"),
+    /// );
+    ///
+    /// assert_eq!(OptionalConfig::Empty::<&str>("device.type").or_none(), None);
+    /// ```
     pub fn or_none(&self) -> Option<&T> {
         match self {
             Self::Present { value, .. } => Some(value),

@@ -73,7 +73,7 @@ define_tedge_config! {
         url: String,
 
         http: {
-            #[tedge_config(default(from_optional_path = "c8y.url"))]
+            #[tedge_config(default(from_optional_key = "c8y.url"))]
             url: String,
         }
     },
@@ -100,7 +100,7 @@ define_tedge_config! {
             host: String,
 
             /// The port that the thin-edge MQTT client should connect to
-            #[tedge_config(default(from_path = "mqtt.bind.port"))]
+            #[tedge_config(default(from_key = "mqtt.bind.port"))]
             #[doku(as = "u16")]
             port: NonZeroU16,
 

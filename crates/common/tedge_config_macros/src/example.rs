@@ -84,7 +84,7 @@ define_tedge_config! {
         root_cert_path: Utf8PathBuf,
 
         #[doku(as = "PathBuf")]
-        #[tedge_config(default(from_optional_path = "device.root_cert_path"))]
+        #[tedge_config(default(from_optional_key = "device.root_cert_path"))]
         root_cert_path2: Utf8PathBuf,
 
         #[tedge_config(rename = "type")]

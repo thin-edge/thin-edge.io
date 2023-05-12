@@ -214,7 +214,7 @@ impl ConfigurableField {
         matches!(
             self,
             Self::ReadWrite(ReadWriteField {
-                default: FieldDefault::FromOptionalPath(_) | FieldDefault::None,
+                default: FieldDefault::FromOptionalKey(_) | FieldDefault::None,
                 ..
             })
         )

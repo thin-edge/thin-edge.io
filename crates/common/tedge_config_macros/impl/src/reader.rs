@@ -152,10 +152,10 @@ fn generate_structs(
 
 fn find_field<'a>(
     mut fields: &'a [FieldOrGroup],
-    path: &Punctuated<syn::Ident, Token![.]>,
+    key: &Punctuated<syn::Ident, Token![.]>,
 ) -> syn::Result<&'a ConfigurableField> {
     let mut current_field = None;
-    for (i, segment) in path.iter().enumerate() {
+    for (i, segment) in key.iter().enumerate() {
         let target = fields
             .iter()
             .find(|field| field.is_called(segment))
@@ -172,12 +172,12 @@ fn find_field<'a>(
                 )
             })?;
 
-        let is_last_segment = i == path.len() - 1;
+        let is_last_segment = i == key.len() - 1;
         match target {
             FieldOrGroup::Group(group) => fields = &group.contents,
             FieldOrGroup::Field(_) if is_last_segment => (),
             _ => {
-                let string_path = path.iter().map(<_>::to_string).collect::<Vec<_>>();
+                let string_path = key.iter().map(<_>::to_string).collect::<Vec<_>>();
                 let (successful_segments, subfields) = string_path.split_at(i + 1);
                 let successful_segments = successful_segments.join(".");
                 let subfields = subfields.join(".");
@@ -192,9 +192,9 @@ fn find_field<'a>(
 
     match current_field {
         // TODO test this appears
-        None => Err(syn::Error::new(path.span(), "path is empty")),
+        None => Err(syn::Error::new(key.span(), "key is empty")),
         Some(FieldOrGroup::Group(_)) => Err(syn::Error::new(
-            path.span(),
+            key.span(),
             // TODO test this too
             "path points to a group of fields, not a single field",
         )),
@@ -206,7 +206,7 @@ fn reader_value_for_field<'a>(
     field: &'a ConfigurableField,
     parents: &[syn::Ident],
     root_fields: &[FieldOrGroup],
-    mut observed_paths: Vec<&'a Punctuated<syn::Ident, Token![.]>>,
+    mut observed_keys: Vec<&'a Punctuated<syn::Ident, Token![.]>>,
 ) -> syn::Result<TokenStream> {
     let name = field.ident();
     Ok(match field {
@@ -224,8 +224,8 @@ fn reader_value_for_field<'a>(
                         Some(value) => OptionalConfig::Present { value: value.clone(), key: #key },
                     }
                 },
-                FieldDefault::FromPath(path) if observed_paths.contains(&path) => {
-                    let string_paths = observed_paths
+                FieldDefault::FromKey(key) if observed_keys.contains(&key) => {
+                    let string_paths = observed_keys
                         .iter()
                         .map(|path| {
                             path.iter()
@@ -237,7 +237,7 @@ fn reader_value_for_field<'a>(
                     let error =
                         format!("this path's default is part of a cycle ({string_paths:?})");
                     // Safe to unwrap the error since observed_paths.len() >= 1
-                    return Err(observed_paths
+                    return Err(observed_keys
                         .into_iter()
                         .map(|path| syn::Error::new(path.span(), &error))
                         .fold(OptionalError::default(), |mut errors, error| {
@@ -247,21 +247,21 @@ fn reader_value_for_field<'a>(
                         .take()
                         .unwrap());
                 }
-                FieldDefault::FromPath(path) | FieldDefault::FromOptionalPath(path) => {
-                    observed_paths.push(path);
+                FieldDefault::FromKey(default_key) | FieldDefault::FromOptionalKey(default_key) => {
+                    observed_keys.push(default_key);
                     let default = reader_value_for_field(
-                        find_field(root_fields, path)?,
-                        &path
+                        find_field(root_fields, default_key)?,
+                        &default_key
                             .iter()
-                            .take(path.len() - 1)
+                            .take(default_key.len() - 1)
                             .map(<_>::to_owned)
                             .collect::<Vec<_>>(),
                         root_fields,
-                        observed_paths,
+                        observed_keys,
                     )?;
 
                     let (default, value) =
-                        if matches!(&field.default, FieldDefault::FromOptionalPath(_)) {
+                        if matches!(&field.default, FieldDefault::FromOptionalKey(_)) {
                             (
                                 quote!(#default.map(|v| v.into())),
                                 quote!(OptionalConfig::Present { value: value.clone(), key: #key }),

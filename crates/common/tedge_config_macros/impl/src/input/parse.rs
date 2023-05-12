@@ -132,8 +132,8 @@ pub struct ConfigurableField {
 pub enum FieldDefault {
     Variable(syn::Path),
     Function(syn::Expr),
-    FromPath(Punctuated<syn::Ident, syn::Token![.]>),
-    FromOptionalPath(Punctuated<syn::Ident, syn::Token![.]>),
+    FromKey(Punctuated<syn::Ident, syn::Token![.]>),
+    FromOptionalKey(Punctuated<syn::Ident, syn::Token![.]>),
     Value(syn::Lit),
     None,
 }
