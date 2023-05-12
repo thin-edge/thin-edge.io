@@ -15,7 +15,6 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
-use tedge_actors::WrappedInput;
 use tedge_api::OperationStatus;
 use tedge_api::RestartOperationRequest;
 use tedge_api::RestartOperationResponse;
@@ -50,16 +49,13 @@ impl Actor for RestartManagerActor {
         while let Some(request) = self.message_box.recv().await {
             let maybe_error = self.handle_restart_operation(&request).await;
 
-            match timeout(Duration::from_secs(5), self.message_box.recv_message()).await {
-                Ok(Some(WrappedInput::RuntimeRequest(RuntimeRequest::Shutdown))) => return Ok(()),
-                Ok(Some(WrappedInput::Message(second_request))) => {
-                    if let Err(err) = maybe_error {
-                        error!("{}", err);
-                    }
-                    self.handle_error(&request).await?;
-                    self.handle_error(&second_request).await?;
+            match timeout(Duration::from_secs(5), self.message_box.recv_signal()).await {
+                Ok(Some(RuntimeRequest::Shutdown)) => {
+                    // As expected, the restart triggered a shutdown.
+                    return Ok(());
                 }
-                _ => {
+                Ok(None) | Err(_) => {
+                    // Something went wrong. The process should have been shutdown by the restart.
                     if let Err(err) = maybe_error {
                         error!("{}", err);
                     }
