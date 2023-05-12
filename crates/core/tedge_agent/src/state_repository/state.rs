@@ -9,7 +9,7 @@ use tokio::fs;
 
 #[derive(Debug)]
 pub struct AgentStateRepository {
-    state_repo_path: Utf8PathBuf,
+    pub state_repo_path: Utf8PathBuf,
     state_repo_root: Utf8PathBuf,
 }
 
