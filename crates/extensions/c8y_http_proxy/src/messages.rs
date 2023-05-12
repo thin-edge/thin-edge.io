@@ -77,3 +77,9 @@ impl From<C8YRestResult> for C8YRestError {
         }
     }
 }
+
+#[derive(thiserror::Error, Debug)]
+pub enum C8YConnectionError {
+    #[error("The connection has been interrupted before the internal id has been retrieved")]
+    Interrupted,
+}
