@@ -17,17 +17,8 @@ pub enum RestartManagerError {
     FromSystemServices(#[from] tedge_config::system_services::SystemServiceError),
 
     #[error(transparent)]
-    FromChannelError(#[from] tedge_actors::ChannelError),
-
-    #[error(transparent)]
     FromState(#[from] crate::state_repository::error::StateError),
 
     #[error("Could not convert {timestamp:?} to unix timestamp. Error message: {error_msg}")]
     TimestampConversionError { timestamp: i64, error_msg: String },
-}
-
-impl From<RestartManagerError> for tedge_actors::RuntimeError {
-    fn from(error: RestartManagerError) -> Self {
-        tedge_actors::RuntimeError::ActorError(Box::new(error))
-    }
 }

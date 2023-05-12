@@ -60,6 +60,7 @@ tracing = { version = "0.1", features = ["attributes", "log"] }
 
 [dev-dependencies]
 serial_test = "0.8"
+tedge_actors = { path = "../../core/tedge_actors", features = ["test-helpers"] }
 tedge_test_utils = { path = "../../tests/tedge_test_utils" }
 test-case = "2.2"
 tokio-test = "0.4"

@@ -10,12 +10,12 @@ use crate::state_repository::state::StateStatus;
 use async_trait::async_trait;
 use std::time::Duration;
 use tedge_actors::Actor;
+use tedge_actors::ChannelError;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
-use tedge_actors::WrappedInput;
 use tedge_api::OperationStatus;
 use tedge_api::RestartOperationRequest;
 use tedge_api::RestartOperationResponse;
@@ -45,21 +45,23 @@ impl Actor for RestartManagerActor {
     }
 
     async fn run(&mut self) -> Result<(), RuntimeError> {
-        self.process_pending_restart_operation().await?;
+        if let Some(response) = self.process_pending_restart_operation().await {
+            self.message_box.send(response).await?;
+        }
 
         while let Some(request) = self.message_box.recv().await {
-            let maybe_error = self.handle_restart_operation(&request).await;
+            let executing_response = self.update_state_repository(&request).await;
+            self.message_box.send(executing_response).await?;
 
-            match timeout(Duration::from_secs(5), self.message_box.recv_message()).await {
-                Ok(Some(WrappedInput::RuntimeRequest(RuntimeRequest::Shutdown))) => return Ok(()),
-                Ok(Some(WrappedInput::Message(second_request))) => {
-                    if let Err(err) = maybe_error {
-                        error!("{}", err);
-                    }
-                    self.handle_error(&request).await?;
-                    self.handle_error(&second_request).await?;
+            let maybe_error = self.handle_restart_operation().await;
+
+            match timeout(Duration::from_secs(5), self.message_box.recv_signal()).await {
+                Ok(Some(RuntimeRequest::Shutdown)) => {
+                    // As expected, the restart triggered a shutdown.
+                    return Ok(());
                 }
-                _ => {
+                Ok(None) | Err(_) => {
+                    // Something went wrong. The process should have been shutdown by the restart.
                     if let Err(err) = maybe_error {
                         error!("{}", err);
                     }
@@ -88,10 +90,8 @@ impl RestartManagerActor {
         }
     }
 
-    async fn process_pending_restart_operation(&mut self) -> Result<(), RestartManagerError> {
+    async fn process_pending_restart_operation(&mut self) -> Option<RestartOperationResponse> {
         let state: Result<State, _> = self.state_repository.load().await;
-
-        let mut status = OperationStatus::Failed;
 
         if let State {
             operation_id: Some(id),
@@ -103,45 +103,62 @@ impl RestartManagerActor {
                 operation: None,
             },
         } {
+            self.clear_state_repository().await;
+
             match operation {
                 StateStatus::Restart(RestartOperationStatus::Restarting) => {
-                    let _state = self.state_repository.clear().await?;
+                    let status = match has_rebooted(&self.config.tmp_dir) {
+                        Ok(true) => {
+                            info!("Device restart successful.");
+                            OperationStatus::Successful
+                        }
+                        Ok(false) => {
+                            info!("Device failed to restart.");
+                            OperationStatus::Failed
+                        }
+                        Err(err) => {
+                            error!("Fail to detect a restart: {err}");
+                            OperationStatus::Failed
+                        }
+                    };
 
-                    if has_rebooted(&self.config.tmp_dir)? {
-                        info!("Device restart successful.");
-                        status = OperationStatus::Successful;
-                    }
+                    return Some(RestartOperationResponse { id, status });
                 }
-                StateStatus::Restart(RestartOperationStatus::Pending) => {}
-                StateStatus::Software(_) => {
-                    error!("SoftwareOperation in store.");
+                StateStatus::Restart(RestartOperationStatus::Pending) => {
+                    error!("The agent has been restarted but not the device");
+                    let status = OperationStatus::Failed;
+                    return Some(RestartOperationResponse { id, status });
                 }
-                StateStatus::UnknownOperation => {
+                StateStatus::Software(_) | StateStatus::UnknownOperation => {
                     error!("UnknownOperation in store.");
                 }
             };
-            self.message_box
-                .send(RestartOperationResponse { id, status })
-                .await?;
         }
-        Ok(())
+        None
     }
 
-    async fn handle_restart_operation(
+    async fn update_state_repository(
         &mut self,
         request: &RestartOperationRequest,
-    ) -> Result<(), RestartManagerError> {
-        self.state_repository
-            .store(&State {
-                operation_id: Some(request.id.clone()),
-                operation: Some(StateStatus::Restart(RestartOperationStatus::Restarting)),
-            })
-            .await?;
+    ) -> RestartOperationResponse {
+        let response = RestartOperationResponse::new(request);
+        let state = State {
+            operation_id: Some(request.id.clone()),
+            operation: Some(StateStatus::Restart(RestartOperationStatus::Restarting)),
+        };
 
-        // Send 'executing'
-        let executing_response = RestartOperationResponse::new(&RestartOperationRequest::default());
-        self.message_box.send(executing_response).await?;
+        if let Err(err) = self.state_repository.store(&state).await {
+            error!(
+                "Fail to update the restart state in {} due to: {}",
+                self.state_repository.state_repo_path, err
+            );
+            return response.with_status(OperationStatus::Failed);
+        }
 
+        response
+    }
+
+    async fn handle_restart_operation(&mut self) -> Result<(), RestartManagerError> {
         create_tmp_restart_file(&self.config.tmp_dir)?;
 
         let commands = self.get_restart_operation_commands().await?;
@@ -164,12 +181,21 @@ impl RestartManagerActor {
     async fn handle_error(
         &mut self,
         request: &RestartOperationRequest,
-    ) -> Result<(), RestartManagerError> {
-        self.state_repository.clear().await?;
+    ) -> Result<(), ChannelError> {
+        self.clear_state_repository().await;
         let status = OperationStatus::Failed;
         let response = RestartOperationResponse::new(request).with_status(status);
         self.message_box.send(response).await?;
         Ok(())
+    }
+
+    async fn clear_state_repository(&mut self) {
+        if let Err(err) = self.state_repository.clear().await {
+            error!(
+                "Fail to clear the restart state in {} due to: {}",
+                self.state_repository.state_repo_path, err
+            );
+        }
     }
 
     async fn get_restart_operation_commands(&self) -> Result<Vec<Command>, RestartManagerError> {
