@@ -160,6 +160,10 @@ impl MessageReceiver<MqttMessage> for MqttMessageBox {
     async fn recv(&mut self) -> Option<MqttMessage> {
         self.input_receiver.recv().await
     }
+
+    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+        self.input_receiver.recv_signal().await
+    }
 }
 
 pub struct MqttActor {

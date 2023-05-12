@@ -775,4 +775,8 @@ impl MessageReceiver<FirmwareInput> for FirmwareManagerMessageBox {
     async fn recv(&mut self) -> Option<FirmwareInput> {
         self.input_receiver.recv().await
     }
+
+    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+        self.input_receiver.recv_signal().await
+    }
 }

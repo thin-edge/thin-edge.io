@@ -341,6 +341,12 @@ where
             .await
             .unwrap_or(None)
     }
+
+    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+        tokio::time::timeout(self.timeout, self.inner.recv_signal())
+            .await
+            .unwrap_or(None)
+    }
 }
 
 #[async_trait]
