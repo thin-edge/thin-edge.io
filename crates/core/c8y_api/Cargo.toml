@@ -9,12 +9,10 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-async-trait = "0.1"
 clock = { path = "../../common/clock" }
 csv = "1.2.1"
 download = { path = "../../common/download" }
 futures = "0.3"
-mockall = "0.11"
 mqtt_channel = { path = "../../common/mqtt_channel" }
 reqwest = { version = "0.11", default-features = false, features = [
     "json",
@@ -36,7 +34,6 @@ anyhow = "1.0"
 assert-json-diff = "2.0"
 assert_matches = "1.5"
 maplit = "1.0.2"
-mockito = "0.31"
 regex = "1.7"
 tedge_test_utils = { path = "../../tests/tedge_test_utils" }
 tempfile = "3.3"

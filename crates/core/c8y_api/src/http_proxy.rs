@@ -1,7 +1,5 @@
-use crate::smartrest::error::SMCumulocityMapperError;
+use crate::smartrest::error::SmartRestDeserializerError;
 use crate::smartrest::smartrest_deserializer::SmartRestJwtResponse;
-use async_trait::async_trait;
-use mockall::automock;
 use mqtt_channel::Connection;
 use mqtt_channel::PubChannel;
 use mqtt_channel::StreamExt;
@@ -9,6 +7,7 @@ use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use reqwest::Url;
 use std::time::Duration;
+use tedge_config::mqtt_config::MqttConfigBuildError;
 use tedge_config::TEdgeConfig;
 
 /// Define a C8y endpoint
@@ -103,31 +102,27 @@ impl C8yEndPoint {
     }
 }
 
-#[automock]
-#[async_trait]
-pub trait C8yJwtTokenRetriever: Send + Sync {
-    async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError>;
-}
-
 pub struct C8yMqttJwtTokenRetriever {
     mqtt_config: mqtt_channel::Config,
 }
 
 impl C8yMqttJwtTokenRetriever {
-    pub async fn try_new(tedge_config: &TEdgeConfig) -> Result<Self, SMCumulocityMapperError> {
-        let topic = TopicFilter::new("c8y/s/dat")?;
-        let mqtt_config = tedge_config
-            .mqtt_config()?
-            .with_clean_session(true)
+    pub fn from_tedge_config(tedge_config: &TEdgeConfig) -> Result<Self, MqttConfigBuildError> {
+        let mqtt_config = tedge_config.mqtt_config()?;
+
+        Ok(Self::new(mqtt_config))
+    }
+
+    pub fn new(mqtt_config: mqtt_channel::Config) -> Self {
+        let topic = TopicFilter::new_unchecked("c8y/s/dat");
+        let mqtt_config = mqtt_config
+            .with_no_session() // Ignore any already published tokens, possibly stale.
             .with_subscriptions(topic);
 
-        Ok(C8yMqttJwtTokenRetriever { mqtt_config })
+        C8yMqttJwtTokenRetriever { mqtt_config }
     }
-}
 
-#[async_trait]
-impl C8yJwtTokenRetriever for C8yMqttJwtTokenRetriever {
-    async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, SMCumulocityMapperError> {
+    pub async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, JwtError> {
         let mut mqtt_con = Connection::new(&self.mqtt_config).await?;
 
         // Ignore errors on this connection
@@ -144,12 +139,24 @@ impl C8yJwtTokenRetriever for C8yMqttJwtTokenRetriever {
         let token_smartrest =
             match tokio::time::timeout(Duration::from_secs(10), mqtt_con.received.next()).await {
                 Ok(Some(msg)) => msg.payload_str()?.to_string(),
-                Ok(None) => return Err(SMCumulocityMapperError::InvalidMqttMessage),
-                Err(_elapsed) => return Err(SMCumulocityMapperError::RequestTimeout),
+                Ok(None) => return Err(JwtError::NoJwtReceived),
+                Err(_elapsed) => return Err(JwtError::NoJwtReceived),
             };
 
         Ok(SmartRestJwtResponse::try_new(&token_smartrest)?)
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum JwtError {
+    #[error(transparent)]
+    NoMqttConnection(#[from] mqtt_channel::MqttError),
+
+    #[error(transparent)]
+    IllFormedJwt(#[from] SmartRestDeserializerError),
+
+    #[error("No JWT token has been received")]
+    NoJwtReceived,
 }
 
 #[cfg(test)]

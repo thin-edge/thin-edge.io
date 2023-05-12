@@ -1,6 +1,7 @@
 use crate::credentials::JwtRequest;
 use crate::credentials::JwtResult;
 use crate::credentials::JwtRetriever;
+use crate::messages::C8YConnectionError;
 use crate::messages::C8YRestError;
 use crate::messages::C8YRestRequest;
 use crate::messages::C8YRestResult;
@@ -32,6 +33,7 @@ use tedge_actors::Actor;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
+use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
 use tedge_actors::ServerMessageBox;
 use tedge_http_ext::HttpRequest;
@@ -74,7 +76,7 @@ impl Actor for C8YHttpProxyActor {
     }
 
     async fn run(&mut self) -> Result<(), RuntimeError> {
-        self.init().await;
+        self.init().await.map_err(Box::new)?;
 
         while let Some((client_id, request)) = self.peers.clients.recv().await {
             let result = match request {
@@ -125,7 +127,7 @@ impl C8YHttpProxyActor {
         }
     }
 
-    async fn init(&mut self) {
+    async fn init(&mut self) -> Result<(), C8YConnectionError> {
         info!(target: self.name(), "start initialisation");
         while self.end_point.get_c8y_internal_id().is_empty() {
             if let Err(error) = self.try_get_and_set_internal_id().await {
@@ -134,11 +136,30 @@ impl C8YHttpProxyActor {
                     RETRY_TIMEOUT_SECS, error
                 );
 
-                tokio::time::sleep(Duration::from_secs(RETRY_TIMEOUT_SECS)).await;
-                continue;
+                match tokio::time::timeout(
+                    Duration::from_secs(RETRY_TIMEOUT_SECS),
+                    self.peers.clients.recv_signal(),
+                )
+                .await
+                {
+                    Ok(Some(RuntimeRequest::Shutdown)) => {
+                        // Give up as requested
+                        return Err(C8YConnectionError::Interrupted);
+                    }
+                    Err(_timeout) => {
+                        // No interruption raised, so just continue
+                        continue;
+                    }
+                    Ok(None) => {
+                        // This actor is not connected to the runtime and will never be interrupted
+                        tokio::time::sleep(Duration::from_secs(RETRY_TIMEOUT_SECS)).await;
+                        continue;
+                    }
+                }
             };
         }
         info!(target: self.name(), "initialisation done.");
+        Ok(())
     }
 
     async fn try_get_and_set_internal_id(&mut self) -> Result<(), C8YRestError> {
