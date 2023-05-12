@@ -3,6 +3,7 @@ use backoff::future::retry;
 use backoff::ExponentialBackoff;
 use log::debug;
 use nix::sys::statvfs;
+use reqwest::header::CONTENT_RANGE;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fs;
@@ -11,6 +12,8 @@ use std::io::Write;
 use std::os::unix::prelude::AsRawFd;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
@@ -150,55 +153,92 @@ impl Downloader {
             ..Default::default()
         };
 
-        let mut response = retry(backoff, || async {
-            let client = if let Some(Auth::Bearer(token)) = &url.auth {
-                reqwest::Client::new().get(url.url()).bearer_auth(token)
-            } else {
-                reqwest::Client::new().get(url.url())
-            };
+        struct DownloadState {
+            written: usize,
+            file: File,
+        }
 
-            match client
+        let download_state: Arc<Mutex<Option<DownloadState>>> = Arc::new(Mutex::new(None));
+
+        #[derive(Debug, thiserror::Error)]
+        enum BackoffError {
+            #[error(transparent)]
+            FromReqwest(#[from] reqwest::Error),
+
+            #[error(transparent)]
+            FromIo(#[from] std::io::Error),
+        }
+
+        retry(backoff, || async {
+            let download_state = download_state.clone();
+            let mut client = reqwest::Client::new().get(url.url());
+
+            if let Some(Auth::Bearer(token)) = &url.auth {
+                client = client.bearer_auth(token)
+            }
+
+            if let Some(state) = &*download_state.lock().unwrap() {
+                let written = state.written;
+                client = client.header("Range", format!("bytes={written}-"));
+            }
+
+            let mut response = client
                 .send()
                 .await
                 .map_err(|err| {
                     if err.is_connect() || err.is_builder() {
-                        backoff::Error::Permanent(err)
+                        backoff::Error::Permanent(err.into())
                     } else {
                         log::warn!("Failed to Download. {:?}\nRetrying.", &err);
-                        backoff::Error::transient(err)
+                        backoff::Error::transient(err.into())
                     }
                 })?
                 .error_for_status()
-            {
-                Ok(response) => Ok(response),
-
-                Err(err) => match err.status() {
+                .map_err(|err| match err.status() {
                     Some(status_error) if status_error.is_client_error() => {
-                        Err(backoff::Error::Permanent(err))
+                        backoff::Error::Permanent(err.into())
                     }
-                    _ => Err(backoff::Error::transient(err)),
-                },
+                    _ => backoff::Error::transient(err.into()),
+                })?;
+
+            let file_len = response.content_length().unwrap_or(0);
+            let content_range = response.headers().get(CONTENT_RANGE);
+            debug!("Downloading file, len={file_len}, content-range={content_range:?}");
+
+            if download_state.lock().unwrap().is_none() {
+                let file = create_file_and_try_pre_allocate_space(&tmp_target_path, file_len)?;
+                debug!("preallocated file");
+                *download_state.lock().unwrap() = Some(DownloadState { written: 0, file });
             }
+
+            while let Some(chunk) = response
+                .chunk()
+                .await
+                .map_err(|e| backoff::Error::transient(e.into()))?
+            {
+                let mut download_state = download_state.lock().unwrap();
+                let state = download_state.as_mut().unwrap();
+                debug!("read response chunk, size={size}", size = chunk.len());
+                if let Err(err) = state.file.write_all(&chunk) {
+                    *download_state = None;
+                    let _ = std::fs::remove_file(self.target_filename.as_path())
+                        .map_err(backoff::Error::permanent);
+                    return Err(backoff::Error::permanent(DownloadError::FromIo {
+                        reason: format!("Failed to download the file with an error {}", err),
+                    }));
+                }
+
+                state.written += chunk.len();
+            }
+
+            Ok(())
         })
         .await?;
-
-        let file_len = response.content_length().unwrap_or(0);
-        let mut file = create_file_and_try_pre_allocate_space(&tmp_target_path, file_len)?;
-
-        while let Some(chunk) = response.chunk().await? {
-            if let Err(err) = file.write_all(&chunk) {
-                drop(file);
-                std::fs::remove_file(self.target_filename.as_path())?;
-                return Err(DownloadError::FromIo {
-                    reason: format!("Failed to download the file with an error {}", err),
-                });
-            }
-        }
 
         // Move the downloaded file to the final destination
         debug!(
             "Moving downloaded file from {:?} to {:?}",
-            tmp_target_path, target_file_path
+            &tmp_target_path, &target_file_path
         );
         move_file(
             tmp_target_path,
@@ -580,6 +620,7 @@ mod tests {
 
     #[tokio::test]
     async fn resume_download_when_disconnected() -> anyhow::Result<()> {
+        env_logger::init();
         let chunk_size = 4;
         let file = "AAAABBBBCCCCDDDD";
 
@@ -599,7 +640,9 @@ mod tests {
                         if line.to_ascii_lowercase().contains("range:") {
                             let (_, bytes) = line.split_once('=').unwrap();
                             let (start, end) = bytes.split_once('-').unwrap();
-                            range = Some(start.parse().unwrap()..end.parse().unwrap())
+                            let start = start.parse().unwrap_or(0);
+                            let end = end.parse().unwrap_or(file.len());
+                            range = Some(start..end)
                         }
                         if line.is_empty() {
                             break 'inner;
@@ -615,7 +658,7 @@ mod tests {
                     connection: close\r\n\
                     content-type: application/octet-stream\r\n\
                     content-length: {size}\r\n\
-                    content-range: bytes {start}-{end}/16
+                    content-range: bytes {start}-{end}/16\r\n\
                     accept-ranges: bytes\r\n\r\n"
                         );
                         let next = (start + chunk_size).min(file.len());
@@ -646,6 +689,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
         downloader.download(&url).await?;
         let saved_file = std::fs::read_to_string(downloader.filename())?;
+        dbg!(&saved_file);
         assert_eq!(saved_file, file);
 
         downloader.cleanup().await?;

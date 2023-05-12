@@ -1276,6 +1276,7 @@ version = "0.11.0"
 dependencies = [
  "anyhow",
  "backoff",
+ "env_logger 0.10.0",
  "log",
  "mockito 0.31.1",
  "nix",
