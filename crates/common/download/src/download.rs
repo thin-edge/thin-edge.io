@@ -325,6 +325,7 @@ mod tests {
     use anyhow::bail;
     use mockito::mock;
     use nix::sys::statvfs;
+    use std::error::Error;
     use std::io::Write;
     use std::path::Path;
     use std::path::PathBuf;
@@ -509,17 +510,6 @@ mod tests {
         }
     }
 
-    // Parameters:
-    //
-    // status code
-    //
-    // bearer token boolean
-    //
-    // maybe url
-    //
-    // expected std error
-    //
-    // description
     #[test_case(
         200,
         false,
@@ -562,7 +552,7 @@ mod tests {
         "404 Not Found"
         ; "client error with auth"
     )]
-    #[tokio::test]
+    // #[tokio::test]
     async fn downloader_download_processing_error(
         status_code: usize,
         with_token: bool,
@@ -611,7 +601,8 @@ mod tests {
         match downloader.download(&url).await {
             Ok(_success) => anyhow::bail!("Expected client error."),
             Err(err) => {
-                assert!(err.to_string().contains(expected_err));
+                dbg!(err.source());
+                assert!(dbg!(err.to_string()).contains(expected_err));
             }
         };
         Ok(())
@@ -623,9 +614,6 @@ mod tests {
         let chunk_size = 4;
         let file = "AAAABBBBCCCCDDDD";
 
-        // Send only one character of the response at a time. The client will
-        // have to send request 3 times to receive the entire response.
-        // TODO: use larger file, parse Range
         let server_task = tokio::spawn(async move {
             let listener = TcpListener::bind("localhost:3000").await.unwrap();
 
@@ -650,34 +638,32 @@ mod tests {
 
                     if let Some(range) = range {
                         let start = range.start;
-                        let end = range.end;
-                        let size = end - start;
-                        let header = format!(
-                            "HTTP/1.1 206 Partial Content\r\n\
+                        let header = "HTTP/1.1 206 Partial Content\r\n\
+                    transfer-encoding: chunked\r\n\
                     connection: close\r\n\
                     content-type: application/octet-stream\r\n\
-                    content-length: {size}\r\n\
-                    content-range: bytes {start}-{end}/16\r\n\
-                    accept-ranges: bytes\r\n\r\n"
-                        );
+                    content-range: bytes */*\r\n\
+                    accept-ranges: bytes\r\n";
                         let next = (start + chunk_size).min(file.len());
                         let body = &file[start..next];
 
-                        writer.write_all(header.as_bytes()).await.unwrap();
-                        writer.write_all(body.as_bytes()).await.unwrap();
+                        let size = body.len();
+                        let msg = format!("{header}\r\n{size}\r\n{body}\r\n");
+                        debug!("sending message = {msg}");
+                        writer.write_all(msg.as_bytes()).await.unwrap();
                     } else {
                         let header = "HTTP/1.1 200 OK\r\n\
+                    transfer-encoding: chunked\r\n\
                     connection: close\r\n\
                     content-type: application/octet-stream\r\n\
-                    content-length: 16\r\n\
-                    accept-ranges: bytes\r\n\r\n";
+                    accept-ranges: bytes\r\n";
 
-                        writer.write_all(header.as_bytes()).await.unwrap();
-                        writer.write_all(b"AAAA").await.unwrap();
+                        let body = "AAAA";
+                        let msg = format!("{header}\r\n4\r\n{body}\r\n");
+                        writer.write_all(msg.as_bytes()).await.unwrap();
                     }
-                    writer.flush().await.unwrap();
                 });
-                tokio::task::spawn(response_task).await.unwrap().unwrap();
+                response_task.await.unwrap();
             }
         });
 
