@@ -69,6 +69,11 @@ impl Operations {
             .iter()
             .position(|o| o.name.eq(&operation.name))
         {
+            if let Some(detail) = operation.exec() {
+                if let Some(on_message) = &detail.on_message {
+                    self.operations_by_trigger.insert(on_message.clone(), index);
+                }
+            }
             self.operations[index] = operation;
         } else {
             if let Some(detail) = operation.exec() {
