@@ -32,6 +32,7 @@
 //!     }
 //! }
 //!
+//! # #[cfg(feature = "test-helpers")]
 //! # #[tokio::main]
 //! # async fn main() -> Result<(),RuntimeError> {
 //! # use std::time::Duration;

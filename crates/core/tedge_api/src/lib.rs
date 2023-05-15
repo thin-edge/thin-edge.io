@@ -1,5 +1,5 @@
 pub mod error;
-mod messages;
+pub mod messages;
 mod software;
 pub mod topic;
 

@@ -52,8 +52,8 @@ Switch off lock file creation
     #Stop the running services
     Stop Service    tedge-mapper-c8y
     Stop Service    tedge-agent
-    #Remove the existing lock files
-    Execute Command    sudo rm /run/lock/ted*
+    #Remove the existing lock files (if they exist)
+    Execute Command    sudo rm -f /run/lock/ted*
     Execute Command    sudo tedge config set run.lock_files false
     #Restart the stopped services
     Start Service    tedge-mapper-c8y

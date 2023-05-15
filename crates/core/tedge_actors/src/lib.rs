@@ -122,6 +122,7 @@
 //! # use crate::tedge_actors::SimpleMessageBoxBuilder;
 //! # use crate::tedge_actors::examples::calculator::*;
 //! #
+//! #[cfg(feature = "test-helpers")]
 //! # #[tokio::main]
 //! # async fn main() {
 //! #
@@ -352,6 +353,7 @@ mod macros;
 pub use macros::*;
 
 #[cfg(test)]
+#[cfg(feature = "test-helpers")]
 pub mod tests;
 
 // FIXME: how to have these examples only available when testing the doc comments?
@@ -359,4 +361,5 @@ pub mod tests;
 #[doc(hidden)]
 pub mod examples;
 
+#[cfg(feature = "test-helpers")]
 pub mod test_helpers;

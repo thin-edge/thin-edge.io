@@ -148,8 +148,10 @@ pub trait MessageSink<M: Message, Config> {
     /// # use tedge_actors::Sender;
     /// # use tedge_actors::SimpleMessageBox;
     /// # use tedge_actors::SimpleMessageBoxBuilder;
+    /// # #[cfg(feature = "test-helpers")]
     /// # use tedge_actors::test_helpers::MessageReceiverExt;
     ///
+    /// #[cfg(feature = "test-helpers")]
     /// # #[tokio::main]
     /// # async fn main() -> Result<(),ChannelError> {
     /// let mut receiver_builder = SimpleMessageBoxBuilder::new("Recv", 16);

@@ -1,4 +1,3 @@
-use c8y_api::http_proxy::C8yJwtTokenRetriever;
 use c8y_api::http_proxy::C8yMqttJwtTokenRetriever;
 use miette::IntoDiagnostic;
 use tedge_config::TEdgeConfig;
@@ -11,9 +10,8 @@ impl Jwt {
     }
 
     pub async fn retrieve(config: &TEdgeConfig) -> miette::Result<Jwt> {
-        let mut retriever = C8yMqttJwtTokenRetriever::try_new(config)
-            .await
-            .into_diagnostic()?;
+        let mut retriever =
+            C8yMqttJwtTokenRetriever::from_tedge_config(config).into_diagnostic()?;
 
         retriever
             .get_jwt_token()

@@ -69,6 +69,7 @@ impl Actor for Player {
 }
 
 #[cfg(test)]
+#[cfg(feature = "test-helpers")]
 mod tests {
     use crate::examples::calculator_server::*;
     use crate::test_helpers::Probe;

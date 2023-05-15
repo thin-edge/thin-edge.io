@@ -132,6 +132,10 @@ pub trait MessageReceiver<Input> {
     /// both of the underlying channels are closed or if a [RuntimeRequest] is received.
     /// Handling [RuntimeRequest]'s by returning [None] takes priority over messages.
     async fn recv(&mut self) -> Option<Input>;
+
+    /// Return [Some] [RuntimeRequest] if any is sent by the runtime,
+    /// postponing the reception of regular messages while awaiting for [RuntimeRequest].
+    async fn recv_signal(&mut self) -> Option<RuntimeRequest>;
 }
 
 pub struct LoggingReceiver<Input: Debug> {
@@ -166,6 +170,12 @@ impl<Input: Send + Debug> MessageReceiver<Input> for LoggingReceiver<Input> {
 
     async fn recv(&mut self) -> Option<Input> {
         let message = self.receiver.recv().await;
+        info!(target: &self.name, "recv {:?}", message);
+        message
+    }
+
+    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+        let message = self.receiver.recv_signal().await;
         info!(target: &self.name, "recv {:?}", message);
         message
     }
@@ -251,6 +261,10 @@ impl<Input: Message, Output: Message> MessageReceiver<Input> for SimpleMessageBo
     async fn recv(&mut self) -> Option<Input> {
         self.input_receiver.recv().await
     }
+
+    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+        self.input_receiver.recv_signal().await
+    }
 }
 
 #[async_trait]
@@ -314,5 +328,9 @@ impl<Input: Send> MessageReceiver<Input> for CombinedReceiver<Input> {
             Some(WrappedInput::Message(message)) => Some(message),
             _ => None,
         }
+    }
+
+    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+        self.signal_receiver.next().await
     }
 }

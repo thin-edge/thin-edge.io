@@ -1,4 +1,4 @@
-use crate::error::StateError;
+use crate::state_repository::error::StateError;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use serde::Deserialize;
@@ -6,11 +6,10 @@ use serde::Serialize;
 use std::str::FromStr;
 use tedge_utils::fs::atomically_write_file_async;
 use tokio::fs;
-use tracing::error;
 
 #[derive(Debug)]
 pub struct AgentStateRepository {
-    state_repo_path: Utf8PathBuf,
+    pub state_repo_path: Utf8PathBuf,
     state_repo_root: Utf8PathBuf,
 }
 
@@ -30,11 +29,7 @@ impl StateRepository for AgentStateRepository {
     async fn load(&self) -> Result<State, StateError> {
         match fs::read(&self.state_repo_path).await {
             Ok(bytes) => Ok(toml::from_slice::<State>(bytes.as_slice())?),
-
-            Err(err) => {
-                error!("Error reading: {:?}", &self.state_repo_path);
-                Err(StateError::FromIo(err))
-            }
+            Err(err) => Err(StateError::FromIo(err)),
         }
     }
 
@@ -72,12 +67,17 @@ impl StateRepository for AgentStateRepository {
 }
 
 impl AgentStateRepository {
+    #[cfg(test)]
     pub fn new(tedge_root: Utf8PathBuf) -> Self {
+        Self::new_with_file_name(tedge_root, "current-operation")
+    }
+
+    pub fn new_with_file_name(tedge_root: Utf8PathBuf, file_name: &str) -> Self {
         let mut state_repo_root = tedge_root;
         state_repo_root.push(Utf8PathBuf::from_str(".agent").expect("infallible"));
 
         let mut state_repo_path = state_repo_root.clone();
-        state_repo_path.push(Utf8PathBuf::from_str("current-operation").expect("infallible"));
+        state_repo_path.push(Utf8PathBuf::from_str(file_name).expect("infallible"));
 
         Self {
             state_repo_path,
@@ -107,7 +107,7 @@ pub enum RestartOperationStatus {
     Restarting,
 }
 
-#[derive(Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Debug, Default, Deserialize, Eq, PartialEq, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct State {
     pub operation_id: Option<String>,
@@ -116,12 +116,12 @@ pub struct State {
 
 #[cfg(test)]
 mod tests {
-    use crate::state::AgentStateRepository;
-    use crate::state::RestartOperationStatus;
-    use crate::state::SoftwareOperationVariants;
-    use crate::state::State;
-    use crate::state::StateRepository;
-    use crate::state::StateStatus;
+    use crate::state_repository::state::AgentStateRepository;
+    use crate::state_repository::state::RestartOperationStatus;
+    use crate::state_repository::state::SoftwareOperationVariants;
+    use crate::state_repository::state::State;
+    use crate::state_repository::state::StateRepository;
+    use crate::state_repository::state::StateStatus;
 
     use tedge_test_utils::fs::TempTedgeDir;
 

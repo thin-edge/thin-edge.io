@@ -200,7 +200,7 @@ pub enum OperationStatus {
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SoftwareListResponse {
     #[serde(flatten)]
-    response: SoftwareRequestResponse,
+    pub response: SoftwareRequestResponse,
 }
 
 impl<'a> Jsonify<'a> for SoftwareListResponse {}
@@ -252,7 +252,7 @@ impl SoftwareListResponse {
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SoftwareUpdateResponse {
     #[serde(flatten)]
-    response: SoftwareRequestResponse,
+    pub response: SoftwareRequestResponse,
 }
 
 impl<'a> Jsonify<'a> for SoftwareUpdateResponse {}

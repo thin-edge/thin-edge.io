@@ -16,6 +16,7 @@ pub(crate) fn get_connected_c8y_url(tedge_config: &TEdgeConfig) -> Result<String
     let mut mqtt_options = tedge_config
         .mqtt_config()?
         .with_session_name(CLIENT_ID)
+        .with_clean_session(true)
         .rumqttc_options()?;
     mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
     mqtt_options.set_connection_timeout(CONNECTION_TIMEOUT.as_secs());

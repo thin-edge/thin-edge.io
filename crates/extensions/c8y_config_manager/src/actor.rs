@@ -414,6 +414,10 @@ impl MessageReceiver<ConfigInput> for ConfigManagerMessageBox {
     async fn recv(&mut self) -> Option<ConfigInput> {
         self.input_receiver.recv().await
     }
+
+    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+        self.input_receiver.recv_signal().await
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
