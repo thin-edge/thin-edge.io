@@ -69,15 +69,19 @@ impl Operations {
             .iter()
             .position(|o| o.name.eq(&operation.name))
         {
+            self.update_trigger_map(&operation, index);
             self.operations[index] = operation;
         } else {
-            if let Some(detail) = operation.exec() {
-                if let Some(on_message) = &detail.on_message {
-                    self.operations_by_trigger
-                        .insert(on_message.clone(), self.operations.len());
-                }
-            }
+            self.update_trigger_map(&operation, self.operations.len());
             self.operations.push(operation);
+        }
+    }
+
+    fn update_trigger_map(&mut self, operation: &Operation, index: usize) {
+        if let Some(detail) = operation.exec() {
+            if let Some(on_message) = &detail.on_message {
+                self.operations_by_trigger.insert(on_message.clone(), index);
+            }
         }
     }
 
