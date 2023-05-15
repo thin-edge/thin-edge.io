@@ -2,6 +2,7 @@ use crate::error::DownloadError;
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
 use log::debug;
+use log::warn;
 use nix::sys::statvfs;
 use reqwest::header::CONTENT_RANGE;
 use serde::Deserialize;
@@ -12,8 +13,6 @@ use std::io::Write;
 use std::os::unix::prelude::AsRawFd;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Duration;
 use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
@@ -23,6 +22,9 @@ use tedge_utils::file::PermissionEntry;
 use nix::fcntl::fallocate;
 #[cfg(target_os = "linux")]
 use nix::fcntl::FallocateFlags;
+
+const BACKOFF_INITIAL_INTERVAL: Duration = Duration::from_secs(1);
+const BACKOFF_MAX_ELAPSED: Duration = Duration::from_secs(300);
 
 /// Describes a request used to retrieve the file.
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
@@ -145,95 +147,92 @@ impl Downloader {
         let tmp_file_name = format!("{file_name}.tmp");
         let tmp_target_path = parent_dir.join(tmp_file_name);
 
-        // Default retry is an exponential retry with a limit of 15 minutes total.
-        // Let's set some more reasonable retry policy so we don't block the downloads for too long.
-        let backoff = ExponentialBackoff {
-            initial_interval: Duration::from_secs(30),
-            max_elapsed_time: Some(Duration::from_secs(300)),
-            ..Default::default()
-        };
-
         struct DownloadState {
             written: usize,
             file: File,
         }
 
-        let download_state: Arc<Mutex<Option<DownloadState>>> = Arc::new(Mutex::new(None));
+        let mut download_state: Option<DownloadState> = None;
 
-        #[derive(Debug, thiserror::Error)]
-        enum BackoffError {
-            #[error(transparent)]
-            FromReqwest(#[from] reqwest::Error),
+        'outer: loop {
+            // Default retry is an exponential retry with a limit of 15 minutes total.
+            // Let's set some more reasonable retry policy so we don't block the downloads for too long.
+            let backoff = ExponentialBackoff {
+                initial_interval: BACKOFF_INITIAL_INTERVAL,
+                max_elapsed_time: Some(BACKOFF_MAX_ELAPSED),
+                ..Default::default()
+            };
 
-            #[error(transparent)]
-            FromIo(#[from] std::io::Error),
-        }
+            let operation = || async {
+                let mut client = reqwest::Client::new().get(url.url());
 
-        retry(backoff, || async {
-            let download_state = download_state.clone();
-            let mut client = reqwest::Client::new().get(url.url());
+                if let Some(Auth::Bearer(token)) = &url.auth {
+                    client = client.bearer_auth(token)
+                }
 
-            if let Some(Auth::Bearer(token)) = &url.auth {
-                client = client.bearer_auth(token)
-            }
+                if let Some(state) = &download_state {
+                    let written = state.written;
+                    client = client.header("Range", format!("bytes={written}-"));
+                }
 
-            if let Some(state) = &*download_state.lock().unwrap() {
-                let written = state.written;
-                client = client.header("Range", format!("bytes={written}-"));
-            }
+                client
+                    .send()
+                    .await
+                    .map_err(|err| {
+                        if err.is_connect() || err.is_builder() {
+                            backoff::Error::Permanent(err)
+                        } else {
+                            log::warn!("Failed to Download. {:?}\nRetrying.", &err);
+                            backoff::Error::transient(err)
+                        }
+                    })?
+                    .error_for_status()
+                    .map_err(|err| match err.status() {
+                        Some(status_error) if status_error.is_client_error() => {
+                            backoff::Error::Permanent(err)
+                        }
+                        _ => backoff::Error::transient(err),
+                    })
+            };
 
-            let mut response = client
-                .send()
-                .await
-                .map_err(|err| {
-                    if err.is_connect() || err.is_builder() {
-                        backoff::Error::Permanent(err.into())
-                    } else {
-                        log::warn!("Failed to Download. {:?}\nRetrying.", &err);
-                        backoff::Error::transient(err.into())
-                    }
-                })?
-                .error_for_status()
-                .map_err(|err| match err.status() {
-                    Some(status_error) if status_error.is_client_error() => {
-                        backoff::Error::Permanent(err.into())
-                    }
-                    _ => backoff::Error::transient(err.into()),
-                })?;
+            let mut response = retry(backoff, operation).await?;
 
             let file_len = response.content_length().unwrap_or(0);
             let content_range = response.headers().get(CONTENT_RANGE);
             debug!("Downloading file, len={file_len}, content-range={content_range:?}");
 
-            if download_state.lock().unwrap().is_none() {
+            if download_state.is_none() {
                 let file = create_file_and_try_pre_allocate_space(&tmp_target_path, file_len)?;
                 debug!("preallocated file");
-                *download_state.lock().unwrap() = Some(DownloadState { written: 0, file });
+                download_state = Some(DownloadState { written: 0, file });
             }
 
-            while let Some(chunk) = response
-                .chunk()
-                .await
-                .map_err(|e| backoff::Error::transient(e.into()))?
-            {
-                let mut download_state = download_state.lock().unwrap();
-                let state = download_state.as_mut().unwrap();
-                debug!("read response chunk, size={size}", size = chunk.len());
-                if let Err(err) = state.file.write_all(&chunk) {
-                    *download_state = None;
-                    let _ = std::fs::remove_file(self.target_filename.as_path())
-                        .map_err(backoff::Error::permanent);
-                    return Err(backoff::Error::permanent(DownloadError::FromIo {
-                        reason: format!("Failed to download the file with an error {}", err),
-                    }));
+            let mut download_state = download_state.as_mut().unwrap();
+
+            loop {
+                let chunk = response.chunk().await;
+                match chunk {
+                    Err(err) => {
+                        warn!("Error while downloading response: {err}.\nRetrying...");
+                        continue 'outer;
+                    }
+                    Ok(None) => break 'outer,
+                    Ok(Some(bytes)) => {
+                        debug!("read response chunk, size={size}", size = bytes.len());
+                        if let Err(err) = download_state.file.write_all(&bytes) {
+                            let _ = std::fs::remove_file(self.target_filename.as_path());
+                            return Err(DownloadError::FromIo {
+                                reason: format!(
+                                    "Failed to download the file with an error {}",
+                                    err
+                                ),
+                            });
+                        }
+                        download_state.written += bytes.len();
+                    }
                 }
-
-                state.written += chunk.len();
             }
-
-            Ok(())
-        })
-        .await?;
+        }
 
         // Move the downloaded file to the final destination
         debug!(
