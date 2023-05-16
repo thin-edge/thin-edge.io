@@ -66,10 +66,10 @@ pub struct LogfileRequestPluginOpt {
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let config_plugin_opt = LogfileRequestPluginOpt::parse();
+    let config_dir = config_plugin_opt.config_dir;
 
     // Load tedge config from the provided location
-    let tedge_config_location =
-        tedge_config::TEdgeConfigLocation::from_custom_root(&config_plugin_opt.config_dir);
+    let tedge_config_location = tedge_config::TEdgeConfigLocation::from_custom_root(&config_dir);
     let log_level = if config_plugin_opt.debug {
         tracing::Level::TRACE
     } else {
@@ -86,18 +86,18 @@ async fn main() -> Result<(), anyhow::Error> {
 
     if config_plugin_opt.init {
         let logs_dir = tedge_config.query(LogPathSetting)?;
-        init(&config_plugin_opt.config_dir, logs_dir.as_std_path()).with_context(|| {
+        init(&config_dir, logs_dir.as_std_path()).with_context(|| {
             format!(
                 "Failed to initialize {}. You have to run the command with sudo.",
                 C8Y_LOG_PLUGIN
             )
         })
     } else {
-        run(tedge_config).await
+        run(config_dir, tedge_config).await
     }
 }
 
-async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
+async fn run(config_dir: impl AsRef<Path>, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     let runtime_events_logger = None;
     let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
@@ -115,8 +115,7 @@ async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     let mut fs_watch_actor = FsWatchActorBuilder::new();
 
     // Instantiate log manager actor
-    let log_manager_config =
-        LogManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH, &tedge_config)?;
+    let log_manager_config = LogManagerConfig::from_tedge_config(config_dir, &tedge_config)?;
     let log_actor = LogManagerBuilder::new(
         log_manager_config,
         &mut mqtt_actor,
