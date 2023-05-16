@@ -1,4 +1,5 @@
 use c8y_api::smartrest::topic::C8yTopic;
+use tedge_utils::paths::validate_parent_dir_exists;
 
 use std::path::Path;
 use std::path::PathBuf;
@@ -86,7 +87,7 @@ impl ConfigManagerConfig {
         let tedge_http_address = tedge_config.query(HttpBindAddressSetting)?;
         let tedge_http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
 
-        Ok(ConfigManagerConfig::new(
+        let config = ConfigManagerConfig::new(
             config_dir,
             tmp_dir,
             data_dir,
@@ -95,6 +96,8 @@ impl ConfigManagerConfig {
             mqtt_port,
             tedge_http_address,
             tedge_http_port,
-        ))
+        );
+        validate_parent_dir_exists(config.plugin_config_path.as_path())?;
+        Ok(config)
     }
 }

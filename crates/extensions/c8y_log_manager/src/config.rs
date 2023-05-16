@@ -18,6 +18,7 @@ use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
 use tedge_config::TmpPathSetting;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_utils::paths::validate_parent_dir_exists;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-log-plugin.toml";
 pub const DEFAULT_OPERATION_DIR_NAME: &str = "c8y/";
@@ -54,6 +55,7 @@ impl LogManagerConfig {
         let plugin_config_path = config_dir
             .join(DEFAULT_OPERATION_DIR_NAME)
             .join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
+        validate_parent_dir_exists(&plugin_config_path)?;
 
         let plugin_config = LogPluginConfig::new(&plugin_config_path);
 

@@ -11,6 +11,7 @@ repository = { workspace = true }
 
 [dependencies]
 async-trait = "0.1"
+log = "0.4"
 tedge_actors = { path = "../../core/tedge_actors" }
 tedge_utils = { path = "../../common/tedge_utils", features = ["fs-notify"] }
 tokio = { version = "1.23", features = ["macros"] }
