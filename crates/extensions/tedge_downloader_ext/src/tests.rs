@@ -13,7 +13,7 @@ const TEST_TIMEOUT: Duration = Duration::from_secs(5);
 async fn download_without_auth() -> Result<(), DynError> {
     let ttd = TempTedgeDir::new();
     let _mock = mock("GET", "/")
-        .with_status(201)
+        .with_status(200)
         .with_header("content-type", "text/plain")
         .with_body("without auth")
         .create();
@@ -43,7 +43,7 @@ async fn download_without_auth() -> Result<(), DynError> {
 async fn download_with_auth() -> Result<(), DynError> {
     let ttd = TempTedgeDir::new();
     let _mock = mock("GET", "/")
-        .with_status(201)
+        .with_status(200)
         .with_header("content-type", "text/plain")
         .match_header("authorization", "Bearer token")
         .with_body("with auth")
