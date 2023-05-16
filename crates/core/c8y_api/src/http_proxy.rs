@@ -9,6 +9,8 @@ use reqwest::Url;
 use std::time::Duration;
 use tedge_config::mqtt_config::MqttConfigBuildError;
 use tedge_config::TEdgeConfig;
+use tracing::error;
+use tracing::info;
 
 /// Define a C8y endpoint
 #[derive(Debug)]
@@ -125,25 +127,40 @@ impl C8yMqttJwtTokenRetriever {
     pub async fn get_jwt_token(&mut self) -> Result<SmartRestJwtResponse, JwtError> {
         let mut mqtt_con = Connection::new(&self.mqtt_config).await?;
 
-        // Ignore errors on this connection
-        mqtt_con.errors.close();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        for _ in 0..3 {
+            mqtt_con
+                .published
+                .publish(mqtt_channel::Message::new(
+                    &Topic::new_unchecked("c8y/s/uat"),
+                    "".to_string(),
+                ))
+                .await?;
+            info!("JWT token requested");
 
-        mqtt_con
-            .published
-            .publish(mqtt_channel::Message::new(
-                &Topic::new_unchecked("c8y/s/uat"),
-                "".to_string(),
-            ))
-            .await?;
+            tokio::select! {
+                maybe_err = mqtt_con.errors.next() => {
+                    if let Some(err) = maybe_err {
+                                error!("Fail to retrieve JWT token: {err}");
+                    return Err(JwtError::NoJwtReceived);
+                    }
+                }
+                maybe_msg = tokio::time::timeout(Duration::from_secs(20), mqtt_con.received.next()) => {
+                    match maybe_msg {
+                        Ok(Some(msg)) => {
+                            info!("JWT token received");
+                            let token_smartrest = msg.payload_str()?.to_string();
+                            return Ok(SmartRestJwtResponse::try_new(&token_smartrest)?);
+                        }
+                        Ok(None) => return Err(JwtError::NoJwtReceived),
+                        Err(_elapsed) => continue,
+                    }
+                }
+            }
+        }
 
-        let token_smartrest =
-            match tokio::time::timeout(Duration::from_secs(10), mqtt_con.received.next()).await {
-                Ok(Some(msg)) => msg.payload_str()?.to_string(),
-                Ok(None) => return Err(JwtError::NoJwtReceived),
-                Err(_elapsed) => return Err(JwtError::NoJwtReceived),
-            };
-
-        Ok(SmartRestJwtResponse::try_new(&token_smartrest)?)
+        error!("Fail to retrieve JWT token after 3 attempts");
+        Err(JwtError::NoJwtReceived)
     }
 }
 

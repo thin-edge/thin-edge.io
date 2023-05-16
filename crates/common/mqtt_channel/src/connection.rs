@@ -8,6 +8,8 @@ use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::SinkExt;
 use futures::StreamExt;
+use log::error;
+use log::info;
 use rumqttc::AsyncClient;
 use rumqttc::ConnectionError;
 use rumqttc::Event;
@@ -139,6 +141,8 @@ impl Connection {
                     if let Some(err) = MqttError::maybe_connection_error(&ack) {
                         return Err(err);
                     };
+                    info!("MQTT connection established");
+
                     let subscriptions = config.subscriptions.filters();
 
                     // Need check here otherwise it will hang waiting for a SubAck, and none will come when there is no subscription.
@@ -163,6 +167,7 @@ impl Connection {
                 }
 
                 Err(err) => {
+                    error!("MQTT connection error: {err}");
                     let should_delay = Connection::pause_on_error(&err);
 
                     // Errors on send are ignored: it just means the client has closed the receiving channel.
@@ -196,8 +201,9 @@ impl Connection {
 
                 Ok(Event::Incoming(Packet::ConnAck(ack))) => {
                     if let Some(err) = MqttError::maybe_connection_error(&ack) {
-                        eprintln!("ERROR: Connection Error {}", err);
+                        error!("MQTT connection Error {err}");
                     } else {
+                        info!("MQTT connection re-established");
                         if let Some(ref imsg_fn) = config.initial_message {
                             // publish the initial message on connect
                             let message = imsg_fn.new_init_message();
@@ -231,6 +237,7 @@ impl Connection {
                 }
 
                 Err(err) => {
+                    error!("MQTT connection error: {err}");
                     let delay = Connection::pause_on_error(&err);
 
                     // Errors on send are ignored: it just means the client has closed the receiving channel.
