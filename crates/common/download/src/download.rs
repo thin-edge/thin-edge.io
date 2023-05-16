@@ -4,11 +4,14 @@ use backoff::ExponentialBackoff;
 use log::debug;
 use log::warn;
 use nix::sys::statvfs;
-use reqwest::header::CONTENT_RANGE;
+use reqwest::header;
+use reqwest::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fs;
 use std::fs::File;
+use std::io::Seek;
+use std::io::SeekFrom;
 use std::io::Write;
 use std::os::unix::prelude::AsRawFd;
 use std::path::Path;
@@ -119,42 +122,22 @@ impl Downloader {
         target_filename.into()
     }
 
-    /// Downloads a file.
+    /// Downloads a file using an exponential backoff strategy.
     ///
-    /// Uses an exponential backoff strategy with initial retry of 30s, up to 5
-    /// min.
+    /// Partial backoff has a minimal interval of 30s and max elapsed time of
+    /// 5min. To learn more about the backoff, see documentation of the
+    /// [`backoff`](backoff) crate.
+    ///
+    /// Requests partial ranges if a transient error happened while downloading
+    /// and the server response included `Accept-Ranges` header.
     pub async fn download(&self, url: &DownloadInfo) -> Result<(), DownloadError> {
-        if self.target_filename.exists() {
-            // Confirm that the file has write access before any http request attempt
-            self.has_write_access()?;
-        } else if let Some(file_parent) = self.target_filename.parent() {
-            if !file_parent.exists() {
-                tokio::fs::create_dir_all(file_parent).await?;
-            }
-        }
+        let tmp_target_path = self.temp_filename().await?;
+        let target_file_path = self.target_filename.as_path();
+        let mut ranges_supported = false;
 
-        // Download file to the target directory with a temp name
-        let target_file_path = self.target_filename.clone();
-        let file_name = target_file_path
-            .file_name()
-            .ok_or_else(|| FileError::NoParentDir(target_file_path.clone()))?
-            .to_str()
-            .ok_or_else(|| FileError::InvalidFileName(target_file_path.clone()))?;
-        let parent_dir = target_file_path
-            .parent()
-            .ok_or_else(|| FileError::NoParentDir(target_file_path.clone()))?;
+        let mut file: File = File::create(&tmp_target_path)?;
 
-        let tmp_file_name = format!("{file_name}.tmp");
-        let tmp_target_path = parent_dir.join(tmp_file_name);
-
-        struct DownloadState {
-            written: usize,
-            file: File,
-        }
-
-        let mut download_state: Option<DownloadState> = None;
-
-        'outer: loop {
+        loop {
             // Default retry is an exponential retry with a limit of 15 minutes total.
             // Let's set some more reasonable retry policy so we don't block the downloads for too long.
             let backoff = ExponentialBackoff {
@@ -163,6 +146,8 @@ impl Downloader {
                 ..Default::default()
             };
 
+            let file_pos = file.stream_position()?;
+
             let operation = || async {
                 let mut client = reqwest::Client::new().get(url.url());
 
@@ -170,9 +155,8 @@ impl Downloader {
                     client = client.bearer_auth(token)
                 }
 
-                if let Some(state) = &download_state {
-                    let written = state.written;
-                    client = client.header("Range", format!("bytes={written}-"));
+                if ranges_supported && file_pos != 0 {
+                    client = client.header("Range", format!("bytes={file_pos}-"));
                 }
 
                 client
@@ -196,42 +180,60 @@ impl Downloader {
             };
 
             let mut response = retry(backoff, operation).await?;
-
-            let file_len = response.content_length().unwrap_or(0);
-            let content_range = response.headers().get(CONTENT_RANGE);
-            debug!("Downloading file, len={file_len}, content-range={content_range:?}");
-
-            if download_state.is_none() {
-                let file = create_file_and_try_pre_allocate_space(&tmp_target_path, file_len)?;
-                debug!("preallocated file");
-                download_state = Some(DownloadState { written: 0, file });
-            }
-
-            let mut download_state = download_state.as_mut().unwrap();
-
-            loop {
-                let chunk = response.chunk().await;
-                match chunk {
-                    Err(err) => {
-                        warn!("Error while downloading response: {err}.\nRetrying...");
-                        continue 'outer;
-                    }
-                    Ok(None) => break 'outer,
-                    Ok(Some(bytes)) => {
-                        debug!("read response chunk, size={size}", size = bytes.len());
-                        if let Err(err) = download_state.file.write_all(&bytes) {
-                            let _ = std::fs::remove_file(self.target_filename.as_path());
-                            return Err(DownloadError::FromIo {
-                                reason: format!(
-                                    "Failed to download the file with an error {}",
-                                    err
-                                ),
-                            });
-                        }
-                        download_state.written += bytes.len();
-                    }
+            if let Some(unit) = response.headers().get(header::ACCEPT_RANGES) {
+                if unit == "bytes" {
+                    ranges_supported = true;
                 }
             }
+
+            let file_len = response.content_length().unwrap_or(0);
+
+            let chunk_pos = match response.status() {
+                // Complete response, seek to the beginning of the file
+                StatusCode::OK => 0,
+                // Partial response, the range might be different from what we
+                // requested, so we need to parse it. Because we only request a
+                // single range from the current position to the end of the
+                // document, we can ignore multipart/byteranges media type.
+                StatusCode::PARTIAL_CONTENT => {
+                    let header = response.headers().get(header::CONTENT_RANGE).ok_or(
+                        DownloadError::Other(
+                            "Response was Partial Content but Content-Range header is missing"
+                                .to_string(),
+                        ),
+                    )?;
+                    partial_response_start_range(header)?
+                }
+                status_code => {
+                    let status_str = status_code.canonical_reason();
+                    return Err(DownloadError::Other(format!(
+                        "unexpected return code: {status_code} {status_str:?}"
+                    )));
+                }
+            };
+
+            if chunk_pos != file.stream_position()? {
+                file.seek(SeekFrom::Start(chunk_pos))?;
+            }
+
+            debug!("Downloading file, len={file_len}");
+
+            if file_pos == 0 && file_len > 0 {
+                try_pre_allocate_space(&mut file, &tmp_target_path, file_len)?;
+                debug!("preallocated space for file {tmp_target_path:?}, len={file_len}");
+            }
+
+            if let Err(err) = save_chunks_to_file(&mut response, &mut file).await {
+                match err {
+                    SaveChunksError::Network(err) => {
+                        warn!("Error while downloading response: {err}.\nRetrying...");
+                        continue;
+                    }
+                    SaveChunksError::Io(err) => return Err(err.into()),
+                }
+            }
+
+            break;
         }
 
         // Move the downloaded file to the final destination
@@ -252,6 +254,31 @@ impl Downloader {
     /// Returns the filename.
     pub fn filename(&self) -> &Path {
         self.target_filename.as_path()
+    }
+
+    async fn temp_filename(&self) -> Result<PathBuf, DownloadError> {
+        if self.target_filename.exists() {
+            // Confirm that the file has write access before any http request attempt
+            self.has_write_access()?;
+        } else if let Some(file_parent) = self.target_filename.parent() {
+            if !file_parent.exists() {
+                tokio::fs::create_dir_all(file_parent).await?;
+            }
+        }
+
+        // Download file to the target directory with a temp name
+        let target_file_path = self.target_filename.clone();
+        let file_name = target_file_path
+            .file_name()
+            .ok_or_else(|| FileError::NoParentDir(target_file_path.clone()))?
+            .to_str()
+            .ok_or_else(|| FileError::InvalidFileName(target_file_path.clone()))?;
+        let parent_dir = target_file_path
+            .parent()
+            .ok_or_else(|| FileError::NoParentDir(target_file_path.clone()))?;
+
+        let tmp_file_name = format!("{file_name}.tmp");
+        Ok(parent_dir.join(tmp_file_name))
     }
 
     fn has_write_access(&self) -> Result<(), DownloadError> {
@@ -285,35 +312,97 @@ impl Downloader {
     }
 }
 
-#[allow(clippy::unnecessary_cast)]
-fn create_file_and_try_pre_allocate_space(
-    file_path: &Path,
-    file_len: u64,
-) -> Result<File, DownloadError> {
-    let file = File::create(file_path)?;
-    if file_len > 0 {
-        if let Some(root) = file_path.parent() {
-            let tmpstats = statvfs::statvfs(root)?;
-            // Reserve 5% of total disk space
-            let five_percent_disk_space =
-                (tmpstats.blocks() as u64 * tmpstats.block_size() as u64) * 5 / 100;
-            let usable_disk_space = tmpstats.blocks_free() as u64 * tmpstats.block_size() as u64
-                - five_percent_disk_space;
-
-            if file_len >= usable_disk_space {
-                return Err(DownloadError::InsufficientSpace);
-            }
-            // Reserve diskspace
-            #[cfg(target_os = "linux")]
-            let _ = fallocate(
-                file.as_raw_fd(),
-                FallocateFlags::empty(),
-                0,
-                file_len.try_into().expect("file too large to fit in i64"),
-            );
-        }
+async fn save_chunks_to_file(
+    response: &mut reqwest::Response,
+    writer: &mut File,
+) -> Result<(), SaveChunksError> {
+    while let Some(bytes) = response.chunk().await? {
+        debug!("read response chunk, size={size}", size = bytes.len());
+        writer.write_all(&bytes)?;
     }
-    Ok(file)
+    Ok(())
+}
+
+/// Extracts the start of the range from the HTTP Content-Range header.
+fn partial_response_start_range(
+    header_value: &header::HeaderValue,
+) -> Result<u64, InvalidContentRangeError> {
+    let (unit, range) = header_value
+        .to_str()
+        .map_err(|_| InvalidContentRangeError {
+            reason: "Not valid utf-8",
+            value: header_value.clone(),
+        })
+        .and_then(|value| {
+            value.split_once(' ').ok_or(InvalidContentRangeError {
+                reason: "Invalid value in Content-Range header",
+                value: header_value.clone(),
+            })
+        })?;
+    if unit != "bytes" {
+        return Err(InvalidContentRangeError {
+            reason: "unknown unit",
+            value: header_value.clone(),
+        });
+    }
+    let (range_start, _) = range.split_once('-').ok_or(InvalidContentRangeError {
+        reason: "invalid range",
+        value: header_value.clone(),
+    })?;
+    range_start.parse().map_err(|_| InvalidContentRangeError {
+        reason: "failed to parse int",
+        value: header_value.clone(),
+    })
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Error parsing Content-Range header, got: {value:?}")]
+pub struct InvalidContentRangeError {
+    reason: &'static str,
+    value: header::HeaderValue,
+}
+
+#[derive(Debug, thiserror::Error)]
+enum SaveChunksError {
+    #[error("Error reading from network")]
+    Network(#[from] reqwest::Error),
+    #[error("Unable to write data to the file")]
+    Io(#[from] std::io::Error),
+}
+
+#[allow(clippy::unnecessary_cast)]
+fn try_pre_allocate_space(
+    file: &mut File,
+    path: &Path,
+    file_len: u64,
+) -> Result<(), DownloadError> {
+    if file_len == 0 {
+        return Ok(());
+    }
+
+    if let Some(root) = path.parent() {
+        let tmpstats = statvfs::statvfs(root)?;
+
+        // Reserve 5% of total disk space
+        let five_percent_disk_space =
+            (tmpstats.blocks() as u64 * tmpstats.block_size() as u64) * 5 / 100;
+        let usable_disk_space =
+            tmpstats.blocks_free() as u64 * tmpstats.block_size() as u64 - five_percent_disk_space;
+
+        if file_len >= usable_disk_space {
+            return Err(DownloadError::InsufficientSpace);
+        }
+
+        // Reserve diskspace
+        #[cfg(target_os = "linux")]
+        let _ = fallocate(
+            file.as_raw_fd(),
+            FallocateFlags::empty(),
+            0,
+            file_len.try_into().expect("file too large to fit in i64"),
+        );
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -638,13 +727,18 @@ mod tests {
 
                     if let Some(range) = range {
                         let start = range.start;
-                        let header = "HTTP/1.1 206 Partial Content\r\n\
+                        let end = range.end;
+                        let header = format!(
+                            "HTTP/1.1 206 Partial Content\r\n\
                     transfer-encoding: chunked\r\n\
                     connection: close\r\n\
                     content-type: application/octet-stream\r\n\
-                    content-range: bytes */*\r\n\
-                    accept-ranges: bytes\r\n";
-                        let next = (start + chunk_size).min(file.len());
+                    content-range: bytes {start}-{end}/*\r\n\
+                    accept-ranges: bytes\r\n"
+                        );
+                        // answer with range starting 1 byte before what client
+                        // requested to ensure it correctly parses content-range
+                        let next = (start - 1 + chunk_size).min(file.len());
                         let body = &file[start..next];
 
                         let size = body.len();

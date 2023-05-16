@@ -1,3 +1,4 @@
+use super::download::InvalidContentRangeError;
 use std::path::PathBuf;
 
 #[derive(Debug, thiserror::Error)]
@@ -31,6 +32,12 @@ pub enum DownloadError {
 
     #[error("From reqwest")]
     FromReqwest(#[from] reqwest::Error),
+
+    #[error("Invalid server response")]
+    InvalidResponse(#[from] InvalidContentRangeError),
+
+    #[error("Error: {0}")]
+    Other(String),
 }
 
 impl From<std::io::Error> for DownloadError {
