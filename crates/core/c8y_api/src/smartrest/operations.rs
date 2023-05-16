@@ -44,12 +44,15 @@ impl Operation {
     pub fn topic(&self) -> Option<String> {
         self.exec().and_then(|exec| exec.topic.clone())
     }
+
+    pub fn template(&self) -> Option<String> {
+        self.exec().and_then(|exec| exec.on_message.clone())
+    }
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct Operations {
     operations: Vec<Operation>,
-    operations_by_trigger: HashMap<String, usize>,
 }
 
 /// depending on which editor you use, temporary files could be created that contain the name of
@@ -64,70 +67,31 @@ pub fn is_valid_operation_name(operation: &str) -> bool {
 
 impl Operations {
     pub fn add_operation(&mut self, operation: Operation) {
-        if let Some(index) = self
-            .operations
-            .iter()
-            .position(|o| o.name.eq(&operation.name))
-        {
-            self.update_trigger_map(&operation, index);
-            self.operations[index] = operation;
-        } else {
-            self.update_trigger_map(&operation, self.operations.len());
-            self.operations.push(operation);
-        }
-    }
-
-    fn update_trigger_map(&mut self, operation: &Operation, index: usize) {
-        if let Some(detail) = operation.exec() {
-            if let Some(on_message) = &detail.on_message {
-                self.operations_by_trigger.insert(on_message.clone(), index);
-            }
-        }
-    }
-
-    pub fn remove_operation(&mut self, op_name: &str) {
-        self.operations.retain(|x| x.name.ne(&op_name));
+        self.operations.push(operation);
     }
 
     pub fn try_new(dir: impl AsRef<Path>) -> Result<Self, OperationsError> {
         get_operations(dir.as_ref())
     }
 
-    pub fn get_child_ops(
-        ops_dir: impl AsRef<Path>,
-    ) -> Result<HashMap<String, Self>, OperationsError> {
-        let mut child_ops: HashMap<String, Operations> = HashMap::new();
-        let child_entries = fs::read_dir(&ops_dir)
-            .map_err(|_| OperationsError::ReadDirError {
-                dir: ops_dir.as_ref().into(),
-            })?
-            .map(|entry| entry.map(|e| e.path()))
-            .collect::<Result<Vec<PathBuf>, _>>()?
-            .into_iter()
-            .filter(|path| path.is_dir())
-            .collect::<Vec<PathBuf>>();
-        for cdir in child_entries {
-            let ops = Operations::try_new(&cdir)?;
-            if let Some(id) = cdir.file_name() {
-                if let Some(id_str) = id.to_str() {
-                    child_ops.insert(id_str.to_string(), ops);
+    pub fn get_operations_list(&self) -> Vec<String> {
+        let mut ops_name: Vec<String> = Vec::default();
+        for op in &self.operations {
+            ops_name.push(op.name.clone());
+        }
+
+        ops_name
+    }
+
+    pub fn matching_smartrest_template(&self, operation_template: &str) -> Option<Operation> {
+        for op in self.operations.clone() {
+            if let Some(template) = op.template() {
+                if template.eq(operation_template) {
+                    return Some(op);
                 }
             }
         }
-        Ok(child_ops)
-    }
-
-    pub fn get_operations_list(&self) -> Vec<String> {
-        self.operations
-            .iter()
-            .map(|operation| operation.name.clone())
-            .collect::<Vec<String>>()
-    }
-
-    pub fn matching_smartrest_template(&self, operation_template: &str) -> Option<&Operation> {
-        self.operations_by_trigger
-            .get(operation_template)
-            .and_then(|index| self.operations.get(*index))
+        None
     }
 
     pub fn topics_for_operations(&self) -> HashSet<String> {
@@ -145,7 +109,7 @@ impl Operations {
     }
 }
 
-fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsError> {
+pub fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsError> {
     let mut operations = Operations::default();
     let dir_entries = fs::read_dir(&dir)
         .map_err(|_| OperationsError::ReadDirError {
@@ -179,6 +143,30 @@ fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsError> 
         }
     }
     Ok(operations)
+}
+
+pub fn get_child_ops(
+    ops_dir: impl AsRef<Path>,
+) -> Result<HashMap<String, Operations>, OperationsError> {
+    let mut child_ops: HashMap<String, Operations> = HashMap::new();
+    let child_entries = fs::read_dir(&ops_dir)
+        .map_err(|_| OperationsError::ReadDirError {
+            dir: ops_dir.as_ref().into(),
+        })?
+        .map(|entry| entry.map(|e| e.path()))
+        .collect::<Result<Vec<PathBuf>, _>>()?
+        .into_iter()
+        .filter(|path| path.is_dir())
+        .collect::<Vec<PathBuf>>();
+    for cdir in child_entries {
+        let ops = Operations::try_new(&cdir)?;
+        if let Some(id) = cdir.file_name() {
+            if let Some(id_str) = id.to_str() {
+                child_ops.insert(id_str.to_string(), ops);
+            }
+        }
+    }
+    Ok(child_ops)
 }
 
 pub fn get_operation(path: PathBuf) -> Result<Operation, OperationsError> {
