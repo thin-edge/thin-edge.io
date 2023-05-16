@@ -2,6 +2,7 @@ use crate::Actor;
 use crate::ConcurrentServerMessageBox;
 use crate::MessageReceiver;
 use crate::RuntimeError;
+use crate::RuntimeRequest;
 use crate::Sender;
 use crate::Server;
 use crate::ServerMessageBox;
@@ -30,8 +31,14 @@ impl<S: Server> Actor for ServerActor<S> {
     async fn run(&mut self) -> Result<(), RuntimeError> {
         let server = &mut self.server;
         while let Some((client_id, request)) = self.messages.recv().await {
-            let result = server.handle(request).await;
-            self.messages.send((client_id, result)).await?
+            tokio::select! {
+                result = server.handle(request) => {
+                    self.messages.send((client_id, result)).await?
+                }
+                Some(RuntimeRequest::Shutdown) = self.messages.recv_signal() => {
+                    break;
+                }
+            }
         }
         Ok(())
     }
