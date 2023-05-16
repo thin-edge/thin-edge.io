@@ -41,7 +41,7 @@ use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResponseExt;
 use tedge_http_ext::HttpResult;
 
-const RETRY_TIMEOUT_SECS: u64 = 60;
+const RETRY_TIMEOUT_SECS: u64 = 20;
 
 pub struct C8YHttpProxyActor {
     end_point: C8yEndPoint,
