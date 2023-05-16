@@ -187,9 +187,15 @@ impl Actor for MqttActor {
     }
 
     async fn run(&mut self) -> Result<(), RuntimeError> {
-        let mut mqtt_client = mqtt_channel::Connection::new(&self.mqtt_config)
-            .await
-            .map_err(Box::new)?;
+        let mut mqtt_client = tokio::select! {
+            connection = mqtt_channel::Connection::new(&self.mqtt_config) => {
+                connection.map_err(Box::new)?
+            }
+            Some(RuntimeRequest::Shutdown) = self.messages.recv_signal() => {
+                // Shutdown requested even before the connection has been established
+                return Ok(())
+            }
+        };
 
         loop {
             tokio::select! {
