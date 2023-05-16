@@ -4,6 +4,7 @@ use c8y_config_manager::ConfigManagerConfig;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use clap::Parser;
+use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::Runtime;
 use tedge_config::mqtt_config::MqttConfigBuildError;
@@ -58,10 +59,10 @@ pub struct ConfigPluginOpt {
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let config_plugin_opt = ConfigPluginOpt::parse();
+    let config_dir = config_plugin_opt.config_dir;
 
     // Load tedge config from the provided location
-    let tedge_config_location =
-        tedge_config::TEdgeConfigLocation::from_custom_root(&config_plugin_opt.config_dir);
+    let tedge_config_location = tedge_config::TEdgeConfigLocation::from_custom_root(&config_dir);
     let log_level = if config_plugin_opt.debug {
         tracing::Level::TRACE
     } else {
@@ -74,18 +75,18 @@ async fn main() -> Result<(), anyhow::Error> {
     let tedge_config = config_repository.load()?;
 
     if config_plugin_opt.init {
-        init(config_plugin_opt.config_dir).with_context(|| {
+        init(config_dir).with_context(|| {
             format!(
                 "Failed to initialize {}. You have to run the command with sudo.",
                 PLUGIN_NAME
             )
         })
     } else {
-        run(tedge_config).await
+        run(config_dir, tedge_config).await
     }
 }
 
-async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
+async fn run(config_dir: impl AsRef<Path>, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     let runtime_events_logger = None;
     let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
@@ -105,8 +106,7 @@ async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     let health_actor = HealthMonitorBuilder::new(PLUGIN_NAME, &mut mqtt_actor);
 
     // Instantiate config manager actor
-    let config_manager_config =
-        ConfigManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH, &tedge_config)?;
+    let config_manager_config = ConfigManagerConfig::from_tedge_config(config_dir, &tedge_config)?;
     let config_actor = ConfigManagerBuilder::new(
         config_manager_config,
         &mut mqtt_actor,
