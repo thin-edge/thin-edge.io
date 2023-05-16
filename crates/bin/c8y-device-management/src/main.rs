@@ -6,8 +6,12 @@ use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use c8y_log_manager::LogManagerBuilder;
 use c8y_log_manager::LogManagerConfig;
+use clap::Parser;
+use std::path::PathBuf;
 use tedge_actors::Runtime;
-use tedge_config::get_tedge_config;
+use tedge_config::ConfigRepository;
+use tedge_config::TEdgeConfigLocation;
+use tedge_config::TEdgeConfigRepository;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
@@ -19,13 +23,31 @@ use tedge_timer_ext::TimerActor;
 
 pub const PLUGIN_NAME: &str = "c8y-device-management";
 
+#[derive(Debug, clap::Parser, Clone)]
+#[clap(
+name = clap::crate_name!(),
+version = clap::crate_version!(),
+about = clap::crate_description!(),
+)]
+pub struct PluginOpt {
+    #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
+    pub config_dir: PathBuf,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let config_plugin_opt = PluginOpt::parse();
+
     env_logger::init();
     let runtime_events_logger = None;
     let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
-    let tedge_config = get_tedge_config()?;
+    // Load tedge config from the provided location
+    let config_dir = config_plugin_opt.config_dir;
+    let tedge_config_location = TEdgeConfigLocation::from_custom_root(&config_dir);
+    let config_repository = TEdgeConfigRepository::new(tedge_config_location);
+    let tedge_config = config_repository.load()?;
+
     let c8y_http_config = (&tedge_config).try_into()?;
     let mqtt_config = tedge_config.mqtt_config()?;
 
@@ -42,8 +64,7 @@ async fn main() -> anyhow::Result<()> {
     let mut downloader_actor = DownloaderActor::new().builder();
 
     // Instantiate config manager actor
-    let config_manager_config =
-        ConfigManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH, &tedge_config)?;
+    let config_manager_config = ConfigManagerConfig::from_tedge_config(&config_dir, &tedge_config)?;
     let config_actor = ConfigManagerBuilder::new(
         config_manager_config,
         &mut mqtt_actor,
@@ -53,8 +74,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Instantiate log manager actor
-    let log_manager_config =
-        LogManagerConfig::from_tedge_config(DEFAULT_TEDGE_CONFIG_PATH, &tedge_config)?;
+    let log_manager_config = LogManagerConfig::from_tedge_config(&config_dir, &tedge_config)?;
     let log_actor = LogManagerBuilder::new(
         log_manager_config,
         &mut mqtt_actor,
