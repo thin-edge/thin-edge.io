@@ -1,3 +1,6 @@
+mod partial_response;
+pub use partial_response::InvalidResponseError;
+
 use crate::error::DownloadError;
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
@@ -5,7 +8,6 @@ use log::debug;
 use log::warn;
 use nix::sys::statvfs;
 use reqwest::header;
-use reqwest::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fs;
@@ -149,7 +151,7 @@ impl Downloader {
                 }
             }
 
-            let chunk_pos = response_range_start(&response)?;
+            let chunk_pos = partial_response::response_range_start(&response)?;
 
             if chunk_pos != file_pos {
                 file_pos = file.seek(SeekFrom::Start(chunk_pos))?;
@@ -252,39 +254,6 @@ impl Downloader {
     }
 }
 
-fn response_range_start(response: &reqwest::Response) -> Result<u64, DownloadError> {
-    let chunk_pos = match response.status() {
-        // Complete response, seek to the beginning of the file
-        StatusCode::OK => 0,
-
-        // Partial response, the range might be different from what we
-        // requested, so we need to parse it. Because we only request a
-        // single range from the current position to the end of the
-        // document, we can ignore multipart/byteranges media type.
-        StatusCode::PARTIAL_CONTENT => {
-            let header =
-                response
-                    .headers()
-                    .get(header::CONTENT_RANGE)
-                    .ok_or(DownloadError::Other(
-                        "Response was Partial Content but Content-Range header is missing"
-                            .to_string(),
-                    ))?;
-            partial_response_start_range(header)?
-        }
-
-        // We don't expect to receive any other 200-299 status code,
-        // return error if we do
-        status_code => {
-            let status_str = status_code.canonical_reason();
-            return Err(DownloadError::Other(format!(
-                "unexpected return code: {status_code} {status_str:?}"
-            )));
-        }
-    };
-    Ok(chunk_pos)
-}
-
 async fn request_range_from(
     url: &DownloadInfo,
     range_start: u64,
@@ -327,6 +296,7 @@ async fn request_range_from(
                 _ => backoff::Error::transient(err),
             })
     };
+
     retry(backoff, operation).await
 }
 
@@ -341,49 +311,11 @@ async fn save_chunks_to_file(
     Ok(())
 }
 
-/// Extracts the start of the range from the HTTP Content-Range header.
-fn partial_response_start_range(
-    header_value: &header::HeaderValue,
-) -> Result<u64, InvalidContentRangeError> {
-    let (unit, range) = header_value
-        .to_str()
-        .map_err(|_| InvalidContentRangeError {
-            reason: "Not valid utf-8",
-            value: header_value.clone(),
-        })
-        .and_then(|value| {
-            value.split_once(' ').ok_or(InvalidContentRangeError {
-                reason: "Invalid value in Content-Range header",
-                value: header_value.clone(),
-            })
-        })?;
-    if unit != "bytes" {
-        return Err(InvalidContentRangeError {
-            reason: "unknown unit",
-            value: header_value.clone(),
-        });
-    }
-    let (range_start, _) = range.split_once('-').ok_or(InvalidContentRangeError {
-        reason: "invalid range",
-        value: header_value.clone(),
-    })?;
-    range_start.parse().map_err(|_| InvalidContentRangeError {
-        reason: "failed to parse int",
-        value: header_value.clone(),
-    })
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("Error parsing Content-Range header, got: {value:?}")]
-pub struct InvalidContentRangeError {
-    reason: &'static str,
-    value: header::HeaderValue,
-}
-
 #[derive(Debug, thiserror::Error)]
 enum SaveChunksError {
     #[error("Error reading from network")]
     Network(#[from] reqwest::Error),
+
     #[error("Unable to write data to the file")]
     Io(#[from] std::io::Error),
 }
@@ -426,8 +358,6 @@ fn try_pre_allocate_space(
 #[cfg(test)]
 #[allow(deprecated)]
 mod tests {
-    use crate::DownloadError;
-
     use super::*;
     use anyhow::bail;
     use mockito::mock;

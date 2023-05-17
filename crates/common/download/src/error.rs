@@ -1,25 +1,13 @@
-use super::download::InvalidContentRangeError;
+use super::download::InvalidResponseError;
 use std::path::PathBuf;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DownloadError {
-    #[error(transparent)]
-    FromBackoff(#[from] backoff::Error<reqwest::Error>),
-
-    #[error(transparent)]
-    FromElapsed(#[from] tokio::time::error::Elapsed),
-
-    #[error("I/O error: {reason:?}")]
-    FromIo { reason: String },
-
-    #[error("JSON parse error: {reason:?}")]
-    JsonParse { reason: String },
+    #[error("I/O error")]
+    FromIo(#[from] std::io::Error),
 
     #[error(transparent)]
     FromUrlParse(#[from] url::ParseError),
-
-    #[error(transparent)]
-    FromNix(#[from] nix::Error),
 
     #[error(transparent)]
     FromFileError(#[from] tedge_utils::file::FileError),
@@ -34,16 +22,11 @@ pub enum DownloadError {
     FromReqwest(#[from] reqwest::Error),
 
     #[error("Invalid server response")]
-    InvalidResponse(#[from] InvalidContentRangeError),
-
-    #[error("Error: {0}")]
-    Other(String),
+    InvalidResponse(#[from] InvalidResponseError),
 }
 
-impl From<std::io::Error> for DownloadError {
-    fn from(err: std::io::Error) -> Self {
-        DownloadError::FromIo {
-            reason: format!("{}", err),
-        }
+impl From<nix::Error> for DownloadError {
+    fn from(err: nix::Error) -> Self {
+        DownloadError::FromIo(err.into())
     }
 }
