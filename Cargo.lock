@@ -313,7 +313,7 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "aws_mapper_ext"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "assert-json-diff",
  "assert_matches",
@@ -333,7 +333,7 @@ dependencies = [
 
 [[package]]
 name = "az_mapper_ext"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "assert-json-diff",
  "assert_matches",
@@ -403,7 +403,7 @@ checksum = "a4a4ddaa51a5bc52a6948f74c06d20aaaddb71924eab79b8c97a8c556e942d6a"
 
 [[package]]
 name = "batcher"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "tedge_actors",
@@ -473,7 +473,7 @@ checksum = "89b2fd2a0dcf38d7971e2194b6b6eebab45ae01067456a7fd93d5547a61b70be"
 
 [[package]]
 name = "c8y-configuration-plugin"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "c8y_config_manager",
@@ -494,7 +494,7 @@ dependencies = [
 
 [[package]]
 name = "c8y-device-management"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "c8y_config_manager",
@@ -518,7 +518,7 @@ dependencies = [
 
 [[package]]
 name = "c8y-firmware-plugin"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "c8y_firmware_manager",
@@ -537,7 +537,7 @@ dependencies = [
 
 [[package]]
 name = "c8y-log-plugin"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "c8y_http_proxy",
@@ -557,7 +557,7 @@ dependencies = [
 
 [[package]]
 name = "c8y-remote-access-plugin"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-compat",
  "async-tungstenite",
@@ -585,7 +585,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_api"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -615,7 +615,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_config_manager"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "c8y_api",
@@ -638,7 +638,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_firmware_manager"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "assert-json-diff",
  "assert_matches",
@@ -665,7 +665,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_http_proxy"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "c8y_api",
@@ -682,7 +682,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_log_manager"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -711,7 +711,7 @@ dependencies = [
 
 [[package]]
 name = "c8y_mapper_ext"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -775,7 +775,7 @@ checksum = "50d30906286121d95be3d479533b458f87493b30a4b5f79a607db8f5d11aa91f"
 
 [[package]]
 name = "certificate"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -899,7 +899,7 @@ checksum = "8a2dd5a6fe8c6e3502f568a6353e5273bbb15193ad9a89e457b9970798efbea1"
 
 [[package]]
 name = "clock"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "mockall",
  "time",
@@ -907,7 +907,7 @@ dependencies = [
 
 [[package]]
 name = "collectd_ext"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -1245,7 +1245,7 @@ checksum = "1435fa1053d8b2fbbe9be7e97eca7f33d37b28409959813daefc1446a14247f1"
 
 [[package]]
 name = "download"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "backoff",
@@ -1404,7 +1404,7 @@ dependencies = [
 
 [[package]]
 name = "flockfile"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "assert_matches",
  "nix",
@@ -1939,7 +1939,7 @@ dependencies = [
 
 [[package]]
 name = "json-writer"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "serde_json",
@@ -2012,7 +2012,7 @@ dependencies = [
 
 [[package]]
 name = "logged_command"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2205,7 +2205,7 @@ dependencies = [
 
 [[package]]
 name = "mqtt_channel"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2222,7 +2222,7 @@ dependencies = [
 
 [[package]]
 name = "mqtt_tests"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "fastrand",
@@ -2620,7 +2620,7 @@ dependencies = [
 
 [[package]]
 name = "plugin_sm"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3204,7 +3204,7 @@ dependencies = [
 
 [[package]]
 name = "sawtooth-publisher"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-log",
  "env_logger 0.9.3",
@@ -3620,7 +3620,7 @@ dependencies = [
 
 [[package]]
 name = "tedge"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -3654,7 +3654,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-agent"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3688,7 +3688,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-apt-plugin"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "clap 3.2.25",
@@ -3704,7 +3704,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-dummy-plugin"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "clap 3.2.25",
  "thiserror",
@@ -3712,7 +3712,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-mapper"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3741,7 +3741,7 @@ dependencies = [
 
 [[package]]
 name = "tedge-watchdog"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "clap 3.2.25",
@@ -3762,7 +3762,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_actors"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "env_logger 0.10.0",
@@ -3774,7 +3774,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_api"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3800,7 +3800,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_config"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3825,7 +3825,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_downloader_ext"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "download",
@@ -3839,7 +3839,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_file_system_ext"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "log",
@@ -3852,7 +3852,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_health_ext"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3868,7 +3868,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_http_ext"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "futures",
@@ -3885,7 +3885,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_mqtt_ext"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "assert-json-diff",
  "async-trait",
@@ -3898,7 +3898,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_script_ext"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "tedge_actors",
@@ -3907,7 +3907,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_signal_ext"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "signal-hook",
@@ -3918,7 +3918,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_test_utils"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "camino",
@@ -3928,7 +3928,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_timer_ext"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "tedge_actors",
@@ -3937,7 +3937,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_utils"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "assert_matches",
  "futures",
