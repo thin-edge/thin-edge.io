@@ -15,6 +15,7 @@ use rumqttc::ConnectionError;
 use rumqttc::Event;
 use rumqttc::EventLoop;
 use rumqttc::Incoming;
+use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::StateError;
 use std::time::Duration;
@@ -231,8 +232,9 @@ impl Connection {
                     }
                 }
 
-                Ok(Event::Incoming(Incoming::Disconnect)) => {
-                    // The connection has been closed
+                Ok(Event::Incoming(Incoming::Disconnect))
+                | Ok(Event::Outgoing(Outgoing::Disconnect)) => {
+                    info!("MQTT connection closed");
                     break;
                 }
 
