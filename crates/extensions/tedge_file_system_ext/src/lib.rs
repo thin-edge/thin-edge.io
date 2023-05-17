@@ -134,7 +134,7 @@ impl Actor for FsWatchActor {
 
         loop {
             tokio::select! {
-                Some(RuntimeRequest::Shutdown) = self.messages.recv() => return Err(ChannelError::ReceiveError().into()),
+                Some(RuntimeRequest::Shutdown) = self.messages.recv() => break,
                 Some((path, fs_event)) = fs_notify.rx.recv() => {
                     let output = match fs_event {
                         FsEvent::Modified => FsWatchEvent::Modified(path),
@@ -148,6 +148,8 @@ impl Actor for FsWatchActor {
                 else => return Err(ChannelError::ReceiveError().into())
             }
         }
+
+        Ok(())
     }
 }
 
