@@ -138,84 +138,24 @@ impl Downloader {
         let mut file: File = File::create(&tmp_target_path)?;
 
         loop {
-            // Default retry is an exponential retry with a limit of 15 minutes total.
-            // Let's set some more reasonable retry policy so we don't block the downloads for too long.
-            let backoff = ExponentialBackoff {
-                initial_interval: BACKOFF_INITIAL_INTERVAL,
-                max_elapsed_time: Some(BACKOFF_MAX_ELAPSED),
-                ..Default::default()
-            };
+            let mut file_pos = file.stream_position()?;
 
-            let file_pos = file.stream_position()?;
+            let range_start = if ranges_supported { file_pos } else { 0 };
+            let mut response = request_range_from(url, range_start).await?;
 
-            let operation = || async {
-                let mut client = reqwest::Client::new().get(url.url());
-
-                if let Some(Auth::Bearer(token)) = &url.auth {
-                    client = client.bearer_auth(token)
-                }
-
-                if ranges_supported && file_pos != 0 {
-                    client = client.header("Range", format!("bytes={file_pos}-"));
-                }
-
-                client
-                    .send()
-                    .await
-                    .map_err(|err| {
-                        if err.is_connect() || err.is_builder() {
-                            backoff::Error::Permanent(err)
-                        } else {
-                            log::warn!("Failed to Download. {:?}\nRetrying.", &err);
-                            backoff::Error::transient(err)
-                        }
-                    })?
-                    .error_for_status()
-                    .map_err(|err| match err.status() {
-                        Some(status_error) if status_error.is_client_error() => {
-                            backoff::Error::Permanent(err)
-                        }
-                        _ => backoff::Error::transient(err),
-                    })
-            };
-
-            let mut response = retry(backoff, operation).await?;
             if let Some(unit) = response.headers().get(header::ACCEPT_RANGES) {
                 if unit == "bytes" {
                     ranges_supported = true;
                 }
             }
 
-            let file_len = response.content_length().unwrap_or(0);
+            let chunk_pos = response_range_start(&response)?;
 
-            let chunk_pos = match response.status() {
-                // Complete response, seek to the beginning of the file
-                StatusCode::OK => 0,
-                // Partial response, the range might be different from what we
-                // requested, so we need to parse it. Because we only request a
-                // single range from the current position to the end of the
-                // document, we can ignore multipart/byteranges media type.
-                StatusCode::PARTIAL_CONTENT => {
-                    let header = response.headers().get(header::CONTENT_RANGE).ok_or(
-                        DownloadError::Other(
-                            "Response was Partial Content but Content-Range header is missing"
-                                .to_string(),
-                        ),
-                    )?;
-                    partial_response_start_range(header)?
-                }
-                status_code => {
-                    let status_str = status_code.canonical_reason();
-                    return Err(DownloadError::Other(format!(
-                        "unexpected return code: {status_code} {status_str:?}"
-                    )));
-                }
-            };
-
-            if chunk_pos != file.stream_position()? {
-                file.seek(SeekFrom::Start(chunk_pos))?;
+            if chunk_pos != file_pos {
+                file_pos = file.seek(SeekFrom::Start(chunk_pos))?;
             }
 
+            let file_len = response.content_length().unwrap_or(0);
             debug!("Downloading file, len={file_len}");
 
             if file_pos == 0 && file_len > 0 {
@@ -310,6 +250,84 @@ impl Downloader {
         let _res = tokio::fs::remove_file(&self.target_filename).await;
         Ok(())
     }
+}
+
+fn response_range_start(response: &reqwest::Response) -> Result<u64, DownloadError> {
+    let chunk_pos = match response.status() {
+        // Complete response, seek to the beginning of the file
+        StatusCode::OK => 0,
+
+        // Partial response, the range might be different from what we
+        // requested, so we need to parse it. Because we only request a
+        // single range from the current position to the end of the
+        // document, we can ignore multipart/byteranges media type.
+        StatusCode::PARTIAL_CONTENT => {
+            let header =
+                response
+                    .headers()
+                    .get(header::CONTENT_RANGE)
+                    .ok_or(DownloadError::Other(
+                        "Response was Partial Content but Content-Range header is missing"
+                            .to_string(),
+                    ))?;
+            partial_response_start_range(header)?
+        }
+
+        // We don't expect to receive any other 200-299 status code,
+        // return error if we do
+        status_code => {
+            let status_str = status_code.canonical_reason();
+            return Err(DownloadError::Other(format!(
+                "unexpected return code: {status_code} {status_str:?}"
+            )));
+        }
+    };
+    Ok(chunk_pos)
+}
+
+async fn request_range_from(
+    url: &DownloadInfo,
+    range_start: u64,
+) -> Result<reqwest::Response, reqwest::Error> {
+    // Default retry is an exponential retry with a limit of 15 minutes total.
+    // Let's set some more reasonable retry policy so we don't block the downloads for too long.
+    let backoff = ExponentialBackoff {
+        initial_interval: BACKOFF_INITIAL_INTERVAL,
+        max_elapsed_time: Some(BACKOFF_MAX_ELAPSED),
+        ..Default::default()
+    };
+
+    let operation = || async {
+        let mut client = reqwest::Client::new().get(url.url());
+
+        if let Some(Auth::Bearer(token)) = &url.auth {
+            client = client.bearer_auth(token)
+        }
+
+        if range_start != 0 {
+            client = client.header("Range", format!("bytes={range_start}-"));
+        }
+
+        client
+            .send()
+            .await
+            .map_err(|err| {
+                if err.is_connect() || err.is_builder() {
+                    backoff::Error::Permanent(err)
+                } else {
+                    log::warn!("Failed to Download. {:?}\nRetrying.", &err);
+                    backoff::Error::transient(err)
+                }
+            })?
+            .error_for_status()
+            .map_err(|err| match err.status() {
+                Some(status_error) if status_error.is_client_error() => {
+                    backoff::Error::Permanent(err)
+                }
+                _ => backoff::Error::transient(err),
+            })
+    };
+    retry(backoff, operation).await
 }
 
 async fn save_chunks_to_file(
