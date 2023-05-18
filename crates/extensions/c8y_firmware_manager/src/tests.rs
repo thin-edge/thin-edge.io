@@ -7,6 +7,7 @@ use assert_json_diff::assert_json_include;
 use c8y_http_proxy::credentials::JwtRequest;
 use serde_json::json;
 use sha256::digest;
+use std::io;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
@@ -255,21 +256,26 @@ async fn handle_request_child_device_with_failed_download() -> Result<(), DynErr
     let (id, _download_request) = downloader_message_box.recv().await.unwrap();
 
     // Simulate downloading a file is failed.
-    let fake_download_error = DownloadError::FromIo {
-        reason: "fail".to_string(),
-    };
+    let fake_download_error = DownloadError::FromIo(io::Error::new(io::ErrorKind::Other, "fail"));
     downloader_message_box
         .send((id, Err(fake_download_error)))
         .await?;
 
     // Assert EXECUTING SmartREST MQTT message and FAILED SmartREST MQTT message due to missing 'cache' directory.
-    mqtt_message_box.assert_received(
-        [
-            MqttMessage::new(&Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME), "501,c8y_Firmware\n"),
-            MqttMessage::new(&Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
-                             format!("502,c8y_Firmware,\"Download from {DOWNLOAD_URL} failed with I/O error: \"fail\"\"\n")),
-        ],
-    ).await;
+    mqtt_message_box
+        .assert_received([
+            MqttMessage::new(
+                &Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
+                "501,c8y_Firmware\n",
+            ),
+            MqttMessage::new(
+                &Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
+                format!(
+                    "502,c8y_Firmware,\"Download from {DOWNLOAD_URL} failed with I/O error\"\n"
+                ),
+            ),
+        ])
+        .await;
 
     Ok(())
 }
