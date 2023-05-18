@@ -14,6 +14,8 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         fakeroot \
         # Utilities
         vim \
+        bash-completion \
+        iputils-ping \
         # Enable systemd
         systemd \
         # Testing dependencies
@@ -22,7 +24,11 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         python3-pip \
         python3-venv \
         # tedge dependencies
-        mosquitto
+        mosquitto \
+        mosquitto-clients
+
+# Enable bash-completion
+RUN echo "source /etc/profile.d/bash_completion.sh" >> ~/.bashrc
 
 # Install gh utility
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
