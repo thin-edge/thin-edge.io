@@ -40,12 +40,6 @@ pub enum FileError {
     #[error("Could not save the file {file:?} to disk. Received error: {from:?}.")]
     FailedToSync { file: PathBuf, from: std::io::Error },
 
-    #[error("The path {0} does not have a parent directory")]
-    NoParentDir(PathBuf),
-
-    #[error("The path {0} does not have a file name")]
-    NoFileName(PathBuf),
-
     #[error("The path {0} contains non UTF-8 characters in the file name")]
     InvalidFileName(PathBuf),
 
@@ -91,13 +85,21 @@ pub fn create_file_with_user_group(
     perm_entry.create_file(file.as_ref(), default_content)
 }
 
-/// This function move file to destination path using rename.
-/// If directories are located on a different mount point, copy and delete method will be used instead.
-/// If the destination directory does not exist, it will create it, as well as all parent directories.
+/// Moves a file to a destination path.
+///
+/// If source and destination are located on the same filesystem, a rename will
+/// be used to avoid rewriting the file. If they are on different filesystems,
+/// copy and delete method will be used instead.
+///
 /// Function cannot move whole directories if copy and delete method is used.
+///
+/// If the destination directory does not exist, it will be created, as well as
+/// all parent directories.
+///
 /// This method returns
-///     Ok() when file was moved successfully
-///     Err(_) when the source path does not exists or function has no permission to move file
+/// - `Ok(())` when file was moved successfully
+/// - `Err(_)` when the source path does not exists or function has no
+///   permission to move file
 pub async fn move_file(
     src_path: impl AsRef<Path>,
     dest_path: impl AsRef<Path>,
@@ -110,8 +112,6 @@ pub async fn move_file(
         if let Some(dir_to) = dest_path.parent() {
             tokio::fs::create_dir_all(dir_to).await?;
             debug!("Created parent directories for {:?}", dest_path);
-        } else {
-            return Err(FileError::NoParentDir(dest_path.to_path_buf()));
         }
     }
 

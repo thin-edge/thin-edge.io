@@ -1,5 +1,6 @@
 mod partial_response;
 pub use partial_response::InvalidResponseError;
+use tedge_utils::file::FileError;
 
 use crate::error::DownloadError;
 use backoff::future::retry;
@@ -20,7 +21,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_utils::file::move_file;
-use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
 
 #[cfg(target_os = "linux")]
@@ -212,12 +212,12 @@ impl Downloader {
         let target_file_path = self.target_filename.clone();
         let file_name = target_file_path
             .file_name()
-            .ok_or_else(|| FileError::NoParentDir(target_file_path.clone()))?
+            .ok_or_else(|| FileError::InvalidFileName(target_file_path.clone()))?
             .to_str()
             .ok_or_else(|| FileError::InvalidFileName(target_file_path.clone()))?;
         let parent_dir = target_file_path
             .parent()
-            .ok_or_else(|| FileError::NoParentDir(target_file_path.clone()))?;
+            .ok_or_else(|| FileError::InvalidFileName(target_file_path.clone()))?;
 
         let tmp_file_name = format!("{file_name}.tmp");
         Ok(parent_dir.join(tmp_file_name))
