@@ -7,9 +7,6 @@ pub enum DownloadError {
     FromIo(#[from] std::io::Error),
 
     #[error(transparent)]
-    FromUrlParse(#[from] url::ParseError),
-
-    #[error(transparent)]
     FromFileError(#[from] tedge_utils::file::FileError),
 
     #[error("Not enough disk space")]
