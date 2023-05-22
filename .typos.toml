@@ -3,6 +3,7 @@ mosquitto = "mosquitto"
 hda = "hda"
 tegde = "tedge"
 OT = "OT"
+Robocorp = "Robocorp"
 
 [files]
 extend-exclude = [

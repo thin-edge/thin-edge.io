@@ -118,7 +118,7 @@ define_tedge_config! {
                 #[tedge_config(deprecated_name = "capath")]
                 ca_path: Utf8PathBuf,
 
-                /// Path to the client certficate
+                /// Path to the client certificate
                 #[doku(as = "PathBuf")]
                 #[tedge_config(deprecated_name = "certfile")]
                 cert_file: Utf8PathBuf,

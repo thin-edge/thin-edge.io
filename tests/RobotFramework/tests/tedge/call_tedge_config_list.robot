@@ -109,14 +109,14 @@ set/unset aws.url
     ${unset}     Execute Command    tedge config list
     Should not Contain    ${unset}    aws.url=
 
-set/unset aws.root.cert.path
-    Execute Command    sudo tedge config set aws.root.cert.path /etc/ssl/certs1   #Changing aws.root.cert.path
+set/unset aws.root_cert_path
+    Execute Command    sudo tedge config set aws.root_cert_path /etc/ssl/certs1   #Changing aws.aws.root_cert_path
     ${set}     Execute Command    tedge config list
-    Should Contain    ${set}    aws.root.cert.path=/etc/ssl/certs1
+    Should Contain    ${set}    aws.root_cert_path=/etc/ssl/certs1
 
-    Execute Command    sudo tedge config unset aws.root.cert.path    #Undo the change by using the 'unset' command, value returns to default one
+    Execute Command    sudo tedge config unset aws.root_cert_path    #Undo the change by using the 'unset' command, value returns to default one
     ${unset}     Execute Command    tedge config list
-    Should Contain    ${unset}    aws.root.cert.path=/etc/ssl/certs
+    Should Contain    ${unset}    aws.root_cert_path=/etc/ssl/certs
 
 set/unset aws.mapper.timestamp
     Execute Command    sudo tedge config set aws.mapper.timestamp false  #Changing aws.mapper.timestamp
@@ -160,14 +160,14 @@ set/unset mqtt.bind.port
     ${unset}    Execute Command    tedge config list
     Should Contain    ${unset}    mqtt.bind.port=1883
 
-set/unset http.port
-    Execute Command    sudo tedge config set http.port 7777  #Changing http.port
+set/unset http.bind.port
+    Execute Command    sudo tedge config set http.bind.port 7777  #Changing http.bind.port
     ${set}     Execute Command    tedge config list
-    Should Contain    ${set}    http.port=7777
+    Should Contain    ${set}    http.bind.port=7777
 
-    Execute Command    sudo tedge config unset http.port    #Undo the change by using the 'unset' command, value returns to default one
+    Execute Command    sudo tedge config unset http.bind.port    #Undo the change by using the 'unset' command, value returns to default one
     ${unset}     Execute Command    tedge config list
-    Should Contain    ${unset}    http.port=8000
+    Should Contain    ${unset}    http.bind.port=8000
 
 set/unset tmp.path
     Execute Command    sudo tedge config set tmp.path /tmp1    #Changing tmp.path
@@ -229,59 +229,59 @@ set/unset az.url
     ${unset}     Execute Command    tedge config list
     Should not Contain    ${unset}    az.url=
 
-set/unset mqtt.external.port 
-    Execute Command    sudo tedge config set mqtt.external.port 8888  #Changing mqtt.external.port
+set/unset mqtt.external.bind.port
+    Execute Command    sudo tedge config set mqtt.external.bind.port 8888  #Changing mqtt.external.bind.port
     ${set}     Execute Command    tedge config list
-    Should Contain    ${set}    mqtt.external.port=8888
+    Should Contain    ${set}    mqtt.external.bind.port=8888
 
-    Execute Command    sudo tedge config unset mqtt.external.port     #Undo the change by using the 'unset' command, value returns to default one
+    Execute Command    sudo tedge config unset mqtt.external.bind.port     #Undo the change by using the 'unset' command, value returns to default one
     ${unset}     Execute Command    tedge config list
-    Should Not Contain    ${unset}    mqtt.external.port=
+    Should Not Contain    ${unset}    mqtt.external.bind.port=
 
-mqtt.external.bind_address
-    Execute Command    sudo tedge config set mqtt.external.bind_address 0.0.0.0  #Changing mqtt.external.bind_address
+mqtt.external.bind.address
+    Execute Command    sudo tedge config set mqtt.external.bind.address 0.0.0.0  #Changing mqtt.external.bind.address
     ${set}     Execute Command    tedge config list
-    Should Contain    ${set}    mqtt.external.bind_address=0.0.0.0
+    Should Contain    ${set}    mqtt.external.bind.address=0.0.0.0
 
-    Execute Command    sudo tedge config unset mqtt.external.bind_address    #Undo the change by using the 'unset' command, value returns to default one
+    Execute Command    sudo tedge config unset mqtt.external.bind.address    #Undo the change by using the 'unset' command, value returns to default one
     ${unset}     Execute Command    tedge config list
-    Should Not Contain    ${unset}    mqtt.external.bind_address=
+    Should Not Contain    ${unset}    mqtt.external.bind.address=
 
-mqtt.external.bind_interface
-    Execute Command    sudo tedge config set mqtt.external.bind_interface wlan0  #Changing mqtt.external.bind_interface
+mqtt.external.bind.interface
+    Execute Command    sudo tedge config set mqtt.external.bind.interface wlan0  #Changing mqtt.external.bind.interface
     ${set}     Execute Command    tedge config list
-    Should Contain    ${set}    mqtt.external.bind_interface=wlan0
+    Should Contain    ${set}    mqtt.external.bind.interface=wlan0
 
-    Execute Command    sudo tedge config unset mqtt.external.bind_interface    #Undo the change by using the 'unset' command, value returns to default one
+    Execute Command    sudo tedge config unset mqtt.external.bind.interface    #Undo the change by using the 'unset' command, value returns to default one
     ${unset}     Execute Command    tedge config list
-    Should Not Contain    ${unset}    mqtt.external.bind_interface=
+    Should Not Contain    ${unset}    mqtt.external.bind.interface=
 
-set/unset mqtt.external.capath
-    Execute Command    sudo tedge config set mqtt.external.capath /etc/ssl/certsNote   #Changing mqtt.external.capath
+set/unset mqtt.external.ca_path
+    Execute Command    sudo tedge config set mqtt.external.ca_path /etc/ssl/certsNote   #Changing mqtt.external.ca_path
     ${set}     Execute Command    tedge config list
-    Should Contain    ${set}    mqtt.external.capath=/etc/ssl/certsNote
+    Should Contain    ${set}    mqtt.external.ca_path=/etc/ssl/certsNote
 
-    Execute Command    sudo tedge config unset mqtt.external.capath    #Undo the change by using the 'unset' command, value returns to default one
+    Execute Command    sudo tedge config unset mqtt.external.ca_path   #Undo the change by using the 'unset' command, value returns to default one
     ${unset}     Execute Command    tedge config list
-    Should Not Contain    ${unset}    mqtt.external.capath=
+    Should Not Contain    ${unset}    mqtt.external.ca_path=
 
-set/unset mqtt.external.certfile
-    Execute Command    sudo tedge config set mqtt.external.certfile /etc/tedge/device-certs/tedge-certificate.pemNote   #Changing mqtt.external.certfile
+set/unset mqtt.external.cert_file
+    Execute Command    sudo tedge config set mqtt.external.cert_file /etc/tedge/device-certs/tedge-certificate.pemNote   #Changing mqtt.external.cert_file
     ${set}     Execute Command    tedge config list
-    Should Contain    ${set}    mqtt.external.certfile=/etc/tedge/device-certs/tedge-certificate.pemNote
+    Should Contain    ${set}    mqtt.external.cert_file=/etc/tedge/device-certs/tedge-certificate.pemNote
 
-    Execute Command    sudo tedge config unset mqtt.external.certfile    #Undo the change by using the 'unset' command, value returns to default one
+    Execute Command    sudo tedge config unset mqtt.external.cert_file    #Undo the change by using the 'unset' command, value returns to default one
     ${unset}     Execute Command    tedge config list
-    Should Not Contain    ${unset}    mqtt.external.certfile=
+    Should Not Contain    ${unset}    mqtt.external.cert_file=
 
-set/unset mqtt.external.keyfile
-    Execute Command    sudo tedge config set mqtt.external.keyfile /etc/tedge/device-certs/tedge-private-key.pemNote   #Changing mqtt.external.keyfile
+set/unset mqtt.external.key_file
+    Execute Command    sudo tedge config set mqtt.external.key_file /etc/tedge/device-certs/tedge-private-key.pemNote   #Changing mqtt.external.key_file
     ${set}     Execute Command    tedge config list
-    Should Contain    ${set}    mqtt.external.keyfile=/etc/tedge/device-certs/tedge-private-key.pemNote
+    Should Contain    ${set}    mqtt.external.key_file=/etc/tedge/device-certs/tedge-private-key.pemNote
 
-    Execute Command    sudo tedge config unset mqtt.external.keyfile    #Undo the change by using the 'unset' command, value returns to default one
+    Execute Command    sudo tedge config unset mqtt.external.key_file    #Undo the change by using the 'unset' command, value returns to default one
     ${unset}     Execute Command    tedge config list
-    Should Not Contain    ${unset}    mqtt.external.keyfile=
+    Should Not Contain    ${unset}    mqtt.external.key_file=
 
 set/unset software.plugin.default
     Execute Command    sudo tedge config set software.plugin.default apt   #Changing software.plugin.default
