@@ -545,9 +545,17 @@ mod tests {
         }
     }
 
+    /// This test simulates HTTP response where a connection just drops and a
+    /// client hits a timeout, having downloaded only part of the response.
+    ///
+    /// I couldn't find a reliable way to drop the TCP connection without doing
+    /// a closing handshake, so the TCP connection is closed normally, but
+    /// because `Transfer-Encoding: chunked` is used, when closing the
+    /// connection, the client sees that it hasn't received a 0-length
+    /// termination chunk (which signals that the entire HTTP chunked body has
+    /// been sent) and retries the request with a `Range` header.
     #[tokio::test]
     async fn resume_download_when_disconnected() -> anyhow::Result<()> {
-        env_logger::init();
         let chunk_size = 4;
         let file = "AAAABBBBCCCCDDDD";
 
@@ -555,11 +563,12 @@ mod tests {
             let listener = TcpListener::bind("localhost:3000").await.unwrap();
 
             while let Ok((mut stream, _addr)) = listener.accept().await {
-                let response_task = tokio::time::timeout(Duration::from_secs(1), async move {
+                let response_task = async move {
                     let (reader, mut writer) = stream.split();
                     let mut lines = BufReader::new(reader).lines();
                     let mut range: Option<std::ops::Range<usize>> = None;
 
+                    // We got an HTTP request, read the lines of the request
                     'inner: while let Ok(Some(line)) = lines.next_line().await {
                         if line.to_ascii_lowercase().contains("range:") {
                             let (_, bytes) = line.split_once('=').unwrap();
@@ -568,6 +577,8 @@ mod tests {
                             let end = end.parse().unwrap_or(file.len());
                             range = Some(start..end)
                         }
+                        // On `\r\n\r\n` (empty line) stop reading the request
+                        // and start responding
                         if line.is_empty() {
                             break 'inner;
                         }
@@ -578,14 +589,16 @@ mod tests {
                         let end = range.end;
                         let header = format!(
                             "HTTP/1.1 206 Partial Content\r\n\
-                    transfer-encoding: chunked\r\n\
-                    connection: close\r\n\
-                    content-type: application/octet-stream\r\n\
-                    content-range: bytes {start}-{end}/*\r\n\
-                    accept-ranges: bytes\r\n"
+                            transfer-encoding: chunked\r\n\
+                            connection: close\r\n\
+                            content-type: application/octet-stream\r\n\
+                            content-range: bytes {start}-{end}/*\r\n\
+                            accept-ranges: bytes\r\n"
                         );
                         // answer with range starting 1 byte before what client
                         // requested to ensure it correctly parses content-range
+                        // and doesn't just keep writing to where it left off in
+                        // the previous request
                         let next = (start - 1 + chunk_size).min(file.len());
                         let body = &file[start..next];
 
@@ -594,29 +607,31 @@ mod tests {
                         debug!("sending message = {msg}");
                         writer.write_all(msg.as_bytes()).await.unwrap();
                     } else {
-                        let header = "HTTP/1.1 200 OK\r\n\
-                    transfer-encoding: chunked\r\n\
-                    connection: close\r\n\
-                    content-type: application/octet-stream\r\n\
-                    accept-ranges: bytes\r\n";
+                        let header = "\
+                            HTTP/1.1 200 OK\r\n\
+                            transfer-encoding: chunked\r\n\
+                            connection: close\r\n\
+                            content-type: application/octet-stream\r\n\
+                            accept-ranges: bytes\r\n";
 
                         let body = "AAAA";
                         let msg = format!("{header}\r\n4\r\n{body}\r\n");
                         writer.write_all(msg.as_bytes()).await.unwrap();
                     }
-                });
-                response_task.await.unwrap();
+                };
+                tokio::spawn(response_task);
             }
         });
+
+        // Wait until task binds a listener on the TCP port
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
         let tmpdir = TempDir::new()?;
         let downloader = Downloader::new_sm("partial_download", &None, &tmpdir);
         let url = DownloadInfo::new("http://localhost:3000/");
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
         downloader.download(&url).await?;
         let saved_file = std::fs::read_to_string(downloader.filename())?;
-        dbg!(&saved_file);
         assert_eq!(saved_file, file);
 
         downloader.cleanup().await?;
