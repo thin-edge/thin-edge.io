@@ -445,7 +445,7 @@ define_tedge_config! {
     http: {
         bind: {
             /// Http server port used by the File Transfer Service
-            #[tedge_config(example = "8000", deprecated_key = "http.port")]
+            #[tedge_config(example = "8000", default(value = 8000u16), deprecated_key = "http.port")]
             port: u16,
 
             /// Http server address used by the File Transfer Service
