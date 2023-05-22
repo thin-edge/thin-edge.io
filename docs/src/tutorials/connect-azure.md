@@ -94,7 +94,7 @@ The URL/Hostname can be found in the Azure web portal, clicking on the overview 
 Set the path to the root certificate if necessary. The default is `/etc/ssl/certs`.
 
 ```shell
-sudo tedge config set az.root.cert.path /etc/ssl/certs/Baltimore_CyberTrust_Root.pem
+sudo tedge config set az.root_cert_path /etc/ssl/certs/Baltimore_CyberTrust_Root.pem
 ```
 
 This will set the root certificate path of the Azure IoT Hub.

@@ -1111,8 +1111,18 @@ version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a01d95850c592940db9b8194bc39f4bc0e89dee5c4265e4b1807c34a9aba453c"
 dependencies = [
- "darling_core",
- "darling_macro",
+ "darling_core 0.13.4",
+ "darling_macro 0.13.4",
+]
+
+[[package]]
+name = "darling"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0558d22a7b463ed0241e993f76f09f30b126687447751a8638587b864e4b3944"
+dependencies = [
+ "darling_core 0.20.1",
+ "darling_macro 0.20.1",
 ]
 
 [[package]]
@@ -1130,14 +1140,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "darling_core"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab8bfa2e259f8ee1ce5e97824a3c55ec4404a0d772ca7fa96bf19f0752a046eb"
+dependencies = [
+ "fnv",
+ "ident_case",
+ "proc-macro2 1.0.56",
+ "quote 1.0.26",
+ "strsim",
+ "syn 2.0.15",
+]
+
+[[package]]
 name = "darling_macro"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c972679f83bdf9c42bd905396b6c3588a843a17f0f16dfcfa3e2c5d57441835"
 dependencies = [
- "darling_core",
+ "darling_core 0.13.4",
  "quote 1.0.26",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "darling_macro"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29a358ff9f12ec09c3e61fef9b5a9902623a695a46a917b07f269bff1445611a"
+dependencies = [
+ "darling_core 0.20.1",
+ "quote 1.0.26",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -1216,9 +1251,9 @@ checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "doku"
-version = "0.20.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "966b1227ac4d9d77f4d7e9507dd01c56ceaec6e35888661b54319123da47b159"
+checksum = "b738a9a7942e6996e6df51b8a58db17105fe5a448112add828fc9ff93fcd6c8e"
 dependencies = [
  "doku-derive",
  "serde",
@@ -1227,11 +1262,11 @@ dependencies = [
 
 [[package]]
 name = "doku-derive"
-version = "0.20.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "252ec56116f931b050b5d80512c2c76f4807a297dd95a93f37593dd7650868a5"
+checksum = "4dd9ccf9dd3a20ad0a08c3a099693490eb243be3287330d77bd3c9c06225babb"
 dependencies = [
- "darling",
+ "darling 0.13.4",
  "proc-macro2 1.0.56",
  "quote 1.0.26",
  "syn 1.0.109",
@@ -2482,6 +2517,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
 
 [[package]]
+name = "pad"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2ad9b889f1b12e0b9ee24db044b5129150d5eada288edc800f789928dc8c0e3"
+dependencies = [
+ "unicode-width",
+]
+
+[[package]]
 name = "parking_lot"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3625,13 +3669,16 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "assert_matches",
+ "atty",
  "base64 0.13.1",
  "camino",
  "certificate",
  "clap 3.2.25",
+ "doku",
  "hyper",
  "mockito 0.31.1",
  "mqtt_tests",
+ "pad",
  "pem",
  "predicates 2.1.5",
  "reqwest",
@@ -3650,6 +3697,7 @@ dependencies = [
  "tracing",
  "url",
  "which",
+ "yansi",
 ]
 
 [[package]]
@@ -3809,9 +3857,11 @@ dependencies = [
  "doku",
  "figment",
  "mqtt_channel",
+ "once_cell",
  "serde",
  "serde_ignored",
  "strum_macros",
+ "tedge_config_macros",
  "tedge_test_utils",
  "tedge_utils",
  "tempfile",
@@ -3821,6 +3871,41 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+]
+
+[[package]]
+name = "tedge_config_macros"
+version = "0.1.0"
+dependencies = [
+ "camino",
+ "doku",
+ "once_cell",
+ "serde",
+ "tedge_config_macros-macro",
+ "thiserror",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "tedge_config_macros-impl"
+version = "0.1.0"
+dependencies = [
+ "darling 0.20.1",
+ "heck",
+ "proc-macro2 1.0.56",
+ "quote 1.0.26",
+ "syn 2.0.15",
+]
+
+[[package]]
+name = "tedge_config_macros-macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2 1.0.56",
+ "quote 1.0.26",
+ "syn 1.0.109",
+ "tedge_config_macros-impl",
 ]
 
 [[package]]

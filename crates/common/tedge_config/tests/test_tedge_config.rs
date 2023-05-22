@@ -673,7 +673,7 @@ fn test_parse_config_empty_file() -> Result<(), TEdgeConfigError> {
     );
     assert_eq!(
         config.query(FirmwareChildUpdateTimeoutSetting)?,
-        Seconds(3600)
+        Seconds::from(3600)
     );
     assert_eq!(config.query(ServiceTypeSetting)?, "service".to_string());
     assert_eq!(config.query(TmpPathSetting)?, Utf8PathBuf::from("/tmp"));
@@ -727,7 +727,7 @@ fn test_parse_config_no_config_file() -> Result<(), TEdgeConfigError> {
 #[test]
 fn test_invalid_mqtt_port() -> Result<(), TEdgeConfigError> {
     let toml_conf = r#"
-[mqtt]
+[mqtt.bind]
 port = "1883"
 "#;
 
@@ -735,7 +735,7 @@ port = "1883"
     let toml_path = config_location.tedge_config_file_path().to_string();
     let result = TEdgeConfigRepository::new(config_location).load();
 
-    let expected_err = format!("invalid type: found string \"1883\", expected u16 for key \"mqtt.port\" in {toml_path} TOML file");
+    let expected_err = format!("invalid type: found string \"1883\", expected a nonzero u16 for key \"mqtt.bind.port\" in {toml_path} TOML file");
 
     match result {
         Err(error @ TEdgeConfigError::Figment(_)) => assert_eq!(error.to_string(), expected_err),
@@ -1050,7 +1050,7 @@ fn dummy_tedge_config_defaults() -> TEdgeConfigDefaults {
         default_mqtt_bind_address: IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST)),
         default_http_bind_address: IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST)),
         default_c8y_smartrest_templates: TemplatesSet::default(),
-        default_firmware_child_update_timeout: Seconds(3600),
+        default_firmware_child_update_timeout: Seconds::from(3600),
         default_service_type: String::from("service"),
         default_lock_files: Flag(true),
     }

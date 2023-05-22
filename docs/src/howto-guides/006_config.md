@@ -56,9 +56,9 @@ The names for these environment variables are prefixed with `TEDGE_` to avoid co
 | Setting             | Environment variable      |
 | ------------------- | ------------------------- |
 | `c8y.url`           | `TEDGE_C8Y_URL`           |
-| `device.key.path`   | `TEDGE_DEVICE_KEY_PATH`   |
-| `device.cert.path`  | `TEDGE_DEVICE_CERT_PATH`  |
-| `mqtt.bind_address` | `TEDGE_MQTT_BIND_ADDRESS` |
+| `device.key_path`   | `TEDGE_DEVICE_KEY_PATH`   |
+| `device.cert_path`  | `TEDGE_DEVICE_CERT_PATH`  |
+| `mqtt.bind.address` | `TEDGE_MQTT_BIND_ADDRESS` |
 
 You can also use `tedge config` to inspect the value that is set, which may prove useful if you are using a mix of toml configuration and environment variables. If you had tedge.toml file set as shown [above](#tedgetoml), you could run:
 

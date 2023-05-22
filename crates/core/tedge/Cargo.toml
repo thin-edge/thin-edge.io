@@ -16,11 +16,14 @@ maintainer-scripts = "../../../configuration/debian/tedge"
 
 [dependencies]
 anyhow = "1.0"
+atty = "0.2"
 base64 = "0.13"
 camino = "1.1.4"
 certificate = { path = "../../common/certificate" }
 clap = { version = "3", features = ["cargo", "derive"] }
+doku = "0.21"
 hyper = { version = "0.14", default-features = false }
+pad = "0.1"
 reqwest = { version = "0.11", default-features = false, features = [
     "blocking",
     "json",
@@ -39,6 +42,7 @@ toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 url = "2.2"
 which = "4.2"
+yansi = "0.5"
 
 [dev-dependencies]
 assert_cmd = "2.0"

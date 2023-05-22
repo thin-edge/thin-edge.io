@@ -38,7 +38,7 @@ sudo tedge config set c8y.url your-tenant.cumulocity.com
 Set the path to the root certificate if necessary. The default is `/etc/ssl/certs`.
 
 ```
-sudo tedge config set c8y.root.cert.path /etc/ssl/certs
+sudo tedge config set c8y.root_cert_path /etc/ssl/certs
 ```
 
 This will set the root certificate path of the Cumulocity IoT.
@@ -49,10 +49,10 @@ If not found download it from [here](https://www.identrust.com/dst-root-ca-x3).
 ## Connecting to Cumulocity server signed with self-signed certificate
 
 If the Cumulocity IoT instance that you're connecting to, is signed with a self-signed certificate(eg: Cumulocity IoT Edge instance),
-then the path to that server certificate must be set as the c8y.root.cert.path as follows:
+then the path to that server certificate must be set as the c8y.root_cert_path as follows:
 
 ```
-sudo tedge config set c8y.root.cert.path /path/to/the/self-signed/certificate
+sudo tedge config set c8y.root_cert_path /path/to/the/self-signed/certificate
 ```
 
 ```admonish warning

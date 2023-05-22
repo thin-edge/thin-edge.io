@@ -25,11 +25,10 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             bridge_keyfile,
         } = params;
 
-        let address = format!("{}:{}", connect_url.as_str(), mqtt_tls_port);
+        let address = format!("{}:{}", connect_url, mqtt_tls_port);
         let user_name = format!(
             "{}/{}/?api-version=2018-06-30",
-            connect_url.as_str(),
-            remote_clientid
+            connect_url, remote_clientid
         );
         let pub_msg_topic = format!("messages/events/# out 1 az/ devices/{}/", remote_clientid);
         let sub_msg_topic = format!(

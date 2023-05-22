@@ -33,12 +33,12 @@ Note: When this test is aborted the configuration might be invalid
 """
 
 configdict = {
-    "device.key.path": "",
-    "device.cert.path": "",
+    "device.key_path": "",
+    "device.cert_path": "",
     "c8y.url": "",
-    "c8y.root.cert.path": "",
+    "c8y.root_cert_path": "",
     "az.url": "",
-    "az.root.cert.path": "",
+    "az.root_cert_path": "",
 }
 
 DEFAULTKEYPATH = "/etc/tedge/device-certs/tedge-private-key.pem"
@@ -118,21 +118,21 @@ class PySysTest(BaseTest):
             valueread = self.get_config_key(key)
             self.log.debug(f"Key: {key} Value: {valueread}")
             # Some values have defaults that are set instead of nothing:
-            if key == "device.key.path":
+            if key == "device.key_path":
                 self.assertThat(
                     "expect == valueread", expect=DEFAULTKEYPATH, valueread=valueread
                 )
-            elif key == "device.cert.path":
+            elif key == "device.cert_path":
                 self.assertThat(
                     "expect == valueread", expect=DEFAULTCERTPATH, valueread=valueread
                 )
-            elif key == "c8y.root.cert.path":
+            elif key == "c8y.root_cert_path":
                 self.assertThat(
                     "expect == valueread",
                     expect=DEFAULTROOTCERTPATH,
                     valueread=valueread,
                 )
-            elif key == "az.root.cert.path":
+            elif key == "az.root_cert_path":
                 self.assertThat(
                     "expect == valueread",
                     expect=DEFAULTROOTCERTPATH,

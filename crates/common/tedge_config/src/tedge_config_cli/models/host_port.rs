@@ -2,7 +2,9 @@ use crate::ConnectUrl;
 use crate::Port;
 use serde::Deserialize;
 use serde::Serialize;
+use std::fmt;
 use std::num::ParseIntError;
+use std::str::FromStr;
 use url::Host;
 
 /// A combination of a host and a port number.
@@ -72,21 +74,41 @@ impl<const P: u16> From<HostPort<P>> for String {
     }
 }
 
+impl<const P: u16> fmt::Display for HostPort<P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.input.fmt(f)
+    }
+}
+
+impl<const P: u16> FromStr for HostPort<P> {
+    type Err = ParseHostPortError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::try_from(s.to_owned())
+    }
+}
+
+impl<const P: u16> doku::Document for HostPort<P> {
+    fn ty() -> doku::Type {
+        String::ty()
+    }
+}
+
 impl<const P: u16> TryFrom<String> for HostPort<P> {
     type Error = ParseHostPortError;
 
-    fn try_from(s: String) -> Result<Self, Self::Error> {
-        let (hostname, port) = if let Some((hostname, port)) = s.split_once(':') {
+    fn try_from(input: String) -> Result<Self, Self::Error> {
+        let (hostname, port) = if let Some((hostname, port)) = input.split_once(':') {
             let port = Port(port.parse()?);
             let hostname: Host<String> = Host::parse(hostname)?;
             (hostname, port)
         } else {
-            let hostname: Host<String> = Host::parse(&s)?;
+            let hostname: Host<String> = Host::parse(&input)?;
             (hostname, Port(P))
         };
 
         Ok(HostPort {
-            input: s,
+            input,
             hostname,
             port,
         })

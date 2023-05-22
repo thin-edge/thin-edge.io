@@ -1,0 +1,15 @@
+[package]
+name = "tedge_config_macros-macro"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+proc-macro = true
+
+[dependencies]
+tedge_config_macros-impl = { version = "=0.1.0", path = "../impl" }
+syn = { version = "1", features = ["full", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1"

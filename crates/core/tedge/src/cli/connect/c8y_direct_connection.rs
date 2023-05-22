@@ -84,13 +84,13 @@ pub fn create_device_with_direct_connection(
                 {
                     if let AlertDescription::CertificateUnknown = alert_description {
                         // Either the device cert is not uploaded to c8y or
-                        // another cert is set in device.cert.path
+                        // another cert is set in device.cert_path
                         eprintln!("The device certificate is not trusted by Cumulocity.");
                         return Err(ConnectError::ConnectionCheckError);
                     } else if let AlertDescription::HandshakeFailure = alert_description {
-                        // Non-paired private key is set in device.key.path
+                        // Non-paired private key is set in device.key_path
                         eprintln!(
-                            "The private key is not paired with the certificate. Check your 'device.key.path'."
+                            "The private key is not paired with the certificate. Check your 'device.key_path'."
                         );
                         return Err(ConnectError::ConnectionCheckError);
                     }
@@ -108,7 +108,7 @@ pub fn create_device_with_direct_connection(
                     Some(Error::InvalidCertificateData(description))
                         if description == "invalid peer certificate: UnknownIssuer" =>
                     {
-                        eprintln!("Cumulocity certificate is not trusted by the device. Check your 'c8y.root.cert.path'.");
+                        eprintln!("Cumulocity certificate is not trusted by the device. Check your 'c8y.root_cert_path'.");
                     }
                     _ => {
                         eprintln!("ERROR: {:?}", err);

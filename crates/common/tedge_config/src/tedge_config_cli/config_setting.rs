@@ -75,4 +75,7 @@ pub enum ConfigSettingError {
 
     #[error("An error occurred: {msg}")]
     Other { msg: &'static str },
+
+    #[error(transparent)]
+    Write(#[from] crate::new::WriteError),
 }

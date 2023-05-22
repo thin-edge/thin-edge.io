@@ -1,22 +1,22 @@
-use crate::cli::config::ConfigKey;
 use crate::command::Command;
+use tedge_config::new::WritableKey;
 use tedge_config::*;
 
 pub struct UnsetConfigCommand {
-    pub config_key: ConfigKey,
+    pub key: WritableKey,
     pub config_repository: TEdgeConfigRepository,
 }
 
 impl Command for UnsetConfigCommand {
     fn description(&self) -> String {
-        format!(
-            "unset the configuration value for key: {}",
-            self.config_key.key
-        )
+        format!("unset the configuration value for '{}'", self.key)
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        self.config_repository.update_toml(&self.config_key.unset)?;
+        self.config_repository.update_toml_new(&|dto| {
+            dto.unset_key(self.key);
+            Ok(())
+        })?;
         Ok(())
     }
 }

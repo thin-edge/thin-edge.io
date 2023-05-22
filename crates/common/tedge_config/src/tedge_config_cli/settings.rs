@@ -43,7 +43,7 @@ impl ConfigSetting for DeviceTypeSetting {
 pub struct DeviceKeyPathSetting;
 
 impl ConfigSetting for DeviceKeyPathSetting {
-    const KEY: &'static str = "device.key.path";
+    const KEY: &'static str = "device.key_path";
 
     const DESCRIPTION: &'static str =
         "Path to the private key file. Example: /home/user/.tedge/tedge-private-key.pem";
@@ -60,7 +60,7 @@ impl ConfigSetting for DeviceKeyPathSetting {
 pub struct DeviceCertPathSetting;
 
 impl ConfigSetting for DeviceCertPathSetting {
-    const KEY: &'static str = "device.cert.path";
+    const KEY: &'static str = "device.cert_path";
 
     const DESCRIPTION: &'static str =
         "Path to the certificate file. Example: /home/user/.tedge/tedge-certificate.crt";
@@ -123,7 +123,7 @@ impl ConfigSetting for C8yMqttSetting {
 pub struct C8yRootCertPathSetting;
 
 impl ConfigSetting for C8yRootCertPathSetting {
-    const KEY: &'static str = "c8y.root.cert.path";
+    const KEY: &'static str = "c8y.root_cert_path";
 
     const DESCRIPTION: &'static str = concat!(
         "Path where Cumulocity root certificate(s) are located. ",
@@ -180,7 +180,7 @@ impl ConfigSetting for AzureUrlSetting {
 pub struct AzureRootCertPathSetting;
 
 impl ConfigSetting for AzureRootCertPathSetting {
-    const KEY: &'static str = "az.root.cert.path";
+    const KEY: &'static str = "az.root_cert_path";
 
     const DESCRIPTION: &'static str = concat!(
         "Path where Azure IoT root certificate(s) are located. ",
@@ -253,7 +253,7 @@ impl ConfigSetting for AwsUrlSetting {
 pub struct AwsRootCertPathSetting;
 
 impl ConfigSetting for AwsRootCertPathSetting {
-    const KEY: &'static str = "aws.root.cert.path";
+    const KEY: &'static str = "aws.root_cert_path";
 
     const DESCRIPTION: &'static str = concat!(
         "Path where AWS IoT root certificate(s) are located. ",
@@ -295,7 +295,7 @@ impl ConfigSetting for MqttClientPortSetting {
 pub struct MqttClientCafileSetting;
 
 impl ConfigSetting for MqttClientCafileSetting {
-    const KEY: &'static str = "mqtt.client.auth.cafile";
+    const KEY: &'static str = "mqtt.client.auth.ca_file";
 
     const DESCRIPTION: &'static str = concat!(
         "Path to the CA certificate used by MQTT clients to use when ",
@@ -309,7 +309,7 @@ impl ConfigSetting for MqttClientCafileSetting {
 pub struct MqttClientCapathSetting;
 
 impl ConfigSetting for MqttClientCapathSetting {
-    const KEY: &'static str = "mqtt.client.auth.cadir";
+    const KEY: &'static str = "mqtt.client.auth.ca_dir";
 
     const DESCRIPTION: &'static str = concat!(
         "Path to the directory containing CA certificate used by MQTT clients ",
@@ -324,7 +324,7 @@ impl ConfigSetting for MqttClientCapathSetting {
 pub struct MqttClientAuthCertSetting;
 
 impl ConfigSetting for MqttClientAuthCertSetting {
-    const KEY: &'static str = "mqtt.client.auth.certfile";
+    const KEY: &'static str = "mqtt.client.auth.cert_file";
 
     const DESCRIPTION: &'static str =
         "Path to the client certificate used for client authentication";
@@ -336,7 +336,7 @@ impl ConfigSetting for MqttClientAuthCertSetting {
 pub struct MqttClientAuthKeySetting;
 
 impl ConfigSetting for MqttClientAuthKeySetting {
-    const KEY: &'static str = "mqtt.client.auth.keyfile";
+    const KEY: &'static str = "mqtt.client.auth.key_file";
 
     const DESCRIPTION: &'static str =
         "Path to the client private key used for client authentication";
@@ -348,7 +348,7 @@ impl ConfigSetting for MqttClientAuthKeySetting {
 pub struct MqttPortSetting;
 
 impl ConfigSetting for MqttPortSetting {
-    const KEY: &'static str = "mqtt.port";
+    const KEY: &'static str = "mqtt.bind.port";
 
     const DESCRIPTION: &'static str = concat!(
         "Mqtt broker port, which is used by the local mqtt clients to publish or subscribe. ",
@@ -389,7 +389,7 @@ impl ConfigSetting for HttpBindAddressSetting {
 pub struct MqttBindAddressSetting;
 
 impl ConfigSetting for MqttBindAddressSetting {
-    const KEY: &'static str = "mqtt.bind_address";
+    const KEY: &'static str = "mqtt.bind.address";
 
     const DESCRIPTION: &'static str = concat!(
         "Mqtt bind address, which is used by the mqtt clients to publish or subscribe. ",
@@ -403,7 +403,7 @@ impl ConfigSetting for MqttBindAddressSetting {
 pub struct MqttExternalPortSetting;
 
 impl ConfigSetting for MqttExternalPortSetting {
-    const KEY: &'static str = "mqtt.external.port";
+    const KEY: &'static str = "mqtt.external.bind.port";
 
     const DESCRIPTION: &'static str = concat!(
         "Mqtt broker port, which is used by the external mqtt clients to publish or subscribe. ",
@@ -417,7 +417,7 @@ impl ConfigSetting for MqttExternalPortSetting {
 pub struct MqttExternalBindAddressSetting;
 
 impl ConfigSetting for MqttExternalBindAddressSetting {
-    const KEY: &'static str = "mqtt.external.bind_address";
+    const KEY: &'static str = "mqtt.external.bind.address";
 
     const DESCRIPTION: &'static str = concat!(
         "IP address / hostname, which the mqtt broker limits incoming connections on. ",
@@ -431,7 +431,7 @@ impl ConfigSetting for MqttExternalBindAddressSetting {
 pub struct MqttExternalBindInterfaceSetting;
 
 impl ConfigSetting for MqttExternalBindInterfaceSetting {
-    const KEY: &'static str = "mqtt.external.bind_interface";
+    const KEY: &'static str = "mqtt.external.bind.interface";
 
     const DESCRIPTION: &'static str = concat!(
         "Name of network interface, which the mqtt broker limits incoming connections on. ",
@@ -445,7 +445,7 @@ impl ConfigSetting for MqttExternalBindInterfaceSetting {
 pub struct MqttExternalCAPathSetting;
 
 impl ConfigSetting for MqttExternalCAPathSetting {
-    const KEY: &'static str = "mqtt.external.capath";
+    const KEY: &'static str = "mqtt.external.ca_path";
 
     const DESCRIPTION: &'static str = concat!(
         "Path to a file containing the PEM encoded CA certificates ",
@@ -461,12 +461,12 @@ impl ConfigSetting for MqttExternalCAPathSetting {
 pub struct MqttExternalCertfileSetting;
 
 impl ConfigSetting for MqttExternalCertfileSetting {
-    const KEY: &'static str = "mqtt.external.certfile";
+    const KEY: &'static str = "mqtt.external.cert_file";
 
     const DESCRIPTION: &'static str = concat!(
         "Path to the certificate file, which is used by external MQTT listener",
         "Example: /etc/tedge/device-certs/tedge-certificate.pem",
-        "Note: This setting shall be used together with `mqtt.external.keyfile` for external connections."
+        "Note: This setting shall be used together with `mqtt.external.key_file` for external connections."
     );
 
     type Value = Utf8PathBuf;
@@ -476,12 +476,12 @@ impl ConfigSetting for MqttExternalCertfileSetting {
 pub struct MqttExternalKeyfileSetting;
 
 impl ConfigSetting for MqttExternalKeyfileSetting {
-    const KEY: &'static str = "mqtt.external.keyfile";
+    const KEY: &'static str = "mqtt.external.key_file";
 
     const DESCRIPTION: &'static str = concat!(
         "Path to the private key file, which is used by external MQTT listener",
         "Example: /etc/tedge/device-certs/tedge-private-key.pem",
-        "Note: This setting shall be used together with `mqtt.external.certfile` for external connections."
+        "Note: This setting shall be used together with `mqtt.external.cert_file` for external connections."
     );
 
     type Value = Utf8PathBuf;

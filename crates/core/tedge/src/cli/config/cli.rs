@@ -1,21 +1,21 @@
 use crate::cli::config::commands::*;
-use crate::cli::config::config_key::*;
 use crate::command::*;
 use crate::ConfigError;
-use tedge_config::ConfigRepository;
+use tedge_config::new::ReadableKey;
+use tedge_config::new::WritableKey;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum ConfigCmd {
     /// Get the value of the provided configuration key
     Get {
         /// Configuration key. Run `tedge config list --doc` for available keys
-        key: ConfigKey,
+        key: ReadableKey,
     },
 
     /// Set or update the provided configuration key with the given value
     Set {
         /// Configuration key. Run `tedge config list --doc` for available keys
-        key: ConfigKey,
+        key: WritableKey,
 
         /// Configuration value.
         value: String,
@@ -24,7 +24,7 @@ pub enum ConfigCmd {
     /// Unset the provided configuration key
     Unset {
         /// Configuration key. Run `tedge config list --doc` for available keys
-        key: ConfigKey,
+        key: WritableKey,
     },
 
     /// Print the configuration keys and their values
@@ -41,31 +41,29 @@ pub enum ConfigCmd {
 
 impl BuildCommand for ConfigCmd {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, ConfigError> {
-        let config = context.config_repository.load()?;
         let config_repository = context.config_repository;
 
         match self {
             ConfigCmd::Get { key } => Ok(GetConfigCommand {
-                config_key: key,
-                config,
+                key,
+                config: config_repository.load_new()?,
             }
             .into_boxed()),
             ConfigCmd::Set { key, value } => Ok(SetConfigCommand {
-                config_key: key,
+                key,
                 value,
                 config_repository,
             }
             .into_boxed()),
             ConfigCmd::Unset { key } => Ok(UnsetConfigCommand {
-                config_key: key,
+                key,
                 config_repository,
             }
             .into_boxed()),
             ConfigCmd::List { is_all, is_doc } => Ok(ListConfigCommand {
                 is_all,
                 is_doc,
-                config_keys: ConfigKey::list_all(),
-                config,
+                config: config_repository.load_new()?,
             }
             .into_boxed()),
         }

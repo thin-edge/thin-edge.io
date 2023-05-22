@@ -1,8 +1,14 @@
 use std::convert::TryFrom;
 use std::convert::TryInto;
+use std::fmt;
+use std::str::FromStr;
+use std::time::Duration;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct Seconds(pub u64);
+#[derive(
+    Copy, Clone, Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq, doku::Document,
+)]
+#[serde(transparent)]
+pub struct Seconds(pub(crate) u64);
 
 #[derive(thiserror::Error, Debug)]
 #[error("Invalid seconds number: '{input}'.")]
@@ -30,9 +36,35 @@ impl TryInto<String> for Seconds {
     }
 }
 
+impl FromStr for Seconds {
+    type Err = <u64 as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        u64::from_str(s).map(Self)
+    }
+}
+
+impl fmt::Display for Seconds {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl Seconds {
+    pub fn duration(self) -> Duration {
+        Duration::from_secs(self.0)
+    }
+}
+
 impl From<Seconds> for u64 {
     fn from(val: Seconds) -> Self {
         val.0
+    }
+}
+
+impl From<u64> for Seconds {
+    fn from(value: u64) -> Self {
+        Self(value)
     }
 }
 

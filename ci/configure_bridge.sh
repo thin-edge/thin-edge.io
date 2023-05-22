@@ -31,11 +31,11 @@ sudo tedge cert show
 
 sudo tedge config set c8y.url "$URL"
 
-sudo tedge config set c8y.root.cert.path /etc/ssl/certs
+sudo tedge config set c8y.root_cert_path /etc/ssl/certs
 
 sudo tedge config set az.url "$IOTHUBNAME.azure-devices.net"
 
-sudo tedge config set az.root.cert.path /etc/ssl/certs/Baltimore_CyberTrust_Root.pem
+sudo tedge config set az.root_cert_path /etc/ssl/certs/Baltimore_CyberTrust_Root.pem
 
 sudo tedge config list
 

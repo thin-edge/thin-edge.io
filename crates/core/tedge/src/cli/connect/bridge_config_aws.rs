@@ -25,7 +25,7 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
             bridge_keyfile,
         } = params;
 
-        let address = format!("{}:{}", connect_url.as_str(), mqtt_tls_port);
+        let address = format!("{}:{}", connect_url, mqtt_tls_port);
         let user_name = remote_clientid.to_string();
 
         // telemetry/command topics for use by the user

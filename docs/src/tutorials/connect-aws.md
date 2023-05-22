@@ -91,7 +91,7 @@ The URL is unique to the AWS account and region that is used, and can be found i
 Set the path to the root certificate if necessary. The default is `/etc/ssl/certs`.
 
 ```shell
-sudo tedge config set aws.root.cert.path /etc/ssl/certs/AmazonRootCA1.pem
+sudo tedge config set aws.root_cert_path /etc/ssl/certs/AmazonRootCA1.pem
 ```
 
 This will set the root certificate path of the AWS IoT Hub. In most of the Linux flavors, the certificate will be

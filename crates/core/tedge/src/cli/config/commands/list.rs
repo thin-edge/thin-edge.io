@@ -1,13 +1,14 @@
-use crate::cli::config::config_key::*;
 use crate::command::Command;
 use crate::ConfigError;
-use tedge_config::*;
+use pad::PadStr;
+use tedge_config::new::ReadableKey;
+use tedge_config::new::TEdgeConfig;
+use tedge_config::new::READABLE_KEYS;
 
 pub struct ListConfigCommand {
     pub is_all: bool,
     pub is_doc: bool,
     pub config: TEdgeConfig,
-    pub config_keys: Vec<ConfigKey>,
 }
 
 impl Command for ListConfigCommand {
@@ -17,31 +18,25 @@ impl Command for ListConfigCommand {
 
     fn execute(&self) -> anyhow::Result<()> {
         if self.is_doc {
-            print_config_doc(&self.config_keys);
+            print_config_doc();
         } else {
-            print_config_list(&self.config_keys, &self.config, self.is_all)?;
+            print_config_list(&self.config, self.is_all)?;
         }
 
         Ok(())
     }
 }
 
-fn print_config_list(
-    config_keys: &[ConfigKey],
-    config: &TEdgeConfig,
-    all: bool,
-) -> Result<(), ConfigError> {
-    let mut keys_without_values: Vec<String> = Vec::new();
-    for config_key in config_keys {
-        match (config_key.get)(config) {
-            Ok(value) => {
-                println!("{}={}", config_key.key, value);
+fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError> {
+    let mut keys_without_values = Vec::new();
+    for config_key in ReadableKey::iter() {
+        match config.read_string(config_key).ok() {
+            Some(value) => {
+                println!("{}={}", config_key, value);
             }
-            Err(tedge_config::ConfigSettingError::ConfigNotSet { .. })
-            | Err(tedge_config::ConfigSettingError::SettingIsNotConfigurable { .. }) => {
-                keys_without_values.push(config_key.key.into());
+            None => {
+                keys_without_values.push(config_key);
             }
-            Err(err) => return Err(err.into()),
         }
     }
     if all && !keys_without_values.is_empty() {
@@ -53,8 +48,73 @@ fn print_config_list(
     Ok(())
 }
 
-fn print_config_doc(config_keys: &[ConfigKey]) {
-    for config_key in config_keys {
-        println!("{:<30} {}", config_key.key, config_key.description);
+fn print_config_doc() {
+    if atty::isnt(atty::Stream::Stdout) {
+        yansi::Paint::disable();
+    }
+
+    let max_length = ReadableKey::iter()
+        .map(|c| c.as_str().len())
+        .max()
+        .unwrap_or_default();
+
+    for (key, ty) in READABLE_KEYS.iter() {
+        let docs = ty
+            .comment
+            .map(|c| {
+                let mut comment = c.replace('\n', " ");
+                if !comment.ends_with('.') {
+                    comment.push('.');
+                };
+                comment.push(' ');
+                comment
+            })
+            .unwrap_or_default();
+
+        println!(
+            "{}  {}",
+            yansi::Paint::yellow(
+                key.pad_to_width_with_alignment(max_length, pad::Alignment::Right)
+            ),
+            yansi::Paint::default(docs).italic()
+        );
+
+        // TODO add a test to make sure people don't accidentally set the wrong meta name
+        if let Some(note) = ty.metas.get("note") {
+            println!(
+                "{}  {} {note}",
+                "".pad_to_width(max_length),
+                yansi::Paint::blue("Note:")
+            );
+        }
+
+        match ty.example {
+            Some(doku::Example::Simple(val)) | Some(doku::Example::Literal(val)) => {
+                println!(
+                    "{}  {} {}",
+                    "".pad_to_width(max_length),
+                    yansi::Paint::green("Example:"),
+                    val
+                );
+            }
+            Some(doku::Example::Compound(val)) => {
+                let vals = val
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                println!(
+                    "{}  {} {}",
+                    "".pad_to_width(max_length),
+                    yansi::Paint::green("Examples:"),
+                    vals
+                );
+            }
+            None => (),
+        };
+
+        if atty::isnt(atty::Stream::Stdout) {
+            println!();
+        }
     }
 }
