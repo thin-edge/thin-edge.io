@@ -279,7 +279,7 @@ define_tedge_config! {
 ```
 
 Additional notes about fields can be added using `#[tedge_config(note =
-"content")]`. This will be added to `tedge config list --doc` on a seperate
+"content")]`. This will be added to `tedge config list --doc` on a separate
 line, with a coloured heading to make it more distinctive.
 
 ## Reader: `#[tedge_config(reader(...))]`

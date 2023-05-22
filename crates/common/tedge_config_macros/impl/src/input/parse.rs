@@ -1,4 +1,4 @@
-//! The inital parsing logic
+//! The initial parsing logic
 //!
 //! This is designed to take a [proc_macro2::TokenStream] and turn it into
 //! something useful with the aid of [syn].

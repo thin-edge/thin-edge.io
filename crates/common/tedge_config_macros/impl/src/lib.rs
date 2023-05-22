@@ -179,7 +179,7 @@ mod tests {
     }
 
     #[test]
-    fn serde_rename_is_not_allowd() {
+    fn serde_rename_is_not_allowed() {
         assert!(generate_configuration(quote! {
             device: {
                 #[serde(rename = "type")]
