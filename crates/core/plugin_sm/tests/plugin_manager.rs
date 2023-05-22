@@ -22,6 +22,7 @@ mod tests {
         assert!(plugins.empty());
     }
 
+    #[ignore = "dependency on tedge-dummy-plugin"]
     #[test]
     fn plugin_manager_load_plugins_some_non_executables() {
         // Create empty plugins directory.
@@ -59,6 +60,7 @@ mod tests {
         assert!(plugins.default().is_none());
     }
 
+    #[ignore = "dependency on tedge-dummy-plugin"]
     #[test]
     fn plugin_manager_load_plugins_some_by_plugins_some() {
         // Create empty plugins directory.
@@ -105,6 +107,7 @@ mod tests {
         assert!(plugins.default().is_none());
     }
 
+    #[ignore = "dependency on tedge-dummy-plugin"]
     #[test]
     fn explicit_default_plugin() {
         let plugin_dir = tempfile::tempdir().unwrap();
@@ -139,6 +142,7 @@ mod tests {
         assert_eq!(plugins.default().unwrap().name, plugin_name2);
     }
 
+    #[ignore = "dependency on tedge-dummy-plugin"]
     #[test]
     fn implicit_default_plugin_with_only_one_plugin() {
         let plugin_dir = tempfile::tempdir().unwrap();

@@ -16,6 +16,7 @@ mod tests {
     use tokio::fs::File;
     use tokio::io::BufWriter;
 
+    #[ignore = "dependency on tedge-dummy-plugin"]
     #[tokio::test]
     #[serial]
     async fn plugin_get_command_prepare() {
@@ -30,6 +31,7 @@ mod tests {
         assert_eq!(res, Ok(()));
     }
 
+    #[ignore = "dependency on tedge-dummy-plugin"]
     #[tokio::test]
     #[serial]
     async fn plugin_get_command_finalize() {
@@ -81,6 +83,7 @@ mod tests {
         assert_eq!(expected_software_list, software_list);
     }
 
+    #[ignore = "dependency on tedge-dummy-plugin"]
     #[tokio::test]
     #[serial]
     async fn plugin_get_command_list_with_version() {
@@ -116,6 +119,7 @@ mod tests {
         assert_eq!(res.unwrap(), expected_response);
     }
 
+    #[ignore = "dependency on tedge-dummy-plugin"]
     #[tokio::test]
     #[serial]
     async fn plugin_get_command_list_without_version() {
@@ -151,6 +155,7 @@ mod tests {
         assert_eq!(res.unwrap(), expected_response);
     }
 
+    #[ignore = "dependency on tedge-dummy-plugin"]
     #[tokio::test]
     #[serial]
     async fn plugin_get_command_install() {
@@ -184,6 +189,7 @@ mod tests {
         assert!(res.is_ok());
     }
 
+    #[ignore = "dependency on tedge-dummy-plugin"]
     #[tokio::test]
     #[serial]
     async fn plugin_get_command_remove() {
@@ -299,6 +305,7 @@ mod tests {
         assert_eq!(res, Ok(()));
     }
 
+    #[ignore = "dependency on tedge-dummy-plugin"]
     #[tokio::test]
     #[serial]
     async fn plugin_get_command_update_list() {
@@ -338,6 +345,7 @@ mod tests {
     }
 
     // Test validating if the plugin will fall back to `install` and `remove` options if the `update-list` option is not supported
+    #[ignore = "dependency on tedge-dummy-plugin"]
     #[tokio::test]
     #[serial]
     async fn plugin_command_update_list_fallback() {
