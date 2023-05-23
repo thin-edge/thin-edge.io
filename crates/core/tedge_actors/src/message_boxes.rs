@@ -101,7 +101,7 @@ use log::info;
 use std::fmt::Debug;
 
 /// Either a message or a [RuntimeRequest]
-pub enum WrappedInput<Input> {
+enum WrappedInput<Input> {
     Message(Input),
     RuntimeRequest(RuntimeRequest),
 }
@@ -123,10 +123,6 @@ pub trait MessageReceiver<Input> {
     /// Return the next received message if any, returning [RuntimeRequest]'s as errors.
     /// Returning [RuntimeRequest] takes priority over messages.
     async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest>;
-
-    /// Returns [Some] [WrappedInput] the next time a message is received. Returns [None] if
-    /// the underlying channels are closed. Returning [RuntimeRequest] takes priority over messages.
-    async fn recv_message(&mut self) -> Option<WrappedInput<Input>>;
 
     /// Returns [Some] message the next time a message is received. Returns [None] if
     /// both of the underlying channels are closed or if a [RuntimeRequest] is received.
@@ -184,12 +180,6 @@ impl<Input: Debug> LoggingReceiver<Input> {
 impl<Input: Send + Debug> MessageReceiver<Input> for LoggingReceiver<Input> {
     async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
         let message = self.receiver.try_recv().await;
-        info!(target: &self.name, "recv {:?}", message);
-        message
-    }
-
-    async fn recv_message(&mut self) -> Option<WrappedInput<Input>> {
-        let message = self.receiver.recv_message().await;
         info!(target: &self.name, "recv {:?}", message);
         message
     }
@@ -298,10 +288,6 @@ impl<Input: Message, Output: Message> MessageReceiver<Input> for SimpleMessageBo
         self.input_receiver.try_recv().await
     }
 
-    async fn recv_message(&mut self) -> Option<WrappedInput<Input>> {
-        self.input_receiver.recv_message().await
-    }
-
     async fn recv(&mut self) -> Option<Input> {
         self.input_receiver.recv().await
     }
@@ -341,18 +327,9 @@ impl<Input> CombinedReceiver<Input> {
             signal_receiver,
         }
     }
-}
 
-#[async_trait]
-impl<Input: Send> MessageReceiver<Input> for CombinedReceiver<Input> {
-    async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
-        match self.recv_message().await {
-            Some(WrappedInput::Message(message)) => Ok(Some(message)),
-            Some(WrappedInput::RuntimeRequest(runtime_request)) => Err(runtime_request),
-            None => Ok(None),
-        }
-    }
-
+    /// Returns [Some] [WrappedInput] the next time a message is received. Returns [None] if
+    /// the underlying channels are closed. Returning [RuntimeRequest] takes priority over messages.
     async fn recv_message(&mut self) -> Option<WrappedInput<Input>> {
         tokio::select! {
             biased;
@@ -364,6 +341,17 @@ impl<Input: Send> MessageReceiver<Input> for CombinedReceiver<Input> {
                 Some(WrappedInput::Message(message))
             }
             else => None
+        }
+    }
+}
+
+#[async_trait]
+impl<Input: Send> MessageReceiver<Input> for CombinedReceiver<Input> {
+    async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
+        match self.recv_message().await {
+            Some(WrappedInput::Message(message)) => Ok(Some(message)),
+            Some(WrappedInput::RuntimeRequest(runtime_request)) => Err(runtime_request),
+            None => Ok(None),
         }
     }
 

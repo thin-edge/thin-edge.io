@@ -15,7 +15,6 @@ use crate::ServiceConsumer;
 use crate::ServiceProvider;
 use crate::SimpleMessageBox;
 use crate::SimpleMessageBoxBuilder;
-use crate::WrappedInput;
 use async_trait::async_trait;
 use core::future::Future;
 use futures::stream::FusedStream;
@@ -328,12 +327,6 @@ where
         tokio::time::timeout(self.timeout, self.inner.try_recv())
             .await
             .unwrap_or(Ok(None))
-    }
-
-    async fn recv_message(&mut self) -> Option<WrappedInput<M>> {
-        tokio::time::timeout(self.timeout, self.inner.recv_message())
-            .await
-            .unwrap_or(None)
     }
 
     async fn recv(&mut self) -> Option<M> {

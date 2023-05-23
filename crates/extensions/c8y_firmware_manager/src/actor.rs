@@ -25,7 +25,6 @@ use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
-use tedge_actors::WrappedInput;
 use tedge_api::topic::get_child_id_from_child_topic;
 use tedge_api::Auth;
 use tedge_api::OperationStatus;
@@ -768,10 +767,6 @@ impl FirmwareManagerMessageBox {
 impl MessageReceiver<FirmwareInput> for FirmwareManagerMessageBox {
     async fn try_recv(&mut self) -> Result<Option<FirmwareInput>, RuntimeRequest> {
         self.input_receiver.try_recv().await
-    }
-
-    async fn recv_message(&mut self) -> Option<WrappedInput<FirmwareInput>> {
-        self.input_receiver.recv_message().await
     }
 
     async fn recv(&mut self) -> Option<FirmwareInput> {

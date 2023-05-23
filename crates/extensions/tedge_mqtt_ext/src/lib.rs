@@ -23,7 +23,6 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
 use tedge_actors::ServiceProvider;
-use tedge_actors::WrappedInput;
 
 pub type MqttConfig = mqtt_channel::Config;
 pub type MqttMessage = mqtt_channel::Message;
@@ -151,10 +150,6 @@ impl MqttMessageBox {
 impl MessageReceiver<MqttMessage> for MqttMessageBox {
     async fn try_recv(&mut self) -> Result<Option<MqttMessage>, RuntimeRequest> {
         self.input_receiver.try_recv().await
-    }
-
-    async fn recv_message(&mut self) -> Option<WrappedInput<MqttMessage>> {
-        self.input_receiver.recv_message().await
     }
 
     async fn recv(&mut self) -> Option<MqttMessage> {
