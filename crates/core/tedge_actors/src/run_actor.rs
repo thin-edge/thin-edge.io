@@ -2,8 +2,10 @@ use crate::Actor;
 use crate::Builder;
 use crate::DynSender;
 use crate::RuntimeError;
+use crate::RuntimeEvent;
 use crate::RuntimeRequest;
 use crate::RuntimeRequestSink;
+use crate::Sender;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
@@ -53,4 +55,6 @@ impl RuntimeRequestSink for RunActor {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.runtime_request_sender.sender_clone()
     }
+
+    fn set_event_sender(&mut self, _event_sender: DynSender<RuntimeEvent>) {}
 }

@@ -25,6 +25,7 @@ use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::NoConfig;
+use tedge_actors::RuntimeEvent;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
@@ -96,6 +97,10 @@ impl FirmwareManagerBuilder {
 impl RuntimeRequestSink for FirmwareManagerBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         Box::new(self.signal_sender.clone())
+    }
+
+    fn set_event_sender(&mut self, event_sender: DynSender<RuntimeEvent>) {
+        self.input_receiver.set_event_sender(event_sender)
     }
 }
 

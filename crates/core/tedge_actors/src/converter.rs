@@ -64,6 +64,7 @@ use crate::MessageSink;
 use crate::MessageSource;
 use crate::NoConfig;
 use crate::RuntimeError;
+use crate::RuntimeEvent;
 use crate::RuntimeRequest;
 use crate::RuntimeRequestSink;
 use crate::Sender;
@@ -300,5 +301,9 @@ impl<C: Converter, Config> ServiceProvider<C::Input, C::Output, NoConfig>
 impl<C: Converter, Config> RuntimeRequestSink for ConvertingActorBuilder<C, Config> {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.message_box.get_signal_sender()
+    }
+
+    fn set_event_sender(&mut self, event_sender: DynSender<RuntimeEvent>) {
+        self.message_box.set_event_sender(event_sender)
     }
 }

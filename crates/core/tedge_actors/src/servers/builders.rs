@@ -11,6 +11,7 @@ use crate::LoggingSender;
 use crate::Message;
 use crate::NoConfig;
 use crate::RuntimeError;
+use crate::RuntimeEvent;
 use crate::RuntimeRequest;
 use crate::RuntimeRequestSink;
 use crate::Sender;
@@ -78,6 +79,10 @@ impl<Request: Message, Response: Message> ServerMessageBoxBuilder<Request, Respo
 impl<Req: Message, Res: Message> RuntimeRequestSink for ServerMessageBoxBuilder<Req, Res> {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.signal_sender.sender_clone()
+    }
+
+    fn set_event_sender(&mut self, event_sender: DynSender<RuntimeEvent>) {
+        self.input_receiver.set_event_sender(event_sender)
     }
 }
 
@@ -207,6 +212,10 @@ impl<S: Server, K> ServiceProvider<S::Request, S::Response, NoConfig> for Server
 impl<S: Server, K> RuntimeRequestSink for ServerActorBuilder<S, K> {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.box_builder.get_signal_sender()
+    }
+
+    fn set_event_sender(&mut self, event_sender: DynSender<RuntimeEvent>) {
+        self.box_builder.set_event_sender(event_sender)
     }
 }
 

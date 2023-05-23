@@ -93,27 +93,29 @@ use crate::channels::Sender;
 use crate::ChannelError;
 use crate::DynSender;
 use crate::Message;
+use crate::NullSender;
+use crate::RuntimeEvent;
 use crate::RuntimeRequest;
+use crate::RuntimeSignal;
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::StreamExt;
+use log::error;
 use log::info;
 use std::fmt::Debug;
+use std::time::Instant;
 
 /// Either a message or a [RuntimeRequest]
 enum WrappedInput<Input> {
     Message(Input),
-    RuntimeRequest(RuntimeRequest),
+    RuntimeSignal(RuntimeSignal),
 }
 
 impl<Input: Debug> Debug for WrappedInput<Input> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Message(input) => f.debug_tuple("Message").field(input).finish(),
-            Self::RuntimeRequest(runtime_request) => f
-                .debug_tuple("RuntimeRequest")
-                .field(runtime_request)
-                .finish(),
+            Self::RuntimeSignal(signal) => f.debug_tuple("RuntimeSignal").field(signal).finish(),
         }
     }
 }
@@ -122,7 +124,7 @@ impl<Input: Debug> Debug for WrappedInput<Input> {
 pub trait MessageReceiver<Input> {
     /// Return the next received message if any, returning [RuntimeRequest]'s as errors.
     /// Returning [RuntimeRequest] takes priority over messages.
-    async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest>;
+    async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeSignal>;
 
     /// Returns [Some] message the next time a message is received. Returns [None] if
     /// both of the underlying channels are closed or if a [RuntimeRequest] is received.
@@ -131,7 +133,7 @@ pub trait MessageReceiver<Input> {
 
     /// Return [Some] [RuntimeRequest] if any is sent by the runtime,
     /// postponing the reception of regular messages while awaiting for [RuntimeRequest].
-    async fn recv_signal(&mut self) -> Option<RuntimeRequest>;
+    async fn recv_signal(&mut self) -> Option<RuntimeSignal>;
 }
 
 pub struct LoggingReceiver<Input: Debug> {
@@ -174,11 +176,15 @@ impl<Input: Debug> LoggingReceiver<Input> {
     pub fn into_split(self) -> (mpsc::Receiver<Input>, mpsc::Receiver<RuntimeRequest>) {
         (self.receiver.input_receiver, self.receiver.signal_receiver)
     }
+
+    pub fn set_event_sender(&mut self, event_sender: DynSender<RuntimeEvent>) {
+        self.receiver.set_event_sender(event_sender);
+    }
 }
 
 #[async_trait]
 impl<Input: Send + Debug> MessageReceiver<Input> for LoggingReceiver<Input> {
-    async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
+    async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeSignal> {
         let message = self.receiver.try_recv().await;
         info!(target: &self.name, "recv {:?}", message);
         message
@@ -190,7 +196,7 @@ impl<Input: Send + Debug> MessageReceiver<Input> for LoggingReceiver<Input> {
         message
     }
 
-    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+    async fn recv_signal(&mut self) -> Option<RuntimeSignal> {
         let message = self.receiver.recv_signal().await;
         info!(target: &self.name, "recv {:?}", message);
         message
@@ -284,7 +290,7 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
 
 #[async_trait]
 impl<Input: Message, Output: Message> MessageReceiver<Input> for SimpleMessageBox<Input, Output> {
-    async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
+    async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeSignal> {
         self.input_receiver.try_recv().await
     }
 
@@ -292,7 +298,7 @@ impl<Input: Message, Output: Message> MessageReceiver<Input> for SimpleMessageBo
         self.input_receiver.recv().await
     }
 
-    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+    async fn recv_signal(&mut self) -> Option<RuntimeSignal> {
         self.input_receiver.recv_signal().await
     }
 }
@@ -312,9 +318,16 @@ impl<Input: Message, Output: Message> Sender<Output> for SimpleMessageBox<Input,
     }
 }
 
+/// A [CombinedReceiver] is the key mechanism for the runtime to interact
+/// with actors. Any signal sent by the runtime to an actor will be processed
+/// with a higher priority.
+///
+/// This receiver also records statistics and responds behind the scene to status requests.
 pub struct CombinedReceiver<Input> {
     input_receiver: mpsc::Receiver<Input>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
+    event_sender: DynSender<RuntimeEvent>,
+    request_count: usize,
 }
 
 impl<Input> CombinedReceiver<Input> {
@@ -322,35 +335,66 @@ impl<Input> CombinedReceiver<Input> {
         input_receiver: mpsc::Receiver<Input>,
         signal_receiver: mpsc::Receiver<RuntimeRequest>,
     ) -> Self {
+        let event_sender = NullSender.into();
         Self {
             input_receiver,
             signal_receiver,
+            event_sender,
+            request_count: 0,
         }
+    }
+
+    pub fn set_event_sender(&mut self, event_sender: DynSender<RuntimeEvent>) {
+        self.event_sender = event_sender;
     }
 
     /// Returns [Some] [WrappedInput] the next time a message is received. Returns [None] if
     /// the underlying channels are closed. Returning [RuntimeRequest] takes priority over messages.
     async fn recv_message(&mut self) -> Option<WrappedInput<Input>> {
-        tokio::select! {
-            biased;
+        loop {
+            tokio::select! {
+                biased;
 
-            Some(runtime_request) = self.signal_receiver.next() => {
-                Some(WrappedInput::RuntimeRequest(runtime_request))
+                Some(request) = self.signal_receiver.next() => {
+                    match request {
+                        RuntimeRequest::Signal(signal) => {
+                            return Some(WrappedInput::RuntimeSignal(signal));
+                        }
+                        RuntimeRequest::Status { timestamp } => {
+                            self.send_status(timestamp).await;
+                            continue;
+                        }
+                    }
+                }
+                Some(message) = self.input_receiver.next() => {
+                    self.request_count += 1;
+                    return Some(WrappedInput::Message(message));
+                }
+                else => {
+                    return None;
+                }
             }
-            Some(message) = self.input_receiver.next() => {
-                Some(WrappedInput::Message(message))
-            }
-            else => None
+        }
+    }
+
+    async fn send_status(&mut self, timestamp: Instant) {
+        let status = RuntimeEvent::Running {
+            task: "FIXME".to_string(),
+            timestamp,
+            request_count: self.request_count,
+        };
+        if let Err(err) = self.event_sender.send(status).await {
+            error!("Fail to send the actor status: {err}");
         }
     }
 }
 
 #[async_trait]
 impl<Input: Send> MessageReceiver<Input> for CombinedReceiver<Input> {
-    async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
+    async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeSignal> {
         match self.recv_message().await {
             Some(WrappedInput::Message(message)) => Ok(Some(message)),
-            Some(WrappedInput::RuntimeRequest(runtime_request)) => Err(runtime_request),
+            Some(WrappedInput::RuntimeSignal(signal)) => Err(signal),
             None => Ok(None),
         }
     }
@@ -362,7 +406,13 @@ impl<Input: Send> MessageReceiver<Input> for CombinedReceiver<Input> {
         }
     }
 
-    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
-        self.signal_receiver.next().await
+    async fn recv_signal(&mut self) -> Option<RuntimeSignal> {
+        while let Some(request) = self.signal_receiver.next().await {
+            match request {
+                RuntimeRequest::Signal(signal) => return Some(signal),
+                RuntimeRequest::Status { timestamp } => self.send_status(timestamp).await,
+            }
+        }
+        None
     }
 }

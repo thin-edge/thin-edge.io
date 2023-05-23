@@ -13,8 +13,10 @@ use tedge_actors::NoConfig;
 use tedge_actors::NoMessage;
 use tedge_actors::RuntimeAction;
 use tedge_actors::RuntimeError;
+use tedge_actors::RuntimeEvent;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::RuntimeSignal;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
@@ -42,6 +44,10 @@ impl Builder<SignalActor> for SignalActorBuilder {
 impl RuntimeRequestSink for SignalActorBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.box_builder.get_signal_sender()
+    }
+
+    fn set_event_sender(&mut self, event_sender: DynSender<RuntimeEvent>) {
+        self.box_builder.set_event_sender(event_sender)
     }
 }
 
@@ -76,7 +82,7 @@ impl Actor for SignalActor {
                 None = self.messages.recv() => return Ok(()),
                 Some(signal) = signals.next() => {
                     match signal {
-                        SIGTERM | SIGINT | SIGQUIT => self.messages.send(RuntimeAction::Shutdown).await?,
+                        SIGTERM | SIGINT | SIGQUIT => self.messages.send(RuntimeRequest::Signal(RuntimeSignal::Shutdown).into()).await?,
                         _ => unreachable!(),
                     }
                 }

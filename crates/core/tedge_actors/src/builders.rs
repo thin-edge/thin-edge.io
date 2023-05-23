@@ -83,6 +83,7 @@ use crate::LoggingSender;
 use crate::MappingSender;
 use crate::Message;
 use crate::NullSender;
+use crate::RuntimeEvent;
 use crate::RuntimeRequest;
 use crate::Sender;
 use crate::SimpleMessageBox;
@@ -211,6 +212,9 @@ pub trait MessageSource<M: Message, Config> {
 pub trait RuntimeRequestSink {
     /// Return the sender that can be used by the runtime to send requests to this actor
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest>;
+
+    /// Set the sender used by this actor to send runtime events
+    fn set_event_sender(&mut self, event_sender: DynSender<RuntimeEvent>);
 }
 
 /// A trait that defines that an actor provides a service
@@ -337,7 +341,7 @@ pub trait ServiceConsumer<Request: Message, Response: Message, Config> {
 /// by making the actor builder implement [RuntimeRequestSink] for that actor.
 ///
 /// ```
-/// # use tedge_actors::{DynSender, RuntimeRequest, RuntimeRequestSink, SimpleMessageBoxBuilder};
+/// # use tedge_actors::{DynSender, RuntimeEvent, RuntimeRequest, RuntimeRequestSink, SimpleMessageBoxBuilder};
 /// # type MyActorConfig = i64;
 /// # type MyActorInput = i64;
 /// # type MyActorOutput = i64;
@@ -350,6 +354,10 @@ pub trait ServiceConsumer<Request: Message, Response: Message, Config> {
 ///     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
 ///         self.messages.get_signal_sender()
 ///     }
+///
+///     fn set_event_sender(&mut self, event_sender: DynSender<RuntimeEvent>) {
+///         self.messages.set_event_sender(event_sender)
+///    }
 /// }
 /// ```
 ///
@@ -547,6 +555,10 @@ impl<I: Message, O: Message> MessageSink<I, NoConfig> for SimpleMessageBoxBuilde
 impl<I: Message, O: Message> RuntimeRequestSink for SimpleMessageBoxBuilder<I, O> {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.signal_sender.sender_clone()
+    }
+
+    fn set_event_sender(&mut self, event_sender: DynSender<RuntimeEvent>) {
+        self.input_receiver.set_event_sender(event_sender)
     }
 }
 

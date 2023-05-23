@@ -3,7 +3,7 @@ use crate::ChannelError;
 use crate::Message;
 use crate::MessageReceiver;
 use crate::NoConfig;
-use crate::RuntimeRequest;
+use crate::RuntimeSignal;
 use crate::Sender;
 use crate::ServiceConsumer;
 use crate::ServiceProvider;
@@ -92,7 +92,7 @@ impl<Request: Message, Response: Message> ConcurrentServerMessageBox<Request, Re
             // then we'd be sure we're able to cancel when anything happens, not
             // just when waiting for pending_responses, e.g. if send_result
             // stalls
-            Some(RuntimeRequest::Shutdown) = self.clients.recv_signal() => {
+            Some(RuntimeSignal::Shutdown) = self.clients.recv_signal() => {
                 ControlFlow::Break(())
             }
             else => ControlFlow::Break(())

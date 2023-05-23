@@ -26,7 +26,7 @@ use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeRequest;
+use tedge_actors::RuntimeSignal;
 use tedge_actors::Sender;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
@@ -405,7 +405,7 @@ impl ConfigManagerMessageBox {
 
 #[async_trait]
 impl MessageReceiver<ConfigInput> for ConfigManagerMessageBox {
-    async fn try_recv(&mut self) -> Result<Option<ConfigInput>, RuntimeRequest> {
+    async fn try_recv(&mut self) -> Result<Option<ConfigInput>, RuntimeSignal> {
         self.input_receiver.try_recv().await
     }
 
@@ -413,7 +413,7 @@ impl MessageReceiver<ConfigInput> for ConfigManagerMessageBox {
         self.input_receiver.recv().await
     }
 
-    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+    async fn recv_signal(&mut self) -> Option<RuntimeSignal> {
         self.input_receiver.recv_signal().await
     }
 }

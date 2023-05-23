@@ -23,7 +23,7 @@ use tedge_actors::DynSender;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeRequest;
+use tedge_actors::RuntimeSignal;
 use tedge_actors::Sender;
 use tedge_api::topic::get_child_id_from_child_topic;
 use tedge_api::Auth;
@@ -765,7 +765,7 @@ impl FirmwareManagerMessageBox {
 
 #[async_trait]
 impl MessageReceiver<FirmwareInput> for FirmwareManagerMessageBox {
-    async fn try_recv(&mut self) -> Result<Option<FirmwareInput>, RuntimeRequest> {
+    async fn try_recv(&mut self) -> Result<Option<FirmwareInput>, RuntimeSignal> {
         self.input_receiver.try_recv().await
     }
 
@@ -773,7 +773,7 @@ impl MessageReceiver<FirmwareInput> for FirmwareManagerMessageBox {
         self.input_receiver.recv().await
     }
 
-    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+    async fn recv_signal(&mut self) -> Option<RuntimeSignal> {
         self.input_receiver.recv_signal().await
     }
 }

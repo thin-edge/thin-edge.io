@@ -2,7 +2,7 @@ use crate::Actor;
 use crate::ConcurrentServerMessageBox;
 use crate::MessageReceiver;
 use crate::RuntimeError;
-use crate::RuntimeRequest;
+use crate::RuntimeSignal;
 use crate::Sender;
 use crate::Server;
 use crate::ServerMessageBox;
@@ -35,7 +35,7 @@ impl<S: Server> Actor for ServerActor<S> {
                 result = server.handle(request) => {
                     self.messages.send((client_id, result)).await?
                 }
-                Some(RuntimeRequest::Shutdown) = self.messages.recv_signal() => {
+                Some(RuntimeSignal::Shutdown) = self.messages.recv_signal() => {
                     break;
                 }
             }

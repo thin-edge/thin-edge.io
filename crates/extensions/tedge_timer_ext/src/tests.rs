@@ -10,6 +10,7 @@ use tedge_actors::MessageReceiver;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::RuntimeSignal;
 use tedge_actors::Sender;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
@@ -96,7 +97,10 @@ async fn should_shutdown_even_if_there_are_pending_timers() {
     );
 
     // Sent a graceful shutdown request
-    signal_handler.send(RuntimeRequest::Shutdown).await.unwrap();
+    signal_handler
+        .send(RuntimeRequest::Signal(RuntimeSignal::Shutdown))
+        .await
+        .unwrap();
 
     // The actor timer is expected to shutdown immediately
     assert_eq!(

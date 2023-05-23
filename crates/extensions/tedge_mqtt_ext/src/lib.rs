@@ -19,8 +19,10 @@ use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeError;
+use tedge_actors::RuntimeEvent;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::RuntimeSignal;
 use tedge_actors::Sender;
 use tedge_actors::ServiceProvider;
 
@@ -106,6 +108,10 @@ impl RuntimeRequestSink for MqttActorBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         Box::new(self.signal_sender.clone())
     }
+
+    fn set_event_sender(&mut self, event_sender: DynSender<RuntimeEvent>) {
+        self.input_receiver.set_event_sender(event_sender)
+    }
 }
 
 impl Builder<MqttActor> for MqttActorBuilder {
@@ -148,7 +154,7 @@ impl MqttMessageBox {
 
 #[async_trait]
 impl MessageReceiver<MqttMessage> for MqttMessageBox {
-    async fn try_recv(&mut self) -> Result<Option<MqttMessage>, RuntimeRequest> {
+    async fn try_recv(&mut self) -> Result<Option<MqttMessage>, RuntimeSignal> {
         self.input_receiver.try_recv().await
     }
 
@@ -156,7 +162,7 @@ impl MessageReceiver<MqttMessage> for MqttMessageBox {
         self.input_receiver.recv().await
     }
 
-    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+    async fn recv_signal(&mut self) -> Option<RuntimeSignal> {
         self.input_receiver.recv_signal().await
     }
 }
@@ -186,7 +192,7 @@ impl Actor for MqttActor {
             connection = mqtt_channel::Connection::new(&self.mqtt_config) => {
                 connection.map_err(Box::new)?
             }
-            Some(RuntimeRequest::Shutdown) = self.messages.recv_signal() => {
+            Some(RuntimeSignal::Shutdown) = self.messages.recv_signal() => {
                 // Shutdown requested even before the connection has been established
                 return Ok(())
             }
@@ -194,18 +200,13 @@ impl Actor for MqttActor {
 
         loop {
             tokio::select! {
-                message_or_signal = self.messages.try_recv() => {
-                    match message_or_signal {
-                        Ok(Some(message)) => {
-                                                mqtt_client
-                            .published
-                            .send(message)
-                            .await
-                            .map_err(Box::new)?
-                        }
-                        Ok(None) | Err(RuntimeRequest::Shutdown) => break,
-                    }
-                }
+                Some(message) = self.messages.recv() => {
+                    mqtt_client
+                        .published
+                        .send(message)
+                        .await
+                        .map_err(Box::new)?
+                },
                 Some(message) = mqtt_client.received.next() => {
                     self.messages.send(message).await?
                 },

@@ -7,8 +7,10 @@ use crate::ChannelError;
 use crate::DynSender;
 use crate::MessageSink;
 use crate::NoConfig;
+use crate::NullSender;
 use crate::RuntimeError;
 use crate::RuntimeRequestSink;
+use crate::RuntimeSignal::Shutdown;
 use futures::channel::mpsc;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
@@ -18,19 +20,36 @@ use log::info;
 use std::collections::HashMap;
 use std::panic;
 use std::time::Duration;
+use std::time::Instant;
 use tokio::task::JoinError;
 use tokio::task::JoinHandle;
 
 /// Actions sent by actors to the runtime
 #[derive(Debug)]
 pub enum RuntimeAction {
-    Shutdown,
+    Request(RuntimeRequest),
     Spawn(RunActor),
 }
 
-/// Requests sent by the runtime to actors
-#[derive(Clone, Debug, PartialEq)]
+impl From<RuntimeRequest> for RuntimeAction {
+    fn from(request: RuntimeRequest) -> Self {
+        RuntimeAction::Request(request)
+    }
+}
+
+/// Requests sent by the runtime to actors' message boxes.
+///
+/// Requests that cannot be handled in a generic manner by the message boxes
+/// are forwarded to the actors as [RuntimeSignal].
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RuntimeRequest {
+    Signal(RuntimeSignal),
+    Status { timestamp: Instant },
+}
+
+/// Signal sent by the runtime to actors
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RuntimeSignal {
     Shutdown,
 }
 
@@ -38,9 +57,21 @@ pub enum RuntimeRequest {
 #[derive(Debug)]
 pub enum RuntimeEvent {
     Error(RuntimeError),
-    Started { task: String },
-    Stopped { task: String },
-    Aborted { task: String, error: RuntimeError },
+    Started {
+        task: String,
+    },
+    Running {
+        task: String,
+        timestamp: Instant,
+        request_count: usize,
+    },
+    Stopped {
+        task: String,
+    },
+    Aborted {
+        task: String,
+        error: RuntimeError,
+    },
 }
 
 /// The actor runtime
@@ -57,12 +88,15 @@ impl Runtime {
         events_sender: Option<DynSender<RuntimeEvent>>,
     ) -> Result<Runtime, RuntimeError> {
         let (actions_sender, actions_receiver) = mpsc::channel(16);
-        let runtime_actor =
-            RuntimeActor::new(actions_receiver, events_sender, Duration::from_secs(60));
+        let runtime_actor = RuntimeActor::new(
+            actions_receiver,
+            events_sender.clone(),
+            Duration::from_secs(60),
+        );
 
         let runtime_task = tokio::spawn(runtime_actor.run());
         let runtime = Runtime {
-            handle: RuntimeHandle { actions_sender },
+            handle: RuntimeHandle::new(actions_sender, events_sender),
             bg_task: runtime_task,
         };
         Ok(runtime)
@@ -106,20 +140,43 @@ impl Runtime {
 #[derive(Clone)]
 pub struct RuntimeHandle {
     actions_sender: mpsc::Sender<RuntimeAction>,
+    events_sender: DynSender<RuntimeEvent>,
 }
 
 impl RuntimeHandle {
+    fn new(
+        actions_sender: mpsc::Sender<RuntimeAction>,
+        events_sender: Option<DynSender<RuntimeEvent>>,
+    ) -> Self {
+        let events_sender = events_sender.unwrap_or(NullSender.into());
+        RuntimeHandle {
+            actions_sender,
+            events_sender,
+        }
+    }
+
     /// Stop all the actors and the runtime
     pub async fn shutdown(&mut self) -> Result<(), RuntimeError> {
-        Ok(self.send(RuntimeAction::Shutdown).await?)
+        Ok(self
+            .send(RuntimeAction::Request(RuntimeRequest::Signal(Shutdown)))
+            .await?)
+    }
+
+    /// Request a status from all the actors
+    pub async fn status(&mut self) -> Result<(), RuntimeError> {
+        let timestamp = Instant::now();
+        Ok(self
+            .send(RuntimeAction::Request(RuntimeRequest::Status { timestamp }))
+            .await?)
     }
 
     /// Spawn an actor
-    pub async fn spawn<A, T>(&mut self, actor_builder: T) -> Result<(), RuntimeError>
+    pub async fn spawn<A, T>(&mut self, mut actor_builder: T) -> Result<(), RuntimeError>
     where
         A: Actor,
         T: Builder<A> + RuntimeRequestSink,
     {
+        actor_builder.set_event_sender(self.events_sender.clone());
         let run_actor = RunActor::from_builder(actor_builder);
 
         Ok(self.send(RuntimeAction::Spawn(run_actor)).await?)
@@ -187,10 +244,14 @@ impl RuntimeActor {
                                     self.futures.push(tokio::spawn(run_task(actor, running_name)));
                                     actors_count += 1;
                                }
-                               RuntimeAction::Shutdown => {
+                               RuntimeAction::Request(RuntimeRequest::Signal(Shutdown)) => {
                                     info!(target: "Runtime", "Shutting down");
                                     shutdown_actors(&mut self.running_actors).await;
                                     break;
+                               }
+                               RuntimeAction::Request(request) => {
+                                    info!(target: "Runtime", "Request status");
+                                    request_status(&mut self.running_actors, request).await;
                                }
                             }
                         }
@@ -258,13 +319,24 @@ where
     I: IntoIterator<Item = (&'a String, &'a mut DynSender<RuntimeRequest>)>,
 {
     for (running_as, sender) in a {
-        match sender.send(RuntimeRequest::Shutdown).await {
+        match sender.send(RuntimeRequest::Signal(Shutdown)).await {
             Ok(()) => {
                 info!(target: "Runtime", "Successfully sent shutdown request to {running_as}")
             }
             Err(e) => {
                 error!(target: "Runtime", "Failed to send shutdown request to {running_as}: {e:?}")
             }
+        }
+    }
+}
+
+async fn request_status<'a, I>(a: I, request: RuntimeRequest)
+where
+    I: IntoIterator<Item = (&'a String, &'a mut DynSender<RuntimeRequest>)>,
+{
+    for (running_as, sender) in a {
+        if let Err(err) = sender.send(request.clone()).await {
+            error!(target: "Runtime", "Failed to send request to {running_as}: {err:?}")
         }
     }
 }
@@ -316,7 +388,8 @@ mod tests {
                         crate::Sender::send(&mut self.messages, EchoMessage::String(message))
                             .await?
                     }
-                    EchoMessage::RuntimeRequest(RuntimeRequest::Shutdown) => break,
+                    EchoMessage::RuntimeRequest(RuntimeRequest::Signal(Shutdown)) => break,
+                    EchoMessage::RuntimeRequest(_) => continue,
                 }
             }
 
@@ -498,7 +571,10 @@ mod tests {
             .await
             .unwrap();
 
-        actions_sender.send(RuntimeAction::Shutdown).await.unwrap();
+        actions_sender
+            .send(RuntimeAction::Request(RuntimeRequest::Signal(Shutdown)))
+            .await
+            .unwrap();
 
         tokio::select! {
             _ = ra.run() => {},

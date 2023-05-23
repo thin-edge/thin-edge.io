@@ -11,7 +11,7 @@ use tedge_actors::Actor;
 use tedge_actors::ClientId;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeRequest;
+use tedge_actors::RuntimeSignal;
 use tedge_actors::Sender;
 use tedge_actors::ServerMessageBox;
 use tokio::time::sleep_until;
@@ -222,7 +222,7 @@ impl Actor for TimerActor {
                                 self.start_timer(current_timer);
                                 break;
                             }
-                            Err(RuntimeRequest::Shutdown) => {
+                            Err(RuntimeSignal::Shutdown) => {
                                 // Stop immediately
                                 return Ok(());
                             }

@@ -17,7 +17,7 @@ use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeRequest;
+use tedge_actors::RuntimeSignal;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_api::OperationStatus;
@@ -104,7 +104,7 @@ impl Actor for SoftwareManagerActor {
             tokio::select! {
                 _ = self.handle_request(request, &mut plugins, &operation_logs) => {}
 
-                Some(RuntimeRequest::Shutdown) = input_receiver.recv_signal() => {
+                Some(RuntimeSignal::Shutdown) = input_receiver.recv_signal() => {
                     info!("Received shutdown request from the runtime, exiting...");
                     // Here we could call `process_pending_sm_operation` to mark
                     // the current operation as failed, but OperationConverter

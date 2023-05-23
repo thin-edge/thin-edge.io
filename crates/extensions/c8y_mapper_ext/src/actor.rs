@@ -20,6 +20,7 @@ use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_actors::RuntimeError;
+use tedge_actors::RuntimeEvent;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
@@ -207,6 +208,10 @@ impl C8yMapperBuilder {
 impl RuntimeRequestSink for C8yMapperBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.box_builder.get_signal_sender()
+    }
+
+    fn set_event_sender(&mut self, event_sender: DynSender<RuntimeEvent>) {
+        self.box_builder.set_event_sender(event_sender)
     }
 }
 

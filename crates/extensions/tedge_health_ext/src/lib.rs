@@ -8,6 +8,7 @@ use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::MessageSink;
+use tedge_actors::RuntimeEvent;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceConsumer;
@@ -63,6 +64,10 @@ impl HealthMonitorBuilder {
 impl RuntimeRequestSink for HealthMonitorBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         Box::new(self.box_builder.get_signal_sender())
+    }
+
+    fn set_event_sender(&mut self, event_sender: DynSender<RuntimeEvent>) {
+        self.box_builder.set_event_sender(event_sender)
     }
 }
 

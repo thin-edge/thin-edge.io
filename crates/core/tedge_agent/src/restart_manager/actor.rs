@@ -13,7 +13,7 @@ use tedge_actors::Actor;
 use tedge_actors::ChannelError;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeRequest;
+use tedge_actors::RuntimeSignal;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_api::OperationStatus;
@@ -56,7 +56,7 @@ impl Actor for RestartManagerActor {
             let maybe_error = self.handle_restart_operation().await;
 
             match timeout(Duration::from_secs(5), self.message_box.recv_signal()).await {
-                Ok(Some(RuntimeRequest::Shutdown)) => {
+                Ok(Some(RuntimeSignal::Shutdown)) => {
                     // As expected, the restart triggered a shutdown.
                     return Ok(());
                 }

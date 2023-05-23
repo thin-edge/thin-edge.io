@@ -10,8 +10,10 @@ use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::MessageSource;
 use tedge_actors::RuntimeError;
+use tedge_actors::RuntimeEvent;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::RuntimeSignal;
 use tedge_utils::notify::FsEvent;
 use tedge_utils::notify::NotifyStream;
 use try_traits::Infallible;
@@ -93,6 +95,8 @@ impl RuntimeRequestSink for FsWatchActorBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         Box::new(self.signal_sender.clone())
     }
+
+    fn set_event_sender(&mut self, _event_sender: DynSender<RuntimeEvent>) {}
 }
 
 impl Builder<FsWatchActor> for FsWatchActorBuilder {
@@ -134,7 +138,7 @@ impl Actor for FsWatchActor {
 
         loop {
             tokio::select! {
-                Some(RuntimeRequest::Shutdown) = self.messages.recv() => break,
+                Some(RuntimeRequest::Signal(RuntimeSignal::Shutdown)) = self.messages.recv() => break,
                 Some((path, fs_event)) = fs_notify.rx.recv() => {
                     let output = match fs_event {
                         FsEvent::Modified => FsWatchEvent::Modified(path),

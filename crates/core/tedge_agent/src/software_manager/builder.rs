@@ -6,6 +6,7 @@ use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::NoConfig;
+use tedge_actors::RuntimeEvent;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
@@ -40,6 +41,10 @@ impl ServiceProvider<SoftwareRequest, SoftwareResponse, NoConfig> for SoftwareMa
 impl RuntimeRequestSink for SoftwareManagerBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.message_box.get_signal_sender()
+    }
+
+    fn set_event_sender(&mut self, event_sender: DynSender<RuntimeEvent>) {
+        self.message_box.set_event_sender(event_sender)
     }
 }
 

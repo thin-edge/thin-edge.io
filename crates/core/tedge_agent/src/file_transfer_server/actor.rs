@@ -9,8 +9,10 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::RuntimeError;
+use tedge_actors::RuntimeEvent;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
+use tedge_actors::RuntimeSignal;
 use tracing::log::info;
 
 pub struct FileTransferServerActor {
@@ -34,7 +36,7 @@ impl Actor for FileTransferServerActor {
                 info!("Done");
                 return Ok(result.map_err(FileTransferError::FromHyperError)?);
             }
-            Some(RuntimeRequest::Shutdown) = self.signal_receiver.next() => {
+            Some(RuntimeRequest::Signal(RuntimeSignal::Shutdown)) = self.signal_receiver.next() => {
                 info!("Shutdown");
                 return Ok(());
             }
@@ -63,6 +65,8 @@ impl RuntimeRequestSink for FileTransferServerBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         Box::new(self.signal_sender.clone())
     }
+
+    fn set_event_sender(&mut self, _event_sender: DynSender<RuntimeEvent>) {}
 }
 
 impl Builder<FileTransferServerActor> for FileTransferServerBuilder {

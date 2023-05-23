@@ -9,7 +9,7 @@ use crate::MessageSink;
 use crate::MessageSource;
 use crate::NoConfig;
 use crate::NullSender;
-use crate::RuntimeRequest;
+use crate::RuntimeSignal;
 use crate::Sender;
 use crate::ServiceConsumer;
 use crate::ServiceProvider;
@@ -323,7 +323,7 @@ where
     M: Message,
     T: MessageReceiver<M> + Send + Sync + 'static,
 {
-    async fn try_recv(&mut self) -> Result<Option<M>, RuntimeRequest> {
+    async fn try_recv(&mut self) -> Result<Option<M>, RuntimeSignal> {
         tokio::time::timeout(self.timeout, self.inner.try_recv())
             .await
             .unwrap_or(Ok(None))
@@ -335,7 +335,7 @@ where
             .unwrap_or(None)
     }
 
-    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+    async fn recv_signal(&mut self) -> Option<RuntimeSignal> {
         tokio::time::timeout(self.timeout, self.inner.recv_signal())
             .await
             .unwrap_or(None)

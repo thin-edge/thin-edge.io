@@ -10,6 +10,7 @@ use tedge_actors::Builder;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::NoConfig;
+use tedge_actors::RuntimeEvent;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServerMessageBoxBuilder;
@@ -151,5 +152,9 @@ impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig> for C8YHttpProxyBu
 impl RuntimeRequestSink for C8YHttpProxyBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.clients.get_signal_sender()
+    }
+
+    fn set_event_sender(&mut self, event_sender: DynSender<RuntimeEvent>) {
+        self.clients.set_event_sender(event_sender)
     }
 }

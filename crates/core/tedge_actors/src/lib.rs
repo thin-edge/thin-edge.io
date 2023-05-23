@@ -275,7 +275,7 @@
 //!
 //! ```no_run
 //! # use std::convert::Infallible;
-//! # use tedge_actors::{Actor, Builder, DynSender, Runtime, RuntimeError, RuntimeRequest, RuntimeRequestSink};
+//! # use tedge_actors::{Actor, Builder, DynSender, Runtime, RuntimeError, RuntimeEvent, RuntimeRequest, RuntimeRequestSink};
 //! struct MyActor;
 //! # #[derive(Default)]
 //! struct MyActorBuilder;
@@ -302,6 +302,10 @@
 //! impl RuntimeRequestSink for MyActorBuilder {
 //!     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
 //!        todo!()
+//!     }
+//!
+//!     fn set_event_sender(&mut self, event_sender: DynSender<RuntimeEvent>) {
+//!         todo!()
 //!     }
 //! }
 //!

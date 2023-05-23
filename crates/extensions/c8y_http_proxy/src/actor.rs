@@ -33,7 +33,7 @@ use tedge_actors::Actor;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
-use tedge_actors::RuntimeRequest;
+use tedge_actors::RuntimeSignal;
 use tedge_actors::Sender;
 use tedge_actors::ServerMessageBox;
 use tedge_http_ext::HttpRequest;
@@ -142,7 +142,7 @@ impl C8YHttpProxyActor {
                 )
                 .await
                 {
-                    Ok(Some(RuntimeRequest::Shutdown)) => {
+                    Ok(Some(RuntimeSignal::Shutdown)) => {
                         // Give up as requested
                         return Err(C8YConnectionError::Interrupted);
                     }
