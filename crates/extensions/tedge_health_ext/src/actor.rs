@@ -1,7 +1,9 @@
 use async_trait::async_trait;
+use log::info;
 use std::collections::HashSet;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
+use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeAction;
@@ -48,6 +50,14 @@ impl HealthMonitorActor {
     pub fn down_health_status(&self) -> MqttMessage {
         health_status_down_message(&self.daemon_name)
     }
+
+    async fn check_actor_as_running(&mut self, actor: String) -> Result<(), ChannelError> {
+        self.expected.remove(&actor);
+        if self.expected.is_empty() {
+            self.messages.send(self.up_health_status()).await?;
+        }
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -58,7 +68,8 @@ impl Actor for HealthMonitorActor {
 
     async fn run(&mut self) -> Result<(), RuntimeError> {
         self.messages.send(self.up_health_status()).await?;
-        while let Some(message) = self.messages.recv().await {
+
+        while let Ok(Some(message)) = self.messages.try_recv().await {
             match message {
                 HealthInput::MqttMessage(_) => {
                     // FIXME consider to set a timer after which non-responding actors are considered as blocked
@@ -66,10 +77,7 @@ impl Actor for HealthMonitorActor {
                     self.runtime.send(RuntimeAction::status_request()).await?;
                 }
                 HealthInput::RuntimeEvent(RuntimeEvent::Running { task, .. }) => {
-                    self.expected.remove(&task);
-                    if self.expected.is_empty() {
-                        self.messages.send(self.up_health_status()).await?;
-                    }
+                    self.check_actor_as_running(task).await?;
                 }
                 HealthInput::RuntimeEvent(RuntimeEvent::Started { task }) => {
                     // FIXME the list of watched actor should not be dynamic
@@ -80,17 +88,47 @@ impl Actor for HealthMonitorActor {
                         && !task.contains("Signal-Handler")
                         && !task.contains("C8Y-REST")
                         && !task.contains("HttpFileTransferServer")
+                        && !task.contains("HealthMonitorActor")
                     {
                         self.watched.insert(task);
                     }
                 }
-                HealthInput::RuntimeEvent(_) => {
-                    // FIXME the list of watched actor should not be dynamic
-                    // What has to be done when an actor stops? fails?
+                HealthInput::RuntimeEvent(RuntimeEvent::Stopped { task }) => {
+                    // FIXME One should be able to control this behavior depending on the actor
+                    info!("Keep running without {task}");
+                    self.watched.remove(&task);
+                    self.check_actor_as_running(task).await?;
+                }
+                HealthInput::RuntimeEvent(RuntimeEvent::Aborted { task, error }) => {
+                    // FIXME One should be able to control this behavior depending on the actor
+                    info!("Aborting on {task} error: {error}");
+                    self.runtime.send(RuntimeAction::shutdown_request()).await?;
+                }
+                HealthInput::RuntimeEvent(RuntimeEvent::Error(error)) => {
+                    info!("Aborting on runtime error: {}", &error);
+                    return Err(error);
                 }
             }
         }
-        // FIXME one has to wait for all the actor to be stopped
+
+        // A shutdown has been requested.
+        // Keep monitoring the actors till they all stopped.
+        while let Some(message) = self.messages.recv().await {
+            match message {
+                HealthInput::RuntimeEvent(RuntimeEvent::Stopped { task })
+                | HealthInput::RuntimeEvent(RuntimeEvent::Aborted { task, .. }) => {
+                    self.watched.remove(&task);
+                    if self.watched.is_empty() {
+                        break;
+                    }
+                }
+                HealthInput::RuntimeEvent(RuntimeEvent::Error(_)) => {
+                    break;
+                }
+                _ => {}
+            }
+        }
+
         Ok(())
     }
 }

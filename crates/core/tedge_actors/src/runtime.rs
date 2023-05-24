@@ -42,6 +42,9 @@ impl RuntimeAction {
     pub fn status_request() -> Self {
         RuntimeRequest::status().into()
     }
+    pub fn shutdown_request() -> Self {
+        RuntimeRequest::shutdown().into()
+    }
 }
 
 /// Requests sent by the runtime to actors' message boxes.
@@ -60,6 +63,10 @@ impl RuntimeRequest {
             timestamp: Instant::now(),
             actor: "".to_string(),
         }
+    }
+
+    pub fn shutdown() -> Self {
+        RuntimeRequest::Signal(RuntimeSignal::Shutdown)
     }
 }
 
