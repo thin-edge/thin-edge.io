@@ -186,19 +186,28 @@ impl<Input: Debug> LoggingReceiver<Input> {
 impl<Input: Send + Debug> MessageReceiver<Input> for LoggingReceiver<Input> {
     async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeSignal> {
         let message = self.receiver.try_recv().await;
-        info!(target: &self.name, "recv {:?}", message);
+        match &message {
+            Ok(Some(message)) => info!(target: &self.name, "recv {:?}", message),
+            Err(signal) => info!(target: &self.name, "recv {:?}", signal),
+            Ok(None) => (),
+        }
         message
     }
 
     async fn recv(&mut self) -> Option<Input> {
         let message = self.receiver.recv().await;
-        info!(target: &self.name, "recv {:?}", message);
+        if let Some(message) = &message {
+            info!(target: &self.name, "recv {:?}", message);
+        }
         message
     }
 
     async fn recv_signal(&mut self) -> Option<RuntimeSignal> {
         let message = self.receiver.recv_signal().await;
         info!(target: &self.name, "recv {:?}", message);
+        if let Some(message) = &message {
+            info!(target: &self.name, "recv {:?}", message);
+        }
         message
     }
 }
