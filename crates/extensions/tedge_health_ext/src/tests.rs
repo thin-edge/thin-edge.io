@@ -68,7 +68,8 @@ async fn spawn_a_health_check_actor(
 ) -> SimpleMessageBox<MqttMessage, MqttMessage> {
     let mut health_mqtt_builder = MqttActorBuilder::new(mqtt_config);
 
-    let health_actor = HealthMonitorBuilder::new(service_to_be_monitored, &mut health_mqtt_builder);
+    let health_actor =
+        HealthMonitorBuilder::with_mqtt(service_to_be_monitored, &mut health_mqtt_builder);
 
     let mut actor = health_actor.build();
     tokio::spawn(async move { actor.run().await });

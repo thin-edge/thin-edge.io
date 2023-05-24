@@ -87,8 +87,9 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 
 async fn run(config_dir: impl AsRef<Path>, tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
-    let runtime_events_logger = None;
-    let mut runtime = Runtime::try_new(runtime_events_logger).await?;
+    // Instantiate the health monitor actor, then the runtime
+    let mut health_actor = HealthMonitorBuilder::new(C8Y_LOG_PLUGIN);
+    let mut runtime = Runtime::try_new(&mut health_actor).await?;
 
     let base_mqtt_config = mqtt_config(&tedge_config)?;
     let mqtt_config = base_mqtt_config.clone().with_session_name(C8Y_LOG_PLUGIN);
@@ -96,12 +97,14 @@ async fn run(config_dir: impl AsRef<Path>, tedge_config: TEdgeConfig) -> Result<
     let c8y_http_config = (&tedge_config).try_into()?;
 
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config);
-    let health_actor = HealthMonitorBuilder::new(C8Y_LOG_PLUGIN, &mut mqtt_actor);
     let mut jwt_actor = C8YJwtRetriever::builder(base_mqtt_config);
     let mut http_actor = HttpActor::new().builder();
     let mut c8y_http_proxy_actor =
         C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);
     let mut fs_watch_actor = FsWatchActorBuilder::new();
+
+    // Connect the health monitor actor to MQTT
+    health_actor.connect_to_mqtt(&mut mqtt_actor);
 
     // Instantiate log manager actor
     let log_manager_config = LogManagerConfig::from_tedge_config(config_dir, &tedge_config)?;

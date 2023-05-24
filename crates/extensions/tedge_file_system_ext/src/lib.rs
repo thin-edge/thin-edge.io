@@ -57,8 +57,17 @@ impl FsWatchMessageBox {
         Ok(())
     }
 
-    async fn recv(&mut self) -> Option<RuntimeRequest> {
-        self.signal_receiver.next().await
+    async fn recv(&mut self) -> Option<RuntimeSignal> {
+        while let Some(request) = self.signal_receiver.next().await {
+            match request {
+                RuntimeRequest::Signal(signal) => return Some(signal),
+                RuntimeRequest::Status { .. } => {
+                    // FIXME one needs to respond!
+                    continue;
+                }
+            }
+        }
+        None
     }
 }
 
@@ -96,7 +105,9 @@ impl RuntimeRequestSink for FsWatchActorBuilder {
         Box::new(self.signal_sender.clone())
     }
 
-    fn set_event_sender(&mut self, _event_sender: DynSender<RuntimeEvent>) {}
+    fn set_event_sender(&mut self, _event_sender: DynSender<RuntimeEvent>) {
+        // TODO This message box must use a CombinedReceiver<NoMessage>
+    }
 }
 
 impl Builder<FsWatchActor> for FsWatchActorBuilder {
@@ -138,7 +149,7 @@ impl Actor for FsWatchActor {
 
         loop {
             tokio::select! {
-                Some(RuntimeRequest::Signal(RuntimeSignal::Shutdown)) = self.messages.recv() => break,
+                Some(RuntimeSignal::Shutdown) = self.messages.recv() => break,
                 Some((path, fs_event)) = fs_notify.rx.recv() => {
                     let output = match fs_event {
                         FsEvent::Modified => FsWatchEvent::Modified(path),

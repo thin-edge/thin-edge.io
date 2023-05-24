@@ -10,13 +10,14 @@ pub async fn start_basic_actors(
     mapper_name: &str,
     config: &TEdgeConfig,
 ) -> Result<(Runtime, MqttActorBuilder), anyhow::Error> {
-    let runtime_events_logger = None;
-    let mut runtime = Runtime::try_new(runtime_events_logger).await?;
+    // Instantiate the health monitor actor, then the runtime
+    let mut health_actor = HealthMonitorBuilder::new(mapper_name);
+    let mut runtime = Runtime::try_new(&mut health_actor).await?;
 
     let mut mqtt_actor = get_mqtt_actor(mapper_name, config).await?;
 
-    //Instantiate health monitor actor
-    let health_actor = HealthMonitorBuilder::new(mapper_name, &mut mqtt_actor);
+    // Connect the health monitor actor to MQTT
+    health_actor.connect_to_mqtt(&mut mqtt_actor);
 
     // Shutdown on SIGINT
     let signal_actor = SignalActor::builder(&runtime.get_handle());

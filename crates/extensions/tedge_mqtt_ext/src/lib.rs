@@ -200,12 +200,17 @@ impl Actor for MqttActor {
 
         loop {
             tokio::select! {
-                Some(message) = self.messages.recv() => {
-                    mqtt_client
-                        .published
-                        .send(message)
-                        .await
-                        .map_err(Box::new)?
+                maybe_message = self.messages.recv() => {
+                    match maybe_message {
+                        Some(message) => {
+                            mqtt_client
+                                .published
+                                .send(message)
+                                .await
+                                .map_err(Box::new)?
+                        }
+                        None => break
+                    }
                 },
                 Some(message) = mqtt_client.received.next() => {
                     self.messages.send(message).await?

@@ -126,9 +126,9 @@ impl Agent {
         info!("Starting tedge agent");
         self.init()?;
 
-        // Runtime
-        let runtime_events_logger = None;
-        let mut runtime = Runtime::try_new(runtime_events_logger).await?;
+        // Instantiate the health monitor actor, then the runtime
+        let mut health_actor = HealthMonitorBuilder::new(TEDGE_AGENT);
+        let mut runtime = Runtime::try_new(&mut health_actor).await?;
 
         // File transfer server actor
         let file_transfer_server_builder =
@@ -160,8 +160,8 @@ impl Agent {
         // Shutdown on SIGINT
         let signal_actor_builder = SignalActor::builder(&runtime.get_handle());
 
-        // Health actor
-        let health_actor = HealthMonitorBuilder::new(TEDGE_AGENT, &mut mqtt_actor_builder);
+        // Connect the health monitor actor to MQTT
+        health_actor.connect_to_mqtt(&mut mqtt_actor_builder);
 
         // Spawn all
         runtime.spawn(signal_actor_builder).await?;

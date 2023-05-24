@@ -77,8 +77,9 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 
 async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
-    let runtime_events_logger = None;
-    let mut runtime = Runtime::try_new(runtime_events_logger).await?;
+    // Instantiate the health monitor actor, then the runtime
+    let mut health_actor = HealthMonitorBuilder::new(PLUGIN_NAME);
+    let mut runtime = Runtime::try_new(&mut health_actor).await?;
 
     // Create actor instances
     let mqtt_config = tedge_config.mqtt_config()?;
@@ -87,8 +88,8 @@ async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
     let mut downloader_actor = DownloaderActor::new().builder();
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
 
-    //Instantiate health monitor actor
-    let health_actor = HealthMonitorBuilder::new(PLUGIN_NAME, &mut mqtt_actor);
+    // Connect the health monitor actor to MQTT
+    health_actor.connect_to_mqtt(&mut mqtt_actor);
 
     // Instantiate firmware manager actor
     let firmware_manager_config = FirmwareManagerConfig::from_tedge_config(&tedge_config)?;

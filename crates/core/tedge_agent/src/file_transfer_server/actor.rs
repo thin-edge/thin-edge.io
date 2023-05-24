@@ -66,7 +66,9 @@ impl RuntimeRequestSink for FileTransferServerBuilder {
         Box::new(self.signal_sender.clone())
     }
 
-    fn set_event_sender(&mut self, _event_sender: DynSender<RuntimeEvent>) {}
+    fn set_event_sender(&mut self, _event_sender: DynSender<RuntimeEvent>) {
+        // FIXME
+    }
 }
 
 impl Builder<FileTransferServerActor> for FileTransferServerBuilder {

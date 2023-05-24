@@ -360,8 +360,8 @@ impl<Input> CombinedReceiver<Input> {
                         RuntimeRequest::Signal(signal) => {
                             return Some(WrappedInput::RuntimeSignal(signal));
                         }
-                        RuntimeRequest::Status { timestamp } => {
-                            self.send_status(timestamp).await;
+                        RuntimeRequest::Status { timestamp, actor } => {
+                            self.send_status(timestamp, actor).await;
                             continue;
                         }
                     }
@@ -377,14 +377,14 @@ impl<Input> CombinedReceiver<Input> {
         }
     }
 
-    async fn send_status(&mut self, timestamp: Instant) {
+    async fn send_status(&mut self, timestamp: Instant, task: String) {
         let status = RuntimeEvent::Running {
-            task: "FIXME".to_string(),
+            task,
             timestamp,
             request_count: self.request_count,
         };
         if let Err(err) = self.event_sender.send(status).await {
-            error!("Fail to send the actor status: {err}");
+            error!("Fail cargo +to send the actor status: {err}");
         }
     }
 }
@@ -410,7 +410,9 @@ impl<Input: Send> MessageReceiver<Input> for CombinedReceiver<Input> {
         while let Some(request) = self.signal_receiver.next().await {
             match request {
                 RuntimeRequest::Signal(signal) => return Some(signal),
-                RuntimeRequest::Status { timestamp } => self.send_status(timestamp).await,
+                RuntimeRequest::Status { timestamp, actor } => {
+                    self.send_status(timestamp, actor).await
+                }
             }
         }
         None

@@ -38,8 +38,10 @@ async fn main() -> anyhow::Result<()> {
     let config_plugin_opt = PluginOpt::parse();
 
     env_logger::init();
-    let runtime_events_logger = None;
-    let mut runtime = Runtime::try_new(runtime_events_logger).await?;
+
+    // Instantiate the health monitor actor, then the runtime
+    let mut health_actor = HealthMonitorBuilder::new(PLUGIN_NAME);
+    let mut runtime = Runtime::try_new(&mut health_actor).await?;
 
     // Load tedge config from the provided location
     let config_dir = config_plugin_opt.config_dir;
@@ -91,8 +93,8 @@ async fn main() -> anyhow::Result<()> {
         &mut downloader_actor,
     )?;
 
-    // Instantiate health monitor actor
-    let health_actor = HealthMonitorBuilder::new(PLUGIN_NAME, &mut mqtt_actor);
+    // Connect the health monitor actor to MQTT
+    health_actor.connect_to_mqtt(&mut mqtt_actor);
 
     // Shutdown on SIGINT
     let signal_actor = SignalActor::builder(&runtime.get_handle());

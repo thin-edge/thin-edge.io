@@ -11,6 +11,7 @@ use crate::NullSender;
 use crate::RuntimeError;
 use crate::RuntimeRequestSink;
 use crate::RuntimeSignal::Shutdown;
+use crate::ServiceProvider;
 use futures::channel::mpsc;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
@@ -37,6 +38,12 @@ impl From<RuntimeRequest> for RuntimeAction {
     }
 }
 
+impl RuntimeAction {
+    pub fn status_request() -> Self {
+        RuntimeRequest::status().into()
+    }
+}
+
 /// Requests sent by the runtime to actors' message boxes.
 ///
 /// Requests that cannot be handled in a generic manner by the message boxes
@@ -44,7 +51,16 @@ impl From<RuntimeRequest> for RuntimeAction {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RuntimeRequest {
     Signal(RuntimeSignal),
-    Status { timestamp: Instant },
+    Status { timestamp: Instant, actor: String },
+}
+
+impl RuntimeRequest {
+    pub fn status() -> Self {
+        RuntimeRequest::Status {
+            timestamp: Instant::now(),
+            actor: "".to_string(),
+        }
+    }
 }
 
 /// Signal sent by the runtime to actors
@@ -83,11 +99,14 @@ pub struct Runtime {
 impl Runtime {
     /// Launch the runtime, returning a runtime handler
     ///
+    /// Use [NoEventProcessor] when there is no needs to process the events raised by the actors.
     /// TODO: ensure this can only be called once
     pub async fn try_new(
-        events_sender: Option<DynSender<RuntimeEvent>>,
+        events_processor: &mut impl ServiceProvider<RuntimeEvent, RuntimeAction, NoConfig>,
     ) -> Result<Runtime, RuntimeError> {
         let (actions_sender, actions_receiver) = mpsc::channel(16);
+        let events_sender =
+            events_processor.connect_consumer(NoConfig, actions_sender.clone().into());
         let runtime_actor = RuntimeActor::new(
             actions_receiver,
             events_sender.clone(),
@@ -146,9 +165,8 @@ pub struct RuntimeHandle {
 impl RuntimeHandle {
     fn new(
         actions_sender: mpsc::Sender<RuntimeAction>,
-        events_sender: Option<DynSender<RuntimeEvent>>,
+        events_sender: DynSender<RuntimeEvent>,
     ) -> Self {
-        let events_sender = events_sender.unwrap_or(NullSender.into());
         RuntimeHandle {
             actions_sender,
             events_sender,
@@ -164,10 +182,7 @@ impl RuntimeHandle {
 
     /// Request a status from all the actors
     pub async fn status(&mut self) -> Result<(), RuntimeError> {
-        let timestamp = Instant::now();
-        Ok(self
-            .send(RuntimeAction::Request(RuntimeRequest::Status { timestamp }))
-            .await?)
+        Ok(self.send(RuntimeAction::status_request()).await?)
     }
 
     /// Spawn an actor
@@ -200,10 +215,23 @@ impl MessageSink<RuntimeAction, NoConfig> for RuntimeHandle {
     }
 }
 
+/// An event processor that simply ignores all the events.
+pub struct NoEventProcessor;
+
+impl ServiceProvider<RuntimeEvent, RuntimeAction, NoConfig> for NoEventProcessor {
+    fn connect_consumer(
+        &mut self,
+        _config: NoConfig,
+        _response_sender: DynSender<RuntimeAction>,
+    ) -> DynSender<RuntimeEvent> {
+        NullSender.into()
+    }
+}
+
 /// The actual runtime implementation
 struct RuntimeActor {
     actions: mpsc::Receiver<RuntimeAction>,
-    events: Option<DynSender<RuntimeEvent>>,
+    events: DynSender<RuntimeEvent>,
     cleanup_duration: Duration,
     futures: FuturesUnordered<JoinHandle<Result<String, (String, RuntimeError)>>>,
     running_actors: HashMap<String, DynSender<RuntimeRequest>>,
@@ -212,7 +240,7 @@ struct RuntimeActor {
 impl RuntimeActor {
     fn new(
         actions: mpsc::Receiver<RuntimeAction>,
-        events: Option<DynSender<RuntimeEvent>>,
+        events: DynSender<RuntimeEvent>,
         cleanup_duration: Duration,
     ) -> Self {
         Self {
@@ -249,9 +277,9 @@ impl RuntimeActor {
                                     shutdown_actors(&mut self.running_actors).await;
                                     break;
                                }
-                               RuntimeAction::Request(request) => {
+                               RuntimeAction::Request(RuntimeRequest::Status {timestamp, ..}) => {
                                     info!(target: "Runtime", "Request status");
-                                    request_status(&mut self.running_actors, request).await;
+                                    request_status(&mut self.running_actors, timestamp).await;
                                }
                             }
                         }
@@ -306,10 +334,8 @@ impl RuntimeActor {
     }
 
     async fn send_event(&mut self, event: RuntimeEvent) {
-        if let Some(events) = &mut self.events {
-            if let Err(e) = events.send(event).await {
-                error!(target: "Runtime", "Failed to send RuntimeEvent: {e}");
-            }
+        if let Err(e) = self.events.send(event).await {
+            error!(target: "Runtime", "Failed to send RuntimeEvent: {e}");
         }
     }
 }
@@ -330,11 +356,15 @@ where
     }
 }
 
-async fn request_status<'a, I>(a: I, request: RuntimeRequest)
+async fn request_status<'a, I>(a: I, timestamp: Instant)
 where
     I: IntoIterator<Item = (&'a String, &'a mut DynSender<RuntimeRequest>)>,
 {
     for (running_as, sender) in a {
+        let request = RuntimeRequest::Status {
+            timestamp,
+            actor: running_as.clone(),
+        };
         if let Err(err) = sender.send(request.clone()).await {
             error!(target: "Runtime", "Failed to send request to {running_as}: {err:?}")
         }
@@ -469,7 +499,7 @@ mod tests {
         let (events_sender, events_receiver) = mpsc::channel::<RuntimeEvent>(16);
         let ra = RuntimeActor::new(
             actions_receiver,
-            Some(Box::new(events_sender)),
+            events_sender.into(),
             Duration::from_millis(1),
         );
         (actions_sender, events_receiver, ra)
