@@ -91,7 +91,7 @@ jobs:
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Install nightly toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -119,6 +119,9 @@ jobs:
         with:
           mdbook-version: "0.4.18"
           #mdbook-version: 'latest'
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2.4.0
 
       - name: Install mdbook-mermaid
         uses: actions-rs/install@v0.1
@@ -176,12 +179,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      
-      - name: Install cargo sort 
+
+      - name: Install cargo sort
         uses: actions-rs/install@v0.1
         # https://github.com/marketplace/actions/rust-cargo-install
         with:
-          crate: cargo-sort 
+          crate: cargo-sort
           version: latest
 
       - name: Cargo sort
@@ -200,7 +203,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      
+
       # Nightly toolchain is needed for cargo fmt since issue: https://github.com/thin-edge/thin-edge.io/issues/1660
       - name: Install nightly toolchain
         uses: actions-rs/toolchain@v1
@@ -242,7 +245,7 @@ jobs:
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.4.0
 
       - name: Cargo clippy --version
         uses: actions-rs/cargo@v1
@@ -300,7 +303,7 @@ jobs:
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.4.0
 
       - name: Cargo version
         uses: actions-rs/cargo@v1
@@ -393,17 +396,21 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: true
+
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2.4.0
+
       - name: cargo install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
-      - name: cargo generate-lockfile
-        if: hashFiles('Cargo.lock') == ''
-        run: cargo generate-lockfile
+
       - name: cargo llvm-cov
         run: cargo llvm-cov --locked --all-features --codecov --output-path codecov.json
+
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v3
         with:
