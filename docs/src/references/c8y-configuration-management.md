@@ -174,6 +174,47 @@ files = [
 ]
 ```
 
+Config files need not always be just plain files that can be read from or written on to the file system.
+Some applications might have non-persistent configurations which can be read/updated using some commands.
+Even for file based configurations, while updating them, just replacing the old config file with a new one may not be enough.
+You might wanna do some pre-processing steps like validating the downloaded file before applying it and
+post-processing steps like reloading the service after updating the config and so on.
+
+The `c8y-configuration-plugin` supports `extensions` to support such complex config management routines.
+Extensions can be any executable file that conforms to the following requirements:
+
+1. Support a `get` subcommand that accepts the config type as an argument and write the config for that type to `stdout`.
+   The `c8y-configuration-plugin` will capture this output to a file and upload that to the cloud.
+   In case of command failure, the exit code and `stderr` contents are sent to the cloud as failure reason.
+2. Support a `set` subcommand that accepts the config type and the downloaded config file path as arguments.
+   In case of command failure, the exit code and `stderr` contents are sent to the cloud as failure reason.
+   The `stdout` contents are ignored irrespective of success or failure (TODO: Log them as operation logs).
+
+Such extensions can be added to the `c8y-configuration-plugin.toml` file as `exts` as follows:
+
+```toml
+exts = [
+  { exec = '/etc/tedge/config-plugins/camera-agent.sh', type = 'traffic-cam-1' },
+]
+
+files = [
+  ...
+]
+```
+
+With the above configuration, when you fetch the configuration snapshot for the `hallway-cam-1` type,
+the plugin will execute the executable provided in `exec` as follows:
+
+```shell
+/etc/tedge/config-plugins/camera-agent.sh get traffic-cam-1
+```
+
+Similarly, when an update is pushed for the `traffic-cam-1`, the following command will be executed:
+
+```shell
+/etc/tedge/config-plugins/camera-agent.sh set traffic-cam-1 /tmp/path/to/downloaded/config/file
+```
+
 Along this `c8y-configuration-plugin` configuration for the main device,
 the configuration plugin expects a configuration file per child device
 that needs to be configured from the cloud.
@@ -261,6 +302,15 @@ by the configuration of thin-edge:
 * `tedge config get mqtt.bind.port`: the TCP port of the local MQTT bus.
 * `tedge config get tmp.path`: the directory where the files are updated
   before being copied atomically to their targets.
+
+### Plugin Script Specification
+
+The config-plugin script provided in the `plugin` key must satisfy the following requirements:
+
+1. Support a `get` and `set` subcommands
+2. The `get` command takes the config type as the argument and must return the config for that type
+3. The `set` command takes the config type as well as the path to the updated config downloaded by the c8y-config-plugin as the argument and must return the config for that type
+
 
 ## Usage
 

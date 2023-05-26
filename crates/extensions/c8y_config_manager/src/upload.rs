@@ -2,6 +2,8 @@ use crate::child_device::try_cleanup_config_file_from_file_transfer_repositoy;
 use crate::child_device::ChildConfigOperationKey;
 use crate::child_device::ConfigOperationMessage;
 use crate::child_device::DEFAULT_OPERATION_TIMEOUT;
+use crate::plugin_config::ConfigEntry;
+use crate::plugin_config::ExtEntry;
 use crate::plugin_config::InvalidConfigTypeError;
 
 use super::actor::ActiveOperationState;
@@ -27,7 +29,12 @@ use log::error;
 use log::info;
 use log::warn;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::Write;
 use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Stdio;
 use tedge_actors::Sender;
 use tedge_api::OperationStatus;
 use tedge_mqtt_ext::MqttMessage;
@@ -37,6 +44,7 @@ use tedge_utils::file::create_directory_with_user_group;
 use tedge_utils::file::create_file_with_user_group;
 use tedge_utils::file::move_file;
 use tedge_utils::file::PermissionEntry;
+use uuid::Uuid;
 
 pub struct ConfigUploadManager {
     config: ConfigManagerConfig,
@@ -82,12 +90,18 @@ impl ConfigUploadManager {
 
         let plugin_config = PluginConfig::new(&self.config.plugin_config_path);
 
+        let target_config_type = &config_upload_request.config_type;
+
         let upload_result =
-            match plugin_config.get_file_entry_from_type(&config_upload_request.config_type) {
-                Ok(file_entry) => {
-                    let config_file_path = file_entry.path;
+            match plugin_config.get_config_entry_from_type(&config_upload_request.config_type) {
+                Ok(config_entry) => {
+                    let config_file_path = match config_entry {
+                        ConfigEntry::FileEntry(file_entry) => PathBuf::from(file_entry.path),
+                        ConfigEntry::ExtEntry(ext_entry) => self.run_extension(ext_entry).await?,
+                    };
+
                     self.upload_config_file(
-                        Path::new(config_file_path.as_str()),
+                        config_file_path,
                         &config_upload_request.config_type,
                         None,
                         message_box,
@@ -96,8 +110,6 @@ impl ConfigUploadManager {
                 }
                 Err(err) => Err(err.into()),
             };
-
-        let target_config_type = &config_upload_request.config_type;
 
         match upload_result {
             Ok(upload_event_url) => {
@@ -116,6 +128,27 @@ impl ConfigUploadManager {
         }
 
         Ok(())
+    }
+
+    async fn run_extension(&self, ext_entry: ExtEntry) -> Result<PathBuf, ConfigManagementError> {
+        let config_type = ext_entry.config_type.clone();
+        let output = Command::new(ext_entry.exec)
+            .args(["get".into(), config_type])
+            .stdout(Stdio::piped())
+            .output()?;
+
+        if output.status.success() {
+            let out_file_path = self.config.tmp_dir.join(Uuid::new_v4().to_string());
+            let mut out_file = File::create(&out_file_path)?;
+            out_file.write_all(&output.stdout)?;
+            Ok(out_file_path)
+        } else {
+            Err(ConfigManagementError::ExecError(
+                output.status,
+                String::from_utf8(output.stderr)
+                    .unwrap_or_else(|_| "non UTF-8 chars in stderr".into()),
+            ))
+        }
     }
 
     /// Map the c8y_UploadConfigFile request into a tedge/commands/req/config_snapshot command for the child device.
@@ -140,27 +173,35 @@ impl ConfigUploadManager {
             self.config.config_dir.display()
         )));
 
-        match plugin_config.get_file_entry_from_type(&config_type) {
-            Ok(file_entry) => {
-                let config_management = ConfigOperationRequest::Snapshot {
-                    child_id: child_id.clone(),
-                    file_entry: file_entry.clone(),
-                };
+        match plugin_config.get_config_entry_from_type(&config_type) {
+            Ok(config_entry) => {
+                match config_entry {
+                    ConfigEntry::FileEntry(file_entry) => {
+                        let config_management = ConfigOperationRequest::Snapshot {
+                            child_id: child_id.clone(),
+                            file_entry: file_entry.clone(),
+                        };
 
-                let msg = MqttMessage::new(
-                    &config_management.operation_request_topic(),
-                    config_management.operation_request_payload(&self.config.tedge_http_host)?,
-                );
-                message_box.send(msg.into()).await?;
-                info!("Config snapshot request for config type: {config_type} sent to child device: {child_id}");
+                        let msg = MqttMessage::new(
+                            &config_management.operation_request_topic(),
+                            config_management
+                                .operation_request_payload(&self.config.tedge_http_host)?,
+                        );
+                        message_box.send(msg.into()).await?;
+                        info!("Config snapshot request for config type: {config_type} sent to child device: {child_id}");
 
-                self.active_child_ops
-                    .insert(operation_key.clone(), ActiveOperationState::Pending);
+                        self.active_child_ops
+                            .insert(operation_key.clone(), ActiveOperationState::Pending);
 
-                // Start the timer for operation timeout
-                message_box
-                    .send(SetTimeout::new(DEFAULT_OPERATION_TIMEOUT, operation_key).into())
-                    .await?;
+                        // Start the timer for operation timeout
+                        message_box
+                            .send(SetTimeout::new(DEFAULT_OPERATION_TIMEOUT, operation_key).into())
+                            .await?;
+                    }
+                    ConfigEntry::ExtEntry(_) => {
+                        warn!("Exec entries not supported for child devices");
+                    }
+                }
             }
             Err(InvalidConfigTypeError { config_type }) => {
                 warn!(
@@ -350,16 +391,16 @@ impl ConfigUploadManager {
         Ok(message)
     }
 
-    pub async fn upload_config_file(
+    pub async fn upload_config_file<P: AsRef<Path>>(
         &mut self,
-        config_file_path: &Path,
+        config_file_path: P,
         config_type: &str,
         child_device_id: Option<String>,
         message_box: &mut ConfigManagerMessageBox,
     ) -> Result<String, ConfigManagementError> {
         let url = message_box
             .c8y_http_proxy
-            .upload_config_file(config_file_path, config_type, child_device_id)
+            .upload_config_file(config_file_path.as_ref(), config_type, child_device_id)
             .await?;
         Ok(url)
     }

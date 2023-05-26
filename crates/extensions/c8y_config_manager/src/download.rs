@@ -1,5 +1,7 @@
 use crate::child_device::ChildConfigOperationKey;
 use crate::child_device::DEFAULT_OPERATION_TIMEOUT;
+use crate::plugin_config::ConfigEntry;
+use crate::plugin_config::ExtEntry;
 use crate::plugin_config::InvalidConfigTypeError;
 
 use super::actor::ActiveOperationState;
@@ -32,12 +34,15 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Command;
+use std::process::Stdio;
 use tedge_actors::Sender;
 use tedge_api::OperationStatus;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_timer_ext::SetTimeout;
 use tedge_utils::file::PermissionEntry;
+use uuid::Uuid;
 
 pub const CONFIG_CHANGE_TOPIC: &str = "tedge/configuration_change";
 
@@ -86,17 +91,23 @@ impl ConfigDownloadManager {
         let mut target_file_entry = FileEntry::default();
 
         let plugin_config = PluginConfig::new(&self.config.plugin_config_path);
-        let download_result = match plugin_config.get_file_entry_from_type(&target_config_type) {
-            Ok(file_entry) => {
-                target_file_entry = file_entry;
-                self.download_config_file(
-                    smartrest_request.url.as_str(),
-                    PathBuf::from(&target_file_entry.path),
-                    target_file_entry.file_permissions,
-                    message_box,
-                )
-                .await
-            }
+        let download_result = match plugin_config.get_config_entry_from_type(&target_config_type) {
+            Ok(config_entry) => match config_entry {
+                ConfigEntry::FileEntry(file_entry) => {
+                    target_file_entry = file_entry;
+                    self.download_config_file(
+                        smartrest_request.url.as_str(),
+                        PathBuf::from(&target_file_entry.path),
+                        target_file_entry.file_permissions,
+                        message_box,
+                    )
+                    .await
+                }
+                ConfigEntry::ExtEntry(ext_entry) => {
+                    self.run_extension(ext_entry, &smartrest_request.url, message_box)
+                        .await
+                }
+            },
             Err(err) => Err(err.into()),
         };
 
@@ -142,6 +153,43 @@ impl ConfigDownloadManager {
         Ok(())
     }
 
+    async fn run_extension(
+        &mut self,
+        ext_entry: ExtEntry,
+        download_url: &str,
+        message_box: &mut ConfigManagerMessageBox,
+    ) -> Result<(), ConfigManagementError> {
+        let tmp_file_path = self.config.tmp_dir.join(Uuid::new_v4().to_string());
+        self.download_config_file(
+            download_url,
+            tmp_file_path.clone(),
+            PermissionEntry::default(),
+            message_box,
+        )
+        .await?;
+
+        let config_type = ext_entry.config_type.clone();
+        let output = Command::new(ext_entry.exec)
+            .args([
+                "set".into(),
+                config_type,
+                tmp_file_path.to_string_lossy().into(),
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()?;
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(ConfigManagementError::ExecError(
+                output.status,
+                String::from_utf8(output.stderr)
+                    .unwrap_or_else(|_| "non UTF-8 chars in stderr".into()),
+            ))
+        }
+    }
+
     /// Map the c8y_DownloadConfigFile request into a tedge/commands/req/config_update command for the child device.
     /// The config file update is shared with the child device via the file transfer service.
     /// The configuration update is downloaded from Cumulocity and is uploaded to the file transfer service,
@@ -167,57 +215,62 @@ impl ConfigDownloadManager {
             self.config.config_dir.display(),
         )));
 
-        match plugin_config.get_file_entry_from_type(&config_type) {
-            Ok(file_entry) => {
-                let config_management = ConfigOperationRequest::Update {
-                    child_id: child_id.clone(),
-                    file_entry,
-                };
+        match plugin_config.get_config_entry_from_type(&config_type) {
+            Ok(config_entry) => match config_entry {
+                ConfigEntry::FileEntry(file_entry) => {
+                    let config_management = ConfigOperationRequest::Update {
+                        child_id: child_id.clone(),
+                        file_entry,
+                    };
 
-                if let Err(err) = self
-                    .download_config_file(
-                        smartrest_request.url.as_str(),
-                        config_management.file_transfer_repository_full_path(
-                            self.config.file_transfer_dir.clone(),
-                        ),
-                        PermissionEntry::new(None, None, None), //no need to change ownership of downloaded file
-                        message_box,
-                    )
-                    .await
-                {
-                    // Fail the operation in the cloud if the file download itself fails
-                    // by sending EXECUTING and FAILED responses back to back
+                    if let Err(err) = self
+                        .download_config_file(
+                            smartrest_request.url.as_str(),
+                            config_management.file_transfer_repository_full_path(
+                                self.config.file_transfer_dir.clone(),
+                            ),
+                            PermissionEntry::new(None, None, None), //no need to change ownership of downloaded file
+                            message_box,
+                        )
+                        .await
+                    {
+                        // Fail the operation in the cloud if the file download itself fails
+                        // by sending EXECUTING and FAILED responses back to back
 
-                    let failure_reason = format!(
-                        "Downloading the config file update from {} failed with {}",
-                        smartrest_request.url, err
-                    );
-                    ConfigManagerActor::fail_config_operation_in_c8y(
-                        ConfigOperation::Update,
-                        Some(child_id),
-                        ActiveOperationState::Pending,
-                        failure_reason,
-                        message_box,
-                    )
-                    .await?;
-                } else {
-                    let config_update_req_msg = MqttMessage::new(
-                        &config_management.operation_request_topic(),
-                        config_management
-                            .operation_request_payload(&self.config.tedge_http_host)?,
-                    );
-                    message_box.send(config_update_req_msg.into()).await?;
-                    info!("Config update request for config type: {config_type} sent to child device: {child_id}");
-
-                    self.active_child_ops
-                        .insert(operation_key.clone(), ActiveOperationState::Pending);
-
-                    // Start the timer for operation timeout
-                    message_box
-                        .send(SetTimeout::new(DEFAULT_OPERATION_TIMEOUT, operation_key).into())
+                        let failure_reason = format!(
+                            "Downloading the config file update from {} failed with {}",
+                            smartrest_request.url, err
+                        );
+                        ConfigManagerActor::fail_config_operation_in_c8y(
+                            ConfigOperation::Update,
+                            Some(child_id),
+                            ActiveOperationState::Pending,
+                            failure_reason,
+                            message_box,
+                        )
                         .await?;
+                    } else {
+                        let config_update_req_msg = MqttMessage::new(
+                            &config_management.operation_request_topic(),
+                            config_management
+                                .operation_request_payload(&self.config.tedge_http_host)?,
+                        );
+                        message_box.send(config_update_req_msg.into()).await?;
+                        info!("Config update request for config type: {config_type} sent to child device: {child_id}");
+
+                        self.active_child_ops
+                            .insert(operation_key.clone(), ActiveOperationState::Pending);
+
+                        // Start the timer for operation timeout
+                        message_box
+                            .send(SetTimeout::new(DEFAULT_OPERATION_TIMEOUT, operation_key).into())
+                            .await?;
+                    }
                 }
-            }
+                ConfigEntry::ExtEntry(_) => {
+                    warn!("Exec entries not supported for child devices");
+                }
+            },
             Err(InvalidConfigTypeError { config_type }) => {
                 warn!(
                     "Ignoring the config operation request for unknown config type: {config_type}"
