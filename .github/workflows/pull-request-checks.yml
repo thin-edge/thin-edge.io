@@ -366,49 +366,14 @@ jobs:
       continue-on-error: true
     - run: exit 0
 
-### Disable cargo-tarpaulin as some tests failed only in this step
-#  cargo-tarpaulin:
-#    name: Run cargo tarpaulin
-#    runs-on: Ubuntu-20.04
-#
-#    steps:
-#      - name: Checkout
-#        uses: actions/checkout@v3
-#
-#      - name: Retrieve MSRV from workspace Cargo.toml
-#        id: rust_version
-#        uses: SebRollen/toml-action@v1.0.2
-#        with:
-#          file: Cargo.toml
-#          field: "workspace.package.rust-version"
-#
-#      - name: Enable toolchain via github action
-#        uses: dtolnay/rust-toolchain@master
-#        with:
-#          toolchain: ${{ steps.rust_version.outputs.value }}
-#
-#      - name: Enable cache
-#        # https://github.com/marketplace/actions/rust-cache
-#        uses: Swatinem/rust-cache@v2
-#
-#      - name: install libssl
-#        run: sudo apt install libssl-dev
-#
-#      - name: Cargo install tarpaulin
-#        uses: actions-rs/cargo@v1
-#        # https://github.com/marketplace/actions/rust-cargo
-#        with:
-#          command: install
-#          args: cargo-tarpaulin
-#
-#      - name: Cargo tarpaulin
-#        uses: actions-rs/cargo@v1
-#        # https://github.com/marketplace/actions/rust-cargo
-#        with:
-#          command: tarpaulin
-#          args: --skip-clean --avoid-cfg-tarpaulin -v --out Xml
-#
-#      - name: Upload to codecov.io
-#        uses: codecov/codecov-action@v1
-#        with:
-#          token: ${{secrets.CODECOV_TOKEN}}
+  doc:
+    runs-on: ubuntu-latest
+    name: nightly / doc
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: cargo doc
+
+        run: cargo doc --no-deps --all-features --workspace --exclude tedge_config_macros
