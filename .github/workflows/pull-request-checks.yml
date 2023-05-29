@@ -324,7 +324,11 @@ jobs:
         # https://github.com/marketplace/actions/rust-cargo
         with:
           command: test
-          args: --no-fail-fast --all-features
+          args: --no-fail-fast --all-features --all-targets
+
+      # https://github.com/rust-lang/cargo/issues/6669
+      - name: cargo test --doc
+        run: cargo test --locked --all-features --doc
 
   shellcheck:
     name: Shellcheck
@@ -393,6 +397,8 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     name: ubuntu / stable / coverage
+    needs: changes
+
     steps:
       - uses: actions/checkout@v3
         with:
