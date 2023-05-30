@@ -13,6 +13,7 @@
 - [How to use thin-edge.io with your preferred init system](./019_how_to_use_preferred_init_system.md)
 - [How to enable watchdog using systemd?](./021_enable_tedge_watchdog_using_systemd.md)
 - [How to change temp path?](./018_update_config_paths.md)
+- [How to set up client/server authentication for the local MQTT broker](./029_mqtt_local_broker_authentication.md)
 
 ## Cloud connection
 - [How to create a test certificate?](./003_registration.md)
