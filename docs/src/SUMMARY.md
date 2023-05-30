@@ -53,6 +53,7 @@
   - [How to monitor a service from Cumulocity](howto-guides/028_c8y_service_monitoring.md)
   - [How to manage Apama software artifacts with Apama plugin?](howto-guides/017_apama_software_management_plugin.md)
   - [How to retrieve JWT token from Cumulocity?](howto-guides/011_retrieve_jwt_token_from_cumulocity.md)
+  - [How to set up client/server authentication for the local MQTT broker](howto-guides/029_mqtt_local_broker_authentication.md)
 
 - [Reference](references/references.md)
   - [Supported platforms](./supported-platforms.md)
