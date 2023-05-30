@@ -10,7 +10,6 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-assert_cmd = "2.0"
 async-trait = "0.1"
 c8y_api = { path = "../../core/c8y_api" }
 c8y_http_proxy = { path = "../c8y_http_proxy" }

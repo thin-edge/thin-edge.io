@@ -1,7 +1,5 @@
 use crate::error::ConversionError;
 use serde::Serialize;
-use std::process::Command;
-use tracing::warn;
 
 const DEFAULT_AGENT_FRAGMENT_NAME: &str = "thin-edge.io";
 const DEFAULT_AGENT_FRAGMENT_URL: &str = "https://thin-edge.io";
@@ -23,7 +21,7 @@ impl C8yAgentFragment {
     pub fn new() -> Result<Self, ConversionError> {
         let c8y_agent = C8yAgent {
             name: DEFAULT_AGENT_FRAGMENT_NAME.into(),
-            version: get_tedge_version()?,
+            version: get_tedge_version(),
             url: DEFAULT_AGENT_FRAGMENT_URL.into(),
         };
         Ok(Self { c8y_agent })
@@ -36,31 +34,9 @@ impl C8yAgentFragment {
     }
 }
 
-pub fn get_tedge_version() -> Result<String, ConversionError> {
-    let process = if cfg!(test) {
-        assert_cmd::Command::cargo_bin("tedge")
-            .unwrap()
-            .arg("--version")
-            .output()
-    } else {
-        Command::new("tedge").arg("--version").output()
-    };
-
-    match process {
-        Ok(process) => {
-            let string = String::from_utf8(process.stdout)?;
-            Ok(string
-                .split_whitespace()
-                .last()
-                .ok_or(ConversionError::FromOptionError)?
-                .trim()
-                .to_string())
-        }
-        Err(err) => {
-            warn!("{}\ntedge version not found.", err);
-            Ok("unknown".to_string())
-        }
-    }
+pub fn get_tedge_version() -> String {
+    // Use package version over tedge cli to remove dependency on the optional tedge cli #1991
+    env!("CARGO_PKG_VERSION").to_string()
 }
 
 #[derive(Debug, Serialize)]

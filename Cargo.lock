@@ -715,7 +715,6 @@ version = "0.11.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
- "assert_cmd",
  "assert_matches",
  "async-trait",
  "c8y_api",
