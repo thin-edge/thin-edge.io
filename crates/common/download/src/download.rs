@@ -387,6 +387,7 @@ mod tests {
     use tempfile::tempdir;
     use tempfile::NamedTempFile;
     use tempfile::TempDir;
+    use test_case::test_case;
     use tokio::io::AsyncBufReadExt;
     use tokio::io::AsyncWriteExt;
     use tokio::io::BufReader;
@@ -712,6 +713,123 @@ mod tests {
 
         server_task.abort();
 
+        Ok(())
+    }
+
+    // Parameters:
+    //
+    // - status code
+    // - bearer token boolean
+    // - maybe url
+    // - expected std error
+    // - description
+    #[test_case(
+        200,
+        false,
+        Some("not_a_url"),
+        "URL"
+        ; "builder error"
+    )]
+    #[test_case(
+        200,
+        true,
+        Some("not_a_url"),
+        "URL"
+        ; "builder error with auth"
+    )]
+    #[test_case(
+        200,
+        false,
+        Some("http://not_a_url"),
+        "dns error: failed to lookup address information"
+        ; "dns error"
+    )]
+    #[test_case(
+        200,
+        true,
+        Some("http://not_a_url"),
+        "dns error: failed to lookup address information"
+        ; "dns error with auth"
+    )]
+    #[test_case(
+        404,
+        false,
+        None,
+        "404 Not Found"
+        ; "client error"
+    )]
+    #[test_case(
+        404,
+        true,
+        None,
+        "404 Not Found"
+        ; "client error with auth"
+    )]
+    #[tokio::test]
+    async fn downloader_download_processing_error(
+        status_code: usize,
+        with_token: bool,
+        url: Option<&str>,
+        expected_err: &str,
+    ) -> anyhow::Result<()> {
+        let name = "test_download";
+        let version = Some("test1".to_string());
+        let target_dir_path = TempDir::new()?;
+
+        // bearer/no bearer setup
+        let _mock1 = {
+            if with_token {
+                mock("GET", "/some_file.txt")
+                    .match_header("authorization", "Bearer token")
+                    .with_status(status_code)
+                    .create()
+            } else {
+                mock("GET", "/some_file.txt")
+                    .with_status(status_code)
+                    .create()
+            }
+        };
+
+        // url/no url setup
+        let url = {
+            if let Some(url) = url {
+                DownloadInfo::new(url)
+            } else {
+                let mut target_url = mockito::server_url();
+                target_url.push_str("/some_file.txt");
+                DownloadInfo::new(&target_url)
+            }
+        };
+
+        // applying token if `with_token` = true
+        let url = {
+            if with_token {
+                url.with_auth(Auth::Bearer(String::from("token")))
+            } else {
+                url
+            }
+        };
+
+        let downloader = Downloader::new_sm(name, &version, target_dir_path.path());
+        match downloader.download(&url).await {
+            Ok(_success) => anyhow::bail!("Expected client error."),
+            Err(err) => {
+                // `Error::to_string` uses a Display trait and only contains a
+                // top-level error message, and not any lower level contexts. To
+                // make sure that we look at the entire error chain, we wrap the
+                // error in `anyhow::Error` which reports errors by printing the
+                // entire error chain. We can then check keywords that we want
+                // appear somewhere in the error chain
+                let err = anyhow::Error::from(err);
+                println!("{err:?}");
+
+                // We use debug representation because that's what anyhow uses
+                // to pretty print error report chain
+                assert!(format!("{err:?}")
+                    .to_ascii_lowercase()
+                    .contains(&expected_err.to_ascii_lowercase()));
+            }
+        };
         Ok(())
     }
 

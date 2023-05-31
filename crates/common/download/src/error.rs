@@ -18,8 +18,8 @@ pub enum DownloadError {
     #[error("No write access to {path:?}")]
     NoWriteAccess { path: PathBuf },
 
-    #[error("From reqwest")]
-    FromReqwest(#[from] reqwest::Error),
+    #[error("Could not make a successful request to the remote server")]
+    Request(#[from] reqwest::Error),
 
     #[error("Invalid server response")]
     InvalidResponse(#[from] InvalidResponseError),
