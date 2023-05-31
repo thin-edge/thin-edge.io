@@ -256,7 +256,10 @@ async fn handle_request_child_device_with_failed_download() -> Result<(), DynErr
     let (id, _download_request) = downloader_message_box.recv().await.unwrap();
 
     // Simulate downloading a file is failed.
-    let fake_download_error = DownloadError::FromIo(io::Error::new(io::ErrorKind::Other, "fail"));
+    let fake_download_error = DownloadError::FromIo {
+        source: io::Error::new(io::ErrorKind::Other, "fail"),
+        context: "fail".to_string(),
+    };
     downloader_message_box
         .send((id, Err(fake_download_error)))
         .await?;
@@ -270,9 +273,7 @@ async fn handle_request_child_device_with_failed_download() -> Result<(), DynErr
             ),
             MqttMessage::new(
                 &Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME),
-                format!(
-                    "502,c8y_Firmware,\"Download from {DOWNLOAD_URL} failed with I/O error\"\n"
-                ),
+                format!("502,c8y_Firmware,\"Download from {DOWNLOAD_URL} failed with fail\"\n"),
             ),
         ])
         .await;

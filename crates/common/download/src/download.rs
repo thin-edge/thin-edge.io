@@ -3,6 +3,7 @@ pub use partial_response::InvalidResponseError;
 use tedge_utils::file::FileError;
 
 use crate::error::DownloadError;
+use crate::error::ErrContext;
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
 use log::debug;
@@ -137,10 +138,14 @@ impl Downloader {
         let target_file_path = self.target_filename.as_path();
         let mut ranges_supported = false;
 
-        let mut file: File = File::create(&tmp_target_path)?;
+        let mut file: File = File::create(&tmp_target_path)
+            .context(format!("Can't create a temporary file {tmp_target_path:?}"))?;
 
+        // TODO: make this a function - no plain loops!
         loop {
-            let mut file_pos = file.stream_position()?;
+            let mut file_pos = file
+                .stream_position()
+                .context("could not get the file cursor position".to_string())?;
 
             let range_start = if ranges_supported { file_pos } else { 0 };
             let mut response = request_range_from(url, range_start).await?;
@@ -154,7 +159,9 @@ impl Downloader {
             let chunk_pos = partial_response::response_range_start(&response)?;
 
             if chunk_pos != file_pos {
-                file_pos = file.seek(SeekFrom::Start(chunk_pos))?;
+                file_pos = file
+                    .seek(SeekFrom::Start(chunk_pos))
+                    .context("can't seek inside the file".to_string())?;
             }
 
             let file_len = response.content_length().unwrap_or(0);
@@ -171,7 +178,12 @@ impl Downloader {
                         warn!("Error while downloading response: {err}.\nRetrying...");
                         continue;
                     }
-                    SaveChunksError::Io(err) => return Err(err.into()),
+                    SaveChunksError::Io(err) => {
+                        return Err(DownloadError::FromIo {
+                            source: err,
+                            context: "Error while saving file to the file".to_string(),
+                        })
+                    }
                 }
             }
 
@@ -204,7 +216,11 @@ impl Downloader {
             self.has_write_access()?;
         } else if let Some(file_parent) = self.target_filename.parent() {
             if !file_parent.exists() {
-                tokio::fs::create_dir_all(file_parent).await?;
+                tokio::fs::create_dir_all(file_parent)
+                    .await
+                    .context(format!(
+                        "error creating parent directories for {file_parent:?}"
+                    ))?;
             }
         }
 
@@ -225,7 +241,9 @@ impl Downloader {
 
     fn has_write_access(&self) -> Result<(), DownloadError> {
         let metadata = if self.target_filename.is_file() {
-            fs::metadata(&self.target_filename)?
+            let target_filename = &self.target_filename;
+            fs::metadata(target_filename)
+                .context(format!("error getting metadata of {target_filename:?}"))?
         } else {
             // If the file does not exist before downloading file, check the directory perms
             let parent_dir =
@@ -235,7 +253,7 @@ impl Downloader {
                     .ok_or_else(|| DownloadError::NoWriteAccess {
                         path: self.target_filename.clone(),
                     })?;
-            fs::metadata(parent_dir)?
+            fs::metadata(parent_dir).context(format!("error getting metadata of {parent_dir:?}"))?
         };
 
         // Write permission check
@@ -331,7 +349,8 @@ fn try_pre_allocate_space(
     }
 
     if let Some(root) = path.parent() {
-        let tmpstats = statvfs::statvfs(root)?;
+        let tmpstats =
+            statvfs::statvfs(root).context(format!("Can't stat temporary path {root:?}"))?;
 
         // Reserve 5% of total disk space
         let five_percent_disk_space =
@@ -484,7 +503,7 @@ mod tests {
         let downloader = Downloader::new_sm(name, &version, target_dir_path);
 
         let err = downloader.download(&url).await.unwrap_err();
-        assert!(matches!(err, DownloadError::FromIo(_)));
+        assert!(matches!(err, DownloadError::FromIo { .. }));
 
         downloader.cleanup().await?;
 
