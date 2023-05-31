@@ -463,6 +463,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn invalid_filename() -> anyhow::Result<()> {
+        let temp_dir = tempdir()?;
+        std::env::set_current_dir(temp_dir.path()).unwrap();
+
+        let _mock1 = mock("GET", "/some_file.txt")
+            .with_status(200)
+            .with_body(b"hello")
+            .create();
+
+        let name = "test_download";
+        let version = Some("test1".to_string());
+        let target_dir_path = "";
+
+        let mut target_url = mockito::server_url();
+        target_url.push_str("/some_file.txt");
+
+        let url = DownloadInfo::new(&target_url);
+
+        let downloader = Downloader::new_sm(name, &version, target_dir_path);
+
+        let err = downloader.download(&url).await.unwrap_err();
+        assert!(matches!(err, DownloadError::FromIo(_)));
+
+        downloader.cleanup().await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn writing_to_existing_file() -> anyhow::Result<()> {
+        let temp_dir = tempdir()?;
+        let _mock1 = mock("GET", "/some_file.txt")
+            .with_status(200)
+            .with_body(b"hello")
+            .create();
+
+        let target_file_path = temp_dir.path().join("downloaded_file.txt");
+        std::fs::File::create(&target_file_path).unwrap();
+
+        let mut target_url = mockito::server_url();
+        target_url.push_str("/some_file.txt");
+
+        let url = DownloadInfo::new(&target_url);
+
+        let downloader = Downloader::new(&target_file_path, PermissionEntry::default());
+        downloader.download(&url).await?;
+
+        let file_content = std::fs::read(target_file_path)?;
+
+        assert_eq!(file_content, "hello".as_bytes());
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn downloader_download_with_reasonable_content_length() -> anyhow::Result<()> {
         let file = create_file_with_size(10 * 1024 * 1024)?;
         let file_path = file.into_temp_path();
