@@ -2,7 +2,6 @@ use crate::error::FirmwareManagementError;
 
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::smartrest::topic::C8yTopic;
-use log::info;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -18,9 +17,7 @@ use tedge_config::IpAddress;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
 use tedge_config::TmpPathSetting;
-use tedge_config::DEFAULT_FILE_TRANSFER_DIR_NAME;
 use tedge_mqtt_ext::TopicFilter;
-use tedge_utils::file::create_directory_with_user_group;
 
 const PLUGIN_SERVICE_NAME: &str = "c8y-firmware-plugin";
 const FIRMWARE_UPDATE_RESPONSE_TOPICS: &str = "tedge/+/commands/res/firmware_update";
@@ -31,6 +28,7 @@ pub struct FirmwareManagerConfig {
     pub tedge_device_id: String,
     pub local_http_host: String,
     pub tmp_dir: PathBuf,
+    pub data_dir: PathBuf,
     pub cache_dir: PathBuf,
     pub file_transfer_dir: PathBuf,
     pub firmware_dir: PathBuf,
@@ -68,6 +66,7 @@ impl FirmwareManagerConfig {
             tedge_device_id,
             local_http_host,
             tmp_dir,
+            data_dir,
             cache_dir,
             file_transfer_dir,
             firmware_dir,
@@ -122,19 +121,6 @@ impl FirmwareManagerConfig {
         validate_dir_exists(self.firmware_dir.as_path())?;
         Ok(self.firmware_dir.clone())
     }
-}
-
-pub fn create_directories(data_dir: PathBuf) -> Result<(), FirmwareManagementError> {
-    info!("Creating required directories for c8y-firmware-plugin.");
-    create_directory_with_user_group(data_dir.join("cache"), "tedge", "tedge", 0o755)?;
-    create_directory_with_user_group(
-        data_dir.join(DEFAULT_FILE_TRANSFER_DIR_NAME),
-        "tedge",
-        "tedge",
-        0o755,
-    )?;
-    create_directory_with_user_group(data_dir.join("firmware"), "tedge", "tedge", 0o755)?;
-    Ok(())
 }
 
 fn validate_dir_exists(dir_path: &Path) -> Result<(), FirmwareManagementError> {

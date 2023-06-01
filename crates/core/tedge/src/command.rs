@@ -145,6 +145,7 @@ pub trait BuildCommand {
 
 /// The context for `BuildCommand`
 ///
+#[derive(Debug)]
 pub struct BuildContext {
     pub config_repository: tedge_config::TEdgeConfigRepository,
     pub config_location: tedge_config::TEdgeConfigLocation,

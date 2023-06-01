@@ -11,6 +11,7 @@ use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_config::*;
+use tracing::log::warn;
 
 mod aws;
 mod az;
@@ -111,9 +112,11 @@ async fn main() -> anyhow::Result<()> {
     }
 
     if mapper_opt.init {
-        component.init(&mapper_opt.config_dir).await
+        warn!("This --init option has been deprecated and will be removed in a future release");
+        Ok(())
     } else if mapper_opt.clear {
-        component.clear_session().await
+        warn!("This --clear option has been deprecated and will be removed in a future release");
+        Ok(())
     } else {
         component.start(config, &mapper_opt.config_dir).await
     }

@@ -13,7 +13,6 @@ use tedge_actors::NoConfig;
 use tedge_config::AwsMapperTimestamp;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::TEdgeConfig;
-use tracing::info;
 
 const AWS_MAPPER_NAME: &str = "tedge-mapper-aws";
 
@@ -23,13 +22,6 @@ pub struct AwsMapper;
 impl TEdgeComponent for AwsMapper {
     fn session_name(&self) -> &str {
         AWS_MAPPER_NAME
-    }
-
-    async fn init(&self, _config_dir: &Path) -> Result<(), anyhow::Error> {
-        info!("Initialize tedge mapper aws");
-        self.init_session(AwsConverter::in_topic_filter()).await?;
-
-        Ok(())
     }
 
     async fn start(

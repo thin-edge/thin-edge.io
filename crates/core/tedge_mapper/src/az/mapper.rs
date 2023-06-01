@@ -11,8 +11,6 @@ use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_config::TEdgeConfig;
 use tedge_config::*;
-use tedge_utils::file::create_directory_with_user_group;
-use tracing::info;
 
 const AZURE_MAPPER_NAME: &str = "tedge-mapper-az";
 
@@ -28,19 +26,6 @@ impl AzureMapper {
 impl TEdgeComponent for AzureMapper {
     fn session_name(&self) -> &str {
         AZURE_MAPPER_NAME
-    }
-
-    async fn init(&self, config_dir: &Path) -> Result<(), anyhow::Error> {
-        info!("Initialize tedge mapper az");
-        create_directory_with_user_group(
-            format!("{}/operations/az", config_dir.display()),
-            "tedge",
-            "tedge",
-            0o775,
-        )?;
-
-        self.init_session(AzureConverter::in_topic_filter()).await?;
-        Ok(())
     }
 
     async fn start(

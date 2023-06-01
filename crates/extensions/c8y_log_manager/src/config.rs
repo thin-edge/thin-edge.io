@@ -12,29 +12,31 @@ use tedge_config::DeviceIdSetting;
 use tedge_config::HttpBindAddressSetting;
 use tedge_config::HttpPortSetting;
 use tedge_config::IpAddress;
+use tedge_config::LogPathSetting;
 use tedge_config::MqttClientHostSetting;
 use tedge_config::MqttClientPortSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
 use tedge_config::TmpPathSetting;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_utils::paths::validate_parent_dir_exists;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-log-plugin.toml";
-pub const DEFAULT_OPERATION_DIR_NAME: &str = "c8y/";
+pub const DEFAULT_PLUGIN_CONFIG_DIR_NAME: &str = "c8y/";
 
 /// Configuration of the Configuration Manager
 #[derive(Clone, Debug)]
 pub struct LogManagerConfig {
     pub config_dir: PathBuf,
     pub tmp_dir: PathBuf,
+    pub log_dir: PathBuf,
     pub device_id: String,
     pub mqtt_host: String,
     pub mqtt_port: u16,
     pub tedge_http_host: IpAddress,
     pub tedge_http_port: u16,
+    pub ops_dir: PathBuf,
+    pub plugin_config_dir: PathBuf,
     pub plugin_config_path: PathBuf,
-    pub plugin_config: LogPluginConfig,
 }
 
 impl LogManagerConfig {
@@ -46,29 +48,31 @@ impl LogManagerConfig {
 
         let device_id = tedge_config.query(DeviceIdSetting)?;
         let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
+        let log_dir = tedge_config.query(LogPathSetting)?.into();
         let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
         let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
 
         let tedge_http_host = tedge_config.query(HttpBindAddressSetting)?;
         let tedge_http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
 
-        let plugin_config_path = config_dir
-            .join(DEFAULT_OPERATION_DIR_NAME)
-            .join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
-        validate_parent_dir_exists(&plugin_config_path)?;
+        let ops_dir = config_dir.join("operations/c8y");
 
-        let plugin_config = LogPluginConfig::new(&plugin_config_path);
+        let plugin_config_dir = config_dir.join(DEFAULT_PLUGIN_CONFIG_DIR_NAME);
+
+        let plugin_config_path = plugin_config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
 
         Ok(Self {
             config_dir,
             tmp_dir,
+            log_dir,
             device_id,
             mqtt_host,
             mqtt_port,
             tedge_http_host,
             tedge_http_port,
+            ops_dir,
+            plugin_config_dir,
             plugin_config_path,
-            plugin_config,
         })
     }
 }

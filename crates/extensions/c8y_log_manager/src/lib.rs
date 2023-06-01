@@ -25,22 +25,29 @@ use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
+use tedge_utils::file::create_directory_with_defaults;
+use tedge_utils::file::create_file_with_defaults;
+use tedge_utils::file::FileError;
 
 /// This is an actor builder.
 pub struct LogManagerBuilder {
     config: LogManagerConfig,
+    plugin_config: LogPluginConfig,
     box_builder: SimpleMessageBoxBuilder<LogInput, NoMessage>,
     mqtt_publisher: DynSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
 }
 
 impl LogManagerBuilder {
-    pub fn new(
+    pub fn try_new(
         config: LogManagerConfig,
         mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
         http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
-    ) -> Self {
+    ) -> Result<Self, FileError> {
+        Self::init(&config)?;
+        let plugin_config = LogPluginConfig::new(&config.plugin_config_path);
+
         let box_builder = SimpleMessageBoxBuilder::new("C8Y Log Manager", 16);
         let http_proxy = C8YHttpProxy::new("LogManager => C8Y", http);
         let mqtt_publisher = mqtt.connect_consumer(
@@ -52,12 +59,33 @@ impl LogManagerBuilder {
             adapt(&box_builder.get_sender()),
         );
 
-        Self {
+        Ok(Self {
             config,
+            plugin_config,
             box_builder,
             mqtt_publisher,
             http_proxy,
-        }
+        })
+    }
+
+    pub fn init(config: &LogManagerConfig) -> Result<(), FileError> {
+        // creating c8y_LogfileRequest operation file
+        create_file_with_defaults(config.ops_dir.join("c8y_LogfileRequest"), None)?;
+
+        // creating plugin config parent dir
+        create_directory_with_defaults(&config.plugin_config_dir)?;
+
+        // creating c8y-log-plugin.toml
+        let logs_path = format!("{}/tedge/agent/software-*", config.log_dir.display());
+        let data = format!(
+            r#"files = [
+    {{ type = "software-management", path = "{logs_path}" }},
+]"#
+        );
+
+        create_file_with_defaults(&config.plugin_config_path, Some(&data))?;
+
+        Ok(())
     }
 
     /// List of MQTT topic filters the log actor has to subscribe to
@@ -93,6 +121,7 @@ impl Builder<LogManagerActor> for LogManagerBuilder {
 
         Ok(LogManagerActor::new(
             self.config,
+            self.plugin_config,
             mqtt_publisher,
             self.http_proxy,
             message_box,

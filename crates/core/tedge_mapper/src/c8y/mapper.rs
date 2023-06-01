@@ -16,8 +16,6 @@ use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActor;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_timer_ext::TimerActor;
-use tedge_utils::file::*;
-use tracing::info;
 
 const CUMULOCITY_MAPPER_NAME: &str = "tedge-mapper-c8y";
 
@@ -27,15 +25,6 @@ pub struct CumulocityMapper;
 impl TEdgeComponent for CumulocityMapper {
     fn session_name(&self) -> &str {
         CUMULOCITY_MAPPER_NAME
-    }
-
-    async fn init(&self, cfg_dir: &Path) -> Result<(), anyhow::Error> {
-        info!("Initialize tedge mapper c8y");
-        create_directories(cfg_dir)?;
-
-        self.init_session(C8yMapperConfig::subscriptions(cfg_dir)?)
-            .await?;
-        Ok(())
     }
 
     async fn start(&self, tedge_config: TEdgeConfig, cfg_dir: &Path) -> Result<(), anyhow::Error> {
@@ -53,13 +42,13 @@ impl TEdgeComponent for CumulocityMapper {
         let mut timer_actor = TimerActor::builder();
 
         let c8y_mapper_config = C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config)?;
-        let c8y_mapper_actor = C8yMapperBuilder::new(
+        let c8y_mapper_actor = C8yMapperBuilder::try_new(
             c8y_mapper_config,
             &mut mqtt_actor,
             &mut c8y_http_proxy_actor,
             &mut timer_actor,
             &mut fs_watch_actor,
-        );
+        )?;
 
         // MQTT client dedicated to set service down status on shutdown, using a last-will message
         // A separate MQTT actor/client is required as the last will message of the main MQTT actor
@@ -96,35 +85,4 @@ pub fn service_monitor_client_config(tedge_config: &TEdgeConfig) -> Result<Confi
             None,
         ));
     Ok(mqtt_config)
-}
-
-fn create_directories(config_dir: &Path) -> Result<(), anyhow::Error> {
-    create_directory_with_user_group(
-        format!("{}/operations/c8y", config_dir.display()),
-        "tedge",
-        "tedge",
-        0o775,
-    )?;
-    create_file_with_user_group(
-        format!("{}/operations/c8y/c8y_SoftwareUpdate", config_dir.display()),
-        "tedge",
-        "tedge",
-        0o644,
-        None,
-    )?;
-    create_file_with_user_group(
-        format!("{}/operations/c8y/c8y_Restart", config_dir.display()),
-        "tedge",
-        "tedge",
-        0o644,
-        None,
-    )?;
-    // Create directory for device custom fragments
-    create_directory_with_user_group(
-        format!("{}/device", config_dir.display()),
-        "tedge",
-        "tedge",
-        0o775,
-    )?;
-    Ok(())
 }

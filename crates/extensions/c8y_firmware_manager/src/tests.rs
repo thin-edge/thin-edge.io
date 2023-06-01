@@ -325,105 +325,6 @@ async fn create_download_request_with_c8y_auth() -> Result<(), DynError> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn handle_request_dir_cache_not_found() -> Result<(), DynError> {
-    let mut ttd = TempTedgeDir::new();
-    ttd.dir("file-transfer");
-    ttd.dir("firmware");
-
-    let (
-        mut mqtt_message_box,
-        mut _jwt_message_box,
-        mut _timer_message_box,
-        mut _downloader_message_box,
-    ) = spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, false, false).await?;
-
-    // On startup, SmartREST 500 should be sent by firmware manager.
-    mqtt_message_box.skip(1).await;
-
-    // Publish firmware update operation to child device.
-    publish_smartrest_firmware_operation(&mut mqtt_message_box).await?;
-
-    // Assert EXECUTING SmartREST MQTT message and FAILED SmartREST MQTT message due to missing 'cache' directory.
-    mqtt_message_box.assert_received(
-        [
-            MqttMessage::new(&Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME), "501,c8y_Firmware\n"),
-            MqttMessage::new(&Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME), format!(
-                "502,c8y_Firmware,\"Directory {}/cache is not found. Run 'c8y-firmware-plugin --init' to create the directory.\"\n",
-                ttd.path().display()
-            )),
-        ],
-    ).await;
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn handle_request_dir_firmware_not_found() -> Result<(), DynError> {
-    let mut ttd = TempTedgeDir::new();
-    ttd.dir("file-transfer");
-    ttd.dir("cache");
-
-    let (
-        mut mqtt_message_box,
-        mut _jwt_message_box,
-        mut _timer_message_box,
-        mut _downloader_message_box,
-    ) = spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, false, true).await?;
-
-    // On startup, SmartREST 500 should be sent by firmware manager.
-    mqtt_message_box.skip(1).await;
-
-    // Publish firmware update operation to child device.
-    publish_smartrest_firmware_operation(&mut mqtt_message_box).await?;
-
-    // Assert EXECUTING SmartREST MQTT message and FAILED SmartREST MQTT message due to missing 'firmware' directory.
-    mqtt_message_box.assert_received(
-        [
-            MqttMessage::new(&Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME), "501,c8y_Firmware\n"),
-            MqttMessage::new(&Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME), format!(
-                "502,c8y_Firmware,\"Directory {}/firmware is not found. Run 'c8y-firmware-plugin --init' to create the directory.\"\n",
-                ttd.path().display()
-            )),
-        ],
-    ).await;
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn handle_request_dir_file_transfer_not_found() -> Result<(), DynError> {
-    let mut ttd = TempTedgeDir::new();
-    ttd.dir("cache");
-    ttd.dir("firmware");
-
-    let (
-        mut mqtt_message_box,
-        mut _jwt_message_box,
-        mut _timer_message_box,
-        mut _downloader_message_box,
-    ) = spawn_firmware_manager(&mut ttd, DEFAULT_REQUEST_TIMEOUT_SEC, false, true).await?;
-
-    // On startup, SmartREST 500 should be sent by firmware manager.
-    mqtt_message_box.skip(1).await;
-
-    // Publish firmware update operation to child device.
-    publish_smartrest_firmware_operation(&mut mqtt_message_box).await?;
-
-    // Assert EXECUTING SmartREST MQTT message and FAILED SmartREST MQTT message due to missing 'file-transfer' directory.
-    mqtt_message_box.assert_received(
-        [
-            MqttMessage::new(&Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME), "501,c8y_Firmware\n"),
-            MqttMessage::new(&Topic::new_unchecked(C8Y_CHILD_PUBLISH_TOPIC_NAME), format!(
-                "502,c8y_Firmware,\"Directory {}/file-transfer is not found. Run 'c8y-firmware-plugin --init' to create the directory.\"\n",
-                ttd.path().display()
-            )),
-        ],
-    ).await;
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn handle_response_successful_child_device() -> Result<(), DynError> {
     let mut ttd = TempTedgeDir::new();
 
@@ -763,13 +664,14 @@ async fn spawn_firmware_manager(
     let mut downloader_builder: SimpleMessageBoxBuilder<IdDownloadRequest, IdDownloadResult> =
         SimpleMessageBoxBuilder::new("Downloader", 5);
 
-    let firmware_manager_builder = FirmwareManagerBuilder::new(
+    let firmware_manager_builder = FirmwareManagerBuilder::try_new(
         config,
         &mut mqtt_builder,
         &mut jwt_builder,
         &mut timer_builder,
         &mut downloader_builder,
-    );
+    )
+    .unwrap();
 
     let mqtt_message_box = mqtt_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let jwt_message_box = jwt_builder.build().with_timeout(TEST_TIMEOUT_MS);

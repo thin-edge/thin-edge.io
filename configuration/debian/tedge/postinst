@@ -18,7 +18,7 @@ if ! grep -q "/etc/tedge/mosquitto-conf" "/etc/mosquitto/mosquitto.conf"; then
 fi
 
 # Initialize the tedge
-tedge --init
+tedge init
 
 ### Below are automatically created script parts by cargo deb (Search for cargo deb DEBHELPER)
 #DEBHELPER#

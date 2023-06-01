@@ -12,6 +12,7 @@ use tedge_config::ConfigSettingAccessor;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::TEdgeConfigRepository;
+use tedge_utils::file::create_directory_with_user_group;
 use tedge_utils::file::create_file_with_user_group;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
@@ -52,8 +53,18 @@ async fn main() -> miette::Result<()> {
 }
 
 fn declare_supported_operation(config_dir: &Utf8Path) -> miette::Result<()> {
+    let supported_operation_path = supported_operation_path(config_dir);
+    create_directory_with_user_group(
+        supported_operation_path.parent().unwrap(),
+        "tedge",
+        "tedge",
+        0o755,
+    )
+    .into_diagnostic()
+    .context("Creating supported operations directory")?;
+
     create_file_with_user_group(
-        supported_operation_path(config_dir),
+        supported_operation_path,
         "tedge",
         "tedge",
         0o644,

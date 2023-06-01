@@ -54,6 +54,20 @@ pub enum FileError {
     NoWriteAccess { path: PathBuf },
 }
 
+pub fn create_directory<P: AsRef<Path>>(
+    dir: P,
+    user: Option<String>,
+    group: Option<String>,
+    mode: Option<u32>,
+) -> Result<(), FileError> {
+    let perm_entry = PermissionEntry::new(user, group, mode);
+    perm_entry.create_directory(dir.as_ref())
+}
+
+pub fn create_directory_with_defaults<P: AsRef<Path>>(dir: P) -> Result<(), FileError> {
+    create_directory(dir, None, None, None)
+}
+
 pub fn create_directory_with_user_group(
     dir: impl AsRef<Path>,
     user: &str,
@@ -67,6 +81,24 @@ pub fn create_directory_with_user_group(
 pub fn create_directory_with_mode(dir: impl AsRef<Path>, mode: u32) -> Result<(), FileError> {
     let perm_entry = PermissionEntry::new(None, None, Some(mode));
     perm_entry.create_directory(dir.as_ref())
+}
+
+pub fn create_file<P: AsRef<Path>>(
+    file: P,
+    content: Option<&str>,
+    user: Option<String>,
+    group: Option<String>,
+    mode: Option<u32>,
+) -> Result<(), FileError> {
+    let perm_entry = PermissionEntry::new(user, group, mode);
+    perm_entry.create_file(file.as_ref(), content)
+}
+
+pub fn create_file_with_defaults<P: AsRef<Path>>(
+    file: P,
+    content: Option<&str>,
+) -> Result<(), FileError> {
+    create_file(file, content, None, None, None)
 }
 
 pub fn create_file_with_mode(
@@ -189,6 +221,14 @@ impl PermissionEntry {
     }
 
     fn create_directory(&self, dir: &Path) -> Result<(), FileError> {
+        match dir.parent() {
+            None => return Ok(()),
+            Some(parent) => {
+                if !parent.exists() {
+                    self.create_directory(parent)?;
+                }
+            }
+        }
         debug!("Creating the directory {:?}", dir);
         match fs::create_dir(dir) {
             Ok(_) => {

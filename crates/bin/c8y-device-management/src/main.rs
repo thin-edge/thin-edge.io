@@ -65,32 +65,32 @@ async fn main() -> anyhow::Result<()> {
 
     // Instantiate config manager actor
     let config_manager_config = ConfigManagerConfig::from_tedge_config(&config_dir, &tedge_config)?;
-    let config_actor = ConfigManagerBuilder::new(
+    let config_actor = ConfigManagerBuilder::try_new(
         config_manager_config,
         &mut mqtt_actor,
         &mut c8y_http_proxy_actor,
         &mut timer_actor,
         &mut fs_watch_actor,
-    );
+    )?;
 
     // Instantiate log manager actor
     let log_manager_config = LogManagerConfig::from_tedge_config(&config_dir, &tedge_config)?;
-    let log_actor = LogManagerBuilder::new(
+    let log_actor = LogManagerBuilder::try_new(
         log_manager_config,
         &mut mqtt_actor,
         &mut c8y_http_proxy_actor,
         &mut fs_watch_actor,
-    );
+    )?;
 
     // Instantiate firmware manager actor
     let firmware_manager_config = FirmwareManagerConfig::from_tedge_config(&tedge_config)?;
-    let firmware_actor = FirmwareManagerBuilder::new(
+    let firmware_actor = FirmwareManagerBuilder::try_new(
         firmware_manager_config,
         &mut mqtt_actor,
         &mut jwt_actor,
         &mut timer_actor,
         &mut downloader_actor,
-    );
+    )?;
 
     // Instantiate health monitor actor
     let health_actor = HealthMonitorBuilder::new(PLUGIN_NAME, &mut mqtt_actor);

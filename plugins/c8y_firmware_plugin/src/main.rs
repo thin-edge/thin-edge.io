@@ -1,5 +1,3 @@
-use anyhow::Context;
-use c8y_firmware_manager::create_directories;
 use c8y_firmware_manager::FirmwareManagerBuilder;
 use c8y_firmware_manager::FirmwareManagerConfig;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
@@ -9,8 +7,6 @@ use tedge_actors::Runtime;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::ConfigRepository;
-use tedge_config::ConfigSettingAccessor;
-use tedge_config::DataPathSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_downloader_ext::DownloaderActor;
@@ -18,6 +14,7 @@ use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_signal_ext::SignalActor;
 use tedge_timer_ext::TimerActor;
+use tracing::log::warn;
 
 const PLUGIN_NAME: &str = "c8y-firmware-plugin";
 
@@ -73,12 +70,8 @@ async fn main() -> Result<(), anyhow::Error> {
     let tedge_config = config_repository.load()?;
 
     if firmware_plugin_opt.init {
-        init(&tedge_config).with_context(|| {
-            format!(
-                "Failed to initialize {}. You have to run the command with sudo.",
-                PLUGIN_NAME
-            )
-        })
+        warn!("This --init option has been deprecated and will be removed in a future release");
+        Ok(())
     } else {
         run(tedge_config).await
     }
@@ -100,13 +93,13 @@ async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
 
     // Instantiate firmware manager actor
     let firmware_manager_config = FirmwareManagerConfig::from_tedge_config(&tedge_config)?;
-    let firmware_actor = FirmwareManagerBuilder::new(
+    let firmware_actor = FirmwareManagerBuilder::try_new(
         firmware_manager_config,
         &mut mqtt_actor,
         &mut jwt_actor,
         &mut timer_actor,
         &mut downloader_actor,
-    );
+    )?;
 
     // Shutdown on SIGINT
     let signal_actor = SignalActor::builder(&runtime.get_handle());
@@ -122,11 +115,5 @@ async fn run(tedge_config: TEdgeConfig) -> Result<(), anyhow::Error> {
 
     runtime.run_to_completion().await?;
 
-    Ok(())
-}
-
-fn init(tedge_config: &TEdgeConfig) -> Result<(), anyhow::Error> {
-    let data_dir: PathBuf = tedge_config.query(DataPathSetting)?.into();
-    create_directories(data_dir)?;
     Ok(())
 }
