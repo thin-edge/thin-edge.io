@@ -207,7 +207,7 @@ jobs:
 
       # Nightly toolchain is needed for cargo fmt since issue: https://github.com/thin-edge/thin-edge.io/issues/1660
       - name: Install nightly toolchain
-        uses: actions-rs/toolchain@v1.0.6
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
           components: rustfmt
@@ -371,6 +371,9 @@ jobs:
     name: nightly / doc
     steps:
       - uses: actions/checkout@v3
+
+      - name: Enable cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
