@@ -284,7 +284,7 @@ jobs:
     name: Run `cargo check` on MSRV
     runs-on: Ubuntu-20.04
     needs: changes
-    if: ${{ needs.changes.outputs.rust == 'true' }}
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
 
     steps:
       - name: Checkout
@@ -314,7 +314,7 @@ jobs:
     env:
       RUSTFLAGS: -D warnings
     needs: changes
-
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -369,6 +369,8 @@ jobs:
   doc:
     runs-on: ubuntu-latest
     name: nightly / doc
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
       - uses: actions/checkout@v3
 
