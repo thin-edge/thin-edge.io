@@ -121,7 +121,7 @@ jobs:
           #mdbook-version: 'latest'
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.4.0
+        uses: Swatinem/rust-cache@v2
 
       - name: Install mdbook-mermaid
         uses: actions-rs/install@v0.1
@@ -246,7 +246,7 @@ jobs:
 
       - name: Enable cache
         # https://github.com/marketplace/actions/rust-cache
-        uses: Swatinem/rust-cache@v2.4.0
+        uses: Swatinem/rust-cache@v2
 
       - name: Cargo clippy --version
         uses: actions-rs/cargo@v1
@@ -303,7 +303,7 @@ jobs:
           toolchain: ${{ steps.rust_version.outputs.value }}
 
       - name: Enable cache
-        uses: Swatinem/rust-cache@v2.4.0
+        uses: Swatinem/rust-cache@v2
 
       - name: Run `cargo check`
         run: cargo check --all-targets --all-features
@@ -332,7 +332,7 @@ jobs:
           components: llvm-tools-preview
 
       - name: Enable cache
-        uses: Swatinem/rust-cache@v2.4.0
+        uses: Swatinem/rust-cache@v2
 
       - name: cargo install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
