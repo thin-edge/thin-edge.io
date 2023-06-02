@@ -93,10 +93,11 @@ jobs:
       - uses: actions/checkout@v3
       
       - name: Install nightly toolchain
-        uses: actions-rs/toolchain@v1
+        id: toolchain
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly
-          override: true
+      - run: rustup override set ${{steps.toolchain.outputs.name}}
 
       - name: Run cargo-udeps
         uses: aig787/cargo-udeps-action@v1
@@ -202,12 +203,17 @@ jobs:
         uses: actions/checkout@v3
       
       # Nightly toolchain is needed for cargo fmt since issue: https://github.com/thin-edge/thin-edge.io/issues/1660
+      # dtolnay/rust-toolchain is preferred over actions-rs/toolchain is currently not maintained and currently using
+      # deprecated GHA api (see https://github.com/actions-rs/toolchain/issues/219).
+      # However since dtolnay/rust-toolchain does not support the 'override' option, an additional call to
+      # rustup override is required (see https://github.com/dtolnay/rust-toolchain/issues/29#issuecomment-1412903426)
       - name: Install nightly toolchain
-        uses: actions-rs/toolchain@v1
+        id: toolchain
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly
           components: rustfmt
-          override: true
+      - run: rustup override set ${{steps.toolchain.outputs.name}}
 
       - name: Cargo fmt --version
         uses: actions-rs/cargo@v1
