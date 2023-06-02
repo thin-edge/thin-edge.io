@@ -1,3 +1,7 @@
+---
+slug: /
+---
+
 # Overview
 
 Welcome to `thin-edge.io`'s documentation!
