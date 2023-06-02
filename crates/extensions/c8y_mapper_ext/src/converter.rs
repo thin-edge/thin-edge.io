@@ -6,7 +6,6 @@ use super::fragments::C8yAgentFragment;
 use super::fragments::C8yDeviceDataFragment;
 use super::service_monitor;
 use crate::dynamic_discovery::DiscoverOp;
-use crate::dynamic_discovery::EventType;
 use crate::error::ConversionError;
 use crate::json;
 use async_trait::async_trait;
@@ -21,7 +20,8 @@ use c8y_api::smartrest::message::get_smartrest_device_id;
 use c8y_api::smartrest::message::get_smartrest_template_id;
 use c8y_api::smartrest::message::sanitize_for_smartrest;
 use c8y_api::smartrest::message::MAX_PAYLOAD_LIMIT_IN_BYTES;
-use c8y_api::smartrest::operations::get_operation;
+use c8y_api::smartrest::operations::get_child_ops;
+use c8y_api::smartrest::operations::get_operations;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::smartrest_deserializer::AvailableChildDevices;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
@@ -196,7 +196,7 @@ impl CumulocityConverter {
         let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
 
         let operations = Operations::try_new(config.ops_dir.clone())?;
-        let children = Operations::get_child_ops(config.ops_dir.clone())?;
+        let children = get_child_ops(config.ops_dir.clone())?;
 
         let alarm_converter = AlarmConverter::new();
 
@@ -746,7 +746,8 @@ impl Converter for CumulocityConverter {
             .ops_dir
             .eq(&self.cfg_dir.join("operations").join("c8y"))
         {
-            add_or_remove_operation(message, &mut self.operations)?;
+            // Re populate the operations irrespective add/remove/modify event
+            self.operations = get_operations(message.ops_dir.clone())?;
             Ok(Some(create_supported_operations(&message.ops_dir)?))
 
         // operation for child
@@ -756,12 +757,11 @@ impl Converter for CumulocityConverter {
             .join("c8y")
             .join(get_child_id(&message.ops_dir)?))
         {
-            let child_op = self
-                .children
-                .entry(get_child_id(&message.ops_dir)?)
-                .or_insert_with(Operations::default);
+            self.children.insert(
+                get_child_id(&message.ops_dir)?,
+                get_operations(message.ops_dir.clone())?,
+            );
 
-            add_or_remove_operation(message, child_op)?;
             Ok(Some(create_supported_operations(&message.ops_dir)?))
         } else {
             Ok(None)
@@ -781,25 +781,6 @@ fn get_child_id(dir_path: &PathBuf) -> Result<String, ConversionError> {
             dir: dir_path.to_owned(),
         }),
     }
-}
-
-fn add_or_remove_operation(
-    message: &DiscoverOp,
-    ops: &mut Operations,
-) -> Result<(), ConversionError> {
-    match message.event_type {
-        EventType::Add => {
-            let ops_dir = message.ops_dir.clone();
-            let op_name = message.operation_name.clone();
-            let op = get_operation(ops_dir.join(op_name))?;
-
-            ops.add_operation(op);
-        }
-        EventType::Remove => {
-            ops.remove_operation(&message.operation_name);
-        }
-    }
-    Ok(())
 }
 
 fn create_device_data_fragments(
