@@ -78,3 +78,14 @@ sudo systemctl stop tedge-agent.service
 sudo systemctl stop tedge-mapper-c8y.service
 ```
 
+## Filter packages by name and maintainer
+
+You can filter the package list output using two filtering criteria: **name and maintainer**. Create the `apt` table in `tedge.toml` and fill it with the `name` and `maintainer` keys. The value of each filter key should be a **valid regex pattern**. Your filters should look like this:
+
+```toml
+[apt]
+name = "exemplary_name.*"
+maintainer  = "exemplary_maintainer"
+```  
+
+Also, filters can be provided as a command line parameter in the `apt-plugin`. However, they are created for testing purposes only and will override config parameters.

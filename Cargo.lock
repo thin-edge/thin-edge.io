@@ -2664,6 +2664,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "tedge_api",
+ "tedge_config",
  "tempfile",
  "test-case",
  "thiserror",
@@ -3730,12 +3731,16 @@ dependencies = [
  "clap 3.2.25",
  "csv",
  "hamcrest2",
+ "log",
+ "regex",
  "reqwest",
  "serde",
  "serial_test",
+ "tedge_config",
  "tedge_utils",
  "test-case",
  "thiserror",
+ "toml 0.5.11",
 ]
 
 [[package]]

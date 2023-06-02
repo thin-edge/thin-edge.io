@@ -5,22 +5,32 @@ use crate::error::InternalError;
 use crate::module_check::PackageMetadata;
 use clap::IntoApp;
 use clap::Parser;
+use log::warn;
+use regex::Regex;
 use serde::Deserialize;
+use std::fs;
 use std::io::{self};
 use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Stdio;
+use tedge_config::TEdgeConfigLocation;
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 struct AptCli {
     #[clap(subcommand)]
     operation: PluginOp,
 }
 
-#[derive(clap::Subcommand)]
+#[derive(clap::Subcommand, Debug)]
 pub enum PluginOp {
     /// List all the installed modules
-    List,
+    List {
+        #[clap(long = "--name")]
+        name: Option<String>,
+
+        #[clap(long = "--maintainer")]
+        maintainer: Option<String>,
+    },
 
     /// Install a module
     Install {
@@ -64,27 +74,61 @@ struct SoftwareModuleUpdate {
     pub path: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct TedgeConfig {
+    pub apt: AptConfig,
+}
+
+#[derive(Debug, Deserialize)]
+struct AptConfig {
+    pub name: Option<String>,
+    pub maintainer: Option<String>,
+}
+
 fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
     let status = match operation {
-        PluginOp::List {} => {
-            let apt = Command::new("apt")
-                .args(vec!["--manual-installed", "list"])
+        PluginOp::List { name, maintainer } => {
+            let dpkg_query = Command::new("dpkg-query")
+                .args(vec![
+                    "-f",
+                    "${Package}\t${Version}\t${Maintainer}\t${Status}\n",
+                    "-W",
+                ])
                 .stdout(Stdio::piped())
                 .spawn()
-                .map_err(|err| InternalError::exec_error("apt", err))?
+                .map_err(|err| InternalError::exec_error("dpkg-query", err))?
                 .wait_with_output()
-                .map_err(|err| InternalError::exec_error("apt", err))?;
+                .map_err(|err| InternalError::exec_error("dpkg-query", err))?;
 
-            let stdout = String::from_utf8(apt.stdout.as_slice().to_vec()).unwrap_or_default();
-            for line in stdout.trim_end().split('\n') {
-                if line == "Listing..." {
-                    // Ignore the first line of the stdout
-                    continue;
+            let stdout = String::from_utf8(dpkg_query.stdout).unwrap_or_default();
+
+            let filter = match (&name, &maintainer) {
+                (None, None) => Regex::new(r"install ok installed").unwrap(),
+
+                _ => match Regex::new(
+                    format!(
+                        r"(^{}\t.*|^\S+\t\S+\t{}\s+.*)install ok installed",
+                        name.unwrap_or_default(),
+                        maintainer.unwrap_or_default()
+                    )
+                    .as_str(),
+                ) {
+                    Ok(filter) => filter,
+                    Err(err) => {
+                        eprintln!("tedge-apt-plugin fails to list packages with matching name and maintainer: {err}");
+                        std::process::exit(1)
+                    }
+                },
+            };
+
+            for line in stdout.trim_end().lines() {
+                if filter.is_match(line) {
+                    let (name, version) = get_name_and_version(line);
+                    println!("{name}\t{version}");
                 }
-                let (name, version) = get_name_and_version(line);
-                println!("{name}\t{version}");
             }
-            apt.status
+
+            dpkg_query.status
         }
 
         PluginOp::Install {
@@ -238,33 +282,38 @@ fn run_cmd(cmd: &str, args: &str) -> Result<ExitStatus, InternalError> {
 }
 
 fn get_name_and_version(line: &str) -> (&str, &str) {
-    let vec: Vec<&str> = line.split(' ').collect();
-    // The first element should always exist and has slash, like tedge/tedge-main
-    let name = vec
-        .first()
-        .unwrap_or(&"unknown name")
-        .split_once('/')
-        .unwrap_or(("unknown name", "others"))
-        .0;
-    let version = if line.contains("upgradable from:") {
-        // e.g. tedge/tedge-main 0.8.1-127-gb7d7d599 arm64 [upgradable from: 0.8.1]
-        vec.get(5)
-            .unwrap_or(&"unknown version")
-            .trim_end_matches(']')
-    } else {
-        // e.g. tedge_agent/now 0.8.1 arm64 [installed,local]
-        vec.get(1).unwrap_or(&"unknown version")
-    };
+    let vec: Vec<&str> = line.split('\t').collect();
+
+    let name = vec.first().unwrap_or(&"unknown name");
+    let version = vec.get(1).unwrap_or(&"unknown version");
     (name, version)
+}
+
+fn get_config() -> Option<TedgeConfig> {
+    let config_dir = TEdgeConfigLocation::default();
+
+    match fs::read_to_string(config_dir.tedge_config_file_path()) {
+        Ok(content) => match toml::from_str(&content) {
+            Ok(config) => Some(config),
+            Err(err) => {
+                warn!(
+                    "Failed to parse {}: {}",
+                    config_dir.tedge_config_file_path(),
+                    err
+                );
+                None
+            }
+        },
+        Err(_) => None,
+    }
 }
 
 fn main() {
     // On usage error, the process exits with a status code of 1
 
-    let apt = match AptCli::try_parse() {
+    let mut apt = match AptCli::try_parse() {
         Ok(aptcli) => aptcli,
-        Err(err) => {
-            eprintln!("ERROR: {}", err);
+        Err(_) => {
             AptCli::command()
                 .print_help()
                 .expect("Failed to print usage help");
@@ -272,6 +321,22 @@ fn main() {
             std::process::exit(1)
         }
     };
+
+    if let PluginOp::List {
+        ref mut name,
+        ref mut maintainer,
+    } = apt.operation
+    {
+        if let Some(config) = get_config() {
+            if name.is_none() {
+                *name = config.apt.name;
+            }
+
+            if maintainer.is_none() {
+                *maintainer = config.apt.maintainer;
+            }
+        }
+    }
 
     match run(apt.operation) {
         Ok(status) if status.success() => {
@@ -300,18 +365,22 @@ mod tests {
     use test_case::test_case;
 
     #[test_case(
-    "aptdaemon/focal-updates,focal-updates,focal-security,focal-security,now 1.1.1+bzr982-0ubuntu32.3 all [installed]",
-    "aptdaemon", "1.1.1+bzr982-0ubuntu32.3"
+    "zsh\t5.8-6+deb11u1\tDebian Zsh Maintainers <pkg-zsh-devel@lists.alioth.debian.org>\tinstall ok installed",
+    "zsh", "5.8-6+deb11u1"
     ; "installed"
-    )]
-    #[test_case(
-    "language-pack-gnome-en-base/focal-updates,focal-updates 1:20.04+20220818 all [upgradable from: 1:20.04+20220211]",
-    "language-pack-gnome-en-base", "1:20.04+20220211"
-    ; "upgradable"
     )]
     fn get_package_name_and_version(line: &str, expected_name: &str, expected_version: &str) {
         let (name, version) = get_name_and_version(line);
         assert_eq!(name, expected_name);
         assert_eq!(version, expected_version);
+    }
+
+    #[test]
+    fn both_filters_are_empty_strings() {
+        let filters = PluginOp::List {
+            name: Some("".into()),
+            maintainer: Some("".into()),
+        };
+        assert!(run(filters).is_ok())
     }
 }

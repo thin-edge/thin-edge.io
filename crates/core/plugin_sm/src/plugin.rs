@@ -7,11 +7,11 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Output;
 use tedge_api::*;
+use tedge_config::get_new_tedge_config;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufWriter;
 use tracing::error;
-
 #[async_trait]
 pub trait Plugin {
     async fn prepare(&self, logger: &mut BufWriter<File>) -> Result<(), SoftwareError>;
@@ -436,10 +436,29 @@ impl Plugin for ExternalPluginCommand {
         let command = self.command(LIST, None)?;
         let output = self.execute(command, logger).await?;
         if output.status.success() {
-            Ok(deserialize_module_info(
-                self.name.clone(),
-                output.stdout.as_slice(),
-            )?)
+            let config = get_new_tedge_config().unwrap();
+            let limit = config.software.plugin.max_packages;
+            if limit == 0 {
+                Ok(deserialize_module_info(
+                    self.name.clone(),
+                    output.stdout.as_slice(),
+                )?)
+            } else {
+                let (last_line, _) = String::from_utf8(output.stdout.as_slice().to_vec())
+                    .unwrap_or_default()
+                    .char_indices()
+                    .filter(|(_, c)| *c == '\n')
+                    .nth(usize::try_from(limit).unwrap_or(usize::MAX))
+                    .unwrap_or_default();
+
+                Ok(deserialize_module_info(
+                    self.name.clone(),
+                    match last_line {
+                        0 => output.stdout.as_slice(),
+                        _ => &output.stdout[..=last_line],
+                    },
+                )?)
+            }
         } else {
             Err(SoftwareError::Plugin {
                 software_type: self.name.clone(),
