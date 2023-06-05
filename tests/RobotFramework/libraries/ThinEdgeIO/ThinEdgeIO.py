@@ -365,7 +365,9 @@ class ThinEdgeIO(DeviceLibrary):
             try:
                 message = json.loads(line)
                 if "message" in message:
-                    if message_pattern_re is None or message_pattern_re.match(message):
+                    if message_pattern_re is None or message_pattern_re.match(
+                        message["message"]["payload"]
+                    ):
                         messages.append(message)
             except Exception as ex:
                 log.debug("ignoring non-json entry. %s", ex)
@@ -466,14 +468,13 @@ class ThinEdgeIO(DeviceLibrary):
     ) -> List[Dict[str, Any]]:
         # log.info("Checking mqtt messages for topic: %s", topic)
         if message_contains:
-            message_pattern = re.escape(message_contains)
+            message_pattern = r".*" + re.escape(message_contains) + r".*"
 
         items = self.mqtt_match_messages(
             topic=topic,
             date_from=date_from,
             date_to=date_to,
             message_pattern=message_pattern,
-            message_contains=message_contains,
             **kwargs,
         )
 
