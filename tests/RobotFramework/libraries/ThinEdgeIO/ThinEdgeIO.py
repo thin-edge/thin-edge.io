@@ -388,7 +388,7 @@ class ThinEdgeIO(DeviceLibrary):
     #
     @keyword("Service Health Status Should Be Up")
     def assert_service_health_status_up(self, service: str) -> Dict[str, Any]:
-        """ Checks if the Service Health Status is up
+        """Checks if the Service Health Status is up
 
         *Example:*
         | `Service Health Status Should Be Up` | | | | | tedge-mapper-c8y |
@@ -408,12 +408,10 @@ class ThinEdgeIO(DeviceLibrary):
     def _assert_health_status(self, service: str, status: str) -> Dict[str, Any]:
         # if mqtt.client.auth.ca_file or mqtt.client.auth.ca_dir is set, we pass setting
         # value to mosquitto_sub
-        mqtt_config_options = self.execute_command(f"tedge config list",
-            stdout=True,
-            stderr=False,
-            ignore_exit_code=True
+        mqtt_config_options = self.execute_command(
+            f"tedge config list", stdout=True, stderr=False, ignore_exit_code=True
         )
-        
+
         server_auth = ""
         if "mqtt.client.auth.ca_file" in mqtt_config_options:
             server_auth = "--cafile /etc/mosquitto/ca_certificates/ca.crt"
