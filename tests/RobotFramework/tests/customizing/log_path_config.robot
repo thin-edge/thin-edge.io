@@ -17,7 +17,7 @@ Customize the log path
     Execute Command    sudo tedge config set logs.path /test
 
 Initialize tedge-agent
-    Execute Command    sudo tedge_agent --init
+    Start Service    tedge-agent
 
 Check created folders
     Directory Should Exist    /test/tedge/agent

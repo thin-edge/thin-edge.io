@@ -46,6 +46,7 @@ assert-json-diff = "2.0"
 assert_matches = "1.5"
 proptest = "1.0"
 rand = "0.8"
+tedge_actors = { path = "../../core/tedge_actors", features = ["test-helpers"] }
 tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext", features = ["test-helpers"] }
 tedge_test_utils = { path = "../../tests/tedge_test_utils" }
 test-case = "2.2"

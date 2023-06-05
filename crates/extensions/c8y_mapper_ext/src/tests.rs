@@ -798,7 +798,14 @@ async fn mapper_publishes_supported_operations() {
     mqtt.skip(1).await;
 
     // Expect smartrest message on `c8y/s/us` with expected payload "114,c8y_TestOp1,c8y_TestOp2"
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114,c8y_TestOp1,c8y_TestOp2")]).await;
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
+            "114,c8y_Restart,c8y_SoftwareUpdate,c8y_TestOp1,c8y_TestOp2",
+        )],
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -889,7 +896,10 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     // Expect smartrest message on `c8y/s/us` with expected payload "114,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3".
     assert_received_contains_str(
         &mut mqtt,
-        [("c8y/s/us", "114,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3")],
+        [(
+            "c8y/s/us",
+            "114,c8y_Restart,c8y_SoftwareUpdate,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3",
+        )],
     )
     .await;
 }
