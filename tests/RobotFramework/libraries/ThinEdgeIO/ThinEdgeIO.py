@@ -365,7 +365,9 @@ class ThinEdgeIO(DeviceLibrary):
             try:
                 message = json.loads(line)
                 if "message" in message:
-                    if message_pattern_re is None or message_pattern_re.match(message):
+                    if message_pattern_re is None or message_pattern_re.match(
+                        message["message"]["payload"]
+                    ):
                         messages.append(message)
             except Exception as ex:
                 log.debug("ignoring non-json entry. %s", ex)
@@ -386,7 +388,7 @@ class ThinEdgeIO(DeviceLibrary):
     #
     @keyword("Service Health Status Should Be Up")
     def assert_service_health_status_up(self, service: str) -> Dict[str, Any]:
-        """ Checks if the Service Health Status is up
+        """Checks if the Service Health Status is up
 
         *Example:*
         | `Service Health Status Should Be Up` | | | | | tedge-mapper-c8y |
@@ -406,12 +408,10 @@ class ThinEdgeIO(DeviceLibrary):
     def _assert_health_status(self, service: str, status: str) -> Dict[str, Any]:
         # if mqtt.client.auth.ca_file or mqtt.client.auth.ca_dir is set, we pass setting
         # value to mosquitto_sub
-        mqtt_config_options = self.execute_command(f"tedge config list",
-            stdout=True,
-            stderr=False,
-            ignore_exit_code=True
+        mqtt_config_options = self.execute_command(
+            f"tedge config list", stdout=True, stderr=False, ignore_exit_code=True
         )
-        
+
         server_auth = ""
         if "mqtt.client.auth.ca_file" in mqtt_config_options:
             server_auth = "--cafile /etc/mosquitto/ca_certificates/ca.crt"
@@ -466,14 +466,13 @@ class ThinEdgeIO(DeviceLibrary):
     ) -> List[Dict[str, Any]]:
         # log.info("Checking mqtt messages for topic: %s", topic)
         if message_contains:
-            message_pattern = re.escape(message_contains)
+            message_pattern = r".*" + re.escape(message_contains) + r".*"
 
         items = self.mqtt_match_messages(
             topic=topic,
             date_from=date_from,
             date_to=date_to,
             message_pattern=message_pattern,
-            message_contains=message_contains,
             **kwargs,
         )
 
