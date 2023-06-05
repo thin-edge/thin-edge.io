@@ -18,40 +18,45 @@ to implement a system with independent processing units, the actors, that
 * behave accordingly to some internal state to which they have an exclusive access,
 * send asynchronous messages to each others,
 * process, one after the other, the messages received in their inbox,
-* react to messages by sending other messages and updating their state,
-* and possibly spawn other actors.
+* react to messages by updating their state, by sending messages to other actors, and possibly by spawning new actors.
+
+All the interactions between actors are materialized by messages.
+* Synchronous method invocations are replaced by asynchronous message exchanges.
+* All the interactions one wants to observe are materialized by messages:
+  commands, events, requests and responses as well as errors, runtime requests, timeouts or cancellations.
+* Typical examples of thin-edge messages are telemetry data, operation requests and outcomes,
+  but also low level messages as MQTT messages, HTTP requests and responses,
+  and even system specific messages as file-system events and update requests.
 
 An actor can be:
 * a source of messages,
 * a mapper that consumes messages and produces translated messages,
 * a transducer that consumes and produces messages but also maintains a state ruling its behavior,
 * a server that delivers responses on requests,
-* an end-point that logs, persists or forwards the messages to some external service.
+* a message sink that forwards the messages to some external service.
 
 In a running system, actors are connected with peers along various patterns:
 
 * An actor can gather messages from several sources and dispatch messages to several recipients.
 * Messages can be addressed to specific actors, or be broadcast to any interested recipients.
 * An actor can be oblivious to the source and the destination of the messages flowing through it,
-  processing messages independently of their source,
-  and publishing out messages to any interested recipients.
+  processing input messages independently of their source,
+  and publishing output messages to any interested recipients.
 * By contrast, an actor can distinguish its peers,
-  possibly processing the messages accordingly to their sources
+  processing the messages accordingly to their sources
   and sending specific messages to each of them.
-* Notably, a server sends response messages specifically to the requester.
+  Notably, a server sends response messages specifically to the requester.
 
 The main benefits of this model in the context of thin-edge are:
 * __Modularity__
   * An actor can be understood in isolation.
-  * The behavior of an actor is fully determined by its reaction at a given state to some given message.
+  * The behavior of an actor is entirely determined by its reaction to a message in a given state.
   * Actors can be implemented, tested, and packaged independently.
 * __Flexibility__
   * Actors can be connected in various way,
     as long as the recipients can interpret the messages received from others.
   * An actor can be substituted by another that implements the same service,
     i.e. that sends and receives the same message types.
-    These can be different sources of telemetry data
-    or different wrappers to software package managers.
 * __Observability__
   * The behavior of an actor can be fully observed, by listening the stream of messages received and sent.
   * In a pure actor model setting, any state change can be traced to a message,
@@ -92,25 +97,93 @@ To name just a few:
   and thin-edge should not pre-defined all the messages that can be exchanged by actors.
   * A contributor should be able to define its own set of messages usable by others.  
 
-## From actors to software components
+## Why yet another framework?
 
-Using actors is key but not sufficient.
-Yes, the actor model helps thin-edge rust developers to implement components in isolation.
-However, thin-edge also aims to provide flexibility to the agent developers with ready-to-use executables,
-that can be tuned on-site for a specific use-case,
-by activating only specific features among all those available.
+[There are a *lot* of actor frameworks for Rust](https://www.reddit.com/r/rust/comments/n2cmvd/there_are_a_lot_of_actor_framework_projects_on/),
+so why thin-edge should come with its own implementation?
 
-The design must address not only the API for *actors* but also the packaging of these actors into *extensions*,
-their integration into *executables* and their *configuration* by agent developers and end-users. 
+As [well described by Alice Ryhl](https://ryhl.io/blog/actors-with-tokio/),
+actors can be implemented with Tokio directly, without using any actor libraries.
+Indeed, [tokio](https://docs.rs/tokio/latest/tokio/index.html) provides the key building blocks for actors:
+[asynchronous tasks](https://docs.rs/tokio/latest/tokio/task/index.html)
+and [in-memory channels](https://docs.rs/tokio/latest/tokio/sync/index.html).
+Alice highlights that the issues are
+*not* on the implementation of the actor processing loop,
+*but* on how the actors are built, interconnected and spawn.
 
-* Elementary features are provided by __actors__: units of computation that interact with asynchronous messages.
-* Actors are packaged into __extensions__: rust libraries that provide implementations along interfaces,
-  input and output messages as well as instantiation services.
-* A thin-edge __executable__ makes available a collection of extensions ready to be enabled on-demand.
-* A user provided __configuration__ enables and configures sherry-picked extensions making an agent.
+But among the existing Rust actor frameworks,
+[actix](https://docs.rs/actix/latest/actix/) being the most notable one,
+the focus is on abstracting the [actor life cycle](https://docs.rs/actix/latest/actix/trait.Actor.html#actor-lifecycle),
+with specific methods to tell what to do at each stage
+and [how to handle each specific message type](https://docs.rs/actix/latest/actix/trait.Handler.html).
+Beyond the fact that this gives little help compared to pattern-matching on the received messages,
+this adds strong constraints on how message reception and emission are interleaved,
+this life cycle being controlled by the framework.
+The `Handler` trait is perfect to define how to react to some input,
+but how to send spontaneous messages or to arbitrarily defer a reaction?
 
-This document is focused on the implementation of the actor model in the context of thin-edge.
-We will address later how a user could sherry-pick extensions from a batteries-included software.
+To address the main issue - i.e. to build a mesh of connected actors,
+Actix distinguishes the [`Actor`](https://docs.rs/actix/latest/actix/prelude/trait.Actor.html) from its
+[`Context`](https://docs.rs/actix/latest/actix/struct.Context.html) but tightly couples one the other.
+An actix actor is unusable without an actix context and runtime.
+And even assuming such a dependency, one has to define an approach on top of actix
+on how to create the actor contexts, the actor instances and their interconnections.
+
+Furthermore, Actix has a bias towards a request / response model of communication.
+- [A response type is attached to any message](https://docs.rs/actix/latest/actix/prelude/trait.Message.html).
+- [Responses are not regular messages and are sent over specific channels](https://docs.rs/actix/latest/actix/dev/trait.MessageResponse.html).
+- A message handler is given a context to send arbitrary messages,
+  but [this must be done before returning a response](https://docs.rs/actix/latest/actix/prelude/trait.Handler.html#tymethod.handle).
+
+To conclude, we decided to design thin-edge actors on top of tokio without using actix.
+- Tokio provides the key building blocks: asynchronous tasks and in-memory channels.
+- By comparison with actor life-cycles defined and controlled by a framework,
+  we prefer the simplicity and generality of actors which behaviors are freely defined as `async fn run(&mut self)` methods.
+- We need the flexibility to connect actors along various communication patterns,
+  with no restrictions on the type nor the number of messages sent as a reaction to a former message,
+  not even on the targets and the reaction time window.
+- Our effort is to be focussed on providing a flexible but systematic approach to instantiate and connect actors.
+
+## Key design ideas
+
+* Require nothing more than being `Display + Send + Sync + 'static` for a value to be a `Message`,
+  i.e. ready to be:
+  * displayed to the user for logging purposes,
+  * and freely exchanged between actors with no constraints on ownership, thread and lifetime.
+  * In contexts where messages are broadcast, these messages will need to `Message + Clone`.
+  * For testing purpose, messages might also be `Eq + PartialEq`.
+* Use multi-producer, single-consumer [`tokio::sync::mpsc`](https://docs.rs/tokio/latest/tokio/sync/mpsc/) channels
+  to asynchronously exchange messages between actors.
+  * The channel receivers are owned by the actor instances that consume and process the messages.
+  * The channel senders are freely cloned and given by the recipients to the actors that produce the messages.
+* Enforce no constraint on the actor behaviors.
+  * An actor behavior is simply defined by an `async fn run(&mut self)` method, with no extra context or runtime.
+  * Therefore, an actor instance has to be given, along its state, any channel required to send and receive messages.
+    But, the actor implementation is free to organize its event loop.
+     * Messages can be processed in turn or concurrently.
+     * Outputs can be sent as reaction to inputs, or, vice versa requests can be sent to get responses.
+     * Messages can be sent spontaneously, independently of any input.
+* Enforce no constraints on the number and types of channels used by an actor to send and receive messages.
+  * A typical actor has two or three input receivers and a bunch of output senders.
+  * ![an actor](diagrams/actor.svg)
+  * Using several receivers helps to implement message priority among peers or to specifically await a message from a given peer.
+    * By concurrently listening to a main input receiver and a runtime message receiver,
+      an actor can handle with a higher priority any message sent by the runtime.
+    * By listening exclusively on a peer specific receiver an actor can block till it receives a response from that peer.
+  * Using a single receiver is by far simpler (not need for `tokio::select!`),
+    but might require the use of envelopes to identify message provenance.
+  * An actor can have a single output sender, multiplexing all its output messages into one channel.
+    However, most actors will use a set of senders to specifically address each message to the appropriate peer.
+  * To avoid boilerplate code an actor implementation can provide specific handles and helpers,
+    to abstract its channels, builds the appropriate messages and hides synchronization subtleties.
+  * To enforce a systematic way to handle timeouts, cancellations, errors and logging,
+    thin-edge provides enhanced receivers and senders, ready to be used by the actors.
+    * For instance, a `LoggingReceiver` listens to two source of messages,
+      a main input channel and a channel connected to the runtime,
+      gives priority to runtime messages,
+      and logs all the messages just before yielding them to the actor. 
+* Set the design focus on how to build and connect actors.
+  * [TODO]
 
 ## Requirements
 
@@ -143,16 +216,17 @@ One should be able to build a thin-edge executable from extensions that have bee
 
 One should be able to build executables with IIoT specific features.
 
-* The `tedge_actors` crate defines only messages related to the runtime as `Spawn`, `Shutdown` or `Timeout`.
+* The `tedge_actors` crate defines only messages related to the runtime as `Spawn` or `Shutdown`.
 * IIoT related messages are defined in specific extensions as `tedge_telemetry` or `tedge_software_management`.
-* An extension must be provided for MQTT as well as another one for HTTP.
+* An extension must be provided so an actor can pub/sub messages over MQTT.
+* Similarly, an extension must be provided to let actors interact with HTTP end-points.
 * An extension must be provided to encapsulate the thin-edge MQTT API,
   with the definition of all the MQTT topics and message payloads.
 
 Robustness is key.
 * One actor panicking should not impact other actors or the runtime.
 * All errors must be handled in a non-crashing way.
-* Unrecoverable errors may cause the binary to shutdown eventually, but not unexpectedly.
+* Unrecoverable errors may cause the binary to shut down eventually, but not unexpectedly.
 * The framework must handle SIGTERM and signal a shutdown to all active actors.
 * Shutdown is signalled to all extensions, giving them a possibility to handle such case gracefully.
   Each actor do a shutdown its own way, ignoring pending messages or not, stopping to send messages or not.
@@ -176,7 +250,7 @@ The runtime itself should behave as an actor, with messages that can be traced.
   - to activate and deactivate extensions at runtime
   - to start and stop actors,
   - to set and trigger timeout,
-  - to shutdown the system.
+  - to shut down the system.
 * Runtime messages sent to an actor must be processed with a higher priority.
 * An actor should be able to send messages to the runtime:
   - to trigger an action as spawning a task
@@ -198,337 +272,10 @@ Nice to have ideas that are out-of-scope of the first implementation of the acto
     to provide the whole list of available extensions and their purpose;
     as well as command line options for detailed help on how to enable and configure those.
 
-## Proposal
-
-[There are a *lot* of actor frameworks for Rust](https://www.reddit.com/r/rust/comments/n2cmvd/there_are_a_lot_of_actor_framework_projects_on/),
-so why thin-edge should come with its own implementation?
-
-As [well described by Alice Ryhl](https://ryhl.io/blog/actors-with-tokio/),
-actors can be implemented with Tokio directly, without using any actor libraries.
-Indeed, [tokio](https://docs.rs/tokio/latest/tokio/index.html) provides the key building blocks for actors:
-[asynchronous tasks](https://docs.rs/tokio/latest/tokio/task/index.html)
-and [in-memory channels](https://docs.rs/tokio/latest/tokio/sync/index.html).
-Alice highlights that the issues are
-*not* on the implementation of the actor processing loop,
-*but* on how the actors are built, interconnected and spawn. 
-
-But if you look at the existing Rust actor frameworks,
-[actix](https://docs.rs/actix/latest/actix/) being the most notable one,
-the focus is on abstracting the [actor life cycle](https://docs.rs/actix/latest/actix/trait.Actor.html#actor-lifecycle),
-with specific methods to tell what to do at each stage
-and [how to handle each specific message type](https://docs.rs/actix/latest/actix/trait.Handler.html).
-Beyond the fact that this gives little help compared to pattern-matching on the received messages,
-this adds strong constraints on how message reception and emission are interleaved,
-this life cycle being controlled by the framework.
-The `Handler` trait is perfect to define how to react to some input,
-but how to send spontaneous messages or to arbitrarily defer a reaction?
-
-To address the main issue - i.e. to build a mesh of connected actors,
-Actix distinguishes the [`Actor`](https://docs.rs/actix/latest/actix/prelude/trait.Actor.html) from its 
-[`Context`](https://docs.rs/actix/latest/actix/struct.Context.html) but tightly couples one the other.
-An actix actor is unusable without an actix context and runtime.
-And even assuming such a dependency, one has to define an approach on top of actix
-on how to create the actor contexts, the instances and their interconnections.
-
-Furthermore, Actix has a bias towards a request / response model of communication.
-- [A response type is attached to any message](https://docs.rs/actix/latest/actix/prelude/trait.Message.html).
-- [Responses are not regular messages and are sent over specific channels](https://docs.rs/actix/latest/actix/dev/trait.MessageResponse.html).
-- A message handler is given a context to send arbitrary messages,
-  but [this must be done before returning a response](https://docs.rs/actix/latest/actix/prelude/trait.Handler.html#tymethod.handle).
-
-To conclude, we decided to design thin-edge actors on top of tokio without using actix.
-- Tokio provides the key building blocks: asynchronous tasks and in-memory channels.
-- By comparison with actor life-cycles defined and controlled by a framework, 
-  we prefer the simplicity and generality of actors which behaviors are freely defined as `async fn run(&mut self)` methods.
-- We need the flexibility to connect actors along various communication patterns,
-  with no restrictions on the type nor the number of messages sent as a reaction to a former message,
-  not even on the targets and the reaction time window.
-- Our effort is to be focussed on providing a flexible but systematic approach to instantiate and connect actors.
-
-### Approach overview
-
-Before moving to an actor model, let's start with regular rust objects.
-This will help us to stress the differences and similarities.
-
-To implement some state-full feature interacting with peers, the typical rust recipe is to:
-* wrap the state into a `struct` along peer handles,
-* expose a set of methods to update this state given a `mut` reference - ensuring exclusive update access, 
-* handle each object instance and peer using an `Arc::<Mutex<T>>` - allowing multiple references to an instance.
-
-```rust
-struct A { state: u64, peer: Arc::<Mutex<B>> }
-
-impl A { 
-  pub async fn do_this(&mut self, arg: ThisArg) {
-    // update self.state
-    self.state += 1;
-    
-    // interact with self.peer, acquiring the mutex first
-    let mut peer = self.peer.lock().unwrap();
-    peer.say("this").await;
-  }
-  
-  pub async fn do_that(&mut self, arg: ThatArg) {
-    // update self.state
-    self.state += 1;
-
-    // interact with self.peer, acquiring the mutex first
-    let mut peer = self.peer.lock().unwrap();
-    peer.say("that").await;
-  }
-}
-
-struct B { state: u64 }
-
-impl B {
-  pub async fn say(&mut self, arg: &str) {
-    self.state += 1;
-    println!("{}: {}", self.state, arg);
-  }
-}
-```
-
-Moving to an actor model introduces two ideas:
-* materialize method invocations with *messages* that can be freely cloned and serialized,
-* use *channels* to *asynchronously* exchange messages between peers,
-  * the actor owns the channel receiver and processes received messages,
-  * the peers clone the channel sender and send messages for processing.
-
-```rust
-struct ActorA { state: u64, messages: Receiver<AMessage>, peer: Sender<BMessage> }
-
-#[derive(Clone, Debug)]
-enum AMessage {
-  DoThis(ThisArg),
-  DoThat(ThatArg),
-}
-
-impl A {
-  pub async fn run(mut self) {
-    while let Some(message) = self.messages.recv().await {
-      match message {
-        DoThis(arg) => {
-          // update self.state
-          self.state += 1;
-          
-          // send messages to self.peer, triggering asynchronous operations
-          let _ = self.peer.send(BMessage::Say("this".to_string())).await;
-        }
-        DoThat(arg) => {
-          // update self.state
-          self.state += 1;
-
-          // send messages to self.peer, triggering asynchronous operations
-          let _ = self.peer.send(BMessage::Say("that".to_string())).await;
-        }
-      }
-    }
-  }
-}
-
-struct ActorB { state: u64, messages: Receiver<BMessage> }
-
-#[derive(Clone, Debug)]
-enum BMessage {
-  Say(String),
-}
-
-impl B {
-  pub async fn run(mut self) {
-    while let Some(message) = self.messages.recv().await {
-      match message {
-        Say(arg) => {
-          self.state += 1;
-          println!("{}: {}", self.state, &arg);
-        }
-      }
-    }
-  }
-}
-```
-
-In practice, constructing and deconstructing messages leads to boilerplate code.
-To avoid that, we can wrap the message-based interface behind regular method invocations.
-
-```rust
-struct ActorAHandle {
-  sender: Sender<AMessage>
-}
-
-impl ActorAHandle {
-  pub async fn do_this(&mut self, arg: ThisArg) {
-    let _ = self.sender.send(arg).await;
-  }
-
-  pub async fn do_that(&mut self, arg: ThatArg) {
-    let _ = self.sender.send(arg).await;
-  }
-}
-
-struct ActorA { state: AState, messages: Receiver<AMessage>, peer: ActorBHandle }
-
-#[derive(Clone, Debug)]
-enum AMessage {
-  DoThis(ThisArg),
-  DoThat(ThatArg),
-}
-
-impl A {
-  pub async fn run(mut self) {
-    while let Some(message) = self.messages.recv().await {
-      match message {
-        DoThis(arg) => self.do_this(arg),
-        DoThat(arg) => self.do_that(arg),
-      }
-    }
-  }
-
-  async fn do_this(&mut self, arg: ThisArg) {
-    // update self.state
-    self.state += 1;
-
-    // interact with self.peer, without waiting for completion
-    self.peer.say("this").await;
-  }
-
-  async fn do_that(&mut self, arg: ThatArg) {
-    // update self.state
-    self.state += 1;
-
-    // interact with self.peer, without waiting for completion
-    self.peer.say("that").await;
-  }
-}
-
-struct ActorBHandler {
-  sender: Sender<BMessage>
-}
-
-impl ActorBHandle {
-  pub async fn say(&mut self, arg: &str) {
-    let _ = self.sender.send(BMessage::Say(arg.to_string())).await;
-  }
-}
-
-struct ActorB { state: u64, messages: Receiver<BMessage> }
-
-#[derive(Clone, Debug)]
-enum BMessage {
-  Say(String),
-}
-
-impl B {
-  pub async fn run(mut self) {
-    while let Some(message) = self.messages.recv().await {
-      match message {
-        Say(arg) => self.say(arg),
-      }
-    }
-  }
-
-  async fn say(&mut self, arg: String) {
-    self.state += 1;
-    println!("{}: {}", self.state, &arg);
-  }
-}
-```
-
-These three variants of the same example highlight several points.
-
-* State is managed the same way in the three cases.
-* What differs is the interaction with peers.
-  * The more salient difference is related to the messages.
-  * However, the main difference is the concurrency model.
-    * With `Arc::<Mutex<T>>`, the caller awaits the peer to finalize the request;
-      while, with messages, the requests are processed concurrently by the peer without blocking the caller.
-    * In the former case, the peer can return a value to the caller,
-      while, in the later case, a value cannot be easily returned
-      and must be wrapped into a message sent back to the caller.
-    * In the context of thin-edge, concurrent processing and asynchronous messages are preferred.
-      However, we need to find a way to let the caller wait for a response when appropriate.
-* The message passing approach leads to boilerplate code.
-  However, the heart of the code is free of any message construction and deconstruction
-  (see the methods `do_this()` and `do_that()` of the third variant).
-  Furthermore, it seems feasible to generate this boilerplate code using macros
-  (the `run()` method, the handler `ActorAHandler` struct and implementation, the `AMessage` enum).
-* The handler type is a great place to improve both code readability and code flexibility
-  (A wrapping similar to what has been done for the third variant can be done for the first to hide lock acquisition).
-  We will use such handlers and adapters to encapsulate messages related features
-  as sending high priority messages or sending a request for which a response is awaited.
-* Similarly, the channel receiver can be encapsulated to add features
-  like reading high priority messages first or awaiting a response.
-* Key points are not addressed by this example.
-  * Who creates the actor channels and instances?
-  * How actors and peers are connected to each others?
-  * Who spawns the actor `run()` method?
-  * How to get the response returned by a peer?
-
-Even if details are missing, this gives us a sketch of the pieces making an actor.
-
-* Along its private state, an actor manipulates
-  * a queue of input messages (often named the actor mailbox or message box),
-  * and handlers to actor peers to which output messages are sent to.
-* The code of an actor is a loop processing input messages in turn,
-  interpreting these messages as method invocations,
-  updating the actor state and sending messages to peers.
-* Actors are running asynchronously in background tasks and can be accessed only indirectly using handlers.
-* Actor handlers and mailboxes are more than just the sending and receiving ends of message channels.
-  * This is where are implemented priority and cancellation mechanisms.
-  * This is a place to adapt sent messages to the type actually expected by the receiver.
-  * They can also act as facades that build and send messages on regular method invocations.
-
 ## Detailed Proposal
 
-Key design ideas:
-
-* All the events, requests and responses that affect the behaviour of an actor (including timeouts and cancellations)
-  are materialized by messages, that are processed one after the other by the actor.
-* All the events, requests and responses that define the effect of an actor
-  are materialized by messages, that are sent to actor peers.
-* All the input and output messages of an actor are going through a single box, the message box of the actor.
-  * This mailbox abstracts message gathering and prioritization over independent input channels.
-  * This same box abstracts message dispatching over independent output channels.
-  * A typical mailbox encapsulates several input and output channels,
-    for regular messages, for high-priority messages as cancellations or to interact with specific peers.
-* An actor implementation can use its own specific mailbox implementation.
-  * These serves two purposes: the ability to use specific synchronization mechanisms between input and output messages
-    and the ability to abstract away the message passing interface behind regular method invocations. 
-  * For instance, an actor can specifically await a response from the peer to which a request has just been sent,
-    postponing all the messages sent by other peers till received the expected response.
-  * Yet another example, is the ability for an actor to process requests concurrently upto some max concurrency level,
-    by pausing the reception of new requests till pending responses are actually sent.
-* For observability purposes, logging can be turned on/off on a mailbox
-  to trace all the input messages just before processing
-  and all the output messages just before sending them.
-* For testing purposes, the mailbox of an actor (even if specialized) can be connected to a test channel
-  * simulating events, possibly interleaved with timeouts and other runtime errors.
-  * observing all the effects triggered by the simulated events.
-* The runtime itself is manipulated via messages as any actor.
-  Spawning a new task or a new actor instance
-  is done by sending a message to the runtime.
-  When a shutdown is triggered, this request is broadcast by the runtime
-  to all the running actors using a shutdown message.
-
-![an actor](diagrams/actor.svg)
-
-### Messages
-
-Messages must flow freely between actors with no constraints on ownership and thread.
-As they are used to improved observability, they must be `Display`.
-
-```rust
-/// A message exchanged between two actors
-pub trait Message: Display + Send + Sync + 'static {}
-
-/// There is no need to tag messages as such
-impl<T: Display + Send + Sync + 'static> Message for T {}
-```
-
-Typical examples of thin-edge messages are telemetry data, operation requests and outcomes,
-but also low level messages as MQTT messages, HTTP requests and responses,
-and even system specific messages as file-system events and update requests.
-
-In contexts where messages are broadcast, these messages will need to `Message + Clone`.
+* TODO: many points are now incorrect and must be fixed
+* TODO: focus here only the key issues.
 
 ### Channels
 
@@ -912,7 +659,235 @@ An actor should also be able to handle requests sent by the runtime, typically a
 
 ### Runtime
 
-### Discovery
+## Appendix
 
+### A taste of using actors in Rust
 
+Before moving to an actor model, let's start with regular rust objects.
+This will help us to stress the differences and similarities.
 
+To implement some state-full feature interacting with peers, the typical rust recipe is to:
+* wrap the state into a `struct` along peer handles,
+* expose a set of methods to update this state given a `mut` reference - ensuring exclusive update access,
+* handle each object instance and peer using an `Arc::<Mutex<T>>` - allowing multiple references to an instance.
+
+```rust
+struct A { state: u64, peer: Arc::<Mutex<B>> }
+
+impl A { 
+  pub async fn do_this(&mut self, arg: ThisArg) {
+    // update self.state
+    self.state += 1;
+    
+    // interact with self.peer, acquiring the mutex first
+    let mut peer = self.peer.lock().unwrap();
+    peer.say("this").await;
+  }
+  
+  pub async fn do_that(&mut self, arg: ThatArg) {
+    // update self.state
+    self.state += 1;
+
+    // interact with self.peer, acquiring the mutex first
+    let mut peer = self.peer.lock().unwrap();
+    peer.say("that").await;
+  }
+}
+
+struct B { state: u64 }
+
+impl B {
+  pub async fn say(&mut self, arg: &str) {
+    self.state += 1;
+    println!("{}: {}", self.state, arg);
+  }
+}
+```
+
+Moving to an actor model introduces two key ideas:
+* materialize method invocations with *messages* that can be freely cloned and serialized,
+* use *channels* to *asynchronously* exchange messages between peers,
+  * the actor owns the channel receiver and processes received messages,
+  * the peers clone the channel sender and send messages for processing.
+
+```rust
+struct ActorA { state: u64, messages: Receiver<AMessage>, peer: Sender<BMessage> }
+
+#[derive(Clone, Debug)]
+enum AMessage {
+  DoThis(ThisArg),
+  DoThat(ThatArg),
+}
+
+impl A {
+  pub async fn run(mut self) {
+    while let Some(message) = self.messages.recv().await {
+      match message {
+        DoThis(arg) => {
+          // update self.state
+          self.state += 1;
+          
+          // send messages to self.peer, triggering asynchronous operations
+          let _ = self.peer.send(BMessage::Say("this".to_string())).await;
+        }
+        DoThat(arg) => {
+          // update self.state
+          self.state += 1;
+
+          // send messages to self.peer, triggering asynchronous operations
+          let _ = self.peer.send(BMessage::Say("that".to_string())).await;
+        }
+      }
+    }
+  }
+}
+
+struct ActorB { state: u64, messages: Receiver<BMessage> }
+
+#[derive(Clone, Debug)]
+enum BMessage {
+  Say(String),
+}
+
+impl B {
+  pub async fn run(mut self) {
+    while let Some(message) = self.messages.recv().await {
+      match message {
+        Say(arg) => {
+          self.state += 1;
+          println!("{}: {}", self.state, &arg);
+        }
+      }
+    }
+  }
+}
+```
+
+In practice, constructing and deconstructing messages leads to boilerplate code.
+To avoid that, we can wrap the message-based interface behind regular method invocations.
+
+```rust
+struct ActorAHandle {
+  sender: Sender<AMessage>
+}
+
+impl ActorAHandle {
+  pub async fn do_this(&mut self, arg: ThisArg) {
+    let _ = self.sender.send(arg).await;
+  }
+
+  pub async fn do_that(&mut self, arg: ThatArg) {
+    let _ = self.sender.send(arg).await;
+  }
+}
+
+struct ActorA { state: AState, messages: Receiver<AMessage>, peer: ActorBHandle }
+
+#[derive(Clone, Debug)]
+enum AMessage {
+  DoThis(ThisArg),
+  DoThat(ThatArg),
+}
+
+impl A {
+  pub async fn run(mut self) {
+    while let Some(message) = self.messages.recv().await {
+      match message {
+        DoThis(arg) => self.do_this(arg),
+        DoThat(arg) => self.do_that(arg),
+      }
+    }
+  }
+
+  async fn do_this(&mut self, arg: ThisArg) {
+    // update self.state
+    self.state += 1;
+
+    // interact with self.peer, without waiting for completion
+    self.peer.say("this").await;
+  }
+
+  async fn do_that(&mut self, arg: ThatArg) {
+    // update self.state
+    self.state += 1;
+
+    // interact with self.peer, without waiting for completion
+    self.peer.say("that").await;
+  }
+}
+
+struct ActorBHandler {
+  sender: Sender<BMessage>
+}
+
+impl ActorBHandle {
+  pub async fn say(&mut self, arg: &str) {
+    let _ = self.sender.send(BMessage::Say(arg.to_string())).await;
+  }
+}
+
+struct ActorB { state: u64, messages: Receiver<BMessage> }
+
+#[derive(Clone, Debug)]
+enum BMessage {
+  Say(String),
+}
+
+impl B {
+  pub async fn run(mut self) {
+    while let Some(message) = self.messages.recv().await {
+      match message {
+        Say(arg) => self.say(arg),
+      }
+    }
+  }
+
+  async fn say(&mut self, arg: String) {
+    self.state += 1;
+    println!("{}: {}", self.state, &arg);
+  }
+}
+```
+
+These three variants of the same example highlight several points.
+
+* State is managed the same way in the three cases.
+* What differs is the interaction with peers.
+  * The more salient difference is related to the messages.
+  * However, the main difference is the concurrency model.
+    * With `Arc::<Mutex<T>>`, the caller awaits the peer to finalize the request;
+      while, with messages, the requests are processed concurrently by the peer without blocking the caller.
+    * In the mutex case, the peer can return a value to the caller,
+      while, in the actor case, a value cannot be easily returned
+      and must be wrapped into a message sent back to the caller.
+    * In the context of thin-edge, concurrent processing and asynchronous messages are preferred.
+      However, we need to find a way to let the caller wait for a response when appropriate.
+* The message passing approach leads to boilerplate code.
+  However, the heart of the code is free of any message construction and deconstruction
+  (see the methods `do_this()` and `do_that()` of the third variant).
+  Furthermore, it seems feasible to generate this boilerplate code using macros
+  (the `run()` method, the handler `ActorAHandler` struct and implementation, the `AMessage` enum).
+* The handler type is a great place to improve both code readability and code flexibility
+  (A wrapping similar to what has been done for the third variant can be done for the first to hide lock acquisition).
+  We will use such handlers and adapters to encapsulate messages related features
+  as sending high priority messages or sending a request for which a response is awaited.
+* Similarly, the channel receiver can be encapsulated to add features
+  like reading high priority messages first or awaiting a response.
+* Key points are not addressed by this example.
+  * Who creates the actor channels and instances?
+  * How actors and peers are connected to each others?
+  * Who spawns the actor `run()` method?
+  * How to get the response returned by a peer?
+
+Even if details are missing, this gives us a sketch of the pieces making an actor.
+
+* Along its private state, an actor manipulates
+  * a queue of input messages (often named the actor mailbox or message box),
+  * and handlers to actor peers to which output messages are sent to.
+* The code of an actor is a loop processing input messages in turn,
+  interpreting these messages as method invocations,
+  updating the actor state and sending messages to peers.
+* Actors are running asynchronously in background tasks and can be accessed only indirectly using handlers.
+* Actor handlers and mailboxes are more than just the sending and receiving ends of message channels.
+  * This is where will be implemented priority and cancellation mechanisms as well as logging and message statistics.
+  * This is a place to adapt messages on the fly, to match constraints set by the receiver.
