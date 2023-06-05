@@ -32,27 +32,22 @@ sudo chown tedge:tedge ~/tedge_tmp_dir
 ```
 
 You must restart the `tedge` daemons after any of these paths are updated, for it to take effect.
-But, when the `data.path` is updated, the daemon must be re-initialized as well with its `--init` option.
 
 For example, the `tedge-agent` must be re-initialized as follows:
 
 ```shell
-# Stop the service
-sudo systemctl stop tedge-agent
-
-# Re-initialize the service
-sudo tedge-agent --init
-
 # Restart the service
-sudo systemctl stop tedge-agent
+sudo systemctl restart tedge-agent
 ```
 
-The following daemons also need to be re-initialized after `data.path` is updated:
+The following daemons also need to be re-started after `data.path` is updated:
 * `c8y-configuration-plugin`
 * `c8y-firmware-plugin`
 
-To revert any of these paths back to their default locations, just `unset` that config as follows:
+To revert any of these paths back to their default locations, `unset` that config as follows:
 
 ```shell
 sudo tedge config unset tmp.path
 ```
+
+... and restart the relevant services.
