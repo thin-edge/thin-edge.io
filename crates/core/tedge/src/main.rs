@@ -1,21 +1,17 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
 
-use std::path::Path;
-
 use anyhow::Context;
 use clap::Parser;
 mod cli;
 mod command;
 mod error;
-use tedge_config::system_services::set_log_level;
-use tedge_utils::file::create_directory_with_user_group;
-
-type ConfigError = crate::error::TEdgeError;
-
 use command::BuildCommand;
 use command::BuildContext;
+use tedge_config::system_services::set_log_level;
 use tracing::log::warn;
+
+type ConfigError = crate::error::TEdgeError;
 
 const BROKER_USER: &str = "mosquitto";
 const BROKER_GROUP: &str = "mosquitto";

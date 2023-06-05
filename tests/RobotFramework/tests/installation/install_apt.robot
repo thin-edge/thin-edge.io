@@ -22,7 +22,6 @@ ${APT_INSTALL}    apt-get install -y \
 Install thin-edge via apt
     Execute Command    apt-get update
     Execute Command    ${APT_INSTALL}
-    Execute Command    echo hi
 
 *** Keywords ***
 
