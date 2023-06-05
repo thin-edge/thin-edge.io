@@ -136,58 +136,41 @@ impl Downloader {
     pub async fn download(&self, url: &DownloadInfo) -> Result<(), DownloadError> {
         let tmp_target_path = self.temp_filename().await?;
         let target_file_path = self.target_filename.as_path();
-        let mut ranges_supported = false;
 
         let mut file: File = File::create(&tmp_target_path)
             .context(format!("Can't create a temporary file {tmp_target_path:?}"))?;
 
-        // TODO: make this a function - no plain loops!
-        loop {
-            let mut file_pos = file
-                .stream_position()
-                .context("could not get the file cursor position".to_string())?;
+        let mut response = request_range_from(url, 0).await?;
 
-            let range_start = if ranges_supported { file_pos } else { 0 };
-            let mut response = request_range_from(url, range_start).await?;
+        let file_len = response.content_length().unwrap_or(0);
+        debug!("Downloading file, len={file_len}");
 
-            if let Some(unit) = response.headers().get(header::ACCEPT_RANGES) {
-                if unit == "bytes" {
-                    ranges_supported = true;
-                }
-            }
+        if file_len > 0 {
+            try_pre_allocate_space(&mut file, &tmp_target_path, file_len)?;
+            debug!("preallocated space for file {tmp_target_path:?}, len={file_len}");
+        }
 
-            let chunk_pos = partial_response::response_range_start(&response)?;
+        if let Err(err) = save_chunks_to_file_at(&mut response, &mut file, 0).await {
+            match err {
+                SaveChunksError::Network(err) => {
+                    warn!("Error while downloading response: {err}.\nRetrying...");
 
-            if chunk_pos != file_pos {
-                file_pos = file
-                    .seek(SeekFrom::Start(chunk_pos))
-                    .context("can't seek inside the file".to_string())?;
-            }
-
-            let file_len = response.content_length().unwrap_or(0);
-            debug!("Downloading file, len={file_len}");
-
-            if file_pos == 0 && file_len > 0 {
-                try_pre_allocate_space(&mut file, &tmp_target_path, file_len)?;
-                debug!("preallocated space for file {tmp_target_path:?}, len={file_len}");
-            }
-
-            if let Err(err) = save_chunks_to_file(&mut response, &mut file).await {
-                match err {
-                    SaveChunksError::Network(err) => {
-                        warn!("Error while downloading response: {err}.\nRetrying...");
-                        continue;
-                    }
-                    SaveChunksError::Io(err) => {
-                        return Err(DownloadError::FromIo {
-                            source: err,
-                            context: "Error while saving file to the file".to_string(),
-                        })
+                    match response.headers().get(header::ACCEPT_RANGES) {
+                        Some(unit) if unit == "bytes" => {
+                            self.download_remaining(url, &mut file).await?;
+                        }
+                        _ => {
+                            self.retry(url, &mut file).await?;
+                        }
                     }
                 }
+                SaveChunksError::Io(err) => {
+                    return Err(DownloadError::FromIo {
+                        source: err,
+                        context: "Error while saving to file".to_string(),
+                    })
+                }
             }
-
-            break;
         }
 
         // Move the downloaded file to the final destination
@@ -205,11 +188,80 @@ impl Downloader {
         Ok(())
     }
 
+    /// Retries the download requesting only the remaining file part.
+    ///
+    /// If the server does support it, a range request is used to download only
+    /// the remaining range of the file. If the range request could not be used,
+    /// [`retry`](Downloader::retry) is used instead.
+    async fn download_remaining(
+        &self,
+        url: &DownloadInfo,
+        file: &mut File,
+    ) -> Result<(), DownloadError> {
+        loop {
+            let file_pos = file
+                .stream_position()
+                .context("Can't get file cursor position".to_string())?;
+
+            let mut response = request_range_from(url, file_pos).await?;
+
+            let offset = partial_response::response_range_start(&response)?;
+
+            match save_chunks_to_file_at(&mut response, file, offset).await {
+                Ok(()) => break,
+
+                Err(SaveChunksError::Network(err)) => {
+                    warn!("Error while downloading response: {err}.\nRetrying...");
+                    continue;
+                }
+
+                Err(SaveChunksError::Io(err)) => {
+                    return Err(DownloadError::FromIo {
+                        source: err,
+                        context: "Error while saving to file".to_string(),
+                    })
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Retries downloading the file.
+    ///
+    /// Retries initial request and downloads the entire file once again. If
+    /// upon the initial request server signaled support for range requests,
+    /// [`download_remaining`](Downloader::download_remaining) is used instead.
+    async fn retry(&self, url: &DownloadInfo, file: &mut File) -> Result<(), DownloadError> {
+        loop {
+            let mut response = request_range_from(url, 0).await?;
+
+            match save_chunks_to_file_at(&mut response, file, 0).await {
+                Ok(()) => break,
+
+                Err(SaveChunksError::Network(err)) => {
+                    warn!("Error while downloading response: {err}.\nRetrying...");
+                    continue;
+                }
+
+                Err(SaveChunksError::Io(err)) => {
+                    return Err(DownloadError::FromIo {
+                        source: err,
+                        context: "Error while saving to file".to_string(),
+                    })
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Returns the filename.
     pub fn filename(&self) -> &Path {
         self.target_filename.as_path()
     }
 
+    /// Builds a temporary filename the file will be downloaded into.
     async fn temp_filename(&self) -> Result<PathBuf, DownloadError> {
         if self.target_filename.exists() {
             // Confirm that the file has write access before any http request attempt
@@ -266,12 +318,23 @@ impl Downloader {
         }
     }
 
+    /// Deletes the file if it was downloaded.
     pub async fn cleanup(&self) -> Result<(), DownloadError> {
         let _res = tokio::fs::remove_file(&self.target_filename).await;
         Ok(())
     }
 }
 
+/// Requests either the entire HTTP resource, or its part, from an offset to the
+/// end.
+///
+/// If `range_start` is `0`, then a regular GET request is sent. Otherwise, a
+/// request for a range of the resource, starting from `range_start`, until EOF,
+/// is sent.
+///
+/// We use a half-open range with only a lower bound, because we expect to use
+/// it to download static resources which do not change, and only as a recovery
+/// mechanism in case of network failures.
 async fn request_range_from(
     url: &DownloadInfo,
     range_start: u64,
@@ -318,14 +381,19 @@ async fn request_range_from(
     retry(backoff, operation).await
 }
 
-async fn save_chunks_to_file(
+/// Saves a response body chunks starting from an offset.
+async fn save_chunks_to_file_at(
     response: &mut reqwest::Response,
     writer: &mut File,
+    offset: u64,
 ) -> Result<(), SaveChunksError> {
+    writer.seek(SeekFrom::Start(offset))?;
+
     while let Some(bytes) = response.chunk().await? {
         debug!("read response chunk, size={size}", size = bytes.len());
         writer.write_all(&bytes)?;
     }
+
     Ok(())
 }
 
