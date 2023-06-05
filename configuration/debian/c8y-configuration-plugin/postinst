@@ -2,9 +2,6 @@
 
 set -e
 
-### Create supported operation files
-c8y-configuration-plugin --init
-
 # Deprecate: Remove symlink in 1.x release
 if [ ! -e /usr/bin/c8y_configuration_plugin ]; then
     ln -s /usr/bin/c8y-configuration-plugin /usr/bin/c8y_configuration_plugin

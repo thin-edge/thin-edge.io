@@ -1,5 +1,6 @@
 use crate::command::BuildContext;
 use crate::command::Command;
+use anyhow::Context;
 use tedge_config::ConfigRepository;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::DataPathSetting;
@@ -80,5 +81,6 @@ impl Command for TEdgeInitCmd {
 
     fn execute(&self) -> anyhow::Result<()> {
         self.initialize_tedge()
+            .with_context(|| "Failed to initialize tedge. You have to run tedge with sudo.")
     }
 }
