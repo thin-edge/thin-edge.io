@@ -399,3 +399,13 @@ set/unset apt.maintainer
     ...    sudo tedge config unset apt.maintainer
     ${unset}    Execute Command    tedge config list
     Should Not Contain    ${unset}    apt.maintainer=
+
+set/unset software.plugin.max_packages
+    Execute Command    sudo tedge config set software.plugin.max_packages 555   #Changing sudo tedge config set software.plugin.max_packages
+    ${set}     Execute Command    tedge config list
+    Should Contain    ${set}    software.plugin.max_packages=555
+
+    Execute Command    sudo tedge config unset software.plugin.max_packages    #Undo the change by using the 'unset' command, value returns to default one 1000
+    ${unset}     Execute Command    tedge config list
+    Should Contain    ${unset}    software.plugin.max_packages=1000
+
