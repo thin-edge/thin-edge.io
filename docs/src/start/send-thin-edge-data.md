@@ -86,7 +86,7 @@ The `time` field is not a regular measurement like `temperature` or `pressure` b
 Refer to [Thin Edge JSON Specification](../understand/thin-edge-json.md) for more details on the kinds of telemetry 
 data that can be represented in Thin Edge JSON format and the reserved fields like `time` used in the above example.
 
-## Sending measurements to child devices
+## Sending measurements from child devices
 
 If valid Thin Edge JSON measurements are published to the `tedge/measurements/<child-id>` topic,
 the measurements are recorded under a child device of your thin-edge.io device.
