@@ -40,8 +40,12 @@ pub enum FileError {
     #[error("Could not save the file {file:?} to disk. Received error: {from:?}.")]
     FailedToSync { file: PathBuf, from: std::io::Error },
 
-    #[error("The path {0:?} is invalid")]
-    InvalidFileName(PathBuf),
+    #[error("The path {path:?} is invalid")]
+    InvalidFileName {
+        path: PathBuf,
+        // Can be io::Error or Utf8Error
+        source: anyhow::Error,
+    },
 
     #[error(transparent)]
     FromIoError(#[from] std::io::Error),

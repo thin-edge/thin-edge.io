@@ -4,6 +4,7 @@ use tedge_utils::file::FileError;
 
 use crate::error::DownloadError;
 use crate::error::ErrContext;
+use anyhow::anyhow;
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
 use log::debug;
@@ -258,6 +259,13 @@ impl Downloader {
 
     /// Builds a temporary filename the file will be downloaded into.
     async fn temp_filename(&self) -> Result<PathBuf, DownloadError> {
+        if self.target_filename.is_relative() {
+            return Err(FileError::InvalidFileName {
+                path: self.target_filename.clone(),
+                source: anyhow!("Path can't be relative"),
+            })?;
+        }
+
         if self.target_filename.exists() {
             // Confirm that the file has write access before any http request attempt
             self.has_write_access()?;
@@ -272,15 +280,24 @@ impl Downloader {
         }
 
         // Download file to the target directory with a temp name
-        let target_file_path = self.target_filename.clone();
+        let target_file_path = &self.target_filename;
         let file_name = target_file_path
             .file_name()
-            .ok_or_else(|| FileError::InvalidFileName(target_file_path.clone()))?
+            .ok_or_else(|| FileError::InvalidFileName {
+                path: target_file_path.clone(),
+                source: anyhow!("Does not name a valid file"),
+            })?
             .to_str()
-            .ok_or_else(|| FileError::InvalidFileName(target_file_path.clone()))?;
+            .ok_or_else(|| FileError::InvalidFileName {
+                path: target_file_path.clone(),
+                source: anyhow!("Path is not valid unicode"),
+            })?;
         let parent_dir = target_file_path
             .parent()
-            .ok_or_else(|| FileError::InvalidFileName(target_file_path.clone()))?;
+            .ok_or_else(|| FileError::InvalidFileName {
+                path: target_file_path.clone(),
+                source: anyhow!("Does not name a valid file"),
+            })?;
 
         let tmp_file_name = format!("{file_name}.tmp");
         Ok(parent_dir.join(tmp_file_name))
@@ -411,29 +428,28 @@ fn try_pre_allocate_space(
         return Ok(());
     }
 
-    if let Some(root) = path.parent() {
-        let tmpstats =
-            statvfs::statvfs(root).context(format!("Can't stat temporary path {root:?}"))?;
+    let tmpstats =
+        statvfs::fstatvfs(file).context(format!("Can't stat file descriptor for file {path:?}"))?;
 
-        // Reserve 5% of total disk space
-        let five_percent_disk_space =
-            (tmpstats.blocks() as u64 * tmpstats.block_size() as u64) * 5 / 100;
-        let usable_disk_space =
-            tmpstats.blocks_free() as u64 * tmpstats.block_size() as u64 - five_percent_disk_space;
+    // Reserve 5% of total disk space
+    let five_percent_disk_space =
+        (tmpstats.blocks() as u64 * tmpstats.block_size() as u64) * 5 / 100;
+    let usable_disk_space =
+        tmpstats.blocks_free() as u64 * tmpstats.block_size() as u64 - five_percent_disk_space;
 
-        if file_len >= usable_disk_space {
-            return Err(DownloadError::InsufficientSpace);
-        }
-
-        // Reserve diskspace
-        #[cfg(target_os = "linux")]
-        let _ = fallocate(
-            file.as_raw_fd(),
-            FallocateFlags::empty(),
-            0,
-            file_len.try_into().expect("file too large to fit in i64"),
-        );
+    if file_len >= usable_disk_space {
+        return Err(DownloadError::InsufficientSpace);
     }
+
+    // Reserve diskspace
+    #[cfg(target_os = "linux")]
+    let _ = fallocate(
+        file.as_raw_fd(),
+        FallocateFlags::empty(),
+        0,
+        file_len.try_into().expect("file too large to fit in i64"),
+    );
+
     Ok(())
 }
 
@@ -530,7 +546,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn invalid_filename() -> anyhow::Result<()> {
+    async fn returns_proper_errors_for_invalid_filenames() -> anyhow::Result<()> {
         let temp_dir = tempdir()?;
         std::env::set_current_dir(temp_dir.path()).unwrap();
 
@@ -539,24 +555,36 @@ mod tests {
             .with_body(b"hello")
             .create();
 
-        let target_dir_path = "";
-
         let mut target_url = mockito::server_url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_dir_path.into());
-
+        // empty filename
+        let downloader = Downloader::new("".into());
         let err = downloader.download(&url).await.unwrap_err();
         assert!(matches!(
             err,
-            DownloadError::FromFileError(FileError::InvalidFileName(_))
+            DownloadError::FromFileError(FileError::InvalidFileName { .. })
         ));
-        let err = anyhow::Error::from(err);
-        println!("{err:?}");
 
-        downloader.cleanup().await?;
+        // invalid unicode filename
+        let path = unsafe { String::from_utf8_unchecked(b"\xff".to_vec()) };
+        let downloader = Downloader::new(path.into());
+        let err = downloader.download(&url).await.unwrap_err();
+        assert!(matches!(
+            err,
+            DownloadError::FromFileError(FileError::InvalidFileName { .. })
+        ));
+
+        // relative path filename
+        let downloader = Downloader::new("myfile.txt".into());
+        let err = downloader.download(&url).await.unwrap_err();
+        assert!(matches!(
+            err,
+            DownloadError::FromFileError(FileError::InvalidFileName { .. })
+        ));
+        println!("{err:?}", err = anyhow::Error::from(err));
 
         Ok(())
     }
