@@ -102,27 +102,22 @@ impl From<PathBuf> for Downloader {
 }
 
 impl Downloader {
-    /// Creates a new downloader which downloads to a target directory and sets
-    /// specified permissions the downloaded file.
-    pub fn new(target_path: &Path, target_permission: PermissionEntry) -> Self {
+    /// Creates a new downloader which downloads to a target directory and uses
+    /// default permissions.
+    pub fn new(target_path: PathBuf) -> Self {
         Self {
-            target_filename: target_path.to_path_buf(),
-            target_permission,
+            target_filename: target_path,
+            target_permission: PermissionEntry::default(),
         }
     }
 
-    /// Creates a new downloader which renames downloaded files as software modules.
-    #[deprecated(note = "Use `new` instead")]
-    pub fn new_sm(name: &str, version: &Option<String>, target_dir_path: impl AsRef<Path>) -> Self {
-        let mut filename = name.to_string();
-        if let Some(version) = version {
-            filename.push('_');
-            filename.push_str(version.as_str());
+    /// Creates a new downloader which downloads to a target directory and sets
+    /// specified permissions the downloaded file.
+    pub fn with_permission(target_path: PathBuf, target_permission: PermissionEntry) -> Self {
+        Self {
+            target_filename: target_path,
+            target_permission,
         }
-
-        let target_filename = PathBuf::new().join(target_dir_path).join(filename);
-
-        target_filename.into()
     }
 
     /// Downloads a file using an exponential backoff strategy.
@@ -450,8 +445,6 @@ mod tests {
     use mockito::mock;
     use nix::sys::statvfs;
     use std::io::Write;
-    use std::path::Path;
-    use std::path::PathBuf;
     use tempfile::tempdir;
     use tempfile::NamedTempFile;
     use tempfile::TempDir;
@@ -461,18 +454,6 @@ mod tests {
     use tokio::io::BufReader;
     use tokio::net::TcpListener;
 
-    #[test]
-    fn construct_downloader_filename() {
-        let name = "test_download";
-        let version = Some("test1".to_string());
-        let target_dir_path = PathBuf::from("/tmp");
-
-        let downloader = Downloader::new_sm(name, &version, target_dir_path);
-
-        let expected_path = Path::new("/tmp/test_download_test1");
-        assert_eq!(downloader.filename(), expected_path);
-    }
-
     #[tokio::test]
     async fn downloader_download_content_no_auth() -> anyhow::Result<()> {
         let _mock1 = mock("GET", "/some_file.txt")
@@ -480,16 +461,15 @@ mod tests {
             .with_body(b"hello")
             .create();
 
-        let name = "test_download";
-        let version = Some("test1".to_string());
         let target_dir_path = TempDir::new()?;
+        let target_path = target_dir_path.path().join("test_download");
 
         let mut target_url = mockito::server_url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new_sm(name, &version, target_dir_path.path());
+        let downloader = Downloader::new(target_path);
         downloader.download(&url).await?;
 
         let log_content = std::fs::read(downloader.filename())?;
@@ -507,17 +487,17 @@ mod tests {
             .with_body(b"hello")
             .create();
 
-        let target_file_path = temp_dir.path().join("downloaded_file.txt");
+        let target_path = temp_dir.path().join("downloaded_file.txt");
 
         let mut target_url = mockito::server_url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(&target_file_path, PermissionEntry::default());
+        let downloader = Downloader::new(target_path.clone());
         downloader.download(&url).await?;
 
-        let file_content = std::fs::read(target_file_path)?;
+        let file_content = std::fs::read(target_path)?;
 
         assert_eq!(file_content, "hello".as_bytes());
 
@@ -534,16 +514,15 @@ mod tests {
             .with_header("content-length", &(usable_disk_space.to_string()))
             .create();
 
-        let name = "test_download_with_length";
-        let version = Some("test1".to_string());
         let target_dir_path = TempDir::new()?;
+        let target_path = target_dir_path.path().join("test_download_with_length");
 
         let mut target_url = mockito::server_url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new_sm(name, &version, target_dir_path.path());
+        let downloader = Downloader::new(target_path);
         match downloader.download(&url).await {
             Err(DownloadError::InsufficientSpace) => Ok(()),
             _ => bail!("failed"),
@@ -560,8 +539,6 @@ mod tests {
             .with_body(b"hello")
             .create();
 
-        let name = "test_download";
-        let version = Some("test1".to_string());
         let target_dir_path = "";
 
         let mut target_url = mockito::server_url();
@@ -569,10 +546,15 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new_sm(name, &version, target_dir_path);
+        let downloader = Downloader::new(target_dir_path.into());
 
         let err = downloader.download(&url).await.unwrap_err();
-        assert!(matches!(err, DownloadError::FromIo { .. }));
+        assert!(matches!(
+            err,
+            DownloadError::FromFileError(FileError::InvalidFileName(_))
+        ));
+        let err = anyhow::Error::from(err);
+        println!("{err:?}");
 
         downloader.cleanup().await?;
 
@@ -595,7 +577,7 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(&target_file_path, PermissionEntry::default());
+        let downloader = Downloader::new(target_file_path.clone());
         downloader.download(&url).await?;
 
         let file_content = std::fs::read(target_file_path)?;
@@ -614,16 +596,15 @@ mod tests {
             .with_body_from_file(&file_path)
             .create();
 
-        let name = "test_download_with_length";
-        let version = Some("test1".to_string());
         let target_dir_path = TempDir::new()?;
+        let target_path = target_dir_path.path().join("test_download_with_length");
 
         let mut target_url = mockito::server_url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new_sm(name, &version, target_dir_path.path());
+        let downloader = Downloader::new(target_path);
 
         match downloader.download(&url).await {
             Ok(()) => {
@@ -644,16 +625,15 @@ mod tests {
             .with_body_from_file(file.into_temp_path())
             .create();
 
-        let name = "test_download_with_length";
-        let version = Some("test1".to_string());
         let target_dir_path = TempDir::new()?;
+        let target_path = target_dir_path.path().join("test_download_with_length");
 
         let mut target_url = mockito::server_url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new_sm(name, &version, target_dir_path.path());
+        let downloader = Downloader::new(target_path);
         downloader.download(&url).await?;
 
         let log_content = std::fs::read(downloader.filename())?;
@@ -667,16 +647,15 @@ mod tests {
     async fn downloader_download_without_content_length() -> anyhow::Result<()> {
         let _mock1 = mock("GET", "/some_file.txt").create();
 
-        let name = "test_download_without_length";
-        let version = Some("test1".to_string());
         let target_dir_path = TempDir::new()?;
+        let target_path = target_dir_path.path().join("test_download_without_length");
 
         let mut target_url = mockito::server_url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new_sm(name, &version, target_dir_path.path());
+        let downloader = Downloader::new(target_path);
         match downloader.download(&url).await {
             Ok(()) => {
                 assert_eq!("".as_bytes(), std::fs::read(downloader.filename())?);
@@ -770,7 +749,9 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
         let tmpdir = TempDir::new()?;
-        let downloader = Downloader::new_sm("partial_download", &None, &tmpdir);
+        let target_path = tmpdir.path().join("partial_download");
+
+        let downloader = Downloader::new(target_path);
         let url = DownloadInfo::new("http://localhost:3000/");
 
         downloader.download(&url).await?;
@@ -840,8 +821,6 @@ mod tests {
         url: Option<&str>,
         expected_err: &str,
     ) -> anyhow::Result<()> {
-        let name = "test_download";
-        let version = Some("test1".to_string());
         let target_dir_path = TempDir::new()?;
 
         // bearer/no bearer setup
@@ -878,7 +857,8 @@ mod tests {
             }
         };
 
-        let downloader = Downloader::new_sm(name, &version, target_dir_path.path());
+        let target_path = target_dir_path.path().join("test_download");
+        let downloader = Downloader::new(target_path);
         match downloader.download(&url).await {
             Ok(_success) => anyhow::bail!("Expected client error."),
             Err(err) => {

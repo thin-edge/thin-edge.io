@@ -40,7 +40,7 @@ pub enum FileError {
     #[error("Could not save the file {file:?} to disk. Received error: {from:?}.")]
     FailedToSync { file: PathBuf, from: std::io::Error },
 
-    #[error("The path {0} contains non UTF-8 characters in the file name")]
+    #[error("The path {0:?} is invalid")]
     InvalidFileName(PathBuf),
 
     #[error(transparent)]

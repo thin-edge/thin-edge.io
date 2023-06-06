@@ -30,7 +30,7 @@
 //!     );
 //!
 //!     // Create downloader instance with desired file path and target directory.
-//!     let downloader = Downloader::new_sm("test_download", &None, "/tmp");
+//!     let downloader = Downloader::new("/tmp/test_download".into());
 //!
 //!     // Call `download` method to get data from url.
 //!     downloader.download(&url_data).await?;
