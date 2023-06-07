@@ -106,7 +106,7 @@ Next, create the files and directories required by thin-edge.io and restart mosq
 
 ```shell
 sudo rc-service mosquitto stop
-sudo tedge init
+sudo tedge init --user tedge --group tedge
 sudo rc-service mosquitto start
 ```
 

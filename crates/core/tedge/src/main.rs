@@ -22,7 +22,7 @@ fn main() -> anyhow::Result<()> {
     let opt = cli::Opt::parse();
 
     if opt.init {
-        warn!("This --init option has been deprecated and will be removed in a future release");
+        warn!("This --init option has been deprecated and will be removed in a future release. Use the `tedge init` command instead");
         return Ok(());
     }
 

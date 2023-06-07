@@ -56,16 +56,13 @@ pub enum FileError {
 
 pub fn create_directory<P: AsRef<Path>>(
     dir: P,
-    user: Option<String>,
-    group: Option<String>,
-    mode: Option<u32>,
+    permissions: PermissionEntry,
 ) -> Result<(), FileError> {
-    let perm_entry = PermissionEntry::new(user, group, mode);
-    perm_entry.create_directory(dir.as_ref())
+    permissions.create_directory(dir.as_ref())
 }
-
+/// Create the directory owned by the user running this API with default directory permissions
 pub fn create_directory_with_defaults<P: AsRef<Path>>(dir: P) -> Result<(), FileError> {
-    create_directory(dir, None, None, None)
+    create_directory(dir, PermissionEntry::default())
 }
 
 pub fn create_directory_with_user_group(
@@ -86,19 +83,17 @@ pub fn create_directory_with_mode(dir: impl AsRef<Path>, mode: u32) -> Result<()
 pub fn create_file<P: AsRef<Path>>(
     file: P,
     content: Option<&str>,
-    user: Option<String>,
-    group: Option<String>,
-    mode: Option<u32>,
+    permissions: PermissionEntry,
 ) -> Result<(), FileError> {
-    let perm_entry = PermissionEntry::new(user, group, mode);
-    perm_entry.create_file(file.as_ref(), content)
+    permissions.create_file(file.as_ref(), content)
 }
 
+/// Create the directory owned by the user running this API with default file permissions
 pub fn create_file_with_defaults<P: AsRef<Path>>(
     file: P,
     content: Option<&str>,
 ) -> Result<(), FileError> {
-    create_file(file, content, None, None, None)
+    create_file(file, content, PermissionEntry::default())
 }
 
 pub fn create_file_with_mode(

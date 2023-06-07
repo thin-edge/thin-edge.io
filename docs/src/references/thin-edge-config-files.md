@@ -2,7 +2,7 @@
 
 Thin-edge.io requires config files for its operation. The `tedge init` command is used to create
 the base directory and other directories inside the base directory with appropriate user and permissions.
-The `tedge-mapper c8y/az` and `tedge-agent` will create the config
+The `tedge-mapper` and `tedge-agent` will create the config
 directories/files inside the base directory that are required for their operation on startup.
 
 By default, the config files are created in `/etc/tedge` directory. To create the config files in
