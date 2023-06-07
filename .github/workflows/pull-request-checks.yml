@@ -92,6 +92,9 @@ jobs:
       - name: Install nightly
         uses: dtolnay/rust-toolchain@nightly
 
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Run cargo-udeps
         run: |
           cargo install cargo-udeps
