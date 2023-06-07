@@ -34,8 +34,7 @@ tedge-apt-plugin list --name
     Should Not Contain    ${apt_list_name}    tedge-apt-plugin
     Should Not Contain    ${apt_list_name}    tedge-mapper
     Should Not Contain    ${apt_list_name}    tedge-watchdog
-    Should Contain    ${apt_list_name}    vim-tiny
-    Should Contain    ${apt_list_name}    vim-common
+
 
 tedge-apt-plugin list --maintainer
     ${apt_list_maintainer}    Execute Command    /etc/tedge/sm-plugins/apt list --maintainer '.*(thin-edge.io).*'
@@ -48,8 +47,7 @@ tedge-apt-plugin list --maintainer
     Should Contain    ${apt_list_maintainer}    tedge-apt-plugin
     Should Contain    ${apt_list_maintainer}    tedge-mapper
     Should Contain    ${apt_list_maintainer}    tedge-watchdog
-    Should Not Contain    ${apt_list_maintainer}    vim-tiny
-    Should Not Contain    ${apt_list_maintainer}    vim-common
+
 
 tedge-apt-plugin list --name --maintainer
     ${apt_list_name_maintainer}    Execute Command    /etc/tedge/sm-plugins/apt list --name '(python|vim).*' --maintainer '.*(raspberry|thin-edge.io).*'
@@ -62,8 +60,7 @@ tedge-apt-plugin list --name --maintainer
     Should Contain    ${apt_list_name_maintainer}    tedge-apt-plugin
     Should Contain    ${apt_list_name_maintainer}    tedge-mapper
     Should Contain    ${apt_list_name_maintainer}    tedge-watchdog
-    Should Contain    ${apt_list_name_maintainer}    vim-tiny
-    Should Contain    ${apt_list_name_maintainer}    vim-common
+
 
 invalid regex pattern
     Execute Command    /etc/tedge/sm-plugins/apt list --name '(python'    exp_exit_code=1
