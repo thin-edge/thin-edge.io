@@ -2,16 +2,17 @@ use anyhow::Result;
 use download::DownloadInfo;
 use download::Downloader;
 
-/// This example shows how to use the `downlaoder`.
+/// This example shows how to use the `downloader`.
 #[tokio::main]
 async fn main() -> Result<()> {
     // Create Download metadata.
     let url_data = DownloadInfo::new(
-        "https://file-examples-com.github.io/uploads/2017/02/file_example_CSV_5000.csv",
+        "https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh",
     );
 
     // Create downloader instance with desired file path and target directory.
-    let downloader = Downloader::new_sm("test_download", &None, "/tmp");
+    #[allow(deprecated)]
+    let downloader = Downloader::new("/tmp/test_download".into());
 
     // Call `download` method to get data from url.
     downloader.download(&url_data).await?;

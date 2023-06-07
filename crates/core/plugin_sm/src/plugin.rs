@@ -153,7 +153,8 @@ pub trait Plugin {
         logger: &mut BufWriter<File>,
         download_path: &Path,
     ) -> Result<Downloader, SoftwareError> {
-        let downloader = Downloader::new_sm(&module.name, &module.version, download_path);
+        let sm_path = sm_path(&module.name, &module.version, download_path);
+        let downloader = Downloader::new(sm_path);
 
         logger
             .write_all(
@@ -512,4 +513,14 @@ pub fn deserialize_module_info(
         });
     }
     Ok(software_list)
+}
+
+fn sm_path(name: &str, version: &Option<String>, target_dir_path: impl AsRef<Path>) -> PathBuf {
+    let mut filename = name.to_string();
+    if let Some(version) = version {
+        filename.push('_');
+        filename.push_str(version.as_str());
+    }
+
+    target_dir_path.as_ref().join(filename)
 }

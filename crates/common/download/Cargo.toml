@@ -10,6 +10,7 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+anyhow = { version = "1.0", features = ["backtrace"] }
 backoff = { version = "0.4", features = ["tokio"] }
 log = "0.4"
 nix = "0.24"
@@ -24,10 +25,10 @@ tokio = { version = "1.23", features = ["fs"] }
 url = "2.2"
 
 [dev-dependencies]
-anyhow = "1.0"
+env_logger = "0.10.0"
 mockito = "0.31"
 regex = "1.5"
 tempfile = "3.2"
 test-case = "2.2"
-tokio = { version = "1.23", features = ["macros"] }
+tokio = { version = "1.23", features = ["macros", "rt-multi-thread"] }
 tokio-test = "0.4"

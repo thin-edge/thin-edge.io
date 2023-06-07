@@ -1,26 +1,15 @@
+use super::download::InvalidResponseError;
+use std::io;
 use std::path::PathBuf;
 
+/// An error that can be returned as a result of
+/// [`Downloader::download`](super::download::Downloader::download) operation.
 #[derive(Debug, thiserror::Error)]
 pub enum DownloadError {
-    #[error(transparent)]
-    FromBackoff(#[from] backoff::Error<reqwest::Error>),
+    #[error("{context}")]
+    FromIo { context: String, source: io::Error },
 
-    #[error(transparent)]
-    FromElapsed(#[from] tokio::time::error::Elapsed),
-
-    #[error("I/O error: {reason:?}")]
-    FromIo { reason: String },
-
-    #[error("JSON parse error: {reason:?}")]
-    FromReqwest { reason: String },
-
-    #[error(transparent)]
-    FromUrlParse(#[from] url::ParseError),
-
-    #[error(transparent)]
-    FromNix(#[from] nix::Error),
-
-    #[error(transparent)]
+    #[error("Error while performing a file operation")]
     FromFileError(#[from] tedge_utils::file::FileError),
 
     #[error("Not enough disk space")]
@@ -28,20 +17,36 @@ pub enum DownloadError {
 
     #[error("No write access to {path:?}")]
     NoWriteAccess { path: PathBuf },
+
+    #[error("Could not make a successful request to the remote server")]
+    Request(#[from] reqwest::Error),
+
+    #[error("Invalid server response")]
+    InvalidResponse(#[from] InvalidResponseError),
 }
 
-impl From<reqwest::Error> for DownloadError {
-    fn from(err: reqwest::Error) -> Self {
-        DownloadError::FromReqwest {
-            reason: format!("{}", err),
-        }
-    }
+/// A trait for attaching context string to io-like errors.
+///
+/// While using thiserror, it is very easy to create a variant like
+/// `FromIo(#[from] io::Error)` and convert io errors to this variant using the
+/// `?` operator. This however loses helpful context, e.g. the actual path
+/// related to the error (because io::Error does not provide it) or information
+/// about what an application tried to do when io::Error was returned.
+///
+/// [`anyhow`] makes it really easy to attach context to errors by using
+/// [`anyhow::Context::context`], but as we want to use typed errors, just not
+/// to repeat `.map_err(|err| DownloadError::FromIo { context: "...", source:
+/// err })` everywhere, this helper trait provides convenient `anyhow`-like
+/// syntax to easily attach context.
+pub(crate) trait ErrContext<T> {
+    fn context(self, context: String) -> Result<T, DownloadError>;
 }
 
-impl From<std::io::Error> for DownloadError {
-    fn from(err: std::io::Error) -> Self {
-        DownloadError::FromIo {
-            reason: format!("{}", err),
-        }
+impl<T, E: Into<io::Error>> ErrContext<T> for Result<T, E> {
+    fn context(self, context: String) -> Result<T, DownloadError> {
+        self.map_err(|err| DownloadError::FromIo {
+            context,
+            source: err.into(),
+        })
     }
 }

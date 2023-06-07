@@ -10,7 +10,6 @@ use tedge_actors::Sequential;
 use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
-use tedge_utils::file::PermissionEntry;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DownloadRequest {
@@ -85,7 +84,7 @@ impl Server for DownloaderActor {
             DownloadInfo::new(&request.url)
         };
 
-        let downloader = Downloader::new(&request.file_path, PermissionEntry::default());
+        let downloader = Downloader::new(request.file_path.clone());
 
         info!(
             "Downloading from url {} to location {}",

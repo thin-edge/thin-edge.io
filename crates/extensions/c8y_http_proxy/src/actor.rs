@@ -320,7 +320,8 @@ impl C8YHttpProxyActor {
         }
 
         debug!(target: self.name(), "Downloading from: {:?}", download_info.url());
-        let downloader: Downloader = Downloader::new(&request.file_path, request.file_permissions);
+        let downloader: Downloader =
+            Downloader::with_permission(request.file_path, request.file_permissions);
         downloader.download(&download_info).await?;
 
         Ok(())
