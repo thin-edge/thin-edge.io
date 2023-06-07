@@ -30,12 +30,9 @@ time = { version = "0.3", features = [
 anyhow = "1.0"
 assert_matches = "1.5"
 clock = { path = "../../common/clock" }
-criterion = "0.3"
 maplit = "1.0.2"
 mockall = "0.11"
-proptest = "1.0"
 regex = "1.5"
-stats_alloc = "0.1"
 test-case = "2.2"
 time = { version = "0.3", features = ["macros"] }
 walkdir = "2"

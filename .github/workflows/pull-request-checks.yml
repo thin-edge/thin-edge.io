@@ -89,7 +89,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install stable
+      - name: Install nightly
         uses: dtolnay/rust-toolchain@nightly
 
       - name: Run cargo-udeps
