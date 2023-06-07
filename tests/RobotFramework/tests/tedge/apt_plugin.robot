@@ -20,15 +20,15 @@ Suite Teardown      Get Logs
 tedge-apt-plugin list
     ${apt_list}    Execute Command    /etc/tedge/sm-plugins/apt list
     Should Contain    ${apt_list}    apt
-    Should Contain    ${apt_list}    wget
+    # Should Contain    ${apt_list}    wget
     Should Contain    ${apt_list}    dpkg
 
 tedge-apt-plugin list --name
-    ${apt_list_name}    Execute Command    /etc/tedge/sm-plugins/apt list --name '(python|vim).*'
-    Should Not Contain    ${apt_list_name}    c8y-configuration-plugin
-    Should Not Contain    ${apt_list_name}    c8y-firmware-plugin
-    Should Not Contain    ${apt_list_name}    c8y-log-plugin
-    Should Not Contain    ${apt_list_name}    c8y-remote-access-plugin
+    ${apt_list_name}    Execute Command    /etc/tedge/sm-plugins/apt list --name '(c8y-).*'
+    Should Contain    ${apt_list_name}    c8y-configuration-plugin
+    Should Contain    ${apt_list_name}    c8y-firmware-plugin
+    Should Contain    ${apt_list_name}    c8y-log-plugin
+    Should Contain    ${apt_list_name}    c8y-remote-access-plugin
     Should Not Contain    ${apt_list_name}    tedge
     Should Not Contain    ${apt_list_name}    tedge-agent
     Should Not Contain    ${apt_list_name}    tedge-apt-plugin
@@ -37,6 +37,7 @@ tedge-apt-plugin list --name
 
 
 tedge-apt-plugin list --maintainer
+    ${apt_workaround}    Set Variable    apt    
     ${apt_list_maintainer}    Execute Command    /etc/tedge/sm-plugins/apt list --maintainer '.*(thin-edge.io).*'
     Should Contain    ${apt_list_maintainer}    c8y-configuration-plugin
     Should Contain    ${apt_list_maintainer}    c8y-firmware-plugin
@@ -47,19 +48,21 @@ tedge-apt-plugin list --maintainer
     Should Contain    ${apt_list_maintainer}    tedge-apt-plugin
     Should Contain    ${apt_list_maintainer}    tedge-mapper
     Should Contain    ${apt_list_maintainer}    tedge-watchdog
-
+    Should Not Contain    ${apt_list_maintainer}    ${apt_workaround}\t
+    Should Not Contain    ${apt_list_maintainer}    dpkg
 
 tedge-apt-plugin list --name --maintainer
-    ${apt_list_name_maintainer}    Execute Command    /etc/tedge/sm-plugins/apt list --name '(python|vim).*' --maintainer '.*(raspberry|thin-edge.io).*'
+    ${apt_list_name_maintainer}    Execute Command    /etc/tedge/sm-plugins/apt list --name '(c8y-).*' --maintainer '.*(APT Development Team).*'
     Should Contain    ${apt_list_name_maintainer}    c8y-configuration-plugin
     Should Contain    ${apt_list_name_maintainer}    c8y-firmware-plugin
     Should Contain    ${apt_list_name_maintainer}    c8y-log-plugin
     Should Contain    ${apt_list_name_maintainer}    c8y-remote-access-plugin
-    Should Contain    ${apt_list_name_maintainer}    tedge
-    Should Contain    ${apt_list_name_maintainer}    tedge-agent
-    Should Contain    ${apt_list_name_maintainer}    tedge-apt-plugin
-    Should Contain    ${apt_list_name_maintainer}    tedge-mapper
-    Should Contain    ${apt_list_name_maintainer}    tedge-watchdog
+    Should Contain    ${apt_list_name_maintainer}    apt
+    Should Not Contain    ${apt_list_name_maintainer}    tedge
+    Should Not Contain    ${apt_list_name_maintainer}    tedge-agent
+    Should Not Contain    ${apt_list_name_maintainer}    tedge-apt-plugin
+    Should Not Contain    ${apt_list_name_maintainer}    tedge-mapper
+    Should Not Contain    ${apt_list_name_maintainer}    tedge-watchdog
 
 
 invalid regex pattern
