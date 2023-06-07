@@ -38,26 +38,17 @@ jobs:
           file: Cargo.toml
           field: "workspace.package.rust-version"
 
-      - name: Enable toolchain via github action
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ steps.rust_version.outputs.value }}
-          components: cargo
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Enable cache
         uses: Swatinem/rust-cache@v2
 
       - name: Install cargo-release
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: --version 0.24.4 cargo-release
+        run: cargo install --version 0.24.4 cargo-release
 
       - name: Increment version and tag
-        uses: actions-rs/cargo@v1
-        with:
-          command: release
-          args: ${{ inputs.bump }} --no-publish --no-push --no-tag -vv --no-confirm --execute
+        run: cargo release ${{ inputs.bump }} --no-publish --no-push --no-tag -vv --no-confirm --execute
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
