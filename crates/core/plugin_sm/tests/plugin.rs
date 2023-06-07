@@ -12,6 +12,7 @@ mod tests {
     use tedge_api::SoftwareError;
     use tedge_api::SoftwareModule;
     use tedge_api::SoftwareModuleUpdate;
+    use tedge_config::TEdgeConfigLocation;
     use test_case::test_case;
     use tokio::fs::File;
     use tokio::io::BufWriter;
@@ -225,18 +226,32 @@ mod tests {
 
     #[test]
     #[serial]
-    fn plugin_call_name_and_path() {
+    fn plugin_call_name_and_path() -> Result<(), anyhow::Error> {
         let dummy_plugin_path = get_dummy_plugin_path();
-        let plugin = ExternalPluginCommand::new("test", &dummy_plugin_path);
+
+        let tmpfile = make_config(100)?;
+        let config_location =
+            TEdgeConfigLocation::from_custom_root(tmpfile.path().to_str().unwrap());
+        let config = tedge_config::TEdgeConfigRepository::new(config_location).load_new()?;
+
+        let plugin = ExternalPluginCommand::new(
+            "test",
+            &dummy_plugin_path,
+            config.software.plugin.max_packages,
+        );
         assert_eq!(plugin.name, "test");
         assert_eq!(plugin.path, dummy_plugin_path);
+        assert_eq!(plugin.max_packages, config.software.plugin.max_packages);
+        Ok(())
     }
 
     #[test]
     #[serial]
     fn plugin_check_module_type_both_same() {
         let dummy_plugin_path = get_dummy_plugin_path();
-        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path);
+
+        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, 100);
+
         let module = SoftwareModule {
             module_type: Some("test".into()),
             name: "test".into(),
@@ -259,7 +274,7 @@ mod tests {
         let dummy_plugin_path = get_dummy_plugin_path();
 
         // Create new plugin in the registry with name `test`.
-        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path);
+        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, 100);
 
         // Create test module with name `test2`.
         let module = SoftwareModule {
@@ -289,7 +304,7 @@ mod tests {
         // Create dummy plugin.
         let dummy_plugin_path = get_dummy_plugin_path();
 
-        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path);
+        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, 100);
 
         // Create software module without an explicit type.
         let module = SoftwareModule {
@@ -411,6 +426,7 @@ mod tests {
             name: name.into(),
             path: dummy_plugin_path.clone(),
             sudo: None,
+            max_packages: 100,
         };
         (plugin, dummy_plugin_path)
     }
@@ -421,6 +437,16 @@ mod tests {
             fs::create_dir(&path).unwrap();
         }
         path
+    }
+
+    fn make_config(max_packages: u32) -> Result<tempfile::TempDir, anyhow::Error> {
+        let dir = tempfile::TempDir::new().unwrap();
+        let toml_conf = &format!("[software]\nmax_packages = {max_packages}");
+
+        let config_location = TEdgeConfigLocation::from_custom_root(dir.path());
+        let mut file = std::fs::File::create(config_location.tedge_config_file_path())?;
+        file.write_all(toml_conf.as_bytes())?;
+        Ok(dir)
     }
 
     async fn dev_null() -> BufWriter<File> {

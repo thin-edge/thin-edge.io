@@ -59,6 +59,7 @@ impl Actor for SoftwareManagerActor {
             &self.config.sm_plugins_dir,
             self.config.default_plugin_type.clone(),
             Some(SUDO.into()),
+            self.config.config_location.clone(),
         )
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
 

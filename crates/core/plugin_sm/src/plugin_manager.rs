@@ -17,6 +17,7 @@ use tedge_api::SoftwareType;
 use tedge_api::SoftwareUpdateRequest;
 use tedge_api::SoftwareUpdateResponse;
 use tedge_api::DEFAULT;
+use tedge_config::TEdgeConfigLocation;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
@@ -53,6 +54,7 @@ pub struct ExternalPlugins {
     plugin_map: HashMap<SoftwareType, ExternalPluginCommand>,
     default_plugin_type: Option<SoftwareType>,
     sudo: Option<PathBuf>,
+    config_location: TEdgeConfigLocation,
 }
 
 impl Plugins for ExternalPlugins {
@@ -96,12 +98,14 @@ impl ExternalPlugins {
         plugin_dir: impl Into<PathBuf>,
         default_plugin_type: Option<String>,
         sudo: Option<PathBuf>,
+        config_location: TEdgeConfigLocation,
     ) -> Result<ExternalPlugins, SoftwareError> {
         let mut plugins = ExternalPlugins {
             plugin_dir: plugin_dir.into(),
             plugin_map: HashMap::new(),
             default_plugin_type: default_plugin_type.clone(),
             sudo,
+            config_location,
         };
         if let Err(e) = plugins.load() {
             warn!(
@@ -135,6 +139,16 @@ impl ExternalPlugins {
 
     pub fn load(&mut self) -> io::Result<()> {
         self.plugin_map.clear();
+
+        let config = tedge_config::TEdgeConfigRepository::new(self.config_location.clone())
+            .load_new()
+            .map_err(|err| {
+                io::Error::new(
+                    ErrorKind::Other,
+                    format!("Failed to load tedge config: {}", err),
+                )
+            })?;
+
         for maybe_entry in fs::read_dir(&self.plugin_dir)? {
             let entry = maybe_entry?;
             let path = entry.path();
@@ -188,7 +202,11 @@ impl ExternalPlugins {
 
                 if let Some(file_name) = path.file_name() {
                     if let Some(plugin_name) = file_name.to_str() {
-                        let plugin = ExternalPluginCommand::new(plugin_name, &path);
+                        let plugin = ExternalPluginCommand::new(
+                            plugin_name,
+                            &path,
+                            config.software.plugin.max_packages,
+                        );
                         self.plugin_map.insert(plugin_name.into(), plugin);
                     }
                 }
@@ -296,6 +314,11 @@ impl ExternalPlugins {
 fn test_no_sm_plugin_dir() {
     let plugin_dir = tempfile::TempDir::new().unwrap();
 
-    let actual = ExternalPlugins::open(plugin_dir.path(), None, None);
+    let actual = ExternalPlugins::open(
+        plugin_dir.path(),
+        None,
+        None,
+        TEdgeConfigLocation::default(),
+    );
     assert!(actual.is_ok());
 }

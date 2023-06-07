@@ -6,6 +6,7 @@ mod tests {
     use std::fs::File;
     use std::path::PathBuf;
     use std::str::FromStr;
+    use tedge_config::TEdgeConfigLocation;
     use tempfile::NamedTempFile;
 
     #[test]
@@ -15,7 +16,8 @@ mod tests {
         let plugin_dir = temp_dir.path().to_owned();
 
         // Call open and load to register all plugins from given directory.
-        let mut plugins = ExternalPlugins::open(plugin_dir, None, None).unwrap();
+        let mut plugins =
+            ExternalPlugins::open(plugin_dir, None, None, TEdgeConfigLocation::default()).unwrap();
         let _ = plugins.load();
 
         // Plugins registry should not register any plugin as no files in the directory are present.
@@ -33,7 +35,8 @@ mod tests {
         let plugin_dir = temp_dir.path().to_owned();
 
         // Call open and load to register all plugins from given directory.
-        let mut plugins = ExternalPlugins::open(plugin_dir, None, None).unwrap();
+        let mut plugins =
+            ExternalPlugins::open(plugin_dir, None, None, TEdgeConfigLocation::default()).unwrap();
         let _ = plugins.load();
 
         // Registry has registered no plugins.
@@ -51,7 +54,8 @@ mod tests {
         let plugin_dir = temp_dir.path().to_owned();
 
         // Call open and load to register all plugins from given directory.
-        let mut plugins = ExternalPlugins::open(plugin_dir, None, None).unwrap();
+        let mut plugins =
+            ExternalPlugins::open(plugin_dir, None, None, TEdgeConfigLocation::default()).unwrap();
         let _ = plugins.load();
 
         // Check if registry has loaded plugin of type `test`.
@@ -97,7 +101,8 @@ mod tests {
         let plugin_dir = temp_dir.path().to_owned();
 
         // Call open and load to register all plugins from given directory.
-        let mut plugins = ExternalPlugins::open(plugin_dir, None, None).unwrap();
+        let mut plugins =
+            ExternalPlugins::open(plugin_dir, None, None, TEdgeConfigLocation::default()).unwrap();
         let _ = plugins.load();
 
         // Plugin registry shall have registered plugin with name as the file in plugin directory.
@@ -130,9 +135,13 @@ mod tests {
         let _res = std::fs::copy(get_dummy_plugin_path(), plugin3.path());
         let (_, _path) = plugin3.keep().unwrap();
 
-        let mut plugins =
-            ExternalPlugins::open(plugin_dir.into_path(), Some(plugin_name2.clone()), None)
-                .unwrap();
+        let mut plugins = ExternalPlugins::open(
+            plugin_dir.into_path(),
+            Some(plugin_name2.clone()),
+            None,
+            TEdgeConfigLocation::default(),
+        )
+        .unwrap();
         plugins.load().unwrap();
 
         assert_eq!(
@@ -158,7 +167,13 @@ mod tests {
             .to_owned();
         let (_, _path) = plugin.keep().unwrap();
 
-        let mut plugins = ExternalPlugins::open(plugin_dir.into_path(), None, None).unwrap();
+        let mut plugins = ExternalPlugins::open(
+            plugin_dir.into_path(),
+            None,
+            None,
+            TEdgeConfigLocation::default(),
+        )
+        .unwrap();
         plugins.load().unwrap();
 
         assert_eq!(
@@ -174,7 +189,12 @@ mod tests {
         let plugin_file_path = plugin_dir.path().join("apt");
         let _ = File::create(plugin_file_path).unwrap();
 
-        let result = ExternalPlugins::open(plugin_dir.into_path(), Some("dummy".into()), None)?;
+        let result = ExternalPlugins::open(
+            plugin_dir.into_path(),
+            Some("dummy".into()),
+            None,
+            TEdgeConfigLocation::default(),
+        )?;
         assert!(result.empty());
         assert!(result.default().is_none());
 
