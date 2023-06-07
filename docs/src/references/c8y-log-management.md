@@ -16,11 +16,12 @@ Thin-edge provides an operation plugin to [fetch log files from the device on to
 ## Installation
 
 As part of this plugin installation:
-* The `--init` command of the plugin is executed, which creates an empty file at `/etc/tedge/operations/c8y/c8y_LogfileRequest` indicating that this device supports `c8y_LogfileRequest` operation from Cumulocity.
 * On systemd enabled devices, the service definition file for this `c8y-log-plugin` daemon is also installed as part of this plugin installation.
 
 Once installed, the `c8y-log-plugin` is run as a daemon on the device listening to log requests from Cumulocity on `c8y/s/us` MQTT topic.
-On startup, it reports all the log file types that it manages, defined in the `c8y-log-plugin.toml`
+On startup, the plugin declares to the Cumulocity mapper that it supports `c8y_LogfileRequest` operation
+by creating an empty file at `/etc/tedge/operations/c8y/c8y_LogfileRequest`.
+It also reports all the log file types that it manages, defined in the `c8y-log-plugin.toml`
 
 ## Configuration
 

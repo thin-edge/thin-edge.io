@@ -79,11 +79,7 @@ to declare that this plugin supports two Cumulocity operations:
 uploading and downloading configuration files
 (which respective SmartRest2 codes are `526` and `524`).
 
-These two files can be created using the `c8y-configuration-plugin --init` option:
-
-```shell
-sudo c8y-configuration-plugin --init
-```
+These two files are created on the very first startup of `c8y-configuration-plugin`:
 
 ```shell
 ls -l /etc/tedge/operations/c8y/c8y_UploadConfigFile

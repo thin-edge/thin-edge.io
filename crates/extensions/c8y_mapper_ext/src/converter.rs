@@ -177,6 +177,7 @@ pub struct CumulocityConverter {
     mqtt_publisher: LoggingSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
     pub cfg_dir: PathBuf,
+    pub ops_dir: PathBuf,
     pub children: HashMap<String, Operations>,
     pub service_type: String,
     pub c8y_endpoint: C8yEndPoint,
@@ -195,8 +196,9 @@ impl CumulocityConverter {
 
         let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
 
-        let operations = Operations::try_new(config.ops_dir.clone())?;
-        let children = get_child_ops(config.ops_dir.clone())?;
+        let ops_dir = config.ops_dir;
+        let operations = Operations::try_new(ops_dir.clone())?;
+        let children = get_child_ops(ops_dir.clone())?;
 
         let alarm_converter = AlarmConverter::new();
 
@@ -220,6 +222,7 @@ impl CumulocityConverter {
             operation_logs,
             http_proxy,
             cfg_dir: config.config_dir,
+            ops_dir,
             children,
             mqtt_publisher,
             service_type,

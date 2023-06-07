@@ -6,7 +6,6 @@ debian package.
 
 If you have not installed via the debian package, make sure you have the following:
 
-- run `sudo c8y-log-plugin --init`
 - a `c8y-log-plugin.service` file in `/lib/systemd/system/c8y-log-plugin.service`
 - a `c8y-log-plugin` binary in `/usr/bin/c8y-log-plugin`
 - check if `/etc/tedge/c8y/c8y-log-plugin.toml` was created

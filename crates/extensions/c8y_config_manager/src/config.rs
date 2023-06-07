@@ -1,13 +1,9 @@
+use super::child_device::ConfigOperationResponseTopic;
 use c8y_api::smartrest::topic::C8yTopic;
-use tedge_utils::paths::validate_parent_dir_exists;
-
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_config::*;
 use tedge_mqtt_ext::TopicFilter;
-
-use super::child_device::ConfigOperationResponseTopic;
-use super::plugin_config::PluginConfig;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-configuration-plugin.toml";
 pub const DEFAULT_OPERATION_DIR_NAME: &str = "c8y/";
@@ -23,8 +19,9 @@ pub struct ConfigManagerConfig {
     pub mqtt_host: String,
     pub mqtt_port: u16,
     pub tedge_http_host: String,
+    pub ops_dir: PathBuf,
+    pub plugin_config_dir: PathBuf,
     pub plugin_config_path: PathBuf,
-    pub plugin_config: PluginConfig,
     pub c8y_request_topics: TopicFilter,
     pub config_snapshot_response_topics: TopicFilter,
     pub config_update_response_topics: TopicFilter,
@@ -44,11 +41,9 @@ impl ConfigManagerConfig {
     ) -> Self {
         let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port);
 
-        let plugin_config_path = config_dir
-            .join(DEFAULT_OPERATION_DIR_NAME)
-            .join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
-
-        let plugin_config = PluginConfig::new(&plugin_config_path);
+        let ops_dir = config_dir.join("operations/c8y");
+        let plugin_config_dir = config_dir.join(DEFAULT_OPERATION_DIR_NAME);
+        let plugin_config_path = plugin_config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
 
         let file_transfer_dir = data_dir.join(DEFAULT_FILE_TRANSFER_DIR_NAME);
 
@@ -66,8 +61,9 @@ impl ConfigManagerConfig {
             mqtt_host,
             mqtt_port,
             tedge_http_host,
+            ops_dir,
+            plugin_config_dir,
             plugin_config_path,
-            plugin_config,
             c8y_request_topics,
             config_snapshot_response_topics,
             config_update_response_topics,
@@ -97,7 +93,6 @@ impl ConfigManagerConfig {
             tedge_http_address,
             tedge_http_port,
         );
-        validate_parent_dir_exists(config.plugin_config_path.as_path())?;
         Ok(config)
     }
 }

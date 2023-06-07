@@ -4,6 +4,7 @@ use clap::Parser;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
+use tracing::log::warn;
 
 mod agent;
 mod file_transfer_server;
@@ -58,7 +59,8 @@ async fn main() -> Result<(), anyhow::Error> {
         AgentConfig::from_tedge_config(&tedge_config_location)?,
     )?;
     if agent_opt.init {
-        agent.init(agent_opt.config_dir).await?;
+        warn!("This --init option has been deprecated and will be removed in a future release");
+        return Ok(());
     } else {
         agent.start().await?;
     }

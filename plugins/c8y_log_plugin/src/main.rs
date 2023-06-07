@@ -1,4 +1,3 @@
-use anyhow::Context;
 use anyhow::Result;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
@@ -12,8 +11,6 @@ use tedge_config::mqtt_config::MqttConfigBuildError;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::ConfigRepository;
-use tedge_config::ConfigSettingAccessor;
-use tedge_config::LogPathSetting;
 use tedge_config::TEdgeConfig;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_file_system_ext::FsWatchActorBuilder;
@@ -22,11 +19,9 @@ use tedge_http_ext::HttpActor;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_signal_ext::SignalActor;
-use tedge_utils::file::create_directory_with_user_group;
-use tedge_utils::file::create_file_with_user_group;
 use tracing::info;
+use tracing::log::warn;
 
-const DEFAULT_PLUGIN_CONFIG_FILE: &str = "c8y/c8y-log-plugin.toml";
 const AFTER_HELP_TEXT: &str = r#"On start, `c8y-log-plugin` notifies the cloud tenant of the log types listed in the `CONFIG_FILE`, sending this list with a `118` on `c8y/s/us`.
 `c8y-log-plugin` subscribes then to `c8y/s/ds` listening for logfile operation requests (`522`) notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
 
@@ -85,13 +80,8 @@ async fn main() -> Result<(), anyhow::Error> {
     let tedge_config = config_repository.load()?;
 
     if config_plugin_opt.init {
-        let logs_dir = tedge_config.query(LogPathSetting)?;
-        init(&config_dir, logs_dir.as_std_path()).with_context(|| {
-            format!(
-                "Failed to initialize {}. You have to run the command with sudo.",
-                C8Y_LOG_PLUGIN
-            )
-        })
+        warn!("This --init option has been deprecated and will be removed in a future release");
+        Ok(())
     } else {
         run(config_dir, tedge_config).await
     }
@@ -116,12 +106,12 @@ async fn run(config_dir: impl AsRef<Path>, tedge_config: TEdgeConfig) -> Result<
 
     // Instantiate log manager actor
     let log_manager_config = LogManagerConfig::from_tedge_config(config_dir, &tedge_config)?;
-    let log_actor = LogManagerBuilder::new(
+    let log_actor = LogManagerBuilder::try_new(
         log_manager_config,
         &mut mqtt_actor,
         &mut c8y_http_proxy_actor,
         &mut fs_watch_actor,
-    );
+    )?;
 
     // Shutdown on SIGINT
     let signal_actor = SignalActor::builder(&runtime.get_handle());
@@ -138,87 +128,6 @@ async fn run(config_dir: impl AsRef<Path>, tedge_config: TEdgeConfig) -> Result<
 
     info!("Ready to serve log requests");
     runtime.run_to_completion().await?;
-    Ok(())
-}
-
-fn init(config_dir: &Path, logs_dir: &Path) -> Result<(), anyhow::Error> {
-    info!("Creating supported operation files");
-    create_init_logs_directories_and_files(config_dir, logs_dir)?;
-    Ok(())
-}
-
-/// for the log plugin to work the following directories and files are needed:
-///
-/// Directories:
-/// - LOGS_DIR/tedge/agent
-/// - CONFIG_DIR/operations/c8y
-/// - CONFIG_DIR/c8y
-///
-/// Files:
-/// - CONFIG_DIR/operations/c8y/c8y_LogfileRequest
-/// - CONFIG_DIR/c8y/c8y-log-plugin.toml
-fn create_init_logs_directories_and_files(
-    config_dir: &Path,
-    logs_dir: &Path,
-) -> Result<(), anyhow::Error> {
-    // creating logs_dir
-    create_directory_with_user_group(
-        format!("{}/tedge", logs_dir.display()),
-        "tedge",
-        "tedge",
-        0o755,
-    )?;
-    create_directory_with_user_group(
-        format!("{}/tedge/agent", logs_dir.display()),
-        "tedge",
-        "tedge",
-        0o755,
-    )?;
-    // creating /operations/c8y directories
-    create_directory_with_user_group(
-        format!("{}/operations", config_dir.display()),
-        "tedge",
-        "tedge",
-        0o755,
-    )?;
-    create_directory_with_user_group(
-        format!("{}/operations/c8y", config_dir.display()),
-        "tedge",
-        "tedge",
-        0o755,
-    )?;
-    // creating c8y_LogfileRequest operation file
-    create_file_with_user_group(
-        format!("{}/operations/c8y/c8y_LogfileRequest", config_dir.display()),
-        "tedge",
-        "tedge",
-        0o644,
-        None,
-    )?;
-    // creating c8y directory
-    create_directory_with_user_group(
-        format!("{}/c8y", config_dir.display()),
-        "root",
-        "root",
-        0o1777,
-    )?;
-
-    // creating c8y-log-plugin.toml
-    let logs_path = format!("{}/tedge/agent/software-*", logs_dir.display());
-    let data = format!(
-        r#"files = [
-    {{ type = "software-management", path = "{logs_path}" }},
-]"#
-    );
-
-    create_file_with_user_group(
-        format!("{}/{DEFAULT_PLUGIN_CONFIG_FILE}", config_dir.display()),
-        "root",
-        "root",
-        0o644,
-        Some(&data),
-    )?;
-
     Ok(())
 }
 

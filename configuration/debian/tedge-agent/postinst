@@ -32,10 +32,6 @@ if ! (process_running tedge-agent || process_running tedge_agent); then
     # although the flockfile is owned by `tedge`. rm will ignore the files if they don't exist
     rm -f /run/lock/tedge_agent.lock
     rm -f /run/lock/tedge-agent.lock
-
-    # It must be run as root to create the directory `/var/tedge`.
-    # Ignore any errors during init so the installatino does not fail
-    tedge-agent --init ||:
 fi
 
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then

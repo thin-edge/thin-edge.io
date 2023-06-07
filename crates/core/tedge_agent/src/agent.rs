@@ -25,7 +25,7 @@ use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_signal_ext::SignalActor;
-use tedge_utils::file::create_directory_with_user_group;
+use tedge_utils::file::create_directory_with_defaults;
 use tracing::info;
 use tracing::instrument;
 
@@ -37,6 +37,7 @@ pub struct AgentConfig {
     pub http_config: HttpConfig,
     pub restart_config: RestartManagerConfig,
     pub sw_update_config: SoftwareManagerConfig,
+    pub config_dir: Utf8PathBuf,
     pub run_dir: Utf8PathBuf,
     pub use_lock: Flag,
     pub log_dir: Utf8PathBuf,
@@ -50,6 +51,8 @@ impl AgentConfig {
         let config_repository =
             tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
         let tedge_config = config_repository.load()?;
+
+        let config_dir = tedge_config_location.tedge_config_root_path.clone();
 
         let mqtt_config = tedge_config
             .mqtt_config()?
@@ -86,6 +89,7 @@ impl AgentConfig {
             http_config,
             restart_config,
             sw_update_config,
+            config_dir,
             run_dir,
             use_lock,
             data_dir,
@@ -119,18 +123,12 @@ impl Agent {
     }
 
     #[instrument(skip(self), name = "sm-agent")]
-    pub async fn init(&mut self, config_dir: Utf8PathBuf) -> Result<(), anyhow::Error> {
+    pub fn init(&self) -> Result<(), anyhow::Error> {
         // `config_dir` by default is `/etc/tedge` (or whatever the user sets with --config-dir)
-        create_directory_with_user_group(format!("{config_dir}/.agent"), "tedge", "tedge", 0o775)?;
-        std::fs::create_dir_all(self.config.log_dir.clone())?;
-        create_directory_with_user_group(self.config.log_dir.clone(), "tedge", "tedge", 0o775)?;
-        create_directory_with_user_group(self.config.data_dir.clone(), "tedge", "tedge", 0o775)?;
-        create_directory_with_user_group(
-            self.config.http_config.file_transfer_dir_as_string(),
-            "tedge",
-            "tedge",
-            0o775,
-        )?;
+        create_directory_with_defaults(self.config.config_dir.join(".agent"))?;
+        create_directory_with_defaults(self.config.log_dir.clone())?;
+        create_directory_with_defaults(self.config.data_dir.clone())?;
+        create_directory_with_defaults(self.config.http_config.file_transfer_dir_as_string())?;
 
         Ok(())
     }
@@ -138,6 +136,7 @@ impl Agent {
     #[instrument(skip(self), name = "sm-agent")]
     pub async fn start(&mut self) -> Result<(), anyhow::Error> {
         info!("Starting tedge agent");
+        self.init()?;
 
         // Runtime
         let runtime_events_logger = None;

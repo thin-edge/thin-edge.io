@@ -5,11 +5,14 @@ use crate::command::BuildContext;
 use crate::command::Command;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
+use self::init::TEdgeInitCmd;
+
 mod certificate;
 mod common;
 mod config;
 mod connect;
 mod disconnect;
+mod init;
 mod mqtt;
 mod reconnect;
 
@@ -35,6 +38,17 @@ pub struct Opt {
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TEdgeOpt {
+    /// Initialize Thin Edge
+    Init {
+        /// The user who will own the directories created
+        #[clap(long, default_value = "tedge")]
+        user: String,
+
+        /// The group who will own the directories created
+        #[clap(long, default_value = "tedge")]
+        group: String,
+    },
+
     /// Create and manage device certificate
     #[clap(subcommand)]
     Cert(certificate::TEdgeCertCli),
@@ -63,6 +77,7 @@ pub enum TEdgeOpt {
 impl BuildCommand for TEdgeOpt {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
         match self {
+            TEdgeOpt::Init { user, group } => Ok(Box::new(TEdgeInitCmd::new(user, group, context))),
             TEdgeOpt::Cert(opt) => opt.build_command(context),
             TEdgeOpt::Config(opt) => opt.build_command(context),
             TEdgeOpt::Connect(opt) => opt.build_command(context),

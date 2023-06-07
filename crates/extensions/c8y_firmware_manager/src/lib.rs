@@ -6,20 +6,19 @@ mod operation;
 #[cfg(test)]
 mod tests;
 
-pub use config::*;
-
 use crate::actor::IdDownloadRequest;
 use crate::actor::IdDownloadResult;
 use crate::actor::OperationSetTimeout;
 use crate::actor::OperationTimeout;
 use crate::operation::OperationKey;
-
 use actor::FirmwareInput;
 use actor::FirmwareManagerActor;
 use actor::FirmwareManagerMessageBox;
 use c8y_http_proxy::credentials::JwtRequest;
 use c8y_http_proxy::credentials::JwtResult;
 use c8y_http_proxy::credentials::JwtRetriever;
+pub use config::*;
+use std::path::Path;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
@@ -29,9 +28,12 @@ use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
+use tedge_config::DEFAULT_FILE_TRANSFER_DIR_NAME;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_timer_ext::SetTimeout;
+use tedge_utils::file::create_directory_with_defaults;
+use tedge_utils::file::FileError;
 
 pub struct FirmwareManagerBuilder {
     config: FirmwareManagerConfig,
@@ -44,13 +46,15 @@ pub struct FirmwareManagerBuilder {
 }
 
 impl FirmwareManagerBuilder {
-    pub fn new(
+    pub fn try_new(
         config: FirmwareManagerConfig,
         mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
         jwt_actor: &mut impl ServiceProvider<JwtRequest, JwtResult, NoConfig>,
         timer_actor: &mut impl ServiceProvider<OperationSetTimeout, OperationTimeout, NoConfig>,
         downloader_actor: &mut impl ServiceProvider<IdDownloadRequest, IdDownloadResult, NoConfig>,
-    ) -> FirmwareManagerBuilder {
+    ) -> Result<FirmwareManagerBuilder, FileError> {
+        Self::init(&config.data_dir)?;
+
         let (input_sender, input_receiver) = mpsc::channel(10);
         let (signal_sender, signal_receiver) = mpsc::channel(10);
         let input_receiver = LoggingReceiver::new(
@@ -64,7 +68,7 @@ impl FirmwareManagerBuilder {
         let jwt_retriever = JwtRetriever::new("Firmware => JWT", jwt_actor);
         let timer_sender = timer_actor.connect_consumer(NoConfig, input_sender.clone().into());
         let download_sender = downloader_actor.connect_consumer(NoConfig, input_sender.into());
-        Self {
+        Ok(Self {
             config,
             input_receiver,
             mqtt_publisher,
@@ -72,7 +76,14 @@ impl FirmwareManagerBuilder {
             timer_sender,
             download_sender,
             signal_sender,
-        }
+        })
+    }
+
+    pub fn init(data_dir: &Path) -> Result<(), FileError> {
+        create_directory_with_defaults(data_dir.join("cache"))?;
+        create_directory_with_defaults(data_dir.join(DEFAULT_FILE_TRANSFER_DIR_NAME))?;
+        create_directory_with_defaults(data_dir.join("firmware"))?;
+        Ok(())
     }
 
     pub fn subscriptions() -> TopicFilter {

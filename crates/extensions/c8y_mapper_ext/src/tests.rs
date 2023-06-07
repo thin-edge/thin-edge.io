@@ -798,7 +798,14 @@ async fn mapper_publishes_supported_operations() {
     mqtt.skip(1).await;
 
     // Expect smartrest message on `c8y/s/us` with expected payload "114,c8y_TestOp1,c8y_TestOp2"
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114,c8y_TestOp1,c8y_TestOp2")]).await;
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
+            "114,c8y_Restart,c8y_SoftwareUpdate,c8y_TestOp1,c8y_TestOp2",
+        )],
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -889,7 +896,10 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     // Expect smartrest message on `c8y/s/us` with expected payload "114,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3".
     assert_received_contains_str(
         &mut mqtt,
-        [("c8y/s/us", "114,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3")],
+        [(
+            "c8y/s/us",
+            "114,c8y_Restart,c8y_SoftwareUpdate,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3",
+        )],
     )
     .await;
 }
@@ -1035,13 +1045,14 @@ async fn spawn_c8y_mapper_actor(
     let mut timer_builder: SimpleMessageBoxBuilder<SyncStart, SyncComplete> =
         SimpleMessageBoxBuilder::new("Timer", 5);
 
-    let c8y_mapper_builder = C8yMapperBuilder::new(
+    let c8y_mapper_builder = C8yMapperBuilder::try_new(
         config,
         &mut mqtt_builder,
         &mut c8y_proxy_builder,
         &mut timer_builder,
         &mut fs_watcher_builder,
-    );
+    )
+    .unwrap();
 
     let mut actor = c8y_mapper_builder.build();
     tokio::spawn(async move { actor.run().await });

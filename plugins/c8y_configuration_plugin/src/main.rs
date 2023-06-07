@@ -1,4 +1,3 @@
-use anyhow::Context;
 use c8y_config_manager::ConfigManagerBuilder;
 use c8y_config_manager::ConfigManagerConfig;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
@@ -20,7 +19,7 @@ use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_signal_ext::SignalActor;
 use tedge_timer_ext::TimerActor;
-use tracing::info;
+use tracing::log::warn;
 
 const PLUGIN_NAME: &str = "c8y-configuration-plugin";
 
@@ -75,12 +74,8 @@ async fn main() -> Result<(), anyhow::Error> {
     let tedge_config = config_repository.load()?;
 
     if config_plugin_opt.init {
-        init(config_dir).with_context(|| {
-            format!(
-                "Failed to initialize {}. You have to run the command with sudo.",
-                PLUGIN_NAME
-            )
-        })
+        warn!("This --init option has been deprecated and will be removed in a future release");
+        Ok(())
     } else {
         run(config_dir, tedge_config).await
     }
@@ -107,13 +102,13 @@ async fn run(config_dir: impl AsRef<Path>, tedge_config: TEdgeConfig) -> Result<
 
     // Instantiate config manager actor
     let config_manager_config = ConfigManagerConfig::from_tedge_config(config_dir, &tedge_config)?;
-    let config_actor = ConfigManagerBuilder::new(
+    let config_actor = ConfigManagerBuilder::try_new(
         config_manager_config,
         &mut mqtt_actor,
         &mut c8y_http_proxy_actor,
         &mut timer_actor,
         &mut fs_watch_actor,
-    );
+    )?;
 
     // Shutdown on SIGINT
     let signal_actor = SignalActor::builder(&runtime.get_handle());
@@ -131,12 +126,6 @@ async fn run(config_dir: impl AsRef<Path>, tedge_config: TEdgeConfig) -> Result<
 
     runtime.run_to_completion().await?;
 
-    Ok(())
-}
-
-fn init(cfg_dir: PathBuf) -> Result<(), anyhow::Error> {
-    info!("Creating supported operation files");
-    c8y_config_manager::init(&cfg_dir)?;
     Ok(())
 }
 

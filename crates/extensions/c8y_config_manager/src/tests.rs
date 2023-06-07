@@ -1000,13 +1000,13 @@ async fn spawn_config_manager(
     let mut fs_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
         SimpleMessageBoxBuilder::new("FsNotify", 5);
 
-    let config_manager_builder = ConfigManagerBuilder::new(
+    let config_manager_builder = ConfigManagerBuilder::try_new(
         config,
         &mut mqtt_builder,
         &mut c8y_proxy_builder,
         &mut timer_builder,
         &mut fs_builder,
-    );
+    )?;
 
     let mqtt_message_box = mqtt_builder.build();
     let c8y_proxy_message_box = c8y_proxy_builder.build();

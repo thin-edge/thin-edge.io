@@ -33,6 +33,9 @@ use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
+use tedge_utils::file::create_directory_with_defaults;
+use tedge_utils::file::create_file_with_defaults;
+use tedge_utils::file::FileError;
 
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 
@@ -167,13 +170,15 @@ pub struct C8yMapperBuilder {
 }
 
 impl C8yMapperBuilder {
-    pub fn new(
+    pub fn try_new(
         config: C8yMapperConfig,
         mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
         http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
         timer: &mut impl ServiceProvider<SyncStart, SyncComplete, NoConfig>,
         fs_watcher: &mut impl MessageSource<FsWatchEvent, PathBuf>,
-    ) -> Self {
+    ) -> Result<Self, FileError> {
+        Self::init(&config)?;
+
         let box_builder = SimpleMessageBoxBuilder::new("CumulocityMapper", 16);
 
         let mqtt_publisher = mqtt.connect_consumer(
@@ -184,13 +189,23 @@ impl C8yMapperBuilder {
         let timer_sender = timer.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
         fs_watcher.register_peer(config.ops_dir.clone(), adapt(&box_builder.get_sender()));
 
-        Self {
+        Ok(Self {
             config,
             box_builder,
             mqtt_publisher,
             http_proxy,
             timer_sender,
-        }
+        })
+    }
+
+    fn init(config: &C8yMapperConfig) -> Result<(), FileError> {
+        // Create c8y operations directory
+        create_directory_with_defaults(config.ops_dir.clone())?;
+        create_file_with_defaults(config.ops_dir.join("c8y_SoftwareUpdate"), None)?;
+        create_file_with_defaults(config.ops_dir.join("c8y_Restart"), None)?;
+        // Create directory for device custom fragments
+        create_directory_with_defaults(config.config_dir.join("device"))?;
+        Ok(())
     }
 }
 

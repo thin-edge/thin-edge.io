@@ -5,22 +5,23 @@ Resource    ../../resources/common.resource
 Library    ThinEdgeIO
 
 Test Tags    theme:cli    theme:configuration
-Suite Setup            Setup
-Suite Teardown         Get Logs
+Suite Setup            Custom Setup
+Suite Teardown         Custom Teardown
 
 *** Test Cases ***
-Stop tedge-agent service
-    Execute Command    sudo systemctl stop tedge-agent.service
-    Execute Command    sudo rm -f /run/lock/tedge*agent.lock    # BUG?: Stopping the service does not delete the file, so if starting tedge_agent as a different user causes problems!
+Validate updated data path used by tedge-agent
+    Execute Command    sudo tedge config set logs.path /var/test
+    Restart Service    tedge-agent
+    Directory Should Exist    /var/test/tedge/agent
 
-Customize the log path
-    Execute Command    sudo tedge config set logs.path /test
+*** Keywords ***
+Custom Setup
+    Setup
+    Execute Command    sudo mkdir /var/test
+    Execute Command    sudo chown tedge:tedge /var/test
 
-Initialize tedge-agent
-    Execute Command    sudo tedge_agent --init
-
-Check created folders
-    Directory Should Exist    /test/tedge/agent
-
-Remove created custom folders
-    Execute Command    sudo rm -rf /test
+Custom Teardown
+    Execute Command    sudo tedge config unset logs.path
+    Restart Service    tedge-agent
+    Execute Command    sudo rm -rf /var/test
+    Get Logs

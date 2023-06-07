@@ -753,16 +753,14 @@ fn test_parse_invalid_toml_file() -> Result<(), TEdgeConfigError> {
         "#;
 
     let (_tempdir, config_location) = create_temp_tedge_config(toml_conf)?;
-    let toml_path = config_location.tedge_config_file_path().to_string();
     let result = TEdgeConfigRepository::new(config_location).load();
 
     match result {
         Err(error @ TEdgeConfigError::Figment(_)) => {
-            assert_eq!(
-                error.to_string(),
-                format!(
-                    "unexpected character found: `<` at line 2 column 9 in {toml_path} TOML file"
-                )
+            assert!(
+                error.to_string().contains("invalid key"),
+                "error: {} does not contain the expected text: invalid key",
+                error
             )
         }
 

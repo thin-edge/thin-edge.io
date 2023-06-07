@@ -18,17 +18,13 @@ Force Tags          theme:cli    theme:configuration
 
 *** Test Cases ***
 Validate updated data path used by tedge-agent
-    Stop Service    tedge-agent
-    Execute Command    sudo tedge-agent --init
-    Start Service    tedge-agent
+    Restart Service    tedge-agent
     Directory Should Exist    /var/test/file-transfer
 
 Validate updated data path used by c8y-firmware-plugin
-    Stop Service    c8y-firmware-plugin
-    Execute Command    sudo c8y-firmware-plugin --init
+    Restart Service    c8y-firmware-plugin
     Directory Should Exist    /var/test/firmware
     Directory Should Exist    /var/test/cache
-    Start Service    c8y-firmware-plugin
     Bootstrap child device with firmware operation support
     ${firmware_url}=    Upload firmware binary to Cumulocity
     ${date_from}=    Get Unix Timestamp

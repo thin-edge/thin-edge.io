@@ -44,19 +44,25 @@ fan_in_message_type!(ConfigOutput[MqttMessage, OperationTimer] : Debug);
 
 pub struct ConfigManagerActor {
     config: ConfigManagerConfig,
+    plugin_config: PluginConfig,
     config_upload_manager: ConfigUploadManager,
     config_download_manager: ConfigDownloadManager,
     messages: ConfigManagerMessageBox,
 }
 
 impl ConfigManagerActor {
-    pub fn new(config: ConfigManagerConfig, messages: ConfigManagerMessageBox) -> Self {
+    pub fn new(
+        config: ConfigManagerConfig,
+        plugin_config: PluginConfig,
+        messages: ConfigManagerMessageBox,
+    ) -> Self {
         let config_upload_manager = ConfigUploadManager::new(config.clone());
 
         let config_download_manager = ConfigDownloadManager::new(config.clone());
 
         ConfigManagerActor {
             config,
+            plugin_config,
             config_upload_manager,
             config_download_manager,
             messages,
@@ -269,10 +275,7 @@ impl ConfigManagerActor {
     }
 
     async fn publish_supported_config_types(&mut self) -> Result<(), ConfigManagementError> {
-        let message = self
-            .config
-            .plugin_config
-            .to_supported_config_types_message()?;
+        let message = self.plugin_config.to_supported_config_types_message()?;
         self.messages.send(message.into()).await.unwrap();
         Ok(())
     }

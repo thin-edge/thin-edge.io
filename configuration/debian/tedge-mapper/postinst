@@ -7,11 +7,6 @@ if [ ! -e /usr/bin/tedge_mapper ]; then
     ln -s /usr/bin/tedge-mapper /usr/bin/tedge_mapper
 fi
 
-### Initialize the mapper
-sudo -u tedge -- tedge-mapper --init c8y
-sudo -u tedge -- tedge-mapper --init az
-sudo -u tedge -- tedge-mapper --init aws
-
 #DEBHELPER#
 
 enable_start_service() {
