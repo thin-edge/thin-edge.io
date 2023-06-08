@@ -11,7 +11,7 @@ use self::init::TEdgeInitCmd;
 
 mod certificate;
 mod common;
-mod config;
+pub mod config;
 mod connect;
 mod disconnect;
 mod init;
