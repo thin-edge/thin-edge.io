@@ -73,6 +73,13 @@ pub fn create_device_with_direct_connection(
                     break;
                 }
             }
+            Ok(Event::Incoming(Incoming::PubComp(rumqttc::PubComp { pkid: 2 }))) => {
+                publish_device_create_message(
+                    &mut client,
+                    &bridge_config.remote_clientid.clone(),
+                    device_type,
+                )?;
+            }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
                 eprintln!("ERROR: Disconnected");
                 break;

@@ -3,23 +3,15 @@
 
 use anyhow::Context;
 use clap::Parser;
-mod cli;
-mod command;
-mod error;
-use command::BuildCommand;
-use command::BuildContext;
+use tedge::command::BuildCommand;
+use tedge::command::BuildContext;
 use tedge_config::system_services::set_log_level;
 use tracing::log::warn;
-
-type ConfigError = crate::error::TEdgeError;
-
-const BROKER_USER: &str = "mosquitto";
-const BROKER_GROUP: &str = "mosquitto";
 
 fn main() -> anyhow::Result<()> {
     set_log_level(tracing::Level::WARN);
 
-    let opt = cli::Opt::parse();
+    let opt = tedge::cli::Opt::parse();
 
     if opt.init {
         warn!("This --init option has been deprecated and will be removed in a future release. Use the `tedge init` command instead");
