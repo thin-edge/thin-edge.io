@@ -9,6 +9,7 @@ use crate::MqttClientPortSetting;
 use crate::TEdgeConfig;
 use certificate::CertificateError;
 
+// TODO!: Remove this after replacing tedge config API by the new one.
 impl TEdgeConfig {
     pub fn mqtt_config(&self) -> Result<mqtt_channel::Config, MqttConfigBuildError> {
         let host = self.query(MqttClientHostSetting)?;

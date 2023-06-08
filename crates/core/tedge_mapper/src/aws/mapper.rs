@@ -1,18 +1,14 @@
-use std::path::Path;
-
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
-use aws_mapper_ext::converter::AwsConverter;
-
 use async_trait::async_trait;
+use aws_mapper_ext::converter::AwsConverter;
 use clock::WallClock;
+use std::path::Path;
 use tedge_actors::ConvertingActor;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
-use tedge_config::AwsMapperTimestamp;
-use tedge_config::ConfigSettingAccessor;
-use tedge_config::TEdgeConfig;
+use tedge_config::new::TEdgeConfig;
 
 const AWS_MAPPER_NAME: &str = "tedge-mapper-aws";
 
@@ -32,8 +28,7 @@ impl TEdgeComponent for AwsMapper {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(self.session_name(), &tedge_config).await?;
         let clock = Box::new(WallClock);
-        let aws_converter =
-            AwsConverter::new(tedge_config.query(AwsMapperTimestamp)?.is_set(), clock);
+        let aws_converter = AwsConverter::new(tedge_config.aws.mapper.timestamp, clock);
         let mut aws_converting_actor = ConvertingActor::builder(
             "AwsConverter",
             aws_converter,

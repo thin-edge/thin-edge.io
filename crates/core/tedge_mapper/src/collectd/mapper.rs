@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
 use async_trait::async_trait;
@@ -8,8 +6,9 @@ use collectd_ext::actor::CollectdActorBuilder;
 use mqtt_channel::QoS;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
+use std::path::Path;
 use tedge_actors::MessageSink;
-use tedge_config::TEdgeConfig;
+use tedge_config::new::TEdgeConfig;
 
 const COLLECTD_MAPPER_NAME: &str = "tedge-mapper-collectd";
 const COLLECTD_INPUT_TOPICS: &str = "collectd/#";

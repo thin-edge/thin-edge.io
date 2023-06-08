@@ -14,6 +14,9 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServerMessageBoxBuilder;
 use tedge_actors::ServiceProvider;
+use tedge_config::new::ConfigNotSet;
+use tedge_config::new::ReadError;
+use tedge_config::new::TEdgeConfig as NewTEdgeConfig;
 use tedge_config::C8yHttpSetting;
 use tedge_config::ConfigSettingAccessor;
 use tedge_config::DeviceIdSetting;
@@ -39,6 +42,7 @@ pub struct C8YHttpConfig {
     pub tmp_dir: PathBuf,
 }
 
+// This must be removed once we are done with moving to new tedge config API
 impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
     type Error = TEdgeConfigError;
 
@@ -52,6 +56,32 @@ impl TryFrom<&TEdgeConfig> for C8YHttpConfig {
             tmp_dir,
         })
     }
+}
+
+impl TryFrom<&NewTEdgeConfig> for C8YHttpConfig {
+    type Error = C8yHttpConfigBuildError;
+
+    fn try_from(tedge_config: &NewTEdgeConfig) -> Result<Self, Self::Error> {
+        let c8y_host = tedge_config.c8y_url().or_config_not_set()?.to_string();
+        let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
+        let tmp_dir = tedge_config.tmp.path.as_std_path().to_path_buf();
+
+        Ok(Self {
+            c8y_host,
+            device_id,
+            tmp_dir,
+        })
+    }
+}
+
+/// The errors that could occur while building `C8YHttpConfig` struct.
+#[derive(Debug, thiserror::Error)]
+pub enum C8yHttpConfigBuildError {
+    #[error(transparent)]
+    FromReadError(#[from] ReadError),
+
+    #[error(transparent)]
+    FromConfigNotSet(#[from] ConfigNotSet),
 }
 
 /// A proxy to C8Y REST API

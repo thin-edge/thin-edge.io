@@ -15,6 +15,7 @@ use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::num::NonZeroU16;
 use std::path::PathBuf;
+use tedge_config_macros::all_or_nothing;
 use tedge_config_macros::define_tedge_config;
 use tedge_config_macros::struct_field_aliases;
 use tedge_config_macros::struct_field_paths;
@@ -47,6 +48,40 @@ impl std::ops::Deref for TEdgeConfig {
 impl TEdgeConfig {
     pub fn from_dto(dto: &TEdgeConfigDto, location: &TEdgeConfigLocation) -> Self {
         Self(TEdgeConfigReader::from_dto(dto, location))
+    }
+
+    /// To get the value of `c8y.url`, which is a private field.
+    pub fn c8y_url(&self) -> OptionalConfig<ConnectUrl> {
+        self.c8y.url.clone()
+    }
+
+    pub fn mqtt_config(&self) -> Result<mqtt_channel::Config, CertificateError> {
+        let host = self.mqtt.client.host.as_str();
+        let port = u16::from(self.mqtt.client.port);
+
+        let mut mqtt_config = mqtt_channel::Config::default()
+            .with_host(host)
+            .with_port(port);
+
+        // If these options are not set, just don't use them
+        // Configure certificate authentication
+        if let Some(ca_file) = self.mqtt.client.auth.ca_file.or_none() {
+            mqtt_config.with_cafile(ca_file)?;
+        }
+        if let Some(ca_path) = self.mqtt.client.auth.ca_dir.or_none() {
+            mqtt_config.with_cadir(ca_path)?;
+        }
+
+        // Both these options have to either be set or not set, so we keep
+        // original error to rethrow when only one is set
+        if let Ok(Some((client_cert, client_key))) = all_or_nothing((
+            self.mqtt.client.auth.cert_file.as_ref(),
+            self.mqtt.client.auth.key_file.as_ref(),
+        )) {
+            mqtt_config.with_client_auth(client_cert, client_key)?;
+        }
+
+        Ok(mqtt_config)
     }
 }
 
