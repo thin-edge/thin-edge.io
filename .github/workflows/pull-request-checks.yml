@@ -79,10 +79,7 @@ jobs:
 
       - name: Check whether lockfile is up to date
         if: steps.filter.outputs.locks == 'true'
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --locked
+        run: cargo check --locked
 
   udeps:
     name: Check for unused dependencies
@@ -92,12 +89,16 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install nightly toolchain
-        id: toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: nightly
-      - run: rustup override set ${{steps.toolchain.outputs.name}}
+      - name: Install nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run cargo-udeps
+        run: |
+          cargo install cargo-udeps
+          cargo udeps --all-features --all-targets
 
       - name: Run cargo-udeps
         uses: aig787/cargo-udeps-action@v1
@@ -114,6 +115,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Setup mdBook
         uses: peaceiris/actions-mdbook@v1
         # https://github.com/marketplace/actions/mdbook-action
@@ -124,42 +128,22 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install mdbook-mermaid
-        uses: actions-rs/install@v0.1
-        # https://github.com/marketplace/actions/rust-cargo-install
-        with:
-          crate: mdbook-mermaid
-          version: latest
+        run: cargo install mdbook-mermaid
 
       - name: Install mdbook-linkcheck
-        uses: actions-rs/install@v0.1
-        # https://github.com/marketplace/actions/rust-cargo-install
-        with:
-          crate: mdbook-linkcheck
-          version: latest
+        run: cargo install mdbook-linkcheck
 
       - name: Install mdbook-admonish
-        uses: actions-rs/install@v0.1
-        with:
-          crate: mdbook-admonish
-          version: latest
+        run: cargo install mdbook-admonish
 
       - name: Install mdbook-pagetoc
-        uses: actions-rs/install@v0.1
-        with:
-          crate: mdbook-pagetoc
-          version: latest
+        run: cargo install mdbook-pagetoc
 
       - name: Install mdbook-cmdrun
-        uses: actions-rs/install@v0.1
-        with:
-          crate: mdbook-cmdrun
-          version: latest
+        run: cargo install mdbook-cmdrun
 
       - name: Cargo build tedge cli
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --bin tedge
+        run: cargo build --bin tedge
 
       - name: Update PATH
         run: echo "$PWD/target/debug" >> $GITHUB_PATH
@@ -181,19 +165,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install cargo sort
-        uses: actions-rs/install@v0.1
-        # https://github.com/marketplace/actions/rust-cargo-install
-        with:
-          crate: cargo-sort
-          version: latest
+        run: cargo install cargo-sort
 
       - name: Cargo sort
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: sort
-          args: -w . --check
+        run: cargo sort -w . --check
 
   cargo-fmt:
     name: Run cargo fmt
@@ -210,27 +189,16 @@ jobs:
       # deprecated GHA api (see https://github.com/actions-rs/toolchain/issues/219).
       # However since dtolnay/rust-toolchain does not support the 'override' option, an additional call to
       # rustup override is required (see https://github.com/dtolnay/rust-toolchain/issues/29#issuecomment-1412903426)
-      - name: Install nightly toolchain
-        id: toolchain
-        uses: dtolnay/rust-toolchain@master
+      - name: Install nightly
+        uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly
           components: rustfmt
-      - run: rustup override set ${{steps.toolchain.outputs.name}}
 
       - name: Cargo fmt --version
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: fmt
-          args: --version
+        run: cargo fmt --version
 
       - name: Cargo fmt
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: fmt
-          args: -- --check
+        run: cargo fmt -- --check
 
   cargo-clippy:
     name: Run cargo clippy
@@ -244,7 +212,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: enable toolchain via github action
+      - name: Install stable
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -253,20 +221,10 @@ jobs:
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Cargo clippy --version
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: clippy
-          args: --version
-
       - name: Cargo clippy
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          toolchain: stable
-          command: clippy
-          args: --all-targets --all-features
+        run: |
+          cargo clippy --version
+          cargo clippy --all-targets --all-features
 
   cargo-audit:
     name: Run cargo audit
@@ -278,11 +236,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Cargo audit
-        uses: actions-rs/cargo@v1
-        # https://github.com/marketplace/actions/rust-cargo
-        with:
-          command: audit
+        run: cargo audit
 
   # Only run check if the project still compiles on MSRV, test are run on stable
   check-msrv:

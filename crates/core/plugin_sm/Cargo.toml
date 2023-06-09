@@ -25,7 +25,6 @@ url = "2.2"
 
 [dev-dependencies]
 anyhow = "1.0"
-assert_matches = "1.5"
 serial_test = "0.8"
 tempfile = "3.2"
 test-case = "2.2"

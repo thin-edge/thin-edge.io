@@ -40,5 +40,4 @@ assert_matches = "1.5"
 maplit = "1.0"
 tedge_test_utils = { path = "../../tests/tedge_test_utils" }
 tokio = { version = "1.23", features = ["rt-multi-thread"] }
-tokio-test = "0.4"
 whoami = "1.2.1"
