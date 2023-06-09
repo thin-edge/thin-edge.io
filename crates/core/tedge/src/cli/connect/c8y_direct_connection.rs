@@ -2,8 +2,6 @@ use super::BridgeConfig;
 use super::ConnectError;
 use crate::cli::connect::CONNECTION_TIMEOUT;
 use certificate::parse_root_certificate::create_tls_config;
-use rumqttc::PubAck;
-use rumqttc::PubComp;
 use rumqttc::tokio_rustls::rustls::AlertDescription;
 use rumqttc::tokio_rustls::rustls::Error;
 use rumqttc::Client;
@@ -130,7 +128,6 @@ pub fn create_device_with_direct_connection(
     println!("No response from Cumulocity");
     Err(ConnectError::TimeoutElapsedError)
 }
-
 
 fn publish_device_create_message(
     client: &mut Client,
