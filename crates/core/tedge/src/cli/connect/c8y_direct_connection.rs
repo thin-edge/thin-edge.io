@@ -2,6 +2,8 @@ use super::BridgeConfig;
 use super::ConnectError;
 use crate::cli::connect::CONNECTION_TIMEOUT;
 use certificate::parse_root_certificate::create_tls_config;
+use rumqttc::PubAck;
+use rumqttc::PubComp;
 use rumqttc::tokio_rustls::rustls::AlertDescription;
 use rumqttc::tokio_rustls::rustls::Error;
 use rumqttc::Client;
@@ -45,7 +47,7 @@ pub fn create_device_with_direct_connection(
     let mut device_create_try: usize = 0;
     for event in connection.iter() {
         match event {
-            Ok(Event::Incoming(Packet::SubAck(_))) => {
+            Ok(Event::Incoming(Packet::SubAck(_) | Packet::PubAck(_) | Packet::PubComp(_))) => {
                 publish_device_create_message(
                     &mut client,
                     &bridge_config.remote_clientid.clone(),
@@ -72,13 +74,6 @@ pub fn create_device_with_direct_connection(
                     // No messages have been received for a while
                     break;
                 }
-            }
-            Ok(Event::Incoming(Incoming::PubComp(rumqttc::PubComp { pkid: 2 }))) => {
-                publish_device_create_message(
-                    &mut client,
-                    &bridge_config.remote_clientid.clone(),
-                    device_type,
-                )?;
             }
             Ok(Event::Incoming(Incoming::Disconnect)) => {
                 eprintln!("ERROR: Disconnected");
@@ -135,6 +130,7 @@ pub fn create_device_with_direct_connection(
     println!("No response from Cumulocity");
     Err(ConnectError::TimeoutElapsedError)
 }
+
 
 fn publish_device_create_message(
     client: &mut Client,
