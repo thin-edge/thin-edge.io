@@ -5,6 +5,7 @@ This thin-edge plugin coordinates the firmware update operation handling with Cu
 by establishing secure communication with the cloud,
 managing firmware file downloads, which are typically large files, even over flaky networks,
 caching the downloaded files for re-use across multiple child devices etc.
+For more details on the inner workings of this plugin, refer to the [reference guide](./../references/c8y-firmware-management.md).
 
 In order to install the firmware itself on the child device,
 an additional piece of software must be developed by the child device owner as well,

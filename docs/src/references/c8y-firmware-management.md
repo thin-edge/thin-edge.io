@@ -4,6 +4,20 @@ Thin-edge provides an operation plugin to
 [manage device firmware using Cumulocity](https://cumulocity.com/guides/users-guide/device-management/#firmware-repo).
 Firmware management is currently supported only for child devices and not for the main tedge device.
 
+- The firmware update operations are defined and triggered from Cumulocity
+- Thin-edge acts as the proxy between Cumulocity and the child device
+  facilitating the routing of firmware update requests as well as the transfer of firmware binary files from cloud to the device.
+- Since thin-edge can not install the firmware on the child device directly,
+  as that is a device specific action that may require additional interactions using device specific protocols as well,
+  an additional piece of software, referred to as `child-device-connector` in the rest fo this doc,
+  must be developed by the child device admin to perform the actual installation itself in coordination with thin-edge.
+- The `child-device-connector` may be installed directly on the child device or alongside thin-edge as well,
+  as long as it can  access the HTTP and MQTT APIs of thin-edge interact with the child device directly.
+  
+This document describes:
+- how to install, configure and use the `c8y-firmware-plugin`
+- how to implement a `child-device-connector` following the protocol of `c8y-firmware-plugin`
+
 ## Installation
 
 The plugin will be installed at `/usr/bin/c8y-firmware-plugin` by the debian package.
@@ -17,10 +31,10 @@ Operation files for child devices must be created as part of their bootstrap pro
 
 The plugin supports a single tedge configuration named `firmware.child.update.timeout`,
 that defines the amount of time the plugin wait for a child device to finish a firmware update once the request is delivered.
-The default timeout value is `3600s` and can be updated with:
+The default timeout value (in seconds) is `3600` and can be updated with:
 
 ```shell
-sudo tedge config set firmware.child.update.timeout <another-value>
+sudo tedge config set firmware.child.update.timeout <value_in_seconds>
 ```
 
 ## Usage
@@ -45,10 +59,10 @@ systemctl enable c8y-firmware-plugin
 
 The plugin manages the download and delivery of firmware files for child-devices connected to the thin-edge device,
 acting as a proxy between the cloud and the child-devices.
-The firmware updates are downloaded from the cloud on the thin-edge device then made available to the child-devices over HTTP,
-using MQTT to notify the availability of these firmware updates.
-The child-device software has to subscribe to these MQTT messages, download the corresponding updates via HTTP,
-and notify the firmware plugin of the update status via MQTT.
+The firmware updates are downloaded from the cloud on the thin-edge device then made available to the child-devices over HTTP.
+The child devices are notified of incoming firmware update requests via MQTT.
+The `child-device-connector` has to subscribe to these MQTT messages, download the firmware files via HTTP,
+and notify the firmware plugin of the firmware update progress via MQTT.
 
 * The responsibilities of the plugin are:
   * to download the firmware files pushed from the cloud, caching it to be shared with child devices
@@ -59,16 +73,17 @@ and notify the firmware plugin of the update status via MQTT.
 * By contrast, the plugin is not responsible for:
   * checking the integrity of the downloaded file which is a third-party binary
   * installing the firmware files on the child-devices.
-* For each child-device, a device-specific software component, referred to as a `child-device-connector`, 
-  is required to listen for firmware update related MQTT notifications from the plugin
+* The `child-device-connector` is required to listen for firmware update related MQTT notifications from the plugin
   and behave accordingly along the protocol defined by this plugin.
-  * Being specific to each type of child devices, this software has to be implemented specifically.
+  * Being specific to each type of child device based on its device specific protocol for applying a firmware update.
   * This software can be installed on the child device.
   * This software can also be installed on the main device,
     when the target device cannot be altered or connected to the main device over MQTT and HTTP.
 
 ### Child device connector connecting to thin-edge device
 
+The `child-device-connector` is responsible for handling the firmware update requests sent by the thin-edge
+and translating it to the relevant 3rd-party device specific API to install the firmware on that device.
 The `child-device-connector` interacts with thin-edge over its MQTT and HTTP APIs.
 In cases where the child device connector is installed alongside thin-edge on the same device,
 these APIs can be accessed via a local IP or even `127.0.0.1`.
@@ -81,7 +96,8 @@ and `http.address` and `http.port` for HTTP.
 
 ### Child devices declaring firmware management support
 
-But for child devices, the operation files must be created under `/etc/tedge/operations/c8y/$CHILD_DEVICE_ID`.
+For child devices, the operation files must be created under `/etc/tedge/operations/c8y/$CHILD_DEVICE_ID`,
+where `$CHILD_DEVICE_ID` should be replaced with the child's identity.
 These files are not created by the plugin itself, but must be created by the child device connector or
 by any other means for each child device as follows:
 
@@ -90,20 +106,13 @@ by any other means for each child device as follows:
 $ tree /etc/tedge/operations/c8y
 /etc/tedge/operations/c8y
 |-- child-1
-|   `-- c8y_Firmware
-`-- child-2
-    `-- c8y_Firmware
+|   |-- c8y_Firmware
+|-- child-2
+    |-- c8y_Firmware
 ```
 
-Using the file watcher mechanism, the c8-mapper picks up the creation of these operation files
-and report them as supported operations for the child device as follows:
-
-```shell
-$ tedge mqtt sub 'c8y/s/us/#'
-[c8y/s/us/child-1] 114,c8y_Firmware
-[c8y/s/us/child-2] 114,c8y_Firmware
-```
-
+The Cumulocity mapper will detect the creation of these child device operation files
+and report them as supported operations for those child devices.
 
 ### The child device connector handling firmware update requests from thin-edge device
 
@@ -154,7 +163,7 @@ The following keywords are used in the following section for brevity:
    1. Validate if the same firmware update operation is already in progress
       by iterating over all the operation files in the `$FIRMWARE_OP_PATH` directory.
       The operation files contains the last `firmware_update` request's JSON payload along with the `device` ID.
-      If an operation file with the `device` id, `name`, `version` and `url` fields matching
+      If an operation file with the `child_id` id, `name`, `version` and `url` fields matching
       the incoming `$FIRMWARE_NAME`,`$FIRMWARE_VERSION` and `$FIRMWARE_URL` is found,
       the same request is re-sent to the child device by just incrementing the `attempt` count value.
       The operation file content is also overwritten the with updated `attempt` count. 
@@ -162,9 +171,19 @@ The following keywords are used in the following section for brevity:
       in its firmware cache at `$FIRMWARE_CACHE_PATH`.
       The file name for the lookup is derived from the SHA-256 digest of the firmware url.
       If a cached copy exists, the download is skipped.
-   1. If not found in the firmware cache, the plugin downloads the firmware file from the `url` to `$TEDGE_TMP_PATH`.
-   1. On successful download, the file is moved to the firmware cache at `$FIRMWARE_CACHE_PATH`
+   1. If not found in the firmware cache, the plugin downloads the firmware file from the `url` to `$FIRMWARE_CACHE_PATH`
       with the name derived from the SHA-256 digest of the firmware url.
+   1. Create an operation file at `$FIRMWARE_OP_PATH/$OP_ID`
+      with a JSON record containing the following fields:
+        * `operation_id`: A unique id generated by the plugin
+        * `child_id`: The child device ID received in the cloud request
+        * `name`: Name of the firmware received in the cloud request
+        * `version`: Version of the firmware received in the cloud request
+        * `server_url`: The firmware URL received in the cloud request
+        * `tedge_url`: The file-transfer service entry URL for the downloaded firmware file (`http://$TEDGE_HTTP_ADDRESS/tedge/file-transfer/$CHILD_DEVICE_ID/firmware_update/$FILE_ID`)
+        * `sha256`: The SHA-256 checksum of the firmware file served via the `tedge_url`
+        * `attempt`: The count that indicates if this request is being resent or not, with an initial value of `1`
+   1. After creating the operation file, do a look up if the firmware file for the given url already exists
 1. The cached firmware file is published via the file-transfer repository of `tedge-agent` 
    by creating a symlink to the cached firmware file is created in the file-transfer repository at
    `$FILE_TRANSFER_REPO/$CHILD_DEVICE_ID/firmware_update/$FILE_ID` making this file available via
@@ -175,10 +194,10 @@ The following keywords are used in the following section for brevity:
    * The payload is a JSON record with the following fields
      * `id`: A unique id generated by the plugin
      * `name`: Name of the firmware received in the cloud request
-     * `version`:
+     * `version`: Version of the firmware received in the cloud request
      * `url`: The file-transfer service entry URL(`http://$TEDGE_HTTP_ADDRESS/tedge/file-transfer/$CHILD_DEVICE_ID/firmware_update/$FILE_ID`)
      * `sha256`: The SHA-256 checksum of the firmware file served via the `url`
-     * `attempt`: The count that indicates if this request is being resent or not
+     * `attempt`: The count that indicates if this request is being resent or not, starting from `1` for the original request
 1. On reception of the firmware update request on the topic `tedge/$CHILD_DEVICE_ID/commands/req/firmware_update`,
    the child device connector is expected to do the following:
    1. Send an acknowledgement of the receipt of the request by sending an executing status message via MQTT:
@@ -197,18 +216,19 @@ The following keywords are used in the following section for brevity:
       * `status`: `successful` or `failed` based on the result of updating the firmware
       * `reason`: The reason for the failure, applicable only for `failed` status.
 1. On reception of an operation status message, the plugin maps it to SmartREST and forwards it to the cloud.
-   * When a `success` or `failed` status message is finally received,
+   * When a `successful` or `failed` status message is finally received,
      then the plugin cleans up the corresponding operation file at `$FIRMWARE_OP_PATH/$OP_ID` and
      the firmware file entry in the file transfer repository at `$FILE_TRANSFER_REPO/$CHILD_DEVICE_ID/firmware_update/$FILE_ID`.
    * If a notification message is received while none is expected,
-     i.e with an operation `id` that doesn't exist  `TEDGE_HTTP_ADDRESS_ROOT/$CHILD_DEVICE_ID/firmware_update/`,
-     then this notification message is ignored.      
+     i.e with an operation `id` that doesn't exist at `$TEDGE_DATA_PATH/firmware/<id>`,
+     then this notification message is deemed stale and ignored.
 
 ## Logging
 
 The plugin logs its progress and errors on to its `stderr`.
 
-* All upload and download operation requests are logged, when received and when completed,
-  with one line per file.
-* All changes to the list of managed file is logged, one line per change.
-* All errors are reported with the operation context (upload or download? which file?).
+The following details are logged:
+* All the `c8y_Firmware` requests received from Cumulocity
+* All the mapped `firmware_update` requests sent to each child device
+* The `firmware_update` responses received from the chold devices
+* All errors are reported with the operation context
