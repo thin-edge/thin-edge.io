@@ -1,15 +1,17 @@
 use std::path::PathBuf;
 
+pub use self::certificate::*;
 use crate::command::BuildCommand;
 use crate::command::BuildContext;
 use crate::command::Command;
+pub use connect::*;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 use self::init::TEdgeInitCmd;
 
 mod certificate;
 mod common;
-mod config;
+pub mod config;
 mod connect;
 mod disconnect;
 mod init;

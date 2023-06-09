@@ -45,7 +45,7 @@ pub fn create_device_with_direct_connection(
     let mut device_create_try: usize = 0;
     for event in connection.iter() {
         match event {
-            Ok(Event::Incoming(Packet::SubAck(_))) => {
+            Ok(Event::Incoming(Packet::SubAck(_) | Packet::PubAck(_) | Packet::PubComp(_))) => {
                 publish_device_create_message(
                     &mut client,
                     &bridge_config.remote_clientid.clone(),
