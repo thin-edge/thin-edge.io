@@ -1,7 +1,9 @@
 use log::error;
+use nix::unistd::Pid;
 use std::ffi::OsStr;
 use std::process::Output;
 use std::process::Stdio;
+use std::time::Duration;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufWriter;
@@ -9,12 +11,37 @@ use tokio::process::Child;
 use tokio::process::Command;
 
 #[derive(Debug)]
+pub enum CmdStatus {
+    Successful,
+    KilledWithSigterm,
+    KilledWithSigKill,
+}
+#[derive(Debug)]
 pub struct LoggingChild {
     command_line: String,
     pub inner_child: Child,
 }
 
 impl LoggingChild {
+    pub async fn wait_for_output_with_timeout(
+        self,
+        logger: &mut BufWriter<File>,
+        graceful_timeout: Duration,
+        forceful_timeout: Duration,
+    ) -> Result<Output, std::io::Error> {
+        let cid = self.inner_child.id();
+        let cmd_line = self.command_line;
+        let mut status = CmdStatus::Successful;
+        tokio::select! {
+            outcome = self.inner_child.wait_with_output() => {
+               Self::update_and_log_outcome(cmd_line, outcome, logger, graceful_timeout, &mut status).await
+            }
+            _ = Self::timeout_operation(&mut status, cid, graceful_timeout, forceful_timeout) => {
+                Err(std::io::Error::new(std::io::ErrorKind::Other,"failed to kill the process: {cmd_line}"))
+            }
+        }
+    }
+
     pub async fn wait_with_output(
         self,
         logger: &mut BufWriter<File>,
@@ -25,6 +52,77 @@ impl LoggingChild {
         }
 
         outcome
+    }
+
+    async fn update_and_log_outcome(
+        command_line: String,
+        outcome: Result<Output, std::io::Error>,
+        logger: &mut BufWriter<File>,
+        timeout: Duration,
+        status: &mut CmdStatus,
+    ) -> Result<Output, std::io::Error> {
+        let outcome = match status {
+            CmdStatus::Successful => outcome,
+            CmdStatus::KilledWithSigterm | CmdStatus::KilledWithSigKill => {
+                outcome.map(|outcome| update_stderr_message(outcome, timeout))?
+            }
+        };
+        if let Err(err) = LoggedCommand::log_outcome(&command_line, &outcome, logger).await {
+            error!("Fail to log the command execution: {}", err);
+        }
+        outcome
+    }
+
+    async fn timeout_operation(
+        status: &mut CmdStatus,
+        child_id: Option<u32>,
+        graceful_timeout: Duration,
+        forceful_timeout: Duration,
+    ) -> Result<(), std::io::Error> {
+        *status = CmdStatus::Successful;
+
+        tokio::time::sleep(graceful_timeout).await;
+
+        // stop the child process by sending sigterm
+        *status = CmdStatus::KilledWithSigterm;
+        send_signal_to_stop_child(child_id, CmdStatus::KilledWithSigterm);
+        tokio::time::sleep(forceful_timeout).await;
+
+        // stop the child process by sending sigkill
+        *status = CmdStatus::KilledWithSigKill;
+        send_signal_to_stop_child(child_id, CmdStatus::KilledWithSigKill);
+
+        // wait for the process to exit after signal
+        tokio::time::sleep(Duration::from_secs(120)).await;
+
+        Ok(())
+    }
+}
+
+fn update_stderr_message(mut output: Output, timeout: Duration) -> Result<Output, std::io::Error> {
+    output.stderr.append(
+        &mut format!(
+            "operation failed due to timeout: duration={}s",
+            timeout.as_secs()
+        )
+        .as_bytes()
+        .to_vec(),
+    );
+    Ok(output)
+}
+
+fn send_signal_to_stop_child(child: Option<u32>, signal_type: CmdStatus) {
+    if let Some(pid) = child {
+        let pid: Pid = nix::unistd::Pid::from_raw(pid as nix::libc::pid_t);
+        match signal_type {
+            CmdStatus::KilledWithSigterm => {
+                let _ = nix::sys::signal::kill(pid, nix::sys::signal::SIGTERM);
+            }
+            CmdStatus::KilledWithSigKill => {
+                let _ = nix::sys::signal::kill(pid, nix::sys::signal::SIGKILL);
+            }
+            _ => {}
+        }
     }
 }
 
