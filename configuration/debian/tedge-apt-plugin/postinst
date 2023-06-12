@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -e
+
+DIR=/etc/tedge/sm-plugins
+
+if [ ! -d "$DIR" ];
+then
+   mkdir /etc/tedge/sm-plugins
+fi
+
+# Create a symlink to apt plugin
+if [ ! -e /etc/tedge/sm-plugins/apt ]; then
+  ln -s /usr/bin/tedge-apt-plugin /etc/tedge/sm-plugins/apt
+fi
