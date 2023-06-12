@@ -1,0 +1,51 @@
+# Upload code coverage report every time there is a push to the main branch.
+#
+# Codecov guides suggest uploading coverage for push and pull_request events.
+# pull-request-checks.yml only runs on PRs though, and when coverage upload only
+# happens there, it has an effect of codecov patch reports not picking up the
+# latest HEAD and displaying coverage changes that have already been made in
+# previous PRs. To fix this, we upload report every time we push to main, which
+# also happens when a PR gets merged.
+
+name: Upload HEAD coverage
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  head-coverage:
+    name: Upload HEAD coverage
+    runs-on: ubuntu-20.04
+    env:
+      RUSTFLAGS: -D warnings
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Enable toolchain via github action
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Enable cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: cargo llvm-cov
+        run: cargo llvm-cov --no-fail-fast --locked --all-features --all-targets --codecov --output-path codecov.json
+
+      # https://github.com/rust-lang/cargo/issues/6669
+      - name: cargo test --doc
+        run: cargo test --locked --all-features --doc
+
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v3
+        with:
+          fail_ci_if_error: true
