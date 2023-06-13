@@ -28,4 +28,5 @@
 - [Plugin API](./plugin-api.md)
 - [Log Management](./c8y-log-management.md)
 - [Configuration Management](./c8y-configuration-management.md)
+- [Firmware Management](./c8y-firmware-management.md)
 - [Thin Edge File Transfer Service](./tedge-file-transfer-service.md)
