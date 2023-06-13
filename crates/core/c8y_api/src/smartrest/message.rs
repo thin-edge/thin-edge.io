@@ -205,7 +205,7 @@ mod tests {
         assert_eq!(sanitized, expected_output.to_string());
     }
 
-    #[test_case("Hello World", "Hello Worl"; "ascii")]
+    #[test_case("foo bar bye", "foo bar by"; "ascii")]
     #[test_case("こんにちは", "こんに"; "no ascii")]
     fn size_u8_vec_is_stripped(input: &str, expected_output: &str) {
         let vec_u8 = input.as_bytes().to_vec();
