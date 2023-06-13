@@ -7,10 +7,10 @@ Firmware management is currently supported only for child devices and not for th
 - The firmware update operations are defined and triggered from Cumulocity
 - Thin-edge acts as the proxy between Cumulocity and the child device
   facilitating the routing of firmware update requests as well as the transfer of firmware binary files from cloud to the device.
-- Since thin-edge can not install the firmware on the child device directly,
-  as that is a device specific action that may require additional interactions using device specific protocols as well,
-  an additional piece of software, referred to as `child-device-connector` in the rest fo this doc,
-  must be developed by the child device admin to perform the actual installation itself in coordination with thin-edge.
+- Updating the firmware of a device is done by some device specific firmware management software.
+  Since thin-edge can not directly interact with that piece of software over whatever third-party protocol it supports,
+  an additional piece of software, referred to as `child-device-connector` in the rest of this doc,
+  must be developed by the child device admin to perform the actual installation itself, in coordination with thin-edge.
 - The `child-device-connector` may be installed directly on the child device or alongside thin-edge as well,
   as long as it can  access the HTTP and MQTT APIs of thin-edge interact with the child device directly.
   
@@ -158,7 +158,7 @@ The following keywords are used in the following section for brevity:
 * `OP_ID`: An operation ID
 * `FILE_ID`: A firmware file id derived from the SHA-256 digest of the firmware url
 
-1. The plugin, on recept of a `c8y_Firmware` request from Cumulocity for a child device named `$CHILD_DEVICE_ID`
+1. The plugin, on reception of a `c8y_Firmware` request from Cumulocity for a child device named `$CHILD_DEVICE_ID`
    in the format `515,$CHILD_DEVICE_ID,$FIRMWARE_NAME,$FIRMWARE_VERSION,$FIRMWARE_URL`
    1. Validate if the same firmware update operation is already in progress
       by iterating over all the operation files in the `$FIRMWARE_OP_PATH` directory.
