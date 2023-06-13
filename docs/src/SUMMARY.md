@@ -75,4 +75,9 @@
   - [Firmware Management](references/c8y-firmware-management.md)
   - [Thin Edge File Transfer Service](references/tedge-file-transfer-service.md)
 
+- [Contributor Guides](developer/developer.md)
+  - [Using a dev container](developer/DEV_CONTAINER.md)
+  - [Debian package hosting](developer/DEBIAN_PACKAGE_HOSTING.md)
+  - [Installing Docker](developer/INSTALLING_DOCKER.md)
+
 - [Index](./SUMMARY.md)

@@ -2,29 +2,66 @@
 
 Welcome to `thin-edge.io`'s documentation!
 
-`thin-edge.io` is an open-source & cloud-agnostic IoT framework designed to:
+`thin-edge.io` is an open-source development toolbox designed for rapid development of IIoT agents.
+It is based on a versatile set of ready-to-use software components
+that can be easily combined with application-specific extensions
+into smart, secure, robust and efficient IIoT agents
+which integrate cloud services, edge computing and operational technologies.
 
-- build business-specific IIoT agents running on resource-constrained edge devices
-- ease the integration of cloud services, edge computing and operational technologies
-- provide the foundations for smart, secure, robust and efficient IIoT agents
-- give the freedom of choice for cloud platform, tools and programming language
+A typical agent uses as a foundation the building blocks provided by thin-edge
+for telemetry data processing and cloud connectivity as well as for device monitoring, configuration and updates.
+In combination with these blocks, the agent designer can provide application-specific extensions,
+which cooperate with thin-edge over MQTT and HTTP along a JSON API,
+to address any hardware, protocol or use-case specificity.
+
+As such, `thin-edge.io` is good choice for implementing smart-equipment
+that collect in-situ real-time data, perform analytics on the edge, forward key data to the cloud,  
+and need to be secured, configured and updated at scale.
 
 ## How to start
 
-The simplest way to start is with the [beginner-friendly tutorial](./tutorials/getting-started.md)
+The easiest way to get started is with the [beginner-friendly tutorial](./tutorials/getting-started.md)
 that introduces `thin-edge.io` and guides you on how to install it on a Raspberry Pi,
 connect your device to [Cumulocity IoT](https://www.cumulocity.com/guides/concepts/introduction/),
 and then monitor it from the cloud.
 
-To install `thin-edge.io` on your specific hardware, refer to the [installation how-to](howto-guides/002_installation.md).
-To connect your device to your cloud, specific tutorials are available for:
-- [Cumulocity IoT](tutorials/connect-c8y.md)
-- [Azure IoT](tutorials/connect-azure.md)
-- [AWS IoT](tutorials/connect-aws.md)
+You can also explore the main use-cases using these [tutorials](tutorials/tutorials.md).
+You will learn to:
 
-## Grow your skills
+- [install thin-edge on your specific hardware](howto-guides/002_installation.md),
+- connect your device to your cloud, whether [Cumulocity IoT](tutorials/connect-c8y.md),
+  [Azure IoT](tutorials/connect-azure.md) or [AWS IoT](tutorials/connect-aws.md),
+- [send telemetry data](tutorials//send-thin-edge-data.md), [alarms](tutorials//raise-alarm.md) and [events](tutorials//send-events.md),
+- operate, configure, update, monitor your device.
 
-* Explore the [tutorials and use-cases](tutorials/tutorials.md)
-* Understand the [concepts](architecture/architecture.md)
+## The concepts
+
+  - [Architecture FAQ](architecture/faq.md)
+  - [Thin Edge Json](architecture/thin-edge-json.md)
+  - [The Mapper](architecture/mapper.md)
+  - [Software Management](architecture/software-management.md)
+
+## How to use thin-edge.io
+
+Thin-edge provides a set of building blocks to operate, configure, update, monitor your devices.
+
 * Use the [how-to guides](howto-guides/howto-guides.md) on a daily basis
 * Refer to the [reference guides](references/references.md) for any in-depth details
+
+## How to extend thin-edge.io
+
+One of the core feature of thin-edge is to be extensible.
+
+- [Write a software-management plugin](tutorials/write-my-software-management-plugin.md)
+- [Build Thin Edge for a Yocto Linux distribution](tutorials/yocto-linux.md)
+
+## How to contribute
+
+[`thin-edge.io`](https://github.com/thin-edge/thin-edge.io) is an open-source project
+released under the [Apache License - Version 2.0](https://github.com/thin-edge/thin-edge.io/blob/main/LICENSE.txt).
+
+All contributions are greatly appreciated.
+It can be by reporting issues, improving this documentation, adding new extensions or contributing to the main code base.
+
+Please refer to the [contribution guide](https://github.com/thin-edge/thin-edge.io/blob/main/CONTRIBUTING.md)
+and the [contributor documentation](developer/developer.md).
