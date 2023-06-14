@@ -20,8 +20,6 @@
   - [Manage my device software](./tutorials/software-management.md)
   - [Configuration management on child-devices](./tutorials/child-device-config-management.md)
   - [Supported Operations Management for Cumulocity IoT](./tutorials/supported_operations.md)
-  - [Write my software management plugin](./tutorials/write-my-software-management-plugin.md)
-  - [Build Thin Edge for a Yocto Linux distribution](tutorials/yocto-linux.md)
 
 - [How-to Guides](howto-guides/howto-guides.md)
   - [How to install thin-edge.io?](howto-guides/002_installation.md)
@@ -74,7 +72,11 @@
   - [Firmware Management](references/c8y-firmware-management.md)
   - [Thin Edge File Transfer Service](references/tedge-file-transfer-service.md)
 
-- [Contributor Guides](contribute/developer.md)
+- [Extend](extend/index.md)
+  - [Write my software management plugin](extend/write-my-software-management-plugin.md)
+  - [Build Thin Edge for a Yocto Linux distribution](extend/yocto-linux.md)
+
+- [Contribute](contribute/developer.md)
   - [Building](contribute/BUILDING.md)
   - [Using a dev container](contribute/DEV_CONTAINER.md)
   - [Debian package hosting](contribute/DEBIAN_PACKAGE_HOSTING.md)

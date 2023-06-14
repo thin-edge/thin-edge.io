@@ -38,7 +38,7 @@ cloud provider native representation and send it to that cloud.
 
 For example, when the device is connected to Cumulocity, the Cumulocity mapper component will be performing these actions.
 To check if these measurements have reached Cumulocity, login to your Cumulocity dashboard and navigate to
-_Device Management => Devices => All devices => <your device id> => Measurements_ 
+_Device Management => Devices => All devices => "your device id" => Measurements_ 
 and see if your temperature measurement is appearing in the dashboard.
 
 ## Complex measurements

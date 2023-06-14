@@ -52,8 +52,8 @@ Thin-edge provides a set of building blocks to operate, configure, update, monit
 
 One of the core feature of thin-edge is to be extensible.
 
-- [Write a software-management plugin](tutorials/write-my-software-management-plugin.md)
-- [Build Thin Edge for a Yocto Linux distribution](tutorials/yocto-linux.md)
+- [Write a software-management plugin](extend/write-my-software-management-plugin.md)
+- [Build Thin Edge for a Yocto Linux distribution](extend/yocto-linux.md)
 
 ## How to contribute
 
