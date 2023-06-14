@@ -22,11 +22,11 @@ Thin-edge.io facilitates remote management of the device it is running on, as we
 
 The figure below illustrates the child-device concept.
 
-![Device Concept](../understand/images/device-concept.svg)
+![Device Concept](../../understand/images/device-concept.svg)
 
 Configuration management can be enabled for child-devices using the same `c8y-configuration-plugin`,
 used for configuration management of the thin-edge device itself.
-You can read more about this plugin and its usage [here](../howto-guides/025_config_management_plugin.md).
+You can read more about this plugin and its usage [here](../c8y/025_config_management_plugin.md).
 
 Another piece of software referred to as a **child-device connector** is also required to coordinate configuration management
 on the child device from the thin-edge device over the protocol that is used to communicate with it.
@@ -178,7 +178,7 @@ Follow these steps to bootstrap the child device:
 4. Verify that the configuration list appears in Cumulocity under the child device's `Configuration` tab
    under `DEVICE-SUPPORTED CONFIGURATIONS` as follows: 
 
-   ![get-config-snapshot-list](./images/get-config-snapshot-list.png)
+   ![get-config-snapshot-list](../../tutorials/images/get-config-snapshot-list.png)
 
 ## Step 2: Get configuration snapshot from the child device 
 
@@ -195,7 +195,7 @@ Following these steps, a configuration file from the child-device will be reques
 3. Select the config file type (`config1`) from the list of configuration files under the `DEVICE-SUPPORTED CONFIGURATIONS`
    and then click on the `Get snapshot from device` button.
    
-   ![get-config-snapshot](./images/get-config-snapshot.png)
+   ![get-config-snapshot](../../tutorials/images/get-config-snapshot.png)
 
    This will trigger a `config_snapshot` request to the child-device via MQTT which will be received by the subscriber spawned in step. 1 as follows:
    
@@ -286,15 +286,15 @@ Performing config update is an 8-step process:
 
 2. In Cumulocity IoT, go to `device management` ->  `Management` -> `Configuration repository` -> `Add configuration snapshot` and fill in the fields in the pop-up. Uploading a simple text file will be sufficient as an example. Give it the `name` and `type` as **config1**.
 
-   ![add configuration snapshot](./images/add-config-snapshot.png)
+   ![add configuration snapshot](../../tutorials/images/add-config-snapshot.png)
 
 3. Click on `Devices` -> `All Devices`, then click on your device. Then click on  `child-devices` ->  then click on the child-device (child1) defined in *Step 1 Bootstrap the child-device* and then click on `Configuration` and on your config file (config1).
 
-   ![open configuration screen](./images/add-config-snapshot-configurations.png)
+   ![open configuration screen](../../tutorials/images/add-config-snapshot-configurations.png)
 
 4. In the column *AVAILABLE SUPPORTED CONFIGURATIONS* click on the previously added/uploaded configuration snapshot (config1) and click on *Send configuration to device*. This will trigger a config snapshot request to the child-device via MQTT.
 
-   ![send-configuration-snapshot](./images/send-config-snapshot-configurations.png)
+   ![send-configuration-snapshot](../../tutorials/images/send-config-snapshot-configurations.png)
 
    The subscriber spawned in step 1 will receive the following request on `tedge/child1/commands/req/config_update` topic.
    

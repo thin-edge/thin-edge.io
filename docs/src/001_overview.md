@@ -28,7 +28,7 @@ and then monitor it from the cloud.
 You can also explore the main use-cases using these [tutorials](tutorials/tutorials.md).
 You will learn to:
 
-- [install thin-edge on your specific hardware](howto-guides/002_installation.md),
+- [install thin-edge on your specific hardware](operate/installation/002_installation.md),
 - connect your device to your cloud, whether [Cumulocity IoT](tutorials/connect-c8y.md),
   [Azure IoT](tutorials/connect-azure.md) or [AWS IoT](tutorials/connect-aws.md),
 - [send telemetry data](tutorials//send-thin-edge-data.md), [alarms](tutorials//raise-alarm.md) and [events](tutorials//send-events.md),
@@ -41,11 +41,11 @@ You will learn to:
   - [The Mapper](understand/mapper.md)
   - [Software Management](understand/software-management.md)
 
-## How to use thin-edge.io
+## How to operate a device with thin-edge.io
 
 Thin-edge provides a set of building blocks to operate, configure, update, monitor your devices.
 
-* Use the [how-to guides](howto-guides/howto-guides.md) on a daily basis
+* Use the [how-to guides](operate/howto-guides.md) on a daily basis
 * Refer to the [reference guides](references/references.md) for any in-depth details
 
 ## How to extend thin-edge.io

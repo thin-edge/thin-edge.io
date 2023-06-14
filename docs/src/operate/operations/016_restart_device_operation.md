@@ -6,11 +6,11 @@ If your device is running thin-edge.io, you can restart it from the cloud. This 
 
 Go to your device's homepage on c8y, and find the "Control" button. 
 
-![Control button](./images/control-button-red-highlight.png)
+![Control button](../../howto-guides/images/control-button-red-highlight.png)
 
  In the top right corner, you will find the "More" button, click it and select, "Restart device".
 
-![Restart device button](./images/restart-button-red-highlight.png)
+![Restart device button](../../howto-guides/images/restart-button-red-highlight.png)
 
 
 ### Azure 

@@ -5,7 +5,7 @@ This thin-edge plugin coordinates the firmware update operation handling with Cu
 by establishing secure communication with the cloud,
 managing firmware file downloads, which are typically large files, even over flaky networks,
 caching the downloaded files for re-use across multiple child devices etc.
-For more details on the inner workings of this plugin, refer to the [reference guide](./../references/c8y-firmware-management.md).
+For more details on the inner workings of this plugin, refer to the [reference guide](../../references/c8y-firmware-management.md).
 
 In order to install the firmware itself on the child device,
 an additional piece of software must be developed by the child device owner as well,
@@ -35,7 +35,7 @@ provides firmware management support for that device.
 ## Declare firmware management support of child device
 
 At first, the child device needs to declare that it supports firmware management from Cumulocity
-using the [supported operations API](../tutorials/supported_operations.md) of thin-edge
+using the [supported operations API](supported_operations.md) of thin-edge
 by simply creating an empty operations file on the thin-edge device as follows:
 
 ```shell

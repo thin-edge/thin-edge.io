@@ -12,7 +12,7 @@ See this [tutorial](connect-aws.md), if you want to connect AWS IoT instead.
 
 Before you try to connect your device to Azure IoT, you need:
 * Create a Azure **IoT Hub** in Azure portal as described [here](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-create-through-portal).
-* [Install `thin-edge.io` on your device](../howto-guides/002_installation.md).
+* [Install `thin-edge.io` on your device](../operate/installation/002_installation.md).
 
 You can now use [`tedge` command](../references/tedge.md) to:
 * [create a certificate for your device](connect-azure.md#create-the-certificate),

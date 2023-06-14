@@ -50,5 +50,5 @@ any file inside "/var/log/tedge/agent/" that starts with "software-".
 The `type` key in the toml is the name of the log with you will see in the
 Cumulocity UI:
 
-![Log request dropdown](images/c8y-log-plugin_log-types.png)
+![Log request dropdown](../../howto-guides/images/c8y-log-plugin_log-types.png)
 

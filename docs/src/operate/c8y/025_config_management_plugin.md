@@ -40,11 +40,11 @@ ar -x ./c8y-configuration-plugin_<version>_<arch>.deb | tar -xf ./data.tar.xz
 ```
 
 The binary is extracted in `<current directory>/usr/bin`.
-For more details, refer to our guide [Extracting from debian package](./015_installation_without_deb_support.md#extracting-binaries-from-deb-packages).
+For more details, refer to our guide [Extracting from debian package](../installation/015_installation_without_deb_support.md#extracting-binaries-from-deb-packages).
 
 ### Building from sources
 
-Follow our guide [Building thin-edge.io](./../contribute/BUILDING.md) and [Building from source](./015_installation_without_deb_support.md#if-building-from-source).
+Follow our guide [Building thin-edge.io](../../contribute/BUILDING.md) and [Building from source](../installation/015_installation_without_deb_support.md#if-building-from-source).
 
 ```shell
 cargo build --release -p c8y-configuration-plugin
@@ -59,7 +59,7 @@ sudo cp <repository_root>/configuration/init/systemd/c8y-configuration-plugin.se
 
 ## Get started
 
-Before starting anything, make sure [your device is connected to Cumulocity](./../tutorials/connect-c8y.md).
+Before starting anything, make sure [your device is connected to Cumulocity](../../tutorials/connect-c8y.md).
 
 **Step 0**
 Unless you installed `c8y-configuration-plugin` using the debian package,
@@ -86,7 +86,7 @@ files = [
 * `type` is a unique alias for each file entry which will be used to represent that file in Cumulocity UI.
 * `user`, `group` and `mode` are UNIX file permission settings to be used to create a configuration file. If not provided, the files will be created with `root` user. If the file exists already, its ownership will be retained.
 
-For more details on this configuration file format, refer to the [reference guide](./../references/c8y-configuration-management.md#configuration).
+For more details on this configuration file format, refer to the [reference guide](../../references/c8y-configuration-management.md#configuration).
 
 ```admonish note
 You can also configure the `c8y-configuration-plugin.toml` from the cloud later.
@@ -110,7 +110,7 @@ sudo c8y-configuration-plugin
 Navigate to your Cumulocity Device Management and the desired device. Open its **Configuration** tab.
 You can find `c8y-configuration-plugin` and more are listed as supported configuration types, as declared in the plugin configuration file in step 1.
 
-![Cumulocity Configuration Management Upload](./images/c8y-config-plugin-upload.png)
+![Cumulocity Configuration Management Upload](../../howto-guides/images/c8y-config-plugin-upload.png)
 
 This is the configuration file of `c8y-configuration-plugin`, where you can add file entries that you want to manage with Cumulocity.
 
@@ -122,7 +122,7 @@ The `c8y-configuration-plugin.toml` file can also be updated from the cloud in a
 
 Then, go back to the **Configuration** tab of your desired device in Cumulocity.
 
-![Cumulocity Configuration Management Download](./images/c8y-config-plugin-download.png)
+![Cumulocity Configuration Management Download](../../howto-guides/images/c8y-config-plugin-download.png)
 
 Click on the config file entry from the **DEVICE SUPPORTED CONFIGURATIONS** files list.
 You can choose the file that you uploaded from the **AVAILABLE SUPPORTED CONFIGURATIONS** section, and then apply that file to your device by clicking on the **Send configuration to device** button.
@@ -135,6 +135,6 @@ All configuration updates are notified over `tedge/configuration_change/<config-
 For more details, refer to the [Notifications section of the specification](./../references/c8y-configuration-management.md#notifications).
 ```
 
-To get to know more about the `c8y-configuration-plugin`, refer to [Specifications of Device Configuration Management using Cumulocity](./../references/c8y-configuration-management.md).
+To get to know more about the `c8y-configuration-plugin`, refer to [Specifications of Device Configuration Management using Cumulocity](../../references/c8y-configuration-management.md).
 
 

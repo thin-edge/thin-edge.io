@@ -10,7 +10,7 @@ Note: `tedge connect` requires `sudo` privilege.
 
 ## Setting the cloud end-point
 
-Configure required parameters for thin-edge.io with [`tedge config set`](../references/tedge-config.md):
+Configure required parameters for thin-edge.io with [`tedge config set`](../../references/tedge-config.md):
 
 ```shell
 sudo tedge config set c8y.url example.cumulocity.com
@@ -38,7 +38,7 @@ in this case we are told to run `tedge config set c8y.url <value>`.
 
 The next step is to have the device certificate trusted by Cumulocity. This is done by uploading the certificate of the signee.
 You can upload the root certificate using the [Cumulocity UI](https://cumulocity.com/guides/users-guide/device-management/#trusted-certificates)
-or with [`tedge cert upload`](../references/tedge-cert.md) command as described below.
+or with [`tedge cert upload`](../../references/tedge-cert.md) command as described below.
 
 ```admonish
 The `tedge cert upload` command requires the credentials of a Cumulocity user
@@ -59,7 +59,7 @@ The connection from the device to the cloud is established using a so-called MQT
 a permanent secured bidirectional MQTT connection that forward messages back and forth
 between the two end-points.
 
-To create the bridge use the [`tedge connect`](../references/tedge-connect.md) command.
+To create the bridge use the [`tedge connect`](../../references/tedge-connect.md) command.
 
 ```shell
 sudo tedge connect c8y
@@ -128,7 +128,7 @@ Caused by:
     Connection is already established. To remove existing connection use 'tedge disconnect c8y' and try again.
 ```
 
-To remove existing connection and create new one follow the advice and issue [`tedge disconnect c8y`](../references/tedge-disconnect.md):
+To remove existing connection and create new one follow the advice and issue [`tedge disconnect c8y`](../../references/tedge-disconnect.md):
 
 ```shell
 sudo tedge disconnect c8y
@@ -158,7 +158,7 @@ tedge-agent service successfully stopped and disabled!
 `tedge disconnect c8y` also stops and disable the **tedge-mapper** service if it is installed on the device.
 ```
 
-And now you can issue [`tedge connect c8y`](../references/tedge-connect.md) to create new bridge.
+And now you can issue [`tedge connect c8y`](../../references/tedge-connect.md) to create new bridge.
 
 #### Connection check warning
 
@@ -225,13 +225,13 @@ Tenant couldn't be reached and therefore connection check has failed.
 
 Bridge configuration is correct but the connection couldn't be established to unknown reason.
 
-To retry start with [`tedge disconnect c8y`](../references/tedge-disconnect.md) removing this bridge:
+To retry start with [`tedge disconnect c8y`](../../references/tedge-disconnect.md) removing this bridge:
 
 ```shell
 sudo tedge disconnect c8y
 ```
 
-When this is done, issue [`tedge connect c8y`](../references/tedge-connect.md) again.
+When this is done, issue [`tedge connect c8y`](../../references/tedge-connect.md) again.
 
 #### File permissions
 
@@ -304,8 +304,8 @@ Caused by:
     Service mosquitto not found. Install mosquitto to use this command.
 ```
 
-mosquitto server has not been installed on the system and it is required to run this command, refer to [How to install thin-edge.io?](./002_installation.md) to install mosquitto and try again.
+mosquitto server has not been installed on the system and it is required to run this command, refer to [How to install thin-edge.io?](../installation/002_installation.md) to install mosquitto and try again.
 
 ## Next steps
 
-1. [How to use mqtt pub/sub?](./005_pub_sub.md)
+1. [How to use mqtt pub/sub?](../telemetry/005_pub_sub.md)

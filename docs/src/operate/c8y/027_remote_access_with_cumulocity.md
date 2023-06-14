@@ -21,25 +21,12 @@ Make sure thin-edge.io is connected to Cumulocity.
 
 You device within Cumulocity should look similar to this (the "Remote access" tab should be visible in the menu on the left):
 
-<img class="cover-pin-left" src="images/c8y-remote-access_dm.png">
+![c8y-remote-access_dm.png](../../howto-guides/images/c8y-remote-access_dm.png)
 
 You can configure now within the Remote access tab to which e.g. VNC or SSH server you want to jump to. Please keep in mind that the Host is from the thin-edge.io point of view.
 
-<img src="images/c8y-remote-access_endpoint.png">
+![c8y-remote-access_endpoint.png](../../howto-guides/images/c8y-remote-access_endpoint.png)
 
 If you click on connect after the proper configuration an websocket window opens and thin-edge.io triggers the <code>c8y-remote-access-connect</code> plugin to reach that websocket.
 
-<img src="images/c8y-remote-access_websocket.png">
-
-<style>
-    img {
-        margin: 2em auto;
-        display: block;
-    }
-
-    img.cover-pin-left {
-        object-fit: cover;
-        height: 500px;
-        object-position: left;
-    }
-</style>
+![c8y-remote-access_websocket.png](../../howto-guides/images/c8y-remote-access_websocket.png)

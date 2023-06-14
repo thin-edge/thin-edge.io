@@ -4,9 +4,9 @@
 
 `thin-edge.io` can be installed on a range of platforms.
 A platform is defined as a set of hardware architecture and OS.
-More details can be found in [Supported Platforms](../references/supported-platforms.md) document.
+More details can be found in [Supported Platforms](../../references/supported-platforms.md) document.
 
-Out of the box `thin-edge.io` uses deb packages for an automated installation ([Installation Guide](./002_installation.md)).
+Out of the box `thin-edge.io` uses deb packages for an automated installation ([Installation Guide](002_installation.md)).
 You can install it yourself on any Linux system as long as you follow the guidelines below.
 
 ## Installation on 'unsupported platforms'
@@ -19,7 +19,7 @@ By default `thin-edge.io` is built with 3 architectures in mind:
 `amd64 (x86_64)`, `arm64 (aarch64)` and `armhf` with gnulibc bindings.
 So if you are looking to install `thin-edge.io` on a different platform
 you have to build your own binaries from source
-which you can do easily if you follow the [Building `thin-edge.io`](./../contribute/BUILDING.md) guide.
+which you can do easily if you follow the [Building `thin-edge.io`](../../contribute/BUILDING.md) guide.
 
 ```admonish note
 By default `thin-edge.io` is built with `musl`, but it is possible to use `GNU libc` instead.

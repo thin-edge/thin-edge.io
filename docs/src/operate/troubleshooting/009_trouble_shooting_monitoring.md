@@ -1,7 +1,7 @@
 # How to trouble shoot device monitoring
 
 To install and configure monitoring on your device,
-see the tutorial [Monitor your device with collectd](../tutorials/device-monitoring.md).
+see the tutorial [Monitor your device with collectd](../../tutorials/device-monitoring.md).
 
 ## Is collectd running?
 
@@ -21,7 +21,7 @@ sudo systemctl start collectd
 tedge mqtt sub 'collectd/#'
 ```
 
-If no metrics are collected, please check the [MQTT configuration](../tutorials/device-monitoring.md#collectdconf)
+If no metrics are collected, please check the [MQTT configuration](../../tutorials/device-monitoring.md#collectdconf)
 
 ## Is the `tedge-mapper-collectd.service` running?
 
@@ -47,7 +47,7 @@ tedge mqtt sub 'tedge/measurements'
 tedge mqtt sub 'c8y/#'
 ```
 
-If not see how to [connect a device to Cumulocity IoT](../tutorials/connect-c8y.md)
+If not see how to [connect a device to Cumulocity IoT](../../tutorials/connect-c8y.md)
 
 ## Are the collectd metrics published to Azure IoT?
 
@@ -55,4 +55,4 @@ If not see how to [connect a device to Cumulocity IoT](../tutorials/connect-c8y.
 tedge mqtt sub 'az/#'
 ```
 
-If not see how to [connect a device to Azure IoT](../tutorials/connect-azure.md)
+If not see how to [connect a device to Azure IoT](../../tutorials/connect-azure.md)

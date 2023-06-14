@@ -1,5 +1,7 @@
 # Tutorials
 
+- [Getting started](./getting-started.md)
+
 ## Cloud connections
 - [Connect my device to Cumulocity IoT](./connect-c8y.md)
 - [Connect my device to Azure IoT](./connect-azure.md)
@@ -13,6 +15,6 @@
 ## Device monitoring and management
 - [Monitor my device](./device-monitoring.md)
 - [Manage my device software](./software-management.md)
-- [Child device config management](./child-device-config-management.md)
-- [Operations Management for Cumulocity IoT](./supported_operations.md)
+- [Child device config management](../operate/configuration/child-device-config-management.md)
+- [Operations Management for Cumulocity IoT](../operate/c8y/supported_operations.md)
 

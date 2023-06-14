@@ -17,7 +17,7 @@ Before you try to connect your device to Cumulocity IoT, you need:
     * None of these credentials will be stored on the device.
     * These are only required once, to register the device.
 
-If not done yet, [install `thin-edge.io` on your device](../howto-guides/002_installation.md).
+If not done yet, [install `thin-edge.io` on your device](../operate/installation/002_installation.md).
 
 You can now use the [`tedge` command](../references/tedge.md) to:
 * [create a certificate for you device](connect-c8y.md#create-the-certificate),
@@ -202,4 +202,4 @@ You can now:
   using the cloud-agnostic [Thin-Edge-Json data format](../understand/thin-edge-json.md),
 * or have a detailed view of the [topics mapped to and from Cumulocity](../references/bridged-topics.md#cumulocity-mqtt-topics)
   if you prefer to use directly Cumulocity specific formats and protocols.
-* learn how to [add custom fragments to cumulocity](../howto-guides/022_c8y_fragments.md).
+* learn how to [add custom fragments to cumulocity](../operate/c8y/022_c8y_fragments.md).

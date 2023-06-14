@@ -30,7 +30,7 @@ is_active = ["/sbin/rc-service", "{}", "status"]
 ```
 
 Then, adjust the values with your preferred init system.
-To get to know the rules of the configuration file, please refer to [Init System Configuration File](./../references/init-system-config.md).
+To get to know the rules of the configuration file, please refer to [Init System Configuration File](../../references/init-system-config.md).
 
 After you finish creating your own configuration file, it's good to limit the file permission to read-only.
 
@@ -46,4 +46,4 @@ If the custom configuration file `/etc/tedge/system.toml` is not in place,
 `tedge connect` and `tedge disconnect` will use `/bin/systemctl` as the init system.
 
 ## Reference document
-- [Init System Configuration File](./../references/init-system-config.md)
+- [Init System Configuration File](../../references/init-system-config.md)

@@ -36,8 +36,4 @@ If the connection check receives a message containing `200` (status success), th
 
 The connection test sends the empty string only once.
 
-## Next steps
-
-1. [How to use mqtt pub/sub?](./005_pub_sub.md)
-
 
