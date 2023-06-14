@@ -1,5 +1,6 @@
 *** Settings ***
 Resource    ../../resources/common.resource
+Resource    ../config_management/child_conf_mgmt_plugin.robot
 Library    ThinEdgeIO
 
 Test Tags    theme:cli    theme:configuration
@@ -34,71 +35,50 @@ Tedge init and check creation of folders
 Check ownership of the folders
     [Documentation]    Running tedge init has created the folders assigning default user/group
     ...    this test step is confirming the default values for user/group
-    ${etc_tedge}   Execute Command    ls -ld /etc/tedge | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${etc_tedge}    \s*tedge:root\s*
-    ${etc_tedge_mosq}   Execute Command    ls -ld /etc/tedge/mosquitto-conf | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${etc_tedge_mosq}    \s*mosquitto:mosquitto\s*
-    ${etc_tedge_operat}   Execute Command    ls -ld /etc/tedge/operations | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${etc_tedge_operat}    \s*tedge:tedge\s*    
-    ${etc_tedge_plug}   Execute Command    ls -ld /etc/tedge/plugins | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${etc_tedge_plug}    \s*tedge:tedge\s*    
-    ${etc_tedge_devcert}   Execute Command    ls -ld /etc/tedge/device-certs | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${etc_tedge_devcert}    \s*mosquitto:mosquitto\s*
-    ${var_tedge}   Execute Command    ls -ld /var/tedge | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${var_tedge}    \s*tedge:tedge\s*
-    ${var_log_tedge}   Execute Command    ls -ld /var/log/tedge | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${var_log_tedge}    \s*tedge:tedge\s*
+    Check Owner of Directory    /etc/tedge    tedge:root
+    Check Owner of Directory    /etc/tedge/mosquitto-conf    mosquitto:mosquitto
+    Check Owner of Directory    /etc/tedge/operations    tedge:tedge
+    Check Owner of Directory    /etc/tedge/plugins    tedge:tedge
+    Check Owner of Directory    /etc/tedge/device-certs    mosquitto:mosquitto
+    Check Owner of Directory    /var/tedge    tedge:tedge
+    Check Owner of Directory    /var/log/tedge    tedge:tedge
 
 Change user/group and check the change
     [Documentation]    Running tedge init --user <user> --group <group>  is setting custom user/group
     ...    this test step is confirming the custom values for user/group
     Execute Command    sudo tedge init --user petertest --group petertest
-    ${etc_tedge}   Execute Command    ls -ld /etc/tedge | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${etc_tedge}    \s*petertest:root\s*
-    ${etc_tedge_mosq}   Execute Command    ls -ld /etc/tedge/mosquitto-conf | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${etc_tedge_mosq}    \s*mosquitto:mosquitto\s*
-    ${etc_tedge_operat}   Execute Command    ls -ld /etc/tedge/operations | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${etc_tedge_operat}    \s*petertest:petertest\s*  
-    ${etc_tedge_plug}   Execute Command    ls -ld /etc/tedge/plugins | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${etc_tedge_plug}    \s*petertest:petertest\s*   
-    ${etc_tedge_devcert}   Execute Command    ls -ld /etc/tedge/device-certs | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${etc_tedge_devcert}    \s*mosquitto:mosquitto\s*
-    ${var_tedge}   Execute Command    ls -ld /var/tedge | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${var_tedge}    \s*petertest:petertest\s*
-    ${var_log_tedge}   Execute Command    ls -ld /var/log/tedge | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${var_log_tedge}    \s*petertest:petertest\s*
+    Check Owner of Directory    /etc/tedge    petertest:root
+    Check Owner of Directory    /etc/tedge/mosquitto-conf    mosquitto:mosquitto
+    Check Owner of Directory    /etc/tedge/operations    petertest:petertest
+    Check Owner of Directory    /etc/tedge/plugins    petertest:petertest
+    Check Owner of Directory    /etc/tedge/device-certs    mosquitto:mosquitto
+    Check Owner of Directory    /var/tedge    petertest:petertest
+    Check Owner of Directory    /var/log/tedge    petertest:petertest
 
 Tedge init and check if default values are restored
     [Documentation]    Running tedge init after setting custom user/group should restore the default user/group
     ...    this test step is confirming the default values for user/group
     Execute Command    sudo tedge init
-    ${etc_tedge}   Execute Command    ls -ld /etc/tedge | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${etc_tedge}    \s*tedge:root\s*
-    ${etc_tedge_mosq}   Execute Command    ls -ld /etc/tedge/mosquitto-conf | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${etc_tedge_mosq}    \s*mosquitto:mosquitto\s*
-    ${etc_tedge_operat}   Execute Command    ls -ld /etc/tedge/operations | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${etc_tedge_operat}    \s*tedge:tedge\s*    
-    ${etc_tedge_plug}   Execute Command    ls -ld /etc/tedge/plugins | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${etc_tedge_plug}    \s*tedge:tedge\s*    
-    ${etc_tedge_devcert}   Execute Command    ls -ld /etc/tedge/device-certs | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${etc_tedge_devcert}    \s*mosquitto:mosquitto\s*
-    ${var_tedge}   Execute Command    ls -ld /var/tedge | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${var_tedge}    \s*tedge:tedge\s*
-    ${var_log_tedge}   Execute Command    ls -ld /var/log/tedge | awk '{print $3 ":" $4}'
-    Should Match Regexp    ${var_log_tedge}    \s*tedge:tedge\s*
-
+    Check Owner of Directory    /etc/tedge    tedge:root
+    Check Owner of Directory    /etc/tedge/mosquitto-conf    mosquitto:mosquitto
+    Check Owner of Directory    /etc/tedge/operations    tedge:tedge
+    Check Owner of Directory    /etc/tedge/plugins    tedge:tedge
+    Check Owner of Directory    /etc/tedge/device-certs    mosquitto:mosquitto
+    Check Owner of Directory    /var/tedge    tedge:tedge
+    Check Owner of Directory    /var/log/tedge    tedge:tedge
 
 *** Keywords ***
 
 Custom Setup
     Setup
     Execute Command    sudo rm -rf /etc/tedge
-    Execute Command    sudo rm -rf /etc/tedge/mosquitto-conf
-    Execute Command    sudo rm -rf /etc/tedge/operations
-    Execute Command    sudo rm -rf /etc/tedge/plugins
-    Execute Command    sudo rm -rf /etc/tedge/device-certs
     Execute Command    sudo rm -rf /var/tedge
     Execute Command    sudo rm -rf /var/log/tedge
 
 Custom Teardown
     Get Logs
+
+Check Owner of Directory
+    [Arguments]    ${directory_path}    ${expected_owner}
+    ${output}    Execute Command    ls -ld ${directory_path} | awk '{print $3 ":" $4}'
+    Should Match Regexp    ${output}    \s*${expected_owner}\s*
