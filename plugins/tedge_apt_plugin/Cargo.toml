@@ -13,13 +13,7 @@ repository = { workspace = true }
 replaces = "tedge_apt_plugin"
 conflicts = "tedge_apt_plugin (<= 0.8.1)"
 breaks = "tedge_apt_plugin (<= 0.8.1)"
-assets = [
-    [
-        "target/release/tedge-apt-plugin",
-        "/etc/tedge/sm-plugins/apt",
-        "755",
-    ],
-]
+maintainer-scripts = "../../configuration/debian/tedge-apt-plugin"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

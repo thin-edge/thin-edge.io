@@ -1,0 +1,8 @@
+#!/bin/sh
+
+set -e
+
+if [ ! -e /etc/tedge/sm-plugins/apt && ! -L /etc/tedge/sm-plugins/apt ];
+then
+   rm /etc/tedge/sm-plugins/apt
+fi
