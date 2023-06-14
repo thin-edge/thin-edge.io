@@ -10,7 +10,6 @@ use std::path::PathBuf;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
-use tedge_config::*;
 use tracing::log::warn;
 
 mod aws;
@@ -89,7 +88,8 @@ async fn main() -> anyhow::Result<()> {
 
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(&mapper_opt.config_dir);
-    let config = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone()).load()?;
+    let config =
+        tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone()).load_new()?;
 
     let log_level = if mapper_opt.debug {
         tracing::Level::TRACE
@@ -103,11 +103,11 @@ async fn main() -> anyhow::Result<()> {
 
     // Run only one instance of a mapper (if enabled)
     let mut _flock = None;
-    if config.query(LockFilesSetting)?.is_set() {
-        let run_dir: PathBuf = config.query(RunPathSetting)?.into();
+    if config.run.lock_files {
+        let run_dir = config.run.path.as_std_path();
         _flock = Some(check_another_instance_is_not_running(
             &mapper_opt.name.to_string(),
-            &run_dir,
+            run_dir,
         )?);
     }
 

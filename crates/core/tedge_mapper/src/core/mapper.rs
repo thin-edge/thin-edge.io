@@ -1,7 +1,7 @@
 #[cfg(test)]
 use std::result::Result::Ok;
 use tedge_actors::Runtime;
-use tedge_config::TEdgeConfig;
+use tedge_config::new::TEdgeConfig;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_signal_ext::SignalActor;

@@ -1,16 +1,14 @@
-use std::path::Path;
-
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
 use async_trait::async_trait;
 use az_mapper_ext::converter::AzureConverter;
 use clock::WallClock;
+use std::path::Path;
 use tedge_actors::ConvertingActor;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
-use tedge_config::TEdgeConfig;
-use tedge_config::*;
+use tedge_config::new::TEdgeConfig;
 
 const AZURE_MAPPER_NAME: &str = "tedge-mapper-az";
 
@@ -36,10 +34,8 @@ impl TEdgeComponent for AzureMapper {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(self.session_name(), &tedge_config).await?;
 
-        let az_converter = AzureConverter::new(
-            tedge_config.query(AzureMapperTimestamp)?.is_set(),
-            Box::new(WallClock),
-        );
+        let az_converter =
+            AzureConverter::new(tedge_config.az.mapper.timestamp, Box::new(WallClock));
         let mut az_converting_actor = ConvertingActor::builder(
             "AzConverter",
             az_converter,

@@ -8,10 +8,7 @@ use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::service_monitor::service_monitor_status_message;
 use mqtt_channel::Config;
 use std::path::Path;
-use tedge_config::ConfigSettingAccessor;
-use tedge_config::DeviceIdSetting;
-use tedge_config::ServiceTypeSetting;
-use tedge_config::TEdgeConfig;
+use tedge_config::new::TEdgeConfig;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActor;
 use tedge_mqtt_ext::MqttActorBuilder;
@@ -71,8 +68,8 @@ impl TEdgeComponent for CumulocityMapper {
 }
 
 pub fn service_monitor_client_config(tedge_config: &TEdgeConfig) -> Result<Config, anyhow::Error> {
-    let device_name = tedge_config.query(DeviceIdSetting)?;
-    let service_type = tedge_config.query(ServiceTypeSetting)?;
+    let device_name = tedge_config.device.id.try_read(tedge_config)?.to_string();
+    let service_type = tedge_config.service.ty.clone();
 
     let mqtt_config = tedge_config
         .mqtt_config()?

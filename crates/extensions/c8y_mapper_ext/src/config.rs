@@ -5,14 +5,9 @@ use camino::Utf8PathBuf;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_api::topic::ResponseTopic;
-use tedge_config::C8yHttpSetting;
-use tedge_config::ConfigSettingAccessor;
-use tedge_config::DeviceIdSetting;
-use tedge_config::DeviceTypeSetting;
-use tedge_config::LogPathSetting;
-use tedge_config::ServiceTypeSetting;
-use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigError;
+use tedge_config::new::ConfigNotSet;
+use tedge_config::new::ReadError;
+use tedge_config::new::TEdgeConfig;
 use tedge_mqtt_ext::TopicFilter;
 
 pub const MQTT_MESSAGE_SIZE_THRESHOLD: usize = 16184;
@@ -52,14 +47,14 @@ impl C8yMapperConfig {
     pub fn from_tedge_config(
         config_dir: impl AsRef<Path>,
         tedge_config: &TEdgeConfig,
-    ) -> Result<C8yMapperConfig, TEdgeConfigError> {
+    ) -> Result<C8yMapperConfig, C8yMapperConfigBuildError> {
         let config_dir: PathBuf = config_dir.as_ref().into();
 
-        let logs_path = tedge_config.query(LogPathSetting)?;
-        let device_id = tedge_config.query(DeviceIdSetting)?;
-        let device_type = tedge_config.query(DeviceTypeSetting)?;
-        let service_type = tedge_config.query(ServiceTypeSetting)?;
-        let c8y_host = tedge_config.query(C8yHttpSetting)?.into();
+        let logs_path = tedge_config.logs.path.clone();
+        let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
+        let device_type = tedge_config.device.ty.clone();
+        let service_type = tedge_config.service.ty.clone();
+        let c8y_host = tedge_config.c8y_url().or_config_not_set()?.to_string();
 
         Ok(C8yMapperConfig::new(
             config_dir,
@@ -98,6 +93,15 @@ impl C8yMapperConfig {
 
         Ok(topic_filter)
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum C8yMapperConfigBuildError {
+    #[error(transparent)]
+    FromReadError(#[from] ReadError),
+
+    #[error(transparent)]
+    FromConfigNotSet(#[from] ConfigNotSet),
 }
 
 #[derive(thiserror::Error, Debug)]
