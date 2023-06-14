@@ -18,7 +18,7 @@ class AptPluginListFormat(BaseTest):
             expectedExitStatus="==0",
         )
 
-        # dpkg-querry outputs tab separated 'module\tversion` pair
+        # dpkg-query outputs tab separated 'module\tversion` pair
         # for example `dash    0.5.10.2-6`
         self.startProcess(
             command="/usr/bin/dpkg-query",
