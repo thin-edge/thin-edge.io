@@ -352,6 +352,11 @@ define_tedge_config! {
         #[tedge_config(default(from_optional_key = "c8y.url"))]
         mqtt: HostPort<MQTT_TLS_PORT>,
 
+        /// Set of MQTT topics the Cumulocity mapper should subscribe to
+        #[tedge_config(example = "tedge/alarms/#,tedge/measurements/+")]
+        #[tedge_config(default(value = "tedge/measurements,tedge/measurements/+,tedge/alarms/+/+,tedge/alarms/+/+/+,tedge/events/+,tedge/events/+/+,tedge/health/+,tedge/health/+/+"))]
+        topics: TemplatesSet,
+
     },
 
     #[tedge_config(deprecated_name = "azure")] // for 0.1.0 compatibility

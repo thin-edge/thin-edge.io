@@ -9,6 +9,7 @@ use tedge_config::new::ConfigNotSet;
 use tedge_config::new::ReadError;
 use tedge_config::new::TEdgeConfig;
 use tedge_mqtt_ext::TopicFilter;
+use tracing::log::warn;
 
 pub const MQTT_MESSAGE_SIZE_THRESHOLD: usize = 16184;
 
@@ -20,6 +21,7 @@ pub struct C8yMapperConfig {
     pub service_type: String,
     pub ops_dir: PathBuf,
     pub c8y_host: String,
+    pub topics: TopicFilter,
 }
 
 impl C8yMapperConfig {
@@ -30,6 +32,7 @@ impl C8yMapperConfig {
         device_type: String,
         service_type: String,
         c8y_host: String,
+        topics: TopicFilter,
     ) -> Self {
         let ops_dir = config_dir.join("operations").join("c8y");
 
@@ -41,6 +44,7 @@ impl C8yMapperConfig {
             service_type,
             ops_dir,
             c8y_host,
+            topics,
         }
     }
 
@@ -56,6 +60,14 @@ impl C8yMapperConfig {
         let service_type = tedge_config.service.ty.clone();
         let c8y_host = tedge_config.c8y_url().or_config_not_set()?.to_string();
 
+        // The topics to subscribe = default internal topics + user configurable external topics
+        let mut topics = Self::internal_topic_filter(&config_dir)?;
+        for topic in tedge_config.c8y.topics.0.clone() {
+            if let Err(_) = topics.add(&topic) {
+                warn!("The configured topic '{topic}' is invalid and ignored.");
+            }
+        }
+
         Ok(C8yMapperConfig::new(
             config_dir,
             logs_path,
@@ -63,22 +75,15 @@ impl C8yMapperConfig {
             device_type,
             service_type,
             c8y_host,
+            topics,
         ))
     }
 
-    pub fn subscriptions(config_dir: &Path) -> Result<TopicFilter, C8yMapperConfigError> {
+    pub fn internal_topic_filter(config_dir: &Path) -> Result<TopicFilter, C8yMapperConfigError> {
         let operations = Operations::try_new(config_dir.join("operations/c8y"))?;
         let mut topic_filter: TopicFilter = vec![
-            "tedge/measurements",
-            "tedge/measurements/+",
-            "tedge/alarms/+/+",
-            "tedge/alarms/+/+/+",
             "c8y-internal/alarms/+/+",
             "c8y-internal/alarms/+/+/+",
-            "tedge/events/+",
-            "tedge/events/+/+",
-            "tedge/health/+",
-            "tedge/health/+/+",
             C8yTopic::SmartRestRequest.to_string().as_str(),
             ResponseTopic::SoftwareListResponse.as_str(),
             ResponseTopic::SoftwareUpdateResponse.as_str(),
@@ -93,6 +98,22 @@ impl C8yMapperConfig {
 
         Ok(topic_filter)
     }
+
+    /// List of all possible external topics that Cumulocity mapper addresses. For testing purpose.
+    pub fn default_external_topic_filter() -> TopicFilter {
+        vec![
+            "tedge/measurements",
+            "tedge/measurements/+",
+            "tedge/alarms/+/+",
+            "tedge/alarms/+/+/+",
+            "tedge/events/+",
+            "tedge/events/+/+",
+            "tedge/health/+",
+            "tedge/health/+/+",
+        ]
+        .try_into()
+        .unwrap()
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -102,6 +123,9 @@ pub enum C8yMapperConfigBuildError {
 
     #[error(transparent)]
     FromConfigNotSet(#[from] ConfigNotSet),
+
+    #[error(transparent)]
+    FromC8yMapperConfigError(#[from] C8yMapperConfigError),
 }
 
 #[derive(thiserror::Error, Debug)]

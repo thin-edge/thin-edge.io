@@ -1013,7 +1013,6 @@ EOF
 }
 
 #[tokio::test]
-
 async fn custom_operation_timeout_sigterm() {
     // The test assures SM Mapper correctly receives custom operation on `c8y/s/ds`
     // and executes the custom operation, it will timeout because it will not complete before given timeout
@@ -1086,7 +1085,6 @@ operation failed due to timeout: duration=1sEOF";
 }
 
 #[tokio::test]
-
 async fn custom_operation_timeout_sigkill() {
     // The test assures SM Mapper correctly receives custom operation on `c8y/s/ds`
     // and executes the custom operation, it will timeout because it will not complete before given timeout
@@ -1243,14 +1241,16 @@ async fn spawn_c8y_mapper_actor(
     SimpleMessageBox<NoMessage, FsWatchEvent>,
     SimpleMessageBox<SyncStart, SyncComplete>,
 ) {
+    if init {
+        config_dir.dir("operations").dir("c8y");
+    }
+
     let device_name = "test-device".into();
     let device_type = "test-device-type".into();
     let service_type = "service".into();
     let c8y_host = "test.c8y.io".into();
-
-    if init {
-        config_dir.dir("operations").dir("c8y");
-    }
+    let mut topics = C8yMapperConfig::internal_topic_filter(config_dir.path()).unwrap();
+    topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
     let config = C8yMapperConfig::new(
         config_dir.to_path_buf(),
@@ -1259,6 +1259,7 @@ async fn spawn_c8y_mapper_actor(
         device_type,
         service_type,
         c8y_host,
+        topics,
     );
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
