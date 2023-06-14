@@ -15,7 +15,7 @@ The Raspberry PI is a relatively simple and cheap device but powerful. Therefore
 To follow this guide, you only need the following:
 - A [Cumulocity IoT](https://www.softwareag.cloud/site/product/cumulocity-iot.html) Trial tenant.
 
-- A Raspberry Pi (3 or 4) with Raspbian installed, for other boards and OS'es have a look [here](https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/supported-platforms.md)
+- A Raspberry Pi (3 or 4) with Raspbian installed, for other boards and OS'es have a look [here](../references/supported-platforms.md)
 - Updated device:
 `
 sudo apt-get update && sudo apt-get upgrade

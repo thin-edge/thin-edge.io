@@ -44,7 +44,7 @@ For more details, refer to our guide [Extracting from debian package](./015_inst
 
 ### Building from sources
 
-Follow our guide [Building thin-edge.io](./../BUILDING.md) and [Building from source](./015_installation_without_deb_support.md#if-building-from-source).
+Follow our guide [Building thin-edge.io](./../contribute/BUILDING.md) and [Building from source](./015_installation_without_deb_support.md#if-building-from-source).
 
 ```shell
 cargo build --release -p c8y-configuration-plugin

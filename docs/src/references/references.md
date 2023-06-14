@@ -1,7 +1,7 @@
 # Reference Guides
 
 ## Setup
-- [Supported platforms](../supported-platforms.md)
+- [Supported platforms](./supported-platforms.md)
 
 ## Configuration files
 - [Thin-edge.io configuration files](./thin-edge-config-files.md)
@@ -24,7 +24,6 @@
 - [Data Model](../understand/data-model.md)
 
 ## Extension API
-- [Building](../BUILDING.md)
 - [Plugin API](./plugin-api.md)
 - [Log Management](./c8y-log-management.md)
 - [Configuration Management](./c8y-configuration-management.md)

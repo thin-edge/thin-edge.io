@@ -64,4 +64,4 @@ All contributions are greatly appreciated.
 It can be by reporting issues, improving this documentation, adding new extensions or contributing to the main code base.
 
 Please refer to the [contribution guide](https://github.com/thin-edge/thin-edge.io/blob/main/CONTRIBUTING.md)
-and the [contributor documentation](developer/developer.md).
+and the [contributor documentation](contribute/developer.md).

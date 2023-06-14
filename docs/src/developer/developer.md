@@ -1,5 +1,0 @@
-# Contributing to thin-edge.io
-
-* [Using a dev container](DEV_CONTAINER.md)
-* [Debian package hosting](DEBIAN_PACKAGE_HOSTING.md)
-* Docker being used for testing, you will have to [install Docker](INSTALLING_DOCKER.md)
