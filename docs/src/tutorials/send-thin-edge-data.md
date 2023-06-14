@@ -6,7 +6,7 @@ to learn how to connect your Thin Edge device to an IoT cloud provider.
 
 In this tutorial, we'll see how different kinds of measurements are represented in Thin Edge JSON format and 
 how they can be sent to the connected cloud provider.
-For a more detailed specification of this data format, refer to [Thin Edge JSON Specification](../architecture/thin-edge-json.md).
+For a more detailed specification of this data format, refer to [Thin Edge JSON Specification](../understand/thin-edge-json.md).
 
 ## Sending measurements
 
@@ -75,7 +75,7 @@ along with a multi-valued `coordinate` measurement, all sharing a single timesta
 ```
 
 The `time` field is not a regular measurement like `temperature` or `pressure` but a special reserved field.
-Refer to [Thin Edge JSON Specification](../architecture/thin-edge-json.md) for more details on the kinds of telemetry 
+Refer to [Thin Edge JSON Specification](../understand/thin-edge-json.md) for more details on the kinds of telemetry 
 data that can be represented in Thin Edge JSON format and the reserved fields like `time` used in the above example.
 
 ## Sending measurements to child devices

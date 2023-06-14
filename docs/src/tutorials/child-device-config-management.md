@@ -22,7 +22,7 @@ Thin-edge.io facilitates remote management of the device it is running on, as we
 
 The figure below illustrates the child-device concept.
 
-![Device Concept](../architecture/images/device-concept.svg)
+![Device Concept](../understand/images/device-concept.svg)
 
 Configuration management can be enabled for child-devices using the same `c8y-configuration-plugin`,
 used for configuration management of the thin-edge device itself.

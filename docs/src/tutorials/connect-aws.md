@@ -164,6 +164,6 @@ To view the messages that were sent from the device to the cloud, follow this
 You can now:
 
 * learn how to [send various kind of telemetry data](send-thin-edge-data.md)
-  using the cloud-agnostic [Thin-Edge-Json data format](../architecture/thin-edge-json.md),
+  using the cloud-agnostic [Thin-Edge-Json data format](../understand/thin-edge-json.md),
 * or have a detailed view of the [topics mapped to and from AWS](../references/bridged-topics.md#aws-mqtt-topics)
   if you prefer to use directly AWS specific formats and protocols.

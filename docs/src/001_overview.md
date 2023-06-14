@@ -36,10 +36,10 @@ You will learn to:
 
 ## The concepts
 
-  - [Architecture FAQ](architecture/faq.md)
-  - [Thin Edge Json](architecture/thin-edge-json.md)
-  - [The Mapper](architecture/mapper.md)
-  - [Software Management](architecture/software-management.md)
+  - [Architecture FAQ](understand/faq.md)
+  - [Thin Edge Json](understand/thin-edge-json.md)
+  - [The Mapper](understand/mapper.md)
+  - [Software Management](understand/software-management.md)
 
 ## How to use thin-edge.io
 

@@ -20,8 +20,8 @@
 - [`tedge mqtt` command](../references/tedge-mqtt.md)
 
 ## Data Model
-- [Domain Model](../architecture/domain-model.md)
-- [Data Model](../architecture/data-model.md)
+- [Domain Model](../understand/domain-model.md)
+- [Data Model](../understand/data-model.md)
 
 ## Extension API
 - [Building](../BUILDING.md)

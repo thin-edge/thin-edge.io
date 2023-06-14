@@ -8,8 +8,8 @@ and can proactively initiate actions in case the device seems to malfunction.
 Additionally, the metrics can be used to help the customer troubleshoot when problems with the device are reported.
 
 Thin-edge.io uses the open source component [`collectd`](https://collectd.org/) to collect the metrics from the device.
-Thin-edge.io translates the collected metrics from their native format to the [thin-edge.io JSON](../architecture/thin-edge-json.md) format
-and then into the [cloud-vendor specific format](../architecture/mapper.md).
+Thin-edge.io translates the collected metrics from their native format to the [thin-edge.io JSON](../understand/thin-edge-json.md) format
+and then into the [cloud-vendor specific format](../understand/mapper.md).
 
 Enabling monitoring on your device is a 3-steps process:
 1. [Install `collectd`](#install-collectd),
@@ -145,7 +145,7 @@ tedge mqtt sub 'collectd/#'
 
 ```
 
-The `tedge-mapper-collectd` translates these collectd measurements into the [thin-edge.io JSON](../architecture/thin-edge-json.md) format,
+The `tedge-mapper-collectd` translates these collectd measurements into the [thin-edge.io JSON](../understand/thin-edge-json.md) format,
 [grouping the measurements](../references/bridged-topics.md#collectd-topics) emitted by each plugin:
 
 ```
