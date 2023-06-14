@@ -14,7 +14,7 @@ This test is already performed as part of the `tedge connect <cloud>` command.
 ## What does the test do?
 
 The connection test sends a message to the cloud and waits for a response.
-The subsequent sections explain the cloud-specific behaviour.
+The subsequent sections explain the cloud-specific behavior.
 
 ### For Cumulocity IoT
 

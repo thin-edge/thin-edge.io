@@ -51,7 +51,7 @@ In thin-edge.io we decided not to follow this approach because:
 
 We were looking for a widely-used, performant IPC mechanism and we investigated a number of alternatives.
 In the end, we decided to use MQTT for the following reasons:
-* The approach is used by other industrial IoT organisations and software,
+* The approach is used by other industrial IoT organizations and software,
   for example by [Open Industry 4.0 Alliance](https://openindustry4.com/).
 * Existing components (like [Node-RED](https://nodered.org/) or [collectd](https://collectd.org/) )
   that support MQTT can be easily integrated. In this case, thin-edge.io acts as an MQTT proxy:

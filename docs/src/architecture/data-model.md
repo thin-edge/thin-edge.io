@@ -2,7 +2,7 @@
 # thin-edge Data Model
 
 The **data model** identifies all data send or received from/to **thin-edge** and its components, to interact with those.
-For all data it defines format and explains behaviour.
+For all data it defines format and explains behavior.
 
 ## Use of MQTT
 
@@ -21,7 +21,7 @@ All telemetry data (**Measurements**, **Events**, **Alarms**) are reflected with
   * all processes (e.g. the domain application[^1], other SW components / 3rd parties) on the main-device and all child-devices can consume those telemetry data from the MQTT broker
   * the cloud mapper on the **main-device** picks-up _all_ telemetry data from the MQTT broker and transfers those to the cloud
 
-The communication diagram below illustrates that behaviour.
+The communication diagram below illustrates that behavior.
 
 ![MQTT communication flow](images/MQTT-communication.svg)
 
@@ -143,7 +143,7 @@ tedge/events/<event-type>/<child-id>
   component (e.g. when that software component restarts and subscribes again).
 
 ### Alarms
-**Alarms** are notifications about some critical behaviour of the device's environment or software system;
+**Alarms** are notifications about some critical behavior of the device's environment or software system;
 e.g. when a temperature sensor detects a temperature went out of its valid range
 
 #### MQTT topics for alarms
@@ -177,10 +177,10 @@ tedge/alarms/<severity>/<alarm-type>/<child-id>
 |`timestamp`         |optional time that indicates when the alarm has occurred; when not provided, thin-edge.io uses the current system time as the time of the alarm; when provided must be conform to ISO 8601|
 |`custom fragments`  |additional fields are handled as custom specific information; if the connected cloud supports custom fragments its mapper transfers those accordingly to the cloud|
 
-#### Behaviour of alarms
+#### Behavior of alarms
 - thin-edge does not store any historical occurrences for alarms
 - **alarms** are stateful; i.e. once raised, an **alarm** is active until it was explicitly cleared by the device's software or the cloud
-- all alarms shall be published as MQTT retain message to reflect the alarm's stateful behaviour in the broker; The retain messages is kept in
+- all alarms shall be published as MQTT retain message to reflect the alarm's stateful behavior in the broker; The retain messages is kept in
   the MQTT broker as long as the alarm is raised. When a raised alarm is gone again, an empty retain message shall be published to clear
   the alarm message in the broker.
 

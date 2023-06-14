@@ -24,7 +24,7 @@ The key points are that the **Tedge Agent** is always generic in cloud platforms
 
 ### Software Management Plugin
 
-The **Software Management Plugin** is dedicated to defining the behaviour of software actions (list, update, remove) per software type (apt, docker, etc.)
+The **Software Management Plugin** is dedicated to defining the behavior of software actions (list, update, remove) per software type (apt, docker, etc.)
 
 ## Related documents
 1. [How to install and enable software management?](../howto-guides/012_install_and_enable_software_management.md)

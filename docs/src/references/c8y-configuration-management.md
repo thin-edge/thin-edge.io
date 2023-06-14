@@ -14,7 +14,7 @@ Thin-edge provides an operation plugin to
 * Notably, __the plugin configuration itself is managed from the cloud__,
   meaning, the device owner can update from the cloud the list of files to be managed.
 * Cumulocity manages the configuration files accordingly to their type,
-  a name that is chosen by the device owner to categorise each configuration.
+  a name that is chosen by the device owner to categorize each configuration.
   By default, the full path of a configuration file on the device is used as its type.
 * When files are downloaded from the cloud to the device,
   __these files are stored in a temporary directory first__.

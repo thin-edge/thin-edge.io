@@ -200,7 +200,7 @@ myplugin install NAME [--module-version VERSION] [--file FILE]
 This command takes 1 mandatory argument and has 2 optional flags.
 - **NAME**: the name of the software module to be installed, e.g. `mosquitto`. (Mandatory)
 - **VERSION**: the version to be installed. e.g. `1.5.7-1+deb10u1`.
-  The version can be blank, so it's recommended to define the behaviour if a version is not provided. 
+  The version can be blank, so it's recommended to define the behavior if a version is not provided. 
   For example, always installs the "latest" version if a version is not provided. (Optional)
 - **FILE**: the path to the software to be installed. (Optional)
 
@@ -297,7 +297,7 @@ This command takes 1 mandatory argument and 1 optional argument with a flag.
 
 - **NAME**: the name of the software module to be removed, e.g. `mosquitto`. (Mandatory)
 - **VERSION**: the version to be installed. e.g. `1.5.7-1+deb10u1`.
-  The version can be blank, so it's recommended to define the behaviour if a version is not provided.
+  The version can be blank, so it's recommended to define the behavior if a version is not provided.
   For example, uninstall a software module regardless of its version if a version is not provided. (Optional)
 
 The uninstallation phase can be failed due to several reasons. An error must be reported if:
@@ -400,7 +400,7 @@ exit 0
 ```
 
 You can find that `install` and `remove` are replaced by `update-list`.
-`update-list` should define the behaviour to read line by line for the case `install` and `remove`.
+`update-list` should define the behavior to read line by line for the case `install` and `remove`.
 
 Also, `update-list` must be **fail-fast**.
 That example exists immediately if one of the commands fails.

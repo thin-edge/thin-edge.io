@@ -38,7 +38,7 @@ to `/etc/tedge/tedge.toml`.
 
 ## Environment variables
 
-To aid in configuring `thin-edge.io` in containerised environments, `thin-edge.io` supports passing in the configuration via environment variables. For instance, to configure the Cumulocity URL and MQTT bind address, you can run:
+To aid in configuring `thin-edge.io` in containerized environments, `thin-edge.io` supports passing in the configuration via environment variables. For instance, to configure the Cumulocity URL and MQTT bind address, you can run:
 
 ```command
 env TEDGE_C8Y_URL=mytenant.cumulocity.com TEDGE_MQTT_BIND_ADDRESS=127.0.0.1 tedge connect c8y 
@@ -74,9 +74,9 @@ env TEDGE_C8Y_URL=example.com tedge config get
 
 which outputs: *example.com*
 
-## Unrecognised configurations
+## Unrecognized configurations
 
-When tedge commands (`tedge`, `tedge-agent`, `tedge-mapper`) detect a configuration setting they don't recognise, they will emit a warning log message[^1]:
+When tedge commands (`tedge`, `tedge-agent`, `tedge-mapper`) detect a configuration setting they don't recognize, they will emit a warning log message[^1]:
 
 ```command
 env TEDGE_C8Y_UNKNOWN_CONFIGURATION=test tedge config get c8y.url
