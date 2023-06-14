@@ -7,13 +7,11 @@ use tedge_actors::Converter;
 use tedge_api::serialize::ThinEdgeJsonSerializer;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
-use tedge_mqtt_ext::TopicFilter;
 
 const AZ_MQTT_THRESHOLD: usize = 1024 * 128;
 
 #[derive(Debug)]
 pub struct MapperConfig {
-    pub in_topic_filter: TopicFilter,
     pub out_topic: Topic,
     pub errors_topic: Topic,
 }
@@ -28,7 +26,6 @@ pub struct AzureConverter {
 impl AzureConverter {
     pub fn new(add_timestamp: bool, clock: Box<dyn Clock>) -> Self {
         let mapper_config = MapperConfig {
-            in_topic_filter: Self::in_topic_filter(),
             out_topic: Topic::new_unchecked("az/messages/events/"),
             errors_topic: Topic::new_unchecked("tedge/errors"),
         };
@@ -47,12 +44,6 @@ impl AzureConverter {
             size_threshold,
             ..self
         }
-    }
-
-    pub fn in_topic_filter() -> TopicFilter {
-        vec!["tedge/measurements", "tedge/measurements/+"]
-            .try_into()
-            .unwrap()
     }
 
     fn try_convert(&mut self, input: &MqttMessage) -> Result<Vec<MqttMessage>, ConversionError> {

@@ -3,12 +3,14 @@ use crate::core::mapper::start_basic_actors;
 use async_trait::async_trait;
 use az_mapper_ext::converter::AzureConverter;
 use clock::WallClock;
+use mqtt_channel::TopicFilter;
 use std::path::Path;
 use tedge_actors::ConvertingActor;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
 use tedge_config::new::TEdgeConfig;
+use tracing::warn;
 
 const AZURE_MAPPER_NAME: &str = "tedge-mapper-az";
 
@@ -36,11 +38,8 @@ impl TEdgeComponent for AzureMapper {
 
         let az_converter =
             AzureConverter::new(tedge_config.az.mapper.timestamp, Box::new(WallClock));
-        let mut az_converting_actor = ConvertingActor::builder(
-            "AzConverter",
-            az_converter,
-            AzureConverter::in_topic_filter(),
-        );
+        let mut az_converting_actor =
+            ConvertingActor::builder("AzConverter", az_converter, get_topic_filter(&tedge_config));
         az_converting_actor.add_input(&mut mqtt_actor);
 
         az_converting_actor.register_peer(NoConfig, mqtt_actor.get_sender());
@@ -50,4 +49,14 @@ impl TEdgeComponent for AzureMapper {
         runtime.run_to_completion().await?;
         Ok(())
     }
+}
+
+fn get_topic_filter(tedge_config: &TEdgeConfig) -> TopicFilter {
+    let mut topics = TopicFilter::empty();
+    for topic in tedge_config.az.topics.0.clone() {
+        if topics.add(&topic).is_err() {
+            warn!("The configured topic '{topic}' is invalid and ignored.");
+        }
+    }
+    topics
 }

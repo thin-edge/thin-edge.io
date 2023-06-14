@@ -376,7 +376,12 @@ define_tedge_config! {
             #[tedge_config(example = "true")]
             #[tedge_config(default(value = true))]
             timestamp: bool,
-        }
+        },
+
+        /// Set of MQTT topics the Azure IoT mapper should subscribe to
+        #[tedge_config(example = "tedge/measurements,tedge/measurements/+")]
+        #[tedge_config(default(value = "tedge/measurements,tedge/measurements/+"))]
+        topics: TemplatesSet,
     },
 
     aws: {
