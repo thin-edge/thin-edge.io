@@ -400,7 +400,12 @@ define_tedge_config! {
             #[tedge_config(example = "true")]
             #[tedge_config(default(value = true))]
             timestamp: bool,
-        }
+        },
+
+        /// Set of MQTT topics the AWS IoT mapper should subscribe to
+        #[tedge_config(example = "tedge/measurements,tedge/measurements/+")]
+        #[tedge_config(default(value = "tedge/measurements,tedge/measurements/+,tedge/alarms/+/+,tedge/alarms/+/+/+,tedge/events/+,tedge/events/+/+,tedge/health,tedge/health/+"))]
+        topics: TemplatesSet,
     },
 
     mqtt: {

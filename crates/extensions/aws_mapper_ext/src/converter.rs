@@ -7,7 +7,6 @@ use tedge_actors::Converter;
 use tedge_api::serialize::ThinEdgeJsonSerializer;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
-use tedge_mqtt_ext::TopicFilter;
 
 use crate::error::ConversionError;
 use crate::size_threshold::SizeThreshold;
@@ -35,21 +34,6 @@ impl AwsConverter {
             size_threshold,
             ..self
         }
-    }
-
-    pub fn in_topic_filter() -> TopicFilter {
-        vec![
-            "tedge/measurements",
-            "tedge/measurements/+",
-            "tedge/health",
-            "tedge/health/+",
-            "tedge/events/+",
-            "tedge/events/+/+",
-            "tedge/alarms/+/+",
-            "tedge/alarms/+/+/+",
-        ]
-        .try_into()
-        .unwrap()
     }
 
     fn try_convert(&mut self, input: &MqttMessage) -> Result<Vec<MqttMessage>, ConversionError> {
