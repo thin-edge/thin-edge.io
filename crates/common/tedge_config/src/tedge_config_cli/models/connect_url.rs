@@ -12,7 +12,7 @@ pub struct ConnectUrl {
 
 #[derive(thiserror::Error, Debug)]
 #[error(
-    "Provided URL: '{input}' contains scheme or port.
+    "Could not parse provided URL: '{input}' as a valid domain name.
          Provided URL should contain only domain, eg: 'subdomain.cumulocity.com'."
 )]
 pub struct InvalidConnectUrl {
