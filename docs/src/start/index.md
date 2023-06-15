@@ -1,6 +1,7 @@
-# Tutorials
+# Getting started
 
-- [Getting started](./getting-started.md)
+- [Install](../operate/installation/002_installation.md),
+- [Getting Started](./getting-started.md)
 
 ## Cloud connections
 - [Connect my device to Cumulocity IoT](./connect-c8y.md)

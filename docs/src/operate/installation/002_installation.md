@@ -208,6 +208,6 @@ curl -sSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstal
 
 ## Next steps
 
-1. [Connect your device to Cumulocity IoT](../../tutorials/connect-c8y.md)
-2. [Connect your device to Azure IoT](../../tutorials/connect-azure.md)
-3. [Connect your device to AWS IoT](../../tutorials/connect-aws.md)
+1. [Connect your device to Cumulocity IoT](../../start/connect-c8y.md)
+2. [Connect your device to Azure IoT](../../start/connect-azure.md)
+3. [Connect your device to AWS IoT](../../start/connect-aws.md)

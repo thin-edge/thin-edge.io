@@ -59,7 +59,7 @@ sudo cp <repository_root>/configuration/init/systemd/c8y-configuration-plugin.se
 
 ## Get started
 
-Before starting anything, make sure [your device is connected to Cumulocity](../../tutorials/connect-c8y.md).
+Before starting anything, make sure [your device is connected to Cumulocity](../../start/connect-c8y.md).
 
 **Step 0**
 Unless you installed `c8y-configuration-plugin` using the debian package,

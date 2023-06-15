@@ -20,18 +20,18 @@ and need to be secured, configured and updated at scale.
 
 ## How to start
 
-The easiest way to get started is with the [beginner-friendly tutorial](./tutorials/getting-started.md)
+The easiest way to get started is with the [beginner-friendly tutorial](start/getting-started.md)
 that introduces `thin-edge.io` and guides you on how to install it on a Raspberry Pi,
 connect your device to [Cumulocity IoT](https://www.cumulocity.com/guides/concepts/introduction/),
 and then monitor it from the cloud.
 
-You can also explore the main use-cases using these [tutorials](tutorials/index.md).
+You can also explore the main use-cases using these [tutorials](start/index.md).
 You will learn to:
 
 - [install thin-edge on your specific hardware](operate/installation/002_installation.md),
-- connect your device to your cloud, whether [Cumulocity IoT](tutorials/connect-c8y.md),
-  [Azure IoT](tutorials/connect-azure.md) or [AWS IoT](tutorials/connect-aws.md),
-- [send telemetry data](tutorials//send-thin-edge-data.md), [alarms](tutorials//raise-alarm.md) and [events](tutorials//send-events.md),
+- connect your device to your cloud, whether [Cumulocity IoT](start/connect-c8y.md),
+  [Azure IoT](start/connect-azure.md) or [AWS IoT](start/connect-aws.md),
+- [send telemetry data](start//send-thin-edge-data.md), [alarms](start//raise-alarm.md) and [events](start//send-events.md),
 - operate, configure, update, monitor your device.
 
 ## The concepts
