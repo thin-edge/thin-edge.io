@@ -1,3 +1,9 @@
+---
+title: Operate Devices
+tags: [Operate]
+sidebar_position: 3
+---
+
 # How-to Guides
 
 ## Installation

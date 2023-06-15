@@ -1,3 +1,9 @@
+---
+title: File Transfer Service
+tags: [Reference, HTTP]
+sidebar_position: 6
+---
+
 # Thin Edge File Transfer Service
 
 The `tedge-agent` hosts a binary repository for child devices and other plugins/extensions to exchange binary files between them.

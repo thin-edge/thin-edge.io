@@ -1,3 +1,9 @@
+---
+title: Child Device Firmware Management
+tags: [Operate, Cumulocity, Child Device, Firmware]
+sidebar_position: 7
+---
+
 # Enable firmware management on child devices with Cumulocity
 
 Firmware management can be enabled for child devices using the `c8y-firmware-plugin`.

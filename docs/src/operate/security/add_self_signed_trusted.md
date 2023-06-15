@@ -1,3 +1,9 @@
+---
+title: Self-signed Device Certificate
+tags: [Operate, Security]
+sidebar_position: 1
+---
+
 # How to add self-signed certificate to trusted certificates list
 
 ## Overview

@@ -1,3 +1,9 @@
+---
+title: "`tedge config`"
+tags: [Reference, CLI]
+sidebar_position: 1
+---
+
 # The `tedge config` command
 
 ```console

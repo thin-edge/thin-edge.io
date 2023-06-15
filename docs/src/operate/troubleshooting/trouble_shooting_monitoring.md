@@ -1,3 +1,9 @@
+---
+title: Troubleshooting Device Monitoring
+tags: [Operate, Monitoring]
+sidebar_position: 1
+---
+
 # How to trouble shoot device monitoring
 
 To install and configure monitoring on your device,

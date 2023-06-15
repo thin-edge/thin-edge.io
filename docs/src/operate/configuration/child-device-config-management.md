@@ -1,3 +1,9 @@
+---
+title: Child Device Configuration Management
+tags: [Operate, Cumulocity, Child Device, Configuration]
+sidebar_position: 6
+---
+
 # Configuration management on child-devices
 
 After following this tutorial, you will know how to manage various configuration files on child-devices connected to a thin-edge device.

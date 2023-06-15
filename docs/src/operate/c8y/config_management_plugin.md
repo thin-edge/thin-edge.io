@@ -1,3 +1,9 @@
+---
+title: Configuration Management
+tags: [Operate, Cumulocity, Configuration]
+sidebar_position: 5
+---
+
 # How to manage configuration files with Cumulocity
 
 With `thin-edge.io`, you can manage config files on a device by using the [Cumulocity configuration management feature](https://cumulocity.com/guides/users-guide/device-management/#managing-configurations) as a part of Device Management.

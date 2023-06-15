@@ -1,3 +1,9 @@
+---
+title: Install
+tags: [Installation]
+sidebar_position: 1
+---
+
 # How to install `thin-edge.io`?
 
 ## Installation with get-thin-edge_io.sh script

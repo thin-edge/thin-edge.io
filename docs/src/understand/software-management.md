@@ -1,3 +1,9 @@
+---
+title: Software Management
+tags: [Concept, Software Management]
+sidebar_position: 1
+---
+
 # Software Management with thin-edge.io
 
 With thin-edge.io you can ease the burden of managing packages on your device.

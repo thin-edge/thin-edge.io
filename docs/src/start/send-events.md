@@ -1,4 +1,10 @@
-# Thin Edge Event
+---
+title: Sending Events
+tags: [Getting Started, Telemetry]
+sidebar_position: 6
+---
+
+# Sending Events
 
 Events on thin-edge.io can be used to trigger signals when some event happens in the system.
 For example, a person entering a room or someone logging into a machine/website can all be represented as events.

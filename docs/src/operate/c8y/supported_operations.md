@@ -1,3 +1,9 @@
+---
+title: Supported Operations
+tags: [Operate, Cumulocity, Operation]
+sidebar_position: 1
+---
+
 # thin-edge.io Supported Operations
 
 ## Supported Operations concepts

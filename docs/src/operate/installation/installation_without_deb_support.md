@@ -1,3 +1,9 @@
+---
+title: Install on Linux
+tags: [Installation, Unix]
+sidebar_position: 2
+---
+
 # How to install `thin-edge.io` on any Linux OS (no deb support)?
 
 ## `thin-edge.io` on supported platforms

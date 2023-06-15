@@ -1,3 +1,9 @@
+---
+title: Reference
+tags: [Reference]
+sidebar_position: 6
+---
+
 # Reference Guides
 
 ## Setup
@@ -5,7 +11,7 @@
 
 ## Configuration files
 - [Thin-edge.io configuration files](./thin-edge-config-files.md)
-- [MQTT bridge configuration](./bridged-topics.md)
+- [MQTT bridge configuration](./mqtt-topics.md)
 - [Init System Configuration File](./init-system-config.md)
 
 ## tedge CLI

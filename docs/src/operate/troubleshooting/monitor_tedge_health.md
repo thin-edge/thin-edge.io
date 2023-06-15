@@ -1,3 +1,9 @@
+---
+title: Monitoring Service Health
+tags: [Operate, Monitoring]
+sidebar_position: 1
+---
+
 # How to monitor health of tedge daemons
 
 The health of tedge daemons like `tedge-mapper`, `tedge-agent` etc can be monitored via MQTT.

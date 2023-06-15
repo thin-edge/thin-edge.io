@@ -1,3 +1,9 @@
+---
+title: Child Device Configuration Management
+tags: [Extend, Cumulocity, Child Device, Configuration]
+sidebar_position: 6
+---
+
 # Enable configuration management on child devices
 
 Configuration management can be enabled for child devices using the same `c8y-configuration-plugin`,

@@ -1,3 +1,9 @@
+---
+title: Enable Software Managament Support
+tags: [Operate, Installation, Software Management]
+sidebar_position: 4
+---
+
 # Install and enable the software management feature
 
 ```admonish note

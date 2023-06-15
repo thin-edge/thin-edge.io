@@ -1,3 +1,9 @@
+---
+title: "`tedge disconnect`"
+tags: [Reference, CLI]
+sidebar_position: 1
+---
+
 # The `tedge disconnect` command
 
 ```console

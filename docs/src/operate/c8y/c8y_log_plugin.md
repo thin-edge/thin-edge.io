@@ -1,3 +1,9 @@
+---
+title: Log management
+tags: [Operate, Cumulocity, Log Files]
+sidebar_position: 3
+---
+
 # How to retrieve logs with the log plugin
 
 You can now access any type of logs directly from your Cumulocity UI, using the

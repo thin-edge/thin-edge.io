@@ -1,3 +1,9 @@
+---
+title: Init System
+tags: [Operate, Configuration, Unix]
+sidebar_position: 3
+---
+
 # How to use thin-edge.io with your preferred init system
 
 thin-edge.io works seamlessly with `systemd` on the CLI commands `tedge connect` and `tedge disconnect`.

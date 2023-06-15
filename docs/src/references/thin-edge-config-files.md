@@ -1,3 +1,9 @@
+---
+title: Configuration files
+tags: [Reference, Configuration]
+sidebar_position: 2
+---
+
 # Thin-edge config files
 
 Thin-edge.io requires config files for its operation. The `tedge init` command is used to create

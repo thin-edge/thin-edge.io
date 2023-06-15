@@ -1,3 +1,9 @@
+---
+title: Connecting to Cumulocity IoT
+tags: [Getting Started, Cumulocity, Connection]
+sidebar_position: 2
+---
+
 # Connect your device to Cumulocity IoT
 
 The very first step to enable `thin-edge.io` is to connect your device to the cloud.
@@ -200,6 +206,6 @@ You should observe a "temperature measurement" graph with the new data point.
 You can now:
 * learn how to [send various kind of telemetry data](send-thin-edge-data.md)
   using the cloud-agnostic [Thin-Edge-Json data format](../understand/thin-edge-json.md),
-* or have a detailed view of the [topics mapped to and from Cumulocity](../references/bridged-topics.md#cumulocity-mqtt-topics)
+* or have a detailed view of the [topics mapped to and from Cumulocity](../references/mqtt-topics.md#cumulocity-mqtt-topics)
   if you prefer to use directly Cumulocity specific formats and protocols.
 * learn how to [add custom fragments to cumulocity](../operate/c8y/c8y_fragments.md).

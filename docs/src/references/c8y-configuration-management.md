@@ -1,3 +1,9 @@
+---
+title: Device Configuration Management
+tags: [Reference, Configuration]
+sidebar_position: 8
+---
+
 # Device Configuration Management using Cumulocity
 
 Thin-edge provides an operation plugin to

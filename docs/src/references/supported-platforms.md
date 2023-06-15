@@ -1,3 +1,9 @@
+---
+title: Supported Platform
+tags: [Reference, Installation]
+sidebar_position: 1
+---
+
 # thin-edge.io platform support
 
 Common requirements for all systems are:

@@ -1,3 +1,9 @@
+---
+title: Connecting to AWS IoT
+tags: [Getting Started, AWS, Connection]
+sidebar_position: 4
+---
+
 # Connect your device to AWS IoT
 
 The very first step to enable **thin-edge.io** is to connect your device to the cloud.
@@ -165,5 +171,5 @@ You can now:
 
 * learn how to [send various kind of telemetry data](send-thin-edge-data.md)
   using the cloud-agnostic [Thin-Edge-Json data format](../understand/thin-edge-json.md),
-* or have a detailed view of the [topics mapped to and from AWS](../references/bridged-topics.md#aws-mqtt-topics)
+* or have a detailed view of the [topics mapped to and from AWS](../references/mqtt-topics.md#aws-mqtt-topics)
   if you prefer to use directly AWS specific formats and protocols.

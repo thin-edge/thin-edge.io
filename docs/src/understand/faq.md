@@ -1,3 +1,9 @@
+---
+title: Architecture FAQ
+tags: [Concept]
+sidebar_position: 1
+---
+
 # Architecture FAQ
 
 ## Design principles

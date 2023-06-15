@@ -1,3 +1,9 @@
+---
+title: Health Monitoring
+tags: [Operate, Cumulocity, Monitoring]
+sidebar_position: 8
+---
+
 # How to monitor health of service from Cumulocity IoT
 
 The health of a `thin-edge.io` service or any other `service` that is running on the `thin-edge.io` device

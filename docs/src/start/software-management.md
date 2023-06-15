@@ -1,17 +1,23 @@
+---
+title: Updating Software
+tags: [Getting Started, Software Management]
+sidebar_position: 9
+---
+
 # Manage the software on your devices from Cumulocity cloud
 
 This document describes how to manage the software modules that are installed on a thin-edge device from the
 cloud using the **software management** feature of thin-edge.io.
 
-```admonish note
+:::note
 This tutorial shows the Debian based distributions **apt** package manager use-case powered by our official **apt** plugin.
 Other package managers can be supported by adding a plugin.
 Refer to [this](../extend/write-my-software-management-plugin.md) document on how to write a plugin to support software management for any other software type.
-```
+:::
 
-```admonish warning
+:::warning
 As of now, software management feature is supported only from Cumulocity cloud, which supports only `install` and `delete` as an action of c8y_SoftwareUpdate operation.
-```
+:::
 
 Three components are required on your devices to enable software management:
 
@@ -90,9 +96,9 @@ From the Cumulocity cloud `Software` tab of a device, software can be
 
 * [removed](https://cumulocity.com/guides/users-guide/device-management/#to-delete-software-from-a-device)
 
-```admonish note
+:::note
 Once the above mentioned operation is selected, one should click on **Apply changes** to confirm operation.
-```
+:::
 
 ## Default plugin
 

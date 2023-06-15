@@ -1,3 +1,9 @@
+---
+title: Init System Configuration
+tags: [Reference, Unix]
+sidebar_position: 3
+---
+
 # Init System Configuration File
 
 To support multiple init systems and service managers, `tedge` requires the `/etc/tedge/system.toml` file.

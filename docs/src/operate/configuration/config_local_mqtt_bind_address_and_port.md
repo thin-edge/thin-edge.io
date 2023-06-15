@@ -1,3 +1,9 @@
+---
+title: Mosquitto Configuration
+tags: [Operate, Configuration, MQTT]
+sidebar_position: 2
+---
+
 # How to configure the local port and bind address in mosquitto?
 
 Configuring a mosquitto port and bind address in thin-edge.io is a three-step process.

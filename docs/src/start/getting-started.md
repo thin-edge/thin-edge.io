@@ -1,3 +1,9 @@
+---
+title: A tour of thin-edge
+tags: [Getting Started, Cumulocity]
+sidebar_position: 1
+---
+
 # Getting started with thin-edge.io on a Raspberry Pi
 
 After following this tutorial you will have an overview of the installation and configuration of thin-edge.io. As an example, a Raspberry Pi is used. This tutorial explains in small steps to reach the goal of sending data to Cumulocity IoT and performing some additional device management tasks.

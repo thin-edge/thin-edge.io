@@ -1,3 +1,9 @@
+---
+title: Log Files
+tags: [Operate, Log Files]
+sidebar_position: 1
+---
+
 # The thin-edge logs
 The logs that are useful for debugging thin-edge.io break down into logs that are created by thin-edge itself and by third party components.
 

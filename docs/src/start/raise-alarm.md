@@ -1,4 +1,10 @@
-# Thin Edge Alarm
+---
+title: Raising Alarms
+tags: [Getting Started, Telemetry]
+sidebar_position: 7
+---
+
+# Raising Alarms
 
 Alarms on thin-edge.io can be used to create alerts, represent state changes etc.
 For example, an alarm can be raised when a certain measurement value breaches some threshold (like high temperature) or when an unexpected event occurs in the system (like a sensor failure).

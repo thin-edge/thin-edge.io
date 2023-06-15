@@ -1,3 +1,9 @@
+---
+title: "`tedge connect`"
+tags: [Reference, CLI]
+sidebar_position: 1
+---
+
 # The `tedge connect` command
 
 ```console

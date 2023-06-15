@@ -1,3 +1,9 @@
+---
+title: Cloud Authentication
+tags: [Operate, Security, Cloud]
+sidebar_position: 1
+---
+
 # How to register?
 
 ## Create self-signed certificate

@@ -1,3 +1,9 @@
+---
+title: SmartRest Template
+tags: [Operate, Cumulocity]
+sidebar_position: 4
+---
+
 # How to use Cumulocity Custom SmartREST 2.0 Templates
 
 [Custom SmartRest Templates](https://cumulocity.com/guides/reference/smartrest-two) can be used to extend the functionality of a device to support more operations than what the [static SmartREST templates](https://cumulocity.com/guides/reference/smartrest-two/#mqtt-static-templates) offer.

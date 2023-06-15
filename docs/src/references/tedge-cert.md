@@ -1,3 +1,9 @@
+---
+title: "`tedge cert`"
+tags: [Reference, CLI]
+sidebar_position: 1
+---
+
 # The `tedge cert` command
 
 ```console

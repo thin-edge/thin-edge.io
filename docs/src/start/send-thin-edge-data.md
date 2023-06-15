@@ -1,4 +1,10 @@
-# Send Thin Edge JSON data
+---
+title: Sending Measurements
+tags: [Getting Started, Telemetry]
+sidebar_position: 5
+---
+
+# Sending Measurements
 
 Once your Thin Edge device is configured and connected to an IoT cloud provider, you can start sending measurements.
 Refer to [Connecting to Cumulocity](./connect-c8y.md) or tutorials for other cloud providers 

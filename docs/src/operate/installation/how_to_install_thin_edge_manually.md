@@ -1,3 +1,9 @@
+---
+title: Install on Linux (Cont)
+tags: [Installation]
+sidebar_position: 3
+---
+
 # How to install thin-edge.io manually with OpenRC
 
 This tutorial will demo how to install thin-edge.io manually for a non-debian linux distribution that uses OpenRC as its init system.

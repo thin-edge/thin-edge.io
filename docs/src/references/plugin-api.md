@@ -1,3 +1,9 @@
+---
+title: Software Management Plugin API
+tags: [Reference, Software Management, API]
+sidebar_position: 10
+---
+
 # Software Management Plugin API
 
 Thin-edge uses plugins to delegate software management operations to the appropriate package manager/installer. The plugins are responsible for: installation of packages, uninstalls and queries.

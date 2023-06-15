@@ -1,3 +1,9 @@
+---
+title: Log File Management
+tags: [Reference, Log Files]
+sidebar_position: 7
+---
+
 # Log file management from Cumulocity
 
 Thin-edge provides an operation plugin to [fetch log files from the device on to Cumulocity](https://cumulocity.com/guides/users-guide/device-management/#logs).

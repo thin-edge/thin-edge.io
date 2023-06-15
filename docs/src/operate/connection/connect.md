@@ -1,3 +1,9 @@
+---
+title: Cloud Connection
+tags: [Operate, Cloud]
+sidebar_position: 1
+---
+
 # How to connect?
 
 ## Connect to Cumulocity IoT

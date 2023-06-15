@@ -1,3 +1,9 @@
+---
+title: Custom Fragments
+tags: [Operate, Cumulocity]
+sidebar_position: 2
+---
+
 # How to add custom fragments to Cumulocity
 
 ## Default fragments

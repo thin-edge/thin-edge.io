@@ -1,3 +1,7 @@
+---
+draft: true
+---
+
 # Index
 
 - [Overview](overview.md)
@@ -74,7 +78,7 @@
 - [Reference](references/index.md)
   - [Supported platforms](references/supported-platforms.md)
   - [Thin-edge.io configuration files](references/thin-edge-config-files.md)
-  - [MQTT bridge configuration](references/bridged-topics.md)
+  - [MQTT bridge configuration](references/mqtt-topics.md)
   - [Init System Configuration File](references/init-system-config.md)
   - [`tedge` command](references/tedge.md)
     - [`tedge cert` command](references/tedge-cert.md)

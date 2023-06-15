@@ -1,3 +1,9 @@
+---
+title: JWT Token
+tags: [Operate, Cumulocity, JWT]
+sidebar_position: 11
+---
+
 ## How to retrieve a JWT Token to authenticate on Cumulocity
 
 ## Overview

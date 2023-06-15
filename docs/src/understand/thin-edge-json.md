@@ -1,3 +1,9 @@
+---
+title: Thin Edge JSON
+tags: [Concept, MQTT]
+sidebar_position: 1
+---
+
 # Thin Edge JSON format
 
 Thin Edge JSON is a lightweight format used in `thin-edge.io` to represent measurements data.

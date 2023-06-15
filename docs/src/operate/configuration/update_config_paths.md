@@ -1,3 +1,9 @@
+---
+title: Path Configuration
+tags: [Operate, Configuration, Unix]
+sidebar_position: 4
+---
+
 # How to change default paths
 
 The `tedge config set` command can be used to change various file system paths used by tedge components.

@@ -1,3 +1,9 @@
+---
+title: Configuration Tools
+tags: [Operate, Configuration]
+sidebar_position: 1
+---
+
 # How-to configure `thin-edge.io`
 
 `thin-edge.io` can be configured in a few different ways:

@@ -1,3 +1,9 @@
+---
+title: Getting Started
+tags: [Getting Started]
+sidebar_position: 1
+---
+
 # Getting started
 
 - [Install](../operate/installation/installation.md),

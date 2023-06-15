@@ -1,3 +1,9 @@
+---
+title: Domain Model
+tags: [Concept, MQTT]
+sidebar_position: 1
+---
+
 # thin-edge Domain Model
 
 The following section introduces the **thin-edge** domain model.

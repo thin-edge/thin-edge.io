@@ -1,3 +1,9 @@
+---
+title: "`tedge mqtt`"
+tags: [Reference, CLI]
+sidebar_position: 1
+---
+
 # The `tedge mqtt` command
 
 ```console

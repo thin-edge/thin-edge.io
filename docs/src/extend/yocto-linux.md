@@ -1,3 +1,9 @@
+---
+title: Thin-edge on Yocto
+tags: [Extend, Build]
+sidebar_position: 2
+---
+
 # Build Thin Edge for a Yocto Linux distribution
 
 Yocto Project enables you to create a customised Linux distribution for your IoT devices. You can select the base image
