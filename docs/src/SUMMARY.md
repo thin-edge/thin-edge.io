@@ -1,7 +1,7 @@
 # Index
 
 - [Overview](001_overview.md)
-- [Getting started](tutorials/tutorials.md)
+- [Getting started](tutorials/index.md)
   - [Getting started](tutorials/getting-started.md)
   - [Connect my device to Cumulocity IoT](tutorials/connect-c8y.md)
   - [Connect my device to Azure IoT](tutorials/connect-azure.md)
@@ -12,13 +12,13 @@
   - [Monitor my device](tutorials/device-monitoring.md)
   - [Manage my device software](tutorials/software-management.md)
 
-- [Concepts](understand/architecture.md)
+- [Concepts](understand/index.md)
   - [Architecture FAQ](understand/faq.md)
   - [Thin Edge Json](understand/thin-edge-json.md)
   - [The Mapper](understand/mapper.md)
   - [Software Management](understand/software-management.md)
   
-- [Operate devices](operate/howto-guides.md)
+- [Operate devices](operate/index.md)
   - [Installation](operate/installation/index.md)
     - [How to install thin-edge.io?](operate/installation/002_installation.md)
     - [How to install thin-edge.io on any Linux OS (no deb support)?](operate/installation/015_installation_without_deb_support.md)
@@ -65,13 +65,13 @@
   - [Write my software management plugin](extend/write-my-software-management-plugin.md)
   - [Build Thin Edge for a Yocto Linux distribution](extend/yocto-linux.md)
 
-- [Contribute to thin-edge](contribute/developer.md)
+- [Contribute to thin-edge](contribute/index.md)
   - [Building](contribute/BUILDING.md)
   - [Using a dev container](contribute/DEV_CONTAINER.md)
   - [Debian package hosting](contribute/DEBIAN_PACKAGE_HOSTING.md)
   - [Installing Docker](contribute/INSTALLING_DOCKER.md)
 
-- [Reference](references/references.md)
+- [Reference](references/index.md)
   - [Supported platforms](references/supported-platforms.md)
   - [Thin-edge.io configuration files](references/thin-edge-config-files.md)
   - [MQTT bridge configuration](references/bridged-topics.md)

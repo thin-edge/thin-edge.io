@@ -25,7 +25,7 @@ that introduces `thin-edge.io` and guides you on how to install it on a Raspberr
 connect your device to [Cumulocity IoT](https://www.cumulocity.com/guides/concepts/introduction/),
 and then monitor it from the cloud.
 
-You can also explore the main use-cases using these [tutorials](tutorials/tutorials.md).
+You can also explore the main use-cases using these [tutorials](tutorials/index.md).
 You will learn to:
 
 - [install thin-edge on your specific hardware](operate/installation/002_installation.md),
@@ -45,8 +45,8 @@ You will learn to:
 
 Thin-edge provides a set of building blocks to operate, configure, update, monitor your devices.
 
-* Use the [how-to guides](operate/howto-guides.md) on a daily basis
-* Refer to the [reference guides](references/references.md) for any in-depth details
+* Use the [how-to guides](operate/index.md) on a daily basis
+* Refer to the [reference guides](references/index.md) for any in-depth details
 
 ## How to extend thin-edge.io
 
@@ -64,4 +64,4 @@ All contributions are greatly appreciated.
 It can be by reporting issues, improving this documentation, adding new extensions or contributing to the main code base.
 
 Please refer to the [contribution guide](https://github.com/thin-edge/thin-edge.io/blob/main/CONTRIBUTING.md)
-and the [contributor documentation](contribute/developer.md).
+and the [contributor documentation](contribute/index.md).
