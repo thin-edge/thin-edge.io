@@ -36,6 +36,7 @@ use tedge_mqtt_ext::Topic;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
 use tedge_utils::file::move_file;
+use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
 
 use crate::config::FirmwareManagerConfig;
@@ -334,7 +335,8 @@ impl FirmwareManagerActor {
                 &cache_file_path,
                 PermissionEntry::new(None, None, None),
             )
-            .await?;
+            .await
+            .map_err(FileError::from)?;
         }
 
         let symlink_path =
