@@ -169,6 +169,9 @@ The needs to be readable by `thin-edge.io` user - `tedge` - and should have perm
 
 In this example we want `thin-edge.io` to pick up a message on specific topic and execute the command on the device, our topic is `c8y/s/ds`.
 We also know that the message we expect is going to use SmartRest template `511` and our plugin is located in `/etc/tedge/operations/command`.
+The operation is configured to `timeout` after 10 seconds, to avoid it from running for too long/forever.
+
+
 Then we need to add the configuration to the file (`/etc/tedge/operations/c8y/c8y_Command`):
 
 ```toml
@@ -176,6 +179,12 @@ Then we need to add the configuration to the file (`/etc/tedge/operations/c8y/c8
   topic = "c8y/s/ds"
   on_message = "511"
   command = "/etc/tedge/operations/command"
+  timeout = 10
+```
+
+```admonish note
+The `timeout` that is configured will be in seconds. If a custom operation is not configured with a `timeout` value, then it will use default `timeout`,.i.e. 3600 seconds.
+If the operation does not complete within that specified `timeout` period, then the operation will be stopped/killed, and marked as failed in the cloud.
 ```
 
 And now the content of our command plugin:
