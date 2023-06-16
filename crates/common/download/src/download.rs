@@ -179,7 +179,8 @@ impl Downloader {
             target_file_path,
             self.target_permission.clone(),
         )
-        .await?;
+        .await
+        .map_err(FileError::from)?;
 
         Ok(())
     }

@@ -52,6 +52,9 @@ pub enum FileError {
 
     #[error("No write access to {path:?}")]
     NoWriteAccess { path: PathBuf },
+
+    #[error(transparent)]
+    FileMove(#[from] FileMoveError),
 }
 
 pub fn create_directory<P: AsRef<Path>>(
@@ -135,20 +138,23 @@ pub async fn move_file(
     src_path: impl AsRef<Path>,
     dest_path: impl AsRef<Path>,
     new_file_permissions: PermissionEntry,
-) -> Result<(), FileError> {
+) -> Result<(), FileMoveError> {
     let src_path = src_path.as_ref();
     let dest_path = dest_path.as_ref();
 
     if !dest_path.exists() {
         if let Some(dir_to) = dest_path.parent() {
-            tokio::fs::create_dir_all(dir_to).await?;
+            tokio::fs::create_dir_all(dir_to)
+                .await
+                .map_err(|err| FileMoveError::new(src_path, dest_path, err))?;
             debug!("Created parent directories for {:?}", dest_path);
         }
     }
 
     let original_permission_mode = match dest_path.is_file() {
         true => {
-            let metadata = get_metadata(src_path)?;
+            let metadata = get_metadata(src_path)
+                .map_err(|err| FileMoveError::new(src_path, dest_path, err))?;
             let mode = metadata.permissions().mode();
             Some(mode)
         }
@@ -161,7 +167,8 @@ pub async fn move_file(
         .or_else(|_| {
             tokio::fs::copy(src_path, dest_path).and_then(|_| tokio::fs::remove_file(src_path))
         })
-        .await?;
+        .await
+        .map_err(|err| FileMoveError::new(src_path, dest_path, err))?;
 
     debug!("Moved file from {:?} to {:?}", src_path, dest_path);
 
@@ -173,13 +180,37 @@ pub async fn move_file(
         new_file_permissions
     };
 
-    file_permissions.apply(dest_path)?;
+    file_permissions
+        .apply(dest_path)
+        .map_err(|err| FileMoveError::new(src_path, dest_path, err))?;
     debug!(
         "Applied permissions: {:?} to {:?}",
         file_permissions, dest_path
     );
 
     Ok(())
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Could not move file from {src:?} to {dest:?}")]
+pub struct FileMoveError {
+    src: Box<Path>,
+    dest: Box<Path>,
+    source: anyhow::Error,
+}
+
+impl FileMoveError {
+    fn new(
+        src_path: &Path,
+        dest_path: &Path,
+        source_err: impl std::error::Error + Send + Sync + 'static,
+    ) -> FileMoveError {
+        FileMoveError {
+            src: Box::from(src_path),
+            dest: Box::from(dest_path),
+            source: anyhow::Error::from(source_err),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Default, Clone)]

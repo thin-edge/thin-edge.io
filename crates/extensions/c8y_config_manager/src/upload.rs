@@ -36,6 +36,7 @@ use tedge_timer_ext::SetTimeout;
 use tedge_utils::file::create_directory_with_user_group;
 use tedge_utils::file::create_file_with_user_group;
 use tedge_utils::file::move_file;
+use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
 
 pub struct ConfigUploadManager {
@@ -301,7 +302,9 @@ impl ConfigUploadManager {
                     config_response.get_child_id()
                 );
                 let path_to = Path::new(path_to);
-                move_file(path_from, path_to, PermissionEntry::default()).await?;
+                move_file(path_from, path_to, PermissionEntry::default())
+                    .await
+                    .map_err(FileError::from)?;
             }
             // send 119
             let child_plugin_config = PluginConfig::new(Path::new(&format!(
