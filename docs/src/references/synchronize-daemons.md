@@ -19,18 +19,6 @@ Thin-edge.io has three main issues for synchronizing the daemons
 
 3. Some of the daemons are dependent on the `tedge-mapper-c8y`(cloud mapper) file system to create the supported operations file.
 
-In the existing solution, the thin-edge daemon interdependency was solved using a workaround by
-creating the `persistent session` with the broker when the `daemon is installed`. 
-For example, when the tedge-agent is installed, it will create a session with the MQTT broker. So, when the tedge-agent is down the broker
-will buffer the messages and delivers once it comes up.
-
-The problem with the existing workaround is
-- The MQTT broker has to be up and running while installing the thin-edge components to create the session
-- If in case the init session fails, then thin-edge daemons have to be started in a strict order,
- else the first message will be lost. i.e tedge-agent has to be started before the tedge-mapper-c8y
-- Also, if the init session is done twice, then also the messages will be lost
-
-
 # Proposed solutions and their Pros and Cons
 
 ## Proposal 1: Use the `health check` mechanism
@@ -66,48 +54,56 @@ topic to receive the health status from the tedge-agent. Based on this the mappe
 -   This will be a hard-coded dependency of the name of the plugin and can’t be updated on the fly if someone wants to change the name of the daemon
     or wants to add a new daemon.
 
-## Proposal 2:  Introduce an `init message` mechanism
 
-Make all the tedge components publish a `retained init` message describing their role (software management, config management, etc)
- and other details specific to that role.
+    ## Proposal 2:  Introduce an `init message` mechanism
 
-The proposed topic will be `tedge/<device-id>/init/<cloud>`.
-Here `<cloud>` could be c8y, azure, aws, etc
+    ```admonish note
+    Pre-condition for this proposal is that the `plugins` must be `cloud-agnostic` and the mappers will be `cloud-specific`.
+    The plugins will be grouped based on the roles they perform. For example, software-management, device-restart, config-management, log-management, firmware-management,.etc.
+    ```
 
-The message template is {Operation_name: <content>, Operation_name:<content>, Config_types: type1..typen}.
-Here `Operation_name` is the name of the operation to be published to the cloud and 
-the `content` is the content of the operation file, if any.
-Here `Config_types` is the configuration types that are supported by that particular daemon.
+    The tedge plugins must publish a `retained init` message describing their role (software-management, config management, etc)
+     and other details specific to that role.
 
-Example 1:
-- When the tedge-mapper-c8y is started, it will subscribe to `tedge/<device-id>/init/#` topic
-- When tedge-agent is started, it will publish `{}` an empty `init` message on to `tedge/init/c8y/tedge-agent`
-- Now the mapper picks up this message and creates the `c8y_Restart, c8y_SoftwareUpdat` supported operations file in `/etc/tedge/operations/c8y`. 
-- Mapper sends the updated supported operations list to the c8y cloud.
-- Also, now that the tedge-agent is up and running, the tedge-mapper-c8y will publish the request to get the
- software list on `tedge/commands/req/software/list`.
-- Now the tedge-agent processes this request and sends the software list to the mapper, once the mapper gets the response it will forward it to the c8y cloud.
+    The proposed topic will be `tedge/<device-id>/init/<cloud>`.
+    Here `<cloud>` component is `optional` and could be c8y, azure, aws, etc
 
-Example 2,
-- When tedge-mapper-c8y is started, it will subscribe to `tedge/<device-id>/init/#` topic
-- When c8y-log-plugin is started, it will publish {"LogfileRequest":"", "LogTypes": "software-management, mosquitto-log"} on to `tedge/thin-edge/init` topic
-- Now the mapper picks up this message and creates the c8y_LogfileRequest operation file in `/etc/tedge/operations/c8y`.
-- Also, the mapper creates the `c8y-log-plugin.toml` file, which contains the `supported log types` in `/etc/tedge/c8y`.
-- Mapper sends the updated supported operations list to the c8y cloud. Also, it sends the supported `log types`(118,software-management, mosquitto-log) to the c8y cloud.
+    The message template is {Operation_name: <content>, Operation_name:<content>, Configs: type1..typen}.
+    Here `Operation_name` is the name of the operation to be published to the cloud and 
+    the `content` is the content of the operation file, if any.
+    Here `Configs` is the other configuration information that is to be passed to the cloud.
+    For Example, in case of `log-plugin` the `Configs` is log types that are supporeted.
 
-> Note: The mapper can also subscribe to cloud-specific init topics like `tedge/<device-id>/init/c8y`, to get a init message from a cloud-specific plugin,
-that does not belong to any of the generic operations categories. For example, any custom operation plugin in case of c8y cloud.
+    Example 1:
+    - When the tedge-mapper-c8y is started, it will subscribe to `tedge/<device-id>/init/#` topic
+    - When tedge-agent is started, it will publish supported operations (software-management, device-restart) as part of `init` message on to `tedge/<device-id>/init` topic.
+    - Now the c8y-mapper picks up this message and creates the `c8y_Restart, c8y_SoftwareUpdate` supported operations file in `/etc/tedge/operations/c8y`. 
+    - Mapper sends the updated supported operations list (c8y_Restart, c8y_SoftwareUpdate) to the c8y cloud.
+    - Also, now that the tedge-agent is up and running, the tedge-mapper-c8y will publish the request to get the
+     software list on `tedge/commands/req/software/list`.
+    - Now the tedge-agent processes this request and sends the software list to the mapper, once the mapper gets the response it will forward it to the c8y cloud.
+    - Now onwards, when the operation request comes for the tedge-agent, if the operation present in the mapper's operation list, then it can forward the operation.
 
-Pros:
--   This will remove the file system dependency when the daemons want to create the supported operation files on the tedge-mapper-c8y file system.
--	No dependency on mapper, no hard-coded list of plugins
--	Very much cloud agnostic because the plugins are categorized based on roles not cloud-specific.
- For example, the `log` plugin can be used by c8y, azure, aws, etc.
- Based on the mapper type, the operations will be created in those specific directories and the supported operations list will be forwarded to the particular cloud.
+    Example 2,
+    - When tedge-mapper-c8y is started, it will subscribe to `tedge/<device-id>/init` topic
+    - When c8y-log-plugin is started, it will publish {"LogfileRequest":"", "Configs": "LogTypes": {"software-management, mosquitto-log"}} on to `tedge/thin-edge/init` topic
+    - Now the mapper picks up this message and creates the c8y_LogfileRequest operation file in `/etc/tedge/operations/c8y`.
+    - Mapper sends the updated supported operations list to the c8y cloud. Also, it sends the supported `log types`(118,software-management, mosquitto-log) to the c8y cloud.
+    - When there is change in the `log types` the plugin must inform the new list to the mapper through the `init` topic,
+     so that the supported logs types are reflected in the cloud side.
+
+    > Note: The mapper can also subscribe to cloud-specific init topics like `tedge/<device-id>/init/c8y`, to get a init message from a cloud-specific plugin,
+    that does not belong to any of the generic operations categories. For example, any custom operation plugin in case of c8y cloud.
     
-Cons:
--   Need one more topic, and one more message format, which might be challenging to maintain.
+    Pros:
+    -   This will remove the file system dependency when the daemons want to create the supported operation files on the tedge-mapper-c8y file system.
+    -	No dependency on mapper, no hard-coded list of plugins
+    -	Very much cloud agnostic because the plugins are categorized based on roles not cloud-specific.
+     For example, the `log` plugin can be used by c8y, azure, aws, etc.
+     Based on the mapper type, the operations will be created in those specific directories and the supported operations list will be forwarded to the particular cloud.
 
+    Cons:
+    -   Need one more topic, and one more message format, which might be challenging to maintain.
 
 # Shutting down or removing the plugin permanently
  
