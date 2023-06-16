@@ -357,16 +357,16 @@ impl Actor for ConfigManagerActor {
         self.get_pending_operations_from_cloud().await?;
 
         while let Some(event) = self.messages.recv().await {
-            match event {
-                ConfigInput::MqttMessage(message) => {
-                    self.process_mqtt_message(message).await?;
-                }
-                ConfigInput::FsWatchEvent(event) => {
-                    self.process_file_watch_events(event).await?;
-                }
+            let result = match event {
+                ConfigInput::MqttMessage(message) => self.process_mqtt_message(message).await,
+                ConfigInput::FsWatchEvent(event) => self.process_file_watch_events(event).await,
                 ConfigInput::OperationTimeout(timeout) => {
-                    self.process_operation_timeout(timeout).await?;
+                    self.process_operation_timeout(timeout).await
                 }
+            };
+
+            if let Err(err) = result {
+                error!("Error processing event: {err:?}");
             }
         }
 
