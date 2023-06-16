@@ -1,34 +1,102 @@
 ---
-title: Understand the Concepts
+title: Concepts
 tags: [Concept]
 sidebar_position: 2
 ---
 
 # Thin-edge Concepts
 
-Thin-edge.io is an open-source framework to develop lightweight, smart and secure connected devices.
+Thin-edge is an open-source IoT development toolbox
+designed to ease the development of smart IoT agents
+with a versatile set of ready-to-use software components
+that can be easily combined with application-specific extensions.
 
-Cloud agnostic, thin-edge.io provides the foundations for cloud connectivity and device management,
-a set of pre-packaged  modules, plug & play connectors to cloud platforms,
-device certificate management, monitoring as well as built-in software and firmware management.
+## What
 
-On top of these foundations, telemetry applications can be built using a combination of components provided by various IoT actors.
-The features provided by these components can be as diverse as low-level connectivity to IoT protocols,
-event-stream analytics, machine-learning-powered systems, or application specific processors.
+Thin-edge is designed to ease the development of smart IIoT agents.
+These agents run on the edge, at the frontier between IT cloud computing and OT industrial equipment,
+and act as gateways between the cloud and the devices embedded into smart equipment, machines or plants.
+They main functions and challenges are to:
+- establish a secure and reliable connection from the cloud to a fleet of smart equipment,
+- provide a uniform way to monitor and control these assets despite the diversity of hardware and protocol,
+- collect telemetry and monitoring data from the various sensors and processes running on the devices,
+- process these data with local analytics tools and push the relevant subset to the cloud,
+- monitor, configure and update from the cloud the agents and the attached devices.
 
-Built around an extensible architecture,
-thin-edge.io can be extended in various programming languages.
-Here are the key aspects of the thin-edge.io architecture:
+To implement these functions, thin-edge proposes to design an IIoT agent using a combination of software components,
+which are deployed on the main agent device as well as the set of interconnected embedded devices that form the equipment.
+On a typical thin-edge agent are running:
+- a local MQTT broker, currently [mosquitto](https://mosquitto.org/),
+  that is used as a message bus between all the components of the equipment,
+- an MQTT bridge connection between the local message bus and the remote cloud end-point,
+- thin-edge ready-to-use generic services that enable device management features, as monitoring or configuration and software updates,
+## How
 
-1. The components are processes exchanging messages over an MQTT bus.
+To implement these functions, thin-edge proposes to design an IoT agent using a combination of software components,
+which are deployed on the main gateway device as well as the set of interconnected embedded devices that form the equipment.
 
-2. The MQTT bus is connected to the cloud, forwarding the messages published on cloud specific topics. 
+A typical thin-edge setup consists of the following components:
+- a local MQTT broker that is used as a message bus between all the components of the equipment
+- an MQTT bridge connection between the local message bus and the remote cloud end-point
+- thin-edge (out-of-the-box) device management services which provide features such as monitoring, configuration and software management
+- equipment-specific services that interact with the hardware that make the equipment,
+  abstracting the various protocol, publishing on the MQTT bus collected data and forwarding operation requests,
+- a cloud-specific service that maps the messages exchanged on the local bus with messages sent to or received from the cloud.
 
-2. A [canonical data format](thin-edge-json.md) let the components exchange telemetry data independently of the connected cloud.
-This is an optional feature, and the components are free to also use cloud specific data formats.
+The first point to note is that all these software components can be provided by independent vendors:
+by the thin-edge open-source project, by the equipment maker, by the IoT application developer
+or even by cloud providers, hardware manufacturers and protocol implementors. 
+Their interoperability is based on:
+- ubiquitous protocols: JSON over MQTT and HTTP,
+- dynamic and loose inter-process communication with no constraint on programming tools nor software placement,
+- domain-specific APIs that can be used independently:
+  for measurements, events, alarms, configurations, software updates, firmware updates,   
+- various extension points: for child devices, services, operations and clouds.
 
-3. The mapper processes are responsible for translating the canonical data format into cloud specific messages and vice versa.
+The second key point is that thin-edge not only defines a set of APIs
+but also provides a set of ready-to-use software components implementing the associated features.
+Out-of-the-box thin-edge supports telemetry and device management features on the main devices and child devices.
+These features are implemented by composable software components that
+- can be freely adapted, combined, removed or replaced,
+- and provide the foundation to start the development of an agent with generic but effective defaults,
+- on top of which can be incrementally implemented the specificities required by smart IIoT agents.
 
+## Why
+
+The aim of thin-edge is to reduce the development effort to build smart IoT agents
+without compromising on quality and feature completeness.
+
+- ready-to-use components provide sound foundations
+- interchangeable software components make it possible to adapt the generic agent to specific contexts
+- simple, yet flexible, extension points enable custom functionality to be added in a modular fashion
+
+## Who
+
+The flexibility of thin-edge means that it can be used at different levels.
+- As a beginner, the simplest option is to use thin-edge as a pre-assembled agent,
+  ready to be installed on a device and configured for a cloud account.
+  The [getting started guide](../start/index.md) gives a taste of what can be done with thin-edge out-of-the-box
+- As a cloud operator, no direct access to a device is required, except for occasional troubleshooting,
+  as most of the operations can be done remotely.
+  However, being able to operate directly a device gives the required understanding
+  to administrate a fleet of thin-edge devices with confidence.
+- As a __device operator__, be prepared to operate a device that is not running the pre-assembled thin-edge agent,
+  but an agent specifically designed for your equipment and application.
+  Among all the [available features](../operate/index.md),
+  some might have been configured differently, disabled, extended, replaced or even added.
+- As an __agent developer__, the nature of thin-edge let you
+  start the design of an agent with the pre-assembled agent
+  and to incrementally [configure, adapt and extend](../extend/index.md) the agent
+  to meet the requirements of the equipment and application.
+  Part of this work can be to implement software components
+  that interact with thin-edge through its JSON API over MQTT and HTTP
+  and are to be deployed on the main devices and the attached child devices.
+- As a contributor, you can [extend thin-edge using its Rust API](../contribute/index.md),
+  when the loosing coupling of MQTT and HTTP is not the more appropriate approach.
+  It can be to fuse 
 
 ![Overview](./images/thin-edge-overview.png)
 
+* A typical IIoT agent
+* Components & Features
+* Extension points
