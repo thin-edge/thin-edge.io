@@ -21,39 +21,37 @@ Thin-edge.io has three main issues for synchronizing the daemons
 
 # Proposed solutions and their Pros and Cons
 
-## Proposal 1: Use the `health check` mechanism
+## Using the `health check` mechanism to synchronize `tedge-mapper-c8y` and `tedge-agent`
 
-The mapper uses the health-check mechanism to detect the health of another daemon and perform all the cloud-specific
- actions for that daemon like updating the supported operations etc.
-In this, the `daemon` sends the health status `up` message once it's completely up. Then the `mapper` picks up this message and creates the required operation files and also sends the supported operation to the cloud.
-Also, now the mapper can start interacting with the daemon.
+- The `tedge-mapper-c8y` can use the health-check mechanism to detect the health of the `tedge-agent` and then send the request to the `tedge-agent`.
+- When the mapper starts it will subscribe to the `tedge/health/tedge-agent` topic.
+- When the `tedge-agent` starts, it will publish a `health` status (up/down) message on the `tedge/health/tedge-agent` topic.
+- Based on this `tedge-agent` health status message, the mapper can create the supported operations in the `/etc/tedge/operations/c8y` directory.
+- Mapper will send the supported operations list to the c8y cloud.
+- Mapper will send the request to the `software list`.
+- Once it receives the software list from `tedge-agent`, the mapper will send the list to the c8y cloud.
 
-Example 1,
-- When tedge-mapper-c8y is started, it will subscribe to `tedge/health/#` topic
-- When tedge-agent is started, it will publish health status as `up` on to `tedge/health/tedge-agent` topic
-- Now the mapper picks up this message and creates the supported operations file (c8y_SoftwareUpdate, etc) in `/etc/tedge/operations/c8y` with their content. 
-- Mapper sends the updated supported operations list to the c8y cloud.
-- Also, now that the tedge-agent is up and running, the tedge-mapper-c8y will publish the request to get the
- software list on `tedge/commands/req/software/list`.
-- Now the tedge-agent processes this request and sends the software list to the mapper, once the mapper gets the response it will forward it to the c8y cloud.
+### Retrieving the internal-id
+When the tedge-mapper-c8y starts, it will request the `internal id` of the `thin-edge` device.
+Which will be used by the mapper for further communication with the c8y cloud over HTTP.
 
-Example 2,
-- When tedge-mapper-c8y is started, it will subscribe to `tedge/health/#` topic
-- When c8y-log-plugin is started, it will publish health status as `up` on to `tedge/health/c8y-log-plugin` topic
-- Now the mapper picks up this message and creates the c8y_LogfileRequest operation file in `/etc/tedge/operations/c8y`.
-- Also the mapper creates the `c8y-log-plugin.toml` file, which contains the `supported log types` in `/etc/tedge/c8y`.
-- Mapper sends the updated supported operations list to the c8y cloud. Also, it sends the supported `log types`(118,software-management) to the c8y cloud.
+To get the `internal id`, the mapper needs the `JWT` token, which was retrieved over the `MQTT`.
+So, before sending the request to retrieve the `JWT` token on the `c8y/s/uat` topic,
+the mapper must check the health of the `c8y bridge`.
+When the bridge is up, it can send a request for the JWT token.
+Then the mapper will receive the `JWT` token on the `c8y/s/dat` topic.
 
-Pros: 
--   This will remove the file system dependency when the daemons want to create the supported operation files on the mapper file system.
-    For example, tedge-agent wants to create the supported operations files in /etc/tedge/operations/c8y directory.
+If there is any issue in retrieving the JWT token then the mapper must `re-try` again.
 
-Cons: 
--   This leads to hard dependency on the list of daemons in the mapper. For example, the tedge-mapper-c8y has to subscribe to tedge/health/tedge-agent
-topic to receive the health status from the tedge-agent. Based on this the mapper has to create a supported operation file in /etc/tedge/operations/c8y.
--   This will be a hard-coded dependency of the name of the plugin and can’t be updated on the fly if someone wants to change the name of the daemon
-    or wants to add a new daemon.
+Once the mapper possesses the JWT token, it can get the thin-edge device's internal-id.
+If there is any issue with getting the internal-id then the mapper must `re-try` getting the
+internal id.
 
+### Sending the software update output to the c8y cloud
+
+The software update/list operation result will be sent to the c8y cloud over `HTTPs`. 
+If there is any issue sending the operation status and list, it must check the reason for the error and,
+If the failure is due to the `internal-id` then it must get the internal id again and re-try sending the operation result.
 
     ## Proposal 2:  Introduce an `init message` mechanism
 
