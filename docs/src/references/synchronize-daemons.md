@@ -32,7 +32,9 @@ Thin-edge.io has three main issues for synchronizing the daemons
 - Mapper will send the request `software list` to `tedge-agent`.
 - Once it receives a software list from `tedge-agent`, the mapper will send the list to the c8y cloud.
 
-### Retrieving the internal-id
+### Communicating with Cumulocity over HTTP
+
+The `tedge-mapper-c8y` needs `internal-id` of the `thin-edge` device from Cumulocity to communicate over HTTP.
 When the tedge-mapper-c8y starts, it will request the `internal id` of the `thin-edge` device from cumulocity cloud.
 Which will be used by the mapper for further communication with the c8y cloud over HTTP.
 
@@ -44,16 +46,17 @@ Then the mapper will receive the `JWT` token on the `c8y/s/dat` topic.
 
 If there is any issue in retrieving the JWT token then the mapper must `re-try` again.
 
-Once the mapper possesses the JWT token, it can get the thin-edge device's internal-id.
+Once the mapper possesses the JWT token, it can get the thin-edge device's internal-id from Cumulocity.
 If there is any issue with getting the internal-id then the mapper must `re-try` getting the
 internal id.
 
-### Sending the software update output to the c8y cloud
+Once the `tedge-mapper-c8y` possesses the `internal-id`, the mapper can start using HTTP to communicate with the Cumulocity.
+While communicating with Cumulocity, If there is any issue it must check the reason for the error and,
+If the failure is due to the `internal-id` then it must get the internal id again and re-try communication with Cumulocify over HTTP.
 
-The software update/list operation result will be sent to the c8y cloud over `HTTPs`. 
+For example, The mapper sends software update/list operation result to the c8y cloud over `HTTP`.
 If there is any issue sending the operation status and list, it must check the reason for the error and,
-If the failure is due to the `internal-id` then it must get the internal id again and re-try sending the operation result.
-
+If the failure is due to the `internal-id` then it must get the internal id again and must re-try sending the operation result.
 
 
 ## (Rejected Proposal) Proposal 2:  Introduce an `init message` mechanism
