@@ -27,15 +27,16 @@ Thin-edge.io has three main issues for synchronizing the daemons
 - When the mapper starts it will subscribe to the `tedge/health/tedge-agent` topic.
 - When the `tedge-agent` starts, it will publish a `health` status (up/down) message on the `tedge/health/tedge-agent` topic.
 - Based on this `tedge-agent` health status message, the mapper can create the supported operations in the `/etc/tedge/operations/c8y` directory.
+- Check if the `c8y-bridge` is up before sending the init messages, including `supported operations` list.
 - Mapper will send the supported operations list to the c8y cloud.
-- Mapper will send the request to the `software list`.
-- Once it receives the software list from `tedge-agent`, the mapper will send the list to the c8y cloud.
+- Mapper will send the request `software list` to `tedge-agent`.
+- Once it receives a software list from `tedge-agent`, the mapper will send the list to the c8y cloud.
 
 ### Retrieving the internal-id
-When the tedge-mapper-c8y starts, it will request the `internal id` of the `thin-edge` device.
+When the tedge-mapper-c8y starts, it will request the `internal id` of the `thin-edge` device from cumulocity cloud.
 Which will be used by the mapper for further communication with the c8y cloud over HTTP.
 
-To get the `internal id`, the mapper needs the `JWT` token, which was retrieved over the `MQTT`.
+To get the `internal id` over HTTP, the mapper needs the `JWT` token, which was retrieved over the `MQTT`.
 So, before sending the request to retrieve the `JWT` token on the `c8y/s/uat` topic,
 the mapper must check the health of the `c8y bridge`.
 When the bridge is up, it can send a request for the JWT token.
@@ -53,7 +54,9 @@ The software update/list operation result will be sent to the c8y cloud over `HT
 If there is any issue sending the operation status and list, it must check the reason for the error and,
 If the failure is due to the `internal-id` then it must get the internal id again and re-try sending the operation result.
 
-    ## Proposal 2:  Introduce an `init message` mechanism
+
+
+## (Rejected Proposal) Proposal 2:  Introduce an `init message` mechanism
 
     ```admonish note
     Pre-condition for this proposal is that the `plugins` must be `cloud-agnostic` and the mappers will be `cloud-specific`.
