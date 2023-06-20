@@ -63,7 +63,7 @@ impl C8yMapperConfig {
         // The topics to subscribe = default internal topics + user configurable external topics
         let mut topics = Self::internal_topic_filter(&config_dir)?;
         for topic in tedge_config.c8y.topics.0.clone() {
-            if let Err(_) = topics.add(&topic) {
+            if topics.add(&topic).is_err() {
                 warn!("The configured topic '{topic}' is invalid and ignored.");
             }
         }
@@ -80,7 +80,6 @@ impl C8yMapperConfig {
     }
 
     pub fn internal_topic_filter(config_dir: &Path) -> Result<TopicFilter, C8yMapperConfigError> {
-        let operations = Operations::try_new(config_dir.join("operations/c8y"))?;
         let mut topic_filter: TopicFilter = vec![
             "c8y-internal/alarms/+/+",
             "c8y-internal/alarms/+/+/+",
@@ -92,8 +91,10 @@ impl C8yMapperConfig {
         .try_into()
         .expect("topics that mapper should subscribe to");
 
-        for topic in operations.topics_for_operations() {
-            topic_filter.add(&topic)?;
+        if let Ok(operations) = Operations::try_new(config_dir.join("operations").join("c8y")) {
+            for topic in operations.topics_for_operations() {
+                topic_filter.add(&topic)?;
+            }
         }
 
         Ok(topic_filter)
