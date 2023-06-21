@@ -99,4 +99,6 @@ The flexibility of thin-edge means that it can be used at different levels.
 
 * A typical IIoT agent
 * Components & Features
+* JSON over MQTT and HTTP
 * Extension points
+* Security
