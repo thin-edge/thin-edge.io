@@ -13,7 +13,7 @@ See this [tutorial](connect-azure.md), if you want to connect Azure IoT instead.
 
 Before you try to connect your device to AWS IoT, you need:
 
-* [Install `thin-edge.io` on your device](../operate/installation/002_installation.md).
+* [Install `thin-edge.io` on your device](../operate/installation/installation.md).
 
 You can now use [`tedge` command](../references/tedge.md) to:
 

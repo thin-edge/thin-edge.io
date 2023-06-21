@@ -33,7 +33,7 @@
 </details>
 
 ## Jump right in:
-* [Install thin-edge.io on your device](docs/src/operate/installation/002_installation.md)
+* [Install thin-edge.io on your device](docs/src/operate/installation/installation.md)
 * [Connect your device to Cumulocity](docs/src/start/connect-c8y.md)
 * [Connect your device to Azure](docs/src/start/connect-azure.md)
 * [Connect your device to AWS](docs/src/start/connect-aws.md)

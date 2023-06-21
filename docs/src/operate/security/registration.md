@@ -75,5 +75,5 @@ and try [`tedge cert create`](../../references/tedge-cert.md) once again.
 
 ## Next steps
 
-1. [How to connect?](../connection/004_connect.md)
-2. [How to use mqtt pub/sub?](../telemetry/005_pub_sub.md)
+1. [How to connect?](../connection/connect.md)
+2. [How to use mqtt pub/sub?](../telemetry/pub_sub.md)
