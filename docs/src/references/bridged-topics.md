@@ -88,7 +88,7 @@ The AWS topics are prefixed by `aws/`.
 
 ## Collectd topics
 
-When the [device monitoring feature is enabled](../tutorials/device-monitoring.md),
+When the [device monitoring feature is enabled](../start/device-monitoring.md),
 monitoring metrics are emitted by `collectd` on a hierarchy of MQTT topics.
 
 * `collectd/$HOSTNAME/#` - All the metrics collected on the device (which hostname is `$HOSTNAME`).
