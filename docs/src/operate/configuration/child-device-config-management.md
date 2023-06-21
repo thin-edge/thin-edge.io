@@ -26,7 +26,7 @@ The figure below illustrates the child-device concept.
 
 Configuration management can be enabled for child-devices using the same `c8y-configuration-plugin`,
 used for configuration management of the thin-edge device itself.
-You can read more about this plugin and its usage [here](../c8y/025_config_management_plugin.md).
+You can read more about this plugin and its usage [here](../c8y/config_management_plugin.md).
 
 Another piece of software referred to as a **child-device connector** is also required to coordinate configuration management
 on the child device from the thin-edge device over the protocol that is used to communicate with it.

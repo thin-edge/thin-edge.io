@@ -304,8 +304,8 @@ Caused by:
     Service mosquitto not found. Install mosquitto to use this command.
 ```
 
-mosquitto server has not been installed on the system and it is required to run this command, refer to [How to install thin-edge.io?](../installation/002_installation.md) to install mosquitto and try again.
+mosquitto server has not been installed on the system and it is required to run this command, refer to [How to install thin-edge.io?](../installation/installation.md) to install mosquitto and try again.
 
 ## Next steps
 
-1. [How to use mqtt pub/sub?](../telemetry/005_pub_sub.md)
+1. [How to use mqtt pub/sub?](../telemetry/pub_sub.md)

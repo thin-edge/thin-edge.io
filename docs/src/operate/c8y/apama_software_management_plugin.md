@@ -59,7 +59,7 @@ For Apama projects:
 1. The version must be suffixed with `::apama` as in `1.0::apama` or just `::apama` if no  version number is necessary.
 2. The uploaded binary must be a `zip` file that contains the `project` directory. If a directory named `project` is not found by the plugin at the root level in the zip, it is considered invalid.
 
-![Add new apama project in Software Repository](../../howto-guides/images/apama-plugin/apama-project-c8y-software-repository.png)
+![Add new apama project in Software Repository](../../images/apama-plugin/apama-project-c8y-software-repository.png)
 
 Once the software modules have been added to the software repository, these can be installed on the device just like any other software from the `Software` tab of the device in the Cumulocity device UI.
 

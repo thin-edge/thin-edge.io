@@ -1,6 +1,6 @@
 # Getting started
 
-- [Install](../operate/installation/002_installation.md),
+- [Install](../operate/installation/installation.md),
 - [Getting Started](./getting-started.md)
 
 ## Cloud connections

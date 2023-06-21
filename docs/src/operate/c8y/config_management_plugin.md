@@ -40,11 +40,11 @@ ar -x ./c8y-configuration-plugin_<version>_<arch>.deb | tar -xf ./data.tar.xz
 ```
 
 The binary is extracted in `<current directory>/usr/bin`.
-For more details, refer to our guide [Extracting from debian package](../installation/015_installation_without_deb_support.md#extracting-binaries-from-deb-packages).
+For more details, refer to our guide [Extracting from debian package](../installation/installation_without_deb_support.md#extracting-binaries-from-deb-packages).
 
 ### Building from sources
 
-Follow our guide [Building thin-edge.io](../../contribute/BUILDING.md) and [Building from source](../installation/015_installation_without_deb_support.md#if-building-from-source).
+Follow our guide [Building thin-edge.io](../../contribute/BUILDING.md) and [Building from source](../installation/installation_without_deb_support.md#if-building-from-source).
 
 ```shell
 cargo build --release -p c8y-configuration-plugin
@@ -110,7 +110,7 @@ sudo c8y-configuration-plugin
 Navigate to your Cumulocity Device Management and the desired device. Open its **Configuration** tab.
 You can find `c8y-configuration-plugin` and more are listed as supported configuration types, as declared in the plugin configuration file in step 1.
 
-![Cumulocity Configuration Management Upload](../../howto-guides/images/c8y-config-plugin-upload.png)
+![Cumulocity Configuration Management Upload](../../images/c8y-config-plugin-upload.png)
 
 This is the configuration file of `c8y-configuration-plugin`, where you can add file entries that you want to manage with Cumulocity.
 
@@ -122,7 +122,7 @@ The `c8y-configuration-plugin.toml` file can also be updated from the cloud in a
 
 Then, go back to the **Configuration** tab of your desired device in Cumulocity.
 
-![Cumulocity Configuration Management Download](../../howto-guides/images/c8y-config-plugin-download.png)
+![Cumulocity Configuration Management Download](../../images/c8y-config-plugin-download.png)
 
 Click on the config file entry from the **DEVICE SUPPORTED CONFIGURATIONS** files list.
 You can choose the file that you uploaded from the **AVAILABLE SUPPORTED CONFIGURATIONS** section, and then apply that file to your device by clicking on the **Send configuration to device** button.

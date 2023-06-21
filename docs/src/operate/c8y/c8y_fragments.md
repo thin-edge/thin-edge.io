@@ -51,7 +51,7 @@ sudo systemctl restart tedge-mapper-c8y.service
 ```
 
 In the Cumulocity UI this will looks something like this:
-![c8y\_custom\_fragments](../../howto-guides/images/c8y_custom_fragments.png)
+![c8y\_custom\_fragments](../../images/c8y_custom_fragments.png)
 
 For information on which fragments Cumulocity supports please see the
 [Cumulocity API docs](https://cumulocity.com/guides/10.6.6/reference/device-management/).
