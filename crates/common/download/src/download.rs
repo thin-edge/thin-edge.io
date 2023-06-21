@@ -1,4 +1,5 @@
 mod partial_response;
+use log::info;
 pub use partial_response::InvalidResponseError;
 use tedge_utils::file::FileError;
 
@@ -30,7 +31,7 @@ use nix::fcntl::fallocate;
 #[cfg(target_os = "linux")]
 use nix::fcntl::FallocateFlags;
 
-const BACKOFF_INITIAL_INTERVAL: Duration = Duration::from_secs(1);
+const BACKOFF_INITIAL_INTERVAL: Duration = Duration::from_secs(30);
 const BACKOFF_MAX_ELAPSED: Duration = Duration::from_secs(300);
 
 /// Describes a request used to retrieve the file.
@@ -139,7 +140,10 @@ impl Downloader {
         let mut response = request_range_from(url, 0).await?;
 
         let file_len = response.content_length().unwrap_or(0);
-        debug!("Downloading file, len={file_len}");
+        info!(
+            "Downloading file from url='{url:?}' , len={file_len}",
+            url = url.url
+        );
 
         if file_len > 0 {
             try_pre_allocate_space(&mut file, &tmp_target_path, file_len)?;
@@ -201,8 +205,13 @@ impl Downloader {
                 .context("Can't get file cursor position".to_string())?;
 
             let mut response = request_range_from(url, file_pos).await?;
-
             let offset = partial_response::response_range_start(&response)?;
+
+            if offset != 0 {
+                info!("Resuming file download at position={file_pos}");
+            } else {
+                info!("Could not resume download, restarting");
+            }
 
             match save_chunks_to_file_at(&mut response, file, offset).await {
                 Ok(()) => break,
@@ -231,6 +240,7 @@ impl Downloader {
     /// [`download_remaining`](Downloader::download_remaining) is used instead.
     async fn retry(&self, url: &DownloadInfo, file: &mut File) -> Result<(), DownloadError> {
         loop {
+            info!("Could not resume download, restarting");
             let mut response = request_range_from(url, 0).await?;
 
             match save_chunks_to_file_at(&mut response, file, 0).await {
@@ -362,7 +372,6 @@ async fn request_range_from(
 
     let operation = || async {
         let mut client = reqwest::Client::new().get(url.url());
-
         if let Some(Auth::Bearer(token)) = &url.auth {
             client = client.bearer_auth(token)
         }
@@ -375,10 +384,11 @@ async fn request_range_from(
             .send()
             .await
             .map_err(|err| {
-                if err.is_connect() || err.is_builder() {
+                if err.is_builder() {
                     backoff::Error::Permanent(err)
                 } else {
-                    log::warn!("Failed to Download. {:?}\nRetrying.", &err);
+                    let err = err.without_url();
+                    log::warn!("Failed to Download. {err:?}\nRetrying.");
                     backoff::Error::transient(err)
                 }
             })?
@@ -406,7 +416,6 @@ async fn save_chunks_to_file_at(
         debug!("read response chunk, size={size}", size = bytes.len());
         writer.write_all(&bytes)?;
     }
-
     Ok(())
 }
 

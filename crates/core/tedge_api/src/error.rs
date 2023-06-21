@@ -16,7 +16,11 @@ pub enum TopicError {
 #[derive(thiserror::Error, Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
 pub enum SoftwareError {
     #[error("DownloadError error: {reason:?} for {url:?}")]
-    DownloadError { reason: String, url: String },
+    DownloadError {
+        reason: String,
+        url: String,
+        source_err: String,
+    },
 
     #[error("Failed to finalize updates for {software_type:?}")]
     Finalize {
