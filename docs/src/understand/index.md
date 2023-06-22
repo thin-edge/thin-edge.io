@@ -93,12 +93,3 @@ The flexibility of thin-edge means that it can be used at different levels.
   and are to be deployed on the main devices and the attached child devices.
 - As a contributor, you can [extend thin-edge using its Rust API](../contribute/index.md),
   when the loosing coupling of MQTT and HTTP is not the more appropriate approach.
-  It can be to fuse 
-
-![Overview](./images/thin-edge-overview.png)
-
-* A typical IIoT agent
-* Components & Features
-* JSON over MQTT and HTTP
-* Extension points
-* Security
