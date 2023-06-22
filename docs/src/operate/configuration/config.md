@@ -8,7 +8,7 @@ sidebar_position: 1
 
 `thin-edge.io` can be configured in a few different ways:
 
-1. The `tedge config` command ([reference here](../../references/tedge-config.md))
+1. The `tedge config` command ([reference here](../../references/cli/tedge-config.md))
 2. The `tedge.toml` file
 3. Environment variables
 

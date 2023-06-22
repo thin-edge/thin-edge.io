@@ -4,13 +4,13 @@ tags: [Operate, MQTT]
 sidebar_position: 1
 ---
 
-# How to use [`tedge mqtt`](../../references/tedge-mqtt.md) pub and sub?
+# How to use [`tedge mqtt`](../../references/cli/tedge-mqtt.md) pub and sub?
 
 thin-edge.io cli provides a convenient way to debug and aid development process.
 
 ## Publish
 
-Command [`tedge mqtt pub`](../../references/tedge-mqtt.md) can be used to publish MQTT messages on a topic to the local mosquitto server.
+Command [`tedge mqtt pub`](../../references/cli/tedge-mqtt.md) can be used to publish MQTT messages on a topic to the local mosquitto server.
 
 Example:
 
@@ -35,7 +35,7 @@ Note: By default the mqtt message will be published with retain flag set to fals
 
 ## Subscribe
 
-Command [`tedge mqtt sub`](../../references/tedge-mqtt.md) can be used to ease debugging of of MQTT communication on local bridge. You can subscribe to topic of your choosing:
+Command [`tedge mqtt sub`](../../references/cli/tedge-mqtt.md) can be used to ease debugging of of MQTT communication on local bridge. You can subscribe to topic of your choosing:
 
 ```shell
 tedge mqtt sub tedge/errors

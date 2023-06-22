@@ -21,7 +21,7 @@ Before you try to connect your device to AWS IoT, you need:
 
 * [Install `thin-edge.io` on your device](../operate/installation/installation.md).
 
-You can now use [`tedge` command](../references/tedge.md) to:
+You can now use [`tedge` command](../references/cli/index.md) to:
 
 * [create a certificate for your device](connect-aws.md#create-the-certificate),
 * [register the device on AWS IoT Hub](connect-aws.md#register-the-device-on-AWS),
@@ -59,7 +59,7 @@ Thumbprint: 860218AD0A996004449521E2713C28F67B5EA580
 You may notice that the issuer of this certificate is the device itself.
 This is a self-signed certificate.
 To use a certificate signed by your Certificate Authority,
-see the reference guide of [`tedge cert`](../references/tedge-cert.md).
+see the reference guide of [`tedge cert`](../references/cli/tedge-cert.md).
 
 ## Register the device on AWS IoT Hub
 

@@ -18,12 +18,12 @@ sidebar_position: 6
 
 `tedge` is the command-line interface of `thin-edge.io` to create and manage resources on the device.
 
-- [`tedge` command](../references/tedge.md)
-- [`tedge cert` command](../references/tedge-cert.md)
-- [`tedge config` command](../references/tedge-config.md)
-- [`tedge connect` command](../references/tedge-connect.md)
-- [`tedge disconnect` command](../references/tedge-disconnect.md)
-- [`tedge mqtt` command](../references/tedge-mqtt.md)
+- [`tedge` command](../references/cli/index.md)
+- [`tedge cert` command](../references/cli/tedge-cert.md)
+- [`tedge config` command](../references/cli/tedge-config.md)
+- [`tedge connect` command](../references/cli/tedge-connect.md)
+- [`tedge disconnect` command](../references/cli/tedge-disconnect.md)
+- [`tedge mqtt` command](../references/cli/tedge-mqtt.md)
 
 ## Data Model
 - [Domain Model](../understand/domain-model.md)

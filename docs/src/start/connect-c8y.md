@@ -25,7 +25,7 @@ Before you try to connect your device to Cumulocity IoT, you need:
 
 If not done yet, [install `thin-edge.io` on your device](../operate/installation/installation.md).
 
-You can now use the [`tedge` command](../references/tedge.md) to:
+You can now use the [`tedge` command](../references/cli/index.md) to:
 * [create a certificate for you device](connect-c8y.md#create-the-certificate),
 * [make the device certificate trusted by Cumulocity](connect-c8y.md#make-the-device-trusted-by-cumulocity),
 * [connect the device](connect-c8y.md#connect-the-device), and
@@ -105,7 +105,7 @@ Thumbprint: CDBF4EC17AA02829CAC4E4C86ABB82B0FE423D3E
 You may notice that the issuer of this certificate is the device itself.
 This is a self-signed certificate.
 To use a certificate signed by your Certificate Authority,
-see the reference guide of [`tedge cert`](../references/tedge-cert.md).
+see the reference guide of [`tedge cert`](../references/cli/tedge-cert.md).
 
 ## Make the device trusted by Cumulocity
 

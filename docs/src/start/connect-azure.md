@@ -20,7 +20,7 @@ Before you try to connect your device to Azure IoT, you need:
 * Create a Azure **IoT Hub** in Azure portal as described [here](https://docs.microsoft.com/en-us/azure/iot-hub/iot-hub-create-through-portal).
 * [Install `thin-edge.io` on your device](../operate/installation/installation.md).
 
-You can now use [`tedge` command](../references/tedge.md) to:
+You can now use [`tedge` command](../references/cli/index.md) to:
 * [create a certificate for your device](connect-azure.md#create-the-certificate),
 * [register the device on Azure IoT Hub](connect-azure.md#register-the-device-on-Azure),
 * [configure the device](connect-azure.md#configure-the-device),
@@ -66,7 +66,7 @@ This is a self-signed certificate.
 The Thumbprint is the Sha1sum of the certificate. This is required for registering the
 device using the self-signed certificate on Azure IoT Hub.
 To use a certificate signed by your Certificate Authority,
-see the reference guide of [`tedge cert`](../references/tedge-cert.md).
+see the reference guide of [`tedge cert`](../references/cli/tedge-cert.md).
 
 ## Register the device on Azure IoT Hub
 
