@@ -37,9 +37,15 @@ Set configuration via environment variables
     TEDGE_MQTT_CLIENT_HOST    mqtt.client.host    custom_host_name
     TEDGE_MQTT_CLIENT_PORT    mqtt.client.port    8888
 
+Set configuration via environment variables for topics
+    [Template]    Check known tedge environment settings for topics
+    TEDGE_AWS_TOPICS    aws.topics
+    TEDGE_AZ_TOPICS    az.topics
+    TEDGE_C8Y_TOPICS    c8y.topics
+
 Set unknown configuration via environment variables
     ${stdout}    ${stderr}=    Execute Command
-    ...    env TEDGE_C8Y_UNKNOWN_CONFIGURATION\=dummy TEDGE_C8Y_URL\=example.com tedge config get c8y.url
+    ...    cmd=env TEDGE_C8Y_UNKNOWN_CONFIGURATION=dummy TEDGE_C8Y_URL=example.com tedge config get c8y.url
     ...    stdout=${True}
     ...    stderr=${True}
     Should Be Equal    ${stdout}    example.com\n
@@ -55,5 +61,10 @@ Custom Setup
 
 Check known tedge environment settings
     [Arguments]    ${ENV_NAME}    ${KEY_NAME}    ${VALUE}
-    ${output}=    Execute Command    env ${ENV_NAME}\=${VALUE} tedge config get ${KEY_NAME}
+    ${output}=    Execute Command    cmd=env ${ENV_NAME}=${VALUE} tedge config get ${KEY_NAME}
     Should Be Equal    ${output}    ${VALUE}\n
+
+Check known tedge environment settings for topics
+    [Arguments]    ${ENV_NAME}    ${KEY_NAME}
+    ${output}=    Execute Command    cmd=env ${ENV_NAME}=topic/1,topic/2/+,topic/3/# tedge config get ${KEY_NAME}
+    Should Be Equal    ${output}    ["topic/1", "topic/2/+", "topic/3/#"]\n
