@@ -62,7 +62,6 @@ async fn mapper_publishes_init_messages_on_startup() {
                 &json!({"type":"test-device-type"}).to_string(),
             ),
             ("c8y/s/us", "500"),
-            ("tedge/commands/req/software/list", r#"{"id":"#),
         ],
     )
     .await;
@@ -706,14 +705,7 @@ async fn mapper_publishes_supported_operations() {
     mqtt.skip(1).await;
 
     // Expect smartrest message on `c8y/s/us` with expected payload "114,c8y_TestOp1,c8y_TestOp2"
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us",
-            "114,c8y_Restart,c8y_SoftwareUpdate,c8y_TestOp1,c8y_TestOp2",
-        )],
-    )
-    .await;
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114,c8y_TestOp1,c8y_TestOp2")]).await;
 }
 
 #[tokio::test]
@@ -788,7 +780,17 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
 
     let (mqtt, _http, mut fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    mqtt.skip(6).await; //Skip all init messages
+    // Simulate tedge-agent health status message
+    mqtt.send(
+        MqttMessage::new(
+            &Topic::new_unchecked("tedge/health/tedge-agent"),
+            "{\"status\":\"up\"}",
+        )
+        .with_retain(),
+    )
+    .await
+    .expect("Send failed");
+    mqtt.skip(8).await; //Skip all init messages
 
     // Simulate FsEvent for the creation of a new operation file
     fs.send(FsWatchEvent::FileCreated(
@@ -1167,8 +1169,6 @@ fn assert_command_exec_log_content(cfg_dir: TempTedgeDir, expected_contents: &st
         let mut contents = String::new();
         file.read_to_string(&mut contents)
             .expect("Unable to read the file");
-        dbg!(&expected_contents);
-        dbg!(&contents);
         assert!(contents.contains(expected_contents));
     }
 }

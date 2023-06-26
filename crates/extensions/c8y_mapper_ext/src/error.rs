@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use tedge_api::serialize::ThinEdgeJsonSerializationError;
 use tedge_config::TEdgeConfigError;
 use tedge_mqtt_ext::MqttError;
+use tedge_utils::file::FileError;
 use tedge_utils::size_threshold::SizeThresholdExceededError;
 
 // allowing enum_variant_names due to a False positive where it is
@@ -108,6 +109,9 @@ pub enum ConversionError {
 
     #[error(transparent)]
     FromC8YRestError(#[from] C8YRestError),
+
+    #[error(transparent)]
+    FileError(#[from] FileError),
 }
 
 #[derive(thiserror::Error, Debug)]
