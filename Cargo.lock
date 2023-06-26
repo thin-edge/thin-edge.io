@@ -3742,6 +3742,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_log_manager"
+version = "0.12.0"
+dependencies = [
+ "anyhow",
+ "assert-json-diff",
+ "async-trait",
+ "filetime",
+ "http",
+ "log",
+ "serde",
+ "serde_json",
+ "tedge_actors",
+ "tedge_config",
+ "tedge_file_system_ext",
+ "tedge_http_ext",
+ "tedge_mqtt_ext",
+ "tedge_test_utils",
+ "tedge_utils",
+ "thiserror",
+ "time",
+ "tokio",
+]
+
+[[package]]
 name = "tedge_mqtt_ext"
 version = "0.12.0"
 dependencies = [
