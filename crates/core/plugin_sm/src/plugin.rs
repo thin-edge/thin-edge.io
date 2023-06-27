@@ -7,7 +7,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Output;
 use tedge_api::*;
-use tedge_config::get_new_tedge_config;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufWriter;
@@ -220,14 +219,20 @@ pub struct ExternalPluginCommand {
     pub name: SoftwareType,
     pub path: PathBuf,
     pub sudo: Option<PathBuf>,
+    pub max_packages: u32,
 }
 
 impl ExternalPluginCommand {
-    pub fn new(name: impl Into<SoftwareType>, path: impl Into<PathBuf>) -> ExternalPluginCommand {
+    pub fn new(
+        name: impl Into<SoftwareType>,
+        path: impl Into<PathBuf>,
+        max_packages: u32,
+    ) -> ExternalPluginCommand {
         ExternalPluginCommand {
             name: name.into(),
             path: path.into(),
             sudo: Some("sudo".into()),
+            max_packages,
         }
     }
 
@@ -437,9 +442,7 @@ impl Plugin for ExternalPluginCommand {
         let command = self.command(LIST, None)?;
         let output = self.execute(command, logger).await?;
         if output.status.success() {
-            let config = get_new_tedge_config().unwrap();
-            let limit = config.software.plugin.max_packages;
-            if limit == 0 {
+            if self.max_packages == 0 {
                 Ok(deserialize_module_info(
                     self.name.clone(),
                     output.stdout.as_slice(),
@@ -449,7 +452,7 @@ impl Plugin for ExternalPluginCommand {
                     .unwrap_or_default()
                     .char_indices()
                     .filter(|(_, c)| *c == '\n')
-                    .nth(usize::try_from(limit).unwrap_or(usize::MAX))
+                    .nth(usize::try_from(self.max_packages).unwrap_or(usize::MAX))
                     .unwrap_or_default();
 
                 Ok(deserialize_module_info(
