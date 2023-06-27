@@ -17,7 +17,7 @@ draft: true
   - [Manage my device software](start/software-management.md)
 
 - [Concepts](understand/index.md)
-  - [A typical IIoT agent](understand/typical-iiot-agent.md)
+  - [A typical IoT agent](understand/typical-iot-agent.md)
   - [Architecture FAQ](understand/faq.md)
   - [Thin Edge Json](understand/thin-edge-json.md)
   - [The Mapper](understand/mapper.md)

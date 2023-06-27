@@ -7,10 +7,10 @@ sidebar_position: 0
 
 Welcome to `thin-edge.io`'s documentation!
 
-`thin-edge.io` is an open-source development toolbox designed for rapid development of IIoT agents.
+`thin-edge.io` is an open-source development toolbox designed for rapid development of IoT agents.
 It is based on a versatile set of ready-to-use software components
 that can be easily combined with application-specific extensions
-into smart, secure, robust and efficient IIoT agents
+into smart, secure, robust and efficient IoT agents
 which integrate cloud services, edge computing and operational technologies.
 
 A typical agent uses as a foundation the building blocks provided by thin-edge

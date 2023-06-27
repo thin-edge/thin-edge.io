@@ -1,6 +1,6 @@
-# A typical IIoT agent running thin-edge
+# A typical IoT agent running thin-edge
 
-A typical IIoT agent acts as a gateway between the cloud and devices deployed over machines and plants.
+A typical IoT agent acts as a gateway between the cloud and devices deployed over machines and plants.
 
 - Each gateway controls a piece of equipment, made up of devices with their hardware, software, sensors and actuators.
   From a cloud perspective, there are possibly tens of thousands of such pieces, each with its own gateway.
@@ -15,7 +15,7 @@ A typical IIoT agent acts as a gateway between the cloud and devices deployed ov
 - The last but not the least requirement is to be able to __trigger operations__ from the cloud
   on the devices for maintenance or troubleshooting.
 
-![Typical hardware](images/typical-iiot-agent-hardware.svg)
+![Typical hardware](images/typical-iot-agent-hardware.svg)
 
 All these capabilities are made available in the cloud using __digital twins__,
 which are virtual representations of the actual devices giving remote capabilities to:
@@ -24,7 +24,7 @@ which are virtual representations of the actual devices giving remote capabiliti
 - monitor the industrial processes
 - operate the devices
 
-__The purpose of thin-edge is to support the development of such smart IIoT agents__,
+__The purpose of thin-edge is to support the development of such smart IoT agents__,
 by providing the building blocks to:
 
 - provide a uniform way to monitor and control miscellaneous hardware and software
@@ -34,7 +34,7 @@ by providing the building blocks to:
   for firmware, software and configuration management on these devices
 - collect monitoring and telemetry data, forwarding these data to the cloud when appropriate
 
-![Typical thin-edge deployment](images/typical-iiot-agent.svg)
+![Typical thin-edge deployment](images/typical-iot-agent.svg)
 
 Thin-edge offers a combination of ready-to-use software components supporting the core features,
 and extension points which allow users to develop small modular components

@@ -51,7 +51,7 @@ Out-of-the-box thin-edge supports telemetry and device management features on th
 These features are implemented by composable software components that:
 - can be freely adapted, combined, removed or replaced
 - provide the foundation to start the development of an agent with sensible defaults
-- on top of which the specificities required by smart IIoT agents can be incrementally implemented
+- on top of which the specificities required by smart IoT agents can be incrementally implemented
 
 ## Why
 
