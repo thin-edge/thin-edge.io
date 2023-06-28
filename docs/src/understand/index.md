@@ -58,6 +58,7 @@ These features are implemented by composable software components that:
 The aim of thin-edge is to reduce the development effort to build smart IoT agents
 without compromising on quality and feature completeness.
 
+thin-edge's goal is to deliver:
 - ready-to-use components provide sound foundations
 - interchangeable software components make it possible to adapt the generic agent to specific contexts
 - simple, yet flexible, extension points enable custom functionality to be added in a modular fashion
@@ -84,4 +85,4 @@ The flexibility of thin-edge means that it can be used at different levels.
   that interact with thin-edge through its JSON API over MQTT and HTTP
   and are to be deployed on the main devices and the attached child devices
 - As a contributor, you can [extend thin-edge using its Rust API](../contribute/index.md),
-  when loosely coupling components over MQTT and HTTP is not appropriate (e.g: for performance reasons)
+  when loosely coupling components over MQTT and HTTP is not appropriate (e.g. for performance reasons)

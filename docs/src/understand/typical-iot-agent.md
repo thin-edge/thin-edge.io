@@ -47,9 +47,9 @@ to meet specific requirements for the piece of equipment, hardware or applicatio
   To be precise, this API combines MQTT and HTTP,
   the latter being used for local file transfers and the former for asynchronous event processing.
 - Thin-edge components, the __agent__ and a set of __operation specific plugins__, supervise all the operations,
-  coordinating remote requests with the local thin-edge-enabled software components.
-- Agent-specific software components, the __child connectors__, that interact with the hardware that make the piece of equipment.
-  Note that the use of an MQTT and HTTP API give the freedom to deploy these connectors directly on the associated hardware
+  coordinating remote requests with the local thin-edge-compatible software components.
+- Device-specific software components, the __child device connectors__, that interact with the hardware that make the piece of equipment.
+  Note that the use of MQTT and HTTP APIs give the freedom to deploy these connectors directly on the associated hardware
   as well as on the main device acting as proxy, when, for some reasons,
   the child device software cannot be updated to directly support the thin-edge protocol.
 - A cloud specific __mapper__ handles the communication with the cloud,
