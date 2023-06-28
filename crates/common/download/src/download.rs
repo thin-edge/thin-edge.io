@@ -31,8 +31,15 @@ use nix::fcntl::fallocate;
 #[cfg(target_os = "linux")]
 use nix::fcntl::FallocateFlags;
 
-const BACKOFF_INITIAL_INTERVAL: Duration = Duration::from_secs(30);
-const BACKOFF_MAX_ELAPSED: Duration = Duration::from_secs(300);
+fn default_backoff() -> ExponentialBackoff {
+    // Default retry is an exponential retry with a limit of 15 minutes total.
+    // Let's set some more reasonable retry policy so we don't block the downloads for too long.
+    ExponentialBackoff {
+        initial_interval: Duration::from_secs(30),
+        max_elapsed_time: Some(Duration::from_secs(300)),
+        ..Default::default()
+    }
+}
 
 /// Describes a request used to retrieve the file.
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
@@ -92,6 +99,7 @@ impl Auth {
 pub struct Downloader {
     target_filename: PathBuf,
     target_permission: PermissionEntry,
+    backoff: ExponentialBackoff,
 }
 
 impl From<PathBuf> for Downloader {
@@ -99,6 +107,7 @@ impl From<PathBuf> for Downloader {
         Self {
             target_filename: path,
             target_permission: PermissionEntry::default(),
+            backoff: default_backoff(),
         }
     }
 }
@@ -110,6 +119,7 @@ impl Downloader {
         Self {
             target_filename: target_path,
             target_permission: PermissionEntry::default(),
+            backoff: default_backoff(),
         }
     }
 
@@ -119,7 +129,12 @@ impl Downloader {
         Self {
             target_filename: target_path,
             target_permission,
+            backoff: default_backoff(),
         }
+    }
+
+    pub fn set_backoff(&mut self, backoff: ExponentialBackoff) {
+        self.backoff = backoff;
     }
 
     /// Downloads a file using an exponential backoff strategy.
@@ -137,7 +152,7 @@ impl Downloader {
         let mut file: File = File::create(&tmp_target_path)
             .context(format!("Can't create a temporary file {tmp_target_path:?}"))?;
 
-        let mut response = request_range_from(url, 0).await?;
+        let mut response = self.request_range_from(url, 0).await?;
 
         let file_len = response.content_length().unwrap_or(0);
         info!(
@@ -204,7 +219,7 @@ impl Downloader {
                 .stream_position()
                 .context("Can't get file cursor position".to_string())?;
 
-            let mut response = request_range_from(url, file_pos).await?;
+            let mut response = self.request_range_from(url, file_pos).await?;
             let offset = partial_response::response_range_start(&response)?;
 
             if offset != 0 {
@@ -241,7 +256,7 @@ impl Downloader {
     async fn retry(&self, url: &DownloadInfo, file: &mut File) -> Result<(), DownloadError> {
         loop {
             info!("Could not resume download, restarting");
-            let mut response = request_range_from(url, 0).await?;
+            let mut response = self.request_range_from(url, 0).await?;
 
             match save_chunks_to_file_at(&mut response, file, 0).await {
                 Ok(()) => break,
@@ -346,62 +361,55 @@ impl Downloader {
         let _res = tokio::fs::remove_file(&self.target_filename).await;
         Ok(())
     }
-}
 
-/// Requests either the entire HTTP resource, or its part, from an offset to the
-/// end.
-///
-/// If `range_start` is `0`, then a regular GET request is sent. Otherwise, a
-/// request for a range of the resource, starting from `range_start`, until EOF,
-/// is sent.
-///
-/// We use a half-open range with only a lower bound, because we expect to use
-/// it to download static resources which do not change, and only as a recovery
-/// mechanism in case of network failures.
-async fn request_range_from(
-    url: &DownloadInfo,
-    range_start: u64,
-) -> Result<reqwest::Response, reqwest::Error> {
-    // Default retry is an exponential retry with a limit of 15 minutes total.
-    // Let's set some more reasonable retry policy so we don't block the downloads for too long.
-    let backoff = ExponentialBackoff {
-        initial_interval: BACKOFF_INITIAL_INTERVAL,
-        max_elapsed_time: Some(BACKOFF_MAX_ELAPSED),
-        ..Default::default()
-    };
+    /// Requests either the entire HTTP resource, or its part, from an offset to the
+    /// end.
+    ///
+    /// If `range_start` is `0`, then a regular GET request is sent. Otherwise, a
+    /// request for a range of the resource, starting from `range_start`, until EOF,
+    /// is sent.
+    ///
+    /// We use a half-open range with only a lower bound, because we expect to use
+    /// it to download static resources which do not change, and only as a recovery
+    /// mechanism in case of network failures.
+    async fn request_range_from(
+        &self,
+        url: &DownloadInfo,
+        range_start: u64,
+    ) -> Result<reqwest::Response, reqwest::Error> {
+        let backoff = self.backoff.clone();
 
-    let operation = || async {
-        let mut client = reqwest::Client::new().get(url.url());
-        if let Some(Auth::Bearer(token)) = &url.auth {
-            client = client.bearer_auth(token)
-        }
+        let operation = || async {
+            let mut client = reqwest::Client::new().get(url.url());
+            if let Some(Auth::Bearer(token)) = &url.auth {
+                client = client.bearer_auth(token)
+            }
 
-        if range_start != 0 {
-            client = client.header("Range", format!("bytes={range_start}-"));
-        }
+            if range_start != 0 {
+                client = client.header("Range", format!("bytes={range_start}-"));
+            }
 
-        client
-            .send()
-            .await
-            .map_err(|err| {
-                if err.is_builder() {
-                    backoff::Error::Permanent(err)
-                } else {
-                    let err = err.without_url();
-                    log::warn!("Failed to Download. {err:?}\nRetrying.");
-                    backoff::Error::transient(err)
-                }
-            })?
-            .error_for_status()
-            .map_err(|err| match err.status() {
-                Some(status_error) if status_error.is_client_error() => {
-                    backoff::Error::Permanent(err)
-                }
-                _ => backoff::Error::transient(err),
-            })
-    };
+            client
+                .send()
+                .await
+                .map_err(|err| {
+                    if err.is_builder() || err.is_connect() {
+                        backoff::Error::Permanent(err)
+                    } else {
+                        backoff::Error::transient(err)
+                    }
+                })?
+                .error_for_status()
+                .map_err(|err| match err.status() {
+                    Some(status_error) if status_error.is_client_error() => {
+                        backoff::Error::Permanent(err)
+                    }
+                    _ => backoff::Error::transient(err),
+                })
+        };
 
-    retry(backoff, operation).await
+        retry(backoff, operation).await
+    }
 }
 
 /// Saves a response body chunks starting from an offset.
@@ -495,7 +503,11 @@ mod tests {
 
         let url = DownloadInfo::new(&target_url);
 
-        let downloader = Downloader::new(target_path);
+        let mut downloader = Downloader::new(target_path);
+        downloader.set_backoff(ExponentialBackoff {
+            current_interval: Duration::ZERO,
+            ..Default::default()
+        });
         downloader.download(&url).await?;
 
         let log_content = std::fs::read(downloader.filename())?;
@@ -719,9 +731,9 @@ mod tests {
         let chunk_size = 4;
         let file = "AAAABBBBCCCCDDDD";
 
+        let listener = TcpListener::bind("localhost:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
         let server_task = tokio::spawn(async move {
-            let listener = TcpListener::bind("localhost:3000").await.unwrap();
-
             while let Ok((mut stream, _addr)) = listener.accept().await {
                 let response_task = async move {
                     let (reader, mut writer) = stream.split();
@@ -790,7 +802,7 @@ mod tests {
         let target_path = tmpdir.path().join("partial_download");
 
         let downloader = Downloader::new(target_path);
-        let url = DownloadInfo::new("http://localhost:3000/");
+        let url = DownloadInfo::new(&format!("http://localhost:{port}/"));
 
         downloader.download(&url).await?;
         let saved_file = std::fs::read_to_string(downloader.filename())?;
@@ -896,7 +908,11 @@ mod tests {
         };
 
         let target_path = target_dir_path.path().join("test_download");
-        let downloader = Downloader::new(target_path);
+        let mut downloader = Downloader::new(target_path);
+        downloader.set_backoff(ExponentialBackoff {
+            current_interval: Duration::ZERO,
+            ..Default::default()
+        });
         match downloader.download(&url).await {
             Ok(_success) => anyhow::bail!("Expected client error."),
             Err(err) => {
@@ -906,6 +922,7 @@ mod tests {
                 // error in `anyhow::Error` which reports errors by printing the
                 // entire error chain. We can then check keywords that we want
                 // appear somewhere in the error chain
+
                 let err = anyhow::Error::from(err);
                 println!("{err:?}");
 
