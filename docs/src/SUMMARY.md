@@ -19,6 +19,7 @@ draft: true
 - [Concepts](understand/index.md)
   - [Typical IoT agent](understand/typical-iot-agent.md)
   - [Digital Twin](understand/digital-twin.md)
+  - [MQTT Bus](understand/mqtt-bus.md)
   - [Architecture FAQ](understand/faq.md)
   - [Thin Edge Json](understand/thin-edge-json.md)
   - [The Mapper](understand/mapper.md)
