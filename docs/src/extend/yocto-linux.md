@@ -20,10 +20,10 @@ recommend to look into [official yocto documentation](https://docs.yoctoproject.
 as the installation process will now skip all information that were mentioned there! For workspace organization or
 raspberry pi distribution, we also recommend this [guide](https://github.com/jynik/ready-set-yocto)
 
-```admonish note
+:::note
 Most of the installation process is based on
 [Yocto Project Quick Build guide](https://docs.yoctoproject.org/brief-yoctoprojectqs/index.html).
-```
+:::
 
 Before starting, be sure the host, where you plan to build a new Yocto image with thin-edge, meets the following
 requirements:
@@ -39,10 +39,10 @@ Project Development Tasks Manual.
 - Python 3.6.0 or greater.
 - gcc 5.0 or greater.
 
-```admonish note
+:::note
 For the purposes of the tutorial, we assume `/home/yocto/` working directory. If using other directory, be sure to
 change paths where needed.
-```
+:::
 
 ### Build Host Packages
 
@@ -139,12 +139,12 @@ git clone https://github.com/meta-rust/meta-rust.git
 git clone --branch=kirkstone git://git.openembedded.org/meta-openembedded
 ```
 
-```admonish note
+:::note
 As with Poky itself, when cloning meta-openembedded either provide `--branch=kirkstone` for the clone command or
 manually `git switch kirkstone` in `meta-openembedded` repository after cloning. Some Yocto layers support different
 Yocto versions on different branches, in which case be sure to select correct branch. `meta-tedge` however supports 2
 versions, Honister and Kirkstone on the main branch, so there's no need to change the default branch.
-```
+:::
 
 Resulting in the following directory structure:
 
@@ -204,12 +204,12 @@ For thin-edge to work, it has to run some setup scripts upon the first boot and 
 init system. Right now, `meta-tedge` only supports systemd init manager. The default in yocto is initrd, thus we have to
 change it.
 
-```admonish important
+:::caution
 This, and any successive changes to the build configuration should happen only in your local configuration, ie.
 `poky/build/conf/local.conf` or in configuration files of layers you create yourself. Changing any files in layers you
 do not control - in our example `meta-tedge` or any of the layers in `meta-openembedded` - is discouraged, because any
 changes you make to them may be lost when you update the layer.
-```
+:::
 
 Activate `systemd` as default init manager by adding following line to `poky/build/conf/local.conf`:
 
@@ -267,10 +267,10 @@ use `nographic` option to run the emulator inside the current terminal, so that 
 clipboard, which wouldn't work in an external window. If this is not necessary, or if you run a graphical image, such as
 `core-image-sato`, you can omit this option.
 
-```admonish tip
+:::tip
 For more information about runqemu tool, see [Using the Quick EMUlator
 (QEMU)](https://docs.yoctoproject.org/4.0.5/dev-manual/qemu.html) in Yocto Development Tasks manual.
-```
+:::
 
 ```bash
 runqemu nographic
@@ -330,10 +330,10 @@ bitbake core-image-tedge
 Once the build is complete, the image will be located in `/tmp/deploy/images/$MACHINE/` directory where `$MACHINE`
 denotes your target platform. Copy the image to the SD card and run your device.
 
-```admonish tip
+:::tip
 To make Yocto run on another hardware, check other layers in the
 [OpenEmbedded Layer Index](https://layers.openembedded.org/layerindex/branch/master/layers/).
-```
+:::
 
 ## Further recommendations
 

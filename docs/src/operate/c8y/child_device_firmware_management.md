@@ -50,11 +50,11 @@ touch /etc/tedge/operations/c8y/<child-device-id>/c8y_Firmware
 
 This action will add `c8y_Firmware` as a new supported operation for the child device in Cumulocity.
 
-```admonish note
+:::note
 This initial bootstrapping step needs to be performed on the thin-edge device directly
 and can not be done from the child device over the network.
 An over-the-network API for the same could be provided in future releases. 
-```
+:::
 
 # Handle firmware update requests from thin-edge
 

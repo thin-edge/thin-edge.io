@@ -15,7 +15,7 @@ Other package managers can be supported by adding a plugin.
 Refer to [this](../extend/write-my-software-management-plugin.md) document on how to write a plugin to support software management for any other software type.
 :::
 
-:::warning
+:::caution
 As of now, software management feature is supported only from Cumulocity cloud, which supports only `install` and `delete` as an action of c8y_SoftwareUpdate operation.
 :::
 

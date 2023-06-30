@@ -55,14 +55,14 @@ For example, during the bootstrapping/startup of the child-device, the child-dev
 followed by an MQTT message informing thin-edge.io that the upload is complete.
 Similarly, handling a configuration snapshot or update request involves sending MQTT messages before and after the configuration file is uploaded/downloaded via HTTP to/from thin-edge.io.
 
-```admonish note
+:::note
 The child-device connector is not part of the thin-edge.io installation and must be developed by the device developer.
 It can be written in any language that the device developer chooses.
 To ease this development, we have written a [reference implementation](https://github.com/thin-edge/thin-edge.io_examples/blob/main/child-device-agent/child_device_agent.py) in Python which can easily be adapted directly or replicated in the language of your choice,
 for your device type.
 The key thing to focus on in the implementation is the interaction with the external device to fetch/update the configuration files over the protocol that the device supports.
 The rest of the MQTT and HTTP interactions would remain the same.
-```
+:::
 
 Since child-device connectors typically run on thin-edge.io device itself, these APIs can be accessed via a local IP or even 127.0.0.1.
 In cases where the child-device connector is deployed on the external child-device itself,
@@ -106,11 +106,11 @@ In this step, configuration files from a child-device will be requested to make 
 
 In this step, configuration files from a child-device will be updated with the updated configuration file pushed from Cumulocity IoT to the child-device via thin-edge.
 
-```admonish note
+:::note
 The examples in this document uses `curl` and `mosquitto` commands just for representational purposes.
 In a realistic deployment, the child device connector will be running as a daemon,
 performing configuration management operations with thin-edge over its MQTT and HTTP APIs.
-```
+:::
 
 ## Step 1: Bootstrap the child device
 
@@ -141,10 +141,10 @@ Follow these steps to bootstrap the child device:
 
    *Update these paths with some realistic paths on your device, or create these files with some dummy content.*
 
-   ```admonish note
+   :::note
    This is not the `c8y-configuration-plugin.toml` file which is used for configuration management of the thin-edge.io main device.
    This is a separate file, in the same format, required for each child-device, with its supported configuration list.
-   ```
+   :::
 
 2. Upload this file to thin-edge.io via HTTP
 
@@ -215,10 +215,10 @@ Following these steps, a configuration file from the child-device will be reques
    }
    ```
 
-   ```admonish note
+   :::note
    After receiving this request, the responses in the next three steps must be sent within 60 seconds,
    else the operation will fail with a timeout.
-   ```
+   :::
 
 4. After receiving the request, the child-device connector may **optionally** acknowledge the receipt of the request by sending an "executing" MQTT status message, as follows:
 
@@ -242,10 +242,10 @@ Following these steps, a configuration file from the child-device will be reques
    mosquitto_pub -h 127.0.0.1 -t "tedge/child1/commands/res/config_snapshot" -m '{"status": "executing", "path": "/home/pi/config/config1", "type": "config1"}'
    ```
 
-   ```admonish note
+   :::note
    Sending the `executing` status will reset the operation timeout window.
    The timer can be reset any number of times by sending this response.
-   ```
+   :::
 
 5. Upload the requested config file to the URL received in the request via HTTP.
 
@@ -312,10 +312,10 @@ Performing config update is an 8-step process:
    }
    ```
 
-   ```admonish note
+   :::note
    After receiving this request, the responses in the next three steps must be sent within 60 seconds,
    else the operation will fail with a timeout.
-   ```
+   :::
 
 5. Optionally send an "executing" operation status update to acknowledge the receipt of the request via MQTT as follows:
 
@@ -339,10 +339,10 @@ Performing config update is an 8-step process:
    mosquitto_pub -h 127.0.0.1 -t "tedge/child1/commands/res/config_update" -m '{"status": "executing", "path": "/home/pi/config/config1",    "type": "config1"}'
    ```
    
-   ```admonish note
+   :::note
    Sending the `executing` status will reset the operation timeout window.
    The timer can be reset any number of times by sending this response.
-   ```
+   :::
 
 6. Download the config file update from the URL received in the request via HTTP.
 

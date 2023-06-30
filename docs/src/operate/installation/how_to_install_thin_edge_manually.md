@@ -79,9 +79,9 @@ This unpacks two directories `usr/bin/`, move its contents to `/usr/bin`
 sudo mv usr/bin/tedge /usr/bin
 ```
 
-```admonish note
+:::note
 Do the same for tedge\_agent and tedge\_mapper debian packages.
-```
+:::
 
 ## Step 1: Creating the tedge user
 
@@ -113,9 +113,9 @@ This should show the following output:
 
 ![Sublime's custom image](../../images/manual_installation-binaries_init.png)
 
-```admonish note
+:::note
 If you do not restart mosquitto you will see a Connection refused error. Do not worry, this error can be ignored.
-```
+:::
 
 Ensure that running the init has created the following files and directories in `/etc/tedge`:
 
@@ -138,13 +138,13 @@ sudo mosquitto --config-file /etc/mosquitto/mosquitto.conf
 
 You will need service files for tedge\_agent and tedge\_mapper. For example:
 
-```admonish note
+:::note
 For Cumulocity IoT, the `tedge connect` command expects three service files called: mosquitto, tedge-agent and tedge-mapper-c8y
-```
+:::
 
 For the `tedge-agent` service an example file is the following:
 
-```admonish example title="/etc/init.d/tedge-agent"
+:::info /etc/init.d/tedge-agent
 > ```sh
 > #!/sbin/runscript
 > 
@@ -160,12 +160,12 @@ For the `tedge-agent` service an example file is the following:
 >     eend $?
 > }
 > ```
-```
+:::
 
 For the `tedge-mapper-c8y` service an example file is the following
 
 
-```admonish example title="/etc/init.d/tedge-mapper-c8y"
+:::info /etc/init.d/tedge-mapper-c8y
 >```sh
 > #!/sbin/runscript
 >
@@ -181,7 +181,7 @@ For the `tedge-mapper-c8y` service an example file is the following
 >    eend $?
 > }
 >```
-```
+:::
 
 ```sh
 sudo chmod +x /etc/init.d/tedge-agent
@@ -191,7 +191,7 @@ sudo chmod +x /etc/init.d/tedge-mapper-c8y
 Next, we need to add a `system.toml` to `/etc/tedge/`, telling it to use OpenRC. To do this create the following file:
 
 
-```admonish example title="/etc/tedge/system.toml"
+:::info /etc/tedge/system.toml
 >```
 > [init]
 > name = "OpenRC"
@@ -202,7 +202,7 @@ Next, we need to add a `system.toml` to `/etc/tedge/`, telling it to use OpenRC.
 > disable =  ["/sbin/rc-update", "delete", "{}"]
 > is_active = ["/sbin/rc-service", "{}", "status"]
 >```
-```
+:::
 
 Limit the file's permission to read only:
 

@@ -25,10 +25,10 @@ Enabling systemd watchdog for a `thin-edge.io` service (tedge-agent, tedge-mappe
 For example, to enable the watchdog feature for `tedge-mapper-c8y` service,
 update the systemd service file as shown below:
 
-```admonish note
+:::note
 The systemd service file for tedge services are usually present in `/lib/systemd/system` directory, 
 like `/lib/systemd/system/tedge-mapper-c8y.service`.
-```
+:::
 
 Add `tedge-watchdog.service` as an `After` service dependency under `[Unit]` section.
 Add the watchdog interval as `WatchdogSec=30` under `[Service]` section.
@@ -71,11 +71,11 @@ the health status response from that service is expected on `tedge/health/<servi
 Once the health status response is received from a particular service,
 the `tedge-watchdog` service will send the [systemd notification](https://www.freedesktop.org/software/systemd/man/sd_notify.html#) to systemd on behalf of that monitored service.
 
-```admonish note
+:::note
 If none of the `thin-edge` services are enabled with the watchdog feature, then the `tedge-watchdog` service will stop with an `inactive` state.
 To monitor any of the `thin-edge` services, one has to update the corresponding `systemd` service file with `WatchdogSec`
 and then restart the `tedge-watchdog` service.
-```
+:::
 
 ## Debugging
 
@@ -83,11 +83,11 @@ One can observe the message exchange between the `service` and the `watchdog`
 by subscribing to `tedge/health/#` and `tedge/health-check/#` topics.
 For more info check [here](../troubleshooting/monitor_tedge_health.md)
 
-```admonish note
+:::note
 If the watchdog service does not send the notification to the systemd within `WatchdogSec` interval for a service,
 then systemd restarts that service by killing the old process and spawning a new one to replace it.
-```
+:::
 
-```admonish example
+:::info
 [Here](https://www.medo64.com/2019/01/systemd-watchdog-for-any-service/) is an example about using `systemd watchdog` feature.
-```
+:::

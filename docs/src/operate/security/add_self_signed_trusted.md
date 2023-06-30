@@ -12,10 +12,10 @@ If the server you are trying to connect `thin-edge.io` to is presenting a certif
 For the most part the store will be filled with certificates from your TLS/SSL provider, but when you want to use self-signed certificates you may need to update your local certificate store.
 Below are instructions on how to add new CA certificate and update the certificate store.
 
-```admonish note
+:::note
 Provided instructions are for supported OSes and may not apply to the flavour you are running,
 if you need help with other OS please consult appropriate documentation.
-```
+:::
 
 ## Ubuntu and Raspberry Pi OS
 

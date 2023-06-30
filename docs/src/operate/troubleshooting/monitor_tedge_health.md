@@ -21,9 +21,9 @@ To refresh the health status of the daemon, publish an empty message on the topi
 tedge/health-check/<tedge-daemon-name>
 ```
 
-```admonish
+:::note
 If the response is not received then most likely the daemon is down, or not responding
-```
+:::
 
 
 For example, `tedge-mapper-c8y` publishes below message on topic `tedge/health/tedge-mapper-c8y` when it starts

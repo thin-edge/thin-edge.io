@@ -61,9 +61,9 @@ then the path to that server certificate must be set as the c8y.root_cert_path a
 sudo tedge config set c8y.root_cert_path /path/to/the/self-signed/certificate
 ```
 
-```admonish warning
+:::caution
 This is the certificate chain of the server and not the device's certificate kept at /etc/tedge/device-certs directory.
-```
+:::
 
 If the Cumulocity server's certificate chain file isn't available locally, it can be downloaded using a web browser or using some other
 third-party tools like openssl command as follows (to be adjusted based on your env):
@@ -124,10 +124,10 @@ This can be done:
 sudo tedge cert upload c8y --user <username>
 ```
 
-```admonish warning
+:::caution
 To upload the certificate to cumulocity this user needs to have "Tenant management" admin rights.
 If you get an error 503 here, check the appropriate rights in cumulocity user management.
-```
+:::
 
 ## Connect the device
 

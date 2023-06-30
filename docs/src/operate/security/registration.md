@@ -18,9 +18,9 @@ sudo tedge cert create --device-id alpha
 Certificate was successfully created
 ```
 
-```admonish note
+:::note
 `tedge cert` requires `sudo` privilege. This command provides no output on success.
-```
+:::
 
 [`sudo tedge cert create`](../../references/cli/tedge-cert.md) will create certificate in a default location (`/etc/tedge/device-certs/`).
 To use a custom location, refer to [`tedge config`](../../references/cli/tedge-config.md).
@@ -63,9 +63,9 @@ Caused by:
             Run `tedge cert remove` first to generate a new certificate.
 ```
 
-```admonish danger
+:::note
 Removing a certificate can break the bridge and more seriously delete a certificate that was a CA-signed certificate.
-```
+:::
 
 Follow the instruction to remove the existing certificate and issue [`tedge cert remove`](../../references/cli/tedge-cert.md):
 

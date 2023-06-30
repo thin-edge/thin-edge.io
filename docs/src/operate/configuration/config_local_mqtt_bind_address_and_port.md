@@ -8,9 +8,9 @@ sidebar_position: 2
 
 Configuring a mosquitto port and bind address in thin-edge.io is a three-step process.
 
-```admonish note
+:::note
 The mqtt.bind.port and the mqtt.bind.address can be set/unset independently.
-```
+:::
 
 ## Step 1: Disconnect thin-edge.io edge device
 
@@ -32,10 +32,10 @@ tedge config set mqtt.bind.port 1024
 tedge config set mqtt.bind.address 127.0.0.1
 ```
 
-```admonish note
+:::note
 The bind_address is the address of one of the device network interface.
 For example, this can be get as `ifconfig | grep inet` or set it to `0.0.0.0`
-```
+:::
 
 This will make sure that all the mqtt clients use the newer port and the bind address that
 has been set once the device is connected to the cloud as in step 3.

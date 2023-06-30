@@ -10,9 +10,9 @@ sidebar_position: 1
 
 To create northbound connection a local bridge shall be established and this can be achieved with `tedge` cli and following commands:
 
-```admonish
+:::note
 Note: `tedge connect` requires `sudo` privilege.
-```
+:::
 
 ## Setting the cloud end-point
 
@@ -22,10 +22,10 @@ Configure required parameters for thin-edge.io with [`tedge config set`](../../r
 sudo tedge config set c8y.url example.cumulocity.com
 ```
 
-```admonish info
+:::info
 If you are unsure which parameters required by the command, simply run the command and it will tell you which parameters are missing.
 
-For example, if we issue [`tedge connect c8y`](../references/cli/tedge-connect.md) without any configuration following advice will be given:
+For example, if we issue [`tedge connect c8y`](../../references/cli/tedge-connect.md) without any configuration following advice will be given:
 
 > ```shell
 > $ tedge connect c8y`
@@ -38,7 +38,7 @@ For example, if we issue [`tedge connect c8y`](../references/cli/tedge-connect.m
 
 This message explains which configuration parameter is missing and how to add it to configuration,
 in this case we are told to run `tedge config set c8y.url <value>`.
-```
+:::
 
 ## Making the cloud trust the device
 
@@ -46,14 +46,14 @@ The next step is to have the device certificate trusted by Cumulocity. This is d
 You can upload the root certificate using the [Cumulocity UI](https://cumulocity.com/guides/users-guide/device-management/#trusted-certificates)
 or with [`tedge cert upload`](../../references/cli/tedge-cert.md) command as described below.
 
-```admonish
+:::note
 The `tedge cert upload` command requires the credentials of a Cumulocity user
 having the permissions to upload trusted certificates on the Cumulocity tenant of the device.
 
 The user name is provided as `--user <username>` parameter,
 and the command will prompt you for this user's password.
 These credentials are used only for this upload and will in no case be stored on the device.
-```
+:::
 
 ```shell
 sudo tedge cert upload c8y --user <username>
@@ -160,9 +160,9 @@ Disabling tedge-agent service.
 tedge-agent service successfully stopped and disabled!
 ```
 
-```admonish
+:::note
 `tedge disconnect c8y` also stops and disable the **tedge-mapper** service if it is installed on the device.
-```
+:::
 
 And now you can issue [`tedge connect c8y`](../../references/cli/tedge-connect.md) to create new bridge.
 

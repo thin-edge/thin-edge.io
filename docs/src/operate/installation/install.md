@@ -16,13 +16,13 @@ curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thi
 
 You can execute that command on your device and it will do all required steps for an initial setup.
 
-```admonish note
+:::note
 If you want to get a specific version, append the `<version>` 3 digits (e.g. `0.7.3`):
 
 > ```shell
 > curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s <version>
 > ```
-```
+:::
 
 If you prefer to have a little more control over the installation or the script did not work for you,
 please go on with the [manual installation steps](#manual-installation-steps).
@@ -33,7 +33,7 @@ If you already have `thin-edge.io` on your device, to upgrade `thin-edge.io`,
 the easiest way is to use the same script as the installation. Follow the steps below.
 There is no need to remove old version.
 
-```admonish note
+:::note
 For version **0.7.7 or lower, to upgrade `thin-edge.io` from these versions,
 all thin-edge.io components **must be stopped** before upgrading.
 
@@ -55,7 +55,7 @@ To stop each component one by one, this is an example how to stop them with `sys
 > systemctl stop tedge-agent
 > systemctl stop c8y-log-plugin
 > ```
-```
+:::
 
 Run `get-thin-edge_io.sh` script as below to upgrade to the latest version.
 
@@ -63,13 +63,13 @@ Run `get-thin-edge_io.sh` script as below to upgrade to the latest version.
 curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
 ```
 
-```admonish note
+:::note
 If you want to upgrade to a specific version, append the `<version>` 3 digits, e.g. `0.7.3`:
 
 > ```shell
 > curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s <version>
 > ```
-```
+:::
 
 ## thin-edge.io manual installation
 
@@ -84,9 +84,9 @@ thin-edge.io has single dependency and it is `mosquitto` used for communication 
 apt install mosquitto
 ```
 
-```admonish note
+:::note
 Some OSes may require you to use `sudo` to install packages.
-```
+:::
 
 ```shell
 sudo apt install mosquitto
@@ -122,9 +122,9 @@ curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.9.0/tedg
 
 Now, we have downloaded the package we can proceed to installation. First we will install cli tool `tedge`.
 
-```admonish note
+:::note
 Some OSes may require you to use `sudo` to install packages and therefore all following commands may need `sudo`.
-```
+:::
 
 To install `tedge` use following command:
 
@@ -173,11 +173,11 @@ COMMANDS:
     purge      Uninstall thin-edge.io and also remove configuration files
 ```
 
-```admonish note
+:::note
 The uninstall script removes/purges the core thin-edge.io packages like `tedge,
 tedge-mapper, and tedge-agent` as well as thin-edge.io plugins like `tedge-apt-plugin,
 c8y-log-plugin, c8y-configuration-plugin` etc.
-```
+:::
 
 ### `Remove` thin-edge.io
 
@@ -187,9 +187,9 @@ Use uninstall script as shown below just to `remove` the `thin-edge.io` packages
 ./uninstall-thin-edge_io.sh remove
 ```
 
-```admonish note
+:::note
 `./uninstall-thin-edge_io.sh remove` removes just the thin-edge.io packages and does not remove the `configuration` files.
-```
+:::
 
 The same thing can also be executed using a one-liner to download and run the script.
 

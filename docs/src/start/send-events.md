@@ -46,9 +46,9 @@ Payload:
 }
 ```
 
-```admonish note
+:::note
 Both the `text` field and the `time` field are optional.
-```
+:::
 
 When the `message` field is not provided, the `event-type` from the MQTT topic will be used as the message as well if the connected cloud mandates one.
 When the `time` field is not provided, thin-edge.io will use the current system time as the `time` of the event.
@@ -67,9 +67,9 @@ If the device is connected to some supported IoT cloud platform, an event that i
 The mapping of thin-edge events data to its respective cloud-native representation will be done by the corresponding cloud mapper process.
 For example, if the device is connected to Cumulocity IoT cloud platform, the Cumulocity cloud mapper process will translate the thin-edge event JSON data to its equivalent Cumulocity SmartREST representation.
 
-```admonish warning
+:::caution
 As of now, event data mapping is supported only on Cumulocity IoT cloud platform.
-```
+:::
 
 ### Cumulocity cloud data mapping
 
@@ -99,9 +99,9 @@ The Cumulocity JSON mapping of the same event would be as follows:
 }
 ```
 
-```admonish note
+:::note
 Mapped events will be sent to Cumulocity via MQTT if the incoming Thin Edge JSON event payload size is less than 16K bytes. If higher, HTTP will be used.
-```
+:::
 
 Find more information about events data model in Cumulocity [here](https://cumulocity.com/guides/concepts/domain-model/#events).
 

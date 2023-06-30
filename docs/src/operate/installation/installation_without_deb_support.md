@@ -27,9 +27,9 @@ So if you are looking to install `thin-edge.io` on a different platform
 you have to build your own binaries from source
 which you can do easily if you follow the [Building `thin-edge.io`](../../contribute/BUILDING.md) guide.
 
-```admonish note
+:::note
 By default `thin-edge.io` is built with `musl`, but it is possible to use `GNU libc` instead.
-```
+:::
 
 Full installation of `thin-edge.io` requires the following components:
 
