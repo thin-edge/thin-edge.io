@@ -6,24 +6,76 @@ sidebar_position: 3
 
 # The `tedge connect` command
 
-```console
-<!-- cmdrun tedge connect --help -->
+```console title="tedge connect"
+tedge-connect 
+Connect to connector provider
+
+USAGE:
+    tedge connect <SUBCOMMAND>
+
+OPTIONS:
+    -h, --help    Print help information
+
+SUBCOMMANDS:
+    aws     Create connection to AWS
+    az      Create connection to Azure
+    c8y     Create connection to Cumulocity
+    help    Print this message or the help of the given subcommand(s)
 ```
 
 ## AWS
 
-```console
-<!-- cmdrun tedge connect aws --help -->
+```console title="tedge connect aws"
+tedge-connect-aws 
+Create connection to AWS
+
+The command will create config and start edge relay from the device to AWS instance
+
+USAGE:
+    tedge connect aws [OPTIONS]
+
+OPTIONS:
+    -h, --help
+            Print help information
+
+        --test
+            Test connection to AWS
 ```
 
 ## Azure
 
-```console
-<!-- cmdrun tedge connect az --help -->
+```console title="tedge connect az"
+tedge-connect-az 
+Create connection to Azure
+
+The command will create config and start edge relay from the device to az instance
+
+USAGE:
+    tedge connect az [OPTIONS]
+
+OPTIONS:
+    -h, --help
+            Print help information
+
+        --test
+            Test connection to Azure
 ```
 
 ## Cumulocity
 
-```console
-<!-- cmdrun tedge connect c8y --help -->
+```console title="tedge connect c8y"
+tedge-connect-c8y 
+Create connection to Cumulocity
+
+The command will create config and start edge relay from the device to c8y instance
+
+USAGE:
+    tedge connect c8y [OPTIONS]
+
+OPTIONS:
+    -h, --help
+            Print help information
+
+        --test
+            Test connection to Cumulocity
 ```
