@@ -9,7 +9,7 @@ sidebar_position: 8
 The health of a `thin-edge.io` service or any other `service` that is running on the `thin-edge.io` device
 or on the `child` device can be monitored from the **Cumulocity IoT** by sending the `health-status` message to **Cumulocity IoT**.
 
-## Send the health status of a service to `tedge/health` topic.
+## Send the health status of a service to health topic.
 
 The table below lists the MQTT topics to which the health status message should be sent, and the
 health status message format for both the `thin-edge` and for the `child` device.
@@ -23,11 +23,11 @@ health status message format for both the `thin-edge` and for the `child` device
 The `status` here can be `up or down` or any other string. For example, `unknown`.
 :::
 
-For example, to monitor the health status of a `tedge-mapper-c8y service` that is running on a `thin-edge.io` device
+For example, to monitor the health status of a `tedge-mapper-c8y` service that is running on a `thin-edge.io` device
 one has to send the below message.
 
-```
-tedge mqtt pub tedge/health/tedge-mapper-c8y `{"status":"up","type":"thin-edge.io"}` -q 2 -r
+```sh te2mqtt
+tedge mqtt pub tedge/health/tedge-mapper-c8y '{"status":"up","type":"thin-edge.io"}' -q 2 -r
 ```
 
 The above message says that the `tedge-mapper-c8y` is `up` and the `type` of the service is `thin-edge.io`.
@@ -35,17 +35,17 @@ The above message says that the `tedge-mapper-c8y` is `up` and the `type` of the
 
 To monitor the health of a `docker` service that is running on an `external-sensor` child device,
 
-```
-tedge mqtt pub tedge/health/external-sensor/docker `{"status":"up","type":"systemd"}` -q 2 -r
+```sh te2mqtt
+tedge mqtt pub tedge/health/external-sensor/docker '{"status":"up","type":"systemd"}' -q 2 -r
 ```
 
 :::note
 The health status message has to be sent as a `retain` message.
 :::
 
-When an `empty health status,i.e('{}' or '')` message sent, the `status` will be replaced with `unknown` and the `type` will be replaced with default value `service`.
+When an empty health status message is sent, e.g. `{}` or `''`, the `status` will be replaced with `unknown` and the `type` will be replaced with default value `service`.
 
-## Conversion of the `health status` message to `Cumulocity IoT service monitor` message.
+## Conversion of the health status message to Cumulocity IoT service monitor message
 
 The `tedge-mapper-c8y` will translate the `health status` message that is received on `tedge/health/#`
 topic to `Cumulocity` specific `service monitor` message and sends it to `Cumulocity` cloud.
@@ -59,6 +59,7 @@ The table below gives more information about the **Cumulocity IoT** topic and th
 
 :::note
 The `unique-service-id` for thin-edge device will be  `<device-name>_<service-name>`.
+
 In case of child device `<device-name>_<child-id>_<service-name>`.
 
 Note also that `102` is the `smartrest` template number for the service monitoring message.
@@ -70,9 +71,8 @@ The `default service type` can be configured using the `tedge` cli.
 
 The example below shows how one can set the default service type to `systemd`.
 
-```
-tedge config set service.type systemd
-
+```sh
+sudo tedge config set service.type systemd
 ```
 
 :::note
@@ -83,8 +83,8 @@ the mapper while translating the `health status` message to `service status` mes
 To clear the configured default service type one can use the command below.
 This will set the `service.type` to `service`.
 
-```
-tedge config unset service.type
+```sh
+sudo tedge config unset service.type
 ```
 
 # References

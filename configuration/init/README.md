@@ -16,20 +16,20 @@ The systemctl is the main command in systemd, used to control services.
 
 Create systemd service file in /etc/systemd/system/ (copy the template):
 
-```bash
+```sh
     sudo cp systemd/thin-edge.service /etc/systemd/system/thin-edge.service
     sudo chmod 664 /etc/systemd/system/thin-edge.service
 ```
 
 Once the service file is added, you need to reload systemd daemon:
 
-```bash
+```sh
     sudo systemctl daemon-reload
 ```
 
 Now you should be able to start, stop, restart and check the service status
 
-```bash
+```sh
     sudo systemctl start thin-edge
     sudo systemctl stop thin-edge
     sudo systemctl restart thin-edge
@@ -38,13 +38,13 @@ Now you should be able to start, stop, restart and check the service status
 
 All daemons can be configured to start on boot:
 
-```bash
+```sh
     sudo systemctl enable thin-edge
 ```
 
 Logs are available via:
 
-```bash
+```sh
     journalctl -u thin-edge
 ```
 
@@ -53,7 +53,7 @@ Logs are available via:
 ### Getting started
 
 Copy thin-edge to /etc/init.d/thin-edge
-```bash
+```sh
     cp /initd/tedge /etc/init.d/tedge
 ```
 
@@ -61,25 +61,25 @@ Copy thin-edge to /etc/init.d/thin-edge
 
 Start the app.
 
-```bash
+```sh
     /etc/init.d/tedge start
 ```
 
 Stop the app.
 
-```bash
+```sh
     /etc/init.d/tedge stop
 ```
 
 Restart the app.
 
-```bash
+```sh
     /etc/init.d/tedge restart
 ```
 
 Print current daemon status.
 
-```bash
+```sh
     /etc/init.d/tedge status
 ```
 

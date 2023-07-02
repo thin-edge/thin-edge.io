@@ -1,12 +1,12 @@
 ---
-title: "`tedge cert`"
+title: "tedge cert"
 tags: [Reference, CLI]
 sidebar_position: 1
 ---
 
-# The `tedge cert` command
+# The tedge cert command
 
-```console title="tedge cert"
+```sh title="tedge cert"
 tedge-cert 
 Create and manage device certificate
 
@@ -26,7 +26,7 @@ SUBCOMMANDS:
 
 ## Create
 
-```console title="tedge cert create"
+```sh title="tedge cert create"
 tedge-cert-create 
 Create a self-signed device certificate
 
@@ -40,7 +40,7 @@ OPTIONS:
 
 ## Show
 
-```console title="tedge cert show"
+```sh title="tedge cert show"
 tedge-cert-show 
 Show the device certificate, if any
 
@@ -53,7 +53,7 @@ OPTIONS:
 
 ## Remove
 
-```console title="tedge cert remove"
+```sh title="tedge cert remove"
 tedge-cert-remove 
 Remove the device certificate
 
@@ -66,7 +66,7 @@ OPTIONS:
 
 ## Upload
 
-```console title="tedge cert upload"
+```sh title="tedge cert upload"
 tedge-cert-upload 
 Upload root certificate
 

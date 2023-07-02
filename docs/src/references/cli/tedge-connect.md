@@ -1,12 +1,12 @@
 ---
-title: "`tedge connect`"
+title: "tedge connect"
 tags: [Reference, CLI]
 sidebar_position: 3
 ---
 
-# The `tedge connect` command
+# The tedge connect command
 
-```console title="tedge connect"
+```sh title="tedge connect"
 tedge-connect 
 Connect to connector provider
 
@@ -25,7 +25,7 @@ SUBCOMMANDS:
 
 ## AWS
 
-```console title="tedge connect aws"
+```sh title="tedge connect aws"
 tedge-connect-aws 
 Create connection to AWS
 
@@ -44,7 +44,7 @@ OPTIONS:
 
 ## Azure
 
-```console title="tedge connect az"
+```sh title="tedge connect az"
 tedge-connect-az 
 Create connection to Azure
 
@@ -63,7 +63,7 @@ OPTIONS:
 
 ## Cumulocity
 
-```console title="tedge connect c8y"
+```sh title="tedge connect c8y"
 tedge-connect-c8y 
 Create connection to Cumulocity
 

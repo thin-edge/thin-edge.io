@@ -116,7 +116,7 @@ Default plugin can be configured using the thin-edge cli command `tedge`.
 
 For example set `apt` plugin as a `default plugin`
 
-```shell
+```sh
 sudo tedge config set software.plugin.default apt
 ```
 

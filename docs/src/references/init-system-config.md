@@ -11,7 +11,7 @@ The file contains configurations about the init system and the supported actions
 
 The format of the file is:
 
-```toml
+```toml title="file: /etc/tedge/system.toml"
 [init]
 name = "systemd"
 is_available = ["/bin/systemctl", "--version"]
@@ -33,17 +33,18 @@ restart = ["/bin/systemctl", "restart", "{}"]
 
 will be interpreted as
 
-```shell
+```sh
 /bin/systemctl restart mosquitto
 ```
 
 ## Keys
 
-- **name**: An identifier of the init system. 
-  It is used in the output of `tedge connect` and `tedge disconnect`.
-- **is_available**: The command to check if the init is available on your system.
-- **restart**: The command to restart a service by the init system.
-- **stop**: The command to stop a service by the init system.
-- **enable**: The command to enable a service by the init system.
-- **disable**: The command to disable a service by the init system.
-- **is_active**: The command to check if the service is running by the init system.
+|Property|Description|
+|--------|-----------|
+|`name`|An identifier of the init system. It is used in the output of `tedge connect` and `tedge disconnect`|
+|`is_available`|The command to check if the init is available on your system|
+|`restart`|The command to restart a service by the init system|
+|`stop`|The command to stop a service by the init system|
+|`enable`|The command to enable a service by the init system|
+|`disable`|The command to disable a service by the init system|
+|`is_active`|The command to check if the service is running by the init system|

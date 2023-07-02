@@ -36,7 +36,7 @@ Update the restart condition as `Restart=always` under `[Service]` section.
 
 Here is the updated service file for `tedge-mapper-c8y` service:
 
-```shell
+```sh
 [Unit]
 Description=tedge-mapper-c8y converts Thin Edge JSON measurements to Cumulocity JSON format.
 After=syslog.target network.target mosquitto.service tedge-watchdog.service
@@ -49,7 +49,7 @@ RestartPreventExitStatus=255
 WatchdogSec=30
 ```
 
-### Step 2: Start the `tedge-watchdog` service
+### Step 2: Start the tedge-watchdog service
 
 The `tedge-watchdog` service is responsible for periodically checking the health of
 all tedge services for which the watchdog feature is enabled,
@@ -57,9 +57,9 @@ and send systemd watchdog notifications on their behalf to systemd.
 
 Start and enable the `tedge-watchdog` service as follows:
 	
-```shell
-systemctl start tedge-watchdog.service
-systemctl enable tedge-watchdog.service
+```sh
+sudo systemctl enable tedge-watchdog
+sudo systemctl start tedge-watchdog
 ``` 
 
 Once started, the `tedge-watchdog` service will keep checking the health of the monitored tedge services
@@ -80,8 +80,18 @@ and then restart the `tedge-watchdog` service.
 ## Debugging
 
 One can observe the message exchange between the `service` and the `watchdog`
-by subscribing to `tedge/health/#` and `tedge/health-check/#` topics.
-For more info check [here](../troubleshooting/monitor_tedge_health.md)
+by subscribing to the following topics:
+
+
+```sh te2mqtt
+tedge mqtt sub 'tedge/health/#'
+```
+
+```sh te2mqtt
+tedge mqtt sub 'tedge/health-check/#'
+```
+
+Check out the [Monitor tedge health](../troubleshooting/monitor_tedge_health.md) for more details about the health endpoint.
 
 :::note
 If the watchdog service does not send the notification to the systemd within `WatchdogSec` interval for a service,

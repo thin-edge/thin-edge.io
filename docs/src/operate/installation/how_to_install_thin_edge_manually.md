@@ -31,7 +31,7 @@ To build from source, download the **Source code (zip)** from the [latest releas
 Once downloaded, unzip it and enter the thin-edge.io directory and build the project with the `--release` flag:
 
 
-```shell
+```sh
 unzip thin-edge*.zip
 cd thin-edge*/
 cargo build --release
@@ -44,7 +44,7 @@ A minimal thin-edge.io installation requires three components:
 - tedge agent
 - tedge mapper
 
-```shell
+```sh
 sudo mv target/release/tedge /usr/bin
 sudo mv target/release/tedge-agent /usr/bin
 sudo mv target/release/tedge-mapper /usr/bin
@@ -69,13 +69,13 @@ For a minimal configuration of thin-edge.io with Cumulocity IoT, you will need t
 Next, unpack each deb file and copy the binary to `/usr/bin`.
 For `tedge` debian package do:
 
-```shell
+```sh
 ar -x tedge_*_amd64.deb | tar -xf data.tar.xz
 ```
 
 This unpacks two directories `usr/bin/`, move its contents to `/usr/bin`
 
-```shell
+```sh
 sudo mv usr/bin/tedge /usr/bin
 ```
 
@@ -89,21 +89,20 @@ The next step is to create the tedge user. This is normally taken care by the de
 
 To do this in Gentoo, for example, you can:
 
-```shell
+```sh
 sudo groupadd --system tedge
-
 sudo useradd --system --no-create-home -c "" -s /sbin/nologin -g tedge tedge
 ```
 
 Now that we have created the tedge user, we need to allow the tedge user to call commands with `sudo` without requiring a password:
 
-```shell
+```sh
 sudo echo "tedge  ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init" >/etc/sudoers.d/tedge
 ```
 
 Next, create the files and directories required by thin-edge.io and restart mosquitto too.
 
-```shell
+```sh
 sudo rc-service mosquitto stop
 sudo tedge init --user tedge --group tedge
 sudo rc-service mosquitto start
@@ -121,20 +120,20 @@ Ensure that running the init has created the following files and directories in 
 
 ![Sublime's custom image](../../images/manual_installation-tedge_directories.png)
 
-## Step 3: Creating mosquitto bridge
+## Step 2: Creating mosquitto bridge
 
 To create the mosquitto bridge simply run:
 
-```shell
+```sh
 sudo echo "include_dir /etc/tedge/mosquitto-conf" >> /etc/mosquitto/mosquitto.conf
 ```
 You can test that `mosquitto` works by running: 
 
-```shell
+```sh
 sudo mosquitto --config-file /etc/mosquitto/mosquitto.conf
 ```
 
-## Step 4: Creating OpenRC service files
+## Step 3: Creating OpenRC service files
 
 You will need service files for tedge\_agent and tedge\_mapper. For example:
 
@@ -144,44 +143,39 @@ For Cumulocity IoT, the `tedge connect` command expects three service files call
 
 For the `tedge-agent` service an example file is the following:
 
-:::info /etc/init.d/tedge-agent
-> ```sh
-> #!/sbin/runscript
-> 
-> start() {
->    ebegin "Starting tedge-agent"
->    start-stop-daemon --user tedge --start --background --exec tedge-agent
->    eend $?
-> }
->
-> stop() {
->     ebegin "Stopping tedge-agent"
->     start-stop-daemon --stop --exec tedge-agent
->     eend $?
-> }
-> ```
-:::
+```sh title="file: /etc/init.d/tedge-agent"
+#!/sbin/runscript
+ 
+start() {
+    ebegin "Starting tedge-agent"
+    start-stop-daemon --user tedge --start --background --exec tedge-agent
+    eend $?
+}
+
+stop() {
+     ebegin "Stopping tedge-agent"
+     start-stop-daemon --stop --exec tedge-agent
+     eend $?
+}
+```
 
 For the `tedge-mapper-c8y` service an example file is the following
 
+```sh title="file: /etc/init.d/tedge-mapper-c8y"
+#!/sbin/runscript
 
-:::info /etc/init.d/tedge-mapper-c8y
->```sh
-> #!/sbin/runscript
->
-> start() {
->    ebegin "Starting tedge-mapper-c8y"
->    start-stop-daemon --user tedge --start --background --exec tedge-mapper c8y
->    eend $?
-> }
->
-> stop() {
->    ebegin "Stopping tedge-mapper-c8y"
->    start-stop-daemon --stop --exec tedge-mapper
->    eend $?
-> }
->```
-:::
+start() {
+    ebegin "Starting tedge-mapper-c8y"
+    start-stop-daemon --user tedge --start --background --exec tedge-mapper c8y
+    eend $?
+}
+
+stop() {
+    ebegin "Stopping tedge-mapper-c8y"
+    start-stop-daemon --stop --exec tedge-mapper
+    eend $?
+}
+```
 
 ```sh
 sudo chmod +x /etc/init.d/tedge-agent
@@ -190,19 +184,16 @@ sudo chmod +x /etc/init.d/tedge-mapper-c8y
 
 Next, we need to add a `system.toml` to `/etc/tedge/`, telling it to use OpenRC. To do this create the following file:
 
-
-:::info /etc/tedge/system.toml
->```
-> [init]
-> name = "OpenRC"
-> is_available = ["/sbin/rc-service", "-l"]
-> restart = ["/sbin/rc-service", "{}", "restart"]
-> stop =  ["/sbin/rc-service", "{}", "stop"]
-> enable =  ["/sbin/rc-update", "add", "{}"]
-> disable =  ["/sbin/rc-update", "delete", "{}"]
-> is_active = ["/sbin/rc-service", "{}", "status"]
->```
-:::
+```toml title="file: /etc/tedge/system.toml"
+[init]
+name = "OpenRC"
+is_available = ["/sbin/rc-service", "-l"]
+restart = ["/sbin/rc-service", "{}", "restart"]
+stop =  ["/sbin/rc-service", "{}", "stop"]
+enable =  ["/sbin/rc-update", "add", "{}"]
+disable =  ["/sbin/rc-update", "delete", "{}"]
+is_active = ["/sbin/rc-service", "{}", "status"]
+```
 
 Limit the file's permission to read only:
 
@@ -212,7 +203,7 @@ sudo chmod 444 /etc/tedge/system.toml
 
 Finally, add the thin-edge.io services to start after boot: 
 
-```
+```sh
 sudo rc-update add tedge-agent default
 sudo rc-update add tedge-mapper-c8y default
 ```

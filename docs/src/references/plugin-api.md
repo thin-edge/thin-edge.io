@@ -29,9 +29,11 @@ Thin-edge uses plugins to delegate software management operations to the appropr
   Consequently a plugin to handle software module defined for `docker` must be named `docker`.
 * The same plugin can be given different names, using virtual links.
 * When there are multiple plugins on a device, one can be marked as the default plugin using the command
-  ```sh
-  tedge config set software.plugin.default <plugin-name>
-  ```
+
+    ```sh
+    sudo tedge config set software.plugin.default <plugin-name>
+    ```
+
 * If there's only one plugin available on a device, it is selected by default, even without an explicit configuration.
 
 On start-up, the sm-agent registers the plugins as follows:
@@ -70,11 +72,11 @@ implement `update-list` can close its `stdin`.
 When called with the `list` command, a plugin returns the list of software modules that have been installed with this plugin,
 using tab separated values.
 
-```shell
+```sh
 debian-plugin list
 ```
 
-```
+```sh title="Output"
 ...
 collectd-core  5.8.1-1.3
 mosquitto   1.5.7-1+deb10u1
@@ -91,7 +93,7 @@ Contract:
 
 The `prepare` command is invoked by the sm-agent before a sequence of install and remove commands
 
-```shell
+```sh
 /etc/tedge/sm-plugins/debian prepare
 /etc/tedge/sm-plugins/debian install x
 /etc/tedge/sm-plugins/debian install y
@@ -130,7 +132,7 @@ Contract:
 
 The `install` command installs a software module, possibly of some expected version.
 
-```shell
+```sh
 plugin install NAME [--module-version VERSION] [--file FILE]
 ```
 
@@ -174,7 +176,7 @@ Contract:
 
 The `remove` command uninstalls a software module, and possibly its dependencies if no other modules are dependent on those.
 
-```shell
+```sh
 plugin remove NAME [--module-version VERSION]
 ```
 
@@ -204,7 +206,7 @@ The `update-list` command accepts a list of software modules and associated oper
 This basically achieves same purpose as original commands `install` and `remove`, but gets passed all software modules to be processed in one command.
 This can be necessary when the processing order of software modules is relevant - e.g. when dependencies between packages inside the software list do occur.
 
-```shell
+```sh
 # building list of software modules and operations, 
 # and passing to plugin's stdin via pipe:
 # NOTE that each argument is tab separated:
@@ -235,7 +237,7 @@ Contract:
 
 Example how to invoke a plugin's `update-list` command. Note that each argument is tab separated:
 
-```shell
+```sh
 plugin update-list <<EOF
   install	name1	version1
   install	name2		path2
@@ -246,7 +248,7 @@ EOF
 
 That is equivalent to use of original commands (`install` and `remove`):
 
-```shell
+```sh
 plugin install name1 --module-version version1
 plugin install name2 --file path2
 plugin remove "name 3" --module-version version3
@@ -255,7 +257,7 @@ plugin remove name4
 
 Below shows an example implementation (in `bash`) to parse the software list from `stdin`:
 
-```shell
+```sh
 #!/bin/bash
 
 echo ""

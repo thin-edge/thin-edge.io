@@ -11,15 +11,17 @@ sidebar_position: 2
 By default your device will send the following information to Cumulocity:
 
 ```json
-"c8y_Agent": {
+{
+  "c8y_Agent": {
     "name": "thin-edge.io",
     "version": "x.x.x"
+  }
 }
 ```
 
 You can change the `name` value using the `tedge` command as follows:
 
-```shell
+```sh
 sudo tedge config set device.type VALUE
 ```
 
@@ -31,20 +33,20 @@ See the link for more information about setting a custom [base_config_dir.](../.
 
 An example `inventory.json` looks something like this:
 
-```json
+```json title="file: /etc/tedge/device/inventory.json"
 {
   "c8y_RequiredAvailability": {
-      "responseInterval": 5
+    "responseInterval": 5
   },
   "c8y_Firmware": {
-      "name": "raspberrypi-bootloader",
-      "version": "1.20140107-1",
-      "url": "31aab9856861b1a587e2094690c2f6e272712cb1"
+    "name": "raspberrypi-bootloader",
+    "version": "1.20140107-1",
+    "url": "31aab9856861b1a587e2094690c2f6e272712cb1"
   },
   "c8y_Hardware": {
-      "model": "BCM2708",
-      "revision": "000e",
-      "serialNumber": "00000000e2f5ad4d"
+    "model": "BCM2708",
+    "revision": "000e",
+    "serialNumber": "00000000e2f5ad4d"
   }
 }
 ```
@@ -52,11 +54,12 @@ An example `inventory.json` looks something like this:
 To see the changes you need to restart the tedge-mapper.
 If you're using systemctl you can do: 
 
-```shell
-sudo systemctl restart tedge-mapper-c8y.service
+```sh
+sudo systemctl restart tedge-mapper-c8y
 ```
 
 In the Cumulocity UI this will looks something like this:
+
 ![c8y\_custom\_fragments](../../images/c8y_custom_fragments.png)
 
 For information on which fragments Cumulocity supports please see the

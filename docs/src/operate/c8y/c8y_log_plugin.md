@@ -19,12 +19,9 @@ If you have not installed via the debian package, make sure you have the followi
 After the device is connected to Cumulocity, this plugin needs to be started and
 enabled as follows:
 
-```shell
-sudo systemctl start c8y-log-plugin
-```
-
-```shell
+```sh
 sudo systemctl enable c8y-log-plugin
+sudo systemctl start c8y-log-plugin
 ```
 
 If you go to Cumulocity, you should see that you are able to see the logs tab
@@ -32,7 +29,7 @@ and you can request "software-management" logs.
 However, you are not limited to only thin-edge logs.
 To add a new log type, you need to edit the `c8y-log-plugin.toml` in `/etc/tedge/c8y/c8y-log-plugin.toml`
 
-```shell
+```sh
 sudo nano /etc/tedge/c8y/c8y-log-plugin.toml
 ```
 
@@ -41,7 +38,7 @@ be retrieved from Cumulocity UI.
 For example, if you wish to request thin-edge software logs and mosquitto logs
 an example toml file would be:
 
-```toml
+```toml title="file: /etc/tedge/c8y/c8y-log-plugin.toml"
 files = [
   { type = "software-management", path = "/var/log/tedge/agent/software-*" },
   { type = "mosquitto", path = "/var/log/mosquitto/mosquitto.log" }

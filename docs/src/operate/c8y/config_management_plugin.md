@@ -11,28 +11,28 @@ With `thin-edge.io`, you can manage config files on a device by using the [Cumul
 If you are new to the Cumulocity **Configuration Management** feature,
 we recommend you to read [the Cumulocity user guide](https://cumulocity.com/guides/users-guide/device-management/#managing-configurations) along with this how-to guide.
 
-## Installation of `c8y-configuration-plugin`
+## Installation of c8y-configuration-plugin
 
 To enable the feature, first you need to install the `c8y-configuration-plugin` binary on your device.
 
-### Using the `get-thin-edge_io.sh` script on Debian based distributions (Recommended)
+### Using the install script on Debian based distributions (Recommended)
 
 If your device supports `apt` as a package manager,
 you can install all `thin-edge.io` packages including the `c8y-configuration-plugin` by the `get-thin-edge_io.sh` script.
 If you have already used the `get-thin-edge_io.sh` script,
 this package is installed, by default.
 
-```shell
+```sh
 curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
 ```
 
-### Using the `c8y-configuration-plugin` Debian package on Debian based distributions
+### Using the c8y-configuration-plugin Debian package on Debian based distributions
 
 For Debian based distributions, we provide the `c8y-configuration-plugin_<version>_<arch>.deb` package as a release asset [here](https://github.com/thin-edge/thin-edge.io/releases).
 
 In case that you didn't use the `get-thin-edge_io.sh` script, you can download the `c8y-configuration-plugin_<version>_<arch>.deb`  package on our [Releases](https://github.com/thin-edge/thin-edge.io/releases) and install it.
 
-```shell
+```sh
 sudo apt install ./path/to/package/c8y-configuration-plugin_<version>_<arch>.deb
 ```
 
@@ -41,7 +41,7 @@ sudo apt install ./path/to/package/c8y-configuration-plugin_<version>_<arch>.deb
 Get the `c8y-configuration-plugin_<version>_<arch>.deb` from our [Releases](https://github.com/thin-edge/thin-edge.io/releases).
 Then, run this command in the directory where the package is stored.
 
-```shell
+```sh
 ar -x ./c8y-configuration-plugin_<version>_<arch>.deb | tar -xf ./data.tar.xz
 ```
 
@@ -52,18 +52,18 @@ For more details, refer to our guide [Extracting from debian package](../install
 
 Follow our guide [Building thin-edge.io](../../contribute/BUILDING.md) and [Building from source](../installation/installation_without_deb_support.md#if-building-from-source).
 
-```shell
+```sh
 cargo build --release -p c8y-configuration-plugin
 ```
 
 A `systemd` unit file for `c8y-configuration-plugin` can be found in the repository at `configuration/init/systemd/c8y-configuration-plugin.service`
 and should be installed on the target in: `/lib/systemd/system/c8y-configuration-plugin.service`.
 
-```shell
+```sh
 sudo cp <repository_root>/configuration/init/systemd/c8y-configuration-plugin.service /lib/systemd/system/c8y-configuration-plugin.service
 ```
 
-## Get started
+## Getting started
 
 Before starting anything, make sure [your device is connected to Cumulocity](../../start/connect-c8y.md).
 
@@ -71,20 +71,20 @@ Before starting anything, make sure [your device is connected to Cumulocity](../
 Unless you installed `c8y-configuration-plugin` using the debian package,
 you need one additional step to initialize the plugin. Run this command.
 
-```shell
+```sh
 sudo c8y-configuration-plugin --init
 ```
 
 **Step 1**
 Open the file `/etc/tedge/c8y/c8y-configuration-plugin.toml` and add entries for the configuration files that you'd like to manage from Cumulocity cloud in the following format:
 
-```toml
+```toml title="file: /etc/tedge/c8y/c8y-configuration-plugin.toml"
 files = [
-    { path = '/etc/tedge/tedge.toml', type = 'tedge.toml'},
-    { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge.conf' },
-    { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf', type = 'tedge-mosquitto.conf' },
-    { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto.conf' },
-    { path = '/etc/tedge/c8y/example.txt', type = 'example', user = 'tedge', group = 'tedge', mode = 0o444 }
+  { path = '/etc/tedge/tedge.toml', type = 'tedge.toml'},
+  { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge.conf' },
+  { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf', type = 'tedge-mosquitto.conf' },
+  { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto.conf' },
+  { path = '/etc/tedge/c8y/example.txt', type = 'example', user = 'tedge', group = 'tedge', mode = 0o444 }
 ]
 ```
 
@@ -101,14 +101,14 @@ You can also configure the `c8y-configuration-plugin.toml` from the cloud later.
 **Step 2**
 Start the configuration plugin process and enable it on boot by `systemctl` (recommended).
 
-```shell
-sudo systemctl start c8y-configuration-plugin.service
-sudo systemctl enable c8y-configuration-plugin.service
+```sh
+sudo systemctl enable c8y-configuration-plugin
+sudo systemctl start c8y-configuration-plugin
 ```
 
 Alternatively, you can run the process directly.
 
-```
+```sh
 sudo c8y-configuration-plugin
 ```
 
@@ -120,7 +120,7 @@ You can find `c8y-configuration-plugin` and more are listed as supported configu
 
 This is the configuration file of `c8y-configuration-plugin`, where you can add file entries that you want to manage with Cumulocity.
 
-## Update `c8y-configuration-plugin` from Cumulocity
+## Update c8y-configuration-plugin from Cumulocity
 
 To update any configuration file, create a local copy of that config file and then upload that file to the [Cumulocity configuration repository](https://cumulocity.com/guides/users-guide/device-management/#to-add-a-configuration-snapshot) with the appropriate configuration type.
 

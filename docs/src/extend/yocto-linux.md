@@ -48,7 +48,7 @@ change paths where needed.
 
 Install essential packages:
 
-```bash
+```sh
 sudo apt install gawk wget git diffstat unzip texinfo gcc build-essential chrpath socat cpio python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping python3-git python3-jinja2 libegl1-mesa libsdl1.2-dev pylint3 xterm python3-subunit mesa-common-dev zstd liblz4-tool
 ```
 
@@ -62,7 +62,7 @@ and [here](https://stackoverflow.com/questions/17714159/how-do-i-undo-a-single-b
 Alternatively, you could use `--branch=honister` for Yocto version 3.4 Honister.
 If doing so, remember to also use `--branch=honister` for all additional layers that require it.
 
-```bash
+```sh
 git clone git://git.yoctoproject.org/poky --branch=kirkstone --depth=1
 ```
 
@@ -132,7 +132,7 @@ In the following steps, we will edit these files to customize our image.
 `oe-init-build-env` moved us to the `build` directory. `cd` back to the working directory and clone the `meta-tedge`, `meta-rust` and
 `meta-openembedded` repositories:
 
-```bash
+```sh
 cd ../../
 git clone https://github.com/thin-edge/meta-tedge
 git clone https://github.com/meta-rust/meta-rust.git
@@ -163,7 +163,7 @@ put them inside `poky` if you prefer. The only thing that matters is to use a co
 Next, we add these layers to our build using `bitbake-layers` tool. Be aware that `meta-openembedded` is not itself a
 layer, but a collection of many layers. We need to run it from the `build` directory:
 
-```bash
+```sh
 cd poky/build
 bitbake-layers add-layer /home/yocto/meta-openembedded/meta-oe
 bitbake-layers add-layer /home/yocto/meta-openembedded/meta-python
@@ -176,9 +176,7 @@ bitbake-layers add-layer /home/yocto/meta-tedge
 file contains the above layers, or if something is wrong with the tool, you can edit the file manually, adding the
 correct paths. The use of absolute paths is required.
 
-In `poky/build/conf/bblayers.conf`:
-
-```
+```text title="file: poky/build/conf/bblayers.conf"
 # POKY_BBLAYERS_CONF_VERSION is increased each time build/conf/bblayers.conf
 # changes incompatibly
 POKY_BBLAYERS_CONF_VERSION = "2"
@@ -213,7 +211,7 @@ changes you make to them may be lost when you update the layer.
 
 Activate `systemd` as default init manager by adding following line to `poky/build/conf/local.conf`:
 
-```
+```text title="file: poky/build/conf/local.conf"
 INIT_MANAGER="systemd"
 ```
 
@@ -224,7 +222,7 @@ include a package manager in our build, we need to add `package-management` feat
 
 In `poky/build/conf/local.conf`, add the following line:
 
-```
+```text title="file: poky/build/conf/local.conf"
 EXTRA_IMAGE_FEATURES += "package-management"
 ```
 
@@ -234,7 +232,7 @@ Let us use `deb` package format and the apt package manager:
 In `poky/build/conf/local.conf` find the following section and change `PACKAGE_CLASSES` from `package_rpm` to
 `package_deb` as such:
 
-```
+```text title="file: poky/build/conf/local.conf"
 #
 # Package Management configuration
 #
@@ -256,7 +254,7 @@ Finally, build the image and run it in the emulator.
 
 Build `core-image-tedge` by running following command, from any directory:
 
-```bash
+```sh
 bitbake core-image-tedge
 ```
 
@@ -272,7 +270,7 @@ For more information about runqemu tool, see [Using the Quick EMUlator
 (QEMU)](https://docs.yoctoproject.org/4.0.5/dev-manual/qemu.html) in Yocto Development Tasks manual.
 :::
 
-```bash
+```sh
 runqemu nographic
 ```
 
@@ -286,21 +284,21 @@ After successful run in qemu, we can run it on raspberry pi by adjusting our bui
 To do that, we will use `meta-raspberrypi` layer that we need to fetch and `meta-openembedded` that we fetched
 previously:
 
-```bash
+```sh
 git clone -b kirkstone https://github.com/agherzan/meta-raspberrypi.git
 ```
 
 According to the `meta-raspberrypi/README.md`, we have all the dependencies added to the layer except `meta-multimedia`
 that we need to add with `add-layer` subcommand. After that, we can add `meta-raspberrypi` itself:
 
-```bash
+```sh
 bitbake-layers add-layer /home/yocto/meta-openembedded/meta-multimedia
 bitbake-layers add-layer /home/yocto/meta-raspberrypi
 ```
 
 Next, we open up `poky/build/conf/local.conf` and find this line:
 
-```
+```text title="file: poky/build/conf/local.conf"
 MACHINE ??= "qemux86-64"
 ```
 
@@ -317,13 +315,13 @@ We can also change the specific configuration of the Raspberry Pi machine. In
 enable/disable/modify functionality of a device, e.g to access a shell via the UART, add following line to
 `poky/build/conf/local.conf` file:
 
-```
+```text title="file: poky/build/conf/local.conf"
 ENABLE_UART = "1"
 ```
 
 After we finish the configuration, we can build an image using `core-image-tedge`:
 
-```bash
+```sh
 bitbake core-image-tedge
 ```
 

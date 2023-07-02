@@ -19,19 +19,19 @@ Further details about this can be found in the thin-edge.io documentation at [Ma
 1. In the Cumulocity IoT tenant, open the **Device Management** app, go to the **Management** menu option and select the **Software repository**.
 2. Click **Add software** at the right of the top menu bar. 
 3. In the **ADD SOFTWARE** dialog enter the following details:
-- **Software**: apama-repo
-- **Description**: apama-repo (or something else if you choose)
-- **Device Filter Type**: (leave empty)
-- **Software Type**: apt
-- **Version**: 2022::apt
-- **SOFTWARE FILE**: check the *Provide a file path* option and enter the URL:	https://downloads.apamacommunity.com/debian/apama-repo_2022_all.deb
+    - **Software**: apama-repo
+    - **Description**: apama-repo (or something else if you choose)
+    - **Device Filter Type**: (leave empty)
+    - **Software Type**: apt
+    - **Version**: 2022::apt
+    - **SOFTWARE FILE**: check the *Provide a file path* option and enter the URL:	https://downloads.apamacommunity.com/debian/apama-repo_2022_all.deb
 
 4. Click the **Add Software** button.
 5. Now select the **Devices** menu option and then select **All devices**.
 6. In the list of devices, select the thin-edge device installed previously.
 7. In the sub-menu for the device, select the **Software** option.
 8. Click the **Install software** button in the bottom left; the apama-repo should be listed.
-9. Click the drop-down arrow on the right and check the 2022::apt radio button, then click **Install**.
+9. Click the drop-down arrow on the right and check the `2022::apt` radio button, then click **Install**.
 10. Finally, click the **Apply changes** button in the lower right of the panel.
 
 #### Add the Apama thin-edge support package to the tenant software repository and deploy it to thin-edge
@@ -79,13 +79,11 @@ Add this project as a software package in the Cumulocity software repository by 
 Once added, this Apama project can be installed on any target device.
 You can test if the project was successfully installed by running the following Apama command:
 
-```shell
+```sh
 /opt/softwareag/Apama/bin/apama_env engine_inspect -m
 ```
 
-You can expect an output like this:
-
-```console
+```text title="Example Output"
 Monitors
 ========
 Name                                               Num Sub Monitors

@@ -137,9 +137,9 @@ So, if the input is below,
 }
 ```
 
-the output of the mapper is
+the output of the mapper is:
 
-```json
+```json title="Transformed message"
 {
   "temperature": 23,
   "time": "2021-06-01T17:24:48.709803664+02:00"
@@ -150,14 +150,14 @@ the output of the mapper is
 
 However, if you don't want to add a timestamp in the output of Azure IoT Hub Mapper, you can change the behavior by running this:
 
-```shell
+```sh
 sudo tedge config set az.mapper.timestamp false 
 ```
 
-After changing the configuration, you need to restart the mapper service by
+After changing the configuration, you need to restart the mapper service by:
 
-```shell
-sudo systemctl restart tedge-mapper-az.service
+```sh
+sudo systemctl restart tedge-mapper-az
 ```
 
 ## AWS mapper
@@ -174,18 +174,18 @@ on the topic `tedge/errors` with the QoS level 1 (at least once).
 
 Here is an example if you publish invalid Thin Edge JSON messages on `tedge/measurements`:
 
-```shell
+```sh
 tedge mqtt pub tedge/measurements '{"temperature": 23,"pressure": 220'
 tedge mqtt pub tedge/measurements '{"temperature": 23,"time": 220}'
 ```
 
 Then, you'll receive error messages from the mapper on the topic `tedge/errors`:
 
-```shell
+```sh te2mqtt
 tedge mqtt sub tedge/errors
 ```
 
-```
+```log title="Output"
 [tedge/errors] Invalid JSON: Unexpected end of JSON: {"temperature":23,"pressure":220
 [tedge/errors] Not a timestamp: the time value must be an ISO8601 timestamp string in the YYYY-MM-DDThh:mm:ss.sss.±hh:mm format, not a number.
 ```

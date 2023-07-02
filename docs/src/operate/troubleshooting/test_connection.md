@@ -9,7 +9,7 @@ sidebar_position: 1
 We provide a way to test the connection from your device to a cloud provider.
 You can call this connection check function by
 
-```shell
+```sh
 sudo tedge connect <cloud> --test
 ```
 

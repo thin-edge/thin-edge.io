@@ -1,12 +1,12 @@
 ---
-title: "The `tedge` command"
+title: "The tedge command"
 tags: [Reference, CLI]
 sidebar_position: 4
 ---
 
-# The `tedge` command
+# The tedge command
 
-```console title="tedge"
+```sh title="tedge"
 tedge 0.11.0
 tedge is the cli tool for thin-edge.io
 

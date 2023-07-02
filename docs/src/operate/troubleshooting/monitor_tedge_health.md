@@ -4,25 +4,25 @@ tags: [Operate, Monitoring]
 sidebar_position: 1
 ---
 
-# How to monitor health of tedge daemons
+# How to monitor health of tedge services
 
-The health of tedge daemons like `tedge-mapper`, `tedge-agent` etc can be monitored via MQTT.
-These daemons expose MQTT health endpoints which you can query to check if the process is still active or not.
+The health of tedge services like `tedge-mapper`, `tedge-agent` etc can be monitored via MQTT.
+These services expose MQTT health endpoints which you can query to check if the process is still active or not.
 
-To get the last known health status of a daemon you can subscribe to the following topic
+To get the last known health status of a service you can subscribe to the following topic
 
+```text
+tedge/health/<tedge-service-name>
 ```
-tedge/health/<tedge-daemon-name>
-```
 
-To refresh the health status of the daemon, publish an empty message on the topic below.
+To refresh the health status of the service, publish an empty message on the topic below.
 
-```
-tedge/health-check/<tedge-daemon-name>
+```text
+tedge/health-check/<tedge-service-name>
 ```
 
 :::note
-If the response is not received then most likely the daemon is down, or not responding
+If the response is not received then most likely the service is down, or not responding
 :::
 
 
@@ -34,23 +34,24 @@ For example, `tedge-mapper-c8y` publishes below message on topic `tedge/health/t
 
 |Property|Description|
 |--------|-----------|
-|`pid`|Process ID of the daemon|
-|`status`|Daemon status. Possible values are `up` or `down`|
+|`pid`|Process ID of the service|
+|`status`|Service status. Possible values are `up` or `down`|
 |`time`|Unix timestamp in seconds|
 
-If the tedge daemon gets stopped or crashed or get killed then a `down` message will be published on health status topic
-and this will be retained till the tedge daemon is re-launched.
+If the tedge service gets stopped or crashed or get killed then a `down` message will be published on health status topic
+and this will be retained till the tedge service is re-launched.
 
 E.g the mapper being killed:
 
-```
+```sh te2mqtt
 tedge mqtt sub 'tedge/health/#'
+```
 
+```log title="Output"
 INFO: Connected
 [tedge/health/mosquitto-c8y-bridge] 1
 [tedge/health/tedge-mapper-c8y] {"pid":51367,"status":"down"}
 [tedge/health/tedge-agent] {"pid":13280,"status":"up","time":1675330667}
-
 ```
 ## Supported MQTT health endpoint topics
 
@@ -64,7 +65,7 @@ The following endpoints are currently supported:
 * `tedge/health/c8y-log-plugin`
 * `tedge/health/c8y-configuration-plugin`
 
-All future tedge daemons will also follow the same topic naming scheme convention.
+All future tedge services will also follow the same topic naming scheme convention.
 
 # Mosquitto bridge health endpoints
 

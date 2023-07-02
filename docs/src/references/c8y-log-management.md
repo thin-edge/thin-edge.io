@@ -37,11 +37,11 @@ This [TOML](https://toml.io/en/) file defines the list of log files that can be 
 The paths to these files can be represented using [glob](https://en.wikipedia.org/wiki/Glob_(programming)) patterns.
 The `type` given to these paths are used as the log type when they are reported to Cumulocity.
 
-```toml
+```toml title="file: /etc/tedge/c8y/c8y-log-plugin.toml"
 files = [
-    { type = "mosquitto", path = '/var/log/mosquitto/mosquitto.log' },
-    { type = "software-management", path = '/var/log/tedge/agent/software-*' },
-    { type = "c8y_CustomOperation", path = '/var/log/tedge/agent/c8y_CustomOperation/*' }
+  { type = "mosquitto", path = '/var/log/mosquitto/mosquitto.log' },
+  { type = "software-management", path = '/var/log/tedge/agent/software-*' },
+  { type = "c8y_CustomOperation", path = '/var/log/tedge/agent/c8y_CustomOperation/*' }
 ]
 ```
 
@@ -84,7 +84,7 @@ This will enable the `c8y-log-plugin.toml` to be tracked and managed by the `c8y
 
 ## Usage
 
-```shell
+```sh
 <!-- cmdrun c8y-log-plugin --help -->
 ```
 
@@ -100,11 +100,11 @@ the log entries in `c8y-log-plugin.toml` can be enhanced to support retrieval of
 
 Here is how the config for such logs retrieved using commands would look like:
 
-```toml
+```toml title="file: /etc/tedge/c8y/c8y-log-plugin.toml"
 files = [
-    { type = "mosquitto", path = '/var/log/mosquitto/mosquitto.log' },
-    { type = "tedge-agent", command = '/usr/bin/journalctl --unit=tedge-agent --since=$FROM --until=$TO | grep $FILTER_TEXT' },
-    { type = "<container id>", command = '/docker/log/script --target=$TARGET --from=$FROM --to=$TO --filter-text=$TEXT --line-count=$COUNT' }
+  { type = "mosquitto", path = '/var/log/mosquitto/mosquitto.log' },
+  { type = "tedge-agent", command = '/usr/bin/journalctl --unit=tedge-agent --since=$FROM --until=$TO | grep $FILTER_TEXT' },
+  { type = "<container id>", command = '/docker/log/script --target=$TARGET --from=$FROM --to=$TO --filter-text=$TEXT --line-count=$COUNT' }
 ]
 ```
 

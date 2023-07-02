@@ -1,12 +1,12 @@
 ---
-title: "`tedge disconnect`"
+title: "tedge disconnect"
 tags: [Reference, CLI]
 sidebar_position: 4
 ---
 
-# The `tedge disconnect` command
+# The tedge disconnect command
 
-```console title="tedge disconnect"
+```sh title="tedge disconnect"
 tedge-disconnect 
 Remove bridge connection for a provider
 
@@ -25,7 +25,7 @@ SUBCOMMANDS:
 
 ## AWS
 
-```console title="tedge disconnect aws"
+```sh title="tedge disconnect aws"
 tedge-disconnect-aws 
 Remove bridge connection to AWS
 
@@ -38,7 +38,7 @@ OPTIONS:
 
 ## Azure
 
-```console title="tedge disconnect az"
+```sh title="tedge disconnect az"
 tedge-disconnect-az 
 Remove bridge connection to Azure
 
@@ -51,7 +51,7 @@ OPTIONS:
 
 ## Cumulocity
 
-```console title="tedge disconnect c8y"
+```sh title="tedge disconnect c8y"
 tedge-disconnect-c8y 
 Remove bridge connection to Cumulocity
 

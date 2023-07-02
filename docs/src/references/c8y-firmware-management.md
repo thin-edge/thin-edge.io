@@ -39,26 +39,26 @@ The plugin supports a single tedge configuration named `firmware.child.update.ti
 that defines the amount of time the plugin wait for a child device to finish a firmware update once the request is delivered.
 The default timeout value (in seconds) is `3600` and can be updated with:
 
-```shell
+```sh
 sudo tedge config set firmware.child.update.timeout <value_in_seconds>
 ```
 
 ## Usage
 
-```shell
+```sh
 c8y-firmware-plugin --help
 ```
 
-```shell
+```sh
 <!-- cmdrun c8y-firmware-plugin --help -->
 ```
 
 The `c8y-firmware-plugin` has to be run as a daemon on the device.
 On systemd supported OSes, it can be run as a daemon service as follows:
 
-```shell
-systemctl start c8y-firmware-plugin
-systemctl enable c8y-firmware-plugin
+```sh
+sudo systemctl enable c8y-firmware-plugin
+sudo systemctl start c8y-firmware-plugin
 ```
 
 ## Firmware update protocol between thin-edge and the child-devices
@@ -108,8 +108,11 @@ These files are not created by the plugin itself, but must be created by the chi
 by any other means for each child device as follows:
 
 
-```shell
-$ tree /etc/tedge/operations/c8y
+```sh
+tree /etc/tedge/operations/c8y
+```
+
+```text title="Output"
 /etc/tedge/operations/c8y
 |-- child-1
 |   |-- c8y_Firmware
@@ -236,5 +239,5 @@ The plugin logs its progress and errors on to its `stderr`.
 The following details are logged:
 * All the `c8y_Firmware` requests received from Cumulocity
 * All the mapped `firmware_update` requests sent to each child device
-* The `firmware_update` responses received from the chold devices
+* The `firmware_update` responses received from the child devices
 * All errors are reported with the operation context

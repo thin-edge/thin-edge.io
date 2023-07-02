@@ -10,11 +10,11 @@ sidebar_position: 1
 
 To create new certificate you can use [`tedge cert create`](../../references/cli/tedge-cert.md) thin-edge.io command:
 
-```shell
+```sh
 sudo tedge cert create --device-id alpha
 ```
 
-```
+```text title="Output"
 Certificate was successfully created
 ```
 
@@ -27,21 +27,23 @@ To use a custom location, refer to [`tedge config`](../../references/cli/tedge-c
 
 Now you should have a certificate in the `/etc/tedge/device-certs/` directory.
 
-```shell
-ls /etc/tedge/device-certs/
+```sh
+ls -l /etc/tedge/device-certs/
 ```
 
-```
-/etc/tedge/device-certs/tedge-certificate.pem
+```text title="Output"
+total 8
+-r--r--r-- 1 mosquitto mosquitto 664 May 31 09:26 tedge-certificate.pem
+-r-------- 1 mosquitto mosquitto 246 May 31 09:26 tedge-private-key.pem
 ```
 
-### Errors
+## Errors
 
-#### Certificate creation fails due to invalid device id
+### Certificate creation fails due to invalid device id
 
 If non-supported characters are used for the device id then the cert create will fail with below error:
 
-```plain
+```text
 Error: failed to create a test certificate for the device +.
 
 Caused by:
@@ -50,11 +52,11 @@ Caused by:
 ```
 
 
-#### Certificate already exists in the given location
+### Certificate already exists in the given location
 
 If the certificate already exists you may see following error:
 
-```plain
+```text
 Error: failed to create a test certificate for the device alpha.
 
 Caused by:
@@ -69,15 +71,15 @@ Removing a certificate can break the bridge and more seriously delete a certific
 
 Follow the instruction to remove the existing certificate and issue [`tedge cert remove`](../../references/cli/tedge-cert.md):
 
-```shell
+```sh
 sudo tedge cert remove
 ```
 
-```
+```text title="Output"
 Certificate was successfully removed
 ```
 
-and try [`tedge cert create`](../../references/cli/tedge-cert.md) once again.
+Afterwards, try executing [`tedge cert create`](../../references/cli/tedge-cert.md) again.
 
 ## Next steps
 

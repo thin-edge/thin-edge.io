@@ -4,9 +4,9 @@ tags: [Operate, Cumulocity, Operation]
 sidebar_position: 1
 ---
 
-# thin-edge.io Supported Operations
+# Supported Operations
 
-## Supported Operations concepts
+## Concepts
 
 ### Device operations
 
@@ -19,14 +19,14 @@ IoT devices often do more than just send data to the cloud. They also do things 
 These operations are supported by [Cumulocity IoT](https://cumulocity.com/api/10.11.0/#section/Device-management-library) and other cloud providers.
 On `thin-edge.io` the support for one such operation can be added using the `thin-edge.io` Supported Operations API.
 
-### `thin-edge.io` Supported Operations API
+### Supported Operations API
 
 The Supported Operations utilises the file system to add and remove operations. A special file placed in `/etc/tedge/operations` directory will indicate that an operation is supported.
 The specification for the operation files is described in `thin-edge.io` specifications repository [src/supported-operations/README.md](https://github.com/thin-edge/thin-edge.io-specs/blob/main/src/supported-operations/README.md)
 
 Supported operations are declared in the cloud specific subdirectory of `/etc/tedge/operations` directory.
 
-## Custom Supported Operations
+## Custom Operations
 
 `thin-edge.io` supports custom operations by using configuration files and plugin mechanism similar to what software management agent does.
 
@@ -42,7 +42,7 @@ device>` directory to store the supported operations of that child device.
 Every file placed in the `/etc/tedge/operations/<cloud-provider>/<child-device>` directory represents an operation supported by that child device.
 The operation files can be dynamically added and removed.
 
-## `thin-edge.io` List of Supported Operations
+## List of Supported Operations
 
 `thin-edge.io` supports natively the following operations:
 
@@ -60,9 +60,11 @@ You can obtain the current list of supported operations by listing the content o
 This directory should have permissions set to `755` and the owner to `tedge`.
 This directory will contain a set subdirectories based on cloud providers currently supported eg:
 
-```shell
+```sh
 ls -l /etc/tedge/operations
+```
 
+```text title="Output"
 drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 az
 drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 c8y
 ```
@@ -72,20 +74,22 @@ The directories should be readable by `thin-edge.io` user - `tedge` - and should
 
 To list all currently supported operations for a cloud provider, run:
 
-```shell
+```sh
 ls -l /etc/tedge/operations/c8y
+```
 
+```text title="Output"
 -rw-r--r-- 1 tedge tedge 0 Jan 01 00:00 c8y_Restart
 ```
 
 To list all currently supported operations, run:
 The operations files should have permissions `644` and the owner `tedge`.
 
-```shell
+```sh
 sudo ls -lR /etc/tedge/operations
 ```
 
-```
+```text title="Output"
 /etc/tedge/operations:
 drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 az
 drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 c8y
@@ -99,11 +103,11 @@ drwxr-xr-x 2 tedge tedge 4096 Jan 01 00:00 c8y
 
 One can list all the currently supported operations for a child device as below
 
-```shell
+```sh
 sudo ls -lR /etc/tedge/operations/c8y/<child-device>
 ```
 
-```
+```text title="Output"
 -rw-r--r-- 1 tedge tedge 0 Oct 26 11:24 c8y_LogfileRequest
 ```
 
@@ -117,7 +121,7 @@ This operation will do the reboot of our device when we receive trigger from the
 
 To add new operation we will create a file in `/etc/tedge/operations/c8y` directory:
 
-```shell
+```sh
 sudo -u tedge touch /etc/tedge/operations/c8y/c8y_Restart
 ```
 
@@ -129,7 +133,7 @@ Now the new operation will be automatically added to the list and the list will 
 
 To add a new operation to a child device, create a new file in `/etc/tedge/operations/c8y/<child-device>` directory as below.
 
-```shell
+```sh
 sudo -u tedge touch /etc/tedge/operations/c8y/<child-device>/c8y_Restart
 ```
 
@@ -139,14 +143,14 @@ Now the new operation will be automatically added to the list of child supported
 
 To remove a supported operation for a thin-edge device, the corresponding operation file must be removed from the `/etc/tedge/operations/c8y` directory. eg:
 
-```shell
+```sh
 sudo rm /etc/tedge/operations/c8y/c8y_Restart
 ```
 
 Similarly, the supported operation for a child device can be removed by removing the corresponding operation file from the child device operations directory
 at `/etc/tedge/operations/c8y/<child-device>`. Eg:
 
-```shell
+```sh
 sudo rm /etc/tedge/operations/c8y/<child-device>/c8y_Restart
 ```
 
@@ -165,7 +169,7 @@ In Cumulocity IoT we know that there is an operation call c8y_Command which allo
 
 First we create a file with the name of the operation:
 
-```shell
+```sh
 sudo -u tedge touch /etc/tedge/operations/c8y/c8y_Command
 ```
 
@@ -178,9 +182,9 @@ We also know that the message we expect is going to use SmartRest template `511`
 The operation is configured to `timeout` after 10 seconds, to avoid it from running for too long/forever.
 
 
-Then we need to add the configuration to the file (`/etc/tedge/operations/c8y/c8y_Command`):
+Then we need to add the configuration to the file:
 
-```toml
+```toml title="file: /etc/tedge/operations/c8y/c8y_Command"
 [exec]
   topic = "c8y/s/ds"
   on_message = "511"
@@ -195,7 +199,7 @@ If the operation does not complete within that specified `timeout` period, then 
 
 And now the content of our command plugin:
 
-```shell
+```sh title="file: /etc/tedge/operations/command"
 #!/bin/bash
 # Parse the smart rest message, ignore the first two field, and everything afterwards is the command
 COMMAND="${1#*,*,}"

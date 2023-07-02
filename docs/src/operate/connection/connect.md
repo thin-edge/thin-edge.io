@@ -18,7 +18,7 @@ Note: `tedge connect` requires `sudo` privilege.
 
 Configure required parameters for thin-edge.io with [`tedge config set`](../../references/cli/tedge-config.md):
 
-```shell
+```sh
 sudo tedge config set c8y.url example.cumulocity.com
 ```
 
@@ -27,14 +27,17 @@ If you are unsure which parameters required by the command, simply run the comma
 
 For example, if we issue [`tedge connect c8y`](../../references/cli/tedge-connect.md) without any configuration following advice will be given:
 
-> ```shell
-> $ tedge connect c8y`
-> ...
-> Error: failed to execute `tedge connect`.
->
-> Caused by:
->     Required configuration item is not provided 'c8y.url', run 'tedge config set c8y.url <value>' to add it to config.
-> ```
+```sh
+sudo tedge connect c8y
+```
+
+```sh title="Output"
+...
+Error: failed to execute `tedge connect`.
+
+Caused by:
+    Required configuration item is not provided 'c8y.url', run 'tedge config set c8y.url <value>' to add it to config.
+```
 
 This message explains which configuration parameter is missing and how to add it to configuration,
 in this case we are told to run `tedge config set c8y.url <value>`.
@@ -55,8 +58,12 @@ and the command will prompt you for this user's password.
 These credentials are used only for this upload and will in no case be stored on the device.
 :::
 
-```shell
-sudo tedge cert upload c8y --user <username>
+```sh
+sudo tedge cert upload c8y --user "${C8Y_USER}"
+```
+
+```sh title="Example"
+sudo tedge cert upload c8y --user "john.smith@example.com"
 ```
 
 ## Creating an MQTT bridge between the device and the cloud
@@ -67,11 +74,11 @@ between the two end-points.
 
 To create the bridge use the [`tedge connect`](../../references/cli/tedge-connect.md) command.
 
-```shell
+```sh
 sudo tedge connect c8y
 ```
 
-```
+```text title="Output"
 Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
@@ -113,17 +120,17 @@ Persisting tedge-agent on reboot.
 tedge-agent service successfully started and enabled!
 ```
 
-### Errors
+## Errors
 
-#### Connection already established
+### Connection already established
 
 If connection has already been established following error may appear:
 
-```shell
+```sh
 sudo tedge connect c8y
 ```
 
-```
+```text title="Output"
 Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
@@ -136,11 +143,11 @@ Caused by:
 
 To remove existing connection and create new one follow the advice and issue [`tedge disconnect c8y`](../../references/cli/tedge-disconnect.md):
 
-```shell
+```sh
 sudo tedge disconnect c8y
 ```
 
-```
+```text title="Output"
 Removing Cumulocity bridge.
 
 Applying changes to mosquitto.
@@ -161,20 +168,20 @@ tedge-agent service successfully stopped and disabled!
 ```
 
 :::note
-`tedge disconnect c8y` also stops and disable the **tedge-mapper** service if it is installed on the device.
+`tedge disconnect c8y` also stops and disables the **tedge-mapper** service if it is installed on the device.
 :::
 
 And now you can issue [`tedge connect c8y`](../../references/cli/tedge-connect.md) to create new bridge.
 
-#### Connection check warning
+### Connection check warning
 
 Sample output of tedge connect when this warning occurs:
 
-```shell
+```sh
 sudo tedge connect c8y
 ```
 
-```
+```text title="Output"
 Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
@@ -233,21 +240,21 @@ Bridge configuration is correct but the connection couldn't be established to un
 
 To retry start with [`tedge disconnect c8y`](../../references/cli/tedge-disconnect.md) removing this bridge:
 
-```shell
+```sh
 sudo tedge disconnect c8y
 ```
 
 When this is done, issue [`tedge connect c8y`](../../references/cli/tedge-connect.md) again.
 
-#### File permissions
+### File permissions
 
-Sample output:
+Connecting without sudo will result in the following error:
 
-```shell
+```sh
 tedge connect c8y
 ```
 
-```
+```text title="Output"
 Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
@@ -264,36 +271,37 @@ Caused by:
     2: Permission denied (os error 13)
 ```
 
-tedge connect cannot access location to create the bridge configuration (`/etc/tedge/mosquitto-conf`), check permissions for the directory and adjust it to allow the tedge connect to access it.
+tedge connect cannot access directory to create the bridge configuration (`/etc/tedge/mosquitto-conf`), check permissions for the directory and adjust it to allow the tedge connect to access it.
 
 Example of incorrect permissions:
 
-```shell
+```sh
 ls -l /etc/tedge
 ```
 
-```
+```text title="Output"
 dr--r--r-- 2 tedge     tedge     4096 Mar 30 15:40 mosquitto-conf
 ```
 
 You should give it the permission 755.
-```shell
+
+```sh
 ls -l /etc/tedge
 ```
 
-```
+```text title="Output"
 drwxr-xr-x 2 tedge     tedge     4096 Mar 30 15:40 mosquitto-conf
 ```
 
-#### mosquitto and systemd check fails
+### Mosquitto and systemd check fails
 
 Sample output:
 
-```shell
+```sh
 sudo tedge connect c8y
 ```
 
-```
+```text title="Output"
 Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
@@ -311,7 +319,3 @@ Caused by:
 ```
 
 mosquitto server has not been installed on the system and it is required to run this command, refer to [How to install thin-edge.io?](../installation/install.md) to install mosquitto and try again.
-
-## Next steps
-
-1. [How to use mqtt pub/sub?](../telemetry/pub_sub.md)

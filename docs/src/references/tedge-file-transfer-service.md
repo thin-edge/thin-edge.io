@@ -12,9 +12,11 @@ as the storage on thin-edge devices are typically very limited.
 
 Files can be uploaded, downloaded and deleted from this repository via the following HTTP endpoints:
 
-* Upload: PUT http://{tedge-ip}:8000/tedge/file-transfer/{path}/{to}/{resource}
-* Download: GET http://{tedge-ip}:8000/tedge/file-transfer/{path}/{to}/{resource}
-* Delete: DELETE http://{tedge-ip}:8000/tedge/file-transfer/{path}/{to}/{resource}
+|Type|Method|Endpoint|
+|----|------|--------|
+|Upload|PUT|http://{tedge-ip}:8000/tedge/file-transfer/{path}/{to}/{resource}|
+|Download|GET|http://{tedge-ip}:8000/tedge/file-transfer/{path}/{to}/{resource}|
+|Delete|DELETE|http://{tedge-ip}:8000/tedge/file-transfer/{path}/{to}/{resource}|
 
 The `tedge-ip` is derived from the following tedge configurations:
 
@@ -26,6 +28,7 @@ else the `mqtt.bind.address` is used with the default value of `127.0.0.1`.
 
 The files uploaded to this repository are stored at `/var/tedge/file-transfer` directory.
 The `{path}/{to}/{resource}` specified in the URL is replicated under this directory.
+
 For example, a file uploaded to `http://{tedge-ip}/tedge/file-transfer/config_update/mosquitto/mosquitto.conf`
 is stored at `/var/tedge/file-transfer/config_update/mosquitto/mosquitto.conf`.
 

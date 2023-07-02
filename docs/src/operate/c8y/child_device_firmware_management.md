@@ -44,8 +44,8 @@ At first, the child device needs to declare that it supports firmware management
 using the [supported operations API](supported_operations.md) of thin-edge
 by simply creating an empty operations file on the thin-edge device as follows:
 
-```shell
-touch /etc/tedge/operations/c8y/<child-device-id>/c8y_Firmware
+```sh
+sudo touch /etc/tedge/operations/c8y/<child-device-id>/c8y_Firmware
 ```
 
 This action will add `c8y_Firmware` as a new supported operation for the child device in Cumulocity.
@@ -76,37 +76,37 @@ The following sections cover these steps in detail.
 The child device connector must subscribe to the `tedge/{CHILD_ID}/commands/req/firmware_update` MQTT topic
 to receive the firmware update requests from thin-edge.
 
-**Example:**
+**Example**
 
-```shell
+```sh
 mosquitto_sub -h {TEDGE_DEVICE_IP} -t "tedge/{CHILD_ID}/commands/req/firmware_update"
 ```
 
 These requests arrive in the following JSON format:
 
-**Payload:**
+**Payload**
 
 ```json
 {
-    "id": "{OP_ID}",
-    "attempt": 1,
-    "name": "{FIRMWARE_NAME}",
-    "version": "{FIRMWARE_VERSION}",
-    "url":"http://{TEDGE_HTTP_ADDRESS}:{TEDGE_HTTP_PORT}/tedge/file-transfer/tedge-child/firmware_update/{FILE_ID}",
-    "sha256":"{FIRMWARE_FILE_SHA256}"
+  "id": "{OP_ID}",
+  "attempt": 1,
+  "name": "{FIRMWARE_NAME}",
+  "version": "{FIRMWARE_VERSION}",
+  "url":"http://{TEDGE_HTTP_ADDRESS}:{TEDGE_HTTP_PORT}/tedge/file-transfer/tedge-child/firmware_update/{FILE_ID}",
+  "sha256":"{FIRMWARE_FILE_SHA256}"
 }
 ```
 
-**Example:**
+**Example**
 
 ```json
 {
-    "id": "tLrLthPXksKbqRqIsrDmy",
-    "attempt": 1,
-    "name": "OpenWRT",
-    "version": "22.03",
-    "url":"http://127.0.0.1:8000/tedge/file-transfer/tedge-child/firmware_update/93d50a297a8c235",
-    "sha256":"c036cbb7553a909f8b8877d4461924307f27ecb66cff928eeeafd569c3887e29"
+  "id": "tLrLthPXksKbqRqIsrDmy",
+  "attempt": 1,
+  "name": "OpenWRT",
+  "version": "22.03",
+  "url":"http://127.0.0.1:8000/tedge/file-transfer/tedge-child/firmware_update/93d50a297a8c235",
+  "sha256":"c036cbb7553a909f8b8877d4461924307f27ecb66cff928eeeafd569c3887e29"
 }
 ```
 
@@ -125,24 +125,26 @@ The fields in the request are describe below.
 On receipt of the request, the connector may optionally send an "executing" MQTT status message,
 to acknowledge the receipt of the request, as follows:
 
-**Topic:**
+**Topic**
 
-`tedge/{CHILD_ID}/commands/res/firmware_update`
+```text
+tedge/{CHILD_ID}/commands/res/firmware_update
+```
 
-**Payload**:
+**Payload**
 
 ```json
 {
-    "id": "{OP_ID}",
-    "status": "executing"
+  "id": "{OP_ID}",
+  "status": "executing"
 }
 ```
 
 where the `OP_ID` must match the `id` received in the `firmware_update` request.
 
-**Example:**
+**Example**
 
-```console
+```sh
 mosquitto_pub -h {TEDGE_DEVICE_IP} -t "tedge/{CHILD_ID}/commands/res/firmware_update" -m '{"id": "{OP_ID}", "status": "executing"}'
 ```
 
@@ -162,41 +164,43 @@ This step is very device specific and might require use of other device specific
 
 Once the update is successfully applied, send a "successful" MQTT status message as follows:
 
-**Topic:**
+**Topic**
 
-`tedge/{CHILD_ID}/commands/res/firmware_update`
+```text
+tedge/{CHILD_ID}/commands/res/firmware_update
+```
 
-**Payload**:
+**Payload**
 
 ```json
 {
-    "id": "{OP_ID}",
-    "status": "successful"
+  "id": "{OP_ID}",
+  "status": "successful"
 }
 ```
 
-**Example:**
+**Example**
 
-```console
+```sh
 mosquitto_pub -h {TEDGE_DEVICE_IP} -t "tedge/{CHILD_ID}/commands/res/firmware_update" -m '{ "id": "{OP_ID}", "status": "successful" }'
 ```
 
 If there are any failures while downloading or applying the update,
 a "failed" status update (with an optional `reason`) must be sent instead, to the same topic as follows:
 
-**Payload**:
+**Payload**
 
 ```json
 {
-    "id": "{OP_ID}",
-    "status": "failed",
-    "reason": "Failure reason"
+  "id": "{OP_ID}",
+  "status": "failed",
+  "reason": "Failure reason"
 }
 ```
 
-**Example:**
+**Example**
 
-```console
+```sh
 mosquitto_pub -h {TEDGE_DEVICE_IP} -t "tedge/{CHILD_ID}/commands/res/firmware_update" -m '{ "id": "{OP_ID}", "status": "failed", "reason": "SHA-256 checksum validation failed" }'
 ```
 
