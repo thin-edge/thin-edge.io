@@ -28,7 +28,7 @@ Most of the installation process is based on
 Before starting, be sure the host, where you plan to build a new Yocto image with thin-edge, meets the following
 requirements:
 
-- 50 Gbytes of free disk space
+- 50 GB of free disk space
 - a Linux distributions that supports the Yocto Project, see the [Supported Linux
 Distributions](https://docs.yoctoproject.org/4.0.4/ref-manual/system-requirements.html#supported-linux-distributions)
 section in the Yocto Project Reference Manual. For detailed information on preparing your build host, see the [Preparing
