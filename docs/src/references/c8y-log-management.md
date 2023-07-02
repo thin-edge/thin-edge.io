@@ -85,7 +85,40 @@ This will enable the `c8y-log-plugin.toml` to be tracked and managed by the `c8y
 ## Usage
 
 ```sh
-<!-- cmdrun c8y-log-plugin --help -->
+c8y-log-plugin --help
+```
+
+```run command="c8y-log-plugin --help" lang="text" title="Output"
+Thin-edge device log file retriever for Cumulocity
+
+USAGE:
+    c8y-log-plugin [OPTIONS]
+
+OPTIONS:
+        --config-dir <CONFIG_DIR>
+            [default: /etc/tedge]
+
+        --debug
+            Turn-on the debug log level.
+
+            If off only reports ERROR, WARN, and INFO If on also reports DEBUG and TRACE
+
+    -h, --help
+            Print help information
+
+    -i, --init
+            Create supported operation files
+
+    -V, --version
+            Print version information
+
+On start, `c8y-log-plugin` notifies the cloud tenant of the log types listed in the `CONFIG_FILE`,
+sending this list with a `118` on `c8y/s/us`.
+`c8y-log-plugin` subscribes then to `c8y/s/ds` listening for logfile operation requests (`522`)
+notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
+
+The thin-edge `CONFIG_DIR` is used to store:
+  * c8y-log-plugin.toml - the configuration file that specifies which logs to be retrieved
 ```
 
 ## Logging

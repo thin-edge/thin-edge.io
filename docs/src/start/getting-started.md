@@ -85,7 +85,7 @@ When running this command something similar like the following will be displayed
 tedge -h
 ```
 
-```run command="tedge -h" lang="sh" title="Output"
+```run command="tedge -h" lang="text" title="Output"
 tedge is the cli tool for thin-edge.io
 
 USAGE:

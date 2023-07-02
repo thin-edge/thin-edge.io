@@ -49,8 +49,41 @@ sudo tedge config set firmware.child.update.timeout <value_in_seconds>
 c8y-firmware-plugin --help
 ```
 
-```sh
-<!-- cmdrun c8y-firmware-plugin --help -->
+```run command="c8y-firmware-plugin --help" lang="text" title="Output"
+Thin-edge device firmware management for Cumulocity
+
+USAGE:
+    c8y-firmware-plugin [OPTIONS]
+
+OPTIONS:
+        --config-dir <CONFIG_DIR>
+            [default: /etc/tedge]
+
+        --debug
+            Turn-on the debug log level.
+
+            If off only reports ERROR, WARN, and INFO If on also reports DEBUG and TRACE
+
+    -h, --help
+            Print help information
+
+    -i, --init
+            Create required directories
+
+    -V, --version
+            Print version information
+
+`c8y-firmware-plugin` subscribes to `c8y/s/ds` listening for firmware operation requests (message
+`515`).
+Notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
+During a successful operation, `c8y-firmware-plugin` updates the installed firmware info in
+Cumulocity tenant with SmartREST message `115`.
+
+The thin-edge `CONFIG_DIR` is used to find where:
+  * to store temporary files on download: `tedge config get tmp.path`,
+  * to log operation errors and progress: `tedge config get log.path`,
+  * to connect the MQTT bus: `tedge config get mqtt.bind.port`,
+  * to timeout pending operations: `tedge config get firmware.child.update.timeout
 ```
 
 The `c8y-firmware-plugin` has to be run as a daemon on the device.
