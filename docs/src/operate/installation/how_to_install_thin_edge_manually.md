@@ -128,7 +128,7 @@ sudo rc-service mosquitto start
 
 This should show the following output:
 
-![Sublime's custom image](../../images/manual_installation-binaries_init.png)
+![Binaries init](../../images/manual_installation-binaries_init.png)
 
 :::note
 If you do not restart mosquitto you will see a Connection refused error. Do not worry, this error can be ignored.
@@ -136,7 +136,7 @@ If you do not restart mosquitto you will see a Connection refused error. Do not 
 
 Ensure that running the init has created the following files and directories in `/etc/tedge`:
 
-![Sublime's custom image](../../images/manual_installation-tedge_directories.png)
+![tedge directories](../../images/manual_installation-tedge_directories.png)
 
 ## Step 2: Creating mosquitto bridge
 
