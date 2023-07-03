@@ -62,18 +62,18 @@ Use the `tedge` command to connect to the desired cloud as below.
 tedge connect c8y
 
 #or
-
 tedge connect az
 
 #or
-
 tedge connect aws
 ```
 
 This will configure all the services (mosquitto, tedge-mapper-c8y.service, tedge-mapper-az.service,
   tedge-mapper-aws.service, tedge-agent.service) to use the newly set port and the bind address.
-  
-Note: The step 1 and 2 can be followed in any order.
+
+:::note
+The step 1 and 2 can be followed in any order.
+:::
 
 ## Revert to use default port and bind address
 

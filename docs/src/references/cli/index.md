@@ -7,7 +7,6 @@ sidebar_position: 4
 # The tedge command
 
 ```sh title="tedge"
-tedge 0.11.0
 tedge is the cli tool for thin-edge.io
 
 USAGE:

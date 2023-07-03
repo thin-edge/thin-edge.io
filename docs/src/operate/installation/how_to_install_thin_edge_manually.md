@@ -26,7 +26,13 @@ You will also need to have mosquitto installed. Check your package manager for a
 
 To build from source, download the **Source code (zip)** from the [latest releases page](https://github.com/thin-edge/thin-edge.io/releases/latest).
 
-![Sublime's custom image](../../images/manual_installation-download_source_code.png)
+<p align="center">
+    <img
+        src={require('../../images/manual_installation-download_source_code.png').default}
+        alt="Download source code"
+        width="40%"
+    />
+</p>
 
 Once downloaded, unzip it and enter the thin-edge.io directory and build the project with the `--release` flag:
 
@@ -52,7 +58,13 @@ sudo mv target/release/tedge-mapper /usr/bin
 
 You should now have access to the `tedge`, `tedge-agent` and `tedge-mapper` binaries.
 
-![Sublime's custom image](../../images/manual_installation-tedge_binary_dry_run.png)
+<p align="center">
+    <img
+        src={require('../../images/manual_installation-tedge_binary_dry_run.png').default}
+        alt="Manual installation of tedge binary dry run"
+        width="80%"
+    />
+</p>
 
 
 ## Extracting binaries from debian files
@@ -64,7 +76,13 @@ For a minimal configuration of thin-edge.io with Cumulocity IoT, you will need t
 - tedge\_agent\_{VERSION}\_amd64.deb
 - tedge\_mapper\_{VERSION}\_amd64.deb
 
-![Sublime's custom image](../../images/manual_installation-minimum_deb_packages.png)
+<p align="center">
+    <img
+        src={require('../../images/manual_installation-minimum_deb_packages.png').default}
+        alt="Manual installation of debian packages"
+        width="60%"
+    />
+</p>
 
 Next, unpack each deb file and copy the binary to `/usr/bin`.
 For `tedge` debian package do:
@@ -110,7 +128,7 @@ sudo rc-service mosquitto start
 
 This should show the following output:
 
-![Sublime's custom image](../../images/manual_installation-binaries_init.png)
+![Binaries init](../../images/manual_installation-binaries_init.png)
 
 :::note
 If you do not restart mosquitto you will see a Connection refused error. Do not worry, this error can be ignored.
@@ -118,7 +136,7 @@ If you do not restart mosquitto you will see a Connection refused error. Do not 
 
 Ensure that running the init has created the following files and directories in `/etc/tedge`:
 
-![Sublime's custom image](../../images/manual_installation-tedge_directories.png)
+![tedge directories](../../images/manual_installation-tedge_directories.png)
 
 ## Step 2: Creating mosquitto bridge
 

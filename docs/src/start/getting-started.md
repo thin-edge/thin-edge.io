@@ -155,7 +155,9 @@ sudo tedge cert upload c8y --user "john.smith@example.com"
 
 If the password prompt appears, enter your password.
 
-``NOTE``: In a production environment, it is not recommended to use the above self-signed certificate, which is for demo purposes. If you plan to use this tutorial as a basis for production, please have a look here: [Registering devices using certificates](https://cumulocity.com/guides/10.7.0/device-sdk/mqtt/#device-certificates).
+:::info
+In a production environment, it is not recommended to use the above self-signed certificate, which is for demo purposes. If you plan to use this tutorial as a basis for production, please have a look here: [Registering devices using certificates](https://cumulocity.com/guides/10.7.0/device-sdk/mqtt/#device-certificates).
+:::
 
 ### Connect
 
@@ -167,7 +169,13 @@ sudo tedge connect c8y
 
 When the connection is established, the device will be created in Cumulocity IoT. When you go to Device Management &rarr; Devices &rarr; All devices, the device is visible in the list.
 
-![NewDevice](./images/DevicesList.png)
+<p align="center">
+    <img
+        src={require('./images/DevicesList.png').default}
+        alt="All devices"
+        width="40%"
+    />
+</p>
 
 ## Step 3 Sending Device Data
 
@@ -272,7 +280,7 @@ sudo systemctl restart collectd
 What you should see by now is that data arrives on the `collectd/#` topics. You can check that via:
 
 ```sh te2mqtt
-tedge mqtt sub collectd/#
+tedge mqtt sub 'collectd/#'
 ```
 
 The output will be similar like:
