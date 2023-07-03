@@ -282,8 +282,7 @@ impl Config {
 
         let client_auth_config = ClientAuthConfig { cert_chain, key };
 
-        let mut authentication_config =
-            self.broker.authentication.get_or_insert(Default::default());
+        let authentication_config = self.broker.authentication.get_or_insert(Default::default());
         authentication_config.client_auth = Some(client_auth_config);
 
         Ok(self)

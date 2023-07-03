@@ -216,8 +216,16 @@ impl TomlMigrationStep {
 /// The keys that can be read from the configuration
 pub static READABLE_KEYS: Lazy<Vec<(Cow<'static, str>, doku::Type)>> = Lazy::new(|| {
     let ty = TEdgeConfigReader::ty();
-    let doku::TypeKind::Struct { fields, transparent: false } = ty.kind else { panic!("Expected struct but got {:?}", ty.kind) };
-    let doku::Fields::Named { fields } = fields else { panic!("Expected named fields but got {:?}", fields)};
+    let doku::TypeKind::Struct {
+        fields,
+        transparent: false,
+    } = ty.kind
+    else {
+        panic!("Expected struct but got {:?}", ty.kind)
+    };
+    let doku::Fields::Named { fields } = fields else {
+        panic!("Expected named fields but got {:?}", fields)
+    };
     struct_field_paths(None, &fields)
 });
 
