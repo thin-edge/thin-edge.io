@@ -2,59 +2,92 @@ name: Build and Deploy to Github Pages
 
 on:
   push:
-    branches: [ main ]
+    branches: ["main"]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      include_last_version:
+        description: Include the last released version
+        type: boolean
+        required: false
+        default: false
+
+      include_next_version:
+        description: Include the next unreleased version
+        type: boolean
+        required: false
+        default: true
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   deploy:
-    runs-on: ubuntu-20.04
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Install stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup mdBook
-        uses: peaceiris/actions-mdbook@v1
+      - name: Checkout tedge-docs
+        uses: actions/checkout@v3
         with:
-          mdbook-version: "0.4.18"
-          # mdbook-version: 'latest'
+          repository: thin-edge/tedge-docs
+          ref: main
+          path: tedge-docs
 
-      - name: install mdbook-mermaid
-        run: cargo install mdbook-mermaid
+      - name: Checkout thin-edge.io
+        uses: actions/checkout@v3
+        with:
+          repository: thin-edge/thin-edge.io
+          path: thin-edge.io
 
-      - name: install mdbook-linkcheck
-        run: cargo install mdbook-linkcheck
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: yarn
+          cache-dependency-path: tedge-docs/yarn.lock
 
-      - name: install mdbook-admonish
-        run: cargo install mdbook-admonish
+      - uses: extractions/setup-just@v1
 
-      - name: install mdbook-pagetoc
-        run: cargo install mdbook-pagetoc
+      - name: Setup project
+        working-directory: tedge-docs
+        run: just init
 
-      - name: install mdbook-cmdrun
-        run: cargo install mdbook-cmdrun
+      - name: Checkout last official version
+        if: ${{ inputs.include_last_version }}
+        working-directory: tedge-docs
+        run: just checkout-version
 
-      - name: Cargo build tedge cli
-        run: cargo build --bin tedge
+      - name: Install dependencies
+        working-directory: tedge-docs
+        run: yarn install --frozen-lockfile
 
-      - name: Update PATH
-        run: echo "$PWD/target/debug" >> $GITHUB_PATH
+      - name: Build website
+        working-directory: tedge-docs
+        env:
+          DOMAIN: ${{format('https://{0}.github.io', github.repository_owner)}}
+          BASE_URL: /thin-edge.io/
+          INCLUDE_CURRENT_VERSION: ${{inputs.include_next_version}}
+        run: yarn build
 
-      - name: Run mdbook build
-        shell: bash
-        run: |
-          echo "generating doc for $(tedge --version)"
-          cd docs
-          mdbook build
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
 
-      # Blocking deploy till fully ported to docusaurus
-      # - name: Deploy
-      #   uses: peaceiris/actions-gh-pages@v3
-      #   if: github.ref == 'refs/heads/main'
-      #   with:
-      #     github_token: ${{ secrets.GITHUB_TOKEN }}
-      #     publish_dir: ./docs/book/html
-      #     destination_dir: html
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: 'tedge-docs/build'
 
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
