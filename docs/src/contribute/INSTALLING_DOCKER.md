@@ -1,3 +1,9 @@
+---
+title: Setting up Docker
+tags: [Contribute]
+sidebar_position: 10
+---
+
 # Setting up Docker (OSS - Variant)
 
 This guide is to assist with the installation of docker and some of the docker cli tools. It is not meant to replace other online articles but more of a cheat sheet to getting your setup up and running as fast as possible. If you encounter issues with the setup, please search online for a fix.
@@ -10,9 +16,9 @@ There are different ways to install the docker engine on MacOS, however this gui
 
 1. Install homebrew. You can also install homebrew without `sudo` rights using this [guide](https://docs.brew.sh/Installation#untar-anywhere-unsupported)
 
-    ✨ **Tip** ✨
-
-    * Make sure you read the homebrew instructions which are printed out on the console 😉
+    :::tip
+    Make sure you read the homebrew instructions which are printed out on the console as it will guide you to the additional setup steps.
+    :::
 
 2. Install [colima](https://github.com/abiosoft/colima) and the docker cli
 
@@ -20,9 +26,9 @@ There are different ways to install the docker engine on MacOS, however this gui
     brew install colima
     ```
 
-    **Note**
-
-    * The installation will take a while as it will have to compile various dependencies.
+    :::info
+    The installation will take a while as it will have to compile various dependencies.
+    :::
 
 3. Install the docker cli tools
 
@@ -43,11 +49,11 @@ There are different ways to install the docker engine on MacOS, however this gui
     colima start --cpu 4 --memory 8
     ```
 
-    **Note**
-
+    :::info
     * The extra arguments are only needed the first time you start it. You can change the settings to based on what you are need/have.
     * You can adjust the number of CPUs and amount of RAM used by colima to suite your machine
     * You will have to start `colima` each time your machine is restarted (as it is not configured to autostart, though there are ways on MacOS to do this)
+    :::
 
 5. Check that everything is working by starting the `hello-world` container
 
@@ -95,7 +101,7 @@ After the install verify that everything is working correctly by running the fol
 
 Some typical problems can be found here. Remember, if you don't find your error then please search online using your preferred search engine.
 
-##### Invalid
+### Invalid
 
 Check the docker config file `~/.docker/config.json`. The credential manager setting (`credsStore`) should be set to `osxkeychain`.
 

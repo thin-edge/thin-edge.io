@@ -106,55 +106,6 @@ jobs:
           version: 'v0.1.35'
           args: '--all-features'
 
-  mdbook-build-check:
-    name: Run mdbook build
-    runs-on: ubuntu-20.04
-    needs: changes
-    if: ${{ needs.changes.outputs.docs == 'true' || needs.changes.outputs.workflows == 'true' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Install stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup mdBook
-        uses: peaceiris/actions-mdbook@v1
-        # https://github.com/marketplace/actions/mdbook-action
-        with:
-          mdbook-version: "0.4.18"
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install mdbook-mermaid
-        run: cargo install mdbook-mermaid
-
-      - name: Install mdbook-linkcheck
-        run: cargo install mdbook-linkcheck
-
-      - name: Install mdbook-admonish
-        run: cargo install mdbook-admonish
-
-      - name: Install mdbook-pagetoc
-        run: cargo install mdbook-pagetoc
-
-      - name: Install mdbook-cmdrun
-        run: cargo install mdbook-cmdrun
-
-      - name: Cargo build tedge cli
-        run: cargo build --bin tedge
-
-      - name: Update PATH
-        run: echo "$PWD/target/debug" >> $GITHUB_PATH
-
-      - name: Run mdbook build
-        shell: bash
-        run: |
-          echo "generating doc for $(tedge --version)"
-          cd docs
-          mdbook build
-
   cargo-sort:
     name: Run cargo sort
     runs-on: ubuntu-20.04

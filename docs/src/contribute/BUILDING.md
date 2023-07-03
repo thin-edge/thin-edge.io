@@ -1,3 +1,9 @@
+---
+title: Build thin-edge
+tags: [Contribute, Build]
+sidebar_position: 1
+---
+
 # Building thin-edge.io
 
 ## Requirements
@@ -24,13 +30,13 @@ thin-edge.io code is in git repository on github to acquire the code use followi
 
 * via SSH:
 
-```shell
+```sh
 git clone git@github.com:thin-edge/thin-edge.io.git
 ```
 
 * or via HTTPS:
 
-```shell
+```sh
 git clone https://github.com/thin-edge/thin-edge.io.git
 ```
 
@@ -41,29 +47,29 @@ git clone https://github.com/thin-edge/thin-edge.io.git
 To install Rust follow [Official installation guide](https://www.rust-lang.org/tools/install).
 To get started you need Cargo's bin directory (`$HOME/.cargo/bin`) in your `PATH` environment variable.
 
-```shell
+```sh
 export PATH=$PATH:$HOME/.cargo/bin
 ```
 
 And then you can run `rustc` to view current version:
 
-```shell
+```sh
 rustc --version
 ```
 
-```
+```text title="Output"
 rustc 1.65.0 (897e37553 2022-11-02)
 ```
 
-```admonish
+:::note
 Above command will add rust to path only for existing session,
 after you restart the session you will have to add it again,
 to add rust to the path permanently it will depend on your shell but for Bash,
-you simply need to add the line from above, `export PATH=$PATH:$HOME/.cargo/bin` to your ~/.bashrc.
+you simply need to add the line from above, `export PATH=$PATH:$HOME/.cargo/bin` to your `~/.bashrc`.
 
 For other shells, you'll want to find the appropriate place to set a configuration at start time,
-eg. zsh uses ~/.zshrc. Check your shell's documentation to find what file it uses.
-```
+eg. zsh uses `~/.zshrc`. Check your shell's documentation to find what file it uses.
+:::
 
 thin-edge.io operates the `MSRV` (Minimum Supported Rust Version) and uses stable toolchain.
 
@@ -76,7 +82,7 @@ Currently we support `Raspberry Pi 3B` for `armv7` architecture with Rust's cros
 
 To install [cargo cross](https://github.com/rust-embedded/cross):
 
-```shell
+```sh
 cargo install cross
 ```
 
@@ -86,7 +92,7 @@ We use [cargo deb](https://github.com/mmstick/cargo-deb) to build our debian pac
 
 To install [cargo deb](https://github.com/mmstick/cargo-deb) use:
 
-```shell
+```sh
 cargo install cargo-deb
 ```
 
@@ -100,17 +106,17 @@ As we are using  `cargo workspace` for all our crates. All compiled files are pu
 
 To compile dev profile (with debug symbols) we use following command:
 
-```shell
+```sh
 cargo build
 ```
 
 Build artifacts can be found in `./target/debug` and will include executables:
 
-```shell
-ls ./target/debug/tedge*
+```sh
+ls -l ./target/debug/tedge*
 ```
 
-```
+```text title="Output"
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge-mapper
 ```
@@ -118,7 +124,7 @@ ls ./target/debug/tedge*
 Binaries can be run eg: `./target/debug/tedge`.
 Alternatively, you can use `cargo` to build and run executable in a single command:
 
-```shell
+```sh
 cargo run --bin tedge
 ```
 
@@ -126,17 +132,17 @@ cargo run --bin tedge
 
 To compile release profile we use following command:
 
-```shell
+```sh
 cargo build --release
 ```
 
 Build artifacts can be found in `./target/release` and will include executables:
 
-```shell
-ls ./target/release/tedge*
+```sh
+ls -l ./target/release/tedge*
 ```
 
-```
+```text title="Output"
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge-mapper
 ```
@@ -147,21 +153,18 @@ Binaries can be run eg: `./target/release/tedge`.
 
 Currently thin-edge.io contains 2 binaries, `tedge` (cli) and `tedge-mapper` which are packaged as separate debian packages. To create following commands are to be issued:
 
-```shell
+```sh
 cargo deb -p tedge
-```
-
-```shell
 cargo deb -p tedge-mapper
 ```
 
 All resulting packages are going to be in: `./target/debian/` directory:
 
-```shell
-ls ./target/debian -l
+```sh
+ls -l ./target/debian
 ```
 
-```
+```text title="Output"
 total 2948
 -rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge_0.9.0_amd64.deb
 -rw-rw-r-- 1 user user 11111 Jan 1 00:00 tedge-mapper_0.9.0_amd64.deb
@@ -171,24 +174,24 @@ total 2948
 
 To create binaries which can run on different platform than one you are currently on you can use [cargo cross](https://github.com/rust-embedded/cross):
 
-```shell
+```sh
 cross build --target armv7-unknown-linux-gnueabihf
 ```
 
 Build artifacts can be found in `./target/armv7-unknown-linux-gnueabihf/debug` and will include executables:
 
-```shell
-ls ./target/armv7-unknown-linux-gnueabihf/debug/tedge*
+```sh
+ls -l ./target/armv7-unknown-linux-gnueabihf/debug/tedge*
 ```
 
-```
+```text title="Output"
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge
 -rwxrwxr-x   2 user user 11111 Jan 1 00:00 tedge-mapper
 ```
 
 To cross compile release version of the binaries just add `--release` to the above command like so:
 
-```shell
+```sh
 cross build --target armv7-unknown-linux-gnueabihf --release
 ```
 
@@ -196,12 +199,12 @@ cross build --target armv7-unknown-linux-gnueabihf --release
 
 When contributing to thin-edge.io we ask you to write tests for the code you have written. The tests will be run by build pipeline when you create pull request, but you can easily run all the tests when you are developing with following command:
 
-```shell
+```sh
 cargo test
 ```
 
 This will run all tests from the repository and sometime may take long time, `cargo` allows you to run specific test or set of tests for binary:
 
-```shell
+```sh
 cargo test --bin tedge
 ```

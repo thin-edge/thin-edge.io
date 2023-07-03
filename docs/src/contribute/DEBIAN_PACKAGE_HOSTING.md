@@ -1,3 +1,9 @@
+---
+title: Debian Package Hosting
+tags: [Contribute, Packaging]
+sidebar_position: 3
+---
+
 # Debian Package Hosting
 
 In additional to the thin-edge.io install script, the packages are also publicly hosted APT repository.

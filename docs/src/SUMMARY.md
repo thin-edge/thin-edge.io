@@ -1,3 +1,7 @@
+---
+draft: true
+---
+
 # Index
 
 - [Overview](overview.md)
@@ -20,7 +24,7 @@
   
 - [Operate devices](operate/index.md)
   - [Installation](operate/installation/index.md)
-    - [How to install thin-edge.io?](operate/installation/installation.md)
+    - [How to install thin-edge.io?](operate/installation/install.md)
     - [How to install thin-edge.io on any Linux OS (no deb support)?](operate/installation/installation_without_deb_support.md)
     - [How to install thin-edge manually with openrc](operate/installation/how_to_install_thin_edge_manually.md)
     - [How to install and enable software management?](operate/installation/install_and_enable_software_management.md)
@@ -74,14 +78,14 @@
 - [Reference](references/index.md)
   - [Supported platforms](references/supported-platforms.md)
   - [Thin-edge.io configuration files](references/thin-edge-config-files.md)
-  - [MQTT bridge configuration](references/bridged-topics.md)
+  - [MQTT bridge configuration](references/mqtt-topics.md)
   - [Init System Configuration File](references/init-system-config.md)
-  - [`tedge` command](references/tedge.md)
-    - [`tedge cert` command](references/tedge-cert.md)
-    - [`tedge config` command](references/tedge-config.md)
-    - [`tedge connect` command](references/tedge-connect.md)
-    - [`tedge disconnect` command](references/tedge-disconnect.md)
-    - [`tedge mqtt` command](references/tedge-mqtt.md)
+  - [`tedge` command](references/cli/index.md)
+    - [`tedge cert` command](references/cli/tedge-cert.md)
+    - [`tedge config` command](references/cli/tedge-config.md)
+    - [`tedge connect` command](references/cli/tedge-connect.md)
+    - [`tedge disconnect` command](references/cli/tedge-disconnect.md)
+    - [`tedge mqtt` command](references/cli/tedge-mqtt.md)
   - [Domain Model](understand/domain-model.md)
   - [Data Model](understand/data-model.md)
   - [Plugin API](references/plugin-api.md)

@@ -1,3 +1,9 @@
+---
+title: Connecting to Cumulocity IoT
+tags: [Getting Started, Cumulocity, Connection]
+sidebar_position: 2
+---
+
 # Connect your device to Cumulocity IoT
 
 The very first step to enable `thin-edge.io` is to connect your device to the cloud.
@@ -17,9 +23,9 @@ Before you try to connect your device to Cumulocity IoT, you need:
     * None of these credentials will be stored on the device.
     * These are only required once, to register the device.
 
-If not done yet, [install `thin-edge.io` on your device](../operate/installation/installation.md).
+If not done yet, [install `thin-edge.io` on your device](../operate/installation/install.md).
 
-You can now use the [`tedge` command](../references/tedge.md) to:
+You can now use the [`tedge` command](../references/cli/index.md) to:
 * [create a certificate for you device](connect-c8y.md#create-the-certificate),
 * [make the device certificate trusted by Cumulocity](connect-c8y.md#make-the-device-trusted-by-cumulocity),
 * [connect the device](connect-c8y.md#connect-the-device), and
@@ -31,18 +37,18 @@ To connect the device to the Cumulocity IoT, one needs to set the URL of your Cu
 
 Set the URL of your Cumulocity IoT tenant.
 
-```
+```sh
 sudo tedge config set c8y.url your-tenant.cumulocity.com
 ```
 
 Set the path to the root certificate if necessary. The default is `/etc/ssl/certs`.
 
-```
+```sh
 sudo tedge config set c8y.root_cert_path /etc/ssl/certs
 ```
 
 This will set the root certificate path of the Cumulocity IoT.
-In most of the Linux flavors, the certificate will be present in /etc/ssl/certs.
+In most of the Linux flavors, the certificate will be present in `/etc/ssl/certs`.
 If not found download it from [here](https://www.identrust.com/dst-root-ca-x3).
 
 
@@ -51,18 +57,21 @@ If not found download it from [here](https://www.identrust.com/dst-root-ca-x3).
 If the Cumulocity IoT instance that you're connecting to, is signed with a self-signed certificate(eg: Cumulocity IoT Edge instance),
 then the path to that server certificate must be set as the c8y.root_cert_path as follows:
 
-```
+```sh
 sudo tedge config set c8y.root_cert_path /path/to/the/self-signed/certificate
 ```
 
-```admonish warning
-This is the certificate chain of the server and not the device's certificate kept at /etc/tedge/device-certs directory.
-```
+:::info
+This is the certificate chain of the server and not the device's certificate kept at `/etc/tedge/device-certs` directory.
+:::
 
 If the Cumulocity server's certificate chain file isn't available locally, it can be downloaded using a web browser or using some other
 third-party tools like openssl command as follows (to be adjusted based on your env):
 
-`openssl s_client -connect <hostname>:<port> < /dev/null 2>/dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p'`
+```sh
+openssl s_client -connect <hostname>:<port> < /dev/null 2>/dev/null \
+| sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p'
+```
 
 ## Create the certificate
 
@@ -73,21 +82,21 @@ This identifier will be used to uniquely identify your devices among others in y
 This identifier will be also used as the Common Name (CN) of the certificate.
 Indeed, this certificate aims to authenticate that this device is actually the device with that identity.
 
-```
+```sh
 sudo tedge cert create --device-id my-device
 ```
 
-```
+```text title="Output"
 Certificate was successfully created
 ```
 
 You can then check the content of that certificate.
 
-```shell
+```sh
 sudo tedge cert show
 ```
 
-```
+```text title="Output"
 Device certificate: /etc/tedge/device-certs/tedge-certificate.pem
 Subject: CN=my-device, O=Thin Edge, OU=Test Device
 Issuer: CN=my-device, O=Thin Edge, OU=Test Device
@@ -99,7 +108,7 @@ Thumbprint: CDBF4EC17AA02829CAC4E4C86ABB82B0FE423D3E
 You may notice that the issuer of this certificate is the device itself.
 This is a self-signed certificate.
 To use a certificate signed by your Certificate Authority,
-see the reference guide of [`tedge cert`](../references/tedge-cert.md).
+see the reference guide of [`tedge cert`](../references/cli/tedge-cert.md).
 
 ## Make the device trusted by Cumulocity
 
@@ -114,14 +123,18 @@ This can be done:
   to your tenant "Device Management/Management/Trusted certificates".
 * or using the `tedge cert upload c8y` command.
 
-```shell
-sudo tedge cert upload c8y --user <username>
+```sh
+sudo tedge cert upload c8y --user "${C8Y_USER}"
 ```
 
-```admonish warning
+```sh title="Example"
+sudo tedge cert upload c8y --user "john.smith@example.com"
+```
+
+:::tip
 To upload the certificate to cumulocity this user needs to have "Tenant management" admin rights.
 If you get an error 503 here, check the appropriate rights in cumulocity user management.
-```
+:::
 
 ## Connect the device
 
@@ -134,11 +147,11 @@ Also, if you have installed `tedge-mapper`, this command starts and enables the 
 At last, it sends packets to Cumulocity to check the connection.
 If your device is not yet registered, you will find the digital-twin created in your tenant after `tedge connect c8y`!
 
-```shell
+```sh
 sudo tedge connect c8y
 ```
 
-```
+```text title="Output"
 Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
@@ -185,14 +198,17 @@ tedge-agent service successfully started and enabled!
 Sending data to Cumulocity is done using MQTT over topics prefixed with `c8y`.
 Any messages sent to one of these topics will be forwarded to Cumulocity.
 The messages are expected to have a format specific to each topic.
-Here, we use `tedge mqtt pub` a raw Cumulocity SmartRest message to be understood as a temperature of 20 Celsius.
+Here, we use `tedge mqtt pub` a raw Cumulocity SmartRest message to be understood as a temperature of 20°C.
 
-```shell
+```sh te2mqtt
 tedge mqtt pub c8y/s/us 211,20
 ```
 
 To check that this message has been received by Cumulocity,
-navigate to "Device Management/Devices/All devices/\<your device id\>/Measurements".
+navigate to:
+
+Device Management &rarr; Devices &rarr; All devices &rarr; `device_id` &rarr; Measurements
+
 You should observe a "temperature measurement" graph with the new data point.
 
 ## Next Steps
@@ -200,6 +216,6 @@ You should observe a "temperature measurement" graph with the new data point.
 You can now:
 * learn how to [send various kind of telemetry data](send-thin-edge-data.md)
   using the cloud-agnostic [Thin-Edge-Json data format](../understand/thin-edge-json.md),
-* or have a detailed view of the [topics mapped to and from Cumulocity](../references/bridged-topics.md#cumulocity-mqtt-topics)
+* or have a detailed view of the [topics mapped to and from Cumulocity](../references/mqtt-topics.md#cumulocity-mqtt-topics)
   if you prefer to use directly Cumulocity specific formats and protocols.
 * learn how to [add custom fragments to cumulocity](../operate/c8y/c8y_fragments.md).

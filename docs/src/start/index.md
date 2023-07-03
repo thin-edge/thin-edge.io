@@ -1,6 +1,12 @@
+---
+title: Getting Started
+tags: [Getting Started]
+sidebar_position: 1
+---
+
 # Getting started
 
-- [Install](../operate/installation/installation.md),
+- [Install](../operate/installation/install.md),
 - [Getting Started](./getting-started.md)
 
 ## Cloud connections

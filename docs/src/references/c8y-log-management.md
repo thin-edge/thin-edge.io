@@ -1,3 +1,9 @@
+---
+title: Log File Management
+tags: [Reference, Log Files]
+sidebar_position: 7
+---
+
 # Log file management from Cumulocity
 
 Thin-edge provides an operation plugin to [fetch log files from the device on to Cumulocity](https://cumulocity.com/guides/users-guide/device-management/#logs).
@@ -31,11 +37,11 @@ This [TOML](https://toml.io/en/) file defines the list of log files that can be 
 The paths to these files can be represented using [glob](https://en.wikipedia.org/wiki/Glob_(programming)) patterns.
 The `type` given to these paths are used as the log type when they are reported to Cumulocity.
 
-```toml
+```toml title="file: /etc/tedge/c8y/c8y-log-plugin.toml"
 files = [
-    { type = "mosquitto", path = '/var/log/mosquitto/mosquitto.log' },
-    { type = "software-management", path = '/var/log/tedge/agent/software-*' },
-    { type = "c8y_CustomOperation", path = '/var/log/tedge/agent/c8y_CustomOperation/*' }
+  { type = "mosquitto", path = '/var/log/mosquitto/mosquitto.log' },
+  { type = "software-management", path = '/var/log/tedge/agent/software-*' },
+  { type = "c8y_CustomOperation", path = '/var/log/tedge/agent/c8y_CustomOperation/*' }
 ]
 ```
 
@@ -78,8 +84,41 @@ This will enable the `c8y-log-plugin.toml` to be tracked and managed by the `c8y
 
 ## Usage
 
-```shell
-<!-- cmdrun c8y-log-plugin --help -->
+```sh
+c8y-log-plugin --help
+```
+
+```run command="c8y-log-plugin --help" lang="text" title="Output"
+Thin-edge device log file retriever for Cumulocity
+
+USAGE:
+    c8y-log-plugin [OPTIONS]
+
+OPTIONS:
+        --config-dir <CONFIG_DIR>
+            [default: /etc/tedge]
+
+        --debug
+            Turn-on the debug log level.
+
+            If off only reports ERROR, WARN, and INFO If on also reports DEBUG and TRACE
+
+    -h, --help
+            Print help information
+
+    -i, --init
+            Create supported operation files
+
+    -V, --version
+            Print version information
+
+On start, `c8y-log-plugin` notifies the cloud tenant of the log types listed in the `CONFIG_FILE`,
+sending this list with a `118` on `c8y/s/us`.
+`c8y-log-plugin` subscribes then to `c8y/s/ds` listening for logfile operation requests (`522`)
+notifying the Cumulocity tenant of their progress (messages `501`, `502` and `503`).
+
+The thin-edge `CONFIG_DIR` is used to store:
+  * c8y-log-plugin.toml - the configuration file that specifies which logs to be retrieved
 ```
 
 ## Logging
@@ -94,11 +133,11 @@ the log entries in `c8y-log-plugin.toml` can be enhanced to support retrieval of
 
 Here is how the config for such logs retrieved using commands would look like:
 
-```toml
+```toml title="file: /etc/tedge/c8y/c8y-log-plugin.toml"
 files = [
-    { type = "mosquitto", path = '/var/log/mosquitto/mosquitto.log' },
-    { type = "tedge-agent", command = '/usr/bin/journalctl --unit=tedge-agent --since=$FROM --until=$TO | grep $FILTER_TEXT' },
-    { type = "<container id>", command = '/docker/log/script --target=$TARGET --from=$FROM --to=$TO --filter-text=$TEXT --line-count=$COUNT' }
+  { type = "mosquitto", path = '/var/log/mosquitto/mosquitto.log' },
+  { type = "tedge-agent", command = '/usr/bin/journalctl --unit=tedge-agent --since=$FROM --until=$TO | grep $FILTER_TEXT' },
+  { type = "<container id>", command = '/docker/log/script --target=$TARGET --from=$FROM --to=$TO --filter-text=$TEXT --line-count=$COUNT' }
 ]
 ```
 

@@ -1,51 +1,61 @@
-# How to use [`tedge mqtt`](../../references/tedge-mqtt.md) pub and sub?
+---
+title: MQTT Tools
+tags: [Operate, MQTT]
+sidebar_position: 1
+---
+
+# Publish and subscribe to MQTT messages on the command line
 
 thin-edge.io cli provides a convenient way to debug and aid development process.
 
 ## Publish
 
-Command [`tedge mqtt pub`](../../references/tedge-mqtt.md) can be used to publish MQTT messages on a topic to the local mosquitto server.
+Command [`tedge mqtt pub`](../../references/cli/tedge-mqtt.md) can be used to publish MQTT messages on a topic to the local mosquitto server.
 
 Example:
 
-```shell
-tedge mqtt pub 'tedge/measurements' '{ "temperature": 21.3 }'
+```sh te2mqtt
+tedge mqtt pub 'tedge/measurements' '{"temperature": 21.3}'
 ```
 
-`tedge mqtt pub` supports setting of QoS for MQTT messages:
+Messages can also be published with a different Quality of Service (QoS).
 
-```shell
-tedge mqtt pub 'tedge/measurements' '{ "temperature": 21.3 }' --qos 2
+```sh te2mqtt
+tedge mqtt pub 'tedge/measurements' '{"temperature": 21.3}' --qos 2
 ```
 
-`tedge mqtt pub` supports publishing a MQTT message with retain flag:
+MQTT messages can also be published using the retained option which means that the message will be received by new MQTT clients connecting to the broker after the message was published.
 
-```shell
+Below shows an example of publishing a retained MQTT message:
+
+```sh te2mqtt
 tedge mqtt pub --retain --qos 1 tedge/alarms/critical/high_temperature '{"message": "Temperature is critical"}'
 ```
 
-Note: By default the mqtt message will be published with retain flag set to false.
+:::note
+By default the mqtt message will be published with retain flag set to false.
+:::
 
 
 ## Subscribe
 
-Command [`tedge mqtt sub`](../../references/tedge-mqtt.md) can be used to ease debugging of of MQTT communication on local bridge. You can subscribe to topic of your choosing:
+Command [`tedge mqtt sub`](../../references/cli/tedge-mqtt.md) can be used to ease debugging of of MQTT communication on local bridge. You can subscribe to topic of your choosing:
 
-```shell
+```sh te2mqtt
 tedge mqtt sub tedge/errors
 ```
 
 Or you can subscribe to any topic on the server using wildcard (`#`) topic:
 
-```shell
+```sh te2mqtt
 tedge mqtt sub '#'
 ```
 
-Now use `tedge mqtt pub 'tedge/measurements' '{ "temperature": 21.3 }'` to publish message on `tedge/measurements` topic with payload `{ "temperature": 21.3 }`.
+Now use `tedge mqtt pub 'tedge/measurements' '{"temperature": 21.3}'` to publish message on `tedge/measurements` topic with payload `{"temperature": 21.3}`.
 
 All messages from sub command are printed to `stdout` and can be captured to a file if you need to:
 
-```shell
+```sh te2mqtt
 tedge mqtt sub '#' > filename.mqtt
 ```
 

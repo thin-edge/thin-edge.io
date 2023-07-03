@@ -1,3 +1,9 @@
+---
+title: Contribute to thin-edge
+tags: [Contribute]
+sidebar_position: 5
+---
+
 # Contributing to thin-edge.io
 
 - [Building](BUILDING.md)

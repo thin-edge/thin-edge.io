@@ -1,3 +1,9 @@
+---
+title: Software Management Plugin
+tags: [Extend, Software Management]
+sidebar_position: 1
+---
+
 # Write my software management plugin
 
 **thin-edge.io** Software Management natively supports APT (Debian) packages.
@@ -11,12 +17,10 @@ and learn how to write your own plugin with a docker plugin shell script example
 
 ## Create a plugin
 
-Create a _docker_ file in the directory _/etc/tedge/sm-plugins/_. 
+Create a file called `docker` in the directory `/etc/tedge/sm-plugins/`. 
 A plugin must be an executable file located in that directory.
 
-Filename: /etc/tedge/sm-plugins/docker
-
-```shell
+```sh title="file: /etc/tedge/sm-plugins/docker"
 #!/bin/sh
 
 COMMAND="$1"
@@ -43,10 +47,10 @@ esac
 exit 0
 ```
 
-```admonish info
+:::info
 The plugin filename will be used as a plugin type to report the software list to a cloud.
 If you name it `docker.sh`, you will see `docker.sh` as a plugin type in cloud.
-```
+:::
 
 If you execute `./docker list`, you will see this kind of output.
 
@@ -74,12 +78,16 @@ Here is the table of the commands that you can use in a plugin.
 |update-list| `COMMAND NAME [--module-version VERSION] [--file FILE]` | - |Executes the list of `install` and `remove` commands.|
 
 The order of the commands invoked by the Software Management Agent is:
-`prepare` -> `update-list` or (`install`, `remove`) ->`finalize`
 
-```admonish info
+```mermaid
+graph LR
+    prepare --> update-list --> install/remove --> finalize
+```
+
+:::info
 There is no guarantee of the order between `install` and `remove`.
 If you need a specific order, use the `update-list` command instead.
-```
+:::
 
 In the following sections, we will dive into each command and other rules deeply.
 
@@ -99,10 +107,13 @@ The **stdout** and **stderr** of the process running a plugin command are captur
 ### Exit status
 
 The exit status of plugins are interpreted by sm-agent as follows:
-- **0**: success.
-- **1**: usage. The command arguments cannot be interpreted, and the command has not been launched.
-- **2**: failure. The command failed and there is no point to retry.
-- **3**: retry. The command failed but might be successful later (for instance, when the network will be back).
+
+|Exit Code|Summary|Description|
+|---------|-------|-----------|
+|0|Success|The command executed successfully without errors|
+|1|Invalid usage|The command arguments cannot be interpreted, and the command has not been launched|
+|2|Failure|The command failed and there is no point to retry|
+|3|Retry|The command failed but might be successful later (for instance, when the network will be back)|
 
 ## List
 
@@ -115,20 +126,22 @@ Rules:
   including:
   - **name**: the name of the software module, e.g. `mosquitto`.
   This name is the name that has been used to install it and that needs to be used to remove it.
-  - **version**: the version currently installed.
-  This is a string that can only be interpreted in the context of the plugin.
-  >Note: If the version is not present for a module, then list can return only the module name without trailing tabulation.
-Given that your plugin is named `docker`, then the Software Management Agent calls
+  - **version**: the version currently installed. This is a string that can only be interpreted in the context of the plugin.
 
-```shell
+    :::info
+    If the version is not present for a module, then list can return only the module name without trailing tabulation.
+        Given that your plugin is named `docker`, then the Software Management Agent calls
+    :::
+
+```sh
 sudo /etc/tedge/sm-plugins/docker list
 ```
 
 to report the list of software modules installed.
 
-```admonish attention
+:::caution
 The Software Management Agent executes the plugin commands using `sudo` using the `tedge` user.
-```
+:::
 
 `docker` should output in the CSV with tabulations as separators like
 
@@ -147,7 +160,7 @@ A plugin must return a CSV line per software module, using a tabulation `\t` as 
 If there is no version field then only the module name will be returned.
 In the _docker_ file example, the following command outputs CSV structures with tabulations as separator.
 
-```shell
+```sh
 docker image list --format '{{.Repository}}\t{{.Tag}}'
 ```
 
@@ -193,7 +206,7 @@ The command can be used in several situations. For example,
 The `install` command installs a software module, possibly of some expected version.
 A plugin must be executable in the below format.
 
-```shell
+```sh
 myplugin install NAME [--module-version VERSION] [--file FILE]
 ```
 
@@ -220,9 +233,7 @@ At the API level, there is no command to distinguish install or upgrade.
 Back to the first _docker_ example, it doesn't address the case with version. 
 Let's expand the example file as below.
 
-Filename: /etc/tedge/sm-plugins/docker
-
-```shell
+```sh title="file: /etc/tedge/sm-plugins/docker"
 #!/bin/sh
 
 COMMAND="$1"
@@ -273,13 +284,13 @@ Each exit status is defined [here](#exit-status).
 If the given NAME is `mosquitto`, and the given VERSION is `1.5.7-1+deb10u1`,
 the Software Management Agent calls
 
-```shell
+```sh
 sudo /etc/tedge/sm-plugins/docker install mosquitto --module-version 1.5.7-1+deb10u1
 ```
 
 Then, the plugin executes
 
-```shell
+```sh
 docker pull mosquitto:1.5.7-1+deb10u1
 ```
 
@@ -289,7 +300,7 @@ The `remove` command uninstalls a software module,
 and possibly its dependencies if no other modules are dependent on those.
 A plugin must be executable in the below format.
 
-```shell
+```sh
 myplugin remove NAME [--module-version VERSION]
 ```
 
@@ -308,13 +319,13 @@ Back to the first _docker_ plugin example,
 if the NAME is `mosquitto`, and the VERSION is `1.5.7-1+deb10u1`,
 the Software Management Agent calls
 
-```shell
+```sh
 sudo /etc/tedge/sm-plugins/docker remove mosquitto --module-version 1.5.7-1+deb10u1
 ```
 
 Then, the plugin executes
 
-```shell
+```sh
 docker rmi mosquitto:1.5.7-1+deb10u1
 ```
 
@@ -328,7 +339,7 @@ This can be needed when an order of processing software modules is relevant.
 In other words, you can choose a combination of the `install` or `remove` commands or this `update-list` command up to your requirement.
 If you don't want to use `update-list`, the plugin must return `1` like the first _docker_ plugin example.
 
-```shell
+```sh
 case "$COMMAND" in
     ...
     update-list)
@@ -342,7 +353,7 @@ First, learn what is the input of `update-list`.
 
 The Software Management Agent calls a plugin as below. Note that each argument is tab separated:
 
-```shell
+```sh
 sudo /etc/tedge/sm-plugins/docker update-list <<EOF
   install	name1	version1
   install	name2		path2
@@ -357,7 +368,7 @@ but the software action list is sent through **stdin**.
 The behaviour of operations `install` and `remove` is the same as for original commands `install` and `remove`. 
 The above input is equivalent to the use of original commands (`install` and `remove`):
 
-```shell
+```sh
 /etc/tedge/sm-plugins/docker install name1 --module-version version1
 /etc/tedge/sm-plugins/docker install name2 --file path2
 /etc/tedge/sm-plugins/docker remove "name 3" --module-version version3
@@ -368,9 +379,7 @@ To make the _docker_ plugin accept a list of install and remove actions,
 let's change the file as below.
 Note that this example works only in bash.
 
-Filename: /etc/tedge/sm-plugins/docker
-
-```shell
+```sh title="file: /etc/tedge/sm-plugins/docker"
 #!/bin/bash
 
 COMMAND="$1"
@@ -405,9 +414,9 @@ You can find that `install` and `remove` are replaced by `update-list`.
 Also, `update-list` must be **fail-fast**.
 That example exists immediately if one of the commands fails.
 
-## Project references
+## Additional references
 
-You can also refer to:
+Additional information and examples can be found from the following references:
 
-- the specification of the [Package Manager Plugin API](https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/references/plugin-api.md).
-- [the APT plugin](https://github.com/thin-edge/thin-edge.io/tree/main/plugins/tedge_apt_plugin) written in Rust.
+- [Package Manager Plugin API Specification](https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/references/plugin-api.md).
+- [tedge-apt-plugin (Debian APT Plugin)](https://github.com/thin-edge/thin-edge.io/tree/main/plugins/tedge_apt_plugin) written in Rust.

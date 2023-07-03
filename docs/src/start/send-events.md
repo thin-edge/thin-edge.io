@@ -1,4 +1,10 @@
-# Thin Edge Event
+---
+title: Sending Events
+tags: [Getting Started, Telemetry]
+sidebar_position: 6
+---
+
+# Sending Events
 
 Events on thin-edge.io can be used to trigger signals when some event happens in the system.
 For example, a person entering a room or someone logging into a machine/website can all be represented as events.
@@ -15,34 +21,32 @@ An event can be triggered on thin-edge.io by sending an MQTT message in Thin Edg
 
 The scheme of the topic to publish the event data is as follows:
 
-`tedge/events/<event-type>`
+```text title="Topic"
+tedge/events/<event-type>
+```
 
 The payload format must be as follows:
 
-```json
+```json title="Payload"
 {
-    "text": "<event text>",
-    "time": "<Timestamp in ISO-8601 format>"
+  "text": "<event text>",
+  "time": "<Timestamp in ISO-8601 format>"
 }
 ```
 
 Here is a sample event triggered for a `login_event` event type:
 
-Topic: 
-`tedge/events/login_event`
-
-Payload:
-
-```json
+```sh te2mqtt
+tedge mqtt pub tedge/events/login_event '
 {
-    "text": "A user just logged in",
-    "time": "2021-01-01T05:30:45+00:00"
-}
+  "text": "A user just logged in",
+  "time": "2021-01-01T05:30:45+00:00"
+}'
 ```
 
-```admonish note
+:::note
 Both the `text` field and the `time` field are optional.
-```
+:::
 
 When the `message` field is not provided, the `event-type` from the MQTT topic will be used as the message as well if the connected cloud mandates one.
 When the `time` field is not provided, thin-edge.io will use the current system time as the `time` of the event.
@@ -61,9 +65,9 @@ If the device is connected to some supported IoT cloud platform, an event that i
 The mapping of thin-edge events data to its respective cloud-native representation will be done by the corresponding cloud mapper process.
 For example, if the device is connected to Cumulocity IoT cloud platform, the Cumulocity cloud mapper process will translate the thin-edge event JSON data to its equivalent Cumulocity SmartREST representation.
 
-```admonish warning
+:::caution
 As of now, event data mapping is supported only on Cumulocity IoT cloud platform.
-```
+:::
 
 ### Cumulocity cloud data mapping
 
@@ -75,7 +79,7 @@ For example the `login_event` described in the earlier sections will be converte
 400,login_event,"A user just logged in",2021-01-01T05:30:45+00:00
 ```
 
-... and is published to `c8y/s/us` topic which will get forwarded to the connected Cumulocity cloud instance.
+The message is published to the `c8y/s/us` topic which will get forwarded to the connected Cumulocity cloud instance.
 
 If the event JSON payload contains fields other than `text` and `time`, or when the payload size is more than 16K irrespective of its contents, it will be converted to Cumulocity JSON format.
 
@@ -83,19 +87,19 @@ The Cumulocity JSON mapping of the same event would be as follows:
 
 ```json
 {
-    "type":"login_event",
-    "text":"A user just logged in",
-    "time":"2021-01-01T05:30:45+00:00",
-    "externalSource":{
-        "externalId":"<child-device-id>",
-        "type":"c8y_Serial"
+  "type":"login_event",
+  "text":"A user just logged in",
+  "time":"2021-01-01T05:30:45+00:00",
+  "externalSource":{
+    "externalId":"<child-device-id>",
+    "type":"c8y_Serial"
   }
 }
 ```
 
-```admonish note
+:::note
 Mapped events will be sent to Cumulocity via MQTT if the incoming Thin Edge JSON event payload size is less than 16K bytes. If higher, HTTP will be used.
-```
+:::
 
 Find more information about events data model in Cumulocity [here](https://cumulocity.com/guides/concepts/domain-model/#events).
 
@@ -105,15 +109,17 @@ An event for a child/external device can be triggered on thin-edge.io by sending
 
 The scheme of the topic to publish the event data is as follows:
 
-`tedge/events/<event-type>/<child-device-id>`
+```sh title="Topic"
+tedge/events/<event-type>/<child-device-id>
+```
 
 The payload format must be as follows:
 
-```json
+```json title="Payload"
 {
-    "type":"<event type>",
-    "text": "<event text>",
-    "time": "<Timestamp in ISO-8601 format>"
+  "type":"<event type>",
+  "text": "<event text>",
+  "time": "<Timestamp in ISO-8601 format>"
 }
 ```
 
@@ -121,23 +127,14 @@ Here is a sample event triggered for a `login_event` event type for the `externa
 
 Command to send the event from a external device as below:
 
-```shell
-sudo tedge mqtt pub tedge/events/login_event/external_sensor '{
-    "type":"login_event",
-    "text":"A user just logged in",
-    "time":"2021-01-01T05:30:45+00:00"
+```sh te2mqtt
+tedge mqtt pub tedge/events/login_event/external_sensor '{
+  "type":"login_event",
+  "text":"A user just logged in",
+  "time":"2021-01-01T05:30:45+00:00"
 }'
 ```
 
-Payload:
-
-```json
-{
-    "type": "login_event",
-    "text": "A user just logged in",
-    "time": "2021-01-01T05:30:45+00:00"
-}
-```
 ### Mapping of events to cloud-specific data format
 
 If the child/external device is connected to some supported IoT cloud platform, an event that is triggered locally on thin-edge.io will be forwarded to the connected cloud platform as well.
@@ -151,12 +148,12 @@ The translated payload will be in the below format.
 
 ```json
 {
-    "type": "login_event",
-    "text": "A user just logged in",
-    "time": "2021-01-01T05:30:45+00:00",
-    "externalSource":{
-        "externalId": "external_sensor",
-        "type": "c8y_Serial"
+  "type": "login_event",
+  "text": "A user just logged in",
+  "time": "2021-01-01T05:30:45+00:00",
+  "externalSource":{
+    "externalId": "external_sensor",
+    "type": "c8y_Serial"
   }
 }
 ```

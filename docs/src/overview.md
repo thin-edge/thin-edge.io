@@ -1,3 +1,8 @@
+---
+slug: /
+sidebar_position: 0
+---
+
 # Overview
 
 Welcome to `thin-edge.io`'s documentation!
@@ -28,7 +33,7 @@ and then monitor it from the cloud.
 You can also explore the main use-cases using these [tutorials](start/index.md).
 You will learn to:
 
-- [install thin-edge on your specific hardware](operate/installation/installation.md),
+- [install thin-edge on your specific hardware](operate/installation/install.md),
 - connect your device to your cloud, whether [Cumulocity IoT](start/connect-c8y.md),
   [Azure IoT](start/connect-azure.md) or [AWS IoT](start/connect-aws.md),
 - [send telemetry data](start//send-thin-edge-data.md), [alarms](start//raise-alarm.md) and [events](start//send-events.md),

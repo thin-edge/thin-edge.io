@@ -1,7 +1,13 @@
+---
+title: Operate Devices
+tags: [Operate]
+sidebar_position: 3
+---
+
 # How-to Guides
 
 ## Installation
-- [How to install thin-edge.io?](installation/installation.md)
+- [How to install thin-edge.io?](installation/install.md)
 - [How to install thin-edge.io on any Linux OS (no deb support)?](installation/installation_without_deb_support.md)
 - [How to install thin-edge manually with openrc?](installation/how_to_install_thin_edge_manually.md)
 - [How to install and enable software management?](installation/install_and_enable_software_management.md)

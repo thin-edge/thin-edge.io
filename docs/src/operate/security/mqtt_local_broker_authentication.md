@@ -1,3 +1,9 @@
+---
+title: MQTT Authentication
+tags: [Operate, Security, MQTT]
+sidebar_position: 1
+---
+
 # Use MQTT authentication for local broker
 
 thin-edge.io supports certificate-based authentication when communicating with
@@ -20,7 +26,7 @@ To enable server authentication, perform the following:
 Create a file in `/etc/mosquitto/conf.d/` with the following content and restart
 mosquitto service:
 
-```conf
+```sh
 listener 8883
 certfile PATH_TO_SERVER_CERTIFICATE
 keyfile  PATH_TO_SERVER_PRIVATE_KEY
@@ -46,10 +52,11 @@ section containing the hostname that the broker is running on.
 Execute the following commands:
 
 ```sh
-tedge config set mqtt.client.port 8883
-tedge config set mqtt.client.cafile PATH_TO_CA_CERTIFICATE
+sudo tedge config set mqtt.client.port 8883
+sudo tedge config set mqtt.client.cafile PATH_TO_CA_CERTIFICATE
+
 # optional
-tedge config set mqtt.client.cadir PATH_TO_CA_CERTIFICATE_DIRECTORY
+sudo tedge config set mqtt.client.cadir PATH_TO_CA_CERTIFICATE_DIRECTORY
 ```
 
 `mqtt.client.cafile` and `mqtt.client.cadir` options point to trusted CA
@@ -60,6 +67,8 @@ authentication is enabled.
 
 Now you will need to manually restart all the affected services so that they can
 pick up the configuration change.
+
+<!-- TODO: Provide example of which services need to be restarted -->
 
 ## Server + client authentication
 
@@ -90,8 +99,8 @@ keyfile  PATH_TO_CLIENT_CA_CERTIFICATE
 ### Step 2: Configure thin-edge.io to use a client certificate and private key
 
 ```sh
-tedge config set mqtt.client.auth.cert_file PATH_TO_CLIENT_CERTIFICATE
-tedge config set mqtt.client.auth.key_file PATH_TO_CLIENT_PRIVATE_KEY
+sudo tedge config set mqtt.client.auth.cert_file PATH_TO_CLIENT_CERTIFICATE
+sudo tedge config set mqtt.client.auth.key_file PATH_TO_CLIENT_PRIVATE_KEY
 ```
 
 Both `certfile` and `keyfile` are required to enable client authentication.

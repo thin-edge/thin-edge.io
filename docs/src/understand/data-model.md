@@ -1,3 +1,8 @@
+---
+title: Data Model
+tags: [Concept, MQTT]
+sidebar_position: 1
+---
 
 # thin-edge Data Model
 

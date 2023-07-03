@@ -1,4 +1,10 @@
-# Architecture
+---
+title: Understand the Concepts
+tags: [Concept]
+sidebar_position: 2
+---
+
+# Thin-edge Concepts
 
 Thin-edge.io is an open-source framework to develop lightweight, smart and secure connected devices.
 

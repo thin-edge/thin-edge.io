@@ -1,3 +1,9 @@
+---
+title: VSCode Dev Containers
+tags: [Contribute]
+sidebar_position: 2
+---
+
 # VSCode Dev Containers
 
 VSCode Dev Containers are great for developing as they contain all of the project's dependencies and in the end you have a ready-to-use dockerFile which can also be used in your CI/CD pipeline.

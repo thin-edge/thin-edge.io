@@ -1,3 +1,9 @@
+---
+title: Child Device Configuration Management
+tags: [Extend, Cumulocity, Child Device, Configuration]
+sidebar_position: 6
+---
+
 # Enable configuration management on child devices
 
 Configuration management can be enabled for child devices using the same `c8y-configuration-plugin`,
@@ -50,10 +56,10 @@ This bootstrapping is a 3 step process:
 The child device agent needs to capture the list of configuration files that needs be managed from the cloud
 in a `c8y-configuration-plugin.toml` file in the same format as specified in the [configuration management documentation](config_management_plugin.md) as follows:
 
-```toml
+```toml title="file: c8y-configuration-plugin.toml"
 files = [
-    { path = '/path/to/some/config', type = 'config1'},
-    { path = '/path/to/another/config', type = 'config2'},
+  {path = '/path/to/some/config', type = 'config1'},
+  {path = '/path/to/another/config', type = 'config2'},
 ]
 ```
 
@@ -69,17 +75,11 @@ to the URL: `http://{tedge-ip}:8000/tedge/file-transfer/{child-id}/c8y-configura
 
 Once the upload is complete, the agent should notify thin-edge about the upload by sending the following MQTT message:
 
-**Topic:**
-
-`tedge/{child-d}/commands/res/config_snapshot`
-
-**Payload**:
-
-```json
-{ "type": "c8y-configuration-plugin", "path": "/child/local/fs/path" }
+```sh te2mqtt
+tedge mqtt pub 'tedge/{child-d}/commands/res/config_snapshot' '{"type": "c8y-configuration-plugin", "path": "/child/local/fs/path"}'
 ```
 
-# Handle config snapshot requests from thin-edge
+## Handle config snapshot requests from thin-edge
 
 Handling config snapshot requests from thin-edge is a 4-step process:
 
@@ -96,9 +96,9 @@ These requests arrive in the following JSON format:
 
 ```json
 {
-    "type": "{config-type}",
-    "path": "/child/local/fs/path",
-    "url": "http://{tedge-ip}:8000/tedge/file-transfer/{child-d}/config_snapshot/{config-type}"
+  "type": "{config-type}",
+  "path": "/child/local/fs/path",
+  "url": "http://{tedge-ip}:8000/tedge/file-transfer/{child-d}/config_snapshot/{config-type}"
 }
 ```
 
@@ -107,18 +107,12 @@ The `url` value is what the child device agent must use to upload the requested 
 
 On receipt of the request, the agent must send an "executing" MQTT status message as follows:
 
-**Topic:**
-
-`tedge/{child-d}/commands/res/config_snapshot`
-
-**Payload**:
-
-```json
-{
-    "status": "executing",
-    "type": "{config-type}",
-    "path": "/child/local/fs/path" 
-}
+```sh te2mqtt
+tedge mqtt pub tedge/{child-d}/commands/res/config_snapshot '{
+  "status": "executing",
+  "type": "{config-type}",
+  "path": "/child/local/fs/path" 
+}'
 ```
 
 After sending this status message, the agent must upload the requested configuration file content to
@@ -126,17 +120,19 @@ the `url` received in the request with an HTTP PUT request.
 
 Once the upload is complete, send a "successful" MQTT status message as follows:
 
-**Topic:**
+**Topic**
 
-`tedge/{child-d}/commands/res/config_snapshot`
+```text
+tedge/{child-d}/commands/res/config_snapshot
+```
 
-**Payload**:
+**Payload**
 
 ```json
 {
-    "status": "successful",
-    "type": "{config-type}",
-    "path": "/child/local/fs/path" 
+  "status": "successful",
+  "type": "{config-type}",
+  "path": "/child/local/fs/path" 
 }
 ```
 
@@ -145,13 +141,13 @@ a "failed" status update must be sent instead, to the same topic as follows:
 
 ```json
 {
-    "status": "failed",
-    "type": "{config-type}",
-    "path": "/child/local/fs/path" 
+  "status": "failed",
+  "type": "{config-type}",
+  "path": "/child/local/fs/path" 
 }
 ```
 
-# Handle config update requests from thin-edge
+## Handle config update requests from thin-edge
 
 Handling config update requests from thin-edge is a 5-step process:
 
@@ -167,9 +163,9 @@ These requests arrive in the following JSON format:
 
 ```json
 {
-    "type": "{config-type}",
-    "path": "/child/local/fs/path",
-    "url": "http://{tedge-ip}:8000/tedge/file-transfer/{child-d}/config_update/{config-type}"
+  "type": "{config-type}",
+  "path": "/child/local/fs/path",
+  "url": "http://{tedge-ip}:8000/tedge/file-transfer/{child-d}/config_update/{config-type}"
 }
 ```
 
@@ -177,17 +173,19 @@ The child device agent must download the config file update for the given `type`
 
 On receipt of the request, the agent must send an "executing" MQTT status message as follows:
 
-**Topic:**
+**Topic**
 
-`tedge/{child-d}/commands/res/config_update`
+```text
+tedge/{child-d}/commands/res/config_update
+```
 
-**Payload**:
+**Payload**
 
 ```json
 {
-    "status": "executing",
-    "type": "{config-type}",
-    "path": "/child/local/fs/path" 
+  "status": "executing",
+  "type": "{config-type}",
+  "path": "/child/local/fs/path" 
 }
 ```
 
@@ -197,17 +195,19 @@ The agent can then apply the downloaded configuration file update on the device.
 
 Once the update is applied, send a "successful" MQTT status message as follows:
 
-**Topic:**
+**Topic**
 
-`tedge/{child-d}/commands/res/config_update`
+```text
+tedge/{child-d}/commands/res/config_update
+```
 
-**Payload**:
+**Payload**
 
 ```json
 {
-    "status": "successful",
-    "type": "{config-type}",
-    "path": "/child/local/fs/path" 
+  "status": "successful",
+  "type": "{config-type}",
+  "path": "/child/local/fs/path" 
 }
 ```
 
@@ -216,9 +216,9 @@ a "failed" status update must be sent instead, to the same topic as follows:
 
 ```json
 {
-    "status": "failed",
-    "type": "{config-type}",
-    "path": "/child/local/fs/path" 
+  "status": "failed",
+  "type": "{config-type}",
+  "path": "/child/local/fs/path" 
 }
 ```
 

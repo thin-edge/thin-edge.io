@@ -1,3 +1,9 @@
+---
+title: Connecting to AWS IoT
+tags: [Getting Started, AWS, Connection]
+sidebar_position: 4
+---
+
 # Connect your device to AWS IoT
 
 The very first step to enable **thin-edge.io** is to connect your device to the cloud.
@@ -13,9 +19,9 @@ See this [tutorial](connect-azure.md), if you want to connect Azure IoT instead.
 
 Before you try to connect your device to AWS IoT, you need:
 
-* [Install `thin-edge.io` on your device](../operate/installation/installation.md).
+* [Install `thin-edge.io` on your device](../operate/installation/install.md).
 
-You can now use [`tedge` command](../references/tedge.md) to:
+You can now use [`tedge` command](../references/cli/index.md) to:
 
 * [create a certificate for your device](connect-aws.md#create-the-certificate),
 * [register the device on AWS IoT Hub](connect-aws.md#register-the-device-on-AWS),
@@ -32,7 +38,7 @@ This identifier will be used to uniquely identify your devices among others in y
 This identifier will be also used as the Common Name (CN) of the certificate.
 Indeed, this certificate aims to authenticate that this device is the device with that identity.
 
-```shell
+```sh
 sudo tedge cert create --device-id my-device
 ```
 
@@ -40,8 +46,11 @@ sudo tedge cert create --device-id my-device
 
 You can then check the content of that certificate.
 
-```shell
-$ sudo tedge cert show
+```sh
+sudo tedge cert show
+```
+
+```text title="Output"
 Device certificate: /etc/tedge/device-certs/tedge-certificate.pem
 Subject: CN=my-device, O=Thin Edge, OU=Test Device
 Issuer: CN=my-device, O=Thin Edge, OU=Test Device
@@ -53,7 +62,7 @@ Thumbprint: 860218AD0A996004449521E2713C28F67B5EA580
 You may notice that the issuer of this certificate is the device itself.
 This is a self-signed certificate.
 To use a certificate signed by your Certificate Authority,
-see the reference guide of [`tedge cert`](../references/tedge-cert.md).
+see the reference guide of [`tedge cert`](../references/cli/tedge-cert.md).
 
 ## Register the device on AWS IoT Hub
 
@@ -62,17 +71,23 @@ Also a policy needs to be attached to the device certificate in AWS IoT Core. AW
 authenticated identity can do (here the authenticated identity is the device being connected). More info on AWS IoT Core
 policies can be found [here](https://docs.aws.amazon.com/iot/latest/developerguide/iot-policies.html).
 
-To create a new policy, head over to the AWS IoT Core and navigate to ***Security -> Policies -> Create policy -> Policy properties -> Policy name -> Enter the name of your policy (e.g.tedge)***
+To create a new policy, head over to the AWS IoT Core and navigate to
 
-On the Policy statements tab click on ***JSON*** and enter the policy in the ***Policy document*** (an example policy can be found [here](./aws-example-policy.json)) then click ***Create***
+**Security &rarr; Policies &rarr; Create policy &rarr; Policy properties &rarr; Policy name &rarr; Enter the name of your policy (e.g.tedge)**
 
-In the AWS IoT Core, navigate to ***Manage -> All devices -> Things -> Create things -> Create Single thing -> Next***. Enter the Thing name which can be obtained from the device with: `tedge config get device.id`
+On the Policy statements tab click on ***JSON*** and enter the policy in the ***Policy document*** (an example policy can be found [here](./aws-example-policy.json)) then click ***Create***.
+
+In the AWS IoT Core, navigate to ***Manage &rarr; All devices &rarr; Things &rarr; Create things &rarr; Create Single thing &rarr; Next***. Enter the Thing name which can be obtained from the device with the output of the following command:
+
+```sh
+tedge config get device.id
+```
 
 In the Device Shadow section which allows connected devices to sync states with AWS choose ***Unnamed shadow (classic)*** and click ***Next*** and ***Configure device certificate - optional*** page opens.
 
-At ***Device certificate*** choose ***Use my certificate -> CA is not registered with AWS IoT*** then ***Choose file*** and select your tedge-certificate.pem file, click on ***Open -> Next***.
+At ***Device certificate*** choose ***Use my certificate &rarr; CA is not registered with AWS IoT*** then ***Choose file*** and select your tedge-certificate.pem file, click on ***Open &rarr; Next***.
 
-The last step needed is to attach previously created policy to your certificate, ***Attach policies to certificate -optional*** -> Select your created policy ***-> Create thing***.
+The last step needed is to attach previously created policy to your certificate, **Attach policies to certificate -optional** &rarr; Select your created policy **&rarr; Create thing**.
 
 ## Configure the device
 
@@ -81,8 +96,12 @@ Hub as below.
 
 Set the URL of your AWS IoT Hub.
 
-```shell
-sudo tedge config set aws.url [your-aws-url.com]
+```sh
+sudo tedge config set aws.url "${AWS_URL}"
+```
+
+```sh title="Example"
+sudo tedge config set aws.url "a2e8ahbpo21syc.iot.eu-central-1.amazonaws.com"
 ```
 
 The URL is unique to the AWS account and region that is used, and can be found in the AWS IoT Core by navigating to
@@ -90,7 +109,7 @@ The URL is unique to the AWS account and region that is used, and can be found i
 
 Set the path to the root certificate if necessary. The default is `/etc/ssl/certs`.
 
-```shell
+```sh
 sudo tedge config set aws.root_cert_path /etc/ssl/certs/AmazonRootCA1.pem
 ```
 
@@ -106,11 +125,14 @@ This command configures the MQTT broker:
 * to establish a permanent and secure connection to the AWS cloud,
 * to forward local messages to the cloud and vice versa.
 
-Also, if you have installed `tedge_mapper`, this command starts and enables the tedge-mapper-aws systemd service.
+Also, if you have installed `tedge-mapper`, this command starts and enables the tedge-mapper-aws systemd service.
 At last, it sends packets to AWS IoT Hub to check the connection.
 
-```shell
-$ sudo tedge connect aws
+```sh
+sudo tedge connect aws
+```
+
+```text title="Output"
 Checking if systemd is available.
 
 Checking if configuration for requested bridge already exists.
@@ -146,13 +168,13 @@ tedge-mapper-aws service successfully started and enabled!
 
 Using the AWS mapper, you can publish measurement telemetry data to AWS by publishing on the `tedge/measurements` topic:
 
-```shell
+```sh te2mqtt
 tedge mqtt pub tedge/measurements '{"temperature": 21.3}'
 ```
 
 Alternatively, post your own custom messages on `aws/td/#` topic:
 
-```shell
+```sh te2mqtt
 tedge mqtt pub aws/td '{"text": "My message"}'
 ```
 
@@ -165,5 +187,5 @@ You can now:
 
 * learn how to [send various kind of telemetry data](send-thin-edge-data.md)
   using the cloud-agnostic [Thin-Edge-Json data format](../understand/thin-edge-json.md),
-* or have a detailed view of the [topics mapped to and from AWS](../references/bridged-topics.md#aws-mqtt-topics)
+* or have a detailed view of the [topics mapped to and from AWS](../references/mqtt-topics.md#aws-mqtt-topics)
   if you prefer to use directly AWS specific formats and protocols.

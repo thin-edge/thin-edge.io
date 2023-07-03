@@ -1,3 +1,9 @@
+---
+title: Thin Edge JSON
+tags: [Concept, MQTT]
+sidebar_position: 1
+---
+
 # Thin Edge JSON format
 
 Thin Edge JSON is a lightweight format used in `thin-edge.io` to represent measurements data.
@@ -10,7 +16,7 @@ Simple single-valued measurements like temperature or pressure measurement with 
 
 ```json
 {
-    "temperature": 25
+  "temperature": 25
 }
 ```
 
@@ -26,11 +32,11 @@ A multi-valued measurement is a measurement that is comprised of multiple values
 
 ```json
 {
-    "three_phase_current": {
-      "L1": 9.5,
-      "L2": 10.3,
-      "L3": 8.8
-    }
+  "three_phase_current": {
+    "L1": 9.5,
+    "L2": 10.3,
+    "L3": 8.8
+  }
 }
 ```
 
@@ -40,18 +46,18 @@ Only one level of nesting is allowed, meaning the values of the measurement keys
 For example, a multi-level measurement as follows is NOT valid: 
 
 ```json
-{ 
-    "three_phase_current": {
-        "phase1": {
-            "L1": 9.5
-        },
-        "phase2": {
-            "L2": 10.3
-        },
-        "phase3": {
-            "L3": 8.8
-        }
+{
+  "three_phase_current": {
+    "phase1": {
+      "L1": 9.5
+    },
+    "phase2": {
+      "L2": 10.3
+    },
+    "phase3": {
+      "L3": 8.8
     }
+  }
 }
 ```
 
@@ -62,14 +68,14 @@ because the values at the second level(`phase1`, `phase2` and `phase3`) are not 
 Multiple single-valued and multi-valued measurements can be grouped into a single Thin Edge JSON message as follows:
 
 ```json
-{ 
-    "temperature": 25,
-    "three_phase_current": {
-        "L1": 9.5,
-        "L2": 10.3,
-        "L3": 8.8
-    },
-    "pressure": 98 
+{
+  "temperature": 25,
+  "three_phase_current": {
+    "L1": 9.5,
+    "L2": 10.3,
+    "L3": 8.8
+  },
+  "pressure": 98
 }
 ```
 
@@ -83,15 +89,15 @@ an explicit timestamp can be provided in the measurement message itself by addin
 in ISO 8601 format using `time` as the key name, as follows:
 
 ```json
-{ 
-    "time": "2020-10-15T05:30:47+00:00", 
-    "temperature": 25, 
-    "location": { 
-        "latitude": 32.54, 
-        "longitude": -117.67, 
-        "altitude": 98.6 
-    }, 
-    "pressure": 98 
+{
+  "time": "2020-10-15T05:30:47+00:00",
+  "temperature": 25,
+  "location": {
+    "latitude": 32.54,
+    "longitude": -117.67,
+    "altitude": 98.6
+  },
+  "pressure": 98
 }
 ```
 
