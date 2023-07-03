@@ -43,7 +43,7 @@ You will learn to:
 
   - [Architecture FAQ](understand/faq.md)
   - [Thin Edge Json](understand/thin-edge-json.md)
-  - [The Mapper](understand/mapper.md)
+  - [The Mapper](understand/tedge-mapper.md)
   - [Software Management](understand/software-management.md)
 
 ## How to operate a device with thin-edge.io

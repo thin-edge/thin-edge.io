@@ -154,4 +154,4 @@ The `thin-edge.io` framework allows users forward all the measurements generated
 with the help of a *mapper* component designed for that cloud.
 The responsibility of a mapper is to subscribe to the `tedge/measurements` topic to receive all incoming measurements 
 represented in the cloud vendor neutral Thin Edge JSON format, to a format that the connected cloud understands.
-Refer to [Cloud Message Mapper Architecture](./mapper.md) for more details on the mapper component.
+Refer to [Cloud Message Mapper Architecture](./tedge-mapper.md) for more details on the mapper component.

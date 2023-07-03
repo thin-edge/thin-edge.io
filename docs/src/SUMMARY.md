@@ -20,10 +20,10 @@ draft: true
   - [Typical IoT agent](understand/typical-iot-agent.md)
   - [Digital Twin](understand/digital-twin.md)
   - [MQTT Bus](understand/mqtt-bus.md)
-  - [Architecture FAQ](understand/faq.md)
   - [Thin Edge Json](understand/thin-edge-json.md)
-  - [The Mapper](understand/mapper.md)
+  - [The Mapper](understand/tedge-mapper.md)
   - [Software Management](understand/software-management.md)
+  - [Architecture FAQ](understand/faq.md)
   
 - [Operate devices](operate/index.md)
   - [Installation](operate/installation/index.md)
