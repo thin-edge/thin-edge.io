@@ -17,8 +17,3 @@ Go to your device's homepage on c8y, and find the "Control" button.
  In the top right corner, you will find the "More" button, click it and select, "Restart device".
 
 ![Restart device button](../../images/restart-button-red-highlight.png)
-
-
-### Azure 
-
-TBD
