@@ -55,8 +55,10 @@ and sends the supported log types message(SmartREST `118`) to Cumulocity on `c8y
 The plugin continuously watches this configuration file for any changes and resends the `118` message with the `type`s in this file,
 whenever it is updated.
 
-Note: If the file `/etc/tedge/c8y/c8y-log-plugin.toml` is ill-formed or cannot be read,
-      then an empty `118` message is sent, indicating no log files are tracked.
+:::note
+If the file `/etc/tedge/c8y/c8y-log-plugin.toml` is ill-formed or cannot be read,
+then an empty `118` message is sent, indicating no log files are tracked.
+:::
 
 ## Handling log requests from Cumulocity
 

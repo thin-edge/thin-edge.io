@@ -155,7 +155,9 @@ sudo tedge cert upload c8y --user "john.smith@example.com"
 
 If the password prompt appears, enter your password.
 
-``NOTE``: In a production environment, it is not recommended to use the above self-signed certificate, which is for demo purposes. If you plan to use this tutorial as a basis for production, please have a look here: [Registering devices using certificates](https://cumulocity.com/guides/10.7.0/device-sdk/mqtt/#device-certificates).
+:::info
+In a production environment, it is not recommended to use the above self-signed certificate, which is for demo purposes. If you plan to use this tutorial as a basis for production, please have a look here: [Registering devices using certificates](https://cumulocity.com/guides/10.7.0/device-sdk/mqtt/#device-certificates).
+:::
 
 ### Connect
 
