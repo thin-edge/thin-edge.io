@@ -272,7 +272,7 @@ sudo systemctl restart collectd
 What you should see by now is that data arrives on the `collectd/#` topics. You can check that via:
 
 ```sh te2mqtt
-tedge mqtt sub collectd/#
+tedge mqtt sub 'collectd/#'
 ```
 
 The output will be similar like:
