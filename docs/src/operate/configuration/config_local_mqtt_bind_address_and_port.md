@@ -62,11 +62,9 @@ Use the `tedge` command to connect to the desired cloud as below.
 tedge connect c8y
 
 #or
-
 tedge connect az
 
 #or
-
 tedge connect aws
 ```
 
