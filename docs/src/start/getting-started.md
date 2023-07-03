@@ -169,7 +169,13 @@ sudo tedge connect c8y
 
 When the connection is established, the device will be created in Cumulocity IoT. When you go to Device Management &rarr; Devices &rarr; All devices, the device is visible in the list.
 
-![NewDevice](./images/DevicesList.png)
+<p align="center">
+    <img
+        src={require('./images/DevicesList.png').default}
+        alt="All devices"
+        width="40%"
+    />
+</p>
 
 ## Step 3 Sending Device Data
 

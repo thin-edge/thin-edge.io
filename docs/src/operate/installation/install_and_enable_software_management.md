@@ -63,7 +63,13 @@ Find more about [how to connect thin-edge device to cloud](../connection/connect
 Once the thin-edge device is successfully connected to Cumulocity cloud, the **Software** option will be enabled and
 the list of software that are installed on the device will be visible as shown in the figure below.
 
-![Add new software](../../images/start-software-management.png)
+<p align="center">
+    <img
+        src={require('../../images/start-software-management.png').default}
+        alt="Add new software"
+        width="40%"
+    />
+</p>
 
 :::note
 Disconnecting thin-edge device from cloud with `tedge disconnect c8y` command will stop and disable the software management feature.
