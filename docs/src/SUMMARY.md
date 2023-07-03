@@ -21,6 +21,7 @@ draft: true
   - [Digital Twin](understand/digital-twin.md)
   - [MQTT Bus](understand/mqtt-bus.md)
   - [Thin Edge Json](understand/thin-edge-json.md)
+  - [The Agent](understand/tedge-agent.md)
   - [The Mapper](understand/tedge-mapper.md)
   - [Software Management](understand/software-management.md)
   - [Architecture FAQ](understand/faq.md)
