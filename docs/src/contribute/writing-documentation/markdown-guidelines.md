@@ -1,7 +1,7 @@
 ---
 title: Markdown guidelines
 tags: [Documentation]
-sidebar_position: 6
+sidebar_position: 2
 ---
 
 A guideline to writing markdown in a consistent manner.
@@ -78,7 +78,7 @@ You can use other syntax highlighting if the output is of another format (e.g. j
 **✅ Good**
 
 ````md
-```text title="Output"
+```sh title="Output"
 tedge --help
 ```
 ````
@@ -120,7 +120,7 @@ In-line code blocks are not easy for users to copy the text from. Use a full cod
 ````md
 **Topic**
    
-```sh
+```text
 tedge/{child-d}/commands/res/config_snapshot
 ```
 ````
