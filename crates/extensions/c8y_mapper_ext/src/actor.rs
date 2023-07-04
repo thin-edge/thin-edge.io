@@ -34,7 +34,6 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
 use tedge_utils::file::create_directory_with_defaults;
-use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::FileError;
 
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
@@ -201,8 +200,6 @@ impl C8yMapperBuilder {
     fn init(config: &C8yMapperConfig) -> Result<(), FileError> {
         // Create c8y operations directory
         create_directory_with_defaults(config.ops_dir.clone())?;
-        create_file_with_defaults(config.ops_dir.join("c8y_SoftwareUpdate"), None)?;
-        create_file_with_defaults(config.ops_dir.join("c8y_Restart"), None)?;
         // Create directory for device custom fragments
         create_directory_with_defaults(config.config_dir.join("device"))?;
         Ok(())

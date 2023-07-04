@@ -41,6 +41,8 @@ use c8y_http_proxy::handle::C8YHttpProxy;
 use logged_command::LoggedCommand;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
+use serde::Deserialize;
+use serde::Serialize;
 use service_monitor::convert_health_status_message;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -69,6 +71,7 @@ use tedge_config::TEdgeConfigError;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
+use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
 use time::format_description::well_known::Rfc3339;
@@ -86,6 +89,7 @@ const TEDGE_EVENTS_TOPIC: &str = "tedge/events/";
 const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "c8y/event/events/create";
 const TEDGE_AGENT_LOG_DIR: &str = "tedge/agent";
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
+const TEDGE_AGENT_HEALTH_TOPIC: &str = "tedge/health/tedge-agent";
 
 #[derive(Debug)]
 pub struct MapperConfig {
@@ -364,6 +368,12 @@ impl CumulocityConverter {
     ) -> Result<Vec<Message>, ConversionError> {
         let mut mqtt_messages: Vec<Message> = Vec::new();
 
+        // Send the init messages
+        if check_tedge_agent_status(message)? {
+            create_tedge_agent_supported_ops(self.ops_dir.clone()).await?;
+            mqtt_messages.push(create_get_software_list_message()?);
+        }
+
         // When there is some messages to be sent on behalf of a child device,
         // this child device must be declared first, if not done yet
         let topic_split: Vec<&str> = message.topic.name.split('/').collect();
@@ -381,6 +391,7 @@ impl CumulocityConverter {
             self.device_name.clone(),
             self.service_type.clone(),
         );
+
         mqtt_messages.append(&mut message);
         Ok(mqtt_messages)
     }
@@ -734,14 +745,12 @@ impl Converter for CumulocityConverter {
         ));
 
         let pending_operations_message = self.wrap_error(create_get_pending_operations_message());
-        let software_list_message = self.wrap_error(create_get_software_list_message());
 
         Ok(vec![
             inventory_fragments_message,
             supported_operations_message,
             device_data_message,
             pending_operations_message,
-            software_list_message,
             cloud_child_devices_message,
         ])
     }
@@ -1028,6 +1037,28 @@ fn get_inventory_fragments(
         }
         Err(_) => Ok(json_fragment),
     }
+}
+
+async fn create_tedge_agent_supported_ops(ops_dir: PathBuf) -> Result<(), ConversionError> {
+    create_file_with_defaults(ops_dir.join("c8y_SoftwareUpdate"), None)?;
+    create_file_with_defaults(ops_dir.join("c8y_Restart"), None)?;
+
+    Ok(())
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct HealthStatus {
+    #[serde(skip)]
+    pub pid: u64,
+    pub status: String,
+}
+
+pub fn check_tedge_agent_status(message: &Message) -> Result<bool, ConversionError> {
+    if message.topic.name.eq(TEDGE_AGENT_HEALTH_TOPIC) {
+        let status: HealthStatus = serde_json::from_str(message.payload_str()?)?;
+        return Ok(status.status.eq("up"));
+    }
+    Ok(false)
 }
 
 #[cfg(test)]
