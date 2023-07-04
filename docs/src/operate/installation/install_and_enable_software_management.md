@@ -1,5 +1,5 @@
 ---
-title: Enable Software Managament Support
+title: Enable Software Management Support
 tags: [Operate, Installation, Software Management]
 sidebar_position: 4
 ---
