@@ -1,7 +1,7 @@
 ---
 title: Domain Model
 tags: [Concept, MQTT]
-sidebar_position: 1
+sidebar_position: 10
 ---
 
 # thin-edge Domain Model
@@ -116,7 +116,7 @@ That includes:
 
 The figure below illustrates the child-device concept.
 
-![Device Concept](images/device-concept.svg)
+![Device Concept](../understand/images/device-concept.svg)
 
 
 ## Plugins
@@ -136,7 +136,7 @@ The figure below illustrates the child-device concept.
 
 The figure below illustrates the concept of **plugins** and **plugin adapters**.
 
-![Plugin Concept](images/plugin-concept.svg)
+![Plugin Concept](../understand/images/plugin-concept.svg)
 
 ### Plugin Adapter
 
@@ -178,7 +178,7 @@ A **plugin** defines and implements a specific **contract** for all interactions
 
 Usual **devices** are **PLCs** (**P**rogrammable **L**ogic **C**ontrollers), **IPCs** (**I**ndustrial **PC**s) or any kind of **SoC-based** or **Microcontroller-based** Embedded System. The figure below shows a simplified conceptual model of such a device.
 
-![Simple Device Model](images/simple-device-model.svg)
+![Simple Device Model](../understand/images/simple-device-model.svg)
 
 <!--
 * TODO: add somehow "Such a **device** is most often a specialized hardware that has been ruggedized to operate in harsh electrical, thermic and mechanical industrial environments."

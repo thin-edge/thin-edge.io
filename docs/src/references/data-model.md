@@ -1,7 +1,7 @@
 ---
 title: Data Model
 tags: [Concept, MQTT]
-sidebar_position: 1
+sidebar_position: 9
 ---
 
 # thin-edge Data Model
@@ -28,11 +28,11 @@ All telemetry data (**Measurements**, **Events**, **Alarms**) are reflected with
 
 The communication diagram below illustrates that behaviour.
 
-![MQTT communication flow](images/MQTT-communication.svg)
+![MQTT communication flow](../understand/images/MQTT-communication.svg)
 
 ### Telemetry Data for Child-Devices
 
-All telemetry data provided to the MQTT bus are associated by **thin-edge** and all consumers with the thin-edge **main-device** or some **child-device** (see more details about **child-devices** in the [domain model](./domain-model.md#child-devices)).
+All telemetry data provided to the MQTT bus are associated by **thin-edge** and all consumers with the thin-edge **main-device** or some **child-device** (see more details about **child-devices** in the [domain model](domain-model.md#child-devices)).
 
 Therefore the `child-id` of the **child-device** is can be appended to the MQTT topic, if the message is meant for a **child-device**;
 or no `child-id` is appended, if the message is meant for the **main-device**.
@@ -189,4 +189,4 @@ tedge/alarms/<severity>/<alarm-type>/<child-id>
   the MQTT broker as long as the alarm is raised. When a raised alarm is gone again, an empty retain message shall be published to clear
   the alarm message in the broker.
 
-[^1]: details see "Domain Model" appendix [Device Domain](./domain-model.md#device-overview) -->
+[^1]: details see "Domain Model" appendix [Device Domain](domain-model.md#device-overview) -->
