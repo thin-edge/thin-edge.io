@@ -355,7 +355,7 @@ sudo tedge disconnect c8y
 sudo tedge connect c8y
 ```
 
-## Adding new software into the software repository in Cumulocity IoT
+### Adding new software into the software repository in Cumulocity IoT
 
 1. Go to Cumulocity IoT
 
@@ -375,7 +375,7 @@ sudo tedge connect c8y
 5. Press `Add Software` button.
 
 
-## Installing software on a device
+### Installing software on a device
 
 1. Go to Cumulocity IoT
 2. Click `All devices` in the Devices menu, select the desired device from the device list and open its Software tab.
@@ -424,7 +424,7 @@ sudo systemctl start c8y-configuration-plugin
 Then navigate to  Cumulocity IoT Device Management and the desired device. Open its Configuration tab. You can find c8y-configuration-plugin and more are listed as supported configuration types, as declared in the plugin configuration file. Here you can save the configuration files into the repository or download them.
 
 
-## Change configuration files via Cumulocity IoT.
+### Change configuration files via Cumulocity IoT.
 
 If there is a need to change one or more configuration files, there is more than one option to follow:
 
@@ -455,7 +455,7 @@ In this tutorial the last option is explained, there are some steps to be taken:
 
 ![Change Configuration](./images/ChangeConfiguration.png)
 
-## Change collectd configuration file via Cumulocity IoT.
+### Change collectd configuration file via Cumulocity IoT.
 
 To change the collectd metrics of the device, which are displayed in Cumulocity IoT, the next steps are needed. These are similar to the steps in the previous paragraphs.
 
