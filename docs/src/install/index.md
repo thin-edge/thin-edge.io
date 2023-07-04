@@ -201,9 +201,3 @@ The same thing can also be executed using a one-liner to download and run the sc
 ```sh
 curl -sSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh | sudo sh -s purge
 ```
-
-## Next steps
-
-1. [Connect your device to Cumulocity IoT](../../start/connect-c8y.md)
-2. [Connect your device to Azure IoT](../../start/connect-azure.md)
-3. [Connect your device to AWS IoT](../../start/connect-aws.md)

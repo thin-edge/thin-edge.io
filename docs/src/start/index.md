@@ -6,7 +6,7 @@ sidebar_position: 1
 
 # Getting started
 
-- [Install](../operate/installation/install.md)
+- [Install](../install/index.md)
 - [Getting Started](./getting-started.md)
 
 ## Cloud connections
