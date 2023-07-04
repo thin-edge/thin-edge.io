@@ -15,7 +15,7 @@ Below steps show how to download, install and enable thin-edge software manageme
 
 ## Download and install software management packages on the device
 
-As a prerequisite, install [tedge and tedge-mapper](install.md) if not installed already.
+As a prerequisite, install [tedge and tedge-mapper](../../install/index.md) if not installed already.
 
 The thin-edge software management packages are in repository on GitHub: [thin-edge.io](https://github.com/thin-edge/thin-edge.io/releases).
 

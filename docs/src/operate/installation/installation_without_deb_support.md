@@ -12,7 +12,7 @@ sidebar_position: 2
 A platform is defined as a set of hardware architecture and OS.
 More details can be found in [Supported Platforms](../../references/supported-platforms.md) document.
 
-Out of the box `thin-edge.io` uses deb packages for an automated installation ([Installation Guide](install.md)).
+Out of the box `thin-edge.io` uses deb packages for an automated installation ([Installation Guide](../../install/index.md)).
 You can install it yourself on any Linux system as long as you follow the guidelines below.
 
 ## Installation on other platforms

@@ -23,7 +23,7 @@ Before you try to connect your device to Cumulocity IoT, you need:
     * None of these credentials will be stored on the device.
     * These are only required once, to register the device.
 
-If not done yet, [install `thin-edge.io` on your device](../operate/installation/install.md).
+If not done yet, [install `thin-edge.io` on your device](../install/index.md).
 
 You can now use the [`tedge` command](../references/cli/index.md) to:
 * [create a certificate for you device](connect-c8y.md#create-the-certificate),

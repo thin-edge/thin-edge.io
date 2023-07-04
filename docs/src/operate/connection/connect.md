@@ -318,4 +318,4 @@ Caused by:
     Service mosquitto not found. Install mosquitto to use this command.
 ```
 
-mosquitto server has not been installed on the system and it is required to run this command, refer to [How to install thin-edge.io?](../installation/install.md) to install mosquitto and try again.
+mosquitto server has not been installed on the system and it is required to run this command, refer to [How to install thin-edge.io?](../../install/index.md) to install mosquitto and try again.

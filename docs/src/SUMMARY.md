@@ -24,7 +24,7 @@ draft: true
   
 - [Operate devices](operate/index.md)
   - [Installation](operate/installation/index.md)
-    - [How to install thin-edge.io?](operate/installation/install.md)
+    - [How to install thin-edge.io?](install/index.md)
     - [How to install thin-edge.io on any Linux OS (no deb support)?](operate/installation/installation_without_deb_support.md)
     - [How to install thin-edge manually with openrc](operate/installation/how_to_install_thin_edge_manually.md)
     - [How to install and enable software management?](operate/installation/install_and_enable_software_management.md)
