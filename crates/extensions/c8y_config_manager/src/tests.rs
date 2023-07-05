@@ -105,7 +105,7 @@ async fn test_config_upload_tedge_device() -> Result<(), DynError> {
         .assert_received([UploadConfigFile {
             config_path: test_config_path.into(),
             config_type: test_config_type.to_string(),
-            child_device_id: None,
+            device_id,
         }])
         .await;
 
@@ -511,7 +511,7 @@ async fn test_child_device_successful_config_snapshot_response_mapping() -> Resu
                 .join("config_snapshot")
                 .join(test_config_type),
             config_type: test_config_type.into(),
-            child_device_id: Some(child_device_id.into()),
+            device_id: child_device_id.into(),
         }])
         .await;
 
@@ -585,7 +585,7 @@ async fn test_child_config_snapshot_successful_response_without_uploaded_file_ma
                 .join("config_snapshot")
                 .join(test_config_type),
             config_type: test_config_type.into(),
-            child_device_id: Some(child_device_id.into()),
+            device_id: child_device_id.into(),
         }])
         .await;
 

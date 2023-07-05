@@ -6,7 +6,7 @@ use tedge_actors::ChannelError;
 use tedge_http_ext::HttpError;
 use tedge_utils::file::PermissionEntry;
 
-fan_in_message_type!(C8YRestRequest[GetJwtToken, C8yCreateEvent, C8yUpdateSoftwareListResponse, UploadLogBinary, UploadConfigFile, DownloadFile]: Debug, PartialEq, Eq);
+fan_in_message_type!(C8YRestRequest[GetJwtToken, C8yCreateEvent, SoftwareListResponse, UploadLogBinary, UploadConfigFile, DownloadFile]: Debug, PartialEq, Eq);
 //HIPPO Rename EventId to String as there could be many other String responses as well and this macro doesn't allow another String variant
 fan_in_message_type!(C8YRestResponse[EventId, Unit]: Debug);
 
@@ -44,17 +44,23 @@ pub type C8YRestResult = Result<C8YRestResponse, C8YRestError>;
 pub struct GetJwtToken;
 
 #[derive(Debug, PartialEq, Eq)]
+pub struct SoftwareListResponse {
+    pub c8y_software_list: C8yUpdateSoftwareListResponse,
+    pub device_id: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct UploadLogBinary {
     pub log_type: String,
     pub log_content: String,
-    pub child_device_id: Option<String>,
+    pub device_id: String,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct UploadConfigFile {
     pub config_path: PathBuf,
     pub config_type: String,
-    pub child_device_id: Option<String>,
+    pub device_id: String,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

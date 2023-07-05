@@ -52,7 +52,7 @@ impl FirmwareManagerConfig {
         let firmware_update_response_topics =
             TopicFilter::new_unchecked(FIRMWARE_UPDATE_RESPONSE_TOPICS);
 
-        let c8y_end_point = C8yEndPoint::new(&c8y_url, &tedge_device_id, "not used");
+        let c8y_end_point = C8yEndPoint::new(&c8y_url, &tedge_device_id);
 
         Self {
             tedge_device_id,

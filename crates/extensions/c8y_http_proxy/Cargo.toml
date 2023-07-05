@@ -13,6 +13,7 @@ repository = { workspace = true }
 async-trait = "0.1"
 c8y_api = { path = "../../core/c8y_api" }
 download = { path = "../../common/download" }
+http = "0.2"
 log = "0.4"
 mqtt_channel = { path = "../../common/mqtt_channel" }
 tedge_actors = { path = "../../core/tedge_actors" }

@@ -210,7 +210,7 @@ impl CumulocityConverter {
         let log_dir = config.logs_path.join(TEDGE_AGENT_LOG_DIR);
         let operation_logs = OperationLogs::try_new(log_dir.into())?;
 
-        let c8y_endpoint = C8yEndPoint::new(&c8y_host, &device_name, "");
+        let c8y_endpoint = C8yEndPoint::new(&c8y_host, &device_name);
 
         let mapper_config = MapperConfig {
             out_topic: Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -706,15 +706,18 @@ impl Converter for CumulocityConverter {
                     Ok(validate_and_publish_software_list(
                         message.payload_str()?,
                         &mut self.http_proxy,
+                        self.device_name.clone(), //derive from topic, when supported for child device also.
                     )
                     .await?)
                 }
                 Ok(MapperSubscribeTopic::ResponseTopic(ResponseTopic::SoftwareUpdateResponse)) => {
                     debug!("Software update");
-                    Ok(
-                        publish_operation_status(message.payload_str()?, &mut self.http_proxy)
-                            .await?,
+                    Ok(publish_operation_status(
+                        message.payload_str()?,
+                        &mut self.http_proxy,
+                        self.device_name.clone(),
                     )
+                    .await?)
                 }
                 Ok(MapperSubscribeTopic::ResponseTopic(ResponseTopic::RestartResponse)) => {
                     Ok(publish_restart_operation_status(message.payload_str()?).await?)
@@ -929,6 +932,7 @@ async fn publish_restart_operation_status(
 async fn publish_operation_status(
     json_response: &str,
     http_proxy: &mut C8YHttpProxy,
+    device_id: String,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
     let response = SoftwareUpdateResponse::from_json(json_response)?;
     let topic = C8yTopic::SmartRestResponse.to_topic()?;
@@ -942,13 +946,13 @@ async fn publish_operation_status(
             let smartrest_set_operation =
                 SmartRestSetOperationToSuccessful::from_thin_edge_json(response)?.to_smartrest()?;
 
-            validate_and_publish_software_list(json_response, http_proxy).await?;
+            validate_and_publish_software_list(json_response, http_proxy, device_id).await?;
             Ok(vec![Message::new(&topic, smartrest_set_operation)])
         }
         OperationStatus::Failed => {
             let smartrest_set_operation =
                 SmartRestSetOperationToFailed::from_thin_edge_json(response)?.to_smartrest()?;
-            validate_and_publish_software_list(json_response, http_proxy).await?;
+            validate_and_publish_software_list(json_response, http_proxy, device_id).await?;
             Ok(vec![Message::new(&topic, smartrest_set_operation)])
         }
     }
@@ -957,6 +961,7 @@ async fn publish_operation_status(
 async fn validate_and_publish_software_list(
     payload: &str,
     http_proxy: &mut C8YHttpProxy,
+    device_id: String,
 ) -> Result<Vec<Message>, CumulocityMapperError> {
     let response = &SoftwareListResponse::from_json(payload)?;
 
@@ -964,7 +969,7 @@ async fn validate_and_publish_software_list(
         OperationStatus::Successful => {
             let c8y_software_list: C8yUpdateSoftwareListResponse = response.into();
             http_proxy
-                .send_software_list_http(c8y_software_list)
+                .send_software_list_http(c8y_software_list, device_id)
                 .await?;
         }
 
