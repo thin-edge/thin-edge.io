@@ -4,4 +4,8 @@ tags: [Operate, Configuration]
 sidebar_position: 2
 ---
 
-# Configuration
+import DocCardList from '@theme/DocCardList';
+
+How to configure thin-edge
+
+<DocCardList />

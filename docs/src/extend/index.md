@@ -4,7 +4,9 @@ tags: [Extend]
 sidebar_position: 4
 ---
 
-# Extend thin-edge
+import DocCardList from '@theme/DocCardList';
 
-- [Write a software-management plugin](./write-my-software-management-plugin.md)
-- [Build Thin Edge for a Yocto Linux distribution](./yocto-linux.md)
+This section is for the agent developers who want to adapt and extend thin-edge
+to meet the requirements of their domain application, target devices and cloud.
+
+<DocCardList />

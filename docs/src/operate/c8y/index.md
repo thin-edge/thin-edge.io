@@ -4,4 +4,8 @@ tags: [Operate, Cloud]
 sidebar_position: 9
 ---
 
-# Device Management with Cumulocity
+import DocCardList from '@theme/DocCardList';
+
+This section is for the cloud operators who manage a fleet of thin-edge devices connected to Cumulocity.
+
+<DocCardList />

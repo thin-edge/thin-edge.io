@@ -4,4 +4,8 @@ tags: [Operate, Operation]
 sidebar_position: 6
 ---
 
-# Operations
+import DocCardList from '@theme/DocCardList';
+
+Maintenance operations on a thin-edge device
+
+<DocCardList />
