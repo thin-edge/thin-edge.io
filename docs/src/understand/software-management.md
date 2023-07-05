@@ -1,7 +1,7 @@
 ---
 title: Software Management
 tags: [Concept, Software Management]
-sidebar_position: 1
+sidebar_position: 7
 ---
 
 # Software Management with thin-edge.io

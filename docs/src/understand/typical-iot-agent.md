@@ -1,3 +1,9 @@
+---
+title: Typical IoT Agent
+tags: [Concept]
+sidebar_position: 1
+---
+
 # A typical IoT agent running thin-edge
 
 A typical IoT agent acts as a gateway between the cloud and devices deployed over machines and plants.
@@ -56,13 +62,3 @@ to meet specific requirements for the piece of equipment, hardware or applicatio
   translating and forwarding requests and responses to and from the local components.
   This bidirectional communication establishes the twin live representation of the asset
   with its set of child-devices, services, configuration files and monitoring data.
-
-TODO: define thin-edge specific terms:
-
-- main device
-- child devices
-- services
-- mapper
-- agent
-- plugins
-- child connector

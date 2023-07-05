@@ -1,3 +1,9 @@
+---
+title: Digital Twin
+tags: [Concept]
+sidebar_position: 2
+---
+
 # Digital Twin
 
 Thin-edge provides the tools to build

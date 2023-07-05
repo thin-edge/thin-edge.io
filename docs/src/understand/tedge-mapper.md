@@ -1,7 +1,7 @@
 ---
-title: The mapper
+title: The Mapper
 tags: [Concept, Cloud, MQTT]
-sidebar_position: 1
+sidebar_position: 6
 ---
 
 # Thin-edge Mapper

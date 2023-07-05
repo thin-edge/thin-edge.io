@@ -1,7 +1,7 @@
 ---
 title: Architecture FAQ
 tags: [Concept]
-sidebar_position: 1
+sidebar_position: 8
 ---
 
 # Architecture FAQ
