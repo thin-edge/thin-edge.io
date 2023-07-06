@@ -1,8 +1,12 @@
 use super::child_device::ConfigOperationResponseTopic;
+
 use c8y_api::smartrest::topic::C8yTopic;
+use std::net::IpAddr;
 use std::path::Path;
 use std::path::PathBuf;
-use tedge_config::*;
+use tedge_config::new::ReadError;
+use tedge_config::new::TEdgeConfig;
+use tedge_config::tedge_config_cli::tedge_config_defaults::DEFAULT_FILE_TRANSFER_DIR_NAME;
 use tedge_mqtt_ext::TopicFilter;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-configuration-plugin.toml";
@@ -36,7 +40,7 @@ impl ConfigManagerConfig {
         device_id: String,
         mqtt_host: String,
         mqtt_port: u16,
-        tedge_http_address: IpAddress,
+        tedge_http_address: IpAddr,
         tedge_http_port: u16,
     ) -> Self {
         let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port);
@@ -73,15 +77,15 @@ impl ConfigManagerConfig {
     pub fn from_tedge_config(
         config_dir: impl AsRef<Path>,
         tedge_config: &TEdgeConfig,
-    ) -> Result<ConfigManagerConfig, TEdgeConfigError> {
+    ) -> Result<ConfigManagerConfig, ReadError> {
         let config_dir: PathBuf = config_dir.as_ref().into();
-        let device_id = tedge_config.query(DeviceIdSetting)?;
-        let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
-        let data_dir: PathBuf = tedge_config.query(DataPathSetting)?.into();
-        let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
-        let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
-        let tedge_http_address = tedge_config.query(HttpBindAddressSetting)?;
-        let tedge_http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
+        let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
+        let tmp_dir = tedge_config.tmp.path.as_std_path().to_path_buf();
+        let data_dir = tedge_config.data.path.as_std_path().to_path_buf();
+        let mqtt_host = tedge_config.mqtt.client.host.clone();
+        let mqtt_port = tedge_config.mqtt.client.port.get();
+        let tedge_http_address = tedge_config.http.bind.address;
+        let tedge_http_port = tedge_config.http.bind.port;
 
         let config = ConfigManagerConfig::new(
             config_dir,

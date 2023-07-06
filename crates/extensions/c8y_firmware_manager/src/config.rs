@@ -1,22 +1,14 @@
+use crate::error::FirmwareManagementConfigBuildError;
 use crate::error::FirmwareManagementError;
 
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::smartrest::topic::C8yTopic;
+use std::net::IpAddr;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_api::health::health_check_topics;
-use tedge_config::C8yHttpSetting;
-use tedge_config::ConfigSettingAccessor;
-use tedge_config::DataPathSetting;
-use tedge_config::DeviceIdSetting;
-use tedge_config::FirmwareChildUpdateTimeoutSetting;
-use tedge_config::HttpBindAddressSetting;
-use tedge_config::HttpPortSetting;
-use tedge_config::IpAddress;
-use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigError;
-use tedge_config::TmpPathSetting;
+use tedge_config::new::TEdgeConfig;
 use tedge_mqtt_ext::TopicFilter;
 
 const PLUGIN_SERVICE_NAME: &str = "c8y-firmware-plugin";
@@ -42,7 +34,7 @@ pub struct FirmwareManagerConfig {
 impl FirmwareManagerConfig {
     pub fn new(
         tedge_device_id: String,
-        local_http_address: IpAddress,
+        local_http_address: IpAddr,
         local_http_port: u16,
         tmp_dir: PathBuf,
         data_dir: PathBuf,
@@ -78,18 +70,17 @@ impl FirmwareManagerConfig {
         }
     }
 
-    pub fn from_tedge_config(tedge_config: &TEdgeConfig) -> Result<Self, TEdgeConfigError> {
-        let tedge_device_id = tedge_config.query(DeviceIdSetting)?;
-        let local_http_address = tedge_config.query(HttpBindAddressSetting)?;
-        let local_http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
-        let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
-        let data_dir = tedge_config.query(DataPathSetting)?.into();
-        let timeout_sec = Duration::from_secs(
-            tedge_config
-                .query(FirmwareChildUpdateTimeoutSetting)?
-                .into(),
-        );
-        let c8y_url = tedge_config.query(C8yHttpSetting)?.into();
+    pub fn from_tedge_config(
+        tedge_config: &TEdgeConfig,
+    ) -> Result<Self, FirmwareManagementConfigBuildError> {
+        let tedge_device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
+        let local_http_address = tedge_config.http.bind.address;
+        let local_http_port = tedge_config.http.bind.port;
+        let tmp_dir = tedge_config.tmp.path.as_std_path().to_path_buf();
+        let data_dir = tedge_config.data.path.as_std_path().to_path_buf();
+        let timeout_sec = tedge_config.firmware.child.update.timeout.duration();
+
+        let c8y_url = tedge_config.c8y_url().or_config_not_set()?.to_string();
 
         Ok(Self::new(
             tedge_device_id,
