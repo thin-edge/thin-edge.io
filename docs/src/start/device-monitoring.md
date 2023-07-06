@@ -15,7 +15,7 @@ Additionally, the metrics can be used to help the customer troubleshoot when pro
 
 Thin-edge.io uses the open source component [`collectd`](https://collectd.org/) to collect the metrics from the device.
 Thin-edge.io translates the collected metrics from their native format to the [thin-edge.io JSON](../understand/thin-edge-json.md) format
-and then into the [cloud-vendor specific format](../understand/mapper.md).
+and then into the [cloud-vendor specific format](../understand/tedge-mapper.md).
 
 Enabling monitoring on your device is a 3-steps process:
 1. [Install `collectd`](#install-collectd),

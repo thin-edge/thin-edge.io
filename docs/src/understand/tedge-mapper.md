@@ -1,10 +1,10 @@
 ---
-title: The mapper
+title: The Mapper
 tags: [Concept, Cloud, MQTT]
-sidebar_position: 1
+sidebar_position: 6
 ---
 
-# The tedge-mapper
+# Thin-edge Mapper
 
 The tedge-mapper is a key concept to support multiple cloud providers.
 The purpose is to translate
