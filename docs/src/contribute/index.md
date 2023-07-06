@@ -4,9 +4,9 @@ tags: [Contribute]
 sidebar_position: 5
 ---
 
-# Contributing to thin-edge.io
+import DocCardList from '@theme/DocCardList';
 
-- [Building](BUILDING.md)
-- [Using a dev container](DEV_CONTAINER.md)
-- [Debian package hosting](DEBIAN_PACKAGE_HOSTING.md)
-- Docker being used for testing, you will have to [install Docker](INSTALLING_DOCKER.md)
+This section is for who wants to contribute to thin-edge,
+submitting issues, writing documentation, implementing features.
+
+<DocCardList />
