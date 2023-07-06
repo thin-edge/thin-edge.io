@@ -39,6 +39,9 @@ tests/PySys/**/Output/
 docs/theme/index.hbs
 docs/theme/pagetoc.js
 
+# Symlink used when building docs in tedge-docs repo
+docs/src/src
+
 # Other files
 Makefile.toml
 .vimspector.json
