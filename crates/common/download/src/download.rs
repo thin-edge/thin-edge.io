@@ -1,16 +1,14 @@
 mod partial_response;
-use log::info;
-pub use partial_response::InvalidResponseError;
-use tedge_utils::file::FileError;
-
 use crate::error::DownloadError;
 use crate::error::ErrContext;
 use anyhow::anyhow;
-use backoff::future::retry;
+use backoff::future::retry_notify;
 use backoff::ExponentialBackoff;
 use log::debug;
+use log::info;
 use log::warn;
 use nix::sys::statvfs;
+pub use partial_response::InvalidResponseError;
 use reqwest::header;
 use serde::Deserialize;
 use serde::Serialize;
@@ -24,6 +22,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_utils::file::move_file;
+use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
 
 #[cfg(target_os = "linux")]
@@ -35,8 +34,9 @@ fn default_backoff() -> ExponentialBackoff {
     // Default retry is an exponential retry with a limit of 15 minutes total.
     // Let's set some more reasonable retry policy so we don't block the downloads for too long.
     ExponentialBackoff {
-        initial_interval: Duration::from_secs(30),
+        initial_interval: Duration::from_secs(15),
         max_elapsed_time: Some(Duration::from_secs(300)),
+        randomization_factor: 0.1,
         ..Default::default()
     }
 }
@@ -140,7 +140,13 @@ impl Downloader {
     /// Downloads a file using an exponential backoff strategy.
     ///
     /// Partial backoff has a minimal interval of 30s and max elapsed time of
-    /// 5min. To learn more about the backoff, see documentation of the
+    /// 5min. It applies only when sending a request and either receiving a
+    /// 500-599 response status or when request couldn't be made due to some
+    /// network-related failure. If a network failure happens when downloading
+    /// response body chunks, in some cases it doesn't trigger any errors, but
+    /// just grinds down to a halt, e.g. when disconnecting from a network.
+    ///
+    /// To learn more about the backoff, see documentation of the
     /// [`backoff`](backoff) crate.
     ///
     /// Requests partial ranges if a transient error happened while downloading
@@ -156,7 +162,7 @@ impl Downloader {
 
         let file_len = response.content_length().unwrap_or(0);
         info!(
-            "Downloading file from url='{url:?}' , len={file_len}",
+            "Downloading file from url={url:?}, len={file_len}",
             url = url.url
         );
 
@@ -408,7 +414,11 @@ impl Downloader {
                 })
         };
 
-        retry(backoff, operation).await
+        retry_notify(backoff, operation, |err, dur: Duration| {
+            let dur = dur.as_secs();
+            warn!("Temporary failure: {err}. Retrying in {dur}s",)
+        })
+        .await
     }
 }
 
