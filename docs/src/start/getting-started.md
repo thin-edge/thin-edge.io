@@ -31,19 +31,13 @@ sudo apt-get update && sudo apt-get upgrade
 
 This tutorial is divided into small steps. The first three steps are needed to install and connect to Cumulocity IoT. The last three are optional but needed to get a good overview of the capabilities of thin-edge.io.
 
-[Step 1 Install thin-edge.io](#Step-1-Install-thin-edge.io)
-
-[Step 2 Configure and Connect to Cumulocity IoT](#Step-2-Configure-and-Connect-to-Cumulocity-IoT)
-
-[Step 3 Sending Device Data](#Step-3-Sending-Device-Data)
-
-[Step 4 Monitor the device](#Step-4-Monitor-the-device)
-
-[Step 5 Add software management](#Step-5-Add-software-management)
-
-[Step 6 Manage configuration files](#Step-6-Manage-configuration-files)
-
-[Step 7 Manage Log Files](getting-started.md#Step-7-Manage-Log-Files)
+- [Step 1 Install thin-edge.io](#step-1-install-thin-edgeio)
+- [Step 2 Configure and Connect to Cumulocity IoT](#step-2-configure-and-connect-to-cumulocity-iot)
+- [Step 3 Sending Device Data](#step-3-sending-device-data)
+- [Step 4 Monitor the device](#step-4-monitor-the-device)
+- [Step 5 Add software management](#step-5-add-software-management)
+- [Step 6 Manage configuration files](#step-6-manage-configuration-files)
+- [Step 7 Manage Log Files](#step-7-manage-log-files)
 
 
 ## Step 1 Install thin-edge.io
