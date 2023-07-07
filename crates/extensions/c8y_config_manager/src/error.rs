@@ -1,4 +1,5 @@
 use std::io;
+use std::process::ExitStatus;
 use tedge_actors::RuntimeError;
 use tedge_mqtt_ext::Topic;
 use tedge_utils::file::FileError;
@@ -44,6 +45,9 @@ pub enum ConfigManagementError {
 
     #[error(transparent)]
     FromPathsError(#[from] PathsError),
+
+    #[error("Command execution failed with exit code: {0:?}, reason: {1:?}")]
+    ExecError(ExitStatus, String),
 }
 
 impl From<ConfigManagementError> for RuntimeError {

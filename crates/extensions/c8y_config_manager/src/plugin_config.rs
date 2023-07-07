@@ -4,7 +4,7 @@ use log::error;
 use log::info;
 use serde::Deserialize;
 use std::borrow::Borrow;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::fs;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -18,6 +18,7 @@ use tedge_utils::file::PermissionEntry;
 #[serde(deny_unknown_fields)]
 struct RawPluginConfig {
     pub files: Vec<RawFileEntry>,
+    pub exts: Option<Vec<RawExtEntry>>,
 }
 
 #[derive(Deserialize, Debug, Default, Eq, PartialEq)]
@@ -31,9 +32,23 @@ pub struct RawFileEntry {
     mode: Option<u32>,
 }
 
-#[derive(Debug, Eq, PartialEq, Default, Clone)]
+#[derive(Deserialize, Debug, Default, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct RawExtEntry {
+    #[serde(rename = "type")]
+    config_type: String,
+    exec: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct PluginConfig {
-    pub files: HashSet<FileEntry>,
+    pub configs: HashMap<String, ConfigEntry>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ConfigEntry {
+    FileEntry(FileEntry),
+    ExtEntry(ExtEntry),
 }
 
 #[derive(Debug, Eq, Default, Clone)]
@@ -41,6 +56,12 @@ pub struct FileEntry {
     pub path: String,
     pub config_type: String,
     pub file_permissions: PermissionEntry,
+}
+
+#[derive(Debug, Eq, Default, Clone)]
+pub struct ExtEntry {
+    pub exec: String,
+    pub config_type: String,
 }
 
 impl Hash for FileEntry {
@@ -74,6 +95,18 @@ impl FileEntry {
             config_type,
             file_permissions: PermissionEntry { user, group, mode },
         }
+    }
+}
+
+impl Hash for ExtEntry {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.config_type.hash(state);
+    }
+}
+
+impl PartialEq for ExtEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.config_type == other.config_type
     }
 }
 
@@ -112,8 +145,12 @@ impl PluginConfig {
             None,
             None,
         );
+
         Self {
-            files: HashSet::from([c8y_configuration_plugin]),
+            configs: HashMap::from([(
+                DEFAULT_PLUGIN_CONFIG_TYPE.into(),
+                ConfigEntry::FileEntry(c8y_configuration_plugin),
+            )]),
         }
     }
 
@@ -139,11 +176,32 @@ impl PluginConfig {
                 raw_entry.group,
                 raw_entry.mode,
             );
-            if !self.files.insert(entry) {
+            if self
+                .configs
+                .insert(config_type.clone(), ConfigEntry::FileEntry(entry))
+                .is_some()
+            {
                 error!("The config file has the duplicated type '{}'.", config_type);
                 return original_plugin_config;
             }
         }
+        for raw_entry in raw_config.exts.into_iter().flatten() {
+            let config_type = raw_entry.config_type;
+            let entry = ExtEntry {
+                config_type: config_type.clone(),
+                exec: raw_entry.exec,
+            };
+
+            if self
+                .configs
+                .insert(config_type.clone(), ConfigEntry::ExtEntry(entry))
+                .is_some()
+            {
+                error!("The config file has the duplicated type '{}'.", config_type);
+                return original_plugin_config;
+            }
+        }
+
         self
     }
 
@@ -161,30 +219,30 @@ impl PluginConfig {
         Ok(MqttMessage::new(&topic, self.to_smartrest_payload()))
     }
 
-    pub fn get_all_file_types(&self) -> Vec<String> {
-        self.files
-            .iter()
-            .map(|x| x.config_type.to_string())
+    pub fn get_all_config_types(&self) -> Vec<String> {
+        self.configs
+            .keys()
+            .map(|x| x.to_owned())
             .collect::<Vec<_>>()
     }
 
-    pub fn get_file_entry_from_type(
+    pub fn get_config_entry_from_type(
         &self,
         config_type: &str,
-    ) -> Result<FileEntry, InvalidConfigTypeError> {
-        let file_entry = self
-            .files
+    ) -> Result<ConfigEntry, InvalidConfigTypeError> {
+        let config_entry = self
+            .configs
             .get(&config_type.to_string())
             .ok_or(InvalidConfigTypeError {
                 config_type: config_type.to_owned(),
             })?
             .to_owned();
-        Ok(file_entry)
+        Ok(config_entry)
     }
 
     // 119,typeA,typeB,...
     fn to_smartrest_payload(&self) -> String {
-        let mut config_types = self.get_all_file_types();
+        let mut config_types = self.get_all_config_types();
         // Sort because hashset doesn't guarantee the order
         config_types.sort();
         let supported_config_types = config_types.join(",");
