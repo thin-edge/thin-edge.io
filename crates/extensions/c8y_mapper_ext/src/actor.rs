@@ -180,10 +180,8 @@ impl C8yMapperBuilder {
 
         let box_builder = SimpleMessageBoxBuilder::new("CumulocityMapper", 16);
 
-        let mqtt_publisher = mqtt.connect_consumer(
-            C8yMapperConfig::subscriptions(&config.config_dir).unwrap(),
-            adapt(&box_builder.get_sender()),
-        );
+        let mqtt_publisher =
+            mqtt.connect_consumer(config.topics.clone(), adapt(&box_builder.get_sender()));
         let http_proxy = C8YHttpProxy::new("C8yMapper => C8YHttpProxy", http);
         let timer_sender = timer.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
         fs_watcher.register_peer(config.ops_dir.clone(), adapt(&box_builder.get_sender()));

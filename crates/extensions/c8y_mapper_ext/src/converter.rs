@@ -1707,13 +1707,15 @@ mod tests {
         CumulocityConverter,
         SimpleMessageBox<C8YRestRequest, C8YRestResult>,
     ) {
+        tmp_dir.dir("operations").dir("c8y");
+        tmp_dir.dir("tedge").dir("agent");
+
         let device_id = "test-device".into();
         let device_type = "test-device-type".into();
         let service_type = "service".into();
         let c8y_host = "test.c8y.io".into();
-
-        tmp_dir.dir("operations").dir("c8y");
-        tmp_dir.dir("tedge").dir("agent");
+        let mut topics = C8yMapperConfig::internal_topic_filter(&tmp_dir.to_path_buf()).unwrap();
+        topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
         let config = C8yMapperConfig::new(
             tmp_dir.to_path_buf(),
@@ -1722,6 +1724,7 @@ mod tests {
             device_type,
             service_type,
             c8y_host,
+            topics,
         );
 
         let mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
