@@ -152,6 +152,32 @@ impl<Input: Debug> LoggingReceiver<Input> {
         let receiver = CombinedReceiver::new(input_receiver, signal_receiver);
         Self { name, receiver }
     }
+
+    /// Splits a `LoggingReceiver` into an input receiver and a signal receiver,
+    /// which can be used to read and write the stream concurrently.
+    ///
+    /// This method is more efficient than [`into_split`](Self::into_split), but
+    /// the halves cannot be moved into independently spawned tasks.
+    pub fn split(
+        &mut self,
+    ) -> (
+        &mut mpsc::Receiver<Input>,
+        &mut mpsc::Receiver<RuntimeRequest>,
+    ) {
+        (
+            &mut self.receiver.input_receiver,
+            &mut self.receiver.signal_receiver,
+        )
+    }
+
+    /// Splits a `LoggingReceiver` into an input receiver and a signal receiver,
+    /// which can be used to read and write the stream concurrently.
+    ///
+    /// This method returns consumes the `LoggingReceiver` and returns owned
+    /// receivers, which can then be separately moved.
+    pub fn into_split(self) -> (mpsc::Receiver<Input>, mpsc::Receiver<RuntimeRequest>) {
+        (self.receiver.input_receiver, self.receiver.signal_receiver)
+    }
 }
 
 #[async_trait]
@@ -245,6 +271,24 @@ impl<Input: Message, Output: Message> SimpleMessageBox<Input, Output> {
             input_receiver,
             output_sender,
         }
+    }
+
+    /// Splits a `SimpleMessageBox` into an input receiver and an output sender,
+    /// which can be used to receive and send messages concurrently.
+    ///
+    /// This method is more efficient than [`into_split`](Self::into_split), but
+    /// the halves cannot be moved into independently spawned tasks.
+    pub fn split(&mut self) -> (&mut LoggingSender<Output>, &mut LoggingReceiver<Input>) {
+        (&mut self.output_sender, &mut self.input_receiver)
+    }
+
+    /// Splits a `SimpleMessageBox` into an input receiver and an output sender,
+    /// which can be used to receive and send messages concurrently.
+    ///
+    /// This method returns consumes the `SimpleMessageBox` and returns owned
+    /// sender and receiver, which can then be separately moved.
+    pub fn into_split(self) -> (LoggingSender<Output>, LoggingReceiver<Input>) {
+        (self.output_sender, self.input_receiver)
     }
 }
 
