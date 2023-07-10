@@ -44,9 +44,10 @@ RUN mkdir -p /etc/apt/keyrings \
     && apt-get update \
     && apt-get install -y docker-ce-cli docker-compose-plugin
 
-# Node js (for browser based tests)
+# Node js (for browser based tests and documentation using docusaurus)
 RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y nodejs
+    && apt-get install -y nodejs \
+    && npm install -g yarn
 
 # Update python deps
 RUN pip3 install --upgrade pip
