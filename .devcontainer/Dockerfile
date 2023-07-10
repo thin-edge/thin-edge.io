@@ -49,6 +49,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs \
     && npm install -g yarn
 
+# Instll just (project task runner)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/bin/
+
 # Update python deps
 RUN pip3 install --upgrade pip
 
