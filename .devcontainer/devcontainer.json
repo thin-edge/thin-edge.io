@@ -52,6 +52,7 @@
 				"tamasfe.even-better-toml",
 				"serayuzgur.crates",
 				"usernamehw.errorlens",
+				"streetsidesoftware.code-spell-checker",
 				// Shell script validation
 				"timonwong.shellcheck",
 				// Containers

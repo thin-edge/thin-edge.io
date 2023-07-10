@@ -14,6 +14,8 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         fakeroot \
         # Utilities
         vim \
+        bash-completion \
+        iputils-ping \
         # Enable systemd
         systemd \
         # Testing dependencies
@@ -22,7 +24,8 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         python3-pip \
         python3-venv \
         # tedge dependencies
-        mosquitto
+        mosquitto \
+        mosquitto-clients
 
 # Install gh utility
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
@@ -38,9 +41,13 @@ RUN mkdir -p /etc/apt/keyrings \
     && apt-get update \
     && apt-get install -y docker-ce-cli docker-compose-plugin
 
-# Node js (for browser based tests)
+# Node js (for browser based tests and documentation using docusaurus)
 RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y nodejs
+    && apt-get install -y nodejs \
+    && npm install -g yarn
+
+# Instll just (project task runner)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/bin/
 
 # Update python deps
 RUN pip3 install --upgrade pip
@@ -53,7 +60,9 @@ USER root
 RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
     && mkdir /commandhistory \
     && touch /commandhistory/.bash_history \
-    && echo "$SNIPPET" >> "/root/.bashrc"
+    && echo "$SNIPPET" >> "/root/.bashrc" \
+    # Enable bash-completion
+    && echo "source /etc/profile.d/bash_completion.sh" >> "/root/.bashrc"
 
 # Enable cross-rs to compile using docker-in-docker
 ENV CROSS_CONTAINER_IN_CONTAINER=true
