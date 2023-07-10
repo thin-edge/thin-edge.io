@@ -423,6 +423,7 @@ mod tests {
     use filetime::set_file_mtime;
     use filetime::FileTime;
     use std::io::Write;
+    use std::net::Ipv4Addr;
     use std::path::Path;
     use std::path::PathBuf;
     use tedge_actors::Actor;
@@ -519,7 +520,7 @@ mod tests {
             device_id: "SUT".to_string(),
             mqtt_host: "127.0.0.1".to_string(),
             mqtt_port: 1883,
-            tedge_http_host: "127.0.0.1".try_into().unwrap(),
+            tedge_http_host: Ipv4Addr::LOCALHOST.into(),
             tedge_http_port: 80,
             ops_dir: temp_dir.to_path_buf(),
             plugin_config_dir: temp_dir.to_path_buf(),

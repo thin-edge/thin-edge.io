@@ -38,15 +38,6 @@ pub enum FirmwareManagementError {
     FromSMCumulocityMapperError(#[from] c8y_api::smartrest::error::SMCumulocityMapperError),
 
     #[error(transparent)]
-    FromSystemServiceError(#[from] tedge_config::system_services::SystemServiceError),
-
-    #[error(transparent)]
-    FromTEdgeConfigError(#[from] tedge_config::TEdgeConfigError),
-
-    #[error(transparent)]
-    FromConfigSettingError(#[from] tedge_config::ConfigSettingError),
-
-    #[error(transparent)]
     FromChannelError(#[from] tedge_actors::ChannelError),
 
     #[error(transparent)]
@@ -57,4 +48,13 @@ impl From<FirmwareManagementError> for RuntimeError {
     fn from(error: FirmwareManagementError) -> Self {
         RuntimeError::ActorError(Box::new(error))
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum FirmwareManagementConfigBuildError {
+    #[error(transparent)]
+    FromReadError(#[from] tedge_config::new::ReadError),
+
+    #[error(transparent)]
+    FromConfigNotSet(#[from] tedge_config::new::ConfigNotSet),
 }

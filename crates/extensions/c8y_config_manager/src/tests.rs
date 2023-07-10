@@ -12,6 +12,7 @@ use c8y_http_proxy::messages::C8YRestResult;
 use c8y_http_proxy::messages::DownloadFile;
 use c8y_http_proxy::messages::UploadConfigFile;
 use serde_json::json;
+use std::net::Ipv4Addr;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::WithTimeout;
@@ -987,7 +988,7 @@ async fn spawn_config_manager(
         device_id.to_string(),
         tedge_host.to_string(),
         mqtt_port,
-        tedge_host.to_string().try_into().unwrap(),
+        tedge_host.parse::<Ipv4Addr>().unwrap().into(),
         tedge_http_port,
     );
 

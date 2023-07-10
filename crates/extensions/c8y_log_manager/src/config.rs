@@ -5,19 +5,11 @@ use serde::Deserialize;
 use std::borrow::Borrow;
 use std::collections::HashSet;
 use std::fs;
+use std::net::IpAddr;
 use std::path::Path;
 use std::path::PathBuf;
-use tedge_config::ConfigSettingAccessor;
-use tedge_config::DeviceIdSetting;
-use tedge_config::HttpBindAddressSetting;
-use tedge_config::HttpPortSetting;
-use tedge_config::IpAddress;
-use tedge_config::LogPathSetting;
-use tedge_config::MqttClientHostSetting;
-use tedge_config::MqttClientPortSetting;
-use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigError;
-use tedge_config::TmpPathSetting;
+use tedge_config::new::ReadError;
+use tedge_config::new::TEdgeConfig;
 use tedge_mqtt_ext::MqttMessage;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-log-plugin.toml";
@@ -32,7 +24,7 @@ pub struct LogManagerConfig {
     pub device_id: String,
     pub mqtt_host: String,
     pub mqtt_port: u16,
-    pub tedge_http_host: IpAddress,
+    pub tedge_http_host: IpAddr,
     pub tedge_http_port: u16,
     pub ops_dir: PathBuf,
     pub plugin_config_dir: PathBuf,
@@ -43,17 +35,16 @@ impl LogManagerConfig {
     pub fn from_tedge_config(
         config_dir: impl AsRef<Path>,
         tedge_config: &TEdgeConfig,
-    ) -> Result<Self, TEdgeConfigError> {
+    ) -> Result<Self, ReadError> {
         let config_dir: PathBuf = config_dir.as_ref().into();
+        let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
+        let tmp_dir = tedge_config.tmp.path.as_std_path().to_path_buf();
+        let log_dir = tedge_config.logs.path.as_std_path().to_path_buf();
+        let mqtt_host = tedge_config.mqtt.client.host.clone();
+        let mqtt_port = u16::from(tedge_config.mqtt.client.port);
 
-        let device_id = tedge_config.query(DeviceIdSetting)?;
-        let tmp_dir = tedge_config.query(TmpPathSetting)?.into();
-        let log_dir = tedge_config.query(LogPathSetting)?.into();
-        let mqtt_host = tedge_config.query(MqttClientHostSetting)?;
-        let mqtt_port = tedge_config.query(MqttClientPortSetting)?.into();
-
-        let tedge_http_host = tedge_config.query(HttpBindAddressSetting)?;
-        let tedge_http_port: u16 = tedge_config.query(HttpPortSetting)?.into();
+        let tedge_http_host = tedge_config.http.bind.address;
+        let tedge_http_port = tedge_config.http.bind.port;
 
         let ops_dir = config_dir.join("operations/c8y");
 

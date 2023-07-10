@@ -16,12 +16,6 @@ pub enum ConfigManagementError {
     EmptyOperationStatus(Topic),
 
     #[error(transparent)]
-    FromTEdgeConfig(#[from] tedge_config::TEdgeConfigError),
-
-    #[error(transparent)]
-    FromConfigSetting(#[from] tedge_config::ConfigSettingError),
-
-    #[error(transparent)]
     FromFile(#[from] FileError),
 
     #[error(transparent)]

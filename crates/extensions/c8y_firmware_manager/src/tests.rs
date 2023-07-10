@@ -7,6 +7,7 @@ use c8y_http_proxy::credentials::JwtRequest;
 use serde_json::json;
 use sha256::digest;
 use std::io;
+use std::net::Ipv4Addr;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
@@ -19,7 +20,6 @@ use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::Auth;
 use tedge_api::DownloadError;
-use tedge_config::IpAddress;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_mqtt_ext::Topic;
 use tedge_test_utils::fs::TempTedgeDir;
@@ -708,7 +708,7 @@ async fn spawn_firmware_manager(
     }
 
     let device_id = "parent-device";
-    let tedge_host: IpAddress = TEDGE_HOST.try_into().unwrap();
+    let tedge_host = TEDGE_HOST.parse::<Ipv4Addr>().unwrap().into();
 
     let config = FirmwareManagerConfig::new(
         device_id.to_string(),

@@ -9,7 +9,6 @@ use c8y_log_manager::LogManagerConfig;
 use clap::Parser;
 use std::path::PathBuf;
 use tedge_actors::Runtime;
-use tedge_config::ConfigRepository;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::TEdgeConfigRepository;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
@@ -46,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
     let config_dir = config_plugin_opt.config_dir;
     let tedge_config_location = TEdgeConfigLocation::from_custom_root(&config_dir);
     let config_repository = TEdgeConfigRepository::new(tedge_config_location);
-    let tedge_config = config_repository.load()?;
+    let tedge_config = config_repository.load_new()?;
 
     let c8y_http_config = (&tedge_config).try_into()?;
     let mqtt_config = tedge_config.mqtt_config()?;
