@@ -27,9 +27,6 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         mosquitto \
         mosquitto-clients
 
-# Enable bash-completion
-RUN echo "source /etc/profile.d/bash_completion.sh" >> ~/.bashrc
-
 # Install gh utility
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
     && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
@@ -63,7 +60,9 @@ USER root
 RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
     && mkdir /commandhistory \
     && touch /commandhistory/.bash_history \
-    && echo "$SNIPPET" >> "/root/.bashrc"
+    && echo "$SNIPPET" >> "/root/.bashrc" \
+    # Enable bash-completion
+    && echo "source /etc/profile.d/bash_completion.sh" >> "/root/.bashrc"
 
 # Enable cross-rs to compile using docker-in-docker
 ENV CROSS_CONTAINER_IN_CONTAINER=true
