@@ -79,7 +79,6 @@ async fn test_new_software_update_operation() -> Result<(), DynError> {
 
     match converter_box.recv().await.unwrap() {
         SoftwareResponse::SoftwareUpdateResponse(res) => {
-            dbg!(&res);
             assert_eq!(res.response.status, OperationStatus::Executing);
         }
         SoftwareResponse::SoftwareListResponse(_) => {

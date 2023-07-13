@@ -11,16 +11,6 @@ use flockfile::Flockfile;
 use flockfile::FlockfileError;
 use std::fmt::Debug;
 use tedge_actors::Runtime;
-use tedge_config::ConfigRepository;
-use tedge_config::ConfigSettingAccessor;
-use tedge_config::DataPathSetting;
-use tedge_config::Flag;
-use tedge_config::HttpBindAddressSetting;
-use tedge_config::HttpPortSetting;
-use tedge_config::LockFilesSetting;
-use tedge_config::LogPathSetting;
-use tedge_config::RunPathSetting;
-use tedge_config::TEdgeConfigLocation;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
@@ -39,18 +29,18 @@ pub struct AgentConfig {
     pub sw_update_config: SoftwareManagerConfig,
     pub config_dir: Utf8PathBuf,
     pub run_dir: Utf8PathBuf,
-    pub use_lock: Flag,
+    pub use_lock: bool,
     pub log_dir: Utf8PathBuf,
     pub data_dir: Utf8PathBuf,
 }
 
 impl AgentConfig {
     pub fn from_tedge_config(
-        tedge_config_location: &TEdgeConfigLocation,
+        tedge_config_location: &tedge_config::TEdgeConfigLocation,
     ) -> Result<Self, anyhow::Error> {
         let config_repository =
             tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
-        let tedge_config = config_repository.load()?;
+        let tedge_config = config_repository.load_new()?;
 
         let config_dir = tedge_config_location.tedge_config_root_path.clone();
 
@@ -60,13 +50,14 @@ impl AgentConfig {
             .with_session_name(TEDGE_AGENT);
 
         // HTTP config
-        let data_dir = tedge_config.query(DataPathSetting)?;
-        let http_bind_address = tedge_config.query(HttpBindAddressSetting)?;
-        let http_port = tedge_config.query(HttpPortSetting)?.0;
+        let data_dir = tedge_config.data.path.clone();
+        let http_bind_address = tedge_config.http.bind.address;
+        let http_port = tedge_config.http.bind.port;
+
         let http_config = HttpConfig::default()
             .with_data_dir(data_dir.clone())
             .with_port(http_port)
-            .with_ip_address(http_bind_address.into());
+            .with_ip_address(http_bind_address);
 
         // Restart config
         let restart_config = RestartManagerConfig::from_tedge_config(tedge_config_location)?;
@@ -75,14 +66,11 @@ impl AgentConfig {
         let sw_update_config = SoftwareManagerConfig::from_tedge_config(tedge_config_location)?;
 
         // For flockfile
-        let run_dir = tedge_config.query(RunPathSetting)?;
-        let use_lock = tedge_config.query(LockFilesSetting)?;
+        let run_dir = tedge_config.run.path.clone();
+        let use_lock = tedge_config.run.lock_files;
 
         // For agent specific
-        let log_dir = tedge_config
-            .query(LogPathSetting)?
-            .join("tedge")
-            .join("agent");
+        let log_dir = tedge_config.logs.path.join("tedge").join("agent");
 
         Ok(Self {
             mqtt_config,
@@ -107,7 +95,7 @@ pub struct Agent {
 impl Agent {
     pub fn try_new(name: &str, config: AgentConfig) -> Result<Self, FlockfileError> {
         let mut flock = None;
-        if config.use_lock.is_set() {
+        if config.use_lock {
             flock = Some(check_another_instance_is_not_running(
                 name,
                 config.run_dir.as_std_path(),
