@@ -145,3 +145,77 @@ Eventually, the `tedge-mapper` will have to clean the command topic with an empt
 tedge mqtt pub -r 'te/device/main///cmd/software_update/c8y-mapper-123' ''
 ```
 
+## Workflow Definition
+
+Operations that require coordination among several software components are managed using *workflows*
+that define the different *states* a specific operation request might go through as well as for each state the software component
+*owning the responsibility* to perform all checks and actions required at that stage to make the command execution move forward.
+
+A workflow is defined for a specific operation and possibly for a subset of the entities and components of a thin-edge device.
+- The operation is identified by its well-known name such `restart` or `software-update`
+- Implicitly a workflow applies to all the targets having the capability to receive commands for that operation.
+  However, a workflow can be make specific to a target subset, say only the main device `te/device/main//`
+  or all the devices of given type `te/PiA/+//`. Doing so, several workflows can be defined for the *same* operation,
+  and the associated commands implemented in a target-specific manner.
+
+Each state of the workflow is defined by:
+- a name, that uniquely identifies the state at the scope of the workflow
+- an owner, that defines which software component is responsible for a command at that stage
+- a list of states which can be the outcome of this stage
+- possible extra information that gives more context on how to process the command at this stage.
+
+
+### Operation API
+
+As several software components have to collaborate when executing a command, each operation must define a specific API.
+This API should be based on the principles of MQTT-driven workflow and define: 
+- the well-known operation name such `restart` or `software-update`
+- user documentation of the required input and the expected outcome of an operation request
+- the set of observable states for a command and the possible state sequences
+- for each state:
+  - the well-known name such as `Download` or `Downloaded`
+  - the schema of the state payload and the required parameters to process a command at this stage 
+  - developer documentation on the role of each parameter and the expected checks and actions
+- the schema for the capability message sent when the operation is enabled on some thin-edge entity or component
+  - developer documentation on the role of each field of the capability message
+
+A workflow implementation is free to define the states a command can go through
+as well as the message payload attached to each state.
+
+However, there are some rules and best practices.
+
+- Three states are mandatory: `Init`, `Successful` and `Failed`.
+- `Init` must be the unique initial state of the workflow.
+  - This state must give all the information required to execute the command.
+  - Having no other initial states is important so any command requester (as the mapper)
+    can trigger commands in a systematic manner *even* if the workflow is updated.
+- `Successful` and `Failed` must be the unique terminal states of the workflow.
+  - The payload of the `Failed` state should contain a `reason` property telling what failed.
+  - Having no other terminal states is important so any command requester (as the mapper)
+    can await the termination of a command in a systematic manner *even* if the workflow is updated.
+- A workflow API should define *no-op* states with no pre-defined actions
+  and which sole purpose is to give an agent developer the opportunity to *insert* its own logic and extra steps.
+  - A *no-op* state is a state which has a single direct transition to the next state.
+  - As an example, having a `Downloaded` *no-op* state, with a direct transition to an `Install` state which uses the downloaded file,
+    let an agent operator override the automatic transition, say to check the downloaded file *before* moving the `Install` state.
+  - The `Init` state should be a *no-op* state.
+
+### Operation Implementation
+
+A workflow implementation for a specific operation must implement the actions specified for each non *no-op* state.
+This implementation has some freedom, notably to implement extra checks and actions but also to add new states.
+
+However, there are some rules and best practices.
+
+- All the state messages must be published as retained with QoS 1.
+- A workflow implementation should not reject a state message payload with unknown fields.
+  - It's also important to keep these unknown fields in the following states.
+  - This is important as we want to *extend* the workflow of an operation.
+    A software component added by the user might need these *extra* fields the plugin is not aware of.
+- A workflow implementation should not react on *no-op* states nor terminal states.
+  - The transition from a *no-op* state must be handled either by thin-edge as direct transition
+    or overridden by the user with domain-specific checks and actions.
+  - The terminal states, a.k.a `Successful` and `Failed`, are owned by the process which created the `Init` state (in practice, the mapper).
+    Only this process should clear the retained message state for an operation instance by sending an empty payload on command's topic.
+
+
