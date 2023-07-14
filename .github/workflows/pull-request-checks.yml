@@ -97,7 +97,7 @@ jobs:
 
       - name: Run cargo-udeps
         run: |
-          cargo install cargo-udeps
+          cargo install --git https://github.com/est31/cargo-udeps --locked
           cargo udeps --all-features --all-targets
 
       - name: Run cargo-udeps

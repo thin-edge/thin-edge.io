@@ -1,3 +1,4 @@
+#[cfg(test)]
 mod tests {
     use predicates::prelude::*;
     use test_case::test_case;
