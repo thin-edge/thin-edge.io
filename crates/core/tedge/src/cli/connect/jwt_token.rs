@@ -6,7 +6,7 @@ use rumqttc::Incoming;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
 use rumqttc::QoS::AtLeastOnce;
-use tedge_config::TEdgeConfig;
+use tedge_config::new::TEdgeConfig;
 
 pub(crate) fn get_connected_c8y_url(tedge_config: &TEdgeConfig) -> Result<String, ConnectError> {
     const C8Y_TOPIC_BUILTIN_JWT_TOKEN_UPSTREAM: &str = "c8y/s/uat";
