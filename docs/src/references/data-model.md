@@ -125,7 +125,7 @@ tedge/events/<event-type>/<child-id>
 {
   // example of an event
   "text": "A user just logged in",     // 'text' message of that event
-  "time": "2021-01-01T05:30:45+00:00"  // optional 'timestamp' of that event
+  "time": "2021-01-01T05:30:45+00:00", // optional 'timestamp' of that event
   "someOtherCustomFragment": {         // optional 'custom fragments'
     "nested": {
       "value": "extra info"

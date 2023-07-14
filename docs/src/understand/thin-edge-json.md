@@ -179,7 +179,7 @@ For instance:
 ```sh te2mqtt
 tedge mqtt pub tedge/events/login '{
   "text": "A user just logged in",
-  "time": "2021-01-01T05:30:45+00:00"
+  "time": "2021-01-01T05:30:45+00:00",
   "someOtherCustomFragment": {
     "nested": {
       "value": "extra info"
