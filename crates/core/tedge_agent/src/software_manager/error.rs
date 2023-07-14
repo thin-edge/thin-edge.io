@@ -21,9 +21,6 @@ pub enum SoftwareManagerError {
 
     #[error(transparent)]
     FromTedgeConfig(#[from] tedge_config::TEdgeConfigError),
-
-    #[error(transparent)]
-    FromConfigSetting(#[from] tedge_config::ConfigSettingError),
 }
 
 impl From<SoftwareManagerError> for tedge_actors::RuntimeError {

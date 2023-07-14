@@ -1,13 +1,5 @@
 use camino::Utf8PathBuf;
-use tedge_config::ConfigRepository;
-use tedge_config::ConfigSettingAccessor;
-use tedge_config::ConfigSettingAccessorStringExt;
-use tedge_config::LogPathSetting;
-use tedge_config::SoftwarePluginDefaultSetting;
-use tedge_config::TEdgeConfigError;
 use tedge_config::TEdgeConfigLocation;
-use tedge_config::TmpPathSetting;
-
 #[derive(Debug, Clone)]
 pub struct SoftwareManagerConfig {
     pub tmp_dir: Utf8PathBuf,
@@ -39,24 +31,26 @@ impl SoftwareManagerConfig {
 
     pub fn from_tedge_config(
         tedge_config_location: &TEdgeConfigLocation,
-    ) -> Result<SoftwareManagerConfig, TEdgeConfigError> {
+    ) -> Result<SoftwareManagerConfig, tedge_config::TEdgeConfigError> {
         let config_repository =
             tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
-        let tedge_config = config_repository.load()?;
+        let tedge_config = config_repository.load_new()?;
 
         let config_dir = tedge_config_location.tedge_config_root_path.clone();
 
-        let tmp_dir = tedge_config.query(TmpPathSetting)?;
+        let tmp_dir = &tedge_config.tmp.path;
         let sm_plugins_dir = config_dir.join("sm-plugins");
-        let log_dir = tedge_config
-            .query(LogPathSetting)?
-            .join("tedge")
-            .join("agent");
-        let default_plugin_type =
-            tedge_config.query_string_optional(SoftwarePluginDefaultSetting)?;
+        let log_dir = tedge_config.logs.path.join("tedge").join("agent");
+        let default_plugin_type = tedge_config
+            .software
+            .plugin
+            .default
+            .clone()
+            .or_none()
+            .cloned();
 
         Ok(Self::new(
-            &tmp_dir,
+            tmp_dir,
             &config_dir,
             &sm_plugins_dir,
             &log_dir,

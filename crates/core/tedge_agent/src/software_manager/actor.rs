@@ -24,10 +24,7 @@ use tedge_api::SoftwareRequestResponse;
 use tedge_api::SoftwareType;
 use tedge_api::SoftwareUpdateRequest;
 use tedge_api::SoftwareUpdateResponse;
-use tedge_config::ConfigRepository;
-use tedge_config::ConfigSettingAccessorStringExt;
-use tedge_config::SoftwarePluginDefaultSetting;
-use tedge_config::TEdgeConfigLocation;
+use tedge_config::TEdgeConfigError;
 use tracing::error;
 use tracing::log::warn;
 
@@ -227,10 +224,16 @@ impl SoftwareManagerActor {
 }
 
 fn get_default_plugin(
-    config_location: &TEdgeConfigLocation,
-) -> Result<Option<SoftwareType>, SoftwareManagerError> {
+    config_location: &tedge_config::TEdgeConfigLocation,
+) -> Result<Option<SoftwareType>, TEdgeConfigError> {
     let config_repository = tedge_config::TEdgeConfigRepository::new(config_location.clone());
-    let tedge_config = config_repository.load()?;
+    let tedge_config = config_repository.load_new()?;
 
-    Ok(tedge_config.query_string_optional(SoftwarePluginDefaultSetting)?)
+    Ok(tedge_config
+        .software
+        .plugin
+        .default
+        .clone()
+        .or_none()
+        .cloned())
 }
