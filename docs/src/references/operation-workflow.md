@@ -19,7 +19,7 @@ More precisely, an operation workflow defines:
 - the *observable states* of an ongoing operation instance
   from initialization up to a final success or failure
 - the *participants* and their interactions, passing the baton to the software component
-  which responsibility is to advance the operation in a given state
+  whose responsibility is to advance the operation in a given state
   and to notify the other participants what is the new resulting state
 - the *possible state sequences* so the system can detect any stale or misbehaving operation request.
 
@@ -145,25 +145,101 @@ Eventually, the `tedge-mapper` will have to clean the command topic with an empt
 tedge mqtt pub -r 'te/device/main///cmd/software_update/c8y-mapper-123' ''
 ```
 
-## Workflow Definition
+## MQTT-Driven Workflows
 
-Operations that require coordination among several software components are managed using *workflows*
-that define the different *states* a specific operation request might go through as well as for each state the software component
-*owning the responsibility* to perform all checks and actions required at that stage to make the command execution move forward.
+Operations that require coordination among several software components are managed using *MQTT-driven workflows*.
 
-A workflow is defined for a specific operation and possibly for a subset of the entities and components of a thin-edge device.
-- The operation is identified by its well-known name such `restart` or `software-update`
-- Implicitly a workflow applies to all the targets having the capability to receive commands for that operation.
-  However, a workflow can be make specific to a target subset, say only the main device `te/device/main//`
-  or all the devices of given type `te/PiA/+//`. Doing so, several workflows can be defined for the *same* operation,
-  and the associated commands implemented in a target-specific manner.
+The core idea is to expose over MQTT the different states a specific operation request might go through;
+so independent sub-systems can observe the progress of the request and act accordingly to their role.
 
-Each state of the workflow is defined by:
-- a name, that uniquely identifies the state at the scope of the workflow
-- an owner, that defines which software component is responsible for a command at that stage
-- a list of states which can be the outcome of this stage
-- possible extra information that gives more context on how to process the command at this stage.
+- A specific topic is attached to each command under-execution.
+  - This topic is specific to the target of the command, the requested operation and the request instance.
+  - e.g. `te/device/child-xyz///cmd/configuration-update/req-123`
+- The messages published over this topic represent the current state of the command.
+  - Such a message states where the command progression is and gives all the required information to proceed.
+  - e.g. `{ "status": "Requested", "target": "mosquitto", "url": "https://..." }`
+- The state messages are published as retained.
+  - They capture the latest state of the operation request.
+  - Till some change occurs, this latest state is dispatched to any participant on reconnect.
+- Several participants act in concert to move forward the command execution.
+  - The participants observe the progress of all the operations they are interested in.
+  - They watch for the specific states they are responsible in moving forward.
+  - When a step is performed, successfully or not, the new state is published accordingly by the performer.
 
+### Example
+
+Here is an example where three software components participate in a `configuration-update` command.
+- The `tedge-mapper` creates the initial state of the command
+  providing the required information to install a new version for a configuration file;
+  and then waits for the final outcome (in black).
+- The `tedge-config-plugin` handles the main steps (in red): downloading the file and installing it where expected.
+- An extra component, provided by the user, handles domain-specific checks (in blue)
+  to timely schedule the command as well as to ensure the configuration file is not corrupted and properly installed.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Init
+    Init --> Download
+    Download --> Downloaded
+    Downloaded --> Install
+    Install --> Installed
+    Installed --> Successful
+    Init --> Failed
+    Download --> Failed
+    Downloaded --> Failed
+    Install --> Failed
+    Installed --> Failed
+    Successful --> [*]
+    Failed --> [*]
+    
+    classDef specific color:blue;
+    class Init, Downloaded, Installed specific
+    
+    classDef plugin color:red;
+    class Download, Install plugin
+       
+    classDef mapper color:black;
+    class Successful, Failed mapper
+```
+
+### Benefits
+
+Observe on the example that:
+
+- At any state, *one and only one* participant is responsible to move the operation forward.
+- Publishing a state to the MQTT command topic, can be seen as passing the baton from one participant to another.
+  The mapper creates the `Init` state and then lets the other components work.
+  The plugin tell the download has been successful by publishing the `Downloaded` state,
+  but do nothing till the domain-specific component has checked the file and move the command state to `Install`.
+- Each software component has to know only *some* states of the whole workflow:
+  - the states they are responsible for
+  - the states they create to pass the control.
+- The compatibility of two participants, one publishing the state owned by the other, is only defined by the message payload:
+  - all the property fields expected to make progress at the new state must be provided.
+
+The benefits are that:
+- A participant can be substituted by another implementation as long as the substitute implementation
+  is ready to process at least all the state processed by the former implementation.
+  - This is the key principle used by thin-edge to provide extensible operation support.
+  - The `tedge-configuration-plugin` defines the `Init`, `Downloaded`, `Installed` states
+    with no specific behavior beyond proceeding to the next step;
+    so, a domain specific component can be substituted to add extra checks and actions before moving forward. 
+- Extra states and participants can be added as long as each state is owned by one participant.
+  - For instance, an agent developer can introduce a `Rollback` state in the `configuration-update` workflow,
+    associated by another software component responsible for these rollbacks.
+
+Furthermore, specific versions of the same workflow can be defined on different targets.
+Indeed, all the status updates for a command on a given thin-edge entity or component
+are published on an MQTT topic which prefix is the entity identifier.
+- The same executable can be used to handle operations on different targets.
+  For instance, the `tedge-configuration-plugin` can run on the main device `te/device/main//`
+  as well as on a child-device identified by `te/device/child-xyz//`.
+- A specific executable can be substituted on a specific target.
+  If for some reasons, `tedge-configuration-plugin` cannot be installed on a child-device,
+  then a specific implementation of the `configuration-update` MQTT API can be used to serve configuration updates
+  on, say, `te/micro-controller/xyz//`.
+- A workflow can be extended differently for each target.
+  As an example, an agent developer can define an extra rollback state on the main device but not on the child devices.
 
 ### Operation API
 
