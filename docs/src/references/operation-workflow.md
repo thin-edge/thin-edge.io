@@ -45,7 +45,7 @@ Restarting the device is not the same as restarting one of its services.
 Each entity or component has to declare its *capabilities* i.e. the operations made available on this target.
 
 Strictly speaking, capabilities are not implemented nor declared by the devices and the services themselves.
-There are implemented by thin-edge services and plugins.
+They are implemented by thin-edge services and plugins.
 These are the components which actually implement the operations interacting with the operating system and other software.
 For instance, device restart and software updates are implemented by the `tedge-agent`.
 
@@ -156,7 +156,7 @@ so independent sub-systems can observe the progress of the request and act accor
   - This topic is specific to the target of the command, the requested operation and the request instance.
   - e.g. `te/device/child-xyz///cmd/configuration-update/req-123`
 - The messages published over this topic represent the current state of the command.
-  - Such a message states where the command progression is and gives all the required information to proceed.
+  - Each message indicates at which step of its progression the command is and gives all the required information to proceed.
   - e.g. `{ "status": "Requested", "target": "mosquitto", "url": "https://..." }`
 - The state messages are published as retained.
   - They capture the latest state of the operation request.
@@ -173,7 +173,7 @@ Here is an example where three software components participate in a `configurati
   providing the required information to install a new version for a configuration file;
   and then waits for the final outcome (in black).
 - The `tedge-config-plugin` handles the main steps (in red): downloading the file and installing it where expected.
-- An extra component, provided by the user, handles domain-specific checks (in blue)
+- User-provided scripts handle domain-specific checks (in blue)
   to timely schedule the command as well as to ensure the configuration file is not corrupted and properly installed.
 
 ```mermaid
@@ -215,7 +215,7 @@ Observe on the example that:
   - the states they are responsible for
   - the states they create to pass the control.
 - The compatibility of two participants, one publishing the state owned by the other, is only defined by the message payload:
-  - all the property fields expected to make progress at the new state must be provided.
+  - all the property fields, required to make progress at some state, must be provided by the previous participant.
 
 The benefits are that:
 - A participant can be substituted by another implementation as long as the substitute implementation
@@ -223,7 +223,7 @@ The benefits are that:
   - This is the key principle used by thin-edge to provide extensible operation support.
   - The `tedge-configuration-plugin` defines the `Init`, `Downloaded`, `Installed` states
     with no specific behavior beyond proceeding to the next step;
-    so, a domain specific component can be substituted to add extra checks and actions before moving forward. 
+    so, a domain specific component can be substituted to add extra checks and actions before moving forward.
 - Extra states and participants can be added as long as each state is owned by one participant.
   - For instance, an agent developer can introduce a `Rollback` state in the `configuration-update` workflow,
     associated by another software component responsible for these rollbacks.
@@ -244,13 +244,13 @@ are published on an MQTT topic which prefix is the entity identifier.
 ### Operation API
 
 As several software components have to collaborate when executing a command, each operation must define a specific API.
-This API should be based on the principles of MQTT-driven workflow and define: 
+This API should be based on the principles of MQTT-driven workflow and defines:
 - the well-known operation name such `restart` or `software-update`
 - user documentation of the required input and the expected outcome of an operation request
 - the set of observable states for a command and the possible state sequences
 - for each state:
   - the well-known name such as `Download` or `Downloaded`
-  - the schema of the state payload and the required parameters to process a command at this stage 
+  - the schema of the state payload and the required parameters to process a command at this stage
   - developer documentation on the role of each parameter and the expected checks and actions
 - the schema for the capability message sent when the operation is enabled on some thin-edge entity or component
   - developer documentation on the role of each field of the capability message
@@ -288,10 +288,74 @@ However, there are some rules and best practices.
   - It's also important to keep these unknown fields in the following states.
   - This is important as we want to *extend* the workflow of an operation.
     A software component added by the user might need these *extra* fields the plugin is not aware of.
-- A workflow implementation should not react on *no-op* states nor terminal states.
+- A workflow implementation must not react on *no-op* states nor terminal states.
   - The transition from a *no-op* state must be handled either by thin-edge as direct transition
     or overridden by the user with domain-specific checks and actions.
   - The terminal states, a.k.a `Successful` and `Failed`, are owned by the process which created the `Init` state (in practice, the mapper).
     Only this process should clear the retained message state for an operation instance by sending an empty payload on command's topic.
 
+### Workflow Overriding
+
+Thin-edge provides a mechanism to override, extend and combine workflows.
+
+This mechanism is provided by the `tedge-agent` which gather a set of user-defined workflows
+and combined them with the builtin workflows implemented by the agent itself and the thin-edge operation plugins.
+
+Each workflow is defined using a TOML file that specifies:
+- the operation target and name defined as a topic filter
+  such as `te/device/main///cmd/software-update/+` or `te/device/main/service/+/cmd/restart/+`
+- the list of states
+- for each state:
+  - the state name as defined by the operation API
+  - the name of the state owner which is the process that is responsible for advancing a command at this state
+    (the default being `tedge`, meaning that thin-edge is responsible for running the state checks and actions)
+  - the set of states which can be an outcome for this state actions
+  - possible extra instructions on how to process the command at this stage, e.g.
+    - run a script
+    - emit an event
+    - raise an alarm
+
+```toml title="file: workflow-example.toml"
+target = "te/device/main///cmd/configuration-update/+"
+
+[Init]
+  next = ["Download", "Failed"]
+  script = "/bin/schedule-configuration-update.sh"
+    
+[Download]
+  owner = "tedge-configuration-plugin"
+  next = ["Downloaded", "Failed"]
+
+[Downloaded]
+  script = "/bin/check-configuration-file.sh"
+  next = ["Install", "Failed"]
+
+[Install]
+  owner = "tedge-configuration-plugin"
+  next = ["Installed", "Failed"]
+        
+[Installed]
+  script = "/bin/check-configuration-update.sh"
+  next = ["Successful", "Failed"]
+
+[Successful]
+  event = "te/device/main///e/operations"
+  next = []
+  
+[Failed]
+  alarm = "te/device/main///a/operations"
+  next = []
+```
+
+Thin-edge combines all these workflows to determine what has to be done
+when a state message is published for a command on one topic matching the global topic filter for commands,
+i.e. `te/+/+/+/+/cmd/+/+`. Given an actual command state message, thin-edge
+- keeps only the workflows which target topic filter matches the topic of the message
+- then keeps only the workflows that define a behavior for the state of the message payload
+- and then uses priority rules to select a single workflow: the workflow ruling this command at that stage
+
+The priority rules give a higher priority to the workflow that are user-defined than to those pre-defined by thin-edge.
+If several user-defined workflows are matching a command state,
+then the alphabetic order of the workflow definition file names is used:
+`001-configuration-update.toml` being of higher priority than `002-configuration-update.toml`.
 
