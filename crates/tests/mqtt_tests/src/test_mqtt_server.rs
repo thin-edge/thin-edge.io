@@ -3,13 +3,15 @@ use std::net::TcpListener;
 use std::time::Duration;
 
 use futures::channel::mpsc::UnboundedReceiver;
-use librumqttd::Broker;
-use librumqttd::Config;
-use librumqttd::ConnectionSettings;
-use librumqttd::ConsoleSettings;
-use librumqttd::ServerSettings;
 use once_cell::sync::Lazy;
+use rumqttc::Event;
+use rumqttc::Incoming;
 use rumqttc::QoS;
+use rumqttd::Broker;
+use rumqttd::Config;
+use rumqttd::ConnectionSettings;
+use rumqttd::ConsoleSettings;
+use rumqttd::ServerSettings;
 
 static SERVER: Lazy<MqttProcessHandler> = Lazy::new(MqttProcessHandler::new);
 
@@ -88,7 +90,7 @@ fn spawn_broker() -> u16 {
     // This would have been much easier if rumqttd would just let us query the
     // port the server got after we've passed in 0 as the port but currently
     // it's not possible, so we have to rely on this workaround.
-    let (mut tx, port) = loop {
+    let port = loop {
         let port = TcpListener::bind("127.0.0.1:0")
             .unwrap()
             .local_addr()
@@ -97,7 +99,8 @@ fn spawn_broker() -> u16 {
 
         let config = get_rumqttd_config(port);
         let mut broker = Broker::new(config);
-        let tx = broker.link("localclient").unwrap();
+        let (mut tx, _rx) = broker.link("localclient").unwrap();
+        tx.subscribe("#").unwrap();
 
         // `broker.start()` blocks, so to catch a TCP port bind error we have to
         // start it in a thread and wait a bit.
@@ -108,7 +111,7 @@ fn spawn_broker() -> u16 {
         std::thread::sleep(std::time::Duration::from_millis(50));
 
         if !broker_thread.is_finished() {
-            break (tx, port);
+            break port;
         }
 
         match broker_thread.join().unwrap() {
@@ -123,25 +126,25 @@ fn spawn_broker() -> u16 {
     };
 
     std::thread::spawn(move || {
-        let mut rx = tx.connect(200).unwrap();
-        tx.subscribe("#").unwrap();
+        let mut mqttoptions = rumqttc::MqttOptions::new("rumqtt-sync", "localhost", port);
+        mqttoptions.set_keep_alive(Duration::from_secs(5));
+
+        let (mut client, mut connection) = rumqttc::Client::new(mqttoptions, 10);
+
+        client.subscribe("#", QoS::ExactlyOnce).unwrap();
 
         loop {
-            if let Some(message) = rx.recv().unwrap() {
-                for chunk in message.payload.into_iter() {
-                    let mut bytes: Vec<u8> = vec![];
-                    for byte in chunk.into_iter() {
-                        bytes.push(byte);
-                    }
-                    let payload = match std::str::from_utf8(bytes.as_ref()) {
-                        Ok(payload) => format!("{:.110}", payload),
-                        Err(_) => format!("Non uft8 ({} bytes)", bytes.len()),
-                    };
-                    eprintln!(
-                        "MQTT-TEST MSG: topic = {}, payload = {:?}",
-                        message.topic, payload
-                    );
-                }
+            let msg = connection.recv();
+            eprintln!("{msg:#?}");
+            if let Ok(Ok(Event::Incoming(Incoming::Publish(publish)))) = msg {
+                let payload = match std::str::from_utf8(publish.payload.as_ref()) {
+                    Ok(payload) => format!("{:.110}", payload),
+                    Err(_) => format!("Non uft8 ({} bytes)", publish.payload.len()),
+                };
+                eprintln!(
+                    "MQTT-TEST MSG: topic = {}, payload = {:?}",
+                    publish.topic, payload
+                );
             }
         }
     });
@@ -150,44 +153,46 @@ fn spawn_broker() -> u16 {
 }
 
 fn get_rumqttd_config(port: u16) -> Config {
-    let router_config = librumqttd::rumqttlog::Config {
-        id: 0,
-        dir: "/tmp/rumqttd".into(),
+    let router_config = rumqttd::RouterConfig {
         max_segment_size: 10240,
         max_segment_count: 10,
         max_connections: 10,
+        initialized_filters: None,
+        ..Default::default()
     };
 
     let connections_settings = ConnectionSettings {
-        connection_timeout_ms: 10,
-        max_client_id_len: 256,
-        throttle_delay_ms: 0,
+        connection_timeout_ms: 1000,
         max_payload_size: 268435455,
         max_inflight_count: 200,
-        max_inflight_size: 1024,
-        login_credentials: None,
+        auth: None,
+        dynamic_filters: false,
     };
 
     let server_config = ServerSettings {
+        name: "1".to_string(),
         listen: ([0, 0, 0, 0], port).into(),
-        cert: None,
+        tls: None,
         next_connection_delay_ms: 1,
         connections: connections_settings,
     };
 
+    let mut console_settings = ConsoleSettings::default();
+    console_settings.listen = "localhost:3030".to_string();
+
     let mut servers = HashMap::new();
     servers.insert("1".to_string(), server_config);
 
-    let console_settings = ConsoleSettings {
-        listen: ([0, 0, 0, 0], 0).into(),
-    };
-
-    librumqttd::Config {
+    rumqttd::Config {
         id: 0,
         router: router_config,
-        servers,
         cluster: None,
-        replicator: None,
         console: console_settings,
+        v4: servers,
+        ws: None,
+        v5: None,
+        bridge: None,
+        prometheus: None,
+        metrics: None,
     }
 }
