@@ -3,6 +3,7 @@ use csv::ReaderBuilder;
 use download::Downloader;
 use logged_command::LoggedCommand;
 use serde::Deserialize;
+use std::error::Error;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Output;
@@ -165,6 +166,7 @@ pub trait Plugin {
                 .as_bytes(),
             )
             .await?;
+        logger.flush().await?;
 
         if let Err(err) =
             downloader
@@ -172,10 +174,11 @@ pub trait Plugin {
                 .await
                 .map_err(|err| SoftwareError::DownloadError {
                     reason: err.to_string(),
+                    source_err: err.source().map(|e| e.to_string()).unwrap_or_default(),
                     url: url.url().to_string(),
                 })
         {
-            error!("Download error: {}", &err);
+            error!("Download error: {err:#?}");
             logger
                 .write_all(format!("error: {}\n", &err).as_bytes())
                 .await?;

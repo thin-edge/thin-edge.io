@@ -13,8 +13,11 @@ use plugin_sm::plugin_manager::ExternalPlugins;
 use plugin_sm::plugin_manager::Plugins;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
+use tedge_actors::LoggingReceiver;
+use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
+use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_api::OperationStatus;
@@ -26,7 +29,8 @@ use tedge_api::SoftwareUpdateRequest;
 use tedge_api::SoftwareUpdateResponse;
 use tedge_config::TEdgeConfigError;
 use tracing::error;
-use tracing::log::warn;
+use tracing::info;
+use tracing::warn;
 
 #[cfg(not(test))]
 const SUDO: &str = "sudo";
@@ -36,10 +40,31 @@ const SUDO: &str = "echo";
 fan_in_message_type!(SoftwareRequest[SoftwareUpdateRequest, SoftwareListRequest] : Debug, Eq, PartialEq);
 fan_in_message_type!(SoftwareResponse[SoftwareUpdateResponse, SoftwareListResponse] : Debug, Eq, PartialEq);
 
+/// Actor which performs software operations.
+///
+/// This actor takes as input [`SoftwareRequest`]s, and responds with
+/// [`SoftwareResponse`]es. It mainly lists and updates software. It can only
+/// process only a single [`SoftwareRequest`] at a time. On startup, it checks
+/// if there are any leftover operations from a previous run, and if so, marks
+/// them as failed.
+///
+/// Upon receiving a shutdown request, it will abort currently running
+/// operation.
 pub struct SoftwareManagerActor {
     config: SoftwareManagerConfig,
     state_repository: AgentStateRepository,
-    message_box: SimpleMessageBox<SoftwareRequest, SoftwareResponse>,
+
+    // the Option is necessary to be able to concurrently handle a request,
+    // which mutably borrows the sender, and listen on signals, which mutably
+    // borrows the receiver. By using the Option we can take its contents
+    // leaving a None in its place.
+    //
+    // If Actor::run signature was changed to consume self instead, we could
+    // freely move out the receiver and get rid of the Option.
+    //
+    // https://github.com/thin-edge/thin-edge.io/pull/2049#discussion_r1243296392
+    input_receiver: Option<LoggingReceiver<SoftwareRequest>>,
+    output_sender: LoggingSender<SoftwareResponse>,
 }
 
 #[async_trait]
@@ -71,26 +96,26 @@ impl Actor for SoftwareManagerActor {
 
         self.process_pending_sm_operation().await?;
 
-        while let Some(request) = self.message_box.recv().await {
-            match request {
-                SoftwareRequest::SoftwareUpdateRequest(request) => {
-                    if let Err(err) = self
-                        .handle_software_update_operation(&request, &mut plugins, &operation_logs)
-                        .await
-                    {
-                        error!("{:?}", err);
-                    }
-                }
-                SoftwareRequest::SoftwareListRequest(request) => {
-                    if let Err(err) = self
-                        .handle_software_list_operation(&request, &plugins, &operation_logs)
-                        .await
-                    {
-                        error!("{:?}", err);
-                    }
+        let mut input_receiver = self.input_receiver.take().ok_or(RuntimeError::ActorError(
+            anyhow::anyhow!("actor can't be run more than once").into(),
+        ))?;
+
+        while let Some(request) = input_receiver.recv().await {
+            tokio::select! {
+                _ = self.handle_request(request, &mut plugins, &operation_logs) => {}
+
+                Some(RuntimeRequest::Shutdown) = input_receiver.recv_signal() => {
+                    info!("Received shutdown request from the runtime, exiting...");
+                    // Here we could call `process_pending_sm_operation` to mark
+                    // the current operation as failed, but OperationConverter
+                    // also exited and we could hit filesystem-related race
+                    // conditions due to concurrently executing
+                    // `handle_request`, so we just exit for now
+                    break;
                 }
             }
         }
+
         Ok(())
     }
 }
@@ -105,36 +130,61 @@ impl SoftwareManagerActor {
             "software-current-operation",
         );
 
+        let (output_sender, input_receiver) = message_box.into_split();
+
         Self {
             config,
             state_repository,
-            message_box,
+            input_receiver: Some(input_receiver),
+            output_sender,
         }
+    }
+
+    async fn handle_request(
+        &mut self,
+        request: SoftwareRequest,
+        plugins: &mut ExternalPlugins,
+        operation_logs: &OperationLogs,
+    ) -> Result<(), SoftwareManagerError> {
+        match request {
+            SoftwareRequest::SoftwareUpdateRequest(request) => {
+                if let Err(err) = self
+                    .handle_software_update_operation(&request, plugins, operation_logs)
+                    .await
+                {
+                    error!("{:?}", err);
+                }
+            }
+            SoftwareRequest::SoftwareListRequest(request) => {
+                if let Err(err) = self
+                    .handle_software_list_operation(&request, plugins, operation_logs)
+                    .await
+                {
+                    error!("{:?}", err);
+                }
+            }
+        }
+        Ok(())
     }
 
     async fn process_pending_sm_operation(&mut self) -> Result<(), SoftwareManagerError> {
         let state: Result<State, _> = self.state_repository.load().await;
 
-        if let State {
+        if let Ok(State {
             operation_id: Some(id),
             operation: Some(operation),
-        } = match state {
-            Ok(state) => state,
-            Err(_) => State {
-                operation_id: None,
-                operation: None,
-            },
-        } {
+        }) = state
+        {
             match operation {
                 StateStatus::Software(SoftwareOperationVariants::Update) => {
                     let response = SoftwareRequestResponse::new(&id, OperationStatus::Failed);
-                    self.message_box
+                    self.output_sender
                         .send(SoftwareUpdateResponse { response }.into())
                         .await?;
                 }
                 StateStatus::Software(SoftwareOperationVariants::List) => {
                     let response = SoftwareRequestResponse::new(&id, OperationStatus::Failed);
-                    self.message_box
+                    self.output_sender
                         .send(SoftwareListResponse { response }.into())
                         .await?;
                 }
@@ -167,7 +217,7 @@ impl SoftwareManagerActor {
 
         // Send 'executing'
         let executing_response = SoftwareUpdateResponse::new(request);
-        self.message_box.send(executing_response.into()).await?;
+        self.output_sender.send(executing_response.into()).await?;
 
         let response = match operation_logs.new_log_file(LogKind::SoftwareUpdate).await {
             Ok(log_file) => {
@@ -182,7 +232,7 @@ impl SoftwareManagerActor {
                 failed_response
             }
         };
-        self.message_box.send(response.into()).await?;
+        self.output_sender.send(response.into()).await?;
 
         let _state: State = self.state_repository.clear().await?;
 
@@ -204,7 +254,7 @@ impl SoftwareManagerActor {
 
         // Send 'executing'
         let executing_response = SoftwareListResponse::new(request);
-        self.message_box.send(executing_response.into()).await?;
+        self.output_sender.send(executing_response.into()).await?;
 
         let response = match operation_logs.new_log_file(LogKind::SoftwareList).await {
             Ok(log_file) => plugins.list(request, log_file).await,
@@ -215,7 +265,7 @@ impl SoftwareManagerActor {
                 failed_response
             }
         };
-        self.message_box.send(response.into()).await?;
+        self.output_sender.send(response.into()).await?;
 
         let _state: State = self.state_repository.clear().await?;
 
