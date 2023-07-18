@@ -1,7 +1,5 @@
 use std::collections::HashMap;
-use std::net::Ipv4Addr;
-use std::net::SocketAddr;
-use std::net::SocketAddrV4;
+use std::net::TcpListener;
 use std::time::Duration;
 
 use futures::channel::mpsc::UnboundedReceiver;
@@ -13,9 +11,7 @@ use librumqttd::ServerSettings;
 use once_cell::sync::Lazy;
 use rumqttc::QoS;
 
-const MQTT_TEST_PORT: u16 = 55555;
-
-static SERVER: Lazy<MqttProcessHandler> = Lazy::new(|| MqttProcessHandler::new(MQTT_TEST_PORT));
+static SERVER: Lazy<MqttProcessHandler> = Lazy::new(MqttProcessHandler::new);
 
 pub fn test_mqtt_broker() -> &'static MqttProcessHandler {
     Lazy::force(&SERVER)
@@ -26,8 +22,8 @@ pub struct MqttProcessHandler {
 }
 
 impl MqttProcessHandler {
-    pub fn new(port: u16) -> MqttProcessHandler {
-        spawn_broker(port);
+    pub fn new() -> MqttProcessHandler {
+        let port = spawn_broker();
         MqttProcessHandler { port }
     }
 
@@ -74,20 +70,57 @@ impl MqttProcessHandler {
     }
 }
 
-fn spawn_broker(port: u16) {
-    let config = get_rumqttd_config(port);
-    let mut broker = Broker::new(config);
-    let mut tx = broker.link("localclient").unwrap();
+impl Default for MqttProcessHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
-    std::thread::spawn(move || {
-        eprintln!("MQTT-TEST INFO: start test MQTT broker (port = {})", port);
-        if let Err(err) = broker.start() {
-            eprintln!(
-                "MQTT-TEST ERROR: fail to start the test MQTT broker: {:?}",
-                err
-            );
+fn spawn_broker() -> u16 {
+    // We can get a free port from the kernel by binding on port 0. We can then
+    // immediately drop the listener, and use the port for the mqtt broker.
+    // Unfortunately we can run into a race condition whereas when tests are run
+    // in parallel, when we get a certain free port, after dropping the listener
+    // the port is freed, and `TcpListener::bind` in another test might pick it
+    // up before we start the mqtt broker. For this reason, we keep retrying
+    // the operation if the port is already in use.
+    //
+    // This would have been much easier if rumqttd would just let us query the
+    // port the server got after we've passed in 0 as the port but currently
+    // it's not possible, so we have to rely on this workaround.
+    let (mut tx, port) = loop {
+        let port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+
+        let config = get_rumqttd_config(port);
+        let mut broker = Broker::new(config);
+        let tx = broker.link("localclient").unwrap();
+
+        // `broker.start()` blocks, so to catch a TCP port bind error we have to
+        // start it in a thread and wait a bit.
+        let broker_thread = std::thread::spawn(move || {
+            eprintln!("MQTT-TEST INFO: start test MQTT broker (port = {})", port);
+            broker.start()
+        });
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        if !broker_thread.is_finished() {
+            break (tx, port);
         }
-    });
+
+        match broker_thread.join().unwrap() {
+            Ok(()) => unreachable!("`broker.start()` does not terminate"),
+            Err(err) => {
+                eprintln!(
+                    "MQTT-TEST ERROR: fail to start the test MQTT broker: {:?}",
+                    err
+                );
+            }
+        }
+    };
 
     std::thread::spawn(move || {
         let mut rx = tx.connect(200).unwrap();
@@ -112,6 +145,8 @@ fn spawn_broker(port: u16) {
             }
         }
     });
+
+    port
 }
 
 fn get_rumqttd_config(port: u16) -> Config {
@@ -134,7 +169,7 @@ fn get_rumqttd_config(port: u16) -> Config {
     };
 
     let server_config = ServerSettings {
-        listen: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), port)),
+        listen: ([0, 0, 0, 0], port).into(),
         cert: None,
         next_connection_delay_ms: 1,
         connections: connections_settings,
@@ -144,7 +179,7 @@ fn get_rumqttd_config(port: u16) -> Config {
     servers.insert("1".to_string(), server_config);
 
     let console_settings = ConsoleSettings {
-        listen: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 3030)),
+        listen: ([0, 0, 0, 0], 0).into(),
     };
 
     librumqttd::Config {
