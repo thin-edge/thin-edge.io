@@ -112,20 +112,34 @@ class ThinEdgeIO(DeviceLibrary):
         )
 
     @keyword("Get Logs")
-    def get_logs(self, name: str = None):
+    def get_logs(self, name: str = None, date_from: Union[datetime, float] = None, show=True):
         """Get device logs (override base class method to add additional debug info)
+
+        Note: the date_from only applies to the systemd logs (not file based logs). This is
+        a technical limitation as there is no easy way to do time based filtering on the content.
 
         Args:
             name (str, optional): Device name to get logs for. Defaults to None.
+            date_from (Union[datetime, float]: Only include logs starting from a specific datetime
+                Accepts either datetime object, or a float (linux timestamp) in seconds.
+            show (boolean, optional): Show/Display the log entries
+
+        Returns:
+            List[str]: List of log lines
 
         *Example:*
         | `Test Teardown` | | | | | Get Logs | | | | | name=${PARENT_SN} |
         """
-        if not self.current:
+        device = self.current
+        if name:
+            if name in self.devices:
+                device = self.devices.get(name)
+
+        if not device:
             log.info("Device has not been setup, so no logs to collect")
             return
 
-        device_sn = name or self.current.get_id()
+        device_sn = name or device.get_id()
         try:
             # TODO: optionally check if the device was registered or not, if no, then skip this step
             managed_object = c8y_lib.device_mgmt.identity.assert_exists(
@@ -141,14 +155,14 @@ class ThinEdgeIO(DeviceLibrary):
         try:
             # Get agent log files (if they exist)
             log.info("tedge agent logs: /var/log/tedge/agent/*")
-            self.current.execute_command(
+            device.execute_command(
                 "tail -n +1 /var/log/tedge/agent/* 2>/dev/null || true",
                 shell=True,
             )
         except Exception as ex:
             log.warning("Failed to retrieve logs. %s", ex, exc_info=True)
 
-        super().get_logs(name)
+        super().get_logs(device.get_id(), date_from=date_from, show=show)
 
     def log_operations(self, mo_id: str, status: str = None):
         """Log operations to help with debugging
