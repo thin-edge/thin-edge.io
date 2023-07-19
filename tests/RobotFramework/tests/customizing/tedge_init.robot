@@ -1,6 +1,5 @@
 *** Settings ***
 Resource    ../../resources/common.resource
-Resource    ../config_management/child_conf_mgmt_plugin.robot
 Library    ThinEdgeIO
 
 Test Tags    theme:cli    theme:configuration
