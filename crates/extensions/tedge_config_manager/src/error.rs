@@ -1,0 +1,49 @@
+use tedge_actors::RuntimeError;
+
+#[derive(thiserror::Error, Debug)]
+pub enum ConfigManagementError {
+    #[error(transparent)]
+    FromMqttError(#[from] tedge_mqtt_ext::MqttError),
+
+    #[error("Failed to parse response with: {0}")]
+    FromSerdeJsonError(#[from] serde_json::Error),
+
+    #[error(transparent)]
+    FromHttpError(#[from] tedge_http_ext::HttpError),
+
+    #[error(transparent)]
+    FromDownloadError(#[from] tedge_api::DownloadError),
+
+    #[error(transparent)]
+    FromChannelError(#[from] tedge_actors::ChannelError),
+
+    #[error(transparent)]
+    InvalidConfigTypeError(#[from] InvalidConfigTypeError),
+
+    #[error(transparent)]
+    FromPathsError(#[from] tedge_utils::paths::PathsError),
+
+    #[error(transparent)]
+    FromIoError(#[from] std::io::Error),
+
+    #[error(transparent)]
+    FromFileError(#[from] tedge_utils::file::FileError),
+
+    #[error("Received unexpected message on topic")]
+    InvalidTopicError,
+
+    #[error("Directory {path} is not found.")]
+    DirectoryNotFound { path: std::path::PathBuf },
+}
+
+impl From<ConfigManagementError> for RuntimeError {
+    fn from(error: ConfigManagementError) -> Self {
+        RuntimeError::ActorError(Box::new(error))
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("The requested config_type {config_type} is not defined in the plugin configuration file.")]
+pub struct InvalidConfigTypeError {
+    pub config_type: String,
+}
