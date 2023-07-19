@@ -21,6 +21,7 @@ Thin-edge provides an operation plugin to fetch log files from the device.
 * The list of managed log files in `tedge-log-plugin.toml` can be updated both locally as well as from clouds, for instance, by using the configuration management feature.
 * However, the plugin provides no direct connection to clouds, which is the responsibility of another component, i.e. the cloud mapper.
 * The plugin has a dependency on the `tedge.toml` configuration file to get the MQTT hostname, port, and device identifier.
+* The plugin establishes an MQTT connection to the broker using the `mqtt.bind.address` and `mqtt.bind.port` values from the `tedge.toml` configuration.
 
 ## Installation
 
@@ -47,9 +48,9 @@ files = [
 
 The `tedge-log-plugin` parses this configuration file on startup for all the `type` values specified,
 and sends the supported log types message to the MQTT local broker on the `<root>/<identifier>/cmd/log_upload` topic with a retained flag.
-The `<root>/<identifier>` is defined in `tedge.toml` file as `device.topic`.
+The `<root>` and `<identifier>` are defined in `tedge.toml` file as `device.topic.root` and `device.topic.id`.
 
-Given that `device.topic` is set to `te/device/main//`, the message to declare the supported log types is as follows.
+Given that `device.topic.root` and `device.topic.id` are set to `te` and `device/main//` for the main device, the message to declare the supported log types is as follows.
 
 ```sh te2mqtt
 tedge mqtt pub -r 'te/device/main///cmd/log_upload' '{
@@ -67,11 +68,7 @@ then a JSON message with an empty array for the `types` field is sent, indicatin
 
 ## Handling log upload commands
 
-The plugin establishes an MQTT connection to the broker using the `mqtt.bind.address` and `mqtt.bind.port` values from the `tedge.toml` configuration.
-Then, it subscribes to the `<root>/<identifier>/cmd/log_upload/+` topic, listening for log file upload commands.
-The `<root>/<identifier>` is defined in `tedge.toml` file as the `device.topic` key.
-
-For instance, if `device.topic` is set to `te/device/main//`, the plugin subscribes to the following topic.
+The plugin is listening to log update commands on the [`<root>/<identifier>/cmd/log_upload/+` MQTT topic](mqtt-topic-design.md). For example, it subscribes to the following topic for the main device.
 
 ```sh te2mqtt
 tedge mqtt sub 'te/device/main///cmd/log_upload/+'
@@ -82,8 +79,8 @@ A new log file upload command with the ID "1234" is published by another compone
 ```sh te2mqtt
 tedge mqtt pub -r 'te/device/main///cmd/log_upload/1234' '{
   "status": "init",
-  "uploadUrl": "http://127.0.0.1:8000/tedge/file-transfer/main/log_upload/mosquitto-1234",
-  "logType": "mosquitto",
+  "url": "http://127.0.0.1:8000/tedge/file-transfer/main/log_upload/mosquitto-1234",
+  "type": "mosquitto",
   "dateFrom": "2013-06-22T17:03:14.000+02:00",
   "dateTo": "2013-06-23T18:03:14.000+02:00",
   "searchText": "ERROR",
@@ -92,18 +89,18 @@ tedge mqtt pub -r 'te/device/main///cmd/log_upload/1234' '{
 ```
 
 The plugin then checks the `tedge-log-plugin.toml` file for the log type in the incoming message (`mosquitto`),
-retrieves the log files using the `target` glob pattern provided in the plugin config file,
+retrieves the log files using the `path` glob pattern provided in the plugin config file,
 including only the ones modified within the date range(`2013-06-22T17:03:14.000+02:00` to `2013-06-23T18:03:14.000+02:00`),
 with the content filtered by the search text(`ERROR`) and the maximum line count(`1000`).
 
-This filtered content is then uploaded to the given URL as `uploadUrl` via an HTTP PUT request.
+This filtered content is then uploaded to the given URL as `url` via an HTTP PUT request.
 
 During the process, the plugin updates the command status via MQTT
-by publishing a retained message to the topic `<root>/<identifier>/cmd/log_upload/<id>`,
-which is the same topic where the command is received.
+by publishing a retained message to the same `<root>/<identifier>/cmd/log_upload/<id>` topic,
+where the command is received.
 
-On the reception of a new log file upload command, the plugin updates the status to `executing `.
-On the reception of the HTTP success status code after uploading a file to the file transfer repository, the plugin updates the status to `successful`.
+On the reception of a new log file upload command, the plugin updates the status to `executing`.
+After successfully uploading the file to the file transfer repository, the plugin updates the status to `successful`.
 If any unexpected error occurs, the plugin updates the status to `failed` with a `reason`.
 
 Thus, the operation status update message for the above example looks like below.
@@ -112,8 +109,8 @@ Thus, the operation status update message for the above example looks like below
 tedge mqtt pub -r 'te/device/main///cmd/log_upload/1234' '{
   "status": "failed",
   "reason": "The target log file for 'mosquitto' does not exist.",
-  "uploadUrl": "http://127.0.0.1:8000/tedge/file-transfer/main/log_upload/mosquitto-1234",
-  "logType": "mosquitto",
+  "url": "http://127.0.0.1:8000/tedge/file-transfer/main/log_upload/mosquitto-1234",
+  "type": "mosquitto",
   "dateFrom": "2013-06-22T17:03:14.000+02:00",
   "dateTo": "2013-06-22T18:03:14.000+02:00",
   "searchText": "ERROR",
@@ -127,13 +124,14 @@ tedge mqtt pub -r 'te/device/main///cmd/log_upload/1234' '{
 sequenceDiagram
   participant Mapper/others
   participant Plugin
+  participant Tedge Agent
 
-  Mapper/others->>Plugin: Cloud-agnostic Log file upload command (Status: init)
+  Mapper/others->>Plugin: tedge log_upload command (Status: init)
   Plugin->>Mapper/others: Status: executing
   alt No error
     Plugin->>Plugin: Extract log
-    Plugin->>Mapper/others: File transfer [HTTP]
-    Mapper/others-->>Plugin: Success status code [HTTP]
+    Plugin->>Tedge Agent: File upload [HTTP]
+    Tedge Agent-->>Plugin: Status OK [HTTP]
     Plugin->>Mapper/others: Status: successful
   else Any error occurs
     Plugin->>Mapper/others: Status: failed
