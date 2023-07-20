@@ -5,7 +5,7 @@ Library    ThinEdgeIO
 
 Test Tags    theme:c8y    theme:software    theme:plugins
 Test Setup       Custom Setup
-Test Teardown    Get Logs
+Test Teardown    Custom Teardown
 
 *** Test Cases ***
 Software list should be populated during startup
@@ -26,7 +26,7 @@ tedge-agent should terminate on SIGINT while downloading file
     Execute Command                          chmod 777 /root
     Execute Command                          tedge config set tmp.path /root
     Restart Service                          tedge-agent
-    ${OPERATION}=    Install Software        test-very-large-software,1.0,https://speed.hetzner.de/1GB.bin
+    ${OPERATION}=    Install Software        test-very-large-software,1.0,http://localhost/speedlimit/10MB
 
     # waiting for the download to start (so, for "Downloading: ...") to appear
     # in the log, but I have no clue how to do "wait until log contains ..."
@@ -47,6 +47,7 @@ Custom Setup
     Device Should Exist                      ${DEVICE_SN}
     Set Test Variable    $DEVICE_SN
     Should Have MQTT Messages    tedge/health/tedge-mapper-c8y
+    Execute Command    sudo start-http-server.sh
     [Documentation]    WORKAROUND: #1731 The tedge-mapper-c8y is restarted due to a suspected race condition between the mapper and tedge-agent which results in the software list message being lost
     ${timestamp}=        Get Unix Timestamp
     Restart Service    tedge-mapper-c8y
@@ -55,3 +56,7 @@ Custom Setup
 Stop tedge-agent
     [Timeout]                                5 seconds
     Stop Service                             tedge-agent
+
+Custom Teardown
+    Execute Command    sudo stop-http-server.sh
+    Get Logs

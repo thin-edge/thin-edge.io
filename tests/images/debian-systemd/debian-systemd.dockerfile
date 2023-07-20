@@ -13,7 +13,8 @@ RUN apt-get -y update \
     ssh \
     mosquitto \
     mosquitto-clients \
-    vim.tiny
+    vim.tiny \
+    nginx
 
 # Remove unnecessary systemd services
 RUN rm -f /lib/systemd/system/multi-user.target.wants/* \
@@ -40,6 +41,11 @@ RUN systemctl enable mqtt-logger.service
 # Custom mosquitto config
 COPY files/mosquitto.conf /etc/mosquitto/conf.d/
 COPY files/secure-listener.conf .
+
+# Install nginx server to provide some dummy test files (e.g. with speed limiting options)
+COPY files/http-server/nginx.conf /etc/nginx/nginx.conf
+COPY files/http-server/*.sh /usr/bin/
+RUN systemctl disable nginx
 
 # Reference: https://developers.redhat.com/blog/2019/04/24/how-to-run-systemd-in-a-container#enter_podman
 # STOPSIGNAL SIGRTMIN+3 (=37)
