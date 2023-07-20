@@ -601,9 +601,9 @@ Command to update the configuration of a service:
 ```sh te2mqtt
 tedge mqtt pub -r 'te/device/main/service/collectd/cmd/config_update/123' '{
   "status": "init",
-  "type": "collectd"
+  "type": "collectd",
   "path": "/etc/collectd/collectd.conf",
-  "url": "http://127.0.0.1:8000/tedge/file-transfer/collectd/config_update/collectd",
+  "url": "http://127.0.0.1:8000/tedge/file-transfer/collectd/config_update/collectd"
 }'
 ```
 
