@@ -17,7 +17,6 @@ The following configurations option are available for you if you want to add an 
 |Property|Description|
 |--------|-----------|
 |`mqtt.external.bind.port`|Mqtt broker port, which is used by the external mqtt clients to publish or subscribe. Example: 8883|
-|`mqtt.external.bind.port`|Mqtt broker port, which is used by the external mqtt clients to publish or subscribe. Example: 8883|
 |`mqtt.external.bind.address`|IP address / hostname, which the mqtt broker limits incoming connections on. Example: 0.0.0.0|
 |`mqtt.external.bind.interface`|Name of network interface, which the mqtt broker limits incoming connections on. Example: wlan0|
 |`mqtt.external.ca_path`|Path to a file containing the PEM encoded CA certificates that are trusted when checking incoming client certificates. Example: /etc/ssl/certs|
