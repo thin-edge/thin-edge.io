@@ -1,5 +1,5 @@
 ---
-title: New Log File Management Plugin
+title: New Log File Management
 tags: [Reference, Log Files]
 sidebar_position: 7
 draft: true
@@ -22,13 +22,14 @@ Thin-edge provides an operation plugin to fetch log files from the device.
 * However, the plugin provides no direct connection to clouds, which is the responsibility of another component, i.e. the cloud mapper.
 * The plugin has a dependency on the `tedge.toml` configuration file to get the MQTT hostname, port, and device identifier.
 * The plugin establishes an MQTT connection to the broker using the `mqtt.bind.address` and `mqtt.bind.port` values from the `tedge.toml` configuration.
+* The `<root>` and `<identifier>` for the topic to publish and subscribe are defined in `tedge.toml` file as `root.topic` and `device.topic`.
 
 ## Installation
 
 As part of this plugin installation:
 * On systemd-enabled devices, the service definition file for this `tedge-log-plugin` daemon is also installed.
 
-Once installed, the `tedge-log-plugin` runs as a daemon on the device, listening to log update commands on the [`<root>/<identifier>/cmd/log_upload/+` MQTT topic](mqtt-topic-design.md).
+Once installed, the `tedge-log-plugin` runs as a daemon on the device, listening to log update commands on the [`<root>/<identifier>/cmd/log_upload/+` MQTT topic](mqtt-api.md).
 
 ## Configuration
 
@@ -48,9 +49,9 @@ files = [
 
 The `tedge-log-plugin` parses this configuration file on startup for all the `type` values specified,
 and sends the supported log types message to the MQTT local broker on the `<root>/<identifier>/cmd/log_upload` topic with a retained flag.
-The `<root>` and `<identifier>` are defined in `tedge.toml` file as `device.topic.root` and `device.topic.id`.
 
-Given that `device.topic.root` and `device.topic.id` are set to `te` and `device/main//` for the main device, the message to declare the supported log types is as follows.
+Given that `root.topic` and `device.topic` are set to `te` and `device/main//` for the main device,
+the message to declare the supported log types is as follows.
 
 ```sh te2mqtt
 tedge mqtt pub -r 'te/device/main///cmd/log_upload' '{
@@ -68,7 +69,8 @@ then a JSON message with an empty array for the `types` field is sent, indicatin
 
 ## Handling log upload commands
 
-The plugin is listening to log update commands on the [`<root>/<identifier>/cmd/log_upload/+` MQTT topic](mqtt-topic-design.md). For example, it subscribes to the following topic for the main device.
+The plugin is listening to log update commands on the [`<root>/<identifier>/cmd/log_upload/+` MQTT topic](mqtt-api.md).
+For example, it subscribes to the following topic for the main device.
 
 ```sh te2mqtt
 tedge mqtt sub 'te/device/main///cmd/log_upload/+'
@@ -79,7 +81,7 @@ A new log file upload command with the ID "1234" is published by another compone
 ```sh te2mqtt
 tedge mqtt pub -r 'te/device/main///cmd/log_upload/1234' '{
   "status": "init",
-  "url": "http://127.0.0.1:8000/tedge/file-transfer/main/log_upload/mosquitto-1234",
+  "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/main/log_upload/mosquitto-1234",
   "type": "mosquitto",
   "dateFrom": "2013-06-22T17:03:14.000+02:00",
   "dateTo": "2013-06-23T18:03:14.000+02:00",
@@ -93,7 +95,7 @@ retrieves the log files using the `path` glob pattern provided in the plugin con
 including only the ones modified within the date range(`2013-06-22T17:03:14.000+02:00` to `2013-06-23T18:03:14.000+02:00`),
 with the content filtered by the search text(`ERROR`) and the maximum line count(`1000`).
 
-This filtered content is then uploaded to the given URL as `url` via an HTTP PUT request.
+This filtered content is then uploaded to the given URL as `tedgeUrl` via an HTTP PUT request.
 
 During the process, the plugin updates the command status via MQTT
 by publishing a retained message to the same `<root>/<identifier>/cmd/log_upload/<id>` topic,
@@ -109,7 +111,7 @@ Thus, the operation status update message for the above example looks like below
 tedge mqtt pub -r 'te/device/main///cmd/log_upload/1234' '{
   "status": "failed",
   "reason": "The target log file for 'mosquitto' does not exist.",
-  "url": "http://127.0.0.1:8000/tedge/file-transfer/main/log_upload/mosquitto-1234",
+  "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/main/log_upload/mosquitto-1234",
   "type": "mosquitto",
   "dateFrom": "2013-06-22T17:03:14.000+02:00",
   "dateTo": "2013-06-22T18:03:14.000+02:00",
@@ -167,7 +169,7 @@ OPTIONS:
 
 The thin-edge `CONFIG_DIR` is used:
   * to find where to connect the MQTT bus: `tedge config get mqtt.bind.address` and `tedge config get mqtt.bind.port`
-  * to find where to publish/subscribe: `tedge config get device.topic`
+  * to find where to publish/subscribe: `tedge config get root.topic` and `tedge config get device.topic`
   * to store tedge-log-plugin.toml: the configuration file that specifies which logs to be retrieved
 ```
 
