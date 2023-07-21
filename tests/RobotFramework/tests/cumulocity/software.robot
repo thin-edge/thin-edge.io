@@ -17,19 +17,12 @@ Install software via Cumulocity
     Device Should Have Installed Software    c8y-remote-access-plugin
 
 tedge-agent should terminate on SIGINT while downloading file
-    [Documentation]    Since this test uses external urls it will be retried to
-        ...            reduce the flakiness caused by unavailability of that resource
-    [Tags]    test:retry(3)
-    # we download a file which is 1GB, but tmpfs at /tmp is only 64M, so we
-    # have to change tmp.path to be able to store the download
+    [Documentation]    The test uses a custom local http server with throttling applied to it to ensure
+    ...                the download does not complete before stopping the tedge-agent
     ${start_time}=    Get Unix Timestamp
-    Execute Command                          chmod 777 /root
-    Execute Command                          tedge config set tmp.path /root
-    Restart Service                          tedge-agent
     ${OPERATION}=    Install Software        test-very-large-software,1.0,http://localhost/speedlimit/10MB
 
-    # waiting for the download to start (so, for "Downloading: ...") to appear
-    # in the log, but I have no clue how to do "wait until log contains ..."
+    # wait for the download to start by waiting for a specific marker to appear in the logs
     Logs Should Contain    text=download::download: Downloading file from url    date_from=${start_time}
     Operation Should Not Be PENDING          ${OPERATION}
 
