@@ -14,9 +14,8 @@ anyhow = "1.0"
 async-trait = "0.1"
 c8y_api = { path = "../../core/c8y_api" }
 c8y_http_proxy = { path = "../../extensions/c8y_http_proxy" }
-easy_reader = "0.5"
-glob = "0.3"
 log = "0.4"
+log_manager = { path = "../../common/log_manager" }
 serde = { version = "1.0", features = ["derive"] }
 tedge_actors = { path = "../../core/tedge_actors" }
 tedge_api = { path = "../../core/tedge_api" }
@@ -26,7 +25,6 @@ tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
 tedge_utils = { path = "../../common/tedge_utils" }
 thiserror = "1.0"
 tokio = { version = "1.23", features = ["macros"] }
-toml = "0.5"
 
 [dev-dependencies]
 filetime = "0.2"

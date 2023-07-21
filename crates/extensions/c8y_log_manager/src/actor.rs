@@ -1,3 +1,4 @@
+use super::LogManagerConfig;
 use async_trait::async_trait;
 use c8y_api::smartrest::message::get_smartrest_device_id;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
@@ -10,15 +11,10 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_api::utils::bridge::is_c8y_bridge_up;
-use c8y_api::OffsetDateTime;
 use c8y_http_proxy::handle::C8YHttpProxy;
-use easy_reader::EasyReader;
-use glob::glob;
 use log::error;
 use log::info;
-use std::collections::VecDeque;
-use std::path::Path;
-use std::path::PathBuf;
+use log_manager::LogPluginConfig;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::LoggingSender;
@@ -30,10 +26,6 @@ use tedge_actors::SimpleMessageBox;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_utils::paths::PathsError;
-
-use super::error::LogRetrievalError;
-use super::LogManagerConfig;
-use super::LogPluginConfig;
 
 fan_in_message_type!(LogInput[MqttMessage, FsWatchEvent] : Debug);
 fan_in_message_type!(LogOutput[MqttMessage]: Debug);
@@ -109,152 +101,6 @@ impl LogManagerActor {
         Ok(())
     }
 
-    fn read_log_content(
-        logfile: &Path,
-        mut line_counter: usize,
-        max_lines: usize,
-        filter_text: &Option<String>,
-    ) -> Result<(usize, String), LogRetrievalError> {
-        if line_counter >= max_lines {
-            Err(LogRetrievalError::MaxLines)
-        } else {
-            let mut file_content_as_vec = VecDeque::new();
-            let file = std::fs::File::open(logfile)?;
-            let file_name = format!(
-                "filename: {}\n",
-                logfile.file_name().unwrap().to_str().unwrap() // never fails because we check file exists
-            );
-            let reader = EasyReader::new(file);
-            match reader {
-                Ok(mut reader) => {
-                    reader.eof();
-                    while line_counter < max_lines {
-                        if let Some(haystack) = reader.prev_line()? {
-                            if let Some(needle) = &filter_text {
-                                if haystack.contains(needle) {
-                                    file_content_as_vec.push_front(format!("{}\n", haystack));
-                                    line_counter += 1;
-                                }
-                            } else {
-                                file_content_as_vec.push_front(format!("{}\n", haystack));
-                                line_counter += 1;
-                            }
-                        } else {
-                            // there are no more lines.prev_line()
-                            break;
-                        }
-                    }
-
-                    file_content_as_vec.push_front(file_name);
-
-                    let file_content = file_content_as_vec
-                        .iter()
-                        .map(|x| x.to_string())
-                        .collect::<String>();
-                    Ok((line_counter, file_content))
-                }
-                Err(_err) => Ok((line_counter, String::new())),
-            }
-        }
-    }
-
-    /// read any log file coming from `smartrest_obj.log_type`
-    pub fn new_read_logs(
-        &mut self,
-        smartrest_obj: &SmartRestLogRequest,
-    ) -> Result<String, anyhow::Error> {
-        let mut output = String::new();
-        // first filter logs on type
-        let mut logfiles_to_read = self.filter_logs_on_type(smartrest_obj)?;
-        logfiles_to_read = Self::filter_logs_path_on_metadata(smartrest_obj, logfiles_to_read)?;
-
-        let mut line_counter = 0usize;
-        for logfile in logfiles_to_read {
-            match Self::read_log_content(
-                logfile.as_path(),
-                line_counter,
-                smartrest_obj.lines,
-                &smartrest_obj.needle,
-            ) {
-                Ok((lines, file_content)) => {
-                    line_counter = lines;
-                    output.push_str(&file_content);
-                }
-                Err(_error @ LogRetrievalError::MaxLines) => {
-                    break;
-                }
-                Err(error) => {
-                    return Err(error.into());
-                }
-            };
-        }
-
-        Ok(output)
-    }
-
-    fn filter_logs_on_type(
-        &mut self,
-        smartrest_obj: &SmartRestLogRequest,
-    ) -> Result<Vec<PathBuf>, LogRetrievalError> {
-        let mut files_to_send = Vec::new();
-        for files in &self.plugin_config.files {
-            let maybe_file_path = files.path.as_str(); // because it can be a glob pattern
-            let file_type = files.config_type.as_str();
-
-            if !file_type.eq(&smartrest_obj.log_type) {
-                continue;
-            } else {
-                for entry in glob(maybe_file_path)? {
-                    let file_path = entry?;
-                    files_to_send.push(file_path)
-                }
-            }
-        }
-        if files_to_send.is_empty() {
-            Err(LogRetrievalError::NoLogsAvailableForType {
-                log_type: smartrest_obj.log_type.to_string(),
-            })
-        } else {
-            Ok(files_to_send)
-        }
-    }
-
-    /// filter a vector of pathbufs according to `smartrest_obj.date_from` and `smartrest_obj.date_to`
-    fn filter_logs_path_on_metadata(
-        smartrest_obj: &SmartRestLogRequest,
-        mut logs_path_vec: Vec<PathBuf>,
-    ) -> Result<Vec<PathBuf>, LogRetrievalError> {
-        let mut out = vec![];
-
-        logs_path_vec.sort_by_key(|pathbuf| {
-            if let Ok(metadata) = std::fs::metadata(pathbuf) {
-                if let Ok(file_modified_time) = metadata.modified() {
-                    return OffsetDateTime::from(file_modified_time);
-                }
-            };
-            // if the file metadata can not be read, we set the file's metadata
-            // to UNIX_EPOCH (Jan 1st 1970)
-            OffsetDateTime::UNIX_EPOCH
-        });
-        logs_path_vec.reverse(); // to get most recent
-
-        for file_pathbuf in logs_path_vec {
-            let metadata = std::fs::metadata(&file_pathbuf)?;
-            let datetime_modified = OffsetDateTime::from(metadata.modified()?);
-            if datetime_modified >= smartrest_obj.date_from {
-                out.push(file_pathbuf);
-            }
-        }
-
-        if out.is_empty() {
-            Err(LogRetrievalError::NoLogsAvailableForType {
-                log_type: smartrest_obj.log_type.to_string(),
-            })
-        } else {
-            Ok(out)
-        }
-    }
-
     /// executes the log file request
     ///
     /// - sends request executing (mqtt)
@@ -267,7 +113,13 @@ impl LogManagerActor {
         let executing = LogfileRequest::executing()?;
         self.mqtt_publisher.send(executing).await?;
 
-        let log_content = self.new_read_logs(smartrest_request)?;
+        let log_content = log_manager::new_read_logs(
+            &self.plugin_config.files,
+            &smartrest_request.log_type,
+            smartrest_request.date_from,
+            smartrest_request.lines,
+            &smartrest_request.needle,
+        )?;
 
         let upload_event_url = self
             .http_proxy
@@ -338,7 +190,12 @@ impl LogManagerActor {
         &mut self,
         plugin_config: &LogPluginConfig,
     ) -> Result<(), anyhow::Error> {
-        let msg = plugin_config.to_supported_config_types_message()?;
+        let topic = C8yTopic::SmartRestResponse.to_topic()?;
+        let mut config_types = plugin_config.get_all_file_types();
+        config_types.sort();
+        let supported_config_types = config_types.join(",");
+        let payload = format!("118,{supported_config_types}");
+        let msg = MqttMessage::new(&topic, payload);
         Ok(self.mqtt_publisher.send(msg).await?)
     }
 
@@ -415,21 +272,17 @@ impl TryIntoOperationStatusMessage for LogfileRequest {
 
 #[cfg(test)]
 mod tests {
-    use super::LogManagerActor;
     use crate::LogManagerBuilder;
     use crate::LogManagerConfig;
     use crate::Topic;
-    use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
     use c8y_http_proxy::messages::C8YRestRequest;
     use c8y_http_proxy::messages::C8YRestResponse;
     use c8y_http_proxy::messages::C8YRestResult;
     use c8y_http_proxy::messages::UploadLogBinary;
     use filetime::set_file_mtime;
     use filetime::FileTime;
-    use std::io::Write;
     use std::net::Ipv4Addr;
     use std::path::Path;
-    use std::path::PathBuf;
     use tedge_actors::Actor;
     use tedge_actors::Builder;
     use tedge_actors::MessageReceiver;
@@ -440,7 +293,6 @@ mod tests {
     use tedge_file_system_ext::FsWatchEvent;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_test_utils::fs::TempTedgeDir;
-    use time::macros::datetime;
 
     /// Preparing a temp directory containing four files, with
     /// two types { type_one, type_two }:
@@ -488,22 +340,6 @@ mod tests {
             ));
 
         Ok(tempdir)
-    }
-
-    fn build_smartrest_log_request_object(
-        log_type: String,
-        needle: Option<String>,
-        lines: usize,
-    ) -> SmartRestLogRequest {
-        SmartRestLogRequest {
-            message_id: "522".to_string(),
-            device: "device".to_string(),
-            log_type,
-            date_from: datetime!(1970-01-01 00:00:03 +00:00),
-            date_to: datetime!(1970-01-01 00:00:00 +00:00), // not used
-            needle,
-            lines,
-        }
     }
 
     /// Create a log manager actor builder
@@ -554,12 +390,6 @@ mod tests {
         )
     }
 
-    /// Create a log manager actor ready for testing
-    fn new_log_manager_actor(temp_dir: &Path) -> LogManagerActor {
-        let (actor_builder, _, _, _) = new_log_manager_builder(temp_dir);
-        actor_builder.build()
-    }
-
     /// Spawn a log manager actor and return 2 boxes to exchange MQTT and HTTP messages with it
     fn spawn_log_manager_actor(
         temp_dir: &Path,
@@ -572,159 +402,6 @@ mod tests {
         let mut actor = actor_builder.build();
         tokio::spawn(async move { actor.run().await });
         (mqtt, http, fs)
-    }
-
-    #[test]
-    /// Filter on type = "type_one".
-    /// There are four logs created in tempdir { file_a, file_b, file_c, file_d }
-    /// Of which, { file_a, file_b, file_d } are "type_one"
-    fn test_filter_logs_on_type() {
-        let tempdir = prepare().unwrap();
-        let tempdir_path = tempdir.path().to_str().unwrap();
-        let smartrest_obj = build_smartrest_log_request_object("type_one".to_string(), None, 1000);
-        let mut actor = new_log_manager_actor(tempdir.path());
-
-        let logs = actor.filter_logs_on_type(&smartrest_obj).unwrap();
-        assert_eq!(
-            logs,
-            vec![
-                PathBuf::from(&format!("{tempdir_path}/file_a")),
-                PathBuf::from(&format!("{tempdir_path}/file_b")),
-                PathBuf::from(&format!("{tempdir_path}/file_d"))
-            ]
-        )
-    }
-
-    #[test]
-    /// Out of logs filtered on type = "type_one", that is: { file_a, file_b, file_d }.
-    /// Only logs filtered on metadata remain, that is { file_b, file_d }.
-    ///
-    /// This is because:
-    ///
-    /// file_a has timestamp: 1970/01/01 00:00:02
-    /// file_b has timestamp: 1970/01/01 00:00:03
-    /// file_d has timestamp: (current, not modified)
-    ///
-    /// The order of the output is { file_d, file_b }, because files are sorted from
-    /// most recent to oldest
-    fn test_filter_logs_path_on_metadata() {
-        let tempdir = prepare().unwrap();
-        let smartrest_obj = build_smartrest_log_request_object("type_one".to_string(), None, 1000);
-        let mut actor = new_log_manager_actor(tempdir.path());
-
-        let logs = actor.filter_logs_on_type(&smartrest_obj).unwrap();
-        let logs = LogManagerActor::filter_logs_path_on_metadata(&smartrest_obj, logs).unwrap();
-
-        assert_eq!(
-            logs,
-            vec![
-                PathBuf::from(format!("{}/file_d", tempdir.path().to_str().unwrap())),
-                PathBuf::from(format!("{}/file_b", tempdir.path().to_str().unwrap())),
-            ]
-        )
-    }
-
-    #[test]
-    /// Inserting 5 log lines in { file_a }:
-    /// [
-    ///     this is the first line.
-    ///     this is the second line.
-    ///     this is the third line.
-    ///     this is the fourth line.
-    ///     this is the fifth line.
-    /// ]
-    ///
-    /// Requesting back only 4. Note that because we read the logs in reverse order, the first line
-    /// should be omitted. The result should be:
-    /// [
-    ///     this is the second line.
-    ///     this is the third line.
-    ///     this is the fourth line.
-    ///     this is the fifth line.
-    /// ]
-    ///
-    fn test_read_log_content() {
-        let tempdir = prepare().unwrap();
-        let path = tempdir.path().to_str().unwrap();
-        let file_path = &format!("{path}/file_a");
-        let mut log_file = std::fs::OpenOptions::new()
-            .append(true)
-            .create(false)
-            .write(true)
-            .open(file_path)
-            .unwrap();
-
-        let data = "this is the first line.\nthis is the second line.\nthis is the third line.\nthis is the forth line.\nthis is the fifth line.";
-
-        log_file.write_all(data.as_bytes()).unwrap();
-
-        let line_counter = 0;
-        let max_lines = 4;
-        let filter_text = None;
-
-        let (line_counter, result) = LogManagerActor::read_log_content(
-            Path::new(file_path),
-            line_counter,
-            max_lines,
-            &filter_text,
-        )
-        .unwrap();
-
-        assert_eq!(line_counter, max_lines);
-        assert_eq!(result, "filename: file_a\nthis is the second line.\nthis is the third line.\nthis is the forth line.\nthis is the fifth line.\n");
-    }
-
-    #[test]
-    /// Inserting 5 lines of logs for each log file { file_a, ..., file_d }.
-    /// Each line contains the text: "this is the { line_number } line of { file_name }
-    /// where line_number { first, second, third, forth, fifth }
-    /// where file_name { file_a, ..., file_d }
-    ///
-    /// Requesting logs for log_type = "type_one", that are older than:
-    /// timestamp: 1970/01/01 00:00:03
-    ///
-    /// These are:
-    /// file_b and file_d
-    ///
-    /// file_d is the newest file, so its logs are read first. then file_b.
-    ///
-    /// Because only 7 lines are requested (and each file has 5 lines), the expedted
-    /// result is:
-    ///
-    /// - all logs from file_d (5)
-    /// - last two logs from file_b (2)
-    fn test_read_log_content_multiple_files() {
-        let tempdir = prepare().unwrap();
-        let tempdir_path = tempdir.path().to_str().unwrap();
-
-        for (file_name, m_time) in [
-            ("file_a", 2),
-            ("file_b", 3),
-            ("file_c", 11),
-            ("file_d", 100),
-        ] {
-            let file_path = &format!("{tempdir_path}/{file_name}");
-
-            let mut log_file = std::fs::OpenOptions::new()
-                .append(true)
-                .create(false)
-                .write(true)
-                .open(file_path)
-                .unwrap();
-
-            let data = &format!("this is the first line of {file_name}.\nthis is the second line of {file_name}.\nthis is the third line of {file_name}.\nthis is the forth line of {file_name}.\nthis is the fifth line of {file_name}.");
-
-            log_file.write_all(data.as_bytes()).unwrap();
-
-            let new_mtime = FileTime::from_unix_time(m_time, 0);
-            set_file_mtime(file_path, new_mtime).unwrap();
-        }
-
-        let smartrest_obj = build_smartrest_log_request_object("type_one".to_string(), None, 7);
-        let mut actor = new_log_manager_actor(tempdir.path());
-
-        let result = actor.new_read_logs(&smartrest_obj).unwrap();
-        assert_eq!(result, String::from("filename: file_d\nthis is the first line of file_d.\nthis is the second line of file_d.\nthis is the third line of file_d.\nthis is the forth line of file_d.\nthis is the fifth line of file_d.\nfilename: file_b\nthis is the forth line of file_b.\nthis is the fifth line of file_b.\n"))
     }
 
     #[tokio::test]

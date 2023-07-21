@@ -8,6 +8,7 @@ mod tests;
 
 pub use actor::*;
 pub use config::*;
+use log_manager::LogPluginConfig;
 use std::path::PathBuf;
 use tedge_actors::adapt;
 use tedge_actors::Builder;

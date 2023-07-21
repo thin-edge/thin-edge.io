@@ -1,5 +1,6 @@
 #[allow(clippy::enum_variant_names)]
 #[derive(thiserror::Error, Debug)]
+
 pub enum LogManagementError {
     #[error(transparent)]
     FromMqttError(#[from] tedge_mqtt_ext::MqttError),

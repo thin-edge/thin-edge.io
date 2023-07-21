@@ -1,6 +1,5 @@
 mod actor;
 mod config;
-mod error;
 
 use actor::*;
 use c8y_api::smartrest::topic::C8yTopic;
@@ -9,6 +8,7 @@ use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
 pub use config::*;
+use log_manager::LogPluginConfig;
 use std::path::PathBuf;
 use tedge_actors::adapt;
 use tedge_actors::Builder;
@@ -28,7 +28,6 @@ use tedge_mqtt_ext::*;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::FileError;
-
 /// This is an actor builder.
 pub struct LogManagerBuilder {
     config: LogManagerConfig,

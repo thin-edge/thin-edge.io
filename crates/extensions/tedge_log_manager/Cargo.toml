@@ -13,6 +13,7 @@ repository = { workspace = true }
 async-trait = "0.1"
 http = "0.2"
 log = "0.4"
+log_manager = { path = "../../common/log_manager" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tedge_actors = { path = "../../core/tedge_actors" }
