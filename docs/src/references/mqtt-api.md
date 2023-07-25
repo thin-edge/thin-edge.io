@@ -652,7 +652,7 @@ tedge mqtt pub -r te/device/main///cmd/health/check '{}'
 
 On receipt of the above command, all services on that device should respond with their health status.
 
-The services are also expected to register an MQTT Last Will and Testament (LWT) message with the broker to publish a `down` status message in the event that the service stops or crashes unexpectedly. The Last Will and Testament message ensures that the down status is published even if the service is not operational. The following example details such as message:
+The services are also expected to register an MQTT Last Will and Testament (LWT) message with the broker to publish a `down` status message in the event that the service stops or crashes unexpectedly. The Last Will and Testament message ensures that the down status is published even if the service is not operational. The following example details such a message:
 
 ```sh te2mqtt
 tedge mqtt pub -r te/device/main/service/tedge-agent/status/health '{
