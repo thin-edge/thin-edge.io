@@ -12,6 +12,7 @@ use rumqttc::QoS::AtLeastOnce;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use tedge_config::new::TEdgeConfig;
 use tedge_config::system_services::*;
 use tedge_config::*;
 use tedge_utils::paths::create_directories;
@@ -53,7 +54,7 @@ impl Command for ConnectCommand {
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        let config = self.config_repository.load()?;
+        let config = self.config_repository.load_new()?;
         if self.is_test_connection {
             let br_config = self.bridge_config(&config)?;
             if self.check_if_bridge_exists(&br_config) {
@@ -84,29 +85,33 @@ impl Command for ConnectCommand {
             .common_mosquitto_config
             .clone()
             .with_internal_opts(
-                config.query(MqttPortSetting)?.into(),
-                config.query(MqttBindAddressSetting)?.to_string(),
+                config.mqtt.bind.port.into(),
+                config.mqtt.bind.address.to_string(),
             )
             .with_external_opts(
-                config.query(MqttExternalPortSetting).ok().map(|x| x.into()),
+                config.mqtt.external.bind.port.or_none().cloned(),
                 config
-                    .query(MqttExternalBindAddressSetting)
-                    .ok()
-                    .map(|x| x.to_string()),
-                config.query(MqttExternalBindInterfaceSetting).ok(),
-                config.query(MqttExternalCAPathSetting).ok(),
-                config.query(MqttExternalCertfileSetting).ok(),
-                config.query(MqttExternalKeyfileSetting).ok(),
+                    .mqtt
+                    .external
+                    .bind
+                    .address
+                    .or_none()
+                    .cloned()
+                    .map(|a| a.to_string()),
+                config.mqtt.external.bind.interface.or_none().cloned(),
+                config.mqtt.external.ca_path.or_none().cloned(),
+                config.mqtt.external.cert_file.or_none().cloned(),
+                config.mqtt.external.key_file.or_none().cloned(),
             );
 
-        let device_type = config.query(DeviceTypeSetting)?;
+        let device_type = &config.device.ty;
 
         new_bridge(
             &bridge_config,
             &updated_mosquitto_config,
             self.service_manager.as_ref(),
             &self.config_location,
-            &device_type,
+            device_type,
         )?;
 
         match self.check_connection(&config) {
@@ -136,7 +141,13 @@ impl Command for ConnectCommand {
         if let Cloud::C8y = self.cloud {
             check_connected_c8y_tenant_as_configured(
                 &config,
-                &config.query_string(C8yMqttSetting)?,
+                &config
+                    .c8y
+                    .mqtt
+                    .or_none()
+                    .cloned()
+                    .map(|u| u.to_string())
+                    .unwrap_or_default(),
             );
             enable_software_management(&bridge_config, self.service_manager.as_ref());
         }
@@ -150,39 +161,39 @@ impl ConnectCommand {
         match self.cloud {
             Cloud::Azure => {
                 let params = BridgeConfigAzureParams {
-                    connect_url: config.query(AzureUrlSetting)?,
+                    connect_url: config.az.url.or_config_not_set()?.clone(),
                     mqtt_tls_port: MQTT_TLS_PORT,
                     config_file: AZURE_CONFIG_FILENAME.into(),
-                    bridge_root_cert_path: config.query(AzureRootCertPathSetting)?,
-                    remote_clientid: config.query(DeviceIdSetting)?,
-                    bridge_certfile: config.query(DeviceCertPathSetting)?,
-                    bridge_keyfile: config.query(DeviceKeyPathSetting)?,
+                    bridge_root_cert_path: config.az.root_cert_path.clone(),
+                    remote_clientid: config.device.id.try_read(config)?.clone(),
+                    bridge_certfile: config.device.cert_path.clone(),
+                    bridge_keyfile: config.device.key_path.clone(),
                 };
 
                 Ok(BridgeConfig::from(params))
             }
             Cloud::Aws => {
                 let params = BridgeConfigAwsParams {
-                    connect_url: config.query(AwsUrlSetting)?,
+                    connect_url: config.aws.url.or_config_not_set()?.clone(),
                     mqtt_tls_port: MQTT_TLS_PORT,
                     config_file: AWS_CONFIG_FILENAME.into(),
-                    bridge_root_cert_path: config.query(AwsRootCertPathSetting)?,
-                    remote_clientid: config.query(DeviceIdSetting)?,
-                    bridge_certfile: config.query(DeviceCertPathSetting)?,
-                    bridge_keyfile: config.query(DeviceKeyPathSetting)?,
+                    bridge_root_cert_path: config.aws.root_cert_path.clone(),
+                    remote_clientid: config.device.id.try_read(config)?.clone(),
+                    bridge_certfile: config.device.cert_path.clone(),
+                    bridge_keyfile: config.device.key_path.clone(),
                 };
 
                 Ok(BridgeConfig::from(params))
             }
             Cloud::C8y => {
                 let params = BridgeConfigC8yParams {
-                    mqtt_host: config.query(C8yMqttSetting)?,
+                    mqtt_host: config.c8y.mqtt.or_config_not_set()?.clone(),
                     config_file: C8Y_CONFIG_FILENAME.into(),
-                    bridge_root_cert_path: config.query(C8yRootCertPathSetting)?,
-                    remote_clientid: config.query(DeviceIdSetting)?,
-                    bridge_certfile: config.query(DeviceCertPathSetting)?,
-                    bridge_keyfile: config.query(DeviceKeyPathSetting)?,
-                    smartrest_templates: config.query(C8ySmartRestTemplates)?,
+                    bridge_root_cert_path: config.c8y.root_cert_path.clone(),
+                    remote_clientid: config.device.id.try_read(config)?.clone(),
+                    bridge_certfile: config.device.cert_path.clone(),
+                    bridge_keyfile: config.device.key_path.clone(),
+                    smartrest_templates: config.c8y.smartrest.templates.clone(),
                 };
 
                 Ok(BridgeConfig::from(params))

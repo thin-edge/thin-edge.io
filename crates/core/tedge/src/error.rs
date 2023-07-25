@@ -27,4 +27,7 @@ pub enum TEdgeError {
 
     #[error(transparent)]
     FromTEdgeConfigRead(#[from] tedge_config::new::ReadError),
+
+    #[error(transparent)]
+    FromConfigNotSet(#[from] tedge_config::new::ConfigNotSet),
 }

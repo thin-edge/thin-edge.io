@@ -1,4 +1,3 @@
-use super::cli::ClientAuthConfig;
 use crate::cli::mqtt::MqttError;
 use crate::command::Command;
 use camino::Utf8PathBuf;
@@ -11,6 +10,7 @@ use rumqttc::Incoming;
 use rumqttc::MqttOptions;
 use rumqttc::Packet;
 use rumqttc::QoS;
+use tedge_config::new::MqttAuthClientConfig;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
 const MAX_PACKET_SIZE: usize = 1048575;
@@ -24,7 +24,7 @@ pub struct MqttSubscribeCommand {
     pub client_id: String,
     pub ca_file: Option<Utf8PathBuf>,
     pub ca_dir: Option<Utf8PathBuf>,
-    pub client_auth_config: Option<ClientAuthConfig>,
+    pub client_auth_config: Option<MqttAuthClientConfig>,
 }
 
 impl Command for MqttSubscribeCommand {

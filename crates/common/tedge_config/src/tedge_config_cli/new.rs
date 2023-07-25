@@ -83,6 +83,25 @@ impl TEdgeConfig {
 
         Ok(mqtt_config)
     }
+
+    pub fn mqtt_client_auth_config(&self) -> MqttAuthConfig {
+        let mut client_auth = MqttAuthConfig {
+            ca_dir: self.mqtt.client.auth.ca_dir.or_none().cloned(),
+            ca_file: self.mqtt.client.auth.ca_file.or_none().cloned(),
+            client: None,
+        };
+        // Both these options have to either be set or not set
+        if let Ok(Some((client_cert, client_key))) = all_or_nothing((
+            self.mqtt.client.auth.cert_file.as_ref(),
+            self.mqtt.client.auth.key_file.as_ref(),
+        )) {
+            client_auth.client = Some(MqttAuthClientConfig {
+                cert_file: client_cert.clone(),
+                key_file: client_key.clone(),
+            })
+        }
+        client_auth
+    }
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Clone, Copy, PartialEq, Eq, Debug)]
@@ -691,6 +710,19 @@ where
     fn call(self, data: &T, location: &TEdgeConfigLocation) -> Self::Output {
         (self)(data, location)
     }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct MqttAuthConfig {
+    pub ca_dir: Option<Utf8PathBuf>,
+    pub ca_file: Option<Utf8PathBuf>,
+    pub client: Option<MqttAuthClientConfig>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct MqttAuthClientConfig {
+    pub cert_file: Utf8PathBuf,
+    pub key_file: Utf8PathBuf,
 }
 
 #[cfg(test)]

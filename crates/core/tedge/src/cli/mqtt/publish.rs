@@ -1,4 +1,3 @@
-use super::cli::ClientAuthConfig;
 use crate::cli::mqtt::MqttError;
 use crate::command::Command;
 use camino::Utf8PathBuf;
@@ -14,6 +13,7 @@ use rumqttc::QoS::AtLeastOnce;
 use rumqttc::QoS::AtMostOnce;
 use rumqttc::QoS::ExactlyOnce;
 use std::time::Duration;
+use tedge_config::new::MqttAuthClientConfig;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
 
@@ -28,7 +28,7 @@ pub struct MqttPublishCommand {
     pub retain: bool,
     pub ca_file: Option<Utf8PathBuf>,
     pub ca_dir: Option<Utf8PathBuf>,
-    pub client_auth_config: Option<ClientAuthConfig>,
+    pub client_auth_config: Option<MqttAuthClientConfig>,
 }
 
 impl Command for MqttPublishCommand {
