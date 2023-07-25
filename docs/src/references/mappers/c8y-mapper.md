@@ -2,6 +2,7 @@
 title: Cumulocity Mapper
 tags: [Reference, Mappers, Cloud]
 sidebar_position: 1
+draft: true
 ---
 
 # Cumulocity Mapper
