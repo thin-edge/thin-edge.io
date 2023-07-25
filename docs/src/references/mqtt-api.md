@@ -351,6 +351,12 @@ tedge mqtt pub -r 'te/device/child01/service/nodered' '{
 }'
 ```
 
+:::info
+A service is always owned by a device. The `@parent` property in the registration message is used to declare the service's owner. The lifecycle of the service is tied to the device's lifecycle.
+
+For example, a linux service runs on a device as it relies on physical hardware to run. A service can have its own telemetry data (e.g. tracking RAM usage of single process), however when the device ceases to exist, then so does the service.
+:::
+
 #### Register a service of a nested child device
 
 ```sh te2mqtt
