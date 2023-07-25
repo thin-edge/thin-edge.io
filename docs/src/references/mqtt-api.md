@@ -510,7 +510,7 @@ The metadata fields supported by each data type will be defined in detail later.
 
 ## Commands
 
-The topic scheme for commands can be visualized using the diagram below. The **identifier** is used as the command 
+The topic scheme for commands can be visualized using the diagram below.
 
 <p align="center">
 
