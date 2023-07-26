@@ -34,7 +34,7 @@
 
 ## Jump right in:
 * [**Explore the Docs**](https://thin-edge.github.io/thin-edge.io/html/)
-* [Install thin-edge.io on your device](https://thin-edge.github.io/thin-edge.io/operate/installation/install)
+* [Install thin-edge.io on your device](https://thin-edge.github.io/thin-edge.io/install/)
 * [Getting started with thin-edge.io on a Raspberry Pi](https://thin-edge.github.io/thin-edge.io/start/getting-started)
 * [Connect your device to Cumulocity](https://thin-edge.github.io/thin-edge.io/start/connect-c8y)
 * [Connect your device to Azure](https://thin-edge.github.io/thin-edge.io/start/connect-azure)
