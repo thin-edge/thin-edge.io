@@ -313,6 +313,7 @@ test_common_help = {
 @task(
     help={
         "iterations": ("Number of test iterations to run"),
+        "clean": ("Remove the output folder if it already exists"),
         **test_common_help,
     }
 )
@@ -327,21 +328,43 @@ def flake_finder(
     processes=None,
     include="",
     exclude="",
+    clean=False,
 ):
     """Run tests multiple times to find any flakey tests
 
-    The output directory should not exist prior to running the tests.
+    If the --clean option is not provided by the user, the task
+    will fail if the output directory already exists. This is to prevent
+    accidentally overwriting existing test results (as the tests can take long time to run)
 
     Examples
-        invoke flake-finder --iterations 100 --outputdir output_flake_finder_100
-        # Run all integration tests 100 times and generate a report
+        invoke flake-finder --iterations 100 --outputdir output_flake_finder_100 --clean
+        # Run all integration tests 100 times and generate a report. If the output
+        # folder already exists, it will be removed (as denoted by --clean)
 
         invoke flake-finder --iterations 2 --outputdir output_flake_finder --suite service_monitoring
         # Only run tests related to a given suite and run it 2 times
     """
     passed = []
     failed = []
-    duration_start = time.time()
+    duration_start = time.monotonic()
+
+    if os.path.exists(outputdir):
+        if not clean:
+            # sys.exit(1)
+            raise invoke.Exit(
+                (
+                    "ERROR: Output directory already exists. "
+                    f"Please use --clean if you want to remove it. dir={outputdir}"
+                ),
+                1,
+            )
+
+        print(f"Removing already existing output directory: {outputdir}")
+        shutil.rmtree(outputdir)
+
+    # Fail if the the output folder already exists
+    os.makedirs(outputdir, exist_ok=False)
+
     for i in range(1, iterations + 1):
         iteration_output = Path(outputdir) / f"iteration-{i}"
         os.makedirs(iteration_output)
@@ -361,7 +384,7 @@ def flake_finder(
         except invoke.exceptions.Failure as ex:
             failed.append(i)
 
-    duration_sec = time.time() - duration_start
+    duration_sec = time.monotonic() - duration_start
 
     print("\n\n" + "-" * 30)
 
