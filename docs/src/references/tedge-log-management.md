@@ -69,7 +69,7 @@ then a JSON message with an empty array for the `types` field is sent, indicatin
 
 ## Handling log upload commands
 
-The plugin is listening to log update commands on the [`<root>/<identifier>/cmd/log_upload/+` MQTT topic](mqtt-api.md).
+The plugin subscribes to log upload commands on the [`<root>/<identifier>/cmd/log_upload/+` MQTT topic](mqtt-api.md).
 For example, it subscribes to the following topic for the main device.
 
 ```sh te2mqtt
@@ -90,12 +90,12 @@ tedge mqtt pub -r 'te/device/main///cmd/log_upload/1234' '{
 }'
 ```
 
-The plugin then checks the `tedge-log-plugin.toml` file for the log type in the incoming message (`mosquitto`),
+The plugin then checks the `tedge-log-plugin.toml` file for the log `type` in the incoming message (`mosquitto`),
 retrieves the log files using the `path` glob pattern provided in the plugin config file,
 including only the ones modified within the date range(`2013-06-22T17:03:14.000+02:00` to `2013-06-23T18:03:14.000+02:00`),
 with the content filtered by the search text(`ERROR`) and the maximum line count(`1000`).
 
-This filtered content is then uploaded to the given URL as `tedgeUrl` via an HTTP PUT request.
+This filtered content is then uploaded to the URL received in the command as `tedgeUrl` via an HTTP PUT request.
 
 During the process, the plugin updates the command status via MQTT
 by publishing a retained message to the same `<root>/<identifier>/cmd/log_upload/<id>` topic,
@@ -168,9 +168,10 @@ OPTIONS:
             Print version information
 
 The thin-edge `CONFIG_DIR` is used:
-  * to find where to connect the MQTT bus: `tedge config get mqtt.bind.address` and `tedge config get mqtt.bind.port`
-  * to find where to publish/subscribe: `tedge config get root.topic` and `tedge config get device.topic`
-  * to store tedge-log-plugin.toml: the configuration file that specifies which logs to be retrieved
+  * to find the `tedge.toml` where the following configs are defined:
+     ** `mqtt.bind.address` and `mqtt.bind.port`: to connect to the tedge MQTT broker
+     ** `root.topic` and `device.topic`: for the MQTT topics to publish to and subscribe from
+  * to find/store the `tedge-log-plugin.toml`: the configuration file that specifies which logs to be retrieved
 ```
 
 ## Logging
