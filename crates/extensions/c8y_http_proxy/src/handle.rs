@@ -3,6 +3,7 @@ use crate::messages::C8YRestRequest;
 use crate::messages::C8YRestResponse;
 use crate::messages::C8YRestResult;
 use crate::messages::GetJwtToken;
+use crate::messages::SoftwareListResponse;
 use crate::messages::UploadConfigFile;
 use crate::messages::UploadLogBinary;
 use c8y_api::json_c8y::C8yCreateEvent;
@@ -49,8 +50,14 @@ impl C8YHttpProxy {
     pub async fn send_software_list_http(
         &mut self,
         c8y_software_list: C8yUpdateSoftwareListResponse,
+        device_id: String,
     ) -> Result<(), C8YRestError> {
-        let request: C8YRestRequest = c8y_software_list.into();
+        let request: C8YRestRequest = SoftwareListResponse {
+            c8y_software_list,
+            device_id,
+        }
+        .into();
+
         match self.c8y.await_response(request).await? {
             Ok(C8YRestResponse::Unit(_)) => Ok(()),
             unexpected => Err(unexpected.into()),
@@ -61,12 +68,12 @@ impl C8YHttpProxy {
         &mut self,
         log_type: &str,
         log_content: &str,
-        child_device_id: Option<String>,
+        device_id: String,
     ) -> Result<String, C8YRestError> {
         let request: C8YRestRequest = UploadLogBinary {
             log_type: log_type.to_string(),
             log_content: log_content.to_string(),
-            child_device_id,
+            device_id,
         }
         .into();
         match self.c8y.await_response(request).await? {
@@ -79,12 +86,12 @@ impl C8YHttpProxy {
         &mut self,
         config_path: &Path,
         config_type: &str,
-        child_device_id: Option<String>,
+        device_id: String,
     ) -> Result<String, C8YRestError> {
         let request: C8YRestRequest = UploadConfigFile {
             config_path: config_path.to_owned(),
             config_type: config_type.to_string(),
-            child_device_id,
+            device_id,
         }
         .into();
         match self.c8y.await_response(request).await? {

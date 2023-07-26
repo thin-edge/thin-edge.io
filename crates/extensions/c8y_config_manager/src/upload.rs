@@ -90,7 +90,7 @@ impl ConfigUploadManager {
                     self.upload_config_file(
                         Path::new(config_file_path.as_str()),
                         &config_upload_request.config_type,
-                        None,
+                        config_upload_request.device,
                         message_box,
                     )
                     .await
@@ -334,7 +334,7 @@ impl ConfigUploadManager {
             .upload_config_file(
                 Path::new(&uploaded_config_file_path),
                 &config_response.get_config_type(),
-                Some(config_response.get_child_id()),
+                config_response.get_child_id(),
                 message_box,
             )
             .await?;
@@ -357,12 +357,12 @@ impl ConfigUploadManager {
         &mut self,
         config_file_path: &Path,
         config_type: &str,
-        child_device_id: Option<String>,
+        device_id: String,
         message_box: &mut ConfigManagerMessageBox,
     ) -> Result<String, ConfigManagementError> {
         let url = message_box
             .c8y_http_proxy
-            .upload_config_file(config_file_path, config_type, child_device_id)
+            .upload_config_file(config_file_path, config_type, device_id)
             .await?;
         Ok(url)
     }

@@ -1302,7 +1302,7 @@ fn spawn_dummy_c8y_http_proxy(mut http: SimpleMessageBox<C8YRestRequest, C8YRest
                         )))
                         .await;
                 }
-                Some(C8YRestRequest::C8yUpdateSoftwareListResponse(_)) => {
+                Some(C8YRestRequest::SoftwareListResponse(_)) => {
                     let _ = http
                         .send(Ok(c8y_http_proxy::messages::C8YRestResponse::Unit(())))
                         .await;

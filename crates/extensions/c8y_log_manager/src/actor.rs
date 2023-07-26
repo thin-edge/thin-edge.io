@@ -271,7 +271,11 @@ impl LogManagerActor {
 
         let upload_event_url = self
             .http_proxy
-            .upload_log_binary(&smartrest_request.log_type, &log_content, None)
+            .upload_log_binary(
+                &smartrest_request.log_type,
+                &log_content,
+                self.config.device_id.clone(),
+            )
             .await?;
 
         let successful = LogfileRequest::successful(Some(upload_event_url))?;
@@ -786,7 +790,7 @@ mod tests {
             Some(C8YRestRequest::UploadLogBinary(UploadLogBinary {
                 log_type: "type_two".to_string(),
                 log_content: "filename: file_c\nSome content\n".to_string(),
-                child_device_id: None
+                device_id: "SUT".into()
             }))
         );
 

@@ -6,35 +6,47 @@ use mqtt_channel::StreamExt;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use reqwest::Url;
+use std::collections::HashMap;
 use std::time::Duration;
 use tedge_config::mqtt_config::MqttConfigBuildError;
 use tedge_config::TEdgeConfig;
 use tracing::error;
 use tracing::info;
 
+#[derive(thiserror::Error, Debug)]
+pub enum C8yEndPointError {
+    #[error("Cumulocity internal id not found for the device: {0}")]
+    InternalIdNotFound(String),
+}
+
 /// Define a C8y endpoint
 #[derive(Debug)]
 pub struct C8yEndPoint {
-    pub c8y_host: String,
+    c8y_host: String,
     pub device_id: String,
-    pub c8y_internal_id: String,
+    pub token: Option<String>,
+    devices_internal_id: HashMap<String, String>,
 }
 
 impl C8yEndPoint {
-    pub fn new(c8y_host: &str, device_id: &str, c8y_internal_id: &str) -> C8yEndPoint {
+    pub fn new(c8y_host: &str, device_id: &str) -> C8yEndPoint {
         C8yEndPoint {
             c8y_host: c8y_host.into(),
             device_id: device_id.into(),
-            c8y_internal_id: c8y_internal_id.into(),
+            token: None,
+            devices_internal_id: HashMap::new(),
         }
     }
 
-    pub fn get_c8y_internal_id(&self) -> &str {
-        &self.c8y_internal_id
+    pub fn get_internal_id(&self, device_id: String) -> Result<String, C8yEndPointError> {
+        match self.devices_internal_id.get(&device_id) {
+            Some(internal_id) => Ok(internal_id.to_string()),
+            None => Err(C8yEndPointError::InternalIdNotFound(device_id.clone())),
+        }
     }
 
-    pub fn set_c8y_internal_id(&mut self, id: String) {
-        self.c8y_internal_id = id;
+    pub fn set_internal_id(&mut self, device_id: String, internal_id: String) {
+        self.devices_internal_id.insert(device_id, internal_id);
     }
 
     fn get_base_url(&self) -> String {
@@ -47,18 +59,17 @@ impl C8yEndPoint {
         url_get_id
     }
 
-    pub fn get_url_for_sw_list(&self) -> String {
+    pub fn get_url_for_sw_list(&self, internal_id: String) -> String {
         let mut url_update_swlist = self.get_base_url();
         url_update_swlist.push_str("/inventory/managedObjects/");
-        url_update_swlist.push_str(&self.c8y_internal_id);
-
+        url_update_swlist.push_str(&internal_id);
         url_update_swlist
     }
 
-    pub fn get_url_for_get_id(&self, device_id: Option<&str>) -> String {
+    pub fn get_url_for_internal_id(&self, device_id: String) -> String {
         let mut url_get_id = self.get_base_url();
         url_get_id.push_str("/identity/externalIds/c8y_Serial/");
-        url_get_id.push_str(device_id.unwrap_or(&self.device_id));
+        url_get_id.push_str(device_id.as_str());
 
         url_get_id
     }
@@ -178,13 +189,14 @@ pub enum JwtError {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use test_case::test_case;
 
     #[test]
     fn get_url_for_get_id_returns_correct_address() {
-        let c8y = C8yEndPoint::new("test_host", "test_device", "internal-id");
-        let res = c8y.get_url_for_get_id(None);
+        let c8y = C8yEndPoint::new("test_host", "test_device");
+        let res = c8y.get_url_for_internal_id("test_device".into());
 
         assert_eq!(
             res,
@@ -194,8 +206,11 @@ mod tests {
 
     #[test]
     fn get_url_for_sw_list_returns_correct_address() {
-        let c8y = C8yEndPoint::new("test_host", "test_device", "12345");
-        let res = c8y.get_url_for_sw_list();
+        let mut c8y = C8yEndPoint::new("test_host", "test_device");
+        c8y.devices_internal_id
+            .insert("test_device".to_string(), "12345".to_string());
+        let internal_id = c8y.get_internal_id("test_device".to_string()).unwrap();
+        let res = c8y.get_url_for_sw_list(internal_id);
 
         assert_eq!(res, "https://test_host/inventory/managedObjects/12345");
     }
@@ -210,7 +225,7 @@ mod tests {
     #[test_case("https://t1124124.test.com/path/to/file.test")]
     #[test_case("https://t1124124.test.com/path/to/file")]
     fn url_is_my_tenant_correct_urls(url: &str) {
-        let c8y = C8yEndPoint::new("test.test.com", "test_device", "internal-id");
+        let c8y = C8yEndPoint::new("test.test.com", "test_device");
         assert!(c8y.url_is_in_my_tenant_domain(url));
     }
 
@@ -220,7 +235,20 @@ mod tests {
     #[test_case("http://test.com:123456")]
     #[test_case("http://test.com::12345")]
     fn url_is_my_tenant_incorrect_urls(url: &str) {
-        let c8y = C8yEndPoint::new("test.test.com", "test_device", "internal-id");
+        let c8y = C8yEndPoint::new("test.test.com", "test_device");
         assert!(!c8y.url_is_in_my_tenant_domain(url));
+    }
+
+    #[test]
+    fn check_non_cached_internal_id_for_a_device() {
+        let mut c8y = C8yEndPoint::new("test_host", "test_device");
+        c8y.devices_internal_id
+            .insert("test_device".to_string(), "12345".to_string());
+        let end_pt_err = c8y.get_internal_id("test_child".into()).unwrap_err();
+
+        assert_eq!(
+            end_pt_err.to_string(),
+            "Cumulocity internal id not found for the device: test_child".to_string()
+        );
     }
 }

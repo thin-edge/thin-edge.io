@@ -17,7 +17,7 @@ use time::OffsetDateTime;
 
 const EMPTY_STRING: &str = "";
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yCreateEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -42,7 +42,7 @@ pub struct C8yEventResponse {
     pub id: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yManagedObject {
     pub id: String,
@@ -98,7 +98,7 @@ impl From<SoftwareModule> for C8ySoftwareModuleItem {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yUpdateSoftwareListResponse {
     #[serde(rename = "c8y_SoftwareList")]
