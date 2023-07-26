@@ -3648,7 +3648,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_config_macros"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "camino",
  "doku",
@@ -3673,7 +3673,7 @@ dependencies = [
 
 [[package]]
 name = "tedge_config_macros-macro"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "proc-macro2 1.0.63",
  "quote 1.0.28",
