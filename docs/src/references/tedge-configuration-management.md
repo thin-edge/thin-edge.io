@@ -232,6 +232,7 @@ A new config snapshot command with the ID "1234" is published by another compone
 tedge mqtt pub -r 'te/device/main///cmd/config_update/1234' '{
   "status": "init",
   "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/main/config_update/mosquitto-1234",
+  "remoteUrl": "http://www.my.url",
   "type": "mosquitto"
 }'
 ```
@@ -256,6 +257,7 @@ Thus, the operation status update message for the above example looks like below
 tedge mqtt pub -r 'te/device/main///cmd/config_update/1234' '{
   "status": "successful",
   "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/main/config_update/mosquitto-1234",
+  "remoteUrl": "http://www.my.url",
   "type": "mosquitto",
   "path": "/etc/mosquitto/mosquitto.conf"
 }'
@@ -332,15 +334,22 @@ The `tedge-configuration-plugin` reports progress and errors on its `stderr`.
 
 ## Open questions/opinions
 
-* Publishing the supported types to both `~/cmd/config_snapshot` and `~/cmd/config_update`? Mapper will decide how to address them?
-* Logging. Are we now creating a file per config operation? Not just logging to journalctl? Need to check.
-* Notification. Do we still need it? I think the successful command status update can be a replacement of notification mechanism.
+* Publishing the supported types to both `~/cmd/config_snapshot` and `~/cmd/config_update`?
+Mapper will decide how to address them? e.g. using the supported types from only `~/cmd/config_snapshot` and ignore the ones from `~/cmd/config_update`.
+* Logging. Are we now creating a file per config operation as described in the c8y-configuration-plugin spec?
+Not just logging to journalctl? Need to check.
+* Notification mechanism. The c8y-configuration-plugin publishes a notification message on a change in main device, in order that the 3rd components can detect the change.
+For example, mosquitto must be restarted once mosquitto.conf is changed.
+However, do we still need this mechanism?
+I think the successful command status update can be a replacement.
+A component can subscribe to `te/device/main///cmd/config_update/+`, then filer `"status": "successful"` and `"type": "mosquitto"`?
 
 ```sh te2mqtt
 tedge mqtt pub -r 'te/device/main///cmd/config_update/1234' '{
   "status": "successful",
   "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/main/config_update/mosquitto-1234",
   "type": "mosquitto",
+  "remoteUrl": "http://www.my.url",
   "path": "/etc/mosquitto/mosquitto.conf"
 }'
 ```
