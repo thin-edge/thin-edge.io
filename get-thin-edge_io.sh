@@ -374,10 +374,10 @@ main() {
         echo
         echo "thin-edge.io is now installed on your system!"
         echo
-        echo "You can go to our documentation to find next steps: https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/003_registration.md"
+        echo "You can go to our documentation to find next steps: https://thin-edge.github.io/thin-edge.io/start/getting-started"
     else
         echo "Something went wrong in the installation process please try the manual installation steps instead:"
-        echo "https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/002_installation.md"
+        echo "https://thin-edge.github.io/thin-edge.io/install/"
     fi
 }
 
