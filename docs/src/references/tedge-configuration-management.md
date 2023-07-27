@@ -10,15 +10,17 @@ draft: true
 Thin-edge provides an operation plugin to manage device configuration files.
 
 * This management is bi-directional:
-  * A device can be taken as reference, all the managed files being uploaded to the [tedge file transfer repository](tedge-file-transfer-service.md)
+  * A device can be taken as reference,
+    all the managed files being uploaded to the [tedge file transfer repository](tedge-file-transfer-service.md)
     and stored there as a configuration snapshot.
-  * A configuration snapshot can be pushed from the tedge file transfer repository to any devices of the same type,
+  * A configuration update can be pushed from the tedge file transfer repository to any devices of the same type,
     i.e. supporting the same kind of configuration files.
+  * This plugin, combined with a cloud mapper, enables configuration management from the cloud.
 * With this operation plugin, the device owner defines the list of files
   (usually configuration files, but not necessarily).
 * The plugin configuration itself can be managed both locally and from the cloud,
   meaning, the device owner can update from the cloud the list of files to be managed with the combination of the cloud mapper.
-* The configuration files are managed accordingly to their type,
+* The configuration files are managed according to their type,
   a name that is chosen by the device owner to categorise each configuration.
   By default, the full path of a configuration file on the device is used as its type.
 * When files are downloaded from the tedge file transfer repository to the device where the plugin is installed,
@@ -26,27 +28,30 @@ Thin-edge provides an operation plugin to manage device configuration files.
   They are atomically renamed, only after a fully successful download.
   The aim is to avoid breaking the system with half downloaded files.
 * When a downloaded file is copied to its target, the unix user, group and mod are preserved.
-* Once a snapshot has been downloaded from the tedge file transfer repository to the target device,
-  __the plugin publishes a notification message on the local thin-edge MQTT bus__.
+* Once an update has been downloaded from the tedge file transfer repository to the target device,
+  __the plugin publishes an operation status update message on the local thin-edge MQTT bus__.
   The device software has to subscribe to these messages if any action is required,
   say to check the content of file, to pre-process it or to restart a daemon.
 * The configuration plugin can be installed both on the main thin-edge device and the child-device.
 * The plugin has a dependency on the `tedge.toml` configuration file to get the MQTT hostname, port, and device identifier.
-* In summary, the responsibilities of the plugin are:
-  * to define the list of files under configuration management
+
+In summary, the responsibilities of the plugin are:
+  * to define the list of files under configuration management,
   * to notify the local MQTT bus when this list is updated,
-  * to upload these files to the tedge file transfer repository on demand,  
+  * to upload these files to the tedge file transfer repository on demand,
   * to download the files pushed from the tedge file transfer repository,
   * to make sure that the target files are updated atomically after successful download,
   * to notify the device software when the configuration is updated.
-* By contrast, the plugin is not responsible for:
+
+By contrast, the plugin is not responsible for:
   * checking the uploaded files are well-formed,
   * restarting the configured processes,
   * establishing any direct connection to clouds.
-* A user-specific component, installed on the device,
+
+A user-specific component, installed on the device,
   can implement more sophisticated configuration use-cases by:
   * listening for configuration updates on the local thin-edge MQTT bus,
-  * restarting the appropriate processes when appropriate,  
+  * restarting the appropriate processes when appropriate,
   * declaring intermediate files as the managed files,
     to have the opportunity to check or update their content
     before moving them to the actual targets.
@@ -54,7 +59,7 @@ Thin-edge provides an operation plugin to manage device configuration files.
 ## Installation
 
 As part of this plugin installation:
-* On systemd-enabled devices, the service definition file for this `tedge-configuration-plugin` daemon is also installed.
+* On systemd-enabled devices, the service definition file for this plugin is also installed.
 
 Once installed, the `tedge-configuration-plugin` runs as a daemon on the device,
 listening to configuration snapshot commands on the `<root>/<identifier>/cmd/config_snapshot/+` [MQTT topic](mqtt-api.md#command-examples) 
@@ -69,31 +74,28 @@ Each configuration file is defined by a record with:
 * The full `path` to the file.
 * An optional configuration `type`. If not provided, the `path` is used as `type`.
   This `type` is used to declare the supported configuration file and then to trigger operations on that file.
-  All the configuration `type`s are declared to the local MQTT bus on start
+  All the configuration `type`s are declared as the supported config list to the local MQTT bus on start
   and on change of the `plugins/tedge-configuration-plugin.toml` file.
 * Optional unix file ownership: `user`, `group` and octal `mode`.
-  These are only used when a configuration file pushed from a config_update command doesn't exist on the device.
-  When a configuration file is already present on the device, this plugin never changes file ownership,
-  ignoring these parameters.
-
-```sh
-cat /etc/tedge/plugins/tedge-configuration-plugin.toml
-```
+  These are only used when a configuration file pushed via a `config_update` command doesn't exist on the device,
+  and a new one is created with these ownership parameters.
+  When a configuration file is already present on the device,
+  this plugin preserves its existing ownership, ignoring these parameters.
 
 ```toml title="file: /etc/tedge/plugins/tedge-configuration-plugin.toml"
 files = [
   { path = '/etc/tedge/tedge.toml', type = 'tedge.toml' },
-  { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf' },
-  { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf' },
+  { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge' },
+  { path = '/etc/tedge/mosquitto-conf/tedge-mosquitto.conf', type = 'tedge-mosquotto' },
   { path = '/etc/mosquitto/mosquitto.conf', type = 'mosquitto', user = 'mosquitto', group = 'mosquitto', mode = 0o644 }
 ]
 ```
 
-On start and when one of these files is updated, the configuration plugin sends
-a supported type declaration message with a retained flag
-to the config_snapshot and config_update command topics
-with the set of `type`s listed by the configuration
-(adding implicitly the `tedge-configuration-plugin` themselves).
+On start and whenever this file is updated, the configuration plugin sends
+the supported config types declaration message with a retained flag
+to the `config_snapshot`` and `config_update`` command topics
+with the set of `type`s listed in that configuration file
+(implicitly adding the `tedge-configuration-plugin` type also to that set).
 The message can be observed over the MQTT bus of the thin-edge device.
 
 Given that `root.topic` and `device.topic` are set to `te` and `device/main//` for the main device,
@@ -172,7 +174,7 @@ tedge mqtt pub -r 'te/device/main///cmd/config_snapshot/1234' '{
 
 On reception of a configuration snapshot command, the plugin:
    1. Uses the `type`(`mosquitto`) information to look up the target path from `tedge-configuration-plugin.toml` file,
-   and retrieve the requested configuration content from the corresponding `path`(`/etc/mosquitto/mosquitto.conf`).
+   and retrieves the requested configuration content from the corresponding `path`(`/etc/mosquitto/mosquitto.conf`).
    2. `PUT`s the content to the `tedgeUrl` specified by the command's payload.
 
 During the process, the plugin updates the command status via MQTT
@@ -203,7 +205,7 @@ sequenceDiagram
   participant Plugin
   participant Tedge Agent
 
-  Mapper/others->>Plugin: tedge config_update command (Status: init)
+  Mapper/others->>Plugin: tedge config_snapshot command (Status: init)
   Plugin->>Mapper/others: Status: executing
   alt No error
     Plugin->>Tedge Agent: File upload [HTTP]
@@ -217,7 +219,7 @@ sequenceDiagram
 ## Handling config update commands
 
 By a config update operation, the plugin downloads a requested configuration file from the tedge file transfer repository,
-and locates it to the target path.
+and moves it to the target path.
 
 The plugin subscribes to config update commands on the `<root>/<identifier>/cmd/config_update/+` MQTT topics.
 For example, it subscribes to the following topic for the main device.
@@ -271,13 +273,13 @@ sequenceDiagram
   participant Plugin
   participant Tedge Agent
 
+  Mapper/others->>Tedge Agent: Make a target config file ready
   Mapper/others->>Plugin: tedge config_update command (Status: init)
   Plugin->>Mapper/others: Status: executing
   alt No error
-  Plugin->>Tedge Agent: Download a config file [HTTP]
+    Plugin->>Tedge Agent: GET the config file [HTTP]
+    Tedge Agent-->>Plugin: Return the content [HTTP]
     Plugin->>Plugin: Apply the config
-    Plugin->>Tedge Agent: Delete a symlink [HTTP]
-    Tedge Agent-->>Plugin: Status OK [HTTP]
     Plugin->>Mapper/others: Status: successful
   else Any error occurs
     Plugin->>Mapper/others: Status: failed
@@ -326,40 +328,3 @@ The thin-edge `CONFIG_DIR` is used:
 ## Logging
 
 The `tedge-configuration-plugin` reports progress and errors on its `stderr`.
-
-* All upload and download operation commands are logged, when received and when completed,
-  with one line per file.
-* All changes to the list of managed file is logged, one line per change.
-* All errors are reported with the operation context (upload or download? which file?).
-
-## Open questions/opinions
-
-* Publishing the supported types to both `~/cmd/config_snapshot` and `~/cmd/config_update`?
-Mapper will decide how to address them? e.g. using the supported types from only `~/cmd/config_snapshot` and ignore the ones from `~/cmd/config_update`.
-* Logging. Are we now creating a file per config operation as described in the c8y-configuration-plugin spec?
-Not just logging to journalctl? Need to check.
-* Notification mechanism. The c8y-configuration-plugin publishes a notification message on a change in main device, in order that the 3rd components can detect the change.
-For example, mosquitto must be restarted once mosquitto.conf is changed.
-However, do we still need this mechanism?
-I think the successful command status update can be a replacement.
-A component can subscribe to `te/device/main///cmd/config_update/+`, then filer `"status": "successful"` and `"type": "mosquitto"`?
-
-```sh te2mqtt
-tedge mqtt pub -r 'te/device/main///cmd/config_update/1234' '{
-  "status": "successful",
-  "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/main/config_update/mosquitto-1234",
-  "type": "mosquitto",
-  "remoteUrl": "http://www.my.url",
-  "path": "/etc/mosquitto/mosquitto.conf"
-}'
-```
-
-* File deletion.
-  * Snapshot (upload): Mapper should delete the file after uploading to cloud.
-  * Update (download): It's possible that the plugin sends a DELETE request after downloading a file completed.
-  However, keeping it in cache may make sense if the same file is used for many devices. Like the firmware plugin implementation.
-  Provided that the cache-symlink approach is used in the file transfer repo, the plugin should DELETE the symlink only
-  after file downloading is completed.
-
-
-
