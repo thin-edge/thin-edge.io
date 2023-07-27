@@ -1,11 +1,12 @@
 ---
-title: MQTT Topic Design
+title: 🚧 MQTT Topic Design
 tags: [Documentation]
 sidebar_position: 2
-draft: true
 ---
 
-# MQTT Topic Design
+import ProposalBanner from '@site/src/components/ProposalBanner'
+
+<ProposalBanner />
 
 A detailed look into the MQTT topic design giving additional context which the reference page does not provide. It is assumed that you are familiar with the [MQTT Topic Schema](../../references/mqtt-api.md) page, if not, then please read it first before continuing.
 
