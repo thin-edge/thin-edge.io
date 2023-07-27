@@ -1,11 +1,12 @@
 ---
-title: MQTT API
+title: 🚧 MQTT API
 tags: [Reference, MQTT]
 sidebar_position: 6
-draft: true
 ---
 
-# Thin Edge MQTT API
+import ProposalBanner from '@site/src/components/ProposalBanner'
+
+<ProposalBanner />
 
 ## Topic Scheme
 

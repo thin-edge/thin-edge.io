@@ -1,11 +1,12 @@
 ---
-title: Cumulocity Mapper
+title: 🚧 Cumulocity Mapper
 tags: [Reference, Mappers, Cloud]
 sidebar_position: 1
-draft: true
 ---
 
-# Cumulocity Mapper
+import ProposalBanner from '@site/src/components/ProposalBanner'
+
+<ProposalBanner />
 
 The Cumulocity mapper, referred to as `c8y-mapper` in the rest of this document,
 maps data in [Thin Edge format](../mqtt-api.md) into their equivalent [Cumulocity format](https://cumulocity.com/guides/reference/smartrest-two/#smartrest-two).
