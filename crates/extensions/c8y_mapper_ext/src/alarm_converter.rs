@@ -36,17 +36,18 @@ impl AlarmConverter {
         input_message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
         let mut output_messages: Vec<Message> = Vec::new();
+        let alarm_id = input_message
+            .topic
+            .name
+            .strip_prefix(TEDGE_ALARMS_TOPIC)
+            .expect("Expected tedge/alarms prefix")
+            .to_string();
+
         match self {
             Self::Syncing {
                 pending_alarms_map,
                 old_alarms_map: _,
             } => {
-                let alarm_id = input_message
-                    .topic
-                    .name
-                    .strip_prefix(TEDGE_ALARMS_TOPIC)
-                    .expect("Expected tedge/alarms prefix")
-                    .to_string();
                 pending_alarms_map.insert(alarm_id, input_message.clone());
             }
             Self::Synced => {
@@ -67,8 +68,8 @@ impl AlarmConverter {
                             payload: mqtt_payload.chars().take(50).collect(),
                         }
                     })?;
-                let c8y_alarm = C8yCreateAlarm::try_from(&tedge_alarm)?;
 
+                let c8y_alarm = C8yCreateAlarm::try_from(&tedge_alarm)?;
                 // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
                 if c8y_alarm.fragments.is_empty() {
                     let smartrest_alarm = alarm::serialize_alarm(tedge_alarm)?;
@@ -82,20 +83,76 @@ impl AlarmConverter {
                     output_messages.push(Message::new(&c8y_alarm_topic, cumulocity_alarm_json));
                 }
 
-                // Persist a copy of the alarm to an internal topic for reconciliation on next restart
-                let alarm_id = input_message
-                    .topic
-                    .name
-                    .strip_prefix(TEDGE_ALARMS_TOPIC)
-                    .expect("Expected tedge/alarms prefix")
-                    .to_string();
-                let topic =
-                    Topic::new_unchecked(format!("{INTERNAL_ALARMS_TOPIC}{alarm_id}").as_str());
+                let topic = Topic::new_unchecked(&format!("{INTERNAL_ALARMS_TOPIC}{}", alarm_id));
                 let alarm_copy =
                     Message::new(&topic, input_message.payload_bytes().to_owned()).with_retain();
                 output_messages.push(alarm_copy);
             }
         }
+        Ok(output_messages)
+    }
+
+    pub(crate) fn new_try_convert_alarm(
+        &mut self,
+        parent_device_name: String,
+        input_message: &Message,
+    ) -> Result<Vec<Message>, ConversionError> {
+        let mut output_messages: Vec<Message> = Vec::new();
+        let alarm_id = input_message.topic.name.split('/').last();
+        match self {
+            Self::Syncing {
+                pending_alarms_map,
+                old_alarms_map: _,
+            } => {
+                pending_alarms_map.insert(
+                    alarm_id.expect("Topic does not contain the alarmid").into(),
+                    input_message.clone(),
+                );
+            }
+            Self::Synced => {
+                //Regular conversion phase
+                let mqtt_topic = input_message.topic.name.clone();
+                let mqtt_payload = input_message.payload_str().map_err(|e| {
+                    ThinEdgeJsonDeserializerError::FailedToParsePayloadToString {
+                        topic: mqtt_topic.clone(),
+                        error: e.to_string(),
+                    }
+                })?;
+
+                let tedge_alarm =
+                    ThinEdgeAlarm::new_try_from(parent_device_name, &mqtt_topic, mqtt_payload)
+                        .map_err(
+                            |e| ThinEdgeJsonDeserializerError::FailedToParseJsonPayload {
+                                topic: mqtt_topic,
+                                error: e.to_string(),
+                                payload: mqtt_payload.chars().take(50).collect(),
+                            },
+                        )?;
+
+                let c8y_alarm = C8yCreateAlarm::try_from(&tedge_alarm)?;
+                // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
+                if c8y_alarm.fragments.is_empty() {
+                    let smartrest_alarm = alarm::serialize_alarm(tedge_alarm)?;
+                    let c8y_alarm_topic = Topic::new_unchecked(
+                        &self.new_get_c8y_alarm_topic(input_message.topic.name.as_str())?,
+                    );
+                    output_messages.push(Message::new(&c8y_alarm_topic, smartrest_alarm));
+                } else {
+                    let cumulocity_alarm_json = serde_json::to_string(&c8y_alarm)?;
+                    let c8y_alarm_topic = Topic::new_unchecked(C8Y_JSON_MQTT_ALARMS_TOPIC);
+                    output_messages.push(Message::new(&c8y_alarm_topic, cumulocity_alarm_json));
+                }
+
+                let topic = Topic::new_unchecked(&format!(
+                    "{INTERNAL_ALARMS_TOPIC}{}",
+                    alarm_id.expect("Expected tedge/alarms prefix")
+                ));
+                let alarm_copy =
+                    Message::new(&topic, input_message.payload_bytes().to_owned()).with_retain();
+                output_messages.push(alarm_copy);
+            }
+        }
+
         Ok(output_messages)
     }
 
@@ -107,6 +164,15 @@ impl AlarmConverter {
             Ok(format!("{SMARTREST_PUBLISH_TOPIC}/{}", topic_split[4]))
         } else {
             Err(ConversionError::UnsupportedTopic(topic.to_string()))
+        }
+    }
+
+    pub(crate) fn new_get_c8y_alarm_topic(&self, topic: &str) -> Result<String, ConversionError> {
+        let topic_split: Vec<&str> = topic.split('/').collect();
+        if topic_split[2].eq("main") {
+            Ok(SMARTREST_PUBLISH_TOPIC.to_string())
+        } else {
+            Ok(format!("{SMARTREST_PUBLISH_TOPIC}/{}", topic_split[2]))
         }
     }
 

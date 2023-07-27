@@ -76,6 +76,19 @@ impl C8yJsonSerializer {
         }
     }
 
+    pub fn new_with_type(
+        default_timestamp: OffsetDateTime,
+        m_type: Option<&str>,
+        maybe_child_id: Option<&str>,
+    ) -> Self {
+        let mut serializer = Self::new(default_timestamp, maybe_child_id);
+        serializer.default_type = match m_type {
+            Some(m_type) if !m_type.is_empty() => m_type.into(),
+            Some(_) | None => "ThinEdgeMeasurement".to_owned(),
+        };
+        serializer
+    }
+
     fn end(&mut self) -> Result<(), C8yJsonSerializationError> {
         if self.is_within_group {
             return Err(MeasurementStreamError::UnexpectedEndOfData.into());

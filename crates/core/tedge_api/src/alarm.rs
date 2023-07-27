@@ -1,13 +1,14 @@
+use clock::Timestamp;
+use serde::Deserialize;
+use serde::Serialize;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt;
 
-use clock::Timestamp;
-use serde::Deserialize;
-use serde::Serialize;
-
 use serde_json::Value;
 use std::collections::HashMap;
+
+use crate::device_id::new_get_child_id_from_topic;
 /// In-memory representation of ThinEdge JSON alarm.
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ThinEdgeAlarm {
@@ -27,10 +28,11 @@ pub enum AlarmSeverity {
 }
 
 /// In-memory representation of ThinEdge JSON alarm payload
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
 pub struct ThinEdgeAlarmData {
     pub text: Option<String>,
 
+    pub severity: Option<String>,
     #[serde(default)]
     #[serde(with = "time::serde::rfc3339::option")]
     pub time: Option<Timestamp>,
@@ -46,6 +48,9 @@ pub enum ThinEdgeJsonDeserializerError {
 
     #[error("Unsupported alarm severity in topic: {0}")]
     UnsupportedAlarmSeverity(String),
+
+    #[error("Did not find the severity in the alarm payload")]
+    AlarmSeverityNotFound,
 
     #[error(transparent)]
     SerdeJsonError(#[from] serde_json::error::Error),
@@ -145,6 +150,47 @@ impl ThinEdgeAlarm {
             ))
         }
     }
+
+    pub fn new_try_from(
+        parent_device_name: String,
+        mqtt_topic: &str,
+        mqtt_payload: &str,
+    ) -> Result<Self, ThinEdgeJsonDeserializerError> {
+        let topic_split: Vec<&str> = mqtt_topic.split('/').collect();
+
+        let alarm_name = topic_split.last().cloned().unwrap_or_default();
+        if alarm_name.is_empty() {
+            return Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(
+                mqtt_topic.into(),
+            ));
+        }
+        let alarm_data: Option<ThinEdgeAlarmData> = if mqtt_payload.is_empty() {
+            None
+        } else {
+            Some(serde_json::from_str(mqtt_payload)?)
+        };
+
+        let external_source = if topic_split[2].eq("main") {
+            parent_device_name
+        } else {
+            new_get_child_id_from_topic(parent_device_name, mqtt_topic.into()).unwrap_or_default()
+        };
+
+        let severity = match alarm_data.clone() {
+            Some(data) => match data.severity {
+                Some(alarm_severity) => alarm_severity,
+                None => return Err(ThinEdgeJsonDeserializerError::AlarmSeverityNotFound),
+            },
+            None => return Err(ThinEdgeJsonDeserializerError::AlarmSeverityNotFound),
+        };
+
+        Ok(Self {
+            name: alarm_name.into(),
+            severity: severity.as_str().try_into()?,
+            data: alarm_data,
+            source: Some(external_source),
+        })
+    }
 }
 
 #[cfg(test)]
@@ -170,6 +216,7 @@ mod tests {
                 text: Some("I raised it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: hashmap!{},
+                severity: None,
             }),
             source: None,
         };
@@ -187,6 +234,7 @@ mod tests {
                 text: Some("I raised it".into()),
                 time: None,
                 alarm_data: hashmap!{},
+                severity: None,
             }),
             source: None,
         };
@@ -204,6 +252,7 @@ mod tests {
                 text: None,
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: hashmap!{},
+                severity: None,
             }),
             source: None,
         };
@@ -219,6 +268,7 @@ mod tests {
                 text: None,
                 time: None,
                 alarm_data: hashmap!{},
+                severity: None,
             }),
             source: None,
         };
@@ -237,6 +287,7 @@ mod tests {
                 text: Some("I raised it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: hashmap!{},
+                severity: None,
             }),
             source: Some("extern_sensor".to_string()),
         };
@@ -256,6 +307,7 @@ mod tests {
                 text: Some("I raised it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data:hashmap!{"message".to_string() => json!("Raised alarm with a message".to_string())},
+                severity: None,
             }),
             source: Some("extern_sensor".to_string()),
         };
@@ -274,6 +326,7 @@ mod tests {
                 text: None,
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: hashmap!{"message".to_string() => json!("Raised alarm with a message".to_string())},
+                severity: None,
             }),
             source: Some("extern_sensor".to_string()),
         };

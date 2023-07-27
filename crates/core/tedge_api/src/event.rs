@@ -5,6 +5,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::device_id::new_get_child_id_from_topic;
+
 use self::error::ThinEdgeJsonDeserializerError;
 
 /// In-memory representation of ThinEdge JSON event.
@@ -84,6 +86,46 @@ impl ThinEdgeEvent {
                 name: event_name.into(),
                 data: event_data,
                 source: external_source,
+            })
+        } else {
+            Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(
+                mqtt_topic.into(),
+            ))
+        }
+    }
+
+    pub fn new_try_from(
+        parent_device_name: String,
+        mqtt_topic: &str,
+        mqtt_payload: &str,
+    ) -> Result<Self, ThinEdgeJsonDeserializerError> {
+        let topic_split: Vec<&str> = mqtt_topic.split('/').collect();
+        if topic_split.len() == 7 {
+            let event_name = if let Some(v) = topic_split.last().cloned() {
+                v.to_owned()
+            } else {
+                return Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(
+                    mqtt_topic.into(),
+                ));
+            };
+
+            let event_data = if mqtt_payload.is_empty() {
+                None
+            } else {
+                Some(serde_json::from_str(mqtt_payload)?)
+            };
+
+            let external_source = if topic_split[2].eq("main") {
+                parent_device_name
+            } else {
+                new_get_child_id_from_topic(parent_device_name, mqtt_topic.into())
+                    .unwrap_or_default()
+            };
+
+            Ok(Self {
+                name: event_name,
+                data: event_data,
+                source: Some(external_source),
             })
         } else {
             Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(
@@ -276,5 +318,131 @@ mod tests {
         assert_matches!(event_data.extras.get("complex"), Some(Value::Object(_)));
 
         Ok(())
+    }
+
+    #[test_case(
+        "te/device/main///e/click_event",
+        json!({
+            "text": "Someone clicked",
+            "time": "2021-04-23T19:00:00+05:00",
+        }),
+        ThinEdgeEvent {
+            name: "click_event".into(),
+            data: Some(ThinEdgeEventData {
+                text: Some("Someone clicked".into()),
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                extras: HashMap::new(),
+            }),
+            source: Some("main".into()),
+        };
+        "event parsing"
+    )]
+    #[test_case(
+        "te/device/main///e/click_event",
+        json!({
+            "text": "Someone clicked",
+        }),
+        ThinEdgeEvent {
+            name: "click_event".into(),
+            data: Some(ThinEdgeEventData {
+                text: Some("Someone clicked".into()),
+                time: None,
+                extras: HashMap::new(),
+            }),
+            source: Some("main".into()),
+        };
+        "event parsing without timestamp"
+    )]
+    #[test_case(
+        "te/device/main///e/click_event",
+        json!({
+            "time": "2021-04-23T19:00:00+05:00",
+        }),
+        ThinEdgeEvent {
+            name: "click_event".into(),
+            data: Some(ThinEdgeEventData {
+                text: None,
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                extras: HashMap::new(),
+            }),
+            source: Some("main".into()),
+        };
+        "event parsing without text"
+    )]
+    #[test_case(
+        "te/device/main///e/click_event",
+        json!({}),
+        ThinEdgeEvent {
+            name: "click_event".into(),
+            data: Some(ThinEdgeEventData {
+                text: None,
+                time: None,
+                extras: HashMap::new(),
+            }),
+            source: Some("main".into()),
+        };
+        "event parsing without text or timestamp"
+    )]
+    #[test_case(
+        "te/device/sensor///e/click_event",
+        json!({
+            "text": "Someone clicked",
+            "time": "2021-04-23T19:00:00+05:00",
+        }),
+        ThinEdgeEvent {
+            name: "click_event".into(),
+            data: Some(ThinEdgeEventData {
+                text: Some("Someone clicked".into()),
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                extras: HashMap::new(),
+            }),
+            source: Some("main:device:sensor".into()),
+        };
+        "event parsing with sensor source"
+    )]
+    #[test_case(
+        "te/device/main///e/click_event",
+        json!({}),
+        ThinEdgeEvent {
+            name: "click_event".into(),
+            data: Some(ThinEdgeEventData {
+                text: None,
+                time: None,
+                extras: HashMap::new(),
+            }),
+            source: Some("main".into()),
+        };
+        "event parsing empty payload with main source"
+    )]
+    #[test_case(
+        "te/device/sensor/a/b/e/click_event",
+        json!({
+            "text": "Someone clicked",
+            "time": "2021-04-23T19:00:00+05:00",
+        }),
+        ThinEdgeEvent {
+            name: "click_event".into(),
+            data: Some(ThinEdgeEventData {
+                text: Some("Someone clicked".into()),
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                extras: HashMap::new(),
+            }),
+            source: Some("main:device:sensor:a:b".into()),
+        };
+        "event parsing with sensor source more hierarchy"
+    )]
+    fn parse_new_thin_edge_event_json(
+        event_topic: &str,
+        event_payload: Value,
+        expected_event: ThinEdgeEvent,
+    ) {
+        let event = ThinEdgeEvent::new_try_from(
+            "main".into(),
+            event_topic,
+            event_payload.to_string().as_str(),
+        )
+        .unwrap();
+
+        assert_eq!(event, expected_event);
     }
 }

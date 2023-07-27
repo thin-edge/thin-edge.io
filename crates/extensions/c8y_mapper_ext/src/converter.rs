@@ -53,6 +53,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
+use tedge_api::device_id::new_get_child_id_from_topic;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::topic::get_child_id_from_measurement_topic;
@@ -242,6 +243,7 @@ impl CumulocityConverter {
         let mut mqtt_messages: Vec<Message> = Vec::new();
 
         let maybe_child_id = get_child_id_from_measurement_topic(&input.topic.name);
+
         let c8y_json_payload = match maybe_child_id {
             Some(child_id) => {
                 // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
@@ -255,6 +257,48 @@ impl CumulocityConverter {
                 c8y_json_child_payload
             }
             None => json::from_thin_edge_json(input.payload_str()?)?,
+        };
+
+        if c8y_json_payload.len() < self.size_threshold.0 {
+            mqtt_messages.push(Message::new(
+                &self.mapper_config.out_topic,
+                c8y_json_payload,
+            ));
+        } else {
+            return Err(ConversionError::TranslatedSizeExceededThreshold {
+                payload: input.payload_str()?.chars().take(50).collect(),
+                topic: input.topic.name.clone(),
+                actual_size: c8y_json_payload.len(),
+                threshold: self.size_threshold.0,
+            });
+        }
+        Ok(mqtt_messages)
+    }
+
+    fn new_try_convert_measurement(
+        &mut self,
+        input: &Message,
+    ) -> Result<Vec<Message>, ConversionError> {
+        let mut mqtt_messages: Vec<Message> = Vec::new();
+
+        let maybe_child_id =
+            new_get_child_id_from_topic(self.device_name.clone(), input.topic.name.clone());
+        let c8y_json_payload = match maybe_child_id {
+            Some(child_id) => {
+                // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
+                let c8y_json_child_payload =
+                    json::from_thin_edge_json_with_child(input.payload_str()?, child_id.as_str())?;
+                add_external_device_registration_message(
+                    child_id,
+                    &mut self.children,
+                    &mut mqtt_messages,
+                );
+                c8y_json_child_payload
+            }
+            None => {
+                let fragments = input.topic.name.split('/').collect::<Vec<_>>();
+                json::new_from_thin_edge_json(input.payload_str()?, fragments.last().cloned())?
+            }
         };
 
         if c8y_json_payload.len() < self.size_threshold.0 {
@@ -293,9 +337,78 @@ impl CumulocityConverter {
                 payload: mqtt_payload.chars().take(50).collect(),
             }
         })?;
+
         let child_id = tedge_event.source.clone();
         let need_registration = if let Some(child_id) = child_id.clone() {
             add_external_device_registration_message(child_id, &mut self.children, &mut messages)
+        } else {
+            false
+        };
+
+        let c8y_event = C8yCreateEvent::try_from(tedge_event)?;
+
+        // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
+        let message = if c8y_event.extras.is_empty() {
+            let smartrest_event = Self::serialize_to_smartrest(&c8y_event)?;
+            let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
+            Message::new(&smartrest_topic, smartrest_event)
+        } else {
+            // If the message contains extra fields other than `text` and `time`, convert to Cumulocity JSON
+            let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
+            let json_mqtt_topic = Topic::new_unchecked(C8Y_JSON_MQTT_EVENTS_TOPIC);
+            Message::new(&json_mqtt_topic, cumulocity_event_json)
+        };
+
+        if self.can_send_over_mqtt(&message) {
+            // The message can be sent via MQTT
+            messages.push(message);
+        } else if !need_registration {
+            // The message must be sent over HTTP
+            let _ = self.http_proxy.send_event(c8y_event).await?;
+            return Ok(vec![]);
+        } else {
+            // The message should be sent over HTTP but this cannot be done
+            return Err(ConversionError::ChildDeviceNotRegistered {
+                id: child_id.unwrap_or_else(|| "".into()),
+            });
+        }
+        Ok(messages)
+    }
+
+    async fn new_try_convert_event(
+        &mut self,
+        input: &Message,
+    ) -> Result<Vec<Message>, ConversionError> {
+        let mut messages = Vec::new();
+        let mqtt_topic = input.topic.name.clone();
+        let mqtt_payload = input.payload_str().map_err(|e| {
+            ThinEdgeJsonDeserializerError::FailedToParsePayloadToString {
+                topic: mqtt_topic.clone(),
+                error: e.to_string(),
+            }
+        })?;
+
+        let tedge_event =
+            ThinEdgeEvent::new_try_from(self.device_name.clone(), &mqtt_topic, mqtt_payload)
+                .map_err(
+                    |e| ThinEdgeJsonDeserializerError::FailedToParseJsonPayload {
+                        topic: mqtt_topic,
+                        error: e.to_string(),
+                        payload: mqtt_payload.chars().take(50).collect(),
+                    },
+                )?;
+
+        let child_id = tedge_event.source.clone();
+        let need_registration = if let Some(child_id) = child_id.clone() {
+            if child_id.ne(&self.device_name) {
+                add_external_device_registration_message(
+                    child_id,
+                    &mut self.children,
+                    &mut messages,
+                )
+            } else {
+                false
+            }
         } else {
             false
         };
@@ -351,6 +464,27 @@ impl CumulocityConverter {
                         &mut mqtt_messages,
                     );
                 }
+            }
+            mqtt_messages.append(&mut messages);
+            Ok(mqtt_messages)
+        } else if topic.name.starts_with("te/device/") && topic.name.contains("/a/") {
+            let mut mqtt_messages: Vec<Message> = Vec::new();
+            self.size_threshold.validate(message)?;
+            let mut messages = self
+                .alarm_converter
+                .new_try_convert_alarm(self.device_name.clone(), message)?;
+            let ts: Vec<&str> = topic.name.split('/').collect();
+            if !messages.is_empty() && ts[2].ne("main") {
+                // When there is some messages to be sent on behalf of a child device,
+                // this child device must be declared first, if not done yet
+                let child_id =
+                    new_get_child_id_from_topic(self.device_name.clone(), topic.name.clone())
+                        .unwrap_or_default();
+                add_external_device_registration_message(
+                    child_id,
+                    &mut self.children,
+                    &mut mqtt_messages,
+                );
             }
             mqtt_messages.append(&mut messages);
             Ok(mqtt_messages)
@@ -688,14 +822,23 @@ impl Converter for CumulocityConverter {
                 self.size_threshold.validate(message)?;
                 self.try_convert_measurement(message)
             }
+            topic if topic.name.starts_with("te/device/") & topic.name.contains("/m/") => {
+                self.size_threshold.validate(message)?;
+                self.new_try_convert_measurement(message)
+            }
             topic
                 if topic.name.starts_with("tedge/alarms")
-                    | topic.name.starts_with(INTERNAL_ALARMS_TOPIC) =>
+                    | topic.name.starts_with(INTERNAL_ALARMS_TOPIC)
+                    | (topic.name.starts_with("te/device/") && topic.name.contains("/a/")) =>
             {
                 self.process_alarm_messages(topic, message)
             }
+
             topic if topic.name.starts_with(TEDGE_EVENTS_TOPIC) => {
                 self.try_convert_event(message).await
+            }
+            topic if (topic.name.starts_with("te/device/") && topic.name.contains("/e/")) => {
+                self.new_try_convert_event(message).await
             }
             topic if topic.name.starts_with("tedge/health") => {
                 self.process_health_status_message(message).await
@@ -1701,6 +1844,345 @@ mod tests {
         assert_eq!(supported_operations_counter, 4);
     }
 
+    #[tokio::test]
+    async fn new_convert_measurement_with_main_id() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let in_topic = "te/device/main///m/";
+        let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
+        let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+
+        let expected_c8y_json_message = Message::new(
+            &Topic::new_unchecked("c8y/measurement/measurements/create"),
+            r#"{"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"ThinEdgeMeasurement"}"#,
+        );
+
+        // Test the first output messages contains SmartREST and C8Y JSON.
+        let out_first_messages = converter.convert(&in_message).await;
+        assert_eq!(out_first_messages, vec![expected_c8y_json_message.clone()]);
+
+        // Test the second output messages doesn't contain SmartREST child device creation.
+        let out_second_messages = converter.convert(&in_message).await;
+        assert_eq!(out_second_messages, vec![expected_c8y_json_message]);
+    }
+
+    #[tokio::test]
+    async fn new_convert_measurement_with_main_id_with_type() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let in_topic = "te/device/main///m/NewMeasurementType";
+        let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
+        let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+
+        let expected_c8y_json_message = Message::new(
+            &Topic::new_unchecked("c8y/measurement/measurements/create"),
+            r#"{"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"NewMeasurementType"}"#,
+        );
+
+        // Test the first output messages contains SmartREST and C8Y JSON.
+        let out_first_messages = converter.convert(&in_message).await;
+        assert_eq!(out_first_messages, vec![expected_c8y_json_message.clone()]);
+
+        // Test the second output messages doesn't contain SmartREST child device creation.
+        let out_second_messages = converter.convert(&in_message).await;
+        assert_eq!(out_second_messages, vec![expected_c8y_json_message]);
+    }
+
+    #[tokio::test]
+    async fn new_convert_measurement_with_child_id() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let in_topic = "te/device/child1///m/";
+        let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
+        let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+
+        let expected_smart_rest_message = Message::new(
+            &Topic::new_unchecked("c8y/s/us"),
+            "101,test-device:device:child1,test-device:device:child1,thin-edge.io-child",
+        );
+        let expected_c8y_json_message = Message::new(
+            &Topic::new_unchecked("c8y/measurement/measurements/create"),
+            r#"{"externalSource":{"externalId":"test-device:device:child1","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"ThinEdgeMeasurement"}"#,
+        );
+
+        // Test the first output messages contains SmartREST and C8Y JSON.
+        let out_first_messages = converter.convert(&in_message).await;
+        assert_eq!(
+            out_first_messages,
+            vec![
+                expected_smart_rest_message,
+                expected_c8y_json_message.clone()
+            ]
+        );
+
+        // Test the second output messages doesn't contain SmartREST child device creation.
+        let out_second_messages = converter.convert(&in_message).await;
+        assert_eq!(out_second_messages, vec![expected_c8y_json_message]);
+    }
+
+    #[tokio::test]
+    async fn new_convert_simple_alarm_from_main_device() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let in_topic = "te/device/main///a/temperature_high";
+        let in_payload = r#"{
+            "severity": "critical",
+            "text": "Temperature is very high",
+            "time": "2021-01-01T05:30:45+00:00"
+          }"#;
+
+        let _sync_messages = converter.sync_messages();
+        let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+
+        let expected_c8y_json_message = Message::new(
+            &Topic::new_unchecked("c8y/s/us"),
+            r#"301,temperature_high,"Temperature is very high",2021-01-01T05:30:45Z"#,
+        );
+        let expected_internal_message = Message::new(
+            &Topic::new_unchecked("c8y-internal/alarms/temperature_high"),
+            r#"{
+            "severity": "critical",
+            "text": "Temperature is very high",
+            "time": "2021-01-01T05:30:45+00:00"
+          }"#,
+        )
+        .with_retain();
+
+        // Test the first output messages contains SmartREST and C8Y JSON.
+        let out_first_messages = converter.convert(&in_message).await;
+        assert_eq!(
+            out_first_messages,
+            vec![expected_c8y_json_message, expected_internal_message]
+        );
+    }
+
+    #[tokio::test]
+    async fn new_convert_complex_alarm_from_main_device() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let in_topic = "te/device/main///a/pressure_alarm";
+        let in_payload = r#"{
+            "severity": "major",
+            "time": "2023-01-25T18:41:14.776170774Z",
+            "text": "Pressure alarm",
+            "customFragment": {
+                "nested": {
+                    "value": "extra info"
+                }
+            }
+        }"#;
+
+        let _sync_messages = converter.sync_messages();
+        let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+
+        let expected_c8y_json_message = Message::new(
+            &Topic::new_unchecked("c8y/alarm/alarms/create"),
+            r#"{"externalSource":{"externalId":"main","type":"c8y_Serial"},"severity":"MAJOR","type":"pressure_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Pressure alarm","customFragment":{"nested":{"value":"extra info"}}}"#,
+        );
+        let expected_internal_message = Message::new(
+            &Topic::new_unchecked("c8y-internal/alarms/pressure_alarm"),
+            in_payload,
+        )
+        .with_retain();
+
+        // Test the first output messages contains SmartREST and C8Y JSON.
+        let out_first_messages = converter.convert(&in_message).await;
+        assert_eq!(
+            out_first_messages,
+            vec![expected_c8y_json_message, expected_internal_message]
+        );
+    }
+
+    #[tokio::test]
+    async fn new_convert_simple_alarm_from_child_device() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let in_topic = "te/device/external_sensor///a/temperature_high";
+        let in_payload = r#"{
+            "severity": "critical",
+            "text": "Temperature is very high",
+            "time": "2021-01-01T05:30:45+00:00"
+          }"#;
+
+        let _sync_messages = converter.sync_messages();
+        let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+
+        let expected_c8y_child_create_json_message = Message::new(
+            &Topic::new_unchecked("c8y/s/us"),
+            r#"101,test-device:device:external_sensor,test-device:device:external_sensor,thin-edge.io-child"#,
+        );
+
+        let expected_c8y_json_message = Message::new(
+            &Topic::new_unchecked("c8y/s/us/external_sensor"),
+            r#"301,temperature_high,"Temperature is very high",2021-01-01T05:30:45Z"#,
+        );
+
+        let expected_internal_message = Message::new(
+            &Topic::new_unchecked("c8y-internal/alarms/temperature_high"),
+            r#"{
+            "severity": "critical",
+            "text": "Temperature is very high",
+            "time": "2021-01-01T05:30:45+00:00"
+          }"#,
+        )
+        .with_retain();
+
+        // Test the first output messages contains SmartREST and C8Y JSON.
+        let out_first_messages = converter.convert(&in_message).await;
+        assert_eq!(
+            out_first_messages,
+            vec![
+                expected_c8y_child_create_json_message,
+                expected_c8y_json_message,
+                expected_internal_message
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn new_convert_complex_alarm_from_child_device() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let in_topic = "te/device/external_sensor///a/pressure_alarm";
+        let in_payload = r#"{
+            "severity": "major",
+            "time": "2023-01-25T18:41:14.776170774Z",
+            "text": "Pressure alarm",
+            "customFragment": {
+                "nested": {
+                    "value": "extra info"
+                }
+            }
+        }"#;
+
+        let _sync_messages = converter.sync_messages();
+        let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+        let expected_c8y_child_create_json_message = Message::new(
+            &Topic::new_unchecked("c8y/s/us"),
+            r#"101,test-device:device:external_sensor,test-device:device:external_sensor,thin-edge.io-child"#,
+        );
+        let expected_c8y_json_message = Message::new(
+            &Topic::new_unchecked("c8y/alarm/alarms/create"),
+            r#"{"externalSource":{"externalId":"external_sensor","type":"c8y_Serial"},"severity":"MAJOR","type":"pressure_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Pressure alarm","customFragment":{"nested":{"value":"extra info"}}}"#,
+        );
+        let expected_internal_message = Message::new(
+            &Topic::new_unchecked("c8y-internal/alarms/pressure_alarm"),
+            in_payload,
+        )
+        .with_retain();
+
+        // Test the first output messages contains SmartREST and C8Y JSON.
+        let out_first_messages = converter.convert(&in_message).await;
+        assert_eq!(
+            out_first_messages,
+            vec![
+                expected_c8y_child_create_json_message,
+                expected_c8y_json_message,
+                expected_internal_message
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn convert_new_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let event_topic = "te/device/main///e/click_event";
+        let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
+        let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
+
+        let converted_events = converter.convert(&event_message).await;
+
+        assert_eq!(converted_events.len(), 1);
+        let converted_event = converted_events.get(0).unwrap();
+        assert_eq!(converted_event.topic.name, "c8y/s/us");
+        assert_eq!(
+            converted_event.payload_str()?,
+            r#"400,click_event,"Someone clicked",2020-02-02T01:02:03+05:30"#
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn new_convert_event_with_extra_fields_to_c8y_json() -> Result<()> {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let event_topic = "te/device/main///e/login_event";
+        let event_payload = r#"{
+            "text": "A user just logged in",
+            "time": "2021-01-01T05:30:45+00:00",
+            "customFragment": {
+              "nested": {
+                "value": "extra info"
+              }
+            }
+          }"#;
+        let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
+
+        let converted_events = converter.convert(&event_message).await;
+        assert_eq!(converted_events.len(), 1);
+        let converted_event = converted_events.get(0).unwrap();
+        assert_eq!(converted_event.topic.name, "c8y/event/events/create");
+        let converted_c8y_json = json!({
+            "externalSource":{
+                "externalId":"test-device",
+                "type":"c8y_Serial"
+              },
+              "type":"login_event",
+              "text":"A user just logged in",
+              "time":"2021-01-01T05:30:45Z",
+              "customFragment": {
+                "nested": {
+                  "value": "extra info"
+                }
+              }
+        });
+        assert_eq!(converted_event.topic.name, "c8y/event/events/create");
+        assert_json_include!(
+            actual: serde_json::from_str::<serde_json::Value>(converted_event.payload_str()?)?,
+            expected: converted_c8y_json
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn new_convert_child_event_with_extra_fields_to_c8y_json() -> Result<()> {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let event_topic = "te/device/sensor///e/click_event";
+        let event_payload = r#"{ "text": "tick", "foo": "bar" }"#;
+        let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
+
+        let converted_events = converter.convert(&event_message).await;
+        assert_eq!(converted_events.len(), 2);
+        let converted_event = converted_events.get(0).unwrap();
+        assert_eq!(converted_event.topic.name, "c8y/s/us");
+        let converted_event = converted_events.get(1).unwrap();
+        assert_eq!(converted_event.topic.name, "c8y/event/events/create");
+        let converted_c8y_json = json!({
+            "type": "click_event",
+            "text": "tick",
+            "foo": "bar",
+            "externalSource":{"externalId":"test-device:device:sensor","type":"c8y_Serial"}
+        });
+
+        assert_eq!(converted_event.topic.name, "c8y/event/events/create");
+        assert_json_include!(
+            actual: serde_json::from_str::<serde_json::Value>(converted_event.payload_str()?)?,
+            expected: converted_c8y_json
+        );
+
+        Ok(())
+    }
+
     async fn create_c8y_converter(
         tmp_dir: &TempTedgeDir,
     ) -> (
@@ -1709,7 +2191,6 @@ mod tests {
     ) {
         tmp_dir.dir("operations").dir("c8y");
         tmp_dir.dir("tedge").dir("agent");
-
         let device_id = "test-device".into();
         let device_type = "test-device-type".into();
         let service_type = "service".into();

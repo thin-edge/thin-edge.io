@@ -6,6 +6,7 @@ pub mod topic;
 pub mod alarm;
 pub mod builder;
 pub mod data;
+pub mod device_id;
 pub mod event;
 pub mod group;
 pub mod health;

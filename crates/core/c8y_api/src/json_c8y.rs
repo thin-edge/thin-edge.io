@@ -147,6 +147,7 @@ impl TryFrom<ThinEdgeEvent> for C8yCreateEvent {
         let text;
         let time;
         let mut extras;
+
         match event.data {
             None => {
                 text = event_type.clone();
@@ -156,11 +157,13 @@ impl TryFrom<ThinEdgeEvent> for C8yCreateEvent {
             Some(event_data) => {
                 text = event_data.text.unwrap_or_else(|| event_type.clone());
                 time = event_data.time.unwrap_or_else(OffsetDateTime::now_utc);
-                extras = event_data.extras;
+                extras = event_data.extras.clone();
+                if let Some(source) = event.source {
+                    if !event_data.extras.is_empty() {
+                        update_the_external_source_event(&mut extras, &source);
+                    }
+                }
             }
-        }
-        if let Some(source) = event.source {
-            update_the_external_source_event(&mut extras, &source);
         }
 
         Ok(Self {
@@ -587,6 +590,7 @@ mod tests {
                 text: Some("Temperature went high".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: HashMap::new(),
+                severity: None,
             }),
             source: None,
         },
@@ -608,6 +612,7 @@ mod tests {
                 text: Some("Temperature went high".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: maplit::hashmap!{"SomeCustomFragment".to_string() => json!({"nested": {"value":"extra info"}})},
+                severity: None,
             }),
             source: None,
         },
@@ -629,6 +634,7 @@ mod tests {
                 text: Some("Temperature went high".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: maplit::hashmap!{"SomeCustomFragment".to_string() => json!({"nested": {"value":"extra info"}})},
+                severity: None,
             }),
             source: Some("external_source".into()),
         },

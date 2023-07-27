@@ -36,6 +36,17 @@ pub fn from_thin_edge_json(input: &str) -> Result<String, CumulocityJsonError> {
     Ok(c8y_vec)
 }
 
+/// Converts from thin-edge measurement JSON to C8Y measurement JSON
+pub fn new_from_thin_edge_json(
+    input: &str,
+    m_type: Option<&str>,
+) -> Result<String, CumulocityJsonError> {
+    let timestamp = WallClock.now();
+
+    let c8y_vec = new_from_thin_edge_json_with_timestamp(input, timestamp, m_type, None)?;
+    Ok(c8y_vec)
+}
+
 /// Converts from thin-edge Json to c8y_json with child id information
 pub fn from_thin_edge_json_with_child(
     input: &str,
@@ -52,6 +63,18 @@ fn from_thin_edge_json_with_timestamp(
     maybe_child_id: Option<&str>,
 ) -> Result<String, CumulocityJsonError> {
     let mut serializer = serializer::C8yJsonSerializer::new(timestamp, maybe_child_id);
+    parse_str(input, &mut serializer)?;
+    Ok(serializer.into_string()?)
+}
+
+fn new_from_thin_edge_json_with_timestamp(
+    input: &str,
+    timestamp: OffsetDateTime,
+    m_type: Option<&str>,
+    maybe_child_id: Option<&str>,
+) -> Result<String, CumulocityJsonError> {
+    let mut serializer =
+        serializer::C8yJsonSerializer::new_with_type(timestamp, m_type, maybe_child_id);
     parse_str(input, &mut serializer)?;
     Ok(serializer.into_string()?)
 }
