@@ -10,7 +10,8 @@ use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResponse;
 use c8y_http_proxy::messages::C8YRestResult;
 use c8y_http_proxy::messages::DownloadFile;
-use c8y_http_proxy::messages::UploadConfigFile;
+use c8y_http_proxy::messages::UploadFile;
+use c8y_http_proxy::messages::Url;
 use serde_json::json;
 use std::net::Ipv4Addr;
 use std::time::Duration;
@@ -102,16 +103,16 @@ async fn test_config_upload_tedge_device() -> Result<(), DynError> {
 
     // Assert config file upload HTTP request
     c8y_proxy_message_box
-        .assert_received([UploadConfigFile {
-            config_path: test_config_path.into(),
-            config_type: test_config_type.to_string(),
+        .assert_received([UploadFile {
+            file_path: test_config_path.into(),
+            file_type: test_config_type.to_string(),
             device_id,
         }])
         .await;
 
     // Provide mock config file upload HTTP response to continue
     c8y_proxy_message_box
-        .send(Ok(C8YRestResponse::EventId("test-url".to_string())))
+        .send(Ok(Url("test-url".to_string()).into()))
         .await?;
 
     // Assert SUCCESSFUL SmartREST MQTT message
@@ -503,21 +504,21 @@ async fn test_child_device_successful_config_snapshot_response_mapping() -> Resu
     mqtt_message_box.send(c8y_config_upload_msg).await?;
 
     c8y_proxy_message_box
-        .assert_received([UploadConfigFile {
-            config_path: ttd
+        .assert_received([UploadFile {
+            file_path: ttd
                 .to_path_buf()
                 .join("file-transfer")
                 .join(child_device_id)
                 .join("config_snapshot")
                 .join(test_config_type),
-            config_type: test_config_type.into(),
+            file_type: test_config_type.into(),
             device_id: child_device_id.into(),
         }])
         .await;
 
     // Provide mock config file upload HTTP response to continue
     c8y_proxy_message_box
-        .send(Ok(C8YRestResponse::EventId("test-url".to_string())))
+        .send(Ok(Url("test-url".to_string()).into()))
         .await?;
 
     mqtt_message_box
@@ -577,14 +578,14 @@ async fn test_child_config_snapshot_successful_response_without_uploaded_file_ma
     mqtt_message_box.send(c8y_config_upload_msg).await?;
 
     c8y_proxy_message_box
-        .assert_received([UploadConfigFile {
-            config_path: ttd
+        .assert_received([UploadFile {
+            file_path: ttd
                 .to_path_buf()
                 .join("file-transfer")
                 .join(child_device_id)
                 .join("config_snapshot")
                 .join(test_config_type),
-            config_type: test_config_type.into(),
+            file_type: test_config_type.into(),
             device_id: child_device_id.into(),
         }])
         .await;
@@ -932,7 +933,7 @@ async fn test_multiline_smartrest_requests() -> Result<(), DynError> {
         loop {
             if let Some(_req) = c8y_proxy_message_box.recv().await {
                 c8y_proxy_message_box
-                    .send(Ok(C8YRestResponse::EventId("test-url".to_string())))
+                    .send(Ok(Url("test-url".to_string()).into()))
                     .await
                     .unwrap();
             }

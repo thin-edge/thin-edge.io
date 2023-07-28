@@ -6,9 +6,9 @@ use tedge_actors::ChannelError;
 use tedge_http_ext::HttpError;
 use tedge_utils::file::PermissionEntry;
 
-fan_in_message_type!(C8YRestRequest[GetJwtToken, GetFreshJwtToken, C8yCreateEvent, SoftwareListResponse, UploadLogBinary, UploadConfigFile, DownloadFile]: Debug, PartialEq, Eq);
+fan_in_message_type!(C8YRestRequest[GetJwtToken, GetFreshJwtToken, C8yCreateEvent, SoftwareListResponse, UploadLogBinary, UploadFile, DownloadFile]: Debug, PartialEq, Eq);
 //HIPPO Rename EventId to String as there could be many other String responses as well and this macro doesn't allow another String variant
-fan_in_message_type!(C8YRestResponse[EventId, Unit]: Debug);
+fan_in_message_type!(C8YRestResponse[EventId, Url, Unit]: Debug);
 
 #[derive(thiserror::Error, Debug)]
 pub enum C8YRestError {
@@ -36,6 +36,9 @@ pub enum C8YRestError {
 
     #[error(transparent)]
     FromFileError(#[from] tedge_utils::file::FileError),
+
+    #[error(transparent)]
+    FromIOError(#[from] std::io::Error),
 }
 
 pub type C8YRestResult = Result<C8YRestResponse, C8YRestError>;
@@ -60,9 +63,9 @@ pub struct UploadLogBinary {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct UploadConfigFile {
-    pub config_path: PathBuf,
-    pub config_type: String,
+pub struct UploadFile {
+    pub file_path: PathBuf,
+    pub file_type: String,
     pub device_id: String,
 }
 
@@ -76,6 +79,9 @@ pub struct DownloadFile {
 pub type EventId = String;
 
 pub type Unit = ();
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Url(pub String);
 
 // Transform any unexpected message into an error
 impl From<C8YRestResult> for C8YRestError {

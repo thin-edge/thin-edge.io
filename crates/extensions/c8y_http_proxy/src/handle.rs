@@ -5,7 +5,7 @@ use crate::messages::C8YRestResult;
 use crate::messages::GetFreshJwtToken;
 use crate::messages::GetJwtToken;
 use crate::messages::SoftwareListResponse;
-use crate::messages::UploadConfigFile;
+use crate::messages::UploadFile;
 use crate::messages::UploadLogBinary;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
@@ -93,20 +93,20 @@ impl C8YHttpProxy {
         }
     }
 
-    pub async fn upload_config_file(
+    pub async fn upload_file(
         &mut self,
-        config_path: &Path,
-        config_type: &str,
+        file_path: &Path,
+        file_type: &str,
         device_id: String,
     ) -> Result<String, C8YRestError> {
-        let request: C8YRestRequest = UploadConfigFile {
-            config_path: config_path.to_owned(),
-            config_type: config_type.to_string(),
+        let request: C8YRestRequest = UploadFile {
+            file_path: file_path.to_owned(),
+            file_type: file_type.to_string(),
             device_id,
         }
         .into();
         match self.c8y.await_response(request).await? {
-            Ok(C8YRestResponse::EventId(id)) => Ok(id),
+            Ok(C8YRestResponse::Url(url)) => Ok(url.0),
             unexpected => Err(unexpected.into()),
         }
     }
