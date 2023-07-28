@@ -17,7 +17,10 @@ Install latest via script (from current branch)
     Tedge Should Not Be Installed
 
 Install specific version via script (from current branch)
+    [Documentation]    Remove the tedge.toml file as the apt filter is not supported in older tedge versions
+    ...                and unknown configuration causes problems
     Transfer To Device    ${CURDIR}/../../../../get-thin-edge_io.sh    /setup/
+    Execute Command    [ -f /etc/tedge/tedge.toml ] && sed -i '/\\[apt\\]/,/\\n/d' /etc/tedge/tedge.toml
     Execute Command    chmod a+x /setup/get-thin-edge_io.sh && sudo /setup/get-thin-edge_io.sh 0.8.1
     Tedge Version Should Be Equal    0.8.1
 

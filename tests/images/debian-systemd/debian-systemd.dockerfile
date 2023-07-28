@@ -31,6 +31,7 @@ RUN rm -f /lib/systemd/system/multi-user.target.wants/* \
 WORKDIR /setup
 COPY files/bootstrap.sh .
 COPY files/system.toml /etc/tedge/
+COPY files/tedge.toml /etc/tedge/tedge.toml
 COPY files/c8y-configuration-plugin.toml /etc/tedge/c8y/
 COPY files/packages/ /setup/packages/
 
