@@ -221,6 +221,77 @@ tedge mqtt pub tedge/measurements '{"temperature": 21.3}'
 tedge mqtt pub tedge/measurements '{"temperature": 21.3}'
 ```
 
+### Example: Use legacy MQTT api
+
+The tedge api code blocks also have the option to set which formats should be displayed, for example the legacy or new v1 api.
+
+**Markdown**
+
+````markdown title="Markdown"
+```sh te2mqtt formats=legacy,v1
+tedge mqtt pub tedge/alarms/major/temp_hi_hi/child01 '{"text": "Temperature Hi Hi"}'
+```
+````
+
+**Output**
+
+```sh te2mqtt formats=legacy,v1
+tedge mqtt pub tedge/alarms/major/temp_hi_hi/child01 '{"text": "Temperature Hi Hi"}'
+```
+
+### Example: Use new MQTT api
+
+The MQTT code block can also be written using the new MQTT api and the command will be automatically translated to the legacy (if there is an equivalent).
+
+**Markdown**
+
+````markdown title="Markdown"
+```sh te2mqtt formats=legacy,v1
+tedge mqtt pub te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
+```
+````
+
+**Output**
+
+```sh te2mqtt formats=legacy,v1
+tedge mqtt pub te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
+```
+
+### Example: MQTT code blocks with different grouping options
+
+The tedge api code blocks can also be grouped in different ways.
+
+#### Grouped
+
+**Markdown**
+
+````markdown title="Markdown"
+```sh te2mqtt formats=legacy,v1 groupTabs=true
+tedge mqtt pub te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
+```
+````
+
+**Output**
+
+```sh te2mqtt formats=legacy,v1 groupTabs=true
+tedge mqtt pub te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
+```
+
+#### Ungrouped
+
+**Markdown**
+
+````markdown title="Markdown"
+```sh te2mqtt formats=legacy,v1 groupTabs=false
+tedge mqtt pub te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
+```
+````
+
+**Output**
+
+```sh te2mqtt formats=legacy,v1 groupTabs=false
+tedge mqtt pub te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "severity": "warning"}'
+```
 
 ### Example: Subscribe to MQTT messages
 
@@ -251,3 +322,36 @@ tedge mqtt sub 'tedge/#' > logged.tedge.messages.txt
 ```sh te2mqtt
 tedge mqtt sub 'tedge/#' > logged.tedge.messages.txt
 ```
+
+## Proposal Banner
+
+A proposal banner is used to indicate that a page details a proposal only and is not yet implemented. The banner allows the proposal to be made public to encourage early feedback from the community as the page will be included in the public documentation.
+
+:::note
+If a proposal is not ready for public feedback, then it should be marked as a draft by setting the `draft: true` in the page's [front matter](https://docusaurus.io/docs/markdown-features#front-matter) section. Draft pages are not included in the public documentation, though they are included when building the docs locally in development mode.
+:::
+
+The proposal banner can be included in a page by adding the following markdown to the top of the page (after the [front matter](https://docusaurus.io/docs/markdown-features#front-matter) section).
+
+````markdown title="Markdown"
+import ProposalBanner from '@site/src/components/ProposalBanner'
+
+<ProposalBanner/>
+````
+
+**Output**
+
+import ProposalBanner from '@site/src/components/ProposalBanner'
+
+<ProposalBanner/>
+
+In addition to the `<ProposalBanner/>`, a proposal page should include the construction icon (🚧) before the page's title so that the page's entry in the sidebar menu clearly shows that the page is a proposal or a work in progress. The example below shows how the page's title is set via the front matter at the top of the markdown document.
+
+
+````markdown title="Markdown"
+---
+title: 🚧 MQTT API
+tags: [Reference, MQTT]
+sidebar_position: 6
+---
+````
