@@ -5,6 +5,7 @@ use mqtt_channel::Topic;
 use nanoid::nanoid;
 use serde::Deserialize;
 use serde::Serialize;
+use time::OffsetDateTime;
 
 const SOFTWARE_LIST_REQUEST_TOPIC: &str = "tedge/commands/req/software/list";
 const SOFTWARE_LIST_RESPONSE_TOPIC: &str = "tedge/commands/res/software/list";
@@ -531,6 +532,73 @@ impl RestartOperationResponse {
 
     pub fn status(&self) -> OperationStatus {
         self.status
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq, Copy, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub enum CommandStatus {
+    Init,
+    Executing,
+    Successful,
+    Failed,
+}
+
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LogUploadCmdPayload {
+    pub status: CommandStatus, //Define a different enum if this op needs more states,
+    #[serde(rename = "type")]
+    pub log_type: String,
+    pub tedge_url: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub date_from: OffsetDateTime,
+    pub date_to: OffsetDateTime,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_text: Option<String>,
+    pub max_lines: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+impl<'a> Jsonify<'a> for LogUploadCmdPayload {}
+
+impl LogUploadCmdPayload {
+    pub fn new(
+        status: CommandStatus,
+        log_type: String,
+        tedge_url: String,
+        date_from: OffsetDateTime,
+        date_to: OffsetDateTime,
+        search_text: Option<String>,
+        max_lines: usize,
+        reason: Option<String>,
+    ) -> Self {
+        Self {
+            status,
+            log_type,
+            tedge_url,
+            date_from,
+            date_to,
+            search_text,
+            max_lines,
+            reason,
+        }
+    }
+
+    pub fn executing(&mut self) {
+        self.status = CommandStatus::Executing;
+        self.reason = None;
+    }
+
+    pub fn successful(&mut self) {
+        self.status = CommandStatus::Successful;
+        self.reason = None;
+    }
+
+    pub fn failed(&mut self, reason: impl Into<String>) {
+        self.status = CommandStatus::Failed;
+        self.reason = Some(reason.into());
     }
 }
 

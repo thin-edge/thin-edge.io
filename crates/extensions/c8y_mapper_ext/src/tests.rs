@@ -1337,16 +1337,19 @@ async fn spawn_c8y_mapper_actor(
     let device_type = "test-device-type".into();
     let service_type = "service".into();
     let c8y_host = "test.c8y.io".into();
+    let tedge_http_host = "localhost".into();
     let mut topics = C8yMapperConfig::internal_topic_filter(config_dir.path()).unwrap();
     topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
     let config = C8yMapperConfig::new(
         config_dir.to_path_buf(),
         config_dir.utf8_path_buf(),
+        config_dir.utf8_path_buf(),
         device_name,
         device_type,
         service_type,
         c8y_host,
+        tedge_http_host,
         topics,
     );
 

@@ -14,16 +14,15 @@ async-trait = { workspace = true }
 http = { workspace = true }
 log = { workspace = true }
 log_manager = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
+tedge_api = { workspace = true }
 tedge_config = { workspace = true }
 tedge_file_system_ext = { workspace = true }
 tedge_http_ext = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
-time = { workspace = true, features = ["formatting", "serde"] }
 tokio = { workspace = true, features = ["macros"] }
 
 [dev-dependencies]
@@ -35,4 +34,3 @@ tedge_http_ext = { workspace = true, features = [
     "test_helpers",
 ] }
 tedge_test_utils = { workspace = true }
-time = { workspace = true, features = ["macros"] }

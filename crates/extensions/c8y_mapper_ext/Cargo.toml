@@ -17,6 +17,7 @@ camino = { workspace = true }
 clock = { workspace = true }
 json-writer = { workspace = true }
 logged_command = { workspace = true }
+nanoid = { workspace = true }
 plugin_sm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -1,5 +1,16 @@
 use crate::error::TopicError;
+use mqtt_channel::Topic;
+use mqtt_channel::TopicFilter;
 use std::convert::TryFrom;
+
+const CMD_TOPIC_FILTER: &str = "te/device/+/+/+/cmd/+/+";
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum DeviceKind {
+    Main,
+    Child(String),
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ResponseTopic {
     SoftwareListResponse,
@@ -67,6 +78,85 @@ pub fn get_child_id_from_child_topic(topic: &str) -> Option<String> {
             Some(id.to_string())
         }
     })
+}
+
+pub fn get_target_ids_from_cmd_topic(topic: &Topic) -> Option<(DeviceKind, String)> {
+    let cmd_topic_filter: TopicFilter = CMD_TOPIC_FILTER.try_into().unwrap();
+
+    if cmd_topic_filter.accept_topic(topic) {
+        // with the topic scheme te/device/<device-id>///cmd/<cmd-id>
+
+        let mut topic_split = topic.name.split('/');
+        // the 3rd level is the device id
+        let device_id = topic_split.nth(2).unwrap();
+        // the 6th element is the child id
+        let cmd_id = topic_split.nth(6).unwrap();
+
+        if device_id == "main" {
+            Some((DeviceKind::Main, cmd_id.into()))
+        } else {
+            Some((DeviceKind::Child(device_id.into()), cmd_id.into()))
+        }
+    } else {
+        None
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum CmdPublishTopic {
+    // Restart(Target),
+    // SoftwareList(Target),
+    // SoftwareUpdate(Target),
+    // ConfigSnapshot(Target),
+    // ConfigUpdate(Target),
+    LogUpload(Target),
+}
+
+impl From<CmdPublishTopic> for Topic {
+    fn from(value: CmdPublishTopic) -> Self {
+        let topic = match value {
+            CmdPublishTopic::LogUpload(target) => {
+                format!("te/device/{}///cmd/{}", target.device_id, target.cmd_id)
+            }
+        };
+        Topic::new_unchecked(&topic)
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum CmdSubscribeTopic {
+    // Restart,
+    // SoftwareList,
+    // SoftwareUpdate,
+    LogUpload,
+    // ConfigSnapshot,
+    // ConfigUpdate,
+}
+
+impl From<CmdSubscribeTopic> for &str {
+    fn from(value: CmdSubscribeTopic) -> Self {
+        match value {
+            CmdSubscribeTopic::LogUpload => "te/device/+///cmd/log_upload/+",
+        }
+    }
+}
+
+impl From<CmdSubscribeTopic> for TopicFilter {
+    fn from(value: CmdSubscribeTopic) -> Self {
+        TopicFilter::new_unchecked(value.into())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Target {
+    device_id: String,
+    cmd_id: String,
+}
+
+impl Target {
+    pub fn new(device_id: String, cmd_id: String) -> Self {
+        Target { device_id, cmd_id }
+    }
 }
 
 #[cfg(test)]

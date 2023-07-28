@@ -72,6 +72,9 @@ pub enum ConversionError {
     #[error(transparent)]
     FromSmartRestSerializerError(#[from] c8y_api::smartrest::error::SmartRestSerializerError),
 
+    #[error(transparent)]
+    FromSmartRestDeserializerError(#[from] c8y_api::smartrest::error::SmartRestDeserializerError),
+
     #[error("Unsupported topic: {0}")]
     UnsupportedTopic(String),
 

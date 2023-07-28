@@ -1,7 +1,6 @@
 mod actor;
 mod config;
 mod error;
-mod json;
 
 #[cfg(test)]
 mod tests;
