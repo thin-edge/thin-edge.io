@@ -57,7 +57,7 @@ This script will install the latest version of thin-edge.io with the following c
 - Command line Interface (CLI) tool
 - Tedge mapper
 
-It is possible to do the installation of thin-edge.io manually or install another version or upgrade the current version. For more information on that, please have a look [here](https://thin-edge.github.io/thin-edge.io/html/howto-guides/002_installation.html#thin-edgeio-manual-installation) for more information.
+It is possible to do the installation of thin-edge.io manually or install another version or upgrade the current version. For more information on that, please have a look [here](../install/) for more information.
 
 After a successful installation, it is possible to use thin-edge.io via the CLI and use the tedge commands.
 
@@ -102,7 +102,7 @@ SUBCOMMANDS:
     reconnect     Reconnect command, calls disconnect followed by connect
 ```
 
-Here is an [overview of the commands for the CLI tool](https://thin-edge.github.io/thin-edge.io/html/references/references.html).
+Here is an [overview of the commands for the CLI tool](../references/cli/).
 
 The CLI will be used to configure the thin-edge.io installation on the device in the next steps.
 
@@ -526,4 +526,4 @@ However, keep in mind that the daemon has to be restarted every time the `/etc/t
 
 With this getting started tutorial you gained some insights on how to install and configure thin-edge.io on a Raspberry Pi.
 
-If you didn't try the optional steps in this tutorial, it might be a nice idea to work on these as you then get a better insight into the device management capabilities of thin-edge.io. Other things you can work on are capabilities like working with child devices, building your own plugin etc. Tutorials for that can be found [here](https://thin-edge.github.io/thin-edge.io/html/).
+If you didn't try the optional steps in this tutorial, it might be a nice idea to work on these as you then get a better insight into the device management capabilities of thin-edge.io. Other things you can work on are capabilities like working with child devices, building your own plugin etc. Tutorials for that can be found [here](../).

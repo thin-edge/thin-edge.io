@@ -1,4 +1,4 @@
-# You can find the [thin-edge.io documentation here](https://thin-edge.github.io/thin-edge.io/html/).
+# You can find the [thin-edge.io documentation here](https://thin-edge.github.io/thin-edge.io/).
 
 # Thin Edge Documentation: Writer Guidelines
 

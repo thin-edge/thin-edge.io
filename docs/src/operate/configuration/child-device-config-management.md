@@ -123,7 +123,7 @@ Follow these steps to bootstrap the child device:
 
 1. Create a `c8y-configuration-plugin.toml` file that contains the supported configuration list of the child-device 
 
-    For example a list of configuration files in the same format as specified in the [configuration management documentation](https://thin-edge.github.io/thin-edge.io/html/howto-guides/025_config_management_plugin.html) as follows:
+    For example a list of configuration files in the same format as specified in the [configuration management documentation](../c8y/config_management_plugin.md) as follows:
 
     ```toml title="file: c8y-configuration-plugin.toml"
     files = [
@@ -421,6 +421,6 @@ Performing config update is an 8-step process:
 
 ## References
 
-* Configuration Management [documentation](https://thin-edge.github.io/thin-edge.io/html/howto-guides/child_device_config_management_agent.html)
+* Configuration Management [documentation](../c8y/config_management_plugin.md)
 * Reference implementation of a [child-device connector](https://github.com/thin-edge/thin-edge.io_examples/tree/main/child-device-agent) written in Python to demonstrate the contract described in this document.
-* How to enable configuration [management on child-devices](https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/howto-guides/child_device_config_management_agent.md)
+* How to enable configuration [management on child-devices](../c8y/child_device_config_management_agent.md)

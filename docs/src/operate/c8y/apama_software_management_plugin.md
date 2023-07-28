@@ -12,7 +12,7 @@ The Apama plugin, part of the Apama thin-edge support package, can be used to in
 
 The Apama thin-edge support package must be installed before you can install Apama projects on thin-edge.
 The recommended way of installing Apama support on Debian based distributions is with the apt package manager.
-Further details about this can be found in the thin-edge.io documentation at [Manage the software on your devices from Cumulocity cloud](https://thin-edge.github.io/thin-edge.io/html/tutorials/software-management.html).
+Further details about this can be found in the thin-edge.io documentation at [Manage the software on your devices from Cumulocity cloud](../../start/software-management.md).
 
 #### Set up the Debian repository from which the Apama packages will be installed
 
