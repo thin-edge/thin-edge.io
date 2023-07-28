@@ -33,7 +33,7 @@
 </details>
 
 ## Jump right in:
-* [**Explore the Docs**](https://thin-edge.github.io/thin-edge.io/html/)
+* [**Explore the Docs**](https://thin-edge.github.io/thin-edge.io/)
 * [Install thin-edge.io on your device](https://thin-edge.github.io/thin-edge.io/install/)
 * [Getting started with thin-edge.io on a Raspberry Pi](https://thin-edge.github.io/thin-edge.io/start/getting-started)
 * [Connect your device to Cumulocity](https://thin-edge.github.io/thin-edge.io/start/connect-c8y)
