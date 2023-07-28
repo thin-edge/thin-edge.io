@@ -7,6 +7,7 @@ use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_actors::adapt;
@@ -49,6 +50,7 @@ pub struct C8yMapperActor {
     messages: SimpleMessageBox<C8yMapperInput, C8yMapperOutput>,
     mqtt_publisher: LoggingSender<MqttMessage>,
     timer_sender: LoggingSender<SyncStart>,
+    registered_entities: HashMap<String, String>,
 }
 
 #[async_trait]
@@ -97,10 +99,21 @@ impl C8yMapperActor {
             messages,
             mqtt_publisher,
             timer_sender,
+            registered_entities: HashMap::new(),
         }
     }
 
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
+        // register device if not registered
+        if let Some(entity_id) = entity_mqtt_id(&message.topic) {
+            if self.registered_entities.get(entity_id).is_none() {
+                let register_messages = self.auto_register_entity(entity_id);
+                for msg in register_messages {
+                    let _ = self.mqtt_publisher.send(msg).await;
+                }
+            }
+        }
+
         let converted_messages = self.converter.convert(&message).await;
 
         for converted_message in converted_messages.into_iter() {
@@ -108,6 +121,55 @@ impl C8yMapperActor {
         }
 
         Ok(())
+    }
+
+    /// Performs auto-registration process for an entity under a given
+    /// identifier.
+    ///
+    /// If an entity is a service, its device is also auto-registered if it's
+    /// not already registered.
+    ///
+    /// It returns MQTT register messages for the given entities to be published
+    /// by the mapper, so other components can also be aware of a new device
+    /// being registered.
+    fn auto_register_entity(&mut self, entity_id: &str) -> Vec<Message> {
+        let mut register_messages = vec![];
+        if let Some(("te", topic)) = entity_id.split_once('/') {
+            let (device_id, service_id) = match topic.split('/').collect::<Vec<&str>>()[..] {
+                ["device", device_id, "service", service_id, ..] => (device_id, Some(service_id)),
+                ["device", device_id, ..] => (device_id, None),
+                _ => return register_messages,
+            };
+
+            let device_register_topic = format!("te/device/{device_id}");
+            let device_register_payload = r#"{ "@type": "device", "type": "Gateway" }"#.to_string();
+            register_messages.push(Message::new(
+                &Topic::new(&device_register_topic).unwrap(),
+                device_register_payload.clone(),
+            ));
+            self.register_entity(device_register_topic, device_register_payload);
+
+            if let Some(service_id) = service_id {
+                let service_register_topic = format!("te/device/{device_id}/service/{service_id}");
+                let service_register_payload =
+                    r#"{"@type": "service", "type": "systemd"}"#.to_string();
+                register_messages.push(Message::new(
+                    &Topic::new(&service_register_topic).unwrap(),
+                    service_register_payload.clone(),
+                ));
+                self.register_entity(service_register_topic, service_register_payload);
+            }
+        }
+        register_messages
+    }
+
+    /// Registers the entity under a given MQTT topic.
+    ///
+    /// If a given entity was registered previously, the function will do
+    /// nothing. Otherwise it will save registration data to memory, free to be
+    /// queried by other components.
+    fn register_entity(&mut self, topic: String, payload: String) {
+        self.registered_entities.entry(topic).or_insert(payload);
     }
 
     async fn process_file_watch_event(
@@ -160,6 +222,17 @@ impl C8yMapperActor {
     }
 }
 
+fn entity_mqtt_id(topic: &Topic) -> Option<&str> {
+    match topic.name.split('/').collect::<Vec<&str>>()[..] {
+        ["te", "device", _device_id, "service", service_id, ..] => {
+            Some(&topic.name[..topic.name.find(service_id).unwrap() + service_id.len()])
+        }
+        ["te", "device", device_id, ..] => {
+            Some(&topic.name[..topic.name.find(device_id).unwrap() + device_id.len()])
+        }
+        _ => None,
+    }
+}
 pub struct C8yMapperBuilder {
     config: C8yMapperConfig,
     box_builder: SimpleMessageBoxBuilder<C8yMapperInput, C8yMapperOutput>,

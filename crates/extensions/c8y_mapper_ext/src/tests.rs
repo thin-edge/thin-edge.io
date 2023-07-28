@@ -2,6 +2,7 @@ use super::actor::C8yMapperBuilder;
 use super::actor::SyncComplete;
 use super::actor::SyncStart;
 use super::config::C8yMapperConfig;
+use assert_json_diff::assert_json_include;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
@@ -14,11 +15,13 @@ use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::Message;
 use tedge_actors::MessageReceiver;
 use tedge_actors::NoMessage;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_actors::WrappedInput;
 use tedge_api::SoftwareUpdateResponse;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
@@ -1157,6 +1160,79 @@ operation failed due to timeout: duration=1sEOF
 ";
 
     assert_command_exec_log_content(cfg_dir, expected_content);
+}
+
+/// This test aims to verify that when a telemetry message is emitted from an
+/// unknown device or service, the mapper will produce a registration message
+/// for this entity. The registration message shall be published only once, when
+/// an unknown entity first publishes its message. After that the entity shall
+/// be considered registered and no more registration messages for this entity
+/// shall be emitted by the mapper.
+#[tokio::test]
+async fn inventory_registers_unknown_entity_once() {
+    let cfg_dir = TempTedgeDir::new();
+    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    let measurement_message = MqttMessage::new(
+        &Topic::new("te/device/main/service/my_service/m/measurement").unwrap(),
+        "",
+    );
+
+    mqtt.send(measurement_message.clone()).await.unwrap();
+    mqtt.send(measurement_message).await.unwrap();
+
+    mqtt.close_sender();
+
+    let mut messages = vec![];
+    while let Some(WrappedInput::Message(msg)) = mqtt.recv_message().await {
+        messages.push(msg);
+    }
+
+    // Assert device register message was published once
+    let mut device_register_messages = messages
+        .iter()
+        .filter(|message| message.topic == "te/device/main".try_into().unwrap());
+    let device_register_message = device_register_messages
+        .next()
+        .expect("Device register message must be present");
+
+    let device_register_payload =
+        serde_json::from_slice::<serde_json::Value>(device_register_message.payload_bytes())
+            .expect("Device register message payload must be JSON");
+    assert_json_include!(
+        actual: device_register_payload,
+        expected: json!({ "@type": "device", "type": "Gateway" })
+    );
+
+    assert_eq!(
+        device_register_messages.next(),
+        None,
+        "There can't be more than 1 device register message"
+    );
+
+    // Assert service register message was published once
+    let mut service_register_messages = messages
+        .iter()
+        .filter(|message| message.topic == "te/device/main/service/my_service".try_into().unwrap());
+    let service_register_message = service_register_messages
+        .next()
+        .expect("Service register message must be present");
+
+    let service_register_payload =
+        serde_json::from_slice::<serde_json::Value>(service_register_message.payload_bytes())
+            .expect("Service register message payload must be JSON");
+    assert_json_include!(
+        actual: service_register_payload,
+        expected: json!({"@type": "service", "type": "systemd"})
+    );
+
+    assert_eq!(
+        service_register_messages.next(),
+        None,
+        "There can't be more than 1 service register message"
+    );
 }
 
 fn assert_command_exec_log_content(cfg_dir: TempTedgeDir, expected_contents: &str) {
