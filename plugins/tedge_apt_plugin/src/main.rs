@@ -3,7 +3,6 @@ mod module_check;
 
 use crate::error::InternalError;
 use crate::module_check::PackageMetadata;
-use clap::IntoApp;
 use clap::Parser;
 use log::warn;
 use regex::Regex;
@@ -19,6 +18,12 @@ use tedge_config::TEdgeConfigRepository;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 #[derive(Parser, Debug)]
+#[clap(
+    name = clap::crate_name!(),
+    version = clap::crate_version!(),
+    about = clap::crate_description!(),
+    arg_required_else_help(true)
+)]
 struct AptCli {
     #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
     config_dir: PathBuf,
@@ -31,9 +36,11 @@ struct AptCli {
 pub enum PluginOp {
     /// List all the installed modules
     List {
+        /// Filter packages list output by name
         #[clap(long = "--name")]
         name: Option<String>,
 
+        /// Filter packages list output by maintainer
         #[clap(long = "--maintainer")]
         maintainer: Option<String>,
     },
@@ -297,14 +304,10 @@ fn get_config(config_dir: PathBuf) -> Option<TEdgeConfig> {
 }
 
 fn main() {
-    // On usage error, the process exits with a status code of 1
-
     let mut apt = match AptCli::try_parse() {
         Ok(aptcli) => aptcli,
-        Err(_) => {
-            AptCli::command()
-                .print_help()
-                .expect("Failed to print usage help");
+        Err(err) => {
+            err.print().expect("Failed to print help message");
             // re-write the clap exit_status from 2 to 1, if parse fails
             std::process::exit(1)
         }

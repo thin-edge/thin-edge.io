@@ -1,6 +1,6 @@
 [package]
 name = "tedge-apt-plugin"
-description = "Thin.edge.io plugin for software management using apt"
+description = "Thin-edge.io plugin for software management using apt"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
