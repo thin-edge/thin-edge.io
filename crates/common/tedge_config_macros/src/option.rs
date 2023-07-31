@@ -35,7 +35,7 @@ impl<T> From<OptionalConfig<T>> for Option<T> {
 
 #[derive(thiserror::Error, Debug)]
 #[error(
-    r#"A value for '{key}' is missing.\n\
+    r#"A value for '{key}' is missing.
     A value can be set with `tedge config set {key} <value>`"#
 )]
 /// A descriptive error for missing configurations
