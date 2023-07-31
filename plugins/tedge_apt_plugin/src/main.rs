@@ -8,15 +8,21 @@ use clap::Parser;
 use log::warn;
 use regex::Regex;
 use serde::Deserialize;
-use std::fs;
 use std::io::{self};
+use std::path::PathBuf;
 use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Stdio;
+use tedge_config::new::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
+use tedge_config::TEdgeConfigRepository;
+use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 #[derive(Parser, Debug)]
 struct AptCli {
+    #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
+    config_dir: PathBuf,
+
     #[clap(subcommand)]
     operation: PluginOp,
 }
@@ -72,17 +78,6 @@ struct SoftwareModuleUpdate {
     pub version: Option<String>,
     #[serde(default)]
     pub path: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct TedgeConfig {
-    pub apt: AptConfig,
-}
-
-#[derive(Debug, Deserialize)]
-struct AptConfig {
-    pub name: Option<String>,
-    pub maintainer: Option<String>,
 }
 
 fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
@@ -289,22 +284,15 @@ fn get_name_and_version(line: &str) -> (&str, &str) {
     (name, version)
 }
 
-fn get_config() -> Option<TedgeConfig> {
-    let config_dir = TEdgeConfigLocation::default();
+fn get_config(config_dir: PathBuf) -> Option<TEdgeConfig> {
+    let tedge_config_location = TEdgeConfigLocation::from_custom_root(config_dir);
 
-    match fs::read_to_string(config_dir.tedge_config_file_path()) {
-        Ok(content) => match toml::from_str(&content) {
-            Ok(config) => Some(config),
-            Err(err) => {
-                warn!(
-                    "Failed to parse {}: {}",
-                    config_dir.tedge_config_file_path(),
-                    err
-                );
-                None
-            }
-        },
-        Err(_) => None,
+    match TEdgeConfigRepository::new(tedge_config_location).load_new() {
+        Ok(config) => Some(config),
+        Err(err) => {
+            warn!("Failed to load TEdgeConfig: {}", err);
+            None
+        }
     }
 }
 
@@ -327,13 +315,13 @@ fn main() {
         ref mut maintainer,
     } = apt.operation
     {
-        if let Some(config) = get_config() {
+        if let Some(config) = get_config(apt.config_dir) {
             if name.is_none() {
-                *name = config.apt.name;
+                *name = config.apt.name.or_none().cloned();
             }
 
             if maintainer.is_none() {
-                *maintainer = config.apt.maintainer;
+                *maintainer = config.apt.maintainer.or_none().cloned();
             }
         }
     }

@@ -3523,7 +3523,6 @@ dependencies = [
  "tedge_utils",
  "test-case",
  "thiserror",
- "toml 0.5.11",
 ]
 
 [[package]]
