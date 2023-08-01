@@ -1982,7 +1982,7 @@ mod tests {
 
         let expected_c8y_json_message = Message::new(
             &Topic::new_unchecked("c8y/alarm/alarms/create"),
-            r#"{"externalSource":{"externalId":"main","type":"c8y_Serial"},"severity":"MAJOR","type":"pressure_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Pressure alarm","customFragment":{"nested":{"value":"extra info"}}}"#,
+            r#"{"externalSource":{"externalId":"test-device","type":"c8y_Serial"},"severity":"MAJOR","type":"pressure_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Pressure alarm","customFragment":{"nested":{"value":"extra info"}}}"#,
         );
         let expected_internal_message = Message::new(
             &Topic::new_unchecked("c8y-internal/alarms/pressure_alarm"),
@@ -2070,7 +2070,7 @@ mod tests {
         );
         let expected_c8y_json_message = Message::new(
             &Topic::new_unchecked("c8y/alarm/alarms/create"),
-            r#"{"externalSource":{"externalId":"external_sensor","type":"c8y_Serial"},"severity":"MAJOR","type":"pressure_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Pressure alarm","customFragment":{"nested":{"value":"extra info"}}}"#,
+            r#"{"externalSource":{"externalId":"test-device:device:external_sensor","type":"c8y_Serial"},"severity":"MAJOR","type":"pressure_alarm","time":"2023-01-25T18:41:14.776170774Z","text":"Pressure alarm","customFragment":{"nested":{"value":"extra info"}}}"#,
         );
         let expected_internal_message = Message::new(
             &Topic::new_unchecked("c8y-internal/alarms/pressure_alarm"),
