@@ -211,7 +211,7 @@ mod tests {
             })
         );
 
-        let result = converter.try_convert(&&new_tedge_message_with_new_topic(input));
+        let result = converter.try_convert(&new_tedge_message_with_new_topic(input));
 
         assert_matches!(
             result,

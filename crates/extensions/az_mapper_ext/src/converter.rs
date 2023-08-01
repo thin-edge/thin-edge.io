@@ -144,7 +144,7 @@ mod tests {
 
         assert_matches!(result, Err(ConversionError::FromThinEdgeJsonParser(_)));
 
-        let result = converter.try_convert(&&new_tedge_message_with_new_mqtt_topic(input));
+        let result = converter.try_convert(&new_tedge_message_with_new_mqtt_topic(input));
 
         assert_matches!(result, Err(ConversionError::FromThinEdgeJsonParser(_)))
     }
@@ -167,7 +167,7 @@ mod tests {
             })
         );
 
-        let result = converter.try_convert(&&new_tedge_message_with_new_mqtt_topic(input));
+        let result = converter.try_convert(&new_tedge_message_with_new_mqtt_topic(input));
 
         assert_matches!(
             result,
