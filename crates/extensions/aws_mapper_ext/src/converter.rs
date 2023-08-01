@@ -12,6 +12,7 @@ use crate::error::ConversionError;
 use crate::size_threshold::SizeThreshold;
 
 const AWS_MQTT_THRESHOLD: usize = 1024 * 255;
+const MQTT_ROOT: &str = "te";
 
 pub struct AwsConverter {
     pub(crate) add_timestamp: bool,
@@ -39,18 +40,20 @@ impl AwsConverter {
     fn try_convert(&mut self, input: &MqttMessage) -> Result<Vec<MqttMessage>, ConversionError> {
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
 
+        let root_topic = format!("{MQTT_ROOT}/device");
+
         // serialize with ThinEdgeJson for measurements, for alarms and events just add the timestamp
         let payload = if input.topic.name.starts_with("tedge/measurements")
-            || input.topic.name.starts_with("te/device/") && input.topic.name.contains("/m/")
+            || input.topic.name.starts_with(&root_topic) && input.topic.name.contains("/m/")
         {
             let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
             tedge_api::parser::parse_str(input.payload_str()?, &mut serializer)?;
 
             serializer.into_string()?
         } else if input.topic.name.starts_with("tedge/events")
-            || (input.topic.name.starts_with("te/device/") && input.topic.name.contains("/e/"))
+            || (input.topic.name.starts_with(&root_topic) && input.topic.name.contains("/e/"))
             || input.topic.name.starts_with("tedge/alarms")
-            || (input.topic.name.starts_with("te/device/") && input.topic.name.contains("/a/"))
+            || (input.topic.name.starts_with(&root_topic) && input.topic.name.contains("/a/"))
             || input.topic.name.starts_with("tedge/health")
         {
             let mut payload_json: Map<String, Value> =
@@ -84,7 +87,7 @@ impl AwsConverter {
     }
 
     fn get_telemetry_type(topic: String) -> Option<String> {
-        if topic.starts_with("te/device/") {
+        if topic.starts_with(&format!("{MQTT_ROOT}/device/")) {
             if topic.contains("/m/") {
                 Some("measurements".to_string())
             } else if topic.contains("/e/") {
