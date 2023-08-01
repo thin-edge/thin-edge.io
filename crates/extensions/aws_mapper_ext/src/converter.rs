@@ -40,13 +40,17 @@ impl AwsConverter {
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
 
         // serialize with ThinEdgeJson for measurements, for alarms and events just add the timestamp
-        let payload = if input.topic.name.starts_with("tedge/measurements") {
+        let payload = if input.topic.name.starts_with("tedge/measurements")
+            || input.topic.name.starts_with("te/device/") && input.topic.name.contains("/m/")
+        {
             let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
             tedge_api::parser::parse_str(input.payload_str()?, &mut serializer)?;
 
             serializer.into_string()?
         } else if input.topic.name.starts_with("tedge/events")
+            || (input.topic.name.starts_with("te/device/") && input.topic.name.contains("/e/"))
             || input.topic.name.starts_with("tedge/alarms")
+            || (input.topic.name.starts_with("te/device/") && input.topic.name.contains("/a/"))
             || input.topic.name.starts_with("tedge/health")
         {
             let mut payload_json: Map<String, Value> =
@@ -65,9 +69,11 @@ impl AwsConverter {
             return Ok(vec![]);
         };
 
-        let topic_suffix = match input.topic.name.split_once('/') {
-            Some((_, topic_suffix)) => topic_suffix,
-            None => return Ok(vec![]),
+        let topic_suffix = match Self::get_telemetry_type(input.topic.name.clone()) {
+            Some(topic_suffix) => topic_suffix,
+            None => {
+                return Ok(vec![]);
+            }
         };
 
         let out_topic = Topic::new(&format!("aws/td/{topic_suffix}"))?;
@@ -75,6 +81,24 @@ impl AwsConverter {
         let output = MqttMessage::new(&out_topic, payload);
         self.size_threshold.validate(&output)?;
         Ok(vec![(output)])
+    }
+
+    fn get_telemetry_type(topic: String) -> Option<String> {
+        if topic.starts_with("te/device/") {
+            if topic.contains("/m/") {
+                Some("measurements".to_string())
+            } else if topic.contains("/e/") {
+                Some("events".to_string())
+            } else if topic.contains("/a/") {
+                Some("alarms".to_string())
+            } else {
+                None
+            }
+        } else {
+            topic
+                .split_once('/')
+                .map(|(_, topic_suffix)| topic_suffix.to_string())
+        }
     }
 
     fn wrap_errors(
@@ -121,6 +145,10 @@ mod tests {
         MqttMessage::new(&Topic::new_unchecked("tedge/measurements"), input)
     }
 
+    fn new_tedge_message_with_new_topic(input: &str) -> MqttMessage {
+        MqttMessage::new(&Topic::new_unchecked("te/device/main///m/"), input)
+    }
+
     fn extract_first_message_payload(mut messages: Vec<MqttMessage>) -> String {
         messages.pop().unwrap().payload_str().unwrap().to_string()
     }
@@ -138,6 +166,16 @@ mod tests {
             extract_first_message_payload(output),
             "Invalid JSON: expected value at line 1 column 1: `Invalid JSON\n`"
         );
+
+        let output = converter
+            .convert(&new_tedge_message_with_new_topic(input))
+            .unwrap();
+
+        assert_eq!(output.first().unwrap().topic.name, "tedge/errors");
+        assert_eq!(
+            extract_first_message_payload(output),
+            "Invalid JSON: expected value at line 1 column 1: `Invalid JSON\n`"
+        );
     }
 
     #[test]
@@ -146,6 +184,10 @@ mod tests {
 
         let input = "This is not Thin Edge JSON";
         let result = converter.try_convert(&new_tedge_message(input));
+
+        assert_matches!(result, Err(ConversionError::FromThinEdgeJsonParser(_)));
+
+        let result = converter.try_convert(&new_tedge_message_with_new_topic(input));
 
         assert_matches!(result, Err(ConversionError::FromThinEdgeJsonParser(_)))
     }
@@ -159,6 +201,17 @@ mod tests {
         let input = r#"{"temperature": 21.3}"#;
         let _input_size = input.len();
         let result = converter.try_convert(&new_tedge_message(input));
+
+        assert_matches!(
+            result,
+            Err(ConversionError::SizeThresholdExceeded {
+                topic: _topic,
+                actual_size: _input_size,
+                threshold: 1
+            })
+        );
+
+        let result = converter.try_convert(&&new_tedge_message_with_new_topic(input));
 
         assert_matches!(
             result,
@@ -190,6 +243,16 @@ mod tests {
                 .unwrap(),
             expected_output
         );
+
+        let output = converter
+            .convert(&new_tedge_message_with_new_topic(input))
+            .unwrap();
+
+        assert_json_eq!(
+            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output))
+                .unwrap(),
+            expected_output
+        );
     }
 
     #[test]
@@ -208,6 +271,16 @@ mod tests {
         });
 
         let output = converter.convert(&new_tedge_message(input)).unwrap();
+
+        assert_json_eq!(
+            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output))
+                .unwrap(),
+            expected_output
+        );
+
+        let output = converter
+            .convert(&new_tedge_message_with_new_topic(input))
+            .unwrap();
 
         assert_json_eq!(
             serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output))
@@ -238,6 +311,16 @@ mod tests {
                 .unwrap(),
             expected_output
         );
+
+        let output = converter
+            .convert(&new_tedge_message_with_new_topic(input))
+            .unwrap();
+
+        assert_json_eq!(
+            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output))
+                .unwrap(),
+            expected_output
+        );
     }
 
     #[test]
@@ -255,6 +338,16 @@ mod tests {
         });
 
         let output = converter.convert(&new_tedge_message(input)).unwrap();
+
+        assert_json_eq!(
+            serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output))
+                .unwrap(),
+            expected_output
+        );
+
+        let output = converter
+            .convert(&new_tedge_message_with_new_topic(input))
+            .unwrap();
 
         assert_json_eq!(
             serde_json::from_str::<serde_json::Value>(&extract_first_message_payload(output))
