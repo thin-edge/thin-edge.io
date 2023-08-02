@@ -448,6 +448,7 @@ impl CumulocityConverter {
         topic: &Topic,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
+        let ts = topic.name.split('/').collect::<Vec<&str>>();
         if topic.name.starts_with("tedge/alarms") {
             let mut mqtt_messages: Vec<Message> = Vec::new();
             self.size_threshold.validate(message)?;
@@ -455,9 +456,9 @@ impl CumulocityConverter {
             if !messages.is_empty() {
                 // When there is some messages to be sent on behalf of a child device,
                 // this child device must be declared first, if not done yet
-                let topic_split: Vec<&str> = topic.name.split('/').collect();
-                if topic_split.len() == 5 {
-                    let child_id = topic_split[4];
+                //let topic_split: Vec<&str> = topic.name.split('/').collect();
+                if ts.len() == 5 {
+                    let child_id = ts[4];
                     add_external_device_registration_message(
                         child_id.to_string(),
                         &mut self.children,
@@ -467,7 +468,7 @@ impl CumulocityConverter {
             }
             mqtt_messages.append(&mut messages);
             Ok(mqtt_messages)
-        } else if topic.name.starts_with("te/device/") && topic.name.contains("/a/") {
+        } else if topic.name.starts_with("te/device/") && ts[5].eq("a") {
             let mut mqtt_messages: Vec<Message> = Vec::new();
             self.size_threshold.validate(message)?;
             let mut messages = self
@@ -817,19 +818,20 @@ impl Converter for CumulocityConverter {
         &self.mapper_config
     }
     async fn try_convert(&mut self, message: &Message) -> Result<Vec<Message>, ConversionError> {
+        let ts = message.topic.name.split('/').collect::<Vec<&str>>();
         match &message.topic {
             topic if topic.name.starts_with("tedge/measurements") => {
                 self.size_threshold.validate(message)?;
                 self.try_convert_measurement(message)
             }
-            topic if topic.name.starts_with("te/device/") & topic.name.contains("/m/") => {
+            topic if topic.name.starts_with("te/device/") && ts[5].eq("m") => {
                 self.size_threshold.validate(message)?;
                 self.new_try_convert_measurement(message)
             }
             topic
                 if topic.name.starts_with("tedge/alarms")
                     | topic.name.starts_with(INTERNAL_ALARMS_TOPIC)
-                    | (topic.name.starts_with("te/device/") && topic.name.contains("/a/")) =>
+                    | (topic.name.starts_with("te/device/") && ts[5].eq("a")) =>
             {
                 self.process_alarm_messages(topic, message)
             }
@@ -837,7 +839,7 @@ impl Converter for CumulocityConverter {
             topic if topic.name.starts_with(TEDGE_EVENTS_TOPIC) => {
                 self.try_convert_event(message).await
             }
-            topic if (topic.name.starts_with("te/device/") && topic.name.contains("/e/")) => {
+            topic if (topic.name.starts_with("te/device/") && ts[5].eq("e")) => {
                 self.new_try_convert_event(message).await
             }
             topic if topic.name.starts_with("tedge/health") => {
