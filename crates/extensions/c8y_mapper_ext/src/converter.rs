@@ -53,7 +53,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
-use tedge_api::device_id::new_get_child_id_from_topic;
+use tedge_api::device_id::get_external_identity_from_topic;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::topic::get_child_id_from_measurement_topic;
@@ -282,7 +282,7 @@ impl CumulocityConverter {
         let mut mqtt_messages: Vec<Message> = Vec::new();
 
         let maybe_child_id =
-            new_get_child_id_from_topic(self.device_name.clone(), input.topic.name.clone());
+            get_external_identity_from_topic(self.device_name.clone(), input.topic.name.clone());
         let c8y_json_payload = match maybe_child_id {
             Some(child_id) => {
                 // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
@@ -478,7 +478,7 @@ impl CumulocityConverter {
                 // When there is some messages to be sent on behalf of a child device,
                 // this child device must be declared first, if not done yet
                 let child_id =
-                    new_get_child_id_from_topic(self.device_name.clone(), topic.name.clone())
+                    get_external_identity_from_topic(self.device_name.clone(), topic.name.clone())
                         .unwrap_or_default();
                 add_external_device_registration_message(
                     child_id,

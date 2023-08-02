@@ -5,7 +5,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::device_id::new_get_child_id_from_topic;
+use crate::device_id::get_external_identity_from_topic;
 
 use self::error::ThinEdgeJsonDeserializerError;
 
@@ -118,7 +118,7 @@ impl ThinEdgeEvent {
             let external_source = if topic_split[2].eq("main") {
                 parent_device_name
             } else {
-                new_get_child_id_from_topic(parent_device_name, mqtt_topic.into())
+                get_external_identity_from_topic(parent_device_name, mqtt_topic.into())
                     .unwrap_or_default()
             };
 

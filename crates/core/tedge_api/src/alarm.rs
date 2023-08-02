@@ -8,7 +8,9 @@ use std::fmt;
 use serde_json::Value;
 use std::collections::HashMap;
 
-use crate::device_id::new_get_child_id_from_topic;
+use crate::device_id::get_external_identity_from_topic;
+
+const DEFAULT_SEVERITY: &str = "major";
 /// In-memory representation of ThinEdge JSON alarm.
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ThinEdgeAlarm {
@@ -48,9 +50,6 @@ pub enum ThinEdgeJsonDeserializerError {
 
     #[error("Unsupported alarm severity in topic: {0}")]
     UnsupportedAlarmSeverity(String),
-
-    #[error("Did not find the severity in the alarm payload")]
-    AlarmSeverityNotFound,
 
     #[error(transparent)]
     SerdeJsonError(#[from] serde_json::error::Error),
@@ -173,15 +172,16 @@ impl ThinEdgeAlarm {
         let external_source = if topic_split[2].eq("main") {
             parent_device_name
         } else {
-            new_get_child_id_from_topic(parent_device_name, mqtt_topic.into()).unwrap_or_default()
+            get_external_identity_from_topic(parent_device_name, mqtt_topic.into())
+                .unwrap_or_default()
         };
 
         let severity = match alarm_data.clone() {
             Some(data) => match data.severity {
                 Some(alarm_severity) => alarm_severity,
-                None => return Err(ThinEdgeJsonDeserializerError::AlarmSeverityNotFound),
+                None => DEFAULT_SEVERITY.into(),
             },
-            None => return Err(ThinEdgeJsonDeserializerError::AlarmSeverityNotFound),
+            None => DEFAULT_SEVERITY.into(),
         };
 
         Ok(Self {
