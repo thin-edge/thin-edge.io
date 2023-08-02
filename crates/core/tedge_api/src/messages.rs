@@ -553,6 +553,7 @@ pub struct LogUploadCmdPayload {
     pub tedge_url: String,
     #[serde(with = "time::serde::rfc3339")]
     pub date_from: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
     pub date_to: OffsetDateTime,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search_text: Option<String>,

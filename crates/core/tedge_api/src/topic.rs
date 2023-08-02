@@ -3,12 +3,22 @@ use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use std::convert::TryFrom;
 
+// TODO! "te" must be configurable
 const CMD_TOPIC_FILTER: &str = "te/device/+/+/+/cmd/+/+";
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum DeviceKind {
     Main,
     Child(String),
+}
+
+impl DeviceKind {
+    pub fn to_string(&self) -> String {
+        match self {
+            DeviceKind::Main => "main".to_string(),
+            DeviceKind::Child(child_id) => child_id.to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -84,18 +94,23 @@ pub fn get_target_ids_from_cmd_topic(topic: &Topic) -> Option<(DeviceKind, Strin
     let cmd_topic_filter: TopicFilter = CMD_TOPIC_FILTER.try_into().unwrap();
 
     if cmd_topic_filter.accept_topic(topic) {
-        // with the topic scheme te/device/<device-id>///cmd/<cmd-id>
+        // with the topic scheme te/device/<device-id>///cmd/<cmd-name>/<cmd-id>
 
         let mut topic_split = topic.name.split('/');
         // the 3rd level is the device id
-        let device_id = topic_split.nth(2).unwrap();
-        // the 6th element is the child id
-        let cmd_id = topic_split.nth(6).unwrap();
+        let maybe_device_id = topic_split.nth(2).filter(|s| !s.is_empty());
+        // the last element is the command id
+        let maybe_cmd_id = topic_split.last().filter(|s| !s.is_empty());
 
-        if device_id == "main" {
-            Some((DeviceKind::Main, cmd_id.into()))
-        } else {
-            Some((DeviceKind::Child(device_id.into()), cmd_id.into()))
+        match (maybe_device_id, maybe_cmd_id) {
+            (Some(device_id), Some(cmd_id)) => {
+                if device_id == "main" {
+                    Some((DeviceKind::Main, cmd_id.into()))
+                } else {
+                    Some((DeviceKind::Child(device_id.into()), cmd_id.into()))
+                }
+            }
+            _ => None,
         }
     } else {
         None
@@ -116,7 +131,10 @@ impl From<CmdPublishTopic> for Topic {
     fn from(value: CmdPublishTopic) -> Self {
         let topic = match value {
             CmdPublishTopic::LogUpload(target) => {
-                format!("te/device/{}///cmd/{}", target.device_id, target.cmd_id)
+                format!(
+                    "te/device/{}///cmd/log_upload/{}",
+                    target.device_id, target.cmd_id
+                )
             }
         };
         Topic::new_unchecked(&topic)
@@ -209,5 +227,15 @@ mod tests {
             get_child_id_from_child_topic(in_topic),
             expected_child_id.map(|s| s.to_string())
         );
+    }
+
+    #[test_case("te/device/main///cmd/log_upload/1234", Some((DeviceKind::Main, "1234".into())); "valid main device and cmd id")]
+    #[test_case("te/device/child///cmd/log_upload/1234", Some((DeviceKind::Child("child".into()), "1234".into())); "valid child device and cmd id")]
+    #[test_case("te/device/child///cmd/log_upload/", None; "cmd id is missing")]
+    #[test_case("te/device////cmd/log_upload/1234", None; "device id is missing")]
+    #[test_case("foo/bar", None; "invalid topic")]
+    fn extract_ids_from_cmd_topic(topic: &str, expected_pair: Option<(DeviceKind, String)>) {
+        let topic = Topic::new_unchecked(topic);
+        assert_eq!(get_target_ids_from_cmd_topic(&topic), expected_pair);
     }
 }

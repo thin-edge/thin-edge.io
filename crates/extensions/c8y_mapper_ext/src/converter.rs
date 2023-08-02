@@ -426,24 +426,32 @@ impl CumulocityConverter {
         payload: &str,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
         match get_smartrest_device_id(payload) {
-            Some(device_id) if device_id == self.device_name => {
+            Some(device_id) => {
                 match get_smartrest_template_id(payload).as_str() {
-                    "528" => self.forward_software_request(payload).await,
-                    "510" => Self::forward_restart_request(payload),
                     "522" => self.convert_log_upload_request(payload),
-                    template => self.forward_operation_request(payload, template).await,
-                }
-            }
-            _ => {
-                match get_smartrest_template_id(payload).as_str() {
-                    "106" => self.register_child_device_supported_operations(payload),
-                    // Ignore any other child device incoming request as not yet supported
+                    "528" if device_id == self.device_name => {
+                        self.forward_software_request(payload).await
+                    }
+                    "510" if device_id == self.device_name => {
+                        Self::forward_restart_request(payload)
+                    }
+                    template if device_id == self.device_name => {
+                        self.forward_operation_request(payload, template).await
+                    }
                     _ => {
+                        // Ignore any other child device incoming request as not yet supported
                         debug!("Ignored. Message not yet supported: {payload}");
                         Ok(vec![])
                     }
                 }
             }
+            None => match get_smartrest_template_id(payload).as_str() {
+                "106" => self.register_child_device_supported_operations(payload),
+                _ => {
+                    debug!("Ignored. Message not yet supported: {payload}");
+                    Ok(vec![])
+                }
+            },
         }
     }
 
@@ -501,12 +509,14 @@ impl CumulocityConverter {
         } else {
             log_request.device
         };
+
         let cmd_id = nanoid!();
-        let topic = CmdPublishTopic::LogUpload(Target::new(device_id, cmd_id.clone())).into();
+        let topic =
+            CmdPublishTopic::LogUpload(Target::new(device_id.clone(), cmd_id.clone())).into();
 
         let tedge_url = format!(
-            "http://{}/tedge/file-transfer/log_upload/{}",
-            &self.config.tedge_http_host, cmd_id
+            "http://{}/tedge/file-transfer/{}/log_upload/{}-{}",
+            &self.config.tedge_http_host, device_id, log_request.log_type, cmd_id
         );
 
         let request = LogUploadCmdPayload::new(
@@ -691,10 +701,13 @@ impl CumulocityConverter {
         &mut self,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        let (device_id, cmd_id) = get_target_ids_from_cmd_topic(&message.topic).unwrap();
-        let device_id = match device_id {
+        let (device_id, cmd_id) = get_target_ids_from_cmd_topic(&message.topic).ok_or(
+            ConversionError::UnsupportedTopic(message.topic.name.clone()),
+        )?;
+
+        let external_id = match device_id {
             DeviceKind::Main => self.config.device_id.clone(),
-            DeviceKind::Child(child_id) => child_id,
+            DeviceKind::Child(ref child_id) => child_id.clone(),
         };
 
         let payload = message.payload_str()?;
@@ -714,14 +727,15 @@ impl CumulocityConverter {
                 let uploaded_file_path = self
                     .config
                     .file_transfer_dir
+                    .join(device_id.to_string())
                     .join("log_upload")
-                    .join(cmd_id);
+                    .join(format!("{}-{}", response.log_type, cmd_id));
                 let res = self
                     .http_proxy
                     .upload_file(
                         uploaded_file_path.as_std_path(),
                         &response.log_type,
-                        device_id,
+                        external_id,
                     )
                     .await;
 
