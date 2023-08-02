@@ -3,20 +3,31 @@ mod module_check;
 
 use crate::error::InternalError;
 use crate::module_check::PackageMetadata;
-use clap::IntoApp;
 use clap::Parser;
 use log::warn;
 use regex::Regex;
 use serde::Deserialize;
-use std::fs;
 use std::io::{self};
+use std::path::PathBuf;
 use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Stdio;
+use tedge_config::new::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
+use tedge_config::TEdgeConfigRepository;
+use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 #[derive(Parser, Debug)]
+#[clap(
+    name = clap::crate_name!(),
+    version = clap::crate_version!(),
+    about = clap::crate_description!(),
+    arg_required_else_help(true)
+)]
 struct AptCli {
+    #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
+    config_dir: PathBuf,
+
     #[clap(subcommand)]
     operation: PluginOp,
 }
@@ -25,9 +36,11 @@ struct AptCli {
 pub enum PluginOp {
     /// List all the installed modules
     List {
+        /// Filter packages list output by name
         #[clap(long = "--name")]
         name: Option<String>,
 
+        /// Filter packages list output by maintainer
         #[clap(long = "--maintainer")]
         maintainer: Option<String>,
     },
@@ -72,17 +85,6 @@ struct SoftwareModuleUpdate {
     pub version: Option<String>,
     #[serde(default)]
     pub path: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct TedgeConfig {
-    pub apt: AptConfig,
-}
-
-#[derive(Debug, Deserialize)]
-struct AptConfig {
-    pub name: Option<String>,
-    pub maintainer: Option<String>,
 }
 
 fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
@@ -289,34 +291,23 @@ fn get_name_and_version(line: &str) -> (&str, &str) {
     (name, version)
 }
 
-fn get_config() -> Option<TedgeConfig> {
-    let config_dir = TEdgeConfigLocation::default();
+fn get_config(config_dir: PathBuf) -> Option<TEdgeConfig> {
+    let tedge_config_location = TEdgeConfigLocation::from_custom_root(config_dir);
 
-    match fs::read_to_string(config_dir.tedge_config_file_path()) {
-        Ok(content) => match toml::from_str(&content) {
-            Ok(config) => Some(config),
-            Err(err) => {
-                warn!(
-                    "Failed to parse {}: {}",
-                    config_dir.tedge_config_file_path(),
-                    err
-                );
-                None
-            }
-        },
-        Err(_) => None,
+    match TEdgeConfigRepository::new(tedge_config_location).load_new() {
+        Ok(config) => Some(config),
+        Err(err) => {
+            warn!("Failed to load TEdgeConfig: {}", err);
+            None
+        }
     }
 }
 
 fn main() {
-    // On usage error, the process exits with a status code of 1
-
     let mut apt = match AptCli::try_parse() {
         Ok(aptcli) => aptcli,
-        Err(_) => {
-            AptCli::command()
-                .print_help()
-                .expect("Failed to print usage help");
+        Err(err) => {
+            err.print().expect("Failed to print help message");
             // re-write the clap exit_status from 2 to 1, if parse fails
             std::process::exit(1)
         }
@@ -327,13 +318,13 @@ fn main() {
         ref mut maintainer,
     } = apt.operation
     {
-        if let Some(config) = get_config() {
+        if let Some(config) = get_config(apt.config_dir) {
             if name.is_none() {
-                *name = config.apt.name;
+                *name = config.apt.name.or_none().cloned();
             }
 
             if maintainer.is_none() {
-                *maintainer = config.apt.maintainer;
+                *maintainer = config.apt.maintainer.or_none().cloned();
             }
         }
     }

@@ -591,6 +591,15 @@ define_tedge_config! {
         #[tedge_config(rename = "type", example = "systemd", default(value = "service"))]
         ty: String,
     },
+
+    apt: {
+        /// The filtering criterion that is used to filter packages list output by name
+        #[tedge_config(example = "tedge.*")]
+        name: String,
+        /// The filtering criterion that is used to filter packages list output by maintainer
+        #[tedge_config(example = "thin-edge.io team.*")]
+        maintainer: String,
+    }
 }
 
 fn default_http_address(dto: &TEdgeConfigDto) -> IpAddr {
@@ -767,6 +776,8 @@ mod tests {
     #[test_case::test_case("firmware.child.update.timeout")]
     #[test_case::test_case("service.type")]
     #[test_case::test_case("run.lock_files")]
+    #[test_case::test_case("apt.name")]
+    #[test_case::test_case("apt.maintainer")]
     fn all_0_10_keys_can_be_deserialised(key: &str) {
         key.parse::<ReadableKey>().unwrap();
     }

@@ -1,6 +1,6 @@
 [package]
 name = "tedge-apt-plugin"
-description = "Thin.edge.io plugin for software management using apt"
+description = "Thin-edge.io plugin for software management using apt"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
@@ -24,7 +24,6 @@ regex = "1"
 serde = { version = "1", features = ["derive"] }
 tedge_config = { path = "../../crates/common/tedge_config" }
 thiserror = "1.0"
-toml = "0.5"
 
 [dev-dependencies]
 anyhow = "1.0"

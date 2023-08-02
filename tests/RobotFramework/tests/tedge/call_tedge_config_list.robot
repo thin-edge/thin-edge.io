@@ -16,6 +16,8 @@ Documentation       Purpose of this test is to verify that the tedge config list
 ...                 Set new tmp.path and return to default value
 ...                 Set new logs.path and return to default value
 ...                 Set new run.path and return to default value
+...                 Set new apt.name and return to default value
+...                 Set new apt.maintainer and return to default value
 
 Resource            ../../resources/common.resource
 Library             ThinEdgeIO
@@ -373,3 +375,27 @@ set/unset software.plugin.default
     ...    sudo tedge config unset software.plugin.default
     ${unset}    Execute Command    tedge config list
     Should Not Contain    ${unset}    software.plugin.default=
+
+set/unset apt.name
+    # Changing apt.name
+    Execute Command    sudo tedge config set apt.name tedge.*
+    ${set}    Execute Command    tedge config list
+    Should Contain    ${set}    apt.name=tedge.*
+
+    # Undo the change by using the 'unset' command, value returns to default one
+    Execute Command
+    ...    sudo tedge config unset apt.name
+    ${unset}    Execute Command    tedge config list
+    Should Not Contain    ${unset}    apt.name=
+
+set/unset apt.maintainer
+    # Changing apt.maintainer
+    Execute Command    sudo tedge config set apt.maintainer 'thin-edge.io team.*'
+    ${set}    Execute Command    tedge config list
+    Should Contain    ${set}    apt.maintainer=thin-edge.io team.*
+
+    # Undo the change by using the 'unset' command, value returns to default one
+    Execute Command
+    ...    sudo tedge config unset apt.maintainer
+    ${unset}    Execute Command    tedge config list
+    Should Not Contain    ${unset}    apt.maintainer=
