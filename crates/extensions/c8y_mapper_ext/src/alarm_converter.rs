@@ -138,7 +138,7 @@ impl AlarmConverter {
                 if c8y_alarm.fragments.is_empty() {
                     let smartrest_alarm = alarm::serialize_alarm(tedge_alarm)?;
                     let c8y_alarm_topic = Topic::new_unchecked(
-                        &self.new_get_c8y_alarm_topic(input_message.topic.name.as_str())?,
+                        &self.new_get_c8y_alarm_topic(input_message.topic.name.as_str()),
                     );
                     output_messages.push(Message::new(&c8y_alarm_topic, smartrest_alarm));
                 } else {
@@ -171,12 +171,12 @@ impl AlarmConverter {
         }
     }
 
-    pub(crate) fn new_get_c8y_alarm_topic(&self, topic: &str) -> Result<String, ConversionError> {
+    pub(crate) fn new_get_c8y_alarm_topic(&self, topic: &str) -> String {
         let topic_split: Vec<&str> = topic.split('/').collect();
         if topic_split[2].eq("main") {
-            Ok(SMARTREST_PUBLISH_TOPIC.to_string())
+            SMARTREST_PUBLISH_TOPIC.to_string()
         } else {
-            Ok(format!("{SMARTREST_PUBLISH_TOPIC}/{}", topic_split[2]))
+            format!("{SMARTREST_PUBLISH_TOPIC}/{}", topic_split[2])
         }
     }
 
