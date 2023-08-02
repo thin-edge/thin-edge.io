@@ -78,7 +78,6 @@ pub fn get_child_id_from_child_topic(topic: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
     use std::convert::TryInto;
     use test_case::test_case;
