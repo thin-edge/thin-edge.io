@@ -99,15 +99,19 @@ impl AlarmConverter {
     ) -> Result<Vec<Message>, ConversionError> {
         let mut output_messages: Vec<Message> = Vec::new();
         let alarm_id = input_message.topic.name.split('/').last();
+        if alarm_id.is_none() {
+            return Err(ConversionError::AlamrIdNotFound(
+                input_message.topic.name.clone(),
+            ));
+        }
+
         match self {
             Self::Syncing {
                 pending_alarms_map,
                 old_alarms_map: _,
             } => {
-                pending_alarms_map.insert(
-                    alarm_id.expect("Topic does not contain the alarmid").into(),
-                    input_message.clone(),
-                );
+                pending_alarms_map
+                    .insert(alarm_id.unwrap_or_default().into(), input_message.clone());
             }
             Self::Synced => {
                 //Regular conversion phase
@@ -145,7 +149,7 @@ impl AlarmConverter {
 
                 let topic = Topic::new_unchecked(&format!(
                     "{INTERNAL_ALARMS_TOPIC}{}",
-                    alarm_id.expect("Expected tedge/alarms prefix")
+                    alarm_id.unwrap_or_default()
                 ));
                 let alarm_copy =
                     Message::new(&topic, input_message.payload_bytes().to_owned()).with_retain();

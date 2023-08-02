@@ -373,7 +373,7 @@ define_tedge_config! {
 
         /// Set of MQTT topics the Cumulocity mapper should subscribe to
         #[tedge_config(example = "tedge/alarms/#,tedge/measurements/+")]
-        #[tedge_config(default(value = "tedge/measurements,tedge/measurements/+,tedge/alarms/+/+,tedge/alarms/+/+/+,tedge/events/+,tedge/events/+/+,tedge/health/+,tedge/health/+/+,te/device/+///m/,te/device/+///m/+,te/device/+///e/,te/device/+///e/+,te/device/+///a/,te/device/+///a/+"))]
+        #[tedge_config(default(value = "tedge/measurements,tedge/measurements/+,tedge/alarms/+/+,tedge/alarms/+/+/+,tedge/events/+,tedge/events/+/+,tedge/health/+,tedge/health/+/+,te/device/+/+/+/m/,te/device/+/+/+/m/+,te/device/+/+/+/e/,te/device/+/+/+/e/+,te/device/+/+/+/a/,te/device/+/+/+/a/+"))]
         topics: TemplatesSet,
 
     },

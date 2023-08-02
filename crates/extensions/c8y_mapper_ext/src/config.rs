@@ -111,12 +111,12 @@ impl C8yMapperConfig {
             "tedge/events/+/+",
             "tedge/health/+",
             "tedge/health/+/+",
-            "te/device/+///m/",
-            "te/device/+///m/+",
-            "te/device/+///a/",
-            "te/device/+///a/+",
-            "te/device/+///e/",
-            "te/device/+///e/+",
+            "te/device/+/+/+/m/",
+            "te/device/+/+/+/m/+",
+            "te/device/+/+/+/a/",
+            "te/device/+/+/+/a/+",
+            "te/device/+/+/+/e/",
+            "te/device/+/+/+/e/+",
         ]
         .try_into()
         .unwrap()

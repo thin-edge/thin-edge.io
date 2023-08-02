@@ -75,6 +75,9 @@ pub enum ConversionError {
     #[error("Unsupported topic: {0}")]
     UnsupportedTopic(String),
 
+    #[error("AlarmID not found in topic: {0}")]
+    AlamrIdNotFound(String),
+
     #[error(transparent)]
     FromSerdeJson(#[from] serde_json::Error),
 
