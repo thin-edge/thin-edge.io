@@ -399,7 +399,7 @@ define_tedge_config! {
 
         /// Set of MQTT topics the Azure IoT mapper should subscribe to
         #[tedge_config(example = "tedge/measurements,tedge/measurements/+")]
-        #[tedge_config(default(value = "tedge/measurements,tedge/measurements/+,te/device/+///m/,te/device/+///m/+,tedge/health/+,tedge/health/+/+"))]
+        #[tedge_config(default(value = "tedge/measurements,tedge/measurements/+,te/device/+/+/+/m/,te/device/+/+/+/m/+,tedge/health/+,tedge/health/+/+"))]
         topics: TemplatesSet,
     },
 
@@ -423,7 +423,7 @@ define_tedge_config! {
 
         /// Set of MQTT topics the AWS IoT mapper should subscribe to
         #[tedge_config(example = "tedge/measurements,tedge/measurements/+")]
-        #[tedge_config(default(value = "tedge/measurements,tedge/measurements/+,tedge/alarms/+/+,tedge/alarms/+/+/+,tedge/events/+,tedge/events/+/+,tedge/health/+,tedge/health/+/+,te/device/+///m/,te/device/+///m/+,te/device/+///e/+,te/device/+///a/+"))]
+        #[tedge_config(default(value = "tedge/measurements,tedge/measurements/+,tedge/alarms/+/+,tedge/alarms/+/+/+,tedge/events/+,tedge/events/+/+,tedge/health/+,tedge/health/+/+,te/device/+/+/+/m/,te/device/+/+/+/m/+,te/device/+/+/+/e/+,te/device/+/+/+/a/+"))]
         topics: TemplatesSet,
     },
 
