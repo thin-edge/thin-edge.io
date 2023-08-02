@@ -3548,6 +3548,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge-log-plugin"
+version = "0.12.0"
+dependencies = [
+ "anyhow",
+ "clap 3.2.25",
+ "tedge_actors",
+ "tedge_config",
+ "tedge_file_system_ext",
+ "tedge_health_ext",
+ "tedge_http_ext",
+ "tedge_log_manager",
+ "tedge_mqtt_ext",
+ "tedge_signal_ext",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "tedge-mapper"
 version = "0.12.0"
 dependencies = [
