@@ -40,6 +40,7 @@ clap = { version = "3.2", features = ["cargo", "derive"] }
 flockfile = { path = "../../common/flockfile" }
 hyper = { version = "0.14", features = ["full"] }
 lazy_static = "1.4"
+log = "0.4"
 path-clean = "0.1"
 plugin_sm = { path = "../plugin_sm" }
 routerify = "3.0"

@@ -3487,6 +3487,7 @@ dependencies = [
  "flockfile",
  "hyper",
  "lazy_static",
+ "log",
  "path-clean",
  "plugin_sm",
  "routerify",
