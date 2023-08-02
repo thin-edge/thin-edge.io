@@ -8,7 +8,7 @@ pub fn serialize_alarm(alarm: ThinEdgeAlarm) -> Result<String, time::error::Form
     match alarm.data {
         None => Ok(format!("306,{}", alarm.name)),
         Some(alarm_data) => {
-            let smartrest_code = match alarm.severity {
+            let smartrest_code = match alarm_data.severity {
                 AlarmSeverity::Critical => 301,
                 AlarmSeverity::Major => 302,
                 AlarmSeverity::Minor => 303,
@@ -43,12 +43,11 @@ mod tests {
     #[test_case(
         ThinEdgeAlarm {
             name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Critical,
             data: Some(ThinEdgeAlarmData {
                 text: Some("I raised it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: hashmap!{},
-                severity: None,
+                severity: AlarmSeverity::Critical,
             }),
             source: None,
         },
@@ -58,12 +57,11 @@ mod tests {
     #[test_case(
         ThinEdgeAlarm {
             name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Major,
             data: Some(ThinEdgeAlarmData {
                 text: Some("I raised it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: hashmap!{},
-                severity: None,
+                severity: AlarmSeverity::Major,
             }),
             source: None,
         },
@@ -73,12 +71,11 @@ mod tests {
     #[test_case(
         ThinEdgeAlarm {
             name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Minor,
             data: Some(ThinEdgeAlarmData {
                 text: None,
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: hashmap!{},
-                severity: None,
+                severity: AlarmSeverity::Minor,
             }),
             source: None,
         },
@@ -88,12 +85,11 @@ mod tests {
     #[test_case(
         ThinEdgeAlarm {
             name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Warning,
             data: Some(ThinEdgeAlarmData {
                 text: Some("I, raised, it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: hashmap!{},
-                severity: None,
+                severity: AlarmSeverity::Warning,
             }),
             source: None,
         },
@@ -103,12 +99,11 @@ mod tests {
     #[test_case(
         ThinEdgeAlarm {
             name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Warning,
             data: Some(ThinEdgeAlarmData {
                 text: Some("External sensor raised alarm".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: hashmap!{},
-                severity: None,
+                severity:AlarmSeverity::Warning,
             }),
             source: Some("External_source".to_string()),
         },
@@ -118,7 +113,6 @@ mod tests {
     #[test_case(
         ThinEdgeAlarm {
             name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Minor,
             data: None,
             source: None,
         },
@@ -128,7 +122,6 @@ mod tests {
     #[test_case(
         ThinEdgeAlarm {
             name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Minor,
             data: None,
             source: Some("external_sensor".to_string()),
         },
@@ -152,12 +145,11 @@ mod tests {
     fn alarm_translation_empty_json_payload_generates_timestamp() {
         let alarm = ThinEdgeAlarm {
             name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Warning,
             data: Some(ThinEdgeAlarmData {
                 text: Some("I raised it".into()),
                 time: None,
                 alarm_data: hashmap! {},
-                severity: None,
+                severity: AlarmSeverity::Major,
             }),
             source: None,
         };

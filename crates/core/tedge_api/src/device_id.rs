@@ -1,6 +1,7 @@
 // TODO: Has to extract this from configuration
 const ROOT_PREFIX: &str = "te";
-
+/// This creates the child device external ID prefixing the main device name (device_common_name), device and child device name separated by `:`
+/// For example `device_common_name:device:child_device_name`
 pub fn get_external_identity_from_topic(
     device_common_name: String,
     topic: String,

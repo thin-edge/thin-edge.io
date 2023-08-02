@@ -10,22 +10,25 @@ use std::collections::HashMap;
 
 use crate::device_id::get_external_identity_from_topic;
 
-const DEFAULT_SEVERITY: &str = "major";
 /// In-memory representation of ThinEdge JSON alarm.
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ThinEdgeAlarm {
     pub name: String,
-    pub severity: AlarmSeverity,
+    // pub severity: AlarmSeverity,
     #[serde(flatten)]
     pub data: Option<ThinEdgeAlarmData>,
     pub source: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
 pub enum AlarmSeverity {
+    #[serde(alias = "critical")]
     Critical,
+    #[serde(alias = "major")]
     Major,
+    #[serde(alias = "minor")]
     Minor,
+    #[serde(alias = "warning")]
     Warning,
 }
 
@@ -33,14 +36,18 @@ pub enum AlarmSeverity {
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
 pub struct ThinEdgeAlarmData {
     pub text: Option<String>,
-
-    pub severity: Option<String>,
+    #[serde(default = "default_severity")]
+    pub severity: AlarmSeverity,
     #[serde(default)]
     #[serde(with = "time::serde::rfc3339::option")]
     pub time: Option<Timestamp>,
 
     #[serde(flatten)]
     pub alarm_data: HashMap<String, Value>,
+}
+
+fn default_severity() -> AlarmSeverity {
+    AlarmSeverity::Major
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -102,14 +109,8 @@ impl ThinEdgeAlarm {
     ) -> Result<Self, ThinEdgeJsonDeserializerError> {
         let topic_split: Vec<&str> = mqtt_topic.split('/').collect();
         if topic_split.len() == 4 || topic_split.len() == 5 {
-            let alarm_severity = topic_split[2];
+            let alarm_severity: AlarmSeverity = topic_split[2].try_into()?;
             let alarm_name = topic_split[3];
-
-            if alarm_severity.is_empty() {
-                return Err(ThinEdgeJsonDeserializerError::UnsupportedAlarmSeverity(
-                    mqtt_topic.into(),
-                ));
-            }
 
             if alarm_name.is_empty() {
                 return Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(
@@ -130,6 +131,10 @@ impl ThinEdgeAlarm {
                 Some(serde_json::from_str(mqtt_payload)?)
             };
 
+            let alarm_data = alarm_data.map(|mut d: ThinEdgeAlarmData| {
+                d.severity = alarm_severity;
+                d
+            });
             // The 4th part of the topic name is the alarm source - if any
             let external_source = if topic_split.len() == 5 {
                 Some(topic_split[4].to_string())
@@ -139,7 +144,6 @@ impl ThinEdgeAlarm {
 
             Ok(Self {
                 name: alarm_name.into(),
-                severity: alarm_severity.try_into()?,
                 data: alarm_data,
                 source: external_source,
             })
@@ -150,6 +154,7 @@ impl ThinEdgeAlarm {
         }
     }
 
+    /// parent_device_name is needed to create the child device external id
     pub fn new_try_from(
         parent_device_name: String,
         mqtt_topic: &str,
@@ -176,17 +181,8 @@ impl ThinEdgeAlarm {
                 .unwrap_or_default()
         };
 
-        let severity = match alarm_data.clone() {
-            Some(data) => match data.severity {
-                Some(alarm_severity) => alarm_severity,
-                None => DEFAULT_SEVERITY.into(),
-            },
-            None => DEFAULT_SEVERITY.into(),
-        };
-
         Ok(Self {
             name: alarm_name.into(),
-            severity: severity.as_str().try_into()?,
             data: alarm_data,
             source: Some(external_source),
         })
@@ -210,13 +206,12 @@ mod tests {
             "time": "2021-04-23T19:00:00+05:00",
         }),
         ThinEdgeAlarm {
-            name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Critical,
+            name: "temperature_alarm".into(),           
             data: Some(ThinEdgeAlarmData {
                 text: Some("I raised it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: hashmap!{},
-                severity: None,
+                severity: AlarmSeverity::Critical,
             }),
             source: None,
         };
@@ -228,13 +223,12 @@ mod tests {
             "text": "I raised it",
         }),
         ThinEdgeAlarm {
-            name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Major,
+            name: "temperature_alarm".into(),          
             data: Some(ThinEdgeAlarmData {
                 text: Some("I raised it".into()),
                 time: None,
                 alarm_data: hashmap!{},
-                severity: None,
+                severity: AlarmSeverity::Major,
             }),
             source: None,
         };
@@ -247,12 +241,11 @@ mod tests {
         }),
         ThinEdgeAlarm {
             name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Minor,
             data: Some(ThinEdgeAlarmData {
                 text: None,
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: hashmap!{},
-                severity: None,
+                severity: AlarmSeverity::Minor,
             }),
             source: None,
         };
@@ -262,13 +255,12 @@ mod tests {
         "tedge/alarms/warning/temperature_alarm",
         json!({}),
         ThinEdgeAlarm {
-            name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Warning,
+            name: "temperature_alarm".into(),           
             data: Some(ThinEdgeAlarmData {
                 text: None,
                 time: None,
                 alarm_data: hashmap!{},
-                severity: None,
+                severity: AlarmSeverity::Warning,
             }),
             source: None,
         };
@@ -281,13 +273,12 @@ mod tests {
             "time": "2021-04-23T19:00:00+05:00",
         }),
         ThinEdgeAlarm {
-            name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Critical,
+            name: "temperature_alarm".into(),           
             data: Some(ThinEdgeAlarmData {
                 text: Some("I raised it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: hashmap!{},
-                severity: None,
+                severity: AlarmSeverity::Critical,
             }),
             source: Some("extern_sensor".to_string()),
         };
@@ -301,13 +292,12 @@ mod tests {
             "time": "2021-04-23T19:00:00+05:00",
         }),
         ThinEdgeAlarm {
-            name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Critical,
+            name: "temperature_alarm".into(),          
             data: Some(ThinEdgeAlarmData {
                 text: Some("I raised it".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data:hashmap!{"message".to_string() => json!("Raised alarm with a message".to_string())},
-                severity: None,
+                severity: AlarmSeverity::Critical,
             }),
             source: Some("extern_sensor".to_string()),
         };
@@ -320,13 +310,12 @@ mod tests {
             "time": "2021-04-23T19:00:00+05:00",
         }),
         ThinEdgeAlarm {
-            name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Critical,
+            name: "temperature_alarm".into(),          
             data: Some(ThinEdgeAlarmData {
                 text: None,
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: hashmap!{"message".to_string() => json!("Raised alarm with a message".to_string())},
-                severity: None,
+                severity: AlarmSeverity::Critical,
             }),
             source: Some("extern_sensor".to_string()),
         };

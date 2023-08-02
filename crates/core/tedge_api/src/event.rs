@@ -94,6 +94,7 @@ impl ThinEdgeEvent {
         }
     }
 
+    /// parent_device_name is needed to create the child device external id
     pub fn new_try_from(
         parent_device_name: String,
         mqtt_topic: &str,

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use tedge_api::alarm::AlarmSeverity;
 use tedge_api::alarm::ThinEdgeAlarm;
 use tedge_api::Jsonify;
 use tedge_api::SoftwareListResponse;
@@ -279,7 +280,7 @@ impl TryFrom<&ThinEdgeAlarm> for C8yCreateAlarm {
     type Error = SMCumulocityMapperError;
 
     fn try_from(alarm: &ThinEdgeAlarm) -> Result<Self, SMCumulocityMapperError> {
-        let severity = alarm.severity.to_string();
+        let severity;
         let alarm_type = alarm.name.to_owned();
         let text;
         let time;
@@ -290,11 +291,13 @@ impl TryFrom<&ThinEdgeAlarm> for C8yCreateAlarm {
                 text = alarm_type.clone();
                 time = OffsetDateTime::now_utc();
                 fragments = HashMap::new();
+                severity = AlarmSeverity::Major;
             }
             Some(data) => {
                 text = data.text.clone().unwrap_or_else(|| alarm_type.clone());
                 time = data.time.unwrap_or_else(OffsetDateTime::now_utc);
                 fragments = data.alarm_data.clone();
+                severity = data.severity.clone();
             }
         }
 
@@ -306,7 +309,7 @@ impl TryFrom<&ThinEdgeAlarm> for C8yCreateAlarm {
 
         Ok(Self {
             source,
-            severity,
+            severity: severity.to_string(),
             alarm_type,
             time,
             text,
@@ -584,13 +587,12 @@ mod tests {
 
     #[test_case(
         ThinEdgeAlarm {
-            name: "temperature alarm".into(),
-            severity: AlarmSeverity::Critical,
+            name: "temperature alarm".into(),            
             data: Some(ThinEdgeAlarmData {
                 text: Some("Temperature went high".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: HashMap::new(),
-                severity: None,
+                severity: AlarmSeverity::Critical,
             }),
             source: None,
         },
@@ -606,13 +608,12 @@ mod tests {
     )]
     #[test_case(
         ThinEdgeAlarm {
-            name: "temperature alarm".into(),
-            severity: AlarmSeverity::Critical,
+            name: "temperature alarm".into(),         
             data: Some(ThinEdgeAlarmData {
                 text: Some("Temperature went high".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: maplit::hashmap!{"SomeCustomFragment".to_string() => json!({"nested": {"value":"extra info"}})},
-                severity: None,
+                severity: AlarmSeverity::Critical,
             }),
             source: None,
         },
@@ -628,13 +629,12 @@ mod tests {
     )]
     #[test_case(
         ThinEdgeAlarm {
-            name: "temperature alarm".into(),
-            severity: AlarmSeverity::Critical,
+            name: "temperature alarm".into(),            
             data: Some(ThinEdgeAlarmData {
                 text: Some("Temperature went high".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
                 alarm_data: maplit::hashmap!{"SomeCustomFragment".to_string() => json!({"nested": {"value":"extra info"}})},
-                severity: None,
+                severity: AlarmSeverity::Critical,
             }),
             source: Some("external_source".into()),
         },
