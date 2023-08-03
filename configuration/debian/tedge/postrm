@@ -66,14 +66,6 @@ case "$1" in
         purge_configs
         purge_var_log
     ;;
-
-    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
-    ;;
-
-    *)
-        echo "tedge postrm called with unknown argument \`$1\`" >&2
-        exit 1
-    ;;
 esac
 
 #DEBHELPER#

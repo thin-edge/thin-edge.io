@@ -13,14 +13,6 @@ case "$1" in
     purge)
         purge_mapper_lock
     ;;
-
-    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
-    ;;
-
-    *)
-        echo "tedge postrm called with unknown argument \`$1\`" >&2
-        exit 1
-    ;;
 esac
 
 #DEBHELPER#
