@@ -53,6 +53,11 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
+use tedge_api::cmd_topic::get_target_ids_from_cmd_topic;
+use tedge_api::cmd_topic::CmdPublishTopic;
+use tedge_api::cmd_topic::CmdSubscribeTopic;
+use tedge_api::cmd_topic::DeviceKind;
+use tedge_api::cmd_topic::Target;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityMetadata;
 use tedge_api::entity_store::EntityRegistrationMessage;
@@ -60,17 +65,13 @@ use tedge_api::entity_store::EntityType;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::messages::CommandStatus;
+use tedge_api::messages::LogMetadata;
 use tedge_api::messages::LogUploadCmdPayload;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_api::topic::get_target_ids_from_cmd_topic;
-use tedge_api::topic::CmdPublishTopic;
-use tedge_api::topic::CmdSubscribeTopic;
-use tedge_api::topic::DeviceKind;
 use tedge_api::topic::RequestTopic;
 use tedge_api::topic::ResponseTopic;
-use tedge_api::topic::Target;
 use tedge_api::Auth;
 use tedge_api::DownloadInfo;
 use tedge_api::EntityStore;
@@ -511,8 +512,8 @@ impl CumulocityConverter {
         };
 
         let cmd_id = nanoid!();
-        let topic =
-            CmdPublishTopic::LogUpload(Target::new(device_id.clone(), cmd_id.clone())).into();
+        let topic = CmdPublishTopic::LogUpload(Target::new(device_id.clone(), cmd_id.clone()))
+            .to_topic("te");
 
         let tedge_url = format!(
             "http://{}/tedge/file-transfer/{}/log_upload/{}-{}",
@@ -529,7 +530,9 @@ impl CumulocityConverter {
             log_request.lines,
             None,
         );
-        Ok(vec![Message::new(&topic, request.to_json()?)])
+
+        // Command messages must be retained
+        Ok(vec![Message::new(&topic, request.to_json()?).with_retain()])
     }
 
     async fn forward_operation_request(
@@ -701,19 +704,28 @@ impl CumulocityConverter {
         &mut self,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        let (device_id, cmd_id) = get_target_ids_from_cmd_topic(&message.topic).ok_or(
-            ConversionError::UnsupportedTopic(message.topic.name.clone()),
-        )?;
+        let (device_kind, cmd_id) = match get_target_ids_from_cmd_topic(&message.topic, "te") {
+            (Some(device_id), Some(cmd_id)) => (device_id, cmd_id),
+            _ => {
+                return Err(ConversionError::UnsupportedTopic(
+                    message.topic.name.clone(),
+                ))
+            }
+        };
 
-        let external_id = match device_id {
-            DeviceKind::Main => self.config.device_id.clone(),
-            DeviceKind::Child(ref child_id) => child_id.clone(),
+        let (external_id, c8y_topic) = match device_kind {
+            DeviceKind::Main => (
+                self.config.device_id.clone(),
+                C8yTopic::SmartRestResponse.to_topic()?,
+            ),
+            DeviceKind::Child(ref child_id) => (
+                child_id.clone(),
+                C8yTopic::ChildSmartRestResponse(child_id.to_owned()).to_topic()?,
+            ),
         };
 
         let payload = message.payload_str()?;
         let response = &LogUploadCmdPayload::from_json(payload)?;
-
-        let topic = C8yTopic::SmartRestResponse.to_topic()?;
 
         let messages = match response.status {
             CommandStatus::Executing => {
@@ -721,13 +733,13 @@ impl CumulocityConverter {
                     CumulocitySupportedOperations::C8yLogFileRequest,
                 )
                 .to_smartrest()?;
-                vec![Message::new(&topic, smartrest_operation_status)]
+                vec![Message::new(&c8y_topic, smartrest_operation_status)]
             }
             CommandStatus::Successful => {
                 let uploaded_file_path = self
                     .config
                     .file_transfer_dir
-                    .join(device_id.to_string())
+                    .join(device_kind.to_string())
                     .join("log_upload")
                     .join(format!("{}-{}", response.log_type, cmd_id));
                 let res = self
@@ -752,7 +764,7 @@ impl CumulocityConverter {
                     .to_smartrest()?,
                 };
 
-                vec![Message::new(&topic, smartrest_operation_status)]
+                vec![Message::new(&c8y_topic, smartrest_operation_status)]
             }
             CommandStatus::Failed => {
                 let smartrest_operation_status = SmartRestSetOperationToFailed::new(
@@ -760,7 +772,7 @@ impl CumulocityConverter {
                     "Restart Failed".into(),
                 )
                 .to_smartrest()?;
-                vec![Message::new(&topic, smartrest_operation_status)]
+                vec![Message::new(&c8y_topic, smartrest_operation_status)]
             }
             _ => {
                 vec![] // Do nothing as other components might handle those states
@@ -768,6 +780,33 @@ impl CumulocityConverter {
         };
 
         Ok(messages)
+    }
+
+    fn convert_log_types(&mut self, message: &Message) -> Result<Vec<Message>, ConversionError> {
+        let device_kind =
+            match get_target_ids_from_cmd_topic(&message.topic, &self.config.topic_root) {
+                (Some(device_id), _) => device_id,
+                _ => {
+                    return Err(ConversionError::UnsupportedTopic(
+                        message.topic.name.clone(),
+                    ))
+                }
+            };
+
+        let c8y_topic = match device_kind {
+            DeviceKind::Main => C8yTopic::SmartRestResponse.to_topic().expect("infallible"),
+            DeviceKind::Child(id) => C8yTopic::ChildSmartRestResponse(id)
+                .to_topic()
+                .expect("infallible"),
+        };
+
+        let metadata = LogMetadata::from_json(message.payload_str()?)?;
+        let mut types = metadata.types;
+        types.sort();
+        let supported_log_types = types.join(",");
+        let payload = format!("118,{supported_log_types}");
+
+        Ok(vec![MqttMessage::new(&c8y_topic, payload)])
     }
 }
 
@@ -861,8 +900,18 @@ impl CumulocityConverter {
                 self.process_health_status_message(message).await
             }
             topic
-                if TopicFilter::new_unchecked(CmdSubscribeTopic::LogUpload.into())
-                    .accept_topic(topic) =>
+                if TopicFilter::new_unchecked(
+                    &CmdSubscribeTopic::LogUpload.metadata(&self.config.topic_root),
+                )
+                .accept_topic(topic) =>
+            {
+                self.convert_log_types(message)
+            }
+            topic
+                if TopicFilter::new_unchecked(
+                    &CmdSubscribeTopic::LogUpload.with_id(&self.config.topic_root),
+                )
+                .accept_topic(topic) =>
             {
                 self.handle_log_upload_state_change(message).await
             }
@@ -1917,7 +1966,9 @@ mod tests {
         let service_type = "service".into();
         let c8y_host = "test.c8y.io".into();
         let tedge_http_host = "localhost".into();
-        let mut topics = C8yMapperConfig::internal_topic_filter(&tmp_dir.to_path_buf()).unwrap();
+        let root_topic = "te".into();
+        let mut topics =
+            C8yMapperConfig::internal_topic_filter(&tmp_dir.to_path_buf(), "te").unwrap();
         topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
         let config = C8yMapperConfig::new(
@@ -1930,6 +1981,7 @@ mod tests {
             c8y_host,
             tedge_http_host,
             topics,
+            root_topic,
         );
 
         let mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =

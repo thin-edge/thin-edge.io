@@ -546,6 +546,14 @@ pub enum CommandStatus {
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct LogMetadata {
+    pub types: Vec<String>,
+}
+
+impl<'a> Jsonify<'a> for LogMetadata {}
+
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct LogUploadCmdPayload {
     pub status: CommandStatus, //Define a different enum if this op needs more states,
     #[serde(rename = "type")]
@@ -557,7 +565,7 @@ pub struct LogUploadCmdPayload {
     pub date_to: OffsetDateTime,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search_text: Option<String>,
-    pub max_lines: usize,
+    pub lines: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 }
@@ -572,7 +580,7 @@ impl LogUploadCmdPayload {
         date_from: OffsetDateTime,
         date_to: OffsetDateTime,
         search_text: Option<String>,
-        max_lines: usize,
+        lines: usize,
         reason: Option<String>,
     ) -> Self {
         Self {
@@ -582,7 +590,7 @@ impl LogUploadCmdPayload {
             date_from,
             date_to,
             search_text,
-            max_lines,
+            lines,
             reason,
         }
     }

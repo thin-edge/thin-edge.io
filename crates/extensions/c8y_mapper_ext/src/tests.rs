@@ -1338,7 +1338,8 @@ async fn spawn_c8y_mapper_actor(
     let service_type = "service".into();
     let c8y_host = "test.c8y.io".into();
     let tedge_http_host = "localhost".into();
-    let mut topics = C8yMapperConfig::internal_topic_filter(config_dir.path()).unwrap();
+    let root_topic = "te".into();
+    let mut topics = C8yMapperConfig::internal_topic_filter(config_dir.path(), "te").unwrap();
     topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
     let config = C8yMapperConfig::new(
@@ -1351,6 +1352,7 @@ async fn spawn_c8y_mapper_actor(
         c8y_host,
         tedge_http_host,
         topics,
+        root_topic,
     );
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
