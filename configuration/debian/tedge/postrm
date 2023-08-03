@@ -1,15 +1,31 @@
 #!/bin/sh
 set -e
 
+command_exists() {
+    command -V "$1" >/dev/null 2>&1
+}
+
 remove_user_tedge() {
     if getent passwd tedge > /dev/null; then
-        deluser --quiet --system tedge
+        if command_exists userdel; then
+            userdel tedge
+        elif command_exists deluser; then
+            deluser tedge
+        else
+            echo "WARNING: Could not delete group: tedge" >&2
+        fi
     fi
 }
 
 remove_tedge_group() {
     if getent group tedge > /dev/null; then
-        groupdel tedge
+        if command_exists groupdel; then
+            groupdel tedge
+        elif command_exists delgroup; then
+            delgroup tedge
+        else
+            echo "WARNING: Could not delete group: tedge" >&2
+        fi
     fi
 }
 

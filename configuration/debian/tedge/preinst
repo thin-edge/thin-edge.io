@@ -1,15 +1,31 @@
 #!/bin/sh
 set -e
 
+command_exists() {
+    command -V "$1" >/dev/null 2>&1
+}
+
 ### Create groups
 if ! getent group tedge >/dev/null; then
-    groupadd --system tedge
+    if command_exists groupadd; then
+        groupadd --system tedge
+    elif command_exists addgroup; then
+        addgroup -S tedge
+    else
+        echo "WARNING: Could not create group: tedge" >&2
+    fi
 fi
 
 ### Create users
 # Create user tedge with no home(--no-create-home), no login(--shell) and in group tedge(--gid)
 if ! getent passwd tedge >/dev/null; then
-    useradd --system --no-create-home --shell /sbin/nologin --gid tedge tedge
+    if command_exists useradd; then
+        useradd --system --no-create-home --shell /sbin/nologin --gid tedge tedge
+    elif command_exists adduser; then
+        adduser -g "" -H -D tedge -G tedge
+    else
+        echo "WARNING: Could not create user: tedge" >&2
+    fi
 fi
 
 ### Create file in /etc/sudoers.d directory. With this configuration, the tedge user have the right to call the tedge command with sudo rights, which is required for system-wide configuration in "/etc/tedge"
