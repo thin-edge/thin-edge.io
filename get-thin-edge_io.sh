@@ -244,23 +244,21 @@ install_tedge_plugins() {
 }
 
 get_latest_version() {
-    # Detect latest version from github api to avoid having a default version in the script
+    # Detect latest version from github using api to avoid having a default version in the script
+    # The request checks the redirected url behind the latest url.
+    # Example:
+    #   https://github.com/thin-edge/thin-edge.io/releases/latest => https://github.com/thin-edge/thin-edge.io/releases/tag/0.12.0
+    #
+    # Note: avoid using the api endpoint (api.github.com) as it is rate limited for unauthenticated requests.
     if command_exists curl; then
-        response=$(curl -s https://api.github.com/repos/thin-edge/thin-edge.io/releases/latest)
+        response=$(curl -Ls -o /dev/null -w "%{url_effective}" 'https://github.com/thin-edge/thin-edge.io/releases/latest')
     elif command_exists wget; then
-        response=$(wget -q --output-document - https://api.github.com/repos/thin-edge/thin-edge.io/releases/latest)
+        response=$(wget --max-redirect=0 https://github.com/thin-edge/thin-edge.io/releases/latest 2>&1 | awk '/Location: /,// { print }' | awk '{print $2}')
     else
         fail 1 "Detecting latest version requires either curl or wget to be installed"
     fi
 
-    # use the same url pattern as expected when downloading the artifacts (so as not to rely on github api response fields)
-    version=$(
-        echo "$response" \
-            | grep -o "https://github.com/thin-edge/thin-edge.io/releases/download/[0-9]\+\.[0-9]\+\.[0-9]\+/.*\.deb" \
-            | grep -o "/[0-9]\+.[0-9]\+.[0-9]\+/" \
-            | cut -d/ -f2 \
-            | head -1
-    )
+    version=$(echo "$response" | rev  | cut -d/ -f1 | rev)
 
     if [ -z "$version" ]; then
         fail 1 "Failed to detect latest version. You can try specifying an explicit version. Check the help for more details"
