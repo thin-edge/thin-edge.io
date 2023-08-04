@@ -928,11 +928,11 @@ te/device/main///cmd/log_upload/<cmd_id>
 {
   "status": "init",
   "type": "tedge-agent",
-  "url": "<tedge-url>",
+  "tedgeUrl": "<tedge-url>",
   "dateFrom": "2013-06-22T17:03:14.000+02:00",
   "dateTo": "2013-06-23T18:03:14.000+02:00",
   "searchText": "ERROR",
-  "maximumLines": 1000
+  "lines": 1000
 }
 ```
 
