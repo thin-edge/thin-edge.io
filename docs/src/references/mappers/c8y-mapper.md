@@ -164,7 +164,7 @@ c8y/s/us
 ```
 
 ```text title="Payload"
-104,<main-device-id>:device:main:service:nodered,systemd,Node-Red,up
+102,<main-device-id>:device:main:service:nodered,systemd,Node-Red,up
 ```
 
 </div>
@@ -199,7 +199,7 @@ c8y/s/us/<main-device-id>:device:child01
 ```
 
 ```text title="Payload"
-104,<main-device-id>:device:child01:service:nodered,systemd,Node-Red,up
+102,<main-device-id>:device:child01:service:nodered,systemd,Node-Red,up
 ```
 
 </div>
@@ -615,7 +615,7 @@ are also mapped to their corresponding _supported logs_ and _supported configs_ 
 **Cumulocity IoT (input)**
 
 ```text title="Topic"
-c8y/s/us
+c8y/s/ds
 ```
 
 ```csv title="Payload"
@@ -746,7 +746,7 @@ All other `status` values are just ignored.
 **Cumulocity IoT (input)**
 
 ```text title="Topic"
-c8y/s/us
+c8y/s/ds
 ```
 
 ```csv title="Payload"
@@ -776,7 +776,7 @@ te/device/child01///cmd/restart
 **Cumulocity IoT (input)**
 
 ```text title="Topic"
-c8y/s/us
+c8y/s/ds
 ```
 
 ```csv title="Payload"
@@ -834,7 +834,7 @@ and the local `<tedge-url>` of that binary is included in the mapped request.
 **Cumulocity IoT (input)**
 
 ```text title="Topic"
-c8y/s/us
+c8y/s/ds
 ```
 
 ```csv title="Payload"
@@ -870,7 +870,7 @@ Where the `url` is the target URL in the tedge file transfer repository to which
 **Cumulocity IoT (input)**
 
 ```text title="Topic"
-c8y/s/us
+c8y/s/ds
 ```
 
 ```csv title="Payload"
@@ -907,7 +907,7 @@ and the local `<tedge-url>` of that binary is included in the mapped request.
 **Cumulocity IoT (input)**
 
 ```text title="Topic"
-c8y/s/us
+c8y/s/ds
 ```
 
 ```csv title="Payload"
