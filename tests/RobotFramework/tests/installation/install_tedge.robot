@@ -12,10 +12,18 @@ Install latest via script (from current branch)
     Execute Command    chmod a+x /setup/get-thin-edge_io.sh && sudo /setup/get-thin-edge_io.sh
     Tedge Version Should Match Regex    ^\\d+\\.\\d+\\.\\d+$
 
+    # Uninstall
+    Uninstall tedge using local Script
+    Tedge Should Not Be Installed
+
 Install specific version via script (from current branch)
     Transfer To Device    ${CURDIR}/../../../../get-thin-edge_io.sh    /setup/
     Execute Command    chmod a+x /setup/get-thin-edge_io.sh && sudo /setup/get-thin-edge_io.sh 0.8.1
     Tedge Version Should Be Equal    0.8.1
+
+    # Uninstall
+    Uninstall tedge using local Script
+    Tedge Should Not Be Installed
 
 Install latest tedge via script (from main branch)
     Execute Command    curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
@@ -25,6 +33,7 @@ Install then uninstall latest tedge via script (from main branch)
     # Install (just install everything, don't set anything up)
     Execute Command    ./bootstrap.sh --install --no-bootstrap --no-connect
     Execute Command    dpkg -s tedge
+    Execute Command    dpkg -s tedge-watchdog
     Execute Command    dpkg -s tedge-mapper
     Execute Command    dpkg -s tedge-agent
     Execute Command    dpkg -s c8y-log-plugin
@@ -34,13 +43,7 @@ Install then uninstall latest tedge via script (from main branch)
 
     # Uninstall
     Execute Command    curl -sSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh | sudo sh -s purge
-    Execute Command    dpkg -s tedge    exp_exit_code=!0
-    Execute Command    dpkg -s tedge-mapper    exp_exit_code=!0
-    Execute Command    dpkg -s tedge-agent    exp_exit_code=!0
-    Execute Command    dpkg -s c8y-log-plugin    exp_exit_code=!0
-    Execute Command    dpkg -s c8y-configuration-plugin    exp_exit_code=!0
-    Execute Command    dpkg -s c8y-firmware-plugin    exp_exit_code=!0
-    Execute Command    dpkg -s c8y-remote-access-plugin    exp_exit_code=!0
+    Tedge Should Not Be Installed
 
 *** Keywords ***
 
@@ -56,3 +59,17 @@ Tedge Version Should Be Equal
     [Arguments]    ${expected}
     ${VERSION}=    Execute Command    tedge --version | cut -d' ' -f 2    strip=True
     Should Be Equal    ${VERSION}    ${expected}
+
+Uninstall tedge using local Script
+    Transfer To Device    ${CURDIR}/../../../../uninstall-thin-edge_io.sh    /setup/
+    Execute Command    chmod a+x /setup/uninstall-thin-edge_io.sh && sudo /setup/uninstall-thin-edge_io.sh purge
+
+Tedge Should Not Be Installed
+    Execute Command    dpkg -s tedge    exp_exit_code=!0
+    Execute Command    dpkg -s tedge-watchdog    exp_exit_code=!0
+    Execute Command    dpkg -s tedge-mapper    exp_exit_code=!0
+    Execute Command    dpkg -s tedge-agent    exp_exit_code=!0
+    Execute Command    dpkg -s c8y-log-plugin    exp_exit_code=!0
+    Execute Command    dpkg -s c8y-configuration-plugin    exp_exit_code=!0
+    Execute Command    dpkg -s c8y-firmware-plugin    exp_exit_code=!0
+    Execute Command    dpkg -s c8y-remote-access-plugin    exp_exit_code=!0
