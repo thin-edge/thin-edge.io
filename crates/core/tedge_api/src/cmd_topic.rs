@@ -8,9 +8,15 @@ pub enum DeviceKind {
 }
 
 impl DeviceKind {
-    pub fn to_string(&self) -> String {
+    /// Return the device name, "main" if DeviceKind::Main, otherwise child ID
+    pub fn name(&self) -> String {
+        self.name_with_default("main")
+    }
+
+    /// Return the device name, the given input if DeviceKind::Main, otherwise child ID
+    pub fn name_with_default(&self, name: &str) -> String {
         match self {
-            DeviceKind::Main => "main".to_string(),
+            DeviceKind::Main => name.to_string(),
             DeviceKind::Child(child_id) => child_id.to_string(),
         }
     }
@@ -117,6 +123,17 @@ pub fn get_target_ids_from_cmd_topic(
 mod tests {
     use super::*;
     use test_case::test_case;
+
+    #[test]
+    fn get_device_name_from_device_kind() {
+        assert_eq!(DeviceKind::Main.name(), "main".to_string());
+        assert_eq!(DeviceKind::Main.name_with_default("abc"), "abc".to_string());
+        assert_eq!(DeviceKind::Child("ch".to_string()).name(), "ch".to_string());
+        assert_eq!(
+            DeviceKind::Child("ch".to_string()).name_with_default("abc"),
+            "ch".to_string()
+        );
+    }
 
     #[test_case("te/device/main///cmd/log_upload/abcd", (Some(DeviceKind::Main), Some("abcd".into())); "valid main device and cmd id")]
     #[test_case("te/device/child///cmd/log_upload/abcd", (Some(DeviceKind::Child("child".into())), Some("abcd".into())); "valid child device and cmd id")]

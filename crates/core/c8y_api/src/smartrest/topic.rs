@@ -1,6 +1,7 @@
 use mqtt_channel::MqttError;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
+use tedge_api::cmd_topic::DeviceKind;
 use tedge_api::topic::ResponseTopic;
 use tedge_api::TopicError;
 
@@ -88,6 +89,15 @@ impl From<C8yTopic> for TopicFilter {
     }
 }
 
+impl From<DeviceKind> for C8yTopic {
+    fn from(value: DeviceKind) -> Self {
+        match value {
+            DeviceKind::Main => Self::SmartRestResponse,
+            DeviceKind::Child(id) => Self::ChildSmartRestResponse(id.to_owned()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum MapperSubscribeTopic {
     C8yTopic(C8yTopic),
@@ -169,5 +179,17 @@ mod tests {
 
         let error: Result<C8yTopic, TopicError> = Topic::new("test").unwrap().try_into();
         assert!(error.is_err());
+    }
+
+    #[test]
+    fn convert_device_kind_into_c8y_topic() {
+        let main_topic: C8yTopic = DeviceKind::Main.into();
+        assert_eq!(main_topic, C8yTopic::SmartRestResponse);
+
+        let child_topic: C8yTopic = DeviceKind::Child("child1".to_string()).into();
+        assert_eq!(
+            child_topic,
+            C8yTopic::ChildSmartRestResponse("child1".to_string())
+        );
     }
 }
