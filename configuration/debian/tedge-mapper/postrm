@@ -1,43 +1,17 @@
 #!/bin/sh
 set -e
 
-purge_operations() {
-    if [ -d "/etc/tedge/operations" ]; then
-        rm -rf /etc/tedge/operations
-    fi
-}
-
 purge_mapper_lock() {
-   if [ -f "/run/lock/tedge-mapper-c8y.lock" ]; then
-       rm -rf /run/lock/tedge-mapper-c8y.lock
-   fi
-
-   if [ -f "/run/lock/tedge-mapper-az.lock" ]; then
-       rm -rf /run/lock/tedge-mapper-az.lock
-   fi
-
-   if [ -f "/run/lock/tedge-mapper-aws.lock" ]; then
-       rm -rf /run/lock/tedge-mapper-aws.lock
-   fi
-
-   if [ -f "/run/lock/tedge-mapper-collectd.lock" ]; then
-       rm -rf /run/lock/tedge-mapper-collectd.lock
-   fi
-
+    rm -f \
+        /run/lock/tedge-mapper-c8y.lock \
+        /run/lock/tedge-mapper-az.lock \
+        /run/lock/tedge-mapper-aws.lock \
+        /run/lock/tedge-mapper-collectd.lock
 }
 
 case "$1" in
     purge)
-        purge_operations
         purge_mapper_lock
-    ;;
-
-    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
-    ;;
-
-    *)
-        echo "tedge postrm called with unknown argument \`$1\`" >&2
-        exit 1
     ;;
 esac
 

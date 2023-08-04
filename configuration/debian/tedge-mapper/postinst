@@ -11,10 +11,21 @@ fi
 
 enable_start_service() {
     name="$1"
-    deb-systemd-helper enable "$name" >/dev/null || true
+
+    if command -v deb-systemd-helper >/dev/null 2>&1; then
+        deb-systemd-helper enable "$name" >/dev/null || true
+    else
+        systemctl enable "$name" >/dev/null || true
+    fi
+
     if [ -d /run/systemd/system ]; then
         systemctl --system daemon-reload >/dev/null || true
-        deb-systemd-invoke start "$name" >/dev/null || true
+
+        if command -v deb-systemd-invoke >/dev/null 2>&1; then
+            deb-systemd-invoke start "$name" >/dev/null || true
+        else
+            systemctl start "$name" >/dev/null || true
+        fi
     fi
 }
 
@@ -32,9 +43,11 @@ if command -v systemctl >/dev/null; then
     if [ -f "/etc/tedge/mosquitto-conf/aws-bridge.conf" ]; then
         enable_start_service tedge-mapper-aws.service
     fi
-    ### Enable the service if the collectd is running on the device
-    if systemctl is-active --quiet collectd.service; then
-        enable_start_service tedge-mapper-collectd.service
+    if [ -d /run/systemd/system ]; then
+        ### Enable the service if the collectd is running on the device
+        if systemctl is-active --quiet collectd.service; then
+            enable_start_service tedge-mapper-collectd.service
+        fi
     fi
 fi
 
