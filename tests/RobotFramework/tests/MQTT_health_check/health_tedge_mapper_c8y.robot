@@ -28,14 +28,14 @@ Start watchdog service
 
     Sleep    10s
 Check PID of tedge-mapper
-    ${pid}=    Execute Command    pgrep -f 'tedge-mapper c8y'        strip=True
+    ${pid}=    Execute Command    pgrep -f '^/usr/bin/tedge-mapper c8y'    strip=${True}
     Set Suite Variable    ${pid}
 
 Kill the PID
     Kill Process    ${pid}
 
 Recheck PID of tedge-mapper
-    ${pid1}=    Execute Command    pgrep -f 'tedge-mapper c8y'        strip=True
+    ${pid1}=    Execute Command    pgrep -f '^/usr/bin/tedge-mapper c8y'    strip=${True}
     Set Suite Variable    ${pid1}
 
 Compare PID change

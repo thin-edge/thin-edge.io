@@ -28,14 +28,14 @@ Start watchdog service
     Sleep    10s
 
 Check PID of c8y-log-plugin
-    ${pid}=    Execute Command    pgrep -f c8y-log-plugin    strip=True
+    ${pid}=    Execute Command    pgrep -f '^/usr/bin/c8y-log-plugin'    strip=${True}
     Set Suite Variable    ${pid}
 
 Kill the PID
     Kill Process    ${pid}
 
 Recheck PID of c8y-log-plugin
-    ${pid1}=    Execute Command    pgrep -f c8y-log-plugin        strip=True
+    ${pid1}=    Execute Command    pgrep -f '^/usr/bin/c8y-log-plugin'        strip=${True}
     Set Suite Variable    ${pid1}
 
 Compare PID change
