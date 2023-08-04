@@ -86,7 +86,7 @@ tedge mqtt pub -r 'te/device/main///cmd/log_upload/1234' '{
   "dateFrom": "2013-06-22T17:03:14.000+02:00",
   "dateTo": "2013-06-23T18:03:14.000+02:00",
   "searchText": "ERROR",
-  "maximumLines": 1000
+  "lines": 1000
 }'
 ```
 
@@ -116,7 +116,7 @@ tedge mqtt pub -r 'te/device/main///cmd/log_upload/1234' '{
   "dateFrom": "2013-06-22T17:03:14.000+02:00",
   "dateTo": "2013-06-22T18:03:14.000+02:00",
   "searchText": "ERROR",
-  "maximumLines": 1000
+  "lines": 1000
 }'
 ```
 
