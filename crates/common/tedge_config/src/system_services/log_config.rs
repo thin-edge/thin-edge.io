@@ -19,14 +19,23 @@ pub fn get_log_level(
     }
 }
 
-/// Initialize a `tracing_subscriber`
-/// Reports all the log events sent either with the `log` crate or the `tracing` crate.
+/// Initializes a tracing subscriber with a given log level if environment
+/// variable `RUST_LOG` is not present.
+///
+/// Reports all the log events sent either with the `log` crate or the `tracing`
+/// crate.
 pub fn set_log_level(log_level: tracing::Level) {
-    tracing_subscriber::fmt()
+    let subscriber = tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
-        .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339())
-        .with_max_level(log_level)
-        .init();
+        .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339());
+
+    if std::env::var("RUST_LOG").is_ok() {
+        subscriber
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .init();
+    } else {
+        subscriber.with_max_level(log_level).init();
+    }
 }
 
 #[cfg(test)]
