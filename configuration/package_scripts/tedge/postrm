@@ -67,5 +67,3 @@ case "$1" in
         purge_var_log
     ;;
 esac
-
-#DEBHELPER#
