@@ -1,0 +1,6 @@
+if [ $1 -eq 2 ]; then
+	if [ -d /run/systemd/system ]; then
+		systemctl --system daemon-reload >/dev/null || true
+		systemctl restart #UNITFILES# >/dev/null || true
+	fi
+fi

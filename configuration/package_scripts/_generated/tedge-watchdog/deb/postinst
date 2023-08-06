@@ -1,13 +1,6 @@
 #!/bin/sh
-
 set -e
-
-# Deprecate: Remove symlink in 1.x release
-if [ ! -e /usr/bin/tedge_watchdog ]; then
-    ln -s /usr/bin/tedge-watchdog /usr/bin/tedge_watchdog
-fi
-
-# Automatically added by cargo-deb
+# Automatically added by thin-edge.io
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
 	# This will only remove masks created by d-s-h on package removal.
 	deb-systemd-helper unmask tedge-watchdog.service >/dev/null || true
@@ -24,17 +17,11 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 	fi
 fi
 # End automatically added section
-# Automatically added by cargo-deb
+# Automatically added by thin-edge.io
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
 	if [ -d /run/systemd/system ]; then
 		systemctl --system daemon-reload >/dev/null || true
-		if [ -n "$2" ]; then
-			_dh_action=restart
-		else
-			_dh_action=start
-		fi
-		deb-systemd-invoke $_dh_action tedge-watchdog.service >/dev/null || true
+		deb-systemd-invoke start tedge-watchdog.service >/dev/null || true
 	fi
 fi
 # End automatically added section
-
