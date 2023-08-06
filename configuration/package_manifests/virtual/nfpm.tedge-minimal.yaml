@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://nfpm.goreleaser.com/static/schema.json
+---
+name: tedge-minimal
+description: |
+  Thin Edge meta package to install a minimal set of tedge components
+arch: all
+platform: "linux"
+version: "${GIT_SEMVER}"
+section: misc
+priority: "optional"
+maintainer: "thin-edge.io team <info@thin-edge.io>"
+vendor: "thin-edge.io"
+homepage: "https://thin-edge.io"
+license: "Apache-2.0"
+
+apk:
+  # Use noarch instead of "all"
+  arch: noarch
+
+recommends:
+  - ca-certificates
+
+overrides:
+  # Different packages requires the version to be specified in
+  # slightly different formats
+  apk:
+    depends:
+        - tedge = ${GIT_SEMVER}
+        - tedge-mapper = ${GIT_SEMVER}
+  rpm:
+    depends:
+        - tedge = ${GIT_SEMVER}
+        - tedge-mapper = ${GIT_SEMVER}
+  deb:
+    depends:
+        - tedge (= ${GIT_SEMVER})
+        - tedge-mapper (= ${GIT_SEMVER})
+
+deb:
+  fields:
+    Multi-Arch: allowed
+    Vcs-Browser: ${CI_PROJECT_URL}
+    Vcs-Git: ${CI_PROJECT_URL}
+  compression: xz

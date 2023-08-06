@@ -32,7 +32,7 @@ WORKDIR /setup
 COPY files/bootstrap.sh .
 COPY files/system.toml /etc/tedge/
 COPY files/c8y-configuration-plugin.toml /etc/tedge/c8y/
-COPY files/deb/ /setup/deb/
+COPY files/packages/ /setup/packages/
 
 COPY files/mqtt-logger.service /etc/systemd/system/
 COPY files/mqtt-logger /usr/bin/

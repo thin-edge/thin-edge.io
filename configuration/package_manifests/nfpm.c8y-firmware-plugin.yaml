@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=https://nfpm.goreleaser.com/static/schema.json
+---
+name: c8y-firmware-plugin
+description: |
+  Thin-edge device firmware management for Cumulocity
+arch: "${PKG_ARCH}"
+platform: "linux"
+version: "${GIT_SEMVER}"
+section: misc
+priority: "optional"
+maintainer: "thin-edge.io team <info@thin-edge.io>"
+vendor: "thin-edge.io"
+homepage: "https://thin-edge.io"
+license: "Apache-2.0"
+
+depends:
+  - tedge-agent
+
+deb:
+  fields:
+    Vcs-Browser: ${CI_PROJECT_URL}
+    Vcs-Git: ${CI_PROJECT_URL}
+  compression: xz
+
+contents:
+  # binary
+  - src: .build/c8y-firmware-plugin
+    dst: /usr/bin/
+
+  # service definitions
+  - src: ./configuration/init/systemd/c8y-firmware-plugin.service
+    dst: /lib/systemd/system/
+    file_info:
+      mode: 0644
+    packager: deb
+
+  - src: ./configuration/init/systemd/c8y-firmware-plugin.service
+    dst: /lib/systemd/system/
+    file_info:
+      mode: 0644
+    packager: rpm
+
+overrides:
+  apk:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/c8y-firmware-plugin/apk/preinst
+      postinstall: configuration/package_scripts/_generated/c8y-firmware-plugin/apk/postinst
+      preremove: configuration/package_scripts/_generated/c8y-firmware-plugin/apk/prerm
+      postremove: configuration/package_scripts/_generated/c8y-firmware-plugin/apk/postrm
+
+  rpm:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/c8y-firmware-plugin/rpm/preinst
+      postinstall: configuration/package_scripts/_generated/c8y-firmware-plugin/rpm/postinst
+      preremove: configuration/package_scripts/_generated/c8y-firmware-plugin/rpm/prerm
+      postremove: configuration/package_scripts/_generated/c8y-firmware-plugin/rpm/postrm
+
+  deb:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/c8y-firmware-plugin/deb/preinst
+      postinstall: configuration/package_scripts/_generated/c8y-firmware-plugin/deb/postinst
+      preremove: configuration/package_scripts/_generated/c8y-firmware-plugin/deb/prerm
+      postremove: configuration/package_scripts/_generated/c8y-firmware-plugin/deb/postrm

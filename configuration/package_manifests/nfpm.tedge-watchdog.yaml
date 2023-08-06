@@ -1,0 +1,73 @@
+# yaml-language-server: $schema=https://nfpm.goreleaser.com/static/schema.json
+---
+name: tedge-watchdog
+description: |
+  tedge-watchdog checks the health of all the thin-edge.io components/services.
+arch: "${PKG_ARCH}"
+platform: "linux"
+version: "${GIT_SEMVER}"
+section: misc
+priority: "optional"
+maintainer: "thin-edge.io team <info@thin-edge.io>"
+vendor: "thin-edge.io"
+homepage: "https://thin-edge.io"
+license: "Apache-2.0"
+
+replaces:
+  - tedge_watchdog
+conflicts:
+  - tedge_watchdog (<= 0.8.1)
+
+deb:
+  fields:
+    Vcs-Browser: ${CI_PROJECT_URL}
+    Vcs-Git: ${CI_PROJECT_URL}
+  compression: xz
+  breaks:
+    - tedge_watchdog (<= 0.8.1)
+
+contents:
+  # binary
+  - src: .build/tedge-watchdog
+    dst: /usr/bin/
+
+  # service definitions
+  - src: ./configuration/init/systemd/tedge-watchdog.service
+    dst: /lib/systemd/system/
+    file_info:
+      mode: 0644
+    packager: deb
+
+  - src: ./configuration/init/systemd/tedge-watchdog.service
+    dst: /lib/systemd/system/
+    file_info:
+      mode: 0644
+    packager: rpm
+
+  # Symlink for backwards compatibility
+  # Deprecate: Remove symlink in 1.x release
+  - src: /usr/bin/tedge-watchdog
+    dst: /usr/bin/tedge_watchdog
+    type: symlink
+
+overrides:
+  apk:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge-watchdog/apk/preinst
+      postinstall: configuration/package_scripts/_generated/tedge-watchdog/apk/postinst
+      preremove: configuration/package_scripts/_generated/tedge-watchdog/apk/prerm
+      postremove: configuration/package_scripts/_generated/tedge-watchdog/apk/postrm
+
+  rpm:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge-watchdog/rpm/preinst
+      postinstall: configuration/package_scripts/_generated/tedge-watchdog/rpm/postinst
+      preremove: configuration/package_scripts/_generated/tedge-watchdog/rpm/prerm
+      postremove: configuration/package_scripts/_generated/tedge-watchdog/rpm/postrm
+
+  deb:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge-watchdog/deb/preinst
+      postinstall: configuration/package_scripts/_generated/tedge-watchdog/deb/postinst
+      preremove: configuration/package_scripts/_generated/tedge-watchdog/deb/prerm
+      postremove: configuration/package_scripts/_generated/tedge-watchdog/deb/postrm

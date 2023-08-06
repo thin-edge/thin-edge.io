@@ -1,0 +1,10 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: tedge
+Source: https://github.com/thin-edge/thin-edge.io
+Copyright: 2023 thin-edge.io team <info@thin-edge.io>
+License: Apache-2.0
+
+Files:
+ *
+Copyright: 2023 thin-edge.io team <info@thin-edge.io>
+License: Apache-2.0
