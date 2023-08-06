@@ -32,7 +32,7 @@ Update tedge version from previous using Cumulocity
     ${OPERATION}=    Install Software    tedge,${NEW_VERSION}    tedge-mapper,${NEW_VERSION}    tedge-watchdog,${NEW_VERSION}    c8y-log-plugin,${NEW_VERSION}    c8y-configuration-plugin,${NEW_VERSION}    tedge-apt-plugin,${NEW_VERSION}
     Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=180
     # Device Should Have Installed Software    tedge,${NEW_VERSION}::apt    tedge-mapper,${NEW_VERSION}::apt    tedge-agent,${NEW_VERSION}::apt    tedge-watchdog,${NEW_VERSION}::apt    c8y-configuration-plugin,${NEW_VERSION}::apt    c8y-log-plugin,${NEW_VERSION}::apt    tedge-apt-plugin,${NEW_VERSION}::apt
-    Device Should Have Installed Software    tedge,${NEW_VERSION}::apt    tedge-mapper,${NEW_VERSION}::apt    tedge-watchdog,${NEW_VERSION}::apt    c8y-configuration-plugin,${NEW_VERSION}::apt    c8y-log-plugin,${NEW_VERSION}::apt    tedge-apt-plugin,${NEW_VERSION}::apt
+    Device Should Have Installed Software    tedge,${NEW_VERSION_ESCAPED}::apt    tedge-mapper,${NEW_VERSION_ESCAPED}::apt    tedge-watchdog,${NEW_VERSION_ESCAPED}::apt    c8y-configuration-plugin,${NEW_VERSION_ESCAPED}::apt    c8y-log-plugin,${NEW_VERSION_ESCAPED}::apt    tedge-apt-plugin,${NEW_VERSION_ESCAPED}::apt
 
     # Check if services are still stopped and disabled
     ${OUTPUT}    Execute Command    systemctl is-active tedge-mapper-az || exit 1    exp_exit_code=1    strip=True
@@ -56,5 +56,7 @@ Create Local Repository
     Execute Command    mkdir -p /opt/repository/local && find /setup -type f -name "*.deb" -exec cp {} /opt/repository/local \\;
     ${NEW_VERSION}=    Execute Command    find /setup -type f -name "tedge-mapper_*.deb" | sort -Vr | head -n1 | cut -d'_' -f 2    strip=True
     Set Suite Variable    $NEW_VERSION
+    ${NEW_VERSION_ESCAPED}=    Regexp Escape      ${NEW_VERSION}
+    Set Suite Variable    $NEW_VERSION_ESCAPED
     Execute Command    cd /opt/repository/local && dpkg-scanpackages -m . > Packages
     Execute Command    cmd=echo 'deb [trusted=yes] file:/opt/repository/local /' > /etc/apt/sources.list.d/tedge-local.list

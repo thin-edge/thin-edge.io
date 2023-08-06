@@ -31,7 +31,8 @@ tedge-agent should terminate on SIGINT while downloading file
 
 Software list should only show currently installed software and not candidates
     ${EXPECTED_VERSION}=    Execute Command    dpkg -s tedge | grep "^Version: " | cut -d' ' -f2    strip=True
-    Device Should Have Installed Software    tedge,^${EXPECTED_VERSION}::apt$        timeout=120
+    ${VERSION}=    Regexp Escape    ${EXPECTED_VERSION}
+    Device Should Have Installed Software    tedge,^${VERSION}::apt$        timeout=120
 
 *** Keywords ***
 

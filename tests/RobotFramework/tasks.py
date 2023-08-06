@@ -41,7 +41,7 @@ class ColourFormatter(logging.Formatter):
 output_path = Path(__file__).parent / "output"
 project_dir = Path(__file__).parent.parent.parent
 project_dotenv = project_dir.joinpath(".env")
-test_image_file_dir = project_dir / "tests/images/debian-systemd/files/deb"
+test_image_file_dir = project_dir / "tests/images/debian-systemd/files/packages"
 
 # LOG settings
 log = logging.getLogger("invoke")

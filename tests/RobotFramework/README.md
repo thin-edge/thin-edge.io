@@ -206,7 +206,7 @@ If you are looking to use packages that you locally built, then just use `invoke
     For example, assume I have already downloaded the packages from GitHub and placed them under my home folder under `Downloads`.
 
     ```sh
-    cp "$HOME/Downloads/"*.deb "tests/images/debian-systemd/files/deb/"
+    cp "$HOME/Downloads/"*.deb "tests/images/debian-systemd/files/packages/"
     ```
 
 4. Rebuild the docker image

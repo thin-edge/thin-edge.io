@@ -9,52 +9,6 @@ license = { workspace = true }
 homepage = { workspace = true }
 repository = { workspace = true }
 
-[package.metadata.deb]
-pre-depends = "tedge"
-replaces = "tedge_mapper"
-conflicts = "tedge_mapper (<= 0.8.1)"
-breaks = "tedge_mapper (<= 0.8.1)"
-provides = "tedge_mapper"
-maintainer-scripts = "../../../configuration/debian/tedge-mapper"
-assets = [
-    [
-        "../../../configuration/init/systemd/tedge-mapper-aws.service",
-        "/lib/systemd/system/tedge-mapper-aws.service",
-        "644"
-    ],
-    [
-        "../../../configuration/init/systemd/tedge-mapper-az.service",
-        "/lib/systemd/system/tedge-mapper-az.service",
-        "644",
-    ],
-    [
-        "../../../configuration/init/systemd/tedge-mapper-c8y.service",
-        "/lib/systemd/system/tedge-mapper-c8y.service",
-        "644",
-    ],
-    [
-        "../../../configuration/init/systemd/tedge-mapper-collectd.service",
-        "/lib/systemd/system/tedge-mapper-collectd.service",
-        "644",
-    ],
-    [
-        "../../../configuration/contrib/collectd/collectd.conf",
-        "/etc/tedge/contrib/collectd/",
-        "644",
-    ],
-    [
-        "target/release/tedge-mapper",
-        "/usr/bin/tedge-mapper",
-        "755",
-    ],
-]
-
-# Required for DEBHELPER
-[package.metadata.deb.systemd-units]
-enable = false
-start = false
-stop-on-upgrade = false
-
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"

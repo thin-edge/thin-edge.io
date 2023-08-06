@@ -9,13 +9,6 @@ license = { workspace = true }
 homepage = { workspace = true }
 repository = { workspace = true }
 
-[package.metadata.deb]
-replaces = "tedge_apt_plugin"
-conflicts = "tedge_apt_plugin (<= 0.8.1)"
-breaks = "tedge_apt_plugin (<= 0.8.1)"
-maintainer-scripts = "../../configuration/debian/tedge-apt-plugin"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 clap = { version = "3", features = ["derive"] }
 csv = "1.1"

@@ -61,8 +61,8 @@ EXAMPLES
     sudo -E $0 --clean
     # Clean the device before installing, then install and bootstrap
 
-    sudo -E $0 ./deb/
-    # Install and bootstrap using locally found tedge debian files under ./deb/ folder
+    sudo -E $0 ./packages/
+    # Install and bootstrap using locally found tedge debian files under ./packages/ folder
 
     sudo -E $0 --channel main
     # Install the latest available version from the main repository. It will includes the latest version built from main

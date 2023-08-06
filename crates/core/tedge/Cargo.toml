@@ -10,10 +10,6 @@ homepage = { workspace = true }
 repository = { workspace = true }
 readme = "README.md"
 
-[package.metadata.deb]
-recommends = "mosquitto"
-maintainer-scripts = "../../../configuration/debian/tedge"
-
 [dependencies]
 anyhow = "1.0"
 atty = "0.2"

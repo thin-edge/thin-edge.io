@@ -61,7 +61,7 @@ jobs:
     strategy:
       matrix:
         job:
-          - { arch: x86_64, target: x86_64-unknown-linux-gnu, output: target/debian }
+          - { arch: x86_64, target: x86_64-unknown-linux-gnu, output: target/packages }
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -89,14 +89,14 @@ jobs:
       - name: Build packages for ${{ matrix.job.arch }}
         run: |
           bash -x ./ci/build_scripts/build.sh "${{ matrix.job.target }}"
-          cp "target/${{ matrix.job.target }}/debian/"*.deb tests/images/debian-systemd/files/deb/
+          cp "target/${{ matrix.job.target }}/packages/"*.deb tests/images/debian-systemd/files/packages/
       
       - name: Upload artifacts as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v3
         with:
-          name: debian-packages-${{ matrix.job.target }}
-          path: target/${{ matrix.job.target }}/debian/*.deb
+          name: packages-${{ matrix.job.target }}
+          path: target/${{ matrix.job.target }}/packages/*.deb
 
   test:
     name: Test ${{ matrix.job.arch }}
@@ -109,7 +109,7 @@ jobs:
     strategy:
       matrix:
         job:
-          - { arch: x86_64, target: x86_64-unknown-linux-gnu, output: target/debian }
+          - { arch: x86_64, target: x86_64-unknown-linux-gnu, output: target/packages }
     steps:
       # Checkout either the PR or the branch
       - name: Checkout PR
@@ -128,8 +128,8 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@v3
         with:
-          name: debian-packages-${{ matrix.job.target }}
-          path: tests/images/debian-systemd/files/deb/
+          name: packages-${{ matrix.job.target }}
+          path: tests/images/debian-systemd/files/packages/
 
       - name: create .env file
         working-directory: tests/RobotFramework
@@ -165,6 +165,7 @@ jobs:
           invoke test \
             --processes "${{ inputs.processes || '' }}" \
             --include "${{ inputs.include || '' }}" \
+            --exclude "test:on_demand" \
             --outputdir output
 
       - name: Upload test results

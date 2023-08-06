@@ -1,0 +1,82 @@
+# yaml-language-server: $schema=https://nfpm.goreleaser.com/static/schema.json
+---
+name: tedge
+description: |
+  CLI tool use to control and configure thin-edge.io
+  tedge provides:
+   * mqtt publish/subscribe
+   * configuration get/set
+   * connect/disconnect cloud mappers
+arch: "${PKG_ARCH}"
+platform: "linux"
+version: "${GIT_SEMVER}"
+section: misc
+priority: "optional"
+maintainer: "thin-edge.io team <info@thin-edge.io>"
+vendor: "thin-edge.io"
+homepage: "https://thin-edge.io"
+license: "Apache-2.0"
+
+overrides:
+  apk:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge/apk/preinst
+      postinstall: configuration/package_scripts/_generated/tedge/apk/postinst
+      preremove: configuration/package_scripts/_generated/tedge/apk/prerm
+      postremove: configuration/package_scripts/_generated/tedge/apk/postrm
+
+    depends:
+      - mosquitto
+
+  rpm:
+    # Note: Don't depend on adduser for rpm or apk packages
+    # as it is generally included out of the box on such systems.
+    # Even if we wanted to add a dependency for rpm, each RHEL/CentOS
+    # variant has another name for the package which provides adduser
+    # Don't use dependency as different operating systems:
+    # E.g.
+    # * shadow-utils (fedora)
+    # * shadow (opensuse)
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge/rpm/preinst
+      postinstall: configuration/package_scripts/_generated/tedge/rpm/postinst
+      preremove: configuration/package_scripts/_generated/tedge/rpm/prerm
+      postremove: configuration/package_scripts/_generated/tedge/rpm/postrm
+    depends:
+      - mosquitto
+
+  deb:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge/deb/preinst
+      postinstall: configuration/package_scripts/_generated/tedge/deb/postinst
+      preremove: configuration/package_scripts/_generated/tedge/deb/prerm
+      postremove: configuration/package_scripts/_generated/tedge/deb/postrm
+
+    depends:
+      - adduser
+      - mosquitto
+
+deb:
+  fields:
+    Vcs-Browser: ${CI_PROJECT_URL}
+    Vcs-Git: ${CI_PROJECT_URL}
+  compression: xz
+
+contents:
+  # binary
+  - src: .build/tedge
+    dst: /usr/bin/
+
+  - src: ./configuration/copyright
+    dst: /usr/share/doc/tedge/copyright
+    packager: deb
+    file_info:
+      mode: 0644
+
+  # systemd presets use for rpm only
+  # Presets only get applied by rpm on a new install (not an upgrade)
+  - src: ./configuration/init/systemd/75-tedge.preset
+    dst: /usr/lib/systemd/system-preset/
+    file_info:
+      mode: 0644
+    packager: rpm
