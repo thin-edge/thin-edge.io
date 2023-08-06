@@ -1,13 +1,6 @@
 #!/bin/sh
-
 set -e
-
-# Deprecate: Remove symlink in 1.x release
-if [ ! -e /usr/bin/c8y_configuration_plugin ]; then
-    ln -s /usr/bin/c8y-configuration-plugin /usr/bin/c8y_configuration_plugin
-fi
-
-# Automatically added by cargo-deb
+# Automatically added by thin-edge.io
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
 	# This will only remove masks created by d-s-h on package removal.
 	deb-systemd-helper unmask c8y-configuration-plugin.service >/dev/null || true
@@ -24,17 +17,11 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 	fi
 fi
 # End automatically added section
-# Automatically added by cargo-deb
+# Automatically added by thin-edge.io
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
 	if [ -d /run/systemd/system ]; then
 		systemctl --system daemon-reload >/dev/null || true
-		if [ -n "$2" ]; then
-			_dh_action=restart
-		else
-			_dh_action=start
-		fi
-		deb-systemd-invoke $_dh_action c8y-configuration-plugin.service >/dev/null || true
+		deb-systemd-invoke start c8y-configuration-plugin.service >/dev/null || true
 	fi
 fi
 # End automatically added section
-

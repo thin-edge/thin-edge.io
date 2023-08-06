@@ -62,3 +62,8 @@ docs:
 # Install doc dependencies
 docs-install:
     cargo install mdbook mdbook-linkcheck mdbook-mermaid mdbook-admonish mdbook-cmdrun
+
+# Generate linux package scripts from templates
+generate-linux-package-scripts:
+    ./configuration/package_scripts/generate.py
+
