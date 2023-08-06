@@ -1,6 +1,6 @@
 set ignore-comments
 
-VERSION := `./ci/build_scripts/build.sh --version 2>/dev/null`
+VERSION := `./ci/build_scripts/build.sh --version 2>/dev/null || exit 0`
 # Detect the default target based on the user's CPU arch.
 # For MacOS m1 users, it will return a linux host but
 # match the appropriate CPU architecture,
