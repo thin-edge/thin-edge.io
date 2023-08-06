@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -e
 
+# enable debugging  by default in ci
+if [ "$CI" = "true" ]; then
+    set -x
+fi
+
 help() {
   cat <<EOF
 Build linux packages
@@ -35,7 +40,7 @@ Flags:
     --version               Print the automatic version which will be used (this does not build the project)
     --output <path>         Output directory where the packages will be written to
     --types <csv_string>    CSV list of packages types. Accepted values: deb, rpm, apk, tarball
-    --clean                 Clean the output directory before writing any packges to it
+    --clean                 Clean the output directory before writing any packages to it
 
 Env:
     GIT_SEMVER      Use a custom version when building the packages. Only use for dev/testing purposes!
@@ -188,10 +193,10 @@ build_virtual_package() {
 
 get_package_arch() {
     case "$1" in
-        x86_64-unknown-linux-musl) pkg_arch=amd64 ;;
-        aarch64-unknown-linux-musl) pkg_arch=arm64 ;;
-        armv7-unknown-linux-musleabihf) pkg_arch=arm7 ;;
-        arm-unknown-linux-musleabihf) pkg_arch=arm6 ;;
+        x86_64-unknown-linux-*) pkg_arch=amd64 ;;
+        aarch64-unknown-linux-*) pkg_arch=arm64 ;;
+        armv7-unknown-linux-*eabihf) pkg_arch=arm7 ;;
+        arm-unknown-linux-*eabihf) pkg_arch=arm6 ;;
         *)
             echo "Unknown package architecture. value=$1"
             exit 1
@@ -252,6 +257,7 @@ cmd_build() {
 
 prepare() {
     if [ "$CLEAN" = "1" ]; then
+        echo "Cleaning output directory: $OUTPUT_DIR"
         rm -rf "$OUTPUT_DIR"
     fi
     mkdir -p "$OUTPUT_DIR"
@@ -273,11 +279,27 @@ banner() {
 }
 
 check_prerequisites() {
-    if ! nfpm --version >/dev/null 2>&1; then
-        echo "Missing dependency: nfpm"
-        echo "  Please install nfpm and try again: https://nfpm.goreleaser.com/install/"
-        exit 1
+    if command -V nfpm >/dev/null 2>&1; then
+        return
     fi
+
+    # Try installing nfpm automatically before giving up
+    if command -V go >/dev/null 2>&1; then
+        go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+        PATH="$(go env GOPATH)/bin:$PATH"
+        export PATH
+        return
+    fi
+
+    if command -V brew >/dev/null 2>&1; then
+        brew install goreleaser/tap/nfpm
+        brew install nfpm
+        return
+    fi    
+
+    echo "Missing dependency: nfpm"
+    echo "  Please install nfpm and try again: https://nfpm.goreleaser.com/install/"
+    exit 1
 }
 
 check_prerequisites

@@ -2,7 +2,7 @@
 ---
 name: c8y-configuration-plugin
 description: |
-  Thin-edge device configuration management for Cumulocity
+  thin-edge.io device configuration management for Cumulocity
 arch: "${PKG_ARCH}"
 platform: "linux"
 version: "${GIT_SEMVER}"

@@ -2,7 +2,7 @@
 ---
 name: tedge-watchdog
 description: |
-  tedge-watchdog checks the health of all the thin-edge.io components/services.
+  thin-edge.io component which checks the health of all the thin-edge.io components/services.
 arch: "${PKG_ARCH}"
 platform: "linux"
 version: "${GIT_SEMVER}"

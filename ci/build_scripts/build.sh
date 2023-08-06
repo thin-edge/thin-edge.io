@@ -161,7 +161,7 @@ if [ -z "$GIT_SEMVER" ]; then
             # If there is build info, it means we are building an unofficial version (e.g. it does not have a git tag)
             # Bump version automatically, and use the build info to mark it as a pre-release version
             #
-            # Note: Use a tilda (~) to seperate the version from the build info
+            # Note: Use a tilda (~) to separate the version from the build info
             # as debian treats everything after ~ as a pre-release of the currently named
             # version.
             #

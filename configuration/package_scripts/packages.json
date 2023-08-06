@@ -17,31 +17,31 @@
         },
         "c8y-configuration-plugin": {
             "services": [
-                {"name": "c8y-configuration-plugin", "enable": true, "start": true, "restart_after_upgrade": false, "stop_on_upgrade": true}
+                {"name": "c8y-configuration-plugin", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
             ]
         },
         "c8y-log-plugin": {
             "services": [
-                {"name": "c8y-log-plugin", "enable": true, "start": true, "restart_after_upgrade": false, "stop_on_upgrade": true}
+                {"name": "c8y-log-plugin", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
             ]
         },
         "c8y-firmware-plugin": {
             "services": [
-                {"name": "c8y-firmware-plugin", "enable": true, "start": true, "restart_after_upgrade": false, "stop_on_upgrade": true}
+                {"name": "c8y-firmware-plugin", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
             ]
         },
         "tedge-watchdog": {
             "services": [
-                {"name": "tedge-watchdog", "enable": true, "start": true, "restart_after_upgrade": false, "stop_on_upgrade": true}
+                {"name": "tedge-watchdog", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
             ]
         },
         "tedge-mapper": {
             "services": [
                 // mapper services use custom conditional start logic depending if the corresponding mapper is configured or not
-                {"name": "tedge-mapper-aws", "enable": false, "start": false, "restart_after_upgrade": false, "stop_on_upgrade": true},
-                {"name": "tedge-mapper-az", "enable": false, "start": false, "restart_after_upgrade": false, "stop_on_upgrade": true},
-                {"name": "tedge-mapper-c8y", "enable": false, "start": false, "restart_after_upgrade": false, "stop_on_upgrade": true},
-                {"name": "tedge-mapper-collectd", "enable": false, "start": false, "restart_after_upgrade": false, "stop_on_upgrade": true}
+                {"name": "tedge-mapper-aws", "enable": false, "start": false, "restart_after_upgrade": true, "stop_on_upgrade": true},
+                {"name": "tedge-mapper-az", "enable": false, "start": false, "restart_after_upgrade": true, "stop_on_upgrade": true},
+                {"name": "tedge-mapper-c8y", "enable": false, "start": false, "restart_after_upgrade": true, "stop_on_upgrade": true},
+                {"name": "tedge-mapper-collectd", "enable": false, "start": false, "restart_after_upgrade": true, "stop_on_upgrade": true}
             ]
         }
     }

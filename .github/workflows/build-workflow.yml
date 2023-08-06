@@ -59,6 +59,7 @@ jobs:
       - uses: actions/setup-go@v4
         with:
           go-version: 'stable'
+          cache: false
       - run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
       - uses: extractions/setup-just@v1
@@ -116,6 +117,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      # Install nfpm used to for linux packaging
+      - uses: actions/setup-go@v4
+        with:
+          go-version: 'stable'
+          cache: false
+      - run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
       - uses: extractions/setup-just@v1
       - name: Build virtual packages
         run: just release-linux-virtual

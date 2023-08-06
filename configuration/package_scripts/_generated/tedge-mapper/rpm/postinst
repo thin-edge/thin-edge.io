@@ -25,6 +25,14 @@ if [ $1 -eq 1 ] && [ -x "/usr/lib/systemd/systemd-update-helper" ]; then
     /usr/lib/systemd/systemd-update-helper install-system-units tedge-mapper-collectd.service || :
 fi
 # End automatically added section
+# Automatically added by thin-edge.io
+if [ $1 -eq 2 ]; then
+	if [ -d /run/systemd/system ]; then
+		systemctl --system daemon-reload >/dev/null || true
+		systemctl restart tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service >/dev/null || true
+	fi
+fi
+# End automatically added section
 
 enable_start_service() {
     name="$1"
@@ -60,8 +68,8 @@ if command -v systemctl >/dev/null; then
     if [ -f "/etc/tedge/mosquitto-conf/aws-bridge.conf" ]; then
         enable_start_service tedge-mapper-aws.service
     fi
-    ### Enable the service if the collectd is running on the device
     if [ -d /run/systemd/system ]; then
+        ### Enable the service if the collectd is running on the device
         if systemctl is-active --quiet collectd.service; then
             enable_start_service tedge-mapper-collectd.service
         fi

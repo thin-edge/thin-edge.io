@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# enable debugging  by default in ci
+if [ "$CI" = "true" ]; then
+    set -x
+fi
+
 help() {
   cat <<EOF
 Publish packages from a path to an external debian repository
@@ -70,7 +75,7 @@ export CI=true
 # Enable setting values via env variables (easier for CI for secrets)
 PUBLISH_TOKEN="${PUBLISH_TOKEN:-}"
 PUBLISH_OWNER="${PUBLISH_OWNER:-thinedge}"
-PUBLISH_REPO="${PUBLISH_REPO:-tedge-dev}"
+PUBLISH_REPO="${PUBLISH_REPO:-tedge-main}"
 PUBLISH_DISTRIBUTION="${PUBLISH_DISTRIBUTION:-any-distro}"
 PUBLISH_DISTRIBUTION_VERSION="${PUBLISH_DISTRIBUTION_VERSION:-any-version}"
 PUBLISH_COMPONENT="${PUBLISH_COMPONENT:-main}"

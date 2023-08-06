@@ -2,7 +2,7 @@
 ---
 name: "tedge-agent"
 description: |
-  tedge-agent interacts with a Cloud Mapper and one or more Software Plugins
+  thin-edge.io interacts with a Cloud Mapper and one or more Software Plugins
 arch: "${PKG_ARCH}"
 platform: "linux"
 version: "${GIT_SEMVER}"

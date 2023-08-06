@@ -2,7 +2,7 @@
 ---
 name: tedge-minimal
 description: |
-  Thin Edge meta package to install a minimal set of tedge components
+  thin-edge.io virtual package to install a minimal set of tedge components
 arch: all
 platform: "linux"
 version: "${GIT_SEMVER}"

@@ -2,7 +2,7 @@
 ---
 name: c8y-remote-access-plugin
 description: |
-  Thin-edge device log file retriever for Cumulocity
+  thin-edge.io plugin for the Cumulocity IoT's Cloud Remote Access feature
 arch: "${PKG_ARCH}"
 platform: "linux"
 version: "${GIT_SEMVER}"

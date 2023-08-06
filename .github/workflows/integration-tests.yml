@@ -61,13 +61,20 @@ jobs:
     strategy:
       matrix:
         job:
-          - { arch: x86_64, target: x86_64-unknown-linux-gnu, output: target/packages }
+          - { arch: x86_64, target: x86_64-unknown-linux-musl, output: target/packages }
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR. Only after the manual approval process
           fetch-depth: 0
+
+      # Install nfpm used to for linux packaging
+      - uses: actions/setup-go@v4
+        with:
+          go-version: 'stable'
+          cache: false
+      - run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
       - name: Retrieve MSRV from workspace Cargo.toml
         id: rust_version
@@ -109,7 +116,7 @@ jobs:
     strategy:
       matrix:
         job:
-          - { arch: x86_64, target: x86_64-unknown-linux-gnu, output: target/packages }
+          - { arch: x86_64, target: x86_64-unknown-linux-musl, output: target/packages }
     steps:
       # Checkout either the PR or the branch
       - name: Checkout PR
