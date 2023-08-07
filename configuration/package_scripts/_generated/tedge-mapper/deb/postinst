@@ -1,0 +1,135 @@
+#!/bin/sh
+
+set -e
+
+# Deprecate: Remove symlink in 1.x release
+if [ ! -e /usr/bin/tedge_mapper ]; then
+    ln -s /usr/bin/tedge-mapper /usr/bin/tedge_mapper
+fi
+
+# Automatically added by cargo-deb
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if deb-systemd-helper debian-installed tedge-mapper-aws.service; then
+		# This will only remove masks created by d-s-h on package removal.
+		deb-systemd-helper unmask tedge-mapper-aws.service >/dev/null || true
+
+		if deb-systemd-helper --quiet was-enabled tedge-mapper-aws.service; then
+			# Create new symlinks, if any.
+			deb-systemd-helper enable tedge-mapper-aws.service >/dev/null || true
+		fi
+	fi
+
+	# Update the statefile to add new symlinks (if any), which need to be cleaned
+	# up on purge. Also remove old symlinks.
+	deb-systemd-helper update-state tedge-mapper-aws.service >/dev/null || true
+fi
+# End automatically added section
+# Automatically added by cargo-deb
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if deb-systemd-helper debian-installed tedge-mapper-az.service; then
+		# This will only remove masks created by d-s-h on package removal.
+		deb-systemd-helper unmask tedge-mapper-az.service >/dev/null || true
+
+		if deb-systemd-helper --quiet was-enabled tedge-mapper-az.service; then
+			# Create new symlinks, if any.
+			deb-systemd-helper enable tedge-mapper-az.service >/dev/null || true
+		fi
+	fi
+
+	# Update the statefile to add new symlinks (if any), which need to be cleaned
+	# up on purge. Also remove old symlinks.
+	deb-systemd-helper update-state tedge-mapper-az.service >/dev/null || true
+fi
+# End automatically added section
+# Automatically added by cargo-deb
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if deb-systemd-helper debian-installed tedge-mapper-c8y.service; then
+		# This will only remove masks created by d-s-h on package removal.
+		deb-systemd-helper unmask tedge-mapper-c8y.service >/dev/null || true
+
+		if deb-systemd-helper --quiet was-enabled tedge-mapper-c8y.service; then
+			# Create new symlinks, if any.
+			deb-systemd-helper enable tedge-mapper-c8y.service >/dev/null || true
+		fi
+	fi
+
+	# Update the statefile to add new symlinks (if any), which need to be cleaned
+	# up on purge. Also remove old symlinks.
+	deb-systemd-helper update-state tedge-mapper-c8y.service >/dev/null || true
+fi
+# End automatically added section
+# Automatically added by cargo-deb
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if deb-systemd-helper debian-installed tedge-mapper-collectd.service; then
+		# This will only remove masks created by d-s-h on package removal.
+		deb-systemd-helper unmask tedge-mapper-collectd.service >/dev/null || true
+
+		if deb-systemd-helper --quiet was-enabled tedge-mapper-collectd.service; then
+			# Create new symlinks, if any.
+			deb-systemd-helper enable tedge-mapper-collectd.service >/dev/null || true
+		fi
+	fi
+
+	# Update the statefile to add new symlinks (if any), which need to be cleaned
+	# up on purge. Also remove old symlinks.
+	deb-systemd-helper update-state tedge-mapper-collectd.service >/dev/null || true
+fi
+# End automatically added section
+# Automatically added by cargo-deb
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if [ -d /run/systemd/system ]; then
+		systemctl --system daemon-reload >/dev/null || true
+		if [ -n "$2" ]; then
+			deb-systemd-invoke try-restart tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service >/dev/null || true
+		fi
+	fi
+fi
+# End automatically added section
+
+
+enable_start_service() {
+    name="$1"
+
+    if command -v deb-systemd-helper >/dev/null 2>&1; then
+        deb-systemd-helper enable "$name" >/dev/null || true
+    else
+        systemctl enable "$name" >/dev/null || true
+    fi
+
+    if [ -d /run/systemd/system ]; then
+        systemctl --system daemon-reload >/dev/null || true
+
+        if command -v deb-systemd-invoke >/dev/null 2>&1; then
+            deb-systemd-invoke start "$name" >/dev/null || true
+        else
+            systemctl start "$name" >/dev/null || true
+        fi
+    fi
+}
+
+# Enable the service only if systemctl is available
+if command -v systemctl >/dev/null; then
+    ### Enable the service if the device is connected to c8y cloud
+    if [ -f "/etc/tedge/mosquitto-conf/c8y-bridge.conf" ]; then
+        enable_start_service tedge-mapper-c8y.service
+    fi
+    ### Enable the service if the device is connected to az cloud
+    if [ -f "/etc/tedge/mosquitto-conf/az-bridge.conf" ]; then
+        enable_start_service tedge-mapper-az.service
+    fi
+    ### Enable the service if the device is connected to aws cloud
+    if [ -f "/etc/tedge/mosquitto-conf/aws-bridge.conf" ]; then
+        enable_start_service tedge-mapper-aws.service
+    fi
+    if [ -d /run/systemd/system ]; then
+        ### Enable the service if the collectd is running on the device
+        if systemctl is-active --quiet collectd.service; then
+            enable_start_service tedge-mapper-collectd.service
+        fi
+    fi
+fi
+
+if [ -f /var/lib/dpkg/info/tedge_mapper.postrm ]; then
+    # Prevent purge from deleting files related to the package
+    rm -f /var/lib/dpkg/info/tedge_mapper.postrm
+fi

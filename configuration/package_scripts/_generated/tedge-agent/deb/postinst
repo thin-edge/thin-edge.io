@@ -1,0 +1,71 @@
+#!/bin/sh
+
+set -e
+
+# Deprecate: Remove symlink in 1.x release
+if [ ! -e /usr/bin/tedge_agent ]; then
+    ln -s /usr/bin/tedge-agent /usr/bin/tedge_agent
+fi
+
+# Use service manager agnostic tools (e.g. ps or pgrep) to determine if a process is running or not
+process_running() {
+    name="$1"
+    if command -v ps >/dev/null 2>&1; then
+        if ps -C "$name" >/dev/null; then
+            return 0
+        fi
+    elif command -v pgrep >/dev/null 2>&1; then
+        if pgrep -x "$name" >/dev/null; then
+            return 0
+        fi
+    fi
+    # Assume process is not running
+    return 1
+}
+
+# Initialize the agent __only__ if not when agent is running.
+# Indeed, during an OTA self-update, the previous version of the  `agent` is kept running
+# to monitor the installation of the new version up to completion.
+# Note: Check for both tedge-agent and tedge_agent for backwards compatibility
+if ! (process_running tedge-agent || process_running tedge_agent); then
+    # Flock file should be removed as `tedge-agent --init` must run as root
+    # although the flockfile is owned by `tedge`. rm will ignore the files if they don't exist
+    rm -f /run/lock/tedge_agent.lock
+    rm -f /run/lock/tedge-agent.lock
+fi
+
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+        if deb-systemd-helper debian-installed tedge-agent.service; then
+                # This will only remove masks created by d-s-h on package removal.
+                deb-systemd-helper unmask tedge-agent.service >/dev/null || true
+
+                if deb-systemd-helper --quiet was-enabled tedge-agent.service; then
+                        # Create new symlinks, if any.
+                        deb-systemd-helper enable tedge-agent.service >/dev/null || true
+                fi
+        fi
+
+        # Update the statefile to add new symlinks (if any), which need to be cleaned
+        # up on purge. Also remove old symlinks.
+        deb-systemd-helper update-state tedge-agent.service >/dev/null || true
+fi
+
+# Enable the services only if systemctl is available
+if command -v systemctl >/dev/null; then
+    # Start the agent __only__ if not already running.
+    # Indeed, during an OTA self-update, the previous version of the  `agent` is kept running
+    # to monitor the installation of the new version up to completion.
+    if [ -f "/etc/tedge/mosquitto-conf/c8y-bridge.conf" ] && ! systemctl is-active --quiet tedge-agent ; then
+        deb-systemd-helper enable tedge-agent.service >/dev/null || true
+        if [ -d /run/systemd/system ]; then
+            deb-systemd-invoke start tedge-agent.service >/dev/null || true
+        fi
+    fi
+fi
+
+if [ -f /var/lib/dpkg/info/tedge_agent.postrm ]; then
+    # Prevent purge from deleting files related to the package
+    rm -f /var/lib/dpkg/info/tedge_agent.postrm
+fi
+
+# Do not use DEBHELPER: for OTA self-update one needs a fine-control over the deb options

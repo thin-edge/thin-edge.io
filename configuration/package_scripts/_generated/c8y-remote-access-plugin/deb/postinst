@@ -1,0 +1,6 @@
+#!/bin/sh
+
+set -e
+
+### Create supported operation files
+c8y-remote-access-plugin --init
