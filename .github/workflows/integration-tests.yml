@@ -190,3 +190,4 @@ jobs:
       uses: joonvena/robotframework-reporter-action@v2.2
       with:
         gh_access_token: ${{ secrets.GITHUB_TOKEN }}
+        show_passed_tests: 'false'
