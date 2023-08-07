@@ -552,13 +552,13 @@ pub struct LogMetadata {
 
 impl<'a> Jsonify<'a> for LogMetadata {}
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct LogUploadCmdPayload {
     pub status: CommandStatus, //Define a different enum if this op needs more states,
+    pub tedge_url: String,
     #[serde(rename = "type")]
     pub log_type: String,
-    pub tedge_url: String,
     #[serde(with = "time::serde::rfc3339")]
     pub date_from: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
@@ -573,28 +573,6 @@ pub struct LogUploadCmdPayload {
 impl<'a> Jsonify<'a> for LogUploadCmdPayload {}
 
 impl LogUploadCmdPayload {
-    pub fn new(
-        status: CommandStatus,
-        log_type: String,
-        tedge_url: String,
-        date_from: OffsetDateTime,
-        date_to: OffsetDateTime,
-        search_text: Option<String>,
-        lines: usize,
-        reason: Option<String>,
-    ) -> Self {
-        Self {
-            status,
-            log_type,
-            tedge_url,
-            date_from,
-            date_to,
-            search_text,
-            lines,
-            reason,
-        }
-    }
-
     pub fn executing(&mut self) {
         self.status = CommandStatus::Executing;
         self.reason = None;

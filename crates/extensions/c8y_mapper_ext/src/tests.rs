@@ -6,6 +6,7 @@ use assert_json_diff::assert_json_include;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
+use c8y_http_proxy::messages::Url;
 use serde_json::json;
 use std::fs;
 use std::fs::File;
@@ -1247,6 +1248,387 @@ async fn inventory_registers_unknown_entity_once() {
     );
 }
 
+#[cfg(feature = "log_upload")]
+#[tokio::test]
+async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_main_device() {
+    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.skip(6).await; //Skip all init messages
+
+    // Simulate c8y_LogfileRequest SmartREST request
+    mqtt.send(MqttMessage::new(
+        &C8yTopic::downstream_topic(),
+        "522,test-device,logfileA,2013-06-22T17:03:14.123+02:00,2013-06-23T18:03:14.123+02:00,ERROR,1000",
+    ))
+        .await
+        .expect("Send failed");
+
+    let (topic, received_json) = mqtt
+        .recv()
+        .await
+        .map(|msg| {
+            (
+                msg.topic,
+                serde_json::from_str::<serde_json::Value>(msg.payload.as_str().expect("UTF8"))
+                    .expect("JSON"),
+            )
+        })
+        .unwrap();
+
+    let cmd_id = tedge_api::cmd_topic::get_target_ids_from_cmd_topic(&topic, "te")
+        .1
+        .unwrap();
+
+    // Validate the topic name
+    assert_eq!(
+        topic.name,
+        format!("te/device/main///cmd/log_upload/{cmd_id}")
+    );
+
+    // Validate the payload JSON
+    let expected_json = json!({
+        "status": "init",
+        "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/main/log_upload/logfileA-{cmd_id}"),
+        "type": "logfileA",
+        "dateFrom": "2013-06-22T17:03:14.123+02:00",
+        "dateTo": "2013-06-23T18:03:14.123+02:00",
+        "searchText": "ERROR",
+        "lines": 1000
+    });
+
+    assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
+}
+
+#[cfg(feature = "log_upload")]
+#[tokio::test]
+async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_child_device() {
+    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.skip(6).await; //Skip all init messages
+
+    // Simulate c8y_LogfileRequest SmartREST request
+    mqtt.send(MqttMessage::new(
+        &C8yTopic::downstream_topic(),
+        "522,DeviceSerial,logfileA,2013-06-22T17:03:14.123+02:00,2013-06-23T18:03:14.123+02:00,ERROR,1000",
+    ))
+    .await
+    .expect("Send failed");
+
+    let (topic, received_json) = mqtt
+        .recv()
+        .await
+        .map(|msg| {
+            (
+                msg.topic,
+                serde_json::from_str::<serde_json::Value>(msg.payload.as_str().expect("UTF8"))
+                    .expect("JSON"),
+            )
+        })
+        .unwrap();
+
+    let cmd_id = tedge_api::cmd_topic::get_target_ids_from_cmd_topic(&topic, "te")
+        .1
+        .unwrap();
+
+    // Validate the topic name
+    assert_eq!(
+        topic.name,
+        format!("te/device/DeviceSerial///cmd/log_upload/{cmd_id}")
+    );
+
+    // Validate the payload JSON
+    let expected_json = json!({
+        "status": "init",
+        "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/DeviceSerial/log_upload/logfileA-{cmd_id}"),
+        "type": "logfileA",
+        "dateFrom": "2013-06-22T17:03:14.123+02:00",
+        "dateTo": "2013-06-23T18:03:14.123+02:00",
+        "searchText": "ERROR",
+        "lines": 1000
+    });
+
+    assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
+}
+
+#[cfg(feature = "log_upload")]
+#[tokio::test]
+async fn mapper_converts_log_upload_cmd_to_supported_op_and_types_for_main_device() {
+    let ttd = TempTedgeDir::new();
+    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&ttd, true).await;
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.skip(6).await; //Skip all init messages
+
+    // Simulate log_upload cmd metadata message
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/log_upload"),
+        r#"{"types" : [ "typeA", "typeB", "typeC" ]}"#,
+    ))
+    .await
+    .expect("Send failed");
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "118,typeA,typeB,typeC")]).await;
+
+    // Validate if the supported operation file is created
+    assert!(ttd
+        .path()
+        .join("operations/c8y/c8y_LogfileRequest")
+        .exists());
+}
+
+#[cfg(feature = "log_upload")]
+#[tokio::test]
+async fn mapper_converts_log_upload_cmd_to_supported_op_and_types_for_child_device() {
+    let ttd = TempTedgeDir::new();
+    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&ttd, true).await;
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.skip(6).await; //Skip all init messages
+
+    // Simulate log_upload cmd metadata message
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1///cmd/log_upload"),
+        r#"{"types" : [ "typeA", "typeB", "typeC" ]}"#,
+    ))
+    .await
+    .expect("Send failed");
+
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            (
+                "te/device/child1//",
+                r#"{ "@type":"child-device", "@id":"child1"}"#,
+            ),
+            ("c8y/s/us", "101,child1,child1,thin-edge.io-child"),
+        ],
+    )
+    .await;
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us/child1", "118,typeA,typeB,typeC")]).await;
+
+    // Validate if the supported operation file is created
+    assert!(ttd
+        .path()
+        .join("operations/c8y/child1/c8y_LogfileRequest")
+        .exists());
+}
+
+#[cfg(feature = "log_upload")]
+#[tokio::test]
+async fn handle_log_upload_executing_and_failed_cmd_for_main_device() {
+    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    mqtt.skip(6).await; //Skip all init messages
+
+    // Simulate log_upload command with "executing" state
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/log_upload/1234"),
+        json!({
+            "status": "executing",
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/main/log_upload/typeA-1234"),
+            "type": "typeA",
+            "dateFrom": "2013-06-22T17:03:14.123+02:00",
+            "dateTo": "2013-06-23T18:03:14.123+02:00",
+            "searchText": "ERROR",
+            "lines": 1000
+        })
+            .to_string(),
+    ))
+        .await
+        .expect("Send failed");
+
+    // Expect `501` smartrest message on `c8y/s/us`.
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_LogfileRequest")]).await;
+
+    // Simulate log_upload command with "failed" state
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/log_upload/1234"),
+        json!({
+            "status": "failed",
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/main/log_upload/typeA-1234"),
+            "type": "typeA",
+            "dateFrom": "2013-06-22T17:03:14.123+02:00",
+            "dateTo": "2013-06-23T18:03:14.123+02:00",
+            "searchText": "ERROR",
+            "lines": 1000,
+            "reason": "Something went wrong"
+        })
+            .to_string(),
+    ))
+        .await
+        .expect("Send failed");
+
+    // Expect `502` smartrest message on `c8y/s/us`.
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
+            "502,c8y_LogfileRequest,\"Something went wrong\"",
+        )],
+    )
+    .await;
+}
+
+#[cfg(feature = "log_upload")]
+#[tokio::test]
+async fn handle_log_upload_executing_and_failed_cmd_for_child_device() {
+    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    mqtt.skip(6).await; //Skip all init messages
+
+    // Simulate log_upload command with "executing" state
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1///cmd/log_upload/1234"),
+        json!({
+            "status": "executing",
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/child1/log_upload/typeA-1234"),
+            "type": "typeA",
+            "dateFrom": "2013-06-22T17:03:14.123+02:00",
+            "dateTo": "2013-06-23T18:03:14.123+02:00",
+            "searchText": "ERROR",
+            "lines": 1000
+        })
+            .to_string(),
+    ))
+        .await
+        .expect("Send failed");
+
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            (
+                "te/device/child1//",
+                r#"{ "@type":"child-device", "@id":"child1"}"#,
+            ),
+            ("c8y/s/us", "101,child1,child1,thin-edge.io-child"),
+        ],
+    )
+    .await;
+
+    // Expect `501` smartrest message on `c8y/s/us/child1`.
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us/child1", "501,c8y_LogfileRequest")]).await;
+
+    // Simulate log_upload command with "failed" state
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1///cmd/log_upload/1234"),
+        json!({
+            "status": "failed",
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/child1/log_upload/typeA-1234"),
+            "type": "typeA",
+            "dateFrom": "2013-06-22T17:03:14.123+02:00",
+            "dateTo": "2013-06-23T18:03:14.123+02:00",
+            "searchText": "ERROR",
+            "lines": 1000,
+            "reason": "Something went wrong"
+        })
+            .to_string(),
+    ))
+        .await
+        .expect("Send failed");
+
+    // Expect `502` smartrest message on `c8y/s/us/child1`.
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us/child1",
+            "502,c8y_LogfileRequest,\"Something went wrong\"",
+        )],
+    )
+    .await;
+}
+
+#[cfg(feature = "log_upload")]
+#[tokio::test]
+async fn handle_log_upload_successful_cmd_for_main_device() {
+    let ttd = TempTedgeDir::new();
+    let (mqtt, http, _fs, _timer) = spawn_c8y_mapper_actor(&ttd, true).await;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    mqtt.skip(6).await; //Skip all init messages
+
+    // Simulate a log file is uploaded to the file transfer repository
+    ttd.dir("tedge")
+        .dir("file-transfer")
+        .dir("main")
+        .dir("log_upload")
+        .file("typeA-1234");
+
+    // Simulate log_upload command with "executing" state
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/log_upload/1234"),
+        json!({
+            "status": "successful",
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/main/log_upload/typeA-1234"),
+            "type": "typeA",
+            "dateFrom": "2013-06-22T17:03:14.123+02:00",
+            "dateTo": "2013-06-23T18:03:14.123+02:00",
+            "searchText": "ERROR",
+            "lines": 1000
+        })
+            .to_string(),
+    ))
+        .await
+        .expect("Send failed");
+
+    // Expect `503` smartrest message on `c8y/s/us`.
+    assert_received_contains_str(
+        &mut mqtt,
+        [("c8y/s/us", "503,c8y_LogfileRequest,http://c8y-binary.url")],
+    )
+    .await;
+}
+
+#[cfg(feature = "log_upload")]
+#[tokio::test]
+#[ignore = "FIXME"]
+async fn handle_log_upload_successful_cmd_for_child_device() {
+    let ttd = TempTedgeDir::new();
+    let (mqtt, http, _fs, _timer) = spawn_c8y_mapper_actor(&ttd, true).await;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    mqtt.skip(6).await; //Skip all init messages
+
+    // Simulate a log file is uploaded to the file transfer repository
+    ttd.dir("tedge")
+        .dir("file-transfer")
+        .dir("child1")
+        .dir("log_upload")
+        .file("typeA-1234");
+
+    // Simulate log_upload command with "executing" state
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1///cmd/log_upload/1234"),
+        json!({
+            "status": "successful",
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/child1/log_upload/typeA-1234"),
+            "type": "typeA",
+            "dateFrom": "2013-06-22T17:03:14.123+02:00",
+            "dateTo": "2013-06-23T18:03:14.123+02:00",
+            "searchText": "ERROR",
+            "lines": 1000
+        })
+            .to_string(),
+    ))
+        .await
+        .expect("Send failed");
+
+    // Expect `503` smartrest message on `c8y/s/us`.
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us/child1",
+            "503,c8y_LogfileRequest,http://c8y-binary.url",
+        )],
+    )
+    .await;
+}
+
 fn assert_command_exec_log_content(cfg_dir: TempTedgeDir, expected_contents: &str) {
     let paths = fs::read_dir(cfg_dir.to_path_buf().join("tedge/agent")).unwrap();
     for path in paths {
@@ -1337,9 +1719,11 @@ async fn spawn_c8y_mapper_actor(
     let device_type = "test-device-type".into();
     let service_type = "service".into();
     let c8y_host = "test.c8y.io".into();
-    let tedge_http_host = "localhost".into();
+    let tedge_http_host = "localhost:8888".into();
     let root_topic = "te".into();
-    let mut topics = C8yMapperConfig::internal_topic_filter(config_dir.path(), "te").unwrap();
+    let mut topics = C8yMapperConfig::default_internal_topic_filter(config_dir.path()).unwrap();
+    #[cfg(feature = "log_upload")]
+    topics.add_all(crate::log_upload::log_upload_topic_filter("te"));
     topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
     let config = C8yMapperConfig::new(
@@ -1406,6 +1790,13 @@ fn spawn_dummy_c8y_http_proxy(mut http: SimpleMessageBox<C8YRestRequest, C8YRest
                 Some(C8YRestRequest::SoftwareListResponse(_)) => {
                     let _ = http
                         .send(Ok(c8y_http_proxy::messages::C8YRestResponse::Unit(())))
+                        .await;
+                }
+                Some(C8YRestRequest::UploadFile(_)) => {
+                    let _ = http
+                        .send(Ok(c8y_http_proxy::messages::C8YRestResponse::Url(Url(
+                            "http://c8y-binary.url".into(),
+                        ))))
                         .await;
                 }
                 _ => {}

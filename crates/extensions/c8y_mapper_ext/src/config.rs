@@ -4,7 +4,6 @@ use c8y_api::smartrest::topic::C8yTopic;
 use camino::Utf8PathBuf;
 use std::path::Path;
 use std::path::PathBuf;
-use tedge_api::cmd_topic::CmdSubscribeTopic;
 use tedge_api::topic::ResponseTopic;
 use tedge_api::DEFAULT_FILE_TRANSFER_DIR_NAME;
 use tedge_config::ConfigNotSet;
@@ -81,8 +80,13 @@ impl C8yMapperConfig {
 
         let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port);
 
-        // The topics to subscribe = default internal topics + user configurable external topics
-        let mut topics = Self::internal_topic_filter(&config_dir, &topic_root)?;
+        let mut topics = Self::default_internal_topic_filter(&config_dir)?;
+
+        // Add feature topic filters
+        #[cfg(feature = "log_upload")]
+        topics.add_all(crate::log_upload::log_upload_topic_filter(&topic_root));
+
+        // Add user configurable external topic filters
         for topic in tedge_config.c8y.topics.0.clone() {
             if topics.add(&topic).is_err() {
                 warn!("The configured topic '{topic}' is invalid and ignored.");
@@ -103,9 +107,8 @@ impl C8yMapperConfig {
         ))
     }
 
-    pub fn internal_topic_filter(
+    pub fn default_internal_topic_filter(
         config_dir: &Path,
-        topic_root: &str,
     ) -> Result<TopicFilter, C8yMapperConfigError> {
         let mut topic_filter: TopicFilter = vec![
             "c8y-internal/alarms/+/+",
@@ -114,8 +117,6 @@ impl C8yMapperConfig {
             ResponseTopic::SoftwareListResponse.as_str(),
             ResponseTopic::SoftwareUpdateResponse.as_str(),
             ResponseTopic::RestartResponse.as_str(),
-            CmdSubscribeTopic::LogUpload.metadata(topic_root).as_str(),
-            CmdSubscribeTopic::LogUpload.with_id(topic_root).as_str(),
         ]
         .try_into()
         .expect("topics that mapper should subscribe to");

@@ -93,7 +93,7 @@ impl From<DeviceKind> for C8yTopic {
     fn from(value: DeviceKind) -> Self {
         match value {
             DeviceKind::Main => Self::SmartRestResponse,
-            DeviceKind::Child(id) => Self::ChildSmartRestResponse(id.to_owned()),
+            DeviceKind::Child(id) => Self::ChildSmartRestResponse(id),
         }
     }
 }

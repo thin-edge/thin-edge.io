@@ -91,13 +91,13 @@ pub fn get_target_ids_from_cmd_topic(
 
     if cmd_topic_filter.accept_topic(topic) {
         // with the topic scheme <root>/device/<device-id>///cmd/<cmd-name>[/<cmd-id>]
-        let splited_topic: Vec<&str> = topic.name.split('/').collect();
+        let split_topic: Vec<&str> = topic.name.split('/').collect();
 
         // the 3rd level is the device id
-        let maybe_device_id = splited_topic.get(2).filter(|s| !s.is_empty());
+        let maybe_device_id = split_topic.get(2).filter(|s| !s.is_empty());
 
         // the 7th level is the command id
-        let maybe_cmd_id = splited_topic
+        let maybe_cmd_id = split_topic
             .get(7)
             .map(|s| s.to_string())
             .filter(|s| !s.is_empty());

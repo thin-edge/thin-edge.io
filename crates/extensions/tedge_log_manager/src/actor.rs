@@ -155,7 +155,7 @@ impl LogManagerActor {
             &self.plugin_config.files,
             &request.log_type,
             request.date_from,
-            request.max_lines.to_owned(),
+            request.lines.to_owned(),
             &request.search_text,
         )?;
 

@@ -23,7 +23,6 @@ use c8y_api::smartrest::operations::get_child_ops;
 use c8y_api::smartrest::operations::get_operations;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::smartrest_deserializer::AvailableChildDevices;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRestartRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestUpdateSoftware;
@@ -39,7 +38,6 @@ use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use c8y_api::utils::child_device::new_child_device_message;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use logged_command::LoggedCommand;
-use nanoid::nanoid;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
 use serde::Deserialize;
@@ -53,20 +51,12 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
-use tedge_api::cmd_topic::get_target_ids_from_cmd_topic;
-use tedge_api::cmd_topic::CmdPublishTopic;
-use tedge_api::cmd_topic::CmdSubscribeTopic;
-use tedge_api::cmd_topic::DeviceKind;
-use tedge_api::cmd_topic::Target;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityMetadata;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityType;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
-use tedge_api::messages::CommandStatus;
-use tedge_api::messages::LogMetadata;
-use tedge_api::messages::LogUploadCmdPayload;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
@@ -86,7 +76,6 @@ use tedge_config::TEdgeConfigError;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
-use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
@@ -167,13 +156,13 @@ pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
     pub config: C8yMapperConfig,
     pub(crate) mapper_config: MapperConfig,
-    device_name: String,
+    pub device_name: String,
     device_type: String,
     alarm_converter: AlarmConverter,
     pub operations: Operations,
     operation_logs: OperationLogs,
     mqtt_publisher: LoggingSender<MqttMessage>,
-    http_proxy: C8YHttpProxy,
+    pub http_proxy: C8YHttpProxy,
     pub cfg_dir: PathBuf,
     pub ops_dir: PathBuf,
     pub children: HashMap<String, Operations>,
@@ -429,6 +418,7 @@ impl CumulocityConverter {
         match get_smartrest_device_id(payload) {
             Some(device_id) => {
                 match get_smartrest_template_id(payload).as_str() {
+                    #[cfg(feature = "log_upload")]
                     "522" => self.convert_log_upload_request(payload),
                     "528" if device_id == self.device_name => {
                         self.forward_software_request(payload).await
@@ -439,6 +429,9 @@ impl CumulocityConverter {
                     template if device_id == self.device_name => {
                         self.forward_operation_request(payload, template).await
                     }
+                    "106" if device_id != self.device_name => {
+                        self.register_child_device_supported_operations(payload)
+                    }
                     _ => {
                         // Ignore any other child device incoming request as not yet supported
                         debug!("Ignored. Message not yet supported: {payload}");
@@ -446,13 +439,16 @@ impl CumulocityConverter {
                     }
                 }
             }
-            None => match get_smartrest_template_id(payload).as_str() {
-                "106" => self.register_child_device_supported_operations(payload),
-                _ => {
-                    debug!("Ignored. Message not yet supported: {payload}");
-                    Ok(vec![])
+            None => {
+                match get_smartrest_template_id(payload).as_str() {
+                    "106" => self.register_child_device_supported_operations(payload),
+                    // Ignore any other child device incoming request as not yet supported
+                    _ => {
+                        debug!("Ignored. Message not yet supported: {payload}");
+                        Ok(vec![])
+                    }
                 }
-            },
+            }
         }
     }
 
@@ -498,41 +494,6 @@ impl CumulocityConverter {
 
         let request = RestartOperationRequest::default();
         Ok(vec![Message::new(&topic, request.to_json()?)])
-    }
-
-    fn convert_log_upload_request(
-        &self,
-        smartrest: &str,
-    ) -> Result<Vec<Message>, CumulocityMapperError> {
-        let log_request = SmartRestLogRequest::from_smartrest(smartrest)?;
-        let device_id = if log_request.device.eq(&self.device_name) {
-            "main".into()
-        } else {
-            log_request.device
-        };
-
-        let cmd_id = nanoid!();
-        let topic = CmdPublishTopic::LogUpload(Target::new(device_id.clone(), cmd_id.clone()))
-            .to_topic("te");
-
-        let tedge_url = format!(
-            "http://{}/tedge/file-transfer/{}/log_upload/{}-{}",
-            &self.config.tedge_http_host, device_id, log_request.log_type, cmd_id
-        );
-
-        let request = LogUploadCmdPayload::new(
-            CommandStatus::Init,
-            log_request.log_type,
-            tedge_url,
-            log_request.date_from,
-            log_request.date_to,
-            log_request.search_text,
-            log_request.lines,
-            None,
-        );
-
-        // Command messages must be retained
-        Ok(vec![Message::new(&topic, request.to_json()?).with_retain()])
     }
 
     async fn forward_operation_request(
@@ -699,114 +660,6 @@ impl CumulocityConverter {
     fn can_send_over_mqtt(&self, message: &Message) -> bool {
         message.payload_bytes().len() < self.size_threshold.0
     }
-
-    async fn handle_log_upload_state_change(
-        &mut self,
-        message: &Message,
-    ) -> Result<Vec<Message>, ConversionError> {
-        let (device_kind, cmd_id) = match get_target_ids_from_cmd_topic(&message.topic, "te") {
-            (Some(device_kind), Some(cmd_id)) => (device_kind, cmd_id),
-            _ => {
-                return Err(ConversionError::UnsupportedTopic(
-                    message.topic.name.clone(),
-                ))
-            }
-        };
-
-        let external_id = device_kind.name_with_default(&self.device_name);
-
-        let c8y_topic: C8yTopic = device_kind.clone().into();
-        let smartrest_topic = c8y_topic.to_topic()?;
-
-        let payload = message.payload_str()?;
-        let response = &LogUploadCmdPayload::from_json(payload)?;
-
-        let messages = match response.status {
-            CommandStatus::Executing => {
-                let smartrest_operation_status = SmartRestSetOperationToExecuting::new(
-                    CumulocitySupportedOperations::C8yLogFileRequest,
-                )
-                .to_smartrest()?;
-                vec![Message::new(&smartrest_topic, smartrest_operation_status)]
-            }
-            CommandStatus::Successful => {
-                let uploaded_file_path = self
-                    .config
-                    .file_transfer_dir
-                    .join(device_kind.name())
-                    .join("log_upload")
-                    .join(format!("{}-{}", response.log_type, cmd_id));
-                let res = self
-                    .http_proxy
-                    .upload_file(
-                        uploaded_file_path.as_std_path(),
-                        &response.log_type,
-                        external_id,
-                    )
-                    .await;
-
-                let smartrest_operation_status = match res {
-                    Ok(url) => SmartRestSetOperationToSuccessful::new(
-                        CumulocitySupportedOperations::C8yLogFileRequest,
-                    )
-                    .with_response_parameter(&url)
-                    .to_smartrest()?,
-                    Err(err) => SmartRestSetOperationToFailed::new(
-                        CumulocitySupportedOperations::C8yLogFileRequest,
-                        format!("Upload failed with {}", err),
-                    )
-                    .to_smartrest()?,
-                };
-
-                vec![Message::new(&smartrest_topic, smartrest_operation_status)]
-            }
-            CommandStatus::Failed => {
-                let smartrest_operation_status = SmartRestSetOperationToFailed::new(
-                    CumulocitySupportedOperations::C8yLogFileRequest,
-                    "Restart Failed".into(),
-                )
-                .to_smartrest()?;
-                vec![Message::new(&smartrest_topic, smartrest_operation_status)]
-            }
-            _ => {
-                vec![] // Do nothing as other components might handle those states
-            }
-        };
-
-        Ok(messages)
-    }
-
-    /// Converts log_upload metadata to supported operation and supported log types declaration
-    fn convert_log_metadata(&mut self, message: &Message) -> Result<Vec<Message>, ConversionError> {
-        let device_kind =
-            match get_target_ids_from_cmd_topic(&message.topic, &self.config.topic_root) {
-                (Some(device_id), _) => device_id,
-                _ => {
-                    return Err(ConversionError::UnsupportedTopic(
-                        message.topic.name.clone(),
-                    ))
-                }
-            };
-
-        // creating c8y_LogfileRequest operation file
-        match device_kind {
-            DeviceKind::Main => {
-                create_file_with_defaults(self.ops_dir.join("c8y_LogfileRequest"), None)?
-            }
-            DeviceKind::Child(ref id) => {
-                create_file_with_defaults(self.ops_dir.join(id).join("c8y_LogfileRequest"), None)?
-            }
-        }
-
-        let metadata = LogMetadata::from_json(message.payload_str()?)?;
-        let mut types = metadata.types;
-        types.sort();
-        let supported_log_types = types.join(",");
-        let payload = format!("118,{supported_log_types}");
-
-        let c8y_topic: C8yTopic = device_kind.into();
-        Ok(vec![MqttMessage::new(&c8y_topic.to_topic()?, payload)])
-    }
 }
 
 #[derive(Error, Debug)]
@@ -898,17 +751,21 @@ impl CumulocityConverter {
             topic if topic.name.starts_with("tedge/health") => {
                 self.process_health_status_message(message).await
             }
+            #[cfg(feature = "log_upload")]
             topic
-                if TopicFilter::new_unchecked(
-                    &CmdSubscribeTopic::LogUpload.metadata(&self.config.topic_root),
+                if tedge_mqtt_ext::TopicFilter::new_unchecked(
+                    &tedge_api::cmd_topic::CmdSubscribeTopic::LogUpload
+                        .metadata(&self.config.topic_root),
                 )
                 .accept_topic(topic) =>
             {
                 self.convert_log_metadata(message)
             }
+            #[cfg(feature = "log_upload")]
             topic
-                if TopicFilter::new_unchecked(
-                    &CmdSubscribeTopic::LogUpload.with_id(&self.config.topic_root),
+                if tedge_mqtt_ext::TopicFilter::new_unchecked(
+                    &tedge_api::cmd_topic::CmdSubscribeTopic::LogUpload
+                        .with_id(&self.config.topic_root),
                 )
                 .accept_topic(topic) =>
             {
@@ -1967,7 +1824,9 @@ mod tests {
         let tedge_http_host = "localhost".into();
         let root_topic = "te".into();
         let mut topics =
-            C8yMapperConfig::internal_topic_filter(&tmp_dir.to_path_buf(), "te").unwrap();
+            C8yMapperConfig::default_internal_topic_filter(&tmp_dir.to_path_buf()).unwrap();
+        #[cfg(feature = "log_upload")]
+        topics.add_all(crate::log_upload::log_upload_topic_filter("te"));
         topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
         let config = C8yMapperConfig::new(
