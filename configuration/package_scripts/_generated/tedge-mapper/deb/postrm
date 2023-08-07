@@ -1,0 +1,37 @@
+#!/bin/sh
+set -e
+
+purge_mapper_lock() {
+    rm -f \
+        /run/lock/tedge-mapper-c8y.lock \
+        /run/lock/tedge-mapper-az.lock \
+        /run/lock/tedge-mapper-aws.lock \
+        /run/lock/tedge-mapper-collectd.lock
+}
+
+case "$1" in
+    purge)
+        purge_mapper_lock
+    ;;
+esac
+
+# Automatically added by cargo-deb
+if [ -d /run/systemd/system ]; then
+	systemctl --system daemon-reload >/dev/null || true
+fi
+# End automatically added section
+# Automatically added by cargo-deb
+if [ "$1" = "remove" ]; then
+	if [ -x "/usr/bin/deb-systemd-helper" ]; then
+		deb-systemd-helper mask tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service >/dev/null || true
+	fi
+fi
+
+if [ "$1" = "purge" ]; then
+	if [ -x "/usr/bin/deb-systemd-helper" ]; then
+		deb-systemd-helper purge tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service >/dev/null || true
+		deb-systemd-helper unmask tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service >/dev/null || true
+	fi
+fi
+# End automatically added section
+

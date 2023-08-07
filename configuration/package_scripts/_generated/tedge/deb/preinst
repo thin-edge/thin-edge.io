@@ -1,0 +1,89 @@
+#!/bin/sh
+set -e
+
+command_exists() {
+    command -V "$1" >/dev/null 2>&1
+}
+
+### Create groups
+if ! getent group tedge >/dev/null; then
+    if command_exists groupadd; then
+        groupadd --system tedge
+    elif command_exists addgroup; then
+        addgroup -S tedge
+    else
+        echo "WARNING: Could not create group: tedge" >&2
+    fi
+fi
+
+### Create users
+# Create user tedge with no home(--no-create-home), no login(--shell) and in group tedge(--gid)
+if ! getent passwd tedge >/dev/null; then
+    if command_exists useradd; then
+        useradd --system --no-create-home --shell /sbin/nologin --gid tedge tedge
+    elif command_exists adduser; then
+        adduser -g "" -H -D tedge -G tedge
+    else
+        echo "WARNING: Could not create user: tedge" >&2
+    fi
+fi
+
+### Create file in /etc/sudoers.d directory. With this configuration, the tedge user have the right to call the tedge command with sudo rights, which is required for system-wide configuration in "/etc/tedge"
+if [ -d /etc/sudoers.d ]; then
+    echo "tedge  ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init" >/etc/sudoers.d/tedge
+
+    if [ -f "/etc/sudoers.d/010_pi-nopasswd" ]; then
+        echo "tedge   ALL = (ALL) NOPASSWD: /usr/bin/tedge, /etc/tedge/sm-plugins/[a-zA-Z0-9]*, /bin/sync, /sbin/init" >/etc/sudoers.d/tedge-nopasswd
+    fi
+fi
+
+
+# change the owenership of the below directories/files to `tedge` user,
+# as there is only `tedge` user exists.
+
+if [ -d "/etc/tedge/operations/c8y" ]; then
+    chown tedge:tedge /etc/tedge/operations/c8y
+
+    # Don't fail if there are no files found
+    chown tedge:tedge /etc/tedge/operations/c8y/c8y_* 2>/dev/null ||:
+fi
+
+if [ -d "/etc/tedge/operations/az" ]; then
+    chown tedge:tedge /etc/tedge/operations/az
+fi
+
+if [ -d "/etc/tedge/operations/aws" ]; then
+    chown tedge:tedge /etc/tedge/operations/aws
+fi
+
+if [ -d "/etc/tedge/.agent/" ]; then
+    chown tedge:tedge /etc/tedge/.agent
+fi
+
+if [ -d "/var/log/tedge/agent/" ]; then
+    chown tedge:tedge /var/log/tedge/agent
+fi
+
+if [ -f "/run/lock/tedge_agent.lock" ]; then
+    chown tedge:tedge /run/lock/tedge_agent.lock
+fi
+
+if [ -f "/run/lock/tedge-agent.lock" ]; then
+    chown tedge:tedge /run/lock/tedge-agent.lock
+fi
+
+if [ -f "/run/lock/tedge-mapper-c8y.lock" ]; then
+    chown tedge:tedge /run/lock/tedge-mapper-c8y.lock
+fi
+
+if [ -f "/run/lock/tedge-mapper-az.lock" ]; then
+    chown tedge:tedge /run/lock/tedge-mapper-az.lock
+fi
+
+if [ -f "/run/lock/tedge-mapper-aws.lock" ]; then
+    chown tedge:tedge /run/lock/tedge-mapper-aws.lock
+fi
+
+if [ -f "/run/lock/tedge-mapper-collectd.lock" ]; then
+    chown tedge:tedge /run/lock/tedge-mapper-collectd.lock
+fi
