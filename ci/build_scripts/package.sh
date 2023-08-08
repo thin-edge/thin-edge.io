@@ -282,6 +282,7 @@ check_prerequisites() {
         go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
         PATH="$(go env GOPATH)/bin:$PATH"
         export PATH
+        return
     fi
 
     if command -V brew >/dev/null 2>&1; then
