@@ -21,6 +21,7 @@ use tedge_api::messages::LogUploadCmdPayload;
 use tedge_api::Jsonify;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
@@ -134,7 +135,11 @@ impl CumulocityConverter {
                     .to_smartrest()?,
                 };
 
-                vec![Message::new(&smartrest_topic, smartrest_operation_status)]
+                let c8y_notification = Message::new(&smartrest_topic, smartrest_operation_status);
+                let clean_operation = Message::new(&message.topic, "")
+                    .with_retain()
+                    .with_qos(QoS::AtLeastOnce);
+                vec![c8y_notification, clean_operation]
             }
             CommandStatus::Failed => {
                 let smartrest_operation_status = SmartRestSetOperationToFailed::new(
@@ -142,7 +147,11 @@ impl CumulocityConverter {
                     response.reason.clone().unwrap_or_default(),
                 )
                 .to_smartrest()?;
-                vec![Message::new(&smartrest_topic, smartrest_operation_status)]
+                let c8y_notification = Message::new(&smartrest_topic, smartrest_operation_status);
+                let clean_operation = Message::new(&message.topic, "")
+                    .with_retain()
+                    .with_qos(QoS::AtLeastOnce);
+                vec![c8y_notification, clean_operation]
             }
             _ => {
                 vec![] // Do nothing as other components might handle those states
