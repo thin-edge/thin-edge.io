@@ -87,8 +87,8 @@ release-linux-virtual:
     ./ci/build_scripts/package.sh build_virtual "all" --version "{{VERSION}}" --output target/virtual-packages
 
 # Publish linux virtual packages
-publish-linux-virtual:
-    ./ci/build_scripts/publish_packages.sh --path target/virtual-packages
+publish-linux-virtual *ARGS='':
+    ./ci/build_scripts/publish_packages.sh --path target/virtual-packages {{ARGS}}
 
 # Publish linux packages for a specific target
 publish-linux-target TARGET=DEFAULT_TARGET *ARGS='':
