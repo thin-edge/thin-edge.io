@@ -9,34 +9,34 @@ Test Tags    theme:installation    test:on_demand
 # Debian
 ${APT_SETUP}      apt-get update \
     ...           && apt-get install -y sudo curl mosquitto \
-    ...           && curl -1sLf https://dl.cloudsmith.io/public/thinedge/tedge-dev/setup.deb.sh | sudo -E bash
+    ...           && curl -1sLf https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.deb.sh | sudo -E bash
 ${APT_INSTALL}    apt-get install -y tedge-full
 
 # CentOS/RHEL
 ${DNF_SETUP}      dnf install -y epel-release \
     ...           && dnf install -y sudo mosquitto \
-    ...           && curl -1sLf "https://dl.cloudsmith.io/public/thinedge/tedge-dev/setup.rpm.sh" | sudo -E bash
+    ...           && curl -1sLf "https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.rpm.sh" | sudo -E bash
 ${DNF_INSTALL}    dnf install -y tedge-full
 
 ${SUSE_SETUP}     zypper install -y sudo curl mosquitto \
-    ...           && curl -1sLf "https://dl.cloudsmith.io/public/thinedge/tedge-dev/setup.rpm.sh" | sudo -E version\=any-version codename\="" bash
+    ...           && curl -1sLf "https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.rpm.sh" | sudo -E version\=any-version codename\="" bash
 ${SUSE_INSTALL}   zypper install -y tedge-full
 
 
 # DNF where the epel-release repo is not required (e.g. Fedora)
 ${DNF2_SETUP}     dnf install -y sudo mosquitto \
-    ...           && curl -1sLf "https://dl.cloudsmith.io/public/thinedge/tedge-dev/setup.rpm.sh" | sudo -E bash
+    ...           && curl -1sLf "https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.rpm.sh" | sudo -E bash
 ${DNF2_INSTALL}   dnf install -y tedge-full
 
 # Microdnf
 ${MDNF_SETUP}     microdnf install -y epel-release \
     ...           && microdnf install -y sudo tar mosquitto \
-    ...           && curl -1sLf "https://dl.cloudsmith.io/public/thinedge/tedge-dev/setup.rpm.sh" | sudo -E bash
+    ...           && curl -1sLf "https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.rpm.sh" | sudo -E bash
 ${MDNF_INSTALL}   microdnf install -y tedge-full
 
 # Alpine linux
 ${APK_SETUP}      apk add --no-cache sudo curl bash mosquitto \
-    ...           && curl -1sLf "https://dl.cloudsmith.io/public/thinedge/tedge-dev/setup.alpine.sh" | sudo -E bash
+    ...           && curl -1sLf "https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.alpine.sh" | sudo -E bash
 ${APK_INSTALL}    apk add --no-cache tedge-full
 
 
