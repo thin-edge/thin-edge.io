@@ -86,14 +86,21 @@ To install [cargo cross](https://github.com/rust-embedded/cross):
 cargo install cross
 ```
 
-### Debian packaging (optional)
+### Linux packaging (optional)
 
-We use [cargo deb](https://github.com/mmstick/cargo-deb) to build our debian packages, the tool takes care of all the work to package thin-edge.io.
+We use [nfpm](https://github.com/goreleaser/nfpm) to build our linux packages (deb, rpm and apk).
 
-To install [cargo deb](https://github.com/mmstick/cargo-deb) use:
+Follow the [nfpm install instructions](https://nfpm.goreleaser.com/install/) to install the dependency. The linux packages will automatically be built when running `just release`.
+
 
 ```sh
-cargo install cargo-deb
+just release
+```
+
+The virtual packages (e.g. `tedge-full` and `tedge-minimal`) can be built using the following command:
+
+```sh
+just release-linux-virtual
 ```
 
 ## Compiling
