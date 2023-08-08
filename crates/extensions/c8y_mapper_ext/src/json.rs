@@ -10,7 +10,7 @@
 //!        "temperature": 23,
 //!        "pressure": 220
 //!     }"#;
-//! let output = from_thin_edge_json(single_value_thin_edge_json);
+//! let output = from_thin_edge_json(single_value_thin_edge_json, None);
 //! ```
 
 use crate::serializer;
@@ -30,20 +30,12 @@ pub enum CumulocityJsonError {
 }
 
 /// Converts from thin-edge measurement JSON to C8Y measurement JSON
-pub fn from_thin_edge_json(input: &str) -> Result<String, CumulocityJsonError> {
-    let timestamp = WallClock.now();
-    let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp, None)?;
-    Ok(c8y_vec)
-}
-
-/// Converts from thin-edge measurement JSON to C8Y measurement JSON
-pub fn new_from_thin_edge_json(
+pub fn from_thin_edge_json(
     input: &str,
     m_type: Option<&str>,
 ) -> Result<String, CumulocityJsonError> {
     let timestamp = WallClock.now();
-
-    let c8y_vec = new_from_thin_edge_json_with_timestamp(input, timestamp, m_type, None)?;
+    let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp, m_type, None)?;
     Ok(c8y_vec)
 }
 
@@ -51,30 +43,21 @@ pub fn new_from_thin_edge_json(
 pub fn from_thin_edge_json_with_child(
     input: &str,
     child_id: &str,
+    m_type: Option<&str>,
 ) -> Result<String, CumulocityJsonError> {
     let timestamp = WallClock.now();
-    let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp, Some(child_id))?;
+    let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp, m_type, Some(child_id))?;
     Ok(c8y_vec)
 }
 
 fn from_thin_edge_json_with_timestamp(
     input: &str,
     timestamp: OffsetDateTime,
-    maybe_child_id: Option<&str>,
-) -> Result<String, CumulocityJsonError> {
-    let mut serializer = serializer::C8yJsonSerializer::new(timestamp, maybe_child_id);
-    parse_str(input, &mut serializer)?;
-    Ok(serializer.into_string()?)
-}
-
-fn new_from_thin_edge_json_with_timestamp(
-    input: &str,
-    timestamp: OffsetDateTime,
     m_type: Option<&str>,
     maybe_child_id: Option<&str>,
 ) -> Result<String, CumulocityJsonError> {
     let mut serializer =
-        serializer::C8yJsonSerializer::new_with_type(timestamp, m_type, maybe_child_id);
+        serializer::C8yJsonSerializer::with_type(timestamp, m_type, maybe_child_id);
     parse_str(input, &mut serializer)?;
     Ok(serializer.into_string()?)
 }
@@ -100,7 +83,7 @@ mod tests {
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
         let output =
-            from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp, None);
+            from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp, None, None);
 
         let expected_output = json!({
             "time": timestamp
@@ -135,8 +118,12 @@ mod tests {
 
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
-        let output =
-            from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp, None);
+        let output = from_thin_edge_json_with_timestamp(
+            single_value_thin_edge_json,
+            timestamp,
+            Some("test_type"),
+            None,
+        );
 
         let expected_output = json!({
             "time": timestamp
@@ -180,7 +167,7 @@ mod tests {
                     "type": "ThinEdgeMeasurement"
                   }"#;
 
-        let output = from_thin_edge_json(single_value_thin_edge_json);
+        let output = from_thin_edge_json(single_value_thin_edge_json, None);
 
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
@@ -203,7 +190,7 @@ mod tests {
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
         let output =
-            from_thin_edge_json_with_timestamp(multi_value_thin_edge_json, timestamp, None);
+            from_thin_edge_json_with_timestamp(multi_value_thin_edge_json, timestamp, None, None);
 
         let expected_output = json!({
             "time": timestamp
@@ -257,7 +244,7 @@ mod tests {
             "type": "ThinEdgeMeasurement"
         }"#;
 
-        let output = from_thin_edge_json(input);
+        let output = from_thin_edge_json(input, None);
 
         let actual_output = output.unwrap().split_whitespace().collect::<String>();
 
@@ -289,7 +276,7 @@ mod tests {
                   "type": "ThinEdgeMeasurement"
                 }}"#, time, measurement, measurement);
 
-        let output = from_thin_edge_json(input.as_str()).unwrap();
+        let output = from_thin_edge_json(input.as_str(), None).unwrap();
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
             output
@@ -336,7 +323,9 @@ mod tests {
         expected_output: Value,
     ) {
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
-        let output = from_thin_edge_json_with_timestamp(thin_edge_json, timestamp, Some(child_id));
+        let m_type = Some("ThinEdgeMeasurement");
+        let output =
+            from_thin_edge_json_with_timestamp(thin_edge_json, timestamp, m_type, Some(child_id));
         assert_json_eq!(
             serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
             expected_output

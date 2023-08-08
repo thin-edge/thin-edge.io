@@ -372,8 +372,8 @@ define_tedge_config! {
         mqtt: HostPort<MQTT_TLS_PORT>,
 
         /// Set of MQTT topics the Cumulocity mapper should subscribe to
-        #[tedge_config(example = "tedge/alarms/#,tedge/measurements/+")]
-        #[tedge_config(default(value = "tedge/measurements,tedge/measurements/+,tedge/alarms/+/+,tedge/alarms/+/+/+,tedge/events/+,tedge/events/+/+,tedge/health/+,tedge/health/+/+,te/device/+/+/+/m/+,te/device/+/+/+/e/+,te/device/+/+/+/a/+"))]
+        #[tedge_config(example = "te/device/+/+/+/m/+,te/device/+/+/+/e/+")]
+        #[tedge_config(default(value = "te/device/+/+/+/m/+,te/device/+/+/+/e/+,te/device/+/+/+/a/+"))]
         topics: TemplatesSet,
 
     },

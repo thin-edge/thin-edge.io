@@ -148,7 +148,6 @@ impl TryFrom<ThinEdgeEvent> for C8yCreateEvent {
         let text;
         let time;
         let mut extras;
-
         match event.data {
             None => {
                 text = event_type.clone();

@@ -253,7 +253,7 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
     mqtt.skip(6).await; //Skip all init messages
 
     mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("tedge/alarms/major/temperature_alarm"),
+        &Topic::new_unchecked("te/device/main///a/temperature_alarm"),
         r#"{ "text": "Temperature high" }"#,
     ))
     .await
@@ -274,8 +274,8 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     mqtt.skip(6).await; //Skip all init messages
 
     mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("tedge/alarms/minor/temperature_high/external_sensor"),
-        json!({ "text": "Temperature high" }).to_string(),
+        &Topic::new_unchecked("te/device/external_sensor///a/temperature_high"),
+        json!({ "text": "Temperature high", "severity": "minor" }).to_string(),
     ))
     .await
     .unwrap();
@@ -286,7 +286,7 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
         [
             (
                 "c8y/s/us",
-                "101,external_sensor,external_sensor,thin-edge.io-child",
+                "101,test-device:device:external_sensor,test-device:device:external_sensor,thin-edge.io-child",
             ),
             (
                 "c8y/s/us/external_sensor",
@@ -305,7 +305,7 @@ async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
     mqtt.skip(6).await; //Skip all init messages
 
     mqtt.send(MqttMessage::new(
-        &"tedge/alarms/major/custom_temperature_alarm"
+        &"te/device/main///a/custom_temperature_alarm"
             .try_into()
             .unwrap(),
         json!({
@@ -351,7 +351,7 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
     mqtt.skip(6).await; //Skip all init messages
 
     mqtt.send(MqttMessage::new(
-        &"tedge/alarms/major/custom_temperature_alarm/external_sensor"
+        &"te/device/external_sensor///a/custom_temperature_alarm"
             .try_into()
             .unwrap(),
         json!({
@@ -373,7 +373,7 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
         &mut mqtt,
         [(
             "c8y/s/us",
-            "101,external_sensor,external_sensor,thin-edge.io-child",
+            "101,test-device:device:external_sensor,test-device:device:external_sensor,thin-edge.io-child",
         )],
     )
     .await;
@@ -394,7 +394,7 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
                     }
                 },
                 "externalSource": {
-                    "externalId":"external_sensor",
+                    "externalId":"test-device:device:external_sensor",
                     "type":"c8y_Serial"
                 }
             }),
@@ -411,7 +411,7 @@ async fn c8y_mapper_alarm_with_message_as_custom_fragment_mapping_to_c8y_json() 
     mqtt.skip(6).await; //Skip all init messages
 
     mqtt.send(MqttMessage::new(
-        &"tedge/alarms/major/custom_msg_pressure_alarm"
+        &"te/device/main///a/custom_msg_pressure_alarm"
             .try_into()
             .unwrap(),
         json!({
@@ -449,7 +449,7 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
     mqtt.skip(6).await; //Skip all init messages
 
     mqtt.send(MqttMessage::new(
-        &"tedge/alarms/major/child_custom_msg_pressure_alarm/external_sensor"
+        &"te/device/external_sensor///a/child_custom_msg_pressure_alarm"
             .try_into()
             .unwrap(),
         json!({
@@ -476,7 +476,7 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
                 "text":"Pressure high",
                 "message":"custom message",
                 "externalSource":{
-                    "externalId":"external_sensor",
+                    "externalId":"test-device:device:external_sensor",
                     "type":"c8y_Serial"
                 }
             }),
@@ -493,7 +493,7 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
     mqtt.skip(6).await; //Skip all init messages
 
     mqtt.send(MqttMessage::new(
-        &"tedge/alarms/major/child_msg_to_text_pressure_alarm/external_sensor"
+        &"te/device/external_sensor///a/child_msg_to_text_pressure_alarm"
             .try_into()
             .unwrap(),
         json!({
@@ -519,7 +519,7 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
                 "text":"child_msg_to_text_pressure_alarm",
                 "message":"Pressure high",
                 "externalSource":{
-                    "externalId":"external_sensor",
+                    "externalId":"test-device:device:external_sensor",
                     "type":"c8y_Serial"
                 }
             }),
@@ -536,7 +536,7 @@ async fn c8y_mapper_alarm_with_custom_message() {
     mqtt.skip(6).await; //Skip all init messages
 
     mqtt.send(MqttMessage::new(
-        &"tedge/alarms/major/msg_to_text_pressure_alarm"
+        &"te/device/main///a/msg_to_text_pressure_alarm"
             .try_into()
             .unwrap(),
         json!({
@@ -573,7 +573,7 @@ async fn c8y_mapper_child_alarm_empty_payload() {
     mqtt.skip(6).await; //Skip all init messages
 
     mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("tedge/alarms/major/empty_temperature_alarm/external_sensor"),
+        &Topic::new_unchecked("te/device/external_sensor///a/empty_temperature_alarm"),
         json!({}).to_string(),
     ))
     .await
@@ -597,7 +597,7 @@ async fn c8y_mapper_alarm_empty_payload() {
     mqtt.skip(6).await; //Skip all init messages
 
     mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("tedge/alarms/major/empty_temperature_alarm"),
+        &Topic::new_unchecked("te/device/main///a/empty_temperature_alarm"),
         json!({}).to_string(),
     ))
     .await
@@ -615,7 +615,7 @@ async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
     mqtt.skip(6).await; //Skip all init messages
 
     mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("tedge/alarms/major/complex_text_alarm"),
+        &Topic::new_unchecked("te/device/main///a/complex_text_alarm"),
         json!({
             "text":{
                 "nested":{
@@ -631,7 +631,7 @@ async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
     .unwrap();
 
     // Expect converted alarm SmartREST message
-    assert_received_contains_str(&mut mqtt, [("tedge/errors", "Parsing of alarm message received on topic: tedge/alarms/major/complex_text_alarm failed due to error: invalid")]).await;
+    assert_received_contains_str(&mut mqtt, [("tedge/errors", "Parsing of alarm message received on topic: te/device/main///a/complex_text_alarm failed due to error: invalid")]).await;
 }
 
 #[tokio::test]

@@ -15,7 +15,7 @@ pub fn get_external_identity_from_topic(
 
             let mut child_device_name = device_common_name;
             for item in topic_split.iter().take(5) {
-                if item.ne(&ROOT_PREFIX) && !item.is_empty() && item.ne(&"main"){
+                if item.ne(&ROOT_PREFIX) && !item.is_empty() && item.ne(&"main") {
                     child_device_name.push_str(&format!(":{}", item));
                 }
             }

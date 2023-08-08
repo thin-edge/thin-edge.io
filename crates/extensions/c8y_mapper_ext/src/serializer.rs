@@ -76,7 +76,7 @@ impl C8yJsonSerializer {
         }
     }
 
-    pub fn new_with_type(
+    pub fn with_type(
         default_timestamp: OffsetDateTime,
         m_type: Option<&str>,
         maybe_child_id: Option<&str>,

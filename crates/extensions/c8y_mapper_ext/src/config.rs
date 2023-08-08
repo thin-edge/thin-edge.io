@@ -103,19 +103,8 @@ impl C8yMapperConfig {
     /// List of all possible external topics that Cumulocity mapper addresses. For testing purpose.
     pub fn default_external_topic_filter() -> TopicFilter {
         vec![
-            "tedge/measurements",
-            "tedge/measurements/+",
-            "tedge/alarms/+/+",
-            "tedge/alarms/+/+/+",
-            "tedge/events/+",
-            "tedge/events/+/+",
-            "tedge/health/+",
-            "tedge/health/+/+",
-            "te/device/+/+/+/m/",
             "te/device/+/+/+/m/+",
-            "te/device/+/+/+/a/",
             "te/device/+/+/+/a/+",
-            "te/device/+/+/+/e/",
             "te/device/+/+/+/e/+",
         ]
         .try_into()
