@@ -35,7 +35,7 @@ Flags:
     --version               Print the automatic version which will be used (this does not build the project)
     --output <path>         Output directory where the packages will be written to
     --types <csv_string>    CSV list of packages types. Accepted values: deb, rpm, apk, tarball
-    --clean                 Clean the output directory before writing any packges to it
+    --clean                 Clean the output directory before writing any packages to it
 
 Env:
     GIT_SEMVER      Use a custom version when building the packages. Only use for dev/testing purposes!
