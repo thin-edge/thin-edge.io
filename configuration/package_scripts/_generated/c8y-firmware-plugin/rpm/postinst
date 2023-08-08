@@ -9,6 +9,11 @@ fi
 # Automatically added by thin-edge.io
 if [ -d /run/systemd/system ]; then
 	systemctl --system daemon-reload >/dev/null || true
-	systemctl start c8y-firmware-plugin.service >/dev/null || true
+	if [ $1 -eq 2 ]; then
+		_dh_action=restart
+	else
+		_dh_action=start
+	fi
+	systemctl $_dh_action c8y-firmware-plugin.service >/dev/null || true
 fi
 # End automatically added section

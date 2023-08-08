@@ -3,17 +3,17 @@ set -e
 # Automatically added by thin-edge.io
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
 	# This will only remove masks created by d-s-h on package removal.
-	deb-systemd-helper unmask tedge-watchdog.service >/dev/null || true
+	deb-systemd-helper unmask tedge-device-management.service >/dev/null || true
 
 	# was-enabled defaults to true, so new installations run enable.
-	if deb-systemd-helper --quiet was-enabled tedge-watchdog.service; then
+	if deb-systemd-helper --quiet was-enabled tedge-device-management.service; then
 		# Enables the unit on first installation, creates new
 		# symlinks on upgrades if the unit file has changed.
-		deb-systemd-helper enable tedge-watchdog.service >/dev/null || true
+		deb-systemd-helper enable tedge-device-management.service >/dev/null || true
 	else
 		# Update the statefile to add new symlinks (if any), which need to be
 		# cleaned up on purge. Also remove old symlinks.
-		deb-systemd-helper update-state tedge-watchdog.service >/dev/null || true
+		deb-systemd-helper update-state tedge-device-management.service >/dev/null || true
 	fi
 fi
 # End automatically added section
@@ -26,7 +26,7 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 		else
 			_dh_action=start
 		fi
-		deb-systemd-invoke $_dh_action tedge-watchdog.service >/dev/null || true
+		deb-systemd-invoke $_dh_action tedge-device-management.service >/dev/null || true
 	fi
 fi
 # End automatically added section

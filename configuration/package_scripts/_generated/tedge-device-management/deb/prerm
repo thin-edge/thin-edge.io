@@ -2,6 +2,6 @@
 set -e
 # Automatically added by thin-edge.io
 if [ -d /run/systemd/system ] && [ "$1" = remove ]; then
-	deb-systemd-invoke stop tedge-watchdog.service >/dev/null || true
+	deb-systemd-invoke stop tedge-device-management.service >/dev/null || true
 fi
 # End automatically added section

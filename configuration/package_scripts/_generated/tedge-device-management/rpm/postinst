@@ -3,7 +3,7 @@ set -e
 # Automatically added by thin-edge.io
 if [ $1 -eq 1 ] && [ -x "/usr/lib/systemd/systemd-update-helper" ]; then
     # Initial installation
-    /usr/lib/systemd/systemd-update-helper install-system-units tedge-watchdog.service || :
+    /usr/lib/systemd/systemd-update-helper install-system-units tedge-device-management.service || :
 fi
 # End automatically added section
 # Automatically added by thin-edge.io
@@ -14,6 +14,6 @@ if [ -d /run/systemd/system ]; then
 	else
 		_dh_action=start
 	fi
-	systemctl $_dh_action tedge-watchdog.service >/dev/null || true
+	systemctl $_dh_action tedge-device-management.service >/dev/null || true
 fi
 # End automatically added section
