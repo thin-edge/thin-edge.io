@@ -69,6 +69,13 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }} # Check out the code of the PR. Only after the manual approval process
           fetch-depth: 0
 
+      # Install nfpm used to for linux packaging
+      - uses: actions/setup-go@v4
+        with:
+          go-version: 'stable'
+          cache: false
+      - run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
       - name: Retrieve MSRV from workspace Cargo.toml
         id: rust_version
         uses: SebRollen/toml-action@v1.0.2
