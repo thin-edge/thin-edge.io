@@ -2,9 +2,18 @@ use crate::error::LogManagementError;
 use serde::Deserialize;
 use serde::Serialize;
 use std::convert::TryFrom;
-use tedge_api::OperationStatus;
 use tedge_mqtt_ext::MqttMessage;
 use time::OffsetDateTime;
+
+// This Enum will be reverted once tedge mapper crate will be merged
+#[derive(Debug, Deserialize, Serialize, PartialEq, Copy, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub enum CommandStatus {
+    Init,
+    Executing,
+    Successful,
+    Failed,
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -53,7 +62,7 @@ impl ToString for LogInfo {
 #[derive(Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct LogRequestPayload {
-    pub status: OperationStatus,
+    pub status: CommandStatus,
     pub tedge_url: String,
     #[serde(flatten)]
     pub log: LogInfo,
@@ -72,7 +81,7 @@ impl TryFrom<MqttMessage> for LogRequestPayload {
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct LogResponsePayload {
-    pub status: OperationStatus,
+    pub status: CommandStatus,
     pub tedge_url: String,
     #[serde(flatten)]
     pub log: LogInfo,
@@ -81,7 +90,7 @@ pub struct LogResponsePayload {
 }
 
 impl LogResponsePayload {
-    pub fn from_log_request(request: &LogRequestPayload, status: OperationStatus) -> Self {
+    pub fn from_log_request(request: &LogRequestPayload, status: CommandStatus) -> Self {
         Self {
             status,
             tedge_url: request.tedge_url.clone(),
@@ -120,14 +129,14 @@ mod tests {
             7,
         );
         let request_payload = LogRequestPayload {
-            status: OperationStatus::Init,
+            status: CommandStatus::Init,
             tedge_url: "http://127.0.0.1:3000/tedge/file-transfer/main/logfile/type_one-opid"
                 .to_string(),
             log,
         };
 
         let response_payload =
-            LogResponsePayload::from_log_request(&request_payload, OperationStatus::Executing);
+            LogResponsePayload::from_log_request(&request_payload, CommandStatus::Executing);
 
         let json = serde_json::to_string(&response_payload).unwrap();
 
@@ -155,14 +164,14 @@ mod tests {
             7,
         );
         let request_payload = LogRequestPayload {
-            status: OperationStatus::Init,
+            status: CommandStatus::Init,
             tedge_url: "http://127.0.0.1:3000/tedge/file-transfer/main/logfile/type_one-opid"
                 .to_string(),
             log,
         };
 
         let response_payload =
-            LogResponsePayload::from_log_request(&request_payload, OperationStatus::Executing)
+            LogResponsePayload::from_log_request(&request_payload, CommandStatus::Executing)
                 .with_reason("something");
 
         let json = serde_json::to_string(&response_payload).unwrap();
@@ -197,7 +206,7 @@ mod tests {
         let value: LogRequestPayload = serde_json::from_str(data).unwrap();
 
         let expected_value = LogRequestPayload {
-            status: OperationStatus::Init,
+            status: CommandStatus::Init,
             tedge_url: "http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_one-1234"
                 .to_string(),
             log: LogInfo {
@@ -227,7 +236,7 @@ mod tests {
         let value: LogRequestPayload = serde_json::from_str(data).unwrap();
 
         let expected_value = LogRequestPayload {
-            status: OperationStatus::Init,
+            status: CommandStatus::Init,
             tedge_url: "http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_one-1234"
                 .to_string(),
             log: LogInfo {

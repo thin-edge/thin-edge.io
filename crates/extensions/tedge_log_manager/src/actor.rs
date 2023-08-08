@@ -14,7 +14,6 @@ use tedge_actors::NoMessage;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
-use tedge_api::OperationStatus;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_http_ext::HttpError;
 use tedge_http_ext::HttpRequest;
@@ -86,8 +85,8 @@ impl LogManagerActor {
         if self.config.logfile_request_topic.accept(&message) {
             match LogRequestPayload::try_from(message.clone()) {
                 Ok(request) => {
-                    if (request.status.eq(&OperationStatus::Executing)
-                        || request.status.eq(&OperationStatus::Init))
+                    if (request.status.eq(&CommandStatus::Executing)
+                        || request.status.eq(&CommandStatus::Init))
                         && !self.config.current_operations.contains(&message.topic.name)
                     {
                         info!("Log request received: {request:?}");
@@ -150,7 +149,7 @@ impl LogManagerActor {
                     .send(create_operation_message_with_reason(
                         topic,
                         request,
-                        OperationStatus::Failed,
+                        CommandStatus::Failed,
                         &error_message,
                     ))
                     .await?;
@@ -257,7 +256,7 @@ impl LogManagerActor {
 fn create_operation_message_with_reason(
     topic: &Topic,
     request: &LogRequestPayload,
-    status: OperationStatus,
+    status: CommandStatus,
     reason: &str,
 ) -> MqttMessage {
     let payload = LogResponsePayload::from_log_request(request, status).with_reason(reason);
@@ -267,7 +266,7 @@ fn create_operation_message_with_reason(
 fn create_operation_message(
     topic: &Topic,
     request: &LogRequestPayload,
-    status: OperationStatus,
+    status: CommandStatus,
 ) -> MqttMessage {
     let payload = LogResponsePayload::from_log_request(request, status);
     MqttMessage::new(topic, payload.to_string()).with_retain()

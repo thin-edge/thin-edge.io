@@ -15,7 +15,6 @@ use tedge_actors::NoMessage;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
-use tedge_api::OperationStatus;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_http_ext::test_helpers::assert_request_eq;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
