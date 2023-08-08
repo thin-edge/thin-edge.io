@@ -193,10 +193,10 @@ build_virtual_package() {
 
 get_package_arch() {
     case "$1" in
-        x86_64-unknown-linux-musl) pkg_arch=amd64 ;;
-        aarch64-unknown-linux-musl) pkg_arch=arm64 ;;
-        armv7-unknown-linux-musleabihf) pkg_arch=arm7 ;;
-        arm-unknown-linux-musleabihf) pkg_arch=arm6 ;;
+        x86_64-unknown-linux-*) pkg_arch=amd64 ;;
+        aarch64-unknown-linux-*) pkg_arch=arm64 ;;
+        armv7-unknown-linux-*eabihf) pkg_arch=arm7 ;;
+        arm-unknown-linux-*eabihf) pkg_arch=arm6 ;;
         *)
             echo "Unknown package architecture. value=$1"
             exit 1
