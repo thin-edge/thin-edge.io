@@ -2,7 +2,7 @@
 ---
 name: c8y-firmware-plugin
 description: |
-  Thin-edge device firmware management for Cumulocity
+  thin-edge.io device firmware management for Cumulocity
 arch: "${PKG_ARCH}"
 platform: "linux"
 version: "${GIT_SEMVER}"
@@ -12,9 +12,6 @@ maintainer: "thin-edge.io team <info@thin-edge.io>"
 vendor: "thin-edge.io"
 homepage: "https://thin-edge.io"
 license: "Apache-2.0"
-
-depends:
-  - tedge-agent
 
 deb:
   fields:

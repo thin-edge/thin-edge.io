@@ -2,7 +2,7 @@
 ---
 name: "tedge-mapper"
 description: |
-  tedge-mapper is the mapper that translates thin-edge.io data model to c8y/az data model.
+  thin-edge.io mapper that translates thin-edge.io data model to c8y/az data model.
 arch: "${PKG_ARCH}"
 platform: "linux"
 version: "${GIT_SEMVER}"
@@ -90,6 +90,11 @@ contents:
     file_info:
       mode: 0644
     packager: rpm
+  - src: ./configuration/contrib/collectd/collectd.conf
+    dst: /etc/tedge/contrib/collectd/
+    file_info:
+      mode: 0644
+    packager: apk
 
   # Symlink for backwards compatibility
   # Deprecate: Remove symlink in 1.x release

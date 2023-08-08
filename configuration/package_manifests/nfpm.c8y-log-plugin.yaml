@@ -2,7 +2,7 @@
 ---
 name: c8y-log-plugin
 description: |
-  Thin-edge device log file retriever for Cumulocity
+  thin-edge.io device log file retriever for Cumulocity
 arch: "${PKG_ARCH}"
 platform: "linux"
 version: "${GIT_SEMVER}"

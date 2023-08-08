@@ -2,7 +2,7 @@
 ---
 name: tedge-apt-plugin
 description: |
-  Thin.edge.io plugin for software management using apt
+  thin-edge.io plugin for software management using apt
 arch: "${PKG_ARCH}"
 platform: "linux"
 version: "${GIT_SEMVER}"

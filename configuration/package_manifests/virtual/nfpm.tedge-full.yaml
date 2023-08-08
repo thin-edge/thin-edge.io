@@ -2,7 +2,7 @@
 ---
 name: tedge-full
 description: |
-  Thin Edge meta package to automatically install all tedge packages
+  thin-edge.io virtual package to automatically install all tedge packages
 arch: all
 platform: "linux"
 version: "${GIT_SEMVER}"
