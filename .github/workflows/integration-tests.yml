@@ -61,7 +61,7 @@ jobs:
     strategy:
       matrix:
         job:
-          - { arch: x86_64, target: x86_64-unknown-linux-gnu, output: target/debian }
+          - { arch: x86_64, target: x86_64-unknown-linux-musl, output: target/packages }
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -109,7 +109,7 @@ jobs:
     strategy:
       matrix:
         job:
-          - { arch: x86_64, target: x86_64-unknown-linux-gnu, output: target/debian }
+          - { arch: x86_64, target: x86_64-unknown-linux-musl, output: target/packages }
     steps:
       # Checkout either the PR or the branch
       - name: Checkout PR
