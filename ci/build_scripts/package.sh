@@ -273,11 +273,26 @@ banner() {
 }
 
 check_prerequisites() {
-    if ! nfpm --version >/dev/null 2>&1; then
-        echo "Missing dependency: nfpm"
-        echo "  Please install nfpm and try again: https://nfpm.goreleaser.com/install/"
-        exit 1
+    if command -V nfpm >/dev/null 2>&1; then
+        return
     fi
+
+    # Try installing nfpm automatically before giving up
+    if command -V go >/dev/null 2>&1; then
+        go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+        PATH="$(go env GOPATH)/bin:$PATH"
+        export PATH
+    fi
+
+    if command -V brew >/dev/null 2>&1; then
+        brew install goreleaser/tap/nfpm
+        brew install nfpm
+        return
+    fi    
+
+    echo "Missing dependency: nfpm"
+    echo "  Please install nfpm and try again: https://nfpm.goreleaser.com/install/"
+    exit 1
 }
 
 check_prerequisites
