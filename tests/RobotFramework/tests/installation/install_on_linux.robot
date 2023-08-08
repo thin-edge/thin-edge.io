@@ -18,9 +18,9 @@ ${DNF_SETUP}      dnf install -y epel-release \
     ...           && curl -1sLf "https://dl.cloudsmith.io/public/thinedge/tedge-dev/setup.rpm.sh" | sudo -E bash
 ${DNF_INSTALL}    dnf install -y tedge-full
 
-${SUSE_SETUP}     yzpper install -y sudo curl mosquitto \
+${SUSE_SETUP}     zypper install -y sudo curl mosquitto \
     ...           && curl -1sLf "https://dl.cloudsmith.io/public/thinedge/tedge-dev/setup.rpm.sh" | sudo -E version\=any-version codename\="" bash
-${SUSE_INSTALL}   yzpper install -y tedge-full
+${SUSE_INSTALL}   zypper install -y tedge-full
 
 
 # DNF where the epel-release repo is not required (e.g. Fedora)
@@ -57,7 +57,7 @@ Install on Fedora based images
     fedora:37
 
 Install on OpenSUSE based images
-    [Template]    Install using yzpper
+    [Template]    Install using zypper
     opensuse/leap:15
     opensuse/tumbleweed:latest
 
@@ -128,7 +128,7 @@ Install using apk
     Execute Command      ${APK_SETUP}    shell=${True}    sudo=${False}
     Execute Command      ${APK_INSTALL}
 
-Install using yzpper
+Install using zypper
     [Arguments]    ${IMAGE}
     Set To Dictionary    ${DOCKER_CONFIG}    image=${IMAGE}
     ${DEVICE_ID}=        Setup    skip_bootstrap=${True}
