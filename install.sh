@@ -4,8 +4,7 @@ set -e
 TYPE=full
 TMPDIR=/tmp/tedge
 LOGFILE=/tmp/tedge/install.log
-# REPO_CHANNEL="${REPO_CHANNEL:-release}"
-REPO_CHANNEL="${REPO_CHANNEL:-dev}"
+REPO_CHANNEL="${REPO_CHANNEL:-main}"
 INSTALL_PREDEPENDS="${INSTALL_PREDEPENDS:-1}"
 PREDEPENDS_PACKAGES=
 
@@ -348,9 +347,6 @@ tarball_postinstall() {
             # Match any included_dir directive as different distributions have different default settings:
             #  On Fedora: `#include_dir`. mosquitto does not use a /etc/mosquitto/conf.d folder
             #  On Debian: `include_dir /etc/mosquitto/conf.d`. Uses a conf.d folder, so the tedge setting must be before this
-
-            # TODO: Check if the conf.d style should be normalized on other non-debian systems...
-            # it might be better as it allows users to add and remove stuff by just using a symlink.
 
             # Check if `include_dir` or `#include_dir` (as the latter could be a future problem if the user uncomments it)
             if grep -qE '^#?include_dir' /etc/mosquitto/mosquitto.conf; then
