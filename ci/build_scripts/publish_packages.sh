@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# enable debugging  by default in ci
+if [ "$CI" = "true" ]; then
+    set -x
+fi
+
 help() {
   cat <<EOF
 Publish packages from a path to an external debian repository

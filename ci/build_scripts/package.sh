@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -e
 
+# enable debugging  by default in ci
+if [ "$CI" = "true" ]; then
+    set -x
+fi
+
 help() {
   cat <<EOF
 Build linux packages
@@ -252,6 +257,7 @@ cmd_build() {
 
 prepare() {
     if [ "$CLEAN" = "1" ]; then
+        echo "Cleaning output directory: $OUTPUT_DIR"
         rm -rf "$OUTPUT_DIR"
     fi
     mkdir -p "$OUTPUT_DIR"
