@@ -35,11 +35,6 @@
                 {"name": "tedge-watchdog", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
             ]
         },
-        "tedge-device-management": {
-            "services": [
-                {"name": "tedge-device-management", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
-            ]
-        },
         "tedge-mapper": {
             "services": [
                 // mapper services use custom conditional start logic depending if the corresponding mapper is configured or not

@@ -68,8 +68,8 @@ if command -v systemctl >/dev/null; then
     if [ -f "/etc/tedge/mosquitto-conf/aws-bridge.conf" ]; then
         enable_start_service tedge-mapper-aws.service
     fi
-    ### Enable the service if the collectd is running on the device
     if [ -d /run/systemd/system ]; then
+        ### Enable the service if the collectd is running on the device
         if systemctl is-active --quiet collectd.service; then
             enable_start_service tedge-mapper-collectd.service
         fi
