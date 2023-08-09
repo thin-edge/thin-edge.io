@@ -24,7 +24,11 @@ impl TEdgeInitCmd {
         let config_dir = self.context.config_location.tedge_config_root_path.clone();
         create_directory(
             &config_dir,
-            PermissionEntry::new(Some(self.user.clone()), None, Some(0o775)),
+            PermissionEntry::new(
+                Some(self.user.clone()),
+                Some(self.group.clone()),
+                Some(0o775),
+            ),
         )?;
 
         create_directory(
