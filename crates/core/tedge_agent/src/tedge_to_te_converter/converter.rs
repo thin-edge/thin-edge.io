@@ -57,7 +57,7 @@ impl TedgetoTeConverter {
     }
 
     // tedge/alarms/severity/alarm_type -> te/device/main///a/alarm_type, put severity in payload
-    // tedge/alarms/severity/child/alarm_type ->  te/device/child///a/alarm_type, put severity in payload
+    // tedge/alarms/severity/alarm_type/child ->  te/device/child///a/alarm_type, put severity in payload
     fn convert_alarm(
         &mut self,
         mut message: MqttMessage,
@@ -67,7 +67,7 @@ impl TedgetoTeConverter {
                 Topic::new_unchecked(format!("te/device/main///a/{alarm_type}").as_str()),
                 severity,
             ),
-            ["tedge", "alarms", severity, cid, alarm_type] => (
+            ["tedge", "alarms", severity, alarm_type, cid] => (
                 Topic::new_unchecked(format!("te/device/{cid}///a/{alarm_type}").as_str()),
                 severity,
             ),
@@ -82,13 +82,13 @@ impl TedgetoTeConverter {
     }
 
     // tedge/events/event_type -> te/device/main///e/event_type
-    // tedge/events/child/event_type -> te/device/child///e/event_type
+    // tedge/events/event_type/child -> te/device/child///e/event_type
     fn convert_event(&mut self, mut message: MqttMessage) -> Vec<tedge_mqtt_ext::Message> {
         let topic = match message.topic.name.split('/').collect::<Vec<_>>()[..] {
             ["tedge", "events", event_type] => {
                 Topic::new_unchecked(format!("te/device/main///e/{event_type}").as_str())
             }
-            ["tedge", "events", cid, event_type] => {
+            ["tedge", "events", event_type, cid] => {
                 Topic::new_unchecked(format!("te/device/{cid}///e/{event_type}").as_str())
             }
             _ => return vec![],

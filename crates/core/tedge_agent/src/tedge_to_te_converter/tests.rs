@@ -126,7 +126,7 @@ async fn convert_incoming_child_device_alarm_topic() -> Result<(), DynError> {
 
     // Simulate SoftwareList MQTT message received.
     let mqtt_message = MqttMessage::new(
-        &Topic::new_unchecked("tedge/alarms/critical/child/MyCustomAlarm"),
+        &Topic::new_unchecked("tedge/alarms/critical/MyCustomAlarm/child"),
         r#"{
            "text": "I raised it",
            "time": "2021-04-23T19:00:00+05:00"
@@ -200,7 +200,7 @@ async fn convert_incoming_child_device_event_topic() -> Result<(), DynError> {
 
     // Simulate SoftwareList MQTT message received.
     let mqtt_message = MqttMessage::new(
-        &Topic::new_unchecked("tedge/events/child/MyEvent"),
+        &Topic::new_unchecked("tedge/events/MyEvent/child"),
         r#"{"text":"Some test event","time":"2021-04-23T19:00:00+05:00"}"#,
     );
 
