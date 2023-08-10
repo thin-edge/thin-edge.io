@@ -198,11 +198,11 @@ impl TEdgeEnv {
             Uncased::new(
                 tracing::subscriber::with_default(
                     tracing::subscriber::NoSubscriber::default(),
-                    || lowercase_name.parse::<crate::new::WritableKey>(),
+                    || lowercase_name.parse::<crate::WritableKey>(),
                 )
                 .map(|key| key.as_str().to_owned())
                 .map_err(|err| {
-                    let is_read_only_key = matches!(err, crate::new::ParseKeyError::ReadOnly(_));
+                    let is_read_only_key = matches!(err, crate::ParseKeyError::ReadOnly(_));
                     if is_read_only_key && !WARNINGS.lock().unwrap().insert(lowercase_name.clone()) {
                             tracing::error!(
                                 "Failed to configure tedge with environment variable `TEDGE_{name}`: {}",

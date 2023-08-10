@@ -14,36 +14,6 @@ use super::new;
 #[derive(Debug, Clone)]
 pub struct TEdgeConfigRepository {
     config_location: TEdgeConfigLocation,
-    config_defaults: TEdgeConfigDefaults,
-}
-
-pub trait ConfigRepository<T> {
-    type Error;
-    fn load(&self) -> Result<T, Self::Error>;
-    fn update_toml(
-        &self,
-        update: &impl Fn(&mut T) -> ConfigSettingResult<()>,
-    ) -> Result<(), Self::Error>;
-}
-
-impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
-    type Error = TEdgeConfigError;
-
-    fn load(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let config =
-            self.make_tedge_config(self.load_dto::<FileAndEnvironment>(self.toml_path())?)?;
-        Ok(config)
-    }
-
-    fn update_toml(
-        &self,
-        update: &impl Fn(&mut TEdgeConfig) -> ConfigSettingResult<()>,
-    ) -> Result<(), Self::Error> {
-        let mut config = self.read_file_or_default::<FileOnly>(self.toml_path())?;
-        update(&mut config)?;
-
-        self.store(&config.data)
-    }
 }
 
 impl TEdgeConfigRepository {
@@ -62,21 +32,10 @@ impl TEdgeConfigRepository {
     }
 
     pub fn new(config_location: TEdgeConfigLocation) -> Self {
-        let config_defaults = TEdgeConfigDefaults::from(&config_location);
-        Self::new_with_defaults(config_location, config_defaults)
+        Self { config_location }
     }
 
-    pub fn new_with_defaults(
-        config_location: TEdgeConfigLocation,
-        config_defaults: TEdgeConfigDefaults,
-    ) -> Self {
-        Self {
-            config_location,
-            config_defaults,
-        }
-    }
-
-    pub fn load_new(&self) -> Result<new::TEdgeConfig, TEdgeConfigError> {
+    pub fn load_new(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
         let dto = self.load_dto::<FileAndEnvironment>(self.toml_path())?;
         Ok(new::TEdgeConfig::from_dto(&dto, &self.config_location))
     }
@@ -124,25 +83,6 @@ impl TEdgeConfigRepository {
 
     pub fn get_config_location(&self) -> &TEdgeConfigLocation {
         &self.config_location
-    }
-
-    fn read_file_or_default<Sources: ConfigSources>(
-        &self,
-        path: &Utf8Path,
-    ) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let dto = self.load_dto::<Sources>(path)?;
-
-        self.make_tedge_config(dto)
-    }
-
-    fn make_tedge_config(
-        &self,
-        data: new::TEdgeConfigDto,
-    ) -> Result<TEdgeConfig, TEdgeConfigError> {
-        Ok(TEdgeConfig {
-            data,
-            config_defaults: self.config_defaults.clone(),
-        })
     }
 
     // TODO: Explicitly set the file permissions in this function and file ownership!

@@ -4,9 +4,9 @@ use c8y_api::smartrest::topic::C8yTopic;
 use std::net::IpAddr;
 use std::path::Path;
 use std::path::PathBuf;
-use tedge_config::new::ReadError;
-use tedge_config::new::TEdgeConfig;
-use tedge_config::tedge_config_cli::tedge_config_defaults::DEFAULT_FILE_TRANSFER_DIR_NAME;
+use tedge_api::DEFAULT_FILE_TRANSFER_DIR_NAME;
+use tedge_config::ReadError;
+use tedge_config::TEdgeConfig;
 use tedge_mqtt_ext::TopicFilter;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-configuration-plugin.toml";
