@@ -151,7 +151,7 @@ install_via_tarball() {
     download_file "https://dl.cloudsmith.io/public/thinedge/${PACKAGE_REPO}/raw/names/tedge-${url_arch}/versions/latest/tedge.tar.gz"
     DOWNLOADED_TARBALL="$TMPDIR/tedge.tar.gz"
 
-    # Prefer gtar over tar, as gtar is guranteed to be GNU tar
+    # Prefer gtar over tar, as gtar is guaranteed to be GNU tar
     # where tar could also be bsdtar which has different options
     # and some systems only have gtar (e.g. rockylinux 9 minimal)
     tar_cmd="tar"
@@ -213,7 +213,7 @@ is_root() {
 run_repo_setup() {
     filename="$1"
 
-    # Use generic distribution version and codement to be compatable with different OSs
+    # Use generic distribution version and codement to be compatible with different OSs
     if is_root; then
         env version=any-version codename="" bash "$filename"
     elif command_exists sudo; then
