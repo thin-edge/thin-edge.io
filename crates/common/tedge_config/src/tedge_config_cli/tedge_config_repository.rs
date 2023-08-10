@@ -16,7 +16,7 @@ pub struct TEdgeConfigRepository {
 }
 
 impl TEdgeConfigRepository {
-    pub fn update_toml_new(
+    pub fn update_toml(
         &self,
         update: &impl Fn(&mut TEdgeConfigDto) -> ConfigSettingResult<()>,
     ) -> Result<(), TEdgeConfigError> {
