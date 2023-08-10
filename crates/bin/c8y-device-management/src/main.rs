@@ -45,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
     let config_dir = config_plugin_opt.config_dir;
     let tedge_config_location = TEdgeConfigLocation::from_custom_root(&config_dir);
     let config_repository = TEdgeConfigRepository::new(tedge_config_location);
-    let tedge_config = config_repository.load_new()?;
+    let tedge_config = config_repository.load()?;
 
     let c8y_http_config = (&tedge_config).try_into()?;
     let mqtt_config = tedge_config.mqtt_config()?;

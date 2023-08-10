@@ -131,7 +131,7 @@ pub trait Command {
 ///                 value,
 ///             }.into_boxed(),
 ///             ConfigCmd::Get { key } => GetConfigCommand {
-///                 config: context.config_repository.load_new()?,
+///                 config: context.config_repository.load()?,
 ///                 key,
 ///             }.into_boxed(),
 ///         };

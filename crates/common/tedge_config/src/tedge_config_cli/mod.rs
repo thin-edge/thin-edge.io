@@ -5,4 +5,4 @@ pub mod tedge_config_repository;
 
 mod figment;
 pub mod models;
-pub mod new;
+pub mod tedge_config;

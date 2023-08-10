@@ -120,7 +120,7 @@ async fn monitor_tedge_service(
 ) -> Result<(), WatchdogError> {
     let client_id: &str = &format!("{}_{}", name, nanoid!());
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
-    let tedge_config = config_repository.load_new()?;
+    let tedge_config = config_repository.load()?;
     let mqtt_config = tedge_config
         .mqtt_config()?
         .with_session_name(client_id)

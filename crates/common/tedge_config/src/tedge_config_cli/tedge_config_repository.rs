@@ -34,7 +34,7 @@ impl TEdgeConfigRepository {
         Self { config_location }
     }
 
-    pub fn load_new(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
+    pub fn load(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
         let dto = self.load_dto::<FileAndEnvironment>(self.toml_path())?;
         Ok(TEdgeConfig::from_dto(&dto, &self.config_location))
     }

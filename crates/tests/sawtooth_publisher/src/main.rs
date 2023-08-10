@@ -72,7 +72,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config_location = tedge_config::TEdgeConfigLocation::default();
     let config_repository = tedge_config::TEdgeConfigRepository::new(config_location);
-    let tedge_config = config_repository.load_new()?;
+    let tedge_config = config_repository.load()?;
 
     let name = "sawtooth_".to_string() + &process::id().to_string();
     let mqtt_config = tedge_config

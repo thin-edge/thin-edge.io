@@ -294,7 +294,7 @@ fn get_name_and_version(line: &str) -> (&str, &str) {
 fn get_config(config_dir: PathBuf) -> Option<TEdgeConfig> {
     let tedge_config_location = TEdgeConfigLocation::from_custom_root(config_dir);
 
-    match TEdgeConfigRepository::new(tedge_config_location).load_new() {
+    match TEdgeConfigRepository::new(tedge_config_location).load() {
         Ok(config) => Some(config),
         Err(err) => {
             warn!("Failed to load TEdgeConfig: {}", err);

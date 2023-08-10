@@ -29,7 +29,7 @@ mod proxy;
 async fn main() -> miette::Result<()> {
     let config_dir = TEdgeConfigLocation::default();
     let tedge_config = TEdgeConfigRepository::new(config_dir.clone())
-        .load_new()
+        .load()
         .into_diagnostic()
         .context("Reading tedge config")?;
 

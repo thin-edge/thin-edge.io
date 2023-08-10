@@ -46,7 +46,7 @@ impl AgentConfig {
     ) -> Result<Self, anyhow::Error> {
         let config_repository =
             tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
-        let tedge_config = config_repository.load_new()?;
+        let tedge_config = config_repository.load()?;
 
         let config_dir = tedge_config_location.tedge_config_root_path.clone();
 

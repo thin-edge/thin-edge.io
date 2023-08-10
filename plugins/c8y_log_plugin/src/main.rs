@@ -76,7 +76,7 @@ async fn main() -> Result<(), anyhow::Error> {
     set_log_level(log_level);
 
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
-    let tedge_config = config_repository.load_new()?;
+    let tedge_config = config_repository.load()?;
 
     if config_plugin_opt.init {
         warn!("This --init option has been deprecated and will be removed in a future release");

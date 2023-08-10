@@ -141,7 +141,7 @@ impl ExternalPlugins {
         self.plugin_map.clear();
 
         let config = tedge_config::TEdgeConfigRepository::new(self.config_location.clone())
-            .load_new()
+            .load()
             .map_err(|err| {
                 io::Error::new(
                     ErrorKind::Other,
