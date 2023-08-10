@@ -1,5 +1,6 @@
 use mqtt_channel::MqttError;
 
+use tedge_config::CertificateError;
 use tedge_config::ConfigSettingError;
 use tedge_config::TEdgeConfigError;
 
@@ -35,4 +36,7 @@ pub enum WatchdogError {
 
     #[error("Error configuring MQTT client")]
     FromMqttConfigBuild(#[from] tedge_config::mqtt_config::MqttConfigBuildError),
+
+    #[error(transparent)]
+    FromCertificateError(#[from] CertificateError),
 }

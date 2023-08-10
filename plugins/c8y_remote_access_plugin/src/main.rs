@@ -6,10 +6,7 @@ use futures::future::try_select;
 use futures::future::Either;
 use miette::Context;
 use miette::IntoDiagnostic;
-use tedge_config::C8yHttpSetting;
-use tedge_config::ConfigRepository;
-use tedge_config::ConfigSettingAccessor;
-use tedge_config::TEdgeConfig;
+use tedge_config::new::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::TEdgeConfigRepository;
 use tedge_utils::file::create_directory_with_user_group;
@@ -32,7 +29,7 @@ mod proxy;
 async fn main() -> miette::Result<()> {
     let config_dir = TEdgeConfigLocation::default();
     let tedge_config = TEdgeConfigRepository::new(config_dir.clone())
-        .load()
+        .load_new()
         .into_diagnostic()
         .context("Reading tedge config")?;
 
@@ -154,7 +151,11 @@ async fn spawn_child(command: String) -> miette::Result<()> {
 }
 
 async fn proxy(command: RemoteAccessConnect, config: TEdgeConfig) -> miette::Result<()> {
-    let host = config.query(C8yHttpSetting).into_diagnostic()?;
+    let host = config
+        .c8y_url()
+        .or_config_not_set()
+        .into_diagnostic()?
+        .to_string();
     let url = build_proxy_url(host.as_str(), command.key())?;
     let jwt = Jwt::retrieve(&config)
         .await
