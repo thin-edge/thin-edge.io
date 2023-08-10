@@ -179,8 +179,8 @@ impl Agent {
         runtime.spawn(restart_actor_builder).await?;
         runtime.spawn(software_update_builder).await?;
         runtime.spawn(converter_actor_builder).await?;
-        runtime.spawn(health_actor).await?;
         runtime.spawn(tedge_to_te_converter).await?;
+        runtime.spawn(health_actor).await?;
 
         runtime.run_to_completion().await?;
 
