@@ -133,4 +133,5 @@ jobs:
           PUBLISH_OWNER: ${{ secrets.PUBLISH_OWNER }}
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
         run: |
-          just publish-linux-virtual
+          just publish-linux-virtual --repo tedge-main
+          just publish-linux-virtual --repo tedge-main-armv6
