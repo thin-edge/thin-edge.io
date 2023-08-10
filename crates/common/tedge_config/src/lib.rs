@@ -5,7 +5,6 @@ pub mod tedge_config_cli;
 pub use self::tedge_config_cli::config_setting::*;
 pub use self::tedge_config_cli::error::*;
 pub use self::tedge_config_cli::models::*;
-pub use self::tedge_config_cli::new;
 pub use self::tedge_config_cli::new::*;
 pub use self::tedge_config_cli::tedge_config_location::*;
 pub use self::tedge_config_cli::tedge_config_repository::*;

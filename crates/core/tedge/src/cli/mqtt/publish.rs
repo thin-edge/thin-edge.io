@@ -13,7 +13,7 @@ use rumqttc::QoS::AtLeastOnce;
 use rumqttc::QoS::AtMostOnce;
 use rumqttc::QoS::ExactlyOnce;
 use std::time::Duration;
-use tedge_config::new::MqttAuthClientConfig;
+use tedge_config::MqttAuthClientConfig;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
 

@@ -1,6 +1,6 @@
 use c8y_api::http_proxy::C8yMqttJwtTokenRetriever;
 use miette::IntoDiagnostic;
-use tedge_config::new::TEdgeConfig;
+use tedge_config::TEdgeConfig;
 
 pub struct Jwt(String);
 

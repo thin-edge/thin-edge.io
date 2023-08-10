@@ -1,4 +1,4 @@
-use tedge_config::new::OptionalConfigError;
+use tedge_config::OptionalConfigError;
 
 use super::create::CreateCertCmd;
 use super::remove::RemoveCertCmd;

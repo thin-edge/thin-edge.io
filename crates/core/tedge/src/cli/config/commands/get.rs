@@ -1,10 +1,10 @@
-use tedge_config::tedge_config_cli::new::ReadableKey;
+use tedge_config::ReadableKey;
 
 use crate::command::Command;
 
 pub struct GetConfigCommand {
     pub key: ReadableKey,
-    pub config: tedge_config::new::TEdgeConfig,
+    pub config: tedge_config::TEdgeConfig,
 }
 
 impl Command for GetConfigCommand {
@@ -17,10 +17,10 @@ impl Command for GetConfigCommand {
             Ok(value) => {
                 println!("{}", value);
             }
-            Err(tedge_config::new::ReadError::ConfigNotSet { .. }) => {
+            Err(tedge_config::ReadError::ConfigNotSet { .. }) => {
                 eprintln!("The provided config key: '{}' is not set", self.key);
             }
-            Err(tedge_config::new::ReadError::ReadOnlyNotFound { message, key }) => {
+            Err(tedge_config::ReadError::ReadOnlyNotFound { message, key }) => {
                 eprintln!("The provided config key: '{key}' is not configured: {message}",);
             }
             Err(err) => return Err(err.into()),

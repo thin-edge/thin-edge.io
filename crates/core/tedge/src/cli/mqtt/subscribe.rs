@@ -10,7 +10,7 @@ use rumqttc::Incoming;
 use rumqttc::MqttOptions;
 use rumqttc::Packet;
 use rumqttc::QoS;
-use tedge_config::new::MqttAuthClientConfig;
+use tedge_config::MqttAuthClientConfig;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
 const MAX_PACKET_SIZE: usize = 1048575;

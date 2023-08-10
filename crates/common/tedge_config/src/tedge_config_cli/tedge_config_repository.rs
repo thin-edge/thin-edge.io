@@ -8,7 +8,6 @@ use super::figment::ConfigSources;
 use super::figment::FileAndEnvironment;
 use super::figment::FileOnly;
 use super::figment::UnusedValueWarnings;
-use super::new;
 
 /// TEdgeConfigRepository is responsible for loading and storing TEdgeConfig entities.
 #[derive(Debug, Clone)]
@@ -19,7 +18,7 @@ pub struct TEdgeConfigRepository {
 impl TEdgeConfigRepository {
     pub fn update_toml_new(
         &self,
-        update: &impl Fn(&mut new::TEdgeConfigDto) -> ConfigSettingResult<()>,
+        update: &impl Fn(&mut TEdgeConfigDto) -> ConfigSettingResult<()>,
     ) -> Result<(), TEdgeConfigError> {
         let mut config = self.load_dto::<FileOnly>(self.toml_path())?;
         update(&mut config)?;
@@ -37,13 +36,13 @@ impl TEdgeConfigRepository {
 
     pub fn load_new(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
         let dto = self.load_dto::<FileAndEnvironment>(self.toml_path())?;
-        Ok(new::TEdgeConfig::from_dto(&dto, &self.config_location))
+        Ok(TEdgeConfig::from_dto(&dto, &self.config_location))
     }
 
     fn load_dto<Sources: ConfigSources>(
         &self,
         path: &Utf8Path,
-    ) -> Result<new::TEdgeConfigDto, TEdgeConfigError> {
+    ) -> Result<TEdgeConfigDto, TEdgeConfigError> {
         let (dto, warnings) = self.load_dto_with_warnings::<Sources>(path)?;
 
         warnings.emit();
@@ -54,8 +53,8 @@ impl TEdgeConfigRepository {
     fn load_dto_with_warnings<Sources: ConfigSources>(
         &self,
         path: &Utf8Path,
-    ) -> Result<(new::TEdgeConfigDto, UnusedValueWarnings), TEdgeConfigError> {
-        let (mut dto, mut warnings): (new::TEdgeConfigDto, _) =
+    ) -> Result<(TEdgeConfigDto, UnusedValueWarnings), TEdgeConfigError> {
+        let (mut dto, mut warnings): (TEdgeConfigDto, _) =
             super::figment::extract_data::<_, Sources>(path)?;
 
         if let Some(migrations) = dto.config.version.unwrap_or_default().migrations() {
@@ -103,7 +102,7 @@ impl TEdgeConfigRepository {
 mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
 
-    use crate::new::TEdgeConfigReader;
+    use crate::TEdgeConfigReader;
 
     use super::*;
 

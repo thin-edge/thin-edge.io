@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use std::path::Path;
-use tedge_config::new::TEdgeConfig;
+use tedge_config::TEdgeConfig;
 
 #[async_trait]
 pub trait TEdgeComponent: Sync + Send {

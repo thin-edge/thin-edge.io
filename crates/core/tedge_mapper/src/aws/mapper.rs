@@ -9,7 +9,7 @@ use tedge_actors::ConvertingActor;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
-use tedge_config::new::TEdgeConfig;
+use tedge_config::TEdgeConfig;
 use tracing::warn;
 
 const AWS_MAPPER_NAME: &str = "tedge-mapper-aws";

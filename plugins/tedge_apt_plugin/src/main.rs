@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Stdio;
-use tedge_config::new::TEdgeConfig;
+use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::TEdgeConfigRepository;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;

@@ -6,7 +6,7 @@ use futures::future::try_select;
 use futures::future::Either;
 use miette::Context;
 use miette::IntoDiagnostic;
-use tedge_config::new::TEdgeConfig;
+use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::TEdgeConfigRepository;
 use tedge_utils::file::create_directory_with_user_group;

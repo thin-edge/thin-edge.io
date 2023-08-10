@@ -1,8 +1,8 @@
 use crate::cli::config::commands::*;
 use crate::command::*;
 use crate::ConfigError;
-use tedge_config::new::ReadableKey;
-use tedge_config::new::WritableKey;
+use tedge_config::ReadableKey;
+use tedge_config::WritableKey;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum ConfigCmd {

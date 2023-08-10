@@ -14,9 +14,9 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServerMessageBoxBuilder;
 use tedge_actors::ServiceProvider;
-use tedge_config::new::ConfigNotSet;
-use tedge_config::new::ReadError;
-use tedge_config::new::TEdgeConfig as NewTEdgeConfig;
+use tedge_config::ConfigNotSet;
+use tedge_config::ReadError;
+use tedge_config::TEdgeConfig as NewTEdgeConfig;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
 

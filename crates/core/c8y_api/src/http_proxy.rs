@@ -9,7 +9,7 @@ use reqwest::Url;
 use std::collections::HashMap;
 use std::time::Duration;
 use tedge_config::mqtt_config::MqttConfigBuildError;
-use tedge_config::new::TEdgeConfig;
+use tedge_config::TEdgeConfig;
 use tracing::error;
 use tracing::info;
 

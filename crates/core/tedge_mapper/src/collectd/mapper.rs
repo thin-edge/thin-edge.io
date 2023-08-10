@@ -8,7 +8,7 @@ use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use std::path::Path;
 use tedge_actors::MessageSink;
-use tedge_config::new::TEdgeConfig;
+use tedge_config::TEdgeConfig;
 
 const COLLECTD_MAPPER_NAME: &str = "tedge-mapper-collectd";
 const COLLECTD_INPUT_TOPICS: &str = "collectd/#";
