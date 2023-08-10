@@ -1,22 +1,7 @@
 #!/bin/sh
-
 set -e
-
-# Stop the service only if systemctl is available
-if command -v systemctl >/dev/null; then
-    if systemctl is-active --quiet tedge-watchdog.service; then
-         systemctl stop tedge-watchdog.service
-    fi
-fi
-
-# Deprecate: Remove symlink in 1.x release
-if [ -e /usr/bin/tedge_watchdog ]; then
-    rm -f /usr/bin/tedge_watchdog
-fi
-
-# Automatically added by cargo-deb
+# Automatically added by thin-edge.io
 if [ -d /run/systemd/system ] && [ "$1" = remove ]; then
 	deb-systemd-invoke stop tedge-watchdog.service >/dev/null || true
 fi
 # End automatically added section
-

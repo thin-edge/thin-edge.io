@@ -55,22 +55,24 @@ jobs:
         # https://github.com/marketplace/actions/rust-cache
         uses: Swatinem/rust-cache@v2
 
+      # Install nfpm used to for linux packaging
+      - uses: actions/setup-go@v4
+        with:
+          go-version: 'stable'
+          cache: false
+      - run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+
+      - uses: extractions/setup-just@v1
       - name: Build for ${{ matrix.job.target }}
-        run: bash -x ./ci/build_scripts/build.sh ${{ matrix.job.target }}
+        run: just release ${{ matrix.job.target }}
 
-      - name: Upload debian packages as zip
+      - name: Upload packages as zip
         # https://github.com/marketplace/actions/upload-a-build-artifact
         uses: actions/upload-artifact@v3
         with:
-          name: debian-packages-${{ matrix.job.target }}
-          path: target/${{ matrix.job.target }}/debian/*.deb
+          name: packages-${{ matrix.job.target }}
+          path: target/${{ matrix.job.target }}/packages/*.*
 
-      - name: Upload binaries as tarball
-        # https://github.com/marketplace/actions/upload-a-build-artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: archive-${{ matrix.job.target }}
-          path: target/${{ matrix.job.target }}/*.tar.gz
 
   publish:
     name: Publish ${{ matrix.job.target }}
@@ -93,16 +95,42 @@ jobs:
         uses: actions/download-artifact@v3
         # https://github.com/marketplace/actions/download-a-build-artifact
         with:
-          name: debian-packages-${{ matrix.job.target }}
-          path: target/${{ matrix.job.target }}/debian/
+          name: packages-${{ matrix.job.target }}
+          path: target/${{ matrix.job.target }}/packages/
 
-      - name: Publish debian packages
+      - uses: extractions/setup-just@v1
+      - name: Publish packages
         env:
           PUBLISH_OWNER: ${{ secrets.PUBLISH_OWNER }}
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
         run: |
-          bash -x \
-            ./ci/build_scripts/publish_debian.sh \
-            --path "target/${{ matrix.job.target }}/debian/" \
+          just publish-linux-target "${{ matrix.job.target }}" \
             --repo "${{ matrix.job.repo }}" \
             --component "${{ matrix.job.component }}"
+
+  # Wait until all other publishing jobs are finished
+  # before publishing the virtual packages (which are architecture agnostic)
+  publish-virtual-packages:
+    name: Publish Virtual Packages
+    runs-on: ubuntu-20.04
+    needs: [publish]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      # Install nfpm used to for linux packaging
+      - uses: actions/setup-go@v4
+        with:
+          go-version: 'stable'
+          cache: false
+      - run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+      - uses: extractions/setup-just@v1
+      - name: Build virtual packages
+        run: just release-linux-virtual
+      - name: Publish packages
+        env:
+          PUBLISH_OWNER: ${{ secrets.PUBLISH_OWNER }}
+          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+        run: |
+          just publish-linux-virtual

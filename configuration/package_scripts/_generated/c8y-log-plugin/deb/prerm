@@ -1,21 +1,7 @@
 #!/bin/sh
-
 set -e
-
-# Stop the service only if systemctl is available
-if command -v systemctl >/dev/null; then
-    if systemctl is-active --quiet c8y-log-plugin.service; then
-         systemctl stop c8y-log-plugin.service
-    fi
-fi
-
-if [ -e /usr/bin/c8y_log_plugin ]; then
-    rm -f /usr/bin/c8y_log_plugin
-fi
-
-# Automatically added by cargo-deb
+# Automatically added by thin-edge.io
 if [ -d /run/systemd/system ] && [ "$1" = remove ]; then
 	deb-systemd-invoke stop c8y-log-plugin.service >/dev/null || true
 fi
 # End automatically added section
-

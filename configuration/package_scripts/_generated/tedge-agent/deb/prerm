@@ -1,13 +1,7 @@
 #!/bin/sh
 set -e
-
+# Automatically added by thin-edge.io
 if [ -d /run/systemd/system ] && [ "$1" = remove ]; then
-        deb-systemd-invoke stop tedge-agent.service >/dev/null || true
+	deb-systemd-invoke stop tedge-agent.service >/dev/null || true
 fi
-
-# Deprecate: Remove symlink in 1.x release
-if [ -e /usr/bin/tedge_agent ]; then
-    rm -f /usr/bin/tedge_agent
-fi
-
-# Do not use DEBHELPER: for OTA self-update one needs a fine-control over the deb options
+# End automatically added section

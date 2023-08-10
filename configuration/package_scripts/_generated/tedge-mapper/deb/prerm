@@ -1,34 +1,7 @@
 #!/bin/sh
-
 set -e
-
-# Stop the services only if systemctl is available
-if command -v systemctl >/dev/null; then
-    if systemctl is-active --quiet tedge-mapper-c8y; then
-        systemctl stop tedge-mapper-c8y.service
-    fi
-
-    if systemctl is-active --quiet tedge-mapper-collectd; then
-        systemctl stop tedge-mapper-collectd.service
-    fi
-
-    if systemctl is-active --quiet tedge-mapper-az; then
-        systemctl stop tedge-mapper-az.service
-    fi
-
-    if systemctl is-active --quiet tedge-mapper-aws; then
-        systemctl stop tedge-mapper-aws.service
-    fi
-fi
-
-# Deprecate: Remove symlink in 1.x release
-if [ -e /usr/bin/tedge_mapper ]; then
-    rm -f /usr/bin/tedge_mapper
-fi
-
-# Automatically added by cargo-deb
+# Automatically added by thin-edge.io
 if [ -d /run/systemd/system ] && [ "$1" = remove ]; then
 	deb-systemd-invoke stop tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service >/dev/null || true
 fi
 # End automatically added section
-

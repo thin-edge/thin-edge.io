@@ -1,0 +1,75 @@
+# yaml-language-server: $schema=https://nfpm.goreleaser.com/static/schema.json
+---
+name: "tedge-agent"
+description: |
+  thin-edge.io interacts with a Cloud Mapper and one or more Software Plugins
+arch: "${PKG_ARCH}"
+platform: "linux"
+version: "${GIT_SEMVER}"
+section: misc
+priority: "optional"
+maintainer: "thin-edge.io team <info@thin-edge.io>"
+vendor: "thin-edge.io"
+homepage: "https://thin-edge.io"
+license: "Apache-2.0"
+
+replaces:
+  - tedge_agent
+provides:
+  - tedge_agent
+conflicts:
+  - tedge_agent (<= 0.8.1)
+
+deb:
+  fields:
+    Vcs-Browser: ${CI_PROJECT_URL}
+    Vcs-Git: ${CI_PROJECT_URL}
+  compression: xz
+  breaks:
+    - tedge_agent (<= 0.8.1)
+
+contents:
+  # binary
+  - src: .build/tedge-agent
+    dst: /usr/bin/
+
+  # service definitions
+  - src: ./configuration/init/systemd/tedge-agent.service
+    dst: /lib/systemd/system/tedge-agent.service
+    file_info:
+      mode: 0644
+    packager: deb
+
+  - src: ./configuration/init/systemd/tedge-agent.service
+    dst: /lib/systemd/system/tedge-agent.service
+    file_info:
+      mode: 0644
+    packager: rpm
+
+  # Symlink for backwards compatibility
+  # Deprecate: Remove symlink in 1.x release
+  - src: /usr/bin/tedge-agent
+    dst: /usr/bin/tedge_agent
+    type: symlink
+
+overrides:
+  apk:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge-agent/apk/preinst
+      postinstall: configuration/package_scripts/_generated/tedge-agent/apk/postinst
+      preremove: configuration/package_scripts/_generated/tedge-agent/apk/prerm
+      postremove: configuration/package_scripts/_generated/tedge-agent/apk/postrm
+
+  rpm:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge-agent/rpm/preinst
+      postinstall: configuration/package_scripts/_generated/tedge-agent/rpm/postinst
+      preremove: configuration/package_scripts/_generated/tedge-agent/rpm/prerm
+      postremove: configuration/package_scripts/_generated/tedge-agent/rpm/postrm
+
+  deb:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge-agent/deb/preinst
+      postinstall: configuration/package_scripts/_generated/tedge-agent/deb/postinst
+      preremove: configuration/package_scripts/_generated/tedge-agent/deb/prerm
+      postremove: configuration/package_scripts/_generated/tedge-agent/deb/postrm

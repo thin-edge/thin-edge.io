@@ -50,7 +50,7 @@ Debug device with locally built debian packages (no upgrade)
 
 Install Locally Built Packages
     [Arguments]    ${connect}=no
-    Transfer To Device                       target/debian/*.deb    /setup/
+    Transfer To Device                       target/packages/*.deb    /setup/
     Execute Command                          apt-get update && apt-get install -y --no-install-recommends mosquitto
     Execute Command                          ${DPKG_INSTALL_SCRIPT}
     IF    "${connect}" == "yes"

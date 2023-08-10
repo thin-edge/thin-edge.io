@@ -1,5 +1,20 @@
 set ignore-comments
 
+VERSION := `./ci/build_scripts/build.sh --version 2>/dev/null || exit 0`
+# Detect the default target based on the user's CPU arch.
+# For MacOS m1 users, it will return a linux host but
+# match the appropriate CPU architecture,
+# e.g. MacOS m1 => "aarch64-unknown-linux-musl"
+DEFAULT_TARGET := `./ci/build_scripts/detect_target.sh`
+
+# Print project and host machine info
+info:
+    @echo "OS:             {{os()}}"
+    @echo "OS_FAMILY:      {{os_family()}}"
+    @echo "HOST_ARCH:      {{arch()}}"
+    @echo "VERSION:        {{VERSION}}"
+    @echo "DEFAULT_TARGET: {{DEFAULT_TARGET}}"
+
 # Default recipe
 [private]
 default:
@@ -62,3 +77,19 @@ docs:
 # Install doc dependencies
 docs-install:
     cargo install mdbook mdbook-linkcheck mdbook-mermaid mdbook-admonish mdbook-cmdrun
+
+# Generate linux package scripts from templates
+generate-linux-package-scripts:
+    ./configuration/package_scripts/generate.py
+
+# Build linux virtual packages
+release-linux-virtual:
+    ./ci/build_scripts/package.sh build_virtual "all" --version "{{VERSION}}" --output target/virtual-packages
+
+# Publish linux virtual packages
+publish-linux-virtual *ARGS='':
+    ./ci/build_scripts/publish_packages.sh --path target/virtual-packages {{ARGS}}
+
+# Publish linux packages for a specific target
+publish-linux-target TARGET=DEFAULT_TARGET *ARGS='':
+    ./ci/build_scripts/publish_packages.sh --path "target/{{TARGET}}/packages" {{ARGS}}

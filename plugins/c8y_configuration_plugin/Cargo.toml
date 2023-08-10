@@ -9,27 +9,6 @@ license = { workspace = true }
 homepage = { workspace = true }
 repository = { workspace = true }
 
-[package.metadata.deb]
-replaces = "c8y_configuration_plugin"
-conflicts = "c8y_configuration_plugin (<= 0.8.1)"
-breaks = "c8y_configuration_plugin (<= 0.8.1)"
-maintainer-scripts = "../../configuration/debian/c8y-configuration-plugin"
-assets = [
-    [
-        "../../configuration/init/systemd/c8y-configuration-plugin.service",
-        "/lib/systemd/system/c8y-configuration-plugin.service",
-        "644",
-    ],
-    [
-        "target/release/c8y-configuration-plugin",
-        "/usr/bin/c8y-configuration-plugin",
-        "755",
-    ],
-]
-
-# Required for DEBHELPER
-[package.metadata.deb.systemd-units]
-
 [dependencies]
 anyhow = "1.0"
 c8y_config_manager = { path = "../../crates/extensions/c8y_config_manager" }

@@ -55,5 +55,6 @@ Both filters as empty string
 *** Keywords ***
 Custom Setup
     Setup
-    ${VERSION}=    Execute Command    tedge --version | cut -d' ' -f 2    strip=True
+    ${RAW_VERSION}=    Execute Command    tedge --version | cut -d' ' -f 2    strip=${True}
+    ${VERSION}=    Regexp Escape    ${RAW_VERSION}
     Set Suite Variable    ${VERSION}

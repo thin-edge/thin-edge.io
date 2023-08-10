@@ -9,29 +9,6 @@ license = { workspace = true }
 homepage = { workspace = true }
 repository = { workspace = true }
 
-[package.metadata.deb]
-pre-depends = "tedge-mapper"
-replaces = "tedge_agent"
-conflicts = "tedge_agent (<= 0.8.1)"
-breaks = "tedge_agent (<= 0.8.1)"
-provides = "tedge_agent"
-maintainer-scripts = "../../../configuration/debian/tedge-agent"
-assets = [
-    [
-        "../../../configuration/init/systemd/tedge-agent.service",
-        "/lib/systemd/system/tedge-agent.service",
-        "644",
-    ],
-    [
-        "target/release/tedge-agent",
-        "/usr/bin/tedge-agent",
-        "755",
-    ],
-]
-# Contrary to the other daemons,
-# The `agent` does not use `systemd-units` of `cargo-deb`:
-# for OTA self-update one needs a fine-control over the deb options
-
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"

@@ -1,0 +1,68 @@
+# yaml-language-server: $schema=https://nfpm.goreleaser.com/static/schema.json
+---
+name: tedge-full
+description: |
+  thin-edge.io virtual package to automatically install all tedge packages
+arch: all
+platform: "linux"
+version: "${GIT_SEMVER}"
+section: misc
+priority: "optional"
+maintainer: "thin-edge.io team <info@thin-edge.io>"
+vendor: "thin-edge.io"
+homepage: "https://thin-edge.io"
+license: "Apache-2.0"
+
+apk:
+  # Use noarch instead of "all"
+  arch: noarch
+
+recommends:
+  - ca-certificates
+
+overrides:
+  # Different packages requires the version to be specified in
+  # slightly different formats
+  apk:
+    depends:
+        - tedge = ${GIT_SEMVER}
+        - tedge-mapper = ${GIT_SEMVER}
+        - tedge-agent = ${GIT_SEMVER}
+        # Watchdog does not make sense on apk as it does not use systemd
+        # - tedge-watchdog = ${GIT_SEMVER}
+        - tedge-apt-plugin = ${GIT_SEMVER}
+        - c8y-log-plugin = ${GIT_SEMVER}
+        - c8y-configuration-plugin = ${GIT_SEMVER}
+        - c8y-remote-access-plugin = ${GIT_SEMVER}
+        - c8y-firmware-plugin = ${GIT_SEMVER}
+  rpm:
+    depends:
+        - ca-certificates
+        - tedge = ${GIT_SEMVER}
+        - tedge-mapper = ${GIT_SEMVER}
+        - tedge-agent = ${GIT_SEMVER}
+        - tedge-watchdog = ${GIT_SEMVER}
+        # tedge-apt-plugin does not make sense on rpm
+        # - tedge-apt-plugin = ${GIT_SEMVER}
+        - c8y-log-plugin = ${GIT_SEMVER}
+        - c8y-configuration-plugin = ${GIT_SEMVER}
+        - c8y-remote-access-plugin = ${GIT_SEMVER}
+        - c8y-firmware-plugin = ${GIT_SEMVER}
+  deb:
+    depends:
+        - tedge (= ${GIT_SEMVER})
+        - tedge-mapper (= ${GIT_SEMVER})
+        - tedge-agent (= ${GIT_SEMVER})
+        - tedge-watchdog (= ${GIT_SEMVER})
+        - tedge-apt-plugin (= ${GIT_SEMVER})
+        - c8y-log-plugin (= ${GIT_SEMVER})
+        - c8y-configuration-plugin (= ${GIT_SEMVER})
+        - c8y-remote-access-plugin (= ${GIT_SEMVER})
+        - c8y-firmware-plugin (= ${GIT_SEMVER})
+
+deb:
+  fields:
+    Multi-Arch: allowed
+    Vcs-Browser: ${CI_PROJECT_URL}
+    Vcs-Git: ${CI_PROJECT_URL}
+  compression: xz

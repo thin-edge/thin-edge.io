@@ -1,0 +1,48 @@
+{
+    "types": [
+        "apk",
+        "deb",
+        "rpm"
+    ],
+    "packages": {
+        "tedge": {},
+        "c8y-remote-access-plugin": {},
+        "tedge-agent": {
+            "services": [
+                // Don't stop or restart service when upgrading as the old agent
+                // is responsible for the entire OTA update (as the packages are installed by the agent)
+                // and restarting the service would kill the maintainer scripts mid-execution
+                {"name": "tedge-agent", "enable": false, "start": true, "restart_after_upgrade": false, "stop_on_upgrade": false}
+            ]
+        },
+        "c8y-configuration-plugin": {
+            "services": [
+                {"name": "c8y-configuration-plugin", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
+            ]
+        },
+        "c8y-log-plugin": {
+            "services": [
+                {"name": "c8y-log-plugin", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
+            ]
+        },
+        "c8y-firmware-plugin": {
+            "services": [
+                {"name": "c8y-firmware-plugin", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
+            ]
+        },
+        "tedge-watchdog": {
+            "services": [
+                {"name": "tedge-watchdog", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
+            ]
+        },
+        "tedge-mapper": {
+            "services": [
+                // mapper services use custom conditional start logic depending if the corresponding mapper is configured or not
+                {"name": "tedge-mapper-aws", "enable": false, "start": false, "restart_after_upgrade": true, "stop_on_upgrade": true},
+                {"name": "tedge-mapper-az", "enable": false, "start": false, "restart_after_upgrade": true, "stop_on_upgrade": true},
+                {"name": "tedge-mapper-c8y", "enable": false, "start": false, "restart_after_upgrade": true, "stop_on_upgrade": true},
+                {"name": "tedge-mapper-collectd", "enable": false, "start": false, "restart_after_upgrade": true, "stop_on_upgrade": true}
+            ]
+        }
+    }
+}

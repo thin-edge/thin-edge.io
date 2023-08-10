@@ -1,8 +1,6 @@
 #!/bin/sh
-
 set -e
-
-# Automatically added by cargo-deb
+# Automatically added by thin-edge.io
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
 	# This will only remove masks created by d-s-h on package removal.
 	deb-systemd-helper unmask c8y-firmware-plugin.service >/dev/null || true
@@ -19,7 +17,7 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 	fi
 fi
 # End automatically added section
-# Automatically added by cargo-deb
+# Automatically added by thin-edge.io
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
 	if [ -d /run/systemd/system ]; then
 		systemctl --system daemon-reload >/dev/null || true
@@ -32,4 +30,3 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 	fi
 fi
 # End automatically added section
-

@@ -1,0 +1,29 @@
+#!/bin/sh
+set -e
+
+purge_mapper_lock() {
+    rm -f \
+        /run/lock/tedge-mapper-c8y.lock \
+        /run/lock/tedge-mapper-az.lock \
+        /run/lock/tedge-mapper-aws.lock \
+        /run/lock/tedge-mapper-collectd.lock
+}
+
+case "$1" in
+    purge)
+        purge_mapper_lock
+    ;;
+esac
+
+# Automatically added by thin-edge.io
+if [ -d /run/systemd/system ]; then
+	systemctl --system daemon-reload >/dev/null || true
+fi
+# End automatically added section
+# Automatically added by thin-edge.io
+if [ $1 -ge 1 ] && [ -x "/usr/lib/systemd/systemd-update-helper" ]; then
+    # Package upgrade, not uninstall
+    /usr/lib/systemd/systemd-update-helper mark-restart-system-units tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-collectd.service || :
+fi
+
+# End automatically added section

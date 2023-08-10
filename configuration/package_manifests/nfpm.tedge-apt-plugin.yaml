@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://nfpm.goreleaser.com/static/schema.json
+---
+name: tedge-apt-plugin
+description: |
+  thin-edge.io plugin for software management using apt
+arch: "${PKG_ARCH}"
+platform: "linux"
+version: "${GIT_SEMVER}"
+section: misc
+priority: "optional"
+maintainer: "thin-edge.io team <info@thin-edge.io>"
+vendor: "thin-edge.io"
+homepage: "https://thin-edge.io"
+license: "Apache-2.0"
+
+replaces:
+  - tedge_apt_plugin
+conflicts:
+  - tedge_apt_plugin (<= 0.8.1)
+
+deb:
+  fields:
+    Vcs-Browser: ${CI_PROJECT_URL}
+    Vcs-Git: ${CI_PROJECT_URL}
+  compression: xz
+  breaks:
+    - tedge_apt_plugin (<= 0.8.1)
+
+contents:
+  # binary
+  - src: .build/tedge-apt-plugin
+    dst: /usr/bin/
+
+  # Symlink to sm plugin dir
+  - src: /usr/bin/tedge-apt-plugin
+    dst: /etc/tedge/sm-plugins/apt
+    type: symlink
