@@ -155,12 +155,18 @@ impl RestartManagerActor {
             return response.with_status(OperationStatus::Failed);
         }
 
+        if let Err(err) = create_tmp_restart_file(&self.config.tmp_dir).await {
+            error!(
+                "Fail to create a witness file in {} due to: {}",
+                self.config.tmp_dir, err
+            );
+            return response.with_status(OperationStatus::Failed);
+        }
+
         response
     }
 
     async fn handle_restart_operation(&mut self) -> Result<(), RestartManagerError> {
-        create_tmp_restart_file(&self.config.tmp_dir)?;
-
         let commands = self.get_restart_operation_commands().await?;
         for mut command in commands {
             match command.status().await {
