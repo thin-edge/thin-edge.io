@@ -78,6 +78,7 @@ impl TedgetoTeConverter {
         alarm.insert("severity".to_string(), severity.into());
         message.topic = te_topic;
         message.payload = serde_json::to_string(&alarm)?.into();
+        message.retain = true;
         Ok(vec![message])
     }
 
@@ -111,6 +112,7 @@ impl TedgetoTeConverter {
             _ => return vec![],
         };
         message.topic = topic;
+        message.retain = true;
         vec![message]
     }
 
