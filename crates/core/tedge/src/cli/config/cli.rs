@@ -1,8 +1,8 @@
 use crate::cli::config::commands::*;
 use crate::command::*;
 use crate::ConfigError;
-use tedge_config::new::ReadableKey;
-use tedge_config::new::WritableKey;
+use tedge_config::ReadableKey;
+use tedge_config::WritableKey;
 
 #[derive(clap::Subcommand, Debug)]
 pub enum ConfigCmd {
@@ -46,7 +46,7 @@ impl BuildCommand for ConfigCmd {
         match self {
             ConfigCmd::Get { key } => Ok(GetConfigCommand {
                 key,
-                config: config_repository.load_new()?,
+                config: config_repository.load()?,
             }
             .into_boxed()),
             ConfigCmd::Set { key, value } => Ok(SetConfigCommand {
@@ -63,7 +63,7 @@ impl BuildCommand for ConfigCmd {
             ConfigCmd::List { is_all, is_doc } => Ok(ListConfigCommand {
                 is_all,
                 is_doc,
-                config: config_repository.load_new()?,
+                config: config_repository.load()?,
             }
             .into_boxed()),
         }

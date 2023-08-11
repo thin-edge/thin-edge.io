@@ -8,7 +8,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_api::health::health_check_topics;
-use tedge_config::new::TEdgeConfig;
+use tedge_config::TEdgeConfig;
 use tedge_mqtt_ext::TopicFilter;
 
 const PLUGIN_SERVICE_NAME: &str = "c8y-firmware-plugin";

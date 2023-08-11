@@ -1,6 +1,6 @@
 use crate::command::Command;
-use tedge_config::new::WritableKey;
 use tedge_config::TEdgeConfigRepository;
+use tedge_config::WritableKey;
 
 pub struct UnsetConfigCommand {
     pub key: WritableKey,
@@ -13,7 +13,7 @@ impl Command for UnsetConfigCommand {
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        self.config_repository.update_toml_new(&|dto| {
+        self.config_repository.update_toml(&|dto| {
             dto.unset_key(self.key);
             Ok(())
         })?;

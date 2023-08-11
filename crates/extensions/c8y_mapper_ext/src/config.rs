@@ -5,9 +5,9 @@ use camino::Utf8PathBuf;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_api::topic::ResponseTopic;
-use tedge_config::new::ConfigNotSet;
-use tedge_config::new::ReadError;
-use tedge_config::new::TEdgeConfig;
+use tedge_config::ConfigNotSet;
+use tedge_config::ReadError;
+use tedge_config::TEdgeConfig;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
 

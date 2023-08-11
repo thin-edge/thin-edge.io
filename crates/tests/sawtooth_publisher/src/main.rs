@@ -19,7 +19,6 @@ use std::io::Write;
 use std::process;
 use std::time::Duration;
 use std::time::Instant;
-use tedge_config::ConfigRepository;
 
 /*
 

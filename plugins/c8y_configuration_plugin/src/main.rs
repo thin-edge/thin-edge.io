@@ -6,10 +6,10 @@ use clap::Parser;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::Runtime;
-use tedge_config::new::TEdgeConfig;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::CertificateError;
+use tedge_config::TEdgeConfig;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_health_ext::HealthMonitorBuilder;
@@ -70,7 +70,7 @@ async fn main() -> Result<(), anyhow::Error> {
     set_log_level(log_level);
 
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
-    let tedge_config = config_repository.load_new()?;
+    let tedge_config = config_repository.load()?;
 
     if config_plugin_opt.init {
         warn!("This --init option has been deprecated and will be removed in a future release");

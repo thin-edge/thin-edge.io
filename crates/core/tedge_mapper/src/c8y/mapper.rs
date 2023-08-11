@@ -8,7 +8,7 @@ use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::service_monitor::service_monitor_status_message;
 use mqtt_channel::Config;
 use std::path::Path;
-use tedge_config::new::TEdgeConfig;
+use tedge_config::TEdgeConfig;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_http_ext::HttpActor;
 use tedge_mqtt_ext::MqttActorBuilder;

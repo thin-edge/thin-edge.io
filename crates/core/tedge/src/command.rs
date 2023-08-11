@@ -27,9 +27,9 @@
 ///
 /// ```
 /// use tedge::command::Command;
-/// use tedge_config::new::TEdgeConfig;
-/// use tedge_config::new::ReadError;
-/// use tedge_config::new::ReadableKey;
+/// use tedge_config::TEdgeConfig;
+/// use tedge_config::ReadError;
+/// use tedge_config::ReadableKey;
 ///
 /// struct GetConfigKey {
 ///     config: TEdgeConfig,
@@ -78,8 +78,8 @@ pub trait Command {
     /// The `BuildCommand::build_command()` method has to return a box around a new command.
     ///
     /// ```
-    /// use tedge_config::new::ReadableKey;
-    /// use tedge_config::new::TEdgeConfig;
+    /// use tedge_config::ReadableKey;
+    /// use tedge_config::TEdgeConfig;
     /// use tedge::cli::config::GetConfigCommand;
     /// use tedge::ConfigError;
     /// use tedge::command::Command;
@@ -111,7 +111,7 @@ pub trait Command {
 /// use tedge::command::*;
 /// use tedge::cli::config::*;
 /// use tedge::ConfigError;
-/// use tedge_config::new::*;
+/// use tedge_config::*;
 ///
 /// #[derive(clap::Parser, Debug)]
 /// enum ConfigCmd {
@@ -131,7 +131,7 @@ pub trait Command {
 ///                 value,
 ///             }.into_boxed(),
 ///             ConfigCmd::Get { key } => GetConfigCommand {
-///                 config: context.config_repository.load_new()?,
+///                 config: context.config_repository.load()?,
 ///                 key,
 ///             }.into_boxed(),
 ///         };

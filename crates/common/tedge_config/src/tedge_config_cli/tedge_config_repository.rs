@@ -8,48 +8,17 @@ use super::figment::ConfigSources;
 use super::figment::FileAndEnvironment;
 use super::figment::FileOnly;
 use super::figment::UnusedValueWarnings;
-use super::new;
 
 /// TEdgeConfigRepository is responsible for loading and storing TEdgeConfig entities.
 #[derive(Debug, Clone)]
 pub struct TEdgeConfigRepository {
     config_location: TEdgeConfigLocation,
-    config_defaults: TEdgeConfigDefaults,
-}
-
-pub trait ConfigRepository<T> {
-    type Error;
-    fn load(&self) -> Result<T, Self::Error>;
-    fn update_toml(
-        &self,
-        update: &impl Fn(&mut T) -> ConfigSettingResult<()>,
-    ) -> Result<(), Self::Error>;
-}
-
-impl ConfigRepository<TEdgeConfig> for TEdgeConfigRepository {
-    type Error = TEdgeConfigError;
-
-    fn load(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let config =
-            self.make_tedge_config(self.load_dto::<FileAndEnvironment>(self.toml_path())?)?;
-        Ok(config)
-    }
-
-    fn update_toml(
-        &self,
-        update: &impl Fn(&mut TEdgeConfig) -> ConfigSettingResult<()>,
-    ) -> Result<(), Self::Error> {
-        let mut config = self.read_file_or_default::<FileOnly>(self.toml_path())?;
-        update(&mut config)?;
-
-        self.store(&config.data)
-    }
 }
 
 impl TEdgeConfigRepository {
-    pub fn update_toml_new(
+    pub fn update_toml(
         &self,
-        update: &impl Fn(&mut new::TEdgeConfigDto) -> ConfigSettingResult<()>,
+        update: &impl Fn(&mut TEdgeConfigDto) -> ConfigSettingResult<()>,
     ) -> Result<(), TEdgeConfigError> {
         let mut config = self.load_dto::<FileOnly>(self.toml_path())?;
         update(&mut config)?;
@@ -62,29 +31,18 @@ impl TEdgeConfigRepository {
     }
 
     pub fn new(config_location: TEdgeConfigLocation) -> Self {
-        let config_defaults = TEdgeConfigDefaults::from(&config_location);
-        Self::new_with_defaults(config_location, config_defaults)
+        Self { config_location }
     }
 
-    pub fn new_with_defaults(
-        config_location: TEdgeConfigLocation,
-        config_defaults: TEdgeConfigDefaults,
-    ) -> Self {
-        Self {
-            config_location,
-            config_defaults,
-        }
-    }
-
-    pub fn load_new(&self) -> Result<new::TEdgeConfig, TEdgeConfigError> {
+    pub fn load(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
         let dto = self.load_dto::<FileAndEnvironment>(self.toml_path())?;
-        Ok(new::TEdgeConfig::from_dto(&dto, &self.config_location))
+        Ok(TEdgeConfig::from_dto(&dto, &self.config_location))
     }
 
     fn load_dto<Sources: ConfigSources>(
         &self,
         path: &Utf8Path,
-    ) -> Result<new::TEdgeConfigDto, TEdgeConfigError> {
+    ) -> Result<TEdgeConfigDto, TEdgeConfigError> {
         let (dto, warnings) = self.load_dto_with_warnings::<Sources>(path)?;
 
         warnings.emit();
@@ -95,8 +53,8 @@ impl TEdgeConfigRepository {
     fn load_dto_with_warnings<Sources: ConfigSources>(
         &self,
         path: &Utf8Path,
-    ) -> Result<(new::TEdgeConfigDto, UnusedValueWarnings), TEdgeConfigError> {
-        let (mut dto, mut warnings): (new::TEdgeConfigDto, _) =
+    ) -> Result<(TEdgeConfigDto, UnusedValueWarnings), TEdgeConfigError> {
+        let (mut dto, mut warnings): (TEdgeConfigDto, _) =
             super::figment::extract_data::<_, Sources>(path)?;
 
         if let Some(migrations) = dto.config.version.unwrap_or_default().migrations() {
@@ -126,25 +84,6 @@ impl TEdgeConfigRepository {
         &self.config_location
     }
 
-    fn read_file_or_default<Sources: ConfigSources>(
-        &self,
-        path: &Utf8Path,
-    ) -> Result<TEdgeConfig, TEdgeConfigError> {
-        let dto = self.load_dto::<Sources>(path)?;
-
-        self.make_tedge_config(dto)
-    }
-
-    fn make_tedge_config(
-        &self,
-        data: new::TEdgeConfigDto,
-    ) -> Result<TEdgeConfig, TEdgeConfigError> {
-        Ok(TEdgeConfig {
-            data,
-            config_defaults: self.config_defaults.clone(),
-        })
-    }
-
     // TODO: Explicitly set the file permissions in this function and file ownership!
     fn store<S: Serialize>(&self, config: &S) -> Result<(), TEdgeConfigError> {
         let toml = toml::to_string_pretty(&config)?;
@@ -163,7 +102,7 @@ impl TEdgeConfigRepository {
 mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
 
-    use crate::new::TEdgeConfigReader;
+    use crate::TEdgeConfigReader;
 
     use super::*;
 

@@ -8,8 +8,8 @@ use std::fs;
 use std::net::IpAddr;
 use std::path::Path;
 use std::path::PathBuf;
-use tedge_config::new::ReadError;
-use tedge_config::new::TEdgeConfig;
+use tedge_config::ReadError;
+use tedge_config::TEdgeConfig;
 use tedge_mqtt_ext::MqttMessage;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "c8y-log-plugin.toml";

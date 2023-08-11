@@ -28,7 +28,7 @@ use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
-use tedge_config::DEFAULT_FILE_TRANSFER_DIR_NAME;
+use tedge_api::DEFAULT_FILE_TRANSFER_DIR_NAME;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_timer_ext::SetTimeout;

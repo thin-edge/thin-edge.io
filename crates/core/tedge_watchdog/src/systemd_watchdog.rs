@@ -3,7 +3,6 @@ use freedesktop_entry_parser::parse_entry;
 use futures::channel::mpsc;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use mqtt_channel::Config;
 use mqtt_channel::Message;
 use mqtt_channel::PubChannel;
 use mqtt_channel::Topic;
@@ -19,9 +18,6 @@ use std::time::Instant;
 use tedge_api::health::health_status_down_message;
 use tedge_api::health::health_status_up_message;
 use tedge_api::health::send_health_status;
-use tedge_config::mqtt_config::MqttConfigBuildError;
-use tedge_config::ConfigRepository;
-use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigLocation;
 use time::OffsetDateTime;
 use tracing::debug;
@@ -125,7 +121,9 @@ async fn monitor_tedge_service(
     let client_id: &str = &format!("{}_{}", name, nanoid!());
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
     let tedge_config = config_repository.load()?;
-    let mqtt_config = get_mqtt_config(&tedge_config, client_id)?
+    let mqtt_config = tedge_config
+        .mqtt_config()?
+        .with_session_name(client_id)
         .with_subscriptions(res_topic.try_into()?)
         .with_initial_message(|| health_status_up_message("tedge-watchdog"))
         .with_last_will_message(health_status_down_message("tedge-watchdog"));
@@ -197,13 +195,6 @@ async fn get_latest_health_status_message(
             }
         }
     }
-}
-
-fn get_mqtt_config(
-    tedge_config: &TEdgeConfig,
-    client_id: &str,
-) -> Result<Config, MqttConfigBuildError> {
-    Ok(tedge_config.mqtt_config()?.with_session_name(client_id))
 }
 
 fn notify_systemd(pid: u32, status: &str) -> Result<ExitStatus, WatchdogError> {

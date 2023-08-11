@@ -1,9 +1,9 @@
 use crate::command::Command;
 use crate::ConfigError;
 use pad::PadStr;
-use tedge_config::new::ReadableKey;
-use tedge_config::new::TEdgeConfig;
-use tedge_config::new::READABLE_KEYS;
+use tedge_config::ReadableKey;
+use tedge_config::TEdgeConfig;
+use tedge_config::READABLE_KEYS;
 
 pub struct ListConfigCommand {
     pub is_all: bool,

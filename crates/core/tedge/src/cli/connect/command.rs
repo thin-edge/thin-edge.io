@@ -12,8 +12,8 @@ use rumqttc::QoS::AtLeastOnce;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use tedge_config::new::TEdgeConfig;
 use tedge_config::system_services::*;
+use tedge_config::TEdgeConfig;
 use tedge_config::*;
 use tedge_utils::paths::create_directories;
 use tedge_utils::paths::ok_if_not_found;
@@ -54,7 +54,7 @@ impl Command for ConnectCommand {
     }
 
     fn execute(&self) -> anyhow::Result<()> {
-        let config = self.config_repository.load_new()?;
+        let config = self.config_repository.load()?;
         if self.is_test_connection {
             let br_config = self.bridge_config(&config)?;
             if self.check_if_bridge_exists(&br_config) {

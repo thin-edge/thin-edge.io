@@ -277,7 +277,7 @@ fn get_default_plugin(
     config_location: &tedge_config::TEdgeConfigLocation,
 ) -> Result<Option<SoftwareType>, TEdgeConfigError> {
     let config_repository = tedge_config::TEdgeConfigRepository::new(config_location.clone());
-    let tedge_config = config_repository.load_new()?;
+    let tedge_config = config_repository.load()?;
 
     Ok(tedge_config
         .software
