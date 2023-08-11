@@ -227,12 +227,14 @@ async fn convert_incoming_main_device_service_health_status() -> Result<(), DynE
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("tedge/health/myservice"),
         r#"{""pid":1234,"status":"up","time":1674739912}"#,
-    );
+    )
+    .with_retain();
 
     let expected_mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/main/service/myservice/status/health"),
         r#"{""pid":1234,"status":"up","time":1674739912}"#,
-    );
+    )
+    .with_retain();
 
     mqtt_box.send(mqtt_message).await?;
 
@@ -250,12 +252,14 @@ async fn convert_incoming_child_device_service_health_status() -> Result<(), Dyn
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("tedge/health/child/myservice"),
         r#"{""pid":1234,"status":"up","time":1674739912}"#,
-    );
+    )
+    .with_retain();
 
     let expected_mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/child/service/myservice/status/health"),
         r#"{""pid":1234,"status":"up","time":1674739912}"#,
-    );
+    )
+    .with_retain();
 
     mqtt_box.send(mqtt_message).await?;
 
