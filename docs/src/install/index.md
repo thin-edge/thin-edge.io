@@ -4,200 +4,215 @@ tags: [Installation]
 sidebar_position: 1
 ---
 
-# How to install thin-edge.io?
+:::tip Announcement
+thin-edge.io ❤️ Linux so we now support installing thin-edge on any Linux distribution!
 
-## Install via script
-
-There are two possibilities to install thin-edge.io, the easiest way is to use the installation script with this command:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
-```
-
-You can execute that command on your device and it will do all required steps for an initial setup.
-
-:::note
-If you want to get a specific version, append the `<version>` 3 digits (e.g. `0.7.3`):
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s <version>
-```
+SystemD is still the default service manager (aka. init system), however if you don't have SystemD, then it won't be used. You are then free to configure your own service manager to run thin-edge how you want.
 :::
 
-If you prefer to have a little more control over the installation or the script did not work for you,
-please go on with the [manual installation steps](#manual-installation-steps).
+## Install/update
 
-## Upgrade via script
+The easiest way to get started with thin-edge.io is to use the installation script which will auto detect the installation method appropriate for your Linux distribution. The script will configure the package manager and install thin-edge.io and its dependencies (e.g. mosquitto). If your distribution does not have one of the supported package managers, then the tarball will be used to install thin-edge.io.
 
-If you already have `thin-edge.io` on your device, to upgrade `thin-edge.io`,
-the easiest way is to use the same script as the installation. Follow the steps below.
-There is no need to remove old version.
+To install or update to the latest version, run the following command:
 
-:::note
-For version **0.7.7 or lower, to upgrade `thin-edge.io` from these versions,
-all thin-edge.io components **must be stopped** before upgrading.
-
-The components are:
-`tedge-mapper-c8y`, `tedge-mapper-az`, `tedge-mapper-collectd`, `tedge-agent`, `tedge-watchdog`, `c8y-log-plugin`, `c8y-configuration-plugin`.
-
-To stop `tedge-mapper-c8y`, `tedge-agent`, `tedge-mapper-az`, `tedge-mapper-aws`, you can simply run the commands below.
-
-```sh
-sudo tedge disconnect c8y
-sudo tedge disconnect az
-sudo tedge disconnect aws
+```sh tab={"label":"curl(sudo)"}
+curl -fsSL https://thin-edge.io/install.sh | sudo sh -s
 ```
 
-To stop each component one by one, this is an example how to stop them with `systemctl`:
-
-```sh
-sudo systemctl stop tedge-mapper-c8y
-sudo systemctl stop tedge-agent
-sudo systemctl stop c8y-log-plugin
+```sh tab={"label":"curl(root)"}
+curl -fsSL https://thin-edge.io/install.sh | sh -s
 ```
+
+```sh tab={"label":"wget(sudo)"}
+wget -O - https://thin-edge.io/install.sh | sudo sh -s
+```
+
+```sh tab={"label":"wget(root)"}
+wget -O - https://thin-edge.io/install.sh | sh -s
+```
+
+**Updating in the future**
+
+thin-edge.io and its components can be updated by running the install.sh script again, or using the Linux package manager on your distribution.
+
+```sh tab={"label":"Debian/Ubuntu"}
+sudo apt-get update
+sudo apt-get install tedge-full
+```
+
+```sh tab={"label":"RHEL/Fedora/RockyLinux"}
+sudo dnf install --best tedge-full --refresh
+```
+
+```sh tab={"label":"Alpine"}
+sudo apk update
+sudo apk add --no-cache tedge-full
+```
+
+:::info
+If you have any trouble updating via the package manager, then run the install.sh script again. The install script will install or update the script as well as configure the appropriate package manager for your Linux distribution.
 :::
 
-Run `get-thin-edge_io.sh` script as below to upgrade to the latest version.
+## Supported Linux Package Managers
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
-```
+The following Linux Package Managers are supported out-of-the-box. For all other Linux distributions, the tarball (.tar.gz binary) can be used to add the thin-edge.io executables/binaries.
 
-:::note
-If you want to upgrade to a specific version, append the `<version>` 3 digits, e.g. `0.7.3`:
+<div>
+    <div class="row">
+        <div class="column logo">
+            <img width="80" height="80" src="https://assets.cloudsmith.media/package/images/backends/deb/large.30f93502b7b5.png" alt="Debian logo" />
+        </div>
+        <div class="column logo">
+            <img width="80" height="80" src="https://assets.cloudsmith.media/package/images/backends/rpm/large.f677f5642875.png" alt="RedHat logo" />
+        </div>
+        <div class="column logo">
+            <img width="80" height="80" src="https://assets.cloudsmith.media/package/images/backends/alpine/large.974a497e9765.png" alt="Alpine logo" />
+        </div>
+    </div>
+</div>
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s <version>
-```
+|Package Manager|Format|Distributions|
+|---------------|------|-------------|
+|apt|deb|Debian, Ubuntu and other debian-based operating systems|
+|yum/dnf/microdnf|rpm|RHEL, RockyLinux, AlmaLinux, Fedora|
+|zypper|rpm|openSUSE|
+|apk|apk|Alpine Linux|
+|-|tarball (*.tar.gz)|All other Linux distributions, e.g. Yocto|
+
+
+## Alternative installation methods
+
+In cases were you would not like to run the automatic install script, you can choose one to run the steps manually. This allows you more control over the process which can be useful if you are experiencing problems with the auto detection used in the install script.
+
+### Manual repository setup and installation
+
+The software repositories used by the package managers can be configured using the setup scripts. These scripts are normally executed by the *install.sh* script in the installation section, however they can also be manually executed if you want more fine-grain control over the process.
+
+:::tip
+If you are having problems setting any of the repositories, check out the [Cloudsmith](https://cloudsmith.io/~thinedge/repos/tedge-release/setup/#formats-deb) website where they have **Set Me Up** instructions in additional formats, e.g. manual configuration rather than via the `setup.*.sh` script.
 :::
 
-## Manual installation
+**Pre-requisites**
 
-To install thin edge package it is required to use `curl` to download the package and `dpkg` to install it.
+The instructions require you to have the following tools installed.
 
-### Dependency installation
+* curl
+* bash
 
-thin-edge.io has single dependency and it is `mosquitto` used for communication southbound and northbound e.g. southbound, devices can publish measurements; northbound, gateway may relay messages to cloud.
-`mosquitto` can be installed with your package manager. For apt the command may look as following:
+#### Setup
 
-```sh
-sudo apt install mosquitto
+**Running with sudo**
+
+You will need to have `sudo` also installed if you want to run these instructions.
+
+```sh tab={"label":"Debian/Ubuntu"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.deb.sh' | sudo bash
 ```
 
-:::note
-Some OSes may require you to use `sudo` to install packages.
-:::
-
-### Download package
-
-thin-edge.io package is in thin-edge.io repository on GitHub: [thin-edge.io](https://github.com/thin-edge/thin-edge.io/releases).
-
-To download the package from github repository use following command (use desired version):
-
-```sh
-curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/<package>_<version>_<arch>.deb
+```sh tab={"label":"RHEL/Fedora/RockyLinux"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.rpm.sh' | sudo bash
 ```
 
-Where:
-- `version` -> thin-edge.io version in x.x.x format
-- `arch` -> architecture type (amd64, armhf, arm64)
-
-```sh title="Example"
-curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.9.0/tedge_0.9.0_armhf.deb
+```sh tab={"label":"Alpine"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.alpine.sh' | sudo bash
 ```
 
-and for `mapper`:
+**Running as root**
 
-```sh title="Example"
-curl -LJO https://github.com/thin-edge/thin-edge.io/releases/download/0.9.0/tedge-mapper_0.9.0_armhf.deb
+These commands must be run as the root user.
+
+```sh tab={"label":"Debian/Ubuntu"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.deb.sh' | bash
 ```
 
-### Install downloaded package
-
-Now, we have downloaded the package we can proceed to installation. First we will install cli tool `tedge`.
-
-:::note
-Some OSes may require you to use `sudo` to install packages and therefore all following commands may need `sudo`.
-:::
-
-To install `tedge` use following command:
-
-```sh
-sudo dpkg -i tedge_<version>_<arch>.deb
+```sh tab={"label":"RHEL/Fedora/RockyLinux"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.rpm.sh' | bash
 ```
 
-```sh title="Example"
-sudo dpkg -i tedge_0.5.0_armhf.deb
+```sh tab={"label":"Alpine"}
+curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/tedge-main/setup.alpine.sh' | bash
 ```
 
-To install mapper for thin-edge.io do:
 
-```sh
-sudo dpkg -i tedge-mapper_<version>_<arch>.deb
+#### Installing and updating using a package manager
+
+Once you have the repository setup, you can install the **tedge-full** virtual package which will automatically pull in all of the thin-edge.io packages. This makes it easier to install and update in the future, as you only have to type in one package name, `tedge-full`.
+
+```sh tab={"label":"Debian/Ubuntu"}
+sudo apt-get update
+sudo apt-get install tedge-full
 ```
 
-```sh title="Example"
-sudo dpkg -i tedge-mapper_0.9.0_armhf.deb
+```sh tab={"label":"RHEL/Fedora/RockyLinux"}
+sudo dnf install --best tedge-full --refresh
 ```
 
-## Uninstall
-
-The `thin-edge.io` can be uninstalled using a script, that can be downloaded
-from below mentioned location.
-
-Whether you are just removing the `thin-edge.io` packages or wanting to purge everything (removing the packages and configuration), there is a convenient one-liner provided under each section.
-
-```sh
-wget https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh
-chmod a+x uninstall-thin-edge_io.sh
+```sh tab={"label":"Alpine"}
+sudo apk update
+sudo apk add --no-cache tedge-full
 ```
 
-The uninstall script provides options as shown below.
+### Install via tarball
 
-```sh
-USAGE: 
-   ./uninstall-thin-edge_io.sh [COMMAND]
-    
-COMMANDS:
-    remove     Uninstall thin-edge.io with keeping configuration files
-    purge      Uninstall thin-edge.io and also remove configuration files
+You can force the install.sh script to install via the tarball instead of via a package manager. The install script will also take care of the required post installation steps.
+
+To install the thin-edge.io via the tarball run the following command:
+
+```sh tab={"label":"curl(sudo)"}
+curl -fsSL https://thin-edge.io/install.sh | sudo sh -s -- --package-manager tarball
 ```
 
-:::note
-The uninstall script removes/purges the core thin-edge.io packages like `tedge,
-tedge-mapper, and tedge-agent` as well as thin-edge.io plugins like `tedge-apt-plugin,
-c8y-log-plugin, c8y-configuration-plugin` etc.
-:::
-
-### Remove
-
-Use uninstall script as shown below just to `remove` the `thin-edge.io` packages.
-
-```sh
-sudo ./uninstall-thin-edge_io.sh remove
+```sh tab={"label":"curl(root)"}
+curl -fsSL https://thin-edge.io/install.sh | sh -s -- --package-manager tarball
 ```
 
-:::note
-`./uninstall-thin-edge_io.sh remove` removes just the thin-edge.io packages and does not remove the `configuration` files.
-:::
-
-The same thing can also be executed using a one-liner to download and run the script.
-
-```sh
-curl -sSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh | sudo sh -s remove
+```sh tab={"label":"wget(sudo)"}
+wget -O - https://thin-edge.io/install.sh | sudo sh -s -- --package-manager tarball
 ```
 
-### Purge
-
-Use uninstall script as shown below to remove the thin-edge.io as well as to remove the `configuration` files that are
-associated with these thin-edge.io packages.
-
-```sh
-sudo ./uninstall-thin-edge_io.sh purge
+```sh tab={"label":"wget(root)"}
+wget -O - https://thin-edge.io/install.sh | sh -s -- --package-manager tarball
 ```
 
-The same thing can also be executed using a one-liner to download and run the script.
+## Package repository hosting
 
-```sh
-curl -sSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/uninstall-thin-edge_io.sh | sudo sh -s purge
-```
+[![Hosted By: Cloudsmith](https://img.shields.io/badge/OSS%20hosting%20by-cloudsmith-blue?logo=cloudsmith&style=for-the-badge)](https://cloudsmith.com)
+
+Package repository hosting is graciously provided by  [Cloudsmith](https://cloudsmith.com).
+Cloudsmith is the only fully hosted, cloud-native, universal package management solution, that
+enables your organization to create, store and share packages in any format, to any place, with total
+confidence.
+
+The packages can be viewed directly from the [Cloudsmith.io](https://cloudsmith.io/~thinedge/repos/) website.
+
+<table>
+<tr>
+    <th>Linux</th>
+    <th>Repository</th>
+</tr>
+<tr>
+    <td>
+        <img width="24" height="24" src="https://assets.cloudsmith.media/package/images/backends/deb/small.bedd6f749317.png" alt="Debian logo" />
+    </td>
+    <td>
+        <a href="https://cloudsmith.io/~thinedge/repos/tedge-main/packages/detail/deb/tedge-full/latest/a=all;d=any-distro%252Fany-version;t=binary/"><img src="https://api-prd.cloudsmith.io/v1/badges/version/thinedge/tedge-main/deb/tedge-full/latest/a=all;d=any-distro%252Fany-version;t=binary/?render=true&show_latest=true" alt="Latest version of 'tedge-full' @ Cloudsmith" /></a>
+    </td>
+</tr>
+<tr>
+    <td>
+        <img width="24" height="24" src="https://assets.cloudsmith.media/package/images/backends/rpm/small.89bd26d9d17b.png" alt="RedHat logo" />
+    </td>
+    <td>
+        <a href="https://cloudsmith.io/~thinedge/repos/tedge-main/packages/detail/rpm/tedge-full/latest/a=noarch;d=any-distro%252Fany-version;t=binary/"><img src="https://api-prd.cloudsmith.io/v1/badges/version/thinedge/tedge-main/rpm/tedge-full/latest/a=noarch;d=any-distro%252Fany-version;t=binary/?render=true&show_latest=true" alt="Latest version of 'tedge-full' @ Cloudsmith" /></a>
+    </td>
+</tr>
+<tr>
+    <td>
+        <img width="24" height="24" src="https://assets.cloudsmith.media/package/images/backends/alpine/small.dff9b535ea47.png" alt="Alpine logo" />
+    </td>
+    <td>
+        <a href="https://cloudsmith.io/~thinedge/repos/tedge-main/packages/detail/alpine/tedge-full/latest/a=noarch;d=alpine%252Fany-version/"><img src="https://api-prd.cloudsmith.io/v1/badges/version/thinedge/tedge-main/alpine/tedge-full/latest/a=noarch;d=alpine%252Fany-version/?render=true&show_latest=true" alt="Latest version of 'tedge-full' @ Cloudsmith" /></a>
+    </td>
+</tr>
+</table>

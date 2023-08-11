@@ -42,25 +42,29 @@ This tutorial is divided into small steps. The first three steps are needed to i
 
 ## Step 1 Install thin-edge.io
 
-There are two ways to install thin-edge.io:
-- Use a script
-- Manually
-
 The easiest way is to use the installation script with this command:
 
-```
-curl -fsSL https://raw.githubusercontent.com/thin-edge/thin-edge.io/main/get-thin-edge_io.sh | sudo sh -s
+```sh tab={"label":"curl(sudo)"}
+curl -fsSL https://thin-edge.io/install.sh | sudo sh -s
 ```
 
-This script will install the latest version of thin-edge.io with the following components:
-- Mosquitto
-- Command line Interface (CLI) tool
-- Tedge mapper
+```sh tab={"label":"curl(root)"}
+curl -fsSL https://thin-edge.io/install.sh | sh -s
+```
 
-It is possible to do the installation of thin-edge.io manually or install another version or upgrade the current version. For more information on that, please have a look [here](../install/index.md) for more information.
+```sh tab={"label":"wget(sudo)"}
+wget -O - https://thin-edge.io/install.sh | sudo sh -s
+```
+
+```sh tab={"label":"wget(root)"}
+wget -O - https://thin-edge.io/install.sh | sh -s
+```
 
 After a successful installation, it is possible to use thin-edge.io via the CLI and use the tedge commands.
 
+:::info
+For more information about the installation, please have a look [here](../install/index.md) for more information.
+:::
 
 ### Tedge CLI
 
