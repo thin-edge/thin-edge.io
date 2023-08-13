@@ -35,10 +35,10 @@ Check ownership of the folders
     [Documentation]    Running tedge init has created the folders assigning default user/group
     ...    this test step is confirming the default values for user/group
     Check Owner of Directory    /etc/tedge    tedge:tedge
-    Check Owner of Directory    /etc/tedge/mosquitto-conf    mosquitto:mosquitto
+    Check Owner of Directory    /etc/tedge/mosquitto-conf    tedge:tedge
     Check Owner of Directory    /etc/tedge/operations    tedge:tedge
     Check Owner of Directory    /etc/tedge/plugins    tedge:tedge
-    Check Owner of Directory    /etc/tedge/device-certs    mosquitto:mosquitto
+    Check Owner of Directory    /etc/tedge/device-certs    root:root
     Check Owner of Directory    /var/tedge    tedge:tedge
     Check Owner of Directory    /var/log/tedge    tedge:tedge
 
@@ -47,10 +47,10 @@ Change user/group and check the change
     ...    this test step is confirming the custom values for user/group
     Execute Command    sudo tedge init --user petertest --group petertest
     Check Owner of Directory    /etc/tedge    petertest:petertest
-    Check Owner of Directory    /etc/tedge/mosquitto-conf    mosquitto:mosquitto
+    Check Owner of Directory    /etc/tedge/mosquitto-conf    petertest:petertest
     Check Owner of Directory    /etc/tedge/operations    petertest:petertest
     Check Owner of Directory    /etc/tedge/plugins    petertest:petertest
-    Check Owner of Directory    /etc/tedge/device-certs    mosquitto:mosquitto
+    Check Owner of Directory    /etc/tedge/device-certs    root:root
     Check Owner of Directory    /var/tedge    petertest:petertest
     Check Owner of Directory    /var/log/tedge    petertest:petertest
 
@@ -59,10 +59,10 @@ Tedge init and check if default values are restored
     ...    this test step is confirming the default values for user/group
     Execute Command    sudo tedge init
     Check Owner of Directory    /etc/tedge    tedge:tedge
-    Check Owner of Directory    /etc/tedge/mosquitto-conf    mosquitto:mosquitto
+    Check Owner of Directory    /etc/tedge/mosquitto-conf    tedge:tedge
     Check Owner of Directory    /etc/tedge/operations    tedge:tedge
     Check Owner of Directory    /etc/tedge/plugins    tedge:tedge
-    Check Owner of Directory    /etc/tedge/device-certs    mosquitto:mosquitto
+    Check Owner of Directory    /etc/tedge/device-certs    root:root
     Check Owner of Directory    /var/tedge    tedge:tedge
     Check Owner of Directory    /var/log/tedge    tedge:tedge
 
