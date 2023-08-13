@@ -1,6 +1,6 @@
 ---
 title: Init System Configuration
-tags: [Reference, Unix]
+tags: [Reference, Unix, Init, Services]
 sidebar_position: 3
 ---
 
@@ -21,6 +21,14 @@ enable =  ["/bin/systemctl", "enable", "{}"]
 disable =  ["/bin/systemctl", "disable", "{}"]
 is_active = ["/bin/systemctl", "is-active", "{}"]
 ```
+
+:::info
+For security reasons, the `system.toml` file should not be writable by non-root users. The permissions on the file can be set using the following command:
+
+```sh
+sudo chmod 644 /etc/tedge/system.toml
+```
+:::
 
 ## Placeholder
 
@@ -48,3 +56,7 @@ will be interpreted as
 |`enable`|The command to enable a service by the init system|
 |`disable`|The command to disable a service by the init system|
 |`is_active`|The command to check if the service is running by the init system|
+
+## Default settings
+
+If the `system.toml` file does not exist, then thin-edge will assume that you are using Systemd, and use `/bin/systemctl` to control the services.

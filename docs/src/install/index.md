@@ -7,7 +7,7 @@ sidebar_position: 1
 :::tip Announcement
 thin-edge.io ❤️ Linux so we now support installing thin-edge on any Linux distribution!
 
-SystemD is still the default service manager (aka. init system), however if you don't have SystemD, then it won't be used. You are then free to configure your own service manager to run thin-edge how you want.
+Systemd is still the default init system (aka. service manager), however if you don't have Systemd, then it won't be used. You are then free to configure your own service manager to run thin-edge how you want, or use one of the [community supported packages](#optional-linux-distributions-without-systemd).
 :::
 
 ## Install/update
@@ -52,6 +52,26 @@ sudo apk add --no-cache tedge-full
 
 :::info
 If you have any trouble updating via the package manager, then run the install.sh script again. The install script will install or update the script as well as configure the appropriate package manager for your Linux distribution.
+:::
+
+### Optional: Linux distributions without Systemd
+
+thin-edge.io uses Systemd by default to run all of its components as background services. If your Linux distribution does not have Systemd installed, then you will also have to run one more additional step.
+
+Run the script below to automatically detect and install the relevant service definitions for the init system provided by your Linux distribution.
+
+```sh tab={"label":"curl"}
+curl -fsSL https://thin-edge.io/install-services.sh | sh -s
+```
+
+```sh tab={"label":"wget"}
+wget -O - https://thin-edge.io/install-services.sh | sh -s
+```
+
+Check out the [init systems](../operate/installation/init_systems.md) for more information on the service definitions.
+
+:::info
+If the script detects that Systemd is installed, then it will not install anything as thin-edge.io comes with Systemd service definitions.
 :::
 
 ## Supported Linux Package Managers
