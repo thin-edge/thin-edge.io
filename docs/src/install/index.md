@@ -16,23 +16,15 @@ The easiest way to get started with thin-edge.io is to use the installation scri
 
 To install or update to the latest version, run the following command:
 
-```sh tab={"label":"curl(sudo)"}
-curl -fsSL https://thin-edge.io/install.sh | sudo sh -s
-```
-
-```sh tab={"label":"curl(root)"}
+```sh tab={"label":"curl"}
 curl -fsSL https://thin-edge.io/install.sh | sh -s
 ```
 
-```sh tab={"label":"wget(sudo)"}
-wget -O - https://thin-edge.io/install.sh | sudo sh -s
-```
-
-```sh tab={"label":"wget(root)"}
+```sh tab={"label":"wget"}
 wget -O - https://thin-edge.io/install.sh | sh -s
 ```
 
-**Updating in the future**
+### Update using a package manager
 
 thin-edge.io and its components can be updated by running the install.sh script again, or using the Linux package manager on your distribution.
 
@@ -179,19 +171,12 @@ You can force the install.sh script to install via the tarball instead of via a 
 
 To install the thin-edge.io via the tarball run the following command:
 
-```sh tab={"label":"curl(sudo)"}
-curl -fsSL https://thin-edge.io/install.sh | sudo sh -s -- --package-manager tarball
-```
 
-```sh tab={"label":"curl(root)"}
+```sh tab={"label":"curl"}
 curl -fsSL https://thin-edge.io/install.sh | sh -s -- --package-manager tarball
 ```
 
-```sh tab={"label":"wget(sudo)"}
-wget -O - https://thin-edge.io/install.sh | sudo sh -s -- --package-manager tarball
-```
-
-```sh tab={"label":"wget(root)"}
+```sh tab={"label":"wget"}
 wget -O - https://thin-edge.io/install.sh | sh -s -- --package-manager tarball
 ```
 
