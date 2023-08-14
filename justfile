@@ -7,6 +7,8 @@ VERSION := `./ci/build_scripts/build.sh --version 2>/dev/null || exit 0`
 # e.g. MacOS m1 => "aarch64-unknown-linux-musl"
 DEFAULT_TARGET := `./ci/build_scripts/detect_target.sh`
 
+CARGO := `command -V cargo-zigbuild >/dev/null 2>&1 && printf "cargo-zigbuild" || printf "cargo"`
+
 # Print project and host machine info
 info:
     @echo "OS:             {{os()}}"
@@ -50,9 +52,9 @@ format-check: check-tools
     cargo sort -w . --check
 
 # Check code
-check:
-    cargo check
-    cargo clippy --all-targets --all-features
+check TARGET=DEFAULT_TARGET:
+    {{CARGO}} check --target {{TARGET}}
+    {{CARGO}} clippy --all-targets --all-features --target {{TARGET}}
 
 # Release, building all binaries and debian packages
 release *ARGS:
@@ -69,14 +71,6 @@ setup-integration-test *ARGS:
 # Run integration tests (using local build)
 integration-test *ARGS: release
     cd tests/RobotFramework && .venv/bin/python3 -m invoke build --local tests {{ARGS}}
-
-# Generate docs and start web server
-docs:
-    cd docs && mdbook serve
-
-# Install doc dependencies
-docs-install:
-    cargo install mdbook mdbook-linkcheck mdbook-mermaid mdbook-admonish mdbook-cmdrun
 
 # Generate linux package scripts from templates
 generate-linux-package-scripts:
