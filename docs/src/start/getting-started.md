@@ -44,19 +44,11 @@ This tutorial is divided into small steps. The first three steps are needed to i
 
 The easiest way is to use the installation script with this command:
 
-```sh tab={"label":"curl(sudo)"}
-curl -fsSL https://thin-edge.io/install.sh | sudo sh -s
-```
-
-```sh tab={"label":"curl(root)"}
+```sh tab={"label":"curl"}
 curl -fsSL https://thin-edge.io/install.sh | sh -s
 ```
 
-```sh tab={"label":"wget(sudo)"}
-wget -O - https://thin-edge.io/install.sh | sudo sh -s
-```
-
-```sh tab={"label":"wget(root)"}
+```sh tab={"label":"wget"}
 wget -O - https://thin-edge.io/install.sh | sh -s
 ```
 

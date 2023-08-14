@@ -8,9 +8,11 @@ sidebar_position: 1
 
 Common requirements for all systems are:
 * minimum 16MB of RAM
-* systemd (for production systems)
 * mosquitto minimum version 1.6 (for security reasons we recommend the latest 1.x version)
-* dpkg (if you want to use our prebuilt deb packages)
+
+:::info
+Systemd is supported out-of-the box and is recommended for production systems. Other init systems (e.g. OpenRC, s6-overlay, SysVInit, supervisord, runit) are supported via addition packages as detailed in the [init system](../operate/installation/init_systems.md) section.
+:::
 
 # Level 1
 Level 1 supported platforms are officially supported and are actively tested in the CI/CD.
