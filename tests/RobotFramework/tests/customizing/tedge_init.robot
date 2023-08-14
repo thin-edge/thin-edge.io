@@ -34,7 +34,7 @@ Tedge init and check creation of folders
 Check ownership of the folders
     [Documentation]    Running tedge init has created the folders assigning default user/group
     ...    this test step is confirming the default values for user/group
-    Check Owner of Directory    /etc/tedge    tedge:root
+    Check Owner of Directory    /etc/tedge    tedge:tedge
     Check Owner of Directory    /etc/tedge/mosquitto-conf    mosquitto:mosquitto
     Check Owner of Directory    /etc/tedge/operations    tedge:tedge
     Check Owner of Directory    /etc/tedge/plugins    tedge:tedge
@@ -46,7 +46,7 @@ Change user/group and check the change
     [Documentation]    Running tedge init --user <user> --group <group>  is setting custom user/group
     ...    this test step is confirming the custom values for user/group
     Execute Command    sudo tedge init --user petertest --group petertest
-    Check Owner of Directory    /etc/tedge    petertest:root
+    Check Owner of Directory    /etc/tedge    petertest:petertest
     Check Owner of Directory    /etc/tedge/mosquitto-conf    mosquitto:mosquitto
     Check Owner of Directory    /etc/tedge/operations    petertest:petertest
     Check Owner of Directory    /etc/tedge/plugins    petertest:petertest
@@ -58,7 +58,7 @@ Tedge init and check if default values are restored
     [Documentation]    Running tedge init after setting custom user/group should restore the default user/group
     ...    this test step is confirming the default values for user/group
     Execute Command    sudo tedge init
-    Check Owner of Directory    /etc/tedge    tedge:root
+    Check Owner of Directory    /etc/tedge    tedge:tedge
     Check Owner of Directory    /etc/tedge/mosquitto-conf    mosquitto:mosquitto
     Check Owner of Directory    /etc/tedge/operations    tedge:tedge
     Check Owner of Directory    /etc/tedge/plugins    tedge:tedge
