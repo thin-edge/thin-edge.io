@@ -34,8 +34,8 @@ impl TEdgeInitCmd {
         create_directory(
             config_dir.join("mosquitto-conf"),
             PermissionEntry::new(
-                Some("mosquitto".into()),
-                Some("mosquitto".into()),
+                Some(self.user.clone()),
+                Some(self.group.clone()),
                 Some(0o775),
             ),
         )?;
@@ -57,11 +57,7 @@ impl TEdgeInitCmd {
         )?;
         create_directory(
             config_dir.join("device-certs"),
-            PermissionEntry::new(
-                Some("mosquitto".into()),
-                Some("mosquitto".into()),
-                Some(0o775),
-            ),
+            PermissionEntry::new(Some("root".into()), Some("root".into()), Some(0o775)),
         )?;
 
         let config = self.context.config_repository.load()?;
