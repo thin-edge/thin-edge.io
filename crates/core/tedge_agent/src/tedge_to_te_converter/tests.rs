@@ -19,7 +19,7 @@ async fn convert_incoming_main_device_measurement_topic() -> Result<(), DynError
     // Spawn incoming mqtt message converter
     let mut mqtt_box = spawn_tedge_to_te_converter().await?;
 
-    // Simulate SoftwareList MQTT message received.
+    // Simulate measurement MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("tedge/measurements"),
         r#"{"temperature": 2500 }"#,
@@ -40,7 +40,7 @@ async fn convert_incoming_child_device_measurement_topic() -> Result<(), DynErro
     // Spawn incoming mqtt message converter
     let mut mqtt_box = spawn_tedge_to_te_converter().await?;
 
-    // Simulate SoftwareList MQTT message received.
+    // Simulate child measurement MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("tedge/measurements/child1"),
         r#"{"temperature": 2500 }"#,
@@ -51,7 +51,7 @@ async fn convert_incoming_child_device_measurement_topic() -> Result<(), DynErro
     );
     mqtt_box.send(mqtt_message).await?;
 
-    // Assert SoftwareListRequest
+    // Assert measurement message
     mqtt_box.assert_received([expected_mqtt_message]).await;
     Ok(())
 }
@@ -61,7 +61,7 @@ async fn convert_incoming_main_device_alarm_topic() -> Result<(), DynError> {
     // Spawn incoming mqtt message converter
     let mut mqtt_box = spawn_tedge_to_te_converter().await?;
 
-    // Simulate SoftwareList MQTT message received.
+    // Simulate alarm MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("tedge/alarms/critical/MyCustomAlarm"),
         r#"{
@@ -85,8 +85,9 @@ async fn convert_incoming_main_device_alarm_topic() -> Result<(), DynError> {
 }
 
 fn same_json_over_mqtt_msg(left: &MqttMessage, right: &MqttMessage) -> bool {
-    let left_msg: serde_json::Value = serde_json::from_slice(left.payload.as_bytes()).unwrap();
-    let right_msg: serde_json::Value = serde_json::from_slice(right.payload.as_bytes()).unwrap();
+    let left_msg: Option<serde_json::Value> = serde_json::from_slice(left.payload.as_bytes()).ok();
+    let right_msg: Option<serde_json::Value> =
+        serde_json::from_slice(right.payload.as_bytes()).ok();
 
     (left.topic == right.topic) && (left_msg == right_msg)
 }
@@ -96,7 +97,7 @@ async fn convert_incoming_custom_main_device_alarm_topic() -> Result<(), DynErro
     // Spawn incoming mqtt message converter
     let mut mqtt_box = spawn_tedge_to_te_converter().await?;
 
-    // Simulate SoftwareList MQTT message received.
+    // Simulate custom alarm MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("tedge/alarms/critical/MyCustomAlarm"),
         r#"{
@@ -112,7 +113,101 @@ async fn convert_incoming_custom_main_device_alarm_topic() -> Result<(), DynErro
 
     mqtt_box.send(mqtt_message).await?;
 
-    // Assert SoftwareListRequest
+    // Assert alarm message
+    mqtt_box
+        .assert_received_matching(same_json_over_mqtt_msg, [expected_mqtt_message])
+        .await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn convert_incoming_clear_alarm_message() -> Result<(), DynError> {
+    // Spawn incoming mqtt message converter
+    let mut mqtt_box = spawn_tedge_to_te_converter().await?;
+
+    // Simulate clear alarm MQTT message received.
+    let mqtt_message = MqttMessage::new(
+        &Topic::new_unchecked("tedge/alarms/critical/MyCustomAlarm"),
+        "",
+    );
+
+    let expected_mqtt_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///a/MyCustomAlarm"),
+        "",
+    );
+
+    mqtt_box.send(mqtt_message).await?;
+
+    // Assert mqtt message
+    mqtt_box
+        .assert_received_matching(same_json_over_mqtt_msg, [expected_mqtt_message])
+        .await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn convert_incoming_empty_alarm_message() -> Result<(), DynError> {
+    // Spawn incoming mqtt message converter
+    let mut mqtt_box = spawn_tedge_to_te_converter().await?;
+
+    // Simulate empty alarm MQTT message received.
+    let mqtt_message = MqttMessage::new(
+        &Topic::new_unchecked("tedge/alarms/critical/MyCustomAlarm"),
+        r#"{}"#,
+    );
+
+    let expected_mqtt_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///a/MyCustomAlarm"),
+        r#"{"severity":"critical"}"#,
+    );
+
+    mqtt_box.send(mqtt_message).await?;
+
+    // Assert empty alarm mqtt message
+    mqtt_box
+        .assert_received_matching(same_json_over_mqtt_msg, [expected_mqtt_message])
+        .await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn convert_incoming_empty_alarm_type() -> Result<(), DynError> {
+    // Spawn incoming mqtt message converter
+    let mut mqtt_box = spawn_tedge_to_te_converter().await?;
+
+    // Simulate empty alarm type MQTT message received.
+    let mqtt_message = MqttMessage::new(&Topic::new_unchecked("tedge/alarms/critical/"), r#"{}"#);
+
+    let expected_mqtt_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///a/"),
+        r#"{"severity":"critical"}"#,
+    );
+
+    mqtt_box.send(mqtt_message).await?;
+
+    // Assert empty alarm type message
+    mqtt_box
+        .assert_received_matching(same_json_over_mqtt_msg, [expected_mqtt_message])
+        .await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn convert_incoming_empty_severity() -> Result<(), DynError> {
+    // Spawn incoming mqtt message converter
+    let mut mqtt_box = spawn_tedge_to_te_converter().await?;
+
+    // Simulate empty severity MQTT message received.
+    let mqtt_message = MqttMessage::new(&Topic::new_unchecked("tedge/alarms//test_type"), r#"{}"#);
+
+    let expected_mqtt_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///a/test_type"),
+        r#"{"severity":""}"#,
+    );
+
+    mqtt_box.send(mqtt_message).await?;
+
+    // Assert empty severity mqtt message
     mqtt_box
         .assert_received_matching(same_json_over_mqtt_msg, [expected_mqtt_message])
         .await;
@@ -124,7 +219,7 @@ async fn convert_incoming_child_device_alarm_topic() -> Result<(), DynError> {
     // Spawn incoming mqtt message converter
     let mut mqtt_box = spawn_tedge_to_te_converter().await?;
 
-    // Simulate SoftwareList MQTT message received.
+    // Simulate child device alarm MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("tedge/alarms/critical/MyCustomAlarm/child"),
         r#"{
@@ -140,7 +235,7 @@ async fn convert_incoming_child_device_alarm_topic() -> Result<(), DynError> {
 
     mqtt_box.send(mqtt_message).await?;
 
-    // Assert SoftwareListRequest
+    // Assert child device alarm message
     mqtt_box
         .assert_received_matching(same_json_over_mqtt_msg, [expected_mqtt_message])
         .await;
@@ -152,7 +247,7 @@ async fn convert_incoming_main_device_event_topic() -> Result<(), DynError> {
     // Spawn incoming mqtt message converter
     let mut mqtt_box = spawn_tedge_to_te_converter().await?;
 
-    // Simulate SoftwareList MQTT message received.
+    // Simulate main device event MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("tedge/events/MyEvent"),
         r#"{"text":"Some test event","time":"2021-04-23T19:00:00+05:00"}"#,
@@ -165,7 +260,7 @@ async fn convert_incoming_main_device_event_topic() -> Result<(), DynError> {
 
     mqtt_box.send(mqtt_message).await?;
 
-    // Assert SoftwareListRequest
+    // Assert event message
     mqtt_box.assert_received([expected_mqtt_message]).await;
     Ok(())
 }
@@ -175,7 +270,7 @@ async fn convert_custom_incoming_main_device_event_topic() -> Result<(), DynErro
     // Spawn incoming mqtt message converter
     let mut mqtt_box = spawn_tedge_to_te_converter().await?;
 
-    // Simulate SoftwareList MQTT message received.
+    // Simulate main device custom MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("tedge/events/MyEvent"),
         r#"{"text":"Some test event","time":"2021-04-23T19:00:00+05:00","someOtherCustomFragment":{"nested":{"value":"extra info"}}}"#,
@@ -188,7 +283,7 @@ async fn convert_custom_incoming_main_device_event_topic() -> Result<(), DynErro
 
     mqtt_box.send(mqtt_message).await?;
 
-    // Assert SoftwareListRequest
+    // Assert event mqtt message
     mqtt_box.assert_received([expected_mqtt_message]).await;
     Ok(())
 }
@@ -198,7 +293,7 @@ async fn convert_incoming_child_device_event_topic() -> Result<(), DynError> {
     // Spawn incoming mqtt message converter
     let mut mqtt_box = spawn_tedge_to_te_converter().await?;
 
-    // Simulate SoftwareList MQTT message received.
+    // Simulate child event MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("tedge/events/MyEvent/child"),
         r#"{"text":"Some test event","time":"2021-04-23T19:00:00+05:00"}"#,
@@ -211,7 +306,7 @@ async fn convert_incoming_child_device_event_topic() -> Result<(), DynError> {
 
     mqtt_box.send(mqtt_message).await?;
 
-    // Assert SoftwareListRequest
+    // Assert event mqtt message
     mqtt_box.assert_received([expected_mqtt_message]).await;
     Ok(())
 }
@@ -223,7 +318,7 @@ async fn convert_incoming_main_device_service_health_status() -> Result<(), DynE
     // Spawn incoming mqtt message converter
     let mut mqtt_box = spawn_tedge_to_te_converter().await?;
 
-    // Simulate SoftwareList MQTT message received.
+    // Simulate health status of main device service MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("tedge/health/myservice"),
         r#"{""pid":1234,"status":"up","time":1674739912}"#,
@@ -238,7 +333,7 @@ async fn convert_incoming_main_device_service_health_status() -> Result<(), DynE
 
     mqtt_box.send(mqtt_message).await?;
 
-    // Assert SoftwareListRequest
+    // Assert health status message
     mqtt_box.assert_received([expected_mqtt_message]).await;
     Ok(())
 }
@@ -248,7 +343,7 @@ async fn convert_incoming_child_device_service_health_status() -> Result<(), Dyn
     // Spawn incoming mqtt message converter
     let mut mqtt_box = spawn_tedge_to_te_converter().await?;
 
-    // Simulate SoftwareList MQTT message received.
+    // Simulate child device service health status MQTT message received.
     let mqtt_message = MqttMessage::new(
         &Topic::new_unchecked("tedge/health/child/myservice"),
         r#"{""pid":1234,"status":"up","time":1674739912}"#,
@@ -263,7 +358,7 @@ async fn convert_incoming_child_device_service_health_status() -> Result<(), Dyn
 
     mqtt_box.send(mqtt_message).await?;
 
-    // Assert SoftwareListRequest
+    // Assert health status mqtt message
     mqtt_box.assert_received([expected_mqtt_message]).await;
     Ok(())
 }

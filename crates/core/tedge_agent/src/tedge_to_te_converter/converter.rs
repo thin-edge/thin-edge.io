@@ -1,4 +1,3 @@
-use log::error;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -15,7 +14,7 @@ impl Converter for TedgetoTeConverter {
 
     fn convert(&mut self, input: &Self::Input) -> Result<Vec<Self::Output>, Self::Error> {
         let messages_or_err = self.try_convert(input.clone());
-        Ok(self.wrap_errors(messages_or_err))
+        Ok(messages_or_err)
     }
 }
 
@@ -24,20 +23,17 @@ impl TedgetoTeConverter {
         TedgetoTeConverter {}
     }
 
-    fn try_convert(
-        &mut self,
-        message: MqttMessage,
-    ) -> Result<Vec<tedge_mqtt_ext::Message>, serde_json::Error> {
+    fn try_convert(&mut self, message: MqttMessage) -> Vec<tedge_mqtt_ext::Message> {
         match message.topic.clone() {
             topic if topic.name.starts_with("tedge/measurements") => {
-                Ok(self.convert_measurement(message))
+                self.convert_measurement(message)
             }
-            topic if topic.name.starts_with("tedge/events") => Ok(self.convert_event(message)),
+            topic if topic.name.starts_with("tedge/events") => self.convert_event(message),
             topic if topic.name.starts_with("tedge/alarms") => self.convert_alarm(message),
             topic if topic.name.starts_with("tedge/health") => {
-                Ok(self.convert_health_status_message(message))
+                self.convert_health_status_message(message)
             }
-            _ => Ok(vec![]),
+            _ => vec![],
         }
     }
 
@@ -58,10 +54,7 @@ impl TedgetoTeConverter {
 
     // tedge/alarms/severity/alarm_type -> te/device/main///a/alarm_type, put severity in payload
     // tedge/alarms/severity/alarm_type/child ->  te/device/child///a/alarm_type, put severity in payload
-    fn convert_alarm(
-        &mut self,
-        mut message: MqttMessage,
-    ) -> Result<Vec<MqttMessage>, serde_json::Error> {
+    fn convert_alarm(&mut self, mut message: MqttMessage) -> Vec<MqttMessage> {
         let (te_topic, severity) = match message.topic.name.split('/').collect::<Vec<_>>()[..] {
             ["tedge", "alarms", severity, alarm_type] => (
                 Topic::new_unchecked(format!("te/device/main///a/{alarm_type}").as_str()),
@@ -71,15 +64,25 @@ impl TedgetoTeConverter {
                 Topic::new_unchecked(format!("te/device/{cid}///a/{alarm_type}").as_str()),
                 severity,
             ),
-            _ => return Ok(vec![]),
+            _ => return vec![],
         };
 
-        let mut alarm: HashMap<String, Value> = serde_json::from_slice(message.payload.as_bytes())?;
-        alarm.insert("severity".to_string(), severity.into());
+        // if alarm payload is empty, then it's a clear alarm message. So, forward empty payload
+        // if the alarm payload is not empty then update the severity.
+        if !message.payload().is_empty() {
+            let res: Result<HashMap<String, Value>, serde_json::Error> =
+                serde_json::from_slice(message.payload.as_bytes());
+            if let Ok(mut alarm) = res {
+                alarm.insert("severity".to_string(), severity.into());
+                // serialize the payload after updating the severity
+                if let Ok(payload) = serde_json::to_string(&alarm) {
+                    message.payload = payload.into()
+                }
+            }
+        }
         message.topic = te_topic;
-        message.payload = serde_json::to_string(&alarm)?.into();
         message.retain = true;
-        Ok(vec![message])
+        vec![message]
     }
 
     // tedge/events/event_type -> te/device/main///e/event_type
@@ -115,16 +118,19 @@ impl TedgetoTeConverter {
         message.retain = true;
         vec![message]
     }
+}
+#[cfg(test)]
+mod tests {
+    use crate::tedge_to_te_converter::converter::TedgetoTeConverter;
+    use tedge_mqtt_ext::MqttMessage;
+    use tedge_mqtt_ext::Topic;
 
-    fn wrap_errors(
-        &self,
-        messages_or_err: Result<Vec<MqttMessage>, serde_json::Error>,
-    ) -> Vec<MqttMessage> {
-        messages_or_err.unwrap_or_else(|error| vec![self.new_error_message(error)])
-    }
+    #[test]
 
-    fn new_error_message(&self, error: serde_json::Error) -> MqttMessage {
-        error!("Mapping error: {}", error);
-        MqttMessage::new(&Topic::new_unchecked("tedge/errors"), error.to_string())
+    fn convert_incoming_wrong_topic() {
+        let mqtt_message = MqttMessage::new(&Topic::new_unchecked("tedge///MyCustomAlarm"), "");
+        let mut converter = TedgetoTeConverter::new();
+        let res = converter.try_convert(mqtt_message);
+        assert!(res.is_empty())
     }
 }
