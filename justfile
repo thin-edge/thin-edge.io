@@ -72,14 +72,6 @@ setup-integration-test *ARGS:
 integration-test *ARGS: release
     cd tests/RobotFramework && .venv/bin/python3 -m invoke build --local tests {{ARGS}}
 
-# Generate docs and start web server
-docs:
-    cd docs && mdbook serve
-
-# Install doc dependencies
-docs-install:
-    cargo install mdbook mdbook-linkcheck mdbook-mermaid mdbook-admonish mdbook-cmdrun
-
 # Generate linux package scripts from templates
 generate-linux-package-scripts:
     ./configuration/package_scripts/generate.py
