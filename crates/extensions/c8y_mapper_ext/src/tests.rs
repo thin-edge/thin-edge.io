@@ -15,7 +15,6 @@ use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
-use tedge_actors::Message;
 use tedge_actors::MessageReceiver;
 use tedge_actors::NoMessage;
 use tedge_actors::Sender;
@@ -1180,8 +1179,9 @@ async fn inventory_registers_unknown_entity_once() {
         "",
     );
 
-    mqtt.send(measurement_message.clone()).await.unwrap();
-    mqtt.send(measurement_message).await.unwrap();
+    for _ in 0..5 {
+        mqtt.send(measurement_message.clone()).await.unwrap();
+    }
 
     mqtt.close_sender();
 
@@ -1190,35 +1190,13 @@ async fn inventory_registers_unknown_entity_once() {
         messages.push(msg);
     }
 
-    // Assert device register message was published once
-    let mut device_register_messages = messages
+    // we should not emit a registration message for the main device, only the
+    // service
+    let mut dut_register_messages: Vec<_> = messages
         .iter()
-        .filter(|message| message.topic == "te/device/main".try_into().unwrap());
-    let device_register_message = device_register_messages
-        .next()
-        .expect("Device register message must be present");
-
-    let device_register_payload =
-        serde_json::from_slice::<serde_json::Value>(device_register_message.payload_bytes())
-            .expect("Device register message payload must be JSON");
-    assert_json_include!(
-        actual: device_register_payload,
-        expected: json!({ "@type": "device", "type": "Gateway" })
-    );
-
-    assert_eq!(
-        device_register_messages.next(),
-        None,
-        "There can't be more than 1 device register message"
-    );
-
-    // Assert service register message was published once
-    let mut service_register_messages = messages
-        .iter()
-        .filter(|message| message.topic == "te/device/main/service/my_service".try_into().unwrap());
-    let service_register_message = service_register_messages
-        .next()
-        .expect("Service register message must be present");
+        .filter(|message| message.topic.name.starts_with("te/device/main"))
+        .collect();
+    let service_register_message = dut_register_messages.remove(0);
 
     let service_register_payload =
         serde_json::from_slice::<serde_json::Value>(service_register_message.payload_bytes())
@@ -1228,10 +1206,11 @@ async fn inventory_registers_unknown_entity_once() {
         expected: json!({"@type": "service", "type": "systemd"})
     );
 
-    assert_eq!(
-        service_register_messages.next(),
-        None,
-        "There can't be more than 1 service register message"
+    assert!(
+        !dut_register_messages
+            .into_iter()
+            .any(|message| message == service_register_message),
+        "duplicate registration message"
     );
 }
 

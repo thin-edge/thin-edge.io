@@ -6,6 +6,8 @@ pub mod topic;
 pub mod alarm;
 pub mod builder;
 pub mod data;
+pub mod entity;
+pub mod entity_store;
 pub mod event;
 pub mod group;
 pub mod health;
@@ -15,6 +17,7 @@ pub mod serialize;
 pub mod utils;
 
 pub use download::*;
+pub use entity_store::EntityStore;
 pub use error::*;
 pub use messages::control_filter_topic;
 pub use messages::software_filter_topic;
