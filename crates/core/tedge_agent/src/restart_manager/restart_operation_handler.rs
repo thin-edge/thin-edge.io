@@ -3,38 +3,24 @@ pub mod restart_operation {
     use crate::restart_manager::error::RestartManagerError;
     use camino::Utf8Path;
     use std::fs::File;
-    use std::fs::OpenOptions;
     use std::io::Read;
-    use std::io::Write;
     use time::OffsetDateTime;
 
     const TEDGE_AGENT_RESTART: &str = "tedge_agent_restart";
     const SLASH_PROC_UPTIME: &str = "/proc/uptime";
 
-    /// creates an empty file in /tmp
-    /// the file name defined by `TEDGE_AGENT_RESTART`
+    /// Creates a witness file that contains the time just before a reboot.
     ///
-    /// # Example
-    /// ```
-    /// RestartOperationHelper::create_tmp_restart_file()?;
-    /// ```
-    pub fn create_tmp_restart_file(tmp_dir: &Utf8Path) -> Result<(), RestartManagerError> {
+    /// This file will be compared on restart with /proc/uptime,
+    /// to determine if a reboot actually happened.
+    ///
+    /// See [has_rebooted]
+    pub async fn create_tmp_restart_file(tmp_dir: &Utf8Path) -> Result<(), RestartManagerError> {
         let path = &tmp_dir.join(TEDGE_AGENT_RESTART);
-        let path = Utf8Path::new(path);
+        let date_utc = OffsetDateTime::now_utc().unix_timestamp().to_string();
 
-        let mut file = match OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .open(path)
-        {
-            Ok(file) => file,
-            Err(err) => {
-                return Err(RestartManagerError::FromIo(err));
-            }
-        };
-        let date_utc = OffsetDateTime::now_utc().unix_timestamp();
-        file.write_all(date_utc.to_string().as_bytes())?;
+        tedge_utils::fs::atomically_write_file_async(path, date_utc.as_bytes()).await?;
+
         Ok(())
     }
 

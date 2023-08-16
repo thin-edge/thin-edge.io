@@ -1,3 +1,4 @@
+use nix::NixPath;
 use std::fs as std_fs;
 use std::io::Write;
 use std::path::Path;
@@ -8,9 +9,10 @@ use tokio::io::AsyncWriteExt;
 
 /// Write file to filesystem atomically using std::fs synchronously.
 pub fn atomically_write_file_sync(dest: impl AsRef<Path>, content: &[u8]) -> std::io::Result<()> {
-    let mut tempfile = PathBuf::from(dest.as_ref());
-    tempfile.set_extension("tmp");
+    let dest_dir = parent_dir(dest.as_ref());
+    let tempfile = PathBuf::from(dest.as_ref()).with_extension("tmp");
 
+    // Write the content on a temp file
     let mut file = std_fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -21,12 +23,19 @@ pub fn atomically_write_file_sync(dest: impl AsRef<Path>, content: &[u8]) -> std
         return Err(err);
     }
 
+    // Ensure the content reach the disk
     file.flush()?;
+    file.sync_all()?;
 
+    // Move the temp file to its destination
     if let Err(err) = std_fs::rename(&tempfile, dest) {
         let _ = std_fs::remove_file(tempfile);
         return Err(err);
     }
+
+    // Ensure the new name reach the disk
+    let dir = std::fs::File::open(dest_dir)?;
+    dir.sync_all()?;
 
     Ok(())
 }
@@ -36,9 +45,10 @@ pub async fn atomically_write_file_async(
     dest: impl AsRef<Path>,
     content: &[u8],
 ) -> std::io::Result<()> {
-    let mut tempfile = PathBuf::from(dest.as_ref());
-    tempfile.set_extension("tmp");
+    let dest_dir = parent_dir(dest.as_ref());
+    let tempfile = PathBuf::from(dest.as_ref()).with_extension("tmp");
 
+    // Write the content on a temp file
     let mut file = tokio_fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -50,14 +60,29 @@ pub async fn atomically_write_file_async(
         return Err(err);
     }
 
+    // Ensure the content reach the disk
     file.flush().await?;
+    file.sync_all().await?;
 
+    // Move the temp file to its destination
     if let Err(err) = tokio_fs::rename(&tempfile, dest).await {
         tokio_fs::remove_file(tempfile).await?;
         return Err(err);
     }
 
+    // Ensure the new name reach the disk
+    let dir = tokio_fs::File::open(dest_dir).await?;
+    dir.sync_all().await?;
+
     Ok(())
+}
+
+fn parent_dir(file: &Path) -> PathBuf {
+    match file.parent() {
+        None => Path::new("/").into(),
+        Some(path) if path.is_empty() => Path::new(".").into(),
+        Some(dir) => dir.into(),
+    }
 }
 
 #[cfg(test)]
