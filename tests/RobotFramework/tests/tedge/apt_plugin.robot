@@ -20,7 +20,6 @@ Suite Teardown      Get Logs
 tedge-apt-plugin list
     ${apt_list}    Execute Command    /etc/tedge/sm-plugins/apt list
     Should Contain    ${apt_list}    apt
-    # Should Contain    ${apt_list}    wget
     Should Contain    ${apt_list}    dpkg
 
 tedge-apt-plugin list --name
