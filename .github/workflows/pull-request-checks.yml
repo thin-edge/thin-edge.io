@@ -100,12 +100,6 @@ jobs:
           cargo install --git https://github.com/est31/cargo-udeps --locked
           cargo udeps --all-features --all-targets
 
-      - name: Run cargo-udeps
-        uses: aig787/cargo-udeps-action@v1
-        with:
-          version: 'v0.1.35'
-          args: '--all-features'
-
   cargo-sort:
     name: Run cargo sort
     runs-on: ubuntu-20.04
@@ -295,4 +289,4 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: cargo doc
 
-        run: cargo doc --no-deps --all-features --workspace --exclude tedge_config_macros
+        run: cargo doc --no-deps --all-features --workspace
