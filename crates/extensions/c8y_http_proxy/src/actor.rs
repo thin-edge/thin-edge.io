@@ -377,7 +377,7 @@ impl C8YHttpProxyActor {
                 .header("Content-Type", "text/plain")
                 .body(config_content.to_string()))
         };
-        debug!(target: self.name(), "Uploading config file to URL: {}", self.end_point
+        info!(target: self.name(), "Uploading config file to URL: {}", self.end_point
         .get_url_for_event_binary_upload(&event_response_id));
         let http_result = self.execute(device_id.clone(), build_request).await??;
 
@@ -415,7 +415,7 @@ impl C8YHttpProxyActor {
             download_info.auth = Some(Auth::new_bearer(token.as_str()));
         }
 
-        debug!(target: self.name(), "Downloading from: {:?}", download_info.url());
+        info!(target: self.name(), "Downloading from: {:?}", download_info.url());
         let downloader: Downloader =
             Downloader::with_permission(request.file_path, request.file_permissions);
         downloader.download(&download_info).await?;
