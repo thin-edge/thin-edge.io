@@ -53,6 +53,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
+use tedge_api::entity_store;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::topic::get_child_id_from_measurement_topic;
@@ -60,6 +61,7 @@ use tedge_api::topic::RequestTopic;
 use tedge_api::topic::ResponseTopic;
 use tedge_api::Auth;
 use tedge_api::DownloadInfo;
+use tedge_api::EntityStore;
 use tedge_api::Jsonify;
 use tedge_api::OperationStatus;
 use tedge_api::RestartOperationRequest;
@@ -186,6 +188,7 @@ pub struct CumulocityConverter {
     pub children: HashMap<String, Operations>,
     pub service_type: String,
     pub c8y_endpoint: C8yEndPoint,
+    pub entity_store: EntityStore,
 }
 
 impl CumulocityConverter {
@@ -194,7 +197,7 @@ impl CumulocityConverter {
         mqtt_publisher: LoggingSender<MqttMessage>,
         http_proxy: C8YHttpProxy,
     ) -> Result<Self, CumulocityConverterBuildError> {
-        let device_name = config.device_id.clone();
+        let device_id = config.device_id.clone();
         let device_type = config.device_type.clone();
         let service_type = config.service_type.clone();
         let c8y_host = config.c8y_host.clone();
@@ -210,17 +213,20 @@ impl CumulocityConverter {
         let log_dir = config.logs_path.join(TEDGE_AGENT_LOG_DIR);
         let operation_logs = OperationLogs::try_new(log_dir.into())?;
 
-        let c8y_endpoint = C8yEndPoint::new(&c8y_host, &device_name);
+        let c8y_endpoint = C8yEndPoint::new(&c8y_host, &device_id);
 
         let mapper_config = MapperConfig {
             out_topic: Topic::new_unchecked("c8y/measurement/measurements/create"),
             errors_topic: Topic::new_unchecked("tedge/errors"),
         };
 
+        let main_device = entity_store::EntityRegistrationMessage::main_device(device_id.clone());
+        let entity_store = EntityStore::with_main_device(main_device).unwrap();
+
         Ok(CumulocityConverter {
             size_threshold,
             mapper_config,
-            device_name,
+            device_name: device_id,
             device_type,
             alarm_converter,
             operations,
@@ -232,6 +238,7 @@ impl CumulocityConverter {
             mqtt_publisher,
             service_type,
             c8y_endpoint,
+            entity_store,
         })
     }
 
