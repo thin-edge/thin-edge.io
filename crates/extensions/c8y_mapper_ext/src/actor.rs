@@ -37,6 +37,7 @@ use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::FileError;
+use tracing::error;
 
 const MQTT_ROOT: &str = "te";
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
@@ -108,19 +109,25 @@ impl C8yMapperActor {
     }
 
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
-        // to which entity is the message related
         if let Some(entity_id) = entity_store::entity_mqtt_id(&message.topic) {
-            // if message is registration message:
             if is_entity_register_message(&message) {
-                // update entity store with registration message
-                // TODO: emit error message on Err
-                self.entity_store
+                if let Err(e) = self
+                    .entity_store
                     .update(message.clone().try_into().unwrap())
-                    .unwrap();
+                {
+                    error!("Could not update device registration: {e}");
+                }
             } else {
                 // if device is unregistered register using auto-registration
                 if self.entity_store.get(entity_id).is_none() {
-                    let register_messages = self.auto_register_entity(entity_id);
+                    let register_messages = match self.auto_register_entity(entity_id) {
+                        Ok(register_messages) => register_messages,
+                        Err(e) => {
+                            error!("Could not update device registration: {e}");
+                            vec![]
+                        }
+                    };
+
                     for msg in register_messages {
                         let _ = self.mqtt_publisher.send(msg).await;
                     }
@@ -146,12 +153,15 @@ impl C8yMapperActor {
     /// It returns MQTT register messages for the given entities to be published
     /// by the mapper, so other components can also be aware of a new device
     /// being registered.
-    fn auto_register_entity(&mut self, entity_id: &str) -> Vec<Message> {
+    fn auto_register_entity(
+        &mut self,
+        entity_id: &str,
+    ) -> Result<Vec<Message>, entity_store::Error> {
         let mut register_messages = vec![];
         let (device_id, service_id) = match entity_id.split('/').collect::<Vec<&str>>()[..] {
             ["device", device_id, "service", service_id, ..] => (device_id, Some(service_id)),
             ["device", device_id, "", ""] => (device_id, None),
-            _ => return register_messages,
+            _ => return Ok(register_messages),
         };
 
         // register device if not registered
@@ -165,8 +175,7 @@ impl C8yMapperActor {
             .with_retain();
             register_messages.push(device_register_message.clone());
             self.entity_store
-                .update(device_register_message.try_into().unwrap())
-                .unwrap();
+                .update(device_register_message.try_into().unwrap())?;
         }
 
         // register service itself
@@ -180,11 +189,10 @@ impl C8yMapperActor {
             .with_retain();
             register_messages.push(service_register_message.clone());
             self.entity_store
-                .update(service_register_message.try_into().unwrap())
-                .unwrap();
+                .update(service_register_message.try_into().unwrap())?;
         }
 
-        register_messages
+        Ok(register_messages)
     }
 
     /// Registers the entity under a given MQTT topic.
