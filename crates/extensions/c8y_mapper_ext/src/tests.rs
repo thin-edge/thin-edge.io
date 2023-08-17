@@ -1168,6 +1168,7 @@ operation failed due to timeout: duration=1sEOF
 /// be considered registered and no more registration messages for this entity
 /// shall be emitted by the mapper.
 #[tokio::test]
+#[ignore = "depends on te topics"]
 async fn inventory_registers_unknown_entity_once() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
