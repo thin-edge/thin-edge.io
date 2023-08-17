@@ -211,7 +211,7 @@ if ! zig --help &>/dev/null; then
 fi
 
 # Display zig version to help with debugging
-echo "zig version: $(zig version ||:)"
+echo "zig version: $(zig version 2>/dev/null || python3 -m ziglang version 2>/dev/null ||:)"
 
 if [ -z "$ARCH" ]; then
     # If no target has been given, choose the target triple based on the
