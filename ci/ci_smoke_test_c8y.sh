@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 # Smoke test for Cumulocity
 # - Rebuild bridge

@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 # Smoke test for Azure IoT
 # The bridge should be already configured (done by configure_bridge.sh)
