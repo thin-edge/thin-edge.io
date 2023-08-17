@@ -104,10 +104,10 @@ impl FromStr for EntityTopic {
     }
 }
 
-impl TryFrom<mqtt_channel::Topic> for EntityTopic {
+impl TryFrom<&mqtt_channel::Topic> for EntityTopic {
     type Error = EntityTopicError;
 
-    fn try_from(topic: mqtt_channel::Topic) -> Result<Self, Self::Error> {
+    fn try_from(topic: &mqtt_channel::Topic) -> Result<Self, Self::Error> {
         topic.name.parse()
     }
 }

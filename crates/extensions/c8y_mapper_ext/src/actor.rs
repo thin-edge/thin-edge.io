@@ -26,7 +26,9 @@ use tedge_actors::Sender;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::entity::EntityTopic;
 use tedge_api::entity_store;
+use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::EntityStore;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::Message;
@@ -109,24 +111,22 @@ impl C8yMapperActor {
     }
 
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
-        if let Some(entity_id) = entity_store::entity_mqtt_id(&message.topic) {
-            if is_entity_register_message(&message) {
-                if let Err(e) = self
-                    .entity_store
-                    .update(message.clone().try_into().unwrap())
-                {
+        if let Ok(entity_topic) = EntityTopic::try_from(&message.topic) {
+            if let Ok(register_message) = EntityRegistrationMessage::try_from(&message) {
+                if let Err(e) = self.entity_store.update(register_message) {
                     error!("Could not update device registration: {e}");
                 }
             } else {
                 // if device is unregistered register using auto-registration
-                if self.entity_store.get(entity_id).is_none() {
-                    let register_messages = match self.auto_register_entity(entity_id) {
-                        Ok(register_messages) => register_messages,
-                        Err(e) => {
-                            error!("Could not update device registration: {e}");
-                            vec![]
-                        }
-                    };
+                if self.entity_store.get(entity_topic.entity_id()).is_none() {
+                    let register_messages =
+                        match self.auto_register_entity(entity_topic.entity_id()) {
+                            Ok(register_messages) => register_messages,
+                            Err(e) => {
+                                error!("Could not update device registration: {e}");
+                                vec![]
+                            }
+                        };
 
                     for msg in register_messages {
                         let _ = self.mqtt_publisher.send(msg).await;
@@ -158,6 +158,7 @@ impl C8yMapperActor {
         entity_id: &str,
     ) -> Result<Vec<Message>, entity_store::Error> {
         let mut register_messages = vec![];
+
         let (device_id, service_id) = match entity_id.split('/').collect::<Vec<&str>>()[..] {
             ["device", device_id, "service", service_id, ..] => (device_id, Some(service_id)),
             ["device", device_id, "", ""] => (device_id, None),
@@ -175,7 +176,7 @@ impl C8yMapperActor {
             .with_retain();
             register_messages.push(device_register_message.clone());
             self.entity_store
-                .update(device_register_message.try_into().unwrap())?;
+                .update(EntityRegistrationMessage::try_from(&device_register_message).unwrap())?;
         }
 
         // register service itself
@@ -189,7 +190,7 @@ impl C8yMapperActor {
             .with_retain();
             register_messages.push(service_register_message.clone());
             self.entity_store
-                .update(service_register_message.try_into().unwrap())?;
+                .update(EntityRegistrationMessage::try_from(&service_register_message).unwrap())?;
         }
 
         Ok(register_messages)
@@ -252,15 +253,6 @@ impl C8yMapperActor {
 
         Ok(())
     }
-}
-
-/// Check if a message is an entity registration message.
-fn is_entity_register_message(message: &Message) -> bool {
-    let Ok(payload) = serde_json::from_slice::<serde_json::Value>(message.payload_bytes()) else {
-        return false;
-    };
-
-    message.retain && payload.get("@type").is_some() && payload.get("type").is_some()
 }
 
 pub struct C8yMapperBuilder {

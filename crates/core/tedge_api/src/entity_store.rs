@@ -53,7 +53,7 @@ const MQTT_ROOT: &str = "te";
 ///     &Topic::new("te/device/main//").unwrap(),
 ///     r#"{"@type": "device"}"#.to_string(),
 /// );
-/// let registration_message = EntityRegistrationMessage::try_from(mqtt_message).unwrap();
+/// let registration_message = EntityRegistrationMessage::try_from(&mqtt_message).unwrap();
 ///
 /// let mut entity_store = EntityStore::with_main_device(registration_message);
 /// ```
@@ -258,7 +258,7 @@ impl EntityRegistrationMessage {
     /// MQTT message is an entity registration message if
     /// - published on a prefix of `te/+/+/+/+`
     /// - its payload contains a registration message.
-    pub fn new(message: Message) -> Option<Self> {
+    pub fn new(message: &Message) -> Option<Self> {
         let payload = parse_entity_register_payload(message.payload_bytes())?;
 
         let r#type = payload
@@ -313,10 +313,10 @@ impl EntityRegistrationMessage {
     }
 }
 
-impl TryFrom<Message> for EntityRegistrationMessage {
+impl TryFrom<&Message> for EntityRegistrationMessage {
     type Error = ();
 
-    fn try_from(value: Message) -> Result<Self, Self::Error> {
+    fn try_from(value: &Message) -> Result<Self, Self::Error> {
         EntityRegistrationMessage::new(value).ok_or(())
     }
 }
@@ -409,7 +409,7 @@ mod tests {
         // child of the main device.
         let updated_entities = store
             .update(
-                EntityRegistrationMessage::new(Message::new(
+                EntityRegistrationMessage::new(&Message::new(
                     &Topic::new("te/device/child1//").unwrap(),
                     json!({"@type": "child-device"}).to_string(),
                 ))
@@ -422,7 +422,7 @@ mod tests {
 
         let updated_entities = store
             .update(
-                EntityRegistrationMessage::new(Message::new(
+                EntityRegistrationMessage::new(&Message::new(
                     &Topic::new("te/device/child2//").unwrap(),
                     json!({"@type": "child-device", "@parent": "device/main//"}).to_string(),
                 ))
