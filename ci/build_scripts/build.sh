@@ -199,9 +199,7 @@ if [ "$SHOW_VERSION" == "1" ]; then
 fi
 
 # Use zig to build as it is provides better cross compiling support
-if ! cargo zigbuild --help &>/dev/null; then
-    cargo install cargo-zigbuild --version ">=0.17.1"
-fi
+cargo install cargo-zigbuild --version ">=0.17.1"
 
 # Allow users to install zig by other package managers
 if ! zig --help &>/dev/null; then
