@@ -24,7 +24,7 @@ pub struct AgentOpt {
     /// Turn-on the debug log level.
     ///
     /// If off only reports ERROR, WARN, and INFO
-    /// If on also reports DEBUG and TRACE
+    /// If on also reports DEBUG
     #[clap(long)]
     pub debug: bool,
 
@@ -46,9 +46,9 @@ async fn main() -> Result<(), anyhow::Error> {
         tedge_config::TEdgeConfigLocation::from_custom_root(agent_opt.config_dir.clone());
 
     // If `debug` is `false` then only `error!`, `warn!` and `info!` are reported.
-    // If `debug` is `true` then only `debug!` and `trace!` are reported.
+    // If `debug` is `true` then also `debug!` is reported.
     let log_level = if agent_opt.debug {
-        tracing::Level::TRACE
+        tracing::Level::DEBUG
     } else {
         get_log_level("tedge-agent", &tedge_config_location.tedge_config_root_path)?
     };

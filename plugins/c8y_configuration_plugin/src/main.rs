@@ -42,7 +42,7 @@ pub struct ConfigPluginOpt {
     /// Turn-on the debug log level.
     ///
     /// If off only reports ERROR, WARN, and INFO
-    /// If on also reports DEBUG and TRACE
+    /// If on also reports DEBUG
     #[clap(long)]
     pub debug: bool,
 
@@ -62,7 +62,7 @@ async fn main() -> Result<(), anyhow::Error> {
     // Load tedge config from the provided location
     let tedge_config_location = tedge_config::TEdgeConfigLocation::from_custom_root(&config_dir);
     let log_level = if config_plugin_opt.debug {
-        tracing::Level::TRACE
+        tracing::Level::DEBUG
     } else {
         get_log_level(PLUGIN_NAME, &tedge_config_location.tedge_config_root_path)?
     };

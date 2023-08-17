@@ -103,7 +103,7 @@ OPTIONS:
         --debug
             Turn-on the debug log level.
 
-            If off only reports ERROR, WARN, and INFO If on also reports DEBUG and TRACE
+            If off only reports ERROR, WARN, and INFO If on also reports DEBUG
 
     -h, --help
             Print help information

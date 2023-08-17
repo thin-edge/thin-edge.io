@@ -40,7 +40,7 @@ pub struct MapperOpt {
     /// Turn-on the debug log level.
     ///
     /// If off only reports ERROR, WARN, and INFO
-    /// If on also reports DEBUG and TRACE
+    /// If on also reports DEBUG
     #[clap(long, global = true)]
     pub debug: bool,
 
@@ -91,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
     let config = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone()).load()?;
 
     let log_level = if mapper_opt.debug {
-        tracing::Level::TRACE
+        tracing::Level::DEBUG
     } else {
         get_log_level(
             "tedge-mapper",

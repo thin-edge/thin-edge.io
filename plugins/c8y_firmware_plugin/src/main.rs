@@ -38,7 +38,7 @@ pub struct FirmwarePluginOpt {
     /// Turn-on the debug log level.
     ///
     /// If off only reports ERROR, WARN, and INFO
-    /// If on also reports DEBUG and TRACE
+    /// If on also reports DEBUG
     #[clap(long)]
     pub debug: bool,
 
@@ -58,7 +58,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(&firmware_plugin_opt.config_dir);
     let log_level = if firmware_plugin_opt.debug {
-        tracing::Level::TRACE
+        tracing::Level::DEBUG
     } else {
         get_log_level(PLUGIN_NAME, &tedge_config_location.tedge_config_root_path)?
     };

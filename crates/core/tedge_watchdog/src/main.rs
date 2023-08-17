@@ -27,7 +27,7 @@ pub struct WatchdogOpt {
     /// Turn-on the debug log level.
     ///
     /// If off only reports ERROR, WARN, and INFO
-    /// If on also reports DEBUG and TRACE
+    /// If on also reports DEBUG
     #[clap(long)]
     pub debug: bool,
 
@@ -45,7 +45,7 @@ async fn main() -> Result<(), anyhow::Error> {
         tedge_config::TEdgeConfigLocation::from_custom_root(watchdog_opt.config_dir.clone());
 
     let log_level = if watchdog_opt.debug {
-        tracing::Level::TRACE
+        tracing::Level::DEBUG
     } else {
         get_log_level(
             "tedge-watchdog",
