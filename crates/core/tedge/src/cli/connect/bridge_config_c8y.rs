@@ -28,9 +28,6 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
         } = params;
 
         let mut topics: Vec<String> = vec![
-            // Registration
-            r#"s/dcr in 2 c8y/ """#.into(),
-            r#"s/ucr out 2 c8y/ """#.into(),
             // Templates
             r#"s/dt in 2 c8y/ """#.into(),
             r#"s/ut/# out 2 c8y/ """#.into(),
@@ -133,9 +130,6 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
         use_mapper: true,
         use_agent: true,
         topics: vec![
-            // Registration
-            r#"s/dcr in 2 c8y/ """#.into(),
-            r#"s/ucr out 2 c8y/ """#.into(),
             // Templates
             r#"s/dt in 2 c8y/ """#.into(),
             r#"s/ut/# out 2 c8y/ """#.into(),

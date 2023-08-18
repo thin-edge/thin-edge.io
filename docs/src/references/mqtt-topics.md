@@ -31,10 +31,6 @@ The topics follow the below format
 
    All Cumulocity topics have been prefixed by `c8y/`.
 
-* Registration topics
-     c8y/s/dcr
-     c8y/s/ucr
-
 * Creating template topics
      c8y/s/dt
      c8y/s/ut/#
