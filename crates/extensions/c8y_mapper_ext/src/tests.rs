@@ -903,7 +903,7 @@ async fn custom_operation_without_timeout_successful() {
     //create custom operation file
     create_custom_op_file(&cfg_dir, cmd_file.as_path(), None, None);
     //create command
-    let content = r#"#!/usr/bin/bash    
+    let content = r#"#!/usr/bin/env bash
     for i in {1..2}
     do
         sleep 1
@@ -965,7 +965,7 @@ async fn custom_operation_with_timeout_successful() {
     //create custom operation file
     create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(4), Some(2));
     //create command
-    let content = r#"#!/usr/bin/bash
+    let content = r#"#!/usr/bin/env bash
     for i in {1..2}
     do
         sleep 1
@@ -1025,7 +1025,7 @@ async fn custom_operation_timeout_sigterm() {
     //create custom operation file
     create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(1), Some(2));
     //create command
-    let content = r#"#!/usr/bin/bash
+    let content = r#"#!/usr/bin/env bash
     handle_term() {
         for i in {1..1}
         do
@@ -1098,7 +1098,7 @@ async fn custom_operation_timeout_sigkill() {
     //create custom operation file
     create_custom_op_file(&cfg_dir, cmd_file.as_path(), Some(1), Some(2));
     //create command
-    let content = r#"#!/usr/bin/bash
+    let content = r#"#!/usr/bin/env bash
     handle_term() {
         for i in {1..50}
         do
