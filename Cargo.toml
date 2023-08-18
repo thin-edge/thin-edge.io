@@ -11,6 +11,7 @@ members = [
     "plugins/c8y_remote_access_plugin",
     "plugins/tedge_apt_plugin",
     "plugins/tedge_dummy_plugin",
+    "plugins/tedge_log_plugin",
 ]
 resolver = "2"
 

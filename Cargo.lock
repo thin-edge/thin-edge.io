@@ -666,10 +666,9 @@ dependencies = [
  "async-trait",
  "c8y_api",
  "c8y_http_proxy",
- "easy_reader",
  "filetime",
- "glob",
  "log",
+ "log_manager",
  "serde",
  "tedge_actors",
  "tedge_api",
@@ -681,7 +680,6 @@ dependencies = [
  "thiserror",
  "time",
  "tokio",
- "toml 0.5.11",
 ]
 
 [[package]]
@@ -1906,6 +1904,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "518ef76f2f87365916b142844c16d8fefd85039bc5699050210a7778ee1cd1de"
 dependencies = [
  "value-bag",
+]
+
+[[package]]
+name = "log_manager"
+version = "0.12.0"
+dependencies = [
+ "easy_reader",
+ "filetime",
+ "glob",
+ "log",
+ "serde",
+ "tedge_test_utils",
+ "thiserror",
+ "time",
+ "toml 0.5.11",
 ]
 
 [[package]]
@@ -3535,6 +3548,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge-log-plugin"
+version = "0.12.0"
+dependencies = [
+ "anyhow",
+ "clap 3.2.25",
+ "tedge_actors",
+ "tedge_config",
+ "tedge_file_system_ext",
+ "tedge_health_ext",
+ "tedge_http_ext",
+ "tedge_log_manager",
+ "tedge_mqtt_ext",
+ "tedge_signal_ext",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "tedge-mapper"
 version = "0.12.0"
 dependencies = [
@@ -3738,6 +3769,31 @@ dependencies = [
  "serde_json",
  "tedge_actors",
  "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "tedge_log_manager"
+version = "0.12.0"
+dependencies = [
+ "anyhow",
+ "assert-json-diff",
+ "async-trait",
+ "filetime",
+ "http",
+ "log",
+ "log_manager",
+ "serde",
+ "serde_json",
+ "tedge_actors",
+ "tedge_config",
+ "tedge_file_system_ext",
+ "tedge_http_ext",
+ "tedge_mqtt_ext",
+ "tedge_test_utils",
+ "tedge_utils",
+ "thiserror",
+ "time",
  "tokio",
 ]
 

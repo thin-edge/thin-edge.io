@@ -1,17 +1,18 @@
 mod actor;
 mod config;
+mod error;
+mod json;
 
-use actor::*;
-use c8y_api::smartrest::topic::C8yTopic;
-use c8y_api::utils::bridge::C8Y_BRIDGE_HEALTH_TOPIC;
-use c8y_http_proxy::handle::C8YHttpProxy;
-use c8y_http_proxy::messages::C8YRestRequest;
-use c8y_http_proxy::messages::C8YRestResult;
+#[cfg(test)]
+mod tests;
+
+pub use actor::*;
 pub use config::*;
 use log_manager::LogPluginConfig;
 use std::path::PathBuf;
 use tedge_actors::adapt;
 use tedge_actors::Builder;
+use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingSender;
@@ -24,33 +25,36 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_file_system_ext::FsWatchEvent;
+use tedge_http_ext::HttpRequest;
+use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::*;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::file::FileError;
+
 /// This is an actor builder.
 pub struct LogManagerBuilder {
     config: LogManagerConfig,
     plugin_config: LogPluginConfig,
     box_builder: SimpleMessageBoxBuilder<LogInput, NoMessage>,
     mqtt_publisher: DynSender<MqttMessage>,
-    http_proxy: C8YHttpProxy,
+    http_proxy: ClientMessageBox<HttpRequest, HttpResult>,
 }
 
 impl LogManagerBuilder {
     pub fn try_new(
         config: LogManagerConfig,
         mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
-        http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
+        http: &mut impl ServiceProvider<HttpRequest, HttpResult, NoConfig>,
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
     ) -> Result<Self, FileError> {
         Self::init(&config)?;
         let plugin_config = LogPluginConfig::new(&config.plugin_config_path);
 
-        let box_builder = SimpleMessageBoxBuilder::new("C8Y Log Manager", 16);
-        let http_proxy = C8YHttpProxy::new("LogManager => C8Y", http);
+        let box_builder = SimpleMessageBoxBuilder::new("Log Manager", 16);
+        let http_proxy = ClientMessageBox::new("LogManager => FileTransfer", http);
         let mqtt_publisher = mqtt.connect_consumer(
-            LogManagerBuilder::subscriptions(),
+            Self::subscriptions(&config),
             adapt(&box_builder.get_sender()),
         );
         fs_notify.register_peer(
@@ -68,40 +72,29 @@ impl LogManagerBuilder {
     }
 
     pub fn init(config: &LogManagerConfig) -> Result<(), FileError> {
-        // creating c8y_LogfileRequest operation file
-        create_file_with_defaults(config.ops_dir.join("c8y_LogfileRequest"), None)?;
-
         // creating plugin config parent dir
         create_directory_with_defaults(&config.plugin_config_dir)?;
 
-        // creating c8y-log-plugin.toml
-        let logs_path = format!("{}/tedge/agent/software-*", config.log_dir.display());
-        let data = format!(
-            r#"files = [
-    {{ type = "software-management", path = "{logs_path}" }},
-]"#
-        );
-
-        create_file_with_defaults(&config.plugin_config_path, Some(&data))?;
+        // creating tedge-log-plugin.toml
+        let example_config = r#"# Add the list of log files that should be managed by tedge-log-plugin
+files = [
+#    { type = "mosquitto", path = '/var/log/mosquitto/mosquitto.log' },
+#    { type = "software-management", path = '/var/log/tedge/agent/software-*' },
+#    { type = "c8y_CustomOperation", path = '/var/log/tedge/agent/c8y_CustomOperation/*' }
+]"#;
+        create_file_with_defaults(&config.plugin_config_path, Some(example_config))?;
 
         Ok(())
     }
 
     /// List of MQTT topic filters the log actor has to subscribe to
-    fn subscriptions() -> TopicFilter {
-        vec![
-            // subscribing to c8y smartrest requests
-            C8yTopic::SmartRestRequest.to_string().as_ref(),
-            // subscribing also to c8y bridge health topic to know when the bridge is up
-            C8Y_BRIDGE_HEALTH_TOPIC,
-        ]
-        .try_into()
-        .expect("Well-formed topic filters")
+    fn subscriptions(config: &LogManagerConfig) -> TopicFilter {
+        config.logfile_request_topic.clone()
     }
 
     /// Directory watched by the log actors for configuration changes
     fn watched_directory(config: &LogManagerConfig) -> PathBuf {
-        config.config_dir.clone()
+        config.plugin_config_dir.clone()
     }
 }
 
@@ -115,15 +108,15 @@ impl Builder<LogManagerActor> for LogManagerBuilder {
     type Error = LinkError;
 
     fn try_build(self) -> Result<LogManagerActor, Self::Error> {
-        let mqtt_publisher = LoggingSender::new("C8Y-Log-Manager".into(), self.mqtt_publisher);
+        let mqtt_publisher = LoggingSender::new("Tedge-Log-Manager".into(), self.mqtt_publisher);
         let message_box = self.box_builder.build();
 
         Ok(LogManagerActor::new(
             self.config,
             self.plugin_config,
             mqtt_publisher,
-            self.http_proxy,
             message_box,
+            self.http_proxy,
         ))
     }
 }

@@ -102,6 +102,15 @@ impl TEdgeConfig {
         }
         client_auth
     }
+
+    pub fn mqtt_internal_config(&self) -> mqtt_channel::Config {
+        let host = self.mqtt.bind.address.to_string();
+        let port = self.mqtt.bind.port.get();
+
+        mqtt_channel::Config::default()
+            .with_host(host)
+            .with_port(port)
+    }
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Clone, Copy, PartialEq, Eq, Debug)]

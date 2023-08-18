@@ -1,0 +1,23 @@
+[package]
+name = "log_manager"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+easy_reader = "0.5"
+glob = "0.3"
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+time = { version = "0.3", features = ["formatting"] }
+toml = "0.5"
+
+[dev-dependencies]
+filetime = "0.2"
+tedge_test_utils = { path = "../../tests/tedge_test_utils" }
+time = { version = "0.3", features = ["macros"] }
