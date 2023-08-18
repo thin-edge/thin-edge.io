@@ -12,7 +12,7 @@ use tedge_config::TEdgeConfig;
 
 const COLLECTD_MAPPER_NAME: &str = "tedge-mapper-collectd";
 const COLLECTD_INPUT_TOPICS: &str = "collectd/#";
-const COLLECTD_OUTPUT_TOPIC: &str = "tedge/measurements";
+const COLLECTD_OUTPUT_TOPIC: &str = "te/device/main///m/";
 
 pub struct CollectdMapper;
 

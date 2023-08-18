@@ -43,7 +43,7 @@ Check remote mqtt broker #1773
 
     # Cumulocity sanity check
     ThinEdgeIO.Set Device Context    ${CONTAINER_2}
-    ThinEdgeIO.Execute Command    tedge mqtt pub tedge/measurements '{"temperature": 29.8}'
+    ThinEdgeIO.Execute Command    tedge mqtt pub te/device/main///m/ '{"temperature": 29.8}'
     ${measurements}=    Cumulocity.Device Should Have Measurements    value=temperature    series=temperature
     Should Be Equal As Numbers    ${measurements[0]["temperature"]["temperature"]["value"]}    ${29.8}
 

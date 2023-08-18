@@ -16,7 +16,7 @@ Publish events to subscribed topic
     Should Have MQTT Messages    c8y/s/us    message_pattern=400,event-type,"Event",*
 
 Publish measurements to unsubscribed topic
-    Execute Command    tedge mqtt pub tedge/measurements '{"temperature": 10}'
+    Execute Command    tedge mqtt pub te/device/main///m/ '{"temperature": 10}'
     Sleep    5s    reason=If a message is not published in 5s, it will never be published.
     Should Have MQTT Messages    c8y/measurement/measurements/create    minimum=0    maximum=0
 

@@ -9,13 +9,13 @@ Test Teardown    Get Logs
 
 *** Test Cases ***
 Child devices support sending simple measurements
-    Execute Command    tedge mqtt pub tedge/measurements/${CHILD_SN} '{ "temperature": 25 }'
+    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///m/ '{ "temperature": 25 }'
     ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=ThinEdgeMeasurement    value=temperature    series=temperature
     Log    ${measurements}
 
 
 Child devices support sending custom measurements
-    Execute Command    tedge mqtt pub tedge/measurements/${CHILD_SN} '{ "current": {"L1": 9.5, "L2": 1.3} }'
+    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///m/ '{ "current": {"L1": 9.5, "L2": 1.3} }'
     ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=ThinEdgeMeasurement    value=current    series=L1
     Log    ${measurements}
 
