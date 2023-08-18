@@ -9,6 +9,7 @@
 
 use std::collections::HashMap;
 
+use crate::entity::EntityTopic;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 
@@ -98,11 +99,25 @@ impl EntityStore {
         self.get(topic_id)
     }
 
+    /// Returns the entity attached to a topic, if any
+    pub fn get_entity_from_topic(&self, topic: &Topic) -> Option<&EntityMetadata> {
+        let entity_topic = EntityTopic::try_from(topic).ok()?;
+        self.get(entity_topic.entity_id())
+    }
+
     /// Returns the MQTT identifier of the main device.
     ///
     /// The main device is an entity with `@type: "device"`.
     pub fn main_device(&self) -> EntityTopicIdRef {
         self.main_device.as_str()
+    }
+
+    /// Returns the name of main device.
+    pub fn main_device_name(&self) -> &str {
+        self.get(self.main_device.as_str())
+            .unwrap()
+            .entity_id
+            .as_str()
     }
 
     /// Returns MQTT identifiers of child devices of a given device.
@@ -220,17 +235,39 @@ impl EntityStore {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityMetadata {
-    parent: Option<EntityTopicId>,
-    r#type: EntityType,
-    entity_id: String,
-    other: serde_json::Value,
+    pub parent: Option<EntityTopicId>,
+    pub r#type: EntityType,
+    pub entity_id: String,
+    pub other: serde_json::Value,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum EntityType {
+pub enum EntityType {
     MainDevice,
     ChildDevice,
     Service,
+}
+
+impl EntityMetadata {
+    /// Creates a entity metadata for a child device.
+    pub fn main_device(device_id: String) -> Self {
+        Self {
+            entity_id: device_id,
+            r#type: EntityType::MainDevice,
+            parent: None,
+            other: serde_json::json!({}),
+        }
+    }
+
+    /// Creates a entity metadata for a child device.
+    pub fn child_device(child_device_id: String) -> Self {
+        Self {
+            entity_id: child_device_id,
+            r#type: EntityType::ChildDevice,
+            parent: Some("device/main//".to_string()),
+            other: serde_json::json!({}),
+        }
+    }
 }
 
 /// Represents an error encountered while updating the store.

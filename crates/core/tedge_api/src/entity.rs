@@ -61,6 +61,16 @@ impl EntityTopic {
             _ => None,
         }
     }
+
+    pub fn is_measurement(topic: &mqtt_channel::Topic) -> bool {
+        EntityTopic::from_str(&topic.name)
+            .map(|ref t| {
+                t.channel()
+                    .map(|c| c.category == ChannelCategory::Measurement)
+                    .unwrap_or(false)
+            })
+            .unwrap_or(false)
+    }
 }
 
 impl FromStr for EntityTopic {
@@ -73,7 +83,6 @@ impl FromStr for EntityTopic {
             expected: MQTT_ROOT.to_string(),
             got: topic.to_string(),
         })?;
-
         if root != MQTT_ROOT {
             return Err(EntityTopicError::Root {
                 expected: MQTT_ROOT.to_string(),
@@ -96,7 +105,6 @@ impl FromStr for EntityTopic {
         } else {
             None
         };
-
         Ok(EntityTopic {
             entity_id: EntityId(entity_id.to_string()),
             channel,
@@ -163,10 +171,6 @@ impl Channel {
         };
 
         let (r#type, suffix) = channel.split_once('/').unwrap_or((channel, ""));
-
-        if r#type.is_empty() {
-            return Err(ChannelError::TooShort);
-        }
 
         Ok(Channel {
             category: kind,
@@ -272,13 +276,9 @@ mod tests {
         .parse::<EntityTopic>();
 
         let topic2 =
-            format!("{MQTT_ROOT}/device/child001/service/service001/m/").parse::<EntityTopic>();
-
-        let topic3 =
             format!("{MQTT_ROOT}/device/child001/service/service001/m").parse::<EntityTopic>();
 
         assert!(topic1.is_err());
         assert!(topic2.is_err());
-        assert!(topic3.is_err());
     }
 }

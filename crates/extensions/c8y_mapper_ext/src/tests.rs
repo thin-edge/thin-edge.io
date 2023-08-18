@@ -1168,7 +1168,6 @@ operation failed due to timeout: duration=1sEOF
 /// be considered registered and no more registration messages for this entity
 /// shall be emitted by the mapper.
 #[tokio::test]
-#[ignore = "depends on te topics"]
 async fn inventory_registers_unknown_entity_once() {
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
@@ -1177,7 +1176,7 @@ async fn inventory_registers_unknown_entity_once() {
 
     let measurement_message = MqttMessage::new(
         &Topic::new("te/device/main/service/my_service/m/measurement").unwrap(),
-        "",
+        r#"{"foo":25}"#,
     );
 
     for _ in 0..5 {
@@ -1195,7 +1194,7 @@ async fn inventory_registers_unknown_entity_once() {
     // service
     let mut dut_register_messages: Vec<_> = messages
         .iter()
-        .filter(|message| message.topic.name.starts_with("te/device/main"))
+        .filter(|message| message.topic.name.starts_with("te/device/main/service"))
         .collect();
     let service_register_message = dut_register_messages.remove(0);
 
