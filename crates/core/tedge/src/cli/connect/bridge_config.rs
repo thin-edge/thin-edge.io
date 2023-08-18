@@ -20,6 +20,7 @@ pub struct BridgeConfig {
     pub try_private: bool,
     pub start_type: String,
     pub clean_session: bool,
+    pub local_clean_session: bool,
     pub notifications: bool,
     pub notifications_local_only: bool,
     pub notification_topic: String,
@@ -52,6 +53,7 @@ impl BridgeConfig {
         writeln!(writer, "try_private {}", self.try_private)?;
         writeln!(writer, "start_type {}", self.start_type)?;
         writeln!(writer, "cleansession {}", self.clean_session)?;
+        writeln!(writer, "local_cleansession {}", self.local_clean_session)?;
         writeln!(writer, "notifications {}", self.notifications)?;
         writeln!(
             writer,
@@ -123,6 +125,7 @@ mod test {
             try_private: false,
             start_type: "automatic".into(),
             clean_session: true,
+            local_clean_session: true,
             notifications: false,
             notifications_local_only: false,
             notification_topic: "test_topic".into(),
@@ -149,6 +152,7 @@ bridge_keyfile ./test-private-key.pem
 try_private false
 start_type automatic
 cleansession true
+local_cleansession true
 notifications false
 notifications_local_only false
 notification_topic test_topic
@@ -158,7 +162,7 @@ bridge_attempt_unsubscribe false
 "#,
         );
 
-        assert_eq!(serialized_config, expected.as_bytes());
+        assert_eq!(std::str::from_utf8(&serialized_config).unwrap(), expected);
 
         Ok(())
     }
@@ -185,6 +189,7 @@ bridge_attempt_unsubscribe false
             try_private: false,
             start_type: "automatic".into(),
             clean_session: true,
+            local_clean_session: true,
             notifications: false,
             notifications_local_only: false,
             notification_topic: "test_topic".into(),
@@ -210,6 +215,7 @@ bridge_keyfile ./test-private-key.pem
 try_private false
 start_type automatic
 cleansession true
+local_cleansession true
 notifications false
 notifications_local_only false
 notification_topic test_topic
@@ -219,7 +225,7 @@ bridge_attempt_unsubscribe false
 "#,
         );
 
-        assert_eq!(serialized_config, expected.as_bytes());
+        assert_eq!(std::str::from_utf8(&serialized_config).unwrap(), expected);
 
         Ok(())
     }
@@ -249,6 +255,7 @@ bridge_attempt_unsubscribe false
             try_private: false,
             start_type: "automatic".into(),
             clean_session: true,
+            local_clean_session: true,
             notifications: false,
             notifications_local_only: false,
             notification_topic: "test_topic".into(),
@@ -277,6 +284,7 @@ bridge_attempt_unsubscribe false
         expected.insert("start_type automatic");
         expected.insert("try_private false");
         expected.insert("cleansession true");
+        expected.insert("local_cleansession true");
         expected.insert("notifications false");
         expected.insert("notifications_local_only false");
         expected.insert("notification_topic test_topic");
@@ -382,6 +390,7 @@ bridge_attempt_unsubscribe false
             try_private: false,
             start_type: "automatic".into(),
             clean_session: true,
+            local_clean_session: true,
             notifications: false,
             notifications_local_only: false,
             notification_topic: "test_topic".into(),
