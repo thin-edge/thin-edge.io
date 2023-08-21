@@ -167,7 +167,7 @@ impl Downloader {
         );
 
         if file_len > 0 {
-            try_pre_allocate_space(&mut file, &tmp_target_path, file_len)?;
+            try_pre_allocate_space(&file, &tmp_target_path, file_len)?;
             debug!("preallocated space for file {tmp_target_path:?}, len={file_len}");
         }
 
@@ -447,11 +447,7 @@ enum SaveChunksError {
 }
 
 #[allow(clippy::unnecessary_cast)]
-fn try_pre_allocate_space(
-    file: &mut File,
-    path: &Path,
-    file_len: u64,
-) -> Result<(), DownloadError> {
+fn try_pre_allocate_space(file: &File, path: &Path, file_len: u64) -> Result<(), DownloadError> {
     if file_len == 0 {
         return Ok(());
     }

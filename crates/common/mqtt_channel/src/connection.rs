@@ -297,16 +297,12 @@ impl Connection {
     }
 
     pub(crate) fn pause_on_error(err: &ConnectionError) -> bool {
-        match &err {
-            rumqttc::ConnectionError::Io(_) => true,
-            rumqttc::ConnectionError::MqttState(state_error)
-                if matches!(state_error, StateError::Io(_)) =>
-            {
-                true
-            }
-            rumqttc::ConnectionError::MqttState(_) => true,
-            _ => false,
-        }
+        matches!(
+            err,
+            rumqttc::ConnectionError::Io(_)
+                | rumqttc::ConnectionError::MqttState(StateError::Io(_))
+                | rumqttc::ConnectionError::MqttState(_)
+        )
     }
 
     pub(crate) async fn do_pause() {

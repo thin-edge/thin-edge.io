@@ -88,12 +88,12 @@ impl OperationLogs {
                 if path.starts_with("software-list") {
                     log_tracker
                         .entry("software-list".to_string())
-                        .or_insert_with(BinaryHeap::new)
+                        .or_default()
                         .push(Reverse(path.to_string()));
                 } else if path.starts_with("software-update") {
                     log_tracker
                         .entry("software-update".to_string())
-                        .or_insert_with(BinaryHeap::new)
+                        .or_default()
                         .push(Reverse(path.to_string()));
                 } else {
                     let file_name = path
@@ -102,7 +102,7 @@ impl OperationLogs {
                         .ok_or(OperationLogsError::FileFormatError)?;
                     log_tracker
                         .entry(file_name.to_string())
-                        .or_insert_with(BinaryHeap::new)
+                        .or_default()
                         .push(Reverse(path.to_string()));
                 }
             }

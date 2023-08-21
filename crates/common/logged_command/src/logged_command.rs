@@ -34,7 +34,7 @@ impl LoggingChild {
         let mut status = CmdStatus::Successful;
         tokio::select! {
             outcome = self.inner_child.wait_with_output() => {
-               Self::update_and_log_outcome(cmd_line, outcome, logger, graceful_timeout, &mut status).await
+               Self::update_and_log_outcome(cmd_line, outcome, logger, graceful_timeout, &status).await
             }
             _ = Self::timeout_operation(&mut status, cid, graceful_timeout, forceful_timeout) => {
                 Err(std::io::Error::new(std::io::ErrorKind::Other,"failed to kill the process: {cmd_line}"))
@@ -59,7 +59,7 @@ impl LoggingChild {
         outcome: Result<Output, std::io::Error>,
         logger: &mut BufWriter<File>,
         timeout: Duration,
-        status: &mut CmdStatus,
+        status: &CmdStatus,
     ) -> Result<Output, std::io::Error> {
         let outcome = match status {
             CmdStatus::Successful => outcome,
