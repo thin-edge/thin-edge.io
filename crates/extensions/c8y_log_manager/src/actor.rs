@@ -149,7 +149,11 @@ impl LogManagerActor {
                 let error_message = format!("Handling of operation failed with {}", error);
                 let failed_msg = LogfileRequest::failed(error_message)?;
                 self.mqtt_publisher.send(failed_msg).await?;
-                Err(error)
+                error!(
+                    "Handling of operation for log type {} failed with: {}",
+                    smartrest_request.log_type, error
+                );
+                Ok(())
             }
         }
     }
