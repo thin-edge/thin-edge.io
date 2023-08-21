@@ -2,6 +2,7 @@ use crate::messages::C8YRestError;
 use crate::messages::C8YRestRequest;
 use crate::messages::C8YRestResponse;
 use crate::messages::C8YRestResult;
+use crate::messages::GetFreshJwtToken;
 use crate::messages::GetJwtToken;
 use crate::messages::SoftwareListResponse;
 use crate::messages::UploadConfigFile;
@@ -33,6 +34,16 @@ impl C8YHttpProxy {
 
     pub async fn get_jwt_token(&mut self) -> Result<String, C8YRestError> {
         let request: C8YRestRequest = GetJwtToken.into();
+
+        match self.c8y.await_response(request).await? {
+            Ok(C8YRestResponse::EventId(id)) => Ok(id),
+            unexpected => Err(unexpected.into()),
+        }
+    }
+
+    pub async fn get_fresh_jwt_token(&mut self) -> Result<String, C8YRestError> {
+        let request: C8YRestRequest = GetFreshJwtToken.into();
+
         match self.c8y.await_response(request).await? {
             Ok(C8YRestResponse::EventId(id)) => Ok(id),
             unexpected => Err(unexpected.into()),

@@ -464,7 +464,8 @@ impl CumulocityConverter {
             .from_smartrest(smartrest)?
             .to_thin_edge_json()?;
 
-        let token = self.http_proxy.get_jwt_token().await?;
+        // Pass the fresh token to the tedge-agent as it cannot request a new one
+        let token = self.http_proxy.get_fresh_jwt_token().await?;
 
         software_update_request
             .update_list
