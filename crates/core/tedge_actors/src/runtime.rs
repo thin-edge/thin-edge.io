@@ -260,7 +260,7 @@ where
     for (running_as, sender) in a {
         match sender.send(RuntimeRequest::Shutdown).await {
             Ok(()) => {
-                info!(target: "Runtime", "Successfully sent shutdown request to {running_as}")
+                debug!(target: "Runtime", "Successfully sent shutdown request to {running_as}")
             }
             Err(e) => {
                 error!(target: "Runtime", "Failed to send shutdown request to {running_as}: {e:?}")

@@ -431,7 +431,6 @@ async fn save_chunks_to_file_at(
     writer.seek(SeekFrom::Start(offset))?;
 
     while let Some(bytes) = response.chunk().await? {
-        debug!("read response chunk, size={size}", size = bytes.len());
         writer.write_all(&bytes)?;
     }
     Ok(())

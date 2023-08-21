@@ -97,7 +97,7 @@ use crate::RuntimeRequest;
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::StreamExt;
-use log::info;
+use log::debug;
 use std::fmt::Debug;
 
 /// Either a message or a [RuntimeRequest]
@@ -184,25 +184,25 @@ impl<Input: Debug> LoggingReceiver<Input> {
 impl<Input: Send + Debug> MessageReceiver<Input> for LoggingReceiver<Input> {
     async fn try_recv(&mut self) -> Result<Option<Input>, RuntimeRequest> {
         let message = self.receiver.try_recv().await;
-        info!(target: &self.name, "recv {:?}", message);
+        debug!(target: &self.name, "recv {:?}", message);
         message
     }
 
     async fn recv_message(&mut self) -> Option<WrappedInput<Input>> {
         let message = self.receiver.recv_message().await;
-        info!(target: &self.name, "recv {:?}", message);
+        debug!(target: &self.name, "recv {:?}", message);
         message
     }
 
     async fn recv(&mut self) -> Option<Input> {
         let message = self.receiver.recv().await;
-        info!(target: &self.name, "recv {:?}", message);
+        debug!(target: &self.name, "recv {:?}", message);
         message
     }
 
     async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
         let message = self.receiver.recv_signal().await;
-        info!(target: &self.name, "recv {:?}", message);
+        debug!(target: &self.name, "recv {:?}", message);
         message
     }
 }
@@ -247,7 +247,7 @@ impl<Output: Debug + Send + Sync + 'static> Sender<Output> for LoggingSender<Out
 }
 
 pub fn log_message_sent<I: Debug>(target: &str, message: I) {
-    info!(target: target, "send {message:?}");
+    debug!(target: target, "send {message:?}");
 }
 
 /// The basic message box to send and receive messages

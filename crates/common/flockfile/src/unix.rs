@@ -11,7 +11,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use tracing::debug;
 use tracing::error;
-use tracing::info;
 use tracing::warn;
 
 const LOCK_CHILD_DIRECTORY: &str = "lock/";
@@ -100,7 +99,7 @@ impl Flockfile {
             source: err,
         })?;
 
-        info!(r#"Lockfile created {:?}"#, &path);
+        debug!(r#"Lockfile created {:?}"#, &path);
         Ok(Flockfile {
             handle: Some(file),
             path,

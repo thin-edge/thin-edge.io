@@ -14,6 +14,7 @@ use c8y_api::utils::bridge::is_c8y_bridge_up;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use log::error;
 use log::info;
+use log::trace;
 use log_manager::LogPluginConfig;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
@@ -66,7 +67,9 @@ impl LogManagerActor {
             for smartrest_message in payload.split('\n') {
                 let result = match smartrest_message.split(',').next().unwrap_or_default() {
                     "522" => {
-                        info!("Log request received: {payload}");
+                        let topic = &message.topic.name;
+                        info!("Log request received on topic: {topic}");
+                        trace!("payload: {payload}");
                         match get_smartrest_device_id(payload) {
                             Some(device_id) if device_id == self.config.device_id => {
                                 // retrieve smartrest object from payload

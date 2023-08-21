@@ -23,7 +23,7 @@ tedge_utils = { path = "../tedge_utils" }
 thiserror = "1.0"
 toml = "0.7"
 tracing = { version = "0.1", features = ["log"] }
-tracing-subscriber = { version = "0.3", features = ["time"] }
+tracing-subscriber = { version = "0.3", features = ["time", "env-filter"] }
 url = "2.2"
 
 [dev-dependencies]
