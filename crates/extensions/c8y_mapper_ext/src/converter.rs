@@ -85,7 +85,6 @@ use tracing::debug;
 use tracing::info;
 use tracing::log::error;
 
-const MQTT_ROOT: &str = "te";
 const C8Y_CLOUD: &str = "c8y";
 const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
 const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
@@ -244,66 +243,6 @@ impl CumulocityConverter {
             c8y_endpoint,
             entity_store,
         })
-    }
-
-    /// Performs auto-registration process for an entity under a given
-    /// identifier.
-    ///
-    /// If an entity is a service, its device is also auto-registered if it's
-    /// not already registered.
-    ///
-    /// It returns MQTT register messages for the given entities to be published
-    /// by the mapper, so other components can also be aware of a new device
-    /// being registered.
-    fn auto_register_entity(
-        &mut self,
-        entity_id: &str,
-    ) -> Result<Vec<Message>, entity_store::Error> {
-        let mut register_messages = vec![];
-        let (device_id, service_id) = match entity_id.split('/').collect::<Vec<&str>>()[..] {
-            ["device", device_id, "service", service_id, ..] => (device_id, Some(service_id)),
-            ["device", device_id, "", ""] => (device_id, None),
-            _ => return Ok(register_messages),
-        };
-
-        // register device if not registered
-        let device_topic = format!("{MQTT_ROOT}/device/{device_id}//");
-        if self.entity_store.get(&device_topic).is_none() {
-            let device_type = if device_id == "main" {
-                "device"
-            } else {
-                "child-device"
-            };
-            let device_name = if device_id == "main" {
-                self.entity_store.main_device_name()
-            } else {
-                device_id
-            };
-            let device_register_payload =
-                format!("{{ \"@type\":\"{device_type}\", \"@id\":\"{device_name}\"}}");
-            let device_register_message =
-                Message::new(&Topic::new(&device_topic).unwrap(), device_register_payload)
-                    .with_retain();
-            register_messages.push(device_register_message.clone());
-            self.entity_store
-                .update(EntityRegistrationMessage::try_from(&device_register_message).unwrap())?;
-        }
-
-        // register service itself
-        if let Some(service_id) = service_id {
-            let service_topic = format!("{MQTT_ROOT}/device/{device_id}/service/{service_id}");
-            let service_register_payload = r#"{"@type": "service", "type": "systemd"}"#.to_string();
-            let service_register_message = Message::new(
-                &Topic::new(&service_topic).unwrap(),
-                service_register_payload,
-            )
-            .with_retain();
-            register_messages.push(service_register_message.clone());
-            self.entity_store
-                .update(EntityRegistrationMessage::try_from(&service_register_message).unwrap())?;
-        }
-
-        Ok(register_messages)
     }
 
     fn try_convert_measurement(
@@ -755,14 +694,16 @@ impl Converter for CumulocityConverter {
             } else {
                 // if device is unregistered register using auto-registration
                 if self.entity_store.get(entity_topic.entity_id()).is_none() {
-                    registration_messages =
-                        match self.auto_register_entity(entity_topic.entity_id()) {
-                            Ok(register_messages) => register_messages,
-                            Err(e) => {
-                                error!("Could not update device registration: {e}");
-                                vec![]
-                            }
-                        };
+                    registration_messages = match self
+                        .entity_store
+                        .auto_register_entity(entity_topic.entity_id())
+                    {
+                        Ok(register_messages) => register_messages,
+                        Err(e) => {
+                            error!("Could not update device registration: {e}");
+                            vec![]
+                        }
+                    };
 
                     let entity = self.entity_store.get(entity_topic.entity_id()).unwrap();
                     if let Some(message) = external_device_registration_message(entity) {

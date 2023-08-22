@@ -10,6 +10,7 @@
 use std::collections::HashMap;
 
 use crate::entity::EntityTopic;
+use crate::entity_store;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 
@@ -230,6 +231,64 @@ impl EntityStore {
 
             format!("{main_device_entity_id}:{entity_id_suffix}")
         }
+    }
+
+    /// Performs auto-registration process for an entity under a given
+    /// identifier.
+    ///
+    /// If an entity is a service, its device is also auto-registered if it's
+    /// not already registered.
+    ///
+    /// It returns MQTT register messages for the given entities to be published
+    /// by the mapper, so other components can also be aware of a new device
+    /// being registered.
+    pub fn auto_register_entity(
+        &mut self,
+        entity_id: &str,
+    ) -> Result<Vec<Message>, entity_store::Error> {
+        let mut register_messages = vec![];
+        let (device_id, service_id) = match entity_id.split('/').collect::<Vec<&str>>()[..] {
+            ["device", device_id, "service", service_id, ..] => (device_id, Some(service_id)),
+            ["device", device_id, "", ""] => (device_id, None),
+            _ => return Ok(register_messages),
+        };
+
+        // register device if not registered
+        let device_topic = format!("{MQTT_ROOT}/device/{device_id}//");
+        if self.get(&device_topic).is_none() {
+            let device_type = if device_id == "main" {
+                "device"
+            } else {
+                "child-device"
+            };
+            let device_name = if device_id == "main" {
+                self.main_device_name()
+            } else {
+                device_id
+            };
+            let device_register_payload =
+                format!("{{ \"@type\":\"{device_type}\", \"@id\":\"{device_name}\"}}");
+            let device_register_message =
+                Message::new(&Topic::new(&device_topic).unwrap(), device_register_payload)
+                    .with_retain();
+            register_messages.push(device_register_message.clone());
+            self.update(EntityRegistrationMessage::try_from(&device_register_message).unwrap())?;
+        }
+
+        // register service itself
+        if let Some(service_id) = service_id {
+            let service_topic = format!("{MQTT_ROOT}/device/{device_id}/service/{service_id}");
+            let service_register_payload = r#"{"@type": "service", "type": "systemd"}"#.to_string();
+            let service_register_message = Message::new(
+                &Topic::new(&service_topic).unwrap(),
+                service_register_payload,
+            )
+            .with_retain();
+            register_messages.push(service_register_message.clone());
+            self.update(EntityRegistrationMessage::try_from(&service_register_message).unwrap())?;
+        }
+
+        Ok(register_messages)
     }
 }
 
