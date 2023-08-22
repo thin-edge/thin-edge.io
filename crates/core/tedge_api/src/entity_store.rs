@@ -9,6 +9,8 @@
 
 use std::collections::HashMap;
 
+use crate::entity::EntityTopic;
+use crate::entity_store;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 
@@ -98,11 +100,25 @@ impl EntityStore {
         self.get(topic_id)
     }
 
+    /// Returns the entity attached to a topic, if any
+    pub fn get_entity_from_topic(&self, topic: &Topic) -> Option<&EntityMetadata> {
+        let entity_topic = EntityTopic::try_from(topic).ok()?;
+        self.get(entity_topic.entity_id())
+    }
+
     /// Returns the MQTT identifier of the main device.
     ///
     /// The main device is an entity with `@type: "device"`.
     pub fn main_device(&self) -> EntityTopicIdRef {
         self.main_device.as_str()
+    }
+
+    /// Returns the name of main device.
+    pub fn main_device_name(&self) -> &str {
+        self.get(self.main_device.as_str())
+            .unwrap()
+            .entity_id
+            .as_str()
     }
 
     /// Returns MQTT identifiers of child devices of a given device.
@@ -216,21 +232,101 @@ impl EntityStore {
             format!("{main_device_entity_id}:{entity_id_suffix}")
         }
     }
+
+    /// Performs auto-registration process for an entity under a given
+    /// identifier.
+    ///
+    /// If an entity is a service, its device is also auto-registered if it's
+    /// not already registered.
+    ///
+    /// It returns MQTT register messages for the given entities to be published
+    /// by the mapper, so other components can also be aware of a new device
+    /// being registered.
+    pub fn auto_register_entity(
+        &mut self,
+        entity_id: &str,
+    ) -> Result<Vec<Message>, entity_store::Error> {
+        let mut register_messages = vec![];
+        let (device_id, service_id) = match entity_id.split('/').collect::<Vec<&str>>()[..] {
+            ["device", device_id, "service", service_id, ..] => (device_id, Some(service_id)),
+            ["device", device_id, "", ""] => (device_id, None),
+            _ => return Ok(register_messages),
+        };
+
+        // register device if not registered
+        let device_topic = format!("{MQTT_ROOT}/device/{device_id}//");
+        if self.get(&device_topic).is_none() {
+            let device_type = if device_id == "main" {
+                "device"
+            } else {
+                "child-device"
+            };
+            let device_name = if device_id == "main" {
+                self.main_device_name()
+            } else {
+                device_id
+            };
+            let device_register_payload =
+                format!("{{ \"@type\":\"{device_type}\", \"@id\":\"{device_name}\"}}");
+            let device_register_message =
+                Message::new(&Topic::new(&device_topic).unwrap(), device_register_payload)
+                    .with_retain();
+            register_messages.push(device_register_message.clone());
+            self.update(EntityRegistrationMessage::try_from(&device_register_message).unwrap())?;
+        }
+
+        // register service itself
+        if let Some(service_id) = service_id {
+            let service_topic = format!("{MQTT_ROOT}/device/{device_id}/service/{service_id}");
+            let service_register_payload = r#"{"@type": "service", "type": "systemd"}"#.to_string();
+            let service_register_message = Message::new(
+                &Topic::new(&service_topic).unwrap(),
+                service_register_payload,
+            )
+            .with_retain();
+            register_messages.push(service_register_message.clone());
+            self.update(EntityRegistrationMessage::try_from(&service_register_message).unwrap())?;
+        }
+
+        Ok(register_messages)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityMetadata {
-    parent: Option<EntityTopicId>,
-    r#type: EntityType,
-    entity_id: String,
-    other: serde_json::Value,
+    pub parent: Option<EntityTopicId>,
+    pub r#type: EntityType,
+    pub entity_id: String,
+    pub other: serde_json::Value,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum EntityType {
+pub enum EntityType {
     MainDevice,
     ChildDevice,
     Service,
+}
+
+impl EntityMetadata {
+    /// Creates a entity metadata for a child device.
+    pub fn main_device(device_id: String) -> Self {
+        Self {
+            entity_id: device_id,
+            r#type: EntityType::MainDevice,
+            parent: None,
+            other: serde_json::json!({}),
+        }
+    }
+
+    /// Creates a entity metadata for a child device.
+    pub fn child_device(child_device_id: String) -> Self {
+        Self {
+            entity_id: child_device_id,
+            r#type: EntityType::ChildDevice,
+            parent: Some("device/main//".to_string()),
+            other: serde_json::json!({}),
+        }
+    }
 }
 
 /// Represents an error encountered while updating the store.

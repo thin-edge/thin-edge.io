@@ -5,17 +5,20 @@
 //!
 //! ```
 //! use c8y_mapper_ext::json::from_thin_edge_json;
+//! use tedge_api::entity_store::EntityMetadata;
 //! let single_value_thin_edge_json = r#"{
 //!        "time": "2020-06-22T17:03:14.000+02:00",
 //!        "temperature": 23,
 //!        "pressure": 220
 //!     }"#;
-//! let output = from_thin_edge_json(single_value_thin_edge_json);
+//! let entity = EntityMetadata::main_device("test-device".to_string());
+//! let output = from_thin_edge_json(single_value_thin_edge_json, &entity);
 //! ```
 
 use crate::serializer;
 use clock::Clock;
 use clock::WallClock;
+use tedge_api::entity_store::EntityMetadata;
 use tedge_api::parser::*;
 use time::OffsetDateTime;
 use time::{self};
@@ -30,28 +33,21 @@ pub enum CumulocityJsonError {
 }
 
 /// Converts from thin-edge measurement JSON to C8Y measurement JSON
-pub fn from_thin_edge_json(input: &str) -> Result<String, CumulocityJsonError> {
-    let timestamp = WallClock.now();
-    let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp, None)?;
-    Ok(c8y_vec)
-}
-
-/// Converts from thin-edge Json to c8y_json with child id information
-pub fn from_thin_edge_json_with_child(
+pub fn from_thin_edge_json(
     input: &str,
-    child_id: &str,
+    entity: &EntityMetadata,
 ) -> Result<String, CumulocityJsonError> {
     let timestamp = WallClock.now();
-    let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp, Some(child_id))?;
+    let c8y_vec = from_thin_edge_json_with_timestamp(input, timestamp, entity)?;
     Ok(c8y_vec)
 }
 
 fn from_thin_edge_json_with_timestamp(
     input: &str,
     timestamp: OffsetDateTime,
-    maybe_child_id: Option<&str>,
+    entity: &EntityMetadata,
 ) -> Result<String, CumulocityJsonError> {
-    let mut serializer = serializer::C8yJsonSerializer::new(timestamp, maybe_child_id);
+    let mut serializer = serializer::C8yJsonSerializer::new(timestamp, entity);
     parse_str(input, &mut serializer)?;
     Ok(serializer.into_string()?)
 }
@@ -76,8 +72,9 @@ mod tests {
 
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
+        let entity = EntityMetadata::main_device("foo".to_string());
         let output =
-            from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp, None);
+            from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp, &entity);
 
         let expected_output = json!({
             "time": timestamp
@@ -112,8 +109,9 @@ mod tests {
 
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
+        let entity = EntityMetadata::main_device("foo".to_string());
         let output =
-            from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp, None);
+            from_thin_edge_json_with_timestamp(single_value_thin_edge_json, timestamp, &entity);
 
         let expected_output = json!({
             "time": timestamp
@@ -157,7 +155,8 @@ mod tests {
                     "type": "ThinEdgeMeasurement"
                   }"#;
 
-        let output = from_thin_edge_json(single_value_thin_edge_json);
+        let entity = EntityMetadata::main_device("foo".to_string());
+        let output = from_thin_edge_json(single_value_thin_edge_json, &entity);
 
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
@@ -179,8 +178,9 @@ mod tests {
 
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
+        let entity = EntityMetadata::main_device("foo".to_string());
         let output =
-            from_thin_edge_json_with_timestamp(multi_value_thin_edge_json, timestamp, None);
+            from_thin_edge_json_with_timestamp(multi_value_thin_edge_json, timestamp, &entity);
 
         let expected_output = json!({
             "time": timestamp
@@ -234,7 +234,8 @@ mod tests {
             "type": "ThinEdgeMeasurement"
         }"#;
 
-        let output = from_thin_edge_json(input);
+        let entity = EntityMetadata::main_device("foo".to_string());
+        let output = from_thin_edge_json(input, &entity);
 
         let actual_output = output.unwrap().split_whitespace().collect::<String>();
 
@@ -266,7 +267,8 @@ mod tests {
                   "type": "ThinEdgeMeasurement"
                 }}"#, time, measurement, measurement);
 
-        let output = from_thin_edge_json(input.as_str()).unwrap();
+        let entity = EntityMetadata::main_device("foo".to_string());
+        let output = from_thin_edge_json(input.as_str(), &entity).unwrap();
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
             output
@@ -313,7 +315,8 @@ mod tests {
         expected_output: Value,
     ) {
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
-        let output = from_thin_edge_json_with_timestamp(thin_edge_json, timestamp, Some(child_id));
+        let entity = EntityMetadata::child_device(child_id.to_string());
+        let output = from_thin_edge_json_with_timestamp(thin_edge_json, timestamp, &entity);
         assert_json_eq!(
             serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),
             expected_output

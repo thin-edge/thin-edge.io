@@ -13,7 +13,7 @@ Documentation      With thin-edge.io device monitoring, you can collect metrics 
 ...                3. Enable thin-edge.io monitoring.
 ...                Checking the grouping of measurements:
 ...                Sending fake collectd measurements with stopped collectd and check that messages are
-...                published on tedge/measurements for that timestamp and grouping the two fake collectd measurements 
+...                published on te/device/main///m/ for that timestamp and grouping the two fake collectd measurements
 ...                (i.e. the temperature and the pressure sent by the two fake measurements).
 
 
@@ -39,7 +39,7 @@ Check thin-edge monitoring
     Execute Command    sudo systemctl enable tedge-mapper-collectd
     Execute Command    sudo systemctl start tedge-mapper-collectd
     # Check thin-edge monitoring
-    ${tedge_messages}=    Should Have MQTT Messages    topic=tedge/measurements    minimum=1    maximum=None
+    ${tedge_messages}=    Should Have MQTT Messages    topic=te/device/main///m/    minimum=1    maximum=None
     Should Contain    ${tedge_messages[0]}   "time"
     Should Contain Any    ${tedge_messages[0]}    "memory"    "cpu"    "df-root"
     ${c8y_messages}=    Should Have MQTT Messages    topic=c8y/measurement/measurements/create    minimum=1    maximum=None

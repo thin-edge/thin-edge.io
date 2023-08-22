@@ -26,10 +26,6 @@ use tedge_actors::Sender;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
-use tedge_api::entity::EntityTopic;
-use tedge_api::entity_store;
-use tedge_api::entity_store::EntityRegistrationMessage;
-use tedge_api::EntityStore;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
@@ -39,9 +35,7 @@ use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::FileError;
-use tracing::error;
 
-const MQTT_ROOT: &str = "te";
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 
 pub type SyncStart = SetTimeout<()>;
@@ -55,7 +49,6 @@ pub struct C8yMapperActor {
     messages: SimpleMessageBox<C8yMapperInput, C8yMapperOutput>,
     mqtt_publisher: LoggingSender<MqttMessage>,
     timer_sender: LoggingSender<SyncStart>,
-    entity_store: EntityStore,
 }
 
 #[async_trait]
@@ -98,43 +91,16 @@ impl C8yMapperActor {
         messages: SimpleMessageBox<C8yMapperInput, C8yMapperOutput>,
         mqtt_publisher: LoggingSender<MqttMessage>,
         timer_sender: LoggingSender<SyncStart>,
-        device_id: String,
     ) -> Self {
-        let main_device = entity_store::EntityRegistrationMessage::main_device(device_id);
         Self {
             converter,
             messages,
             mqtt_publisher,
             timer_sender,
-            entity_store: EntityStore::with_main_device(main_device).unwrap(),
         }
     }
 
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
-        if let Ok(entity_topic) = EntityTopic::try_from(&message.topic) {
-            if let Ok(register_message) = EntityRegistrationMessage::try_from(&message) {
-                if let Err(e) = self.entity_store.update(register_message) {
-                    error!("Could not update device registration: {e}");
-                }
-            } else {
-                // if device is unregistered register using auto-registration
-                if self.entity_store.get(entity_topic.entity_id()).is_none() {
-                    let register_messages =
-                        match self.auto_register_entity(entity_topic.entity_id()) {
-                            Ok(register_messages) => register_messages,
-                            Err(e) => {
-                                error!("Could not update device registration: {e}");
-                                vec![]
-                            }
-                        };
-
-                    for msg in register_messages {
-                        let _ = self.mqtt_publisher.send(msg).await;
-                    }
-                }
-            }
-        }
-
         let converted_messages = self.converter.convert(&message).await;
 
         for converted_message in converted_messages.into_iter() {
@@ -142,58 +108,6 @@ impl C8yMapperActor {
         }
 
         Ok(())
-    }
-
-    /// Performs auto-registration process for an entity under a given
-    /// identifier.
-    ///
-    /// If an entity is a service, its device is also auto-registered if it's
-    /// not already registered.
-    ///
-    /// It returns MQTT register messages for the given entities to be published
-    /// by the mapper, so other components can also be aware of a new device
-    /// being registered.
-    fn auto_register_entity(
-        &mut self,
-        entity_id: &str,
-    ) -> Result<Vec<Message>, entity_store::Error> {
-        let mut register_messages = vec![];
-
-        let (device_id, service_id) = match entity_id.split('/').collect::<Vec<&str>>()[..] {
-            ["device", device_id, "service", service_id, ..] => (device_id, Some(service_id)),
-            ["device", device_id, "", ""] => (device_id, None),
-            _ => return Ok(register_messages),
-        };
-
-        // register device if not registered
-        let device_topic = format!("device/{device_id}//");
-        if self.entity_store.get(&device_topic).is_none() {
-            let device_register_payload = r#"{ "@type": "child-device" }"#.to_string();
-            let device_register_message = Message::new(
-                &Topic::new(&device_topic).unwrap(),
-                device_register_payload.clone(),
-            )
-            .with_retain();
-            register_messages.push(device_register_message.clone());
-            self.entity_store
-                .update(EntityRegistrationMessage::try_from(&device_register_message).unwrap())?;
-        }
-
-        // register service itself
-        if let Some(service_id) = service_id {
-            let service_topic = format!("{MQTT_ROOT}/device/{device_id}/service/{service_id}");
-            let service_register_payload = r#"{"@type": "service", "type": "systemd"}"#.to_string();
-            let service_register_message = Message::new(
-                &Topic::new(&service_topic).unwrap(),
-                service_register_payload.clone(),
-            )
-            .with_retain();
-            register_messages.push(service_register_message.clone());
-            self.entity_store
-                .update(EntityRegistrationMessage::try_from(&service_register_message).unwrap())?;
-        }
-
-        Ok(register_messages)
     }
 
     /// Registers the entity under a given MQTT topic.
@@ -312,8 +226,6 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
         let mqtt_publisher = LoggingSender::new("C8yMapper => Mqtt".into(), self.mqtt_publisher);
         let timer_sender = LoggingSender::new("C8yMapper => Timer".into(), self.timer_sender);
 
-        let device_id = self.config.device_id.clone();
-
         let converter =
             CumulocityConverter::new(self.config, mqtt_publisher.clone(), self.http_proxy)
                 .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
@@ -325,7 +237,6 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             message_box,
             mqtt_publisher,
             timer_sender,
-            device_id,
         ))
     }
 }

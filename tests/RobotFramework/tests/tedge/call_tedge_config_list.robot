@@ -105,7 +105,7 @@ set/unset c8y.topics
     ${unset}    Execute Command    tedge config list
     Should Contain
     ...    ${unset}
-    ...    c8y.topics=["tedge/measurements", "tedge/measurements/+", "tedge/alarms/+/+", "tedge/alarms/+/+/+", "tedge/events/+", "tedge/events/+/+", "tedge/health/+", "tedge/health/+/+"]
+    ...    c8y.topics=["te/+/+/+/+/m/+", "tedge/alarms/+/+", "tedge/alarms/+/+/+", "tedge/events/+", "tedge/events/+/+", "tedge/health/+", "tedge/health/+/+"]
 
 set/unset az.root_cert_path
     Execute Command    sudo tedge config set az.root_cert_path /etc/ssl/certs1    # Changing az.root_cert_path

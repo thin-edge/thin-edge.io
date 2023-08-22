@@ -1176,7 +1176,7 @@ async fn inventory_registers_unknown_entity_once() {
 
     let measurement_message = MqttMessage::new(
         &Topic::new("te/device/main/service/my_service/m/measurement").unwrap(),
-        "",
+        r#"{"foo":25}"#,
     );
 
     for _ in 0..5 {
@@ -1194,7 +1194,7 @@ async fn inventory_registers_unknown_entity_once() {
     // service
     let mut dut_register_messages: Vec<_> = messages
         .iter()
-        .filter(|message| message.topic.name.starts_with("te/device/main"))
+        .filter(|message| message.topic.name.starts_with("te/device/main/service"))
         .collect();
     let service_register_message = dut_register_messages.remove(0);
 
