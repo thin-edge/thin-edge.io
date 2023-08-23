@@ -64,13 +64,8 @@ impl Command for ConnectCommand {
                         println!("Connection check to {} cloud is successful.\n", cloud);
                         Ok(())
                     }
-                    Ok(DeviceStatus::Unknown) | Err(_) => {
-                        println!(
-                            "Connection check to {} cloud failed.\n",
-                            self.cloud.as_str()
-                        );
-                        Ok(())
-                    }
+                    Ok(DeviceStatus::Unknown) => Err(ConnectError::UnknownDeviceStatus.into()),
+                    Err(err) => Err(err.into()),
                 };
             } else {
                 return Err((ConnectError::DeviceNotConnected {
@@ -283,7 +278,6 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
         Ok(DeviceStatus::Unknown)
     } else {
         // The request has not even been sent
-        println!("\nMake sure mosquitto is running.");
         Err(ConnectError::TimeoutElapsedError)
     }
 }
@@ -359,7 +353,6 @@ fn check_device_status_azure(tedge_config: &TEdgeConfig) -> Result<DeviceStatus,
         Ok(DeviceStatus::Unknown)
     } else {
         // The request has not even been sent
-        println!("Make sure mosquitto is running.");
         Err(ConnectError::TimeoutElapsedError)
     }
 }
@@ -426,7 +419,6 @@ fn check_device_status_aws(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
         Ok(DeviceStatus::Unknown)
     } else {
         // The request has not even been sent
-        println!("Make sure mosquitto is running.");
         Err(ConnectError::TimeoutElapsedError)
     }
 }
