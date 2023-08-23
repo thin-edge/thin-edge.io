@@ -48,6 +48,9 @@ pub enum ConnectError {
     #[error("Device is not connected to {cloud} cloud")]
     DeviceNotConnected { cloud: String },
 
+    #[error("Unknown device status")]
+    UnknownDeviceStatus,
+
     #[error(
         "The JWT token received from Cumulocity is invalid.\nToken: {token}\nReason: {reason}"
     )]
