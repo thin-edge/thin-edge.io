@@ -10,34 +10,34 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-anyhow = "1.0"
-async-trait = "0.1"
-camino = "1.1.4"
-clap = { version = "3.2", features = ["cargo", "derive"] }
-flockfile = { path = "../../common/flockfile" }
-hyper = { version = "0.14", features = ["full"] }
-lazy_static = "1.4"
-log = "0.4"
-path-clean = "0.1"
-plugin_sm = { path = "../plugin_sm" }
-routerify = "3.0"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tedge_actors = { path = "../../core/tedge_actors" }
-tedge_api = { path = "../../core/tedge_api" }
-tedge_config = { path = "../../common/tedge_config" }
-tedge_health_ext = { path = "../../extensions/tedge_health_ext" }
-tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
-tedge_signal_ext = { path = "../../extensions/tedge_signal_ext" }
-tedge_utils = { path = "../../common/tedge_utils" }
-thiserror = "1.0"
-time = { version = "0.3", features = ["formatting"] }
-tokio = { version = "1.23", features = ["rt-multi-thread"] }
-toml = "0.5"
-tracing = { version = "0.1", features = ["attributes", "log"] }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+camino = { workspace = true }
+clap = { workspace = true }
+flockfile = { workspace = true }
+hyper = { workspace = true, features = ["full"] }
+lazy_static = { workspace = true }
+log = { workspace = true }
+path-clean = { workspace = true }
+plugin_sm = { workspace = true }
+routerify = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tedge_actors = { workspace = true }
+tedge_api = { workspace = true }
+tedge_config = { workspace = true }
+tedge_health_ext = { workspace = true }
+tedge_mqtt_ext = { workspace = true }
+tedge_signal_ext = { workspace = true }
+tedge_utils = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true, features = ["formatting"] }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+toml = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
-serial_test = "0.8"
-tedge_actors = { path = "../../core/tedge_actors", features = ["test-helpers"] }
-tedge_test_utils = { path = "../../tests/tedge_test_utils" }
-test-case = "2.2"
+serial_test = { workspace = true }
+tedge_actors = { workspace = true, features = ["test-helpers"] }
+tedge_test_utils = { workspace = true }
+test-case = { workspace = true }

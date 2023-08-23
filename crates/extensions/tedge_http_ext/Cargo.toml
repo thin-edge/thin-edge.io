@@ -15,16 +15,16 @@ default = []
 test_helpers = []
 
 [dependencies]
-async-trait = "0.1"
-futures = { version = "0.3" }
-http = "0.2"
-hyper = { version = "0.14", default_features = false, features = ["client", "http1", "http2", "tcp"] }
-hyper-rustls = { version = "0.23", default_features = false, features = ["tokio-runtime", "tls12", "rustls-native-certs", "http1", "http2"] }
-serde = "1.0"
-serde_json = "1.0"
-tedge_actors = { path = "../../core/tedge_actors" }
-thiserror = "1.0"
-tokio = { version = "1.23", default_features = false, features = ["macros", "rt"] }
+async-trait = { workspace = true }
+futures = { workspace = true }
+http = { workspace = true }
+hyper = { workspace = true, default_features = false, features = ["client", "http1", "http2", "tcp"] }
+hyper-rustls = { workspace = true }
+serde  = { workspace = true }
+serde_json = { workspace = true }
+tedge_actors = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, default_features = false, features = ["macros", "rt"] }
 
 [dev-dependencies]
 mockito = "1.0.2"

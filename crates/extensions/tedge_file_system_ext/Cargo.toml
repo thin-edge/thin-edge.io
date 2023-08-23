@@ -10,14 +10,14 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-async-trait = "0.1"
-log = "0.4"
-tedge_actors = { path = "../../core/tedge_actors" }
-tedge_utils = { path = "../../common/tedge_utils", features = ["fs-notify"] }
-tokio = { version = "1.23", features = ["macros"] }
-try-traits = { version = "0.1" }
+async-trait = { workspace = true }
+log = { workspace = true }
+tedge_actors = { workspace = true }
+tedge_utils = { workspace = true, features = ["fs-notify"] }
+tokio = { workspace = true, features = ["macros"] }
+try-traits = { workspace = true }
 
 [dev-dependencies]
-tedge_actors = { path = "../../core/tedge_actors", features = ["test-helpers"] }
-tedge_test_utils = { path = "../../tests/tedge_test_utils" }
-tokio = { version = "1.23", features = ["rt-multi-thread"] }
+tedge_actors = { workspace = true, features = ["test-helpers"] }
+tedge_test_utils = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }

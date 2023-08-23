@@ -12,7 +12,7 @@ repository = { workspace = true }
 proc-macro = true
 
 [dependencies]
-tedge_config_macros-impl = { path = "../impl" }
-syn = { version = "1", features = ["full", "extra-traits"] }
-quote = "1"
-proc-macro2 = "1"
+tedge_config_macros-impl = { workspace = true }
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }

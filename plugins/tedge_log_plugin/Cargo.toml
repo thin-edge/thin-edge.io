@@ -11,15 +11,15 @@ repository = { workspace = true }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0"
-clap = { version = "3.2", features = ["cargo", "derive"] }
-tedge_actors = { path = "../../crates/core/tedge_actors" }
-tedge_config = { path = "../../crates/common/tedge_config" }
-tedge_file_system_ext = { path = "../../crates/extensions/tedge_file_system_ext" }
-tedge_health_ext = { path = "../../crates/extensions/tedge_health_ext" }
-tedge_http_ext = { path = "../../crates/extensions/tedge_http_ext" }
-tedge_log_manager = { path = "../../crates/extensions/tedge_log_manager" }
-tedge_mqtt_ext = { path = "../../crates/extensions/tedge_mqtt_ext" }
-tedge_signal_ext = { path = "../../crates/extensions/tedge_signal_ext" }
-tokio = { version = "1.23", features = ["rt", "rt-multi-thread"] }
-tracing = { version = "0.1", features = ["attributes", "log"] }
+anyhow = { workspace = true }
+clap = { workspace = true }
+tedge_actors  = { workspace = true }
+tedge_config   = { workspace = true }
+tedge_file_system_ext = { workspace = true }
+tedge_health_ext = { workspace = true }
+tedge_http_ext  = { workspace = true }
+tedge_log_manager = { workspace = true }
+tedge_mqtt_ext = { workspace = true }
+tedge_signal_ext = { workspace = true }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
+tracing = { workspace = true }

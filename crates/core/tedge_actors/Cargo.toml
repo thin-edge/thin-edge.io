@@ -15,11 +15,11 @@ default = []
 test-helpers = []
 
 [dependencies]
-async-trait = "0.1"
-futures = { version = "0.3" }
-log = "0.4"
-thiserror = "1.0"
-tokio = { version = "1.23", default_features = false, features = [
+async-trait = { workspace = true }
+futures = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, default_features = false, features = [
     "sync",
     "rt",
     "macros",
@@ -27,8 +27,8 @@ tokio = { version = "1.23", default_features = false, features = [
 ] }
 
 [dev-dependencies]
-env_logger = "0.10" # TODO: remove me
-tokio = { version = "1.23", default_features = false, features = [
+env_logger = { workspace = true } # TODO: remove me
+tokio = { workspace = true, default_features = false, features = [
     "rt-multi-thread",
 ] }
 

@@ -11,45 +11,45 @@ repository = { workspace = true }
 readme = "README.md"
 
 [dependencies]
-anyhow = "1.0"
-atty = "0.2"
-base64 = "0.13"
-camino = "1.1.4"
-certificate = { path = "../../common/certificate" }
+anyhow = { workspace = true }
+atty = { workspace = true }
+base64 = { workspace = true }
+camino = { workspace = true }
+certificate = { workspace = true }
 clap = { version = "3", features = ["cargo", "derive"] }
-doku = "0.21"
-hyper = { version = "0.14", default-features = false }
-pad = "0.1"
-reqwest = { version = "0.11", default-features = false, features = [
+doku = { workspace = true }
+hyper = { workspace = true, default-features = false }
+pad = { workspace = true }
+reqwest = { workspace = true, features = [
     "blocking",
     "json",
     "rustls-tls-native-roots",
     "stream",
 ] }
-rpassword = "5.0"
-rumqttc = "0.18"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-strum_macros = "0.24.1"
-tedge_config = { path = "../../common/tedge_config" }
-tedge_utils = { path = "../../common/tedge_utils" }
-thiserror = "1.0"
-toml = "0.5"
-tracing = { version = "0.1", features = ["attributes", "log"] }
-url = "2.2"
-which = "4.2"
-yansi = "0.5"
+rpassword = { workspace = true }
+rumqttc = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum_macros = { workspace = true }
+tedge_config = { workspace = true }
+tedge_utils = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+which = { workspace = true }
+yansi = { workspace = true }
 
 [dev-dependencies]
-assert_cmd = "2.0"
-assert_matches = "1.5"
-mockito = "0.31"
-mqtt_tests = { path = "../../tests/mqtt_tests" }
-pem = "1.0"
-predicates = "2.1"
-tempfile = "3.2"
-test-case = "2.2"
-tokio = { version = "1.23" }
+assert_cmd = { workspace = true }
+assert_matches = { workspace = true }
+mockito = { workspace = true }
+mqtt_tests = { workspace = true }
+pem = { workspace = true }
+predicates = { workspace = true }
+tempfile = { workspace = true }
+test-case = { workspace = true }
+tokio = { workspace = true }
 
 [features]
 integration-test = []

@@ -17,14 +17,14 @@ fs-notify = ["strum_macros", "notify"]
 
 [dependencies]
 anyhow = "1.0.71"
-futures = "0.3"
-mqtt_channel = { path = "../mqtt_channel" }
-nix = "0.24"
-notify = { version = "5.0", optional = true, default-features = false }
-strum_macros = { version = "0.24", optional = true }
-tempfile = "3.2"
-thiserror = "1.0"
-tokio = { version = "1.23", default_features = false, features = [
+futures = { workspace = true }
+mqtt_channel = { workspace = true }
+nix = { workspace = true }
+notify = { workspace = true, optional = true }
+strum_macros = { workspace = true, optional = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, default_features = false, features = [
     "fs",
     "io-util",
     "macros",
@@ -32,12 +32,12 @@ tokio = { version = "1.23", default_features = false, features = [
     "sync",
     "time",
 ] }
-tracing = { version = "0.1", features = [] }
-users = "0.11.0"
+tracing = { workspace = true }
+users = { workspace = true }
 
 [dev-dependencies]
-assert_matches = "1.5"
-maplit = "1.0"
-tedge_test_utils = { path = "../../tests/tedge_test_utils" }
-tokio = { version = "1.23", features = ["rt-multi-thread"] }
-whoami = "1.2.1"
+assert_matches = { workspace = true }
+maplit = { workspace = true }
+tedge_test_utils = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+whoami = { workspace = true }

@@ -12,7 +12,7 @@ repository = { workspace = true }
 normal = ["anyhow"]
 
 [dependencies]
-anyhow = "1.0"
-camino = "1.1.4"
-tempfile = "3.3"
-toml = "0.5"
+anyhow = { workspace = true }
+camino = { workspace = true }
+tempfile = { workspace = true }
+toml = { workspace = true }

@@ -11,14 +11,14 @@ repository = { workspace = true }
 
 [dependencies]
 clap = { version = "3", features = ["derive"] }
-csv = "1.1"
-log = "0.4"
-regex = "1"
-serde = { version = "1", features = ["derive"] }
-tedge_config = { path = "../../crates/common/tedge_config" }
-thiserror = "1.0"
+csv = { workspace = true }
+log = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+tedge_config   = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
-anyhow = "1.0"
-tedge_utils = { path = "../../crates/common/tedge_utils" }
-test-case = "2.2"
+anyhow = { workspace = true }
+tedge_utils = { workspace = true }
+test-case = { workspace = true }

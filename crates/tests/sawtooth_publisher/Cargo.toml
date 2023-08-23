@@ -6,11 +6,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-log = "2.0"
-env_logger = "0.9"
-futures = "0.3"
-futures-timer = "3.0"
-log = "0.4"
-mqtt_channel = { path = "../../common/mqtt_channel" }
-tedge_config = { path = "../../common/tedge_config" }
-tokio = { version = "1.23", features = ["sync", "macros"] }
+async-log = { workspace = true }
+env_logger = { workspace = true }
+futures = { workspace = true }
+futures-timer = { workspace = true }
+log = { workspace = true }
+mqtt_channel = { workspace = true }
+tedge_config = { workspace = true }
+tokio = { workspace = true, features = ["sync", "macros"] }
