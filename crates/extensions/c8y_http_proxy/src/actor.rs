@@ -85,6 +85,13 @@ impl Actor for C8YHttpProxyActor {
                     .await
                     .map(|response| response.into()),
 
+                C8YRestRequest::GetFreshJwtToken(_) => {
+                    self.end_point.token = None;
+                    self.get_and_set_jwt_token()
+                        .await
+                        .map(|response| response.into())
+                }
+
                 C8YRestRequest::C8yCreateEvent(request) => self
                     .create_event(request)
                     .await

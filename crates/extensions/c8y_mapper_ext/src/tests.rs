@@ -12,6 +12,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
+use std::time::SystemTime;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
@@ -109,6 +110,38 @@ async fn mapper_publishes_software_update_request() {
         )],
     )
     .await;
+}
+
+#[tokio::test]
+async fn mapper_publishes_software_update_request_with_new_token() {
+    // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
+    // and converts it to thin-edge json message published on `tedge/commands/req/software/update` with new JWT token.
+    let (mqtt, http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.skip(6).await; //Skip all init messages
+
+    // Simulate c8y_SoftwareUpdate SmartREST request
+    mqtt.send(MqttMessage::new(
+        &C8yTopic::downstream_topic(),
+        "528,test-device,test-very-large-software,2.0,https://test.c8y.io,install",
+    ))
+    .await
+    .expect("Send failed");
+    let first_request = mqtt.recv().await.unwrap();
+    // Simulate c8y_SoftwareUpdate SmartREST request
+    mqtt.send(MqttMessage::new(
+        &C8yTopic::downstream_topic(),
+        "528,test-device,test-very-large-software,2.0,https://test.c8y.io,install",
+    ))
+    .await
+    .expect("Send failed");
+    let second_request = mqtt.recv().await.unwrap();
+
+    // Both software update requests will have different tokens in it. So, they are not equal.
+    assert_ne!(first_request, second_request);
 }
 
 #[tokio::test]
@@ -1354,6 +1387,14 @@ fn spawn_dummy_c8y_http_proxy(mut http: SimpleMessageBox<C8YRestRequest, C8YRest
                     let _ = http
                         .send(Ok(c8y_http_proxy::messages::C8YRestResponse::EventId(
                             "dummy-token".into(),
+                        )))
+                        .await;
+                }
+                Some(C8YRestRequest::GetFreshJwtToken(_)) => {
+                    let now = SystemTime::now();
+                    let _ = http
+                        .send(Ok(c8y_http_proxy::messages::C8YRestResponse::EventId(
+                            format!("dummy-token-{:?}", now),
                         )))
                         .await;
                 }
