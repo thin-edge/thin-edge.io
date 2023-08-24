@@ -23,7 +23,7 @@ http = { workspace = true }
 miette = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
-tedge_config   = { workspace = true }
+tedge_config = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [
@@ -34,7 +34,7 @@ tokio = { workspace = true, features = [
     "time",
     "process",
 ] }
-tungstenite = { workspace = true }
+
 url = { workspace = true }
 ws_stream_tungstenite = { workspace = true }
 
