@@ -1,5 +1,77 @@
-//! A module defining entities, their types, and utilities for parsing MQTT
-//! topics following the default thin-edge MQTT scheme.
+//! This module abstracts the MQTT topics used by thin-edge.
+//!
+//! See https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/
+
+/// The MQTT topics are represented by three distinct groups:
+/// - a root prefix, used by all the topics
+/// - an entity topic identifier of the source or target of the messages
+/// - a channel kind for the messages exchanged along this topic
+///
+/// Once built from a root prefix, the main two features of such a schema are to:
+/// - get the topic addressing a given entity channel
+/// - get the entity channel addressed by some topic
+///
+/// ```
+/// # use tedge_api::mqtt_topics::{MqttSchema, Channel, ChannelCategory, EntityId};
+/// # use mqtt_channel::Topic;
+///
+/// // The default root prefix is `"te"`:
+/// let te = MqttSchema::default();
+/// assert_eq!(&te.root, "te");
+///
+/// // Getting the entity channel addressed by some topic
+/// let topic = Topic::new_unchecked("te/device/child001/service/service001/m/measurement_type");
+/// let entity = EntityId::new("device/child001/service/service001");
+/// let channel = Channel {
+///     category: ChannelCategory::Measurement,
+///     r#type: "measurement_type".to_string(),
+///     suffix: "".to_string(),
+/// };
+/// assert_eq!(
+///     te.entity_channel_of(&topic).ok(),
+///     Some((entity.clone(), channel.clone()))
+/// );
+///
+/// // Getting the topic to address a specific entity channel
+/// assert_eq!(
+///     te.topic_for(&entity, &channel).name,
+///     topic.name
+/// );
+/// ```
+pub struct MqttSchema {
+    pub root: String,
+}
+
+/// The default root prefix used by thin-edge is `te`
+impl Default for MqttSchema {
+    fn default() -> Self {
+        MqttSchema::new("te")
+    }
+}
+
+impl MqttSchema {
+    /// Build a new schema using the given root prefix for all topics.
+    pub fn new(root: &str) -> Self {
+        MqttSchema {
+            root: root.to_string(),
+        }
+    }
+
+    /// Get the topic addressing a given entity channel
+    pub fn topic_for(&self, entity: &EntityId, channel: &Channel) -> mqtt_channel::Topic {
+        let topic = format!("{}/{}/{}", self.root, entity.0, channel.topic_suffix());
+        mqtt_channel::Topic::new(&topic).unwrap()
+    }
+
+    /// Get the entity channel addressed by some topic
+    pub fn entity_channel_of(
+        &self,
+        topic: &mqtt_channel::Topic,
+    ) -> Result<(EntityId, Channel), EntityTopicError> {
+        let entity_topic: EntityTopic = topic.name.parse()?;
+        Ok((entity_topic.entity_id, entity_topic.channel.unwrap()))
+    }
+}
 
 use std::str::FromStr;
 
@@ -144,7 +216,13 @@ pub enum EntityTopicError {
 ///
 /// https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#group-identifier
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct EntityId(String);
+pub struct EntityId(String);
+
+impl EntityId {
+    pub fn new(topic_id: &str) -> Self {
+        EntityId(topic_id.to_string())
+    }
+}
 
 /// Represents a channel group in thin-edge MQTT scheme.
 ///
@@ -177,6 +255,20 @@ impl Channel {
             r#type: r#type.to_string(),
             suffix: suffix.to_string(),
         })
+    }
+
+    pub fn topic_suffix(&self) -> String {
+        let kind = match self.category {
+            ChannelCategory::Measurement => "m",
+            ChannelCategory::Event => "e",
+            ChannelCategory::Alarm => "a",
+            ChannelCategory::Command => "cmd",
+        };
+        if self.suffix.is_empty() {
+            format!("{}/{}", kind, self.r#type)
+        } else {
+            format!("{}/{}/{}", kind, self.r#type, self.suffix)
+        }
     }
 }
 
