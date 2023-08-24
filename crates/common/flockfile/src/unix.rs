@@ -1,3 +1,5 @@
+use nix::errno::Errno::EACCES;
+use nix::errno::Errno::EAGAIN;
 use nix::fcntl::flock;
 use nix::fcntl::FlockArg;
 use nix::unistd::write;
@@ -11,6 +13,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use tracing::debug;
 use tracing::error;
+use tracing::info;
 use tracing::warn;
 
 const LOCK_CHILD_DIRECTORY: &str = "lock/";
@@ -33,19 +36,12 @@ pub enum FlockfileError {
 }
 
 impl FlockfileError {
-    fn path(&self) -> &Path {
-        match self {
-            FlockfileError::FromIo { path, .. } => path,
-            FlockfileError::FromNix { path, .. } => path,
-        }
-    }
-
     /// Is the error due to concurrent accesses on the lock file?
     /// Or to some unrelated issue as a permission denied error opening the file?
     fn non_exclusive_access(&self) -> bool {
         match self {
             FlockfileError::FromIo { .. } => false,
-            FlockfileError::FromNix { .. } => true,
+            FlockfileError::FromNix { source, .. } => matches!(source, EACCES | EAGAIN),
         }
     }
 }
@@ -154,16 +150,23 @@ impl AsRef<Path> for Flockfile {
 pub fn check_another_instance_is_not_running(
     app_name: &str,
     run_dir: &Path,
-) -> Result<Flockfile, FlockfileError> {
+) -> Result<Option<Flockfile>, FlockfileError> {
     let lock_path = run_dir.join(format!("{}{}.lock", LOCK_CHILD_DIRECTORY, app_name));
 
-    Flockfile::new_lock(lock_path.as_path()).map_err(|err| {
-        if err.non_exclusive_access() {
+    match Flockfile::new_lock(lock_path.as_path()) {
+        Ok(flock) => Ok(Some(flock)),
+        Err(err) if err.non_exclusive_access() => {
             error!("Another instance of {} is running.", app_name);
+            Err(err)
         }
-        error!("Lock file path: {}", err.path().to_str().unwrap());
-        err
-    })
+        Err(_) => {
+            info!(
+                "The locking mechanism is not active, as {:?} is not a directory with write access.",
+                lock_path.parent().unwrap() // This is true as run_dir and lock directories are always provided
+            );
+            Ok(None)
+        }
+    }
 }
 
 #[cfg(test)]

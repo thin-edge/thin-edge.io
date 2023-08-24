@@ -104,10 +104,7 @@ async fn main() -> anyhow::Result<()> {
     let mut _flock = None;
     if config.run.lock_files {
         let run_dir = config.run.path.as_std_path();
-        _flock = Some(check_another_instance_is_not_running(
-            &mapper_opt.name.to_string(),
-            run_dir,
-        )?);
+        _flock = check_another_instance_is_not_running(&mapper_opt.name.to_string(), run_dir)?;
     }
 
     if mapper_opt.init {
