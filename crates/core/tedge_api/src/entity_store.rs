@@ -70,6 +70,7 @@ impl EntityStore {
 
         let entity_id = main_device.entity_id?;
         let metadata = EntityMetadata {
+            topic_id: main_device.topic_id.clone(),
             entity_id: entity_id.clone(),
             r#type: main_device.r#type,
             parent: None,
@@ -170,6 +171,7 @@ impl EntityStore {
             .entity_id
             .unwrap_or_else(|| self.derive_entity_id(&message.topic_id));
         let entity_metadata = EntityMetadata {
+            topic_id: message.topic_id.clone(),
             r#type: message.r#type,
             entity_id: entity_id.clone(),
             parent,
@@ -179,7 +181,7 @@ impl EntityStore {
         // device is affected if it was previously registered and was updated
         let previous = self
             .entities
-            .insert(message.topic_id.clone(), entity_metadata);
+            .insert(entity_metadata.topic_id.clone(), entity_metadata);
 
         if previous.is_some() {
             affected_entities.push(message.topic_id);
@@ -283,6 +285,7 @@ impl EntityStore {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityMetadata {
+    pub topic_id: EntityTopicId,
     pub parent: Option<EntityTopicId>,
     pub r#type: EntityType,
     pub entity_id: String,
@@ -300,6 +303,7 @@ impl EntityMetadata {
     /// Creates a entity metadata for a child device.
     pub fn main_device(device_id: String) -> Self {
         Self {
+            topic_id: "device/main//".to_string(),
             entity_id: device_id,
             r#type: EntityType::MainDevice,
             parent: None,
@@ -310,6 +314,7 @@ impl EntityMetadata {
     /// Creates a entity metadata for a child device.
     pub fn child_device(child_device_id: String) -> Self {
         Self {
+            topic_id: format!("device/{child_device_id}//"),
             entity_id: child_device_id,
             r#type: EntityType::ChildDevice,
             parent: Some(EntityTopicId::default_main_device()),

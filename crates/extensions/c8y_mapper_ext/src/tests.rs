@@ -1289,7 +1289,7 @@ async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_main_device
     // Validate the payload JSON
     let expected_json = json!({
         "status": "init",
-        "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/main/log_upload/logfileA-{cmd_id}"),
+        "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device/log_upload/logfileA-{cmd_id}"),
         "type": "logfileA",
         "dateFrom": "2013-06-22T17:03:14.123+02:00",
         "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -1307,6 +1307,14 @@ async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_child_devic
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
     mqtt.skip(6).await; //Skip all init messages
+
+    // The child device must be registered first
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/DeviceSerial//"),
+        r#"{ "@type":"child-device", "@id":"DeviceSerial" }"#,
+    ))
+    .await
+    .expect("fail to register the child-device");
 
     // Simulate c8y_LogfileRequest SmartREST request
     mqtt.send(MqttMessage::new(

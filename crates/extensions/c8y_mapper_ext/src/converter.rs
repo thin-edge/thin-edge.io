@@ -794,9 +794,10 @@ impl CumulocityConverter {
                     Ok(publish_restart_operation_status(message.payload_str()?).await?)
                 }
                 Ok(MapperSubscribeTopic::C8yTopic(_)) => self.parse_c8y_topics(message).await,
-                _ => Err(ConversionError::UnsupportedTopic(
-                    message.topic.name.clone(),
-                )),
+                _ => {
+                    error!("Unsupported topic: {}", message.topic.name);
+                    Ok(vec![])
+                }
             },
         }?;
 

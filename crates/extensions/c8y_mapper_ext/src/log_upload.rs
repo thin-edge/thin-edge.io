@@ -1,6 +1,7 @@
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
+use crate::error::CumulocityMapperError::UnknownDevice;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
@@ -13,8 +14,8 @@ use nanoid::nanoid;
 use tedge_api::cmd_topic::get_target_ids_from_cmd_topic;
 use tedge_api::cmd_topic::CmdPublishTopic;
 use tedge_api::cmd_topic::CmdSubscribeTopic;
-use tedge_api::cmd_topic::DeviceKind;
 use tedge_api::cmd_topic::Target;
+use tedge_api::entity_store::EntityType;
 use tedge_api::messages::CommandStatus;
 use tedge_api::messages::LogMetadata;
 use tedge_api::messages::LogUploadCmdPayload;
@@ -42,19 +43,19 @@ impl CumulocityConverter {
         smartrest: &str,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
         let log_request = SmartRestLogRequest::from_smartrest(smartrest)?;
-        let device_id = if log_request.device.eq(&self.device_name) {
-            "main".into()
-        } else {
-            log_request.device
-        };
+        let target = self
+            .entity_store
+            .get_by_id(&log_request.device)
+            .ok_or_else(|| UnknownDevice {
+                device_id: log_request.device.to_string(),
+            })?;
 
         let cmd_id = nanoid!();
-        let topic = CmdPublishTopic::LogUpload(Target::new(device_id.clone(), cmd_id.clone()))
-            .to_topic("te");
+        let topic = CmdPublishTopic::LogUpload(Target::new(target, &cmd_id)).to_topic("te");
 
         let tedge_url = format!(
             "http://{}/tedge/file-transfer/{}/log_upload/{}-{}",
-            &self.config.tedge_http_host, device_id, log_request.log_type, cmd_id
+            &self.config.tedge_http_host, target.entity_id, log_request.log_type, cmd_id
         );
 
         let request = LogUploadCmdPayload {
@@ -80,9 +81,9 @@ impl CumulocityConverter {
         &mut self,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        let (device_kind, cmd_id) =
+        let (topic_id, cmd_id) =
             match get_target_ids_from_cmd_topic(&message.topic, &self.config.topic_root) {
-                (Some(device_kind), Some(cmd_id)) => (device_kind, cmd_id),
+                (Some(topic_id), Some(cmd_id)) => (topic_id, cmd_id),
                 _ => {
                     return Err(ConversionError::UnsupportedTopic(
                         message.topic.name.clone(),
@@ -90,9 +91,15 @@ impl CumulocityConverter {
                 }
             };
 
-        let external_id = device_kind.name_with_default(&self.device_name);
+        // get the device metadata from its id
+        let device = self.entity_store.get(topic_id).ok_or_else(|| {
+            CumulocityMapperError::UnregisteredDevice {
+                topic_id: topic_id.to_string(),
+            }
+        })?;
+        let external_id = device.entity_id.to_string();
 
-        let c8y_topic: C8yTopic = device_kind.clone().into();
+        let c8y_topic: C8yTopic = device.into();
         let smartrest_topic = c8y_topic.to_topic()?;
 
         let payload = message.payload_str()?;
@@ -110,7 +117,7 @@ impl CumulocityConverter {
                 let uploaded_file_path = self
                     .config
                     .file_transfer_dir
-                    .join(device_kind.name())
+                    .join(&device.entity_id)
                     .join("log_upload")
                     .join(format!("{}-{}", response.log_type, cmd_id));
                 let result = self
@@ -170,20 +177,30 @@ impl CumulocityConverter {
     ) -> Result<Vec<Message>, ConversionError> {
         let metadata = LogMetadata::from_json(message.payload_str()?)?;
 
-        let device_kind =
+        let topic_id =
             match get_target_ids_from_cmd_topic(&message.topic, &self.config.topic_root).0 {
-                Some(device_id) => device_id,
+                Some(topic_id) => topic_id,
                 _ => {
                     return Err(ConversionError::UnsupportedTopic(
                         message.topic.name.clone(),
                     ))
                 }
             };
+        // get the device metadata from its id
+        let device = self.entity_store.get(topic_id).ok_or_else(|| {
+            CumulocityMapperError::UnregisteredDevice {
+                topic_id: topic_id.to_string(),
+            }
+        })?;
 
         // Create a c8y_LogfileRequest operation file
-        let dir_path = match device_kind {
-            DeviceKind::Main => self.ops_dir.clone(),
-            DeviceKind::Child(ref id) => self.ops_dir.join(id),
+        let dir_path = match device.r#type {
+            EntityType::MainDevice => self.ops_dir.clone(),
+            EntityType::ChildDevice => self.ops_dir.join(&device.entity_id),
+            EntityType::Service => {
+                // No support for service log management
+                return Ok(vec![]);
+            }
         };
         create_directory_with_defaults(&dir_path)?;
         create_file_with_defaults(dir_path.join("c8y_LogfileRequest"), None)?;
@@ -194,7 +211,7 @@ impl CumulocityConverter {
         let supported_log_types = types.join(",");
         let payload = format!("118,{supported_log_types}");
 
-        let c8y_topic: C8yTopic = device_kind.into();
+        let c8y_topic: C8yTopic = device.into();
         Ok(vec![MqttMessage::new(&c8y_topic.to_topic()?, payload)])
     }
 }
