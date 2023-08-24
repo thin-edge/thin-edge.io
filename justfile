@@ -1,6 +1,6 @@
 set ignore-comments
 
-VERSION := `./ci/build_scripts/build.sh --version 2>/dev/null || exit 0`
+VERSION := `./ci/build_scripts/version.sh 2>/dev/null || exit 0`
 # Detect the default target based on the user's CPU arch.
 # For MacOS m1 users, it will return a linux host but
 # match the appropriate CPU architecture,
@@ -78,7 +78,7 @@ generate-linux-package-scripts:
 
 # Build linux virtual packages
 release-linux-virtual:
-    ./ci/build_scripts/package.sh build_virtual "all" --version "{{VERSION}}" --output target/virtual-packages
+    ./ci/build_scripts/package.sh build_virtual "all" --output target/virtual-packages
 
 # Publish linux virtual packages
 publish-linux-virtual *ARGS='':

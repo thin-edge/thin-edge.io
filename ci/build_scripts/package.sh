@@ -37,7 +37,7 @@ Args:
 
 Flags:
     --help|-h   Show this help
-    --version               Print the automatic version which will be used (this does not build the project)
+    --version <string>      Use a specific version
     --output <path>         Output directory where the packages will be written to
     --types <csv_string>    CSV list of packages types. Accepted values: deb, rpm, apk, tarball
     --clean                 Clean the output directory before writing any packages to it
@@ -51,9 +51,6 @@ Examples:
 
     $0 aarch64-unknown-linux-musl tedge-agent
     # Package the tedge-agent for aarch64
-
-    $0 aarch64-unknown-linux-musl tedge tedge-agent --version 0.0.1
-    # Package using an manual version
 EOF
 }
 
@@ -67,7 +64,7 @@ export CI_PROJECT_URL="https://github.com/thin-edge/thin-edge.io"
 #
 OUTPUT_DIR=${OUTPUT_DIR:-dist}
 TARGET=
-VERSION=0.0.0
+VERSION=
 CLEAN=1
 PACKAGES=()
 COMMAND=
@@ -166,7 +163,7 @@ build_package() {
 
     # Alpine
     if [[ "$PACKAGE_TYPES" =~ apk ]]; then
-        nfpm "${COMMON_ARGS[@]}" --packager apk
+        env GIT_SEMVER="${APK_VERSION:-$GIT_SEMVER}" RELEASE="r0" nfpm "${COMMON_ARGS[@]}" --packager apk
     fi
 }
 
@@ -187,7 +184,7 @@ build_virtual_package() {
     fi
 
     if [[ "$PACKAGE_TYPES" =~ apk ]]; then
-        nfpm "${COMMON_ARGS[@]}" --packager apk
+        env GIT_SEMVER="${APK_VERSION:-$GIT_SEMVER}" RELEASE="r0" nfpm "${COMMON_ARGS[@]}" --packager apk
     fi
 }
 
@@ -304,7 +301,8 @@ check_prerequisites() {
 
 check_prerequisites
 
-export GIT_SEMVER="$VERSION"
+# shellcheck disable=SC1091
+. ./ci/build_scripts/version.sh --version "$VERSION"
 
 case "$COMMAND" in
     build)
