@@ -10,7 +10,6 @@
 use std::collections::HashMap;
 
 use crate::entity_store;
-use crate::mqtt_topics::EntityTopic;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 
@@ -98,12 +97,6 @@ impl EntityStore {
     pub fn get_by_id(&self, entity_id: &str) -> Option<&EntityMetadata> {
         let topic_id = self.entity_id_index.get(entity_id)?;
         self.get(topic_id)
-    }
-
-    /// Returns the entity attached to a topic, if any
-    pub fn get_entity_from_topic(&self, topic: &Topic) -> Option<&EntityMetadata> {
-        let entity_topic = EntityTopic::try_from(topic).ok()?;
-        self.get(entity_topic.entity_id())
     }
 
     /// Returns the MQTT identifier of the main device.
