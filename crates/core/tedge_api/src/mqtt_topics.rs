@@ -2,6 +2,10 @@
 //!
 //! See https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/
 
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::str::FromStr;
+
 /// The MQTT topics are represented by three distinct groups:
 /// - a root prefix, used by all the topics
 /// - an entity topic identifier of the source or target of the messages
@@ -12,7 +16,7 @@
 /// - get the entity channel addressed by some topic
 ///
 /// ```
-/// # use tedge_api::mqtt_topics::{MqttSchema, Channel, ChannelCategory, EntityId};
+/// # use tedge_api::mqtt_topics::{MqttSchema, Channel, EntityId};
 /// # use mqtt_channel::Topic;
 ///
 /// // The default root prefix is `"te"`:
@@ -22,10 +26,8 @@
 /// // Getting the entity channel addressed by some topic
 /// let topic = Topic::new_unchecked("te/device/child001/service/service001/m/measurement_type");
 /// let entity = EntityId::new("device/child001/service/service001");
-/// let channel = Channel {
-///     category: ChannelCategory::Measurement,
-///     r#type: "measurement_type".to_string(),
-///     suffix: "".to_string(),
+/// let channel = Channel::Measurement {
+///     measurement_type: "measurement_type".to_string(),
 /// };
 /// assert_eq!(
 ///     te.entity_channel_of(&topic).ok(),
@@ -59,7 +61,7 @@ impl MqttSchema {
 
     /// Get the topic addressing a given entity channel
     pub fn topic_for(&self, entity: &EntityId, channel: &Channel) -> mqtt_channel::Topic {
-        let topic = format!("{}/{}/{}", self.root, entity.0, channel.topic_suffix());
+        let topic = format!("{}/{}/{}", self.root, entity.0, channel.to_string());
         mqtt_channel::Topic::new(&topic).unwrap()
     }
 
@@ -69,11 +71,9 @@ impl MqttSchema {
         topic: &mqtt_channel::Topic,
     ) -> Result<(EntityId, Channel), EntityTopicError> {
         let entity_topic: EntityTopic = topic.name.parse()?;
-        Ok((entity_topic.entity_id, entity_topic.channel.unwrap()))
+        Ok((entity_topic.entity_id, entity_topic.channel))
     }
 }
-
-use std::str::FromStr;
 
 // TODO: read from config
 const MQTT_ROOT: &str = "te";
@@ -86,24 +86,22 @@ const MQTT_ROOT: &str = "te";
 /// successfully parsed.
 ///
 /// ```
-/// # use tedge_api::mqtt_topics::{EntityTopic, Channel, ChannelCategory};
+/// # use tedge_api::mqtt_topics::{EntityTopic, Channel};
 /// let entity_topic: EntityTopic =
 ///     format!("te/device/child001/service/service001/m/measurement_type")
 ///         .parse()
 ///         .unwrap();
 /// assert_eq!(entity_topic.entity_id(), "device/child001/service/service001");
-/// assert_eq!(entity_topic.channel(), Some(&Channel {
-///     category: ChannelCategory::Measurement,
-///     r#type: "measurement_type".to_string(),
-///     suffix: "".to_string()
-/// }));
+/// assert_eq!(entity_topic.channel(), &Channel::Measurement {
+///     measurement_type: "measurement_type".to_string(),
+/// });
 /// ```
 ///
 /// https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#topic-scheme
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityTopic {
     entity_id: EntityId,
-    channel: Option<Channel>,
+    channel: Channel,
 }
 
 impl EntityTopic {
@@ -111,8 +109,8 @@ impl EntityTopic {
         self.entity_id.0.as_str()
     }
 
-    pub fn channel(&self) -> Option<&Channel> {
-        self.channel.as_ref()
+    pub fn channel(&self) -> &Channel {
+        &self.channel
     }
 
     /// Returns a device name if entity topic identifier is not using a custom
@@ -136,11 +134,7 @@ impl EntityTopic {
 
     pub fn is_measurement(topic: &mqtt_channel::Topic) -> bool {
         EntityTopic::from_str(&topic.name)
-            .map(|ref t| {
-                t.channel()
-                    .map(|c| c.category == ChannelCategory::Measurement)
-                    .unwrap_or(false)
-            })
+            .map(|ref t| matches!(t.channel(), Channel::Measurement { .. }))
             .unwrap_or(false)
     }
 }
@@ -171,12 +165,7 @@ impl FromStr for EntityTopic {
         let missing_slashes = ENTITY_ID_SEGMENTS - entity_id_segments - 1;
         let entity_id = format!("{entity_id}{:/<1$}", "", missing_slashes);
 
-        let channel = channel.trim_start_matches('/');
-        let channel = if !channel.is_empty() {
-            Some(Channel::new(channel)?)
-        } else {
-            None
-        };
+        let channel: Channel = channel.trim_start_matches('/').parse()?;
         Ok(EntityTopic {
             entity_id: EntityId(entity_id.to_string()),
             channel,
@@ -224,68 +213,83 @@ impl EntityId {
     }
 }
 
-/// Represents a channel group in thin-edge MQTT scheme.
-///
-/// A valid channel needs to be at least 2 segments long, with the first segment
-/// containing a valid category.
+/// A channel identifies the type of the messages exchanged over a topic
 ///
 /// <https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#group-channel>
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Channel {
-    pub category: ChannelCategory,
-    pub r#type: String,
-    pub suffix: String,
-}
-
-impl Channel {
-    pub fn new(channel: &str) -> Result<Self, ChannelError> {
-        let (category, channel) = channel.split_once('/').ok_or(ChannelError::TooShort)?;
-        let kind = match category {
-            "m" => ChannelCategory::Measurement,
-            "e" => ChannelCategory::Event,
-            "a" => ChannelCategory::Alarm,
-            "cmd" => ChannelCategory::Command,
-            _ => return Err(ChannelError::InvalidCategory(category.to_string())),
-        };
-
-        let (r#type, suffix) = channel.split_once('/').unwrap_or((channel, ""));
-
-        Ok(Channel {
-            category: kind,
-            r#type: r#type.to_string(),
-            suffix: suffix.to_string(),
-        })
-    }
-
-    pub fn topic_suffix(&self) -> String {
-        let kind = match self.category {
-            ChannelCategory::Measurement => "m",
-            ChannelCategory::Event => "e",
-            ChannelCategory::Alarm => "a",
-            ChannelCategory::Command => "cmd",
-        };
-        if self.suffix.is_empty() {
-            format!("{}/{}", kind, self.r#type)
-        } else {
-            format!("{}/{}/{}", kind, self.r#type, self.suffix)
-        }
-    }
+pub enum Channel {
+    EntityMetadata,
+    Measurement { measurement_type: String },
+    Event { event_type: String },
+    Alarm { alarm_type: String },
+    Command { operation: String, cmd_id: String },
+    MeasurementMetadata { measurement_type: String },
+    EventMetadata { event_type: String },
+    AlarmMetadata { alarm_type: String },
+    CommandMetadata { operation: String },
 }
 
 impl FromStr for Channel {
     type Err = ChannelError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::new(s)
+    fn from_str(channel: &str) -> Result<Self, ChannelError> {
+        match channel.split('/').collect::<Vec<&str>>()[..] {
+            [""] => Ok(Channel::EntityMetadata),
+
+            ["m", measurement_type] => Ok(Channel::Measurement {
+                measurement_type: measurement_type.to_string(),
+            }),
+            ["m", measurement_type, "meta"] => Ok(Channel::MeasurementMetadata {
+                measurement_type: measurement_type.to_string(),
+            }),
+
+            ["e", event_type] => Ok(Channel::Event {
+                event_type: event_type.to_string(),
+            }),
+            ["e", event_type, "meta"] => Ok(Channel::EventMetadata {
+                event_type: event_type.to_string(),
+            }),
+
+            ["a", alarm_type] => Ok(Channel::Alarm {
+                alarm_type: alarm_type.to_string(),
+            }),
+            ["a", alarm_type, "meta"] => Ok(Channel::AlarmMetadata {
+                alarm_type: alarm_type.to_string(),
+            }),
+
+            ["cmd", operation] => Ok(Channel::CommandMetadata {
+                operation: operation.to_string(),
+            }),
+            ["cmd", operation, cmd_id] => Ok(Channel::Command {
+                operation: operation.to_string(),
+                cmd_id: cmd_id.to_string(),
+            }),
+
+            _ => Err(ChannelError::InvalidCategory(channel.to_string())),
+        }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChannelCategory {
-    Measurement,
-    Event,
-    Alarm,
-    Command,
+impl Display for Channel {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Channel::EntityMetadata => Ok(()),
+
+            Channel::Measurement { measurement_type } => write!(f, "m/{measurement_type}"),
+            Channel::MeasurementMetadata { measurement_type } => {
+                write!(f, "m/{measurement_type}/meta")
+            }
+
+            Channel::Event { event_type } => write!(f, "e/{event_type}"),
+            Channel::EventMetadata { event_type } => write!(f, "e/{event_type}/meta"),
+
+            Channel::Alarm { alarm_type } => write!(f, "a/{alarm_type}"),
+            Channel::AlarmMetadata { alarm_type } => write!(f, "a/{alarm_type}/meta"),
+
+            Channel::Command { operation, cmd_id } => write!(f, "cmd/{operation}/{cmd_id}"),
+            Channel::CommandMetadata { operation } => write!(f, "cmd/{operation}"),
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone)]
@@ -312,31 +316,25 @@ mod tests {
             entity_topic,
             EntityTopic {
                 entity_id: EntityId("device/child001/service/service001".to_string()),
-                channel: Some(Channel {
-                    category: ChannelCategory::Measurement,
-                    r#type: "measurement_type".to_string(),
-                    suffix: "".to_string()
-                })
+                channel: Channel::Measurement {
+                    measurement_type: "measurement_type".to_string(),
+                }
             }
         );
     }
 
     #[test]
     fn parses_nochannel_correct_topic() {
-        let topic1: EntityTopic = format!("{MQTT_ROOT}/device/child001/service/service001/")
-            .parse()
-            .unwrap();
-        let topic2: EntityTopic = format!("{MQTT_ROOT}/device/child001/service/service001")
+        let topic1: EntityTopic = format!("{MQTT_ROOT}/device/child001/service/service001")
             .parse()
             .unwrap();
 
         let topic = EntityTopic {
             entity_id: EntityId("device/child001/service/service001".to_string()),
-            channel: None,
+            channel: Channel::EntityMetadata,
         };
 
         assert_eq!(topic1, topic);
-        assert_eq!(topic2, topic);
     }
 
     #[test]
@@ -346,7 +344,7 @@ mod tests {
 
         let topic = EntityTopic {
             entity_id: EntityId("device/child001//".to_string()),
-            channel: None,
+            channel: Channel::EntityMetadata,
         };
 
         assert_eq!(topic1, topic);
