@@ -150,15 +150,15 @@ build_package() {
     # * arm7 => armhf
     if [[ "$PACKAGE_TYPES" =~ deb ]]; then
         if [ "$package_arch" == "arm6" ]; then
-            nfpm "${COMMON_ARGS[@]}" --packager deb --target "${OUTPUT_DIR}/${name}_${GIT_SEMVER}_armv6.deb"
+            env GIT_SEMVER="${DEB_VERSION:-$GIT_SEMVER}" nfpm "${COMMON_ARGS[@]}" --packager deb --target "${OUTPUT_DIR}/${name}_${GIT_SEMVER}_armv6.deb"
         else
-            nfpm "${COMMON_ARGS[@]}" --packager deb
+            env GIT_SEMVER="${DEB_VERSION:-$GIT_SEMVER}" nfpm "${COMMON_ARGS[@]}" --packager deb
         fi
     fi
 
     # RPM for CentOS/RHEL/RockyLinux
     if [[ "$PACKAGE_TYPES" =~ rpm ]]; then
-        nfpm "${COMMON_ARGS[@]}" --packager rpm
+        env GIT_SEMVER="${RPM_VERSION:-$GIT_SEMVER}" nfpm "${COMMON_ARGS[@]}" --packager rpm
     fi
 
     # Alpine
@@ -176,11 +176,11 @@ build_virtual_package() {
     )
 
     if [[ "$PACKAGE_TYPES" =~ deb ]]; then
-        nfpm "${COMMON_ARGS[@]}" --packager deb
+        env GIT_SEMVER="${DEB_VERSION:-$GIT_SEMVER}" nfpm "${COMMON_ARGS[@]}" --packager deb
     fi
 
     if [[ "$PACKAGE_TYPES" =~ rpm ]]; then
-        nfpm "${COMMON_ARGS[@]}" --packager rpm
+        env GIT_SEMVER="${RPM_VERSION:-$GIT_SEMVER}" nfpm "${COMMON_ARGS[@]}" --packager rpm
     fi
 
     if [[ "$PACKAGE_TYPES" =~ apk ]]; then
