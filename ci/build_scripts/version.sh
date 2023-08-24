@@ -105,11 +105,13 @@ set_version_variables() {
     APK_VERSION="${GIT_SEMVER//\~/_rc}"
     DEB_VERSION="$GIT_SEMVER"
     RPM_VERSION="$GIT_SEMVER"
+    TARBALL_VERSION="${GIT_SEMVER//\~/-rc}"
 
     export GIT_SEMVER
     export APK_VERSION
     export DEB_VERSION
     export RPM_VERSION
+    export TARBALL_VERSION
 }
 
 

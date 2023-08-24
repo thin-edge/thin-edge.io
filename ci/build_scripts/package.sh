@@ -210,7 +210,7 @@ build_tarball() {
     rm -f "$source_dir/$name"*tar.gz
 
     # Use underscores as a delimiter between version and target/arch to make it easier to parse
-    TAR_FILE="${OUTPUT_DIR}/${name}_${VERSION}_${target}.tar.gz"
+    TAR_FILE="${OUTPUT_DIR}/${name}_${TARBALL_VERSION:-$GIT_SEMVER}_${target}.tar.gz"
 
     echo ""
     echo "Building: pkg_arch=$target, source=$source_dir"
