@@ -9,8 +9,8 @@
 
 use std::collections::HashMap;
 
-use crate::entity::EntityTopic;
 use crate::entity_store;
+use crate::mqtt_topics::EntityTopic;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 

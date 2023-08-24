@@ -14,7 +14,7 @@ const MQTT_ROOT: &str = "te";
 /// successfully parsed.
 ///
 /// ```
-/// # use tedge_api::entity::{EntityTopic, Channel, ChannelCategory};
+/// # use tedge_api::mqtt_topics::{EntityTopic, Channel, ChannelCategory};
 /// let entity_topic: EntityTopic =
 ///     format!("te/device/child001/service/service001/m/measurement_type")
 ///         .parse()
