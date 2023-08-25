@@ -73,56 +73,12 @@ impl MqttSchema {
         &self,
         topic: &mqtt_channel::Topic,
     ) -> Result<(EntityId, Channel), EntityTopicError> {
-        let entity_topic: EntityTopic = self.parse(&topic.name)?;
-        Ok((entity_topic.entity_id, entity_topic.channel))
-    }
-}
-
-/// A thin-edge entity MQTT topic.
-///
-/// An entity topic consists of 3 groups: root, entity identifier, and
-/// optionally a channel. To be a valid entity topic, a topic must start with a
-/// root, and then have its entity identifier and channel (if present) groups
-/// successfully parsed.
-///
-/// https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#topic-scheme
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EntityTopic {
-    entity_id: EntityId,
-    channel: Channel,
-}
-
-impl EntityTopic {
-    pub fn entity_id(&self) -> &str {
-        self.entity_id.0.as_str()
-    }
-
-    pub fn channel(&self) -> &Channel {
-        &self.channel
-    }
-
-    /// Returns a device name if entity topic identifier is not using a custom
-    /// schema.
-    pub fn device_name(&self) -> Option<&str> {
-        match self.entity_id.0.split('/').collect::<Vec<&str>>()[..] {
-            ["device", device_id, "service", _] => Some(device_id),
-            ["device", device_id, "", ""] => Some(device_id),
-            _ => None,
-        }
-    }
-
-    /// Returns a service name if entity topic identifier is not using a custom
-    /// schema and the entity identifier refers to the service.
-    pub fn service_name(&self) -> Option<&str> {
-        match self.entity_id.0.split('/').collect::<Vec<&str>>()[..] {
-            ["device", _, "service", service_id] => Some(service_id),
-            _ => None,
-        }
+        self.parse(&topic.name)
     }
 }
 
 impl MqttSchema {
-    fn parse(&self, topic: &str) -> Result<EntityTopic, EntityTopicError> {
+    fn parse(&self, topic: &str) -> Result<(EntityId, Channel), EntityTopicError> {
         const ENTITY_ID_SEGMENTS: usize = 4;
 
         let (root, topic) = topic.split_once('/').ok_or(EntityTopicError::Root {
@@ -145,11 +101,9 @@ impl MqttSchema {
         let missing_slashes = ENTITY_ID_SEGMENTS - entity_id_segments - 1;
         let entity_id = format!("{entity_id}{:/<1$}", "", missing_slashes);
 
+        let entity_id = EntityId::new(&entity_id);
         let channel: Channel = channel.trim_start_matches('/').parse()?;
-        Ok(EntityTopic {
-            entity_id: EntityId(entity_id.to_string()),
-            channel,
-        })
+        Ok((entity_id, channel))
     }
 }
 
@@ -186,6 +140,25 @@ impl EntityId {
 
     pub fn entity_id(&self) -> &str {
         &self.0
+    }
+
+    /// Returns a device name if entity topic identifier is not using a custom
+    /// schema.
+    pub fn device_name(&self) -> Option<&str> {
+        match self.0.split('/').collect::<Vec<&str>>()[..] {
+            ["device", device_id, "service", _] => Some(device_id),
+            ["device", device_id, "", ""] => Some(device_id),
+            _ => None,
+        }
+    }
+
+    /// Returns a service name if entity topic identifier is not using a custom
+    /// schema and the entity identifier refers to the service.
+    pub fn service_name(&self) -> Option<&str> {
+        match self.0.split('/').collect::<Vec<&str>>()[..] {
+            ["device", _, "service", service_id] => Some(service_id),
+            _ => None,
+        }
     }
 }
 
@@ -299,67 +272,68 @@ mod tests {
 
         assert_eq!(
             entity_topic,
-            EntityTopic {
-                entity_id: EntityId("device/child001/service/service001".to_string()),
-                channel: Channel::Measurement {
+            (
+                EntityId("device/child001/service/service001".to_string()),
+                Channel::Measurement {
                     measurement_type: "measurement_type".to_string(),
                 }
-            }
+            )
         );
     }
 
     #[test]
     fn parses_nochannel_correct_topic() {
         let schema = MqttSchema::with_root(MQTT_ROOT.to_string());
-        let topic = schema
+        let entity_channel = schema
             .parse(&format!("{MQTT_ROOT}/device/child001/service/service001"))
             .unwrap();
 
-        let expected = EntityTopic {
-            entity_id: EntityId("device/child001/service/service001".to_string()),
-            channel: Channel::EntityMetadata,
-        };
+        let expected = (
+            EntityId("device/child001/service/service001".to_string()),
+            Channel::EntityMetadata,
+        );
 
-        assert_eq!(topic, expected);
+        assert_eq!(entity_channel, expected);
     }
 
     #[test]
     fn parses_noservice_entity_correct_topic() {
         let schema = MqttSchema::with_root(MQTT_ROOT.to_string());
-        let topic1 = schema
+        let entity_channel1 = schema
             .parse(&format!("{MQTT_ROOT}/device/child001//"))
             .unwrap();
-        let topic2 = schema
+        let entity_channel2 = schema
             .parse(&format!("{MQTT_ROOT}/device/child001"))
             .unwrap();
 
-        let topic = EntityTopic {
-            entity_id: EntityId("device/child001//".to_string()),
-            channel: Channel::EntityMetadata,
-        };
+        let expected = (
+            EntityId("device/child001//".to_string()),
+            Channel::EntityMetadata,
+        );
 
-        assert_eq!(topic1, topic);
-        assert_eq!(topic2, topic);
+        assert_eq!(entity_channel1, expected);
+        assert_eq!(entity_channel2, expected);
     }
 
     #[test]
     fn no_root() {
         let schema = MqttSchema::with_root(MQTT_ROOT.to_string());
-        let topic = schema.parse("device/child001/service/service001/m/measurement_type");
+        let entity_channel = schema.parse("device/child001/service/service001/m/measurement_type");
 
-        assert!(topic.is_err());
+        assert!(entity_channel.is_err());
     }
 
     #[test]
     fn incorrect_channel() {
         let schema = MqttSchema::with_root(MQTT_ROOT.to_string());
-        let topic1 = schema.parse(&format!(
-            "{MQTT_ROOT}/device/child001/service/service001/incgorrect_category/measurement_type"
+        let entity_channel1 = schema.parse(&format!(
+            "{MQTT_ROOT}/device/child001/service/service001/incorrect_category/measurement_type"
         ));
 
-        let topic2 = schema.parse(&format!("{MQTT_ROOT}/device/child001/service/service001/m"));
+        let entity_channel2 =
+            schema.parse(&format!("{MQTT_ROOT}/device/child001/service/service001/m"));
 
-        assert!(topic1.is_err());
-        assert!(topic2.is_err());
+        assert!(entity_channel1.is_err());
+        assert!(entity_channel2.is_err());
     }
 }
