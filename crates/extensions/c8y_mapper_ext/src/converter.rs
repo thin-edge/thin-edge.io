@@ -230,7 +230,7 @@ impl CumulocityConverter {
     ) -> Result<Vec<Message>, ConversionError> {
         let mut mqtt_messages: Vec<Message> = Vec::new();
 
-        if let Some(entity) = self.entity_store.get(source.entity_id()) {
+        if let Some(entity) = self.entity_store.get(source) {
             // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
             let c8y_json_payload = json::from_thin_edge_json(input.payload_str()?, entity)?;
 
@@ -687,17 +687,16 @@ impl CumulocityConverter {
             }
             _ => {
                 // if device is unregistered register using auto-registration
-                if self.entity_store.get(source.entity_id()).is_none() {
-                    registration_messages =
-                        match self.entity_store.auto_register_entity(source.entity_id()) {
-                            Ok(register_messages) => register_messages,
-                            Err(e) => {
-                                error!("Could not update device registration: {e}");
-                                vec![]
-                            }
-                        };
+                if self.entity_store.get(&source).is_none() {
+                    registration_messages = match self.entity_store.auto_register_entity(&source) {
+                        Ok(register_messages) => register_messages,
+                        Err(e) => {
+                            error!("Could not update device registration: {e}");
+                            vec![]
+                        }
+                    };
 
-                    let entity = self.entity_store.get(source.entity_id()).unwrap();
+                    let entity = self.entity_store.get(&source).unwrap();
                     if let Some(message) = external_device_registration_message(entity) {
                         self.children
                             .insert(entity.entity_id.to_string(), Operations::default());

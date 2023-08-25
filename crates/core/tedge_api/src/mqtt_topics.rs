@@ -25,7 +25,7 @@ use std::str::FromStr;
 ///
 /// // Getting the entity channel addressed by some topic
 /// let topic = Topic::new_unchecked("te/device/child001/service/service001/m/measurement_type");
-/// let entity = EntityTopicId::new("device/child001/service/service001");
+/// let entity: EntityTopicId = "device/child001/service/service001".parse().unwrap();
 /// let channel = Channel::Measurement {
 ///     measurement_type: "measurement_type".to_string(),
 /// };
@@ -64,7 +64,7 @@ impl MqttSchema {
 
     /// Get the topic addressing a given entity channel
     pub fn topic_for(&self, entity: &EntityTopicId, channel: &Channel) -> mqtt_channel::Topic {
-        let topic = format!("{}/{}/{}", self.root, entity.0, channel.to_string());
+        let topic = format!("{}/{}/{}", self.root, entity, channel);
         mqtt_channel::Topic::new(&topic).unwrap()
     }
 
@@ -131,9 +131,20 @@ pub enum EntityTopicError {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct EntityTopicId(String);
 
-impl AsRef<str> for EntityTopicId {
-    fn as_ref(&self) -> &str {
-        &self.0
+impl<T: AsRef<str>> PartialEq<T> for EntityTopicId {
+    fn eq(&self, other: &T) -> bool {
+        self.0 == other.as_ref()
+    }
+}
+impl PartialEq<str> for EntityTopicId {
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other
+    }
+}
+
+impl Display for EntityTopicId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -159,14 +170,30 @@ impl FromStr for EntityTopicId {
 }
 
 impl EntityTopicId {
-    pub fn entity_id(&self) -> &str {
-        &self.0
+    /// The default topic identifier for the main device.
+    pub fn default_main_device() -> Self {
+        EntityTopicId("device/main//".to_string())
+    }
+
+    /// The default topic identifier for a child device.
+    pub fn default_child_device(child: &str) -> Result<Self, TopicIdError> {
+        format!("device/{child}//").parse()
+    }
+
+    /// The default topic identifier for a service of the main device.
+    pub fn default_main_service(service: &str) -> Result<Self, TopicIdError> {
+        format!("device/main/service/{service}").parse()
+    }
+
+    /// The default topic identifier for a service of a child device.
+    pub fn default_child_service(child: &str, service: &str) -> Result<Self, TopicIdError> {
+        format!("device/{child}/service/{service}").parse()
     }
 
     /// Returns the device name when the entity topic identifier is using the `device/+/service/+` pattern.
     ///
     /// Returns None otherwise.
-    pub fn device_name(&self) -> Option<&str> {
+    pub fn default_device_name(&self) -> Option<&str> {
         match self.0.split('/').collect::<Vec<&str>>()[..] {
             ["device", device_id, "service", _] => Some(device_id),
             ["device", device_id, "", ""] => Some(device_id),
@@ -177,11 +204,25 @@ impl EntityTopicId {
     /// Returns the service name when the entity topic identifier is using the `device/+/service/+` pattern.
     ///
     /// Returns None if this is not a service or if the pattern doesn't apply.
-    pub fn service_name(&self) -> Option<&str> {
+    pub fn default_service_name(&self) -> Option<&str> {
         match self.0.split('/').collect::<Vec<&str>>()[..] {
             ["device", _, "service", service_id] => Some(service_id),
             _ => None,
         }
+    }
+
+    /// Returns the topic identifier of the parent of a service,
+    /// assuming `self` is the topic identifier of a device `device/+//
+    /// or a service `device/+/service/+`
+    ///
+    /// Returns None if this is not a service or if the pattern doesn't apply.
+    pub fn default_parent_identifier(&self) -> Option<Self> {
+        match self.0.split('/').collect::<Vec<&str>>()[..] {
+            ["device", parent_id, "", ""] => Some(parent_id),
+            ["device", parent_id, "service", _] => Some(parent_id),
+            _ => None,
+        }
+        .map(|parent_id| EntityTopicId(format!("device/{parent_id}//")))
     }
 }
 

@@ -76,9 +76,6 @@ pub enum ConversionError {
     UnsupportedTopic(String),
 
     #[error(transparent)]
-    MqttSchemaError(#[from] tedge_api::mqtt_topics::EntityTopicError),
-
-    #[error(transparent)]
     FromSerdeJson(#[from] serde_json::Error),
 
     #[error(transparent)]
