@@ -12,8 +12,18 @@ The following environment variables are set:
 * DEB_VERSION
 * RPM_VERSION
 
+NOTES
+
+If you have previously sourced the script into your current shell environment then you will need to unset the GIT_SEMVER variable otherwise the previously created GIT_SEMVER value will be used.
+Alternatively, you can limit to calling the script only from other scripts to avoid leakage of the environment variables between script calls.
+
+Example:
+    unset GIT_SEMVER
+    . $0
+
 USAGE
     $0 [apk|deb|rpm|all]
+    # Print out a version
 
     # importing values via a script
     . $0 [--version <version>]
@@ -22,6 +32,10 @@ EXAMPLES
 
 . $0
 # Export env variables for use in packaging
+
+unset GIT_SEMVER
+. $0
+# Export env variables for use in package but ignore any previously set value
 
 . $0 --version 1.2.3
 # Export env variables but use an explicit value
@@ -198,11 +212,15 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         rpm)
             echo "$RPM_VERSION"
             ;;
+        tarball)
+            echo "$TARBALL_VERSION"
+            ;;
         all)
             echo "GIT_SEMVER: $GIT_SEMVER"
             echo "APK_VERSION: $APK_VERSION"
             echo "DEB_VERSION: $DEB_VERSION"
             echo "RPM_VERSION: $RPM_VERSION"
+            echo "TARBALL_VERSION: $TARBALL_VERSION"
             ;;
         *)
             echo "$GIT_SEMVER"
