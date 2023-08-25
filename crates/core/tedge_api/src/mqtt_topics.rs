@@ -16,7 +16,7 @@ use std::str::FromStr;
 /// - get the entity channel addressed by some topic
 ///
 /// ```
-/// # use tedge_api::mqtt_topics::{MqttSchema, Channel, EntityId};
+/// # use tedge_api::mqtt_topics::{MqttSchema, Channel, EntityTopicId};
 /// # use mqtt_channel::Topic;
 ///
 /// // The default root prefix is `"te"`:
@@ -25,7 +25,7 @@ use std::str::FromStr;
 ///
 /// // Getting the entity channel addressed by some topic
 /// let topic = Topic::new_unchecked("te/device/child001/service/service001/m/measurement_type");
-/// let entity = EntityId::new("device/child001/service/service001");
+/// let entity = EntityTopicId::new("device/child001/service/service001");
 /// let channel = Channel::Measurement {
 ///     measurement_type: "measurement_type".to_string(),
 /// };
@@ -63,7 +63,7 @@ impl MqttSchema {
     }
 
     /// Get the topic addressing a given entity channel
-    pub fn topic_for(&self, entity: &EntityId, channel: &Channel) -> mqtt_channel::Topic {
+    pub fn topic_for(&self, entity: &EntityTopicId, channel: &Channel) -> mqtt_channel::Topic {
         let topic = format!("{}/{}/{}", self.root, entity.0, channel.to_string());
         mqtt_channel::Topic::new(&topic).unwrap()
     }
@@ -72,15 +72,13 @@ impl MqttSchema {
     pub fn entity_channel_of(
         &self,
         topic: &mqtt_channel::Topic,
-    ) -> Result<(EntityId, Channel), EntityTopicError> {
+    ) -> Result<(EntityTopicId, Channel), EntityTopicError> {
         self.parse(&topic.name)
     }
 }
 
 impl MqttSchema {
-    fn parse(&self, topic: &str) -> Result<(EntityId, Channel), EntityTopicError> {
-        const ENTITY_ID_SEGMENTS: usize = 4;
-
+    fn parse(&self, topic: &str) -> Result<(EntityTopicId, Channel), EntityTopicError> {
         let (root, topic) = topic.split_once('/').ok_or(EntityTopicError::Root {
             expected: self.root.to_string(),
             got: topic.to_string(),
@@ -96,12 +94,7 @@ impl MqttSchema {
         let id_channel_separator_index = topic_separator_indices.nth(3).unwrap_or(topic.len());
 
         let (entity_id, channel) = topic.split_at(id_channel_separator_index);
-
-        let entity_id_segments = entity_id.matches('/').count();
-        let missing_slashes = ENTITY_ID_SEGMENTS - entity_id_segments - 1;
-        let entity_id = format!("{entity_id}{:/<1$}", "", missing_slashes);
-
-        let entity_id = EntityId::new(&entity_id);
+        let entity_id = entity_id.parse()?;
         let channel: Channel = channel.trim_start_matches('/').parse()?;
         Ok((entity_id, channel))
     }
@@ -112,11 +105,14 @@ pub enum EntityTopicError {
     #[error("Fist topic segment expected to be {expected:?}, got {got:?}")]
     Root { expected: String, got: String },
 
+    #[error("Invalid entity topic identifier")]
+    TopicId(#[from] TopicIdError),
+
     #[error("Channel group invalid")]
     Channel(#[from] ChannelError),
 }
 
-/// Represents an entity identifier group in thin-edge MQTT scheme.
+/// Represents an "Entity topic identifier" portion of the MQTT topic
 ///
 /// An entity identifier is a fixed 4-segment group, as such any 4 topic
 /// segments that come after the root are considered a part of an identifier,
@@ -127,23 +123,49 @@ pub enum EntityTopicError {
 /// filled by empty segments (`//`).
 ///
 /// # Example
+/// - topic: `te/device/dev1/service/myservice/m//my_measurement`
+/// - entity id: `device/dev1/service/myservice`
 ///
-///
+/// # Reference
 /// https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#group-identifier
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EntityId(String);
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct EntityTopicId(String);
 
-impl EntityId {
-    pub fn new(topic_id: &str) -> Self {
-        EntityId(topic_id.to_string())
+impl AsRef<str> for EntityTopicId {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
+}
 
+impl FromStr for EntityTopicId {
+    type Err = TopicIdError;
+
+    fn from_str(entity_id: &str) -> Result<Self, Self::Err> {
+        const ENTITY_ID_SEGMENTS: usize = 4;
+
+        let entity_id_segments = entity_id.matches('/').count();
+        if entity_id_segments > ENTITY_ID_SEGMENTS {
+            return Err(TopicIdError::TooLong);
+        }
+
+        let missing_slashes = ENTITY_ID_SEGMENTS - entity_id_segments - 1;
+        let topic_id = format!("{entity_id}{:/<1$}", "", missing_slashes);
+        if mqtt_channel::Topic::new(&topic_id).is_err() {
+            return Err(TopicIdError::InvalidMqttTopic);
+        }
+
+        Ok(EntityTopicId(topic_id))
+    }
+}
+
+impl EntityTopicId {
     pub fn entity_id(&self) -> &str {
         &self.0
     }
 
-    /// Returns a device name if entity topic identifier is not using a custom
-    /// schema.
+    /// Returns the device name when the entity topic identifier is using the `device/+/service/+` pattern.
+    ///
+    /// Returns None otherwise.
     pub fn device_name(&self) -> Option<&str> {
         match self.0.split('/').collect::<Vec<&str>>()[..] {
             ["device", device_id, "service", _] => Some(device_id),
@@ -152,14 +174,24 @@ impl EntityId {
         }
     }
 
-    /// Returns a service name if entity topic identifier is not using a custom
-    /// schema and the entity identifier refers to the service.
+    /// Returns the service name when the entity topic identifier is using the `device/+/service/+` pattern.
+    ///
+    /// Returns None if this is not a service or if the pattern doesn't apply.
     pub fn service_name(&self) -> Option<&str> {
         match self.0.split('/').collect::<Vec<&str>>()[..] {
             ["device", _, "service", service_id] => Some(service_id),
             _ => None,
         }
     }
+}
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq, Clone)]
+pub enum TopicIdError {
+    #[error("An entity topic identifier has at most 4 segments")]
+    TooLong,
+
+    #[error("An entity topic identifier must be a valid MQTT topic")]
+    InvalidMqttTopic,
 }
 
 /// A channel identifies the type of the messages exchanged over a topic
@@ -273,7 +305,7 @@ mod tests {
         assert_eq!(
             entity_topic,
             (
-                EntityId("device/child001/service/service001".to_string()),
+                EntityTopicId("device/child001/service/service001".to_string()),
                 Channel::Measurement {
                     measurement_type: "measurement_type".to_string(),
                 }
@@ -289,7 +321,7 @@ mod tests {
             .unwrap();
 
         let expected = (
-            EntityId("device/child001/service/service001".to_string()),
+            EntityTopicId("device/child001/service/service001".to_string()),
             Channel::EntityMetadata,
         );
 
@@ -307,7 +339,7 @@ mod tests {
             .unwrap();
 
         let expected = (
-            EntityId("device/child001//".to_string()),
+            EntityTopicId("device/child001//".to_string()),
             Channel::EntityMetadata,
         );
 

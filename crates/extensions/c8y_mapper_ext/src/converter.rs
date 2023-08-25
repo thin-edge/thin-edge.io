@@ -58,7 +58,7 @@ use tedge_api::entity_store::EntityType;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::mqtt_topics::Channel;
-use tedge_api::mqtt_topics::EntityId;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::topic::RequestTopic;
 use tedge_api::topic::ResponseTopic;
@@ -225,7 +225,7 @@ impl CumulocityConverter {
 
     fn try_convert_measurement(
         &mut self,
-        source: &EntityId,
+        source: &EntityTopicId,
         input: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
         let mut mqtt_messages: Vec<Message> = Vec::new();
@@ -672,7 +672,7 @@ impl CumulocityConverter {
 
     async fn try_convert_te_topics(
         &mut self,
-        source: EntityId,
+        source: EntityTopicId,
         channel: Channel,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
