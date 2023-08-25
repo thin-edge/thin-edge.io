@@ -70,7 +70,15 @@ setup-integration-test *ARGS:
 
 # Run integration tests (using local build)
 integration-test *ARGS: release
-    cd tests/RobotFramework && .venv/bin/python3 -m invoke build --local tests {{ARGS}}
+    #!/usr/bin/env bash
+    set -e
+    if [ ! -d tests/RobotFramework/.venv ]; then
+        just -f {{justfile()}} setup-integration-test
+    fi
+    cd tests/RobotFramework
+    source .venv/bin/activate
+    invoke build --local
+    invoke tests {{ARGS}}
 
 # Generate linux package scripts from templates
 generate-linux-package-scripts:
