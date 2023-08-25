@@ -10,30 +10,30 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-async-trait = "0.1"
-c8y_api = { path = "../../../crates/core/c8y_api" }
-c8y_http_proxy = { path = "../../extensions/c8y_http_proxy" }
-log = "0.4"
-nanoid = "0.4"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-sha256 = "1.1"
-tedge_actors = { path = "../../core/tedge_actors" }
-tedge_api = { path = "../../../crates/core/tedge_api" }
-tedge_config = { path = "../../../crates/common/tedge_config" }
-tedge_downloader_ext = { path = "../../extensions/tedge_downloader_ext" }
-tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
-tedge_timer_ext = { path = "../../extensions/tedge_timer_ext" }
-tedge_utils = { path = "../../../crates/common/tedge_utils" }
-thiserror = "1.0"
+async-trait = { workspace = true }
+c8y_api = { workspace = true }
+c8y_http_proxy = { workspace = true }
+log = { workspace = true }
+nanoid = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha256 = { workspace = true }
+tedge_actors = { workspace = true }
+tedge_api = { workspace = true }
+tedge_config = { workspace = true }
+tedge_downloader_ext = { workspace = true }
+tedge_mqtt_ext = { workspace = true }
+tedge_timer_ext = { workspace = true }
+tedge_utils = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
-assert-json-diff = "2.0"
-assert_matches = "1.5"
-mockall = "0.11"
-tedge_actors = { path = "../../core/tedge_actors", features = ["test-helpers"] }
-tedge_test_utils = { path = "../../../crates/tests/tedge_test_utils" }
-tokio = { version = "1.23", default_features = false, features = [
+assert-json-diff = { workspace = true }
+assert_matches = { workspace = true }
+mockall = { workspace = true }
+tedge_actors = { workspace = true, features = ["test-helpers"] }
+tedge_test_utils = { workspace = true }
+tokio = { workspace = true, default_features = false, features = [
     "test-util",
     "rt-multi-thread",
 ] }

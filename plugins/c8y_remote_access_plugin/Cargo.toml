@@ -10,26 +10,23 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-async-compat = "0.2.1"
-async-tungstenite = { version = "0.18.0", features = [
-    "tokio-runtime",
-    "tokio-rustls-native-certs",
-] }
-base64 = "0.13.1"
-c8y_api = { path = "../../crates/core/c8y_api" }
-camino = "1.1.4"
-clap = { version = "4.1.4", features = ["cargo", "derive"] }
-csv = "1.1.6"
-futures = "0.3.25"
-futures-util = "0.3.25"
-http = "0.2.8"
-miette = { version = "5.5.0", features = ["fancy"] }
-rand = "0.8.5"
-serde = { version = "1.0", features = ["derive"] }
-tedge_config = { path = "../../crates/common/tedge_config" }
-tedge_utils = { path = "../../crates/common/tedge_utils" }
-thiserror = "1.0.38"
-tokio = { version = "1.0", features = [
+async-compat = { workspace = true }
+async-tungstenite = { workspace = true }
+base64 = { workspace = true }
+c8y_api = { workspace = true }
+camino = { workspace = true }
+clap = { workspace = true }
+csv = { workspace = true }
+futures = { workspace = true }
+futures-util = { workspace = true }
+http = { workspace = true }
+miette = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+tedge_config   = { workspace = true }
+tedge_utils = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = [
     "macros",
     "rt-multi-thread",
     "io-util",
@@ -37,10 +34,10 @@ tokio = { version = "1.0", features = [
     "time",
     "process",
 ] }
-tungstenite = "0.17.3"
-url = "2.3.1"
-ws_stream_tungstenite = "0.9.0"
+tungstenite = { workspace = true }
+url = { workspace = true }
+ws_stream_tungstenite = { workspace = true }
 
 [dev-dependencies]
-rstest = "0.16.0"
-tempfile = "3.5.0"
+rstest = { workspace = true }
+tempfile = { workspace = true }

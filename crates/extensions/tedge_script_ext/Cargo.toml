@@ -10,13 +10,13 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-async-trait = "0.1"
-shell-words = "1.1"
-tedge_actors = { path = "../../core/tedge_actors" }
-tokio = { version = "1.23", default_features = false, features = ["process"] }
+async-trait = { workspace = true }
+shell-words = { workspace = true }
+tedge_actors = { workspace = true }
+tokio = { workspace = true, default_features = false, features = ["process"] }
 
 [dev-dependencies]
-tokio = { version = "1.23", default_features = false, features = [
+tokio = { workspace = true, default_features = false, features = [
     "macros",
     "rt-multi-thread",
 ] }

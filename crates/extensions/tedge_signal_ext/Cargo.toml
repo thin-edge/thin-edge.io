@@ -10,8 +10,8 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-async-trait = "0.1"
-signal-hook = "0.3"
-signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
-tedge_actors = { path = "../../core/tedge_actors" }
-tokio = { version = "1.23", features = ["macros"] }
+async-trait = { workspace = true }
+signal-hook = { workspace = true }
+signal-hook-tokio = { workspace = true }
+tedge_actors = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }

@@ -10,6 +10,6 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-async-trait = "0.1"
-tedge_actors = { path = "../../core/tedge_actors" }
-tokio = { version = "1.23", default_features = false, features = ["time"] }
+async-trait = { workspace = true }
+tedge_actors = { workspace = true }
+tokio = { workspace = true, default_features = false, features = ["time"] }

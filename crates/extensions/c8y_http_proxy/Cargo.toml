@@ -10,20 +10,20 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-async-trait = "0.1"
-c8y_api = { path = "../../core/c8y_api" }
-download = { path = "../../common/download" }
-http = "0.2"
-log = "0.4"
-mqtt_channel = { path = "../../common/mqtt_channel" }
-tedge_actors = { path = "../../core/tedge_actors" }
-tedge_config = { path = "../../common/tedge_config" }
-tedge_http_ext = { path = "../../extensions/tedge_http_ext" }
-tedge_utils = { path = "../../common/tedge_utils" }
-thiserror = "1.0"
-tokio = { version = "1.23", features = ["macros"] }
+async-trait = { workspace = true }
+c8y_api = { workspace = true }
+download = { workspace = true }
+http = { workspace = true }
+log = { workspace = true }
+mqtt_channel = { workspace = true }
+tedge_actors = { workspace = true }
+tedge_config = { workspace = true }
+tedge_http_ext = { workspace = true }
+tedge_utils = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
 
 [dev-dependencies]
-tedge_http_ext = { path = "../../extensions/tedge_http_ext", features = [
+tedge_http_ext = { workspace = true, features = [
     "test_helpers",
 ] }

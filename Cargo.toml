@@ -24,6 +24,134 @@ license = "Apache-2.0"
 homepage = "https://thin-edge.io"
 repository = "https://github.com/thin-edge/thin-edge.io"
 
+[workspace.dependencies]
+anyhow =  "1.0"
+assert-json-diff = "2.0"
+assert_cmd = "2.0"
+assert_matches = "1.5"
+async-compat = "0.2.1"
+async-log = "2.0"
+async-trait = "0.1"
+async-tungstenite = { version = "0.18.0", features = [
+    "tokio-runtime",
+    "tokio-rustls-native-certs",
+] }
+atty = "0.2"
+aws_mapper_ext = { path = "crates/extensions/aws_mapper_ext" }
+az_mapper_ext = { path = "crates/extensions/az_mapper_ext" }
+backoff = { version = "0.4", features = ["tokio"] }
+base64 = "0.13"
+batcher = { path = "crates/common/batcher" }
+c8y_api = { path = "crates/core/c8y_api" }
+c8y_config_manager = { path = "crates/extensions/c8y_config_manager" }
+c8y_firmware_manager = { path = "crates/extensions/c8y_firmware_manager" }
+c8y_http_proxy = { path = "crates/extensions/c8y_http_proxy" }
+c8y_log_manager = { path = "crates/extensions/c8y_log_manager" }
+c8y_mapper_ext = { path = "crates/extensions/c8y_mapper_ext" }
+camino = "1.1"
+certificate = { path = "crates/common/certificate" }
+clap = { version = "4.1", features = ["cargo", "derive"] }
+clock = { path = "crates/common/clock" }
+collectd_ext = { path = "crates/extensions/collectd_ext" }
+csv = "1.1"
+darling = "0.20"
+doku = "0.21"
+download = { path = "crates/common/download" }
+easy_reader = "0.5"
+env_logger = "0.10"
+fastrand = "1.8"
+figment = { version = "0.10" }
+filetime = "0.2"
+flockfile = { path = "crates/common/flockfile" }
+freedesktop_entry_parser = "1.3.0"
+futures = "0.3"
+futures-timer = "3.0"
+futures-util = "0.3.25"
+glob = "0.3"
+heck = "0.4.1"
+http = "0.2"
+hyper = { version = "0.14", default-features = false }
+hyper-rustls = { version = "0.23", default_features = false, features = ["tokio-runtime", "tls12", "rustls-native-certs", "http1", "http2"] }
+json-writer = { path = "crates/common/json_writer" }
+lazy_static = "1.4"
+log = "0.4"
+log_manager = { path = "crates/common/log_manager" }
+logged_command = { path = "crates/common/logged_command" }
+maplit = "1.0"
+miette = { version = "5.5.0", features = ["fancy"] }
+mockall = "0.11"
+mockito = "0.31"
+mqtt_channel = { path = "crates/common/mqtt_channel" }
+mqtt_tests = { path = "crates/tests/mqtt_tests" }
+nanoid = "0.4"
+nix = "0.26"
+notify = { version = "5.0", default-features = false }
+once_cell = "1.8"
+pad = "0.1"
+path-clean = "0.1"
+pem = "1.0"
+plugin_sm = { path = "crates/core/plugin_sm" }
+predicates = "2.1"
+proc-macro2 = "1"
+proptest = "1.0"
+quote = "1"
+rand = "0.8"
+rcgen = { version = "0.9", features = ["pem", "zeroize"] }
+regex = "1.4"
+reqwest = { version = "0.11", default-features = false }
+routerify = "3.0"
+rpassword = "5.0"
+rstest = "0.16.0"
+rumqttc = "0.18"
+rumqttd = "0.11"
+rustls = "0.20.6"
+rustls-pemfile = "1.0.1"
+serde  = "1.0"
+serde_ignored = "0.1"
+serde_json = "1.0"
+serial_test = "0.8"
+sha-1 = "0.10"
+sha256 = "1.1"
+shell-words = "1.1"
+signal-hook = "0.3"
+signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
+strum_macros = "0.24"
+syn = { version = "2", features = ["full", "extra-traits"] }
+tedge_actors = { path = "crates/core/tedge_actors" }
+tedge_api = { path = "crates/core/tedge_api" }
+tedge_config = { path = "crates/common/tedge_config" }
+tedge_config_macros = { path = "crates/common/tedge_config_macros" }
+tedge_config_macros-impl = { path = "crates/common/tedge_config_macros/impl" }
+tedge_downloader_ext = { path = "crates/extensions/tedge_downloader_ext" }
+tedge_file_system_ext = { path = "crates/extensions/tedge_file_system_ext" }
+tedge_health_ext = { path = "crates/extensions/tedge_health_ext" }
+tedge_http_ext = { path = "crates/extensions/tedge_http_ext" }
+tedge_log_manager = { path = "crates/extensions/tedge_log_manager" }
+tedge_mqtt_ext = { path = "crates/extensions/tedge_mqtt_ext" }
+tedge_signal_ext = { path = "crates/extensions/tedge_signal_ext" }
+tedge_test_utils = { path = "crates/tests/tedge_test_utils" }
+tedge_timer_ext = { path = "crates/extensions/tedge_timer_ext" }
+tedge_utils = { path = "crates/common/tedge_utils" }
+tempfile = "3.5"
+test-case = "2.2"
+thiserror = "1.0"
+time = "0.3"
+tokio = { version = "1.23", default-features = false }
+toml = "0.5"
+tracing = { version = "0.1", features = ["attributes", "log"] }
+tracing-subscriber = { version = "0.3", features = ["time", "env-filter"] }
+try-traits = "0.1" 
+tungstenite = "0.17.3"
+url = "2.3"
+users = "0.11"
+walkdir = "2"
+which = "4.2"
+whoami = "1.2.1"
+ws_stream_tungstenite = "0.9.0"
+x509-parser = "0.14"
+yansi = "0.5"
+zeroize = "1.5"
+
 [profile.release]
 codegen-units = 1
 lto = true

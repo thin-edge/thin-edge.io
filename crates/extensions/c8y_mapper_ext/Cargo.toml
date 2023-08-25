@@ -10,43 +10,43 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-async-trait = "0.1"
-c8y_api = { path = "../../core/c8y_api" }
-c8y_http_proxy = { path = "../c8y_http_proxy" }
-camino = "1.1"
-clock = { path = "../../common/clock" }
-json-writer = { path = "../../common/json_writer" }
-logged_command = { path = "../../common/logged_command" }
-plugin_sm = { path = "../../core/plugin_sm" }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tedge_actors = { path = "../../core/tedge_actors" }
-tedge_api = { path = "../../core/tedge_api" }
-tedge_config = { path = "../../common/tedge_config" }
-tedge_file_system_ext = { path = "../../extensions/tedge_file_system_ext" }
-tedge_http_ext = { path = "../../extensions/tedge_http_ext" }
-tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext" }
-tedge_timer_ext = { path = "../../extensions/tedge_timer_ext" }
-tedge_utils = { path = "../../common/tedge_utils" }
-thiserror = "1.0"
-time = "0.3"
-tokio = { version = "1.23", features = [
+async-trait = { workspace = true }
+c8y_api = { workspace = true }
+c8y_http_proxy = { workspace = true }
+camino = { workspace = true }
+clock = { workspace = true }
+json-writer = { workspace = true }
+logged_command = { workspace = true }
+plugin_sm = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tedge_actors = { workspace = true }
+tedge_api = { workspace = true }
+tedge_config = { workspace = true }
+tedge_file_system_ext = { workspace = true }
+tedge_http_ext = { workspace = true }
+tedge_mqtt_ext = { workspace = true }
+tedge_timer_ext = { workspace = true }
+tedge_utils = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true, features = [
     "process",
     "rt",
     "rt-multi-thread",
     "sync",
     "time",
 ] }
-toml = "0.5"
-tracing = { version = "0.1", features = ["attributes", "log"] }
+toml = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
-anyhow = "1.0"
-assert-json-diff = "2.0"
-assert_matches = "1.5"
-proptest = "1.0"
-rand = "0.8"
-tedge_actors = { path = "../../core/tedge_actors", features = ["test-helpers"] }
-tedge_mqtt_ext = { path = "../../extensions/tedge_mqtt_ext", features = ["test-helpers"] }
-tedge_test_utils = { path = "../../tests/tedge_test_utils" }
-test-case = "2.2"
+anyhow = { workspace = true }
+assert-json-diff = { workspace = true }
+assert_matches = { workspace = true }
+proptest = { workspace = true }
+rand = { workspace = true }
+tedge_actors = { workspace = true, features = ["test-helpers"] }
+tedge_mqtt_ext = { workspace = true, features = ["test-helpers"] }
+tedge_test_utils = { workspace = true }
+test-case = { workspace = true }

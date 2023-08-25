@@ -10,13 +10,13 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-async-trait = "0.1"
-download = { path = "../../common/download" }
-log = "0.4"
-tedge_actors = { path = "../../core/tedge_actors" }
-tedge_utils = { path = "../../common/tedge_utils" }
+async-trait = { workspace = true }
+download = { workspace = true }
+log = { workspace = true }
+tedge_actors = { workspace = true }
+tedge_utils = { workspace = true }
 
 [dev-dependencies]
-mockito = "0.31"
-tedge_test_utils = { path = "../../tests/tedge_test_utils" }
-tokio = { version = "1.23", default_features = false, features = ["time"] }
+mockito = { workspace = true }
+tedge_test_utils = { workspace = true }
+tokio = { workspace = true, default_features = false, features = ["time"] }

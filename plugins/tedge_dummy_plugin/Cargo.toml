@@ -10,5 +10,5 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-clap = { version = "3", features = ["derive"] }
-thiserror = "1.0"
+clap = { workspace = true }
+thiserror = { workspace = true }

@@ -9,8 +9,8 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-darling = "0.20"
-heck = "0.4.1"
-proc-macro2 = "1"
-quote = "1"
-syn = { version = "2", features = ["full", "extra-traits"] }
+darling = { workspace = true }
+heck = { workspace = true }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }

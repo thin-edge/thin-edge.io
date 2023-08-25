@@ -9,27 +9,27 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-camino = { version = "1.1.4", features = ["serde", "serde1"] }
-certificate = { path = "../certificate" }
-doku = "0.21"
-figment = { version = "0.10", features = ["env", "toml"] }
-mqtt_channel = { path = "../mqtt_channel" }
-once_cell = "1.17"
-serde = { version = "1.0", features = ["derive"] }
-serde_ignored = "0.1"
-strum_macros = { version = "0.24" }
-tedge_config_macros = { path = "../tedge_config_macros" }
-tedge_utils = { path = "../tedge_utils" }
-thiserror = "1.0"
+camino = { workspace = true, features = ["serde", "serde1"] }
+certificate = { workspace = true }
+doku = { workspace = true }
+figment = { workspace = true, features = ["env", "toml"] }
+mqtt_channel = { workspace = true }
+once_cell = { workspace = true }
+serde = { workspace = true }
+serde_ignored = { workspace = true }
+strum_macros = { workspace = true }
+tedge_config_macros = { workspace = true }
+tedge_utils = { workspace = true }
+thiserror = { workspace = true }
 toml = "0.7"
-tracing = { version = "0.1", features = ["log"] }
-tracing-subscriber = { version = "0.3", features = ["time", "env-filter"] }
-url = "2.2"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
-anyhow = "1.0"
-assert_matches = "1.5"
-figment = { version = "0.10", features = ["test"] }
-tedge_test_utils = { path = "../../tests/tedge_test_utils" }
-tempfile = "3.4"
-test-case = "2.2"
+anyhow = { workspace = true }
+assert_matches = { workspace = true }
+figment = { workspace = true, features = ["test"] }
+tedge_test_utils = { workspace = true }
+tempfile = { workspace = true }
+test-case = { workspace = true }

@@ -9,16 +9,16 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-async-trait = "0.1"
-certificate = { path = "../certificate" }
-fastrand = "1.8"
-futures = "0.3"
-log = "0.4.17"
-rumqttc = "0.18"
-thiserror = "1.0"
-tokio = { version = "1.23", features = ["rt", "time"] }
+async-trait = { workspace = true }
+certificate = { workspace = true }
+fastrand = { workspace = true }
+futures = { workspace = true }
+log = { workspace = true }
+rumqttc = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "time"] }
 
 [dev-dependencies]
-anyhow = "1.0"
-mqtt_tests = { path = "../../tests/mqtt_tests" }
-serial_test = "0.8"
+anyhow = { workspace = true }
+mqtt_tests = { workspace = true }
+serial_test = { workspace = true }

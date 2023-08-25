@@ -9,32 +9,32 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-clock = { path = "../../common/clock" }
-csv = "1.2.1"
-download = { path = "../../common/download" }
-futures = "0.3"
-mqtt_channel = { path = "../../common/mqtt_channel" }
-reqwest = { version = "0.11", default-features = false, features = [
+clock = { workspace = true }
+csv = { workspace = true }
+download = { workspace = true }
+futures = { workspace = true }
+mqtt_channel = { workspace = true }
+reqwest = { workspace = true, features = [
     "json",
     "rustls-tls-native-roots",
 ] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tedge_api = { path = "../tedge_api" }
-tedge_config = { path = "../../common/tedge_config" }
-tedge_utils = { path = "../../common/tedge_utils", features = ["logging"] }
-thiserror = "1.0"
-time = { version = "0.3", features = ["formatting"] }
-tokio = { version = "1.23", features = ["rt", "sync", "time"] }
-toml = "0.5"
-tracing = { version = "0.1", features = ["attributes", "log"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tedge_api = { workspace = true }
+tedge_config = { workspace = true }
+tedge_utils = { workspace = true, features = ["logging"] }
+thiserror = { workspace = true }
+time = { workspace = true, features = ["formatting"] }
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
+toml = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
-anyhow = "1.0"
-assert-json-diff = "2.0"
-assert_matches = "1.5"
-maplit = "1.0.2"
-regex = "1.7"
-tempfile = "3.3"
-test-case = "2.2"
-time = { version = "0.3", features = ["macros"] }
+anyhow = { workspace = true }
+assert-json-diff = { workspace = true }
+assert_matches = { workspace = true }
+maplit = { workspace = true }
+regex = { workspace = true }
+tempfile = { workspace = true }
+test-case = { workspace = true }
+time = { workspace = true, features = ["macros"] }
