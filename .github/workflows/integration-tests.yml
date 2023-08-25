@@ -195,7 +195,7 @@ jobs:
         name: reports
         path: reports
     - name: Create summary
-      uses: joonvena/robotframework-reporter-action@v2.2
+      uses: joonvena/robotframework-reporter-action@v2.3
       with:
         gh_access_token: ${{ secrets.GITHUB_TOKEN }}
         show_passed_tests: 'false'
