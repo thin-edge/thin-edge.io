@@ -272,6 +272,6 @@ echo world""#
             messages[9],
             r#"524,DeviceSerial,"something",http://www.my.url,type"#
         );
-        assert_eq!(messages[10], r#"511,device,511,rina0005,echo \\\"#);
+        assert_eq!(messages[10], r"511,device,511,rina0005,echo \\\");
     }
 }

@@ -144,29 +144,25 @@ mod tests {
 
     #[test]
     fn all_or_nothing_returns_an_error_if_only_the_first_value_is_configured() {
-        assert!(matches!(
-            all_or_nothing((
-                OptionalConfig::Present {
-                    value: "test",
-                    key: "first.key"
-                },
-                OptionalConfig::<String>::Empty("second.key")
-            )),
-            Err(_)
+        assert!(all_or_nothing((
+            OptionalConfig::Present {
+                value: "test",
+                key: "first.key"
+            },
+            OptionalConfig::<String>::Empty("second.key")
         ))
+        .is_err())
     }
 
     #[test]
     fn all_or_nothing_returns_an_error_if_only_the_second_value_is_configured() {
-        assert!(matches!(
-            all_or_nothing((
-                OptionalConfig::<String>::Empty("first.key"),
-                OptionalConfig::Present {
-                    value: "test",
-                    key: "second.key"
-                },
-            )),
-            Err(_)
+        assert!(all_or_nothing((
+            OptionalConfig::<String>::Empty("first.key"),
+            OptionalConfig::Present {
+                value: "test",
+                key: "second.key"
+            },
         ))
+        .is_err())
     }
 }
