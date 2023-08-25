@@ -6,6 +6,7 @@ description: |
 arch: all
 platform: "linux"
 version: "${GIT_SEMVER}"
+release: "${RELEASE}"
 section: misc
 priority: "optional"
 maintainer: "thin-edge.io team <info@thin-edge.io>"
