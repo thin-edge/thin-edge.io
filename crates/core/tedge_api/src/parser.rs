@@ -337,7 +337,7 @@ mod tests {
                     vec![("x", 1.0).into(), ("y", 2.0).into(), ("z", -42.0).into(),]
                 )
                     .into(),
-                (r#"escaped\"#, 123.0).into(),
+                (r"escaped\", 123.0).into(),
             ]
         );
         Ok(())
