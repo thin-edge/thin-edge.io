@@ -453,7 +453,7 @@ dependencies = [
  "anyhow",
  "c8y_config_manager",
  "c8y_http_proxy",
- "clap 4.3.24",
+ "clap 4.2.7",
  "tedge_actors",
  "tedge_config",
  "tedge_file_system_ext",
@@ -476,7 +476,7 @@ dependencies = [
  "c8y_firmware_manager",
  "c8y_http_proxy",
  "c8y_log_manager",
- "clap 4.3.24",
+ "clap 4.2.7",
  "env_logger 0.10.0",
  "log",
  "tedge_actors",
@@ -498,7 +498,7 @@ dependencies = [
  "anyhow",
  "c8y_firmware_manager",
  "c8y_http_proxy",
- "clap 4.3.24",
+ "clap 4.2.7",
  "tedge_actors",
  "tedge_config",
  "tedge_downloader_ext",
@@ -517,7 +517,7 @@ dependencies = [
  "anyhow",
  "c8y_http_proxy",
  "c8y_log_manager",
- "clap 4.3.24",
+ "clap 4.2.7",
  "tedge_actors",
  "tedge_config",
  "tedge_file_system_ext",
@@ -539,7 +539,7 @@ dependencies = [
  "base64 0.13.1",
  "c8y_api",
  "camino",
- "clap 4.3.24",
+ "clap 4.2.7",
  "csv",
  "futures",
  "futures-util",
@@ -789,24 +789,25 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.3.24"
+version = "4.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb690e81c7840c0d7aade59f242ea3b41b9bc27bcd5997890e7702ae4b32e487"
+checksum = "34d21f9bf1b425d2968943631ec91202fe5e837264063503708b83013f8fc938"
 dependencies = [
  "clap_builder",
- "clap_derive 4.3.12",
+ "clap_derive 4.2.0",
  "once_cell",
 ]
 
 [[package]]
 name = "clap_builder"
-version = "4.3.24"
+version = "4.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ed2e96bc16d8d740f6f48d663eddf4b8a0983e79210fd55479b7bcd0a69860e"
+checksum = "914c8c79fb560f238ef6429439a30023c862f7a28e688c58f7203f12b29970bd"
 dependencies = [
  "anstream",
  "anstyle",
- "clap_lex 0.5.0",
+ "bitflags 1.3.2",
+ "clap_lex 0.4.1",
  "once_cell",
  "strsim",
 ]
@@ -826,9 +827,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.3.12"
+version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54a9bb5758fc5dfe728d1019941681eccaf0cf8a4189b692a0ee2f2ecf90a050"
+checksum = "3f9644cd56d6b87dbe899ef8b053e331c0637664e9e21a33dfcdc36093f5c5c4"
 dependencies = [
  "heck",
  "proc-macro2 1.0.66",
@@ -847,9 +848,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.5.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2da6da31387c7e4ef160ffab6d5e7f00c42626fe39aea70a7b0f1773f7dd6c1b"
+checksum = "8a2dd5a6fe8c6e3502f568a6353e5273bbb15193ad9a89e457b9970798efbea1"
 
 [[package]]
 name = "clock"
@@ -3511,7 +3512,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "camino",
- "clap 4.3.24",
+ "clap 4.2.7",
  "flockfile",
  "hyper",
  "lazy_static",
@@ -3558,7 +3559,7 @@ dependencies = [
 name = "tedge-dummy-plugin"
 version = "0.12.0"
 dependencies = [
- "clap 4.3.24",
+ "clap 4.2.7",
  "thiserror",
 ]
 
@@ -3567,7 +3568,7 @@ name = "tedge-log-plugin"
 version = "0.12.0"
 dependencies = [
  "anyhow",
- "clap 4.3.24",
+ "clap 4.2.7",
  "tedge_actors",
  "tedge_config",
  "tedge_file_system_ext",
@@ -3591,7 +3592,7 @@ dependencies = [
  "batcher",
  "c8y_http_proxy",
  "c8y_mapper_ext",
- "clap 4.3.24",
+ "clap 4.2.7",
  "clock",
  "collectd_ext",
  "flockfile",
@@ -3614,7 +3615,7 @@ name = "tedge-watchdog"
 version = "0.12.0"
 dependencies = [
  "anyhow",
- "clap 4.3.24",
+ "clap 4.2.7",
  "freedesktop_entry_parser",
  "futures",
  "mqtt_channel",
