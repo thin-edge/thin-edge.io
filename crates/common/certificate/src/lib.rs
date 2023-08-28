@@ -150,37 +150,21 @@ impl KeyCertPair {
 }
 
 pub fn translate_rustls_error(err: &(dyn std::error::Error + 'static)) -> Option<CertificateError> {
-    if let Some(rustls::Error::InvalidCertificateData(inner)) = err.downcast_ref::<rustls::Error>()
-    {
+    if let Some(rustls::Error::InvalidCertificate(inner)) = err.downcast_ref::<rustls::Error>() {
         match inner {
-            msg if msg.contains("CaUsedAsEndEntity") => Some(CertificateError::CertificateValidationFailure {
-                hint: "A CA certificate is used as an end-entity server certificate. Make sure that the certificate used is an end-entity certificate signed by CA certificate.".into(),
-                msg: msg.to_string(),
-            }),
-
-            msg if msg.contains("CertExpired") => Some(CertificateError::CertificateValidationFailure {
+            rustls::CertificateError::Expired => Some(CertificateError::CertificateValidationFailure {
                 hint: "The server certificate has expired, the time it is being validated for is later than the certificate's `notAfter` time.".into(),
-                msg: msg.to_string(),
+                msg: err.to_string()
             }),
 
-            msg if msg.contains("CertNotValidYet") => Some(CertificateError::CertificateValidationFailure {
+            rustls::CertificateError::NotValidYet => Some(CertificateError::CertificateValidationFailure {
                 hint: "The server certificate is not valid yet, the time it is being validated for is earlier than the certificate's `notBefore` time.".into(),
-                msg: msg.to_string(),
-            }),
-
-            msg if msg.contains("EndEntityUsedAsCa") => Some(CertificateError::CertificateValidationFailure {
-                hint: "An end-entity certificate is used as a server CA certificate. Make sure that the certificate used is signed by a correct CA certificate.".into(),
-                msg: msg.to_string(),
-            }),
-
-            msg if msg.contains("InvalidCertValidity") => Some(CertificateError::CertificateValidationFailure {
-                hint: "The server certificate validity period (`notBefore`, `notAfter`) is invalid, maybe the `notAfter` time is earlier than the `notBefore` time.".into(),
-                msg: msg.to_string(),
+                msg: err.to_string(),
             }),
 
             _ => Some(CertificateError::CertificateValidationFailure {
                 hint: "Server certificate validation error.".into(),
-                msg: inner.to_string(),
+                msg: err.to_string(),
             }),
         }
     } else {
@@ -244,6 +228,8 @@ impl Default for NewCertificateConfig {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error;
+
     use time::macros::datetime;
 
     use super::*;
@@ -394,5 +380,26 @@ mod tests {
         let pem = PemCertificate::from_pem_string(cert_content).expect("Reading PEM failed");
         let thumbprint = pem.thumbprint().expect("Extracting thumbprint failed");
         assert_eq!(thumbprint, expected_thumbprint);
+    }
+
+    #[test]
+    fn check_translate_rustls_error() -> Result<(), anyhow::Error> {
+        let expired_error = rustls::Error::InvalidCertificate(rustls::CertificateError::Expired);
+        let expired_error2: Box<dyn Error> = expired_error.clone().into();
+        let translated_error = translate_rustls_error(expired_error2.as_ref());
+
+        println!("plaintext error: {expired_error}");
+
+        println!(
+            "anyhow-formatted error: {:?}",
+            anyhow::Error::from(expired_error)
+        );
+
+        if let Some(inner) = translated_error {
+            println!("translated error: {inner}");
+            println!("anyhow-formatted error: {:?}", anyhow::Error::from(inner));
+        }
+
+        Ok(())
     }
 }

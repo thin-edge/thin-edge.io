@@ -747,7 +747,7 @@ dependencies = [
  "base64 0.13.1",
  "pem",
  "rcgen",
- "rustls 0.20.9",
+ "rustls 0.21.7",
  "rustls-pemfile 1.0.3",
  "sha-1",
  "tempfile",
@@ -2473,12 +2473,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pollster"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5da3b0203fd7ee5720aa0b5e790b591aa5d3f41c3ed2c34a3a393382198af2f7"
-
-[[package]]
 name = "ppv-lite86"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2867,20 +2861,20 @@ dependencies = [
 
 [[package]]
 name = "rumqttc"
-version = "0.18.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1514bbc994fc9f36ab7f7ae067b3e4758c717aff7a06c4818c6787cad8b086e1"
+checksum = "f2433b134712bc17a6f85a35e06b901e6e8d0bb20b5367e1121e6fedc140c0ac"
 dependencies = [
  "bytes",
  "flume",
  "futures",
  "log",
- "pollster",
  "rustls-native-certs",
- "rustls-pemfile 0.3.0",
+ "rustls-pemfile 1.0.3",
+ "rustls-webpki 0.100.2",
  "thiserror",
  "tokio",
- "tokio-rustls 0.23.4",
+ "tokio-rustls 0.24.1",
 ]
 
 [[package]]
@@ -2963,7 +2957,7 @@ checksum = "cd8d6c9f025a446bc4d18ad9632e69aec8f287aa84499ee335599fabd20c3fd8"
 dependencies = [
  "log",
  "ring",
- "rustls-webpki",
+ "rustls-webpki 0.101.4",
  "sct",
 ]
 
@@ -2995,6 +2989,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d3987094b1d07b653b7dfdc3f70ce9a1da9c51ac18c1b06b662e4f9a0e9f4b2"
 dependencies = [
  "base64 0.21.3",
+]
+
+[[package]]
+name = "rustls-webpki"
+version = "0.100.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e98ff011474fa39949b7e5c0428f9b4937eda7da7848bbb947786b7be0b27dab"
+dependencies = [
+ "ring",
+ "untrusted",
 ]
 
 [[package]]

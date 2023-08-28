@@ -316,7 +316,7 @@ impl Config {
 
             let tls_config = match authentication_config.client_auth.clone() {
                 Some(client_auth_config) => tls_config
-                    .with_single_cert(client_auth_config.cert_chain, client_auth_config.key)?,
+                    .with_client_auth_cert(client_auth_config.cert_chain, client_auth_config.key)?,
                 None => tls_config.with_no_client_auth(),
             };
 
