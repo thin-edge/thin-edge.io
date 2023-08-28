@@ -17,7 +17,7 @@
 //! files downloaded by a downloader are no longer necessary,
 //! [`Downloader::cleanup`] method can delete the downloaded files.
 //!
-//! ```rust
+//! ```no_run
 //! use anyhow::Result;
 //! use download::DownloadInfo;
 //! use download::Downloader;

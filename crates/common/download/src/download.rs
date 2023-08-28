@@ -456,11 +456,11 @@ fn try_pre_allocate_space(file: &File, path: &Path, file_len: u64) -> Result<(),
 
     // Reserve 5% of total disk space
     let five_percent_disk_space =
-        (tmpstats.blocks() as u64 * tmpstats.block_size() as u64) * 5 / 100;
+        (tmpstats.blocks() as i64 * tmpstats.block_size() as i64) * 5 / 100;
     let usable_disk_space =
-        tmpstats.blocks_free() as u64 * tmpstats.block_size() as u64 - five_percent_disk_space;
+        tmpstats.blocks_free() as i64 * tmpstats.block_size() as i64 - five_percent_disk_space;
 
-    if file_len >= usable_disk_space {
+    if file_len >= usable_disk_space.max(0) as u64 {
         return Err(DownloadError::InsufficientSpace);
     }
 
