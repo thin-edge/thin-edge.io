@@ -1,7 +1,6 @@
 use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
-use crate::converter::Converter;
 use async_trait::async_trait;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use c8y_http_proxy::handle::C8YHttpProxy;

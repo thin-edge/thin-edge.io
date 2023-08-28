@@ -8,7 +8,6 @@ use super::service_monitor;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
-use async_trait::async_trait;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
@@ -45,7 +44,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use service_monitor::convert_health_status_message;
 use std::collections::HashMap;
-use std::fmt::Display;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
@@ -53,13 +51,15 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
-use tedge_api::entity::EntityTopic;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityMetadata;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityType;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
+use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::topic::RequestTopic;
 use tedge_api::topic::ResponseTopic;
 use tedge_api::Auth;
@@ -102,39 +102,31 @@ pub struct MapperConfig {
     pub errors_topic: Topic,
 }
 
-#[async_trait]
-pub trait Converter: Send + Sync {
-    type Error: Display;
-
-    fn get_mapper_config(&self) -> &MapperConfig;
-
-    async fn try_convert(&mut self, input: &Message) -> Result<Vec<Message>, Self::Error>;
-
-    async fn convert(&mut self, input: &Message) -> Vec<Message> {
+impl CumulocityConverter {
+    pub async fn convert(&mut self, input: &Message) -> Vec<Message> {
         let messages_or_err = self.try_convert(input).await;
         self.wrap_errors(messages_or_err)
     }
 
-    fn wrap_errors(&self, messages_or_err: Result<Vec<Message>, Self::Error>) -> Vec<Message> {
+    pub fn wrap_errors(
+        &self,
+        messages_or_err: Result<Vec<Message>, ConversionError>,
+    ) -> Vec<Message> {
         messages_or_err.unwrap_or_else(|error| vec![self.new_error_message(error)])
     }
 
-    fn wrap_error(&self, message_or_err: Result<Message, Self::Error>) -> Message {
+    pub fn wrap_error(&self, message_or_err: Result<Message, ConversionError>) -> Message {
         message_or_err.unwrap_or_else(|error| self.new_error_message(error))
     }
 
-    fn new_error_message(&self, error: Self::Error) -> Message {
+    pub fn new_error_message(&self, error: ConversionError) -> Message {
         error!("Mapping error: {}", error);
         Message::new(&self.get_mapper_config().errors_topic, error.to_string())
     }
 
-    fn try_init_messages(&mut self) -> Result<Vec<Message>, Self::Error> {
-        Ok(vec![])
-    }
-
     /// This function will be the first method that's called on the converter after it's instantiated.
     /// Return any initialization messages that must be processed before the converter starts converting regular messages.
-    fn init_messages(&mut self) -> Vec<Message> {
+    pub fn init_messages(&mut self) -> Vec<Message> {
         match self.try_init_messages() {
             Ok(messages) => messages,
             Err(error) => {
@@ -147,23 +139,7 @@ pub trait Converter: Send + Sync {
         }
     }
 
-    /// This function will be the called after a brief period(sync window) after the converter starts converting messages.
-    /// This gives the converter an opportunity to process the messages received during the sync window and
-    /// produce any additional messages as "sync messages" as a result of this processing.
-    /// These sync messages will be processed by the mapper right after the sync window before it starts converting further messages.
-    /// Typically used to do some processing on all messages received on mapper startup and derive additional messages out of those.
-    fn sync_messages(&mut self) -> Vec<Message> {
-        vec![]
-    }
-
-    fn try_process_operation_update_message(
-        &mut self,
-        _input: &DiscoverOp,
-    ) -> Result<Option<Message>, Self::Error> {
-        Ok(None)
-    }
-
-    fn process_operation_update_message(&mut self, message: DiscoverOp) -> Message {
+    pub fn process_operation_update_message(&mut self, message: DiscoverOp) -> Message {
         let message_or_err = self.try_process_operation_update_message(&message);
         match message_or_err {
             Ok(Some(msg)) => msg,
@@ -191,6 +167,7 @@ pub struct CumulocityConverter {
     pub children: HashMap<String, Operations>,
     pub service_type: String,
     pub c8y_endpoint: C8yEndPoint,
+    pub mqtt_schema: MqttSchema,
     pub entity_store: EntityStore,
 }
 
@@ -241,17 +218,19 @@ impl CumulocityConverter {
             mqtt_publisher,
             service_type,
             c8y_endpoint,
+            mqtt_schema: MqttSchema::default(),
             entity_store,
         })
     }
 
     fn try_convert_measurement(
         &mut self,
+        source: &EntityTopicId,
         input: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
         let mut mqtt_messages: Vec<Message> = Vec::new();
 
-        if let Some(entity) = self.entity_store.get_entity_from_topic(&input.topic) {
+        if let Some(entity) = self.entity_store.get(source) {
             // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
             let c8y_json_payload = json::from_thin_edge_json(input.payload_str()?, entity)?;
 
@@ -676,29 +655,40 @@ pub enum CumulocityConverterBuildError {
     OperationLogsError(#[from] OperationLogsError),
 }
 
-#[async_trait]
-impl Converter for CumulocityConverter {
-    type Error = ConversionError;
-
+impl CumulocityConverter {
     fn get_mapper_config(&self) -> &MapperConfig {
         &self.mapper_config
     }
 
-    async fn try_convert(&mut self, message: &Message) -> Result<Vec<Message>, ConversionError> {
-        let mut registration_messages = vec![];
+    pub async fn try_convert(
+        &mut self,
+        message: &Message,
+    ) -> Result<Vec<Message>, ConversionError> {
+        match self.mqtt_schema.entity_channel_of(&message.topic) {
+            Ok((source, channel)) => self.try_convert_te_topics(source, channel, message).await,
+            Err(_) => self.try_convert_tedge_topics(message).await,
+        }
+    }
 
-        if let Ok(entity_topic) = EntityTopic::try_from(&message.topic) {
-            if let Ok(register_message) = EntityRegistrationMessage::try_from(message) {
-                if let Err(e) = self.entity_store.update(register_message) {
-                    error!("Could not update device registration: {e}");
+    async fn try_convert_te_topics(
+        &mut self,
+        source: EntityTopicId,
+        channel: Channel,
+        message: &Message,
+    ) -> Result<Vec<Message>, ConversionError> {
+        let mut registration_messages = vec![];
+        match &channel {
+            Channel::EntityMetadata => {
+                if let Ok(register_message) = EntityRegistrationMessage::try_from(message) {
+                    if let Err(e) = self.entity_store.update(register_message) {
+                        error!("Could not update device registration: {e}");
+                    }
                 }
-            } else {
+            }
+            _ => {
                 // if device is unregistered register using auto-registration
-                if self.entity_store.get(entity_topic.entity_id()).is_none() {
-                    registration_messages = match self
-                        .entity_store
-                        .auto_register_entity(entity_topic.entity_id())
-                    {
+                if self.entity_store.get(&source).is_none() {
+                    registration_messages = match self.entity_store.auto_register_entity(&source) {
                         Ok(register_messages) => register_messages,
                         Err(e) => {
                             error!("Could not update device registration: {e}");
@@ -706,7 +696,7 @@ impl Converter for CumulocityConverter {
                         }
                     };
 
-                    let entity = self.entity_store.get(entity_topic.entity_id()).unwrap();
+                    let entity = self.entity_store.get(&source).unwrap();
                     if let Some(message) = external_device_registration_message(entity) {
                         self.children
                             .insert(entity.entity_id.to_string(), Operations::default());
@@ -716,8 +706,20 @@ impl Converter for CumulocityConverter {
             }
         }
 
-        let mut messages = match &message.topic {
-            topic if EntityTopic::is_measurement(topic) => self.try_convert_measurement(message),
+        let mut messages = match &channel {
+            Channel::Measurement { .. } => self.try_convert_measurement(&source, message)?,
+            _ => vec![],
+        };
+
+        registration_messages.append(&mut messages);
+        Ok(registration_messages)
+    }
+
+    async fn try_convert_tedge_topics(
+        &mut self,
+        message: &Message,
+    ) -> Result<Vec<Message>, ConversionError> {
+        let messages = match &message.topic {
             topic
                 if topic.name.starts_with("tedge/alarms")
                     | topic.name.starts_with(INTERNAL_ALARMS_TOPIC) =>
@@ -759,8 +761,7 @@ impl Converter for CumulocityConverter {
             },
         }?;
 
-        registration_messages.append(&mut messages);
-        Ok(registration_messages)
+        Ok(messages)
     }
 
     fn try_init_messages(&mut self) -> Result<Vec<Message>, ConversionError> {
@@ -791,7 +792,7 @@ impl Converter for CumulocityConverter {
         ])
     }
 
-    fn sync_messages(&mut self) -> Vec<Message> {
+    pub fn sync_messages(&mut self) -> Vec<Message> {
         let sync_messages: Vec<Message> = self.alarm_converter.sync();
         self.alarm_converter = AlarmConverter::Synced;
         sync_messages
@@ -1133,7 +1134,6 @@ mod tests {
     use test_case::test_case;
 
     use crate::config::C8yMapperConfig;
-    use crate::converter::Converter;
     use crate::error::ConversionError;
 
     use super::CumulocityConverter;
