@@ -117,7 +117,7 @@ fi
 . ./ci/build_scripts/version.sh
 
 # Use zig to build as it is provides better cross compiling support
-cargo install cargo-zigbuild --version ">=0.17.1"
+cargo +stable install cargo-zigbuild --version ">=0.17.1"
 
 # Allow users to install zig by other package managers
 if ! zig --help &>/dev/null; then
