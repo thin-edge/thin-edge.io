@@ -71,7 +71,7 @@ glob = "0.3"
 heck = "0.4.1"
 http = "0.2"
 hyper = { version = "0.14", default-features = false }
-hyper-rustls = { version = "0.23", default_features = false, features = [
+hyper-rustls = { version = "0.24", default_features = false, features = [
     "tokio-runtime",
     "tls12",
     "rustls-native-certs",
