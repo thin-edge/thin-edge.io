@@ -2,6 +2,7 @@ use super::actor::C8yMapperBuilder;
 use super::actor::SyncComplete;
 use super::actor::SyncStart;
 use super::config::C8yMapperConfig;
+use crate::Capabilities;
 use assert_json_diff::assert_json_include;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::messages::C8YRestRequest;
@@ -1248,7 +1249,6 @@ async fn inventory_registers_unknown_entity_once() {
     );
 }
 
-#[cfg(feature = "log_upload")]
 #[tokio::test]
 async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_main_device() {
     let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
@@ -1300,7 +1300,6 @@ async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_main_device
     assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
 }
 
-#[cfg(feature = "log_upload")]
 #[tokio::test]
 async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_child_device() {
     let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
@@ -1360,7 +1359,6 @@ async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_child_devic
     assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
 }
 
-#[cfg(feature = "log_upload")]
 #[tokio::test]
 async fn mapper_converts_log_upload_cmd_to_supported_op_and_types_for_main_device() {
     let ttd = TempTedgeDir::new();
@@ -1386,7 +1384,6 @@ async fn mapper_converts_log_upload_cmd_to_supported_op_and_types_for_main_devic
         .exists());
 }
 
-#[cfg(feature = "log_upload")]
 #[tokio::test]
 async fn mapper_converts_log_upload_cmd_to_supported_op_and_types_for_child_device() {
     let ttd = TempTedgeDir::new();
@@ -1423,7 +1420,6 @@ async fn mapper_converts_log_upload_cmd_to_supported_op_and_types_for_child_devi
         .exists());
 }
 
-#[cfg(feature = "log_upload")]
 #[tokio::test]
 async fn handle_log_upload_executing_and_failed_cmd_for_main_device() {
     let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
@@ -1480,7 +1476,6 @@ async fn handle_log_upload_executing_and_failed_cmd_for_main_device() {
     .await;
 }
 
-#[cfg(feature = "log_upload")]
 #[tokio::test]
 async fn handle_log_upload_executing_and_failed_cmd_for_child_device() {
     let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
@@ -1549,7 +1544,6 @@ async fn handle_log_upload_executing_and_failed_cmd_for_child_device() {
     .await;
 }
 
-#[cfg(feature = "log_upload")]
 #[tokio::test]
 async fn handle_log_upload_successful_cmd_for_main_device() {
     let ttd = TempTedgeDir::new();
@@ -1591,7 +1585,6 @@ async fn handle_log_upload_successful_cmd_for_main_device() {
     .await;
 }
 
-#[cfg(feature = "log_upload")]
 #[tokio::test]
 #[ignore = "FIXME"]
 async fn handle_log_upload_successful_cmd_for_child_device() {
@@ -1730,7 +1723,6 @@ async fn spawn_c8y_mapper_actor(
     let tedge_http_host = "localhost:8888".into();
     let root_topic = "te".into();
     let mut topics = C8yMapperConfig::default_internal_topic_filter(config_dir.path()).unwrap();
-    #[cfg(feature = "log_upload")]
     topics.add_all(crate::log_upload::log_upload_topic_filter("te"));
     topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
@@ -1745,6 +1737,7 @@ async fn spawn_c8y_mapper_actor(
         tedge_http_host,
         topics,
         root_topic,
+        Capabilities::default(),
     );
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =

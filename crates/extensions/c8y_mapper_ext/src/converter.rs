@@ -418,8 +418,9 @@ impl CumulocityConverter {
         match get_smartrest_device_id(payload) {
             Some(device_id) => {
                 match get_smartrest_template_id(payload).as_str() {
-                    #[cfg(feature = "log_upload")]
-                    "522" => self.convert_log_upload_request(payload),
+                    "522" if self.config.capabilities.log_management => {
+                        self.convert_log_upload_request(payload)
+                    }
                     "528" if device_id == self.device_name => {
                         self.forward_software_request(payload).await
                     }
@@ -751,7 +752,6 @@ impl CumulocityConverter {
             topic if topic.name.starts_with("tedge/health") => {
                 self.process_health_status_message(message).await
             }
-            #[cfg(feature = "log_upload")]
             topic
                 if tedge_mqtt_ext::TopicFilter::new_unchecked(
                     &tedge_api::cmd_topic::CmdSubscribeTopic::LogUpload
@@ -759,9 +759,12 @@ impl CumulocityConverter {
                 )
                 .accept_topic(topic) =>
             {
-                self.convert_log_metadata(message)
+                if self.config.capabilities.log_management {
+                    self.convert_log_metadata(message)
+                } else {
+                    Ok(vec![])
+                }
             }
-            #[cfg(feature = "log_upload")]
             topic
                 if tedge_mqtt_ext::TopicFilter::new_unchecked(
                     &tedge_api::cmd_topic::CmdSubscribeTopic::LogUpload
@@ -769,7 +772,11 @@ impl CumulocityConverter {
                 )
                 .accept_topic(topic) =>
             {
-                self.handle_log_upload_state_change(message).await
+                if self.config.capabilities.log_management {
+                    self.handle_log_upload_state_change(message).await
+                } else {
+                    Ok(vec![])
+                }
             }
             topic => match topic.clone().try_into() {
                 Ok(MapperSubscribeTopic::ResponseTopic(ResponseTopic::SoftwareListResponse)) => {
@@ -1149,6 +1156,7 @@ pub fn check_tedge_agent_status(message: &Message) -> Result<bool, ConversionErr
 
 #[cfg(test)]
 mod tests {
+    use crate::Capabilities;
     use anyhow::Result;
     use assert_json_diff::assert_json_include;
     use assert_matches::assert_matches;
@@ -1826,7 +1834,6 @@ mod tests {
         let root_topic = "te".into();
         let mut topics =
             C8yMapperConfig::default_internal_topic_filter(&tmp_dir.to_path_buf()).unwrap();
-        #[cfg(feature = "log_upload")]
         topics.add_all(crate::log_upload::log_upload_topic_filter("te"));
         topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
@@ -1841,6 +1848,7 @@ mod tests {
             tedge_http_host,
             topics,
             root_topic,
+            Capabilities::default(),
         );
 
         let mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =

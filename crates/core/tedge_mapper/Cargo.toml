@@ -44,4 +44,3 @@ tracing = { workspace = true }
 
 [features]
 integration-test = []
-log_upload = ["c8y_mapper_ext/log_upload"]

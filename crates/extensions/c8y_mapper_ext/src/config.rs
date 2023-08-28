@@ -1,3 +1,4 @@
+use crate::Capabilities;
 use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
@@ -27,6 +28,7 @@ pub struct C8yMapperConfig {
     pub tedge_http_host: String,
     pub topics: TopicFilter,
     pub topic_root: String,
+    pub capabilities: Capabilities,
 }
 
 impl C8yMapperConfig {
@@ -42,6 +44,7 @@ impl C8yMapperConfig {
         tedge_http_host: String,
         topics: TopicFilter,
         topic_root: String,
+        capabilities: Capabilities,
     ) -> Self {
         let ops_dir = config_dir.join("operations").join("c8y");
         let file_transfer_dir = data_dir.join(DEFAULT_FILE_TRANSFER_DIR_NAME);
@@ -59,6 +62,7 @@ impl C8yMapperConfig {
             tedge_http_host,
             topics,
             topic_root,
+            capabilities,
         }
     }
 
@@ -80,11 +84,15 @@ impl C8yMapperConfig {
 
         let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port);
 
+        // TODO read these capabilities from disk
+        let capabilities = Capabilities::default();
+
         let mut topics = Self::default_internal_topic_filter(&config_dir)?;
 
         // Add feature topic filters
-        #[cfg(feature = "log_upload")]
-        topics.add_all(crate::log_upload::log_upload_topic_filter(&topic_root));
+        if capabilities.log_management {
+            topics.add_all(crate::log_upload::log_upload_topic_filter(&topic_root));
+        }
 
         // Add user configurable external topic filters
         for topic in tedge_config.c8y.topics.0.clone() {
@@ -104,6 +112,7 @@ impl C8yMapperConfig {
             tedge_http_host,
             topics,
             topic_root,
+            capabilities,
         ))
     }
 
