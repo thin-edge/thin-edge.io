@@ -1,6 +1,5 @@
 pub mod alarm;
 pub mod builder;
-pub mod cmd_topic;
 pub mod data;
 pub mod entity_store;
 pub mod error;

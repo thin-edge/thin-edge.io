@@ -2,6 +2,7 @@
 //!
 //! See https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/
 
+use std::convert::Infallible;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
@@ -244,11 +245,11 @@ pub enum Channel {
     Measurement { measurement_type: String },
     Event { event_type: String },
     Alarm { alarm_type: String },
-    Command { operation: String, cmd_id: String },
+    Command { operation: OperationType, cmd_id: String },
     MeasurementMetadata { measurement_type: String },
     EventMetadata { event_type: String },
     AlarmMetadata { alarm_type: String },
-    CommandMetadata { operation: String },
+    CommandMetadata { operation: OperationType },
 }
 
 impl FromStr for Channel {
@@ -280,10 +281,10 @@ impl FromStr for Channel {
             }),
 
             ["cmd", operation] => Ok(Channel::CommandMetadata {
-                operation: operation.to_string(),
+                operation: operation.parse().unwrap(), // Infallible
             }),
             ["cmd", operation, cmd_id] => Ok(Channel::Command {
-                operation: operation.to_string(),
+                operation: operation.parse().unwrap(), // Infallible
                 cmd_id: cmd_id.to_string(),
             }),
 
@@ -317,6 +318,41 @@ impl Display for Channel {
 impl Channel {
     pub fn is_measurement(&self) -> bool {
         matches!(self, Channel::Measurement { .. })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OperationType {
+    Restart,
+    SoftwareList,
+    SoftwareUpdate,
+    LogUpload,
+    Custom(String),
+}
+
+impl FromStr for OperationType {
+    type Err = Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "restart" => Ok(OperationType::Restart),
+            "software_list" => Ok(OperationType::SoftwareList),
+            "software_update" => Ok(OperationType::SoftwareUpdate),
+            "log_upload" => Ok(OperationType::LogUpload),
+            operation => Ok(OperationType::Custom(operation.to_string())),
+        }
+    }
+}
+
+impl Display for OperationType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OperationType::Restart => write!(f, "restart"),
+            OperationType::SoftwareList => write!(f, "software_list"),
+            OperationType::SoftwareUpdate => write!(f, "software_update"),
+            OperationType::LogUpload => write!(f, "log_upload"),
+            OperationType::Custom(operation) => write!(f, "{operation}"),
+        }
     }
 }
 

@@ -11,6 +11,7 @@ use std::collections::HashMap;
 
 use crate::entity_store;
 use crate::mqtt_topics::EntityTopicId;
+use crate::mqtt_topics::TopicIdError;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 
@@ -303,7 +304,7 @@ impl EntityMetadata {
     /// Creates a entity metadata for a child device.
     pub fn main_device(device_id: String) -> Self {
         Self {
-            topic_id: "device/main//".to_string(),
+            topic_id: EntityTopicId::default_main_device(),
             entity_id: device_id,
             r#type: EntityType::MainDevice,
             parent: None,
@@ -312,14 +313,14 @@ impl EntityMetadata {
     }
 
     /// Creates a entity metadata for a child device.
-    pub fn child_device(child_device_id: String) -> Self {
-        Self {
-            topic_id: format!("device/{child_device_id}//"),
+    pub fn child_device(child_device_id: String) -> Result<Self, TopicIdError> {
+        Ok(Self {
+            topic_id: EntityTopicId::default_child_device(&child_device_id)?,
             entity_id: child_device_id,
             r#type: EntityType::ChildDevice,
             parent: Some(EntityTopicId::default_main_device()),
             other: serde_json::json!({}),
-        }
+        })
     }
 }
 
