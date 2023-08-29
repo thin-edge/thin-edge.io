@@ -445,27 +445,28 @@ impl Plugin for ExternalPluginCommand {
         let command = self.command(LIST, None)?;
         let output = self.execute(command, logger).await?;
         if output.status.success() {
-            if self.max_packages == 0 {
-                Ok(deserialize_module_info(
-                    self.name.clone(),
-                    output.stdout.as_slice(),
-                )?)
-            } else {
-                let (last_line, _) = String::from_utf8(output.stdout.as_slice().to_vec())
+            // If max_packages is set to an invalid value, use 0 which represents all
+            // of the content, don't bother filtering the content when all of it will
+            // be included anyway
+            let max_packages = usize::try_from(self.max_packages).unwrap_or(0);
+            let last_char = match max_packages {
+                0 => 0,
+                _ => String::from_utf8(output.stdout.as_slice().to_vec())
                     .unwrap_or_default()
                     .char_indices()
                     .filter(|(_, c)| *c == '\n')
-                    .nth(usize::try_from(self.max_packages).unwrap_or(usize::MAX))
-                    .unwrap_or_default();
+                    .nth(max_packages - 1)
+                    .map(|(i, _)| i)
+                    .unwrap_or_default(),
+            };
 
-                Ok(deserialize_module_info(
-                    self.name.clone(),
-                    match last_line {
-                        0 => output.stdout.as_slice(),
-                        _ => &output.stdout[..=last_line],
-                    },
-                )?)
-            }
+            Ok(deserialize_module_info(
+                self.name.clone(),
+                match last_char {
+                    0 => &output.stdout[..],
+                    _ => &output.stdout[..=last_char],
+                },
+            )?)
         } else {
             Err(SoftwareError::Plugin {
                 software_type: self.name.clone(),
