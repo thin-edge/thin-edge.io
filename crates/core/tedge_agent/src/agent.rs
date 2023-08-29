@@ -102,12 +102,8 @@ impl Agent {
     pub fn try_new(name: &str, config: AgentConfig) -> Result<Self, FlockfileError> {
         let mut flock = None;
         if config.use_lock {
-            flock = Some(check_another_instance_is_not_running(
-                name,
-                config.run_dir.as_std_path(),
-            )?);
+            flock = check_another_instance_is_not_running(name, config.run_dir.as_std_path())?;
         }
-
         info!("{} starting", &name);
 
         Ok(Self {
