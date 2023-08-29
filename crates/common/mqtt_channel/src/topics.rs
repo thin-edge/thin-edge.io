@@ -157,6 +157,16 @@ impl TryInto<TopicFilter> for &str {
     }
 }
 
+impl FromIterator<TopicFilter> for TopicFilter {
+    fn from_iter<T: IntoIterator<Item = TopicFilter>>(filters: T) -> Self {
+        let mut combined_filters = TopicFilter::empty();
+        for filter in filters.into_iter() {
+            combined_filters.add_all(filter)
+        }
+        combined_filters
+    }
+}
+
 impl TryInto<TopicFilter> for Vec<&str> {
     type Error = MqttError;
 
