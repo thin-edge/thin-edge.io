@@ -2,6 +2,7 @@
 //!
 //! See https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/
 
+use mqtt_channel::TopicFilter;
 use std::convert::Infallible;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -75,6 +76,27 @@ impl MqttSchema {
         topic: &mqtt_channel::Topic,
     ) -> Result<(EntityTopicId, Channel), EntityTopicError> {
         self.parse(&topic.name)
+    }
+
+    /// Get the topic filter to subscribe to messages from specific entities and channels
+    pub fn topics(&self, entity: EntityFilter, channel: ChannelFilter) -> TopicFilter {
+        let entity = match entity {
+            EntityFilter::AnyEntity => "+/+/+/+".to_string(),
+            EntityFilter::Entity(entity) => entity.to_string(),
+        };
+        let channel = match channel {
+            ChannelFilter::EntityMetadata => "".to_string(),
+            ChannelFilter::Measurement => "/m/+".to_string(),
+            ChannelFilter::MeasurementMetadata => "/m/+/meta".to_string(),
+            ChannelFilter::Event => "/e/+".to_string(),
+            ChannelFilter::EventMetadata => "/e/+/meta".to_string(),
+            ChannelFilter::Alarm => "/a/+".to_string(),
+            ChannelFilter::AlarmMetadata => "/a/+/meta".to_string(),
+            ChannelFilter::Command(operation) => format!("/cmd/{operation}/+"),
+            ChannelFilter::CommandMetadata(operation) => format!("/cmd/{operation}"),
+        };
+
+        TopicFilter::new_unchecked(&format!("{}/{entity}{channel}", self.root))
     }
 }
 
@@ -242,14 +264,31 @@ pub enum TopicIdError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Channel {
     EntityMetadata,
-    Measurement { measurement_type: String },
-    Event { event_type: String },
-    Alarm { alarm_type: String },
-    Command { operation: OperationType, cmd_id: String },
-    MeasurementMetadata { measurement_type: String },
-    EventMetadata { event_type: String },
-    AlarmMetadata { alarm_type: String },
-    CommandMetadata { operation: OperationType },
+    Measurement {
+        measurement_type: String,
+    },
+    Event {
+        event_type: String,
+    },
+    Alarm {
+        alarm_type: String,
+    },
+    Command {
+        operation: OperationType,
+        cmd_id: String,
+    },
+    MeasurementMetadata {
+        measurement_type: String,
+    },
+    EventMetadata {
+        event_type: String,
+    },
+    AlarmMetadata {
+        alarm_type: String,
+    },
+    CommandMetadata {
+        operation: OperationType,
+    },
 }
 
 impl FromStr for Channel {
@@ -363,6 +402,23 @@ pub enum ChannelError {
 
     #[error("Invalid category: {0:?}")]
     InvalidCategory(String),
+}
+
+pub enum EntityFilter<'a> {
+    AnyEntity,
+    Entity(&'a EntityTopicId),
+}
+
+pub enum ChannelFilter {
+    EntityMetadata,
+    Measurement,
+    Event,
+    Alarm,
+    Command(OperationType),
+    MeasurementMetadata,
+    EventMetadata,
+    AlarmMetadata,
+    CommandMetadata(OperationType),
 }
 
 #[cfg(test)]
