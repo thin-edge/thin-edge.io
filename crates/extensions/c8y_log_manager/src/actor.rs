@@ -121,7 +121,7 @@ impl LogManagerActor {
             &smartrest_request.log_type,
             smartrest_request.date_from,
             smartrest_request.lines,
-            &smartrest_request.needle,
+            &smartrest_request.search_text,
         )?;
 
         let upload_event_url = self
