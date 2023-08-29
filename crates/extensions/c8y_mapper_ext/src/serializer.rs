@@ -478,7 +478,7 @@ mod tests {
     fn serialize_timestamp_child_message() -> anyhow::Result<()> {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
-        let entity = EntityMetadata::child_device("child1".to_string());
+        let entity = EntityMetadata::child_device("child1".to_string())?;
         let mut serializer = C8yJsonSerializer::new(timestamp, &entity);
         serializer.visit_timestamp(timestamp)?;
         serializer.visit_measurement("temperature", 25.5)?;

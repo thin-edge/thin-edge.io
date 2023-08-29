@@ -5,6 +5,7 @@ use c8y_api::smartrest::topic::C8yTopic;
 use camino::Utf8PathBuf;
 use std::path::Path;
 use std::path::PathBuf;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::topic::ResponseTopic;
 use tedge_api::DEFAULT_FILE_TRANSFER_DIR_NAME;
 use tedge_config::ConfigNotSet;
@@ -27,7 +28,6 @@ pub struct C8yMapperConfig {
     pub c8y_host: String,
     pub tedge_http_host: String,
     pub topics: TopicFilter,
-    pub topic_root: String,
     pub capabilities: Capabilities,
 }
 
@@ -43,7 +43,6 @@ impl C8yMapperConfig {
         c8y_host: String,
         tedge_http_host: String,
         topics: TopicFilter,
-        topic_root: String,
         capabilities: Capabilities,
     ) -> Self {
         let ops_dir = config_dir.join("operations").join("c8y");
@@ -61,7 +60,6 @@ impl C8yMapperConfig {
             c8y_host,
             tedge_http_host,
             topics,
-            topic_root,
             capabilities,
         }
     }
@@ -80,7 +78,7 @@ impl C8yMapperConfig {
         let c8y_host = tedge_config.c8y_url().or_config_not_set()?.to_string();
         let tedge_http_address = tedge_config.http.bind.address;
         let tedge_http_port = tedge_config.http.bind.port;
-        let topic_root = "te".to_string(); // later get the value from tedge config
+        let mqtt_schema = MqttSchema::default(); // later get the value from tedge config
 
         let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port);
 
@@ -91,7 +89,7 @@ impl C8yMapperConfig {
 
         // Add feature topic filters
         if capabilities.log_management {
-            topics.add_all(crate::log_upload::log_upload_topic_filter(&topic_root));
+            topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
         }
 
         // Add user configurable external topic filters
@@ -111,7 +109,6 @@ impl C8yMapperConfig {
             c8y_host,
             tedge_http_host,
             topics,
-            topic_root,
             capabilities,
         ))
     }

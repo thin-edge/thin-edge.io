@@ -11,14 +11,17 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::topic::C8yTopic;
 use nanoid::nanoid;
-use tedge_api::cmd_topic::get_target_ids_from_cmd_topic;
-use tedge_api::cmd_topic::CmdPublishTopic;
-use tedge_api::cmd_topic::CmdSubscribeTopic;
-use tedge_api::cmd_topic::Target;
 use tedge_api::entity_store::EntityType;
 use tedge_api::messages::CommandStatus;
 use tedge_api::messages::LogMetadata;
 use tedge_api::messages::LogUploadCmdPayload;
+use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::ChannelFilter::Command;
+use tedge_api::mqtt_topics::ChannelFilter::CommandMetadata;
+use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::OperationType;
 use tedge_api::Jsonify;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
@@ -27,13 +30,13 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
 
-pub fn log_upload_topic_filter(topic_root: &str) -> TopicFilter {
-    vec![
-        CmdSubscribeTopic::LogUpload.metadata(topic_root).as_str(),
-        CmdSubscribeTopic::LogUpload.with_id(topic_root).as_str(),
+pub fn log_upload_topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
+    [
+        mqtt_schema.topics(AnyEntity, Command(OperationType::LogUpload)),
+        mqtt_schema.topics(AnyEntity, CommandMetadata(OperationType::LogUpload)),
     ]
-    .try_into()
-    .unwrap()
+    .into_iter()
+    .collect()
 }
 
 impl CumulocityConverter {
@@ -42,6 +45,11 @@ impl CumulocityConverter {
         &self,
         smartrest: &str,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
+        if !self.config.capabilities.log_management {
+            // Log_management is disabled
+            return Ok(vec![]);
+        }
+
         let log_request = SmartRestLogRequest::from_smartrest(smartrest)?;
         let target = self
             .entity_store
@@ -51,7 +59,11 @@ impl CumulocityConverter {
             })?;
 
         let cmd_id = nanoid!();
-        let topic = CmdPublishTopic::LogUpload(Target::new(target, &cmd_id)).to_topic("te");
+        let channel = Channel::Command {
+            operation: OperationType::LogUpload,
+            cmd_id: cmd_id.clone(),
+        };
+        let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
 
         let tedge_url = format!(
             "http://{}/tedge/file-transfer/{}/log_upload/{}-{}",
@@ -79,17 +91,14 @@ impl CumulocityConverter {
     /// - "failed", it converts the message to SmartREST "Failed".
     pub async fn handle_log_upload_state_change(
         &mut self,
+        topic_id: &EntityTopicId,
+        cmd_id: &str,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        let (topic_id, cmd_id) =
-            match get_target_ids_from_cmd_topic(&message.topic, &self.config.topic_root) {
-                (Some(topic_id), Some(cmd_id)) => (topic_id, cmd_id),
-                _ => {
-                    return Err(ConversionError::UnsupportedTopic(
-                        message.topic.name.clone(),
-                    ))
-                }
-            };
+        if !self.config.capabilities.log_management {
+            // Log_management is disabled
+            return Ok(vec![]);
+        }
 
         // get the device metadata from its id
         let device = self.entity_store.get(topic_id).ok_or_else(|| {
@@ -173,19 +182,16 @@ impl CumulocityConverter {
     /// - supported log types
     pub fn convert_log_metadata(
         &mut self,
+        topic_id: &EntityTopicId,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
+        if !self.config.capabilities.log_management {
+            // Log_management is disabled
+            return Ok(vec![]);
+        }
+
         let metadata = LogMetadata::from_json(message.payload_str()?)?;
 
-        let topic_id =
-            match get_target_ids_from_cmd_topic(&message.topic, &self.config.topic_root).0 {
-                Some(topic_id) => topic_id,
-                _ => {
-                    return Err(ConversionError::UnsupportedTopic(
-                        message.topic.name.clone(),
-                    ))
-                }
-            };
         // get the device metadata from its id
         let device = self.entity_store.get(topic_id).ok_or_else(|| {
             CumulocityMapperError::UnregisteredDevice {

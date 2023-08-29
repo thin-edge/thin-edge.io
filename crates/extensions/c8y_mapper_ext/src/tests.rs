@@ -24,6 +24,9 @@ use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_actors::WrappedInput;
+use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::OperationType;
 use tedge_api::SoftwareUpdateResponse;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
@@ -1276,28 +1279,36 @@ async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_main_device
         })
         .unwrap();
 
-    let cmd_id = tedge_api::cmd_topic::get_target_ids_from_cmd_topic(&topic, "te")
-        .1
-        .unwrap();
+    let mqtt_schema = MqttSchema::default();
+    let (entity, channel) = mqtt_schema.entity_channel_of(&topic).unwrap();
+    assert_eq!(entity, "device/main//");
 
-    // Validate the topic name
-    assert_eq!(
-        topic.name,
-        format!("te/device/main///cmd/log_upload/{cmd_id}")
-    );
+    if let Channel::Command {
+        operation: OperationType::LogUpload,
+        cmd_id,
+    } = channel
+    {
+        // Validate the topic name
+        assert_eq!(
+            topic.name,
+            format!("te/device/main///cmd/log_upload/{cmd_id}")
+        );
 
-    // Validate the payload JSON
-    let expected_json = json!({
-        "status": "init",
-        "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device/log_upload/logfileA-{cmd_id}"),
-        "type": "logfileA",
-        "dateFrom": "2013-06-22T17:03:14.123+02:00",
-        "dateTo": "2013-06-23T18:03:14.123+02:00",
-        "searchText": "ERROR",
-        "lines": 1000
-    });
+        // Validate the payload JSON
+        let expected_json = json!({
+            "status": "init",
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device/log_upload/logfileA-{cmd_id}"),
+            "type": "logfileA",
+            "dateFrom": "2013-06-22T17:03:14.123+02:00",
+            "dateTo": "2013-06-23T18:03:14.123+02:00",
+            "searchText": "ERROR",
+            "lines": 1000
+        });
 
-    assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
+        assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
+    } else {
+        panic!("Unexpected response on channel: {:?}", topic)
+    }
 }
 
 #[tokio::test]
@@ -1335,28 +1346,36 @@ async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_child_devic
         })
         .unwrap();
 
-    let cmd_id = tedge_api::cmd_topic::get_target_ids_from_cmd_topic(&topic, "te")
-        .1
-        .unwrap();
+    let mqtt_schema = MqttSchema::default();
+    let (entity, channel) = mqtt_schema.entity_channel_of(&topic).unwrap();
+    assert_eq!(entity, "device/DeviceSerial//");
 
-    // Validate the topic name
-    assert_eq!(
-        topic.name,
-        format!("te/device/DeviceSerial///cmd/log_upload/{cmd_id}")
-    );
+    if let Channel::Command {
+        operation: OperationType::LogUpload,
+        cmd_id,
+    } = channel
+    {
+        // Validate the topic name
+        assert_eq!(
+            topic.name,
+            format!("te/device/DeviceSerial///cmd/log_upload/{cmd_id}")
+        );
 
-    // Validate the payload JSON
-    let expected_json = json!({
-        "status": "init",
-        "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/DeviceSerial/log_upload/logfileA-{cmd_id}"),
-        "type": "logfileA",
-        "dateFrom": "2013-06-22T17:03:14.123+02:00",
-        "dateTo": "2013-06-23T18:03:14.123+02:00",
-        "searchText": "ERROR",
-        "lines": 1000
-    });
+        // Validate the payload JSON
+        let expected_json = json!({
+            "status": "init",
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/DeviceSerial/log_upload/logfileA-{cmd_id}"),
+            "type": "logfileA",
+            "dateFrom": "2013-06-22T17:03:14.123+02:00",
+            "dateTo": "2013-06-23T18:03:14.123+02:00",
+            "searchText": "ERROR",
+            "lines": 1000
+        });
 
-    assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
+        assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
+    } else {
+        panic!("Unexpected response on channel: {:?}", topic)
+    }
 }
 
 #[tokio::test]
@@ -1721,9 +1740,9 @@ async fn spawn_c8y_mapper_actor(
     let service_type = "service".into();
     let c8y_host = "test.c8y.io".into();
     let tedge_http_host = "localhost:8888".into();
-    let root_topic = "te".into();
+    let mqtt_schema = MqttSchema::default();
     let mut topics = C8yMapperConfig::default_internal_topic_filter(config_dir.path()).unwrap();
-    topics.add_all(crate::log_upload::log_upload_topic_filter("te"));
+    topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
     topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
     let config = C8yMapperConfig::new(
@@ -1736,7 +1755,6 @@ async fn spawn_c8y_mapper_actor(
         c8y_host,
         tedge_http_host,
         topics,
-        root_topic,
         Capabilities::default(),
     );
 

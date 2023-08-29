@@ -315,7 +315,7 @@ mod tests {
         expected_output: Value,
     ) {
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
-        let entity = EntityMetadata::child_device(child_id.to_string());
+        let entity = EntityMetadata::child_device(child_id.to_string()).unwrap();
         let output = from_thin_edge_json_with_timestamp(thin_edge_json, timestamp, &entity);
         assert_json_eq!(
             serde_json::from_str::<serde_json::Value>(output.unwrap().as_str()).unwrap(),

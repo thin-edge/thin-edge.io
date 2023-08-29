@@ -60,6 +60,7 @@ use tedge_api::event::ThinEdgeEvent;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::OperationType;
 use tedge_api::topic::RequestTopic;
 use tedge_api::topic::ResponseTopic;
 use tedge_api::Auth;
@@ -418,9 +419,7 @@ impl CumulocityConverter {
         match get_smartrest_device_id(payload) {
             Some(device_id) => {
                 match get_smartrest_template_id(payload).as_str() {
-                    "522" if self.config.capabilities.log_management => {
-                        self.convert_log_upload_request(payload)
-                    }
+                    "522" => self.convert_log_upload_request(payload),
                     "528" if device_id == self.device_name => {
                         self.forward_software_request(payload).await
                     }
@@ -728,6 +727,17 @@ impl CumulocityConverter {
 
         let mut messages = match &channel {
             Channel::Measurement { .. } => self.try_convert_measurement(&source, message)?,
+
+            Channel::CommandMetadata {
+                operation: OperationType::LogUpload,
+            } => self.convert_log_metadata(&source, message)?,
+            Channel::Command {
+                operation: OperationType::LogUpload,
+                cmd_id,
+            } => {
+                self.handle_log_upload_state_change(&source, cmd_id, message)
+                    .await?
+            }
             _ => vec![],
         };
 
@@ -751,32 +761,6 @@ impl CumulocityConverter {
             }
             topic if topic.name.starts_with("tedge/health") => {
                 self.process_health_status_message(message).await
-            }
-            topic
-                if tedge_mqtt_ext::TopicFilter::new_unchecked(
-                    &tedge_api::cmd_topic::CmdSubscribeTopic::LogUpload
-                        .metadata(&self.config.topic_root),
-                )
-                .accept_topic(topic) =>
-            {
-                if self.config.capabilities.log_management {
-                    self.convert_log_metadata(message)
-                } else {
-                    Ok(vec![])
-                }
-            }
-            topic
-                if tedge_mqtt_ext::TopicFilter::new_unchecked(
-                    &tedge_api::cmd_topic::CmdSubscribeTopic::LogUpload
-                        .with_id(&self.config.topic_root),
-                )
-                .accept_topic(topic) =>
-            {
-                if self.config.capabilities.log_management {
-                    self.handle_log_upload_state_change(message).await
-                } else {
-                    Ok(vec![])
-                }
             }
             topic => match topic.clone().try_into() {
                 Ok(MapperSubscribeTopic::ResponseTopic(ResponseTopic::SoftwareListResponse)) => {
@@ -1174,6 +1158,7 @@ mod tests {
     use tedge_actors::Sender;
     use tedge_actors::SimpleMessageBox;
     use tedge_actors::SimpleMessageBoxBuilder;
+    use tedge_api::mqtt_topics::MqttSchema;
     use tedge_mqtt_ext::Message;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
@@ -1831,10 +1816,10 @@ mod tests {
         let service_type = "service".into();
         let c8y_host = "test.c8y.io".into();
         let tedge_http_host = "localhost".into();
-        let root_topic = "te".into();
+        let mqtt_schema = MqttSchema::default();
         let mut topics =
             C8yMapperConfig::default_internal_topic_filter(&tmp_dir.to_path_buf()).unwrap();
-        topics.add_all(crate::log_upload::log_upload_topic_filter("te"));
+        topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
         topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
         let config = C8yMapperConfig::new(
@@ -1847,7 +1832,6 @@ mod tests {
             c8y_host,
             tedge_http_host,
             topics,
-            root_topic,
             Capabilities::default(),
         );
 
