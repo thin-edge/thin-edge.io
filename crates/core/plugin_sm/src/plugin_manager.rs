@@ -2,7 +2,7 @@ use crate::log_file::LogFile;
 use crate::plugin::ExternalPluginCommand;
 use crate::plugin::Plugin;
 use crate::plugin::LIST;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::ErrorKind;
 use std::io::{self};
@@ -51,7 +51,7 @@ pub trait Plugins {
 #[derive(Debug)]
 pub struct ExternalPlugins {
     plugin_dir: PathBuf,
-    plugin_map: HashMap<SoftwareType, ExternalPluginCommand>,
+    plugin_map: BTreeMap<SoftwareType, ExternalPluginCommand>,
     default_plugin_type: Option<SoftwareType>,
     sudo: Option<PathBuf>,
     config_location: TEdgeConfigLocation,
@@ -102,7 +102,7 @@ impl ExternalPlugins {
     ) -> Result<ExternalPlugins, SoftwareError> {
         let mut plugins = ExternalPlugins {
             plugin_dir: plugin_dir.into(),
-            plugin_map: HashMap::new(),
+            plugin_map: BTreeMap::new(),
             default_plugin_type: default_plugin_type.clone(),
             sudo,
             config_location,
