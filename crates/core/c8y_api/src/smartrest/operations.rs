@@ -172,7 +172,7 @@ pub fn get_operations(dir: impl AsRef<Path>) -> Result<Operations, OperationsErr
             }
 
             let mut details = match fs::read(&path) {
-                Ok(bytes) => toml::from_slice::<Operation>(bytes.as_slice())
+                Ok(bytes) => toml::from_str::<Operation>(&String::from_utf8(bytes)?)
                     .map_err(|e| OperationsError::TomlError(path.to_path_buf(), e))?,
                 Err(err) => return Err(OperationsError::FromIo(err)),
             };
@@ -215,7 +215,7 @@ pub fn get_child_ops(
 
 pub fn get_operation(path: PathBuf) -> Result<Operation, OperationsError> {
     let mut details = match fs::read(&path) {
-        Ok(bytes) => toml::from_slice::<Operation>(bytes.as_slice())
+        Ok(bytes) => toml::from_str::<Operation>(&String::from_utf8(bytes)?)
             .map_err(|e| OperationsError::TomlError(path.to_path_buf(), e))?,
 
         Err(err) => return Err(OperationsError::FromIo(err)),

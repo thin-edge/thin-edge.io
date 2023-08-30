@@ -496,7 +496,7 @@ dependencies = [
  "anyhow",
  "c8y_config_manager",
  "c8y_http_proxy",
- "clap 4.2.7",
+ "clap",
  "tedge_actors",
  "tedge_config",
  "tedge_file_system_ext",
@@ -519,7 +519,7 @@ dependencies = [
  "c8y_firmware_manager",
  "c8y_http_proxy",
  "c8y_log_manager",
- "clap 4.2.7",
+ "clap",
  "env_logger",
  "log",
  "tedge_actors",
@@ -541,7 +541,7 @@ dependencies = [
  "anyhow",
  "c8y_firmware_manager",
  "c8y_http_proxy",
- "clap 4.2.7",
+ "clap",
  "tedge_actors",
  "tedge_config",
  "tedge_downloader_ext",
@@ -560,7 +560,7 @@ dependencies = [
  "anyhow",
  "c8y_http_proxy",
  "c8y_log_manager",
- "clap 4.2.7",
+ "clap",
  "tedge_actors",
  "tedge_config",
  "tedge_file_system_ext",
@@ -582,7 +582,7 @@ dependencies = [
  "base64 0.13.1",
  "c8y_api",
  "camino",
- "clap 4.2.7",
+ "clap",
  "csv",
  "futures",
  "futures-util",
@@ -625,7 +625,7 @@ dependencies = [
  "thiserror",
  "time",
  "tokio",
- "toml 0.5.11",
+ "toml 0.7.6",
  "tracing",
 ]
 
@@ -649,7 +649,7 @@ dependencies = [
  "tedge_utils",
  "thiserror",
  "tokio",
- "toml 0.5.11",
+ "toml 0.7.6",
 ]
 
 [[package]]
@@ -753,7 +753,7 @@ dependencies = [
  "thiserror",
  "time",
  "tokio",
- "toml 0.5.11",
+ "toml 0.7.6",
  "tracing",
 ]
 
@@ -802,29 +802,12 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "clap"
-version = "3.2.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ea181bf566f71cb9a5d17a59e1871af638180a18fb0035c92ae62b705207123"
-dependencies = [
- "atty",
- "bitflags 1.3.2",
- "clap_derive 3.2.25",
- "clap_lex 0.2.4",
- "indexmap 1.9.3",
- "once_cell",
- "strsim",
- "termcolor",
- "textwrap 0.16.0",
-]
-
-[[package]]
-name = "clap"
 version = "4.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34d21f9bf1b425d2968943631ec91202fe5e837264063503708b83013f8fc938"
 dependencies = [
  "clap_builder",
- "clap_derive 4.2.0",
+ "clap_derive",
  "once_cell",
 ]
 
@@ -837,22 +820,9 @@ dependencies = [
  "anstream",
  "anstyle",
  "bitflags 1.3.2",
- "clap_lex 0.4.1",
+ "clap_lex",
  "once_cell",
  "strsim",
-]
-
-[[package]]
-name = "clap_derive"
-version = "3.2.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae6371b8bdc8b7d3959e9cf7b22d4435ef3e79e138688421ec654acf8c81b008"
-dependencies = [
- "heck",
- "proc-macro-error",
- "proc-macro2 1.0.66",
- "quote 1.0.33",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -865,15 +835,6 @@ dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
  "syn 2.0.29",
-]
-
-[[package]]
-name = "clap_lex"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2850f2f5a82cbf437dd5af4d49848fbdfc27c157c3d010345776f952765261c5"
-dependencies = [
- "os_str_bytes",
 ]
 
 [[package]]
@@ -1880,7 +1841,7 @@ dependencies = [
  "tedge_test_utils",
  "thiserror",
  "time",
- "toml 0.5.11",
+ "toml 0.7.6",
 ]
 
 [[package]]
@@ -2019,7 +1980,7 @@ dependencies = [
  "supports-hyperlinks",
  "supports-unicode",
  "terminal_size",
- "textwrap 0.15.2",
+ "textwrap",
  "thiserror",
  "unicode-width",
 ]
@@ -2325,12 +2286,6 @@ dependencies = [
  "dlv-list",
  "hashbrown 0.12.3",
 ]
-
-[[package]]
-name = "os_str_bytes"
-version = "6.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d5d9eb14b174ee9aa2ef96dc2b94637a2d4b6e7cb873c7e171f0c20c6cf3eac"
 
 [[package]]
 name = "overload"
@@ -2960,7 +2915,7 @@ checksum = "869b9022fc45f60004b943c78326d35eb948d60d97fd22e0c9ebdbb153b4e504"
 dependencies = [
  "axum",
  "bytes",
- "clap 4.2.7",
+ "clap",
  "config",
  "flume",
  "metrics",
@@ -3547,7 +3502,7 @@ dependencies = [
  "base64 0.13.1",
  "camino",
  "certificate",
- "clap 3.2.25",
+ "clap",
  "doku",
  "hyper",
  "mockito 0.31.1",
@@ -3567,7 +3522,7 @@ dependencies = [
  "test-case",
  "thiserror",
  "tokio",
- "toml 0.5.11",
+ "toml 0.7.6",
  "tracing",
  "url",
  "which",
@@ -3581,7 +3536,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "camino",
- "clap 4.2.7",
+ "clap",
  "flockfile",
  "hyper",
  "lazy_static",
@@ -3604,7 +3559,7 @@ dependencies = [
  "thiserror",
  "time",
  "tokio",
- "toml 0.5.11",
+ "toml 0.7.6",
  "tracing",
 ]
 
@@ -3613,7 +3568,7 @@ name = "tedge-apt-plugin"
 version = "0.12.0"
 dependencies = [
  "anyhow",
- "clap 3.2.25",
+ "clap",
  "csv",
  "log",
  "regex",
@@ -3628,7 +3583,7 @@ dependencies = [
 name = "tedge-dummy-plugin"
 version = "0.12.0"
 dependencies = [
- "clap 4.2.7",
+ "clap",
  "thiserror",
 ]
 
@@ -3637,7 +3592,7 @@ name = "tedge-log-plugin"
 version = "0.12.0"
 dependencies = [
  "anyhow",
- "clap 4.2.7",
+ "clap",
  "tedge_actors",
  "tedge_config",
  "tedge_file_system_ext",
@@ -3661,7 +3616,7 @@ dependencies = [
  "batcher",
  "c8y_http_proxy",
  "c8y_mapper_ext",
- "clap 4.2.7",
+ "clap",
  "clock",
  "collectd_ext",
  "flockfile",
@@ -3684,7 +3639,7 @@ name = "tedge-watchdog"
 version = "0.12.0"
 dependencies = [
  "anyhow",
- "clap 4.2.7",
+ "clap",
  "freedesktop_entry_parser",
  "futures",
  "mqtt_channel",
@@ -3923,7 +3878,7 @@ dependencies = [
  "anyhow",
  "camino",
  "tempfile",
- "toml 0.5.11",
+ "toml 0.7.6",
 ]
 
 [[package]]
@@ -4026,12 +3981,6 @@ dependencies = [
  "unicode-linebreak",
  "unicode-width",
 ]
-
-[[package]]
-name = "textwrap"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "222a222a5bfe1bba4a77b45ec488a741b3cb8872e5e499451fd7d0129c9c7c3d"
 
 [[package]]
 name = "thiserror"

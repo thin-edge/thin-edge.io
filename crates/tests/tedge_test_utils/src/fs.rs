@@ -88,7 +88,7 @@ impl TempTedgeFile {
         file.sync_all().unwrap();
     }
 
-    pub fn with_toml_content(self, content: toml::Value) {
+    pub fn with_toml_content(self, content: toml::Table) {
         let mut file = OpenOptions::new()
             .write(true)
             .create(false)
@@ -205,11 +205,11 @@ mod tests {
         let as_toml: toml::Value = toml::from_str(&file_content).unwrap();
         assert_eq!(
             as_toml,
-            toml::toml! {
+            toml::Value::Table(toml::toml! {
                 files = [
                     { type = "apt", path = "/var/log/apt/history.log"}
                 ]
-            }
+            })
         );
 
         Ok(())

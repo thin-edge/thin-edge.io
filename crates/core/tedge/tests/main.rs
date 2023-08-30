@@ -20,7 +20,7 @@ mod tests {
 
         cmd.assert()
             .success()
-            .stdout(predicate::str::contains("USAGE"));
+            .stdout(predicate::str::contains("Usage"));
 
         Ok(())
     }

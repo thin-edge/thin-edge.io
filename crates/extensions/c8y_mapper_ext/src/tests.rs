@@ -1282,9 +1282,7 @@ fn create_custom_op_file(
 
     let mut map = toml::map::Map::new();
     map.insert("exec".into(), toml::Value::Table(custom_content));
-    let toml_content = toml::Value::Table(map);
-
-    custom_op_file.with_toml_content(toml_content);
+    custom_op_file.with_toml_content(map);
 }
 
 fn create_custom_cmd(custom_cmd: &Path, content: &str) {
