@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use http::status::StatusCode;
+use log::debug;
 use log::error;
 use log::info;
 use log_manager::LogPluginConfig;
@@ -84,19 +85,24 @@ impl LogManagerActor {
     pub async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
         if self.config.logfile_request_topic.accept(&message) {
             match request_from_message(&message) {
-                Ok(request) => {
-                    if (request.status.eq(&CommandStatus::Executing)
-                        || request.status.eq(&CommandStatus::Init))
-                        && !self.config.current_operations.contains(&message.topic.name)
-                    {
+                Ok(request) => match request.status {
+                    CommandStatus::Init => {
                         info!("Log request received: {request:?}");
                         self.config
                             .current_operations
                             .insert(message.topic.name.clone());
+                        self.start_executing_logfile_request(&message.topic, request)
+                            .await?;
+                    }
+                    CommandStatus::Executing => {
+                        debug!("Executing log request: {request:?}");
                         self.handle_logfile_request_operation(&message.topic, request)
                             .await?;
                     }
-                }
+                    CommandStatus::Successful | CommandStatus::Failed => {
+                        self.config.current_operations.remove(&message.topic.name);
+                    }
+                },
                 Err(err) => {
                     error!("Incorrect log request payload: {}", err);
                 }
@@ -111,22 +117,24 @@ impl LogManagerActor {
         Ok(())
     }
 
+    pub async fn start_executing_logfile_request(
+        &mut self,
+        topic: &Topic,
+        mut request: LogUploadCmdPayload,
+    ) -> Result<(), ChannelError> {
+        request.executing();
+        self.publish_command_status(topic, &request).await
+    }
+
     pub async fn handle_logfile_request_operation(
         &mut self,
         topic: &Topic,
         mut request: LogUploadCmdPayload,
     ) -> Result<(), ChannelError> {
-        if !request.status.eq(&CommandStatus::Executing) {
-            request.executing();
-            self.publish_command_status(topic, &request).await?;
-        }
         match self.execute_logfile_request_operation(&request).await {
             Ok(()) => {
                 request.successful();
                 self.publish_command_status(topic, &request).await?;
-
-                self.config.current_operations.remove(&topic.name);
-
                 info!("Log request processed for log type: {}.", request.log_type);
                 Ok(())
             }
@@ -134,8 +142,6 @@ impl LogManagerActor {
                 let error_message = format!("Handling of operation failed with {}", error);
                 request.failed(&error_message);
                 self.publish_command_status(topic, &request).await?;
-                self.config.current_operations.remove(&topic.name);
-
                 error!("{}", error_message);
                 Ok(())
             }
