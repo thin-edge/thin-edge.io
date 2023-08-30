@@ -55,22 +55,61 @@ impl Default for MqttSchema {
 
 impl MqttSchema {
     /// Build a new schema using the default root prefix, i.e. `te`
+    ///
+    /// ```
+    /// let te = tedge_api::mqtt_topics::MqttSchema::default();
+    /// assert_eq!(&te.root, "te");
+    /// ```
     pub fn new() -> Self {
         MqttSchema::with_root("te".to_string())
     }
 
     /// Build a new schema using the given root prefix for all topics.
+    /// ```
+    /// let te = tedge_api::mqtt_topics::MqttSchema::with_root("thin-edge".to_string());
+    /// assert_eq!(&te.root, "thin-edge");
+    /// ```
     pub fn with_root(root: String) -> Self {
         MqttSchema { root }
     }
 
     /// Get the topic addressing a given entity channel
+    /// ```
+    /// # use tedge_api::mqtt_topics::{MqttSchema, Channel, EntityTopicId};
+    /// # use mqtt_channel::Topic;
+    ///
+    /// let te = MqttSchema::default();
+    /// let child_device: EntityTopicId = "device/child001//".parse().unwrap();
+    /// let channel = Channel::AlarmMetadata {
+    ///     alarm_type: "sensors".to_string(),
+    /// };
+    ///
+    /// let topic = te.topic_for(&child_device, &channel);
+    /// assert_eq!(
+    ///     topic.name,
+    ///     "te/device/child001///a/sensors/meta"
+    /// );
+    /// ```
     pub fn topic_for(&self, entity: &EntityTopicId, channel: &Channel) -> mqtt_channel::Topic {
         let topic = format!("{}/{}/{}", self.root, entity, channel);
         mqtt_channel::Topic::new(&topic).unwrap()
     }
 
     /// Get the entity channel addressed by some topic
+    ///
+    /// ```
+    /// # use tedge_api::mqtt_topics::{MqttSchema, Channel, EntityTopicId};
+    /// # use mqtt_channel::Topic;
+    ///
+    /// let te = MqttSchema::default();
+    /// let topic = Topic::new_unchecked("te/device/child001/service/service001/m/measurement_type");
+    ///
+    /// let (entity_identifier, channel) = te.entity_channel_of(&topic).unwrap();
+    /// assert_eq!(entity_identifier , "device/child001/service/service001");
+    /// assert_eq!(channel, Channel::Measurement {
+    ///     measurement_type: "measurement_type".to_string(),
+    /// })
+    /// ```
     pub fn entity_channel_of(
         &self,
         topic: &mqtt_channel::Topic,
@@ -79,6 +118,25 @@ impl MqttSchema {
     }
 
     /// Get the topic filter to subscribe to messages from specific entities and channels
+    ///
+    /// ```
+    /// use mqtt_channel::Topic;
+    /// use tedge_api::mqtt_topics::{ChannelFilter, EntityFilter, MqttSchema};
+    ///
+    /// let te = MqttSchema::default();
+    /// let topics = te.topics(EntityFilter::AnyEntity, ChannelFilter::Measurement);
+    ///
+    /// assert!(topics.accept_topic(&Topic::new_unchecked("te/device/main///m/")));
+    /// assert!(topics.accept_topic(&Topic::new_unchecked("te/device/child///m/m_type")));
+    /// assert!(topics.accept_topic(&Topic::new_unchecked("te/device/child/service/collected/m/collectd")));
+    ///
+    /// assert!(! topics.accept_topic(&Topic::new_unchecked("not-te/device/main///m/")));
+    /// assert!(! topics.accept_topic(&Topic::new_unchecked("te/device/main///not-m/")));
+    /// assert!(! topics.accept_topic(&Topic::new_unchecked("te/device/main///m/t/not-meta")));
+    /// assert!(! topics.accept_topic(&Topic::new_unchecked("te/device/main///m/t/meta/too-long")));
+    /// assert!(! topics.accept_topic(&Topic::new_unchecked("te/device/main/too/short")));
+    /// assert!(! topics.accept_topic(&Topic::new_unchecked("te/device/main/missing/sep/m")));
+    /// ```
     pub fn topics(&self, entity: EntityFilter, channel: ChannelFilter) -> TopicFilter {
         let entity = match entity {
             EntityFilter::AnyEntity => "+/+/+/+".to_string(),

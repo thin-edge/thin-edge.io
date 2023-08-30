@@ -301,7 +301,7 @@ pub enum EntityType {
 }
 
 impl EntityMetadata {
-    /// Creates a entity metadata for a child device.
+    /// Creates a entity metadata for the main device.
     pub fn main_device(device_id: String) -> Self {
         Self {
             topic_id: EntityTopicId::default_main_device(),
