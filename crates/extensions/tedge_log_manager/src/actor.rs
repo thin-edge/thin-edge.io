@@ -85,7 +85,7 @@ impl LogManagerActor {
     pub async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
         if self.config.logfile_request_topic.accept(&message) {
             match request_from_message(&message) {
-                Ok(request) => match request.status {
+                Ok(Some(request)) => match request.status {
                     CommandStatus::Init => {
                         info!("Log request received: {request:?}");
                         self.config
@@ -103,6 +103,7 @@ impl LogManagerActor {
                         self.config.current_operations.remove(&message.topic.name);
                     }
                 },
+                Ok(None) => {}
                 Err(err) => {
                     error!("Incorrect log request payload: {}", err);
                 }
@@ -251,8 +252,16 @@ impl LogManagerActor {
     }
 }
 
-fn request_from_message(message: &MqttMessage) -> Result<LogUploadCmdPayload, LogManagementError> {
-    Ok(LogUploadCmdPayload::from_json(message.payload_str()?)?)
+fn request_from_message(
+    message: &MqttMessage,
+) -> Result<Option<LogUploadCmdPayload>, LogManagementError> {
+    if message.payload_bytes().is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(LogUploadCmdPayload::from_json(
+            message.payload_str()?,
+        )?))
+    }
 }
 
 fn request_into_message(

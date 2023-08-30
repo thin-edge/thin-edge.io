@@ -728,9 +728,15 @@ impl CumulocityConverter {
         let mut messages = match &channel {
             Channel::Measurement { .. } => self.try_convert_measurement(&source, message)?,
 
+            Channel::Command { .. } if message.payload_bytes().is_empty() => {
+                // The command has been fully processed
+                vec![]
+            }
+
             Channel::CommandMetadata {
                 operation: OperationType::LogUpload,
             } => self.convert_log_metadata(&source, message)?,
+
             Channel::Command {
                 operation: OperationType::LogUpload,
                 cmd_id,
@@ -738,6 +744,7 @@ impl CumulocityConverter {
                 self.handle_log_upload_state_change(&source, cmd_id, message)
                     .await?
             }
+
             _ => vec![],
         };
 
