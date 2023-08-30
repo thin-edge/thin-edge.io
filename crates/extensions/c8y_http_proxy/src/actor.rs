@@ -9,8 +9,9 @@ use crate::messages::DownloadFile;
 use crate::messages::EventId;
 use crate::messages::SoftwareListResponse;
 use crate::messages::Unit;
-use crate::messages::UploadConfigFile;
+use crate::messages::UploadFile;
 use crate::messages::UploadLogBinary;
+use crate::messages::Url;
 use crate::C8YHttpConfig;
 use async_trait::async_trait;
 use c8y_api::http_proxy::C8yEndPoint;
@@ -106,10 +107,10 @@ impl Actor for C8YHttpProxyActor {
                     .upload_log_binary(request)
                     .await
                     .map(|response| response.into()),
-                C8YRestRequest::UploadConfigFile(request) => self
-                    .upload_config_file(request)
-                    .await
-                    .map(|response| response.into()),
+
+                C8YRestRequest::UploadFile(request) => {
+                    self.upload_file(request).await.map(|url| url.into())
+                }
 
                 C8YRestRequest::DownloadFile(request) => self
                     .download_file(request)
@@ -352,21 +353,19 @@ impl C8YHttpProxyActor {
         }
     }
 
-    async fn upload_config_file(
-        &mut self,
-        request: UploadConfigFile,
-    ) -> Result<EventId, C8YRestError> {
+    async fn upload_file(&mut self, request: UploadFile) -> Result<Url, C8YRestError> {
         let device_id = request.device_id;
+        // TODO: Upload the file as a multi-part stream
         // read the config file contents
-        let config_content = std::fs::read_to_string(request.config_path)
+        let file_content = std::fs::read_to_string(request.file_path)
             .map_err(<std::io::Error as Into<SMCumulocityMapperError>>::into)?;
 
         let create_event = |internal_id: String| -> C8yCreateEvent {
             C8yCreateEvent {
                 source: Some(C8yManagedObject { id: internal_id }),
-                event_type: request.config_type.clone(),
+                event_type: request.file_type.clone(),
                 time: OffsetDateTime::now_utc(),
-                text: request.config_type.clone(),
+                text: request.file_type.clone(),
                 extras: HashMap::new(),
             }
         };
@@ -374,7 +373,7 @@ impl C8YHttpProxyActor {
         let event_response_id = self
             .send_event_internal(device_id.clone(), create_event)
             .await?;
-        debug!(target: self.name(), "Config event created with id: {:?}", event_response_id);
+        debug!(target: self.name(), "File event created with id: {:?}", event_response_id);
 
         let build_request = |end_point: &C8yEndPoint| -> Result<HttpRequestBuilder, C8YRestError> {
             let binary_upload_event_url =
@@ -382,18 +381,18 @@ impl C8YHttpProxyActor {
             Ok(HttpRequestBuilder::post(&binary_upload_event_url)
                 .header("Accept", "application/json")
                 .header("Content-Type", "text/plain")
-                .body(config_content.to_string()))
+                .body(file_content.to_string()))
         };
-        info!(target: self.name(), "Uploading config file to URL: {}", self.end_point
+        info!(target: self.name(), "Uploading file to URL: {}", self.end_point
         .get_url_for_event_binary_upload(&event_response_id));
         let http_result = self.execute(device_id.clone(), build_request).await??;
 
         if !http_result.status().is_success() {
             Err(C8YRestError::CustomError("Upload failed".into()))
         } else {
-            Ok(self
+            Ok(Url(self
                 .end_point
-                .get_url_for_event_binary_upload(&event_response_id))
+                .get_url_for_event_binary_upload(&event_response_id)))
         }
     }
 

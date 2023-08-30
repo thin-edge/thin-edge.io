@@ -362,7 +362,7 @@ impl ConfigUploadManager {
     ) -> Result<String, ConfigManagementError> {
         let url = message_box
             .c8y_http_proxy
-            .upload_config_file(config_file_path, config_type, device_id)
+            .upload_file(config_file_path, config_type, device_id)
             .await?;
         Ok(url)
     }

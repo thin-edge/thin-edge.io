@@ -241,7 +241,7 @@ pub struct SmartRestLogRequest {
     pub date_from: OffsetDateTime,
     #[serde(deserialize_with = "to_datetime")]
     pub date_to: OffsetDateTime,
-    pub needle: Option<String>,
+    pub search_text: Option<String>,
     pub lines: usize,
 }
 
