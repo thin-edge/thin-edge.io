@@ -19,9 +19,12 @@ pub(crate) fn get_connected_c8y_url(tedge_config: &TEdgeConfig) -> Result<String
         .with_clean_session(true)
         .rumqttc_options()?;
     mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
-    mqtt_options.set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
 
     let (mut client, mut connection) = rumqttc::Client::new(mqtt_options, 10);
+    connection
+        .eventloop
+        .network_options
+        .set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
     let mut acknowledged = false;
 
     client.subscribe(C8Y_TOPIC_BUILTIN_JWT_TOKEN_DOWNSTREAM, AtLeastOnce)?;

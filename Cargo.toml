@@ -19,20 +19,20 @@ resolver = "2"
 version = "0.12.0"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
-rust-version = "1.67"
+rust-version = "1.70"
 license = "Apache-2.0"
 homepage = "https://thin-edge.io"
 repository = "https://github.com/thin-edge/thin-edge.io"
 
 [workspace.dependencies]
-anyhow =  "1.0"
+anyhow = "1.0"
 assert-json-diff = "2.0"
 assert_cmd = "2.0"
 assert_matches = "1.5"
 async-compat = "0.2.1"
 async-log = "2.0"
 async-trait = "0.1"
-async-tungstenite = { version = "0.18.0", features = [
+async-tungstenite = { version = "0.23", features = [
     "tokio-runtime",
     "tokio-rustls-native-certs",
 ] }
@@ -71,7 +71,13 @@ glob = "0.3"
 heck = "0.4.1"
 http = "0.2"
 hyper = { version = "0.14", default-features = false }
-hyper-rustls = { version = "0.23", default_features = false, features = ["tokio-runtime", "tls12", "rustls-native-certs", "http1", "http2"] }
+hyper-rustls = { version = "0.24", default_features = false, features = [
+    "tokio-runtime",
+    "tls12",
+    "rustls-native-certs",
+    "http1",
+    "http2",
+] }
 json-writer = { path = "crates/common/json_writer" }
 lazy_static = "1.4"
 log = "0.4"
@@ -102,11 +108,11 @@ reqwest = { version = "0.11", default-features = false }
 routerify = "3.0"
 rpassword = "5.0"
 rstest = "0.16.0"
-rumqttc = "0.18"
-rumqttd = "0.11"
-rustls = "0.20.6"
+rumqttc = "0.22"
+rumqttd = "0.17"
+rustls = "0.21.6"
 rustls-pemfile = "1.0.1"
-serde  = "1.0"
+serde = "1.0"
 serde_ignored = "0.1"
 serde_json = "1.0"
 serial_test = "0.8"
@@ -140,14 +146,14 @@ tokio = { version = "1.23", default-features = false }
 toml = "0.5"
 tracing = { version = "0.1", features = ["attributes", "log"] }
 tracing-subscriber = { version = "0.3", features = ["time", "env-filter"] }
-try-traits = "0.1" 
+try-traits = "0.1"
 tungstenite = "0.17.3"
 url = "2.3"
 users = "0.11"
 walkdir = "2"
 which = "4.2"
 whoami = "1.2.1"
-ws_stream_tungstenite = "0.9.0"
+ws_stream_tungstenite = { git = "https://github.com/swanandx/ws_stream_tungstenite", rev = "1dc6b3f52672922c1fc9a3473ceb980e3cab89af" }
 x509-parser = "0.14"
 yansi = "0.5"
 zeroize = "1.5"

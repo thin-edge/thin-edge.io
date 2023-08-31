@@ -76,7 +76,7 @@ fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
         let tls_config = if let Some(client_auth) = cmd.client_auth_config.as_ref() {
             let client_cert = parse_root_certificate::read_cert_chain(&client_auth.cert_file)?;
             let client_key = parse_root_certificate::read_pvt_key(&client_auth.key_file)?;
-            tls_config.with_single_cert(client_cert, client_key)?
+            tls_config.with_client_auth_cert(client_cert, client_key)?
         } else {
             tls_config.with_no_client_auth()
         };

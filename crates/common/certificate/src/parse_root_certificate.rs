@@ -26,7 +26,7 @@ pub fn create_tls_config(
     Ok(ClientConfig::builder()
         .with_safe_defaults()
         .with_root_certificates(root_cert_store)
-        .with_single_cert(cert_chain, pvt_key)?)
+        .with_client_auth_cert(cert_chain, pvt_key)?)
 }
 
 pub fn add_certs_from_file(
