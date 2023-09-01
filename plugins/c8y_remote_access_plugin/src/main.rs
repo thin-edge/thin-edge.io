@@ -2,12 +2,13 @@ use std::process::Stdio;
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use clap::Parser;
 use futures::future::try_select;
 use futures::future::Either;
+use input::parse_arguments;
 use miette::Context;
 use miette::IntoDiagnostic;
 use tedge_config::TEdgeConfig;
-use tedge_config::TEdgeConfigLocation;
 use tedge_config::TEdgeConfigRepository;
 use tedge_utils::file::create_directory_with_user_group;
 use tedge_utils::file::create_file_with_user_group;
@@ -27,13 +28,16 @@ mod proxy;
 
 #[tokio::main]
 async fn main() -> miette::Result<()> {
-    let config_dir = TEdgeConfigLocation::default();
+    let opt = input::Cli::parse();
+
+    let config_dir = opt.get_config_location();
+
     let tedge_config = TEdgeConfigRepository::new(config_dir.clone())
         .load()
         .into_diagnostic()
         .context("Reading tedge config")?;
 
-    let command = input::parse_arguments()?;
+    let command = parse_arguments(opt)?;
 
     match command {
         Command::Init => declare_supported_operation(config_dir.tedge_config_root_path())
