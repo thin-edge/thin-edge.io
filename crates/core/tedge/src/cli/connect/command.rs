@@ -101,13 +101,19 @@ impl Command for ConnectCommand {
 
         let device_type = &config.device.ty;
 
-        new_bridge(
+        match new_bridge(
             &bridge_config,
             &updated_mosquitto_config,
             self.service_manager.as_ref(),
             &self.config_location,
             device_type,
-        )?;
+        ) {
+            Ok(()) => println!("Successfully created bridge connection!\n"),
+            Err(ConnectError::SystemServiceError(
+                SystemServiceError::ServiceManagerUnavailable { .. },
+            )) => return Ok(()),
+            Err(err) => return Err(err.into()),
+        }
 
         match self.check_connection(&config) {
             Ok(DeviceStatus::AlreadyExists) => {
@@ -488,8 +494,6 @@ fn new_bridge(
         clean_up(config_location, bridge_config)?;
         return Err(err.into());
     }
-
-    println!("Successfully created bridge connection!\n");
 
     Ok(())
 }
