@@ -18,13 +18,21 @@ test_helpers = []
 async-trait = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
-hyper = { workspace = true, default_features = false, features = ["client", "http1", "http2", "tcp"] }
+hyper = { workspace = true, default_features = false, features = [
+    "client",
+    "http1",
+    "http2",
+    "tcp",
+] }
 hyper-rustls = { workspace = true }
-serde  = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, default_features = false, features = ["macros", "rt"] }
+tokio = { workspace = true, default_features = false, features = [
+    "macros",
+    "rt",
+] }
 
 [dev-dependencies]
-mockito = { workspace = true}
+mockito = { workspace = true }
