@@ -229,6 +229,7 @@ fn check_device_status_c8y(tedge_config: &TEdgeConfig) -> Result<DeviceStatus, C
     let mut mqtt_options = tedge_config
         .mqtt_config()?
         .with_session_name(CLIENT_ID)
+        .with_clean_session(true)
         .rumqttc_options()?;
 
     mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
