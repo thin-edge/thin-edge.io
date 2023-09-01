@@ -28,10 +28,7 @@ impl StateRepository for AgentStateRepository {
 
     async fn load(&self) -> Result<State, StateError> {
         match fs::read(&self.state_repo_path).await {
-            Ok(bytes) => {
-                dbg!(&String::from_utf8(bytes.clone())?);
-                Ok(toml::from_str::<State>(&String::from_utf8(bytes)?)?)
-            }
+            Ok(bytes) => Ok(toml::from_str::<State>(&String::from_utf8(bytes)?)?),
             Err(err) => Err(StateError::FromIo(err)),
         }
     }
