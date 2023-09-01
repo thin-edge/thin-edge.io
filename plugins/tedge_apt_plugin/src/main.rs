@@ -37,27 +37,27 @@ pub enum PluginOp {
     /// List all the installed modules
     List {
         /// Filter packages list output by name
-        #[clap(long = "--name")]
+        #[clap(long, short)]
         name: Option<String>,
 
         /// Filter packages list output by maintainer
-        #[clap(long = "--maintainer")]
+        #[clap(long, short)]
         maintainer: Option<String>,
     },
 
     /// Install a module
     Install {
         module: String,
-        #[clap(short = 'v', long = "--module-version")]
+        #[clap(short = 'v', long = "module-version")]
         version: Option<String>,
-        #[clap(long = "--file")]
+        #[clap(long = "file")]
         file_path: Option<String>,
     },
 
     /// Uninstall a module
     Remove {
         module: String,
-        #[clap(short = 'v', long = "--module-version")]
+        #[clap(short = 'v', long = "module-version")]
         version: Option<String>,
     },
 

@@ -9,4 +9,7 @@ pub enum StateError {
 
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
+
+    #[error(transparent)]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
 }

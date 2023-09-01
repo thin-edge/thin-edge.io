@@ -21,7 +21,7 @@ strum_macros = { workspace = true }
 tedge_config_macros = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
-toml = "0.7"
+toml = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = { workspace = true }

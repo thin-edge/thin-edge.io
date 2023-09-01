@@ -16,7 +16,7 @@ atty = { workspace = true }
 base64 = { workspace = true }
 camino = { workspace = true }
 certificate = { workspace = true }
-clap = { version = "3", features = ["cargo", "derive"] }
+clap = { workspace = true, features = ["cargo", "derive"] }
 doku = { workspace = true }
 hyper = { workspace = true, default-features = false }
 pad = { workspace = true }

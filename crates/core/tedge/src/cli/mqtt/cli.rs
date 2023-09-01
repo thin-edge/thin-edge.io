@@ -20,7 +20,8 @@ pub enum TEdgeMqttCli {
         /// Message to publish
         message: String,
         /// QoS level (0, 1, 2)
-        #[clap(short, long, parse(try_from_str = parse_qos), default_value = "0")]
+        #[clap(short, long, default_value = "0")]
+        #[arg(value_parser = parse_qos)]
         qos: QoS,
         /// Retain flag
         #[clap(short, long = "retain")]
@@ -32,7 +33,8 @@ pub enum TEdgeMqttCli {
         /// Topic to subscribe to
         topic: String,
         /// QoS level (0, 1, 2)
-        #[clap(short, long, parse(try_from_str = parse_qos), default_value = "0")]
+        #[clap(short, long, default_value = "0")]
+        #[arg(value_parser = parse_qos)]
         qos: QoS,
         /// Avoid printing the message topics on the console
         #[clap(long = "no-topic")]

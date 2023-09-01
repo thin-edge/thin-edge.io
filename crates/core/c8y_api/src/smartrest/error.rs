@@ -61,6 +61,9 @@ pub enum OperationsError {
 
     #[error("Error while parsing operation file: '{0}': {1}.")]
     TomlError(PathBuf, #[source] toml::de::Error),
+
+    #[error(transparent)]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
 }
 
 #[derive(thiserror::Error, Debug)]

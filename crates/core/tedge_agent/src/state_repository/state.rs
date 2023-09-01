@@ -28,7 +28,7 @@ impl StateRepository for AgentStateRepository {
 
     async fn load(&self) -> Result<State, StateError> {
         match fs::read(&self.state_repo_path).await {
-            Ok(bytes) => Ok(toml::from_slice::<State>(bytes.as_slice())?),
+            Ok(bytes) => Ok(toml::from_str::<State>(&String::from_utf8(bytes)?)?),
             Err(err) => Err(StateError::FromIo(err)),
         }
     }
@@ -217,6 +217,6 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(data, "operation_id = \'1234\'\noperation = \'list\'\n");
+        assert_eq!(data, "operation_id = \"1234\"\noperation = \"list\"\n");
     }
 }
