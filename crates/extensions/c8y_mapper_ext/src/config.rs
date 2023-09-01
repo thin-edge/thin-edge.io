@@ -82,8 +82,9 @@ impl C8yMapperConfig {
 
         let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port);
 
-        // TODO read these capabilities from disk
-        let capabilities = Capabilities::default();
+        let capabilities = Capabilities {
+            log_management: tedge_config.c8y.enable.log_management,
+        };
 
         let mut topics = Self::default_internal_topic_filter(&config_dir)?;
 

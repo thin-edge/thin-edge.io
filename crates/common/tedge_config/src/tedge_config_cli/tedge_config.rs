@@ -385,6 +385,13 @@ define_tedge_config! {
         #[tedge_config(default(value = "te/+/+/+/+/m/+,tedge/alarms/+/+,tedge/alarms/+/+/+,tedge/events/+,tedge/events/+/+,tedge/health/+,tedge/health/+/+"))]
         topics: TemplatesSet,
 
+        enable: {
+            /// Enable log management
+            // TODO turn the default to true, when c8y-log-plugin will be deprecated
+            #[tedge_config(example = "true", default(value = false))]
+            log_management: bool,
+        }
+
     },
 
     #[tedge_config(deprecated_name = "azure")] // for 0.1.0 compatibility
