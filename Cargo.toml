@@ -86,7 +86,7 @@ logged_command = { path = "crates/common/logged_command" }
 maplit = "1.0"
 miette = { version = "5.5.0", features = ["fancy"] }
 mockall = "0.11"
-mockito = "0.31"
+mockito = "1.1.0"
 mqtt_channel = { path = "crates/common/mqtt_channel" }
 mqtt_tests = { path = "crates/tests/mqtt_tests" }
 nanoid = "0.4"

@@ -481,7 +481,6 @@ fn try_pre_allocate_space(file: &File, path: &Path, file_len: u64) -> Result<(),
 mod tests {
     use super::*;
     use anyhow::bail;
-    use mockito::mock;
     use nix::sys::statvfs;
     use std::io::Write;
     use tempfile::tempdir;
@@ -496,7 +495,9 @@ mod tests {
     #[tokio::test]
     #[ignore = "fails CI because of lack of disk space"]
     async fn downloader_download_content_no_auth() -> anyhow::Result<()> {
-        let _mock1 = mock("GET", "/some_file.txt")
+        let mut server = mockito::Server::new();
+        let _mock1 = server
+            .mock("GET", "/some_file.txt")
             .with_status(200)
             .with_body(b"hello")
             .create();
@@ -504,7 +505,7 @@ mod tests {
         let target_dir_path = TempDir::new()?;
         let target_path = target_dir_path.path().join("test_download");
 
-        let mut target_url = mockito::server_url();
+        let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
@@ -527,14 +528,17 @@ mod tests {
     #[ignore = "fails CI because of lack of disk space"]
     async fn downloader_download_to_target_path() -> anyhow::Result<()> {
         let temp_dir = tempdir()?;
-        let _mock1 = mock("GET", "/some_file.txt")
+
+        let mut server = mockito::Server::new();
+        let _mock1 = server
+            .mock("GET", "/some_file.txt")
             .with_status(200)
             .with_body(b"hello")
             .create();
 
         let target_path = temp_dir.path().join("downloaded_file.txt");
 
-        let mut target_url = mockito::server_url();
+        let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
@@ -556,14 +560,17 @@ mod tests {
     ) -> anyhow::Result<()> {
         let tmpstats = statvfs::statvfs("/tmp")?;
         let usable_disk_space = tmpstats.blocks_free() * tmpstats.block_size();
-        let _mock1 = mock("GET", "/some_file.txt")
+
+        let mut server = mockito::Server::new();
+        let _mock1 = server
+            .mock("GET", "/some_file.txt")
             .with_header("content-length", &(usable_disk_space.to_string()))
             .create();
 
         let target_dir_path = TempDir::new()?;
         let target_path = target_dir_path.path().join("test_download_with_length");
 
-        let mut target_url = mockito::server_url();
+        let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
@@ -581,12 +588,14 @@ mod tests {
         let temp_dir = tempdir()?;
         std::env::set_current_dir(temp_dir.path()).unwrap();
 
-        let _mock1 = mock("GET", "/some_file.txt")
+        let mut server = mockito::Server::new();
+        let _mock1 = server
+            .mock("GET", "/some_file.txt")
             .with_status(200)
             .with_body(b"hello")
             .create();
 
-        let mut target_url = mockito::server_url();
+        let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
@@ -624,7 +633,9 @@ mod tests {
     #[ignore = "fails CI because of lack of disk space"]
     async fn writing_to_existing_file() -> anyhow::Result<()> {
         let temp_dir = tempdir()?;
-        let _mock1 = mock("GET", "/some_file.txt")
+        let mut server = mockito::Server::new();
+        let _mock1 = server
+            .mock("GET", "/some_file.txt")
             .with_status(200)
             .with_body(b"hello")
             .create();
@@ -632,7 +643,7 @@ mod tests {
         let target_file_path = temp_dir.path().join("downloaded_file.txt");
         std::fs::File::create(&target_file_path).unwrap();
 
-        let mut target_url = mockito::server_url();
+        let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
@@ -653,14 +664,16 @@ mod tests {
         let file = create_file_with_size(10 * 1024 * 1024)?;
         let file_path = file.into_temp_path();
 
-        let _mock1 = mock("GET", "/some_file.txt")
+        let mut server = mockito::Server::new();
+        let _mock1 = server
+            .mock("GET", "/some_file.txt")
             .with_body_from_file(&file_path)
             .create();
 
         let target_dir_path = TempDir::new()?;
         let target_path = target_dir_path.path().join("test_download_with_length");
 
-        let mut target_url = mockito::server_url();
+        let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
@@ -683,14 +696,16 @@ mod tests {
     async fn downloader_download_verify_file_content() -> anyhow::Result<()> {
         let file = create_file_with_size(10)?;
 
-        let _mock1 = mock("GET", "/some_file.txt")
+        let mut server = mockito::Server::new();
+        let _mock1 = server
+            .mock("GET", "/some_file.txt")
             .with_body_from_file(file.into_temp_path())
             .create();
 
         let target_dir_path = TempDir::new()?;
         let target_path = target_dir_path.path().join("test_download_with_length");
 
-        let mut target_url = mockito::server_url();
+        let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
@@ -707,12 +722,13 @@ mod tests {
 
     #[tokio::test]
     async fn downloader_download_without_content_length() -> anyhow::Result<()> {
-        let _mock1 = mock("GET", "/some_file.txt").create();
+        let mut server = mockito::Server::new();
+        let _mock1 = server.mock("GET", "/some_file.txt").create();
 
         let target_dir_path = TempDir::new()?;
         let target_path = target_dir_path.path().join("test_download_without_length");
 
-        let mut target_url = mockito::server_url();
+        let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
@@ -884,16 +900,19 @@ mod tests {
         expected_err: &str,
     ) -> anyhow::Result<()> {
         let target_dir_path = TempDir::new()?;
+        let mut server = mockito::Server::new();
 
         // bearer/no bearer setup
         let _mock1 = {
             if with_token {
-                mock("GET", "/some_file.txt")
+                server
+                    .mock("GET", "/some_file.txt")
                     .match_header("authorization", "Bearer token")
                     .with_status(status_code)
                     .create()
             } else {
-                mock("GET", "/some_file.txt")
+                server
+                    .mock("GET", "/some_file.txt")
                     .with_status(status_code)
                     .create()
             }
@@ -904,7 +923,7 @@ mod tests {
             if let Some(url) = url {
                 DownloadInfo::new(url)
             } else {
-                let mut target_url = mockito::server_url();
+                let mut target_url = server.url();
                 target_url.push_str("/some_file.txt");
                 DownloadInfo::new(&target_url)
             }

@@ -1196,7 +1196,7 @@ dependencies = [
  "anyhow",
  "backoff",
  "log",
- "mockito 0.31.1",
+ "mockito",
  "nix",
  "regex",
  "reqwest",
@@ -2093,24 +2093,6 @@ dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "mockito"
-version = "0.31.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80f9fece9bd97ab74339fe19f4bcaf52b76dcc18e5364c7977c1838f76b38de9"
-dependencies = [
- "assert-json-diff",
- "colored",
- "httparse",
- "lazy_static",
- "log",
- "rand",
- "regex",
- "serde_json",
- "serde_urlencoded",
- "similar",
 ]
 
 [[package]]
@@ -3550,7 +3532,7 @@ dependencies = [
  "clap 3.2.25",
  "doku",
  "hyper",
- "mockito 0.31.1",
+ "mockito",
  "mqtt_tests",
  "pad",
  "pem",
@@ -3804,7 +3786,7 @@ dependencies = [
  "async-trait",
  "download",
  "log",
- "mockito 0.31.1",
+ "mockito",
  "tedge_actors",
  "tedge_test_utils",
  "tedge_utils",
@@ -3849,7 +3831,7 @@ dependencies = [
  "http",
  "hyper",
  "hyper-rustls",
- "mockito 1.1.0",
+ "mockito",
  "serde",
  "serde_json",
  "tedge_actors",

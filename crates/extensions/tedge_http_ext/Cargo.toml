@@ -27,4 +27,4 @@ thiserror = { workspace = true }
 tokio = { workspace = true, default_features = false, features = ["macros", "rt"] }
 
 [dev-dependencies]
-mockito = "1.0.2"
+mockito = { workspace = true}
