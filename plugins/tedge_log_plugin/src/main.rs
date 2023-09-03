@@ -58,7 +58,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let tedge_config_location = TEdgeConfigLocation::from_custom_root(&logfile_opt.config_dir);
 
     let log_level = if logfile_opt.debug {
-        tracing::Level::TRACE
+        tracing::Level::DEBUG
     } else {
         get_log_level(
             "tedge-log-plugin",
@@ -87,10 +87,11 @@ async fn run(
     let runtime_events_logger = None;
     let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
-    let mqtt_config = tedge_config
-        .mqtt_internal_config()
-        .with_session_name(TEDGE_LOG_PLUGIN);
-    let mut mqtt_actor = MqttActorBuilder::new(mqtt_config);
+    let mqtt_config = tedge_config.mqtt_config()?;
+    let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(format!(
+        "{}#{}/{}",
+        TEDGE_LOG_PLUGIN, topic_root, topic_identifier
+    )));
 
     let mut fs_watch_actor = FsWatchActorBuilder::new();
 
