@@ -58,7 +58,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let tedge_config_location = TEdgeConfigLocation::from_custom_root(&logfile_opt.config_dir);
 
     let log_level = if logfile_opt.debug {
-        tracing::Level::TRACE
+        tracing::Level::DEBUG
     } else {
         get_log_level(
             "tedge-log-plugin",
