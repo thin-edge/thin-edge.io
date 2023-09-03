@@ -5,6 +5,7 @@ use mqtt_channel::Topic;
 use nanoid::nanoid;
 use serde::Deserialize;
 use serde::Serialize;
+use time::OffsetDateTime;
 
 const SOFTWARE_LIST_REQUEST_TOPIC: &str = "tedge/commands/req/software/list";
 const SOFTWARE_LIST_RESPONSE_TOPIC: &str = "tedge/commands/res/software/list";
@@ -531,6 +532,60 @@ impl RestartOperationResponse {
 
     pub fn status(&self) -> OperationStatus {
         self.status
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq, Copy, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub enum CommandStatus {
+    Init,
+    Executing,
+    Successful,
+    Failed,
+}
+
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LogMetadata {
+    pub types: Vec<String>,
+}
+
+impl<'a> Jsonify<'a> for LogMetadata {}
+
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LogUploadCmdPayload {
+    pub status: CommandStatus, //Define a different enum if this op needs more states,
+    pub tedge_url: String,
+    #[serde(rename = "type")]
+    pub log_type: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub date_from: OffsetDateTime,
+    #[serde(with = "time::serde::rfc3339")]
+    pub date_to: OffsetDateTime,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_text: Option<String>,
+    pub lines: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+impl<'a> Jsonify<'a> for LogUploadCmdPayload {}
+
+impl LogUploadCmdPayload {
+    pub fn executing(&mut self) {
+        self.status = CommandStatus::Executing;
+        self.reason = None;
+    }
+
+    pub fn successful(&mut self) {
+        self.status = CommandStatus::Successful;
+        self.reason = None;
+    }
+
+    pub fn failed(&mut self, reason: impl Into<String>) {
+        self.status = CommandStatus::Failed;
+        self.reason = Some(reason.into());
     }
 }
 

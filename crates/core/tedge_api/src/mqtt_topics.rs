@@ -2,6 +2,8 @@
 //!
 //! See https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/
 
+use mqtt_channel::TopicFilter;
+use std::convert::Infallible;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
@@ -53,27 +55,106 @@ impl Default for MqttSchema {
 
 impl MqttSchema {
     /// Build a new schema using the default root prefix, i.e. `te`
+    ///
+    /// ```
+    /// let te = tedge_api::mqtt_topics::MqttSchema::default();
+    /// assert_eq!(&te.root, "te");
+    /// ```
     pub fn new() -> Self {
         MqttSchema::with_root("te".to_string())
     }
 
     /// Build a new schema using the given root prefix for all topics.
+    /// ```
+    /// let te = tedge_api::mqtt_topics::MqttSchema::with_root("thin-edge".to_string());
+    /// assert_eq!(&te.root, "thin-edge");
+    /// ```
     pub fn with_root(root: String) -> Self {
         MqttSchema { root }
     }
 
     /// Get the topic addressing a given entity channel
+    /// ```
+    /// # use tedge_api::mqtt_topics::{MqttSchema, Channel, EntityTopicId};
+    /// # use mqtt_channel::Topic;
+    ///
+    /// let te = MqttSchema::default();
+    /// let child_device: EntityTopicId = "device/child001//".parse().unwrap();
+    /// let channel = Channel::AlarmMetadata {
+    ///     alarm_type: "sensors".to_string(),
+    /// };
+    ///
+    /// let topic = te.topic_for(&child_device, &channel);
+    /// assert_eq!(
+    ///     topic.name,
+    ///     "te/device/child001///a/sensors/meta"
+    /// );
+    /// ```
     pub fn topic_for(&self, entity: &EntityTopicId, channel: &Channel) -> mqtt_channel::Topic {
         let topic = format!("{}/{}/{}", self.root, entity, channel);
         mqtt_channel::Topic::new(&topic).unwrap()
     }
 
     /// Get the entity channel addressed by some topic
+    ///
+    /// ```
+    /// # use tedge_api::mqtt_topics::{MqttSchema, Channel, EntityTopicId};
+    /// # use mqtt_channel::Topic;
+    ///
+    /// let te = MqttSchema::default();
+    /// let topic = Topic::new_unchecked("te/device/child001/service/service001/m/measurement_type");
+    ///
+    /// let (entity_identifier, channel) = te.entity_channel_of(&topic).unwrap();
+    /// assert_eq!(entity_identifier , "device/child001/service/service001");
+    /// assert_eq!(channel, Channel::Measurement {
+    ///     measurement_type: "measurement_type".to_string(),
+    /// })
+    /// ```
     pub fn entity_channel_of(
         &self,
         topic: &mqtt_channel::Topic,
     ) -> Result<(EntityTopicId, Channel), EntityTopicError> {
         self.parse(&topic.name)
+    }
+
+    /// Get the topic filter to subscribe to messages from specific entities and channels
+    ///
+    /// ```
+    /// use mqtt_channel::Topic;
+    /// use tedge_api::mqtt_topics::{ChannelFilter, EntityFilter, MqttSchema};
+    ///
+    /// let te = MqttSchema::default();
+    /// let topics = te.topics(EntityFilter::AnyEntity, ChannelFilter::Measurement);
+    ///
+    /// assert!(topics.accept_topic(&Topic::new_unchecked("te/device/main///m/")));
+    /// assert!(topics.accept_topic(&Topic::new_unchecked("te/device/child///m/m_type")));
+    /// assert!(topics.accept_topic(&Topic::new_unchecked("te/device/child/service/collected/m/collectd")));
+    ///
+    /// assert!(! topics.accept_topic(&Topic::new_unchecked("not-te/device/main///m/")));
+    /// assert!(! topics.accept_topic(&Topic::new_unchecked("te/device/main///not-m/")));
+    /// assert!(! topics.accept_topic(&Topic::new_unchecked("te/device/main///m/t/not-meta")));
+    /// assert!(! topics.accept_topic(&Topic::new_unchecked("te/device/main///m/t/meta/too-long")));
+    /// assert!(! topics.accept_topic(&Topic::new_unchecked("te/device/main/too/short")));
+    /// assert!(! topics.accept_topic(&Topic::new_unchecked("te/device/main/missing/sep/m")));
+    /// ```
+    pub fn topics(&self, entity: EntityFilter, channel: ChannelFilter) -> TopicFilter {
+        let entity = match entity {
+            EntityFilter::AnyEntity => "+/+/+/+".to_string(),
+            EntityFilter::Entity(entity) => entity.to_string(),
+        };
+        let channel = match channel {
+            ChannelFilter::EntityMetadata => "".to_string(),
+            ChannelFilter::Measurement => "/m/+".to_string(),
+            ChannelFilter::MeasurementMetadata => "/m/+/meta".to_string(),
+            ChannelFilter::Event => "/e/+".to_string(),
+            ChannelFilter::EventMetadata => "/e/+/meta".to_string(),
+            ChannelFilter::Alarm => "/a/+".to_string(),
+            ChannelFilter::AlarmMetadata => "/a/+/meta".to_string(),
+            ChannelFilter::Command(operation) => format!("/cmd/{operation}/+"),
+            ChannelFilter::CommandMetadata(operation) => format!("/cmd/{operation}"),
+        };
+
+        TopicFilter::new_unchecked(&format!("{}/{entity}{channel}", self.root))
     }
 }
 
@@ -241,14 +322,31 @@ pub enum TopicIdError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Channel {
     EntityMetadata,
-    Measurement { measurement_type: String },
-    Event { event_type: String },
-    Alarm { alarm_type: String },
-    Command { operation: String, cmd_id: String },
-    MeasurementMetadata { measurement_type: String },
-    EventMetadata { event_type: String },
-    AlarmMetadata { alarm_type: String },
-    CommandMetadata { operation: String },
+    Measurement {
+        measurement_type: String,
+    },
+    Event {
+        event_type: String,
+    },
+    Alarm {
+        alarm_type: String,
+    },
+    Command {
+        operation: OperationType,
+        cmd_id: String,
+    },
+    MeasurementMetadata {
+        measurement_type: String,
+    },
+    EventMetadata {
+        event_type: String,
+    },
+    AlarmMetadata {
+        alarm_type: String,
+    },
+    CommandMetadata {
+        operation: OperationType,
+    },
 }
 
 impl FromStr for Channel {
@@ -280,10 +378,10 @@ impl FromStr for Channel {
             }),
 
             ["cmd", operation] => Ok(Channel::CommandMetadata {
-                operation: operation.to_string(),
+                operation: operation.parse().unwrap(), // Infallible
             }),
             ["cmd", operation, cmd_id] => Ok(Channel::Command {
-                operation: operation.to_string(),
+                operation: operation.parse().unwrap(), // Infallible
                 cmd_id: cmd_id.to_string(),
             }),
 
@@ -320,6 +418,41 @@ impl Channel {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OperationType {
+    Restart,
+    SoftwareList,
+    SoftwareUpdate,
+    LogUpload,
+    Custom(String),
+}
+
+impl FromStr for OperationType {
+    type Err = Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "restart" => Ok(OperationType::Restart),
+            "software_list" => Ok(OperationType::SoftwareList),
+            "software_update" => Ok(OperationType::SoftwareUpdate),
+            "log_upload" => Ok(OperationType::LogUpload),
+            operation => Ok(OperationType::Custom(operation.to_string())),
+        }
+    }
+}
+
+impl Display for OperationType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OperationType::Restart => write!(f, "restart"),
+            OperationType::SoftwareList => write!(f, "software_list"),
+            OperationType::SoftwareUpdate => write!(f, "software_update"),
+            OperationType::LogUpload => write!(f, "log_upload"),
+            OperationType::Custom(operation) => write!(f, "{operation}"),
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone)]
 pub enum ChannelError {
     #[error("Channel needs to have at least 2 segments")]
@@ -327,6 +460,23 @@ pub enum ChannelError {
 
     #[error("Invalid category: {0:?}")]
     InvalidCategory(String),
+}
+
+pub enum EntityFilter<'a> {
+    AnyEntity,
+    Entity(&'a EntityTopicId),
+}
+
+pub enum ChannelFilter {
+    EntityMetadata,
+    Measurement,
+    Event,
+    Alarm,
+    Command(OperationType),
+    MeasurementMetadata,
+    EventMetadata,
+    AlarmMetadata,
+    CommandMetadata(OperationType),
 }
 
 #[cfg(test)]

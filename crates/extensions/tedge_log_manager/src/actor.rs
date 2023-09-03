@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use http::status::StatusCode;
+use log::debug;
 use log::error;
 use log::info;
 use log_manager::LogPluginConfig;
@@ -14,6 +15,7 @@ use tedge_actors::NoMessage;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
+use tedge_api::Jsonify;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_http_ext::HttpError;
 use tedge_http_ext::HttpRequest;
@@ -24,11 +26,10 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 
 use super::error::LogManagementError;
-use super::json::CommandStatus;
-use super::json::LogRequestPayload;
-use super::json::LogResponsePayload;
 use super::LogManagerConfig;
 use super::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
+use tedge_api::messages::CommandStatus;
+use tedge_api::messages::LogUploadCmdPayload;
 
 fan_in_message_type!(LogInput[MqttMessage, FsWatchEvent] : Debug);
 fan_in_message_type!(LogOutput[MqttMessage]: Debug);
@@ -83,20 +84,26 @@ impl LogManagerActor {
 
     pub async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
         if self.config.logfile_request_topic.accept(&message) {
-            match LogRequestPayload::try_from(message.clone()) {
-                Ok(request) => {
-                    if (request.status.eq(&CommandStatus::Executing)
-                        || request.status.eq(&CommandStatus::Init))
-                        && !self.config.current_operations.contains(&message.topic.name)
-                    {
+            match request_from_message(&message) {
+                Ok(Some(request)) => match request.status {
+                    CommandStatus::Init => {
                         info!("Log request received: {request:?}");
                         self.config
                             .current_operations
                             .insert(message.topic.name.clone());
-                        self.handle_logfile_request_operation(&message.topic, &request)
+                        self.start_executing_logfile_request(&message.topic, request)
                             .await?;
                     }
-                }
+                    CommandStatus::Executing => {
+                        debug!("Executing log request: {request:?}");
+                        self.handle_logfile_request_operation(&message.topic, request)
+                            .await?;
+                    }
+                    CommandStatus::Successful | CommandStatus::Failed => {
+                        self.config.current_operations.remove(&message.topic.name);
+                    }
+                },
+                Ok(None) => {}
                 Err(err) => {
                     error!("Incorrect log request payload: {}", err);
                 }
@@ -111,51 +118,31 @@ impl LogManagerActor {
         Ok(())
     }
 
+    pub async fn start_executing_logfile_request(
+        &mut self,
+        topic: &Topic,
+        mut request: LogUploadCmdPayload,
+    ) -> Result<(), ChannelError> {
+        request.executing();
+        self.publish_command_status(topic, &request).await
+    }
+
     pub async fn handle_logfile_request_operation(
         &mut self,
         topic: &Topic,
-        request: &LogRequestPayload,
+        mut request: LogUploadCmdPayload,
     ) -> Result<(), ChannelError> {
-        if !request.status.eq(&CommandStatus::Executing) {
-            self.mqtt_publisher
-                .send(create_operation_message(
-                    topic,
-                    request,
-                    CommandStatus::Executing,
-                ))
-                .await?;
-        }
-        match self.execute_logfile_request_operation(request).await {
+        match self.execute_logfile_request_operation(&request).await {
             Ok(()) => {
-                self.mqtt_publisher
-                    .send(create_operation_message(
-                        topic,
-                        request,
-                        CommandStatus::Successful,
-                    ))
-                    .await?;
-
-                self.config.current_operations.remove(&topic.name);
-
-                info!(
-                    "Log request processed for log type: {}.",
-                    request.log.log_type
-                );
+                request.successful();
+                self.publish_command_status(topic, &request).await?;
+                info!("Log request processed for log type: {}.", request.log_type);
                 Ok(())
             }
             Err(error) => {
                 let error_message = format!("Handling of operation failed with {}", error);
-                self.mqtt_publisher
-                    .send(create_operation_message_with_reason(
-                        topic,
-                        request,
-                        CommandStatus::Failed,
-                        &error_message,
-                    ))
-                    .await?;
-
-                self.config.current_operations.remove(&topic.name);
-
+                request.failed(&error_message);
+                self.publish_command_status(topic, &request).await?;
                 error!("{}", error_message);
                 Ok(())
             }
@@ -169,14 +156,14 @@ impl LogManagerActor {
     /// - sends request successful (mqtt)
     async fn execute_logfile_request_operation(
         &mut self,
-        request: &LogRequestPayload,
+        request: &LogUploadCmdPayload,
     ) -> Result<(), LogManagementError> {
         let log_content = log_manager::new_read_logs(
             &self.plugin_config.files,
-            &request.log.log_type,
-            request.log.date_from,
-            request.log.lines,
-            &request.log.search_text,
+            &request.log_type,
+            request.date_from,
+            request.lines.to_owned(),
+            &request.search_text,
         )?;
 
         self.send_log_file_http(log_content, request.tedge_url.clone())
@@ -251,23 +238,35 @@ impl LogManagerActor {
         let msg = MqttMessage::new(&self.config.logtype_reload_topic, payload).with_retain();
         self.mqtt_publisher.send(msg).await
     }
+
+    async fn publish_command_status(
+        &mut self,
+        topic: &Topic,
+        request: &LogUploadCmdPayload,
+    ) -> Result<(), ChannelError> {
+        match request_into_message(topic, request) {
+            Ok(message) => self.mqtt_publisher.send(message).await?,
+            Err(err) => error!("Fail to build a message for {:?}: {err}", request),
+        }
+        Ok(())
+    }
 }
 
-fn create_operation_message_with_reason(
-    topic: &Topic,
-    request: &LogRequestPayload,
-    status: CommandStatus,
-    reason: &str,
-) -> MqttMessage {
-    let payload = LogResponsePayload::from_log_request(request, status).with_reason(reason);
-    MqttMessage::new(topic, payload.to_string()).with_retain()
+fn request_from_message(
+    message: &MqttMessage,
+) -> Result<Option<LogUploadCmdPayload>, LogManagementError> {
+    if message.payload_bytes().is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(LogUploadCmdPayload::from_json(
+            message.payload_str()?,
+        )?))
+    }
 }
 
-fn create_operation_message(
+fn request_into_message(
     topic: &Topic,
-    request: &LogRequestPayload,
-    status: CommandStatus,
-) -> MqttMessage {
-    let payload = LogResponsePayload::from_log_request(request, status);
-    MqttMessage::new(topic, payload.to_string()).with_retain()
+    request: &LogUploadCmdPayload,
+) -> Result<MqttMessage, LogManagementError> {
+    Ok(MqttMessage::new(topic, request.to_json()?).with_retain())
 }

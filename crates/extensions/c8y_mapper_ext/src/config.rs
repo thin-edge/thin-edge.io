@@ -1,10 +1,13 @@
+use crate::Capabilities;
 use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::topic::C8yTopic;
 use camino::Utf8PathBuf;
 use std::path::Path;
 use std::path::PathBuf;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::topic::ResponseTopic;
+use tedge_api::DEFAULT_FILE_TRANSFER_DIR_NAME;
 use tedge_config::ConfigNotSet;
 use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
@@ -16,35 +19,48 @@ pub const MQTT_MESSAGE_SIZE_THRESHOLD: usize = 16184;
 pub struct C8yMapperConfig {
     pub config_dir: PathBuf,
     pub logs_path: Utf8PathBuf,
+    pub data_dir: Utf8PathBuf,
     pub device_id: String,
     pub device_type: String,
     pub service_type: String,
     pub ops_dir: PathBuf,
+    pub file_transfer_dir: Utf8PathBuf,
     pub c8y_host: String,
+    pub tedge_http_host: String,
     pub topics: TopicFilter,
+    pub capabilities: Capabilities,
 }
 
 impl C8yMapperConfig {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         config_dir: PathBuf,
         logs_path: Utf8PathBuf,
+        data_dir: Utf8PathBuf,
         device_id: String,
         device_type: String,
         service_type: String,
         c8y_host: String,
+        tedge_http_host: String,
         topics: TopicFilter,
+        capabilities: Capabilities,
     ) -> Self {
         let ops_dir = config_dir.join("operations").join("c8y");
+        let file_transfer_dir = data_dir.join(DEFAULT_FILE_TRANSFER_DIR_NAME);
 
         Self {
             config_dir,
             logs_path,
+            data_dir,
             device_id,
             device_type,
             service_type,
             ops_dir,
+            file_transfer_dir,
             c8y_host,
+            tedge_http_host,
             topics,
+            capabilities,
         }
     }
 
@@ -55,13 +71,29 @@ impl C8yMapperConfig {
         let config_dir: PathBuf = config_dir.as_ref().into();
 
         let logs_path = tedge_config.logs.path.clone();
+        let data_dir = tedge_config.data.path.clone();
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let device_type = tedge_config.device.ty.clone();
         let service_type = tedge_config.service.ty.clone();
         let c8y_host = tedge_config.c8y_url().or_config_not_set()?.to_string();
+        let tedge_http_address = tedge_config.http.bind.address;
+        let tedge_http_port = tedge_config.http.bind.port;
+        let mqtt_schema = MqttSchema::default(); // later get the value from tedge config
 
-        // The topics to subscribe = default internal topics + user configurable external topics
-        let mut topics = Self::internal_topic_filter(&config_dir)?;
+        let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port);
+
+        let capabilities = Capabilities {
+            log_management: tedge_config.c8y.enable.log_management,
+        };
+
+        let mut topics = Self::default_internal_topic_filter(&config_dir)?;
+
+        // Add feature topic filters
+        if capabilities.log_management {
+            topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
+        }
+
+        // Add user configurable external topic filters
         for topic in tedge_config.c8y.topics.0.clone() {
             if topics.add(&topic).is_err() {
                 warn!("The configured topic '{topic}' is invalid and ignored.");
@@ -71,15 +103,20 @@ impl C8yMapperConfig {
         Ok(C8yMapperConfig::new(
             config_dir,
             logs_path,
+            data_dir,
             device_id,
             device_type,
             service_type,
             c8y_host,
+            tedge_http_host,
             topics,
+            capabilities,
         ))
     }
 
-    pub fn internal_topic_filter(config_dir: &Path) -> Result<TopicFilter, C8yMapperConfigError> {
+    pub fn default_internal_topic_filter(
+        config_dir: &Path,
+    ) -> Result<TopicFilter, C8yMapperConfigError> {
         let mut topic_filter: TopicFilter = vec![
             "c8y-internal/alarms/+/+",
             "c8y-internal/alarms/+/+/+",

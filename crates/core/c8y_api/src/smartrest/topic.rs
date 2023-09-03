@@ -1,6 +1,8 @@
 use mqtt_channel::MqttError;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
+use tedge_api::entity_store::EntityMetadata;
+use tedge_api::entity_store::EntityType;
 use tedge_api::topic::ResponseTopic;
 use tedge_api::TopicError;
 
@@ -85,6 +87,17 @@ impl TryFrom<Topic> for C8yTopic {
 impl From<C8yTopic> for TopicFilter {
     fn from(val: C8yTopic) -> Self {
         val.to_string().as_str().try_into().expect("infallible")
+    }
+}
+
+// FIXME this From conversion is error prone as this can only be used for responses.
+impl From<&EntityMetadata> for C8yTopic {
+    fn from(value: &EntityMetadata) -> Self {
+        match value.r#type {
+            EntityType::MainDevice => Self::SmartRestResponse,
+            EntityType::ChildDevice => Self::ChildSmartRestResponse(value.entity_id.clone()),
+            EntityType::Service => Self::SmartRestResponse, // TODO how services are handled by c8y?
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 use crate::error::TopicError;
 use std::convert::TryFrom;
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ResponseTopic {
     SoftwareListResponse,

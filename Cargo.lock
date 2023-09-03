@@ -735,6 +735,7 @@ dependencies = [
  "clock",
  "json-writer",
  "logged_command",
+ "nanoid",
  "plugin_sm",
  "proptest",
  "rand",
@@ -3823,9 +3824,9 @@ dependencies = [
  "http",
  "log",
  "log_manager",
- "serde",
  "serde_json",
  "tedge_actors",
+ "tedge_api",
  "tedge_config",
  "tedge_file_system_ext",
  "tedge_http_ext",
@@ -3833,7 +3834,6 @@ dependencies = [
  "tedge_test_utils",
  "tedge_utils",
  "thiserror",
- "time",
  "tokio",
 ]
 

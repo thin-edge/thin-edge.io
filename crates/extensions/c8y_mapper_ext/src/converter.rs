@@ -60,6 +60,7 @@ use tedge_api::event::ThinEdgeEvent;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::OperationType;
 use tedge_api::topic::RequestTopic;
 use tedge_api::topic::ResponseTopic;
 use tedge_api::Auth;
@@ -154,14 +155,15 @@ impl CumulocityConverter {
 
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
+    pub config: C8yMapperConfig,
     pub(crate) mapper_config: MapperConfig,
-    device_name: String,
+    pub device_name: String,
     device_type: String,
     alarm_converter: AlarmConverter,
     pub operations: Operations,
     operation_logs: OperationLogs,
     mqtt_publisher: LoggingSender<MqttMessage>,
-    http_proxy: C8YHttpProxy,
+    pub http_proxy: C8YHttpProxy,
     pub cfg_dir: PathBuf,
     pub ops_dir: PathBuf,
     pub children: HashMap<String, Operations>,
@@ -181,10 +183,11 @@ impl CumulocityConverter {
         let device_type = config.device_type.clone();
         let service_type = config.service_type.clone();
         let c8y_host = config.c8y_host.clone();
+        let cfg_dir = config.config_dir.clone();
 
         let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
 
-        let ops_dir = config.ops_dir;
+        let ops_dir = config.ops_dir.clone();
         let operations = Operations::try_new(ops_dir.clone())?;
         let children = get_child_ops(ops_dir.clone())?;
 
@@ -205,6 +208,7 @@ impl CumulocityConverter {
 
         Ok(CumulocityConverter {
             size_threshold,
+            config,
             mapper_config,
             device_name: device_id,
             device_type,
@@ -212,7 +216,7 @@ impl CumulocityConverter {
             operations,
             operation_logs,
             http_proxy,
-            cfg_dir: config.config_dir,
+            cfg_dir,
             ops_dir,
             children,
             mqtt_publisher,
@@ -413,14 +417,29 @@ impl CumulocityConverter {
         payload: &str,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
         match get_smartrest_device_id(payload) {
-            Some(device_id) if device_id == self.device_name => {
+            Some(device_id) => {
                 match get_smartrest_template_id(payload).as_str() {
-                    "528" => self.forward_software_request(payload).await,
-                    "510" => Self::forward_restart_request(payload),
-                    template => self.forward_operation_request(payload, template).await,
+                    "522" => self.convert_log_upload_request(payload),
+                    "528" if device_id == self.device_name => {
+                        self.forward_software_request(payload).await
+                    }
+                    "510" if device_id == self.device_name => {
+                        Self::forward_restart_request(payload)
+                    }
+                    template if device_id == self.device_name => {
+                        self.forward_operation_request(payload, template).await
+                    }
+                    "106" if device_id != self.device_name => {
+                        self.register_child_device_supported_operations(payload)
+                    }
+                    _ => {
+                        // Ignore any other child device incoming request as not yet supported
+                        debug!("Ignored. Message not yet supported: {payload}");
+                        Ok(vec![])
+                    }
                 }
             }
-            _ => {
+            None => {
                 match get_smartrest_template_id(payload).as_str() {
                     "106" => self.register_child_device_supported_operations(payload),
                     // Ignore any other child device incoming request as not yet supported
@@ -708,6 +727,24 @@ impl CumulocityConverter {
 
         let mut messages = match &channel {
             Channel::Measurement { .. } => self.try_convert_measurement(&source, message)?,
+
+            Channel::Command { .. } if message.payload_bytes().is_empty() => {
+                // The command has been fully processed
+                vec![]
+            }
+
+            Channel::CommandMetadata {
+                operation: OperationType::LogUpload,
+            } => self.convert_log_metadata(&source, message)?,
+
+            Channel::Command {
+                operation: OperationType::LogUpload,
+                cmd_id,
+            } => {
+                self.handle_log_upload_state_change(&source, cmd_id, message)
+                    .await?
+            }
+
             _ => vec![],
         };
 
@@ -755,9 +792,10 @@ impl CumulocityConverter {
                     Ok(publish_restart_operation_status(message.payload_str()?).await?)
                 }
                 Ok(MapperSubscribeTopic::C8yTopic(_)) => self.parse_c8y_topics(message).await,
-                _ => Err(ConversionError::UnsupportedTopic(
-                    message.topic.name.clone(),
-                )),
+                _ => {
+                    error!("Unsupported topic: {}", message.topic.name);
+                    Ok(vec![])
+                }
             },
         }?;
 
@@ -1109,6 +1147,7 @@ pub fn check_tedge_agent_status(message: &Message) -> Result<bool, ConversionErr
 
 #[cfg(test)]
 mod tests {
+    use crate::Capabilities;
     use anyhow::Result;
     use assert_json_diff::assert_json_include;
     use assert_matches::assert_matches;
@@ -1126,6 +1165,7 @@ mod tests {
     use tedge_actors::Sender;
     use tedge_actors::SimpleMessageBox;
     use tedge_actors::SimpleMessageBoxBuilder;
+    use tedge_api::mqtt_topics::MqttSchema;
     use tedge_mqtt_ext::Message;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
@@ -1782,17 +1822,24 @@ mod tests {
         let device_type = "test-device-type".into();
         let service_type = "service".into();
         let c8y_host = "test.c8y.io".into();
-        let mut topics = C8yMapperConfig::internal_topic_filter(&tmp_dir.to_path_buf()).unwrap();
+        let tedge_http_host = "localhost".into();
+        let mqtt_schema = MqttSchema::default();
+        let mut topics =
+            C8yMapperConfig::default_internal_topic_filter(&tmp_dir.to_path_buf()).unwrap();
+        topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
         topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
         let config = C8yMapperConfig::new(
             tmp_dir.to_path_buf(),
             tmp_dir.utf8_path_buf(),
+            tmp_dir.utf8_path_buf(),
             device_id,
             device_type,
             service_type,
             c8y_host,
+            tedge_http_host,
             topics,
+            Capabilities::default(),
         );
 
         let mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =

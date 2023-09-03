@@ -182,13 +182,16 @@ async fn log_manager_upload_log_files_on_request() -> Result<(), anyhow::Error> 
         .await?;
 
     // The log manager notifies that the request has been received and is processed
+    let executing_message = mqtt.recv().await;
     assert_eq!(
-            mqtt.recv().await,
-            Some(MqttMessage::new(
+        executing_message,
+        Some(MqttMessage::new(
                 &logfile_topic,
                 r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_two-1234","type":"type_two","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
             ).with_retain())
         );
+    // This message being published over MQTT is also received by the log-manager itself
+    mqtt.send(executing_message.unwrap()).await?;
 
     // Then uploads the requested content over HTTP
     let actual_request = http.recv().await;
@@ -243,13 +246,16 @@ async fn request_logtype_that_does_not_exist() -> Result<(), anyhow::Error> {
         .await?;
 
     // The log manager notifies that the request has been received and is processed
+    let executing_message = mqtt.recv().await;
     assert_eq!(
-        mqtt.recv().await,
+        executing_message,
         Some(MqttMessage::new(
             &logfile_topic,
             r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_four-1234","type":"type_four","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
         ).with_retain())
     );
+    // This message being published over MQTT is also received by the log-manager itself
+    mqtt.send(executing_message.unwrap()).await?;
 
     // Finally, the log manager notifies that given log type does not exists
     assert_eq!(
@@ -287,13 +293,16 @@ async fn put_logfiles_without_permissions() -> Result<(), anyhow::Error> {
         .await?;
 
     // The log manager notifies that the request has been received and is processed
+    let executing_message = mqtt.recv().await;
     assert_eq!(
-            mqtt.recv().await,
+        executing_message,
             Some(MqttMessage::new(
                 &logfile_topic,
                 r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_two-1234","type":"type_two","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
             ).with_retain())
         );
+    // This message being published over MQTT is also received by the log-manager itself
+    mqtt.send(executing_message.unwrap()).await?;
 
     // Then uploads the requested content over HTTP
     assert!(http.recv().await.is_some());
@@ -397,13 +406,16 @@ async fn read_log_from_file_that_does_not_exist() -> Result<(), anyhow::Error> {
         .await?;
 
     // The log manager notifies that the request has been received and is processed
+    let executing_message = mqtt.recv().await;
     assert_eq!(
-            mqtt.recv().await,
-            Some(MqttMessage::new(
+        executing_message,
+        Some(MqttMessage::new(
                 &logfile_topic,
                 r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_three-1234","type":"type_three","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
             ).with_retain())
         );
+    // This message being published over MQTT is also received by the log-manager itself
+    mqtt.send(executing_message.unwrap()).await?;
 
     // Finally, the log manager notifies that given log type does not exists
     assert_eq!(

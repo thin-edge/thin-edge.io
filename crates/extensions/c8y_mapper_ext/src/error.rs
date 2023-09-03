@@ -72,6 +72,9 @@ pub enum ConversionError {
     #[error(transparent)]
     FromSmartRestSerializerError(#[from] c8y_api::smartrest::error::SmartRestSerializerError),
 
+    #[error(transparent)]
+    FromSmartRestDeserializerError(#[from] c8y_api::smartrest::error::SmartRestDeserializerError),
+
     #[error("Unsupported topic: {0}")]
     UnsupportedTopic(String),
 
@@ -117,6 +120,12 @@ pub enum ConversionError {
 #[derive(thiserror::Error, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum CumulocityMapperError {
+    #[error("Unknown device id: '{device_id}'")]
+    UnknownDevice { device_id: String },
+
+    #[error("Unregistered device topic: '{topic_id}'")]
+    UnregisteredDevice { topic_id: String },
+
     #[error(transparent)]
     InvalidTopicError(#[from] tedge_api::TopicError),
 
