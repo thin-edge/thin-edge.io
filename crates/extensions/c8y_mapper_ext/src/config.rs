@@ -141,10 +141,9 @@ impl C8yMapperConfig {
     pub fn default_external_topic_filter() -> TopicFilter {
         vec![
             "te/+/+/+/+/m/+",
+            "te/+/+/+/+/e/+",
             "tedge/alarms/+/+",
             "tedge/alarms/+/+/+",
-            "tedge/events/+",
-            "tedge/events/+/+",
             "tedge/health/+",
             "tedge/health/+/+",
         ]
