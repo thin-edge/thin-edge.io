@@ -6,9 +6,9 @@ set -e
 packages="tedge tedge_apt_plugin tedge_apama_plugin c8y_log_plugin c8y_configuration_plugin tedge_mapper tedge_agent tedge_watchdog"
 
 # Package names for version > 0.8.1
-packages="$packages tedge-apt-plugin tedge-apama-plugin c8y-log-plugin c8y-configuration-plugin c8y-remote-access-plugin c8y-firmware-plugin tedge-watchdog tedge-agent tedge-mapper"
+packages="$packages tedge-apt-plugin tedge-apama-plugin c8y-log-plugin tedge-log-plugin c8y-configuration-plugin c8y-remote-access-plugin c8y-firmware-plugin tedge-watchdog tedge-agent tedge-mapper"
 
-extension_services="tedge-watchdog.service tedge-mapper-collectd.service c8y-log-plugin.service c8y-configuration-plugin.service c8y-firmware-plugin.service"
+extension_services="tedge-watchdog.service tedge-mapper-collectd.service tedge-log-plugin.service c8y-log-plugin.service c8y-configuration-plugin.service c8y-firmware-plugin.service"
 
 clouds="c8y az aws"
 

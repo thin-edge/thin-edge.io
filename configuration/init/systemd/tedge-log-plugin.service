@@ -1,0 +1,13 @@
+[Unit]
+Description=thin-edge.io log file retriever
+After=syslog.target network.target
+
+[Service]
+User=root
+ExecStart=/usr/bin/tedge-log-plugin
+Restart=on-failure
+RestartPreventExitStatus=255
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
