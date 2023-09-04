@@ -91,11 +91,11 @@ const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
 const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
 const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "c8y/inventory/managedObjects/update";
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
-const TEDGE_EVENTS_TOPIC: &str = "tedge/events/";
 const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "c8y/event/events/create";
 const TEDGE_AGENT_LOG_DIR: &str = "tedge/agent";
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
 const TEDGE_AGENT_HEALTH_TOPIC: &str = "tedge/health/tedge-agent";
+const DEFAULT_EVENT_TYPE: &str = "ThinEdgeEvent";
 
 #[derive(Debug)]
 pub struct MapperConfig {
@@ -258,58 +258,59 @@ impl CumulocityConverter {
 
     async fn try_convert_event(
         &mut self,
+        source: &EntityTopicId,
         input: &Message,
+        event_type: &str,
     ) -> Result<Vec<Message>, ConversionError> {
         let mut messages = Vec::new();
-        let mqtt_topic = input.topic.name.clone();
-        let mqtt_payload = input.payload_str().map_err(|e| {
-            ThinEdgeJsonDeserializerError::FailedToParsePayloadToString {
-                topic: mqtt_topic.clone(),
-                error: e.to_string(),
-            }
-        })?;
 
-        let tedge_event = ThinEdgeEvent::try_from(&mqtt_topic, mqtt_payload).map_err(|e| {
-            ThinEdgeJsonDeserializerError::FailedToParseJsonPayload {
-                topic: mqtt_topic,
-                error: e.to_string(),
-                payload: mqtt_payload.chars().take(50).collect(),
-            }
-        })?;
-        let child_id = tedge_event.source.clone();
-        let need_registration = if let Some(child_id) = child_id.clone() {
-            add_external_device_registration_message(child_id, &mut self.children, &mut messages)
-        } else {
-            false
+        let event_type = match event_type.is_empty() {
+            true => DEFAULT_EVENT_TYPE,
+            false => event_type,
         };
 
-        let c8y_event = C8yCreateEvent::try_from(tedge_event)?;
+        if let Some(entity) = self.entity_store.get(source) {
+            let mqtt_topic = input.topic.name.clone();
+            let mqtt_payload = input.payload_str().map_err(|e| {
+                ThinEdgeJsonDeserializerError::FailedToParsePayloadToString {
+                    topic: mqtt_topic.clone(),
+                    error: e.to_string(),
+                }
+            })?;
 
-        // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
-        let message = if c8y_event.extras.is_empty() {
-            let smartrest_event = Self::serialize_to_smartrest(&c8y_event)?;
-            let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
-            Message::new(&smartrest_topic, smartrest_event)
-        } else {
-            // If the message contains extra fields other than `text` and `time`, convert to Cumulocity JSON
-            let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
-            let json_mqtt_topic = Topic::new_unchecked(C8Y_JSON_MQTT_EVENTS_TOPIC);
-            Message::new(&json_mqtt_topic, cumulocity_event_json)
+            let tedge_event =
+                ThinEdgeEvent::try_from(event_type, entity, mqtt_payload).map_err(|e| {
+                    ThinEdgeJsonDeserializerError::FailedToParseJsonPayload {
+                        topic: mqtt_topic.clone(),
+                        error: e.to_string(),
+                        payload: mqtt_payload.chars().take(50).collect(),
+                    }
+                })?;
+
+            let c8y_event = C8yCreateEvent::try_from(tedge_event)?;
+
+            // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
+            let message = if c8y_event.extras.is_empty() {
+                let smartrest_event = Self::serialize_to_smartrest(&c8y_event)?;
+                let smartrest_topic = Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC);
+                Message::new(&smartrest_topic, smartrest_event)
+            } else {
+                // If the message contains extra fields other than `text` and `time`, convert to Cumulocity JSON
+                let cumulocity_event_json = serde_json::to_string(&c8y_event)?;
+                let json_mqtt_topic = Topic::new_unchecked(C8Y_JSON_MQTT_EVENTS_TOPIC);
+                Message::new(&json_mqtt_topic, cumulocity_event_json)
+            };
+
+            if self.can_send_over_mqtt(&message) {
+                // The message can be sent via MQTT
+                messages.push(message);
+            } else {
+                // The message must be sent over HTTP
+                let _ = self.http_proxy.send_event(c8y_event).await?;
+                return Ok(vec![]);
+            }
         };
 
-        if self.can_send_over_mqtt(&message) {
-            // The message can be sent via MQTT
-            messages.push(message);
-        } else if !need_registration {
-            // The message must be sent over HTTP
-            let _ = self.http_proxy.send_event(c8y_event).await?;
-            return Ok(vec![]);
-        } else {
-            // The message should be sent over HTTP but this cannot be done
-            return Err(ConversionError::ChildDeviceNotRegistered {
-                id: child_id.unwrap_or_else(|| "".into()),
-            });
-        }
         Ok(messages)
     }
 
@@ -728,6 +729,10 @@ impl CumulocityConverter {
         let mut messages = match &channel {
             Channel::Measurement { .. } => self.try_convert_measurement(&source, message)?,
 
+            Channel::Event { event_type } => {
+                self.try_convert_event(&source, message, event_type).await?
+            }
+
             Channel::Command { .. } if message.payload_bytes().is_empty() => {
                 // The command has been fully processed
                 vec![]
@@ -762,9 +767,6 @@ impl CumulocityConverter {
                     | topic.name.starts_with(INTERNAL_ALARMS_TOPIC) =>
             {
                 self.process_alarm_messages(topic, message)
-            }
-            topic if topic.name.starts_with(TEDGE_EVENTS_TOPIC) => {
-                self.try_convert_event(message).await
             }
             topic if topic.name.starts_with("tedge/health") => {
                 self.process_health_status_message(message).await
@@ -1456,10 +1458,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn convert_event_with_known_fields_to_c8y_smartrest() -> Result<()> {
+    async fn convert_event_without_given_event_type() {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
-        let event_topic = "tedge/events/click_event";
+        let event_topic = "te/device/main///e/";
         let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
         let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
 
@@ -1469,25 +1471,42 @@ mod tests {
         assert_eq!(converted_event.topic.name, "c8y/s/us");
 
         assert_eq!(
-            converted_event.payload_str()?,
-            r#"400,click_event,"Someone clicked",2020-02-02T01:02:03+05:30"#
+            converted_event.payload_str().unwrap(),
+            r#"400,ThinEdgeEvent,"Someone clicked",2020-02-02T01:02:03+05:30"#
         );
-
-        Ok(())
     }
 
     #[tokio::test]
-    async fn convert_event_with_extra_fields_to_c8y_json() -> Result<()> {
+    async fn convert_event_with_known_fields_to_c8y_smartrest() {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
-        let event_topic = "tedge/events/click_event";
-        let event_payload = r#"{ "text": "tick", "foo": "bar" }"#;
+        let event_topic = "te/device/main///e/click_event";
+        let event_payload = r#"{ "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
         let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
 
         let converted_events = converter.convert(&event_message).await;
         assert_eq!(converted_events.len(), 1);
         let converted_event = converted_events.get(0).unwrap();
-        assert_eq!(converted_event.topic.name, "c8y/event/events/create");
+        assert_eq!(converted_event.topic.name, "c8y/s/us");
+
+        assert_eq!(
+            converted_event.payload_str().unwrap(),
+            r#"400,click_event,"Someone clicked",2020-02-02T01:02:03+05:30"#
+        );
+    }
+
+    #[tokio::test]
+    async fn convert_event_with_extra_fields_to_c8y_json() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let event_topic = "te/device/main///e/click_event";
+        let event_payload = r#"{ "text": "tick", "foo": "bar" }"#;
+        let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
+
+        let converted_events = converter.convert(&event_message).await;
+        assert_eq!(converted_events.len(), 1);
+
+        let converted_event = converted_events.get(0).unwrap();
         let converted_c8y_json = json!({
             "type": "click_event",
             "text": "tick",
@@ -1495,11 +1514,9 @@ mod tests {
         });
         assert_eq!(converted_event.topic.name, "c8y/event/events/create");
         assert_json_include!(
-            actual: serde_json::from_str::<serde_json::Value>(converted_event.payload_str()?)?,
+            actual: serde_json::from_str::<serde_json::Value>(converted_event.payload_str().unwrap()).unwrap(),
             expected: converted_c8y_json
         );
-
-        Ok(())
     }
 
     #[tokio::test]
@@ -1516,13 +1533,12 @@ mod tests {
             }
         });
 
-        let event_topic = "tedge/events/click_event";
+        let event_topic = "te/device/main///e/click_event";
         let big_event_text = create_packet((16 + 1) * 1024); // Event payload > size_threshold
         let big_event_payload = json!({ "text": big_event_text }).to_string();
         let big_event_message = Message::new(&Topic::new_unchecked(event_topic), big_event_payload);
 
-        println!("{:?}", converter.convert(&big_event_message).await);
-        // assert!(converter.convert(&big_event_message).await.is_empty());
+        assert!(converter.convert(&big_event_message).await.is_empty());
     }
 
     #[tokio::test]
