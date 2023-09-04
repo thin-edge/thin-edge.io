@@ -237,6 +237,7 @@ mod tests {
         let plugin = ExternalPluginCommand::new(
             "test",
             &dummy_plugin_path,
+            None,
             config.software.plugin.max_packages,
         );
         assert_eq!(plugin.name, "test");
@@ -250,7 +251,7 @@ mod tests {
     fn plugin_check_module_type_both_same() {
         let dummy_plugin_path = get_dummy_plugin_path();
 
-        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, 100);
+        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, None, 100);
 
         let module = SoftwareModule {
             module_type: Some("test".into()),
@@ -274,7 +275,7 @@ mod tests {
         let dummy_plugin_path = get_dummy_plugin_path();
 
         // Create new plugin in the registry with name `test`.
-        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, 100);
+        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, None, 100);
 
         // Create test module with name `test2`.
         let module = SoftwareModule {
@@ -304,7 +305,7 @@ mod tests {
         // Create dummy plugin.
         let dummy_plugin_path = get_dummy_plugin_path();
 
-        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, 100);
+        let plugin = ExternalPluginCommand::new("test", dummy_plugin_path, None, 100);
 
         // Create software module without an explicit type.
         let module = SoftwareModule {
