@@ -19,6 +19,16 @@ Thin-edge devices support sending simple measurements with custom type
     ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=CustomType    value=temperature    series=temperature
     Log    ${measurements}    
 
+Thin-edge devices support sending simple measurements with custom type in topic
+    Execute Command    tedge mqtt pub te/device/main///m/CustomType_topic '{ "temperature": 25 }'
+    ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=CustomType_topic    value=temperature    series=temperature
+    Log    ${measurements}
+
+
+Thin-edge devices support sending simple measurements with custom type in payload
+    Execute Command    tedge mqtt pub te/device/main///m/CustomType_topic '{ "type":"CustomType_payload","temperature": 25 }'
+    ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=CustomType_payload    value=temperature    series=temperature
+    Log    ${measurements}    
 
 Thin-edge devices support sending custom measurements
     Execute Command    tedge mqtt pub te/device/main///m/ '{ "current": {"L1": 9.5, "L2": 1.3} }'
