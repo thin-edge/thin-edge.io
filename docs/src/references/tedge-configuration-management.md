@@ -140,12 +140,12 @@ For example, it subscribes to the following topic for the main device.
 tedge mqtt sub 'te/device/main///cmd/config_snapshot/+'
 ```
 
-When a new config snapshot command with the ID "1234" is published by another component, it appears as follows.
+To start a new config snapshot with the ID "1234" on the device named "example", a component has to publish the following message over MQTT:
 
 ```sh te2mqtt
 tedge mqtt pub -r 'te/device/main///cmd/config_snapshot/1234' '{
   "status": "init",
-  "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/main/config_snapshot/mosquitto-1234",
+  "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/example/config_snapshot/mosquitto-1234",
   "type": "mosquitto"
 }'
 ```
@@ -170,7 +170,7 @@ As a result, the operation status update message for the example above looks lik
 ```sh te2mqtt
 tedge mqtt pub -r 'te/device/main///cmd/config_snapshot/1234' '{
   "status": "successful",
-  "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/main/config_snapshot/mosquitto-1234",
+  "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/example/config_snapshot/mosquitto-1234",
   "type": "mosquitto",
   "path": "/etc/mosquitto/mosquitto.conf"
 }'
@@ -207,13 +207,12 @@ For example, it subscribes to the following topic for the main device.
 tedge mqtt sub 'te/device/main///cmd/config_update/+'
 ```
 
-When a new config update command with the ID "1234" is published by another component,
-it appears as below.
+To start a new config update with the ID "1234" on the device named "example", a component has to publish the following message over MQTT:
 
 ```sh te2mqtt
 tedge mqtt pub -r 'te/device/main///cmd/config_update/1234' '{
   "status": "init",
-  "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/main/config_update/mosquitto-1234",
+  "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/example/config_update/mosquitto-1234",
   "remoteUrl": "http://www.my.url",
   "type": "mosquitto"
 }'
@@ -239,7 +238,7 @@ As a result, the operation status update message for the example above looks lik
 ```sh te2mqtt
 tedge mqtt pub -r 'te/device/main///cmd/config_update/1234' '{
   "status": "successful",
-  "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/main/config_update/mosquitto-1234",
+  "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/example/config_update/mosquitto-1234",
   "remoteUrl": "http://www.my.url",
   "type": "mosquitto",
   "path": "/etc/mosquitto/mosquitto.conf"
