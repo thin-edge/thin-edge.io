@@ -174,8 +174,8 @@ mod tests {
     fn get_tenant_id_blocking_should_return_error_given_wrong_credentials() {
         let client = reqwest::blocking::Client::new();
 
-        let request_url =
-            Url::parse(&format!("{}/tenant/currentTenant", mockito::server_url())).unwrap();
+        let mut server = mockito::Server::new();
+        let request_url = Url::parse(&format!("{}/tenant/currentTenant", server.url())).unwrap();
 
         let auth_header_field = "authorization";
         let auth_header_value = "Basic dGVzdDpmYWlsZWR0ZXN0"; // Base64 encoded test:failedtest
@@ -183,7 +183,8 @@ mod tests {
         let response_body = r#"{"name":"test"}"#;
         let expected_status = 200;
 
-        let _serv = mockito::mock("GET", "/tenant/currentTenant")
+        let _serv = server
+            .mock("GET", "/tenant/currentTenant")
             .match_header(auth_header_field, auth_header_value)
             .with_body(response_body)
             .with_status(expected_status)
@@ -197,8 +198,8 @@ mod tests {
     fn get_tenant_id_blocking_returns_correct_response() {
         let client = reqwest::blocking::Client::new();
 
-        let request_url =
-            Url::parse(&format!("{}/tenant/currentTenant", mockito::server_url())).unwrap();
+        let mut server = mockito::Server::new();
+        let request_url = Url::parse(&format!("{}/tenant/currentTenant", server.url())).unwrap();
 
         let auth_header_field = "authorization";
         let auth_header_value = "Basic dGVzdDp0ZXN0"; // Base64 encoded test:test
@@ -208,7 +209,8 @@ mod tests {
 
         let expected = "test";
 
-        let _serv = mockito::mock("GET", "/tenant/currentTenant")
+        let _serv = server
+            .mock("GET", "/tenant/currentTenant")
             .match_header(auth_header_field, auth_header_value)
             .with_body(response_body)
             .with_status(expected_status)
@@ -223,8 +225,8 @@ mod tests {
     fn get_tenant_id_blocking_response_should_return_error_when_response_has_no_name_field() {
         let client = reqwest::blocking::Client::new();
 
-        let request_url =
-            Url::parse(&format!("{}/tenant/currentTenant", mockito::server_url())).unwrap();
+        let mut server = mockito::Server::new();
+        let request_url = Url::parse(&format!("{}/tenant/currentTenant", server.url())).unwrap();
 
         let auth_header_field = "authorization";
         let auth_header_value = "Basic dGVzdDp0ZXN0"; // Base64 encoded test:test
@@ -232,7 +234,8 @@ mod tests {
         let response_body = r#"{"test":"test"}"#;
         let expected_status = 200;
 
-        let _serv = mockito::mock("GET", "/test/tenant/currentTenant")
+        let _serv = server
+            .mock("GET", "/test/tenant/currentTenant")
             .match_header(auth_header_field, auth_header_value)
             .with_body(response_body)
             .with_status(expected_status)

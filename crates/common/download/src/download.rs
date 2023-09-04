@@ -480,8 +480,6 @@ fn try_pre_allocate_space(file: &File, path: &Path, file_len: u64) -> Result<(),
 #[allow(deprecated)]
 mod tests {
     use super::*;
-    use anyhow::bail;
-    use mockito::mock;
     use nix::sys::statvfs;
     use std::io::Write;
     use tempfile::tempdir;
@@ -495,16 +493,18 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "fails CI because of lack of disk space"]
-    async fn downloader_download_content_no_auth() -> anyhow::Result<()> {
-        let _mock1 = mock("GET", "/some_file.txt")
+    async fn downloader_download_content_no_auth() {
+        let mut server = mockito::Server::new();
+        let _mock1 = server
+            .mock("GET", "/some_file.txt")
             .with_status(200)
             .with_body(b"hello")
             .create();
 
-        let target_dir_path = TempDir::new()?;
+        let target_dir_path = TempDir::new().unwrap();
         let target_path = target_dir_path.path().join("test_download");
 
-        let mut target_url = mockito::server_url();
+        let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
@@ -514,79 +514,80 @@ mod tests {
             current_interval: Duration::ZERO,
             ..Default::default()
         });
-        downloader.download(&url).await?;
+        downloader.download(&url).await.unwrap();
 
-        let log_content = std::fs::read(downloader.filename())?;
+        let log_content = std::fs::read(downloader.filename()).unwrap();
 
         assert_eq!("hello".as_bytes(), log_content);
-
-        Ok(())
     }
 
     #[tokio::test]
     #[ignore = "fails CI because of lack of disk space"]
-    async fn downloader_download_to_target_path() -> anyhow::Result<()> {
-        let temp_dir = tempdir()?;
-        let _mock1 = mock("GET", "/some_file.txt")
+    async fn downloader_download_to_target_path() {
+        let temp_dir = tempdir().unwrap();
+
+        let mut server = mockito::Server::new();
+        let _mock1 = server
+            .mock("GET", "/some_file.txt")
             .with_status(200)
             .with_body(b"hello")
             .create();
 
         let target_path = temp_dir.path().join("downloaded_file.txt");
 
-        let mut target_url = mockito::server_url();
+        let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
         let downloader = Downloader::new(target_path.clone());
-        downloader.download(&url).await?;
+        downloader.download(&url).await.unwrap();
 
-        let file_content = std::fs::read(target_path)?;
+        let file_content = std::fs::read(target_path).unwrap();
 
         assert_eq!(file_content, "hello".as_bytes());
-
-        Ok(())
     }
 
     #[cfg(target_os = "linux")]
     #[tokio::test]
-    #[ignore = "fails CI because of lack of disk space"]
-    async fn downloader_download_with_content_length_larger_than_usable_disk_space(
-    ) -> anyhow::Result<()> {
-        let tmpstats = statvfs::statvfs("/tmp")?;
+    #[ignore = "Overriding Content-Length doesn't work in mockito"]
+    async fn downloader_download_with_content_length_larger_than_usable_disk_space() {
+        let tmpstats = statvfs::statvfs("/tmp").unwrap();
         let usable_disk_space = tmpstats.blocks_free() * tmpstats.block_size();
-        let _mock1 = mock("GET", "/some_file.txt")
-            .with_header("content-length", &(usable_disk_space.to_string()))
+
+        let mut server = mockito::Server::new();
+        let _mock1 = server
+            .mock("GET", "/some_file.txt")
+            .with_header("content-length", &usable_disk_space.to_string())
             .create();
 
-        let target_dir_path = TempDir::new()?;
+        let target_dir_path = TempDir::new().unwrap();
         let target_path = target_dir_path.path().join("test_download_with_length");
 
-        let mut target_url = mockito::server_url();
+        let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
         let downloader = Downloader::new(target_path);
-        match downloader.download(&url).await {
-            Err(DownloadError::InsufficientSpace) => Ok(()),
-            _ => bail!("failed"),
-        }
+        let err = downloader.download(&url).await.unwrap_err();
+        assert!(matches!(err, DownloadError::InsufficientSpace));
     }
 
     #[tokio::test]
     #[ignore = "fails CI because of lack of disk space"]
-    async fn returns_proper_errors_for_invalid_filenames() -> anyhow::Result<()> {
-        let temp_dir = tempdir()?;
+    async fn returns_proper_errors_for_invalid_filenames() {
+        let temp_dir = tempdir().unwrap();
         std::env::set_current_dir(temp_dir.path()).unwrap();
 
-        let _mock1 = mock("GET", "/some_file.txt")
+        let mut server = mockito::Server::new();
+        let _mock1 = server
+            .mock("GET", "/some_file.txt")
             .with_status(200)
             .with_body(b"hello")
             .create();
 
-        let mut target_url = mockito::server_url();
+        let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
@@ -616,15 +617,15 @@ mod tests {
             DownloadError::FromFileError(FileError::InvalidFileName { .. })
         ));
         println!("{err:?}", err = anyhow::Error::from(err));
-
-        Ok(())
     }
 
     #[tokio::test]
     #[ignore = "fails CI because of lack of disk space"]
-    async fn writing_to_existing_file() -> anyhow::Result<()> {
-        let temp_dir = tempdir()?;
-        let _mock1 = mock("GET", "/some_file.txt")
+    async fn writing_to_existing_file() {
+        let temp_dir = tempdir().unwrap();
+        let mut server = mockito::Server::new();
+        let _mock1 = server
+            .mock("GET", "/some_file.txt")
             .with_status(200)
             .with_body(b"hello")
             .create();
@@ -632,101 +633,92 @@ mod tests {
         let target_file_path = temp_dir.path().join("downloaded_file.txt");
         std::fs::File::create(&target_file_path).unwrap();
 
-        let mut target_url = mockito::server_url();
+        let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
         let downloader = Downloader::new(target_file_path.clone());
-        downloader.download(&url).await?;
+        downloader.download(&url).await.unwrap();
 
-        let file_content = std::fs::read(target_file_path)?;
+        let file_content = std::fs::read(target_file_path).unwrap();
 
         assert_eq!(file_content, "hello".as_bytes());
-
-        Ok(())
     }
 
     #[tokio::test]
     #[ignore = "fails CI because of lack of disk space"]
-    async fn downloader_download_with_reasonable_content_length() -> anyhow::Result<()> {
-        let file = create_file_with_size(10 * 1024 * 1024)?;
+    async fn downloader_download_with_reasonable_content_length() {
+        let file = create_file_with_size(10 * 1024 * 1024).unwrap();
         let file_path = file.into_temp_path();
 
-        let _mock1 = mock("GET", "/some_file.txt")
+        let mut server = mockito::Server::new();
+        let _mock1 = server
+            .mock("GET", "/some_file.txt")
             .with_body_from_file(&file_path)
             .create();
 
-        let target_dir_path = TempDir::new()?;
+        let target_dir_path = TempDir::new().unwrap();
         let target_path = target_dir_path.path().join("test_download_with_length");
 
-        let mut target_url = mockito::server_url();
+        let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
         let downloader = Downloader::new(target_path);
 
-        match downloader.download(&url).await {
-            Ok(()) => {
-                let log_content = std::fs::read(downloader.filename())?;
-                let expected_content = std::fs::read(file_path)?;
-                assert_eq!(log_content, expected_content);
-                Ok(())
-            }
-            _ => bail!("failed"),
-        }
+        downloader.download(&url).await.unwrap();
+
+        let log_content = std::fs::read(downloader.filename()).unwrap();
+        let expected_content = std::fs::read(file_path).unwrap();
+        assert_eq!(log_content, expected_content);
     }
 
     #[tokio::test]
     #[ignore = "fails CI because of lack of disk space"]
-    async fn downloader_download_verify_file_content() -> anyhow::Result<()> {
-        let file = create_file_with_size(10)?;
+    async fn downloader_download_verify_file_content() {
+        let file = create_file_with_size(10).unwrap();
 
-        let _mock1 = mock("GET", "/some_file.txt")
+        let mut server = mockito::Server::new();
+        let _mock1 = server
+            .mock("GET", "/some_file.txt")
             .with_body_from_file(file.into_temp_path())
             .create();
 
-        let target_dir_path = TempDir::new()?;
+        let target_dir_path = TempDir::new().unwrap();
         let target_path = target_dir_path.path().join("test_download_with_length");
 
-        let mut target_url = mockito::server_url();
+        let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
         let downloader = Downloader::new(target_path);
-        downloader.download(&url).await?;
+        downloader.download(&url).await.unwrap();
 
-        let log_content = std::fs::read(downloader.filename())?;
+        let log_content = std::fs::read(downloader.filename()).unwrap();
 
         assert_eq!("Some data!".as_bytes(), log_content);
-
-        Ok(())
     }
 
     #[tokio::test]
-    async fn downloader_download_without_content_length() -> anyhow::Result<()> {
-        let _mock1 = mock("GET", "/some_file.txt").create();
+    async fn downloader_download_without_content_length() {
+        let mut server = mockito::Server::new();
+        let _mock1 = server.mock("GET", "/some_file.txt").create();
 
-        let target_dir_path = TempDir::new()?;
+        let target_dir_path = TempDir::new().unwrap();
         let target_path = target_dir_path.path().join("test_download_without_length");
 
-        let mut target_url = mockito::server_url();
+        let mut target_url = server.url();
         target_url.push_str("/some_file.txt");
 
         let url = DownloadInfo::new(&target_url);
 
         let downloader = Downloader::new(target_path);
-        match downloader.download(&url).await {
-            Ok(()) => {
-                assert_eq!("".as_bytes(), std::fs::read(downloader.filename())?);
-                Ok(())
-            }
-            _ => {
-                bail!("failed")
-            }
-        }
+        downloader.download(&url).await.unwrap();
+
+        assert_eq!("".as_bytes(), std::fs::read(downloader.filename()).unwrap());
     }
 
     /// This test simulates HTTP response where a connection just drops and a
@@ -739,7 +731,7 @@ mod tests {
     /// termination chunk (which signals that the entire HTTP chunked body has
     /// been sent) and retries the request with a `Range` header.
     #[tokio::test]
-    async fn resume_download_when_disconnected() -> anyhow::Result<()> {
+    async fn resume_download_when_disconnected() {
         let chunk_size = 4;
         let file = "AAAABBBBCCCCDDDD";
 
@@ -810,21 +802,19 @@ mod tests {
         // Wait until task binds a listener on the TCP port
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-        let tmpdir = TempDir::new()?;
+        let tmpdir = TempDir::new().unwrap();
         let target_path = tmpdir.path().join("partial_download");
 
         let downloader = Downloader::new(target_path);
         let url = DownloadInfo::new(&format!("http://localhost:{port}/"));
 
-        downloader.download(&url).await?;
-        let saved_file = std::fs::read_to_string(downloader.filename())?;
+        downloader.download(&url).await.unwrap();
+        let saved_file = std::fs::read_to_string(downloader.filename()).unwrap();
         assert_eq!(saved_file, file);
 
-        downloader.cleanup().await?;
+        downloader.cleanup().await.unwrap();
 
         server_task.abort();
-
-        Ok(())
     }
 
     // Parameters:
@@ -882,18 +872,21 @@ mod tests {
         with_token: bool,
         url: Option<&str>,
         expected_err: &str,
-    ) -> anyhow::Result<()> {
-        let target_dir_path = TempDir::new()?;
+    ) {
+        let target_dir_path = TempDir::new().unwrap();
+        let mut server = mockito::Server::new();
 
         // bearer/no bearer setup
         let _mock1 = {
             if with_token {
-                mock("GET", "/some_file.txt")
+                server
+                    .mock("GET", "/some_file.txt")
                     .match_header("authorization", "Bearer token")
                     .with_status(status_code)
                     .create()
             } else {
-                mock("GET", "/some_file.txt")
+                server
+                    .mock("GET", "/some_file.txt")
                     .with_status(status_code)
                     .create()
             }
@@ -904,7 +897,7 @@ mod tests {
             if let Some(url) = url {
                 DownloadInfo::new(url)
             } else {
-                let mut target_url = mockito::server_url();
+                let mut target_url = server.url();
                 target_url.push_str("/some_file.txt");
                 DownloadInfo::new(&target_url)
             }
@@ -926,7 +919,7 @@ mod tests {
             ..Default::default()
         });
         match downloader.download(&url).await {
-            Ok(_success) => anyhow::bail!("Expected client error."),
+            Ok(_success) => panic!("Expected client error."),
             Err(err) => {
                 // `Error::to_string` uses a Display trait and only contains a
                 // top-level error message, and not any lower level contexts. To
@@ -945,11 +938,10 @@ mod tests {
                     .contains(&expected_err.to_ascii_lowercase()));
             }
         };
-        Ok(())
     }
 
     fn create_file_with_size(size: usize) -> Result<NamedTempFile, anyhow::Error> {
-        let mut file = NamedTempFile::new()?;
+        let mut file = NamedTempFile::new().unwrap();
         let data: String = "Some data!".into();
         let loops = size / data.len();
         let mut buffer = String::with_capacity(size);
@@ -957,7 +949,7 @@ mod tests {
             buffer.push_str("Some data!");
         }
 
-        file.write_all(buffer.as_bytes())?;
+        file.write_all(buffer.as_bytes()).unwrap();
 
         Ok(file)
     }
