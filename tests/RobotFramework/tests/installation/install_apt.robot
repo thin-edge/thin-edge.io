@@ -13,7 +13,7 @@ ${APT_INSTALL}    apt-get install -y \
     ...    tedge-agent \
     ...    tedge-apt-plugin \
     ...    c8y-configuration-plugin \
-    ...    c8y-log-plugin \
+    ...    tedge-log-plugin \
     ...    c8y-firmware-plugin \
     ...    tedge-watchdog
 

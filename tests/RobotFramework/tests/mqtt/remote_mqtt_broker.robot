@@ -28,7 +28,7 @@ Check remote mqtt broker #1773
     ThinEdgeIO.Service Should Be Stopped    tedge-agent
     ThinEdgeIO.Service Should Be Stopped    c8y-configuration-plugin
     ThinEdgeIO.Service Should Be Stopped    c8y-firmware-plugin
-    ThinEdgeIO.Service Should Be Stopped    c8y-log-plugin
+    ThinEdgeIO.Service Should Be Stopped    tedge-log-plugin
 
     ThinEdgeIO.Set Device Context    ${CONTAINER_2}
     ThinEdgeIO.Service Should Be Stopped    mosquitto
@@ -36,7 +36,7 @@ Check remote mqtt broker #1773
     ThinEdgeIO.Service Should Be Running    tedge-agent
     ThinEdgeIO.Service Should Be Running    c8y-configuration-plugin
     ThinEdgeIO.Service Should Be Running    c8y-firmware-plugin
-    ThinEdgeIO.Service Should Be Running    c8y-log-plugin
+    ThinEdgeIO.Service Should Be Running    tedge-log-plugin
 
     # Validate the device exists in the cloud
     Cumulocity.Device Should Exist    ${CONTAINER_1}
@@ -51,7 +51,7 @@ Check remote mqtt broker #1773
     Cumulocity.Should Have Services    name=tedge-agent    status=up
     Cumulocity.Should Have Services    name=c8y-configuration-plugin    status=up
     Cumulocity.Should Have Services    name=c8y-firmware-plugin    status=up
-    Cumulocity.Should Have Services    name=c8y-log-plugin    status=up
+    Cumulocity.Should Have Services    name=tedge-log-plugin    status=up
 
 
 *** Keywords ***
@@ -70,7 +70,7 @@ Custom Setup
 
     Stop Service    tedge-agent
     Stop Service    c8y-configuration-plugin
-    Stop Service    c8y-log-plugin
+    Stop Service    tedge-log-plugin
     Stop Service    c8y-firmware-plugin
 
     # Copy files form one device to another (use base64 encoding to prevent quoting issues)
@@ -91,6 +91,6 @@ Custom Setup
     Execute Command    sudo tedge config set mqtt.client.port 1883
     Execute Command    echo "${pem}" | sudo tee "$(tedge config get device.cert_path)"
     Restart Service    c8y-firmware-plugin
-    Restart Service    c8y-log-plugin
+    Restart Service    tedge-log-plugin
     Restart Service    c8y-configuration-plugin
     Restart Service    tedge-agent

@@ -11,13 +11,13 @@ Suite Teardown    Get Logs
 
 *** Test Cases ***
 
-c8y-log-plugin health status
-    Execute Command    sudo systemctl start c8y-log-plugin.service
+tedge-log-plugin health status
+    Execute Command    sudo systemctl start tedge-log-plugin.service
 
     Sleep    5s    reason=It fails without this! It needs a better way of queuing requests
-    ${pid}=    Execute Command    pgrep -f '^/usr/bin/c8y[_-]log[_-]plugin'    strip=${True}
-    Execute Command    sudo tedge mqtt pub 'tedge/health-check/c8y-log-plugin' ''
-    ${messages}=    Should Have MQTT Messages    tedge/health/c8y-log-plugin    minimum=1    maximum=2
+    ${pid}=    Execute Command    pgrep -f '^/usr/bin/tedge-log-plugin'    strip=${True}
+    Execute Command    sudo tedge mqtt pub 'tedge/health-check/tedge-log-plugin' ''
+    ${messages}=    Should Have MQTT Messages    tedge/health/tedge-log-plugin    minimum=1    maximum=2
     Should Contain    ${messages[0]}    "pid":${pid}
     Should Contain    ${messages[0]}    "status":"up"
 
