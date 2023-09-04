@@ -566,7 +566,7 @@ class ThinEdgeIO(DeviceLibrary):
         name: str = None,
     ):
         """
-        Register a child device to a parent along with a give list of supported operations
+        Register a child device to a parent along with a given list of supported operations
 
         *Examples:*
 
