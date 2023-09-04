@@ -112,7 +112,9 @@ class ThinEdgeIO(DeviceLibrary):
         )
 
     @keyword("Get Logs")
-    def get_logs(self, name: str = None, date_from: Union[datetime, float] = None, show=True):
+    def get_logs(
+        self, name: str = None, date_from: Union[datetime, float] = None, show=True
+    ):
         """Get device logs (override base class method to add additional debug info)
 
         Note: the date_from only applies to the systemd logs (not file based logs). This is
@@ -581,6 +583,7 @@ class ThinEdgeIO(DeviceLibrary):
             cmd.append(f"sudo touch '/etc/tedge/operations/c8y/{child_name}/{op_type}'")
 
         device.assert_command(" && ".join(cmd))
+
 
 def to_date(value: relativetime_) -> datetime:
     if isinstance(value, datetime):
