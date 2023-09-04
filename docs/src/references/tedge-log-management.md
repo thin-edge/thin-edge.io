@@ -76,7 +76,7 @@ For example, it subscribes to the following topic for the main device.
 tedge mqtt sub 'te/device/main///cmd/log_upload/+'
 ```
 
-A new log file upload command with the ID "1234" for the device name "example" is published by another component as below.
+A new log file upload command with the ID "1234" is published for the device named "example" by another component as below.
 
 ```sh te2mqtt
 tedge mqtt pub -r 'te/device/main///cmd/log_upload/1234' '{

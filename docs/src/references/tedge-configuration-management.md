@@ -140,7 +140,7 @@ For example, it subscribes to the following topic for the main device.
 tedge mqtt sub 'te/device/main///cmd/config_snapshot/+'
 ```
 
-When a new config snapshot command with the ID "1234" for the device name "example" is published by another component, it appears as follows.
+When a new config snapshot command with the ID "1234" is published for the device named "example" by another component, it appears as follows.
 
 ```sh te2mqtt
 tedge mqtt pub -r 'te/device/main///cmd/config_snapshot/1234' '{
@@ -207,7 +207,7 @@ For example, it subscribes to the following topic for the main device.
 tedge mqtt sub 'te/device/main///cmd/config_update/+'
 ```
 
-When a new config update command with the ID "1234" for the device name "example" is published by another component,
+When a new config update command with the ID "1234" is published for the device named "example" by another component,
 it appears as below.
 
 ```sh te2mqtt
