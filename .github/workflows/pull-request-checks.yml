@@ -224,6 +224,19 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.workflows == 'true' }}
     steps:
+      - name: Check disk space before setting up
+        run: df -BM
+
+      - name: Reclaim some disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf /opt/hostedtoolcache
+
+      - name: Check disk space after freeing
+        run: df -BM
+
       - name: Checkout
         uses: actions/checkout@v3
 
@@ -256,6 +269,9 @@ jobs:
         uses: codecov/codecov-action@v3
         with:
           fail_ci_if_error: false
+
+      - name: Check disk space after completing workflow
+        run: df -BM
 
   shellcheck:
     name: Shellcheck
