@@ -12,7 +12,7 @@ Test Tags           theme:mqtt    theme:c8y
 
 *** Test Cases ***
 Publish events to subscribed topic
-    Execute Command    tedge mqtt pub tedge/events/event-type '{"text": "Event"}'
+    Execute Command    tedge mqtt pub te/device/main///e/event-type '{"text": "Event"}'
     Should Have MQTT Messages    c8y/s/us    message_pattern=400,event-type,"Event",*
 
 Publish measurements to unsubscribed topic
@@ -24,7 +24,7 @@ Publish measurements to unsubscribed topic
 *** Keywords ***
 Custom Setup
     Setup
-    Execute Command    sudo tedge config set c8y.topics tedge/events/+
+    Execute Command    sudo tedge config set c8y.topics te/+/+/+/+/e/+
     Execute Command    sudo systemctl restart tedge-mapper-c8y.service
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 
