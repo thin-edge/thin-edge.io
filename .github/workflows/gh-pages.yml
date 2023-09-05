@@ -39,14 +39,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout tedge-docs
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: thin-edge/tedge-docs
           ref: main
           path: tedge-docs
 
       - name: Checkout thin-edge.io
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: thin-edge/thin-edge.io
           path: thin-edge.io

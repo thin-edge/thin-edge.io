@@ -25,7 +25,7 @@ jobs:
       RUSTFLAGS: -D warnings
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Enable toolchain via github action
         uses: dtolnay/rust-toolchain@stable
