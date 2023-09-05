@@ -9,7 +9,6 @@ use tokio::time::timeout;
 const TEST_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[tokio::test]
-#[ignore = "fails CI because of lack of disk space"]
 async fn download_without_auth() -> Result<(), DynError> {
     let ttd = TempTedgeDir::new();
     let mut server = mockito::Server::new();
@@ -42,7 +41,6 @@ async fn download_without_auth() -> Result<(), DynError> {
 }
 
 #[tokio::test]
-#[ignore = "fails CI because of lack of disk space"]
 async fn download_with_auth() -> Result<(), DynError> {
     let ttd = TempTedgeDir::new();
     let mut server = mockito::Server::new();

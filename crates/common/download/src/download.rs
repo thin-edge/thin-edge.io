@@ -492,7 +492,6 @@ mod tests {
     use tokio::net::TcpListener;
 
     #[tokio::test]
-    #[ignore = "fails CI because of lack of disk space"]
     async fn downloader_download_content_no_auth() {
         let mut server = mockito::Server::new();
         let _mock1 = server
@@ -522,7 +521,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "fails CI because of lack of disk space"]
     async fn downloader_download_to_target_path() {
         let temp_dir = tempdir().unwrap();
 
@@ -575,7 +573,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "fails CI because of lack of disk space"]
     async fn returns_proper_errors_for_invalid_filenames() {
         let temp_dir = tempdir().unwrap();
         std::env::set_current_dir(temp_dir.path()).unwrap();
@@ -620,7 +617,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "fails CI because of lack of disk space"]
     async fn writing_to_existing_file() {
         let temp_dir = tempdir().unwrap();
         let mut server = mockito::Server::new();
@@ -647,7 +643,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "fails CI because of lack of disk space"]
     async fn downloader_download_with_reasonable_content_length() {
         let file = create_file_with_size(10 * 1024 * 1024).unwrap();
         let file_path = file.into_temp_path();
@@ -676,7 +671,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "fails CI because of lack of disk space"]
     async fn downloader_download_verify_file_content() {
         let file = create_file_with_size(10).unwrap();
 
