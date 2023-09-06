@@ -671,6 +671,73 @@ impl LogUploadCmdPayload {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigSnapshotCmdPayload {
+    pub status: CommandStatus,
+    pub tedge_url: String,
+    #[serde(rename = "type")]
+    pub config_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+impl<'a> Jsonify<'a> for ConfigSnapshotCmdPayload {}
+
+impl ConfigSnapshotCmdPayload {
+    pub fn executing(&mut self) {
+        self.status = CommandStatus::Executing;
+        self.reason = None;
+    }
+
+    pub fn successful(&mut self, path: impl Into<String>) {
+        self.status = CommandStatus::Successful;
+        self.reason = None;
+        self.path = Some(path.into())
+    }
+
+    pub fn failed(&mut self, reason: impl Into<String>) {
+        self.status = CommandStatus::Failed;
+        self.reason = Some(reason.into());
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigUpdateCmdPayload {
+    pub status: CommandStatus,
+    pub tedge_url: String,
+    pub remote_url: String,
+    #[serde(rename = "type")]
+    pub config_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+impl<'a> Jsonify<'a> for ConfigUpdateCmdPayload {}
+
+impl ConfigUpdateCmdPayload {
+    pub fn executing(&mut self) {
+        self.status = CommandStatus::Executing;
+        self.reason = None;
+    }
+
+    pub fn successful(&mut self, path: impl Into<String>) {
+        self.status = CommandStatus::Successful;
+        self.reason = None;
+        self.path = Some(path.into())
+    }
+
+    pub fn failed(&mut self, reason: impl Into<String>) {
+        self.status = CommandStatus::Failed;
+        self.reason = Some(reason.into());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
