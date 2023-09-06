@@ -287,7 +287,7 @@ impl CumulocityConverter {
                     }
                 })?;
 
-            let c8y_event = C8yCreateEvent::try_from(tedge_event)?;
+            let c8y_event = C8yCreateEvent::from(tedge_event);
 
             // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
             let message = if c8y_event.extras.is_empty() {
@@ -1473,6 +1473,49 @@ mod tests {
         assert_eq!(
             converted_event.payload_str().unwrap(),
             r#"400,ThinEdgeEvent,"Someone clicked",2020-02-02T01:02:03+05:30"#
+        );
+    }
+
+    #[tokio::test]
+    async fn convert_event_use_event_type_from_payload_to_c8y_smartrest() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let event_topic = "te/device/main///e/topic_event";
+        let event_payload = r#"{ "type": "payload event", "text": "Someone clicked", "time": "2020-02-02T01:02:03+05:30" }"#;
+        let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
+
+        let converted_events = converter.convert(&event_message).await;
+        assert_eq!(converted_events.len(), 1);
+        let converted_event = converted_events.get(0).unwrap();
+        assert_eq!(converted_event.topic.name, "c8y/s/us");
+
+        assert_eq!(
+            converted_event.payload_str().unwrap(),
+            r#"400,payload event,"Someone clicked",2020-02-02T01:02:03+05:30"#
+        );
+    }
+
+    #[tokio::test]
+    async fn convert_event_use_event_type_from_payload_to_c8y_json() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+        let event_topic = "te/device/main///e/click_event";
+        let event_payload = r#"{ "type": "payload event", "text": "tick", "foo": "bar" }"#;
+        let event_message = Message::new(&Topic::new_unchecked(event_topic), event_payload);
+
+        let converted_events = converter.convert(&event_message).await;
+        assert_eq!(converted_events.len(), 1);
+
+        let converted_event = converted_events.get(0).unwrap();
+        let converted_c8y_json = json!({
+            "type": "payload event",
+            "text": "tick",
+            "foo": "bar",
+        });
+        assert_eq!(converted_event.topic.name, "c8y/event/events/create");
+        assert_json_include!(
+            actual: serde_json::from_str::<serde_json::Value>(converted_event.payload_str().unwrap()).unwrap(),
+            expected: converted_c8y_json
         );
     }
 

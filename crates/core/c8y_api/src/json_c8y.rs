@@ -139,37 +139,42 @@ impl C8yCreateEvent {
     }
 }
 
-impl TryFrom<ThinEdgeEvent> for C8yCreateEvent {
-    type Error = SMCumulocityMapperError;
-
-    fn try_from(event: ThinEdgeEvent) -> Result<Self, SMCumulocityMapperError> {
-        let event_type = event.name;
-        let text;
-        let time;
-        let mut extras;
-        match event.data {
-            None => {
-                text = event_type.clone();
-                time = OffsetDateTime::now_utc();
-                extras = HashMap::new();
-            }
-            Some(event_data) => {
-                text = event_data.text.unwrap_or_else(|| event_type.clone());
-                time = event_data.time.unwrap_or_else(OffsetDateTime::now_utc);
-                extras = event_data.extras;
-            }
-        }
+impl From<ThinEdgeEvent> for C8yCreateEvent {
+    fn from(event: ThinEdgeEvent) -> Self {
+        let mut extras = HashMap::new();
         if let Some(source) = event.source {
             update_the_external_source_event(&mut extras, &source);
         }
 
-        Ok(Self {
-            source: None,
-            event_type,
-            time,
-            text,
-            extras,
-        })
+        match event.data {
+            None => Self {
+                source: None,
+                event_type: event.name.clone(),
+                time: OffsetDateTime::now_utc(),
+                text: event.name,
+                extras,
+            },
+            Some(event_data) => {
+                extras.extend(event_data.extras);
+
+                // If payload contains type, use the value as the event type unless it's empty
+                let event_type = match extras.remove("type") {
+                    Some(type_from_payload) => match type_from_payload.as_str() {
+                        Some(new_type) if !new_type.is_empty() => new_type.to_string(),
+                        _ => event.name,
+                    },
+                    None => event.name,
+                };
+
+                Self {
+                    source: None,
+                    event_type: event_type.clone(),
+                    time: event_data.time.unwrap_or_else(OffsetDateTime::now_utc),
+                    text: event_data.text.unwrap_or(event_type),
+                    extras,
+                }
+            }
+        }
     }
 }
 
