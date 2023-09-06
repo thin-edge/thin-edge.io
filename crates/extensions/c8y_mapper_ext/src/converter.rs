@@ -231,12 +231,14 @@ impl CumulocityConverter {
         &mut self,
         source: &EntityTopicId,
         input: &Message,
+        measurement_type: &str,
     ) -> Result<Vec<Message>, ConversionError> {
         let mut mqtt_messages: Vec<Message> = Vec::new();
 
         if let Some(entity) = self.entity_store.get(source) {
             // Need to check if the input Thin Edge JSON is valid before adding a child ID to list
-            let c8y_json_payload = json::from_thin_edge_json(input.payload_str()?, entity)?;
+            let c8y_json_payload =
+                json::from_thin_edge_json(input.payload_str()?, entity, measurement_type)?;
 
             if c8y_json_payload.len() < self.size_threshold.0 {
                 mqtt_messages.push(Message::new(
@@ -726,7 +728,9 @@ impl CumulocityConverter {
         }
 
         let mut messages = match &channel {
-            Channel::Measurement { .. } => self.try_convert_measurement(&source, message)?,
+            Channel::Measurement { measurement_type } => {
+                self.try_convert_measurement(&source, message, measurement_type)?
+            }
 
             Channel::Command { .. } if message.payload_bytes().is_empty() => {
                 // The command has been fully processed
@@ -1434,6 +1438,123 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn convert_measurement_with_main_id_with_measurement_type() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let in_topic = "te/device/main///m/test_type";
+        let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
+        let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+
+        let expected_c8y_json_message = Message::new(
+            &Topic::new_unchecked("c8y/measurement/measurements/create"),
+            r#"{"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"test_type"}"#,
+        );
+
+        // Test the output messages contains SmartREST and C8Y JSON.
+        let out_first_messages: Vec<_> = converter
+            .convert(&in_message)
+            .await
+            .into_iter()
+            .filter(|m| m.topic.name.starts_with("c8y"))
+            .collect();
+        assert_eq!(out_first_messages, vec![expected_c8y_json_message.clone()]);
+    }
+
+    #[tokio::test]
+    async fn convert_measurement_with_main_id_with_measurement_type_in_payload() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let in_topic = "te/device/main///m/test_type";
+        let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00","type":"type_in_payload"}"#;
+        let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+
+        let expected_c8y_json_message = Message::new(
+            &Topic::new_unchecked("c8y/measurement/measurements/create"),
+            r#"{"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"type_in_payload"}"#,
+        );
+
+        // Test the output messages contains SmartREST and C8Y JSON.
+        let out_messages: Vec<_> = converter
+            .convert(&in_message)
+            .await
+            .into_iter()
+            .filter(|m| m.topic.name.starts_with("c8y"))
+            .collect();
+        assert_eq!(out_messages, vec![expected_c8y_json_message.clone()]);
+    }
+
+    #[tokio::test]
+    async fn convert_measurement_with_child_id_with_measurement_type() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let in_topic = "te/device/child///m/test_type";
+        let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
+        let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+
+        let expected_smart_rest_message = Message::new(
+            &Topic::new_unchecked("c8y/s/us"),
+            "101,child,child,thin-edge.io-child",
+        );
+
+        let expected_c8y_json_message = Message::new(
+            &Topic::new_unchecked("c8y/measurement/measurements/create"),
+            r#"{"externalSource":{"externalId":"child","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"test_type"}"#,
+        );
+
+        // Test the output messages contains SmartREST and C8Y JSON.
+        let out_messages: Vec<_> = converter
+            .convert(&in_message)
+            .await
+            .into_iter()
+            .filter(|m| m.topic.name.starts_with("c8y"))
+            .collect();
+        assert_eq!(
+            out_messages,
+            vec![
+                expected_smart_rest_message,
+                expected_c8y_json_message.clone()
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn convert_measurement_with_child_id_with_measurement_type_in_payload() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let in_topic = "te/device/child2///m/test_type";
+        let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00","type":"type_in_payload"}"#;
+        let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+        let expected_smart_rest_message = Message::new(
+            &Topic::new_unchecked("c8y/s/us"),
+            "101,child2,child2,thin-edge.io-child",
+        );
+
+        let expected_c8y_json_message = Message::new(
+            &Topic::new_unchecked("c8y/measurement/measurements/create"),
+            r#"{"externalSource":{"externalId":"child2","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"type_in_payload"}"#,
+        );
+
+        // Test the first output messages contains SmartREST and C8Y JSON.
+        let out_first_messages: Vec<_> = converter
+            .convert(&in_message)
+            .await
+            .into_iter()
+            .filter(|m| m.topic.name.starts_with("c8y"))
+            .collect();
+        assert_eq!(
+            out_first_messages,
+            vec![
+                expected_smart_rest_message,
+                expected_c8y_json_message.clone()
+            ]
+        );
+    }
+
+    #[tokio::test]
     async fn check_c8y_threshold_packet_size() -> Result<(), anyhow::Error> {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
@@ -1558,7 +1679,6 @@ mod tests {
         );
 
         let result = converter.convert(&big_measurement_message).await;
-        dbg!(&result);
 
         assert!(result[0]
             .payload_str()

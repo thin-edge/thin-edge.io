@@ -47,10 +47,14 @@ pub enum MeasurementStreamError {
 }
 
 impl C8yJsonSerializer {
-    pub fn new(default_timestamp: OffsetDateTime, entity: &EntityMetadata) -> Self {
+    pub fn new(default_timestamp: OffsetDateTime, entity: &EntityMetadata, m_type: &str) -> Self {
         let capa = 1024; // XXX: Choose a capacity based on expected JSON length.
         let mut json = JsonWriter::with_capacity(capa);
-        let default_type = "ThinEdgeMeasurement".to_string();
+        let default_type = if m_type.is_empty() {
+            "ThinEdgeMeasurement".to_owned()
+        } else {
+            m_type.into()
+        };
 
         json.write_open_obj();
 
@@ -219,7 +223,7 @@ mod tests {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let entity = EntityMetadata::main_device("foo".to_string());
-        let mut serializer = C8yJsonSerializer::new(timestamp, &entity);
+        let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_timestamp(timestamp)?;
         serializer.visit_measurement("temperature", 25.5)?;
 
@@ -243,11 +247,39 @@ mod tests {
     }
 
     #[test]
+    fn serialize_single_value_message_with_custom_type() -> anyhow::Result<()> {
+        let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
+
+        let entity = EntityMetadata::main_device("foo".to_string());
+        let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "test_type");
+        serializer.visit_timestamp(timestamp)?;
+        serializer.visit_measurement("temperature", 25.5)?;
+
+        let output = serializer.into_string()?;
+
+        let expected_output = json!({
+            "type": "test_type",
+            "time": "2021-06-22T17:03:14.123456789+05:00",
+            "temperature":{
+                "temperature":{
+                    "value": 25.5
+                }
+            }
+        });
+
+        assert_json_eq!(
+            serde_json::from_str::<serde_json::Value>(&output)?,
+            expected_output
+        );
+        Ok(())
+    }
+
+    #[test]
     fn invalid_to_have_type_as_measurement() -> anyhow::Result<()> {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let entity = EntityMetadata::main_device("foo".to_string());
-        let mut serializer = C8yJsonSerializer::new(timestamp, &entity);
+        let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_timestamp(timestamp)?;
         serializer.visit_measurement("temperature", 25.5)?;
         let res = serializer.visit_measurement("type", 1234.0).unwrap_err();
@@ -263,7 +295,7 @@ mod tests {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let entity = EntityMetadata::main_device("foo".to_string());
-        let mut serializer = C8yJsonSerializer::new(timestamp, &entity);
+        let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_timestamp(timestamp)?;
         serializer.visit_measurement("temperature", 25.5)?;
         let res = serializer
@@ -282,7 +314,7 @@ mod tests {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let entity = EntityMetadata::main_device("foo".to_string());
-        let mut serializer = C8yJsonSerializer::new(timestamp, &entity);
+        let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_timestamp(timestamp)?;
         serializer.visit_measurement("temperature", 25.5)?;
         serializer.visit_start_group("location")?;
@@ -334,7 +366,7 @@ mod tests {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let entity = EntityMetadata::main_device("foo".to_string());
-        let mut serializer = C8yJsonSerializer::new(timestamp, &entity);
+        let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_timestamp(timestamp)?;
         serializer.visit_measurement("temperature", 25.5)?;
         serializer.visit_start_group("location")?;
@@ -352,7 +384,7 @@ mod tests {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let entity = EntityMetadata::main_device("foo".to_string());
-        let serializer = C8yJsonSerializer::new(timestamp, &entity);
+        let serializer = C8yJsonSerializer::new(timestamp, &entity, "");
 
         let expected_output =
             json!({"type": "ThinEdgeMeasurement", "time": "2021-06-22T17:03:14.123456789+05:00"});
@@ -372,7 +404,7 @@ mod tests {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let entity = EntityMetadata::main_device("foo".to_string());
-        let mut serializer = C8yJsonSerializer::new(timestamp, &entity);
+        let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_timestamp(timestamp)?;
 
         let expected_output = json!({
@@ -395,7 +427,7 @@ mod tests {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let entity = EntityMetadata::main_device("foo".to_string());
-        let mut serializer = C8yJsonSerializer::new(timestamp, &entity);
+        let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_start_group("location")?;
 
         let expected_err = serializer.visit_timestamp(timestamp);
@@ -414,7 +446,7 @@ mod tests {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let entity = EntityMetadata::main_device("foo".to_string());
-        let mut serializer = C8yJsonSerializer::new(timestamp, &entity);
+        let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_measurement("alti", 2100.4)?;
         serializer.visit_measurement("longi", 2200.4)?;
 
@@ -435,7 +467,7 @@ mod tests {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let entity = EntityMetadata::main_device("foo".to_string());
-        let mut serializer = C8yJsonSerializer::new(timestamp, &entity);
+        let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_start_group("location")?;
         serializer.visit_measurement("alti", 2100.4)?;
         serializer.visit_measurement("longi", 2200.4)?;
@@ -457,7 +489,7 @@ mod tests {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let entity = EntityMetadata::main_device("foo".to_string());
-        let mut serializer = C8yJsonSerializer::new(timestamp, &entity);
+        let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_start_group("location")?;
         serializer.visit_measurement("alti", 2100.4)?;
         serializer.visit_measurement("longi", 2200.4)?;
@@ -479,7 +511,7 @@ mod tests {
         let timestamp = datetime!(2021-06-22 17:03:14.123456789 +05:00);
 
         let entity = EntityMetadata::child_device("child1".to_string())?;
-        let mut serializer = C8yJsonSerializer::new(timestamp, &entity);
+        let mut serializer = C8yJsonSerializer::new(timestamp, &entity, "");
         serializer.visit_timestamp(timestamp)?;
         serializer.visit_measurement("temperature", 25.5)?;
 

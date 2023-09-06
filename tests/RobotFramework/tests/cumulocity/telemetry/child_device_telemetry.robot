@@ -14,6 +14,18 @@ Child devices support sending simple measurements
     Log    ${measurements}
 
 
+
+Child devices support sending simple measurements with custom type in topic
+    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///m/CustomType_topic '{ "temperature": 25 }'
+    ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=CustomType_topic    value=temperature    series=temperature
+    Log    ${measurements}
+
+
+Child devices support sending simple measurements with custom type in payload
+    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///m/CustomType_topic '{ "type":"CustomType_payload","temperature": 25 }'
+    ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=CustomType_payload    value=temperature    series=temperature
+    Log    ${measurements}
+
 Child devices support sending custom measurements
     Execute Command    tedge mqtt pub te/device/${CHILD_SN}///m/ '{ "current": {"L1": 9.5, "L2": 1.3} }'
     ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=ThinEdgeMeasurement    value=current    series=L1
