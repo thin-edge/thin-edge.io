@@ -46,7 +46,7 @@ use tedge_http_ext::HttpResult;
 const RETRY_TIMEOUT_SECS: u64 = 20;
 
 pub struct C8YHttpProxyActor {
-    end_point: C8yEndPoint,
+    pub(crate) end_point: C8yEndPoint,
     peers: C8YHttpProxyMessageBox,
 }
 
@@ -182,7 +182,10 @@ impl C8YHttpProxyActor {
         Ok(())
     }
 
-    async fn try_get_internal_id(&mut self, device_id: String) -> Result<String, C8YRestError> {
+    pub(crate) async fn try_get_internal_id(
+        &mut self,
+        device_id: String,
+    ) -> Result<String, C8YRestError> {
         let url_get_id: String = self.end_point.get_url_for_internal_id(device_id);
         if self.end_point.token.is_none() {
             self.get_fresh_token().await?;
@@ -190,6 +193,7 @@ impl C8YHttpProxyActor {
         let request = HttpRequestBuilder::get(&url_get_id)
             .bearer_auth(self.end_point.token.clone().unwrap_or_default())
             .build()?;
+
         let res = match self.peers.http.await_response(request).await? {
             Ok(response) => match response.status() {
                 StatusCode::OK => Ok(Ok(response)),
@@ -224,6 +228,7 @@ impl C8YHttpProxyActor {
         let request = request_builder?
             .bearer_auth(self.end_point.token.clone().unwrap_or_default())
             .build()?;
+
         let resp = self.peers.http.await_response(request).await?;
         match resp {
             Ok(response) => match response.status() {
@@ -257,7 +262,9 @@ impl C8YHttpProxyActor {
         self.get_fresh_token().await?;
         // build the request
         let request_builder = build_request(&self.end_point);
-        let request = request_builder?.build()?;
+        let request = request_builder?
+            .bearer_auth(self.end_point.token.clone().unwrap_or_default())
+            .build()?;
         // retry the request
         Ok(self.peers.http.await_response(request).await?)
     }
@@ -277,7 +284,10 @@ impl C8YHttpProxyActor {
         Ok(self.peers.http.await_response(request).await?)
     }
 
-    async fn create_event(&mut self, c8y_event: C8yCreateEvent) -> Result<EventId, C8YRestError> {
+    pub(crate) async fn create_event(
+        &mut self,
+        c8y_event: C8yCreateEvent,
+    ) -> Result<EventId, C8YRestError> {
         let create_event = |internal_id: String| -> C8yCreateEvent {
             C8yCreateEvent {
                 source: Some(C8yManagedObject { id: internal_id }),
