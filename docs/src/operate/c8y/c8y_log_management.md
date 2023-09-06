@@ -14,7 +14,6 @@ If you have not installed via the debian package, make sure you have the followi
 
 - a `tedge-log-plugin.service` file in `/lib/systemd/system/tedge-log-plugin.service`
 - a `tedge-log-plugin` binary in `/usr/bin/`
-- check if `/etc/tedge/plugins/tedge-log-plugin.toml` was created
 
 After the device is connected to Cumulocity, this plugin needs to be started and
 enabled as follows:
@@ -24,14 +23,10 @@ sudo systemctl enable tedge-log-plugin
 sudo systemctl start tedge-log-plugin
 ```
 
-If you go to Cumulocity, you should see that you are able to see the logs tab
-and you can request "software-management" logs.
-However, you are not limited to only thin-edge logs.
-To add a new log type, you need to edit the `tedge-log-plugin.toml` in `/etc/tedge/plugins/tedge-log-plugin.toml`
-
-```sh
-sudo nano /etc/tedge/plugins/tedge-log-plugin.toml
-```
+If you go to Cumulocity, you should see that you are able to see the logs tab.
+However, no log type is yet available.
+To add a new log type, you need to edit the `tedge-log-plugin.toml` in `/etc/tedge/plugins/tedge-log-plugin.toml`.
+The file is created once you start the `tedge-log-plugin`.
 
 In this toml file you specify the log type and log path of the logs wished to
 be retrieved from Cumulocity UI.
