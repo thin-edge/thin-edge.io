@@ -14,7 +14,10 @@ RUN apt-get -y update \
     mosquitto \
     mosquitto-clients \
     vim.tiny \
-    nginx
+    nginx \
+    netcat \
+    iputils-ping \
+    net-tools
 
 # Remove unnecessary systemd services
 RUN rm -f /lib/systemd/system/multi-user.target.wants/* \
