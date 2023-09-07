@@ -1,8 +1,7 @@
 use std::collections::HashSet;
-use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tedge_config::ReadError;
-use tedge_config::TEdgeConfig;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 
@@ -13,8 +12,8 @@ pub const DEFAULT_PLUGIN_CONFIG_DIR_NAME: &str = "plugins/";
 #[derive(Clone, Debug)]
 pub struct LogManagerConfig {
     pub config_dir: PathBuf,
-    pub topic_root: String,
-    pub topic_identifier: String,
+    pub mqtt_topic_root: String,
+    pub mqtt_device_topic_id: String,
     pub plugin_config_dir: PathBuf,
     pub plugin_config_path: PathBuf,
     pub logtype_reload_topic: Topic,
@@ -22,30 +21,42 @@ pub struct LogManagerConfig {
     pub current_operations: HashSet<String>,
 }
 
+pub struct LogManagerOptions {
+    pub config_dir: PathBuf,
+    pub mqtt_topic_root: Arc<str>,
+    pub mqtt_device_topic_id: Arc<str>,
+}
+
 impl LogManagerConfig {
-    pub fn from_tedge_config(
-        config_dir: impl AsRef<Path>,
-        _tedge_config: &TEdgeConfig,
-        topic_root: String,
-        topic_identifier: String,
-    ) -> Result<Self, ReadError> {
-        let config_dir: PathBuf = config_dir.as_ref().into();
+    pub fn from_options(cliopts: LogManagerOptions) -> Result<Self, ReadError> {
+        let config_dir = cliopts.config_dir;
+        let mqtt_topic_root = cliopts.mqtt_topic_root;
+        let mqtt_device_topic_id = cliopts.mqtt_device_topic_id;
 
         let plugin_config_dir = config_dir.join(DEFAULT_PLUGIN_CONFIG_DIR_NAME);
         let plugin_config_path = plugin_config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
 
+        // TODO: move topic parsing to tedge_api
         let logtype_reload_topic = Topic::new_unchecked(
-            format!("{}/{}/cmd/log_upload", topic_root, topic_identifier).as_str(),
+            format!(
+                "{}/{}/cmd/log_upload",
+                mqtt_topic_root, mqtt_device_topic_id
+            )
+            .as_str(),
         );
         let logfile_request_topic = TopicFilter::new_unchecked(
-            format!("{}/{}/cmd/log_upload/+", topic_root, topic_identifier).as_str(),
+            format!(
+                "{}/{}/cmd/log_upload/+",
+                mqtt_topic_root, mqtt_device_topic_id
+            )
+            .as_str(),
         );
         let current_operations = HashSet::new();
 
         Ok(Self {
             config_dir,
-            topic_root,
-            topic_identifier,
+            mqtt_topic_root: mqtt_topic_root.to_string(),
+            mqtt_device_topic_id: mqtt_device_topic_id.to_string(),
             plugin_config_dir,
             plugin_config_path,
             logtype_reload_topic,

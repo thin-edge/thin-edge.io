@@ -1,6 +1,6 @@
 use clap::Parser;
-use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tedge_actors::Runtime;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
@@ -13,6 +13,7 @@ use tedge_health_ext::HealthMonitorBuilder;
 use tedge_http_ext::HttpActor;
 use tedge_log_manager::LogManagerBuilder;
 use tedge_log_manager::LogManagerConfig;
+use tedge_log_manager::LogManagerOptions;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_signal_ext::SignalActor;
 use tracing::info;
@@ -43,11 +44,11 @@ pub struct LogfilePluginOpt {
     #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
     pub config_dir: PathBuf,
 
-    #[clap(long, default_value = "te")]
-    root: String,
+    #[clap(long)]
+    mqtt_topic_root: Option<Arc<str>>,
 
-    #[clap(long, default_value = "device/main//")]
-    device: String,
+    #[clap(long)]
+    mqtt_device_topic_id: Option<Arc<str>>,
 }
 
 #[tokio::main]
@@ -69,28 +70,24 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let tedge_config = TEdgeConfigRepository::new(tedge_config_location).load()?;
 
-    run(
-        logfile_opt.config_dir,
-        tedge_config,
-        logfile_opt.root,
-        logfile_opt.device,
-    )
-    .await
+    run(tedge_config, logfile_opt).await
 }
 
-async fn run(
-    config_dir: impl AsRef<Path>,
-    tedge_config: TEdgeConfig,
-    topic_root: String,
-    topic_identifier: String,
-) -> Result<(), anyhow::Error> {
+async fn run(tedge_config: TEdgeConfig, cliopts: LogfilePluginOpt) -> Result<(), anyhow::Error> {
     let runtime_events_logger = None;
     let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
+    let mqtt_topic_root = cliopts
+        .mqtt_topic_root
+        .unwrap_or(tedge_config.mqtt.topic_root.clone().into());
+
+    let mqtt_device_topic_id = cliopts
+        .mqtt_device_topic_id
+        .unwrap_or(tedge_config.mqtt.device_topic_id.clone().into());
+
     let mqtt_config = tedge_config.mqtt_config()?;
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(format!(
-        "{}#{}/{}",
-        TEDGE_LOG_PLUGIN, topic_root, topic_identifier
+        "{TEDGE_LOG_PLUGIN}#{mqtt_topic_root}/{mqtt_device_topic_id}",
     )));
 
     let mut fs_watch_actor = FsWatchActorBuilder::new();
@@ -100,12 +97,11 @@ async fn run(
     let mut http_actor = HttpActor::new().builder();
 
     // Instantiate log manager actor
-    let log_manager_config = LogManagerConfig::from_tedge_config(
-        config_dir,
-        &tedge_config,
-        topic_root,
-        topic_identifier,
-    )?;
+    let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
+        config_dir: cliopts.config_dir,
+        mqtt_device_topic_id,
+        mqtt_topic_root,
+    })?;
     let log_actor = LogManagerBuilder::try_new(
         log_manager_config,
         &mut mqtt_actor,
