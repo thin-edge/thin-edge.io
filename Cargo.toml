@@ -49,7 +49,7 @@ c8y_log_manager = { path = "crates/extensions/c8y_log_manager" }
 c8y_mapper_ext = { path = "crates/extensions/c8y_mapper_ext" }
 camino = "1.1"
 certificate = { path = "crates/common/certificate" }
-clap = { version = "~4.2.0", features = ["cargo", "derive"] }
+clap = { version = "4.4", features = ["cargo", "derive"] }
 clock = { path = "crates/common/clock" }
 collectd_ext = { path = "crates/extensions/collectd_ext" }
 csv = "1.1"
