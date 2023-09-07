@@ -202,11 +202,11 @@ impl Actor for MqttActor {
                 message_or_signal = self.messages.try_recv() => {
                     match message_or_signal {
                         Ok(Some(message)) => {
-                                                mqtt_client
-                            .published
-                            .send(message)
-                            .await
-                            .map_err(Box::new)?
+                            mqtt_client
+                                .published
+                                .send(message)
+                                .await
+                                .map_err(Box::new)?
                         }
                         Ok(None) | Err(RuntimeRequest::Shutdown) => break,
                     }

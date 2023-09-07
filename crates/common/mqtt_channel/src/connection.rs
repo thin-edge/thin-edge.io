@@ -8,6 +8,7 @@ use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::SinkExt;
 use futures::StreamExt;
+use log::debug;
 use log::error;
 use log::info;
 use rumqttc::AsyncClient;
@@ -136,6 +137,15 @@ impl Connection {
         let mqtt_options = config.rumqttc_options()?;
         let (mqtt_client, mut event_loop) = AsyncClient::new(mqtt_options, config.queue_capacity);
 
+        info!(
+            "MQTT connecting to broker: host={}:{}, auth={:?}, session_name={:?}",
+            config.broker.host,
+            config.broker.port,
+            config.broker.authentication,
+            config.session_name
+        );
+        debug!("MQTT Config: {config:?}");
+
         loop {
             match event_loop.poll().await {
                 Ok(Event::Incoming(Packet::ConnAck(ack))) => {
@@ -168,7 +178,11 @@ impl Connection {
                 }
 
                 Err(err) => {
-                    error!("MQTT connection error: {err}");
+                    error!(
+                        "MQTT: failed to connect to broker at '{host}:{port}': {err}",
+                        host = config.broker.host,
+                        port = config.broker.port
+                    );
                     let should_delay = Connection::pause_on_error(&err);
 
                     // Errors on send are ignored: it just means the client has closed the receiving channel.
