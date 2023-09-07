@@ -435,6 +435,14 @@ define_tedge_config! {
     },
 
     mqtt: {
+        /// MQTT topic root
+        #[tedge_config(default(value = "te"))]
+        topic_root: String,
+
+        /// The device MQTT topic identifier
+        #[tedge_config(default(value = "device/main//"))]
+        device_topic_id: String,
+
         bind: {
             /// The address mosquitto binds to for internal use
             #[tedge_config(example = "127.0.0.1", default(variable = "Ipv4Addr::LOCALHOST"))]

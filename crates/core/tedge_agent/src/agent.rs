@@ -6,11 +6,13 @@ use crate::software_manager::builder::SoftwareManagerBuilder;
 use crate::software_manager::config::SoftwareManagerConfig;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
 use crate::tedge_to_te_converter::converter::TedgetoTeConverter;
+use crate::AgentOpt;
 use camino::Utf8PathBuf;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
 use flockfile::FlockfileError;
 use std::fmt::Debug;
+use std::sync::Arc;
 use tedge_actors::ConvertingActor;
 use tedge_actors::ConvertingActorBuilder;
 use tedge_actors::MessageSink;
@@ -38,11 +40,14 @@ pub struct AgentConfig {
     pub use_lock: bool,
     pub log_dir: Utf8PathBuf,
     pub data_dir: Utf8PathBuf,
+    pub mqtt_device_topic_id: Arc<str>,
+    pub mqtt_topic_root: Arc<str>,
 }
 
 impl AgentConfig {
-    pub fn from_tedge_config(
+    pub fn from_config_and_cliopts(
         tedge_config_location: &tedge_config::TEdgeConfigLocation,
+        cliopts: AgentOpt,
     ) -> Result<Self, anyhow::Error> {
         let config_repository =
             tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
@@ -50,10 +55,20 @@ impl AgentConfig {
 
         let config_dir = tedge_config_location.tedge_config_root_path.clone();
 
+        let mqtt_topic_root = cliopts
+            .mqtt_topic_root
+            .unwrap_or(tedge_config.mqtt.topic_root.clone().into());
+
+        let mqtt_device_topic_id = cliopts
+            .mqtt_device_topic_id
+            .unwrap_or(tedge_config.mqtt.device_topic_id.clone().into());
+
+        let mqtt_session_name = format!("{TEDGE_AGENT}#{mqtt_topic_root}/{mqtt_device_topic_id}");
+
         let mqtt_config = tedge_config
             .mqtt_config()?
             .with_max_packet_size(10 * 1024 * 1024)
-            .with_session_name(TEDGE_AGENT);
+            .with_session_name(mqtt_session_name);
 
         // HTTP config
         let data_dir = tedge_config.data.path.clone();
@@ -88,6 +103,8 @@ impl AgentConfig {
             use_lock,
             data_dir,
             log_dir,
+            mqtt_topic_root,
+            mqtt_device_topic_id,
         })
     }
 }
@@ -141,12 +158,7 @@ impl Agent {
             RestartManagerBuilder::new(self.config.restart_config.clone());
 
         // Mqtt actor
-        let mut mqtt_actor_builder = MqttActorBuilder::new(
-            self.config
-                .mqtt_config
-                .clone()
-                .with_session_name(TEDGE_AGENT),
-        );
+        let mut mqtt_actor_builder = MqttActorBuilder::new(self.config.mqtt_config.clone());
 
         // Software update actor
         let mut software_update_builder =
