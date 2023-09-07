@@ -36,7 +36,6 @@ async-tungstenite = { version = "0.23", features = [
     "tokio-runtime",
     "tokio-rustls-native-certs",
 ] }
-atty = "0.2"
 aws_mapper_ext = { path = "crates/extensions/aws_mapper_ext" }
 az_mapper_ext = { path = "crates/extensions/az_mapper_ext" }
 backoff = { version = "0.4", features = ["tokio"] }

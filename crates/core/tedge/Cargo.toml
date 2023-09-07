@@ -12,7 +12,6 @@ readme = "README.md"
 
 [dependencies]
 anyhow = { workspace = true }
-atty = { workspace = true }
 base64 = { workspace = true }
 camino = { workspace = true }
 certificate = { workspace = true }
