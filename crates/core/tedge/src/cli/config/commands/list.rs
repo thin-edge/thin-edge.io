@@ -1,6 +1,8 @@
 use crate::command::Command;
 use crate::ConfigError;
 use pad::PadStr;
+use std::io::stdout;
+use std::io::IsTerminal;
 use tedge_config::ReadableKey;
 use tedge_config::TEdgeConfig;
 use tedge_config::READABLE_KEYS;
@@ -49,7 +51,7 @@ fn print_config_list(config: &TEdgeConfig, all: bool) -> Result<(), ConfigError>
 }
 
 fn print_config_doc() {
-    if atty::isnt(atty::Stream::Stdout) {
+    if !stdout().is_terminal() {
         yansi::Paint::disable();
     }
 
@@ -113,7 +115,7 @@ fn print_config_doc() {
             None => (),
         };
 
-        if atty::isnt(atty::Stream::Stdout) {
+        if !stdout().is_terminal() {
             println!();
         }
     }
