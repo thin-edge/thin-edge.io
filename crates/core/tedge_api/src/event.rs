@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-
+use self::error::ThinEdgeJsonDeserializerError;
+use crate::entity_store::EntityMetadata;
 use clock::Timestamp;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
-
-use self::error::ThinEdgeJsonDeserializerError;
+use std::collections::HashMap;
 
 /// In-memory representation of ThinEdge JSON event.
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -34,16 +33,10 @@ pub mod error {
 
     #[derive(thiserror::Error, Debug)]
     pub enum ThinEdgeJsonDeserializerError {
-        #[error("Unsupported topic: {0}")]
-        UnsupportedTopic(String),
-
-        #[error("Event name can not be empty")]
-        EmptyEventName,
-
         #[error(transparent)]
         SerdeJsonError(#[from] serde_json::error::Error),
 
-        #[error("Parsing of alarm message received on topic: {topic} failed due to error: {error}. Snipped payload: {payload}")]
+        #[error("Parsing of event message received on topic: {topic} failed due to error: {error}. Snipped payload: {payload}")]
         FailedToParseJsonPayload {
             topic: String,
             error: String,
@@ -57,46 +50,30 @@ pub mod error {
 
 impl ThinEdgeEvent {
     pub fn try_from(
-        mqtt_topic: &str,
+        event_type: &str,
+        entity: &EntityMetadata,
         mqtt_payload: &str,
     ) -> Result<Self, ThinEdgeJsonDeserializerError> {
-        let topic_split: Vec<&str> = mqtt_topic.split('/').collect();
-        if topic_split.len() == 3 || topic_split.len() == 4 {
-            let event_name = topic_split[2];
-            if event_name.is_empty() {
-                return Err(ThinEdgeJsonDeserializerError::EmptyEventName);
-            }
-
-            let event_data = if mqtt_payload.is_empty() {
-                None
-            } else {
-                Some(serde_json::from_str(mqtt_payload)?)
-            };
-
-            // The 4th part of the topic name is the event source - if any
-            let external_source = if topic_split.len() == 4 {
-                Some(topic_split[3].to_string())
-            } else {
-                None
-            };
-
-            Ok(Self {
-                name: event_name.into(),
-                data: event_data,
-                source: external_source,
-            })
+        let event_data = if mqtt_payload.is_empty() {
+            None
         } else {
-            Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(
-                mqtt_topic.into(),
-            ))
-        }
+            Some(serde_json::from_str(mqtt_payload)?)
+        };
+
+        // Parent exists means the device is child device
+        let external_source = entity.parent.as_ref().map(|_| entity.entity_id.clone());
+
+        Ok(Self {
+            name: event_type.into(),
+            data: event_data,
+            source: external_source,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyhow::Result;
     use assert_matches::assert_matches;
     use serde_json::json;
     use serde_json::Value;
@@ -104,7 +81,6 @@ mod tests {
     use time::macros::datetime;
 
     #[test_case(
-        "tedge/events/click_event",
         json!({
             "text": "Someone clicked",
             "time": "2021-04-23T19:00:00+05:00",
@@ -121,7 +97,6 @@ mod tests {
         "event parsing"
     )]
     #[test_case(
-        "tedge/events/click_event",
         json!({
             "text": "Someone clicked",
         }),
@@ -137,7 +112,6 @@ mod tests {
         "event parsing without timestamp"
     )]
     #[test_case(
-        "tedge/events/click_event",
         json!({
             "time": "2021-04-23T19:00:00+05:00",
         }),
@@ -153,7 +127,6 @@ mod tests {
         "event parsing without text"
     )]
     #[test_case(
-        "tedge/events/click_event",
         json!({}),
         ThinEdgeEvent {
             name: "click_event".into(),
@@ -166,8 +139,17 @@ mod tests {
         };
         "event parsing without text or timestamp"
     )]
+    fn parse_thin_edge_event_json(event_payload: Value, expected_event: ThinEdgeEvent) {
+        let event_type = "click_event";
+        let entity = EntityMetadata::main_device("main-device".to_string());
+        let event =
+            ThinEdgeEvent::try_from(event_type, &entity, event_payload.to_string().as_str())
+                .unwrap();
+
+        assert_eq!(event, expected_event);
+    }
+
     #[test_case(
-        "tedge/events/click_event/external_source",
         json!({
             "text": "Someone clicked",
             "time": "2021-04-23T19:00:00+05:00",
@@ -184,7 +166,6 @@ mod tests {
         "event parsing with external source"
     )]
     #[test_case(
-        "tedge/events/click_event/external_source",
         json!({}),
         ThinEdgeEvent {
             name: "click_event".into(),
@@ -197,36 +178,21 @@ mod tests {
         };
         "event parsing empty payload with external source"
     )]
-    fn parse_thin_edge_event_json(
-        event_topic: &str,
+    fn parse_thin_edge_event_json_from_extra_source(
         event_payload: Value,
         expected_event: ThinEdgeEvent,
     ) {
+        let event_type = "click_event";
+        let entity = EntityMetadata::child_device("external_source".to_string()).unwrap();
         let event =
-            ThinEdgeEvent::try_from(event_topic, event_payload.to_string().as_str()).unwrap();
+            ThinEdgeEvent::try_from(event_type, &entity, event_payload.to_string().as_str())
+                .unwrap();
 
         assert_eq!(event, expected_event);
     }
 
     #[test]
-    fn event_translation_empty_event_name() {
-        let result = ThinEdgeEvent::try_from("tedge/events/", "{}");
-
-        assert_matches!(result, Err(ThinEdgeJsonDeserializerError::EmptyEventName));
-    }
-
-    #[test]
-    fn event_translation_more_than_four_topic_levels() {
-        let result = ThinEdgeEvent::try_from("tedge/events/page/click/click", "{}");
-
-        assert_matches!(
-            result,
-            Err(ThinEdgeJsonDeserializerError::UnsupportedTopic(_))
-        );
-    }
-
-    #[test]
-    fn event_translation_empty_payload() -> Result<()> {
+    fn event_translation_empty_payload() {
         let event_data = ThinEdgeEventData {
             text: Some("foo".to_string()),
             time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
@@ -234,21 +200,23 @@ mod tests {
         };
 
         let serialized = serde_json::to_string(&event_data).unwrap();
-        println!("serialized = {}", serialized);
-
-        Ok(())
+        assert_eq!(
+            r#"{"text":"foo","time":"2021-04-23T19:00:00+05:00"}"#,
+            serialized
+        );
     }
 
     #[test]
-    fn test_serialize() -> Result<()> {
-        let result = ThinEdgeEvent::try_from("tedge/events/click_event", "")?;
+    fn test_serialize() {
+        let entity = EntityMetadata::main_device("main-device".to_string());
+        let result = ThinEdgeEvent::try_from("click_event", &entity, "").unwrap();
+
         assert_eq!(result.name, "click_event".to_string());
         assert_matches!(result.data, None);
-        Ok(())
     }
 
     #[test]
-    fn event_translation_additional_fields() -> Result<()> {
+    fn event_translation_additional_fields() {
         let event_json = json!({
             "text": "foo",
             "time": "2021-04-23T19:00:00+05:00",
@@ -260,10 +228,13 @@ mod tests {
             }
         });
 
-        let result =
-            ThinEdgeEvent::try_from("tedge/events/click_event", event_json.to_string().as_str())?;
+        let entity = EntityMetadata::main_device("main-device".to_string());
 
+        let result =
+            ThinEdgeEvent::try_from("click_event", &entity, event_json.to_string().as_str())
+                .unwrap();
         assert_eq!(result.name, "click_event".to_string());
+
         let event_data = result.data.unwrap();
         assert_eq!(
             event_data.extras.get("extra").unwrap().as_str().unwrap(),
@@ -274,7 +245,5 @@ mod tests {
             32u64
         );
         assert_matches!(event_data.extras.get("complex"), Some(Value::Object(_)));
-
-        Ok(())
     }
 }

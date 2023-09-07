@@ -37,14 +37,20 @@ Thin-edge devices support sending custom measurements
 
 
 Thin-edge devices support sending custom events
-    Execute Command    tedge mqtt pub tedge/events/myCustomType1 '{ "text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
+    Execute Command    tedge mqtt pub te/device/main///e/myCustomType1 '{ "text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
     ${events}=    Device Should Have Event/s    expected_text=Some test event    with_attachment=False    minimum=1    maximum=1    type=myCustomType1    fragment=someOtherCustomFragment
     Log    ${events}
 
 
 Thin-edge devices support sending custom events overriding the type
-    Execute Command    tedge mqtt pub tedge/events/myCustomType '{"type": "otherType", "text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
+    Execute Command    tedge mqtt pub te/device/main///e/myCustomType '{"type": "otherType", "text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
     ${events}=    Device Should Have Event/s    expected_text=Some test event    with_attachment=False    minimum=1    maximum=1    type=otherType    fragment=someOtherCustomFragment
+    Log    ${events}
+
+
+Thin-edge devices support sending custom events without type in topic
+    Execute Command    tedge mqtt pub te/device/main///e/ '{"text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
+    ${events}=    Device Should Have Event/s    expected_text=Some test event    with_attachment=False    minimum=1    maximum=1    type=ThinEdgeEvent    fragment=someOtherCustomFragment
     Log    ${events}
 
 
