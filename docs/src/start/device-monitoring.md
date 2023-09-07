@@ -31,11 +31,11 @@ To install collectd, follow the [collectd installation process](https://collectd
 that is specific to your device. On a Debian or Ubuntu linux:
 
 ```sh title="Option 1: (Recommended)"
-sudo apt-get install collectd-core mosquitto-clients
+sudo apt-get install --no-install-recommends collectd-core mosquitto-clients
 ```
 
 ```sh title="Option 2"
-sudo apt-get install collectd-core libmosquitto1
+sudo apt-get install --no-install-recommends collectd-core libmosquitto1
 ```
 
 :::note
