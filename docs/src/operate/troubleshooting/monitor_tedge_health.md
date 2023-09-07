@@ -67,7 +67,7 @@ The following endpoints are currently supported:
 
 All future tedge services will also follow the same topic naming scheme convention.
 
-# Mosquitto bridge health endpoints
+## Mosquitto bridge health endpoints
 
 The mosquitto bridge clients connecting thin-edge devices to the respective cloud platforms also report their health status as retained messages to `tedge/health/<mosquitto-cloud-bridge>` topics.
 The health check messages published by these clients are just numeric values `1` or `0`, indicating active and dead bridge clients respectively.
