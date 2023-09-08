@@ -3,6 +3,7 @@ use camino::Utf8Path;
 use serde::Serialize;
 use std::fs;
 use tedge_utils::fs::atomically_write_file_sync;
+use tracing::debug;
 
 use super::figment::ConfigSources;
 use super::figment::FileAndEnvironment;
@@ -36,6 +37,10 @@ impl TEdgeConfigRepository {
 
     pub fn load(&self) -> Result<TEdgeConfig, TEdgeConfigError> {
         let dto = self.load_dto::<FileAndEnvironment>(self.toml_path())?;
+        debug!(
+            "Loading configuration from {:?}",
+            self.config_location.tedge_config_file_path
+        );
         Ok(TEdgeConfig::from_dto(&dto, &self.config_location))
     }
 
