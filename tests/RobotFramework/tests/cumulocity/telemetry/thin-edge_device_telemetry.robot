@@ -42,6 +42,19 @@ Thin-edge devices support sending custom events
     Log    ${events}
 
 
+Thin-edge devices support sending large events
+    Execute Command    tedge mqtt pub te/device/main///e/largeEvent "$(printf '{"text":"Large event","large_text_field":"%s"}' "$(printf -- 'x%.0s' {1..1000000})")"
+    ${events}=    Device Should Have Event/s    expected_text=Large event    with_attachment=False    minimum=1    maximum=1    type=largeEvent    fragment=large_text_field
+    Log    ${events}
+
+
+Thin-edge devices support sending large events using legacy api
+    [Tags]    legacy
+    Execute Command    tedge mqtt pub tedge/events/largeEvent2 "$(printf '{"text":"Large event","large_text_field":"%s"}' "$(printf -- 'x%.0s' {1..1000000})")"
+    ${events}=    Device Should Have Event/s    expected_text=Large event    with_attachment=False    minimum=1    maximum=1    type=largeEvent2    fragment=large_text_field
+    Log    ${events}
+
+
 Thin-edge devices support sending custom events overriding the type
     Execute Command    tedge mqtt pub te/device/main///e/myCustomType '{"type": "otherType", "text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
     ${events}=    Device Should Have Event/s    expected_text=Some test event    with_attachment=False    minimum=1    maximum=1    type=otherType    fragment=someOtherCustomFragment

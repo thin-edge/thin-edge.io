@@ -297,11 +297,14 @@ impl C8YHttpProxyActor {
                 extras: c8y_event.extras.clone(),
             }
         };
-        self.send_event_internal(
-            c8y_event.source.clone().unwrap_or_default().id,
-            create_event,
-        )
-        .await
+
+        // If the incoming event does not have any source mentioned explicitly,
+        // it is associated to the main device by default.
+        let device_id = c8y_event
+            .source
+            .map_or_else(|| self.end_point.device_id.clone(), |v| v.id);
+
+        self.send_event_internal(device_id, create_event).await
     }
 
     async fn send_software_list_http(
