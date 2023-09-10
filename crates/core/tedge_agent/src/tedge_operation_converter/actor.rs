@@ -2,6 +2,7 @@ use crate::software_manager::actor::SoftwareRequest;
 use crate::software_manager::actor::SoftwareResponse;
 use crate::tedge_operation_converter::error::TedgeOperationConverterError;
 use async_trait::async_trait;
+use log::error;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::LoggingReceiver;
@@ -76,20 +77,32 @@ impl TedgeOperationConverterActor {
     ) -> Result<(), TedgeOperationConverterError> {
         match message.topic.name.as_str() {
             "tedge/commands/req/software/list" => {
-                let request = SoftwareListRequest::from_slice(message.payload_bytes())?;
-                self.software_sender
-                    .send(SoftwareRequest::SoftwareListRequest(request))
-                    .await?;
+                match SoftwareListRequest::from_slice(message.payload_bytes()) {
+                    Ok(request) => {
+                        self.software_sender
+                            .send(SoftwareRequest::SoftwareListRequest(request))
+                            .await?;
+                    }
+                    Err(err) => error!("Incorrect software list request payload: {err}"),
+                }
             }
             "tedge/commands/req/software/update" => {
-                let request = SoftwareUpdateRequest::from_slice(message.payload_bytes())?;
-                self.software_sender
-                    .send(SoftwareRequest::SoftwareUpdateRequest(request))
-                    .await?;
+                match SoftwareUpdateRequest::from_slice(message.payload_bytes()) {
+                    Ok(request) => {
+                        self.software_sender
+                            .send(SoftwareRequest::SoftwareUpdateRequest(request))
+                            .await?;
+                    }
+                    Err(err) => error!("Incorrect software update request payload: {err}"),
+                }
             }
             "tedge/commands/req/control/restart" => {
-                let request = RestartOperationRequest::from_slice(message.payload_bytes())?;
-                self.restart_sender.send(request).await?;
+                match RestartOperationRequest::from_slice(message.payload_bytes()) {
+                    Ok(request) => {
+                        self.restart_sender.send(request).await?;
+                    }
+                    Err(err) => error!("Incorrect restart request payload: {err}"),
+                }
             }
             _ => unreachable!(),
         }
