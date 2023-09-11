@@ -4,6 +4,9 @@ use miette::ensure;
 use miette::miette;
 use miette::Context;
 use serde::Deserialize;
+use std::path::PathBuf;
+use tedge_config::TEdgeConfigLocation;
+use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
 use crate::csv::deserialize_csv_record;
 
@@ -21,8 +24,12 @@ pub struct RemoteAccessConnect {
 name = clap::crate_name!(),
 version = clap::crate_version!(),
 about = clap::crate_description!(),
+arg_required_else_help(true),
 )]
-struct Cli {
+pub struct Cli {
+    #[arg(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
+    config_dir: PathBuf,
+
     #[arg(long)]
     /// Complete the installation of c8y-configuration-plugin by declaring the supported operation.
     init: bool,
@@ -40,6 +47,12 @@ struct Cli {
     child: Option<String>,
 }
 
+impl Cli {
+    pub fn get_config_location(&self) -> TEdgeConfigLocation {
+        TEdgeConfigLocation::from_custom_root(&self.config_dir)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
     Init,
@@ -48,8 +61,8 @@ pub enum Command {
     Connect(RemoteAccessConnect),
 }
 
-pub fn parse_arguments() -> miette::Result<Command> {
-    Cli::parse().try_into()
+pub fn parse_arguments(cli: Cli) -> miette::Result<Command> {
+    cli.try_into()
 }
 
 impl TryFrom<Cli> for Command {
