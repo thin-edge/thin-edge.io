@@ -205,6 +205,7 @@ impl ExternalPlugins {
                         let plugin = ExternalPluginCommand::new(
                             plugin_name,
                             &path,
+                            self.sudo.clone(),
                             config.software.plugin.max_packages,
                         );
                         self.plugin_map.insert(plugin_name.into(), plugin);

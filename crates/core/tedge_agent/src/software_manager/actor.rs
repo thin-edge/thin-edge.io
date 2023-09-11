@@ -11,6 +11,7 @@ use plugin_sm::operation_logs::LogKind;
 use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::plugin_manager::ExternalPlugins;
 use plugin_sm::plugin_manager::Plugins;
+use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::LoggingReceiver;
@@ -31,6 +32,7 @@ use tedge_config::TEdgeConfigError;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
+use which::which;
 
 #[cfg(not(test))]
 const SUDO: &str = "sudo";
@@ -77,10 +79,12 @@ impl Actor for SoftwareManagerActor {
         let operation_logs = OperationLogs::try_new(self.config.log_dir.clone().into())
             .map_err(SoftwareManagerError::FromOperationsLogs)?;
 
+        let sudo: Option<PathBuf> = which(SUDO).ok();
+
         let mut plugins = ExternalPlugins::open(
             &self.config.sm_plugins_dir,
             self.config.default_plugin_type.clone(),
-            Some(SUDO.into()),
+            sudo,
             self.config.config_location.clone(),
         )
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;

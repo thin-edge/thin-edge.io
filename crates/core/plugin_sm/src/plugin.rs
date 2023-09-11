@@ -229,12 +229,13 @@ impl ExternalPluginCommand {
     pub fn new(
         name: impl Into<SoftwareType>,
         path: impl Into<PathBuf>,
+        sudo: Option<PathBuf>,
         max_packages: u32,
     ) -> ExternalPluginCommand {
         ExternalPluginCommand {
             name: name.into(),
             path: path.into(),
-            sudo: Some("sudo".into()),
+            sudo,
             max_packages,
         }
     }

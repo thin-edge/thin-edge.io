@@ -24,6 +24,7 @@ use tokio::process::Command;
 use tokio::time::timeout;
 use tracing::error;
 use tracing::info;
+use which::which;
 
 const SYNC: &str = "sync";
 
@@ -206,17 +207,34 @@ impl RestartManagerActor {
 
     async fn get_restart_operation_commands(&self) -> Result<Vec<Command>, RestartManagerError> {
         let mut vec = vec![];
-        // sync first
-        let mut sync_command = Command::new(SUDO);
-        sync_command.arg(SYNC);
-        vec.push(sync_command);
 
         // reading `config_dir` to get the restart command or defaulting to `["init", "6"]'
         let system_config = SystemConfig::try_new(&self.config.config_dir)?;
 
-        let mut command = Command::new(SUDO);
-        command.args(system_config.system.reboot);
-        vec.push(command);
+        // Check if sudo command is available
+        match which(SUDO) {
+            Ok(sudo) => {
+                let mut sync_command = Command::new(&sudo);
+                sync_command.arg(SYNC);
+                vec.push(sync_command);
+
+                let mut command = Command::new(sudo);
+                command.args(system_config.system.reboot);
+                vec.push(command);
+            }
+            Err(_) => {
+                let sync_command = Command::new(SYNC);
+                vec.push(sync_command);
+
+                let mut args = system_config.system.reboot.iter();
+
+                let mut command =
+                    Command::new(args.next().map(|s| s.to_string()).unwrap_or_default());
+                command.args(args);
+                vec.push(command);
+            }
+        }
+
         Ok(vec)
     }
 }

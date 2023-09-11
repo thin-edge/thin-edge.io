@@ -39,6 +39,14 @@ Don't limit number of packages
     ${software}=    Device Should Have Installed Software    dummy1-0001,1.0.0::dummy1    dummy2-0001,1.0.0::dummy2
     Length Should Be    ${software}    3000
 
+sm-plugins should work without sudo installed and running as root
+    Execute Command    sudo tedge config set software.plugin.max_packages 1
+    Set Service User    tedge-agent    root
+    Connect Mapper    c8y
+    Device Should Exist    ${DEVICE_SN}
+    ${software}=    Device Should Have Installed Software    dummy1-0001,1.0.0::dummy1    dummy2-0001,1.0.0::dummy2
+    Length Should Be    ${software}    2
+
 
 *** Keywords ***
 Custom Setup
@@ -51,4 +59,12 @@ Custom Setup
     Transfer To Device    ${CURDIR}/dummy-plugin.sh    /etc/tedge/sm-plugins/dummy2
 
 Custom Teardown
+    # Restore sudo in case if the tests are run on a device (and not in a container)
+    Execute Command    [ -f /usr/bin/sudo.bak ] && mv /usr/bin/sudo.bak /usr/bin/sudo || true
     Get Logs
+
+Set Service User
+    [Arguments]    ${SERVICE_NAME}    ${SERVICE_USER}
+    Execute Command    mkdir -p /etc/systemd/system/${SERVICE_NAME}.service.d/
+    Execute Command    cmd=printf "[Service]\nUser = ${SERVICE_USER}" | sudo tee /etc/systemd/system/${SERVICE_NAME}.service.d/10-user.conf
+    Execute Command    systemctl daemon-reload
