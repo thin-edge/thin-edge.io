@@ -13,7 +13,7 @@ use rumqttc::QoS;
 use tedge_config::MqttAuthClientConfig;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
-const MAX_PACKET_SIZE: usize = 1048575;
+use super::MAX_PACKET_SIZE;
 
 pub struct MqttSubscribeCommand {
     pub host: String,
