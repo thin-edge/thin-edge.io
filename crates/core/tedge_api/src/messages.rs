@@ -11,8 +11,6 @@ const SOFTWARE_LIST_REQUEST_TOPIC: &str = "tedge/commands/req/software/list";
 const SOFTWARE_LIST_RESPONSE_TOPIC: &str = "tedge/commands/res/software/list";
 const SOFTWARE_UPDATE_REQUEST_TOPIC: &str = "tedge/commands/req/software/update";
 const SOFTWARE_UPDATE_RESPONSE_TOPIC: &str = "tedge/commands/res/software/update";
-const DEVICE_RESTART_REQUEST_TOPIC: &str = "tedge/commands/req/control/restart";
-const DEVICE_RESTART_RESPONSE_TOPIC: &str = "tedge/commands/res/control/restart";
 
 /// All the messages are serialized using json.
 pub trait Jsonify<'a>
@@ -501,8 +499,9 @@ impl RestartOperationRequest {
         RestartOperationRequest { id: id.to_string() }
     }
 
-    pub fn topic() -> Topic {
-        Topic::new_unchecked(DEVICE_RESTART_REQUEST_TOPIC)
+    pub fn topic(&self) -> Topic {
+        // FIXME: use mqtt_schema
+        Topic::new_unchecked(&format!("te/device/main///cmd/restart/{}", self.id))
     }
 }
 
@@ -526,8 +525,9 @@ impl RestartOperationResponse {
         Self { status, ..self }
     }
 
-    pub fn topic() -> Topic {
-        Topic::new_unchecked(DEVICE_RESTART_RESPONSE_TOPIC)
+    pub fn topic(&self) -> Topic {
+        // FIXME: use mqtt_schema
+        Topic::new_unchecked(&format!("te/device/main///cmd/restart/{}", self.id))
     }
 
     pub fn status(&self) -> OperationStatus {

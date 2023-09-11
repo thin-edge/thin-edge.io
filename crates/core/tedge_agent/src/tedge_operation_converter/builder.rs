@@ -12,6 +12,11 @@ use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
+use tedge_api::mqtt_topics::ChannelFilter::Command;
+use tedge_api::mqtt_topics::ChannelFilter::CommandMetadata;
+use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::OperationType;
 use tedge_api::RestartOperationRequest;
 use tedge_api::RestartOperationResponse;
 use tedge_mqtt_ext::MqttMessage;
@@ -65,13 +70,25 @@ impl TedgeOperationConverterBuilder {
     }
 
     pub fn subscriptions() -> TopicFilter {
-        vec![
-            "tedge/commands/req/software/list",
-            "tedge/commands/req/software/update",
-            "tedge/commands/req/control/restart",
+        let mqtt_schema = MqttSchema::default(); // FIXME read root topic suffix from config
+
+        let mut topics: TopicFilter = [
+            mqtt_schema.topics(AnyEntity, Command(OperationType::Restart)),
+            mqtt_schema.topics(AnyEntity, CommandMetadata(OperationType::Restart)),
         ]
-        .try_into()
-        .expect("Infallible")
+        .into_iter()
+        .collect();
+
+        topics.add_all(
+            vec![
+                "tedge/commands/req/software/list",
+                "tedge/commands/req/software/update",
+            ]
+            .try_into()
+            .expect("Infallible"),
+        );
+
+        topics
     }
 }
 

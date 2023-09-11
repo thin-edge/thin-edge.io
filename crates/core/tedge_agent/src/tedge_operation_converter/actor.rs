@@ -10,6 +10,9 @@ use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
+use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::OperationType;
 use tedge_api::Jsonify;
 use tedge_api::RestartOperationRequest;
 use tedge_api::RestartOperationResponse;
@@ -96,7 +99,21 @@ impl TedgeOperationConverterActor {
                     Err(err) => error!("Incorrect software update request payload: {err}"),
                 }
             }
-            "tedge/commands/req/control/restart" => {
+            _ => {
+                // Not a tedge/commands !
+            }
+        }
+
+        let mqtt_schema = MqttSchema::default(); // FIXME use the correct root suffix
+        match mqtt_schema.entity_channel_of(&message.topic) {
+            Ok((
+                _target,
+                Channel::Command {
+                    operation: OperationType::Restart,
+                    ..
+                },
+            )) => {
+                // FIXME extract the command id from the topic, not the payload
                 match RestartOperationRequest::from_slice(message.payload_bytes()) {
                     Ok(request) => {
                         self.restart_sender.send(request).await?;
@@ -104,7 +121,9 @@ impl TedgeOperationConverterActor {
                     Err(err) => error!("Incorrect restart request payload: {err}"),
                 }
             }
-            _ => unreachable!(),
+            _ => {
+                log::error!("Unknown command channel: {}", message.topic.name);
+            }
         }
         Ok(())
     }
@@ -137,10 +156,7 @@ impl TedgeOperationConverterActor {
         &mut self,
         response: RestartOperationResponse,
     ) -> Result<(), TedgeOperationConverterError> {
-        let message = MqttMessage::new(
-            &Topic::new_unchecked("tedge/commands/res/control/restart"),
-            response.to_bytes()?,
-        );
+        let message = MqttMessage::new(&response.topic(), response.to_bytes()?);
         self.mqtt_publisher.send(message).await?;
         Ok(())
     }

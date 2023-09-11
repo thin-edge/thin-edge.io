@@ -6,7 +6,11 @@ use camino::Utf8PathBuf;
 use std::net::IpAddr;
 use std::path::Path;
 use std::path::PathBuf;
+use tedge_api::mqtt_topics::ChannelFilter::Command;
+use tedge_api::mqtt_topics::ChannelFilter::CommandMetadata;
+use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::OperationType;
 use tedge_api::topic::ResponseTopic;
 use tedge_api::DEFAULT_FILE_TRANSFER_DIR_NAME;
 use tedge_config::ConfigNotSet;
@@ -98,6 +102,8 @@ impl C8yMapperConfig {
         let mut topics = Self::default_internal_topic_filter(&config_dir)?;
 
         // Add feature topic filters
+        topics.add_all(mqtt_schema.topics(AnyEntity, Command(OperationType::Restart)));
+        topics.add_all(mqtt_schema.topics(AnyEntity, CommandMetadata(OperationType::Restart)));
         if capabilities.log_management {
             topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
         }
@@ -133,7 +139,6 @@ impl C8yMapperConfig {
             C8yTopic::SmartRestRequest.to_string().as_str(),
             ResponseTopic::SoftwareListResponse.as_str(),
             ResponseTopic::SoftwareUpdateResponse.as_str(),
-            ResponseTopic::RestartResponse.as_str(),
         ]
         .try_into()
         .expect("topics that mapper should subscribe to");

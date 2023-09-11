@@ -61,12 +61,12 @@ mod tests {
             Topic::new_unchecked("tedge/commands/res/software/update")
         );
         assert_eq!(
-            RestartOperationRequest::topic(),
-            Topic::new_unchecked("tedge/commands/req/control/restart")
+            RestartOperationRequest::new_with_id("abc").topic(),
+            Topic::new_unchecked("te/device/main///cmd/restart/abc")
         );
         assert_eq!(
-            RestartOperationResponse::topic(),
-            Topic::new_unchecked("tedge/commands/res/control/restart")
+            RestartOperationResponse::new(&RestartOperationRequest::new_with_id("abc")).topic(),
+            Topic::new_unchecked("te/device/main///cmd/restart/abc")
         );
     }
 

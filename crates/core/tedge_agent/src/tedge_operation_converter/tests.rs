@@ -89,7 +89,8 @@ async fn convert_incoming_restart_request() -> Result<(), DynError> {
 
     // Simulate Restart MQTT message received.
     let mqtt_message = MqttMessage::new(
-        &Topic::new_unchecked("tedge/commands/req/control/restart"),
+        // FIXME The cmd id has to be read from the topic and no more the payload
+        &Topic::new_unchecked("te/device/main///cmd/restart/abc"),
         r#"{"id": "random"}"#,
     );
     mqtt_box.send(mqtt_message).await?;
@@ -150,7 +151,8 @@ async fn convert_outgoing_restart_response() -> Result<(), DynError> {
     let (_software_box, mut restart_box, mut mqtt_box) = spawn_mqtt_operation_converter().await?;
 
     // Simulate SoftwareList response message received.
-    let executing_response = RestartOperationResponse::new(&RestartOperationRequest::default());
+    let executing_response =
+        RestartOperationResponse::new(&RestartOperationRequest::new_with_id("abc"));
     restart_box.send(executing_response).await?;
 
     let (topic, payload) = mqtt_box
@@ -158,7 +160,8 @@ async fn convert_outgoing_restart_response() -> Result<(), DynError> {
         .await
         .map(|msg| (msg.topic, msg.payload))
         .expect("MqttMessage");
-    assert_eq!(topic.name, "tedge/commands/res/control/restart");
+    // FIXME The cmd id has to be read from the topic and no more the payload
+    assert_eq!(topic.name, "te/device/main///cmd/restart/abc");
     assert!(format!("{:?}", payload).contains(r#"status":"executing"#));
 
     Ok(())

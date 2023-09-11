@@ -478,11 +478,10 @@ impl CumulocityConverter {
     }
 
     fn forward_restart_request(smartrest: &str) -> Result<Vec<Message>, CumulocityMapperError> {
-        let topic = Topic::new(RequestTopic::RestartRequest.as_str())?;
         let _ = SmartRestRestartRequest::from_smartrest(smartrest)?;
 
         let request = RestartOperationRequest::default();
-        Ok(vec![Message::new(&topic, request.to_json()?)])
+        Ok(vec![Message::new(&request.topic(), request.to_json()?)])
     }
 
     async fn forward_operation_request(
@@ -733,6 +732,17 @@ impl CumulocityConverter {
             }
 
             Channel::CommandMetadata {
+                operation: OperationType::Restart,
+            } => {
+                // FIXME: register restart operation on child devices
+                vec![]
+            }
+            Channel::Command {
+                operation: OperationType::Restart,
+                ..
+            } => publish_restart_operation_status(message.payload_str()?).await?,
+
+            Channel::CommandMetadata {
                 operation: OperationType::LogUpload,
             } => self.convert_log_metadata(&source, message)?,
 
@@ -781,9 +791,6 @@ impl CumulocityConverter {
                         self.device_name.clone(),
                     )
                     .await?)
-                }
-                Ok(MapperSubscribeTopic::ResponseTopic(ResponseTopic::RestartResponse)) => {
-                    Ok(publish_restart_operation_status(message.payload_str()?).await?)
                 }
                 Ok(MapperSubscribeTopic::C8yTopic(_)) => self.parse_c8y_topics(message).await,
                 _ => {
