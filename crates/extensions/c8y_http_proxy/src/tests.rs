@@ -1,17 +1,28 @@
 use crate::credentials::ConstJwtRetriever;
+use crate::credentials::JwtRequest;
+use crate::credentials::JwtResult;
 use crate::handle::C8YHttpProxy;
 use crate::C8YHttpConfig;
 use crate::C8YHttpProxyBuilder;
+use async_trait::async_trait;
+use c8y_api::json_c8y::C8yCreateEvent;
+use c8y_api::json_c8y::C8yEventResponse;
+use c8y_api::json_c8y::C8yManagedObject;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::json_c8y::InternalIdResponse;
+use mockito::Matcher;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::Server;
 use tedge_actors::ServerActor;
 use tedge_actors::ServerMessageBoxBuilder;
 use tedge_http_ext::test_helpers::FakeHttpServerBox;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
+use tedge_http_ext::HttpActor;
 use tedge_http_ext::HttpRequestBuilder;
+use time::macros::datetime;
 
 #[tokio::test]
 async fn c8y_http_proxy_requests_the_device_internal_id_on_start() {
@@ -125,6 +136,126 @@ async fn retry_internal_id_on_expired_jwt() {
             .unwrap(),
     ))
     .await;
+}
+
+#[tokio::test]
+async fn retry_internal_id_on_expired_jwt_with_mock() {
+    let external_id = "device-001";
+    let tmp_dir = "/tmp";
+    let internal_id = "internal-device-001";
+
+    let response = InternalIdResponse::new(internal_id, external_id);
+    let response = serde_json::to_string(&response).unwrap();
+    // Start a lightweight mock server.
+    let mut server = mockito::Server::new();
+
+    let _mock1 = server
+        .mock("GET", "/identity/externalIds/c8y_Serial/device-001")
+        .match_header(
+            "Authorization",
+            Matcher::Exact("Bearer Cached JWT token".into()),
+        )
+        .with_status(401)
+        .create();
+    let _mock2 = server
+        .mock("GET", "/identity/externalIds/c8y_Serial/device-001")
+        .match_header(
+            "Authorization",
+            Matcher::Exact("Bearer Fresh JWT token".into()),
+        )
+        .with_status(200)
+        .with_body(response)
+        .create();
+
+    let target_url = server.url();
+    let mut jwt = ServerMessageBoxBuilder::new("JWT Actor", 16);
+
+    let mut http_actor = HttpActor::new().builder();
+
+    let config = C8YHttpConfig {
+        c8y_host: target_url.clone(),
+        device_id: external_id.into(),
+        tmp_dir: tmp_dir.into(),
+    };
+    let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor, &mut jwt);
+    let mut jwt_actor = ServerActor::new(DynamicJwtRetriever { count: 0 }, jwt.build());
+
+    tokio::spawn(async move { http_actor.run().await });
+    tokio::spawn(async move { jwt_actor.run().await });
+    let mut proxy = c8y_proxy_actor.build();
+
+    let result = proxy.try_get_internal_id(external_id.into()).await;
+    assert_eq!(internal_id, result.unwrap());
+}
+
+#[tokio::test]
+async fn retry_create_event_on_expired_jwt_with_mock() {
+    let external_id = "device-001";
+    let tmp_dir = "/tmp";
+    let internal_id = "external-device-001";
+    let event_id = "TestClickEvent";
+
+    let event = C8yCreateEvent {
+        source: Some(C8yManagedObject {
+            id: external_id.to_string(),
+        }),
+        event_type: "click_event".into(),
+        time: datetime!(2021-04-23 19:00:00 +05:00),
+        text: "Someone clicked".into(),
+        extras: HashMap::new(),
+    };
+
+    let response = C8yEventResponse {
+        id: event_id.to_string(),
+    };
+    let response = serde_json::to_string(&response).unwrap();
+    // Start a lightweight mock server.
+    let mut server = mockito::Server::new();
+
+    let _mock1 = server
+        .mock("POST", "/event/events/")
+        .match_header(
+            "authorization",
+            Matcher::Exact("Bearer Cached JWT Token".into()),
+        )
+        .with_status(401)
+        .create();
+
+    let _mock2 = server
+        .mock("POST", "/event/events/")
+        .match_header(
+            "authorization",
+            Matcher::Exact("Bearer Fresh JWT token".into()),
+        )
+        .with_status(200)
+        .with_body(response)
+        .create();
+
+    let target_url = server.url();
+    let mut jwt = ServerMessageBoxBuilder::new("JWT Actor", 16);
+
+    let mut http_actor = HttpActor::new().builder();
+
+    let config = C8YHttpConfig {
+        c8y_host: target_url.clone(),
+        device_id: external_id.into(),
+        tmp_dir: tmp_dir.into(),
+    };
+    let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor, &mut jwt);
+    let mut jwt_actor = ServerActor::new(DynamicJwtRetriever { count: 1 }, jwt.build());
+
+    tokio::spawn(async move { http_actor.run().await });
+    tokio::spawn(async move { jwt_actor.run().await });
+    let mut proxy = c8y_proxy_actor.build();
+    // initialize the endpoint for mocking purpose
+    proxy.end_point.device_id = external_id.into();
+    proxy
+        .end_point
+        .set_internal_id(external_id.into(), internal_id.into());
+    proxy.end_point.token = Some("Cached JWT Token".into());
+
+    let result = proxy.create_event(event).await;
+    assert_eq!(event_id, result.unwrap());
 }
 
 #[tokio::test]
@@ -351,4 +482,27 @@ async fn spawn_c8y_http_proxy(
     });
 
     (proxy, http.build())
+}
+
+pub(crate) struct DynamicJwtRetriever {
+    pub count: usize,
+}
+
+#[async_trait]
+impl Server for DynamicJwtRetriever {
+    type Request = JwtRequest;
+    type Response = JwtResult;
+
+    fn name(&self) -> &str {
+        "DynamicJwtRetriever"
+    }
+
+    async fn handle(&mut self, _request: Self::Request) -> Self::Response {
+        if self.count == 0 {
+            self.count += 1;
+            Ok("Cached JWT token".into())
+        } else {
+            Ok("Fresh JWT token".into())
+        }
+    }
 }

@@ -676,12 +676,16 @@ dependencies = [
  "download",
  "http",
  "log",
+ "mockito",
  "mqtt_channel",
+ "serde",
+ "serde_json",
  "tedge_actors",
  "tedge_config",
  "tedge_http_ext",
  "tedge_utils",
  "thiserror",
+ "time",
  "tokio",
 ]
 
