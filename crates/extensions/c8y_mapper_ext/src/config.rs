@@ -73,7 +73,7 @@ impl C8yMapperConfig {
         let logs_path = tedge_config.logs.path.clone();
         let data_dir = tedge_config.data.path.clone();
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
-        let device_type = tedge_config.device.ty.clone();
+        let device_type = tedge_config.device.ty;
         let service_type = tedge_config.service.ty.clone();
         let c8y_host = tedge_config.c8y_url().or_config_not_set()?.to_string();
         let tedge_http_address = tedge_config.http.bind.address;
@@ -105,7 +105,7 @@ impl C8yMapperConfig {
             logs_path,
             data_dir,
             device_id,
-            device_type,
+            device_type.to_string(),
             service_type,
             c8y_host,
             tedge_http_host,

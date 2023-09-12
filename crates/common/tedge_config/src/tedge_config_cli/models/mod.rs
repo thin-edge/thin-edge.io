@@ -1,4 +1,5 @@
 pub mod connect_url;
+mod device_type;
 pub mod flag;
 pub mod host_port;
 pub mod ipaddress;
@@ -10,6 +11,7 @@ pub const HTTPS_PORT: u16 = 443;
 pub const MQTT_TLS_PORT: u16 = 8883;
 
 pub use self::connect_url::*;
+pub use self::device_type::*;
 pub use self::flag::*;
 #[doc(inline)]
 pub use self::host_port::HostPort;

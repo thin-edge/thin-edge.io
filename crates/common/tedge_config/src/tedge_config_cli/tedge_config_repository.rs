@@ -192,7 +192,7 @@ type = "a-service-type""#;
 
         assert_eq!(reader.device.cert_path, "/tedge/device-cert.pem");
         assert_eq!(reader.device.key_path, "/tedge/device-key.pem");
-        assert_eq!(reader.device.ty, "a-device");
+        assert_eq!(reader.device.ty.as_str(), "a-device");
         assert_eq!(u16::from(reader.mqtt.bind.port), 1886);
         assert_eq!(u16::from(reader.mqtt.client.port), 1885);
     }

@@ -106,7 +106,7 @@ impl Command for ConnectCommand {
             &updated_mosquitto_config,
             self.service_manager.as_ref(),
             &self.config_location,
-            device_type,
+            device_type.as_str(),
         ) {
             Ok(()) => println!("Successfully created bridge connection!\n"),
             Err(ConnectError::SystemServiceError(

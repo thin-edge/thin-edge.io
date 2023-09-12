@@ -1,3 +1,4 @@
+use super::models::DeviceType;
 use crate::ConnectUrl;
 use crate::HostPort;
 use crate::Seconds;
@@ -337,9 +338,9 @@ define_tedge_config! {
         cert_path: Utf8PathBuf,
 
         /// The default device type
-        #[tedge_config(example = "thin-edge.io", default(value = "thin-edge.io"))]
+        #[tedge_config(example = "thin-edge.io", default(function = Default::default))]
         #[tedge_config(rename = "type")]
-        ty: String,
+        ty: DeviceType,
     },
 
     c8y: {
