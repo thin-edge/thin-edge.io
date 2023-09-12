@@ -5,12 +5,13 @@ use certificate::CertificateError;
 use log::debug;
 use rumqttc::tokio_rustls::rustls;
 use rumqttc::tokio_rustls::rustls::Certificate;
-use rumqttc::tokio_rustls::rustls::PrivateKey;
 use rumqttc::LastWill;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
+use zeroize::Zeroizing;
 
 /// Configuration of an MQTT connection
 #[derive(Debug, Clone)]
@@ -107,7 +108,7 @@ impl Default for AuthenticationConfig {
 #[derive(Clone)]
 struct ClientAuthConfig {
     cert_chain: Vec<Certificate>,
-    key: PrivateKey,
+    key: Zeroizing<PrivateKey>,
 }
 
 impl Debug for ClientAuthConfig {
@@ -115,6 +116,15 @@ impl Debug for ClientAuthConfig {
         f.debug_struct("ClientAuthConfig")
             .field("cert_chain", &self.cert_chain)
             .finish()
+    }
+}
+
+#[derive(Debug, Clone)]
+struct PrivateKey(rustls::PrivateKey);
+
+impl zeroize::Zeroize for PrivateKey {
+    fn zeroize(&mut self) {
+        self.0 .0.zeroize()
     }
 }
 
@@ -293,7 +303,10 @@ impl Config {
         let cert_chain = parse_root_certificate::read_cert_chain(cert_file)?;
         let key = parse_root_certificate::read_pvt_key(key_file)?;
 
-        let client_auth_config = ClientAuthConfig { cert_chain, key };
+        let client_auth_config = ClientAuthConfig {
+            cert_chain,
+            key: Zeroizing::new(PrivateKey(key)),
+        };
 
         let authentication_config = self.broker.authentication.get_or_insert(Default::default());
         authentication_config.client_auth = Some(client_auth_config);
@@ -328,8 +341,10 @@ impl Config {
                 .with_root_certificates(authentication_config.cert_store.clone());
 
             let tls_config = match authentication_config.client_auth.clone() {
-                Some(client_auth_config) => tls_config
-                    .with_client_auth_cert(client_auth_config.cert_chain, client_auth_config.key)?,
+                Some(client_auth_config) => tls_config.with_client_auth_cert(
+                    client_auth_config.cert_chain,
+                    client_auth_config.key.deref().0.clone(),
+                )?,
                 None => tls_config.with_no_client_auth(),
             };
 
