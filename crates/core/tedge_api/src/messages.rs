@@ -1,6 +1,12 @@
 use crate::error::SoftwareError;
+use crate::mqtt_topics::Channel;
+use crate::mqtt_topics::EntityTopicId;
+use crate::mqtt_topics::MqttSchema;
+use crate::mqtt_topics::OperationType;
 use crate::software::*;
 use download::DownloadInfo;
+use mqtt_channel::Message;
+use mqtt_channel::QoS;
 use mqtt_channel::Topic;
 use nanoid::nanoid;
 use serde::Deserialize;
@@ -471,67 +477,106 @@ impl From<SoftwareError> for Option<SoftwareModuleItem> {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
-pub enum RestartOperation {
-    Request(RestartOperationRequest),
-    Response(RestartOperationResponse),
+/// Command to restart a device
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct RestartCommand {
+    pub target: EntityTopicId,
+    pub cmd_id: String,
+    pub payload: RestartCommandPayload,
 }
 
-/// Message payload definition for restart operation request.
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
-pub struct RestartOperationRequest {
-    pub id: String,
-}
-
-impl<'a> Jsonify<'a> for RestartOperationRequest {}
-
-impl Default for RestartOperationRequest {
-    fn default() -> RestartOperationRequest {
-        let id = nanoid!();
-        RestartOperationRequest { id }
-    }
-}
-
-impl RestartOperationRequest {
-    pub fn new_with_id(id: &str) -> RestartOperationRequest {
-        RestartOperationRequest { id: id.to_string() }
-    }
-
-    pub fn topic(&self) -> Topic {
-        // FIXME: use mqtt_schema
-        Topic::new_unchecked(&format!("te/device/main///cmd/restart/{}", self.id))
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
-pub struct RestartOperationResponse {
-    pub id: String,
-    pub status: OperationStatus,
-}
-
-impl<'a> Jsonify<'a> for RestartOperationResponse {}
-
-impl RestartOperationResponse {
-    pub fn new(req: &RestartOperationRequest) -> Self {
-        Self {
-            id: req.id.clone(),
-            status: OperationStatus::Executing,
+impl RestartCommand {
+    /// Create a [RestartCommand] to restart a target device.
+    ///
+    /// - use a fresh cmd id
+    /// - set the status to [CommandStatus::Init]
+    pub fn new(target: EntityTopicId) -> Self {
+        let cmd_id = nanoid!();
+        let payload = RestartCommandPayload::default();
+        RestartCommand {
+            target,
+            cmd_id,
+            payload,
         }
     }
 
-    pub fn with_status(self, status: OperationStatus) -> Self {
-        Self { status, ..self }
+    /// A new command with a given cmd id
+    pub fn with_id(self, cmd_id: String) -> Self {
+        Self { cmd_id, ..self }
     }
 
-    pub fn topic(&self) -> Topic {
-        // FIXME: use mqtt_schema
-        Topic::new_unchecked(&format!("te/device/main///cmd/restart/{}", self.id))
+    /// Return the RestartCommand received on a topic
+    pub fn try_from(
+        target: EntityTopicId,
+        cmd_id: String,
+        bytes: &[u8],
+    ) -> Result<Option<Self>, serde_json::Error> {
+        if bytes.is_empty() {
+            Ok(None)
+        } else {
+            let payload = RestartCommandPayload::from_slice(bytes)?;
+            Ok(Some(RestartCommand {
+                target,
+                cmd_id,
+                payload,
+            }))
+        }
     }
 
-    pub fn status(&self) -> OperationStatus {
-        self.status
+    /// Return the current status of the command
+    pub fn status(&self) -> CommandStatus {
+        self.payload.status
+    }
+
+    /// Set the status of the command
+    pub fn with_status(mut self, status: CommandStatus) -> Self {
+        self.payload.status = status;
+        self
+    }
+
+    /// Return the MQTT topic identifier of the target
+    fn topic_id(&self) -> &EntityTopicId {
+        &self.target
+    }
+
+    /// Return the MQTT channel for this command
+    fn channel(&self) -> Channel {
+        Channel::Command {
+            operation: OperationType::Restart,
+            cmd_id: self.cmd_id.clone(),
+        }
+    }
+
+    /// Return the MQTT topic for this command
+    fn topic(&self, schema: &MqttSchema) -> Topic {
+        schema.topic_for(self.topic_id(), &self.channel())
+    }
+
+    /// Return the MQTT payload for this command
+    pub fn try_into_message(&self, schema: &MqttSchema) -> Result<Message, serde_json::Error> {
+        let topic = self.topic(schema);
+        let payload = self.payload.to_bytes()?;
+        let message = Message::new(&topic, payload)
+            .with_qos(QoS::AtLeastOnce)
+            .with_retain();
+        Ok(message)
+    }
+}
+
+/// Command to restart a device
+#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RestartCommandPayload {
+    pub status: CommandStatus,
+}
+
+impl<'a> Jsonify<'a> for RestartCommandPayload {}
+
+impl Default for RestartCommandPayload {
+    fn default() -> Self {
+        RestartCommandPayload {
+            status: CommandStatus::Init,
+        }
     }
 }
 

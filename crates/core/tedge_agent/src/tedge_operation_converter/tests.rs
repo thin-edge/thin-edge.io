@@ -11,11 +11,13 @@ use tedge_actors::MessageReceiver;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::messages::CommandStatus;
+use tedge_api::messages::RestartCommandPayload;
 use tedge_api::messages::SoftwareModuleAction;
 use tedge_api::messages::SoftwareModuleItem;
 use tedge_api::messages::SoftwareRequestResponseSoftwareList;
-use tedge_api::RestartOperationRequest;
-use tedge_api::RestartOperationResponse;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::RestartCommand;
 use tedge_api::SoftwareListRequest;
 use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareUpdateRequest;
@@ -89,16 +91,19 @@ async fn convert_incoming_restart_request() -> Result<(), DynError> {
 
     // Simulate Restart MQTT message received.
     let mqtt_message = MqttMessage::new(
-        // FIXME The cmd id has to be read from the topic and no more the payload
-        &Topic::new_unchecked("te/device/main///cmd/restart/abc"),
-        r#"{"id": "random"}"#,
+        &Topic::new_unchecked("te/device/main///cmd/restart/random"),
+        r#"{"status": "init"}"#,
     );
     mqtt_box.send(mqtt_message).await?;
 
     // Assert RestartOperationRequest
     restart_box
-        .assert_received([RestartOperationRequest {
-            id: "random".to_string(),
+        .assert_received([RestartCommand {
+            target: EntityTopicId::default_main_device(),
+            cmd_id: "random".to_string(),
+            payload: RestartCommandPayload {
+                status: CommandStatus::Init,
+            },
         }])
         .await;
 
@@ -150,9 +155,14 @@ async fn convert_outgoing_restart_response() -> Result<(), DynError> {
     // Spawn outgoing mqtt message converter
     let (_software_box, mut restart_box, mut mqtt_box) = spawn_mqtt_operation_converter().await?;
 
-    // Simulate SoftwareList response message received.
-    let executing_response =
-        RestartOperationResponse::new(&RestartOperationRequest::new_with_id("abc"));
+    // Simulate Restart response message received.
+    let executing_response = RestartCommand {
+        target: EntityTopicId::default_main_device(),
+        cmd_id: "abc".to_string(),
+        payload: RestartCommandPayload {
+            status: CommandStatus::Executing,
+        },
+    };
     restart_box.send(executing_response).await?;
 
     let (topic, payload) = mqtt_box
@@ -170,17 +180,15 @@ async fn convert_outgoing_restart_response() -> Result<(), DynError> {
 async fn spawn_mqtt_operation_converter() -> Result<
     (
         TimedMessageBox<SimpleMessageBox<SoftwareRequest, SoftwareResponse>>,
-        TimedMessageBox<SimpleMessageBox<RestartOperationRequest, RestartOperationResponse>>,
+        TimedMessageBox<SimpleMessageBox<RestartCommand, RestartCommand>>,
         TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
     ),
     DynError,
 > {
     let mut software_builder: SimpleMessageBoxBuilder<SoftwareRequest, SoftwareResponse> =
         SimpleMessageBoxBuilder::new("Software", 5);
-    let mut restart_builder: SimpleMessageBoxBuilder<
-        RestartOperationRequest,
-        RestartOperationResponse,
-    > = SimpleMessageBoxBuilder::new("Restart", 5);
+    let mut restart_builder: SimpleMessageBoxBuilder<RestartCommand, RestartCommand> =
+        SimpleMessageBoxBuilder::new("Restart", 5);
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
 

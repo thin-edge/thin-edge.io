@@ -17,15 +17,14 @@ use tedge_api::mqtt_topics::ChannelFilter::CommandMetadata;
 use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::RestartOperationRequest;
-use tedge_api::RestartOperationResponse;
+use tedge_api::RestartCommand;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 
 pub struct TedgeOperationConverterBuilder {
     input_receiver: LoggingReceiver<AgentInput>,
     software_sender: LoggingSender<SoftwareRequest>,
-    restart_sender: LoggingSender<RestartOperationRequest>,
+    restart_sender: LoggingSender<RestartCommand>,
     mqtt_publisher: LoggingSender<MqttMessage>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
 }
@@ -33,11 +32,7 @@ pub struct TedgeOperationConverterBuilder {
 impl TedgeOperationConverterBuilder {
     pub fn new(
         software_actor: &mut impl ServiceProvider<SoftwareRequest, SoftwareResponse, NoConfig>,
-        restart_actor: &mut impl ServiceProvider<
-            RestartOperationRequest,
-            RestartOperationResponse,
-            NoConfig,
-        >,
+        restart_actor: &mut impl ServiceProvider<RestartCommand, RestartCommand, NoConfig>,
         mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
     ) -> Self {
         let (input_sender, input_receiver) = mpsc::channel(10);

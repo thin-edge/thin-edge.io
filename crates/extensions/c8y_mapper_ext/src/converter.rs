@@ -58,6 +58,7 @@ use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityType;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
+use tedge_api::messages::CommandStatus;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
@@ -68,8 +69,7 @@ use tedge_api::DownloadInfo;
 use tedge_api::EntityStore;
 use tedge_api::Jsonify;
 use tedge_api::OperationStatus;
-use tedge_api::RestartOperationRequest;
-use tedge_api::RestartOperationResponse;
+use tedge_api::RestartCommand;
 use tedge_api::SoftwareListRequest;
 use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareUpdateResponse;
@@ -415,9 +415,7 @@ impl CumulocityConverter {
                     "528" if device_id == self.device_name => {
                         self.forward_software_request(payload).await
                     }
-                    "510" if device_id == self.device_name => {
-                        Self::forward_restart_request(payload)
-                    }
+                    "510" => self.forward_restart_request(payload),
                     template if device_id == self.device_name => {
                         self.forward_operation_request(payload, template).await
                     }
@@ -477,11 +475,20 @@ impl CumulocityConverter {
         )])
     }
 
-    fn forward_restart_request(smartrest: &str) -> Result<Vec<Message>, CumulocityMapperError> {
-        let _ = SmartRestRestartRequest::from_smartrest(smartrest)?;
-
-        let request = RestartOperationRequest::default();
-        Ok(vec![Message::new(&request.topic(), request.to_json()?)])
+    fn forward_restart_request(
+        &mut self,
+        smartrest: &str,
+    ) -> Result<Vec<Message>, CumulocityMapperError> {
+        let request = SmartRestRestartRequest::from_smartrest(smartrest)?;
+        let device_id = &request.device;
+        let target = self.entity_store.get_by_id(device_id).ok_or_else(|| {
+            CumulocityMapperError::UnknownDevice {
+                device_id: device_id.to_owned(),
+            }
+        })?;
+        let command = RestartCommand::new(target.topic_id.clone());
+        let message = command.try_into_message(&self.mqtt_schema)?;
+        Ok(vec![message])
     }
 
     async fn forward_operation_request(
@@ -739,8 +746,11 @@ impl CumulocityConverter {
             }
             Channel::Command {
                 operation: OperationType::Restart,
-                ..
-            } => publish_restart_operation_status(message.payload_str()?).await?,
+                cmd_id,
+            } => {
+                self.publish_restart_operation_status(&source, cmd_id, message)
+                    .await?
+            }
 
             Channel::CommandMetadata {
                 operation: OperationType::LogUpload,
@@ -976,35 +986,60 @@ fn create_inventory_fragments_message(
     Ok(Message::new(&topic, ops_msg.to_string()))
 }
 
-async fn publish_restart_operation_status(
-    json_response: &str,
-) -> Result<Vec<Message>, CumulocityMapperError> {
-    let response = RestartOperationResponse::from_json(json_response)?;
-    let topic = C8yTopic::SmartRestResponse.to_topic()?;
+impl CumulocityConverter {
+    async fn publish_restart_operation_status(
+        &mut self,
+        target: &EntityTopicId,
+        cmd_id: &str,
+        message: &Message,
+    ) -> Result<Vec<Message>, CumulocityMapperError> {
+        let command = match RestartCommand::try_from(
+            target.clone(),
+            cmd_id.to_owned(),
+            message.payload_bytes(),
+        )? {
+            Some(command) => command,
+            None => {
+                // The command has been fully processed
+                return Ok(vec![]);
+            }
+        };
+        let topic = self
+            .entity_store
+            .get(target)
+            .and_then(C8yTopic::smartrest_response_topic)
+            .ok_or_else(|| CumulocityMapperError::UnregisteredDevice {
+                topic_id: target.to_string(),
+            })?;
 
-    match response.status() {
-        OperationStatus::Executing => {
-            let smartrest_set_operation = SmartRestSetOperationToExecuting::new(
-                CumulocitySupportedOperations::C8yRestartRequest,
-            )
-            .to_smartrest()?;
+        match command.status() {
+            CommandStatus::Executing => {
+                let smartrest_set_operation = SmartRestSetOperationToExecuting::new(
+                    CumulocitySupportedOperations::C8yRestartRequest,
+                )
+                .to_smartrest()?;
 
-            Ok(vec![Message::new(&topic, smartrest_set_operation)])
-        }
-        OperationStatus::Successful => {
-            let smartrest_set_operation = SmartRestSetOperationToSuccessful::new(
-                CumulocitySupportedOperations::C8yRestartRequest,
-            )
-            .to_smartrest()?;
-            Ok(vec![Message::new(&topic, smartrest_set_operation)])
-        }
-        OperationStatus::Failed => {
-            let smartrest_set_operation = SmartRestSetOperationToFailed::new(
-                CumulocitySupportedOperations::C8yRestartRequest,
-                "Restart Failed".into(),
-            )
-            .to_smartrest()?;
-            Ok(vec![Message::new(&topic, smartrest_set_operation)])
+                Ok(vec![Message::new(&topic, smartrest_set_operation)])
+            }
+            CommandStatus::Successful => {
+                let smartrest_set_operation = SmartRestSetOperationToSuccessful::new(
+                    CumulocitySupportedOperations::C8yRestartRequest,
+                )
+                .to_smartrest()?;
+                Ok(vec![Message::new(&topic, smartrest_set_operation)])
+            }
+            CommandStatus::Failed => {
+                let smartrest_set_operation = SmartRestSetOperationToFailed::new(
+                    CumulocitySupportedOperations::C8yRestartRequest,
+                    "Restart Failed".into(),
+                )
+                .to_smartrest()?;
+                Ok(vec![Message::new(&topic, smartrest_set_operation)])
+            }
+            _ => {
+                // The other states are ignored
+                Ok(vec![])
+            }
         }
     }
 }

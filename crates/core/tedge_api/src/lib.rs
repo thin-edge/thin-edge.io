@@ -22,8 +22,7 @@ pub use messages::control_filter_topic;
 pub use messages::software_filter_topic;
 pub use messages::Jsonify;
 pub use messages::OperationStatus;
-pub use messages::RestartOperationRequest;
-pub use messages::RestartOperationResponse;
+pub use messages::RestartCommand;
 pub use messages::SoftwareListRequest;
 pub use messages::SoftwareListResponse;
 pub use messages::SoftwareRequestResponse;
@@ -37,6 +36,8 @@ pub const DEFAULT_FILE_TRANSFER_DIR_NAME: &str = "file-transfer";
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mqtt_topics::EntityTopicId;
+    use crate::mqtt_topics::MqttSchema;
     use mqtt_channel::Topic;
     use regex::Regex;
 
@@ -61,11 +62,11 @@ mod tests {
             Topic::new_unchecked("tedge/commands/res/software/update")
         );
         assert_eq!(
-            RestartOperationRequest::new_with_id("abc").topic(),
-            Topic::new_unchecked("te/device/main///cmd/restart/abc")
-        );
-        assert_eq!(
-            RestartOperationResponse::new(&RestartOperationRequest::new_with_id("abc")).topic(),
+            RestartCommand::new(EntityTopicId::default_main_device())
+                .with_id("abc".to_string())
+                .try_into_message(&MqttSchema::default())
+                .unwrap()
+                .topic,
             Topic::new_unchecked("te/device/main///cmd/restart/abc")
         );
     }

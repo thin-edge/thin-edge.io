@@ -14,8 +14,7 @@ use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::Jsonify;
-use tedge_api::RestartOperationRequest;
-use tedge_api::RestartOperationResponse;
+use tedge_api::RestartCommand;
 use tedge_api::SoftwareListRequest;
 use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareUpdateRequest;
@@ -23,12 +22,12 @@ use tedge_api::SoftwareUpdateResponse;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 
-fan_in_message_type!(AgentInput[MqttMessage, SoftwareResponse, RestartOperationResponse] : Debug);
+fan_in_message_type!(AgentInput[MqttMessage, SoftwareResponse, RestartCommand] : Debug);
 
 pub struct TedgeOperationConverterActor {
     input_receiver: LoggingReceiver<AgentInput>,
     software_sender: LoggingSender<SoftwareRequest>,
-    restart_sender: LoggingSender<RestartOperationRequest>,
+    restart_sender: LoggingSender<RestartCommand>,
     mqtt_publisher: LoggingSender<MqttMessage>,
 }
 
@@ -50,8 +49,8 @@ impl Actor for TedgeOperationConverterActor {
                 AgentInput::SoftwareResponse(SoftwareResponse::SoftwareUpdateResponse(res)) => {
                     self.process_software_update_response(res).await?;
                 }
-                AgentInput::RestartOperationResponse(res) => {
-                    self.process_restart_response(res).await?;
+                AgentInput::RestartCommand(cmd) => {
+                    self.process_restart_response(cmd).await?;
                 }
             }
         }
@@ -63,7 +62,7 @@ impl TedgeOperationConverterActor {
     pub fn new(
         input_receiver: LoggingReceiver<AgentInput>,
         software_sender: LoggingSender<SoftwareRequest>,
-        restart_sender: LoggingSender<RestartOperationRequest>,
+        restart_sender: LoggingSender<RestartCommand>,
         mqtt_publisher: LoggingSender<MqttMessage>,
     ) -> Self {
         Self {
@@ -104,23 +103,27 @@ impl TedgeOperationConverterActor {
             }
         }
 
+        if message.topic.name.as_str().starts_with("tedge") {
+            return Ok(());
+        }
+
         let mqtt_schema = MqttSchema::default(); // FIXME use the correct root suffix
         match mqtt_schema.entity_channel_of(&message.topic) {
             Ok((
-                _target,
+                target,
                 Channel::Command {
                     operation: OperationType::Restart,
-                    ..
+                    cmd_id,
                 },
-            )) => {
-                // FIXME extract the command id from the topic, not the payload
-                match RestartOperationRequest::from_slice(message.payload_bytes()) {
-                    Ok(request) => {
-                        self.restart_sender.send(request).await?;
-                    }
-                    Err(err) => error!("Incorrect restart request payload: {err}"),
+            )) => match RestartCommand::try_from(target, cmd_id, message.payload_bytes()) {
+                Ok(Some(cmd)) => {
+                    self.restart_sender.send(cmd).await?;
                 }
-            }
+                Ok(None) => {
+                    // The command has been fully processed
+                }
+                Err(err) => error!("Incorrect restart request payload: {err}"),
+            },
             _ => {
                 log::error!("Unknown command channel: {}", message.topic.name);
             }
@@ -154,9 +157,11 @@ impl TedgeOperationConverterActor {
 
     async fn process_restart_response(
         &mut self,
-        response: RestartOperationResponse,
+        response: RestartCommand,
     ) -> Result<(), TedgeOperationConverterError> {
-        let message = MqttMessage::new(&response.topic(), response.to_bytes()?);
+        // FIXME use the mqtt root suffix read from the config
+        let schema = MqttSchema::default();
+        let message = response.try_into_message(&schema)?;
         self.mqtt_publisher.send(message).await?;
         Ok(())
     }
