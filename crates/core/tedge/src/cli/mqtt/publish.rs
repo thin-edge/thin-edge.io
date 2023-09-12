@@ -16,6 +16,7 @@ use std::time::Duration;
 use tedge_config::MqttAuthClientConfig;
 
 const DEFAULT_QUEUE_CAPACITY: usize = 10;
+use super::MAX_PACKET_SIZE;
 
 pub struct MqttPublishCommand {
     pub host: String,
@@ -47,6 +48,7 @@ impl Command for MqttPublishCommand {
 fn publish(cmd: &MqttPublishCommand) -> Result<(), MqttError> {
     let mut options = MqttOptions::new(cmd.client_id.as_str(), &cmd.host, cmd.port);
     options.set_clean_session(true);
+    options.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
 
     if cmd.ca_file.is_some() || cmd.ca_dir.is_some() {
         let mut root_store = RootCertStore::empty();
