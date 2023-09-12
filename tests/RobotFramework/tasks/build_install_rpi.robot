@@ -97,7 +97,7 @@ Install tedge apt plugin
    ${rc}=    Execute Command    sudo dpkg -i ./tedge-apt-plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 Install Tedge logfile request plugin
-   ${rc}=    Execute Command    sudo dpkg -i ./c8y-log-plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
+   ${rc}=    Execute Command    sudo dpkg -i ./tedge-log-plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 Install C8y configuration plugin
     ${rc}=    Execute Command    sudo dpkg -i ./c8y-configuration-plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True

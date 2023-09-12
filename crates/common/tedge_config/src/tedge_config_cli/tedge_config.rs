@@ -378,8 +378,7 @@ define_tedge_config! {
 
         enable: {
             /// Enable log management
-            // TODO turn the default to true, when c8y-log-plugin will be deprecated
-            #[tedge_config(example = "true", default(value = false))]
+            #[tedge_config(example = "true", default(value = true))]
             log_management: bool,
         }
 

@@ -97,7 +97,7 @@ curl -1sLf \
         tedge-apt-plugin \
         c8y-firmware-plugin \
         c8y-remote-access-plugin \
-        c8y-log-plugin
+        tedge-log-plugin
     ```
 
     The latest version will be automatically selected by `apt-get`.

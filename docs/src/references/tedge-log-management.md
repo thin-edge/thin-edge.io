@@ -1,8 +1,7 @@
 ---
-title: New Log File Management
+title: Log File Management
 tags: [Reference, Log Files]
 sidebar_position: 7
-draft: true
 ---
 
 # Log file management plugin

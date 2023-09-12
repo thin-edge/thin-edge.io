@@ -476,7 +476,7 @@ This functionality is also installed by default but some configuration is needed
 
 Log files can be added by creating or editing the following file with the given contents:
 
-```toml title="file: /etc/tedge/c8y/c8y-log-plugin.toml"
+```toml title="file: /etc/tedge/plugins/tedge-log-plugin.toml"
 files = [
   { type = "software-management", path = "/var/log/tedge/agent/software-*" },
   { type = "mosquitto", path = "/var/log/mosquitto/mosquitto.log" },
@@ -493,8 +493,8 @@ files = [
 The service can be started and enabled via:
 
 ```sh
-sudo systemctl enable c8y-log-plugin
-sudo systemctl start c8y-log-plugin
+sudo systemctl enable tedge-log-plugin
+sudo systemctl start tedge-log-plugin
 ```
 
 To see the content of the log files in Cumulocity IoT, take the following steps:
@@ -510,11 +510,11 @@ To see the content of the log files in Cumulocity IoT, take the following steps:
 
 ![Request Log file](./images/RequestLogfile.png)
 
-If `c8y-log-plugin.toml` is added to the `c8y-configuration-plugin.toml` it is possible to do the administration from there.
+If `tedge-log-plugin.toml` is added to the `c8y-configuration-plugin.toml` it is possible to do the administration from there.
 
-<!-- TODO: Check if restarting the c8y-log-plugin is required each time the log file is edited -->
+<!-- TODO: Check if restarting the tedge-log-plugin is required each time the log file is edited -->
 
-However, keep in mind that the daemon has to be restarted every time the `/etc/tedge/c8y/c8y-log-plugin.toml` is touched via the command line.
+However, keep in mind that the daemon has to be restarted every time the `/etc/tedge/plugins/tedge-log-plugin.toml` is touched via the command line.
 
 ### Final remarks and summary
 

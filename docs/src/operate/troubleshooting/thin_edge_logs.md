@@ -141,7 +141,7 @@ The supported log levels are `info, warn, error, trace, debug`.
 tedge-mapper = "trace"
 tedge-agent = "info"
 tedge-watchdog = "debug"
-c8y-log-plugin = "warn"
+tedge-log-plugin = "warn"
 c8y-configuration-plugin = "error"
 ```
 

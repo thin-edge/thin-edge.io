@@ -25,6 +25,11 @@
                 {"name": "c8y-log-plugin", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
             ]
         },
+        "tedge-log-plugin": {
+            "services": [
+                {"name": "tedge-log-plugin", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}
+            ]
+        },
         "c8y-firmware-plugin": {
             "services": [
                 {"name": "c8y-firmware-plugin", "enable": true, "start": true, "restart_after_upgrade": true, "stop_on_upgrade": true}

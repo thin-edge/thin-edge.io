@@ -112,7 +112,9 @@ class ThinEdgeIO(DeviceLibrary):
         )
 
     @keyword("Get Logs")
-    def get_logs(self, name: str = None, date_from: Union[datetime, float] = None, show=True):
+    def get_logs(
+        self, name: str = None, date_from: Union[datetime, float] = None, show=True
+    ):
         """Get device logs (override base class method to add additional debug info)
 
         Note: the date_from only applies to the systemd logs (not file based logs). This is
@@ -435,7 +437,7 @@ class ThinEdgeIO(DeviceLibrary):
             client_auth = "--cert /setup/client.crt --key /setup/client.key"
 
         message = self.execute_command(
-            f"mosquitto_sub -t 'tedge/health/{service}' --retained-only -C 1 -W 5 -p $(tedge config get mqtt.client.port) {server_auth} {client_auth}",
+            f"mosquitto_sub -t 'tedge/health/{service}' --retained-only -C 1 -W 5 -h $(tedge config get mqtt.client.host) -p $(tedge config get mqtt.client.port) {server_auth} {client_auth}",
             stdout=True,
             stderr=False,
         )
@@ -539,9 +541,9 @@ class ThinEdgeIO(DeviceLibrary):
         *Examples:*
 
         | ${listen}= | `Should Have MQTT Message` | topic=tedge/${CHILD_SN}/commands/req/config_snapshot | date_from=-5s |
-        | ${messages}= | `Should Have MQTT Message` | tedge/health/c8y-log-plugin | minimum=1 | minimum=2 |
-        | ${messages}= | `Should Have MQTT Message` | tedge/health/c8y-log-plugin | minimum=1 | minimum=2 | message_contains="time" |
-        | ${messages}= | `Should Have MQTT Message` | tedge/health/c8y-log-plugin | minimum=1 | minimum=2 | message_pattern="value":\s*\d+ |
+        | ${messages}= | `Should Have MQTT Message` | tedge/health/tedge-log-plugin | minimum=1 | minimum=2 |
+        | ${messages}= | `Should Have MQTT Message` | tedge/health/tedge-log-plugin | minimum=1 | minimum=2 | message_contains="time" |
+        | ${messages}= | `Should Have MQTT Message` | tedge/health/tedge-log-plugin | minimum=1 | minimum=2 | message_pattern="value":\s*\d+ |
         """
         result = self._assert_mqtt_topic_messages(
             topic,
@@ -554,6 +556,33 @@ class ThinEdgeIO(DeviceLibrary):
             **kwargs,
         )
         return result
+
+    @keyword("Register Child Device")
+    def register_child(
+        self,
+        parent_name: str,
+        child_name: str,
+        supported_operations: Union[List[str], str] = None,
+        name: str = None,
+    ):
+        """
+        Register a child device to a parent along with a given list of supported operations
+
+        *Examples:*
+
+        | `Register Child Device` | parent_name=tedge001 | child_name=child01 | supported_operations=c8y_LogfileRequest,c8y_SoftwareUpdate |
+        """
+        self.set_current(parent_name)
+        device = self.current
+        cmd = [f"sudo mkdir -p '/etc/tedge/operations/c8y/{child_name}'"]
+
+        if isinstance(supported_operations, str):
+            supported_operations = supported_operations.split(",")
+
+        for op_type in supported_operations:
+            cmd.append(f"sudo touch '/etc/tedge/operations/c8y/{child_name}/{op_type}'")
+
+        device.assert_command(" && ".join(cmd))
 
 
 def to_date(value: relativetime_) -> datetime:

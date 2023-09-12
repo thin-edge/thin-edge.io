@@ -18,8 +18,8 @@ thin-edge components support a custom config-dir location via flags
     Should Not Contain Default Path    ${CONFIG_DIR}    tedge-agent --config-dir ${CONFIG_DIR}
     Should Not Contain Default Path    ${CONFIG_DIR}    c8y-firmware-plugin --config-dir ${CONFIG_DIR}
 
-    Should Not Contain Default Path    ${CONFIG_DIR}    c8y-log-plugin --config-dir ${CONFIG_DIR}
-    ThinEdgeIO.File Should Exist       ${CONFIG_DIR}/c8y/c8y-log-plugin.toml
+    Should Not Contain Default Path    ${CONFIG_DIR}    tedge-log-plugin --config-dir ${CONFIG_DIR}
+    ThinEdgeIO.File Should Exist       ${CONFIG_DIR}/plugins/tedge-log-plugin.toml
 
     Should Not Contain Default Path    ${CONFIG_DIR}    c8y-configuration-plugin --config-dir ${CONFIG_DIR}
     ThinEdgeIO.File Should Exist       ${CONFIG_DIR}/c8y/c8y-configuration-plugin.toml
@@ -32,7 +32,7 @@ Custom Suite Setup
     Stop Service    tedge-agent
     Stop Service    tedge-mapper-c8y
     Stop Service    c8y-configuration-plugin
-    Stop Service    c8y-log-plugin
+    Stop Service    tedge-log-plugin
     Stop Service    c8y-firmware-plugin
 
     Set Suite Variable    ${DEVICE_SN}

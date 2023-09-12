@@ -5,7 +5,6 @@ Library             DateTime
 Library             ThinEdgeIO
 
 Suite Setup         Custom Setup
-Test Setup          Test Setup
 Test Teardown       Get Logs
 
 Test Tags           theme:c8y    theme:log
@@ -31,15 +30,17 @@ Request with non-existing log type
 
 
 *** Keywords ***
-Test Setup
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y-log-plugin.toml    /etc/tedge/c8y/c8y-log-plugin.toml
+Setup LogFiles
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/tedge-log-plugin.toml    /etc/tedge/plugins/tedge-log-plugin.toml
     ThinEdgeIO.Transfer To Device    ${CURDIR}/example.log    /var/log/example/
-    Execute Command    chown root:root /etc/tedge/c8y/c8y-log-plugin.toml /var/log/example/example.log
-    ThinEdgeIO.Restart Service    c8y-log-plugin
-    ThinEdgeIO.Service Health Status Should Be Up    c8y-log-plugin
+    Execute Command    chown root:root /etc/tedge/plugins/tedge-log-plugin.toml /var/log/example/example.log
+    ThinEdgeIO.Restart Service    tedge-log-plugin
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-log-plugin
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 
 Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
     Device Should Exist    ${DEVICE_SN}
+
+    Setup LogFiles
