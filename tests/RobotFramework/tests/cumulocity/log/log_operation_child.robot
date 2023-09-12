@@ -32,7 +32,7 @@ Setup Child Device
     ThinEdgeIO.Transfer To Device    ${CURDIR}/example.log    /var/log/example/
     Execute Command    chown root:root /etc/tedge/plugins/tedge-log-plugin.toml /var/log/example/example.log
     ThinEdgeIO.Stop Service    tedge-log-plugin
-    Execute Command    cmd=sed -i 's|ExecStart=.*|ExecStart=/usr/bin/tedge-log-plugin --root te --device "device/${CHILD_SN}//"|g' /lib/systemd/system/tedge-log-plugin.service && sudo systemctl daemon-reload
+    Execute Command    cmd=sed -i 's|ExecStart=.*|ExecStart=/usr/bin/tedge-log-plugin --mqtt-topic-root te --mqtt-device-topic-id "device/${CHILD_SN}//"|g' /lib/systemd/system/tedge-log-plugin.service && sudo systemctl daemon-reload
     ThinEdgeIO.Start Service    tedge-log-plugin
     ThinEdgeIO.Service Health Status Should Be Up    tedge-log-plugin
 
