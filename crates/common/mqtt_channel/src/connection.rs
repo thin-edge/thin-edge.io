@@ -8,7 +8,6 @@ use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::SinkExt;
 use futures::StreamExt;
-use log::debug;
 use log::error;
 use log::info;
 use rumqttc::AsyncClient;
@@ -138,13 +137,9 @@ impl Connection {
         let (mqtt_client, mut event_loop) = AsyncClient::new(mqtt_options, config.queue_capacity);
 
         info!(
-            "MQTT connecting to broker: host={}:{}, auth={:?}, session_name={:?}",
-            config.broker.host,
-            config.broker.port,
-            config.broker.authentication,
-            config.session_name
+            "MQTT connecting to broker: host={}:{}, session_name={:?}",
+            config.broker.host, config.broker.port, config.session_name
         );
-        debug!("MQTT Config: {config:?}");
 
         loop {
             match event_loop.poll().await {

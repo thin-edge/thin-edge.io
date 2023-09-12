@@ -2,6 +2,7 @@ use crate::Message;
 use crate::TopicFilter;
 use certificate::parse_root_certificate;
 use certificate::CertificateError;
+use log::debug;
 use rumqttc::tokio_rustls::rustls;
 use rumqttc::tokio_rustls::rustls::Certificate;
 use rumqttc::tokio_rustls::rustls::PrivateKey;
@@ -103,10 +104,18 @@ impl Default for AuthenticationConfig {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct ClientAuthConfig {
     cert_chain: Vec<Certificate>,
     key: PrivateKey,
+}
+
+impl Debug for ClientAuthConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClientAuthConfig")
+            .field("cert_chain", &self.cert_chain)
+            .finish()
+    }
 }
 
 #[derive(Clone)]
@@ -246,6 +255,7 @@ impl Config {
         &mut self,
         ca_file: impl AsRef<Path>,
     ) -> Result<&mut Self, certificate::CertificateError> {
+        debug!("Using CA certificate: {}", ca_file.as_ref().display());
         let authentication_config = self.broker.authentication.get_or_insert(Default::default());
         let cert_store = &mut authentication_config.cert_store;
 
@@ -260,6 +270,7 @@ impl Config {
         &mut self,
         ca_dir: impl AsRef<Path>,
     ) -> Result<&mut Self, certificate::CertificateError> {
+        debug!("Using CA directory: {}", ca_dir.as_ref().display());
         let authentication_config = self.broker.authentication.get_or_insert(Default::default());
         let cert_store = &mut authentication_config.cert_store;
 
@@ -277,6 +288,8 @@ impl Config {
         cert_file: P,
         key_file: P,
     ) -> Result<&mut Self, CertificateError> {
+        debug!("Using client certificate: {}", cert_file.as_ref().display());
+        debug!("Using client private key: {}", key_file.as_ref().display());
         let cert_chain = parse_root_certificate::read_cert_chain(cert_file)?;
         let key = parse_root_certificate::read_pvt_key(key_file)?;
 
