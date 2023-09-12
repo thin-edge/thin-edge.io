@@ -43,7 +43,4 @@ Custom Setup
     Set Suite Variable    $DEVICE_SN
     Device Should Exist    ${DEVICE_SN}
 
-    Execute Command    sudo tedge config set c8y.enable.log_management true
-    ThinEdgeIO.Restart Service    tedge-mapper-c8y
-
     Setup LogFiles
