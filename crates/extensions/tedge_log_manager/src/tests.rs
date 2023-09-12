@@ -91,8 +91,8 @@ fn new_log_manager_builder(
 ) {
     let config = LogManagerConfig {
         config_dir: temp_dir.to_path_buf(),
-        topic_root: "te".to_string(),
-        topic_identifier: "device/main//".to_string(),
+        mqtt_topic_root: "te".to_string(),
+        mqtt_device_topic_id: "device/main//".to_string(),
         plugin_config_dir: temp_dir.to_path_buf(),
         plugin_config_path: temp_dir.join("tedge-log-plugin.toml"),
         logtype_reload_topic: Topic::new_unchecked("te/device/main///cmd/log_upload"),

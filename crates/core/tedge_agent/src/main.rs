@@ -1,3 +1,18 @@
+//! Handles cloud-agnostic operations.
+//!
+//! The Tedge Agent addresses cloud-agnostic software management operations e.g.
+//! listing current installed software list, software update, software removal.
+//! Also, the Tedge Agent calls an SM Plugin(s) to execute an action defined by
+//! a received operation.
+//!
+//! It also has following capabilities:
+//!
+//! - File transfer HTTP server
+//! - Restart management
+//! - Software management
+
+use std::sync::Arc;
+
 use agent::AgentConfig;
 use camino::Utf8PathBuf;
 use clap::Parser;
@@ -14,7 +29,7 @@ mod state_repository;
 mod tedge_operation_converter;
 mod tedge_to_te_converter;
 
-#[derive(Debug, clap::Parser)]
+#[derive(Debug, Clone, clap::Parser)]
 #[clap(
 name = clap::crate_name!(),
 version = clap::crate_version!(),
@@ -37,6 +52,14 @@ pub struct AgentOpt {
     /// WARNING: This is mostly used in testing.
     #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
     pub config_dir: Utf8PathBuf,
+
+    /// The device MQTT topic identifier
+    #[clap(long)]
+    pub mqtt_device_topic_id: Option<Arc<str>>,
+
+    /// MQTT root prefix
+    #[clap(long)]
+    pub mqtt_topic_root: Option<Arc<str>>,
 }
 
 #[tokio::main]
@@ -55,11 +78,14 @@ async fn main() -> Result<(), anyhow::Error> {
 
     set_log_level(log_level);
 
+    let init = agent_opt.init;
+
     let mut agent = agent::Agent::try_new(
         "tedge-agent",
-        AgentConfig::from_tedge_config(&tedge_config_location)?,
+        AgentConfig::from_config_and_cliopts(&tedge_config_location, agent_opt)?,
     )?;
-    if agent_opt.init {
+
+    if init {
         warn!("This --init option has been deprecated and will be removed in a future release");
         return Ok(());
     } else {
