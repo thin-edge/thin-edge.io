@@ -50,11 +50,6 @@ impl TEdgeConfig {
         Self(TEdgeConfigReader::from_dto(dto, location))
     }
 
-    /// To get the value of `c8y.url`, which is a private field.
-    pub fn c8y_url(&self) -> OptionalConfig<ConnectUrl> {
-        self.c8y.url.clone()
-    }
-
     pub fn mqtt_config(&self) -> Result<mqtt_channel::Config, CertificateError> {
         let host = self.mqtt.client.host.as_str();
         let port = u16::from(self.mqtt.client.port);
@@ -345,6 +340,7 @@ define_tedge_config! {
     c8y: {
         /// Endpoint URL of Cumulocity tenant
         #[tedge_config(example = "your-tenant.cumulocity.com")]
+        // Config consumers should use `c8y.http`/`c8y.mqtt` as appropriate, hence this field is private
         #[tedge_config(reader(private))]
         url: ConnectUrl,
 

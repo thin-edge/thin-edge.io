@@ -78,7 +78,7 @@ impl C8yMapperConfig {
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let device_type = tedge_config.device.ty.clone();
         let service_type = tedge_config.service.ty.clone();
-        let c8y_host = tedge_config.c8y_url().or_config_not_set()?.to_string();
+        let c8y_host = tedge_config.c8y.http.or_config_not_set()?.to_string();
         let tedge_http_address = tedge_config.http.bind.address;
         let tedge_http_port = tedge_config.http.bind.port;
         let mqtt_schema = MqttSchema::default(); // later get the value from tedge config

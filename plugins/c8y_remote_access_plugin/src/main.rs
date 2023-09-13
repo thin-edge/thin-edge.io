@@ -156,7 +156,8 @@ async fn spawn_child(command: String) -> miette::Result<()> {
 
 async fn proxy(command: RemoteAccessConnect, config: TEdgeConfig) -> miette::Result<()> {
     let host = config
-        .c8y_url()
+        .c8y
+        .http
         .or_config_not_set()
         .into_diagnostic()?
         .to_string();
