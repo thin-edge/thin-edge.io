@@ -13,8 +13,8 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
 use tedge_api::mqtt_topics::ChannelFilter::Command;
-use tedge_api::mqtt_topics::ChannelFilter::CommandMetadata;
-use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
+use tedge_api::mqtt_topics::EntityFilter;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::RestartCommand;
@@ -22,6 +22,7 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 
 pub struct TedgeOperationConverterBuilder {
+    mqtt_schema: MqttSchema,
     input_receiver: LoggingReceiver<AgentInput>,
     software_sender: LoggingSender<SoftwareRequest>,
     restart_sender: LoggingSender<RestartCommand>,
@@ -31,10 +32,12 @@ pub struct TedgeOperationConverterBuilder {
 
 impl TedgeOperationConverterBuilder {
     pub fn new(
+        mqtt_topic_root: &str,
         software_actor: &mut impl ServiceProvider<SoftwareRequest, SoftwareResponse, NoConfig>,
         restart_actor: &mut impl ServiceProvider<RestartCommand, RestartCommand, NoConfig>,
         mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
     ) -> Self {
+        let mqtt_schema = MqttSchema::with_root(mqtt_topic_root.to_string());
         let (input_sender, input_receiver) = mpsc::channel(10);
         let (signal_sender, signal_receiver) = mpsc::channel(10);
 
@@ -51,11 +54,14 @@ impl TedgeOperationConverterBuilder {
         let restart_sender = restart_actor.connect_consumer(NoConfig, input_sender.clone().into());
         let restart_sender = LoggingSender::new("RestartSender".into(), restart_sender);
 
-        let mqtt_publisher =
-            mqtt_actor.connect_consumer(Self::subscriptions(), input_sender.into());
+        let mqtt_publisher = mqtt_actor.connect_consumer(
+            Self::subscriptions(&mqtt_schema, &device_topic_id),
+            input_sender.into(),
+        );
         let mqtt_publisher = LoggingSender::new("MqttPublisher".into(), mqtt_publisher);
 
         Self {
+            mqtt_schema,
             input_receiver,
             software_sender,
             restart_sender,
@@ -64,13 +70,11 @@ impl TedgeOperationConverterBuilder {
         }
     }
 
-    pub fn subscriptions() -> TopicFilter {
-        let mqtt_schema = MqttSchema::default(); // FIXME read root topic suffix from config
-
-        let mut topics: TopicFilter = [
-            mqtt_schema.topics(AnyEntity, Command(OperationType::Restart)),
-            mqtt_schema.topics(AnyEntity, CommandMetadata(OperationType::Restart)),
-        ]
+    pub fn subscriptions(mqtt_schema: &MqttSchema, device_topic_id: &EntityTopicId) -> TopicFilter {
+        let mut topics: TopicFilter = [mqtt_schema.topics(
+            EntityFilter::Entity(device_topic_id),
+            Command(OperationType::Restart),
+        )]
         .into_iter()
         .collect();
 
@@ -102,6 +106,7 @@ impl Builder<TedgeOperationConverterActor> for TedgeOperationConverterBuilder {
 
     fn build(self) -> TedgeOperationConverterActor {
         TedgeOperationConverterActor::new(
+            self.mqtt_schema,
             self.input_receiver,
             self.software_sender,
             self.restart_sender,

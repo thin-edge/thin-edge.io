@@ -25,6 +25,7 @@ use tedge_mqtt_ext::Topic;
 fan_in_message_type!(AgentInput[MqttMessage, SoftwareResponse, RestartCommand] : Debug);
 
 pub struct TedgeOperationConverterActor {
+    mqtt_schema: MqttSchema,
     input_receiver: LoggingReceiver<AgentInput>,
     software_sender: LoggingSender<SoftwareRequest>,
     restart_sender: LoggingSender<RestartCommand>,
@@ -60,12 +61,14 @@ impl Actor for TedgeOperationConverterActor {
 
 impl TedgeOperationConverterActor {
     pub fn new(
+        mqtt_schema: MqttSchema,
         input_receiver: LoggingReceiver<AgentInput>,
         software_sender: LoggingSender<SoftwareRequest>,
         restart_sender: LoggingSender<RestartCommand>,
         mqtt_publisher: LoggingSender<MqttMessage>,
     ) -> Self {
         Self {
+            mqtt_schema,
             input_receiver,
             software_sender,
             restart_sender,
@@ -107,8 +110,7 @@ impl TedgeOperationConverterActor {
             return Ok(());
         }
 
-        let mqtt_schema = MqttSchema::default(); // FIXME use the correct root suffix
-        match mqtt_schema.entity_channel_of(&message.topic) {
+        match self.mqtt_schema.entity_channel_of(&message.topic) {
             Ok((
                 target,
                 Channel::Command {
@@ -159,9 +161,7 @@ impl TedgeOperationConverterActor {
         &mut self,
         response: RestartCommand,
     ) -> Result<(), TedgeOperationConverterError> {
-        // FIXME use the mqtt root suffix read from the config
-        let schema = MqttSchema::default();
-        let message = response.try_into_message(&schema)?;
+        let message = response.try_into_message(&self.mqtt_schema)?;
         self.mqtt_publisher.send(message).await?;
         Ok(())
     }

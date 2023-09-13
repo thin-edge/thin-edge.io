@@ -193,6 +193,7 @@ async fn spawn_mqtt_operation_converter() -> Result<
         SimpleMessageBoxBuilder::new("MQTT", 5);
 
     let converter_actor_builder = TedgeOperationConverterBuilder::new(
+        "te",
         &mut software_builder,
         &mut restart_builder,
         &mut mqtt_builder,
