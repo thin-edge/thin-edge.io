@@ -15,6 +15,7 @@ async-trait = { workspace = true }
 aws_mapper_ext = { workspace = true }
 az_mapper_ext = { workspace = true }
 batcher = { workspace = true }
+c8y_auth_proxy = { workspace = true }
 c8y_http_proxy = { workspace = true }
 c8y_mapper_ext = { workspace = true }
 clap = { workspace = true }

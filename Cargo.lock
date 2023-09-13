@@ -288,6 +288,7 @@ checksum = "3b829e4e32b91e643de6eafe82b1d90675f5874230191a4ffbc1b336dec4d6bf"
 dependencies = [
  "async-trait",
  "axum-core",
+ "axum-macros",
  "bitflags 1.3.2",
  "bytes",
  "futures-util",
@@ -327,6 +328,18 @@ dependencies = [
  "rustversion",
  "tower-layer",
  "tower-service",
+]
+
+[[package]]
+name = "axum-macros"
+version = "0.3.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdca6a10ecad987bda04e95606ef85a5417dcaac1a78455242d72e031e2b6b62"
+dependencies = [
+ "heck",
+ "proc-macro2 1.0.66",
+ "quote 1.0.33",
+ "syn 2.0.29",
 ]
 
 [[package]]
@@ -618,6 +631,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "c8y_auth_proxy"
+version = "0.12.0"
+dependencies = [
+ "axum",
+ "c8y_http_proxy",
+ "env_logger",
+ "futures",
+ "hyper",
+ "miette",
+ "mockito",
+ "reqwest",
+ "tedge_actors",
+ "tedge_config",
+ "tedge_http_ext",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "c8y_config_manager"
 version = "0.12.0"
 dependencies = [
@@ -722,6 +755,7 @@ dependencies = [
  "assert_matches",
  "async-trait",
  "c8y_api",
+ "c8y_auth_proxy",
  "c8y_http_proxy",
  "camino",
  "clock",
@@ -3579,6 +3613,7 @@ dependencies = [
  "aws_mapper_ext",
  "az_mapper_ext",
  "batcher",
+ "c8y_auth_proxy",
  "c8y_http_proxy",
  "c8y_mapper_ext",
  "clap",

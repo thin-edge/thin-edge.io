@@ -12,6 +12,7 @@ repository = { workspace = true }
 [dependencies]
 async-trait = { workspace = true }
 c8y_api = { workspace = true }
+c8y_auth_proxy = { workspace = true }
 c8y_http_proxy = { workspace = true }
 camino = { workspace = true }
 clock = { workspace = true }

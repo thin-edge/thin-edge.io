@@ -380,8 +380,19 @@ define_tedge_config! {
             /// Enable log management
             #[tedge_config(example = "true", default(value = true))]
             log_management: bool,
-        }
+        },
 
+        proxy: {
+            bind: {
+                /// The address used for the local Cumulocity HTTP proxy
+                #[tedge_config(example = "127.0.0.1", default(variable = "Ipv4Addr::LOCALHOST"))]
+                address: IpAddr,
+
+                /// The port used for the local Cumulocity HTTP proxy
+                #[tedge_config(example = "8001", default(value = 8001u16))]
+                port: u16,
+            }
+        }
     },
 
     #[tedge_config(deprecated_name = "azure")] // for 0.1.0 compatibility

@@ -1,6 +1,7 @@
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
 use async_trait::async_trait;
+use c8y_auth_proxy::actor::C8yAuthProxyBuilder;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use c8y_mapper_ext::actor::C8yMapperBuilder;
@@ -34,6 +35,8 @@ impl TEdgeComponent for CumulocityMapper {
         let c8y_http_config = (&tedge_config).try_into()?;
         let mut c8y_http_proxy_actor =
             C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);
+        let c8y_auth_proxy_actor =
+            C8yAuthProxyBuilder::try_from_config(&tedge_config, &mut jwt_actor)?;
 
         let mut fs_watch_actor = FsWatchActorBuilder::new();
         let mut timer_actor = TimerActor::builder();
@@ -57,6 +60,7 @@ impl TEdgeComponent for CumulocityMapper {
         runtime.spawn(jwt_actor).await?;
         runtime.spawn(http_actor).await?;
         runtime.spawn(c8y_http_proxy_actor).await?;
+        runtime.spawn(c8y_auth_proxy_actor).await?;
         runtime.spawn(fs_watch_actor).await?;
         runtime.spawn(timer_actor).await?;
         runtime.spawn(c8y_mapper_actor).await?;
