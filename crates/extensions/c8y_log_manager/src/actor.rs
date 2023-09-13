@@ -187,18 +187,15 @@ impl LogManagerActor {
     }
 
     pub async fn reload_supported_log_types(&mut self) -> Result<(), anyhow::Error> {
-        let plugin_config = LogPluginConfig::new(self.config.plugin_config_path.as_path());
-        self.publish_supported_log_types(&plugin_config).await
+        self.plugin_config = LogPluginConfig::new(self.config.plugin_config_path.as_path());
+        self.publish_supported_log_types().await
     }
 
     /// updates the log types on Cumulocity
     /// sends 118,typeA,typeB,... on mqtt
-    pub async fn publish_supported_log_types(
-        &mut self,
-        plugin_config: &LogPluginConfig,
-    ) -> Result<(), anyhow::Error> {
+    pub async fn publish_supported_log_types(&mut self) -> Result<(), anyhow::Error> {
         let topic = C8yTopic::SmartRestResponse.to_topic()?;
-        let mut config_types = plugin_config.get_all_file_types();
+        let mut config_types = self.plugin_config.get_all_file_types();
         config_types.sort();
         let supported_config_types = config_types.join(",");
         let payload = format!("118,{supported_config_types}");
