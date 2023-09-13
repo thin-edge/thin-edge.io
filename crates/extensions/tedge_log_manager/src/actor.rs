@@ -222,17 +222,13 @@ impl LogManagerActor {
     }
 
     async fn reload_supported_log_types(&mut self) -> Result<(), ChannelError> {
-        let plugin_config: LogPluginConfig =
-            LogPluginConfig::new(self.config.plugin_config_path.as_path());
-        self.publish_supported_log_types(&plugin_config).await
+        self.plugin_config = LogPluginConfig::new(self.config.plugin_config_path.as_path());
+        self.publish_supported_log_types().await
     }
 
     /// updates the log types
-    async fn publish_supported_log_types(
-        &mut self,
-        plugin_config: &LogPluginConfig,
-    ) -> Result<(), ChannelError> {
-        let mut config_types = plugin_config.get_all_file_types();
+    async fn publish_supported_log_types(&mut self) -> Result<(), ChannelError> {
+        let mut config_types = self.plugin_config.get_all_file_types();
         config_types.sort();
         let payload = json!({ "types": config_types }).to_string();
         let msg = MqttMessage::new(&self.config.logtype_reload_topic, payload).with_retain();
