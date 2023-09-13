@@ -403,25 +403,27 @@ class ThinEdgeIO(DeviceLibrary):
     # Service Health Status
     #
     @keyword("Service Health Status Should Be Up")
-    def assert_service_health_status_up(self, service: str) -> Dict[str, Any]:
+    def assert_service_health_status_up(self, service: str, device: str = "main") -> Dict[str, Any]:
         """Checks if the Service Health Status is up
 
-        *Example:*
-        | `Service Health Status Should Be Up` | | | | | tedge-mapper-c8y |
+        *Examples:*
+
+        | `Service Health Status Should Be Up` | tedge-mapper-c8y |
+        | `Service Health Status Should Be Up` | tedge-mapper-c8y | device=child01 |
         """
-        return self._assert_health_status(service, status="up")
+        return self._assert_health_status(service, status="up", device=device)
 
     @keyword("Service Health Status Should Be Down")
-    def assert_service_health_status_down(self, service: str) -> Dict[str, Any]:
-        return self._assert_health_status(service, status="down")
+    def assert_service_health_status_down(self, service: str, device: str = "main") -> Dict[str, Any]:
+        return self._assert_health_status(service, status="down", device=device)
 
     @keyword("Service Health Status Should Be Equal")
     def assert_service_health_status_equal(
-        self, service: str, status: str
+        self, service: str, status: str, device: str = "main"
     ) -> Dict[str, Any]:
-        return self._assert_health_status(service, status=status)
+        return self._assert_health_status(service, status=status, device=device)
 
-    def _assert_health_status(self, service: str, status: str) -> Dict[str, Any]:
+    def _assert_health_status(self, service: str, status: str, device: str = "main") -> Dict[str, Any]:
         # if mqtt.client.auth.ca_file or mqtt.client.auth.ca_dir is set, we pass setting
         # value to mosquitto_sub
         mqtt_config_options = self.execute_command(
@@ -437,7 +439,7 @@ class ThinEdgeIO(DeviceLibrary):
             client_auth = "--cert /setup/client.crt --key /setup/client.key"
 
         message = self.execute_command(
-            f"mosquitto_sub -t 'tedge/health/{service}' --retained-only -C 1 -W 5 -h $(tedge config get mqtt.client.host) -p $(tedge config get mqtt.client.port) {server_auth} {client_auth}",
+            f"mosquitto_sub -t 'te/device/{device}/service/{service}/status/health' --retained-only -C 1 -W 5 -h $(tedge config get mqtt.client.host) -p $(tedge config get mqtt.client.port) {server_auth} {client_auth}",
             stdout=True,
             stderr=False,
         )
