@@ -136,7 +136,7 @@ impl LogManagerActor {
             Ok(()) => {
                 request.successful();
                 self.publish_command_status(topic, &request).await?;
-                info!("Log request processed for log type: {}.", request.log_type);
+                info!("Log request processed for log type: {}", request.log_type);
                 Ok(())
             }
             Err(error) => {
@@ -192,7 +192,7 @@ impl LogManagerActor {
         };
 
         let _ = http_result.error_for_status()?;
-        info!("Logfile uploaded to: {}.", url);
+        info!("Logfile uploaded to: {}", url);
         Ok(())
     }
 

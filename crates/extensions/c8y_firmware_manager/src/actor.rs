@@ -433,7 +433,7 @@ impl FirmwareManagerActor {
                     .insert(operation_key.clone(), ActiveOperationState::Executing);
             }
             None => {
-                info!("Received a response from {child_id} for unknown request {operation_id}.");
+                info!("Received a response from {child_id} for unknown request {operation_id}");
                 return Ok(());
             }
         }
