@@ -3,8 +3,8 @@ use axum::body::Body;
 use axum::body::Full;
 use axum::body::StreamBody;
 use axum::extract::FromRef;
+use axum::extract::Path;
 use axum::extract::State;
-use axum::http::uri::PathAndQuery;
 use axum::http::HeaderValue;
 use axum::response::Response;
 use axum::routing::get;
@@ -14,7 +14,6 @@ use futures::future::BoxFuture;
 use futures::FutureExt;
 use hyper::server::conn::AddrIncoming;
 use hyper::HeaderMap;
-use hyper::Uri;
 use miette::Context;
 use miette::IntoDiagnostic;
 use reqwest::Method;
@@ -51,8 +50,8 @@ fn try_run_server(address: IpAddr, port: u16, state: AppState) -> miette::Result
         .delete(respond_to)
         .options(respond_to);
     let app = Router::new()
-        .route("/", handle.clone())
-        .route("/*path", handle)
+        .route("/c8y", handle.clone())
+        .route("/c8y/*path", handle)
         .with_state(state);
     Ok(axum::Server::try_bind(&(address, port).into())
         .into_diagnostic()
@@ -90,22 +89,23 @@ impl fmt::Display for TargetHost {
 async fn respond_to(
     State(TargetHost(host)): State<TargetHost>,
     retrieve_token: State<SharedTokenManager>,
-    uri: Uri,
+    path: Option<Path<String>>,
     method: Method,
     headers: HeaderMap<HeaderValue>,
     small_body: crate::body::PossiblySmallBody,
 ) -> Response {
-    if uri.path().ends_with(".js") || uri.path().starts_with("apps/") {
+    let path = match &path {
+        Some(Path(p)) => p.as_str(),
+        None => "",
+    };
+
+    if path.ends_with(".js") || path.starts_with("apps/") {
         return Response::builder()
             .status(StatusCode::FORBIDDEN)
             .body(<_>::default())
             .unwrap();
     }
-    let destination = format!(
-        "{host}{}",
-        uri.path_and_query()
-            .map_or(PathAndQuery::from_static(""), <_>::to_owned)
-    );
+    let destination = format!("{host}/{path}",);
 
     let mut token = retrieve_token.not_matching(None).await;
 
@@ -171,7 +171,7 @@ mod tests {
 
         let port = start_server(&server, vec!["test-token"]);
 
-        let res = reqwest::get(format!("http://localhost:{port}/hello"))
+        let res = reqwest::get(format!("http://localhost:{port}/c8y/hello"))
             .await
             .unwrap();
         assert_eq!(res.status(), 204);
@@ -188,7 +188,7 @@ mod tests {
 
         let port = start_server(&server, vec!["test-token"]);
 
-        let res = reqwest::get(format!("http://localhost:{port}/not-a-known-url"))
+        let res = reqwest::get(format!("http://localhost:{port}/c8y/not-a-known-url"))
             .await
             .unwrap();
         assert_eq!(res.status(), 404);
@@ -216,7 +216,7 @@ mod tests {
         let client = reqwest::Client::new();
         let body = "A body";
         let res = client
-            .put(format!("http://localhost:{port}/hello"))
+            .put(format!("http://localhost:{port}/c8y/hello"))
             .header("Content-Length", body.bytes().len())
             .body(body)
             .send()
@@ -246,7 +246,7 @@ mod tests {
 
         let port = start_server(&server, vec!["stale-token", "test-token"]);
 
-        let res = reqwest::get(format!("http://localhost:{port}/hello"))
+        let res = reqwest::get(format!("http://localhost:{port}/c8y/hello"))
             .await
             .unwrap();
         assert_eq!(res.status(), 200);

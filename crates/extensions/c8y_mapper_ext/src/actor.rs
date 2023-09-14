@@ -195,7 +195,7 @@ impl C8yMapperBuilder {
         let http_proxy = C8YHttpProxy::new("C8yMapper => C8YHttpProxy", http);
         let timer_sender = timer.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
         fs_watcher.register_peer(config.ops_dir.clone(), adapt(&box_builder.get_sender()));
-        let auth_proxy = ProxyUrlGenerator::new(config.auth_proxy_port);
+        let auth_proxy = ProxyUrlGenerator::new(config.auth_proxy_addr, config.auth_proxy_port);
 
         Ok(Self {
             config,

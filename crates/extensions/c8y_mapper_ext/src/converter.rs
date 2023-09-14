@@ -2005,6 +2005,7 @@ mod tests {
         let c8y_host = "test.c8y.io".into();
         let tedge_http_host = "localhost".into();
         let mqtt_schema = MqttSchema::default();
+        let auth_proxy_addr = [127, 0, 0, 1].into();
         let auth_proxy_port = 8001;
         let mut topics =
             C8yMapperConfig::default_internal_topic_filter(&tmp_dir.to_path_buf()).unwrap();
@@ -2022,6 +2023,7 @@ mod tests {
             tedge_http_host,
             topics,
             Capabilities::default(),
+            auth_proxy_addr,
             auth_proxy_port,
         );
 
