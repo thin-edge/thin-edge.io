@@ -23,6 +23,7 @@ use tedge_mqtt_ext::TopicFilter;
 
 pub struct TedgeOperationConverterBuilder {
     mqtt_schema: MqttSchema,
+    device_topic_id: EntityTopicId,
     input_receiver: LoggingReceiver<AgentInput>,
     software_sender: LoggingSender<SoftwareRequest>,
     restart_sender: LoggingSender<RestartCommand>,
@@ -33,6 +34,7 @@ pub struct TedgeOperationConverterBuilder {
 impl TedgeOperationConverterBuilder {
     pub fn new(
         mqtt_topic_root: &str,
+        device_topic_id: EntityTopicId,
         software_actor: &mut impl ServiceProvider<SoftwareRequest, SoftwareResponse, NoConfig>,
         restart_actor: &mut impl ServiceProvider<RestartCommand, RestartCommand, NoConfig>,
         mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
@@ -62,6 +64,7 @@ impl TedgeOperationConverterBuilder {
 
         Self {
             mqtt_schema,
+            device_topic_id,
             input_receiver,
             software_sender,
             restart_sender,
@@ -107,6 +110,7 @@ impl Builder<TedgeOperationConverterActor> for TedgeOperationConverterBuilder {
     fn build(self) -> TedgeOperationConverterActor {
         TedgeOperationConverterActor::new(
             self.mqtt_schema,
+            self.device_topic_id,
             self.input_receiver,
             self.software_sender,
             self.restart_sender,

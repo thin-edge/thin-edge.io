@@ -11,6 +11,7 @@ use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::Jsonify;
@@ -26,6 +27,7 @@ fan_in_message_type!(AgentInput[MqttMessage, SoftwareResponse, RestartCommand] :
 
 pub struct TedgeOperationConverterActor {
     mqtt_schema: MqttSchema,
+    device_topic_id: EntityTopicId,
     input_receiver: LoggingReceiver<AgentInput>,
     software_sender: LoggingSender<SoftwareRequest>,
     restart_sender: LoggingSender<RestartCommand>,
@@ -39,6 +41,8 @@ impl Actor for TedgeOperationConverterActor {
     }
 
     async fn run(&mut self) -> Result<(), RuntimeError> {
+        self.publish_operation_capabilities().await?;
+
         while let Some(input) = self.input_receiver.recv().await {
             match input {
                 AgentInput::MqttMessage(message) => {
@@ -62,6 +66,7 @@ impl Actor for TedgeOperationConverterActor {
 impl TedgeOperationConverterActor {
     pub fn new(
         mqtt_schema: MqttSchema,
+        device_topic_id: EntityTopicId,
         input_receiver: LoggingReceiver<AgentInput>,
         software_sender: LoggingSender<SoftwareRequest>,
         restart_sender: LoggingSender<RestartCommand>,
@@ -69,11 +74,18 @@ impl TedgeOperationConverterActor {
     ) -> Self {
         Self {
             mqtt_schema,
+            device_topic_id,
             input_receiver,
             software_sender,
             restart_sender,
             mqtt_publisher,
         }
+    }
+
+    async fn publish_operation_capabilities(&mut self) -> Result<(), RuntimeError> {
+        let restart_capability =
+            RestartCommand::capability_message(&self.mqtt_schema, &self.device_topic_id);
+        Ok(self.mqtt_publisher.send(restart_capability).await?)
     }
 
     async fn process_mqtt_message(

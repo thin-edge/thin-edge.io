@@ -552,7 +552,21 @@ impl RestartCommand {
         schema.topic_for(self.topic_id(), &self.channel())
     }
 
-    /// Return the MQTT payload for this command
+    /// Return the MQTT message to register `restart` as a supported command on a given target device
+    pub fn capability_message(schema: &MqttSchema, target: &EntityTopicId) -> Message {
+        let meta_topic = schema.topic_for(
+            target,
+            &Channel::CommandMetadata {
+                operation: OperationType::Restart,
+            },
+        );
+        let payload = "{}";
+        Message::new(&meta_topic, payload)
+            .with_retain()
+            .with_qos(QoS::AtLeastOnce)
+    }
+
+    /// Return the MQTT message for this command
     pub fn try_into_message(&self, schema: &MqttSchema) -> Result<Message, serde_json::Error> {
         let topic = self.topic(schema);
         let payload = self.payload.to_bytes()?;
@@ -560,6 +574,14 @@ impl RestartCommand {
             .with_qos(QoS::AtLeastOnce)
             .with_retain();
         Ok(message)
+    }
+
+    /// Return the MQTT message to clear this command
+    pub fn clearing_message(&self, schema: &MqttSchema) -> Message {
+        let topic = self.topic(schema);
+        Message::new(&topic, vec![])
+            .with_qos(QoS::AtLeastOnce)
+            .with_retain()
     }
 }
 

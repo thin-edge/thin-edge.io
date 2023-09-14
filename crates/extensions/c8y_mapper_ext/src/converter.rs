@@ -77,6 +77,7 @@ use tedge_config::TEdgeConfigError;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
+use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
@@ -740,10 +741,7 @@ impl CumulocityConverter {
 
             Channel::CommandMetadata {
                 operation: OperationType::Restart,
-            } => {
-                // FIXME: register restart operation on child devices
-                vec![]
-            }
+            } => self.register_restart_operation(&source).await?,
             Channel::Command {
                 operation: OperationType::Restart,
                 cmd_id,
@@ -987,6 +985,33 @@ fn create_inventory_fragments_message(
 }
 
 impl CumulocityConverter {
+    async fn register_restart_operation(
+        &self,
+        target: &EntityTopicId,
+    ) -> Result<Vec<Message>, ConversionError> {
+        match self.entity_store.get(target) {
+            None => {
+                error!("Fail to register `restart` operation for unknown device: {target}");
+                Ok(vec![])
+            }
+            Some(device) => {
+                let ops_dir = match device.r#type {
+                    EntityType::MainDevice => self.ops_dir.clone(),
+                    EntityType::ChildDevice => self.ops_dir.clone().join(&device.entity_id),
+                    EntityType::Service => {
+                        error!("Unsupported `restart` operation for a service: {target}");
+                        return Ok(vec![]);
+                    }
+                };
+                let ops_file = ops_dir.join("c8y_Restart");
+                create_directory_with_defaults(&ops_dir)?;
+                create_file_with_defaults(ops_file, None)?;
+                let device_operations = create_supported_operations(&ops_dir)?;
+                Ok(vec![device_operations])
+            }
+        }
+    }
+
     async fn publish_restart_operation_status(
         &mut self,
         target: &EntityTopicId,
@@ -1026,7 +1051,11 @@ impl CumulocityConverter {
                     CumulocitySupportedOperations::C8yRestartRequest,
                 )
                 .to_smartrest()?;
-                Ok(vec![Message::new(&topic, smartrest_set_operation)])
+
+                Ok(vec![
+                    command.clearing_message(&self.mqtt_schema),
+                    Message::new(&topic, smartrest_set_operation),
+                ])
             }
             CommandStatus::Failed => {
                 let smartrest_set_operation = SmartRestSetOperationToFailed::new(
@@ -1034,7 +1063,10 @@ impl CumulocityConverter {
                     "Restart Failed".into(),
                 )
                 .to_smartrest()?;
-                Ok(vec![Message::new(&topic, smartrest_set_operation)])
+                Ok(vec![
+                    command.clearing_message(&self.mqtt_schema),
+                    Message::new(&topic, smartrest_set_operation),
+                ])
             }
             _ => {
                 // The other states are ignored
@@ -1161,7 +1193,6 @@ fn get_inventory_fragments(
 
 async fn create_tedge_agent_supported_ops(ops_dir: PathBuf) -> Result<(), ConversionError> {
     create_file_with_defaults(ops_dir.join("c8y_SoftwareUpdate"), None)?;
-    create_file_with_defaults(ops_dir.join("c8y_Restart"), None)?;
 
     Ok(())
 }

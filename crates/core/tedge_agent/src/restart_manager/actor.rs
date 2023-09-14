@@ -52,6 +52,9 @@ impl Actor for RestartManagerActor {
         }
 
         while let Some(request) = self.message_box.recv().await {
+            if request.status() != CommandStatus::Init {
+                continue;
+            }
             let executing_response = self.update_state_repository(request.clone()).await;
             self.message_box.send(executing_response).await?;
 

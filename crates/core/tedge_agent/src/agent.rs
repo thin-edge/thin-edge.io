@@ -171,6 +171,7 @@ impl Agent {
         // Converter actor
         let converter_actor_builder = TedgeOperationConverterBuilder::new(
             self.config.mqtt_topic_root.as_ref(),
+            self.config.mqtt_device_topic_id.clone(),
             &mut software_update_builder,
             &mut restart_actor_builder,
             &mut mqtt_actor_builder,
