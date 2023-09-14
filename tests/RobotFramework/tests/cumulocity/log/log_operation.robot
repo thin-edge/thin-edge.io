@@ -37,8 +37,6 @@ Setup LogFiles
     ThinEdgeIO.Transfer To Device    ${CURDIR}/example.log    /var/log/example/
     # touch file again to change last modified timestamp, otherwise the logfile retrieval could be outside of the requested range
     Execute Command    chown root:root /etc/tedge/plugins/tedge-log-plugin.toml /var/log/example/example.log && touch /var/log/example/example.log
-    # WORKAROUND: Remove restart service command once https://github.com/thin-edge/thin-edge.io/issues/2246 has been resolved
-    ThinEdgeIO.Restart Service    tedge-log-plugin
     ThinEdgeIO.Service Health Status Should Be Up    tedge-log-plugin
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 
