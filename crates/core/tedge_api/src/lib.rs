@@ -64,8 +64,7 @@ mod tests {
         assert_eq!(
             RestartCommand::new(EntityTopicId::default_main_device())
                 .with_id("abc".to_string())
-                .try_into_message(&MqttSchema::default())
-                .unwrap()
+                .command_message(&MqttSchema::default())
                 .topic,
             Topic::new_unchecked("te/device/main///cmd/restart/abc")
         );
@@ -76,7 +75,7 @@ mod tests {
         let request = SoftwareListRequest::new_with_id("1");
 
         let expected_json = r#"{"id":"1"}"#;
-        let actual_json = request.to_json().expect("Failed to serialize");
+        let actual_json = request.to_json();
         assert_eq!(actual_json, expected_json);
     }
 
@@ -162,7 +161,7 @@ mod tests {
                     {"name":"m","url":"https://foobar.io/m.epl"}
                 ]}
             ]}"#;
-        let actual_json = response.to_json().expect("Failed to serialize");
+        let actual_json = response.to_json();
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
@@ -246,7 +245,7 @@ mod tests {
             "reason": "Request_timed-out"
         }"#;
 
-        let actual_json = response.to_json().expect("Failed to serialize");
+        let actual_json = response.to_json();
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
@@ -349,7 +348,7 @@ mod tests {
                 }
             ]
         }"#;
-        let actual_json = request.to_json().expect("Failed to serialize");
+        let actual_json = request.to_json();
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
@@ -424,7 +423,7 @@ mod tests {
                 }
             ]
         }"#;
-        let actual_json = request.to_json().expect("Failed to serialize");
+        let actual_json = request.to_json();
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
@@ -496,7 +495,7 @@ mod tests {
                 }
             ]
         }"#;
-        let actual_json = request.to_json().expect("Failed to serialize");
+        let actual_json = request.to_json();
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
@@ -612,7 +611,7 @@ mod tests {
             "status": "executing"
         }"#;
 
-        let actual_json = response.to_json().expect("Failed to serialize");
+        let actual_json = response.to_json();
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
@@ -709,7 +708,7 @@ mod tests {
             ]
         }"#;
 
-        let actual_json = response.to_json().expect("Failed to serialize");
+        let actual_json = response.to_json();
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
@@ -832,7 +831,7 @@ mod tests {
             ]
         }"#;
 
-        let actual_json = response.to_json().expect("Failed to serialize");
+        let actual_json = response.to_json();
         assert_eq!(
             remove_whitespace(&actual_json),
             remove_whitespace(expected_json)

@@ -82,7 +82,7 @@ impl CumulocityConverter {
         };
 
         // Command messages must be retained
-        Ok(vec![Message::new(&topic, request.to_json()?).with_retain()])
+        Ok(vec![Message::new(&topic, request.to_json()).with_retain()])
     }
 
     /// Address a received log_upload command. If its status is

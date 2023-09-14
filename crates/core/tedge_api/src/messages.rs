@@ -31,12 +31,12 @@ where
         serde_json::from_slice(bytes)
     }
 
-    fn to_json(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string(self)
+    fn to_json(&self) -> String {
+        serde_json::to_string(self).unwrap() // all thin-edge data can be serialized to json
     }
 
-    fn to_bytes(&self) -> Result<Vec<u8>, serde_json::Error> {
-        serde_json::to_vec(self)
+    fn to_bytes(&self) -> Vec<u8> {
+        serde_json::to_vec(self).unwrap() // all thin-edge data can be serialized to json
     }
 }
 
@@ -567,13 +567,12 @@ impl RestartCommand {
     }
 
     /// Return the MQTT message for this command
-    pub fn try_into_message(&self, schema: &MqttSchema) -> Result<Message, serde_json::Error> {
+    pub fn command_message(&self, schema: &MqttSchema) -> Message {
         let topic = self.topic(schema);
-        let payload = self.payload.to_bytes()?;
-        let message = Message::new(&topic, payload)
+        let payload = self.payload.to_bytes();
+        Message::new(&topic, payload)
             .with_qos(QoS::AtLeastOnce)
-            .with_retain();
-        Ok(message)
+            .with_retain()
     }
 
     /// Return the MQTT message to clear this command
@@ -667,7 +666,7 @@ mod tests {
         };
         let expected_json = r#"{"id":"1234"}"#;
 
-        let actual_json = request.to_json().expect("Failed to serialize");
+        let actual_json = request.to_json();
 
         assert_eq!(actual_json, expected_json);
 
@@ -719,7 +718,7 @@ mod tests {
 
         let expected_json = r#"{"id":"1234","updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"},{"name":"debian2","version":"0.0.2","action":"install"}]},{"type":"docker","modules":[{"name":"docker1","version":"0.0.1","url":"test.com","action":"remove"}]}]}"#;
 
-        let actual_json = request.to_json().expect("Fail to serialize the request");
+        let actual_json = request.to_json();
         assert_eq!(actual_json, expected_json);
 
         let parsed_request =
@@ -739,7 +738,7 @@ mod tests {
 
         let expected_json = r#"{"id":"1234","status":"successful","currentSoftwareList":[]}"#;
 
-        let actual_json = request.to_json().expect("Fail to serialize the request");
+        let actual_json = request.to_json();
         assert_eq!(actual_json, expected_json);
 
         let parsed_request = SoftwareRequestResponse::from_json(&actual_json)
@@ -772,7 +771,7 @@ mod tests {
 
         let expected_json = r#"{"id":"1234","status":"successful","currentSoftwareList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1"}]}]}"#;
 
-        let actual_json = request.to_json().expect("Fail to serialize the request");
+        let actual_json = request.to_json();
         assert_eq!(actual_json, expected_json);
 
         let parsed_request = SoftwareRequestResponse::from_json(&actual_json)

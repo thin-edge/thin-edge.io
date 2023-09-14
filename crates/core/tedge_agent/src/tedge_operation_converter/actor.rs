@@ -1,6 +1,5 @@
 use crate::software_manager::actor::SoftwareRequest;
 use crate::software_manager::actor::SoftwareResponse;
-use crate::tedge_operation_converter::error::TedgeOperationConverterError;
 use async_trait::async_trait;
 use log::error;
 use tedge_actors::fan_in_message_type;
@@ -88,10 +87,7 @@ impl TedgeOperationConverterActor {
         Ok(self.mqtt_publisher.send(restart_capability).await?)
     }
 
-    async fn process_mqtt_message(
-        &mut self,
-        message: MqttMessage,
-    ) -> Result<(), TedgeOperationConverterError> {
+    async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
         match message.topic.name.as_str() {
             "tedge/commands/req/software/list" => {
                 match SoftwareListRequest::from_slice(message.payload_bytes()) {
@@ -148,10 +144,10 @@ impl TedgeOperationConverterActor {
     async fn process_software_list_response(
         &mut self,
         response: SoftwareListResponse,
-    ) -> Result<(), TedgeOperationConverterError> {
+    ) -> Result<(), RuntimeError> {
         let message = MqttMessage::new(
             &Topic::new_unchecked("tedge/commands/res/software/list"),
-            response.to_bytes()?,
+            response.to_bytes(),
         );
         self.mqtt_publisher.send(message).await?;
         Ok(())
@@ -160,10 +156,10 @@ impl TedgeOperationConverterActor {
     async fn process_software_update_response(
         &mut self,
         response: SoftwareUpdateResponse,
-    ) -> Result<(), TedgeOperationConverterError> {
+    ) -> Result<(), RuntimeError> {
         let message = MqttMessage::new(
             &Topic::new_unchecked("tedge/commands/res/software/update"),
-            response.to_bytes()?,
+            response.to_bytes(),
         );
         self.mqtt_publisher.send(message).await?;
         Ok(())
@@ -172,8 +168,8 @@ impl TedgeOperationConverterActor {
     async fn process_restart_response(
         &mut self,
         response: RestartCommand,
-    ) -> Result<(), TedgeOperationConverterError> {
-        let message = response.try_into_message(&self.mqtt_schema)?;
+    ) -> Result<(), RuntimeError> {
+        let message = response.command_message(&self.mqtt_schema);
         self.mqtt_publisher.send(message).await?;
         Ok(())
     }

@@ -472,7 +472,7 @@ impl CumulocityConverter {
 
         Ok(vec![Message::new(
             &topic,
-            software_update_request.to_json().unwrap(),
+            software_update_request.to_json(),
         )])
     }
 
@@ -488,7 +488,7 @@ impl CumulocityConverter {
             }
         })?;
         let command = RestartCommand::new(target.topic_id.clone());
-        let message = command.try_into_message(&self.mqtt_schema)?;
+        let message = command.command_message(&self.mqtt_schema);
         Ok(vec![message])
     }
 
@@ -905,7 +905,7 @@ fn create_device_data_fragments(
 fn create_get_software_list_message() -> Result<Message, ConversionError> {
     let request = SoftwareListRequest::default();
     let topic = Topic::new(RequestTopic::SoftwareListRequest.as_str())?;
-    let payload = request.to_json().unwrap();
+    let payload = request.to_json();
     Ok(Message::new(&topic, payload))
 }
 
