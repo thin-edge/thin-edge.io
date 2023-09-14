@@ -12,10 +12,11 @@ Test Tags           theme:c8y    theme:log
 
 *** Test Cases ***
 Successful log operation
-    ${end_timestamp}=    get current date    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${operation}=    Cumulocity.Create Operation
     ...    description=Log file request
-    ...    fragments={"c8y_LogfileRequest":{"dateFrom":"1970-01-01T00:00:00+0000","dateTo":"${end_timestamp}","logFile":"example","searchText":"first","maximumLines":10}}
+    ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"example","searchText":"first","maximumLines":10}}
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
 
 
@@ -23,18 +24,21 @@ Successful log operation
 Setup Child Device
     ThinEdgeIO.Set Device Context    ${CHILD_SN}
     Execute Command    sudo dpkg -i packages/tedge_*.deb
-    Execute Command    sudo dpkg -i packages/tedge-log-plugin*.deb
 
     Execute Command    sudo tedge config set mqtt.client.host ${PARENT_IP}
     Execute Command    sudo tedge config set mqtt.client.port 1883
+    Execute Command    sudo tedge config set mqtt.topic_root te
+    Execute Command    sudo tedge config set mqtt.device_topic_id "device/${CHILD_SN}//"
+
+    # Install plugin after the default settings have been updated to prevent it from starting up as the main plugin
+    Execute Command    sudo dpkg -i packages/tedge-log-plugin*.deb
 
     ThinEdgeIO.Transfer To Device    ${CURDIR}/tedge-log-plugin.toml    /etc/tedge/plugins/tedge-log-plugin.toml
     ThinEdgeIO.Transfer To Device    ${CURDIR}/example.log    /var/log/example/
-    Execute Command    chown root:root /etc/tedge/plugins/tedge-log-plugin.toml /var/log/example/example.log
-    ThinEdgeIO.Stop Service    tedge-log-plugin
-    Execute Command    cmd=sed -i 's|ExecStart=.*|ExecStart=/usr/bin/tedge-log-plugin --mqtt-topic-root te --mqtt-device-topic-id "device/${CHILD_SN}//"|g' /lib/systemd/system/tedge-log-plugin.service && sudo systemctl daemon-reload
-    ThinEdgeIO.Start Service    tedge-log-plugin
-    ThinEdgeIO.Service Health Status Should Be Up    tedge-log-plugin
+    Execute Command    chown root:root /etc/tedge/plugins/tedge-log-plugin.toml /var/log/example/example.log && touch /var/log/example/example.log
+
+    # WORKAROUND: Uncomment next line once https://github.com/thin-edge/thin-edge.io/issues/2253 has been resolved
+    # ThinEdgeIO.Service Health Status Should Be Up    tedge-log-plugin    device=${CHILD_SN}
 
 Custom Setup
     # Parent

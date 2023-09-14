@@ -239,9 +239,7 @@ impl ConfigManagerActor {
                 )?;
 
                 if parent_dir_name.eq("c8y") {
-                    let plugin_config = PluginConfig::new(&path);
-                    let message = plugin_config.to_supported_config_types_message()?;
-                    self.messages.send(message.into()).await?;
+                    self.publish_supported_config_types().await?;
                 } else {
                     // this is a child device
                     let plugin_config = PluginConfig::new(&path);
@@ -275,8 +273,9 @@ impl ConfigManagerActor {
     }
 
     async fn publish_supported_config_types(&mut self) -> Result<(), ConfigManagementError> {
+        self.plugin_config = PluginConfig::new(self.config.plugin_config_path.as_path());
         let message = self.plugin_config.to_supported_config_types_message()?;
-        self.messages.send(message.into()).await.unwrap();
+        self.messages.send(message.into()).await?;
         Ok(())
     }
 

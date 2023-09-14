@@ -73,36 +73,47 @@ Modify configuration plugin config via local filesystem modify inplace
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1
     Execute Command    sed -i 's/CONFIG1/CONFIG3/g' /etc/tedge/c8y/c8y-configuration-plugin.toml
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG3
+    ${operation}=    Cumulocity.Get Configuration    CONFIG3
+    Operation Should Be SUCCESSFUL    ${operation}
 
 Modify configuration plugin config via local filesystem overwrite
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1
     ${NEW_CONFIG}=    Execute Command    sed 's/CONFIG1/CONFIG3/g' /etc/tedge/c8y/c8y-configuration-plugin.toml
     Execute Command    echo "${NEW_CONFIG}" > /etc/tedge/c8y/c8y-configuration-plugin.toml
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG3
+    ${operation}=    Cumulocity.Get Configuration    CONFIG3
+    Operation Should Be SUCCESSFUL    ${operation}
 
 Update configuration plugin config via local filesystem copy
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1
     Transfer To Device    ${CURDIR}/c8y-configuration-plugin-updated.toml    /etc/tedge/c8y/
     Execute Command    cp /etc/tedge/c8y/c8y-configuration-plugin-updated.toml /etc/tedge/c8y/c8y-configuration-plugin.toml
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
+    ${operation}=    Cumulocity.Get Configuration    Config@2.0.0
+    Operation Should Be SUCCESSFUL    ${operation}
 
 Update configuration plugin config via local filesystem move (different directory)
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1
     Transfer To Device    ${CURDIR}/c8y-configuration-plugin-updated.toml    /etc/
     Execute Command    mv /etc/c8y-configuration-plugin-updated.toml /etc/tedge/c8y/c8y-configuration-plugin.toml
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
+    ${operation}=    Cumulocity.Get Configuration    Config@2.0.0
+    Operation Should Be SUCCESSFUL    ${operation}
 
 Update configuration plugin config via local filesystem move (same directory)
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1
     Transfer To Device    ${CURDIR}/c8y-configuration-plugin-updated.toml    /etc/tedge/c8y/
     Execute Command    mv /etc/tedge/c8y/c8y-configuration-plugin-updated.toml /etc/tedge/c8y/c8y-configuration-plugin.toml
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
+    ${operation}=    Cumulocity.Get Configuration    Config@2.0.0
+    Operation Should Be SUCCESSFUL    ${operation}
 
 *** Keywords ***
 
 Test Setup
     ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y-configuration-plugin.toml    /etc/tedge/c8y/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/config1.json         /etc/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/config2.json         /etc/
     Execute Command    chown root:root /etc/tedge/c8y/c8y-configuration-plugin.toml /etc/config1.json
     ThinEdgeIO.Service Health Status Should Be Up    c8y-configuration-plugin
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
