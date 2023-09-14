@@ -271,8 +271,8 @@ mod test {
         assert_eq!(actual_file_name, expected_file_name);
     }
 
-    const VALID_TEST_URI: &str = "http://127.0.0.1:3000/tedge/file-transfer/another/dir/test-file";
-    const INVALID_TEST_URI: &str = "http://127.0.0.1:3000/wrong/place/test-file";
+    const VALID_TEST_URI: &str = "http://127.0.0.1:3333/tedge/file-transfer/another/dir/test-file";
+    const INVALID_TEST_URI: &str = "http://127.0.0.1:3333/wrong/place/test-file";
 
     #[test_case(hyper::Method::GET, VALID_TEST_URI, hyper::StatusCode::OK)]
     #[test_case(hyper::Method::GET, INVALID_TEST_URI, hyper::StatusCode::NOT_FOUND)]
@@ -348,7 +348,7 @@ mod test {
         let tempdir_path = ttd.utf8_path_buf();
         let http_config = HttpConfig::default()
             .with_data_dir(tempdir_path)
-            .with_port(3000);
+            .with_port(3333);
         let server = http_file_transfer_server(&http_config).unwrap();
         (ttd, server)
     }
