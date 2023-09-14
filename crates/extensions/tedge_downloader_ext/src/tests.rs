@@ -4,6 +4,7 @@ use std::time::Duration;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::DynError;
 use tedge_test_utils::fs::TempTedgeDir;
+use tedge_utils::file::PermissionEntry;
 use tokio::time::timeout;
 
 const TEST_TIMEOUT: Duration = Duration::from_secs(5);
@@ -21,7 +22,7 @@ async fn download_without_auth() -> Result<(), DynError> {
 
     let target_path = ttd.path().join("downloaded_file");
     let server_url = server.url();
-    let download_request = DownloadRequest::new(&server_url, &target_path, None);
+    let download_request = DownloadRequest::new(&server_url, &target_path);
 
     let mut requester = spawn_downloader_actor().await;
 
@@ -54,10 +55,43 @@ async fn download_with_auth() -> Result<(), DynError> {
 
     let target_path = ttd.path().join("downloaded_file");
     let server_url = server.url();
-    let download_request = DownloadRequest::new(
-        &server_url,
-        &target_path,
-        Some(Auth::Bearer("token".into())),
+    let download_request =
+        DownloadRequest::new(&server_url, &target_path).with_auth(Auth::Bearer("token".into()));
+
+    let mut requester = spawn_downloader_actor().await;
+
+    let (id, response) = timeout(
+        TEST_TIMEOUT,
+        requester.await_response(("id".to_string(), download_request)),
+    )
+    .await?
+    .expect("timeout");
+
+    assert_eq!(id.as_str(), "id");
+    assert!(response.is_ok());
+    assert_eq!(response.as_ref().unwrap().file_path, target_path.as_path());
+    assert_eq!(response.as_ref().unwrap().url, server_url);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn download_with_permission() -> Result<(), DynError> {
+    let ttd = TempTedgeDir::new();
+    let mut server = mockito::Server::new();
+    let _mock = server
+        .mock("GET", "/")
+        .with_status(200)
+        .with_header("content-type", "text/plain")
+        .with_body("without auth")
+        .create();
+
+    let target_path = ttd.path().join("downloaded_file");
+    let server_url = server.url();
+    let user = whoami::username();
+
+    let download_request = DownloadRequest::new(&server_url, &target_path).with_permission(
+        PermissionEntry::new(Some(user.clone()), Some(user), Some(0o775)),
     );
 
     let mut requester = spawn_downloader_actor().await;

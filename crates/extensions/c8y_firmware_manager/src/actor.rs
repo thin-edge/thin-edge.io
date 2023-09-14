@@ -245,22 +245,21 @@ impl FirmwareManagerActor {
                 operation_id, firmware_url
             );
 
-            let auth = if self
+            // Send a request to the Downloader to download the file asynchronously.
+            let download_request = if self
                 .config
                 .c8y_end_point
                 .url_is_in_my_tenant_domain(firmware_url)
             {
                 if let Ok(token) = self.message_box.jwt_retriever.await_response(()).await? {
-                    Some(Auth::new_bearer(&token))
+                    DownloadRequest::new(firmware_url, &cache_file_path)
+                        .with_auth(Auth::new_bearer(&token))
                 } else {
                     return Err(FirmwareManagementError::NoJwtToken);
                 }
             } else {
-                None
+                DownloadRequest::new(firmware_url, &cache_file_path)
             };
-
-            // Send a request to the Downloader to download the file asynchronously.
-            let download_request = DownloadRequest::new(firmware_url, &cache_file_path, auth);
 
             self.message_box
                 .download_sender
