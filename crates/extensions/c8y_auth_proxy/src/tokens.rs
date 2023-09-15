@@ -7,7 +7,10 @@ use tokio::sync::Mutex;
 pub struct SharedTokenManager(Arc<Mutex<TokenManager>>);
 
 impl SharedTokenManager {
-    pub async fn not_matching(&self, input: Option<&str>) -> Arc<str> {
+    /// Returns a JWT that doesn't match the provided JWT
+    ///
+    /// This prevents needless token refreshes if multiple requests are made in parallel
+    pub async fn not_matching(&self, input: Option<&Arc<str>>) -> Arc<str> {
         self.0.lock().await.not_matching(input).await
     }
 }
@@ -28,10 +31,11 @@ impl TokenManager {
 }
 
 impl TokenManager {
-    async fn not_matching(&mut self, input: Option<&str>) -> Arc<str> {
-        let no_match = input.unwrap_or("");
-        match self.cached.as_mut() {
-            Some(cached) if &**cached != no_match => cached.clone(),
+    async fn not_matching(&mut self, input: Option<&Arc<str>>) -> Arc<str> {
+        match (self.cached.as_mut(), input) {
+            (Some(token), None) => token.clone(),
+            // The token should have arisen from this TokenManager, so pointer equality is sufficient
+            (Some(token), Some(no_match)) if !Arc::ptr_eq(token, no_match) => token.clone(),
             _ => self.refresh().await,
         }
     }
