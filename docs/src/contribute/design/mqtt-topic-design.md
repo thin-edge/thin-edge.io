@@ -126,7 +126,7 @@ The equipment, which is a conveyor belt called "belt01", is located in factory "
 ```sh te2mqtt formats="v1"
 tedge mqtt pub -r 'te/factory01/hallA/packaging/belt001' '{
   "@type": "child-device",
-  "displayName": "belt001",
+  "name": "belt001",
   "type": "ConveyorBelt",
   "factory": "factory01",
   "building": "hallA",

@@ -24,7 +24,7 @@ impl C8yTopic {
         match entity.r#type {
             EntityType::MainDevice => Some(C8yTopic::upstream_topic()),
             EntityType::ChildDevice | EntityType::Service => {
-                Self::ChildSmartRestResponse(entity.entity_id.clone())
+                Self::ChildSmartRestResponse(entity.entity_id.clone().into())
                     .to_topic()
                     .ok()
             }
@@ -108,7 +108,7 @@ impl From<&EntityMetadata> for C8yTopic {
     fn from(value: &EntityMetadata) -> Self {
         match value.r#type {
             EntityType::MainDevice => Self::SmartRestResponse,
-            EntityType::ChildDevice => Self::ChildSmartRestResponse(value.entity_id.clone()),
+            EntityType::ChildDevice => Self::ChildSmartRestResponse(value.entity_id.clone().into()),
             EntityType::Service => Self::SmartRestResponse, // TODO how services are handled by c8y?
         }
     }
@@ -164,10 +164,35 @@ impl TryFrom<Topic> for MapperSubscribeTopic {
     }
 }
 
+/// Generates the SmartREST topic to publish to, for a given managed object
+/// from the list of external IDs of itself and all its parents.
+///
+/// The parents are appended in the reverse order,
+/// starting from the main device at the end of the list.
+/// The main device itself is represented by the root topic c8y/s/us,
+/// with the rest of the children appended to it at each topic level.
+///
+/// # Examples
+///
+/// - `["main"]` -> `c8y/s/us`
+/// - `["child1", "main"]` -> `c8y/s/us/child1`
+/// - `["child2", "child1", "main"]` -> `c8y/s/us/child1/child2`
+pub fn publish_topic_from_ancestors(ancestors: &[String]) -> Topic {
+    let mut target_topic = SMARTREST_PUBLISH_TOPIC.to_string();
+    for ancestor in ancestors.iter().rev().skip(1) {
+        // Skipping the last ancestor as it is the main device represented by the root topic itself
+        target_topic.push('/');
+        target_topic.push_str(ancestor);
+    }
+
+    Topic::new_unchecked(&target_topic)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::convert::TryInto;
+    use test_case::test_case;
 
     #[test]
     fn convert_c8y_topic_to_str() {
@@ -210,5 +235,15 @@ mod tests {
 
         let error: Result<C8yTopic, TopicError> = Topic::new("test").unwrap().try_into();
         assert!(error.is_err());
+    }
+
+    #[test_case(&["main"], "c8y/s/us")]
+    #[test_case(&["foo"], "c8y/s/us")]
+    #[test_case(&["child1", "main"], "c8y/s/us/child1")]
+    #[test_case(&["child3", "child2", "child1", "main"], "c8y/s/us/child1/child2/child3")]
+    fn topic_from_ancestors(ancestors: &[&str], topic: &str) {
+        let ancestors: Vec<String> = ancestors.iter().map(|v| v.to_string()).collect();
+        let nested_child_topic = publish_topic_from_ancestors(&ancestors);
+        assert_eq!(nested_child_topic, Topic::new_unchecked(topic));
     }
 }

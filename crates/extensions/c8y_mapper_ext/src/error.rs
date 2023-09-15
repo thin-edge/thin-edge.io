@@ -118,6 +118,12 @@ pub enum ConversionError {
 
     #[error(transparent)]
     FromC8yAlarmError(#[from] c8y_api::json_c8y::C8yAlarmError),
+
+    #[error("Main device registration via MQTT is not supported. Use 'tedge connect c8y' command instead.")]
+    MainDeviceRegistrationNotSupported,
+
+    #[error(transparent)]
+    FromEntityStoreError(#[from] tedge_api::entity_store::Error),
 }
 
 #[derive(thiserror::Error, Debug)]

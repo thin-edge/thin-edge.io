@@ -294,7 +294,7 @@ tedge mqtt pub -r 'te/device/main' '{
 ```sh te2mqtt formats="v1"
 tedge mqtt pub -r 'te/device/main/service/nodered' '{
   "@type": "service",
-  "displayName": "nodered",
+  "name": "nodered",
   "type": "systemd"
 }'
 ```
@@ -308,7 +308,7 @@ if the parent can not be derived from the topic directly:
 tedge mqtt pub -r 'te/component_namespace/service/nodered/instance-1' '{
   "@type": "service",
   "@parent": "te/device/main",
-  "displayName": "nodered",
+  "name": "nodered",
   "type": "systemd"
 }'
 ```
@@ -318,7 +318,7 @@ tedge mqtt pub -r 'te/component_namespace/service/nodered/instance-1' '{
 ```sh te2mqtt formats="v1"
 tedge mqtt pub -r 'te/device/child01' '{
   "@type": "child-device",
-  "displayName": "child01",
+  "name": "child01",
   "type": "SmartHomeHub"
 }'
 ```
@@ -333,7 +333,7 @@ Nested child devices are registered in a similar fashion as an immediate child d
 tedge mqtt pub -r 'te/device/nested_child01' '{
   "@type": "child-device",
   "@parent": "te/device/child01",
-  "displayName": "nested_child01"
+  "name": "nested_child01"
 }'
 ```
 
@@ -347,7 +347,7 @@ But, it is advised to declare it explicitly as follows:
 tedge mqtt pub -r 'te/device/child01/service/nodered' '{
   "@type": "service",
   "@parent": "te/device/child01",
-  "displayName": "nodered",
+  "name": "nodered",
   "type": "systemd"
 }'
 ```
@@ -364,7 +364,7 @@ For example, a linux service runs on a device as it relies on physical hardware 
 tedge mqtt pub -r 'te/device/nested_child01/service/nodered' '{
   "@type": "service",
   "@parent": "te/device/nested_child01",
-  "displayName": "nodered",
+  "name": "nodered",
   "type": "systemd"
 }'
 ```

@@ -37,7 +37,7 @@ te/device/child01
 ```json5 title="Payload"
 {
   "@type": "child-device",
-  "displayName": "child01",
+  "name": "child01",
   "type": "SmartHomeHub"
 }
 ```
@@ -75,7 +75,7 @@ te/device/child01
 {
   "@type": "child-device",
   "@id": "child01",
-  "displayName": "child01",
+  "name": "child01",
   "type": "SmartHomeHub"
 }
 ```
@@ -112,7 +112,7 @@ te/device/nested_child01
 {
   "@type": "child-device",
   "@parent": "te/device/child01",
-  "displayName": "nested_child01",
+  "name": "nested_child01",
   "type": "BatterySensor"
 }
 ```
@@ -147,7 +147,7 @@ te/device/main/service/nodered
 ```json5 title="Payload"
 {
   "@type": "service",
-  "displayName": "Node-Red",
+  "name": "Node-Red",
   "type": "systemd"
 }
 ```
@@ -182,7 +182,7 @@ te/device/child01/service/nodered
 ```json5 title="Payload"
 {
   "@type": "service",
-  "displayName": "Node-Red",
+  "name": "Node-Red",
   "type": "systemd"
 }
 ```

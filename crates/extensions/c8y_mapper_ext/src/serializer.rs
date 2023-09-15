@@ -67,7 +67,7 @@ impl C8yJsonSerializer {
             let _ = json.write_key("externalSource");
             json.write_open_obj();
             let _ = json.write_key("externalId");
-            let _ = json.write_str(child_id);
+            let _ = json.write_str(child_id.as_ref());
             let _ = json.write_key("type");
             let _ = json.write_str("c8y_Serial");
             json.write_close_obj();

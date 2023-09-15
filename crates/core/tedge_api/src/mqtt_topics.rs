@@ -305,6 +305,10 @@ impl EntityTopicId {
         }
         .map(|parent_id| EntityTopicId(format!("device/{parent_id}//")))
     }
+
+    pub fn is_default_main_device(&self) -> bool {
+        self == &Self::default_main_device()
+    }
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone)]

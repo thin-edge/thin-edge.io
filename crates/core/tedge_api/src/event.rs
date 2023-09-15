@@ -66,7 +66,7 @@ impl ThinEdgeEvent {
         Ok(Self {
             name: event_type.into(),
             data: event_data,
-            source: external_source,
+            source: external_source.map(|v| v.into()),
         })
     }
 }
