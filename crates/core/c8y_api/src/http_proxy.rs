@@ -101,7 +101,7 @@ impl C8yEndPoint {
 
         let (_, host) = url_host.split_once('.').unwrap_or((url_host, ""));
         let (_, c8y_host) = tenant_uri.split_once('.').unwrap();
-        (host == c8y_host).then(|| url)
+        (host == c8y_host).then_some(url)
     }
 }
 
