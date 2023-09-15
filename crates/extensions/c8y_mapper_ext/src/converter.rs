@@ -1060,7 +1060,7 @@ impl CumulocityConverter {
             CommandStatus::Failed => {
                 let smartrest_set_operation = SmartRestSetOperationToFailed::new(
                     CumulocitySupportedOperations::C8yRestartRequest,
-                    "Restart Failed".into(),
+                    format!("Restart Failed: {}", command.reason()),
                 )
                 .to_smartrest()?;
                 Ok(vec![

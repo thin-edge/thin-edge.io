@@ -36,6 +36,7 @@ async fn test_pending_restart_operation() -> Result<(), DynError> {
             cmd_id: "1234".to_string(),
             payload: RestartCommandPayload {
                 status: CommandStatus::Successful,
+                reason: "".to_string(),
             },
         }])
         .await;
@@ -60,6 +61,7 @@ async fn test_pending_restart_operation_failed() -> Result<(), DynError> {
             cmd_id: "1234".to_string(),
             payload: RestartCommandPayload {
                 status: CommandStatus::Failed,
+                reason: "The agent has been restarted but not the device".to_string(),
             },
         }])
         .await;
@@ -84,6 +86,7 @@ async fn test_pending_restart_operation_successful() -> Result<(), DynError> {
             cmd_id: "1234".to_string(),
             payload: RestartCommandPayload {
                 status: CommandStatus::Successful,
+                reason: "".to_string(),
             },
         }])
         .await;
@@ -106,6 +109,7 @@ async fn test_new_restart_operation() -> Result<(), DynError> {
             cmd_id: "1234".to_string(),
             payload: RestartCommandPayload {
                 status: CommandStatus::Init,
+                reason: "".to_string(),
             },
         })
         .await?;
@@ -125,7 +129,11 @@ async fn spawn_restart_manager(
     let mut converter_builder: SimpleMessageBoxBuilder<RestartCommand, RestartCommand> =
         SimpleMessageBoxBuilder::new("Converter", 5);
 
-    let config = RestartManagerConfig::new(&tmp_dir.utf8_path_buf(), &tmp_dir.utf8_path_buf());
+    let config = RestartManagerConfig::new(
+        &EntityTopicId::default_main_device(),
+        &tmp_dir.utf8_path_buf(),
+        &tmp_dir.utf8_path_buf(),
+    );
 
     let mut restart_actor_builder = RestartManagerBuilder::new(config);
     converter_builder.set_connection(&mut restart_actor_builder);

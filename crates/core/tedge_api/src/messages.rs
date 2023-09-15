@@ -528,9 +528,21 @@ impl RestartCommand {
         self.payload.status
     }
 
+    /// Return the reason why this command failed
+    pub fn reason(&self) -> &str {
+        &self.payload.reason
+    }
+
     /// Set the status of the command
     pub fn with_status(mut self, status: CommandStatus) -> Self {
         self.payload.status = status;
+        self
+    }
+
+    /// Set the failure reason of the command
+    pub fn with_error(mut self, reason: String) -> Self {
+        self.payload.status = CommandStatus::Failed;
+        self.payload.reason = reason;
         self
     }
 
@@ -589,6 +601,9 @@ impl RestartCommand {
 #[serde(rename_all = "camelCase")]
 pub struct RestartCommandPayload {
     pub status: CommandStatus,
+
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub reason: String,
 }
 
 impl<'a> Jsonify<'a> for RestartCommandPayload {}
@@ -597,6 +612,7 @@ impl Default for RestartCommandPayload {
     fn default() -> Self {
         RestartCommandPayload {
             status: CommandStatus::Init,
+            reason: String::new(),
         }
     }
 }

@@ -108,6 +108,7 @@ async fn convert_incoming_restart_request() -> Result<(), DynError> {
             cmd_id: "random".to_string(),
             payload: RestartCommandPayload {
                 status: CommandStatus::Init,
+                reason: "".to_string(),
             },
         }])
         .await;
@@ -195,6 +196,7 @@ async fn convert_outgoing_restart_response() -> Result<(), DynError> {
         cmd_id: "abc".to_string(),
         payload: RestartCommandPayload {
             status: CommandStatus::Executing,
+            reason: "".to_string(),
         },
     };
     restart_box.send(executing_response).await?;

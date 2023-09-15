@@ -18,7 +18,6 @@ use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_api::messages::CommandStatus;
 use tedge_api::messages::RestartCommandPayload;
-use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::RestartCommand;
 use tedge_config::system_services::SystemConfig;
 use tokio::process::Command;
@@ -67,10 +66,12 @@ impl Actor for RestartManagerActor {
                 }
                 Ok(None) | Err(_) => {
                     // Something went wrong. The process should have been shutdown by the restart.
-                    if let Err(err) = maybe_error {
-                        error!("{}", err);
-                    }
-                    self.handle_error(request).await?;
+                    let error = match maybe_error {
+                        Err(err) => format!("No shutdown has been triggered: {err}"),
+                        Ok(()) => "No shutdown has been triggered".to_string(),
+                    };
+                    error!(error);
+                    self.handle_error(request, error).await?;
                 }
             }
         }
@@ -96,87 +97,84 @@ impl RestartManagerActor {
     }
 
     async fn process_pending_restart_operation(&mut self) -> Option<RestartCommand> {
-        let state: Result<State, _> = self.state_repository.load().await;
+        match self.state_repository.load().await {
+            Ok(State {
+                operation_id: Some(operation_id),
+                operation: Some(operation),
+            }) => {
+                self.clear_state_repository().await;
 
-        if let State {
-            operation_id: Some(cmd_id),
-            operation: Some(operation),
-        } = match state {
-            Ok(state) => state,
-            Err(_) => State {
-                operation_id: None,
-                operation: None,
-            },
-        } {
-            self.clear_state_repository().await;
+                let command = RestartCommand {
+                    target: self.config.device_topic_id.clone(),
+                    cmd_id: operation_id,
+                    payload: RestartCommandPayload::default(),
+                };
 
-            let target = EntityTopicId::default_main_device();
-            match operation {
-                StateStatus::Restart(RestartOperationStatus::Restarting) => {
-                    let status = match has_rebooted(&self.config.tmp_dir) {
-                        Ok(true) => {
-                            info!("Device restart successful.");
-                            CommandStatus::Successful
-                        }
-                        Ok(false) => {
-                            info!("Device failed to restart.");
-                            CommandStatus::Failed
-                        }
-                        Err(err) => {
-                            error!("Fail to detect a restart: {err}");
-                            CommandStatus::Failed
-                        }
-                    };
+                match operation {
+                    StateStatus::Restart(RestartOperationStatus::Restarting) => {
+                        let command = match has_rebooted(&self.config.tmp_dir) {
+                            Ok(true) => {
+                                info!("Device restart successful");
+                                command.with_status(CommandStatus::Successful)
+                            }
+                            Ok(false) => {
+                                let error = "Device failed to restart";
+                                error!(error);
+                                command.with_error(error.to_string())
+                            }
+                            Err(err) => {
+                                let error = format!("Fail to detect a restart: {err}");
+                                error!(error);
+                                command.with_error(error)
+                            }
+                        };
 
-                    let payload = RestartCommandPayload { status };
-                    return Some(RestartCommand {
-                        target,
-                        cmd_id,
-                        payload,
-                    });
+                        Some(command)
+                    }
+                    StateStatus::Restart(RestartOperationStatus::Pending) => {
+                        let error = "The agent has been restarted but not the device";
+                        error!(error);
+                        Some(command.with_error(error.to_string()))
+                    }
+                    StateStatus::Software(_) | StateStatus::UnknownOperation => {
+                        error!("UnknownOperation in store.");
+                        None
+                    }
                 }
-                StateStatus::Restart(RestartOperationStatus::Pending) => {
-                    error!("The agent has been restarted but not the device");
-                    let status = CommandStatus::Failed;
-                    let payload = RestartCommandPayload { status };
-                    return Some(RestartCommand {
-                        target,
-                        cmd_id,
-                        payload,
-                    });
-                }
-                StateStatus::Software(_) | StateStatus::UnknownOperation => {
-                    error!("UnknownOperation in store.");
-                }
-            };
+            }
+            Err(err) => {
+                error!("Fail to read tedge-agent state: {err}");
+                None
+            }
+            Ok(_) => None,
         }
-        None
     }
 
     async fn update_state_repository(&mut self, command: RestartCommand) -> RestartCommand {
-        let command = command.with_status(CommandStatus::Executing);
         let state = State {
             operation_id: Some(command.cmd_id.clone()),
             operation: Some(StateStatus::Restart(RestartOperationStatus::Restarting)),
         };
 
         if let Err(err) = self.state_repository.store(&state).await {
-            error!(
+            let reason = format!(
                 "Fail to update the restart state in {} due to: {}",
                 self.state_repository.state_repo_path, err
             );
-            return command.with_status(CommandStatus::Failed);
+            error!(reason);
+            return command.with_error(reason);
         }
 
         if let Err(err) = create_tmp_restart_file(&self.config.tmp_dir).await {
-            error!(
+            let reason = format!(
                 "Fail to create a witness file in {} due to: {}",
                 self.config.tmp_dir, err
             );
-            return command.with_status(CommandStatus::Failed);
+            error!(reason);
+            return command.with_error(reason);
         }
 
-        command
+        command.with_status(CommandStatus::Executing)
     }
 
     async fn handle_restart_operation(&mut self) -> Result<(), RestartManagerError> {
@@ -185,7 +183,9 @@ impl RestartManagerActor {
             match command.status().await {
                 Ok(status) => {
                     if !status.success() {
-                        return Err(RestartManagerError::CommandFailed);
+                        return Err(RestartManagerError::CommandFailed {
+                            command: format!("{command:?}"),
+                        });
                     }
                 }
                 Err(e) => {
@@ -197,11 +197,13 @@ impl RestartManagerActor {
         Ok(())
     }
 
-    async fn handle_error(&mut self, command: RestartCommand) -> Result<(), ChannelError> {
+    async fn handle_error(
+        &mut self,
+        command: RestartCommand,
+        reason: String,
+    ) -> Result<(), ChannelError> {
         self.clear_state_repository().await;
-        self.message_box
-            .send(command.with_status(CommandStatus::Failed))
-            .await?;
+        self.message_box.send(command.with_error(reason)).await?;
         Ok(())
     }
 
