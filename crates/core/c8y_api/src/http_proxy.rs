@@ -89,7 +89,7 @@ impl C8yEndPoint {
         url_event_binary
     }
 
-    pub fn possible_tenant_url(&self, url: &str) -> Option<Url> {
+    pub fn maybe_tenant_url(&self, url: &str) -> Option<Url> {
         // c8y URL may contain either `Tenant Name` or Tenant Id` so they can be one of following options:
         // * <tenant_name>.<domain> eg: sample.c8y.io
         // * <tenant_id>.<domain> eg: t12345.c8y.io
@@ -216,7 +216,7 @@ mod tests {
     #[test_case("https://t1124124.test.com/path/to/file")]
     fn url_is_my_tenant_correct_urls(url: &str) {
         let c8y = C8yEndPoint::new("test.test.com", "test_device");
-        assert_eq!(c8y.possible_tenant_url(url), Some(url.parse().unwrap()));
+        assert_eq!(c8y.maybe_tenant_url(url), Some(url.parse().unwrap()));
     }
 
     #[test_case("test.com")]
@@ -226,7 +226,7 @@ mod tests {
     #[test_case("http://test.com::12345")]
     fn url_is_my_tenant_incorrect_urls(url: &str) {
         let c8y = C8yEndPoint::new("test.test.com", "test_device");
-        assert!(c8y.possible_tenant_url(url).is_none());
+        assert!(c8y.maybe_tenant_url(url).is_none());
     }
 
     #[test]

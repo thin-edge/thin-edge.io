@@ -1,7 +1,5 @@
 use std::net::IpAddr;
 
-use miette::Context;
-use miette::IntoDiagnostic;
 use tedge_config::TEdgeConfig;
 
 pub struct ProxyUrlGenerator {
@@ -41,11 +39,13 @@ mod tests {
             port: 8001,
         };
 
+        let url = url::Url::parse(
+            "https://thin-edge-io.eu-latest.cumulocity.com/inventory/managedObjects",
+        )
+        .unwrap();
+
         assert_eq!(
-            url_gen
-                .proxy_url("https://thin-edge-io.eu-latest.cumulocity.com/inventory/managedObjects")
-                .unwrap()
-                .to_string(),
+            url_gen.proxy_url(url).to_string(),
             "http://127.0.0.1:8001/c8y/inventory/managedObjects"
         )
     }

@@ -428,7 +428,7 @@ impl C8YHttpProxyActor {
         // If the provided url is c8y, add auth
         if self
             .end_point
-            .possible_tenant_url(download_info.url())
+            .maybe_tenant_url(download_info.url())
             .is_some()
         {
             let token = self.get_and_set_jwt_token().await?;
