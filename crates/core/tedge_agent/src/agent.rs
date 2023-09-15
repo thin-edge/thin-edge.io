@@ -7,6 +7,7 @@ use crate::software_manager::config::SoftwareManagerConfig;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
 use crate::tedge_to_te_converter::converter::TedgetoTeConverter;
 use crate::AgentOpt;
+use anyhow::Context;
 use camino::Utf8PathBuf;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
@@ -18,6 +19,7 @@ use tedge_actors::ConvertingActorBuilder;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::Runtime;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
@@ -40,7 +42,7 @@ pub struct AgentConfig {
     pub use_lock: bool,
     pub log_dir: Utf8PathBuf,
     pub data_dir: Utf8PathBuf,
-    pub mqtt_device_topic_id: Arc<str>,
+    pub mqtt_device_topic_id: EntityTopicId,
     pub mqtt_topic_root: Arc<str>,
 }
 
@@ -61,7 +63,9 @@ impl AgentConfig {
 
         let mqtt_device_topic_id = cliopts
             .mqtt_device_topic_id
-            .unwrap_or(tedge_config.mqtt.device_topic_id.clone().into());
+            .unwrap_or(tedge_config.mqtt.device_topic_id.clone().into())
+            .parse()
+            .context("Could not parse the device MQTT topic")?;
 
         let mqtt_session_name = format!("{TEDGE_AGENT}#{mqtt_topic_root}/{mqtt_device_topic_id}");
 
@@ -182,13 +186,24 @@ impl Agent {
 
         // Spawn all
         runtime.spawn(signal_actor_builder).await?;
-        runtime.spawn(file_transfer_server_builder).await?;
         runtime.spawn(mqtt_actor_builder).await?;
         runtime.spawn(restart_actor_builder).await?;
         runtime.spawn(software_update_builder).await?;
         runtime.spawn(converter_actor_builder).await?;
-        runtime.spawn(tedge_to_te_converter).await?;
         runtime.spawn(health_actor).await?;
+
+        // TODO: replace with a call to entity store when we stop assuming default MQTT schema
+        let is_main_device =
+            self.config.mqtt_device_topic_id == EntityTopicId::default_main_device();
+        if is_main_device {
+            info!(
+                "Running as a main device, starting tedge_to_te_converter and file transfer actors"
+            );
+            runtime.spawn(tedge_to_te_converter).await?;
+            runtime.spawn(file_transfer_server_builder).await?;
+        } else {
+            info!("Running as a child device, tedge_to_te_converter and file transfer actors disabled");
+        }
 
         runtime.run_to_completion().await?;
 
