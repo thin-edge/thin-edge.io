@@ -474,10 +474,12 @@ impl CumulocityConverter {
             .for_each(|modules| {
                 modules.modules.iter_mut().for_each(|module| {
                     if let Some(url) = &mut module.url {
-                        *url = if self.c8y_endpoint.url_is_in_my_tenant_domain(url.url()) {
+                        *url = if let Some(cumulocity_url) =
+                            self.c8y_endpoint.possible_tenant_url(url.url())
+                        {
                             // TODO what do we do if this fails?
                             DownloadInfo::new(
-                                self.auth_proxy.proxy_url(url.url()).unwrap().as_ref(),
+                                self.auth_proxy.proxy_url(cumulocity_url).unwrap().as_ref(),
                             )
                         } else {
                             DownloadInfo::new(url.url())

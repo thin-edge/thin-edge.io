@@ -21,16 +21,12 @@ impl ProxyUrlGenerator {
         }
     }
 
-    pub fn proxy_url(&self, cumulocity_url: &str) -> miette::Result<url::Url> {
-        let mut parsed_url = cumulocity_url
-            .parse::<url::Url>()
-            .into_diagnostic()
-            .wrap_err_with(|| format!("failed to parse url: {cumulocity_url}"))?;
-        parsed_url.set_ip_host(self.address).unwrap();
-        parsed_url.set_scheme("http").unwrap();
-        parsed_url.set_port(Some(self.port)).unwrap();
-        parsed_url.set_path(&format!("/c8y{}", parsed_url.path()));
-        Ok(parsed_url)
+    pub fn proxy_url(&self, mut cumulocity_url: url::Url) -> url::Url {
+        cumulocity_url.set_ip_host(self.address).unwrap();
+        cumulocity_url.set_scheme("http").unwrap();
+        cumulocity_url.set_port(Some(self.port)).unwrap();
+        cumulocity_url.set_path(&format!("/c8y{}", cumulocity_url.path()));
+        cumulocity_url
     }
 }
 

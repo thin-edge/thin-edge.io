@@ -248,7 +248,8 @@ impl FirmwareManagerActor {
             let auth = if self
                 .config
                 .c8y_end_point
-                .url_is_in_my_tenant_domain(firmware_url)
+                .possible_tenant_url(firmware_url)
+                .is_some()
             {
                 if let Ok(token) = self.message_box.jwt_retriever.await_response(()).await? {
                     Some(Auth::new_bearer(&token))
