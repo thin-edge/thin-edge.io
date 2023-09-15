@@ -2034,7 +2034,7 @@ mod tests {
         let mut c8y_proxy_builder: SimpleMessageBoxBuilder<C8YRestRequest, C8YRestResult> =
             SimpleMessageBoxBuilder::new("C8Y", 1);
         let http_proxy = C8YHttpProxy::new("C8Y", &mut c8y_proxy_builder);
-        let auth_proxy = ProxyUrlGenerator::new(auth_proxy_port);
+        let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port);
 
         let converter =
             CumulocityConverter::new(config, mqtt_publisher, http_proxy, auth_proxy).unwrap();
