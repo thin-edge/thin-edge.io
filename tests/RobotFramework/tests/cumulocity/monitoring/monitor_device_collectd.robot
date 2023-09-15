@@ -64,6 +64,11 @@ Custom Setup
     Device Should Exist    ${DEVICE_SN}
     # 1. Install collectd
     # 2. Configure collectd
-    Execute Command    sudo apt-get install libmosquitto1
-    Execute Command    sudo apt-get --assume-yes install collectd-core && sudo cp /etc/tedge/contrib/collectd/collectd.conf /etc/collectd/collectd.conf
+    Execute Command    sudo apt-get install -y --no-install-recommends collectd-core libmosquitto1
+    Execute Command    sudo cp /etc/tedge/contrib/collectd/collectd.conf /etc/collectd/collectd.conf
+
+    # Shorten the interval to 1 second so it is easier to test. This is technically not a documentation step,
+    # but collectd does not support a manual trigger to publish metrics
+    Execute Command    sudo sed -iE 's/\\bInterval.*[0-9]\\+/Interval 1/g' /etc/collectd/collectd.conf && cat /etc/collectd/collectd.conf
+
     Execute Command    sudo systemctl restart collectd
