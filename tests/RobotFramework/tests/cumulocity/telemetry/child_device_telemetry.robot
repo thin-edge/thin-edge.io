@@ -52,25 +52,14 @@ Child devices support sending custom events overriding the type
 
 Child devices support sending custom alarms #1699
     [Tags]    \#1699
-    Execute Command    tedge mqtt pub tedge/alarms/critical/myCustomAlarmType/${CHILD_SN} '{ "text": "Some test alarm", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
+    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///a/myCustomAlarmType '{ "severity": "critical", "text": "Some test alarm", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
     ${alarms}=    Device Should Have Alarm/s    expected_text=Some test alarm    severity=CRITICAL    minimum=1    maximum=1    type=myCustomAlarmType
     Should Be Equal    ${alarms[0]["someOtherCustomFragment"]["nested"]["value"]}    extra info
     Log    ${alarms}
 
 
-Child devices support sending events using message fragment instead of text
-    [Tags]    MQTT-API-INCONSISTENCY
-    Skip    Message fragment is not converted to 'text' for child devices. This is inconsistent with the parent device functionality
-    Execute Command    tedge mqtt pub tedge/alarms/minor/parentAlarmType1 '{ "message": "Some test alarm" }'
-    Cumulocity.Set Device    ${DEVICE_SN}
-    ${alarms}=    Device Should Have Alarm/s    expected_text=Some test alarm    severity=MINOR    minimum=1    maximum=1    type=parentAlarmType1
-    Log    ${alarms}
-
-
-Child devices support sending alarms using message fragment instead of text
-    [Tags]    MQTT-API-INCONSISTENCY
-    Skip    Message fragment is not converted to 'text' for child devices. This is inconsistent with the parent device functionality
-    Execute Command    tedge mqtt pub tedge/alarms/critical/childAlarmType1/${CHILD_SN} '{ "message": "Some test alarm" }'
+Child devices support sending alarms using text fragment
+    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///a/childAlarmType1 '{ "severity": "critical", "text": "Some test alarm" }'
     ${alarms}=    Device Should Have Alarm/s    expected_text=Some test alarm    severity=CRITICAL    minimum=1    maximum=1    type=childAlarmType1
     Log    ${alarms}
 

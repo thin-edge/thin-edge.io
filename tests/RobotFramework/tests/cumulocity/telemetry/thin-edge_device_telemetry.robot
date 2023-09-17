@@ -69,9 +69,47 @@ Thin-edge devices support sending custom events without type in topic
 
 Thin-edge devices support sending custom alarms #1699
     [Tags]    \#1699
-    Execute Command    tedge mqtt pub tedge/alarms/critical/myCustomAlarmType '{ "text": "Some test alarm", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
+    Execute Command    tedge mqtt pub te/device/main///a/myCustomAlarmType '{ "severity": "critical", "text": "Some test alarm", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
     ${alarms}=    Device Should Have Alarm/s    expected_text=Some test alarm    severity=CRITICAL    minimum=1    maximum=1    type=myCustomAlarmType
     Should Be Equal    ${alarms[0]["someOtherCustomFragment"]["nested"]["value"]}    extra info
+    Log    ${alarms}
+
+
+Thin-edge devices support sending custom alarms overriding the type
+    Execute Command    tedge mqtt pub te/device/main///a/myCustomAlarmType '{ "severity": "critical", "text": "Some test alarm", "type": "otherType", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
+    ${alarms}=    Device Should Have Alarm/s    expected_text=Some test alarm    severity=CRITICAL    minimum=1    maximum=1    type=otherType
+    Log    ${alarms}
+
+
+Thin-edge devices support sending custom alarms without type in topic
+    Execute Command    tedge mqtt pub te/device/main///a/ '{ "severity": "critical", "text": "Some test alarm", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
+    ${alarms}=    Device Should Have Alarm/s    expected_text=Some test alarm    severity=CRITICAL    minimum=1    maximum=1    type=ThinEdgeAlarm
+    Log    ${alarms}
+
+
+Thin-edge devices support sending custom alarms without severity in payload
+    Execute Command    tedge mqtt pub te/device/main///a/myCustomAlarmType2 '{ "text": "Some test alarm" }'
+    ${alarms}=    Device Should Have Alarm/s    expected_text=Some test alarm    severity=MINOR    minimum=1    maximum=1    type=myCustomAlarmType2
+    Log    ${alarms}
+
+
+Thin-edge devices support sending custom alarms with unknown severity in payload
+    Execute Command    tedge mqtt pub te/device/main///a/myCustomAlarmType3 '{ "severity": "invalid", "text": "Some test alarm", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
+    ${alarms}=    Device Should Have Alarm/s    expected_text=Some test alarm    severity=MINOR    minimum=1    maximum=1    type=myCustomAlarmType3
+    Log    ${alarms}
+
+
+
+Thin-edge devices support sending custom alarms without text in payload
+    Execute Command    tedge mqtt pub te/device/main///a/myCustomAlarmType4 '{ "severity": "major", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
+    ${alarms}=    Device Should Have Alarm/s    expected_text=myCustomAlarmType4    severity=MAJOR    minimum=1    maximum=1    type=myCustomAlarmType4
+    Log    ${alarms}
+
+
+Thin-edge devices support sending alarms using text fragment
+    Execute Command    tedge mqtt pub te/device/main///a/parentAlarmType1 '{ "severity": "minor", "text": "Some test alarm" }'
+    Cumulocity.Set Device    ${DEVICE_SN}
+    ${alarms}=    Device Should Have Alarm/s    expected_text=Some test alarm    severity=MINOR    minimum=1    maximum=1    type=parentAlarmType1
     Log    ${alarms}
 
 

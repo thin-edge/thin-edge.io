@@ -24,7 +24,7 @@ Custom Setup
     Device Should Exist    ${DEVICE_SN}
 
 Send retained Alarm
-    [Documentation]    https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/tutorials/raise-alarm.md
+    [Documentation]    https://github.com/thin-edge/thin-edge.io/blob/main/docs/src/start/raise-alarm.md
     [Arguments]    ${severity}
     ${timestamp}    ThinEdgeIO.Get Test Start Time
     #Raising alarms + adding custom fragment
