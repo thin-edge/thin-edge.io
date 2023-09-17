@@ -50,7 +50,7 @@ pub enum ConversionError {
     FromThinEdgeJsonSerialization(#[from] ThinEdgeJsonSerializationError),
 
     #[error(transparent)]
-    FromThinEdgeJsonAlarmDeserialization(#[from] tedge_api::alarm::ThinEdgeJsonDeserializerError),
+    FromThinEdgeJsonAlarmDeserialization(#[from] tedge_api::alarm::ThinEdgeAlarmDeserializerError),
 
     #[error(transparent)]
     FromThinEdgeJsonEventDeserialization(
@@ -115,6 +115,9 @@ pub enum ConversionError {
 
     #[error(transparent)]
     FileError(#[from] FileError),
+
+    #[error(transparent)]
+    FromC8yAlarmError(#[from] c8y_api::json_c8y::C8yAlarmError),
 }
 
 #[derive(thiserror::Error, Debug)]
