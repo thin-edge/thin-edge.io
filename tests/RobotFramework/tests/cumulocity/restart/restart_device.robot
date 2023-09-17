@@ -2,7 +2,6 @@
 Resource    ../../../resources/common.resource
 Library    Cumulocity
 Library    ThinEdgeIO
-Library    DebugLibrary
 
 Test Tags    theme:c8y    theme:troubleshooting
 Test Setup    Custom Setup
@@ -12,6 +11,7 @@ Test Teardown    Custom Teardown
 
 Supports restarting the device
     [Documentation]    Use a longer timeout period to allow the device time to restart and allow the initial token fetching process to fail at least one (due to the 60 seconds retry window)
+    Cumulocity.Should Contain Supported Operations    c8y_Restart
     ${operation}=    Cumulocity.Restart Device
     Operation Should Be SUCCESSFUL    ${operation}    timeout=180
 
