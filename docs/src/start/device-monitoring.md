@@ -58,6 +58,10 @@ sudo cp /etc/tedge/contrib/collectd/collectd.conf /etc/collectd/collectd.conf
 sudo systemctl restart collectd
 ```
 
+:::note
+The `collectd.conf` file included with thin-edge.io is configured for conservative interval times, e.g. 10 mins to 1 hour depending on the metric. This is done so that the metrics don't consume unnecessary IoT resources both on the device and in the cloud. If you want to push the metrics more frequently then you will have to adjust the `Interval` settings either globally or on the individual plugins. Make sure you restart the collectd service after making any changes to the configuration.
+:::
+
 ### Collectd.conf
 
 Unless you opted for the [minimal test configuration provided with thin-edge](#tldr-just-want-it-running),
