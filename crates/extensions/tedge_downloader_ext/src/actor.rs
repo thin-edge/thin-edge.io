@@ -10,20 +10,37 @@ use tedge_actors::Sequential;
 use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
+use tedge_utils::file::PermissionEntry;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DownloadRequest {
     pub url: String,
     pub file_path: PathBuf,
     pub auth: Option<Auth>,
+    pub permission: Option<PermissionEntry>,
 }
 
 impl DownloadRequest {
-    pub fn new(url: &str, file_path: &Path, auth: Option<Auth>) -> Self {
+    pub fn new(url: &str, file_path: &Path) -> Self {
         Self {
             url: url.into(),
             file_path: file_path.into(),
-            auth,
+            auth: None,
+            permission: None,
+        }
+    }
+
+    pub fn with_auth(self, auth: Auth) -> Self {
+        Self {
+            auth: Some(auth),
+            ..self
+        }
+    }
+
+    pub fn with_permission(self, permission: PermissionEntry) -> Self {
+        Self {
+            permission: Some(permission),
+            ..self
         }
     }
 }
@@ -84,7 +101,11 @@ impl Server for DownloaderActor {
             DownloadInfo::new(&request.url)
         };
 
-        let downloader = Downloader::new(request.file_path.clone());
+        let downloader = if let Some(permission) = request.permission {
+            Downloader::with_permission(request.file_path.clone(), permission)
+        } else {
+            Downloader::new(request.file_path.clone())
+        };
 
         info!(
             "Downloading from url {} to location {}",

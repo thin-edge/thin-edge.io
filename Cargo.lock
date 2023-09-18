@@ -3729,6 +3729,7 @@ dependencies = [
  "tedge_test_utils",
  "tedge_utils",
  "tokio",
+ "whoami",
 ]
 
 [[package]]
