@@ -711,11 +711,14 @@ impl CumulocityConverter {
                         }
                     };
 
-                    let entity = self.entity_store.get(&source).unwrap();
-                    if let Some(message) = external_device_registration_message(entity) {
-                        self.children
-                            .insert(entity.entity_id.to_string(), Operations::default());
-                        registration_messages.push(message);
+                    if let Some(entity) = self.entity_store.get(&source) {
+                        if let Some(message) = external_device_registration_message(entity) {
+                            self.children
+                                .insert(entity.entity_id.to_string(), Operations::default());
+                            registration_messages.push(message);
+                        }
+                    } else {
+                        error!("Cannot auto-register entity with non-standard MQTT identifier: {source}");
                     }
                 }
             }
