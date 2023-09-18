@@ -566,7 +566,7 @@ fn write_bridge_config_to_file(
 
     let common_config_path =
         get_common_mosquitto_config_file_path(config_location, common_mosquitto_config);
-    let mut common_draft = DraftFile::new(common_config_path)?;
+    let mut common_draft = DraftFile::new(common_config_path)?.with_mode(0o644);
     common_mosquitto_config.serialize(&mut common_draft)?;
     common_draft.persist()?;
 
