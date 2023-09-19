@@ -5,7 +5,6 @@ use crate::restart_manager::config::RestartManagerConfig;
 use crate::software_manager::builder::SoftwareManagerBuilder;
 use crate::software_manager::config::SoftwareManagerConfig;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
-use crate::tedge_to_te_converter::converter::TedgetoTeConverter;
 use crate::AgentOpt;
 use anyhow::Context;
 use camino::Utf8PathBuf;
@@ -14,16 +13,11 @@ use flockfile::Flockfile;
 use flockfile::FlockfileError;
 use std::fmt::Debug;
 use std::sync::Arc;
-use tedge_actors::ConvertingActor;
-use tedge_actors::ConvertingActorBuilder;
-use tedge_actors::MessageSink;
-use tedge_actors::MessageSource;
 use tedge_actors::Runtime;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
-use tedge_mqtt_ext::TopicFilter;
 use tedge_signal_ext::SignalActor;
 use tedge_utils::file::create_directory_with_defaults;
 use tracing::info;
@@ -181,9 +175,6 @@ impl Agent {
         // Health actor
         let health_actor = HealthMonitorBuilder::new(TEDGE_AGENT, &mut mqtt_actor_builder);
 
-        // Tedge to Te topic converter
-        let tedge_to_te_converter = create_tedge_to_te_converter(&mut mqtt_actor_builder)?;
-
         // Spawn all
         runtime.spawn(signal_actor_builder).await?;
         runtime.spawn(mqtt_actor_builder).await?;
@@ -196,43 +187,14 @@ impl Agent {
         let is_main_device =
             self.config.mqtt_device_topic_id == EntityTopicId::default_main_device();
         if is_main_device {
-            info!(
-                "Running as a main device, starting tedge_to_te_converter and file transfer actors"
-            );
-            runtime.spawn(tedge_to_te_converter).await?;
+            info!("Running as a main device, starting file transfer actor");
             runtime.spawn(file_transfer_server_builder).await?;
         } else {
-            info!("Running as a child device, tedge_to_te_converter and file transfer actors disabled");
+            info!("Running as a child device, file transfer actor disabled");
         }
 
         runtime.run_to_completion().await?;
 
         Ok(())
     }
-}
-
-pub fn create_tedge_to_te_converter(
-    mqtt_actor_builder: &mut MqttActorBuilder,
-) -> Result<ConvertingActorBuilder<TedgetoTeConverter, TopicFilter>, anyhow::Error> {
-    let tedge_to_te_converter = TedgetoTeConverter::new();
-    let subscriptions: TopicFilter = vec![
-        "tedge/measurements",
-        "tedge/measurements/+",
-        "tedge/events/+",
-        "tedge/events/+/+",
-        "tedge/alarms/+/+",
-        "tedge/alarms/+/+/+",
-        "tedge/health/+",
-        "tedge/health/+/+",
-    ]
-    .try_into()?;
-
-    // Tedge to Te converter
-    let mut tedge_converter_actor =
-        ConvertingActor::builder("TedgetoTeConverter", tedge_to_te_converter, subscriptions);
-
-    tedge_converter_actor.add_input(mqtt_actor_builder);
-    tedge_converter_actor.add_sink(mqtt_actor_builder);
-
-    Ok(tedge_converter_actor)
 }

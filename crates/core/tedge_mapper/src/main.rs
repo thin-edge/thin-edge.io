@@ -17,6 +17,7 @@ mod az;
 mod c8y;
 mod collectd;
 mod core;
+mod tedge_to_te_converter;
 
 fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     match component_name {
