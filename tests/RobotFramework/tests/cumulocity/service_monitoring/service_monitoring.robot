@@ -160,6 +160,8 @@ Check if a service is down
     ThinEdgeIO.Service Should Be Stopped  ${service_name}
 
     Device Should Exist                      ${DEVICE_SN}_${service_name}    show_info=False
+    # XXX: On error, this produces output of just `AssertionError` without any context. It's also difficult finding what
+    # went wrong in the logs.
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=down
 
     Should Be Equal    ${SERVICE["name"]}    ${service_name}

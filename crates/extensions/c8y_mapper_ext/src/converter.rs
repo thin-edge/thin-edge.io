@@ -748,7 +748,7 @@ impl CumulocityConverter {
 
             Channel::Command {
                 operation: OperationType::LogUpload,
-                cmd_id,
+                cmd_id: Some(cmd_id),
             } => {
                 self.handle_log_upload_state_change(&source, cmd_id, message)
                     .await?

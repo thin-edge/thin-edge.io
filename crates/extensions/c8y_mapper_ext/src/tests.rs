@@ -1285,7 +1285,7 @@ async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_main_device
 
     if let Channel::Command {
         operation: OperationType::LogUpload,
-        cmd_id,
+        cmd_id: Some(cmd_id),
     } = channel
     {
         // Validate the topic name
@@ -1352,7 +1352,7 @@ async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_child_devic
 
     if let Channel::Command {
         operation: OperationType::LogUpload,
-        cmd_id,
+        cmd_id: Some(cmd_id),
     } = channel
     {
         // Validate the topic name

@@ -61,7 +61,7 @@ impl CumulocityConverter {
         let cmd_id = nanoid!();
         let channel = Channel::Command {
             operation: OperationType::LogUpload,
-            cmd_id: cmd_id.clone(),
+            cmd_id: Some(cmd_id.clone()),
         };
         let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
 

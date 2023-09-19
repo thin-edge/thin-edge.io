@@ -8,6 +8,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
+const ENTITY_ID_SEGMENTS: usize = 4;
+
 /// The MQTT topics are represented by three distinct groups:
 /// - a root prefix, used by all the topics
 /// - an entity topic identifier of the source or target of the messages
@@ -233,8 +235,6 @@ impl FromStr for EntityTopicId {
     type Err = TopicIdError;
 
     fn from_str(entity_id: &str) -> Result<Self, Self::Err> {
-        const ENTITY_ID_SEGMENTS: usize = 4;
-
         let entity_id_segments = entity_id.matches('/').count();
         if entity_id_segments > ENTITY_ID_SEGMENTS {
             return Err(TopicIdError::TooLong);
@@ -305,6 +305,75 @@ impl EntityTopicId {
         }
         .map(|parent_id| EntityTopicId(format!("device/{parent_id}//")))
     }
+
+    /// If `self` is a device topic id, return a service topic id under this
+    /// device.
+    ///
+    /// The device topic id must be in a format: "device/DEVICE_NAME//"; if not,
+    /// `None` will be returned.
+    pub fn to_service_topic_id(&self, service_name: &str) -> Option<ServiceTopicId> {
+        if let ["device", device_name, "", ""] = self.0.split('/').collect::<Vec<&str>>()[..] {
+            return Some(ServiceTopicId(EntityTopicId(format!(
+                "device/{device_name}/service/{service_name}"
+            ))));
+        }
+        None
+    }
+
+    /// Returns an array of all segments of this entity topic.
+    pub fn segments(&self) -> [&str; ENTITY_ID_SEGMENTS] {
+        let mut segments = self.0.split('/');
+        let seg1 = segments.next().unwrap();
+        let seg2 = segments.next().unwrap();
+        let seg3 = segments.next().unwrap();
+        let seg4 = segments.next().unwrap();
+        [seg1, seg2, seg3, seg4]
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+/// Represents an entity topic identifier known to be a service.
+///
+/// It's most often in a format `device/DEVICE_NAME/service/SERVICE_NAME`.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct ServiceTopicId(EntityTopicId);
+
+impl ServiceTopicId {
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    pub fn entity(&self) -> &EntityTopicId {
+        &self.0
+    }
+
+    /// If in a default MQTT scheme, returns a device topic id of this service.
+    pub fn to_device_topic_id(&self) -> Option<DeviceTopicId> {
+        if let ["device", device_name, "service", _] = self.0.segments() {
+            Some(DeviceTopicId(EntityTopicId(format!(
+                "device/{device_name}//"
+            ))))
+        } else {
+            None
+        }
+    }
+}
+
+impl Display for ServiceTopicId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+pub struct DeviceTopicId(EntityTopicId);
+
+impl DeviceTopicId {
+    pub fn entity(&self) -> &EntityTopicId {
+        &self.0
+    }
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq, Clone)]
@@ -333,7 +402,7 @@ pub enum Channel {
     },
     Command {
         operation: OperationType,
-        cmd_id: String,
+        cmd_id: Option<String>,
     },
     MeasurementMetadata {
         measurement_type: String,
@@ -347,6 +416,7 @@ pub enum Channel {
     CommandMetadata {
         operation: OperationType,
     },
+    Health,
 }
 
 impl FromStr for Channel {
@@ -382,8 +452,9 @@ impl FromStr for Channel {
             }),
             ["cmd", operation, cmd_id] => Ok(Channel::Command {
                 operation: operation.parse().unwrap(), // Infallible
-                cmd_id: cmd_id.to_string(),
+                cmd_id: Some(cmd_id.to_string()),
             }),
+            ["status", "health"] => Ok(Channel::Health),
 
             _ => Err(ChannelError::InvalidCategory(channel.to_string())),
         }
@@ -406,8 +477,16 @@ impl Display for Channel {
             Channel::Alarm { alarm_type } => write!(f, "a/{alarm_type}"),
             Channel::AlarmMetadata { alarm_type } => write!(f, "a/{alarm_type}/meta"),
 
-            Channel::Command { operation, cmd_id } => write!(f, "cmd/{operation}/{cmd_id}"),
+            Channel::Command {
+                operation,
+                cmd_id: None,
+            } => write!(f, "cmd/{operation}"),
+            Channel::Command {
+                operation,
+                cmd_id: Some(cmd_id),
+            } => write!(f, "cmd/{operation}/{cmd_id}"),
             Channel::CommandMetadata { operation } => write!(f, "cmd/{operation}"),
+            Channel::Health => write!(f, "status/health"),
         }
     }
 }
@@ -424,6 +503,7 @@ pub enum OperationType {
     SoftwareList,
     SoftwareUpdate,
     LogUpload,
+    HealthCheck,
     Custom(String),
 }
 
@@ -448,6 +528,7 @@ impl Display for OperationType {
             OperationType::SoftwareList => write!(f, "software_list"),
             OperationType::SoftwareUpdate => write!(f, "software_update"),
             OperationType::LogUpload => write!(f, "log_upload"),
+            OperationType::HealthCheck => write!(f, "health/check"),
             OperationType::Custom(operation) => write!(f, "{operation}"),
         }
     }

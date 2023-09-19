@@ -179,10 +179,19 @@ impl Agent {
         let signal_actor_builder = SignalActor::builder(&runtime.get_handle());
 
         // Health actor
-        let health_actor = HealthMonitorBuilder::new(TEDGE_AGENT, &mut mqtt_actor_builder);
+        let service_topic_id = self.config.mqtt_device_topic_id.to_service_topic_id("tedge-agent")
+            .with_context(|| format!("Device topic id {} currently needs default scheme, e.g: 'device/DEVICE_NAME//'", self.config.mqtt_device_topic_id))?;
+        let health_actor = HealthMonitorBuilder::from_service_topic_id(
+            service_topic_id,
+            &mut mqtt_actor_builder,
+            self.config.mqtt_topic_root.clone(),
+        );
 
         // Tedge to Te topic converter
-        let tedge_to_te_converter = create_tedge_to_te_converter(&mut mqtt_actor_builder)?;
+        let tedge_to_te_converter = create_tedge_to_te_converter(
+            &mut mqtt_actor_builder,
+            self.config.mqtt_topic_root.to_string(),
+        )?;
 
         // Spawn all
         runtime.spawn(signal_actor_builder).await?;
@@ -213,8 +222,10 @@ impl Agent {
 
 pub fn create_tedge_to_te_converter(
     mqtt_actor_builder: &mut MqttActorBuilder,
+    mqtt_topic_root: String,
 ) -> Result<ConvertingActorBuilder<TedgetoTeConverter, TopicFilter>, anyhow::Error> {
-    let tedge_to_te_converter = TedgetoTeConverter::new();
+    let tedge_to_te_converter = TedgetoTeConverter::with_root(mqtt_topic_root.clone());
+
     let subscriptions: TopicFilter = vec![
         "tedge/measurements",
         "tedge/measurements/+",
@@ -224,6 +235,8 @@ pub fn create_tedge_to_te_converter(
         "tedge/alarms/+/+/+",
         "tedge/health/+",
         "tedge/health/+/+",
+        // currently only tedge-agent uses new topics
+        &format!("{mqtt_topic_root}/device/main/service/tedge-agent/status/health"),
     ]
     .try_into()?;
 
