@@ -61,10 +61,12 @@ pub fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
 
 /// A DraftFile is a temporary file
 /// that can be populated using the `Write` trait
-/// then finally and atomically persisted to a target file.
+/// then finally and atomically persisted to a target file
+/// with permission set to given mode if provided
 pub struct DraftFile {
     file: NamedTempFile,
     target: PathBuf,
+    mode: Option<u32>,
 }
 
 impl DraftFile {
@@ -80,18 +82,35 @@ impl DraftFile {
                 path: target.as_os_str().into(),
             })?;
         let file = NamedTempFile::new_in(dir)?;
+
         let target = target.to_path_buf();
 
-        Ok(DraftFile { file, target })
+        Ok(DraftFile {
+            file,
+            target,
+            mode: None,
+        })
     }
 
-    /// Atomically persist the file into its target path
+    /// Provide mode that will be applied to target file after persist operation
+    pub fn with_mode(self, mode: u32) -> Self {
+        Self {
+            mode: Some(mode),
+            ..self
+        }
+    }
+
+    /// Atomically persist the file into its target path and apply permission if provided
     pub fn persist(self) -> Result<(), PathsError> {
         let target = &self.target;
-        let _ = self
+        let file = self
             .file
             .persist(target)
             .map_err(|error| PathsError::FileCreationFailed(error, target.into()))?;
+
+        if let Some(mode) = self.mode {
+            set_permission(&file, mode)?;
+        }
 
         Ok(())
     }
