@@ -4,6 +4,7 @@ use clock::Clock;
 use log::error;
 use std::convert::Infallible;
 use tedge_actors::Converter;
+use tedge_api::health::is_bridge_health;
 use tedge_api::serialize::ThinEdgeJsonSerializer;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -47,15 +48,19 @@ impl AzureConverter {
     }
 
     fn try_convert(&mut self, input: &MqttMessage) -> Result<Vec<MqttMessage>, ConversionError> {
-        self.size_threshold.validate(input)?;
-        let default_timestamp = self.add_timestamp.then(|| self.clock.now());
-        let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
-        tedge_api::parser::parse_str(input.payload_str()?, &mut serializer)?;
+        if is_bridge_health(&input.topic.name) {
+            Ok(vec![])
+        } else {
+            self.size_threshold.validate(input)?;
+            let default_timestamp = self.add_timestamp.then(|| self.clock.now());
+            let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
+            tedge_api::parser::parse_str(input.payload_str()?, &mut serializer)?;
 
-        let payload = serializer.into_string()?;
-        Ok(vec![
-            (MqttMessage::new(&self.mapper_config.out_topic, payload)),
-        ])
+            let payload = serializer.into_string()?;
+            Ok(vec![
+                (MqttMessage::new(&self.mapper_config.out_topic, payload)),
+            ])
+        }
     }
 
     fn wrap_errors(
@@ -241,5 +246,18 @@ mod tests {
                 .unwrap(),
             expected_output
         );
+    }
+
+    #[test]
+    fn converting_bridge_health_status() {
+        let mut converter = AzureConverter::new(false, Box::new(TestClock));
+
+        let input = "0";
+        let result = converter.try_convert(&MqttMessage::new(
+            &Topic::new_unchecked("tedge/health/mosquitto-az-bridge"),
+            input,
+        ));
+        let res = result.unwrap();
+        assert!(res.is_empty());
     }
 }

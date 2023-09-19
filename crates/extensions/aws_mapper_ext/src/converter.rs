@@ -4,6 +4,7 @@ use serde_json::Map;
 use serde_json::Value;
 use std::convert::Infallible;
 use tedge_actors::Converter;
+use tedge_api::health::is_bridge_health;
 use tedge_api::serialize::ThinEdgeJsonSerializer;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -37,44 +38,48 @@ impl AwsConverter {
     }
 
     fn try_convert(&mut self, input: &MqttMessage) -> Result<Vec<MqttMessage>, ConversionError> {
-        let default_timestamp = self.add_timestamp.then(|| self.clock.now());
-
-        // serialize with ThinEdgeJson for measurements, for alarms and events just add the timestamp
-        let payload = if input.topic.name.starts_with("tedge/measurements") {
-            let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
-            tedge_api::parser::parse_str(input.payload_str()?, &mut serializer)?;
-
-            serializer.into_string()?
-        } else if input.topic.name.starts_with("tedge/events")
-            || input.topic.name.starts_with("tedge/alarms")
-            || input.topic.name.starts_with("tedge/health")
-        {
-            let mut payload_json: Map<String, Value> =
-                serde_json::from_slice(input.payload.as_bytes())?;
-
-            if let Some(timestamp) = default_timestamp {
-                let timestamp = timestamp
-                    .format(&time::format_description::well_known::Rfc3339)?
-                    .as_str()
-                    .into();
-                payload_json.entry("time").or_insert(timestamp);
-            }
-
-            serde_json::to_string(&payload_json)?
+        if is_bridge_health(&input.topic.name) {
+            Ok(vec![])
         } else {
-            return Ok(vec![]);
-        };
+            let default_timestamp = self.add_timestamp.then(|| self.clock.now());
 
-        let topic_suffix = match input.topic.name.split_once('/') {
-            Some((_, topic_suffix)) => topic_suffix,
-            None => return Ok(vec![]),
-        };
+            // serialize with ThinEdgeJson for measurements, for alarms and events just add the timestamp
+            let payload = if input.topic.name.starts_with("tedge/measurements") {
+                let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
+                tedge_api::parser::parse_str(input.payload_str()?, &mut serializer)?;
 
-        let out_topic = Topic::new(&format!("aws/td/{topic_suffix}"))?;
+                serializer.into_string()?
+            } else if input.topic.name.starts_with("tedge/events")
+                || input.topic.name.starts_with("tedge/alarms")
+                || input.topic.name.starts_with("tedge/health")
+            {
+                let mut payload_json: Map<String, Value> =
+                    serde_json::from_slice(input.payload.as_bytes())?;
 
-        let output = MqttMessage::new(&out_topic, payload);
-        self.size_threshold.validate(&output)?;
-        Ok(vec![(output)])
+                if let Some(timestamp) = default_timestamp {
+                    let timestamp = timestamp
+                        .format(&time::format_description::well_known::Rfc3339)?
+                        .as_str()
+                        .into();
+                    payload_json.entry("time").or_insert(timestamp);
+                }
+
+                serde_json::to_string(&payload_json)?
+            } else {
+                return Ok(vec![]);
+            };
+
+            let topic_suffix = match input.topic.name.split_once('/') {
+                Some((_, topic_suffix)) => topic_suffix,
+                None => return Ok(vec![]),
+            };
+
+            let out_topic = Topic::new(&format!("aws/td/{topic_suffix}"))?;
+
+            let output = MqttMessage::new(&out_topic, payload);
+            self.size_threshold.validate(&output)?;
+            Ok(vec![(output)])
+        }
     }
 
     fn wrap_errors(
@@ -261,5 +266,18 @@ mod tests {
                 .unwrap(),
             expected_output
         );
+    }
+
+    #[test]
+    fn converting_bridge_health_status() {
+        let mut converter = AwsConverter::new(false, Box::new(TestClock));
+
+        let input = "0";
+        let result = converter.try_convert(&MqttMessage::new(
+            &Topic::new_unchecked("tedge/health/mosquitto-aws-bridge"),
+            input,
+        ));
+        let res = result.unwrap();
+        assert!(res.is_empty());
     }
 }
