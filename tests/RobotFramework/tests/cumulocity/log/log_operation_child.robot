@@ -12,6 +12,7 @@ Test Tags           theme:c8y    theme:log
 
 *** Test Cases ***
 Successful log operation
+    Cumulocity.Should Contain Supported Operations    c8y_LogfileRequest
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${operation}=    Cumulocity.Create Operation
@@ -58,7 +59,5 @@ Custom Setup
     # Child
     ${child_sn}=    Setup    skip_bootstrap=${True}
     Set Suite Variable    $CHILD_SN    ${child_sn}
-    Register Child Device    parent_name=${PARENT_SN}    child_name=${CHILD_SN}    supported_operations=c8y_LogfileRequest
-    Cumulocity.Device Should Exist    ${CHILD_SN}
-
     Setup Child Device
+    Cumulocity.Device Should Exist    ${CHILD_SN}

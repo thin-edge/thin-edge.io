@@ -581,8 +581,9 @@ class ThinEdgeIO(DeviceLibrary):
         if isinstance(supported_operations, str):
             supported_operations = supported_operations.split(",")
 
-        for op_type in supported_operations:
-            cmd.append(f"sudo touch '/etc/tedge/operations/c8y/{child_name}/{op_type}'")
+        if supported_operations:
+            for op_type in supported_operations:
+                cmd.append(f"sudo touch '/etc/tedge/operations/c8y/{child_name}/{op_type}'")
 
         device.assert_command(" && ".join(cmd))
 
