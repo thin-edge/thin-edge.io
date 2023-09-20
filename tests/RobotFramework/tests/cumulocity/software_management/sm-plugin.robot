@@ -54,7 +54,9 @@ sm-plugins download files from Cumulocity
     ${file_url}=    Cumulocity.Create Inventory Binary    sm-plugin-test-file    software1    contents=Testing a thing
     ${OPERATION}=    Install Software    dummy-software,1.0.0::dummy3,${file_url}
     ${OPERATION}=    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
-    File Should Exist    /tmp/dummy3/intalled_dummy-software
+    File Should Exist    /tmp/dummy3/installed_dummy-software
+    ${downloaded}=    Execute Command    cat /tmp/dummy3/installed_dummy-software
+    Should Be Equal    ${downloaded}    Testing a thing
 
 *** Keywords ***
 Custom Setup
