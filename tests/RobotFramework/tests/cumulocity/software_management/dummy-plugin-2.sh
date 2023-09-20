@@ -52,11 +52,5 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ $(cat "$FILEPATH") != "Testing a thing" ]]; then
-    echo -e "Downloaded file (for package $NAME) does not have expected SHA256. Contents are:\n\n$(cat "$FILEPATH")"
-    exit 1
-else
-    mkdir -p "/tmp/$PLUGIN_NAME"
-    touch "/tmp/$PLUGIN_NAME/intalled_$NAME"
-fi
-
+mkdir -p "/tmp/$PLUGIN_NAME"
+cp "$FILEPATH" "/tmp/$PLUGIN_NAME/installed_$NAME"
