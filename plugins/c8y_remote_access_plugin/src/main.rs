@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::process::Stdio;
 
 use camino::Utf8Path;
@@ -6,6 +7,7 @@ use clap::Parser;
 use futures::future::try_select;
 use futures::future::Either;
 use input::parse_arguments;
+use miette::miette;
 use miette::Context;
 use miette::IntoDiagnostic;
 use tedge_config::TEdgeConfig;
@@ -14,6 +16,7 @@ use tedge_utils::file::create_directory_with_user_group;
 use tedge_utils::file::create_file_with_user_group;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
+use toml::Table;
 use url::Url;
 
 use crate::auth::Jwt;
@@ -49,7 +52,7 @@ async fn main() -> miette::Result<()> {
             Ok(())
         }
         Command::Connect(command) => proxy(command, tedge_config).await,
-        Command::SpawnChild(command) => spawn_child(command).await,
+        Command::SpawnChild(command) => spawn_child(command, config_dir.tedge_config_root_path()).await,
     }
 }
 
@@ -96,8 +99,10 @@ static SUCCESS_MESSAGE: &str = "CONNECTED";
 ))]
 struct Unreachable<E: std::error::Error + 'static>(#[source] E, &'static str);
 
-async fn spawn_child(command: String) -> miette::Result<()> {
-    let mut command = tokio::process::Command::new("/usr/bin/c8y-remote-access-plugin")
+async fn spawn_child(command: String, config_dir: &Utf8Path) -> miette::Result<()> {
+    let exec_path = get_executable_path(config_dir).await?;
+
+    let mut command = tokio::process::Command::new(exec_path)
         .arg("--child")
         .arg(command)
         .stdout(Stdio::piped())
@@ -182,6 +187,28 @@ fn build_proxy_url(cumulocity_host: &str, key: &str) -> miette::Result<Url> {
         .parse()
         .into_diagnostic()
         .context("Creating websocket URL")
+}
+
+async fn get_executable_path(config_dir: &Utf8Path) -> miette::Result<PathBuf> {
+    let operation_path = supported_operation_path(config_dir);
+
+    let content = tokio::fs::read_to_string(&operation_path)
+        .await
+        .into_diagnostic()
+        .with_context(|| {
+            format!("The operation file {operation_path} does not exist or is not readable.")
+        })?;
+
+    let operation: Table = content
+        .parse()
+        .into_diagnostic()
+        .with_context(|| format!("Failed to parse {operation_path} file"))?;
+
+    Ok(PathBuf::from(
+        operation["exec"]["command"]
+            .as_str()
+            .ok_or_else(|| miette!("Failed to read command from {operation_path} file"))?,
+    ))
 }
 
 #[cfg(test)]

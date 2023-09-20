@@ -34,7 +34,7 @@ tokio = { workspace = true, features = [
     "time",
     "process",
 ] }
-
+toml = { workspace = true }
 url = { workspace = true }
 ws_stream_tungstenite = { workspace = true }
 

@@ -584,6 +584,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "toml 0.7.6",
  "url",
  "ws_stream_tungstenite",
 ]
