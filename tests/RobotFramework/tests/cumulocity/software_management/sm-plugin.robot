@@ -47,6 +47,14 @@ sm-plugins should work without sudo installed and running as root
     ${software}=    Device Should Have Installed Software    dummy1-0001,1.0.0::dummy1    dummy2-0001,1.0.0::dummy2
     Length Should Be    ${software}    2
 
+sm-plugins download files from Cumulocity
+    Execute Command    sudo tedge config set software.plugin.max_packages 1
+    Connect Mapper    c8y
+    Device Should Exist    ${DEVICE_SN}
+    ${file_url}=    Cumulocity.Create Inventory Binary    sm-plugin-test-file    software1    contents=Testing a thing
+    ${OPERATION}=    Install Software    dummy-software,1.0.0::dummy3,${file_url}
+    ${OPERATION}=    Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
+    File Should Exist    /tmp/dummy3/intalled_dummy-software
 
 *** Keywords ***
 Custom Setup
@@ -57,6 +65,7 @@ Custom Setup
     Execute Command       rm -f /etc/tedge/sm-plugins/*
     Transfer To Device    ${CURDIR}/dummy-plugin.sh    /etc/tedge/sm-plugins/dummy1
     Transfer To Device    ${CURDIR}/dummy-plugin.sh    /etc/tedge/sm-plugins/dummy2
+    Transfer To Device    ${CURDIR}/dummy-plugin-2.sh  /etc/tedge/sm-plugins/dummy3
 
 Custom Teardown
     # Restore sudo in case if the tests are run on a device (and not in a container)
