@@ -3,6 +3,7 @@ use camino::Utf8Path;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
+use std::time::Duration;
 
 pub const SERVICE_CONFIG_FILE: &str = "system.toml";
 const REBOOT_COMMAND: &[&str] = &["init", "6"];
@@ -32,6 +33,23 @@ pub struct InitConfig {
 #[serde(deny_unknown_fields)]
 pub struct SystemSpecificCommands {
     pub reboot: Vec<String>,
+    #[serde(default = "SystemSpecificCommands::default_reboot_timeout_seconds")]
+    pub reboot_timeout_seconds: u64,
+}
+
+impl SystemSpecificCommands {
+    pub fn default_reboot_timeout_seconds() -> u64 {
+        // The linux shutdown command only supports triggering the shutdown immediately
+        // or in minutes, a delay in seconds is not supported. Using a shell script to delay
+        // the call to shutdown is generally not very reliable.
+        // Choose a sensible default that won't timeout if 'shutdown -r' is used
+        // (with some buffer), e.g. 2 x default interval (60 seconds)
+        120
+    }
+
+    pub fn reboot_timeout(&self) -> Duration {
+        Duration::from_secs(self.reboot_timeout_seconds)
+    }
 }
 
 impl Default for SystemSpecificCommands {
@@ -41,6 +59,7 @@ impl Default for SystemSpecificCommands {
                 .iter()
                 .map(|value| String::from(*value))
                 .collect::<Vec<String>>(),
+            reboot_timeout_seconds: SystemSpecificCommands::default_reboot_timeout_seconds(),
         }
     }
 }

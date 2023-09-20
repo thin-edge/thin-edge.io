@@ -20,6 +20,7 @@ use tedge_api::messages::CommandStatus;
 use tedge_api::messages::RestartCommandPayload;
 use tedge_api::RestartCommand;
 use tedge_config::system_services::SystemConfig;
+use tedge_config::system_services::SystemSpecificCommands;
 use tokio::process::Command;
 use tokio::time::timeout;
 use tracing::error;
@@ -54,26 +55,41 @@ impl Actor for RestartManagerActor {
             if request.status() != CommandStatus::Init {
                 continue;
             }
+            info!("Triggering a restart");
             let executing_response = self.update_state_repository(request.clone()).await;
             self.message_box.send(executing_response).await?;
 
-            let maybe_error = self.handle_restart_operation().await;
-
-            match timeout(Duration::from_secs(5), self.message_box.recv_signal()).await {
-                Ok(Some(RuntimeRequest::Shutdown)) => {
-                    // As expected, the restart triggered a shutdown.
-                    return Ok(());
-                }
-                Ok(None) | Err(_) => {
-                    // Something went wrong. The process should have been shutdown by the restart.
-                    let error = match maybe_error {
-                        Err(err) => format!("No shutdown has been triggered: {err}"),
-                        Ok(()) => "No shutdown has been triggered".to_string(),
-                    };
+            let restart_timeout = self.get_restart_timeout();
+            match timeout(restart_timeout, self.handle_restart_operation()).await {
+                Ok(Err(err)) => {
+                    let error = format!("Fail to trigger a restart: {err}");
                     error!(error);
                     self.handle_error(request, error).await?;
                 }
-            }
+                Err(_) => {
+                    let error = format!(
+                        "Restart command still running after {} seconds",
+                        restart_timeout.as_secs()
+                    );
+                    error!(error);
+                    self.handle_error(request, error).await?;
+                }
+                Ok(Ok(())) => {
+                    info!("The restart command has been successfully executed");
+                    match timeout(restart_timeout, self.message_box.recv_signal()).await {
+                        Ok(Some(RuntimeRequest::Shutdown)) => {
+                            info!("As requested, a shutdown has been triggered");
+                            return Ok(());
+                        }
+                        Ok(None) | Err(_ /* timeout */) => {
+                            // Something went wrong. The process should have been shutdown by the restart.
+                            let error = "No shutdown has been triggered".to_string();
+                            error!(error);
+                            self.handle_error(request, error).await?;
+                        }
+                    }
+                }
+            };
         }
 
         Ok(())
@@ -178,11 +194,14 @@ impl RestartManagerActor {
     }
 
     async fn handle_restart_operation(&mut self) -> Result<(), RestartManagerError> {
-        let commands = self.get_restart_operation_commands().await?;
+        let commands = self.get_restart_operation_commands()?;
         for mut command in commands {
             match command.status().await {
                 Ok(status) => {
-                    if !status.success() {
+                    if status.code().is_none() {
+                        // This might the result of the reboot - hence not considered as an error
+                        info!("Restart command has been interrupted by a signal: {command:?}");
+                    } else if !status.success() {
                         return Err(RestartManagerError::CommandFailed {
                             command: format!("{command:?}"),
                         });
@@ -216,7 +235,7 @@ impl RestartManagerActor {
         }
     }
 
-    async fn get_restart_operation_commands(&self) -> Result<Vec<Command>, RestartManagerError> {
+    fn get_restart_operation_commands(&self) -> Result<Vec<Command>, RestartManagerError> {
         let mut vec = vec![];
 
         // reading `config_dir` to get the restart command or defaulting to `["init", "6"]'
@@ -247,5 +266,11 @@ impl RestartManagerActor {
         }
 
         Ok(vec)
+    }
+
+    fn get_restart_timeout(&self) -> Duration {
+        SystemConfig::try_new(&self.config.config_dir)
+            .map(|config| config.system.reboot_timeout())
+            .unwrap_or_else(|_| SystemSpecificCommands::default().reboot_timeout())
     }
 }
