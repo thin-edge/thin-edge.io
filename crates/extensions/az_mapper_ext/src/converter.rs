@@ -48,11 +48,16 @@ impl AzureConverter {
     }
 
     fn try_convert(&mut self, input: &MqttMessage) -> Result<Vec<MqttMessage>, ConversionError> {
+        let default_timestamp = self.add_timestamp.then(|| self.clock.now());
         if is_bridge_health(&input.topic.name) {
             Ok(vec![])
+        } else if input.topic.name.starts_with("tedge/health") {
+            let mut input_msg = input.clone();
+            input_msg.topic = self.mapper_config.out_topic.clone();
+            Ok(vec![input_msg])
         } else {
             self.size_threshold.validate(input)?;
-            let default_timestamp = self.add_timestamp.then(|| self.clock.now());
+
             let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
             tedge_api::parser::parse_str(input.payload_str()?, &mut serializer)?;
 
@@ -259,5 +264,35 @@ mod tests {
         ));
         let res = result.unwrap();
         assert!(res.is_empty());
+    }
+
+    #[test]
+    fn converting_service_health_status_up_message() {
+        let mut converter = AzureConverter::new(false, Box::new(TestClock));
+
+        let input = r#"{"pid":1234,"status":"up","time":1694586060}"#;
+        let result = converter.try_convert(&MqttMessage::new(
+            &Topic::new_unchecked("tedge/health/tedge-mapper-az"),
+            input,
+        ));
+
+        let expected_msg = MqttMessage::new(&Topic::new_unchecked("az/messages/events/"), input);
+        let res = result.unwrap();
+        assert_eq!(res[0], expected_msg);
+    }
+
+    #[test]
+    fn converting_service_health_status_down_message() {
+        let mut converter = AzureConverter::new(false, Box::new(TestClock));
+
+        let input = r#"{"pid":1234,"status":"up"}"#;
+        let result = converter.try_convert(&MqttMessage::new(
+            &Topic::new_unchecked("tedge/health/tedge-mapper-az"),
+            input,
+        ));
+
+        let expected_msg = MqttMessage::new(&Topic::new_unchecked("az/messages/events/"), input);
+        let res = result.unwrap();
+        assert_eq!(res[0], expected_msg);
     }
 }
