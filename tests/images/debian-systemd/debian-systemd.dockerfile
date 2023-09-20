@@ -10,6 +10,7 @@ RUN apt-get -y update \
     apt-transport-https \
     ca-certificates \
     systemd \
+    systemd-sysv \
     ssh \
     mosquitto \
     mosquitto-clients \
