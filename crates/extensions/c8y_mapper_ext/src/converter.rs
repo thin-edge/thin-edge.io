@@ -107,7 +107,8 @@ const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "c8y/event/events/create";
 const TEDGE_AGENT_LOG_DIR: &str = "tedge/agent";
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
-const TEDGE_AGENT_HEALTH_TOPIC: &str = "tedge/health/tedge-agent";
+/// XXX: hardcoded topic root
+const TEDGE_AGENT_HEALTH_TOPIC: &str = "te/device/main/service/tedge-agent/status/health";
 const DEFAULT_EVENT_TYPE: &str = "ThinEdgeEvent";
 const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
 
@@ -485,29 +486,33 @@ impl CumulocityConverter {
 
     pub async fn process_health_status_message(
         &mut self,
+        entity: &EntityTopicId,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
         let mut mqtt_messages: Vec<Message> = Vec::new();
 
         // Send the init messages
-        if check_tedge_agent_status(message)? {
-            create_tedge_agent_supported_ops(self.ops_dir.clone()).await?;
+        // TODO: use entity store to check service statuses
+        if is_message_tedge_agent_up(message)? {
+            create_tedge_agent_supported_ops(&self.ops_dir).await?;
             mqtt_messages.push(create_get_software_list_message()?);
         }
 
         // When there is some messages to be sent on behalf of a child device,
         // this child device must be declared first, if not done yet
-        let topic_split: Vec<&str> = message.topic.name.split('/').collect();
-        if topic_split.len() == 4 {
-            let child_id = topic_split[2];
-            add_external_device_registration_message(
-                child_id.to_string(),
-                &mut self.children,
-                &mut mqtt_messages,
-            );
+        if let Some(parent) = entity.default_parent_identifier() {
+            if parent.is_default_child_device() {
+                let child_id = parent.default_device_name().unwrap();
+                add_external_device_registration_message(
+                    child_id.to_string(),
+                    &mut self.children,
+                    &mut mqtt_messages,
+                );
+            }
         }
 
         let mut message = convert_health_status_message(
+            entity,
             message,
             self.device_name.clone(),
             self.service_type.clone(),
@@ -960,6 +965,7 @@ impl CumulocityConverter {
                 self.handle_config_update_state_change(&source, cmd_id, message)
                     .await?
             }
+            Channel::Health => self.process_health_status_message(&source, message).await?,
 
             _ => vec![],
         };
@@ -1033,9 +1039,6 @@ impl CumulocityConverter {
             topic if topic.name.starts_with(INTERNAL_ALARMS_TOPIC) => {
                 self.alarm_converter.process_internal_alarm(message);
                 Ok(vec![])
-            }
-            topic if topic.name.starts_with("tedge/health") => {
-                self.process_health_status_message(message).await
             }
             topic => match topic.clone().try_into() {
                 Ok(MapperSubscribeTopic::ResponseTopic(ResponseTopic::SoftwareListResponse)) => {
@@ -1442,7 +1445,7 @@ fn get_inventory_fragments(
     }
 }
 
-async fn create_tedge_agent_supported_ops(ops_dir: PathBuf) -> Result<(), ConversionError> {
+async fn create_tedge_agent_supported_ops(ops_dir: &Path) -> Result<(), ConversionError> {
     create_file_with_defaults(ops_dir.join("c8y_SoftwareUpdate"), None)?;
 
     Ok(())
@@ -1455,7 +1458,7 @@ pub struct HealthStatus {
     pub status: String,
 }
 
-pub fn check_tedge_agent_status(message: &Message) -> Result<bool, ConversionError> {
+pub fn is_message_tedge_agent_up(message: &Message) -> Result<bool, ConversionError> {
     if message.topic.name.eq(TEDGE_AGENT_HEALTH_TOPIC) {
         let status: HealthStatus = serde_json::from_str(message.payload_str()?)?;
         return Ok(status.status.eq("up"));
@@ -1492,6 +1495,7 @@ mod tests {
     use tedge_actors::SimpleMessageBox;
     use tedge_actors::SimpleMessageBoxBuilder;
     use tedge_api::entity_store::EntityRegistrationMessage;
+    use tedge_api::entity_store::EntityType;
     use tedge_api::entity_store::InvalidExternalIdError;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
@@ -2162,9 +2166,12 @@ mod tests {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
-        let in_topic = "tedge/health/child1/child-service-c8y";
+        let in_topic = "te/device/child1/service/child-service-c8y/status/health";
         let in_payload = r#"{"pid":"1234","status":"up","time":"2021-11-16T17:45:40.571760714+01:00","type":"thin-edge.io"}"#;
         let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+
+        let mqtt_schema = MqttSchema::new();
+        let (in_entity, _in_channel) = mqtt_schema.entity_channel_of(&in_message.topic).unwrap();
 
         let expected_child_create_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
@@ -2176,11 +2183,27 @@ mod tests {
             r#"102,test-device_child1_child-service-c8y,"thin-edge.io",child-service-c8y,"up""#,
         );
 
-        // Test the first output messages contains SmartREST and C8Y JSON.
-        let out_first_messages = converter.convert(&in_message).await;
+        let mut out_messages = converter.convert(&in_message).await.into_iter();
+
+        // child device entity store registration message
+        let device_registration_message = out_messages.next().unwrap();
+        let device_registration_message =
+            EntityRegistrationMessage::new(&device_registration_message).unwrap();
+        assert_eq!(
+            device_registration_message.topic_id,
+            in_entity.default_parent_identifier().unwrap()
+        );
+        assert_eq!(device_registration_message.r#type, EntityType::ChildDevice);
+
+        // service entity store registration message
+        let service_registration_message = out_messages.next().unwrap();
+        let service_registration_message =
+            EntityRegistrationMessage::new(&service_registration_message).unwrap();
+        assert_eq!(service_registration_message.topic_id, in_entity);
+        assert_eq!(service_registration_message.r#type, EntityType::Service);
 
         assert_eq!(
-            out_first_messages,
+            out_messages.collect::<Vec<_>>(),
             vec![
                 expected_child_create_smart_rest_message,
                 expected_service_monitor_smart_rest_message.clone()
@@ -2193,9 +2216,12 @@ mod tests {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
-        let in_topic = "tedge/health/test-tedge-mapper-c8y";
+        let in_topic = "te/device/main/service/test-tedge-mapper-c8y/status/health";
         let in_payload = r#"{"pid":"1234","status":"up","time":"2021-11-16T17:45:40.571760714+01:00","type":"thin-edge.io"}"#;
         let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
+
+        let mqtt_schema = MqttSchema::new();
+        let (in_entity, _in_channel) = mqtt_schema.entity_channel_of(&in_message.topic).unwrap();
 
         let expected_service_monitor_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
@@ -2203,11 +2229,20 @@ mod tests {
         );
 
         // Test the output messages contains SmartREST and C8Y JSON.
-        let out_messages = converter.convert(&in_message).await;
+        let mut out_messages = converter.convert(&in_message).await.into_iter();
+
+        // service entity store registration message
+        let service_registration_message = out_messages.next().unwrap();
+        let service_registration_message =
+            EntityRegistrationMessage::new(&service_registration_message).unwrap();
+        assert_eq!(service_registration_message.topic_id, in_entity);
+        assert_eq!(service_registration_message.r#type, EntityType::Service);
+
+        let service_monitor_message = out_messages.next().unwrap();
 
         assert_eq!(
-            out_messages,
-            vec![expected_service_monitor_smart_rest_message]
+            service_monitor_message,
+            expected_service_monitor_smart_rest_message
         );
     }
 

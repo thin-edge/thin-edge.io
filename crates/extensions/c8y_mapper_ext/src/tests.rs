@@ -1168,7 +1168,7 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     // Simulate tedge-agent health status message
     mqtt.send(
         MqttMessage::new(
-            &Topic::new_unchecked("tedge/health/tedge-agent"),
+            &Topic::new_unchecked("te/device/main/service/tedge-agent/status/health"),
             "{\"status\":\"up\"}",
         )
         .with_retain(),

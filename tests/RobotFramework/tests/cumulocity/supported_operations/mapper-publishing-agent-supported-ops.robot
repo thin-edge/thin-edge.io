@@ -20,23 +20,23 @@ Create and publish the tedge agent supported operations on mapper restart
     ${timestamp}=        Get Unix Timestamp
     # now restart the mapper
     ThinEdgeIO.start Service    tedge-mapper-c8y
-    Should Have MQTT Messages    tedge/health/tedge-mapper-c8y     message_contains=up    date_from=${timestamp}
+    Should Have MQTT Messages    te/device/main/service/tedge-mapper-c8y/status/health     message_contains=up    date_from=${timestamp}
     # After receiving the health status `up` from tege-agent, the mapper creates supported operations and will publish to c8y
-    Should Have MQTT Messages    tedge/health/tedge-agent     message_contains=up
+    Should Have MQTT Messages    te/device/main/service/tedge-agent/status/health     message_contains=up
     
     # Check if the `c8y_SoftwareUpdate` and `c8y_Restart` ops files exists in `/etc/tedge/operations/c8y` directory
     ThinEdgeIO.File Should Exist    /etc/tedge/operations/c8y/c8y_SoftwareUpdate
     ThinEdgeIO.File Should Exist    /etc/tedge/operations/c8y/c8y_Restart
 
     # Check if the tedge-agent supported operations exists in c8y cloud
-    Cumulocity.Should Contain Supported Operations    c8y_Restart    c8y_SoftwareUpdate   
+    Cumulocity.Should Contain Supported Operations    c8y_Restart    c8y_SoftwareUpdate
 
 
 Agent gets the software list request once it comes up
     ${timestamp}=        Get Unix Timestamp    
     ThinEdgeIO.restart Service    tedge-agent
     # wait till there is up status on tedge-agent health
-    Should Have MQTT Messages    tedge/health/tedge-agent    message_contains=up    date_from=${timestamp}
+    Should Have MQTT Messages    te/device/main/service/tedge-agent/status/health    message_contains=up    date_from=${timestamp}
     # now there should be a new list request
     Should Have MQTT Messages    tedge/commands/req/software/list    message_contains=id    date_from=${timestamp}
    

@@ -169,8 +169,7 @@ impl C8yMapperConfig {
             "te/+/+/+/+/m/+",
             "te/+/+/+/+/e/+",
             "te/+/+/+/+/a/+",
-            "tedge/health/+",
-            "tedge/health/+/+",
+            "te/+/+/+/+/status/health",
         ]
         .try_into()
         .unwrap()

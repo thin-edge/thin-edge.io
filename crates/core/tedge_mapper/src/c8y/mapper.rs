@@ -56,7 +56,7 @@ impl TEdgeComponent for CumulocityMapper {
 
         // MQTT client dedicated to set service down status on shutdown, using a last-will message
         // A separate MQTT actor/client is required as the last will message of the main MQTT actor
-        // is used to send down status to tedge/health topic
+        // is used to send down status to health topic
         let service_monitor_actor =
             MqttActorBuilder::new(service_monitor_client_config(&tedge_config)?);
 

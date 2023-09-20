@@ -129,6 +129,8 @@ Custom Test Setup
     ThinEdgeIO.Start Service    mosquitto
     ThinEdgeIO.Restart Service    tedge-mapper-c8y
     ThinEdgeIO.Service Should Be Running    tedge-mapper-c8y
+    ThinEdgeIO.Restart Service    tedge-agent
+    ThinEdgeIO.Service Should Be Running    tedge-agent
 
 Custom Test Teardown
     ThinEdgeIO.Stop Service    tedge-mapper-c8y

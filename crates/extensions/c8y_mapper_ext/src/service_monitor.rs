@@ -3,6 +3,7 @@ use c8y_api::smartrest::message::MAX_PAYLOAD_LIMIT_IN_BYTES;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use serde::Deserialize;
 use serde::Serialize;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::Topic;
 
@@ -25,47 +26,37 @@ fn default_type() -> String {
     "".to_string()
 }
 
-#[derive(Deserialize, Serialize, Debug)]
-pub struct TopicInfo {
-    pub service_name: String,
-    pub child_id: Option<String>,
-}
-
-impl TopicInfo {
-    fn parse_topic_info(topic: &str) -> Self {
-        let topic_split: Vec<&str> = topic.split('/').collect();
-        let service_name = if topic_split.len() == 4 {
-            topic_split[3]
-        } else {
-            topic_split[2]
-        }
-        .to_string();
-
-        let child_id = if topic_split.len() == 4 {
-            Some(topic_split[2].to_owned())
-        } else {
-            None
-        };
-
-        Self {
-            service_name,
-            child_id,
-        }
-    }
-}
-
 pub fn convert_health_status_message(
+    entity: &EntityTopicId,
     message: &Message,
     device_name: String,
     default_service_type: String,
 ) -> Vec<Message> {
     let mut mqtt_messages: Vec<Message> = Vec::new();
-    let topic = message.topic.name.to_owned();
-    let topic_info = TopicInfo::parse_topic_info(&topic);
+
+    let service_name = entity
+        .default_service_name()
+        .expect("EntityTopicId should be in default scheme");
+
+    let parent = entity
+        .default_parent_identifier()
+        .expect("EntityTopicId should be in default scheme");
+
+    let child_id = if parent.is_default_child_device() {
+        Some(
+            parent
+                .default_device_name()
+                .expect("EntityTopicId should be in default scheme")
+                .to_string(),
+        )
+    } else {
+        None
+    };
+
     let default_health_status = format!("\"type\":{default_service_type},\"status\":\"unknown\"");
 
     // If not Bridge health status
-    if !topic_info.service_name.contains("bridge") {
+    if !service_name.contains("bridge") {
         let payload_str = message.payload_str().unwrap_or(&default_health_status);
 
         let mut health_status =
@@ -88,10 +79,10 @@ pub fn convert_health_status_message(
 
         let status_message = service_monitor_status_message(
             &device_name,
-            &topic_info.service_name,
+            service_name,
             &health_status.status,
             &health_status.service_type,
-            topic_info.child_id,
+            child_id,
         );
 
         mqtt_messages.push(status_message);
@@ -134,10 +125,11 @@ pub fn service_monitor_status_message(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tedge_api::mqtt_topics::MqttSchema;
     use test_case::test_case;
     #[test_case(
         "test_device",
-        "tedge/health/tedge-mapper-c8y",
+        "te/device/main/service/tedge-mapper-c8y/status/health",
         r#"{"pid":"1234","type":"systemd","status":"up"}"#,
         "c8y/s/us",
         r#"102,test_device_tedge-mapper-c8y,"systemd",tedge-mapper-c8y,"up""#;  
@@ -145,7 +137,7 @@ mod tests {
     )]
     #[test_case(
         "test_device",
-        "tedge/health/child/tedge-mapper-c8y",
+        "te/device/child/service/tedge-mapper-c8y/status/health",
         r#"{"pid":"1234","type":"systemd","status":"up"}"#,
         "c8y/s/us/child",
         r#"102,test_device_child_tedge-mapper-c8y,"systemd",tedge-mapper-c8y,"up""#;
@@ -153,7 +145,7 @@ mod tests {
     )]
     #[test_case(
         "test_device",
-        "tedge/health/tedge-mapper-c8y",
+        "te/device/main/service/tedge-mapper-c8y/status/health",
         r#"{"pid":"123456","type":"systemd"}"#,
         "c8y/s/us",
         r#"102,test_device_tedge-mapper-c8y,"systemd",tedge-mapper-c8y,"unknown""#;
@@ -161,7 +153,7 @@ mod tests {
     )]
     #[test_case(
         "test_device",
-        "tedge/health/tedge-mapper-c8y",
+        "te/device/main/service/tedge-mapper-c8y/status/health",
         r#"{"type":"systemd"}"#,
         "c8y/s/us",
         r#"102,test_device_tedge-mapper-c8y,"systemd",tedge-mapper-c8y,"unknown""#;
@@ -169,7 +161,7 @@ mod tests {
     )]
     #[test_case(
         "test_device",
-        "tedge/health/tedge-mapper-c8y",
+        "te/device/main/service/tedge-mapper-c8y/status/health",
         r#"{"type":"", "status":""}"#,
         "c8y/s/us",
         r#"102,test_device_tedge-mapper-c8y,"service",tedge-mapper-c8y,"unknown""#;
@@ -177,7 +169,7 @@ mod tests {
     )]
     #[test_case(
         "test_device",
-        "tedge/health/tedge-mapper-c8y",
+        "te/device/main/service/tedge-mapper-c8y/status/health",
         "{}",
         "c8y/s/us",
         r#"102,test_device_tedge-mapper-c8y,"service",tedge-mapper-c8y,"unknown""#;
@@ -185,7 +177,7 @@ mod tests {
     )]
     #[test_case(
         "test_device",
-        "tedge/health/tedge-mapper-c8y",
+        "te/device/main/service/tedge-mapper-c8y/status/health",
         r#"{"type":"thin,edge","status":"up,down"}"#,
         "c8y/s/us",
         r#"102,test_device_tedge-mapper-c8y,"thin,edge",tedge-mapper-c8y,"up,down""#;
@@ -193,7 +185,7 @@ mod tests {
     )]
     #[test_case(
         "test_device",
-        "tedge/health/tedge-mapper-c8y",
+        "te/device/main/service/tedge-mapper-c8y/status/health",
         r#"{"type":"thin\"\"edge","status":"up\"down"}"#,
         "c8y/s/us",
         r#"102,test_device_tedge-mapper-c8y,"thin""""edge",tedge-mapper-c8y,"up""down""#;
@@ -207,14 +199,22 @@ mod tests {
         c8y_monitor_payload: &str,
     ) {
         let topic = Topic::new_unchecked(health_topic);
+
+        let mqtt_schema = MqttSchema::new();
+        let (entity, _) = mqtt_schema.entity_channel_of(&topic).unwrap();
+
         let health_message = Message::new(&topic, health_payload.as_bytes().to_owned());
         let expected_message = Message::new(
             &Topic::new_unchecked(c8y_monitor_topic),
             c8y_monitor_payload.as_bytes(),
         );
 
-        let msg =
-            convert_health_status_message(&health_message, device_name.into(), "service".into());
+        let msg = convert_health_status_message(
+            &entity,
+            &health_message,
+            device_name.into(),
+            "service".into(),
+        );
         assert_eq!(msg[0], expected_message);
     }
 }
