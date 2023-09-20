@@ -89,29 +89,19 @@ impl C8yEndPoint {
         url_event_binary
     }
 
-    pub fn url_is_in_my_tenant_domain(&self, url: &str) -> bool {
+    pub fn maybe_tenant_url(&self, url: &str) -> Option<Url> {
         // c8y URL may contain either `Tenant Name` or Tenant Id` so they can be one of following options:
         // * <tenant_name>.<domain> eg: sample.c8y.io
         // * <tenant_id>.<domain> eg: t12345.c8y.io
         // These URLs may be both equivalent and point to the same tenant.
         // We are going to remove that and only check if the domain is the same.
         let tenant_uri = &self.c8y_host;
-        let url_host = match Url::parse(url) {
-            Ok(url) => match url.host() {
-                Some(host) => host.to_string(),
-                None => return false,
-            },
-            Err(_err) => {
-                return false;
-            }
-        };
+        let url = Url::parse(url).ok()?;
+        let url_host = url.domain()?;
 
-        let url_domain = url_host.splitn(2, '.').collect::<Vec<&str>>();
-        let tenant_domain = tenant_uri.splitn(2, '.').collect::<Vec<&str>>();
-        if url_domain.get(1) == tenant_domain.get(1) {
-            return true;
-        }
-        false
+        let (_, host) = url_host.split_once('.').unwrap_or((url_host, ""));
+        let (_, c8y_host) = tenant_uri.split_once('.').unwrap();
+        (host == c8y_host).then_some(url)
     }
 }
 
@@ -226,7 +216,7 @@ mod tests {
     #[test_case("https://t1124124.test.com/path/to/file")]
     fn url_is_my_tenant_correct_urls(url: &str) {
         let c8y = C8yEndPoint::new("test.test.com", "test_device");
-        assert!(c8y.url_is_in_my_tenant_domain(url));
+        assert_eq!(c8y.maybe_tenant_url(url), Some(url.parse().unwrap()));
     }
 
     #[test_case("test.com")]
@@ -236,7 +226,7 @@ mod tests {
     #[test_case("http://test.com::12345")]
     fn url_is_my_tenant_incorrect_urls(url: &str) {
         let c8y = C8yEndPoint::new("test.test.com", "test_device");
-        assert!(!c8y.url_is_in_my_tenant_domain(url));
+        assert!(c8y.maybe_tenant_url(url).is_none());
     }
 
     #[test]

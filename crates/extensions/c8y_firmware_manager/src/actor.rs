@@ -249,7 +249,8 @@ impl FirmwareManagerActor {
             let download_request = if self
                 .config
                 .c8y_end_point
-                .url_is_in_my_tenant_domain(firmware_url)
+                .maybe_tenant_url(firmware_url)
+                .is_some()
             {
                 if let Ok(token) = self.message_box.jwt_retriever.await_response(()).await? {
                     DownloadRequest::new(firmware_url, &cache_file_path)

@@ -36,6 +36,7 @@ use c8y_api::smartrest::topic::C8yTopic;
 use c8y_api::smartrest::topic::MapperSubscribeTopic;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use c8y_api::utils::child_device::new_child_device_message;
+use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use logged_command::LoggedCommand;
 use plugin_sm::operation_logs::OperationLogs;
@@ -63,7 +64,6 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::topic::RequestTopic;
 use tedge_api::topic::ResponseTopic;
-use tedge_api::Auth;
 use tedge_api::DownloadInfo;
 use tedge_api::EntityStore;
 use tedge_api::Jsonify;
@@ -171,6 +171,7 @@ pub struct CumulocityConverter {
     pub c8y_endpoint: C8yEndPoint,
     pub mqtt_schema: MqttSchema,
     pub entity_store: EntityStore,
+    pub auth_proxy: ProxyUrlGenerator,
 }
 
 impl CumulocityConverter {
@@ -178,6 +179,7 @@ impl CumulocityConverter {
         config: C8yMapperConfig,
         mqtt_publisher: LoggingSender<MqttMessage>,
         http_proxy: C8YHttpProxy,
+        auth_proxy: ProxyUrlGenerator,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
         let device_type = config.device_type.clone();
@@ -224,6 +226,7 @@ impl CumulocityConverter {
             c8y_endpoint,
             mqtt_schema: MqttSchema::default(),
             entity_store,
+            auth_proxy,
         })
     }
 
@@ -465,22 +468,19 @@ impl CumulocityConverter {
             .from_smartrest(smartrest)?
             .to_thin_edge_json()?;
 
-        // Pass the fresh token to the tedge-agent as it cannot request a new one
-        let token = self.http_proxy.get_fresh_jwt_token().await?;
-
         software_update_request
             .update_list
             .iter_mut()
             .for_each(|modules| {
                 modules.modules.iter_mut().for_each(|module| {
-                    if let Some(url) = &module.url {
-                        if self.c8y_endpoint.url_is_in_my_tenant_domain(url.url()) {
-                            module.url = module.url.as_ref().map(|s| {
-                                DownloadInfo::new(&s.url).with_auth(Auth::new_bearer(&token))
-                            });
+                    if let Some(url) = &mut module.url {
+                        *url = if let Some(cumulocity_url) =
+                            self.c8y_endpoint.maybe_tenant_url(url.url())
+                        {
+                            DownloadInfo::new(self.auth_proxy.proxy_url(cumulocity_url).as_ref())
                         } else {
-                            module.url = module.url.as_ref().map(|s| DownloadInfo::new(&s.url));
-                        }
+                            DownloadInfo::new(url.url())
+                        };
                     }
                 });
             });
@@ -1157,6 +1157,7 @@ mod tests {
     use anyhow::Result;
     use assert_json_diff::assert_json_include;
     use assert_matches::assert_matches;
+    use c8y_auth_proxy::url::ProxyUrlGenerator;
     use c8y_http_proxy::handle::C8YHttpProxy;
     use c8y_http_proxy::messages::C8YRestRequest;
     use c8y_http_proxy::messages::C8YRestResult;
@@ -2003,6 +2004,8 @@ mod tests {
         let c8y_host = "test.c8y.io".into();
         let tedge_http_host = "localhost".into();
         let mqtt_schema = MqttSchema::default();
+        let auth_proxy_addr = [127, 0, 0, 1].into();
+        let auth_proxy_port = 8001;
         let mut topics =
             C8yMapperConfig::default_internal_topic_filter(&tmp_dir.to_path_buf()).unwrap();
         topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
@@ -2019,6 +2022,8 @@ mod tests {
             tedge_http_host,
             topics,
             Capabilities::default(),
+            auth_proxy_addr,
+            auth_proxy_port,
         );
 
         let mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
@@ -2028,8 +2033,10 @@ mod tests {
         let mut c8y_proxy_builder: SimpleMessageBoxBuilder<C8YRestRequest, C8YRestResult> =
             SimpleMessageBoxBuilder::new("C8Y", 1);
         let http_proxy = C8YHttpProxy::new("C8Y", &mut c8y_proxy_builder);
+        let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port);
 
-        let converter = CumulocityConverter::new(config, mqtt_publisher, http_proxy).unwrap();
+        let converter =
+            CumulocityConverter::new(config, mqtt_publisher, http_proxy, auth_proxy).unwrap();
 
         (converter, c8y_proxy_builder.build())
     }

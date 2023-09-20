@@ -3,6 +3,7 @@ use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use async_trait::async_trait;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
+use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
@@ -174,6 +175,7 @@ pub struct C8yMapperBuilder {
     mqtt_publisher: DynSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
     timer_sender: DynSender<SyncStart>,
+    auth_proxy: ProxyUrlGenerator,
 }
 
 impl C8yMapperBuilder {
@@ -193,6 +195,7 @@ impl C8yMapperBuilder {
         let http_proxy = C8YHttpProxy::new("C8yMapper => C8YHttpProxy", http);
         let timer_sender = timer.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
         fs_watcher.register_peer(config.ops_dir.clone(), adapt(&box_builder.get_sender()));
+        let auth_proxy = ProxyUrlGenerator::new(config.auth_proxy_addr, config.auth_proxy_port);
 
         Ok(Self {
             config,
@@ -200,6 +203,7 @@ impl C8yMapperBuilder {
             mqtt_publisher,
             http_proxy,
             timer_sender,
+            auth_proxy,
         })
     }
 
@@ -225,9 +229,13 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
         let mqtt_publisher = LoggingSender::new("C8yMapper => Mqtt".into(), self.mqtt_publisher);
         let timer_sender = LoggingSender::new("C8yMapper => Timer".into(), self.timer_sender);
 
-        let converter =
-            CumulocityConverter::new(self.config, mqtt_publisher.clone(), self.http_proxy)
-                .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
+        let converter = CumulocityConverter::new(
+            self.config,
+            mqtt_publisher.clone(),
+            self.http_proxy,
+            self.auth_proxy,
+        )
+        .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
 
         let message_box = self.box_builder.build();
 

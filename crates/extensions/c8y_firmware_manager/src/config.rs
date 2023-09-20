@@ -80,7 +80,7 @@ impl FirmwareManagerConfig {
         let data_dir = tedge_config.data.path.as_std_path().to_path_buf();
         let timeout_sec = tedge_config.firmware.child.update.timeout.duration();
 
-        let c8y_url = tedge_config.c8y_url().or_config_not_set()?.to_string();
+        let c8y_url = tedge_config.c8y.http.or_config_not_set()?.to_string();
 
         Ok(Self::new(
             tedge_device_id,

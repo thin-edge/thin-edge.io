@@ -1,0 +1,28 @@
+[package]
+name = "c8y_auth_proxy"
+description = "An HTTP proxy to Cumulocity that automatically authenticates incoming requests"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+axum = { workspace = true, features = ["macros"] }
+c8y_http_proxy = { workspace = true }
+futures = { workspace = true }
+hyper = { workspace = true }
+miette = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
+tedge_actors = { workspace = true }
+tedge_config = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process", "io-util"] }
+tracing = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
+env_logger = { workspace = true }
+mockito = { workspace = true }
+tedge_http_ext = { workspace = true, features = ["test_helpers" ] }

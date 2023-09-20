@@ -40,7 +40,7 @@ impl TryFrom<&NewTEdgeConfig> for C8YHttpConfig {
     type Error = C8yHttpConfigBuildError;
 
     fn try_from(tedge_config: &NewTEdgeConfig) -> Result<Self, Self::Error> {
-        let c8y_host = tedge_config.c8y_url().or_config_not_set()?.to_string();
+        let c8y_host = tedge_config.c8y.http.or_config_not_set()?.to_string();
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let tmp_dir = tedge_config.tmp.path.as_std_path().to_path_buf();
 

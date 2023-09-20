@@ -1739,6 +1739,8 @@ async fn spawn_c8y_mapper_actor(
     let c8y_host = "test.c8y.io".into();
     let tedge_http_host = "localhost:8888".into();
     let mqtt_schema = MqttSchema::default();
+    let auth_proxy_addr = [127, 0, 0, 1].into();
+    let auth_proxy_port = 8001;
     let mut topics = C8yMapperConfig::default_internal_topic_filter(config_dir.path()).unwrap();
     topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
     topics.add_all(C8yMapperConfig::default_external_topic_filter());
@@ -1754,6 +1756,8 @@ async fn spawn_c8y_mapper_actor(
         tedge_http_host,
         topics,
         Capabilities::default(),
+        auth_proxy_addr,
+        auth_proxy_port,
     );
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
