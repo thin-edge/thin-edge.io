@@ -60,7 +60,8 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
                 pub_msg_topic,
                 sub_msg_topic,
                 r##"twin/res/# in 1 az/ $iothub/"##.into(),
-                r#"twin/GET/?$rid=1 out 1 az/ $iothub/"#.into(),
+                r##"twin/GET/# out 1 az/ $iothub/"##.into(),
+                r##"twin/PATCH/# out 1 az/ $iothub/"##.into(),
             ],
         }
     }
@@ -99,7 +100,8 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
             r#"messages/events/# out 1 az/ devices/alpha/"#.into(),
             r##"messages/devicebound/# in 1 az/ devices/alpha/"##.into(),
             r##"twin/res/# in 1 az/ $iothub/"##.into(),
-            r#"twin/GET/?$rid=1 out 1 az/ $iothub/"#.into(),
+            r##"twin/GET/# out 1 az/ $iothub/"##.into(),
+            r##"twin/PATCH/# out 1 az/ $iothub/"##.into(),
         ],
         try_private: false,
         start_type: "automatic".into(),
