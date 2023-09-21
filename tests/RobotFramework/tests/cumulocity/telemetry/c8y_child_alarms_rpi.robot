@@ -18,8 +18,8 @@ ${CHILD_SN}
 *** Test Cases ***
 
 Define Child device 1 ID
-    ${name}=    Get Random Name    prefix=${EMPTY}
-    Set Suite Variable    $CHILD_SN    ${DEVICE_SN}-${name}-child01
+    Set Suite Variable    $CHILD_ID    child01
+    Set Suite Variable    $CHILD_SN    ${DEVICE_SN}:device:${CHILD_ID}
 
 Normal case when the child device does not exist on c8y cloud
     # Sending child alarm

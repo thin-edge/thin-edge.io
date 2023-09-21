@@ -9,50 +9,50 @@ Test Teardown    Get Logs
 
 *** Test Cases ***
 Child devices support sending simple measurements
-    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///m/ '{ "temperature": 25 }'
+    Execute Command    tedge mqtt pub te/device/${CHILD_ID}///m/ '{ "temperature": 25 }'
     ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=ThinEdgeMeasurement    value=temperature    series=temperature
     Log    ${measurements}
 
 
 
 Child devices support sending simple measurements with custom type in topic
-    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///m/CustomType_topic '{ "temperature": 25 }'
+    Execute Command    tedge mqtt pub te/device/${CHILD_ID}///m/CustomType_topic '{ "temperature": 25 }'
     ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=CustomType_topic    value=temperature    series=temperature
     Log    ${measurements}
 
 
 Child devices support sending simple measurements with custom type in payload
-    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///m/CustomType_topic '{ "type":"CustomType_payload","temperature": 25 }'
+    Execute Command    tedge mqtt pub te/device/${CHILD_ID}///m/CustomType_topic '{ "type":"CustomType_payload","temperature": 25 }'
     ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=CustomType_payload    value=temperature    series=temperature
     Log    ${measurements}
 
 Child devices support sending custom measurements
-    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///m/ '{ "current": {"L1": 9.5, "L2": 1.3} }'
+    Execute Command    tedge mqtt pub te/device/${CHILD_ID}///m/ '{ "current": {"L1": 9.5, "L2": 1.3} }'
     ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=ThinEdgeMeasurement    value=current    series=L1
     Log    ${measurements}
 
 
 Child devices support sending custom events
-    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///e/myCustomType1 '{ "text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
+    Execute Command    tedge mqtt pub te/device/${CHILD_ID}///e/myCustomType1 '{ "text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
     ${events}=    Device Should Have Event/s    expected_text=Some test event    with_attachment=False    minimum=1    maximum=1    type=myCustomType1    fragment=someOtherCustomFragment
     Log    ${events}
 
 
 Child devices support sending custom events overriding the type
-    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///e/myCustomType '{"type": "otherType", "text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
+    Execute Command    tedge mqtt pub te/device/${CHILD_ID}///e/myCustomType '{"type": "otherType", "text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
     ${events}=    Device Should Have Event/s    expected_text=Some test event    with_attachment=False    minimum=1    maximum=1    type=otherType    fragment=someOtherCustomFragment
     Log    ${events}
 
 
  Child devices support sending custom events without type in topic
-    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///e/ '{"text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
+    Execute Command    tedge mqtt pub te/device/${CHILD_ID}///e/ '{"text": "Some test event", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
     ${events}=    Device Should Have Event/s    expected_text=Some test event    with_attachment=False    minimum=1    maximum=1    type=ThinEdgeEvent    fragment=someOtherCustomFragment
     Log    ${events}
 
 
 Child devices support sending custom alarms #1699
     [Tags]    \#1699
-    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///a/myCustomAlarmType '{ "severity": "critical", "text": "Some test alarm", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
+    Execute Command    tedge mqtt pub te/device/${CHILD_ID}///a/myCustomAlarmType '{ "severity": "critical", "text": "Some test alarm", "someOtherCustomFragment": {"nested":{"value": "extra info"}} }'
     ${alarms}=    Device Should Have Alarm/s    expected_text=Some test alarm    severity=CRITICAL    minimum=1    maximum=1    type=myCustomAlarmType
     Should Be Equal    ${alarms[0]["someOtherCustomFragment"]["nested"]["value"]}    extra info
     Log    ${alarms}
@@ -84,7 +84,8 @@ Child device supports sending custom child device measurements directly to c8y
 Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
-    Set Suite Variable    $CHILD_SN    ${DEVICE_SN}_child1
+    Set Suite Variable    $CHILD_ID    child1
+    Set Suite Variable    $CHILD_SN    ${DEVICE_SN}:device:child1
     Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_SN}
     Restart Service    tedge-mapper-c8y
     Device Should Exist                      ${DEVICE_SN}
