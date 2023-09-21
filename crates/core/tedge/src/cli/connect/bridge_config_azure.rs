@@ -57,8 +57,14 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             notification_topic: "tedge/health/mosquitto-az-bridge".into(),
             bridge_attempt_unsubscribe: false,
             topics: vec![
+                // See Azure IoT Hub documentation for detailed explanation on the topics
+                // https://learn.microsoft.com/en-us/azure/iot/iot-mqtt-connect-to-iot-hub#receiving-cloud-to-device-messages
                 pub_msg_topic,
                 sub_msg_topic,
+                // Direct methods (request/response)
+                r##"topic methods/POST/# in 1 az/ $iothub/"##.into(),
+                r##"topic methods/res/# out 1 az/ $iothub/"##.into(),
+                // Digital twin
                 r##"twin/res/# in 1 az/ $iothub/"##.into(),
                 r##"twin/GET/# out 1 az/ $iothub/"##.into(),
                 r##"twin/PATCH/# out 1 az/ $iothub/"##.into(),
@@ -99,6 +105,8 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         topics: vec![
             r#"messages/events/# out 1 az/ devices/alpha/"#.into(),
             r##"messages/devicebound/# in 1 az/ devices/alpha/"##.into(),
+            r##"topic methods/POST/# in 1 az/ $iothub/"##.into(),
+            r##"topic methods/res/# out 1 az/ $iothub/"##.into(),
             r##"twin/res/# in 1 az/ $iothub/"##.into(),
             r##"twin/GET/# out 1 az/ $iothub/"##.into(),
             r##"twin/PATCH/# out 1 az/ $iothub/"##.into(),
