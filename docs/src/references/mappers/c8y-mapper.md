@@ -568,6 +568,416 @@ c8y/alarm/alarms/create
 
 </div>
 
+## Twin
+
+The `twin` metadata is mapped to [inventory data](https://cumulocity.com/guides/concepts/domain-model/#inventory) in Cumulocity.
+
+#### Twin - Main device
+
+A device's digital twin model can be updated by publishing to a specific topic.
+
+The type part of the topic is used to group the data so it is easier for components to subscribe to relevant parts.
+
+<div class="code-indent-left">
+
+**Thin Edge (input)**
+
+```text title="Topic (retain=true)"
+te/device/main///twin/device_OS
+```
+
+```json5 title="Payload"
+{
+  "family": "Debian",
+  "version": "11"
+}
+```
+
+</div>
+
+<div class="code-indent-right">
+
+**Cumulocity IoT (output)**
+
+```text title="Topic"
+c8y/inventory/managedObjects/update/<main-device-id>
+```
+
+```json5 title="Payload"
+{
+  "device_OS": {
+    "family": "Debian",
+    "version": "11"
+  }
+}
+```
+
+</div>
+
+
+#### Twin - Child Device
+
+<div class="code-indent-left">
+
+**Thin Edge (input)**
+
+```text title="Topic (retain=true)"
+te/device/child01///twin/device_OS
+```
+
+```json5 title="Payload"
+{
+  "family": "Debian",
+  "version": "11"
+}
+```
+
+</div>
+
+<div class="code-indent-right">
+
+**Cumulocity IoT (output)**
+
+```text title="Topic"
+c8y/inventory/managedObjects/update/<main-device-id>:device:child01
+```
+
+```json5 title="Payload"
+{
+  "device_OS": {
+    "family": "Debian",
+    "version": "11"
+  }
+}
+```
+
+</div>
+
+#### Twin - Service on Main Device
+
+<div class="code-indent-left">
+
+**Thin Edge (input)**
+
+```text title="Topic (retain=true)"
+te/device/main/service/tedge-agent/twin/runtime_stats
+```
+
+```json5 title="Payload"
+{
+  "memory": 3024,
+  "uptime": 86400
+}
+```
+
+</div>
+
+<div class="code-indent-right">
+
+**Cumulocity IoT (output)**
+
+```text title="Topic"
+c8y/inventory/managedObjects/update/<main-device-id>:device:main:service:tedge-agent
+```
+
+```json5 title="Payload"
+{
+  "runtime_stats": {
+    "memory": 3.3,
+    "uptime": 86400
+  }
+}
+```
+
+</div>
+
+
+#### Twin - Service on Child Device
+
+<div class="code-indent-left">
+
+**Thin Edge (input)**
+
+```text title="Topic (retain=true)"
+te/device/child01/service/tedge-agent/twin/runtime_stats
+```
+
+```json5 title="Payload"
+{
+  "memory": 3.3,
+  "uptime": 86400
+}
+```
+
+</div>
+
+<div class="code-indent-right">
+
+**Cumulocity IoT (output)**
+
+```text title="Topic"
+c8y/inventory/managedObjects/update/<main-device-id>:device:child01:service:tedge-agent
+```
+
+```json5 title="Payload"
+{
+  "runtime_stats": {
+    "memory": 3.3,
+    "uptime": 86400
+  }
+}
+```
+
+</div>
+
+
+### Twin data - Root fragments
+
+Data can be added on the root level of the twin by publishing the values directly to the topic with the key used as type.
+The payload can be any valid JSON value other than a JSON object.
+JSON objects must be published to their typed topics directly.
+
+<div class="code-indent-left">
+
+**Thin Edge (input)**
+
+```text title="Topic (retain=true)"
+te/device/main///twin/subtype
+```
+
+```json5 title="Payload"
+"my-custom-type"
+```
+
+</div>
+
+<div class="code-indent-right">
+
+**Cumulocity IoT (output)**
+
+```text title="Topic"
+c8y/inventory/managedObjects/update/<main-device-id>
+```
+
+```json5 title="Payload"
+{
+  "subtype": "my-custom-type"
+}
+```
+
+</div>
+
+:::warning
+Updating the following properties via the `twin` channel is not supported
+
+* `name`
+* `type`
+
+as they are included in the entity registration message and can only be updated with another registration message.
+:::
+
+
+### Twin - Deleting a fragment
+
+<div class="code-indent-left">
+
+**Thin Edge (input)**
+
+```text title="Topic (retain=true)"
+te/device/child01/service/tedge-agent/twin/runtime_stats
+```
+
+```json5 title="Payload"
+<<empty>>
+```
+
+</div>
+
+<div class="code-indent-right">
+
+**Cumulocity IoT (output)**
+
+```text title="Topic"
+c8y/inventory/managedObjects/update/<main-device-id>:device:child01:service:tedge-agent
+```
+
+```json5 title="Payload"
+{
+  "runtime_stats": null
+}
+```
+
+</div>
+
+### Base inventory model
+
+The contents of `{tedge_config_dir}/device/inventory.json` are used to populate the initial inventory fragments
+of the the main thin-edge device in Cumulocity.
+For example, if the `inventory.json` contains the following fragments:
+
+```json title="inventory.json"
+{
+  "c8y_Firmware": {
+    "name": "raspberrypi-bootloader",
+    "version": "1.20140107-1",
+    "url": "31aab9856861b1a587e2094690c2f6e272712cb1"
+  },
+  "c8y_Hardware": {
+    "model": "BCM2708",
+    "revision": "000e",
+    "serialNumber": "00000000e2f5ad4d"
+  }
+}
+```
+
+It is mapped to the following Cumulocity message:
+
+```text title="Topic"
+c8y/inventory/managedObjects/update
+```
+
+```json5 title="Payload"
+{
+  "c8y_Agent": {
+    "name": "thin-edge.io",
+    "url": "https://thin-edge.io",
+    "version": "x.x.x"
+  },
+  "c8y_Firmware": {
+    "name": "raspberrypi-bootloader",
+    "version": "1.20140107-1",
+    "url": "31aab9856861b1a587e2094690c2f6e272712cb1"
+  },
+  "c8y_Hardware": {
+    "model": "BCM2708",
+    "revision": "000e",
+    "serialNumber": "00000000e2f5ad4d"
+  }
+}
+```
+
+Where the `c8y_Agent` fragment is auto-generated by thin-edge and appended to the contents of the file before it is published.
+
+The fragments in this file are also published to the `te/device/main///twin/<fragment-key>` topics so that
+the local twin metadata on the broker is also up-to-date and other components can also consume it.
+For example, the above `inventory.json` would result in the following `twin` messages:
+
+```text title="Topic"
+te/device/main///twin/c8y_Agent
+```
+
+```json5 title="Payload"
+{
+  "name": "thin-edge.io",
+  "url": "https://thin-edge.io",
+  "version": "x.x.x"
+}
+```
+
+```text title="Topic"
+te/device/main///twin/c8y_Firmware
+```
+
+```json5 title="Payload"
+{
+  "name": "raspberrypi-bootloader",
+  "version": "1.20140107-1",
+  "url": "31aab9856861b1a587e2094690c2f6e272712cb1"
+}
+```
+
+```text title="Topic"
+te/device/main///twin/c8y_Hardware
+```
+
+```json5 title="Payload"
+{
+  "model": "BCM2708",
+  "revision": "000e",
+  "serialNumber": "00000000e2f5ad4d"
+}
+```
+
+:::warning
+The following keys in the `inventory.json` file are also ignored:
+
+* `name`
+* `type`
+
+as they are included in the entity registration message and can only be updated with another registration message.
+:::
+
+### Updating entity type in inventory
+
+After updating the inventory with `inventory.json` file contents, 
+the device `type` of the main device, set using the `device.type` tedge config key,
+is also updated in the inventory with the following message:
+
+```text title="Topic"
+c8y/inventory/managedObjects/update
+```
+
+```json5 title="Payload"
+{
+  "type": "configured-device-type"
+}
+```
+
+
+#### Data - Deleting a root fragment
+
+When deleting the root fragments on the `/twin/` topic, the mapper will have to keep track of the previously published value before the delete request is published. All the properties should have their values set to `null` and included in the published.
+
+For the example mapping, it assumes that the following message was already published before the deletion message was received.
+
+```text title="Topic (retain=true)"
+te/device/child01/service/tedge-agent/twin/
+```
+
+```json5 title="Payload"
+<<empty>>
+{
+  "subtype": "foo",
+  "other": "bar"
+}
+```
+
+<div class="code-indent-left">
+
+**Thin Edge (input)**
+
+```text title="Topic (retain=true)"
+te/device/child01/service/tedge-agent/twin/
+```
+
+```json5 title="Payload"
+<<empty>>
+{
+  "subtype": null,
+  "other": null
+}
+```
+
+</div>
+
+<div class="code-indent-right">
+
+**Cumulocity IoT (output)**
+
+```text title="Topic"
+c8y/inventory/managedObjects/update/<main-device-id>:device:child01:service:tedge-agent
+```
+
+```json5 title="Payload"
+{
+  "subtype": null,
+  "other": null
+}
+```
+
+</div>
+
+
 ## Operations/Commands
 
 Operations from Cumulocity are mapped to their equivalent commands in Thin Edge format.
