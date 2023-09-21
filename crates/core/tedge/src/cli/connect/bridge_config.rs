@@ -250,7 +250,7 @@ bridge_attempt_unsubscribe false
             use_agent: false,
             topics: vec![
                 r#"messages/events/ out 1 az/ devices/alpha/"#.into(),
-                r##"messages/devicebound/# out 1 az/ devices/alpha/"##.into(),
+                r##"messages/devicebound/# in 1 az/ devices/alpha/"##.into(),
             ],
             try_private: false,
             start_type: "automatic".into(),
@@ -291,7 +291,7 @@ bridge_attempt_unsubscribe false
         expected.insert("bridge_attempt_unsubscribe false");
 
         expected.insert("topic messages/events/ out 1 az/ devices/alpha/");
-        expected.insert("topic messages/devicebound/# out 1 az/ devices/alpha/");
+        expected.insert("topic messages/devicebound/# in 1 az/ devices/alpha/");
         assert_eq!(config_set, expected);
         Ok(())
     }
