@@ -23,7 +23,7 @@ Define Child device 1 ID
 
 Normal case when the child device does not exist on c8y cloud
     # Sending child alarm
-    Execute Command    sudo tedge mqtt pub 'tedge/alarms/critical/temperature_high/${CHILD_SN}' '{ "text": "Temperature is very high", "time": "2021-01-01T05:30:45+00:00" }' -q 2 -r
+    Execute Command    sudo tedge mqtt pub 'te/device/${CHILD_SN}///a/temperature_high' '{ "severity": "critical", "text": "Temperature is very high", "time": "2021-01-01T05:30:45+00:00" }' -q 2 -r
     # Check Child device creation
     Set Device    ${DEVICE_SN}
     Should Be A Child Device Of Device    ${CHILD_SN}
@@ -35,7 +35,7 @@ Normal case when the child device does not exist on c8y cloud
 
 Normal case when the child device already exists
 #Sending child alarm again
-    Execute Command    sudo tedge mqtt pub 'tedge/alarms/critical/temperature_high/${CHILD_SN}' '{ "text": "Temperature is very high", "time": "2021-01-02T05:30:45+00:00" }' -q 2 -r
+    Execute Command    sudo tedge mqtt pub 'te/device/${CHILD_SN}///a/temperature_high' '{ "severity": "critical", "text": "Temperature is very high", "time": "2021-01-02T05:30:45+00:00" }' -q 2 -r
 
 #Check created second alarm
     ${alarms}=    Device Should Have Alarm/s    minimum=1    maximum=1    updated_after=2021-01-02
@@ -43,7 +43,7 @@ Normal case when the child device already exists
 
 Reconciliation when the new alarm message arrives, restart the mapper
     Execute Command    sudo systemctl stop tedge-mapper-c8y.service
-    Execute Command    sudo tedge mqtt pub 'tedge/alarms/critical/temperature_high/${CHILD_SN}' '{ "text": "Temperature is very high", "time": "2021-01-03T05:30:45+00:00" }' -q 2 -r
+    Execute Command    sudo tedge mqtt pub 'te/device/${CHILD_SN}///a/temperature_high' '{ "severity": "critical", "text": "Temperature is very high", "time": "2021-01-03T05:30:45+00:00" }' -q 2 -r
     Execute Command    sudo systemctl start tedge-mapper-c8y.service
 
     # Check created second alarm
@@ -52,7 +52,7 @@ Reconciliation when the new alarm message arrives, restart the mapper
 
 Reconciliation when the alarm that is cleared
     Execute Command    sudo systemctl stop tedge-mapper-c8y.service
-    Execute Command    sudo tedge mqtt pub 'tedge/alarms/critical/temperature_high/${CHILD_SN}' '' -q 2 -r
+    Execute Command    sudo tedge mqtt pub 'te/device/${CHILD_SN}///a/temperature_high' '' -q 2 -r
     Execute Command    sudo systemctl start tedge-mapper-c8y.service
     Device Should Not Have Alarm/s
 

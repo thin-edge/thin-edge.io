@@ -1,168 +1,124 @@
-use tedge_api::alarm::AlarmSeverity;
-use tedge_api::alarm::ThinEdgeAlarm;
+use crate::json_c8y::AlarmSeverity;
+use crate::json_c8y::C8yAlarm;
 use time::format_description::well_known::Rfc3339;
-use time::OffsetDateTime;
 
-/// Converts from thin-edge alarm to C8Y alarm SmartREST message
-pub fn serialize_alarm(alarm: ThinEdgeAlarm) -> Result<String, time::error::Format> {
-    match alarm.data {
-        None => Ok(format!("306,{}", alarm.name)),
-        Some(alarm_data) => {
+/// Serialize C8yAlarm to SmartREST message
+pub fn serialize_alarm(c8y_alarm: &C8yAlarm) -> Result<String, time::error::Format> {
+    let smartrest = match c8y_alarm {
+        C8yAlarm::Create(alarm) => {
             let smartrest_code = match alarm.severity {
                 AlarmSeverity::Critical => 301,
                 AlarmSeverity::Major => 302,
                 AlarmSeverity::Minor => 303,
                 AlarmSeverity::Warning => 304,
             };
-            let current_timestamp = OffsetDateTime::now_utc();
-            let smartrest_message = format!(
+            format!(
                 "{},{},\"{}\",{}",
                 smartrest_code,
-                alarm.name,
-                alarm_data.text.unwrap_or_default(),
-                alarm_data.time.map_or_else(
-                    || current_timestamp.format(&Rfc3339),
-                    |timestamp| timestamp.format(&Rfc3339)
-                )?
-            );
-            Ok(smartrest_message)
+                alarm.alarm_type,
+                alarm.text,
+                alarm.time.format(&Rfc3339)?
+            )
         }
-    }
+        C8yAlarm::Clear(alarm) => format!("306,{}", alarm.alarm_type),
+    };
+    Ok(smartrest)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use assert_matches::assert_matches;
+    use crate::json_c8y::C8yClearAlarm;
+    use crate::json_c8y::C8yCreateAlarm;
+    use crate::json_c8y::SourceInfo;
     use maplit::hashmap;
-    use serde::Deserialize;
-    use tedge_api::alarm::ThinEdgeAlarmData;
     use test_case::test_case;
     use time::macros::datetime;
 
     #[test_case(
-        ThinEdgeAlarm {
-            name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Critical,
-            data: Some(ThinEdgeAlarmData {
-                text: Some("I raised it".into()),
-                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
-                alarm_data: hashmap!{},
-            }),
+        C8yAlarm::Create(C8yCreateAlarm {
+            alarm_type: "temperature_alarm".into(),
             source: None,
-        },
+            severity: AlarmSeverity::Critical,
+            text: "I raised it".into(),
+            time: datetime!(2021-04-23 19:00:00 +05:00),
+            fragments: hashmap!{},
+        }),
         "301,temperature_alarm,\"I raised it\",2021-04-23T19:00:00+05:00"
         ;"critical alarm translation"
     )]
     #[test_case(
-        ThinEdgeAlarm {
-            name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Major,
-            data: Some(ThinEdgeAlarmData {
-                text: Some("I raised it".into()),
-                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
-                alarm_data: hashmap!{},
-            }),
+        C8yAlarm::Create(C8yCreateAlarm {
+            alarm_type: "temperature_alarm".into(),
             source: None,
-        },
+            severity: AlarmSeverity::Major,
+            text: "I raised it".into(),
+            time: datetime!(2021-04-23 19:00:00 +05:00),
+            fragments: hashmap!{},
+        }),
         "302,temperature_alarm,\"I raised it\",2021-04-23T19:00:00+05:00"
         ;"major alarm translation"
     )]
     #[test_case(
-        ThinEdgeAlarm {
-            name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Minor,
-            data: Some(ThinEdgeAlarmData {
-                text: None,
-                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
-                alarm_data: hashmap!{},
-            }),
+        C8yAlarm::Create(C8yCreateAlarm {
+            alarm_type: "temperature_alarm".into(),
             source: None,
-        },
+            severity: AlarmSeverity::Minor,
+            text: "".into(),
+            time: datetime!(2021-04-23 19:00:00 +05:00),
+            fragments: hashmap!{},
+        }),
         "303,temperature_alarm,\"\",2021-04-23T19:00:00+05:00"
         ;"minor alarm translation without message"
     )]
     #[test_case(
-        ThinEdgeAlarm {
-            name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Warning,
-            data: Some(ThinEdgeAlarmData {
-                text: Some("I, raised, it".into()),
-                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
-                alarm_data: hashmap!{},
-            }),
+        C8yAlarm::Create(C8yCreateAlarm {
+            alarm_type: "temperature_alarm".into(),
             source: None,
-        },
+            severity: AlarmSeverity::Warning,
+            text: "I, raised, it".into(),
+            time: datetime!(2021-04-23 19:00:00 +05:00),
+            fragments: hashmap!{},
+        }),
         "304,temperature_alarm,\"I, raised, it\",2021-04-23T19:00:00+05:00"
         ;"warning alarm translation with commas in message"
     )]
     #[test_case(
-        ThinEdgeAlarm {
-            name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Warning,
-            data: Some(ThinEdgeAlarmData {
-                text: Some("External sensor raised alarm".into()),
-                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
-                alarm_data: hashmap!{},
+        C8yAlarm::Create(C8yCreateAlarm {
+            alarm_type: "temperature_alarm".into(),
+            source: Some(SourceInfo {
+                id: "External_source".into(),
+                source_type: "c8y_Serial".into()
             }),
-            source: Some("External_source".to_string()),
-        },
+            severity: AlarmSeverity::Warning,
+            text: "External sensor raised alarm".into(),
+            time: datetime!(2021-04-23 19:00:00 +05:00),
+            fragments: hashmap!{},
+        }),
         "304,temperature_alarm,\"External sensor raised alarm\",2021-04-23T19:00:00+05:00"
         ;"warning alarm translation by external sensor"
     )]
     #[test_case(
-        ThinEdgeAlarm {
-            name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Minor,
-            data: None,
+        C8yAlarm::Clear(C8yClearAlarm {
+            alarm_type: "temperature_alarm".into(),
             source: None,
-        },
+        }),
         "306,temperature_alarm"
         ;"clear alarm translation"
     )]
     #[test_case(
-        ThinEdgeAlarm {
-            name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Minor,
-            data: None,
-            source: Some("external_sensor".to_string()),
-        },
+        C8yAlarm::Clear(C8yClearAlarm {
+            alarm_type: "temperature_alarm".into(),
+            source: Some(SourceInfo {
+                id: "External_source".into(),
+                source_type: "c8y_Serial".into()
+            }),
+        }),
         "306,temperature_alarm"
         ;"clear child alarm translation"
     )]
-    fn check_alarm_translation(alarm: ThinEdgeAlarm, expected_smartrest_msg: &str) {
-        let result = serialize_alarm(alarm);
-
-        assert_eq!(result.unwrap(), expected_smartrest_msg);
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct SmartRestAlarm {
-        pub code: i32,
-        pub name: String,
-        pub time: Option<OffsetDateTime>,
-    }
-
-    #[test]
-    fn alarm_translation_empty_json_payload_generates_timestamp() {
-        let alarm = ThinEdgeAlarm {
-            name: "temperature_alarm".into(),
-            severity: AlarmSeverity::Warning,
-            data: Some(ThinEdgeAlarmData {
-                text: Some("I raised it".into()),
-                time: None,
-                alarm_data: hashmap! {},
-            }),
-            source: None,
-        };
-
-        let smartrest_message = serialize_alarm(alarm).unwrap();
-        let mut reader = csv::Reader::from_reader(smartrest_message.as_bytes());
-        for result in reader.deserialize() {
-            let smartrest_alarm: SmartRestAlarm = result.unwrap();
-            assert_eq!(smartrest_alarm.code, 301);
-            assert_eq!(smartrest_alarm.name, "empty_alarm".to_string());
-            assert_matches!(smartrest_alarm.time, Some(_))
-        }
+    fn check_alarm_translation(alarm: C8yAlarm, expected_smartrest_msg: &str) {
+        let smartrest = serialize_alarm(&alarm);
+        assert_eq!(smartrest.unwrap(), expected_smartrest_msg);
     }
 }

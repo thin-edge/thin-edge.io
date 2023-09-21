@@ -129,8 +129,7 @@ impl C8yMapperConfig {
         config_dir: &Path,
     ) -> Result<TopicFilter, C8yMapperConfigError> {
         let mut topic_filter: TopicFilter = vec![
-            "c8y-internal/alarms/+/+",
-            "c8y-internal/alarms/+/+/+",
+            "c8y-internal/alarms/+/+/+/+/+/a/+",
             C8yTopic::SmartRestRequest.to_string().as_str(),
             ResponseTopic::SoftwareListResponse.as_str(),
             ResponseTopic::SoftwareUpdateResponse.as_str(),
@@ -153,8 +152,7 @@ impl C8yMapperConfig {
         vec![
             "te/+/+/+/+/m/+",
             "te/+/+/+/+/e/+",
-            "tedge/alarms/+/+",
-            "tedge/alarms/+/+/+",
+            "te/+/+/+/+/a/+",
             "tedge/health/+",
             "tedge/health/+/+",
         ]

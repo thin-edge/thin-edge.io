@@ -1,16 +1,17 @@
-use c8y_api::json_c8y::C8yCreateAlarm;
+use c8y_api::json_c8y::C8yAlarm;
 use c8y_api::smartrest::alarm;
-use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
+use c8y_api::smartrest::topic::C8yTopic;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use tedge_api::alarm::ThinEdgeAlarm;
-use tedge_api::alarm::ThinEdgeJsonDeserializerError;
+use tedge_api::alarm::ThinEdgeAlarmDeserializerError;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::EntityStore;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::Topic;
 
 use crate::error::ConversionError;
 
-const TEDGE_ALARMS_TOPIC: &str = "tedge/alarms/";
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const C8Y_JSON_MQTT_ALARMS_TOPIC: &str = "c8y/alarm/alarms/create";
 
@@ -33,7 +34,10 @@ impl AlarmConverter {
 
     pub(crate) fn try_convert_alarm(
         &mut self,
+        source: &EntityTopicId,
         input_message: &Message,
+        alarm_type: &str,
+        entity_store: &EntityStore,
     ) -> Result<Vec<Message>, ConversionError> {
         let mut output_messages: Vec<Message> = Vec::new();
         match self {
@@ -41,54 +45,43 @@ impl AlarmConverter {
                 pending_alarms_map,
                 old_alarms_map: _,
             } => {
-                let alarm_id = input_message
-                    .topic
-                    .name
-                    .strip_prefix(TEDGE_ALARMS_TOPIC)
-                    .expect("Expected tedge/alarms prefix")
-                    .to_string();
+                let alarm_id = input_message.topic.name.to_string();
                 pending_alarms_map.insert(alarm_id, input_message.clone());
             }
             Self::Synced => {
-                //Regular conversion phase
+                // Regular conversion phase
                 let mqtt_topic = input_message.topic.name.clone();
                 let mqtt_payload = input_message.payload_str().map_err(|e| {
-                    ThinEdgeJsonDeserializerError::FailedToParsePayloadToString {
+                    ThinEdgeAlarmDeserializerError::FailedToParsePayloadToString {
                         topic: mqtt_topic.clone(),
                         error: e.to_string(),
                     }
                 })?;
 
-                let tedge_alarm =
-                    ThinEdgeAlarm::try_from(&mqtt_topic, mqtt_payload).map_err(|e| {
-                        ThinEdgeJsonDeserializerError::FailedToParseJsonPayload {
-                            topic: mqtt_topic,
-                            error: e.to_string(),
-                            payload: mqtt_payload.chars().take(50).collect(),
-                        }
-                    })?;
-                let c8y_alarm = C8yCreateAlarm::try_from(&tedge_alarm)?;
+                let tedge_alarm = ThinEdgeAlarm::try_from(alarm_type, source, mqtt_payload)?;
+                let c8y_alarm = C8yAlarm::try_from(&tedge_alarm, entity_store)?;
 
-                // If the message doesn't contain any fields other than `text` and `time`, convert to SmartREST
-                if c8y_alarm.fragments.is_empty() {
-                    let smartrest_alarm = alarm::serialize_alarm(tedge_alarm)?;
-                    let c8y_alarm_topic = Topic::new_unchecked(
-                        &self.get_c8y_alarm_topic(input_message.topic.name.as_str())?,
-                    );
-                    output_messages.push(Message::new(&c8y_alarm_topic, smartrest_alarm));
-                } else {
-                    let cumulocity_alarm_json = serde_json::to_string(&c8y_alarm)?;
-                    let c8y_alarm_topic = Topic::new_unchecked(C8Y_JSON_MQTT_ALARMS_TOPIC);
-                    output_messages.push(Message::new(&c8y_alarm_topic, cumulocity_alarm_json));
+                // If the message doesn't contain any fields other than `text`, `severity` and `time`, convert to SmartREST
+                match c8y_alarm {
+                    C8yAlarm::Create(c8y_create_alarm)
+                        if !c8y_create_alarm.fragments.is_empty() =>
+                    {
+                        // JSON over MQTT
+                        let cumulocity_alarm_json = serde_json::to_string(&c8y_create_alarm)?;
+                        let c8y_alarm_topic = Topic::new_unchecked(C8Y_JSON_MQTT_ALARMS_TOPIC);
+                        output_messages.push(Message::new(&c8y_alarm_topic, cumulocity_alarm_json));
+                    }
+                    _ => {
+                        // SmartREST
+                        let smartrest_alarm = alarm::serialize_alarm(&c8y_alarm)?;
+                        let smartrest_topic =
+                            C8yTopic::from(&c8y_alarm).to_topic().expect("Infallible");
+                        output_messages.push(Message::new(&smartrest_topic, smartrest_alarm));
+                    }
                 }
 
                 // Persist a copy of the alarm to an internal topic for reconciliation on next restart
-                let alarm_id = input_message
-                    .topic
-                    .name
-                    .strip_prefix(TEDGE_ALARMS_TOPIC)
-                    .expect("Expected tedge/alarms prefix")
-                    .to_string();
+                let alarm_id = input_message.topic.name.to_string();
                 let topic =
                     Topic::new_unchecked(format!("{INTERNAL_ALARMS_TOPIC}{alarm_id}").as_str());
                 let alarm_copy =
@@ -97,17 +90,6 @@ impl AlarmConverter {
             }
         }
         Ok(output_messages)
-    }
-
-    pub(crate) fn get_c8y_alarm_topic(&self, topic: &str) -> Result<String, ConversionError> {
-        let topic_split: Vec<&str> = topic.split('/').collect();
-        if topic_split.len() == 4 {
-            Ok(SMARTREST_PUBLISH_TOPIC.to_string())
-        } else if topic_split.len() == 5 {
-            Ok(format!("{SMARTREST_PUBLISH_TOPIC}/{}", topic_split[4]))
-        } else {
-            Err(ConversionError::UnsupportedTopic(topic.to_string()))
-        }
     }
 
     pub(crate) fn process_internal_alarm(&mut self, input: &Message) {
@@ -158,9 +140,7 @@ impl AlarmConverter {
                         // If an alarm that is present in c8y-internal/alarms topic is not present in tedge/alarms topic,
                         // it is assumed to have been cleared while the mapper process was down
                         Entry::Vacant(_) => {
-                            let topic = Topic::new_unchecked(
-                                format!("{TEDGE_ALARMS_TOPIC}{alarm_id}").as_str(),
-                            );
+                            let topic = Topic::new_unchecked(&alarm_id);
                             let message = Message::new(&topic, vec![]).with_retain();
                             // Recreate the clear alarm message and add it to the pending alarms list to be processed later
                             sync_messages.push(message);

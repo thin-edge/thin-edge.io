@@ -1,21 +1,25 @@
+use download::DownloadInfo;
+use serde::Deserialize;
+use serde::Serialize;
+use serde_json::Value;
 use std::collections::HashMap;
-
+use std::fmt;
 use tedge_api::alarm::ThinEdgeAlarm;
+use tedge_api::alarm::ThinEdgeAlarmData;
+use tedge_api::entity_store::EntityMetadata;
+use tedge_api::entity_store::EntityType;
+use tedge_api::event::ThinEdgeEvent;
+use tedge_api::EntityStore;
 use tedge_api::Jsonify;
 use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareModule;
 use tedge_api::SoftwareType;
 use tedge_api::SoftwareVersion;
-
-use crate::smartrest::error::SMCumulocityMapperError;
-use download::DownloadInfo;
-use serde::Deserialize;
-use serde::Serialize;
-use serde_json::Value;
-use tedge_api::event::ThinEdgeEvent;
 use time::OffsetDateTime;
 
 const EMPTY_STRING: &str = "";
+const DEFAULT_ALARM_SEVERITY: AlarmSeverity = AlarmSeverity::Minor;
+const DEFAULT_ALARM_TYPE: &str = "ThinEdgeAlarm";
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -218,8 +222,8 @@ fn update_the_external_source_event(extras: &mut HashMap<String, Value>, source:
     extras.insert("externalSource".into(), value.into());
 }
 
-fn make_c8y_source_fragment(source_name: &str) -> Option<SourceInfo> {
-    Some(SourceInfo::new(source_name.into(), "c8y_Serial".into()))
+fn make_c8y_source_fragment(source_name: &str) -> SourceInfo {
+    SourceInfo::new(source_name.into(), "c8y_Serial".into())
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -236,96 +240,184 @@ impl SourceInfo {
         Self { id, source_type }
     }
 }
+
+/// Internal representation of c8y's alarm model.
+#[derive(Debug, PartialEq, Eq)]
+pub enum C8yAlarm {
+    Create(C8yCreateAlarm),
+    Clear(C8yClearAlarm),
+}
+
+/// Internal representation of creating an alarm in c8y.
+/// Note: text and time are optional for SmartREST, however,
+/// mandatory for JSON over MQTT. Hence, here they are mandatory.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yCreateAlarm {
+    /// Alarm type, default is "ThinEdgeAlarm".
+    #[serde(rename = "type")]
+    pub alarm_type: String,
+
+    /// None for main device, Some for child device.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "externalSource")]
     pub source: Option<SourceInfo>,
 
-    pub severity: String,
+    pub severity: AlarmSeverity,
 
-    #[serde(rename = "type")]
-    pub alarm_type: String,
+    pub text: String,
 
     #[serde(with = "time::serde::rfc3339")]
     pub time: OffsetDateTime,
-
-    pub text: String,
 
     #[serde(flatten)]
     pub fragments: HashMap<String, Value>,
 }
 
-impl C8yCreateAlarm {
-    pub fn new(
-        source: Option<SourceInfo>,
-        severity: String,
-        alarm_type: String,
-        time: OffsetDateTime,
-        text: String,
-        fragments: HashMap<String, Value>,
-    ) -> Self {
-        Self {
-            source,
-            severity,
-            alarm_type,
-            time,
-            text,
-            fragments,
+/// Internal representation of clearing an alarm in c8y.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct C8yClearAlarm {
+    /// Alarm type, default is "ThinEdgeAlarm".
+    #[serde(rename = "type")]
+    pub alarm_type: String,
+
+    /// None for main device, Some for child device.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "externalSource")]
+    pub source: Option<SourceInfo>,
+}
+
+impl C8yAlarm {
+    pub fn try_from(
+        alarm: &ThinEdgeAlarm,
+        entity_store: &EntityStore,
+    ) -> Result<Self, C8yAlarmError> {
+        if let Some(entity) = entity_store.get(&alarm.source) {
+            let source = Self::convert_source(entity);
+            let alarm_type = Self::convert_alarm_type(&alarm.alarm_type);
+
+            let c8y_alarm = match alarm.data.as_ref() {
+                None => C8yAlarm::Clear(C8yClearAlarm { alarm_type, source }),
+                Some(tedge_alarm_data) => C8yAlarm::Create(C8yCreateAlarm {
+                    alarm_type: alarm_type.clone(),
+                    source,
+                    severity: C8yCreateAlarm::convert_severity(tedge_alarm_data),
+                    text: C8yCreateAlarm::convert_text(tedge_alarm_data, &alarm_type),
+                    time: C8yCreateAlarm::convert_time(tedge_alarm_data),
+                    fragments: C8yCreateAlarm::convert_extras(tedge_alarm_data),
+                }),
+            };
+            Ok(c8y_alarm)
+        } else {
+            Err(C8yAlarmError::UnsupportedDeviceTopicId(
+                alarm.source.to_string(),
+            ))
+        }
+    }
+
+    fn convert_source(entity: &EntityMetadata) -> Option<SourceInfo> {
+        match entity.r#type {
+            EntityType::MainDevice => None,
+            EntityType::ChildDevice => Some(make_c8y_source_fragment(&entity.entity_id.clone())),
+            EntityType::Service => Some(make_c8y_source_fragment(&entity.entity_id.clone())),
+        }
+    }
+
+    fn convert_alarm_type(alarm_type: &str) -> String {
+        if alarm_type.is_empty() {
+            DEFAULT_ALARM_TYPE.to_string()
+        } else {
+            alarm_type.to_string()
         }
     }
 }
 
-impl TryFrom<&ThinEdgeAlarm> for C8yCreateAlarm {
-    type Error = SMCumulocityMapperError;
-
-    fn try_from(alarm: &ThinEdgeAlarm) -> Result<Self, SMCumulocityMapperError> {
-        let severity = alarm.severity.to_string();
-        let alarm_type = alarm.name.to_owned();
-        let text;
-        let time;
-        let fragments;
-
-        match &alarm.to_owned().data {
-            None => {
-                text = alarm_type.clone();
-                time = OffsetDateTime::now_utc();
-                fragments = HashMap::new();
-            }
-            Some(data) => {
-                text = data.text.clone().unwrap_or_else(|| alarm_type.clone());
-                time = data.time.unwrap_or_else(OffsetDateTime::now_utc);
-                fragments = data.alarm_data.clone();
-            }
+impl C8yCreateAlarm {
+    fn convert_severity(alarm_data: &ThinEdgeAlarmData) -> AlarmSeverity {
+        match alarm_data.severity.clone() {
+            Some(severity) => match AlarmSeverity::try_from(severity.as_str()) {
+                Ok(c8y_severity) => c8y_severity,
+                Err(_) => DEFAULT_ALARM_SEVERITY,
+            },
+            None => DEFAULT_ALARM_SEVERITY,
         }
-
-        let source = if let Some(external_source) = &alarm.source {
-            make_c8y_source_fragment(external_source)
-        } else {
-            None
-        };
-
-        Ok(Self {
-            source,
-            severity,
-            alarm_type,
-            time,
-            text,
-            fragments,
-        })
     }
+
+    fn convert_text(alarm_data: &ThinEdgeAlarmData, alarm_type: &str) -> String {
+        alarm_data.text.clone().unwrap_or(alarm_type.to_string())
+    }
+
+    fn convert_time(alarm_data: &ThinEdgeAlarmData) -> OffsetDateTime {
+        alarm_data.time.unwrap_or_else(OffsetDateTime::now_utc)
+    }
+
+    /// Remove reserved keywords from extras.
+    /// "type", "time", "text", "severity" are ensured that they are not
+    /// in the hashmap of ThinEdgeAlarm because they are already members of the struct itself.
+    fn convert_extras(alarm_data: &ThinEdgeAlarmData) -> HashMap<String, Value> {
+        let mut map = alarm_data.extras.clone();
+        map.remove("externalSource");
+        map
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(rename_all(serialize = "UPPERCASE"))]
+pub enum AlarmSeverity {
+    Critical,
+    Major,
+    Minor,
+    Warning,
+}
+
+impl TryFrom<&str> for AlarmSeverity {
+    type Error = C8yAlarmError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "critical" => Ok(AlarmSeverity::Critical),
+            "major" => Ok(AlarmSeverity::Major),
+            "minor" => Ok(AlarmSeverity::Minor),
+            "warning" => Ok(AlarmSeverity::Warning),
+            invalid => Err(C8yAlarmError::UnsupportedAlarmSeverity(invalid.into())),
+        }
+    }
+}
+
+impl fmt::Display for AlarmSeverity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AlarmSeverity::Critical => write!(f, "CRITICAL"),
+            AlarmSeverity::Major => write!(f, "MAJOR"),
+            AlarmSeverity::Minor => write!(f, "MINOR"),
+            AlarmSeverity::Warning => write!(f, "WARNING"),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum C8yAlarmError {
+    #[error("Unsupported alarm severity in topic: {0}")]
+    UnsupportedAlarmSeverity(String),
+
+    #[error("Unsupported device topic ID in topic: {0}")]
+    UnsupportedDeviceTopicId(String),
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::json_c8y::AlarmSeverity;
     use anyhow::Result;
     use assert_matches::assert_matches;
+    use mqtt_channel::Message;
+    use mqtt_channel::Topic;
     use serde_json::json;
-    use tedge_api::alarm::AlarmSeverity;
     use tedge_api::alarm::ThinEdgeAlarm;
     use tedge_api::alarm::ThinEdgeAlarmData;
+    use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::event::ThinEdgeEventData;
+    use tedge_api::mqtt_topics::EntityTopicId;
     use test_case::test_case;
     use time::macros::datetime;
 
@@ -586,75 +678,136 @@ mod tests {
 
     #[test_case(
         ThinEdgeAlarm {
-            name: "temperature alarm".into(),
-            severity: AlarmSeverity::Critical,
+            alarm_type: "temperature alarm".into(),
+            source: EntityTopicId::default_main_device(),
             data: Some(ThinEdgeAlarmData {
+                severity: Some("critical".into()),
                 text: Some("Temperature went high".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
-                alarm_data: HashMap::new(),
+                extras: HashMap::new(),
             }),
-            source: None,
         },
-        C8yCreateAlarm {
-            severity: "CRITICAL".to_string(),
-            source: None,
+        C8yAlarm::Create(C8yCreateAlarm {
             alarm_type: "temperature alarm".into(),
-            time: datetime!(2021-04-23 19:00:00 +05:00),
+            source: None,
+            severity: AlarmSeverity::Critical,
             text: "Temperature went high".into(),
+            time: datetime!(2021-04-23 19:00:00 +05:00),
             fragments: HashMap::new(),
-        }
+        })
         ;"critical alarm translation"
     )]
     #[test_case(
         ThinEdgeAlarm {
-            name: "temperature alarm".into(),
-            severity: AlarmSeverity::Critical,
+            alarm_type: "temperature alarm".into(),
+            source: EntityTopicId::default_main_device(),
             data: Some(ThinEdgeAlarmData {
+                severity: Some("critical".into()),
                 text: Some("Temperature went high".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
-                alarm_data: maplit::hashmap!{"SomeCustomFragment".to_string() => json!({"nested": {"value":"extra info"}})},
+                extras: maplit::hashmap!{"SomeCustomFragment".to_string() => json!({"nested": {"value":"extra info"}})},
             }),
-            source: None,
         },
-        C8yCreateAlarm {
-            severity: "CRITICAL".to_string(),
-            source: None,
+        C8yAlarm::Create(C8yCreateAlarm {
             alarm_type: "temperature alarm".into(),
-            time: datetime!(2021-04-23 19:00:00 +05:00),
+            source: None,
+            severity: AlarmSeverity::Critical,
             text: "Temperature went high".into(),
+            time: datetime!(2021-04-23 19:00:00 +05:00),
             fragments: maplit::hashmap!{"SomeCustomFragment".to_string() => json!({"nested": {"value":"extra info"}})},
-        }
+        })
         ;"critical alarm translation with custom fragment"
     )]
     #[test_case(
         ThinEdgeAlarm {
-            name: "temperature alarm".into(),
-            severity: AlarmSeverity::Critical,
+            alarm_type: "temperature alarm".into(),
+            source: EntityTopicId::default_child_device("external_source").unwrap(),
             data: Some(ThinEdgeAlarmData {
+                severity: Some("critical".into()),
                 text: Some("Temperature went high".into()),
                 time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
-                alarm_data: maplit::hashmap!{"SomeCustomFragment".to_string() => json!({"nested": {"value":"extra info"}})},
+                extras: maplit::hashmap!{"SomeCustomFragment".to_string() => json!({"nested": {"value":"extra info"}})},
             }),
-            source: Some("external_source".into()),
         },
-        C8yCreateAlarm {
-            severity: "CRITICAL".to_string(),
-            source: Some(SourceInfo::new("external_source".to_string(),"c8y_Serial".to_string())),
+        C8yAlarm::Create(C8yCreateAlarm {
             alarm_type: "temperature alarm".into(),
-            time: datetime!(2021-04-23 19:00:00 +05:00),
+            source: Some(SourceInfo::new("external_source".to_string(),"c8y_Serial".to_string())),
+            severity: AlarmSeverity::Critical,
             text: "Temperature went high".into(),
+            time: datetime!(2021-04-23 19:00:00 +05:00),
             fragments: maplit::hashmap!{"SomeCustomFragment".to_string() => json!({"nested": {"value":"extra info"}})},
-        }
+        })
         ;"critical alarm translation of child device with custom fragment"
     )]
-    fn check_alarm_translation(
-        tedge_alarm: ThinEdgeAlarm,
-        expected_c8y_alarm: C8yCreateAlarm,
-    ) -> Result<()> {
-        let actual_c8y_alarm = C8yCreateAlarm::try_from(&tedge_alarm)?;
+    #[test_case(
+        ThinEdgeAlarm {
+            alarm_type: "".into(),
+            source: EntityTopicId::default_main_device(),
+            data: Some(ThinEdgeAlarmData {
+                severity: Some("invalid".into()),
+                text: None,
+                time: Some(datetime!(2021-04-23 19:00:00 +05:00)),
+                extras: HashMap::new(),
+            }),
+        },
+        C8yAlarm::Create(C8yCreateAlarm {
+            alarm_type: "ThinEdgeAlarm".into(),
+            source: None,
+            severity: AlarmSeverity::Minor,
+            text: "ThinEdgeAlarm".into(),
+            time: datetime!(2021-04-23 19:00:00 +05:00),
+            fragments: HashMap::new(),
+        })
+        ;"using default values of alarm"
+    )]
+    #[test_case(
+        ThinEdgeAlarm {
+            alarm_type: "".into(),
+            source: EntityTopicId::default_main_device(),
+            data: None,
+        },
+        C8yAlarm::Clear(C8yClearAlarm {
+            alarm_type: "ThinEdgeAlarm".into(),
+            source: None,
+        })
+        ;"convert to clear alarm"
+    )]
+    fn check_alarm_translation(tedge_alarm: ThinEdgeAlarm, expected_c8y_alarm: C8yAlarm) {
+        let main_device = EntityRegistrationMessage::main_device("test-main".into());
+        let mut entity_store = EntityStore::with_main_device(main_device).unwrap();
 
+        let child_registration = EntityRegistrationMessage::new(&Message::new(
+            &Topic::new_unchecked("te/device/external_source//"),
+            r#"{"@id": "external_source", "@type": "child-device"}"#,
+        ))
+        .unwrap();
+        entity_store.update(child_registration).unwrap();
+
+        let actual_c8y_alarm = C8yAlarm::try_from(&tedge_alarm, &entity_store).unwrap();
         assert_eq!(actual_c8y_alarm, expected_c8y_alarm);
+    }
 
-        Ok(())
+    #[test]
+    fn alarm_translation_generates_timestamp_if_not_given() {
+        let tedge_alarm = ThinEdgeAlarm {
+            alarm_type: "".into(),
+            source: EntityTopicId::default_main_device(),
+            data: Some(ThinEdgeAlarmData {
+                severity: Some("critical".into()),
+                text: None,
+                time: None,
+                extras: HashMap::new(),
+            }),
+        };
+
+        let main_device = EntityRegistrationMessage::main_device("test-main".into());
+        let entity_store = EntityStore::with_main_device(main_device).unwrap();
+
+        match C8yAlarm::try_from(&tedge_alarm, &entity_store).unwrap() {
+            C8yAlarm::Create(value) => {
+                assert!(value.time.millisecond() > 0);
+            }
+            C8yAlarm::Clear(_) => panic!("Must be C8yAlarm::Create"),
+        };
     }
 }

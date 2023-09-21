@@ -1,3 +1,4 @@
+use crate::json_c8y::C8yAlarm;
 use mqtt_channel::MqttError;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
@@ -97,6 +98,21 @@ impl From<&EntityMetadata> for C8yTopic {
             EntityType::MainDevice => Self::SmartRestResponse,
             EntityType::ChildDevice => Self::ChildSmartRestResponse(value.entity_id.clone()),
             EntityType::Service => Self::SmartRestResponse, // TODO how services are handled by c8y?
+        }
+    }
+}
+
+impl From<&C8yAlarm> for C8yTopic {
+    fn from(value: &C8yAlarm) -> Self {
+        match value {
+            C8yAlarm::Create(alarm) => match alarm.source.as_ref() {
+                None => Self::SmartRestResponse,
+                Some(info) => Self::ChildSmartRestResponse(info.id.clone()),
+            },
+            C8yAlarm::Clear(alarm) => match alarm.source.as_ref() {
+                None => Self::SmartRestResponse,
+                Some(info) => Self::ChildSmartRestResponse(info.id.clone()),
+            },
         }
     }
 }
