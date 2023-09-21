@@ -1,11 +1,13 @@
 use crate::tokens::*;
 use axum::body::Body;
+use axum::body::BoxBody;
 use axum::body::Full;
 use axum::body::StreamBody;
 use axum::extract::FromRef;
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::HeaderValue;
+use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::routing::get;
 use axum::routing::IntoMakeService;
@@ -21,6 +23,7 @@ use reqwest::StatusCode;
 use std::fmt;
 use std::net::IpAddr;
 use std::sync::Arc;
+use tracing::error;
 use tracing::info;
 
 type AxumServer = hyper::Server<AddrIncoming, IntoMakeService<Router>>;
@@ -41,6 +44,25 @@ impl Server {
     }
 }
 
+struct ProxyError(miette::Report);
+
+impl From<miette::Report> for ProxyError {
+    fn from(value: miette::Report) -> Self {
+        Self(value)
+    }
+}
+
+impl IntoResponse for ProxyError {
+    fn into_response(self) -> Response {
+        error!("{:?}", self.0);
+        (
+            StatusCode::BAD_GATEWAY,
+            "Error communicating with Cumulocity",
+        )
+            .into_response()
+    }
+}
+
 fn try_run_server(address: IpAddr, port: u16, state: AppState) -> miette::Result<AxumServer> {
     info!("Launching on port {port}");
     let handle = get(respond_to)
@@ -51,6 +73,7 @@ fn try_run_server(address: IpAddr, port: u16, state: AppState) -> miette::Result
         .options(respond_to);
     let app = Router::new()
         .route("/c8y", handle.clone())
+        .route("/c8y/", handle.clone())
         .route("/c8y/*path", handle)
         .with_state(state);
     Ok(axum::Server::try_bind(&(address, port).into())
@@ -90,22 +113,26 @@ async fn respond_to(
     State(TargetHost(host)): State<TargetHost>,
     retrieve_token: State<SharedTokenManager>,
     path: Option<Path<String>>,
+    uri: hyper::Uri,
     method: Method,
     headers: HeaderMap<HeaderValue>,
     small_body: crate::body::PossiblySmallBody,
-) -> Response {
+) -> Result<(StatusCode, Option<HeaderMap>, BoxBody), ProxyError> {
     let path = match &path {
         Some(Path(p)) => p.as_str(),
         None => "",
     };
 
+    // Cumulocity revokes the device token if we access parts of the frontend UI,
+    // so deny requests to these proactively
     if path.ends_with(".js") || path.starts_with("apps/") {
-        return Response::builder()
-            .status(StatusCode::FORBIDDEN)
-            .body(<_>::default())
-            .unwrap();
+        return Ok((StatusCode::FORBIDDEN, None, <_>::default()));
     }
-    let destination = format!("{host}/{path}",);
+    let mut destination = format!("{host}/{path}");
+    if let Some(query) = uri.query() {
+        destination += "?";
+        destination += query;
+    }
 
     let mut token = retrieve_token.not_matching(None).await;
 
@@ -119,28 +146,38 @@ async fn respond_to(
             .body(body)
             .send()
     };
-    let mut res = send_request(body, token.clone()).await.unwrap();
+    let mut res = send_request(body, token.clone())
+        .await
+        .into_diagnostic()
+        .wrap_err_with(|| format!("making proxied requst to {destination}"))?;
 
     if res.status() == StatusCode::UNAUTHORIZED {
         token = retrieve_token.not_matching(Some(&token)).await;
         if let Some(body) = body_clone {
-            res = send_request(Body::from(body), token.clone()).await.unwrap();
+            res = send_request(Body::from(body), token.clone())
+                .await
+                .into_diagnostic()
+                .wrap_err_with(|| format!("making proxied requst to {destination}"))?;
         }
     }
     let te_header = res.headers_mut().remove("transfer-encoding");
+    let status = res.status();
     let headers = std::mem::take(res.headers_mut());
-    let mut build = Response::builder().status(res.status());
-    *build.headers_mut().unwrap() = headers;
 
     let body = if te_header.map_or(false, |h| {
         h.to_str().unwrap_or_default().contains("chunked")
     }) {
         axum::body::boxed(StreamBody::new(res.bytes_stream()))
     } else {
-        axum::body::boxed(Full::new(res.bytes().await.unwrap()))
+        axum::body::boxed(Full::new(
+            res.bytes()
+                .await
+                .into_diagnostic()
+                .wrap_err("reading proxy response bytes")?,
+        ))
     };
 
-    build.body(body).unwrap()
+    Ok((status, Some(headers), body))
 }
 
 #[cfg(test)]
@@ -192,6 +229,26 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.status(), 404);
+    }
+
+    #[tokio::test]
+    async fn sends_query_string_from_original_request() {
+        let _ = env_logger::try_init();
+        let mut server = mockito::Server::new();
+        let _mock = server
+            .mock("GET", "/inventory/managedObjects")
+            .match_query("pageSize=100")
+            .with_status(200)
+            .create();
+
+        let port = start_server(&server, vec!["test-token"]);
+
+        let res = reqwest::get(format!(
+            "http://localhost:{port}/c8y/inventory/managedObjects?pageSize=100"
+        ))
+        .await
+        .unwrap();
+        assert_eq!(res.status(), 200);
     }
 
     #[tokio::test]

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use c8y_http_proxy::credentials::JwtRetriever;
 use tokio::sync::Mutex;
+use tracing::info;
 
 #[derive(Clone)]
 pub struct SharedTokenManager(Arc<Mutex<TokenManager>>);
@@ -41,6 +42,7 @@ impl TokenManager {
     }
 
     async fn refresh(&mut self) -> Arc<str> {
+        info!("Refreshing JWT");
         self.cached = Some(self.recv.await_response(()).await.unwrap().unwrap().into());
         self.cached.as_ref().unwrap().clone()
     }
