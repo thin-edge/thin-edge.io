@@ -149,7 +149,7 @@ async fn respond_to(
     let mut res = send_request(body, token.clone())
         .await
         .into_diagnostic()
-        .wrap_err_with(|| format!("making proxied requst to {destination}"))?;
+        .wrap_err_with(|| format!("making proxied request to {destination}"))?;
 
     if res.status() == StatusCode::UNAUTHORIZED {
         token = retrieve_token.not_matching(Some(&token)).await;
