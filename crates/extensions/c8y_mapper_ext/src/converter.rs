@@ -211,7 +211,8 @@ impl CumulocityConverter {
         };
 
         let main_device = entity_store::EntityRegistrationMessage::main_device(device_id.clone());
-        let entity_store = EntityStore::with_main_device(main_device).unwrap();
+        let entity_store =
+            EntityStore::with_main_device(main_device, Self::map_to_c8y_external_id).unwrap();
 
         Ok(CumulocityConverter {
             size_threshold,
@@ -291,21 +292,23 @@ impl CumulocityConverter {
     /// - `device/child001//` => `DEVICE_COMMON_NAME:device:child001`
     /// - `device/child001/service/service001` => `DEVICE_COMMON_NAME:device:child001:service:service001`
     /// - `factory01/hallA/packaging/belt001` => `DEVICE_COMMON_NAME:factory01:hallA:packaging:belt001`
-    fn map_to_c8y_external_id(&self, entity_topic_id: &EntityTopicId) -> EntityExternalId {
-        let external_id = if entity_topic_id.is_default_main_device() {
-            self.device_name.clone()
+    fn map_to_c8y_external_id(
+        entity_topic_id: &EntityTopicId,
+        main_device_xid: &EntityExternalId,
+    ) -> EntityExternalId {
+        if entity_topic_id.is_default_main_device() {
+            main_device_xid.clone()
         } else {
             format!(
                 "{}:{}",
-                self.device_name.clone(),
+                main_device_xid.as_ref(),
                 entity_topic_id
                     .to_string()
                     .trim_end_matches('/')
                     .replace('/', ":")
             )
-        };
-
-        external_id.into()
+            .into()
+        }
     }
 
     fn try_convert_measurement(
@@ -558,12 +561,13 @@ impl CumulocityConverter {
         smartrest: &str,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
         let request = SmartRestRestartRequest::from_smartrest(smartrest)?;
-        let device_id = &request.device;
-        let target = self.entity_store.get_by_id(device_id).ok_or_else(|| {
-            CumulocityMapperError::UnknownDevice {
-                device_id: device_id.to_owned(),
-            }
-        })?;
+        let device_id = &request.device.into();
+        let target = self
+            .entity_store
+            .get_by_external_id(device_id)
+            .ok_or_else(|| CumulocityMapperError::UnknownDevice {
+                device_id: device_id.as_ref().to_string(),
+            })?;
         let command = RestartCommand::new(target.topic_id.clone());
         let message = command.command_message(&self.mqtt_schema);
         Ok(vec![message])
@@ -772,17 +776,7 @@ impl CumulocityConverter {
         match &channel {
             Channel::EntityMetadata => {
                 if let Ok(register_message) = EntityRegistrationMessage::try_from(message) {
-                    // Generate the c8y external id, if an external id is not provided in the message
-                    let external_id = register_message
-                        .entity_id
-                        .as_ref()
-                        .map(|v| v.to_string().into())
-                        .unwrap_or_else(|| self.map_to_c8y_external_id(&source));
-
-                    if let Err(e) = self
-                        .entity_store
-                        .update(register_message.clone(), external_id)
-                    {
+                    if let Err(e) = self.entity_store.update(register_message.clone()) {
                         error!("Could not update device registration: {e}");
                     }
                     let c8y_message =
@@ -793,18 +787,7 @@ impl CumulocityConverter {
             _ => {
                 // if device is unregistered register using auto-registration
                 if self.entity_store.get(&source).is_none() {
-                    let entity_external_id = self.map_to_c8y_external_id(&source);
-
-                    // If the entity is a service, generate the external id of the parent device as well
-                    let parent_external_id = source
-                        .default_parent_identifier()
-                        .map(|parent| self.map_to_c8y_external_id(&parent));
-
-                    registration_messages = match self.entity_store.auto_register_entity(
-                        &source,
-                        entity_external_id,
-                        parent_external_id,
-                    ) {
+                    registration_messages = match self.entity_store.auto_register_entity(&source) {
                         Ok(register_messages) => register_messages,
                         Err(e) => {
                             error!("Could not update device registration: {e}");
@@ -2189,12 +2172,9 @@ mod tests {
         entity_topic_id: &str,
         c8y_external_id: &str,
     ) {
-        let tmp_dir = TempTedgeDir::new();
-        let (converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
-
         let entity_topic_id = EntityTopicId::from_str(entity_topic_id).unwrap();
         assert_eq!(
-            converter.map_to_c8y_external_id(&entity_topic_id),
+            CumulocityConverter::map_to_c8y_external_id(&entity_topic_id, &"test-device".into()),
             c8y_external_id.into()
         );
     }

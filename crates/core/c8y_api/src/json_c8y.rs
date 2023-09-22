@@ -415,6 +415,7 @@ mod tests {
     use serde_json::json;
     use tedge_api::alarm::ThinEdgeAlarm;
     use tedge_api::alarm::ThinEdgeAlarmData;
+    use tedge_api::entity_store::EntityExternalId;
     use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::event::ThinEdgeEventData;
     use tedge_api::mqtt_topics::EntityTopicId;
@@ -774,16 +775,15 @@ mod tests {
     )]
     fn check_alarm_translation(tedge_alarm: ThinEdgeAlarm, expected_c8y_alarm: C8yAlarm) {
         let main_device = EntityRegistrationMessage::main_device("test-main".into());
-        let mut entity_store = EntityStore::with_main_device(main_device).unwrap();
+        let mut entity_store =
+            EntityStore::with_main_device(main_device, dummy_external_id_mapper).unwrap();
 
         let child_registration = EntityRegistrationMessage::new(&Message::new(
             &Topic::new_unchecked("te/device/external_source//"),
             r#"{"@id": "external_source", "@type": "child-device"}"#,
         ))
         .unwrap();
-        entity_store
-            .update(child_registration, "external_source".into())
-            .unwrap();
+        entity_store.update(child_registration).unwrap();
 
         let actual_c8y_alarm = C8yAlarm::try_from(&tedge_alarm, &entity_store).unwrap();
         assert_eq!(actual_c8y_alarm, expected_c8y_alarm);
@@ -803,7 +803,8 @@ mod tests {
         };
 
         let main_device = EntityRegistrationMessage::main_device("test-main".into());
-        let entity_store = EntityStore::with_main_device(main_device).unwrap();
+        let entity_store =
+            EntityStore::with_main_device(main_device, dummy_external_id_mapper).unwrap();
 
         match C8yAlarm::try_from(&tedge_alarm, &entity_store).unwrap() {
             C8yAlarm::Create(value) => {
@@ -811,5 +812,16 @@ mod tests {
             }
             C8yAlarm::Clear(_) => panic!("Must be C8yAlarm::Create"),
         };
+    }
+
+    fn dummy_external_id_mapper(
+        entity_topic_id: &EntityTopicId,
+        _main_device_xid: &EntityExternalId,
+    ) -> EntityExternalId {
+        entity_topic_id
+            .to_string()
+            .trim_end_matches('/')
+            .replace('/', ":")
+            .into()
     }
 }

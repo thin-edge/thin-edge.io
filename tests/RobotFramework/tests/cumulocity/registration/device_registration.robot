@@ -78,7 +78,9 @@ Register service on a child device via MQTT
 Register devices using custom MQTT schema
     [Documentation]    Complex example showing how to use custom MQTT topics to register devices/services using
         ...            custom identity schemas
-    Execute Command    tedge mqtt pub --retain 'te/base///' '{"@type":"main-device","name":"base","type":"te_gateway"}'
+
+    # Main device registration via MQTT is not supported at the moment
+    # Execute Command    tedge mqtt pub --retain 'te/base///' '{"@type":"main-device","name":"base","type":"te_gateway"}'
 
     Execute Command    tedge mqtt pub --retain 'te/factory1/shop1/plc1/sensor1' '{"@type":"child-device","name":"sensor1","type":"SmartSensor"}'
     Execute Command    tedge mqtt pub --retain 'te/factory1/shop1/plc1/sensor2' '{"@type":"child-device","name":"sensor2","type":"SmartSensor"}'
@@ -94,8 +96,8 @@ Register devices using custom MQTT schema
     Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${DEVICE_SN}:factory1:shop1:plc1:sensor2    child_name=sensor2    child_type=SmartSensor
 
     # Check main device services
-    Cumulocity.Set Device    ${DEVICE_SN}
-    Should Have Services    name=metrics    service_type=PLCApplication    status=up
+    # Cumulocity.Set Device    ${DEVICE_SN}
+    # Should Have Services    name=metrics    service_type=PLCApplication    status=up
 
     # Check child services
     Cumulocity.Set Device    ${DEVICE_SN}:factory1:shop1:plc1:sensor1
@@ -104,10 +106,11 @@ Register devices using custom MQTT schema
     Cumulocity.Set Device    ${DEVICE_SN}:factory1:shop1:plc1:sensor2
     Should Have Services    name=metrics    service_type=PLCMonitorApplication    status=up
 
+    # Skipping as main device registration via MQTT is not supported at the moment
     # Publish to main device on custom topic
-    Execute Command    cmd=tedge mqtt pub te/base////m/gateway_stats '{"runtime":1001}'
-    Cumulocity.Set Device    ${DEVICE_SN}
-    Cumulocity.Device Should Have Measurements    type=gateway_stats    minimum=1    maximum=1
+    # Execute Command    cmd=tedge mqtt pub te/base////m/gateway_stats '{"runtime":1001}'
+    # Cumulocity.Set Device    ${DEVICE_SN}
+    # Cumulocity.Device Should Have Measurements    type=gateway_stats    minimum=1    maximum=1
 
 *** Keywords ***
 

@@ -132,6 +132,61 @@ async fn child_device_registration_mapping() {
 }
 
 #[tokio::test]
+async fn custom_topic_scheme_registration_mapping() {
+    let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
+    timer.send(Timeout::new(())).await.unwrap(); // Complete sync phase so that alarm mapping starts
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    mqtt.skip(6).await; // Skip all init messages
+
+    // Child device with custom scheme
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/custom///"),
+        r#"{ "@type": "child-device", "type": "RaspberryPi", "name": "Child1" }"#,
+    ))
+    .await
+    .unwrap();
+
+    assert_received_contains_str(
+        &mut mqtt,
+        [("c8y/s/us", "101,test-device:custom,Child1,RaspberryPi")],
+    )
+    .await;
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/custom/child1//"),
+        r#"{ "@type": "child-device", "type": "RaspberryPi", "name": "Child1" }"#,
+    ))
+    .await
+    .unwrap();
+
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
+            "101,test-device:custom:child1,Child1,RaspberryPi",
+        )],
+    )
+    .await;
+
+    // Service with custom scheme
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/custom/service/collectd/"),
+        r#"{ "@type": "service", "type": "systemd", "name": "Collectd" }"#,
+    ))
+    .await
+    .unwrap();
+
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
+            "102,test-device:custom:service:collectd,systemd,Collectd,up",
+        )],
+    )
+    .await;
+}
+
+#[tokio::test]
 async fn service_registration_mapping() {
     let (mqtt, _http, _fs, mut timer) = spawn_c8y_mapper_actor(&TempTedgeDir::new(), true).await;
     timer.send(Timeout::new(())).await.unwrap(); // Complete sync phase so that alarm mapping starts

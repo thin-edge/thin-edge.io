@@ -51,11 +51,12 @@ impl CumulocityConverter {
         }
 
         let log_request = SmartRestLogRequest::from_smartrest(smartrest)?;
+        let device_external_id = log_request.device.into();
         let target = self
             .entity_store
-            .get_by_id(&log_request.device)
+            .get_by_external_id(&device_external_id)
             .ok_or_else(|| UnknownDevice {
-                device_id: log_request.device.to_string(),
+                device_id: device_external_id.into(),
             })?;
 
         let cmd_id = nanoid!();
