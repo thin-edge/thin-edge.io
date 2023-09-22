@@ -55,9 +55,14 @@ impl Actor for RestartManagerActor {
             if request.status() != CommandStatus::Init {
                 continue;
             }
-            info!("Triggering a restart");
             let executing_response = self.update_state_repository(request.clone()).await;
+            let ready = executing_response.status() == CommandStatus::Executing;
             self.message_box.send(executing_response).await?;
+            if !ready {
+                info!("Cannot restart");
+                continue;
+            }
+            info!("Triggering a restart");
 
             let restart_timeout = self.get_restart_timeout();
             match timeout(restart_timeout, self.handle_restart_operation()).await {
@@ -74,8 +79,12 @@ impl Actor for RestartManagerActor {
                     error!(error);
                     self.handle_error(request, error).await?;
                 }
-                Ok(Ok(())) => {
-                    info!("The restart command has been successfully executed");
+                Ok(Ok(not_interrupted)) => {
+                    if not_interrupted {
+                        info!("The restart command has been successfully executed");
+                    } else {
+                        info!("The restart command has been interrupted by a signal");
+                    }
                     match timeout(restart_timeout, self.message_box.recv_signal()).await {
                         Ok(Some(RuntimeRequest::Shutdown)) => {
                             info!("As requested, a shutdown has been triggered");
@@ -193,14 +202,24 @@ impl RestartManagerActor {
         command.with_status(CommandStatus::Executing)
     }
 
-    async fn handle_restart_operation(&mut self) -> Result<(), RestartManagerError> {
+    /// Run the restart command
+    ///
+    /// Returns:
+    /// - `Ok(true)` if all the commands run successfully.
+    /// - `Ok(false)` if one of the commands has been interrupted by a signal.
+    /// - `Err(_)` if one the commands cannot be launched or failed.
+    async fn handle_restart_operation(&mut self) -> Result<bool, RestartManagerError> {
         let commands = self.get_restart_operation_commands()?;
+        let mut not_interrupted = true;
         for mut command in commands {
+            if let Some(cmd) = command.as_std().get_program().to_str() {
+                info!("Restarting: {cmd}");
+            }
             match command.status().await {
                 Ok(status) => {
                     if status.code().is_none() {
                         // This might the result of the reboot - hence not considered as an error
-                        info!("Restart command has been interrupted by a signal: {command:?}");
+                        not_interrupted = false;
                     } else if !status.success() {
                         return Err(RestartManagerError::CommandFailed {
                             command: format!("{command:?}"),
@@ -213,7 +232,7 @@ impl RestartManagerActor {
             }
         }
 
-        Ok(())
+        Ok(not_interrupted)
     }
 
     async fn handle_error(
