@@ -157,7 +157,7 @@ async fn respond_to(
             res = send_request(Body::from(body), token.clone())
                 .await
                 .into_diagnostic()
-                .wrap_err_with(|| format!("making proxied requst to {destination}"))?;
+                .wrap_err_with(|| format!("making proxied request to {destination}"))?;
         }
     }
     let te_header = res.headers_mut().remove("transfer-encoding");
