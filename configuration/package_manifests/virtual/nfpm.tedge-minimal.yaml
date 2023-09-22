@@ -30,8 +30,10 @@ overrides:
         - tedge-mapper = ${GIT_SEMVER}
   rpm:
     depends:
-        - tedge = ${GIT_SEMVER}
-        - tedge-mapper = ${GIT_SEMVER}
+        # FIXME: Work out a better way to reference the full package specific version which includes the release number (-1) suffix
+        # without having to manually add it
+        - tedge = ${GIT_SEMVER}-1
+        - tedge-mapper = ${GIT_SEMVER}-1
   deb:
     depends:
         - tedge (= ${GIT_SEMVER})

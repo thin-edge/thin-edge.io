@@ -38,17 +38,19 @@ overrides:
         - c8y-firmware-plugin = ${GIT_SEMVER}
   rpm:
     depends:
+        # FIXME: Work out a better way to reference the full package specific version which includes the release number (-1) suffix
+        # without having to manually add it
         - ca-certificates
-        - tedge = ${GIT_SEMVER}
-        - tedge-mapper = ${GIT_SEMVER}
-        - tedge-agent = ${GIT_SEMVER}
-        - tedge-watchdog = ${GIT_SEMVER}
+        - tedge = ${GIT_SEMVER}-1
+        - tedge-mapper = ${GIT_SEMVER}-1
+        - tedge-agent = ${GIT_SEMVER}-1
+        - tedge-watchdog = ${GIT_SEMVER}-1
         # tedge-apt-plugin does not make sense on rpm
-        # - tedge-apt-plugin = ${GIT_SEMVER}
-        - tedge-log-plugin = ${GIT_SEMVER}
-        - c8y-configuration-plugin = ${GIT_SEMVER}
-        - c8y-remote-access-plugin = ${GIT_SEMVER}
-        - c8y-firmware-plugin = ${GIT_SEMVER}
+        # - tedge-apt-plugin = ${GIT_SEMVER}-1
+        - tedge-log-plugin = ${GIT_SEMVER}-1
+        - c8y-configuration-plugin = ${GIT_SEMVER}-1
+        - c8y-remote-access-plugin = ${GIT_SEMVER}-1
+        - c8y-firmware-plugin = ${GIT_SEMVER}-1
   deb:
     depends:
         - tedge (= ${GIT_SEMVER})
