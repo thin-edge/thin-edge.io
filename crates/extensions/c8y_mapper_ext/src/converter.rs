@@ -1429,12 +1429,12 @@ mod tests {
         let device_creation_msgs = converter.convert(&alarm_message).await;
         let first_msg = Message::new(
             &Topic::new_unchecked("te/device/external_sensor//"),
-            r#"{ "@type":"child-device", "@id":"external_sensor"}"#,
+            r#"{ "@type":"child-device", "@id":"test-device:device:external_sensor"}"#,
         )
         .with_retain();
         let second_msg = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,external_sensor,external_sensor,thin-edge.io-child",
+            "101,test-device:device:external_sensor,test-device:device:external_sensor,thin-edge.io-child",
         );
         assert_eq!(device_creation_msgs[0], first_msg);
         assert_eq!(device_creation_msgs[1], second_msg);

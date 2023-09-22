@@ -454,14 +454,14 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
         [
             (
                 "te/device/external_sensor//",
-                r#"{ "@type":"child-device", "@id":"external_sensor"}"#,
+                r#"{ "@type":"child-device", "@id":"test-device:device:external_sensor"}"#,
             ),
             (
                 "c8y/s/us",
-                "101,external_sensor,external_sensor,thin-edge.io-child",
+                "101,test-device:device:external_sensor,test-device:device:external_sensor,thin-edge.io-child",
             ),
             (
-                "c8y/s/us/external_sensor",
+                "c8y/s/us/test-device:device:external_sensor",
                 "303,temperature_high,\"Temperature high\"",
             ),
         ],
@@ -548,11 +548,11 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
         [
             (
                 "te/device/external_sensor//",
-                r#"{ "@type":"child-device", "@id":"external_sensor"}"#,
+                r#"{ "@type":"child-device", "@id":"test-device:device:external_sensor"}"#,
             ),
             (
                 "c8y/s/us",
-                "101,external_sensor,external_sensor,thin-edge.io-child",
+                "101,test-device:device:external_sensor,test-device:device:external_sensor,thin-edge.io-child",
             ),
         ],
     )
@@ -574,7 +574,7 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
                     }
                 },
                 "externalSource": {
-                    "externalId":"external_sensor",
+                    "externalId":"test-device:device:external_sensor",
                     "type":"c8y_Serial"
                 }
             }),
@@ -658,7 +658,7 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
                 "text":"Pressure high",
                 "message":"custom message",
                 "externalSource":{
-                    "externalId":"external_sensor",
+                    "externalId":"test-device:device:external_sensor",
                     "type":"c8y_Serial"
                 }
             }),
@@ -702,7 +702,7 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
                 "text":"child_msg_to_text_pressure_alarm",
                 "message":"Pressure high",
                 "externalSource":{
-                    "externalId":"external_sensor",
+                    "externalId":"test-device:device:external_sensor",
                     "type":"c8y_Serial"
                 }
             }),
@@ -768,7 +768,10 @@ async fn c8y_mapper_child_alarm_empty_payload() {
     // Expect converted alarm SmartREST message
     assert_received_contains_str(
         &mut mqtt,
-        [("c8y/s/us/external_sensor", "306,empty_temperature_alarm")],
+        [(
+            "c8y/s/us/test-device:device:external_sensor",
+            "306,empty_temperature_alarm",
+        )],
     )
     .await;
 }
@@ -1048,7 +1051,7 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     let cfg_dir = TempTedgeDir::new();
     create_thin_edge_child_operations(
         &cfg_dir,
-        "child1",
+        "test-device:device:child1",
         vec!["c8y_ChildTestOp1", "c8y_ChildTestOp2"],
     );
 
@@ -1062,7 +1065,7 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
         cfg_dir
             .dir("operations")
             .dir("c8y")
-            .dir("child1")
+            .dir("test-device:device:child1")
             .file("c8y_ChildTestOp3")
             .to_path_buf(),
     ))
@@ -1073,7 +1076,7 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     assert_received_contains_str(
         &mut mqtt,
         [(
-            "c8y/s/us/child1",
+            "c8y/s/us/test-device:device:child1",
             "114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3",
         )],
     )
@@ -1095,20 +1098,20 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     assert_eq!(child_metadata.topic.name, "te/device/child1//");
     assert_eq!(
         child_metadata.payload_str().unwrap(),
-        r#"{ "@type":"child-device", "@id":"child1"}"#
+        r#"{ "@type":"child-device", "@id":"test-device:device:child1"}"#
     );
     let child_c8y_registration = mqtt.recv().await.unwrap();
     assert_eq!(child_c8y_registration.topic.name, "c8y/s/us");
     assert_eq!(
         child_c8y_registration.payload_str().unwrap(),
-        "101,child1,child1,thin-edge.io-child"
+        "101,test-device:device:child1,test-device:device:child1,thin-edge.io-child"
     );
 
     // Expect an update list of capabilities with agent capabilities
     assert_received_contains_str(
         &mut mqtt,
         [(
-            "c8y/s/us/child1",
+            "c8y/s/us/test-device:device:child1",
             "114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3,c8y_Restart",
         )],
     )

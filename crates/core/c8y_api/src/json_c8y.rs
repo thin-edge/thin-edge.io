@@ -415,7 +415,7 @@ mod tests {
     use serde_json::json;
     use tedge_api::alarm::ThinEdgeAlarm;
     use tedge_api::alarm::ThinEdgeAlarmData;
-    use tedge_api::entity_store::{EntityExternalId, EntityRegistrationMessage};
+    use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::event::ThinEdgeEventData;
     use tedge_api::mqtt_topics::EntityTopicId;
     use test_case::test_case;
@@ -781,7 +781,9 @@ mod tests {
             r#"{"@id": "external_source", "@type": "child-device"}"#,
         ))
         .unwrap();
-        entity_store.update(child_registration, EntityExternalId::from("external_source")).unwrap();
+        entity_store
+            .update(child_registration, "external_source".into())
+            .unwrap();
 
         let actual_c8y_alarm = C8yAlarm::try_from(&tedge_alarm, &entity_store).unwrap();
         assert_eq!(actual_c8y_alarm, expected_c8y_alarm);

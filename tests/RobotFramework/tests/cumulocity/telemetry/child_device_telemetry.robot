@@ -59,7 +59,7 @@ Child devices support sending custom alarms #1699
 
 
 Child devices support sending alarms using text fragment
-    Execute Command    tedge mqtt pub te/device/${CHILD_SN}///a/childAlarmType1 '{ "severity": "critical", "text": "Some test alarm" }'
+    Execute Command    tedge mqtt pub te/device/${CHILD_ID}///a/childAlarmType1 '{ "severity": "critical", "text": "Some test alarm" }'
     ${alarms}=    Device Should Have Alarm/s    expected_text=Some test alarm    severity=CRITICAL    minimum=1    maximum=1    type=childAlarmType1
     Log    ${alarms}
 
@@ -85,7 +85,7 @@ Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
     Set Suite Variable    $CHILD_ID    child1
-    Set Suite Variable    $CHILD_SN    ${DEVICE_SN}:device:child1
+    Set Suite Variable    $CHILD_SN    ${DEVICE_SN}:device:${CHILD_ID}
     Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_SN}
     Restart Service    tedge-mapper-c8y
     Device Should Exist                      ${DEVICE_SN}
