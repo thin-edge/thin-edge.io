@@ -75,6 +75,40 @@ Register service on a child device via MQTT
     Check Service    child_sn=${DEVICE_SN}:device:${CHILD_SN}    service_sn=${DEVICE_SN}:device:${CHILD_SN}:service:custom-app    service_name=custom-app    service_type=custom-type    service_status=up
 
 
+Register devices using custom MQTT schema
+    [Documentation]    Complex example showing how to use custom MQTT topics to register devices/services using
+        ...            custom identity schemas
+    Execute Command    tedge mqtt pub --retain 'te/base///' '{"@type":"main-device","name":"base","type":"te_gateway"}'
+
+    Execute Command    tedge mqtt pub --retain 'te/factory1/shop1/plc1/sensor1' '{"@type":"child-device","name":"sensor1","type":"SmartSensor"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory1/shop1/plc1/sensor2' '{"@type":"child-device","name":"sensor2","type":"SmartSensor"}'
+
+    # Service of main device
+    Execute Command    tedge mqtt pub --retain 'te/factory1/shop1/plc1/metrics' '{"@type":"service","name":"metrics","type":"PLCApplication"}'
+
+    # Service of child device
+    Execute Command    tedge mqtt pub --retain 'te/factory1/shop1/apps/sensor1' '{"@type":"service","@parent":"factory1/shop1/plc1/sensor1","name":"metrics","type":"PLCMonitorApplication"}'
+    Execute Command    tedge mqtt pub --retain 'te/factory1/shop1/apps/sensor2' '{"@type":"service","@parent":"factory1/shop1/plc1/sensor2","name":"metrics","type":"PLCMonitorApplication"}'
+
+    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${DEVICE_SN}:factory1:shop1:plc1:sensor1    child_name=sensor1    child_type=SmartSensor
+    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${DEVICE_SN}:factory1:shop1:plc1:sensor2    child_name=sensor2    child_type=SmartSensor
+
+    # Check main device services
+    Cumulocity.Set Device    ${DEVICE_SN}
+    Should Have Services    name=metrics    service_type=PLCApplication    status=up
+
+    # Check child services
+    Cumulocity.Set Device    ${DEVICE_SN}:factory1:shop1:plc1:sensor1
+    Should Have Services    name=metrics    service_type=PLCMonitorApplication    status=up
+
+    Cumulocity.Set Device    ${DEVICE_SN}:factory1:shop1:plc1:sensor2
+    Should Have Services    name=metrics    service_type=PLCMonitorApplication    status=up
+
+    # Publish to main device on custom topic
+    Execute Command    cmd=tedge mqtt pub te/base////m/gateway_stats '{"runtime":1001}'
+    Cumulocity.Set Device    ${DEVICE_SN}
+    Cumulocity.Device Should Have Measurements    type=gateway_stats    minimum=1    maximum=1
+
 *** Keywords ***
 
 Check Child Device
