@@ -274,6 +274,7 @@ mod test {
     const VALID_TEST_URI: &str = "http://127.0.0.1:3000/tedge/file-transfer/another/dir/test-file";
     const INVALID_TEST_URI: &str = "http://127.0.0.1:3000/wrong/place/test-file";
 
+    #[ignore = "flaky: returns 404 for GET/OK case (https://github.com/thin-edge/thin-edge.io/actions/runs/6273349762/job/17036638819?pr=2276#step:10:1153)"]
     #[test_case(hyper::Method::GET, VALID_TEST_URI, hyper::StatusCode::OK)]
     #[test_case(hyper::Method::GET, INVALID_TEST_URI, hyper::StatusCode::NOT_FOUND)]
     #[test_case(hyper::Method::DELETE, VALID_TEST_URI, hyper::StatusCode::ACCEPTED)]
