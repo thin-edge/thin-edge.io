@@ -85,7 +85,8 @@ impl AgentConfig {
             .with_ip_address(http_bind_address);
 
         // Restart config
-        let restart_config = RestartManagerConfig::from_tedge_config(tedge_config_location)?;
+        let restart_config =
+            RestartManagerConfig::from_tedge_config(&mqtt_device_topic_id, tedge_config_location)?;
 
         // Software update config
         let sw_update_config = SoftwareManagerConfig::from_tedge_config(tedge_config_location)?;
@@ -170,6 +171,8 @@ impl Agent {
 
         // Converter actor
         let converter_actor_builder = TedgeOperationConverterBuilder::new(
+            self.config.mqtt_topic_root.as_ref(),
+            self.config.mqtt_device_topic_id.clone(),
             &mut software_update_builder,
             &mut restart_actor_builder,
             &mut mqtt_actor_builder,

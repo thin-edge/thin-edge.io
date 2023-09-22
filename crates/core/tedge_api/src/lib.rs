@@ -22,8 +22,7 @@ pub use messages::control_filter_topic;
 pub use messages::software_filter_topic;
 pub use messages::Jsonify;
 pub use messages::OperationStatus;
-pub use messages::RestartOperationRequest;
-pub use messages::RestartOperationResponse;
+pub use messages::RestartCommand;
 pub use messages::SoftwareListRequest;
 pub use messages::SoftwareListResponse;
 pub use messages::SoftwareRequestResponse;
@@ -37,6 +36,8 @@ pub const DEFAULT_FILE_TRANSFER_DIR_NAME: &str = "file-transfer";
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mqtt_topics::EntityTopicId;
+    use crate::mqtt_topics::MqttSchema;
     use mqtt_channel::Topic;
     use regex::Regex;
 
@@ -61,12 +62,11 @@ mod tests {
             Topic::new_unchecked("tedge/commands/res/software/update")
         );
         assert_eq!(
-            RestartOperationRequest::topic(),
-            Topic::new_unchecked("tedge/commands/req/control/restart")
-        );
-        assert_eq!(
-            RestartOperationResponse::topic(),
-            Topic::new_unchecked("tedge/commands/res/control/restart")
+            RestartCommand::new(EntityTopicId::default_main_device())
+                .with_id("abc".to_string())
+                .command_message(&MqttSchema::default())
+                .topic,
+            Topic::new_unchecked("te/device/main///cmd/restart/abc")
         );
     }
 
@@ -75,7 +75,7 @@ mod tests {
         let request = SoftwareListRequest::new_with_id("1");
 
         let expected_json = r#"{"id":"1"}"#;
-        let actual_json = request.to_json().expect("Failed to serialize");
+        let actual_json = request.to_json();
         assert_eq!(actual_json, expected_json);
     }
 
@@ -161,7 +161,7 @@ mod tests {
                     {"name":"m","url":"https://foobar.io/m.epl"}
                 ]}
             ]}"#;
-        let actual_json = response.to_json().expect("Failed to serialize");
+        let actual_json = response.to_json();
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
@@ -245,7 +245,7 @@ mod tests {
             "reason": "Request_timed-out"
         }"#;
 
-        let actual_json = response.to_json().expect("Failed to serialize");
+        let actual_json = response.to_json();
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
@@ -348,7 +348,7 @@ mod tests {
                 }
             ]
         }"#;
-        let actual_json = request.to_json().expect("Failed to serialize");
+        let actual_json = request.to_json();
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
@@ -423,7 +423,7 @@ mod tests {
                 }
             ]
         }"#;
-        let actual_json = request.to_json().expect("Failed to serialize");
+        let actual_json = request.to_json();
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
@@ -495,7 +495,7 @@ mod tests {
                 }
             ]
         }"#;
-        let actual_json = request.to_json().expect("Failed to serialize");
+        let actual_json = request.to_json();
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
@@ -611,7 +611,7 @@ mod tests {
             "status": "executing"
         }"#;
 
-        let actual_json = response.to_json().expect("Failed to serialize");
+        let actual_json = response.to_json();
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
@@ -708,7 +708,7 @@ mod tests {
             ]
         }"#;
 
-        let actual_json = response.to_json().expect("Failed to serialize");
+        let actual_json = response.to_json();
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
@@ -831,7 +831,7 @@ mod tests {
             ]
         }"#;
 
-        let actual_json = response.to_json().expect("Failed to serialize");
+        let actual_json = response.to_json();
         assert_eq!(
             remove_whitespace(&actual_json),
             remove_whitespace(expected_json)

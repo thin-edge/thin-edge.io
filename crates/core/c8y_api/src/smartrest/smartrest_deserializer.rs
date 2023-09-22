@@ -542,7 +542,7 @@ mod tests {
             .from_smartrest(&smartrest)
             .unwrap()
             .to_thin_edge_json_with_id("123");
-        let output_json = software_update_request.unwrap().to_json().unwrap();
+        let output_json = software_update_request.unwrap().to_json();
 
         let expected_json = json!({
             "id": "123",

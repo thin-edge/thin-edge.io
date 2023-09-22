@@ -1,6 +1,12 @@
 use crate::error::SoftwareError;
+use crate::mqtt_topics::Channel;
+use crate::mqtt_topics::EntityTopicId;
+use crate::mqtt_topics::MqttSchema;
+use crate::mqtt_topics::OperationType;
 use crate::software::*;
 use download::DownloadInfo;
+use mqtt_channel::Message;
+use mqtt_channel::QoS;
 use mqtt_channel::Topic;
 use nanoid::nanoid;
 use serde::Deserialize;
@@ -11,8 +17,6 @@ const SOFTWARE_LIST_REQUEST_TOPIC: &str = "tedge/commands/req/software/list";
 const SOFTWARE_LIST_RESPONSE_TOPIC: &str = "tedge/commands/res/software/list";
 const SOFTWARE_UPDATE_REQUEST_TOPIC: &str = "tedge/commands/req/software/update";
 const SOFTWARE_UPDATE_RESPONSE_TOPIC: &str = "tedge/commands/res/software/update";
-const DEVICE_RESTART_REQUEST_TOPIC: &str = "tedge/commands/req/control/restart";
-const DEVICE_RESTART_RESPONSE_TOPIC: &str = "tedge/commands/res/control/restart";
 
 /// All the messages are serialized using json.
 pub trait Jsonify<'a>
@@ -27,12 +31,12 @@ where
         serde_json::from_slice(bytes)
     }
 
-    fn to_json(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string(self)
+    fn to_json(&self) -> String {
+        serde_json::to_string(self).unwrap() // all thin-edge data can be serialized to json
     }
 
-    fn to_bytes(&self) -> Result<Vec<u8>, serde_json::Error> {
-        serde_json::to_vec(self)
+    fn to_bytes(&self) -> Vec<u8> {
+        serde_json::to_vec(self).unwrap() // all thin-edge data can be serialized to json
     }
 }
 
@@ -473,65 +477,143 @@ impl From<SoftwareError> for Option<SoftwareModuleItem> {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
-pub enum RestartOperation {
-    Request(RestartOperationRequest),
-    Response(RestartOperationResponse),
+/// Command to restart a device
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct RestartCommand {
+    pub target: EntityTopicId,
+    pub cmd_id: String,
+    pub payload: RestartCommandPayload,
 }
 
-/// Message payload definition for restart operation request.
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
-pub struct RestartOperationRequest {
-    pub id: String,
-}
-
-impl<'a> Jsonify<'a> for RestartOperationRequest {}
-
-impl Default for RestartOperationRequest {
-    fn default() -> RestartOperationRequest {
-        let id = nanoid!();
-        RestartOperationRequest { id }
-    }
-}
-
-impl RestartOperationRequest {
-    pub fn new_with_id(id: &str) -> RestartOperationRequest {
-        RestartOperationRequest { id: id.to_string() }
-    }
-
-    pub fn topic() -> Topic {
-        Topic::new_unchecked(DEVICE_RESTART_REQUEST_TOPIC)
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
-pub struct RestartOperationResponse {
-    pub id: String,
-    pub status: OperationStatus,
-}
-
-impl<'a> Jsonify<'a> for RestartOperationResponse {}
-
-impl RestartOperationResponse {
-    pub fn new(req: &RestartOperationRequest) -> Self {
-        Self {
-            id: req.id.clone(),
-            status: OperationStatus::Executing,
+impl RestartCommand {
+    /// Create a [RestartCommand] to restart a target device.
+    ///
+    /// - use a fresh cmd id
+    /// - set the status to [CommandStatus::Init]
+    pub fn new(target: EntityTopicId) -> Self {
+        let cmd_id = nanoid!();
+        let payload = RestartCommandPayload::default();
+        RestartCommand {
+            target,
+            cmd_id,
+            payload,
         }
     }
 
-    pub fn with_status(self, status: OperationStatus) -> Self {
-        Self { status, ..self }
+    /// A new command with a given cmd id
+    pub fn with_id(self, cmd_id: String) -> Self {
+        Self { cmd_id, ..self }
     }
 
-    pub fn topic() -> Topic {
-        Topic::new_unchecked(DEVICE_RESTART_RESPONSE_TOPIC)
+    /// Return the RestartCommand received on a topic
+    pub fn try_from(
+        target: EntityTopicId,
+        cmd_id: String,
+        bytes: &[u8],
+    ) -> Result<Option<Self>, serde_json::Error> {
+        if bytes.is_empty() {
+            Ok(None)
+        } else {
+            let payload = RestartCommandPayload::from_slice(bytes)?;
+            Ok(Some(RestartCommand {
+                target,
+                cmd_id,
+                payload,
+            }))
+        }
     }
 
-    pub fn status(&self) -> OperationStatus {
-        self.status
+    /// Return the current status of the command
+    pub fn status(&self) -> CommandStatus {
+        self.payload.status
+    }
+
+    /// Return the reason why this command failed
+    pub fn reason(&self) -> &str {
+        &self.payload.reason
+    }
+
+    /// Set the status of the command
+    pub fn with_status(mut self, status: CommandStatus) -> Self {
+        self.payload.status = status;
+        self
+    }
+
+    /// Set the failure reason of the command
+    pub fn with_error(mut self, reason: String) -> Self {
+        self.payload.status = CommandStatus::Failed;
+        self.payload.reason = reason;
+        self
+    }
+
+    /// Return the MQTT topic identifier of the target
+    fn topic_id(&self) -> &EntityTopicId {
+        &self.target
+    }
+
+    /// Return the MQTT channel for this command
+    fn channel(&self) -> Channel {
+        Channel::Command {
+            operation: OperationType::Restart,
+            cmd_id: self.cmd_id.clone(),
+        }
+    }
+
+    /// Return the MQTT topic for this command
+    fn topic(&self, schema: &MqttSchema) -> Topic {
+        schema.topic_for(self.topic_id(), &self.channel())
+    }
+
+    /// Return the MQTT message to register `restart` as a supported command on a given target device
+    pub fn capability_message(schema: &MqttSchema, target: &EntityTopicId) -> Message {
+        let meta_topic = schema.topic_for(
+            target,
+            &Channel::CommandMetadata {
+                operation: OperationType::Restart,
+            },
+        );
+        let payload = "{}";
+        Message::new(&meta_topic, payload)
+            .with_retain()
+            .with_qos(QoS::AtLeastOnce)
+    }
+
+    /// Return the MQTT message for this command
+    pub fn command_message(&self, schema: &MqttSchema) -> Message {
+        let topic = self.topic(schema);
+        let payload = self.payload.to_bytes();
+        Message::new(&topic, payload)
+            .with_qos(QoS::AtLeastOnce)
+            .with_retain()
+    }
+
+    /// Return the MQTT message to clear this command
+    pub fn clearing_message(&self, schema: &MqttSchema) -> Message {
+        let topic = self.topic(schema);
+        Message::new(&topic, vec![])
+            .with_qos(QoS::AtLeastOnce)
+            .with_retain()
+    }
+}
+
+/// Command to restart a device
+#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RestartCommandPayload {
+    pub status: CommandStatus,
+
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub reason: String,
+}
+
+impl<'a> Jsonify<'a> for RestartCommandPayload {}
+
+impl Default for RestartCommandPayload {
+    fn default() -> Self {
+        RestartCommandPayload {
+            status: CommandStatus::Init,
+            reason: String::new(),
+        }
     }
 }
 
@@ -600,7 +682,7 @@ mod tests {
         };
         let expected_json = r#"{"id":"1234"}"#;
 
-        let actual_json = request.to_json().expect("Failed to serialize");
+        let actual_json = request.to_json();
 
         assert_eq!(actual_json, expected_json);
 
@@ -652,7 +734,7 @@ mod tests {
 
         let expected_json = r#"{"id":"1234","updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"},{"name":"debian2","version":"0.0.2","action":"install"}]},{"type":"docker","modules":[{"name":"docker1","version":"0.0.1","url":"test.com","action":"remove"}]}]}"#;
 
-        let actual_json = request.to_json().expect("Fail to serialize the request");
+        let actual_json = request.to_json();
         assert_eq!(actual_json, expected_json);
 
         let parsed_request =
@@ -672,7 +754,7 @@ mod tests {
 
         let expected_json = r#"{"id":"1234","status":"successful","currentSoftwareList":[]}"#;
 
-        let actual_json = request.to_json().expect("Fail to serialize the request");
+        let actual_json = request.to_json();
         assert_eq!(actual_json, expected_json);
 
         let parsed_request = SoftwareRequestResponse::from_json(&actual_json)
@@ -705,7 +787,7 @@ mod tests {
 
         let expected_json = r#"{"id":"1234","status":"successful","currentSoftwareList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1"}]}]}"#;
 
-        let actual_json = request.to_json().expect("Fail to serialize the request");
+        let actual_json = request.to_json();
         assert_eq!(actual_json, expected_json);
 
         let parsed_request = SoftwareRequestResponse::from_json(&actual_json)

@@ -8,12 +8,11 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
-use tedge_api::RestartOperationRequest;
-use tedge_api::RestartOperationResponse;
+use tedge_api::RestartCommand;
 
 pub struct RestartManagerBuilder {
     config: RestartManagerConfig,
-    message_box: SimpleMessageBoxBuilder<RestartOperationRequest, RestartOperationResponse>,
+    message_box: SimpleMessageBoxBuilder<RestartCommand, RestartCommand>,
 }
 
 impl RestartManagerBuilder {
@@ -27,14 +26,12 @@ impl RestartManagerBuilder {
     }
 }
 
-impl ServiceProvider<RestartOperationRequest, RestartOperationResponse, NoConfig>
-    for RestartManagerBuilder
-{
+impl ServiceProvider<RestartCommand, RestartCommand, NoConfig> for RestartManagerBuilder {
     fn connect_consumer(
         &mut self,
         config: NoConfig,
-        response_sender: DynSender<RestartOperationResponse>,
-    ) -> DynSender<RestartOperationRequest> {
+        response_sender: DynSender<RestartCommand>,
+    ) -> DynSender<RestartCommand> {
         self.message_box.connect_consumer(config, response_sender)
     }
 }

@@ -19,6 +19,18 @@ pub enum C8yTopic {
 }
 
 impl C8yTopic {
+    /// Return the c8y SmartRest response topic for the given entity
+    pub fn smartrest_response_topic(entity: &EntityMetadata) -> Option<Topic> {
+        match entity.r#type {
+            EntityType::MainDevice => Some(C8yTopic::upstream_topic()),
+            EntityType::ChildDevice | EntityType::Service => {
+                Self::ChildSmartRestResponse(entity.entity_id.clone())
+                    .to_topic()
+                    .ok()
+            }
+        }
+    }
+
     pub fn to_topic(&self) -> Result<Topic, MqttError> {
         Topic::new(self.to_string().as_str())
     }

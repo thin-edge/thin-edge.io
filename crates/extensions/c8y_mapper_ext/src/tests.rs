@@ -889,6 +889,23 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
         &mut mqtt,
         [(
             "c8y/s/us",
+            "114,c8y_SoftwareUpdate,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3",
+        )],
+    )
+    .await;
+
+    // Then the agent start adding it's own set of capabilities
+    mqtt.send(
+        MqttMessage::new(&Topic::new_unchecked("te/device/main///cmd/restart"), "{}").with_retain(),
+    )
+    .await
+    .expect("Send failed");
+
+    // Expect an update list of capabilities with agent capabilities
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
             "114,c8y_Restart,c8y_SoftwareUpdate,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3",
         )],
     )
@@ -930,6 +947,41 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
         [(
             "c8y/s/us/child1",
             "114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3",
+        )],
+    )
+    .await;
+
+    // Then the agent start on the child device adding it's own set of capabilities
+    mqtt.send(
+        MqttMessage::new(
+            &Topic::new_unchecked("te/device/child1///cmd/restart"),
+            "{}",
+        )
+        .with_retain(),
+    )
+    .await
+    .expect("Send failed");
+
+    // Being new, the child device is first registered on the bus
+    let child_metadata = mqtt.recv().await.unwrap();
+    assert_eq!(child_metadata.topic.name, "te/device/child1//");
+    assert_eq!(
+        child_metadata.payload_str().unwrap(),
+        r#"{ "@type":"child-device", "@id":"child1"}"#
+    );
+    let child_c8y_registration = mqtt.recv().await.unwrap();
+    assert_eq!(child_c8y_registration.topic.name, "c8y/s/us");
+    assert_eq!(
+        child_c8y_registration.payload_str().unwrap(),
+        "101,child1,child1,thin-edge.io-child"
+    );
+
+    // Expect an update list of capabilities with agent capabilities
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us/child1",
+            "114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3,c8y_Restart",
         )],
     )
     .await;

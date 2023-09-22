@@ -4,8 +4,8 @@ pub enum RestartManagerError {
     #[error(transparent)]
     FromIo(#[from] std::io::Error),
 
-    #[error("Command returned non 0 exit code.")]
-    CommandFailed,
+    #[error("Command returned non 0 exit code: {command}")]
+    CommandFailed { command: String },
 
     #[error("Failed parsing /proc/uptime")]
     UptimeParserError,

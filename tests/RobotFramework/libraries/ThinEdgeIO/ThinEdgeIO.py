@@ -587,6 +587,35 @@ class ThinEdgeIO(DeviceLibrary):
 
         device.assert_command(" && ".join(cmd))
 
+    @keyword("Set Restart Command")
+    def set_restart_command(self, command: str, **kwargs):
+        """Set the restart command used by thin-edge.io to restart the device.
+
+        *Examples:*
+        | `Set Restart Command` | ["/sbin/reboot"] |
+        | `Set Restart Command` | ["/usr/bin/on_shutdown.sh", "300"] |
+        """
+        self.execute_command(
+            f"sed -i 's|reboot =.*|reboot = {command}|g' /etc/tedge/system.toml",
+            **kwargs,
+        )
+
+    @keyword("Set Restart Timeout")
+    def set_restart_timeout(self, value: Union[str,int], **kwargs):
+        """Set the restart timeout interval in seconds for how long thin-edge.io
+        should wait to for a device restart to happen.
+
+        Use a value of "default" if you want to revert to the default thin-edge.io timeout setting.
+
+        *Examples:*
+        | `Set Restart Timeout` | 60 |
+        | `Set Restart Timeout` | default |
+        """
+        if str(value).lower() == 'default':
+            command = "sed -i -e '/reboot_timeout_seconds/d' /etc/tedge/system.toml"
+        else:
+            command = f"sed -i -e '/reboot_timeout_seconds/d' -e '/reboot =/a reboot_timeout_seconds = {value}' /etc/tedge/system.toml",
+        self.execute_command(command, **kwargs,)
 
 def to_date(value: relativetime_) -> datetime:
     if isinstance(value, datetime):

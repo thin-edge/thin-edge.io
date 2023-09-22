@@ -240,11 +240,8 @@ impl LogManagerActor {
         topic: &Topic,
         request: &LogUploadCmdPayload,
     ) -> Result<(), ChannelError> {
-        match request_into_message(topic, request) {
-            Ok(message) => self.mqtt_publisher.send(message).await?,
-            Err(err) => error!("Fail to build a message for {:?}: {err}", request),
-        }
-        Ok(())
+        let message = request_into_message(topic, request);
+        self.mqtt_publisher.send(message).await
     }
 }
 
@@ -260,9 +257,6 @@ fn request_from_message(
     }
 }
 
-fn request_into_message(
-    topic: &Topic,
-    request: &LogUploadCmdPayload,
-) -> Result<MqttMessage, LogManagementError> {
-    Ok(MqttMessage::new(topic, request.to_json()?).with_retain())
+fn request_into_message(topic: &Topic, request: &LogUploadCmdPayload) -> MqttMessage {
+    MqttMessage::new(topic, request.to_json()).with_retain()
 }

@@ -5,7 +5,6 @@ use std::convert::TryFrom;
 pub enum ResponseTopic {
     SoftwareListResponse,
     SoftwareUpdateResponse,
-    RestartResponse,
 }
 
 impl ResponseTopic {
@@ -13,7 +12,6 @@ impl ResponseTopic {
         match self {
             Self::SoftwareListResponse => r#"tedge/commands/res/software/list"#,
             Self::SoftwareUpdateResponse => r#"tedge/commands/res/software/update"#,
-            Self::RestartResponse => r#"tedge/commands/res/control/restart"#,
         }
     }
 }
@@ -25,7 +23,6 @@ impl TryFrom<String> for ResponseTopic {
         match value.as_str() {
             r#"tedge/commands/res/software/list"# => Ok(ResponseTopic::SoftwareListResponse),
             r#"tedge/commands/res/software/update"# => Ok(ResponseTopic::SoftwareUpdateResponse),
-            r#"tedge/commands/res/control/restart"# => Ok(ResponseTopic::RestartResponse),
             err => Err(TopicError::UnknownTopic {
                 topic: err.to_string(),
             }),
@@ -45,7 +42,6 @@ impl TryFrom<&str> for ResponseTopic {
 pub enum RequestTopic {
     SoftwareListRequest,
     SoftwareUpdateRequest,
-    RestartRequest,
 }
 
 impl RequestTopic {
@@ -53,7 +49,6 @@ impl RequestTopic {
         match self {
             Self::SoftwareListRequest => r#"tedge/commands/req/software/list"#,
             Self::SoftwareUpdateRequest => r#"tedge/commands/req/software/update"#,
-            Self::RestartRequest => r#"tedge/commands/req/control/restart"#,
         }
     }
 }

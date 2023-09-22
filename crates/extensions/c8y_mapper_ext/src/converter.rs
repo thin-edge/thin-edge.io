@@ -58,6 +58,7 @@ use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityType;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
+use tedge_api::messages::CommandStatus;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
@@ -68,8 +69,7 @@ use tedge_api::DownloadInfo;
 use tedge_api::EntityStore;
 use tedge_api::Jsonify;
 use tedge_api::OperationStatus;
-use tedge_api::RestartOperationRequest;
-use tedge_api::RestartOperationResponse;
+use tedge_api::RestartCommand;
 use tedge_api::SoftwareListRequest;
 use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareUpdateResponse;
@@ -77,6 +77,7 @@ use tedge_config::TEdgeConfigError;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
+use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
 use tedge_utils::size_threshold::SizeThreshold;
 use thiserror::Error;
@@ -415,9 +416,7 @@ impl CumulocityConverter {
                     "528" if device_id == self.device_name => {
                         self.forward_software_request(payload).await
                     }
-                    "510" if device_id == self.device_name => {
-                        Self::forward_restart_request(payload)
-                    }
+                    "510" => self.forward_restart_request(payload),
                     template if device_id == self.device_name => {
                         self.forward_operation_request(payload, template).await
                     }
@@ -473,16 +472,24 @@ impl CumulocityConverter {
 
         Ok(vec![Message::new(
             &topic,
-            software_update_request.to_json().unwrap(),
+            software_update_request.to_json(),
         )])
     }
 
-    fn forward_restart_request(smartrest: &str) -> Result<Vec<Message>, CumulocityMapperError> {
-        let topic = Topic::new(RequestTopic::RestartRequest.as_str())?;
-        let _ = SmartRestRestartRequest::from_smartrest(smartrest)?;
-
-        let request = RestartOperationRequest::default();
-        Ok(vec![Message::new(&topic, request.to_json()?)])
+    fn forward_restart_request(
+        &mut self,
+        smartrest: &str,
+    ) -> Result<Vec<Message>, CumulocityMapperError> {
+        let request = SmartRestRestartRequest::from_smartrest(smartrest)?;
+        let device_id = &request.device;
+        let target = self.entity_store.get_by_id(device_id).ok_or_else(|| {
+            CumulocityMapperError::UnknownDevice {
+                device_id: device_id.to_owned(),
+            }
+        })?;
+        let command = RestartCommand::new(target.topic_id.clone());
+        let message = command.command_message(&self.mqtt_schema);
+        Ok(vec![message])
     }
 
     async fn forward_operation_request(
@@ -704,11 +711,14 @@ impl CumulocityConverter {
                         }
                     };
 
-                    let entity = self.entity_store.get(&source).unwrap();
-                    if let Some(message) = external_device_registration_message(entity) {
-                        self.children
-                            .insert(entity.entity_id.to_string(), Operations::default());
-                        registration_messages.push(message);
+                    if let Some(entity) = self.entity_store.get(&source) {
+                        if let Some(message) = external_device_registration_message(entity) {
+                            self.children
+                                .insert(entity.entity_id.to_string(), Operations::default());
+                            registration_messages.push(message);
+                        }
+                    } else {
+                        error!("Cannot auto-register entity with non-standard MQTT identifier: {source}");
                     }
                 }
             }
@@ -730,6 +740,17 @@ impl CumulocityConverter {
             Channel::Command { .. } if message.payload_bytes().is_empty() => {
                 // The command has been fully processed
                 vec![]
+            }
+
+            Channel::CommandMetadata {
+                operation: OperationType::Restart,
+            } => self.register_restart_operation(&source).await?,
+            Channel::Command {
+                operation: OperationType::Restart,
+                cmd_id,
+            } => {
+                self.publish_restart_operation_status(&source, cmd_id, message)
+                    .await?
             }
 
             Channel::CommandMetadata {
@@ -781,9 +802,6 @@ impl CumulocityConverter {
                         self.device_name.clone(),
                     )
                     .await?)
-                }
-                Ok(MapperSubscribeTopic::ResponseTopic(ResponseTopic::RestartResponse)) => {
-                    Ok(publish_restart_operation_status(message.payload_str()?).await?)
                 }
                 Ok(MapperSubscribeTopic::C8yTopic(_)) => self.parse_c8y_topics(message).await,
                 _ => {
@@ -890,7 +908,7 @@ fn create_device_data_fragments(
 fn create_get_software_list_message() -> Result<Message, ConversionError> {
     let request = SoftwareListRequest::default();
     let topic = Topic::new(RequestTopic::SoftwareListRequest.as_str())?;
-    let payload = request.to_json().unwrap();
+    let payload = request.to_json();
     Ok(Message::new(&topic, payload))
 }
 
@@ -969,35 +987,94 @@ fn create_inventory_fragments_message(
     Ok(Message::new(&topic, ops_msg.to_string()))
 }
 
-async fn publish_restart_operation_status(
-    json_response: &str,
-) -> Result<Vec<Message>, CumulocityMapperError> {
-    let response = RestartOperationResponse::from_json(json_response)?;
-    let topic = C8yTopic::SmartRestResponse.to_topic()?;
-
-    match response.status() {
-        OperationStatus::Executing => {
-            let smartrest_set_operation = SmartRestSetOperationToExecuting::new(
-                CumulocitySupportedOperations::C8yRestartRequest,
-            )
-            .to_smartrest()?;
-
-            Ok(vec![Message::new(&topic, smartrest_set_operation)])
+impl CumulocityConverter {
+    async fn register_restart_operation(
+        &self,
+        target: &EntityTopicId,
+    ) -> Result<Vec<Message>, ConversionError> {
+        match self.entity_store.get(target) {
+            None => {
+                error!("Fail to register `restart` operation for unknown device: {target}");
+                Ok(vec![])
+            }
+            Some(device) => {
+                let ops_dir = match device.r#type {
+                    EntityType::MainDevice => self.ops_dir.clone(),
+                    EntityType::ChildDevice => self.ops_dir.clone().join(&device.entity_id),
+                    EntityType::Service => {
+                        error!("Unsupported `restart` operation for a service: {target}");
+                        return Ok(vec![]);
+                    }
+                };
+                let ops_file = ops_dir.join("c8y_Restart");
+                create_directory_with_defaults(&ops_dir)?;
+                create_file_with_defaults(ops_file, None)?;
+                let device_operations = create_supported_operations(&ops_dir)?;
+                Ok(vec![device_operations])
+            }
         }
-        OperationStatus::Successful => {
-            let smartrest_set_operation = SmartRestSetOperationToSuccessful::new(
-                CumulocitySupportedOperations::C8yRestartRequest,
-            )
-            .to_smartrest()?;
-            Ok(vec![Message::new(&topic, smartrest_set_operation)])
-        }
-        OperationStatus::Failed => {
-            let smartrest_set_operation = SmartRestSetOperationToFailed::new(
-                CumulocitySupportedOperations::C8yRestartRequest,
-                "Restart Failed".into(),
-            )
-            .to_smartrest()?;
-            Ok(vec![Message::new(&topic, smartrest_set_operation)])
+    }
+
+    async fn publish_restart_operation_status(
+        &mut self,
+        target: &EntityTopicId,
+        cmd_id: &str,
+        message: &Message,
+    ) -> Result<Vec<Message>, CumulocityMapperError> {
+        let command = match RestartCommand::try_from(
+            target.clone(),
+            cmd_id.to_owned(),
+            message.payload_bytes(),
+        )? {
+            Some(command) => command,
+            None => {
+                // The command has been fully processed
+                return Ok(vec![]);
+            }
+        };
+        let topic = self
+            .entity_store
+            .get(target)
+            .and_then(C8yTopic::smartrest_response_topic)
+            .ok_or_else(|| CumulocityMapperError::UnregisteredDevice {
+                topic_id: target.to_string(),
+            })?;
+
+        match command.status() {
+            CommandStatus::Executing => {
+                let smartrest_set_operation = SmartRestSetOperationToExecuting::new(
+                    CumulocitySupportedOperations::C8yRestartRequest,
+                )
+                .to_smartrest()?;
+
+                Ok(vec![Message::new(&topic, smartrest_set_operation)])
+            }
+            CommandStatus::Successful => {
+                let smartrest_set_operation = SmartRestSetOperationToSuccessful::new(
+                    CumulocitySupportedOperations::C8yRestartRequest,
+                )
+                .to_smartrest()?;
+
+                Ok(vec![
+                    command.clearing_message(&self.mqtt_schema),
+                    Message::new(&topic, smartrest_set_operation),
+                ])
+            }
+            CommandStatus::Failed => {
+                let smartrest_set_operation = SmartRestSetOperationToFailed::new(
+                    CumulocitySupportedOperations::C8yRestartRequest,
+                    format!("Restart Failed: {}", command.reason()),
+                )
+                .to_smartrest()?;
+                Ok(vec![
+                    command.clearing_message(&self.mqtt_schema),
+                    Message::new(&topic, smartrest_set_operation),
+                ])
+            }
+            _ => {
+                // The other states are ignored
+                Ok(vec![])
+            }
         }
     }
 }
@@ -1119,7 +1196,6 @@ fn get_inventory_fragments(
 
 async fn create_tedge_agent_supported_ops(ops_dir: PathBuf) -> Result<(), ConversionError> {
     create_file_with_defaults(ops_dir.join("c8y_SoftwareUpdate"), None)?;
-    create_file_with_defaults(ops_dir.join("c8y_Restart"), None)?;
 
     Ok(())
 }
