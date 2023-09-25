@@ -14,6 +14,7 @@ use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::TopicIdError;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
+use serde_json::json;
 use serde_json::Map;
 use serde_json::Value;
 
@@ -318,19 +319,13 @@ impl EntityStore {
                 let device_external_id =
                     (self.external_id_mapper)(&parent_device_id, &self.main_device_external_id());
 
-                let device_register_payload = format!(
-                    "{{ \"@type\":\"child-device\", \"@id\":\"{}\"}}",
-                    device_external_id.as_ref()
-                );
-
-                // FIXME: The root prefix should not be added this way.
-                //        The simple fix is to change the signature of the method,
-                //        returning (EntityTopicId, EntityMetadata) pairs instead of MQTT Messages.
-                let topic = Topic::new(&format!("{MQTT_ROOT}/{parent_device_id}")).unwrap();
-                let device_register_message =
-                    Message::new(&topic, device_register_payload).with_retain();
-                let device_register_message =
-                    EntityRegistrationMessage::try_from(&device_register_message).unwrap();
+                let device_register_message = EntityRegistrationMessage {
+                    topic_id: parent_device_id.clone(),
+                    external_id: Some(device_external_id),
+                    r#type: EntityType::ChildDevice,
+                    parent: None,
+                    payload: json!({}),
+                };
                 register_messages.push(device_register_message.clone());
                 self.update(device_register_message)?;
             }
@@ -340,19 +335,13 @@ impl EntityStore {
                 let service_external_id =
                     (self.external_id_mapper)(entity_topic_id, &self.main_device_external_id());
 
-                let service_register_payload = format!(
-                    "{{ \"@type\":\"service\", \"@id\":\"{}\", \"name\":\"{}\", \"type\": \"systemd\"}}",
-                    service_external_id.as_ref(),
-                    service_id
-                );
-
-                let service_register_message = Message::new(
-                    &Topic::new(&format!("{MQTT_ROOT}/{entity_topic_id}")).unwrap(),
-                    service_register_payload,
-                )
-                .with_retain();
-                let service_register_message =
-                    EntityRegistrationMessage::try_from(&service_register_message).unwrap();
+                let service_register_message = EntityRegistrationMessage {
+                    topic_id: entity_topic_id.clone(),
+                    external_id: Some(service_external_id),
+                    r#type: EntityType::Service,
+                    parent: Some(parent_device_id),
+                    payload: json!({ "name": service_id,  "type": "systemd" }),
+                };
                 register_messages.push(service_register_message.clone());
                 self.update(service_register_message)?;
             }
