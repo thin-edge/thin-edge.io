@@ -142,7 +142,7 @@ set/unset aws.topics
     ${unset}    Execute Command    tedge config list
     Should Contain
     ...    ${unset}
-    ...    aws.topics=["tedge/measurements", "tedge/measurements/+", "tedge/alarms/+/+", "tedge/alarms/+/+/+", "tedge/events/+", "tedge/events/+/+", "tedge/health/+", "tedge/health/+/+"]
+    ...    aws.topics=["te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "tedge/health/+", "tedge/health/+/+"]
 
 set/unset aws.url
     Execute Command    sudo tedge config set aws.url your-endpoint.amazonaws.com    # Changing aws.url
