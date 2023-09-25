@@ -23,4 +23,7 @@ pub enum ConversionError {
 
     #[error(transparent)]
     MqttError(#[from] MqttError),
+
+    #[error(transparent)]
+    FromSerdeJson(#[from] serde_json::Error),
 }
