@@ -61,7 +61,7 @@ impl ThinEdgeEvent {
         };
 
         // Parent exists means the device is child device
-        let external_source = entity.parent.as_ref().map(|_| entity.entity_id.clone());
+        let external_source = entity.parent.as_ref().map(|_| entity.external_id.clone());
 
         Ok(Self {
             name: event_type.into(),

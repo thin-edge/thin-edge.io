@@ -69,7 +69,7 @@ impl CumulocityConverter {
         let tedge_url = format!(
             "http://{}/tedge/file-transfer/{}/log_upload/{}-{}",
             &self.config.tedge_http_host,
-            target.entity_id.as_ref(),
+            target.external_id.as_ref(),
             log_request.log_type,
             cmd_id
         );
@@ -110,7 +110,7 @@ impl CumulocityConverter {
                 topic_id: topic_id.to_string(),
             }
         })?;
-        let external_id = &device.entity_id;
+        let external_id = &device.external_id;
 
         let c8y_topic: C8yTopic = device.into();
         let smartrest_topic = c8y_topic.to_topic()?;
@@ -130,7 +130,7 @@ impl CumulocityConverter {
                 let uploaded_file_path = self
                     .config
                     .file_transfer_dir
-                    .join(device.entity_id.as_ref())
+                    .join(device.external_id.as_ref())
                     .join("log_upload")
                     .join(format!("{}-{}", response.log_type, cmd_id));
                 let result = self
@@ -206,7 +206,7 @@ impl CumulocityConverter {
         // Create a c8y_LogfileRequest operation file
         let dir_path = match device.r#type {
             EntityType::MainDevice => self.ops_dir.clone(),
-            EntityType::ChildDevice => self.ops_dir.join(device.entity_id.as_ref()),
+            EntityType::ChildDevice => self.ops_dir.join(device.external_id.as_ref()),
             EntityType::Service => {
                 // No support for service log management
                 return Ok(vec![]);

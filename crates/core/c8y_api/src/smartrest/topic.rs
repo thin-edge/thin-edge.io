@@ -24,7 +24,7 @@ impl C8yTopic {
         match entity.r#type {
             EntityType::MainDevice => Some(C8yTopic::upstream_topic()),
             EntityType::ChildDevice | EntityType::Service => {
-                Self::ChildSmartRestResponse(entity.entity_id.clone().into())
+                Self::ChildSmartRestResponse(entity.external_id.clone().into())
                     .to_topic()
                     .ok()
             }
@@ -108,7 +108,9 @@ impl From<&EntityMetadata> for C8yTopic {
     fn from(value: &EntityMetadata) -> Self {
         match value.r#type {
             EntityType::MainDevice => Self::SmartRestResponse,
-            EntityType::ChildDevice => Self::ChildSmartRestResponse(value.entity_id.clone().into()),
+            EntityType::ChildDevice => {
+                Self::ChildSmartRestResponse(value.external_id.clone().into())
+            }
             EntityType::Service => Self::SmartRestResponse, // TODO how services are handled by c8y?
         }
     }

@@ -319,8 +319,8 @@ impl C8yAlarm {
     fn convert_source(entity: &EntityMetadata) -> Option<SourceInfo> {
         match entity.r#type {
             EntityType::MainDevice => None,
-            EntityType::ChildDevice => Some(make_c8y_source_fragment(entity.entity_id.as_ref())),
-            EntityType::Service => Some(make_c8y_source_fragment(entity.entity_id.as_ref())),
+            EntityType::ChildDevice => Some(make_c8y_source_fragment(entity.external_id.as_ref())),
+            EntityType::Service => Some(make_c8y_source_fragment(entity.external_id.as_ref())),
         }
     }
 

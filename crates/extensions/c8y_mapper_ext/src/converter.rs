@@ -248,7 +248,7 @@ impl CumulocityConverter {
         let external_id = self
             .entity_store
             .get(entity_topic_id)
-            .map(|e| &e.entity_id)
+            .map(|e| &e.external_id)
             .ok_or_else(|| Error::UnknownEntity(entity_topic_id.to_string()))?;
         match input.r#type {
             EntityType::MainDevice => Err(ConversionError::MainDeviceRegistrationNotSupported),
@@ -787,22 +787,25 @@ impl CumulocityConverter {
             _ => {
                 // if device is unregistered register using auto-registration
                 if self.entity_store.get(&source).is_none() {
-                    registration_messages = match self.entity_store.auto_register_entity(&source) {
-                        Ok(register_messages) => register_messages,
-                        Err(e) => {
-                            error!("Could not update device registration: {e}");
-                            vec![]
-                        }
-                    };
+                    let auto_registration_messages =
+                        self.entity_store.auto_register_entity(&source)?;
 
-                    if let Some(entity) = self.entity_store.get(&source) {
-                        if let Some(message) = external_device_registration_message(entity) {
-                            self.children
-                                .insert(entity.entity_id.clone().into(), Operations::default());
-                            registration_messages.push(message);
+                    for auto_registration_message in &auto_registration_messages {
+                        if auto_registration_message.r#type == EntityType::ChildDevice {
+                            self.children.insert(
+                                auto_registration_message
+                                    .external_id
+                                    .clone()
+                                    .unwrap()
+                                    .into(),
+                                Operations::default(),
+                            );
                         }
-                    } else {
-                        error!("Cannot auto-register entity with non-standard MQTT identifier: {source}");
+
+                        registration_messages.push(auto_registration_message.into());
+                        let c8y_message = self
+                            .try_convert_entity_registration(&source, auto_registration_message)?;
+                        registration_messages.push(c8y_message);
                     }
                 }
             }
@@ -1053,13 +1056,6 @@ fn add_external_device_registration_message(
     false
 }
 
-fn external_device_registration_message(entity: &EntityMetadata) -> Option<Message> {
-    match entity.r#type {
-        EntityType::ChildDevice => Some(new_child_device_message(entity.entity_id.as_ref())),
-        _ => None,
-    }
-}
-
 fn create_inventory_fragments_message(
     device_name: &str,
     cfg_dir: &Path,
@@ -1084,7 +1080,9 @@ impl CumulocityConverter {
             Some(device) => {
                 let ops_dir = match device.r#type {
                     EntityType::MainDevice => self.ops_dir.clone(),
-                    EntityType::ChildDevice => self.ops_dir.clone().join(device.entity_id.as_ref()),
+                    EntityType::ChildDevice => {
+                        self.ops_dir.clone().join(device.external_id.as_ref())
+                    }
                     EntityType::Service => {
                         error!("Unsupported `restart` operation for a service: {target}");
                         return Ok(vec![]);
@@ -1303,6 +1301,7 @@ pub fn check_tedge_agent_status(message: &Message) -> Result<bool, ConversionErr
 mod tests {
     use crate::Capabilities;
     use anyhow::Result;
+    use assert_json_diff::assert_json_eq;
     use assert_json_diff::assert_json_include;
     use assert_matches::assert_matches;
     use c8y_auth_proxy::url::ProxyUrlGenerator;
@@ -1410,16 +1409,22 @@ mod tests {
 
         // Child device creation messages are published.
         let device_creation_msgs = converter.convert(&alarm_message).await;
-        let first_msg = Message::new(
-            &Topic::new_unchecked("te/device/external_sensor//"),
-            r#"{ "@type":"child-device", "@id":"test-device:device:external_sensor"}"#,
-        )
-        .with_retain();
+        assert_eq!(
+            device_creation_msgs[0].topic.name,
+            "te/device/external_sensor//"
+        );
+        assert_json_eq!(
+            serde_json::from_str::<serde_json::Value>(
+                device_creation_msgs[0].payload_str().unwrap()
+            )
+            .unwrap(),
+            json!({ "@type":"child-device", "@id":"test-device:device:external_sensor" })
+        );
+
         let second_msg = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
             "101,test-device:device:external_sensor,test-device:device:external_sensor,thin-edge.io-child",
         );
-        assert_eq!(device_creation_msgs[0], first_msg);
         assert_eq!(device_creation_msgs[1], second_msg);
 
         // During the sync phase, alarms are not converted immediately, but only cached to be synced later

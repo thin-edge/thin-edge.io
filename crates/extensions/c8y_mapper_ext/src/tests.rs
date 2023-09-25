@@ -503,14 +503,19 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     .await
     .unwrap();
 
+    // Expect auto-registration message
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "te/device/external_sensor//",
+            json!({"@type":"child-device","@id":"test-device:device:external_sensor"}),
+        )],
+    )
+    .await;
     // Expect child device creation and converted temperature alarm messages
     assert_received_contains_str(
         &mut mqtt,
         [
-            (
-                "te/device/external_sensor//",
-                r#"{ "@type":"child-device", "@id":"test-device:device:external_sensor"}"#,
-            ),
             (
                 "c8y/s/us",
                 "101,test-device:device:external_sensor,test-device:device:external_sensor,thin-edge.io-child",
@@ -597,14 +602,20 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
     .await
     .unwrap();
 
+    // Expect auto-registration message
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "te/device/external_sensor//",
+            json!({"@type":"child-device","@id":"test-device:device:external_sensor"}),
+        )],
+    )
+    .await;
+
     // Expect child device creation message
     assert_received_contains_str(
         &mut mqtt,
         [
-            (
-                "te/device/external_sensor//",
-                r#"{ "@type":"child-device", "@id":"test-device:device:external_sensor"}"#,
-            ),
             (
                 "c8y/s/us",
                 "101,test-device:device:external_sensor,test-device:device:external_sensor,thin-edge.io-child",
@@ -1152,8 +1163,8 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     let child_metadata = mqtt.recv().await.unwrap();
     assert_eq!(child_metadata.topic.name, "te/device/child1//");
     assert_eq!(
-        child_metadata.payload_str().unwrap(),
-        r#"{ "@type":"child-device", "@id":"test-device:device:child1"}"#
+        serde_json::from_str::<serde_json::Value>(child_metadata.payload_str().unwrap()).unwrap(),
+        json!({"@type":"child-device","@id":"test-device:device:child1"})
     );
     let child_c8y_registration = mqtt.recv().await.unwrap();
     assert_eq!(child_c8y_registration.topic.name, "c8y/s/us");
@@ -1700,18 +1711,22 @@ async fn mapper_converts_log_upload_cmd_to_supported_op_and_types_for_child_devi
     .await
     .expect("Send failed");
 
+    // Expect auto-registration message
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "te/device/child1//",
+            json!({"@type":"child-device","@id":"test-device:device:child1"}),
+        )],
+    )
+    .await;
+
     assert_received_contains_str(
         &mut mqtt,
-        [
-            (
-                "te/device/child1//",
-                r#"{ "@type":"child-device", "@id":"test-device:device:child1"}"#,
-            ),
-            (
-                "c8y/s/us",
-                "101,test-device:device:child1,test-device:device:child1,thin-edge.io-child",
-            ),
-        ],
+        [(
+            "c8y/s/us",
+            "101,test-device:device:child1,test-device:device:child1,thin-edge.io-child",
+        )],
     )
     .await;
     assert_received_contains_str(
@@ -1810,18 +1825,22 @@ async fn handle_log_upload_executing_and_failed_cmd_for_child_device() {
         .await
         .expect("Send failed");
 
+    // Expect auto-registration message
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "te/device/child1//",
+            json!({"@type":"child-device","@id":"test-device:device:child1"}),
+        )],
+    )
+    .await;
+
     assert_received_contains_str(
         &mut mqtt,
-        [
-            (
-                "te/device/child1//",
-                r#"{ "@type":"child-device", "@id":"test-device:device:child1"}"#,
-            ),
-            (
-                "c8y/s/us",
-                "101,test-device:device:child1,test-device:device:child1,thin-edge.io-child",
-            ),
-        ],
+        [(
+            "c8y/s/us",
+            "101,test-device:device:child1,test-device:device:child1,thin-edge.io-child",
+        )],
     )
     .await;
 
