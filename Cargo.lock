@@ -3579,6 +3579,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge-configuration-plugin"
+version = "0.12.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "tedge_actors",
+ "tedge_api",
+ "tedge_config",
+ "tedge_config_manager",
+ "tedge_downloader_ext",
+ "tedge_file_system_ext",
+ "tedge_health_ext",
+ "tedge_http_ext",
+ "tedge_mqtt_ext",
+ "tedge_signal_ext",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "tedge-dummy-plugin"
 version = "0.12.0"
 dependencies = [
@@ -3750,6 +3770,30 @@ dependencies = [
  "quote 1.0.33",
  "syn 2.0.29",
  "tedge_config_macros-impl",
+]
+
+[[package]]
+name = "tedge_config_manager"
+version = "0.12.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "http",
+ "log",
+ "serde",
+ "serde_json",
+ "tedge_actors",
+ "tedge_api",
+ "tedge_config",
+ "tedge_downloader_ext",
+ "tedge_file_system_ext",
+ "tedge_http_ext",
+ "tedge_mqtt_ext",
+ "tedge_test_utils",
+ "tedge_utils",
+ "thiserror",
+ "tokio",
+ "toml 0.7.6",
 ]
 
 [[package]]

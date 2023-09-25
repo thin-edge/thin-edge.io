@@ -1,0 +1,34 @@
+[package]
+name = "tedge_config_manager"
+description = "thin-edge extension adding support for configuration management"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+async-trait = { workspace = true }
+http = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tedge_actors = { workspace = true }
+tedge_api = { workspace = true }
+tedge_config = { workspace = true }
+tedge_downloader_ext = { workspace = true }
+tedge_file_system_ext = { workspace = true }
+tedge_http_ext = { workspace = true }
+tedge_mqtt_ext = { workspace = true }
+tedge_utils = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+tedge_actors = { workspace = true, features = ["test-helpers"] }
+tedge_http_ext = { workspace = true, features = ["test_helpers"] }
+tedge_test_utils = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
