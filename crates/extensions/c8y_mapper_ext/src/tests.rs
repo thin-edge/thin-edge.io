@@ -1041,7 +1041,10 @@ async fn mapper_publishes_supported_operations_for_child_device() {
         &mut mqtt,
         [
             ("c8y/s/us", "101,child1,child1,thin-edge.io-child"),
-            ("c8y/s/us/child1", "114,c8y_ChildTestOp1,c8y_ChildTestOp2\n"),
+            (
+                "c8y/s/us/test-device:device:child1",
+                "114,c8y_ChildTestOp1,c8y_ChildTestOp2\n",
+            ),
         ],
     )
     .await;
@@ -1117,7 +1120,7 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     let cfg_dir = TempTedgeDir::new();
     create_thin_edge_child_operations(
         &cfg_dir,
-        "test-device:device:child1",
+        "child1",
         vec!["c8y_ChildTestOp1", "c8y_ChildTestOp2"],
     );
 
@@ -1131,7 +1134,7 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
         cfg_dir
             .dir("operations")
             .dir("c8y")
-            .dir("test-device:device:child1")
+            .dir("child1")
             .file("c8y_ChildTestOp3")
             .to_path_buf(),
     ))

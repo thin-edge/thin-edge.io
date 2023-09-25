@@ -2,11 +2,11 @@ use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use async_trait::async_trait;
-use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
 use c8y_http_proxy::messages::C8YRestResult;
+use serde_json::json;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_actors::adapt;
@@ -26,10 +26,11 @@ use tedge_actors::Sender;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::entity_store::EntityRegistrationMessage;
+use tedge_api::entity_store::EntityType;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_file_system_ext::FsWatchEvent;
-use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
@@ -127,11 +128,17 @@ impl C8yMapperActor {
             FsWatchEvent::DirectoryCreated(path) => {
                 if let Some(directory_name) = path.file_name() {
                     let child_id = directory_name.to_string_lossy().to_string();
-                    let message = Message::new(
-                        &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
-                        format!("101,{child_id},{child_id},thin-edge.io-child"),
-                    );
-                    self.mqtt_publisher.send(message).await?;
+                    let child_topic_id = EntityTopicId::default_child_device(&child_id).unwrap();
+                    let child_device_reg_msg = EntityRegistrationMessage {
+                        topic_id: child_topic_id,
+                        external_id: None,
+                        r#type: EntityType::ChildDevice,
+                        parent: Some(EntityTopicId::default_main_device()),
+                        payload: json!({}),
+                    };
+                    self.converter
+                        .try_convert_entity_registration(&child_device_reg_msg)
+                        .unwrap();
                 }
             }
             FsWatchEvent::FileCreated(path)
