@@ -234,11 +234,6 @@ impl EntityStore {
         &mut self,
         message: EntityRegistrationMessage,
     ) -> Result<Vec<EntityTopicId>, Error> {
-        if message.r#type == EntityType::MainDevice && message.topic_id != self.main_device {
-            return Err(Error::MainDeviceAlreadyRegistered(
-                self.main_device.to_string().into_boxed_str(),
-            ));
-        }
         let topic_id = message.topic_id;
 
         let mut affected_entities = vec![];
@@ -261,9 +256,12 @@ impl EntityStore {
             affected_entities.push(parent.clone());
         }
 
-        let external_id = message.external_id.unwrap_or_else(|| {
-            (self.external_id_mapper)(&topic_id, &self.main_device_external_id())
-        });
+        let external_id = match message.r#type {
+            EntityType::MainDevice => self.main_device_external_id(),
+            _ => message.external_id.unwrap_or_else(|| {
+                (self.external_id_mapper)(&topic_id, &self.main_device_external_id())
+            }),
+        };
         let entity_metadata = EntityMetadata {
             topic_id: topic_id.clone(),
             r#type: message.r#type,
@@ -316,6 +314,7 @@ impl EntityStore {
                 .expect("device id must be present as the topic id follows the default scheme");
 
             if !parent_device_id.is_default_main_device() && self.get(&parent_device_id).is_none() {
+                let device_local_id = entity_topic_id.default_device_name().unwrap();
                 let device_external_id =
                     (self.external_id_mapper)(&parent_device_id, &self.main_device_external_id());
 
@@ -324,7 +323,7 @@ impl EntityStore {
                     external_id: Some(device_external_id),
                     r#type: EntityType::ChildDevice,
                     parent: None,
-                    payload: json!({}),
+                    payload: json!({ "name": device_local_id }),
                 };
                 register_messages.push(device_register_message.clone());
                 self.update(device_register_message)?;
@@ -541,6 +540,9 @@ fn parse_entity_register_payload(payload: &[u8]) -> Option<serde_json::Value> {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
+    use assert_matches::assert_matches;
     use serde_json::json;
 
     use super::*;
@@ -670,39 +672,6 @@ mod tests {
         assert!(services
             .iter()
             .any(|&e| e == &EntityTopicId::default_main_service("service2").unwrap()));
-    }
-
-    /// Forbids creating multiple main devices.
-    ///
-    /// Publishing new registration message on a topic where main device is
-    /// registered updates the main device and is allowed. Creating a new main
-    /// device on another topic is not allowed.
-    #[test]
-    fn forbids_multiple_main_devices() {
-        let mut store = EntityStore::with_main_device(
-            EntityRegistrationMessage {
-                topic_id: EntityTopicId::default_main_device(),
-                r#type: EntityType::MainDevice,
-                external_id: Some("test-device".into()),
-                parent: None,
-                payload: json!({}),
-            },
-            dummy_external_id_mapper,
-        )
-        .unwrap();
-
-        let res = store.update(EntityRegistrationMessage {
-            topic_id: EntityTopicId::default_child_device("another_main").unwrap(),
-            external_id: Some("test-device".into()),
-            r#type: EntityType::MainDevice,
-            parent: None,
-            payload: json!({}),
-        });
-
-        assert_eq!(
-            res,
-            Err(Error::MainDeviceAlreadyRegistered("device/main//".into()))
-        );
     }
 
     #[test]
@@ -976,5 +945,165 @@ mod tests {
 
         let message: Message = (&entity_reg_message).into();
         println!("{}", message.payload_str().unwrap());
+    }
+
+    #[test]
+    fn auto_register_service() {
+        let mut store = EntityStore::with_main_device(
+            EntityRegistrationMessage {
+                topic_id: EntityTopicId::default_main_device(),
+                r#type: EntityType::MainDevice,
+                external_id: Some("test-device".into()),
+                parent: None,
+                payload: json!({}),
+            },
+            dummy_external_id_mapper,
+        )
+        .unwrap();
+
+        let service_topic_id = EntityTopicId::default_child_service("child1", "service1").unwrap();
+        let res = store.auto_register_entity(&service_topic_id).unwrap();
+        assert_eq!(
+            res,
+            [
+                EntityRegistrationMessage {
+                    topic_id: EntityTopicId::from_str("device/child1//").unwrap(),
+                    r#type: EntityType::ChildDevice,
+                    external_id: Some("device:child1".into()),
+                    parent: None,
+                    payload: json!({ "name": "child1" }),
+                },
+                EntityRegistrationMessage {
+                    topic_id: EntityTopicId::from_str("device/child1/service/service1").unwrap(),
+                    r#type: EntityType::Service,
+                    external_id: Some("device:child1:service:service1".into()),
+                    parent: Some(EntityTopicId::from_str("device/child1//").unwrap()),
+                    payload: json!({ "name": "service1",  "type": "systemd" }),
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn auto_register_child_device() {
+        let mut store = EntityStore::with_main_device(
+            EntityRegistrationMessage {
+                topic_id: EntityTopicId::default_main_device(),
+                r#type: EntityType::MainDevice,
+                external_id: Some("test-device".into()),
+                parent: None,
+                payload: json!({}),
+            },
+            dummy_external_id_mapper,
+        )
+        .unwrap();
+
+        let child_topic_id = EntityTopicId::default_child_device("child2").unwrap();
+        let res = store.auto_register_entity(&child_topic_id).unwrap();
+
+        assert_eq!(
+            res,
+            [EntityRegistrationMessage {
+                topic_id: EntityTopicId::from_str("device/child2//").unwrap(),
+                r#type: EntityType::ChildDevice,
+                external_id: Some("device:child2".into()),
+                parent: None,
+                payload: json!({ "name": "child2" }),
+            },]
+        );
+    }
+
+    #[test]
+    fn auto_register_custom_topic_scheme_not_supported() {
+        let mut store = EntityStore::with_main_device(
+            EntityRegistrationMessage {
+                topic_id: EntityTopicId::default_main_device(),
+                r#type: EntityType::MainDevice,
+                external_id: Some("test-device".into()),
+                parent: None,
+                payload: json!({}),
+            },
+            dummy_external_id_mapper,
+        )
+        .unwrap();
+        assert_matches!(
+            store.auto_register_entity(&EntityTopicId::from_str("custom/child2//").unwrap()),
+            Err(Error::NonDefaultTopicScheme(_))
+        );
+    }
+
+    #[test]
+    fn register_main_device_custom_scheme() {
+        let mut store = EntityStore::with_main_device(
+            EntityRegistrationMessage {
+                topic_id: EntityTopicId::default_main_device(),
+                r#type: EntityType::MainDevice,
+                external_id: Some("test-device".into()),
+                parent: None,
+                payload: json!({}),
+            },
+            dummy_external_id_mapper,
+        )
+        .unwrap();
+
+        // Register main device with custom topic scheme
+        let main_topic_id = EntityTopicId::from_str("custom/main//").unwrap();
+        store
+            .update(EntityRegistrationMessage {
+                topic_id: main_topic_id.clone(),
+                r#type: EntityType::MainDevice,
+                external_id: None,
+                parent: None,
+                payload: json!({}),
+            })
+            .unwrap();
+
+        let expected_entity_metadata = EntityMetadata {
+            topic_id: main_topic_id.clone(),
+            parent: None,
+            r#type: EntityType::MainDevice,
+            external_id: "test-device".into(),
+            other: json!({}),
+        };
+        // Assert main device registered with custom topic scheme
+        assert_eq!(
+            store.get(&main_topic_id).unwrap(),
+            &expected_entity_metadata
+        );
+        assert_eq!(
+            store.get_by_external_id(&"test-device".into()).unwrap(),
+            &expected_entity_metadata
+        );
+
+        // Register service on main device with custom scheme
+        let service_topic_id = EntityTopicId::from_str("custom/main/service/collectd").unwrap();
+        store
+            .update(EntityRegistrationMessage {
+                topic_id: service_topic_id.clone(),
+                r#type: EntityType::Service,
+                external_id: None,
+                parent: Some(main_topic_id.clone()),
+                payload: json!({}),
+            })
+            .unwrap();
+
+        let expected_entity_metadata = EntityMetadata {
+            topic_id: service_topic_id.clone(),
+            parent: Some(main_topic_id),
+            r#type: EntityType::Service,
+            external_id: "custom:main:service:collectd".into(),
+            other: json!({}),
+        };
+        // Assert service registered under main device with custom topic scheme
+        assert_eq!(
+            store.get(&service_topic_id).unwrap(),
+            &expected_entity_metadata
+        );
+        assert_eq!(
+            store
+                .get_by_external_id(&"custom:main:service:collectd".into())
+                .unwrap(),
+            &expected_entity_metadata
+        );
     }
 }

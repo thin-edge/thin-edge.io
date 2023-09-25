@@ -239,7 +239,7 @@ impl CumulocityConverter {
     pub fn try_convert_entity_registration(
         &mut self,
         input: &EntityRegistrationMessage,
-    ) -> Result<Message, ConversionError> {
+    ) -> Result<Vec<Message>, ConversionError> {
         // Parse the optional fields
         let display_name = input.payload.get("name").and_then(|v| v.as_str());
         let display_type = input.payload.get("type").and_then(|v| v.as_str());
@@ -251,22 +251,26 @@ impl CumulocityConverter {
             .map(|e| &e.external_id)
             .ok_or_else(|| Error::UnknownEntity(entity_topic_id.to_string()))?;
         match input.r#type {
-            EntityType::MainDevice => Err(ConversionError::MainDeviceRegistrationNotSupported),
+            EntityType::MainDevice => {
+                self.entity_store.update(input.clone())?;
+                Ok(vec![])
+            }
             EntityType::ChildDevice => {
                 let ancestors_external_ids =
                     self.entity_store.ancestors_external_ids(entity_topic_id)?;
-                Ok(child_device_creation_message(
+                let child_creation_message = child_device_creation_message(
                     external_id.as_ref(),
                     display_name,
                     display_type,
                     &ancestors_external_ids,
-                ))
+                );
+                Ok(vec![child_creation_message])
             }
             EntityType::Service => {
                 let ancestors_external_ids =
                     self.entity_store.ancestors_external_ids(entity_topic_id)?;
 
-                Ok(service_creation_message(
+                let service_creation_message = service_creation_message(
                     external_id.as_ref(),
                     display_name.unwrap_or_else(|| {
                         entity_topic_id
@@ -276,7 +280,8 @@ impl CumulocityConverter {
                     display_type.unwrap_or("service"),
                     "up",
                     &ancestors_external_ids,
-                ))
+                );
+                Ok(vec![service_creation_message])
             }
         }
     }
@@ -788,15 +793,16 @@ impl CumulocityConverter {
         channel: Channel,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        let mut registration_messages = vec![];
+        let mut registration_messages: Vec<Message> = vec![];
         match &channel {
             Channel::EntityMetadata => {
                 if let Ok(register_message) = EntityRegistrationMessage::try_from(message) {
                     if let Err(e) = self.entity_store.update(register_message.clone()) {
                         error!("Could not update device registration: {e}");
                     }
-                    let c8y_message = self.try_convert_entity_registration(&register_message)?;
-                    registration_messages.push(c8y_message);
+                    let mut c8y_message =
+                        self.try_convert_entity_registration(&register_message)?;
+                    registration_messages.append(&mut c8y_message);
                 }
             }
             _ => {
@@ -882,8 +888,8 @@ impl CumulocityConverter {
 
         let mut registration_messages = vec![];
         registration_messages.push(registration_message.into());
-        let c8y_message = self.try_convert_entity_registration(registration_message)?;
-        registration_messages.push(c8y_message);
+        let mut c8y_message = self.try_convert_entity_registration(registration_message)?;
+        registration_messages.append(&mut c8y_message);
 
         Ok(registration_messages)
     }
@@ -1461,12 +1467,16 @@ mod tests {
                 device_creation_msgs[0].payload_str().unwrap()
             )
             .unwrap(),
-            json!({ "@type":"child-device", "@id":"test-device:device:external_sensor" })
+            json!({
+                "@type":"child-device",
+                "@id":"test-device:device:external_sensor",
+                "name": "external_sensor"
+            })
         );
 
         let second_msg = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,test-device:device:external_sensor,test-device:device:external_sensor,thin-edge.io-child",
+            "101,test-device:device:external_sensor,external_sensor,thin-edge.io-child",
         );
         assert_eq!(device_creation_msgs[1], second_msg);
 
@@ -1528,7 +1538,7 @@ mod tests {
 
         let expected_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,test-device:device:child1,test-device:device:child1,thin-edge.io-child",
+            "101,test-device:device:child1,child1,thin-edge.io-child",
         );
         let expected_c8y_json_message = Message::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -1584,7 +1594,7 @@ mod tests {
             .collect();
         let expected_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,test-device:device:child1,test-device:device:child1,thin-edge.io-child",
+            "101,test-device:device:child1,child1,thin-edge.io-child",
         );
         let expected_c8y_json_message = Message::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -1613,7 +1623,7 @@ mod tests {
             .collect();
         let expected_first_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,test-device:device:child1,test-device:device:child1,thin-edge.io-child",
+            "101,test-device:device:child1,child1,thin-edge.io-child",
         );
         let expected_first_c8y_json_message = Message::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -1638,7 +1648,7 @@ mod tests {
             .collect();
         let expected_second_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,test-device:device:child2,test-device:device:child2,thin-edge.io-child",
+            "101,test-device:device:child2,child2,thin-edge.io-child",
         );
         let expected_second_c8y_json_message = Message::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
@@ -1712,7 +1722,7 @@ mod tests {
 
         let expected_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,test-device:device:child,test-device:device:child,thin-edge.io-child",
+            "101,test-device:device:child,child,thin-edge.io-child",
         );
 
         let expected_c8y_json_message = Message::new(
@@ -1746,7 +1756,7 @@ mod tests {
         let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
         let expected_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,test-device:device:child2,test-device:device:child2,thin-edge.io-child",
+            "101,test-device:device:child2,child2,thin-edge.io-child",
         );
 
         let expected_c8y_json_message = Message::new(
@@ -2005,9 +2015,7 @@ mod tests {
         let payload1 = &result[0].payload_str().unwrap();
         let payload2 = &result[1].payload_str().unwrap();
 
-        assert!(payload1.contains(
-            "101,test-device:device:child1,test-device:device:child1,thin-edge.io-child"
-        ));
+        assert!(payload1.contains("101,test-device:device:child1,child1,thin-edge.io-child"));
         assert!(payload2 .contains(
         r#"{"externalSource":{"externalId":"test-device:device:child1","type":"c8y_Serial"},"temperature0":{"temperature0":{"value":0.0}},"#
     ));

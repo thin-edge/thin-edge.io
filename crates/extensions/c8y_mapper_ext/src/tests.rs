@@ -508,7 +508,11 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
         &mut mqtt,
         [(
             "te/device/external_sensor//",
-            json!({"@type":"child-device","@id":"test-device:device:external_sensor"}),
+            json!({
+                "@type":"child-device",
+                "@id":"test-device:device:external_sensor",
+                "name": "external_sensor"
+            }),
         )],
     )
     .await;
@@ -518,7 +522,7 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
         [
             (
                 "c8y/s/us",
-                "101,test-device:device:external_sensor,test-device:device:external_sensor,thin-edge.io-child",
+                "101,test-device:device:external_sensor,external_sensor,thin-edge.io-child",
             ),
             (
                 "c8y/s/us/test-device:device:external_sensor",
@@ -615,12 +619,10 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
     // Expect child device creation message
     assert_received_contains_str(
         &mut mqtt,
-        [
-            (
-                "c8y/s/us",
-                "101,test-device:device:external_sensor,test-device:device:external_sensor,thin-edge.io-child",
-            ),
-        ],
+        [(
+            "c8y/s/us",
+            "101,test-device:device:external_sensor,external_sensor,thin-edge.io-child",
+        )],
     )
     .await;
 
@@ -1193,13 +1195,17 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     assert_eq!(child_metadata.topic.name, "te/device/child1//");
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(child_metadata.payload_str().unwrap()).unwrap(),
-        json!({"@type":"child-device","@id":"test-device:device:child1"})
+        json!({
+            "@type":"child-device",
+            "@id":"test-device:device:child1",
+            "name": "child1"
+        })
     );
     let child_c8y_registration = mqtt.recv().await.unwrap();
     assert_eq!(child_c8y_registration.topic.name, "c8y/s/us");
     assert_eq!(
         child_c8y_registration.payload_str().unwrap(),
-        "101,test-device:device:child1,test-device:device:child1,thin-edge.io-child"
+        "101,test-device:device:child1,child1,thin-edge.io-child"
     );
 
     // Expect an update list of capabilities with agent capabilities
@@ -1754,7 +1760,7 @@ async fn mapper_converts_log_upload_cmd_to_supported_op_and_types_for_child_devi
         &mut mqtt,
         [(
             "c8y/s/us",
-            "101,test-device:device:child1,test-device:device:child1,thin-edge.io-child",
+            "101,test-device:device:child1,child1,thin-edge.io-child",
         )],
     )
     .await;
@@ -1868,7 +1874,7 @@ async fn handle_log_upload_executing_and_failed_cmd_for_child_device() {
         &mut mqtt,
         [(
             "c8y/s/us",
-            "101,test-device:device:child1,test-device:device:child1,thin-edge.io-child",
+            "101,test-device:device:child1,child1,thin-edge.io-child",
         )],
     )
     .await;

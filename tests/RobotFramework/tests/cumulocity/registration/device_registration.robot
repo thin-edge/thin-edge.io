@@ -18,30 +18,30 @@ Main device registration
 
 
 Child device registration
-    Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_SN}
+    Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_ID}
     Restart Service    tedge-mapper-c8y
 
     # Check registration
     ${child_mo}=    Device Should Exist        ${CHILD_SN}
-    ${child_mo}=    Cumulocity.Device Should Have Fragment Values    name\=${CHILD_SN}
+    ${child_mo}=    Cumulocity.Device Should Have Fragment Values    name\=${CHILD_ID}
     Should Be Equal    ${child_mo["owner"]}    device_${DEVICE_SN}    # The parent is the owner of the child
-    Should Be Equal    ${child_mo["name"]}     ${CHILD_SN}
+    Should Be Equal    ${child_mo["name"]}     ${CHILD_ID}
 
     # Check child device relationship
     Cumulocity.Set Device    ${DEVICE_SN}
     Cumulocity.Should Be A Child Device Of Device    ${CHILD_SN}
 
 Register child device with defaults via MQTT
-    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device"}'
-    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${DEVICE_SN}:device:${CHILD_SN}    child_name=${DEVICE_SN}:device:${CHILD_SN}    child_type=thin-edge.io-child
+    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_ID}//' '{"@type":"child-device"}'
+    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${CHILD_SN}    child_name=${CHILD_SN}    child_type=thin-edge.io-child
 
 Register child device with custom name and type via MQTT
-    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device","name":"${CHILD_SN}","type":"linux-device-Aböut"}'
-    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${DEVICE_SN}:device:${CHILD_SN}    child_name=${CHILD_SN}    child_type=linux-device-Aböut
+    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_ID}//' '{"@type":"child-device","name":"${CHILD_ID}","type":"linux-device-Aböut"}'
+    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${CHILD_SN}    child_name=${CHILD_ID}    child_type=linux-device-Aböut
 
 Register child device with custom id via MQTT
-    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device","@id":"${CHILD_SN}","name":"custom-${CHILD_SN}"}'
-    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${CHILD_SN}    child_name=custom-${CHILD_SN}    child_type=thin-edge.io-child
+    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_ID}//' '{"@type":"child-device","@id":"custom-${CHILD_SN}","name":"custom-${CHILD_ID}"}'
+    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=custom-${CHILD_SN}    child_name=custom-${CHILD_ID}    child_type=thin-edge.io-child
 
 Register nested child device using default topic schema via MQTT
     ${child_level1}=    Get Random Name
@@ -65,22 +65,21 @@ Register nested child device using default topic schema via MQTT
 
 
 Register service on a child device via MQTT
-    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device","name":"${CHILD_SN}","type":"linux-device-Aböut"}'
-    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}/service/custom-app' '{"@type":"service","@parent":"device/${CHILD_SN}//","name":"custom-app","type":"custom-type"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_ID}//' '{"@type":"child-device","name":"${CHILD_ID}","type":"linux-device-Aböut"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_ID}/service/custom-app' '{"@type":"service","@parent":"device/${CHILD_ID}//","name":"custom-app","type":"custom-type"}'
 
     # Check child registration
-    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${DEVICE_SN}:device:${CHILD_SN}    child_name=${CHILD_SN}    child_type=linux-device-Aböut
+    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${CHILD_SN}    child_name=${CHILD_ID}    child_type=linux-device-Aböut
 
     # Check service registration
-    Check Service    child_sn=${DEVICE_SN}:device:${CHILD_SN}    service_sn=${DEVICE_SN}:device:${CHILD_SN}:service:custom-app    service_name=custom-app    service_type=custom-type    service_status=up
+    Check Service    child_sn=${CHILD_SN}    service_sn=${CHILD_SN}:service:custom-app    service_name=custom-app    service_type=custom-type    service_status=up
 
 
 Register devices using custom MQTT schema
     [Documentation]    Complex example showing how to use custom MQTT topics to register devices/services using
         ...            custom identity schemas
 
-    # Main device registration via MQTT is not supported at the moment
-    # Execute Command    tedge mqtt pub --retain 'te/base///' '{"@type":"main-device","name":"base","type":"te_gateway"}'
+    Execute Command    tedge mqtt pub --retain 'te/base///' '{"@type":"device","name":"base","type":"te_gateway"}'
 
     Execute Command    tedge mqtt pub --retain 'te/factory1/shop1/plc1/sensor1' '{"@type":"child-device","name":"sensor1","type":"SmartSensor"}'
     Execute Command    tedge mqtt pub --retain 'te/factory1/shop1/plc1/sensor2' '{"@type":"child-device","name":"sensor2","type":"SmartSensor"}'
@@ -96,8 +95,8 @@ Register devices using custom MQTT schema
     Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${DEVICE_SN}:factory1:shop1:plc1:sensor2    child_name=sensor2    child_type=SmartSensor
 
     # Check main device services
-    # Cumulocity.Set Device    ${DEVICE_SN}
-    # Should Have Services    name=metrics    service_type=PLCApplication    status=up
+    Cumulocity.Set Device    ${DEVICE_SN}
+    Should Have Services    name=metrics    service_type=PLCApplication    status=up
 
     # Check child services
     Cumulocity.Set Device    ${DEVICE_SN}:factory1:shop1:plc1:sensor1
@@ -106,11 +105,10 @@ Register devices using custom MQTT schema
     Cumulocity.Set Device    ${DEVICE_SN}:factory1:shop1:plc1:sensor2
     Should Have Services    name=metrics    service_type=PLCMonitorApplication    status=up
 
-    # Skipping as main device registration via MQTT is not supported at the moment
     # Publish to main device on custom topic
-    # Execute Command    cmd=tedge mqtt pub te/base////m/gateway_stats '{"runtime":1001}'
-    # Cumulocity.Set Device    ${DEVICE_SN}
-    # Cumulocity.Device Should Have Measurements    type=gateway_stats    minimum=1    maximum=1
+    Execute Command    cmd=tedge mqtt pub te/base////m/gateway_stats '{"runtime":1001}'
+    Cumulocity.Set Device    ${DEVICE_SN}
+    Cumulocity.Device Should Have Measurements    type=gateway_stats    minimum=1    maximum=1
 
 *** Keywords ***
 
@@ -135,8 +133,9 @@ Check Service
 
 
 Test Setup
-    ${CHILD_SN}=    Get Random Name
-    Set Test Variable    $CHILD_SN
+    ${CHILD_ID}=    Get Random Name
+    Set Test Variable    $CHILD_ID
+    Set Test Variable    $CHILD_SN    ${DEVICE_SN}:device:${CHILD_ID}
 
     ThinEdgeIO.Set Device Context    ${DEVICE_SN}
 
