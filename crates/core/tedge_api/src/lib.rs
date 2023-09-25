@@ -19,8 +19,6 @@ pub mod utils;
 pub use download::*;
 pub use entity_store::EntityStore;
 pub use error::*;
-pub use messages::control_filter_topic;
-pub use messages::software_filter_topic;
 pub use messages::Jsonify;
 pub use messages::OperationStatus;
 pub use messages::RestartCommand;
@@ -41,8 +39,8 @@ mod tests {
 
     #[test]
     fn topic_names() {
-        // There are two topics for each kind of requests,
-        // one for the requests, the other for the responses
+        // There are two topics for each kind of commands,
+        // one for the metadata, the other for the command instances
         assert_eq!(
             SoftwareListRequest::topic(),
             Topic::new_unchecked("tedge/commands/req/software/list")
@@ -58,6 +56,13 @@ mod tests {
         assert_eq!(
             SoftwareUpdateResponse::topic(),
             Topic::new_unchecked("tedge/commands/res/software/update")
+        );
+        assert_eq!(
+            RestartCommand::new(EntityTopicId::default_main_device())
+                .with_id("abc".to_string())
+                .command_message(&MqttSchema::default())
+                .topic,
+            Topic::new_unchecked("te/device/main///cmd/restart/abc")
         );
         assert_eq!(
             RestartCommand::new(EntityTopicId::default_main_device())

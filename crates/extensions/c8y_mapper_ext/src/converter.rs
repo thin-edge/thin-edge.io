@@ -37,7 +37,6 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::topic::publish_topic_from_ancestors;
 use c8y_api::smartrest::topic::C8yTopic;
-use c8y_api::smartrest::topic::MapperSubscribeTopic;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
@@ -66,12 +65,14 @@ use tedge_api::entity_store::InvalidExternalIdError;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::messages::CommandStatus;
+use tedge_api::messages::SOFTWARE_LIST_REQUEST_TOPIC;
+use tedge_api::messages::SOFTWARE_LIST_RESPONSE_TOPIC;
+use tedge_api::messages::SOFTWARE_UPDATE_REQUEST_TOPIC;
+use tedge_api::messages::SOFTWARE_UPDATE_RESPONSE_TOPIC;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::topic::RequestTopic;
-use tedge_api::topic::ResponseTopic;
 use tedge_api::DownloadInfo;
 use tedge_api::EntityStore;
 use tedge_api::Jsonify;
@@ -589,7 +590,7 @@ impl CumulocityConverter {
         &mut self,
         smartrest: &str,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
-        let topic = Topic::new(RequestTopic::SoftwareUpdateRequest.as_str())?;
+        let topic = Topic::new(SOFTWARE_UPDATE_REQUEST_TOPIC)?;
         let update_software = SmartRestUpdateSoftware::default();
         let mut software_update_request = update_software
             .from_smartrest(smartrest)?
@@ -1036,31 +1037,29 @@ impl CumulocityConverter {
                 self.alarm_converter.process_internal_alarm(message);
                 Ok(vec![])
             }
-            topic => match topic.clone().try_into() {
-                Ok(MapperSubscribeTopic::ResponseTopic(ResponseTopic::SoftwareListResponse)) => {
-                    debug!("Software list");
-                    Ok(validate_and_publish_software_list(
-                        message.payload_str()?,
-                        &mut self.http_proxy,
-                        self.device_name.clone(), //derive from topic, when supported for child device also.
-                    )
-                    .await?)
-                }
-                Ok(MapperSubscribeTopic::ResponseTopic(ResponseTopic::SoftwareUpdateResponse)) => {
-                    debug!("Software update");
-                    Ok(publish_operation_status(
-                        message.payload_str()?,
-                        &mut self.http_proxy,
-                        self.device_name.clone(),
-                    )
-                    .await?)
-                }
-                Ok(MapperSubscribeTopic::C8yTopic(_)) => self.parse_c8y_topics(message).await,
-                _ => {
-                    error!("Unsupported topic: {}", message.topic.name);
-                    Ok(vec![])
-                }
-            },
+            topic if topic.name == SOFTWARE_LIST_RESPONSE_TOPIC => {
+                debug!("Software list");
+                Ok(validate_and_publish_software_list(
+                    message.payload_str()?,
+                    &mut self.http_proxy,
+                    self.device_name.clone(), //derive from topic, when supported for child device also.
+                )
+                .await?)
+            }
+            topic if topic.name == SOFTWARE_UPDATE_RESPONSE_TOPIC => {
+                debug!("Software update");
+                Ok(publish_operation_status(
+                    message.payload_str()?,
+                    &mut self.http_proxy,
+                    self.device_name.clone(),
+                )
+                .await?)
+            }
+            topic if C8yTopic::accept(topic) => self.parse_c8y_topics(message).await,
+            _ => {
+                error!("Unsupported topic: {}", message.topic.name);
+                Ok(vec![])
+            }
         }?;
 
         Ok(messages)
@@ -1161,7 +1160,7 @@ fn get_child_id(dir_path: &PathBuf) -> Result<String, ConversionError> {
 
 fn create_get_software_list_message() -> Result<Message, ConversionError> {
     let request = SoftwareListRequest::default();
-    let topic = Topic::new(RequestTopic::SoftwareListRequest.as_str())?;
+    let topic = Topic::new(SOFTWARE_LIST_REQUEST_TOPIC)?;
     let payload = request.to_json();
     Ok(Message::new(&topic, payload))
 }

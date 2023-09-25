@@ -13,10 +13,11 @@ use serde::Deserialize;
 use serde::Serialize;
 use time::OffsetDateTime;
 
-const SOFTWARE_LIST_REQUEST_TOPIC: &str = "tedge/commands/req/software/list";
-const SOFTWARE_LIST_RESPONSE_TOPIC: &str = "tedge/commands/res/software/list";
-const SOFTWARE_UPDATE_REQUEST_TOPIC: &str = "tedge/commands/req/software/update";
-const SOFTWARE_UPDATE_RESPONSE_TOPIC: &str = "tedge/commands/res/software/update";
+// TODO deprecate these consts
+pub const SOFTWARE_LIST_REQUEST_TOPIC: &str = "tedge/commands/req/software/list";
+pub const SOFTWARE_LIST_RESPONSE_TOPIC: &str = "tedge/commands/res/software/list";
+pub const SOFTWARE_UPDATE_REQUEST_TOPIC: &str = "tedge/commands/req/software/update";
+pub const SOFTWARE_UPDATE_RESPONSE_TOPIC: &str = "tedge/commands/res/software/update";
 
 /// All the messages are serialized using json.
 pub trait Jsonify<'a>
@@ -38,14 +39,6 @@ where
     fn to_bytes(&self) -> Vec<u8> {
         serde_json::to_vec(self).unwrap() // all thin-edge data can be serialized to json
     }
-}
-
-pub const fn software_filter_topic() -> &'static str {
-    "tedge/commands/req/software/#"
-}
-
-pub const fn control_filter_topic() -> &'static str {
-    "tedge/commands/req/control/#"
 }
 
 /// Message payload definition for SoftwareList request.
