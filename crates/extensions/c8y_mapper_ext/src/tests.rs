@@ -1005,10 +1005,23 @@ async fn mapper_publishes_child_device_create_message() {
     .await
     .expect("Send failed");
 
+    // Expect auto-registration message
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "te/device/child1//",
+            json!({"@type":"child-device", "name": "child1"}),
+        )],
+    )
+    .await;
+
     // Expect smartrest message on `c8y/s/us` with expected payload "101,child1,child1,thin-edge.io-child".
     assert_received_contains_str(
         &mut mqtt,
-        [("c8y/s/us", "101,child1,child1,thin-edge.io-child")],
+        [(
+            "c8y/s/us",
+            "101,test-device:device:child1,child1,thin-edge.io-child",
+        )],
     )
     .await;
 }
@@ -1036,11 +1049,24 @@ async fn mapper_publishes_supported_operations_for_child_device() {
     .await
     .expect("Send failed");
 
+    // Expect auto-registration message
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "te/device/child1//",
+            json!({"@type":"child-device", "name": "child1"}),
+        )],
+    )
+    .await;
+
     // Expect smartrest message on `c8y/s/us/child1` with expected payload "114,c8y_ChildTestOp1,c8y_ChildTestOp2.
     assert_received_contains_str(
         &mut mqtt,
         [
-            ("c8y/s/us", "101,child1,child1,thin-edge.io-child"),
+            (
+                "c8y/s/us",
+                "101,test-device:device:child1,child1,thin-edge.io-child",
+            ),
             (
                 "c8y/s/us/test-device:device:child1",
                 "114,c8y_ChildTestOp1,c8y_ChildTestOp2\n",

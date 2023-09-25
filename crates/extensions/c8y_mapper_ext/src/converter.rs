@@ -45,6 +45,7 @@ use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::json;
 use service_monitor::convert_health_status_message;
 use std::collections::HashMap;
 use std::fs;
@@ -707,18 +708,31 @@ impl CumulocityConverter {
 
         for child_id in difference {
             // here we register new child devices, sending the 101 code
-            messages_vec.push(new_child_device_message(child_id));
+            let child_topic_id = EntityTopicId::default_child_device(child_id).unwrap();
+            let child_device_reg_msg = EntityRegistrationMessage {
+                topic_id: child_topic_id,
+                external_id: None,
+                r#type: EntityType::ChildDevice,
+                parent: None,
+                payload: json!({ "name": child_id }),
+            };
+            let mut reg_messages = self
+                .register_and_convert_entity(&child_device_reg_msg)
+                .unwrap();
+
+            messages_vec.append(&mut reg_messages);
         }
         // loop over all local child devices and update the operations
         for child_id in local_child_devices {
             // update the children cache with the operations supported
             let ops = Operations::try_new(path_to_child_devices.join(&child_id))?;
-            self.children.insert(child_id.clone(), ops.clone());
-
-            let ops_msg = ops.create_smartrest_ops_message()?;
             let child_topic_id = EntityTopicId::default_child_device(&child_id).unwrap();
             let child_external_id =
                 Self::map_to_c8y_external_id(&child_topic_id, &self.device_name.as_str().into());
+
+            self.children
+                .insert(child_external_id.as_ref().into(), ops.clone());
+            let ops_msg = ops.create_smartrest_ops_message()?;
             let topic_str = format!("{SMARTREST_PUBLISH_TOPIC}/{}", child_external_id.as_ref());
             let topic = Topic::new_unchecked(&topic_str);
             messages_vec.push(Message::new(&topic, ops_msg));
@@ -792,21 +806,9 @@ impl CumulocityConverter {
                         self.entity_store.auto_register_entity(&source)?;
 
                     for auto_registration_message in &auto_registration_messages {
-                        if auto_registration_message.r#type == EntityType::ChildDevice {
-                            self.children.insert(
-                                auto_registration_message
-                                    .external_id
-                                    .clone()
-                                    .unwrap()
-                                    .into(),
-                                Operations::default(),
-                            );
-                        }
-
-                        registration_messages.push(auto_registration_message.into());
-                        let c8y_message =
-                            self.try_convert_entity_registration(auto_registration_message)?;
-                        registration_messages.push(c8y_message);
+                        registration_messages.append(
+                            &mut self.register_and_convert_entity(auto_registration_message)?,
+                        );
                     }
                 }
             }
@@ -857,6 +859,32 @@ impl CumulocityConverter {
         };
 
         registration_messages.append(&mut messages);
+        Ok(registration_messages)
+    }
+
+    pub fn register_and_convert_entity(
+        &mut self,
+        registration_message: &EntityRegistrationMessage,
+    ) -> Result<Vec<Message>, ConversionError> {
+        let entity_topic_id = &registration_message.topic_id;
+        self.entity_store.update(registration_message.clone())?;
+        if registration_message.r#type == EntityType::ChildDevice {
+            self.children.insert(
+                self.entity_store
+                    .get(entity_topic_id)
+                    .expect("Should have been registered in the previous step")
+                    .external_id
+                    .as_ref()
+                    .into(),
+                Operations::default(),
+            );
+        }
+
+        let mut registration_messages = vec![];
+        registration_messages.push(registration_message.into());
+        let c8y_message = self.try_convert_entity_registration(registration_message)?;
+        registration_messages.push(c8y_message);
+
         Ok(registration_messages)
     }
 
@@ -1351,7 +1379,12 @@ mod tests {
         "c8y_Command",
     ];
 
-    const EXPECTED_CHILD_DEVICES: &[&str] = &["child-0", "child-1", "child-2", "child-3"];
+    const EXPECTED_CHILD_DEVICES: &[&str] = &[
+        "test-device:device:child-0",
+        "test-device:device:child-1",
+        "test-device:device:child-2",
+        "test-device:device:child-3",
+    ];
 
     #[tokio::test]
     async fn test_sync_alarms() {
@@ -2127,7 +2160,7 @@ mod tests {
     ///     then supported operations will be published to the cloud and the device will be cached.
     #[test_case("106", EXPECTED_CHILD_DEVICES; "cloud representation is empty")]
     #[test_case("106,child-one,child-two", EXPECTED_CHILD_DEVICES; "cloud representation is completely different")]
-    #[test_case("106,child-3,child-one,child-1", &["child-0", "child-2"]; "cloud representation has some similar child devices")]
+    #[test_case("106,child-3,child-one,child-1", &["test-device:device:child-0", "test-device:device:child-2"]; "cloud representation has some similar child devices")]
     #[test_case("106,child-0,child-1,child-2,child-3", &[]; "cloud representation has seen all child devices")]
     #[tokio::test]
     async fn test_child_device_cache_is_updated(

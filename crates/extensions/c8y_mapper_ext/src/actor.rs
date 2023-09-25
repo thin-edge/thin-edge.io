@@ -133,11 +133,11 @@ impl C8yMapperActor {
                         topic_id: child_topic_id,
                         external_id: None,
                         r#type: EntityType::ChildDevice,
-                        parent: Some(EntityTopicId::default_main_device()),
-                        payload: json!({}),
+                        parent: None,
+                        payload: json!({ "name": child_id }),
                     };
                     self.converter
-                        .try_convert_entity_registration(&child_device_reg_msg)
+                        .register_and_convert_entity(&child_device_reg_msg)
                         .unwrap();
                 }
             }
