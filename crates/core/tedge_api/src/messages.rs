@@ -525,12 +525,7 @@ impl RestartCommand {
 
     /// Return the current status of the command
     pub fn status(&self) -> CommandStatus {
-        self.payload.status
-    }
-
-    /// Return the reason why this command failed
-    pub fn reason(&self) -> &str {
-        &self.payload.reason
+        self.payload.status.clone()
     }
 
     /// Set the status of the command
@@ -541,8 +536,7 @@ impl RestartCommand {
 
     /// Set the failure reason of the command
     pub fn with_error(mut self, reason: String) -> Self {
-        self.payload.status = CommandStatus::Failed;
-        self.payload.reason = reason;
+        self.payload.status = CommandStatus::Failed { reason };
         self
     }
 
@@ -600,10 +594,8 @@ impl RestartCommand {
 #[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RestartCommandPayload {
+    #[serde(flatten)]
     pub status: CommandStatus,
-
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub reason: String,
 }
 
 impl<'a> Jsonify<'a> for RestartCommandPayload {}
@@ -612,18 +604,17 @@ impl Default for RestartCommandPayload {
     fn default() -> Self {
         RestartCommandPayload {
             status: CommandStatus::Init,
-            reason: String::new(),
         }
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Copy, Eq, Clone)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[serde(rename_all = "camelCase", tag = "status")]
 pub enum CommandStatus {
     Init,
     Executing,
     Successful,
-    Failed,
+    Failed { reason: String },
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
@@ -637,7 +628,8 @@ impl<'a> Jsonify<'a> for LogMetadata {}
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct LogUploadCmdPayload {
-    pub status: CommandStatus, //Define a different enum if this op needs more states,
+    #[serde(flatten)]
+    pub status: CommandStatus,
     pub tedge_url: String,
     #[serde(rename = "type")]
     pub log_type: String,
@@ -648,8 +640,6 @@ pub struct LogUploadCmdPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search_text: Option<String>,
     pub lines: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<String>,
 }
 
 impl<'a> Jsonify<'a> for LogUploadCmdPayload {}
@@ -657,31 +647,29 @@ impl<'a> Jsonify<'a> for LogUploadCmdPayload {}
 impl LogUploadCmdPayload {
     pub fn executing(&mut self) {
         self.status = CommandStatus::Executing;
-        self.reason = None;
     }
 
     pub fn successful(&mut self) {
         self.status = CommandStatus::Successful;
-        self.reason = None;
     }
 
     pub fn failed(&mut self, reason: impl Into<String>) {
-        self.status = CommandStatus::Failed;
-        self.reason = Some(reason.into());
+        self.status = CommandStatus::Failed {
+            reason: reason.into(),
+        };
     }
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigSnapshotCmdPayload {
+    #[serde(flatten)]
     pub status: CommandStatus,
     pub tedge_url: String,
     #[serde(rename = "type")]
     pub config_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<String>,
 }
 
 impl<'a> Jsonify<'a> for ConfigSnapshotCmdPayload {}
@@ -689,24 +677,24 @@ impl<'a> Jsonify<'a> for ConfigSnapshotCmdPayload {}
 impl ConfigSnapshotCmdPayload {
     pub fn executing(&mut self) {
         self.status = CommandStatus::Executing;
-        self.reason = None;
     }
 
     pub fn successful(&mut self, path: impl Into<String>) {
         self.status = CommandStatus::Successful;
-        self.reason = None;
         self.path = Some(path.into())
     }
 
     pub fn failed(&mut self, reason: impl Into<String>) {
-        self.status = CommandStatus::Failed;
-        self.reason = Some(reason.into());
+        self.status = CommandStatus::Failed {
+            reason: reason.into(),
+        }
     }
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigUpdateCmdPayload {
+    #[serde(flatten)]
     pub status: CommandStatus,
     pub tedge_url: String,
     pub remote_url: String,
@@ -714,8 +702,6 @@ pub struct ConfigUpdateCmdPayload {
     pub config_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<String>,
 }
 
 impl<'a> Jsonify<'a> for ConfigUpdateCmdPayload {}
@@ -723,18 +709,17 @@ impl<'a> Jsonify<'a> for ConfigUpdateCmdPayload {}
 impl ConfigUpdateCmdPayload {
     pub fn executing(&mut self) {
         self.status = CommandStatus::Executing;
-        self.reason = None;
     }
 
     pub fn successful(&mut self, path: impl Into<String>) {
         self.status = CommandStatus::Successful;
-        self.reason = None;
         self.path = Some(path.into())
     }
 
     pub fn failed(&mut self, reason: impl Into<String>) {
-        self.status = CommandStatus::Failed;
-        self.reason = Some(reason.into());
+        self.status = CommandStatus::Failed {
+            reason: reason.into(),
+        };
     }
 }
 
