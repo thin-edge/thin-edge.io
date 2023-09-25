@@ -78,7 +78,6 @@ impl CumulocityConverter {
             date_to: log_request.date_to,
             search_text: log_request.search_text,
             lines: log_request.lines,
-            reason: None,
         };
 
         // Command messages must be retained
@@ -157,10 +156,10 @@ impl CumulocityConverter {
                     .with_qos(QoS::AtLeastOnce);
                 vec![c8y_notification, clean_operation]
             }
-            CommandStatus::Failed => {
+            CommandStatus::Failed { ref reason } => {
                 let smartrest_operation_status = SmartRestSetOperationToFailed::new(
                     CumulocitySupportedOperations::C8yLogFileRequest,
-                    response.reason.clone().unwrap_or_default(),
+                    reason.clone(),
                 )
                 .to_smartrest()?;
                 let c8y_notification = Message::new(&smartrest_topic, smartrest_operation_status);
