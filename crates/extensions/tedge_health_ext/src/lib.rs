@@ -3,8 +3,6 @@ mod actor;
 #[cfg(test)]
 mod tests;
 
-use std::sync::Arc;
-
 use actor::HealthMonitorActor;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
@@ -19,7 +17,7 @@ use tedge_api::health::ServiceHealthTopic;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::mqtt_topics::ServiceTopicId;
+use tedge_api::mqtt_topics::Service;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
@@ -65,22 +63,24 @@ impl HealthMonitorBuilder {
     /// Creates a HealthMonitorBuilder that creates a HealthMonitorActor with
     /// a new topic scheme.
     pub fn from_service_topic_id(
-        service: ServiceTopicId,
+        service: Service,
         mqtt: &mut (impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter> + AsMut<MqttConfig>),
         // TODO: pass it less annoying way
-        mqtt_topic_root: Arc<str>,
+        mqtt_schema: &MqttSchema,
     ) -> Self {
-        let health_topic = ServiceHealthTopic::new(service.clone());
+        let Service {
+            service_topic_id,
+            device_topic_id,
+        } = service;
 
-        let mut box_builder = SimpleMessageBoxBuilder::new(service.as_str(), 16);
+        let service_health_topic =
+            ServiceHealthTopic::from_new_topic(&service_topic_id, mqtt_schema);
 
-        // passed service is in default scheme
-        let device_topic_id = service.to_device_topic_id().unwrap();
+        let mut box_builder = SimpleMessageBoxBuilder::new(service_topic_id.as_str(), 16);
 
-        let mqtt_schema = MqttSchema::with_root(mqtt_topic_root.to_string());
         let subscriptions = vec![
             mqtt_schema.topic_for(
-                service.clone().entity(),
+                service_topic_id.entity(),
                 &Channel::Command {
                     operation: OperationType::Health,
                     cmd_id: "check".to_string(),
@@ -102,7 +102,7 @@ impl HealthMonitorBuilder {
             .set_request_sender(mqtt.connect_consumer(subscriptions, box_builder.get_sender()));
 
         let builder = HealthMonitorBuilder {
-            service_health_topic: health_topic,
+            service_health_topic,
             box_builder,
         };
 

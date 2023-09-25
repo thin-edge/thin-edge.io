@@ -357,9 +357,21 @@ impl EntityTopicId {
     }
 }
 
+/// Contains a topic id of the service itself and the associated device.
+pub struct Service {
+    pub service_topic_id: ServiceTopicId,
+    pub device_topic_id: DeviceTopicId,
+}
+
 /// Represents an entity topic identifier known to be a service.
 ///
-/// It's most often in a format `device/DEVICE_NAME/service/SERVICE_NAME`.
+/// It's most often in a format `device/DEVICE_NAME/service/SERVICE_NAME`, but
+/// it doesn't have to be. Thus in order to know whether or not a particular
+/// [`EntityTopicId`] is a service, one has to check the
+/// [`EntityStore`](super::entity_store::EntityStore), but some functions do not
+/// have any way to access it. As such, functions can use this type to tell the
+/// caller that they expect passed [`EntityTopicId`] to be a service, and that
+/// it is the responsibility of the caller to verify it first.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct ServiceTopicId(EntityTopicId);
 
@@ -390,9 +402,22 @@ impl Display for ServiceTopicId {
     }
 }
 
+/// Represents an entity topic identifier known to be a device.
+///
+/// It's most often in a format `device/DEVICE_NAME//`, but it doesn't have to
+/// be. Thus in order to know whether or not a particular [`EntityTopicId`] is a
+/// service, one has to check the
+/// [`EntityStore`](super::entity_store::EntityStore), but some functions do not
+/// have any way to access it. As such, functions can use this type to tell the
+/// caller that they expect passed [`EntityTopicId`] to be a device, and that
+/// it is the responsibility of the caller to verify it first.
 pub struct DeviceTopicId(EntityTopicId);
 
 impl DeviceTopicId {
+    pub fn new(device_topic_id: EntityTopicId) -> Self {
+        Self(device_topic_id)
+    }
+
     pub fn entity(&self) -> &EntityTopicId {
         &self.0
     }

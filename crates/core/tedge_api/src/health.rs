@@ -3,6 +3,8 @@ use clock::WallClock;
 use std::process;
 use std::sync::Arc;
 
+use crate::mqtt_topics::Channel;
+use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::ServiceTopicId;
 use mqtt_channel::Message;
 use mqtt_channel::PubChannel;
@@ -14,16 +16,24 @@ use serde_json::json;
 ///
 /// Health topics are topics on which messages about health status of services are published. To be
 /// able to send health messages, a health topic needs to be constructed for a given entity.
+// Because all the services use the same `HealthMonitorActor`, `ServiceHealthTopic` needs to support
+// both old and new topics until all the services are fully moved to the new topic scheme.
+//
 // TODO: replace `Arc<str>` with `ServiceTopicId` after we're done with transition to new topics
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceHealthTopic(Arc<str>);
 
 impl ServiceHealthTopic {
-    pub fn new(service: ServiceTopicId) -> Self {
-        // XXX: hardcoded MQTT root
-        ServiceHealthTopic(Arc::from(format!("te/{}/status/health", service.as_str())))
+    /// Create a new `ServiceHealthTopic` from a topic in a new topic scheme.
+    pub fn from_new_topic(service_topic_id: &ServiceTopicId, mqtt_schema: &MqttSchema) -> Self {
+        let health_topic = mqtt_schema.topic_for(service_topic_id.entity(), &Channel::Health);
+        Self(health_topic.name.into())
     }
 
+    /// Create a new `ServiceHealthTopic` from a topic in an old topic scheme.
+    ///
+    /// The argument has to fit old topic scheme, i.e. contain either "tedge/health/SERVICE_NAME" or
+    /// "tedge/health/CHILD_ID/SERVICE_NAME"
     pub fn from_old_topic(topic: String) -> Result<Self, HealthTopicError> {
         match topic.split('/').collect::<Vec<&str>>()[..] {
             ["tedge", "health", _service_name] => {}
@@ -34,28 +44,8 @@ impl ServiceHealthTopic {
         Ok(Self(Arc::from(topic)))
     }
 
-    pub fn is_health_topic(topic: &str) -> bool {
-        matches!(
-            topic.split('/').collect::<Vec<&str>>()[..],
-            ["te", _, _, _, _, "status", "health"]
-        )
-    }
-
     pub fn as_str(&self) -> &str {
         &self.0
-    }
-
-    pub async fn send_health_status(&self, responses: &mut impl PubChannel) {
-        let response_topic_health = Topic::new_unchecked(self.as_str());
-
-        let health_status = json!({
-            "status": "up",
-            "pid": process::id(),
-        })
-        .to_string();
-
-        let health_message = Message::new(&response_topic_health, health_status).with_retain();
-        let _ = responses.send(health_message).await;
     }
 
     pub fn down_message(&self) -> Message {

@@ -19,7 +19,10 @@ use tedge_actors::ConvertingActorBuilder;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::Runtime;
+use tedge_api::mqtt_topics::DeviceTopicId;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::Service;
 use tedge_api::path::DataDir;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
@@ -184,12 +187,18 @@ impl Agent {
         let signal_actor_builder = SignalActor::builder(&runtime.get_handle());
 
         // Health actor
+        // TODO: take a user-configurable service topic id
         let service_topic_id = self.config.mqtt_device_topic_id.to_service_topic_id("tedge-agent")
             .with_context(|| format!("Device topic id {} currently needs default scheme, e.g: 'device/DEVICE_NAME//'", self.config.mqtt_device_topic_id))?;
-        let health_actor = HealthMonitorBuilder::from_service_topic_id(
+        let service = Service {
             service_topic_id,
+            device_topic_id: DeviceTopicId::new(self.config.mqtt_device_topic_id.clone()),
+        };
+        let mqtt_schema = MqttSchema::with_root(self.config.mqtt_topic_root.to_string());
+        let health_actor = HealthMonitorBuilder::from_service_topic_id(
+            service,
             &mut mqtt_actor_builder,
-            self.config.mqtt_topic_root.clone(),
+            &mqtt_schema,
         );
 
         // Tedge to Te topic converter
