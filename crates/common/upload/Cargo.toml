@@ -1,0 +1,24 @@
+[package]
+name = "upload"
+description = "upload manager"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+backoff = { workspace = true }
+camino = { workspace = true }
+log = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
+tokio-util = { workspace = true, features = ["codec"] }
+
+[dev-dependencies]
+mockito = { workspace = true }
+tedge_test_utils = { workspace = true }
+tempfile = { workspace = true }
