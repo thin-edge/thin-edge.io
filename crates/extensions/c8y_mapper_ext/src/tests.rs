@@ -1176,7 +1176,8 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     .await
     .expect("Send failed");
 
-    mqtt.skip(2).await; // Skip tedge-agent health status mapping and software list request
+    // Skip tedge-agent registration, health status mapping, and software list request
+    mqtt.skip(4).await;
 
     // Simulate FsEvent for the creation of a new operation file
     fs.send(FsWatchEvent::FileCreated(

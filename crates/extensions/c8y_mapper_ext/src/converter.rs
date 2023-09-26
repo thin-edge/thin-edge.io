@@ -41,7 +41,6 @@ use c8y_api::smartrest::topic::publish_topic_from_ancestors;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_api::smartrest::topic::MapperSubscribeTopic;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
-use c8y_api::utils::child_device::new_child_device_message;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use logged_command::LoggedCommand;
@@ -107,8 +106,6 @@ const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "c8y/event/events/create";
 const TEDGE_AGENT_LOG_DIR: &str = "tedge/agent";
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
-/// XXX: hardcoded topic root
-const TEDGE_AGENT_HEALTH_TOPIC: &str = "te/device/main/service/tedge-agent/status/health";
 const DEFAULT_EVENT_TYPE: &str = "ThinEdgeEvent";
 const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
 
@@ -492,23 +489,9 @@ impl CumulocityConverter {
         let mut mqtt_messages: Vec<Message> = Vec::new();
 
         // Send the init messages
-        // TODO: use entity store to check service statuses
-        if is_message_tedge_agent_up(message)? {
+        if self.is_message_tedge_agent_up(message)? {
             create_tedge_agent_supported_ops(&self.ops_dir).await?;
             mqtt_messages.push(create_get_software_list_message()?);
-        }
-
-        // When there is some messages to be sent on behalf of a child device,
-        // this child device must be declared first, if not done yet
-        if let Some(parent) = entity.default_parent_identifier() {
-            if parent.is_default_child_device() {
-                let child_id = parent.default_device_name().unwrap();
-                add_external_device_registration_message(
-                    child_id.to_string(),
-                    &mut self.children,
-                    &mut mqtt_messages,
-                );
-            }
         }
 
         let mut message = convert_health_status_message(
@@ -1213,19 +1196,6 @@ fn create_request_for_cloud_child_devices() -> Message {
     Message::new(&Topic::new_unchecked("c8y/s/us"), "105")
 }
 
-fn add_external_device_registration_message(
-    child_id: String,
-    children: &mut HashMap<String, Operations>,
-    mqtt_messages: &mut Vec<Message>,
-) -> bool {
-    if !children.contains_key(&child_id) {
-        children.insert(child_id.to_string(), Operations::default());
-        mqtt_messages.push(new_child_device_message(&child_id));
-        return true;
-    }
-    false
-}
-
 fn create_inventory_fragments_message(
     device_name: &str,
     cfg_dir: &Path,
@@ -1327,6 +1297,22 @@ impl CumulocityConverter {
                 Ok(vec![])
             }
         }
+    }
+
+    pub fn is_message_tedge_agent_up(&self, message: &Message) -> Result<bool, ConversionError> {
+        let main_device_topic_id = self.entity_store.main_device();
+        let tedge_agent_topic_id = main_device_topic_id
+            .to_service_topic_id("tedge-agent")
+            .expect("main device topic needs to fit default MQTT scheme");
+        let tedge_agent_health_topic = self
+            .mqtt_schema
+            .topic_for(tedge_agent_topic_id.entity(), &Channel::Health);
+
+        if message.topic == tedge_agent_health_topic {
+            let status: HealthStatus = serde_json::from_str(message.payload_str()?)?;
+            return Ok(status.status.eq("up"));
+        }
+        Ok(false)
     }
 }
 
@@ -1456,14 +1442,6 @@ pub struct HealthStatus {
     #[serde(skip)]
     pub pid: u64,
     pub status: String,
-}
-
-pub fn is_message_tedge_agent_up(message: &Message) -> Result<bool, ConversionError> {
-    if message.topic.name.eq(TEDGE_AGENT_HEALTH_TOPIC) {
-        let status: HealthStatus = serde_json::from_str(message.payload_str()?)?;
-        return Ok(status.status.eq("up"));
-    }
-    Ok(false)
 }
 
 #[cfg(test)]
@@ -2175,15 +2153,16 @@ mod tests {
 
         let expected_child_create_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,child1,child1,thin-edge.io-child",
+            "101,test-device:device:child1,child1,thin-edge.io-child",
         );
 
         let expected_service_monitor_smart_rest_message = Message::new(
-            &Topic::new_unchecked("c8y/s/us/child1"),
-            r#"102,test-device_child1_child-service-c8y,"thin-edge.io",child-service-c8y,"up""#,
+            &Topic::new_unchecked("c8y/s/us/test-device:device:child1"),
+            r#"102,test-device:device:child1:service:child-service-c8y,systemd,child-service-c8y,up"#,
         );
 
-        let mut out_messages = converter.convert(&in_message).await.into_iter();
+        let out_messages = converter.convert(&in_message).await;
+        let mut out_messages = out_messages.into_iter();
 
         // child device entity store registration message
         let device_registration_message = out_messages.next().unwrap();
@@ -2195,6 +2174,12 @@ mod tests {
         );
         assert_eq!(device_registration_message.r#type, EntityType::ChildDevice);
 
+        // child device cloud registration message
+        assert_eq!(
+            out_messages.next().unwrap(),
+            expected_child_create_smart_rest_message
+        );
+
         // service entity store registration message
         let service_registration_message = out_messages.next().unwrap();
         let service_registration_message =
@@ -2202,12 +2187,11 @@ mod tests {
         assert_eq!(service_registration_message.topic_id, in_entity);
         assert_eq!(service_registration_message.r#type, EntityType::Service);
 
+        // service cloud registration message
+
         assert_eq!(
-            out_messages.collect::<Vec<_>>(),
-            vec![
-                expected_child_create_smart_rest_message,
-                expected_service_monitor_smart_rest_message.clone()
-            ]
+            out_messages.next().unwrap(),
+            expected_service_monitor_smart_rest_message.clone()
         );
     }
 
@@ -2225,7 +2209,7 @@ mod tests {
 
         let expected_service_monitor_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            r#"102,test-device_test-tedge-mapper-c8y,"thin-edge.io",test-tedge-mapper-c8y,"up""#,
+            r#"102,test-device:device:main:service:test-tedge-mapper-c8y,systemd,test-tedge-mapper-c8y,up"#,
         );
 
         // Test the output messages contains SmartREST and C8Y JSON.
