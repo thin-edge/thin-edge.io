@@ -17,8 +17,7 @@ fn main() -> anyhow::Result<()> {
 
     if executable_name.as_deref() == Some("apt") {
         let try_opt = AptCli::try_parse();
-        tedge_apt_plugin::run(try_opt);
-        return Ok(());
+        tedge_apt_plugin::run_and_exit(try_opt);
     }
 
     let opt = parse_multicall_if_known(&executable_name);

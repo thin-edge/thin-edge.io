@@ -302,7 +302,7 @@ fn get_config(config_dir: PathBuf) -> Option<TEdgeConfig> {
     }
 }
 
-pub fn run(cli: Result<AptCli, clap::Error>) {
+pub fn run_and_exit(cli: Result<AptCli, clap::Error>) -> ! {
     let mut apt = match cli {
         Ok(aptcli) => aptcli,
         Err(err) => {
