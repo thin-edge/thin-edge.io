@@ -1776,7 +1776,7 @@ async fn mapper_converts_log_upload_cmd_to_supported_op_and_types_for_child_devi
     // Validate if the supported operation file is created
     assert!(ttd
         .path()
-        .join("operations/c8y/test-device:device:child1/c8y_LogfileRequest")
+        .join("operations/c8y/child1/c8y_LogfileRequest")
         .exists());
 }
 

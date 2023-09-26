@@ -47,6 +47,8 @@ use plugin_sm::operation_logs::OperationLogsError;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
+use serde_json::Map;
+use serde_json::Value;
 use service_monitor::convert_health_status_message;
 use std::collections::HashMap;
 use std::fs;
@@ -287,7 +289,9 @@ impl CumulocityConverter {
         }
     }
 
-    pub fn publish_topic_for_entity(
+    /// Return the SmartREST publish topic for the given entity
+    /// derived from its ancestors.
+    pub fn smartrest_publish_topic_for_entity(
         &self,
         entity_topic_id: &EntityTopicId,
     ) -> Result<Topic, ConversionError> {
@@ -904,11 +908,42 @@ impl CumulocityConverter {
         }
 
         let mut registration_messages = vec![];
-        registration_messages.push(registration_message.into());
+        registration_messages.push(self.convert_entity_registration_message(registration_message));
         let mut c8y_message = self.try_convert_entity_registration(registration_message)?;
         registration_messages.append(&mut c8y_message);
 
         Ok(registration_messages)
+    }
+
+    fn convert_entity_registration_message(&self, value: &EntityRegistrationMessage) -> Message {
+        let entity_topic_id = value.topic_id.clone();
+
+        let mut register_payload: Map<String, Value> = Map::new();
+
+        let entity_type = match value.r#type {
+            EntityType::MainDevice => "device",
+            EntityType::ChildDevice => "child-device",
+            EntityType::Service => "service",
+        };
+        register_payload.insert("@type".into(), Value::String(entity_type.to_string()));
+
+        if let Some(external_id) = &value.external_id {
+            register_payload.insert("@id".into(), Value::String(external_id.as_ref().into()));
+        }
+
+        if let Some(parent_id) = &value.parent {
+            register_payload.insert("@parent".into(), Value::String(parent_id.to_string()));
+        }
+
+        if let Value::Object(other_keys) = value.payload.clone() {
+            register_payload.extend(other_keys)
+        }
+
+        Message::new(
+            &Topic::new(&format!("{}/{entity_topic_id}", self.mqtt_schema.root)).unwrap(),
+            serde_json::to_string(&Value::Object(register_payload)).unwrap(),
+        )
+        .with_retain()
     }
 
     async fn try_convert_tedge_topics(

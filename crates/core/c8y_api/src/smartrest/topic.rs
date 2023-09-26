@@ -103,19 +103,6 @@ impl From<C8yTopic> for TopicFilter {
     }
 }
 
-// FIXME this From conversion is error prone as this can only be used for responses.
-impl From<&EntityMetadata> for C8yTopic {
-    fn from(value: &EntityMetadata) -> Self {
-        match value.r#type {
-            EntityType::MainDevice => Self::SmartRestResponse,
-            EntityType::ChildDevice => {
-                Self::ChildSmartRestResponse(value.external_id.clone().into())
-            }
-            EntityType::Service => Self::SmartRestResponse, // TODO how services are handled by c8y?
-        }
-    }
-}
-
 impl From<&C8yAlarm> for C8yTopic {
     fn from(value: &C8yAlarm) -> Self {
         match value {

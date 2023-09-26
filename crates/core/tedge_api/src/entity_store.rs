@@ -13,10 +13,7 @@ use crate::entity_store;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::TopicIdError;
 use mqtt_channel::Message;
-use mqtt_channel::Topic;
 use serde_json::json;
-use serde_json::Map;
-use serde_json::Value;
 
 /// Represents an "Entity topic identifier" portion of the MQTT topic
 ///
@@ -491,39 +488,6 @@ impl TryFrom<&Message> for EntityRegistrationMessage {
     }
 }
 
-impl From<&EntityRegistrationMessage> for Message {
-    fn from(value: &EntityRegistrationMessage) -> Self {
-        let entity_topic_id = value.topic_id.clone();
-
-        let mut register_payload: Map<String, Value> = Map::new();
-
-        let entity_type = match value.r#type {
-            EntityType::MainDevice => "device",
-            EntityType::ChildDevice => "child-device",
-            EntityType::Service => "service",
-        };
-        register_payload.insert("@type".into(), Value::String(entity_type.to_string()));
-
-        if let Some(external_id) = &value.external_id {
-            register_payload.insert("@id".into(), Value::String(external_id.as_ref().into()));
-        }
-
-        if let Some(parent_id) = &value.parent {
-            register_payload.insert("@parent".into(), Value::String(parent_id.to_string()));
-        }
-
-        if let Value::Object(other_keys) = value.payload.clone() {
-            register_payload.extend(other_keys)
-        }
-
-        Message::new(
-            &Topic::new(&format!("{MQTT_ROOT}/{entity_topic_id}")).unwrap(),
-            serde_json::to_string(&Value::Object(register_payload)).unwrap(),
-        )
-        .with_retain()
-    }
-}
-
 /// Parse a MQTT message payload as an entity registration payload.
 ///
 /// Returns `Some(register_payload)` if a payload is valid JSON and is a
@@ -543,6 +507,7 @@ mod tests {
     use std::str::FromStr;
 
     use assert_matches::assert_matches;
+    use mqtt_channel::Topic;
     use serde_json::json;
 
     use super::*;
@@ -933,18 +898,6 @@ mod tests {
                 .unwrap(),
             ["device:child2", "device:child1", "test-device"]
         );
-    }
-
-    #[test]
-    fn entity_registration_message_into_mqtt_message() {
-        let entity_reg_message = EntityRegistrationMessage::new(&Message::new(
-            &Topic::new("te/device/child2/service/collectd").unwrap(),
-            json!({"@type": "service"}).to_string(),
-        ))
-        .unwrap();
-
-        let message: Message = (&entity_reg_message).into();
-        println!("{}", message.payload_str().unwrap());
     }
 
     #[test]

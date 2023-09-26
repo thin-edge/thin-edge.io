@@ -9,7 +9,6 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
-use c8y_api::smartrest::topic::C8yTopic;
 use nanoid::nanoid;
 use tedge_api::entity_store::EntityType;
 use tedge_api::messages::CommandStatus;
@@ -112,8 +111,7 @@ impl CumulocityConverter {
         })?;
         let external_id = &device.external_id;
 
-        let c8y_topic: C8yTopic = device.into();
-        let smartrest_topic = c8y_topic.to_topic()?;
+        let smartrest_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
 
         let payload = message.payload_str()?;
         let response = &LogUploadCmdPayload::from_json(payload)?;
@@ -228,7 +226,7 @@ impl CumulocityConverter {
         let supported_log_types = types.join(",");
         let payload = format!("118,{supported_log_types}");
 
-        let c8y_topic = self.publish_topic_for_entity(topic_id)?;
+        let c8y_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
         Ok(vec![MqttMessage::new(&c8y_topic, payload)])
     }
 }
