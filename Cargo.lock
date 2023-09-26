@@ -3956,6 +3956,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_uploader_ext"
+version = "0.12.0"
+dependencies = [
+ "async-trait",
+ "camino",
+ "log",
+ "mockito",
+ "tedge_actors",
+ "tedge_test_utils",
+ "tokio",
+ "upload",
+]
+
+[[package]]
 name = "tedge_utils"
 version = "0.12.0"
 dependencies = [
