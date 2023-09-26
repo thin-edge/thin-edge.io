@@ -6,6 +6,7 @@ use download::Downloader;
 use log::info;
 use std::path::Path;
 use std::path::PathBuf;
+use tedge_actors::Message;
 use tedge_actors::Sequential;
 use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
@@ -63,30 +64,32 @@ impl DownloadResponse {
 }
 
 #[derive(Debug, Default)]
-pub struct DownloaderActor {
+pub struct DownloaderActor<T> {
     config: ServerConfig,
+    key: std::marker::PhantomData<T>,
 }
 
-impl DownloaderActor {
+impl<T: Message + Default> DownloaderActor<T> {
     pub fn new() -> Self {
         DownloaderActor::default()
     }
 
-    pub fn builder(&self) -> ServerActorBuilder<DownloaderActor, Sequential> {
+    pub fn builder(&self) -> ServerActorBuilder<DownloaderActor<T>, Sequential> {
         ServerActorBuilder::new(DownloaderActor::default(), &ServerConfig::new(), Sequential)
     }
 
     pub fn with_capacity(self, capacity: usize) -> Self {
         Self {
             config: self.config.with_capacity(capacity),
+            key: self.key,
         }
     }
 }
 
 #[async_trait]
-impl Server for DownloaderActor {
-    type Request = (String, DownloadRequest);
-    type Response = (String, DownloadResult);
+impl<T: Message> Server for DownloaderActor<T> {
+    type Request = (T, DownloadRequest);
+    type Response = (T, DownloadResult);
 
     fn name(&self) -> &str {
         "Downloader"

@@ -120,3 +120,55 @@ async fn spawn_downloader_actor(
 
     requester
 }
+
+#[tokio::test]
+async fn download_if_download_key_is_struct() -> Result<(), DynError> {
+    let ttd = TempTedgeDir::new();
+    let mut server = mockito::Server::new();
+    let _mock = server
+        .mock("GET", "/")
+        .with_status(200)
+        .with_header("content-type", "text/plain")
+        .with_body("without auth")
+        .create();
+
+    let target_path = ttd.path().join("downloaded_file");
+    let server_url = server.url();
+    let download_request = DownloadRequest::new(&server_url, &target_path);
+    let request_key = TestDownloadKey {
+        text: "I am test".to_string(),
+        some: true,
+    };
+
+    let mut requester = spawn_downloader_actor_with_struct().await;
+
+    let (return_key, response) = timeout(
+        TEST_TIMEOUT,
+        requester.await_response((request_key.clone(), download_request)),
+    )
+    .await?
+    .expect("timeout");
+
+    assert_eq!(return_key, request_key);
+    assert!(response.is_ok());
+    assert_eq!(response.as_ref().unwrap().file_path, target_path.as_path());
+    assert_eq!(response.as_ref().unwrap().url, server_url);
+
+    Ok(())
+}
+
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
+struct TestDownloadKey {
+    text: String,
+    some: bool,
+}
+
+async fn spawn_downloader_actor_with_struct(
+) -> ClientMessageBox<(TestDownloadKey, DownloadRequest), (TestDownloadKey, DownloadResult)> {
+    let mut downloader_actor_builder = DownloaderActor::new().builder();
+    let requester = ClientMessageBox::new("DownloadRequester2", &mut downloader_actor_builder);
+
+    tokio::spawn(downloader_actor_builder.run());
+
+    requester
+}
