@@ -20,7 +20,7 @@ mod core;
 
 fn lookup_component(component_name: &MapperName) -> Box<dyn TEdgeComponent> {
     match component_name {
-        MapperName::Az => Box::new(AzureMapper::new()),
+        MapperName::Az => Box::new(AzureMapper),
         MapperName::Aws => Box::new(AwsMapper),
         MapperName::Collectd => Box::new(CollectdMapper),
         MapperName::C8y => Box::new(CumulocityMapper),
@@ -80,10 +80,7 @@ impl fmt::Display for MapperName {
     }
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let mapper_opt = MapperOpt::parse();
-
+pub async fn run(mapper_opt: MapperOpt) -> anyhow::Result<()> {
     let component = lookup_component(&mapper_opt.name);
 
     let tedge_config_location =

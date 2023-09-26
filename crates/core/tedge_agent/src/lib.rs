@@ -15,7 +15,6 @@ use std::sync::Arc;
 
 use agent::AgentConfig;
 use camino::Utf8PathBuf;
-use clap::Parser;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
@@ -62,9 +61,7 @@ pub struct AgentOpt {
     pub mqtt_topic_root: Option<Arc<str>>,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
-    let agent_opt = AgentOpt::parse();
+pub async fn run(agent_opt: AgentOpt) -> Result<(), anyhow::Error> {
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(agent_opt.config_dir.clone());
 

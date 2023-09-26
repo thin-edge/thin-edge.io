@@ -14,13 +14,7 @@ use tracing::warn;
 
 const AZURE_MAPPER_NAME: &str = "tedge-mapper-az";
 
-pub struct AzureMapper {}
-
-impl AzureMapper {
-    pub fn new() -> AzureMapper {
-        AzureMapper {}
-    }
-}
+pub struct AzureMapper;
 
 #[async_trait]
 impl TEdgeComponent for AzureMapper {

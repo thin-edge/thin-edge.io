@@ -51,10 +51,7 @@ pub struct LogfilePluginOpt {
     mqtt_device_topic_id: Option<Arc<str>>,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
-    let logfile_opt = LogfilePluginOpt::parse();
-
+pub async fn run(logfile_opt: LogfilePluginOpt) -> Result<(), anyhow::Error> {
     // Load tedge config from the provided location
     let tedge_config_location = TEdgeConfigLocation::from_custom_root(&logfile_opt.config_dir);
 
@@ -70,10 +67,13 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let tedge_config = TEdgeConfigRepository::new(tedge_config_location).load()?;
 
-    run(tedge_config, logfile_opt).await
+    run_with(tedge_config, logfile_opt).await
 }
 
-async fn run(tedge_config: TEdgeConfig, cliopts: LogfilePluginOpt) -> Result<(), anyhow::Error> {
+async fn run_with(
+    tedge_config: TEdgeConfig,
+    cliopts: LogfilePluginOpt,
+) -> Result<(), anyhow::Error> {
     let runtime_events_logger = None;
     let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 

@@ -18,7 +18,7 @@ pub struct RemoteAccessConnect {
     key: String,
 }
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[clap(group(ArgGroup::new("install").args(&["init", "cleanup", "connect_string", "child"])))]
 #[clap(
 name = clap::crate_name!(),
@@ -26,7 +26,7 @@ version = clap::crate_version!(),
 about = clap::crate_description!(),
 arg_required_else_help(true),
 )]
-pub struct Cli {
+pub struct C8yRemoteAccessPluginOpt {
     #[arg(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
     config_dir: PathBuf,
 
@@ -47,7 +47,7 @@ pub struct Cli {
     child: Option<String>,
 }
 
-impl Cli {
+impl C8yRemoteAccessPluginOpt {
     pub fn get_config_location(&self) -> TEdgeConfigLocation {
         TEdgeConfigLocation::from_custom_root(&self.config_dir)
     }
@@ -61,21 +61,21 @@ pub enum Command {
     Connect(RemoteAccessConnect),
 }
 
-pub fn parse_arguments(cli: Cli) -> miette::Result<Command> {
+pub fn parse_arguments(cli: C8yRemoteAccessPluginOpt) -> miette::Result<Command> {
     cli.try_into()
 }
 
-impl TryFrom<Cli> for Command {
+impl TryFrom<C8yRemoteAccessPluginOpt> for Command {
     type Error = miette::Error;
-    fn try_from(arguments: Cli) -> Result<Self, Self::Error> {
+    fn try_from(arguments: C8yRemoteAccessPluginOpt) -> Result<Self, Self::Error> {
         match arguments {
-            Cli { init: true, .. } => Ok(Command::Init),
-            Cli { cleanup: true, .. } => Ok(Command::Cleanup),
-            Cli {
+            C8yRemoteAccessPluginOpt { init: true, .. } => Ok(Command::Init),
+            C8yRemoteAccessPluginOpt { cleanup: true, .. } => Ok(Command::Cleanup),
+            C8yRemoteAccessPluginOpt {
                 connect_string: Some(message),
                 ..
             } => Ok(Command::SpawnChild(message)),
-            Cli {
+            C8yRemoteAccessPluginOpt {
                 child: Some(message),
                 ..
             } => RemoteAccessConnect::deserialize_smartrest(&message).map(Command::Connect),
@@ -149,9 +149,11 @@ mod tests {
     }
 
     fn try_parse_arguments(arguments: &[&str]) -> miette::Result<Command> {
-        Cli::try_parse_from(iter::once(&"c8y-remote-access-plugin").chain(arguments))
-            .into_diagnostic()?
-            .try_into()
+        C8yRemoteAccessPluginOpt::try_parse_from(
+            iter::once(&"c8y-remote-access-plugin").chain(arguments),
+        )
+        .into_diagnostic()?
+        .try_into()
     }
 
     #[test]

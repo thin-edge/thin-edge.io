@@ -3,7 +3,6 @@ mod module_check;
 
 use crate::error::InternalError;
 use crate::module_check::PackageMetadata;
-use clap::Parser;
 use log::warn;
 use regex::Regex;
 use serde::Deserialize;
@@ -17,14 +16,14 @@ use tedge_config::TEdgeConfigLocation;
 use tedge_config::TEdgeConfigRepository;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 
-#[derive(Parser, Debug)]
+#[derive(clap::Parser, Debug)]
 #[clap(
     name = clap::crate_name!(),
     version = clap::crate_version!(),
     about = clap::crate_description!(),
     arg_required_else_help(true)
 )]
-struct AptCli {
+pub struct AptCli {
     #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
     config_dir: PathBuf,
 
@@ -87,7 +86,7 @@ struct SoftwareModuleUpdate {
     pub path: Option<String>,
 }
 
-fn run(operation: PluginOp) -> Result<ExitStatus, InternalError> {
+fn run_op(operation: PluginOp) -> Result<ExitStatus, InternalError> {
     let status = match operation {
         PluginOp::List { name, maintainer } => {
             let dpkg_query = Command::new("dpkg-query")
@@ -303,8 +302,8 @@ fn get_config(config_dir: PathBuf) -> Option<TEdgeConfig> {
     }
 }
 
-fn main() {
-    let mut apt = match AptCli::try_parse() {
+pub fn run(cli: Result<AptCli, clap::Error>) {
+    let mut apt = match cli {
         Ok(aptcli) => aptcli,
         Err(err) => {
             err.print().expect("Failed to print help message");
@@ -313,11 +312,7 @@ fn main() {
         }
     };
 
-    if let PluginOp::List {
-        ref mut name,
-        ref mut maintainer,
-    } = apt.operation
-    {
+    if let PluginOp::List { name, maintainer } = &mut apt.operation {
         if let Some(config) = get_config(apt.config_dir) {
             if name.is_none() {
                 *name = config.apt.name.or_none().cloned();
@@ -329,7 +324,7 @@ fn main() {
         }
     }
 
-    match run(apt.operation) {
+    match run_op(apt.operation) {
         Ok(status) if status.success() => {
             std::process::exit(0);
         }
@@ -372,6 +367,6 @@ mod tests {
             name: Some("".into()),
             maintainer: Some("".into()),
         };
-        assert!(run(filters).is_ok())
+        assert!(run_op(filters).is_ok())
     }
 }

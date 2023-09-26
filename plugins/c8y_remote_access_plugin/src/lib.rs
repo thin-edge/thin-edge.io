@@ -3,7 +3,6 @@ use std::process::Stdio;
 
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use clap::Parser;
 use futures::future::try_select;
 use futures::future::Either;
 use input::parse_arguments;
@@ -20,6 +19,7 @@ use toml::Table;
 use url::Url;
 
 use crate::auth::Jwt;
+pub use crate::input::C8yRemoteAccessPluginOpt;
 use crate::input::Command;
 use crate::input::RemoteAccessConnect;
 use crate::proxy::WebsocketSocketProxy;
@@ -29,10 +29,7 @@ mod csv;
 mod input;
 mod proxy;
 
-#[tokio::main]
-async fn main() -> miette::Result<()> {
-    let opt = input::Cli::parse();
-
+pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
     let config_dir = opt.get_config_location();
 
     let tedge_config = TEdgeConfigRepository::new(config_dir.clone())

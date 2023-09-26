@@ -1,4 +1,3 @@
-use clap::Parser;
 use std::path::PathBuf;
 use tedge_config::system_services::*;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
@@ -38,9 +37,7 @@ pub struct WatchdogOpt {
     pub config_dir: PathBuf,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
-    let watchdog_opt = WatchdogOpt::parse();
+pub async fn run(watchdog_opt: WatchdogOpt) -> Result<(), anyhow::Error> {
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(watchdog_opt.config_dir.clone());
 

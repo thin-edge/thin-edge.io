@@ -4,11 +4,17 @@ pub use self::certificate::*;
 use crate::command::BuildCommand;
 use crate::command::BuildContext;
 use crate::command::Command;
+use c8y_configuration_plugin::ConfigPluginOpt;
+use c8y_firmware_plugin::FirmwarePluginOpt;
+use c8y_remote_access_plugin::C8yRemoteAccessPluginOpt;
 pub use connect::*;
+use tedge_agent::AgentOpt;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
+use tedge_log_plugin::LogfilePluginOpt;
+use tedge_mapper::MapperOpt;
+use tedge_watchdog::WatchdogOpt;
 
 use self::init::TEdgeInitCmd;
-
 mod certificate;
 mod common;
 pub mod config;
@@ -23,22 +29,47 @@ mod reconnect;
     name = clap::crate_name!(),
     version = clap::crate_version!(),
     about = clap::crate_description!(),
-    arg_required_else_help(true)
+    arg_required_else_help(true),
+    allow_external_subcommands(true),
+    styles(styles()),
+    multicall(true),
 )]
+pub enum TEdgeOptMulticall {
+    Tedge {
+        #[clap(subcommand)]
+        cmd: TEdgeOpt,
 
-pub struct Opt {
-    /// Initialize the tedge
-    #[clap(long)]
-    pub init: bool,
+        #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH, global = true)]
+        config_dir: PathBuf,
+    },
 
-    #[clap(long = "config-dir", default_value = DEFAULT_TEDGE_CONFIG_PATH)]
-    pub config_dir: PathBuf,
+    #[clap(flatten)]
+    Component(Component),
+}
 
-    #[clap(subcommand)]
-    pub tedge: Option<TEdgeOpt>,
+#[derive(clap::Parser, Debug)]
+pub enum Component {
+    TedgeMapper(MapperOpt),
+
+    TedgeAgent(AgentOpt),
+
+    TedgeLogPlugin(LogfilePluginOpt),
+
+    C8yConfigurationPlugin(ConfigPluginOpt),
+
+    C8yFirmwarePlugin(FirmwarePluginOpt),
+
+    TedgeWatchdog(WatchdogOpt),
+
+    C8yRemoteAccessPlugin(C8yRemoteAccessPluginOpt),
 }
 
 #[derive(clap::Subcommand, Debug)]
+#[clap(
+    name = clap::crate_name!(),
+    version = clap::crate_version!(),
+    about = clap::crate_description!(),
+)]
 pub enum TEdgeOpt {
     /// Initialize Thin Edge
     Init {
@@ -76,6 +107,44 @@ pub enum TEdgeOpt {
     Mqtt(mqtt::TEdgeMqttCli),
 }
 
+fn styles() -> clap::builder::Styles {
+    clap::builder::Styles::styled()
+        .usage(
+            anstyle::Style::new()
+                .bold()
+                .underline()
+                .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Yellow))),
+        )
+        .header(
+            anstyle::Style::new()
+                .bold()
+                .underline()
+                .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Yellow))),
+        )
+        .literal(
+            anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Green))),
+        )
+        .invalid(
+            anstyle::Style::new()
+                .bold()
+                .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Red))),
+        )
+        .error(
+            anstyle::Style::new()
+                .bold()
+                .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Red))),
+        )
+        .valid(
+            anstyle::Style::new()
+                .bold()
+                .underline()
+                .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Green))),
+        )
+        .placeholder(
+            anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::White))),
+        )
+}
+
 impl BuildCommand for TEdgeOpt {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
         match self {
@@ -87,5 +156,33 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::Mqtt(opt) => opt.build_command(context),
             TEdgeOpt::Reconnect(opt) => opt.build_command(context),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Component;
+    use crate::TEdgeOptMulticall;
+    use clap::Parser;
+
+    #[test]
+    fn tedge_mapper_rejects_with_missing_argument() {
+        assert!(TEdgeOptMulticall::try_parse_from(["tedge-mapper"]).is_err());
+    }
+
+    #[test]
+    fn tedge_mapper_accepts_with_argument() {
+        assert!(matches!(
+            TEdgeOptMulticall::parse_from(["tedge-mapper", "c8y"]),
+            TEdgeOptMulticall::Component(Component::TedgeMapper(_))
+        ));
+    }
+
+    #[test]
+    fn tedge_agent_runs_with_no_additional_arguments() {
+        assert!(matches!(
+            TEdgeOptMulticall::parse_from(["tedge-agent"]),
+            TEdgeOptMulticall::Component(Component::TedgeAgent(_))
+        ));
     }
 }
