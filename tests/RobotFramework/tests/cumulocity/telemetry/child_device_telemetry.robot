@@ -84,9 +84,9 @@ Child device supports sending custom child device measurements directly to c8y
 Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
-    Set Suite Variable    $CHILD_ID    child1
+    Set Suite Variable    $CHILD_ID    ${DEVICE_SN}_child1
     Set Suite Variable    $CHILD_SN    ${DEVICE_SN}:device:${CHILD_ID}
-    Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_SN}
+    Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_ID}
     Restart Service    tedge-mapper-c8y
     Device Should Exist                      ${DEVICE_SN}
     Device Should Exist                      ${CHILD_SN}

@@ -206,7 +206,14 @@ impl CumulocityConverter {
         // Create a c8y_LogfileRequest operation file
         let dir_path = match device.r#type {
             EntityType::MainDevice => self.ops_dir.clone(),
-            EntityType::ChildDevice => self.ops_dir.join(device.external_id.as_ref()),
+            EntityType::ChildDevice => {
+                let child_dir_name = if let Some(child_local_id) = topic_id.default_device_name() {
+                    child_local_id
+                } else {
+                    device.external_id.as_ref()
+                };
+                self.ops_dir.clone().join(child_dir_name)
+            }
             EntityType::Service => {
                 // No support for service log management
                 return Ok(vec![]);
@@ -221,7 +228,7 @@ impl CumulocityConverter {
         let supported_log_types = types.join(",");
         let payload = format!("118,{supported_log_types}");
 
-        let c8y_topic: C8yTopic = device.into();
-        Ok(vec![MqttMessage::new(&c8y_topic.to_topic()?, payload)])
+        let c8y_topic = self.publish_topic_for_entity(topic_id)?;
+        Ok(vec![MqttMessage::new(&c8y_topic, payload)])
     }
 }

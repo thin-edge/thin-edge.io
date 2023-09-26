@@ -34,6 +34,7 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
+use c8y_api::smartrest::topic::publish_topic_from_ancestors;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_api::smartrest::topic::MapperSubscribeTopic;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
@@ -284,6 +285,22 @@ impl CumulocityConverter {
                 Ok(vec![service_creation_message])
             }
         }
+    }
+
+    pub fn publish_topic_for_entity(
+        &self,
+        entity_topic_id: &EntityTopicId,
+    ) -> Result<Topic, ConversionError> {
+        let entity = self.entity_store.get(entity_topic_id).ok_or_else(|| {
+            CumulocityMapperError::UnregisteredDevice {
+                topic_id: entity_topic_id.to_string(),
+            }
+        })?;
+
+        let mut ancestors_external_ids =
+            self.entity_store.ancestors_external_ids(entity_topic_id)?;
+        ancestors_external_ids.insert(0, entity.external_id.as_ref().into());
+        Ok(publish_topic_from_ancestors(&ancestors_external_ids))
     }
 
     /// Generates external ID of the given entity.
