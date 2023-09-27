@@ -13,6 +13,8 @@ use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
 use c8y_api::smartrest::error::OperationsError;
 use c8y_api::smartrest::error::SmartRestDeserializerError;
+use c8y_api::smartrest::inventory::child_device_creation_message;
+use c8y_api::smartrest::inventory::service_creation_message;
 use c8y_api::smartrest::message::collect_smartrest_messages;
 use c8y_api::smartrest::message::get_failure_reason_for_smartrest;
 use c8y_api::smartrest::message::get_smartrest_device_id;
@@ -32,6 +34,7 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
+use c8y_api::smartrest::topic::publish_topic_from_ancestors;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_api::smartrest::topic::MapperSubscribeTopic;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
@@ -43,6 +46,9 @@ use plugin_sm::operation_logs::OperationLogs;
 use plugin_sm::operation_logs::OperationLogsError;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::json;
+use serde_json::Map;
+use serde_json::Value;
 use service_monitor::convert_health_status_message;
 use std::collections::HashMap;
 use std::fs;
@@ -53,9 +59,10 @@ use std::path::PathBuf;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
 use tedge_api::entity_store;
-use tedge_api::entity_store::EntityMetadata;
+use tedge_api::entity_store::EntityExternalId;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityType;
+use tedge_api::entity_store::Error;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::messages::CommandStatus;
@@ -207,7 +214,8 @@ impl CumulocityConverter {
         };
 
         let main_device = entity_store::EntityRegistrationMessage::main_device(device_id.clone());
-        let entity_store = EntityStore::with_main_device(main_device).unwrap();
+        let entity_store =
+            EntityStore::with_main_device(main_device, Self::map_to_c8y_external_id).unwrap();
 
         Ok(CumulocityConverter {
             size_threshold,
@@ -229,6 +237,104 @@ impl CumulocityConverter {
             entity_store,
             auth_proxy,
         })
+    }
+
+    pub fn try_convert_entity_registration(
+        &mut self,
+        input: &EntityRegistrationMessage,
+    ) -> Result<Vec<Message>, ConversionError> {
+        // Parse the optional fields
+        let display_name = input.payload.get("name").and_then(|v| v.as_str());
+        let display_type = input.payload.get("type").and_then(|v| v.as_str());
+
+        let entity_topic_id = &input.topic_id;
+        let external_id = self
+            .entity_store
+            .get(entity_topic_id)
+            .map(|e| &e.external_id)
+            .ok_or_else(|| Error::UnknownEntity(entity_topic_id.to_string()))?;
+        match input.r#type {
+            EntityType::MainDevice => {
+                self.entity_store.update(input.clone())?;
+                Ok(vec![])
+            }
+            EntityType::ChildDevice => {
+                let ancestors_external_ids =
+                    self.entity_store.ancestors_external_ids(entity_topic_id)?;
+                let child_creation_message = child_device_creation_message(
+                    external_id.as_ref(),
+                    display_name,
+                    display_type,
+                    &ancestors_external_ids,
+                );
+                Ok(vec![child_creation_message])
+            }
+            EntityType::Service => {
+                let ancestors_external_ids =
+                    self.entity_store.ancestors_external_ids(entity_topic_id)?;
+
+                let service_creation_message = service_creation_message(
+                    external_id.as_ref(),
+                    display_name.unwrap_or_else(|| {
+                        entity_topic_id
+                            .default_service_name()
+                            .unwrap_or(external_id.as_ref())
+                    }),
+                    display_type.unwrap_or("service"),
+                    "up",
+                    &ancestors_external_ids,
+                );
+                Ok(vec![service_creation_message])
+            }
+        }
+    }
+
+    /// Return the SmartREST publish topic for the given entity
+    /// derived from its ancestors.
+    pub fn smartrest_publish_topic_for_entity(
+        &self,
+        entity_topic_id: &EntityTopicId,
+    ) -> Result<Topic, ConversionError> {
+        let entity = self.entity_store.get(entity_topic_id).ok_or_else(|| {
+            CumulocityMapperError::UnregisteredDevice {
+                topic_id: entity_topic_id.to_string(),
+            }
+        })?;
+
+        let mut ancestors_external_ids =
+            self.entity_store.ancestors_external_ids(entity_topic_id)?;
+        ancestors_external_ids.insert(0, entity.external_id.as_ref().into());
+        Ok(publish_topic_from_ancestors(&ancestors_external_ids))
+    }
+
+    /// Generates external ID of the given entity.
+    ///
+    /// The external id is generated by transforming the EntityTopicId
+    /// by replacing the `/` characters with `:` and then adding the
+    /// main device id as a prefix, to namespace all the entities under that device.
+    ///
+    /// # Examples
+    /// - `device/main//` => `DEVICE_COMMON_NAME`
+    /// - `device/child001//` => `DEVICE_COMMON_NAME:device:child001`
+    /// - `device/child001/service/service001` => `DEVICE_COMMON_NAME:device:child001:service:service001`
+    /// - `factory01/hallA/packaging/belt001` => `DEVICE_COMMON_NAME:factory01:hallA:packaging:belt001`
+    pub fn map_to_c8y_external_id(
+        entity_topic_id: &EntityTopicId,
+        main_device_xid: &EntityExternalId,
+    ) -> EntityExternalId {
+        if entity_topic_id.is_default_main_device() {
+            main_device_xid.clone()
+        } else {
+            format!(
+                "{}:{}",
+                main_device_xid.as_ref(),
+                entity_topic_id
+                    .to_string()
+                    .trim_end_matches('/')
+                    .replace('/', ":")
+            )
+            .into()
+        }
     }
 
     fn try_convert_measurement(
@@ -481,12 +587,13 @@ impl CumulocityConverter {
         smartrest: &str,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
         let request = SmartRestRestartRequest::from_smartrest(smartrest)?;
-        let device_id = &request.device;
-        let target = self.entity_store.get_by_id(device_id).ok_or_else(|| {
-            CumulocityMapperError::UnknownDevice {
-                device_id: device_id.to_owned(),
-            }
-        })?;
+        let device_id = &request.device.into();
+        let target = self
+            .entity_store
+            .get_by_external_id(device_id)
+            .ok_or_else(|| CumulocityMapperError::UnknownDevice {
+                device_id: device_id.as_ref().to_string(),
+            })?;
         let command = RestartCommand::new(target.topic_id.clone());
         let message = command.command_message(&self.mqtt_schema);
         Ok(vec![message])
@@ -627,16 +734,32 @@ impl CumulocityConverter {
 
         for child_id in difference {
             // here we register new child devices, sending the 101 code
-            messages_vec.push(new_child_device_message(child_id));
+            let child_topic_id = EntityTopicId::default_child_device(child_id).unwrap();
+            let child_device_reg_msg = EntityRegistrationMessage {
+                topic_id: child_topic_id,
+                external_id: None,
+                r#type: EntityType::ChildDevice,
+                parent: None,
+                payload: json!({ "name": child_id }),
+            };
+            let mut reg_messages = self
+                .register_and_convert_entity(&child_device_reg_msg)
+                .unwrap();
+
+            messages_vec.append(&mut reg_messages);
         }
         // loop over all local child devices and update the operations
         for child_id in local_child_devices {
             // update the children cache with the operations supported
             let ops = Operations::try_new(path_to_child_devices.join(&child_id))?;
-            self.children.insert(child_id.clone(), ops.clone());
+            let child_topic_id = EntityTopicId::default_child_device(&child_id).unwrap();
+            let child_external_id =
+                Self::map_to_c8y_external_id(&child_topic_id, &self.device_name.as_str().into());
 
+            self.children
+                .insert(child_external_id.as_ref().into(), ops.clone());
             let ops_msg = ops.create_smartrest_ops_message()?;
-            let topic_str = format!("{SMARTREST_PUBLISH_TOPIC}/{}", child_id);
+            let topic_str = format!("{SMARTREST_PUBLISH_TOPIC}/{}", child_external_id.as_ref());
             let topic = Topic::new_unchecked(&topic_str);
             messages_vec.push(Message::new(&topic, ops_msg));
         }
@@ -691,34 +814,28 @@ impl CumulocityConverter {
         channel: Channel,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        let mut registration_messages = vec![];
+        let mut registration_messages: Vec<Message> = vec![];
         match &channel {
             Channel::EntityMetadata => {
                 if let Ok(register_message) = EntityRegistrationMessage::try_from(message) {
-                    if let Err(e) = self.entity_store.update(register_message) {
+                    if let Err(e) = self.entity_store.update(register_message.clone()) {
                         error!("Could not update device registration: {e}");
                     }
+                    let mut c8y_message =
+                        self.try_convert_entity_registration(&register_message)?;
+                    registration_messages.append(&mut c8y_message);
                 }
             }
             _ => {
                 // if device is unregistered register using auto-registration
                 if self.entity_store.get(&source).is_none() {
-                    registration_messages = match self.entity_store.auto_register_entity(&source) {
-                        Ok(register_messages) => register_messages,
-                        Err(e) => {
-                            error!("Could not update device registration: {e}");
-                            vec![]
-                        }
-                    };
+                    let auto_registration_messages =
+                        self.entity_store.auto_register_entity(&source)?;
 
-                    if let Some(entity) = self.entity_store.get(&source) {
-                        if let Some(message) = external_device_registration_message(entity) {
-                            self.children
-                                .insert(entity.entity_id.to_string(), Operations::default());
-                            registration_messages.push(message);
-                        }
-                    } else {
-                        error!("Cannot auto-register entity with non-standard MQTT identifier: {source}");
+                    for auto_registration_message in &auto_registration_messages {
+                        registration_messages.append(
+                            &mut self.register_and_convert_entity(auto_registration_message)?,
+                        );
                     }
                 }
             }
@@ -772,6 +889,63 @@ impl CumulocityConverter {
         Ok(registration_messages)
     }
 
+    pub fn register_and_convert_entity(
+        &mut self,
+        registration_message: &EntityRegistrationMessage,
+    ) -> Result<Vec<Message>, ConversionError> {
+        let entity_topic_id = &registration_message.topic_id;
+        self.entity_store.update(registration_message.clone())?;
+        if registration_message.r#type == EntityType::ChildDevice {
+            self.children.insert(
+                self.entity_store
+                    .get(entity_topic_id)
+                    .expect("Should have been registered in the previous step")
+                    .external_id
+                    .as_ref()
+                    .into(),
+                Operations::default(),
+            );
+        }
+
+        let mut registration_messages = vec![];
+        registration_messages.push(self.convert_entity_registration_message(registration_message));
+        let mut c8y_message = self.try_convert_entity_registration(registration_message)?;
+        registration_messages.append(&mut c8y_message);
+
+        Ok(registration_messages)
+    }
+
+    fn convert_entity_registration_message(&self, value: &EntityRegistrationMessage) -> Message {
+        let entity_topic_id = value.topic_id.clone();
+
+        let mut register_payload: Map<String, Value> = Map::new();
+
+        let entity_type = match value.r#type {
+            EntityType::MainDevice => "device",
+            EntityType::ChildDevice => "child-device",
+            EntityType::Service => "service",
+        };
+        register_payload.insert("@type".into(), Value::String(entity_type.to_string()));
+
+        if let Some(external_id) = &value.external_id {
+            register_payload.insert("@id".into(), Value::String(external_id.as_ref().into()));
+        }
+
+        if let Some(parent_id) = &value.parent {
+            register_payload.insert("@parent".into(), Value::String(parent_id.to_string()));
+        }
+
+        if let Value::Object(other_keys) = value.payload.clone() {
+            register_payload.extend(other_keys)
+        }
+
+        Message::new(
+            &Topic::new(&format!("{}/{entity_topic_id}", self.mqtt_schema.root)).unwrap(),
+            serde_json::to_string(&Value::Object(register_payload)).unwrap(),
+        )
+        .with_retain()
+    }
+
     async fn try_convert_tedge_topics(
         &mut self,
         message: &Message,
@@ -820,9 +994,9 @@ impl CumulocityConverter {
             &self.cfg_dir,
         ));
 
-        let supported_operations_message = self.wrap_error(create_supported_operations(
-            &self.cfg_dir.join("operations").join("c8y"),
-        ));
+        let supported_operations_message = self.wrap_error(
+            self.create_supported_operations(&self.cfg_dir.join("operations").join("c8y")),
+        );
 
         let cloud_child_devices_message = create_request_for_cloud_child_devices();
 
@@ -842,6 +1016,28 @@ impl CumulocityConverter {
         ])
     }
 
+    fn create_supported_operations(&self, path: &Path) -> Result<Message, ConversionError> {
+        if is_child_operation_path(path) {
+            // operations for child
+            let child_id = get_child_id(&path.to_path_buf())?;
+            let child_topic_id = EntityTopicId::default_child_device(&child_id).unwrap();
+            let child_external_id =
+                Self::map_to_c8y_external_id(&child_topic_id, &self.device_name.as_str().into());
+            let stopic = format!("{SMARTREST_PUBLISH_TOPIC}/{}", child_external_id.as_ref());
+
+            Ok(Message::new(
+                &Topic::new_unchecked(&stopic),
+                Operations::try_new(path)?.create_smartrest_ops_message()?,
+            ))
+        } else {
+            // operations for parent
+            Ok(Message::new(
+                &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
+                Operations::try_new(path)?.create_smartrest_ops_message()?,
+            ))
+        }
+    }
+
     pub fn sync_messages(&mut self) -> Vec<Message> {
         let sync_messages: Vec<Message> = self.alarm_converter.sync();
         self.alarm_converter = AlarmConverter::Synced;
@@ -859,7 +1055,7 @@ impl CumulocityConverter {
         {
             // Re populate the operations irrespective add/remove/modify event
             self.operations = get_operations(message.ops_dir.clone())?;
-            Ok(Some(create_supported_operations(&message.ops_dir)?))
+            Ok(Some(self.create_supported_operations(&message.ops_dir)?))
 
         // operation for child
         } else if message.ops_dir.eq(&self
@@ -873,7 +1069,7 @@ impl CumulocityConverter {
                 get_operations(message.ops_dir.clone())?,
             );
 
-            Ok(Some(create_supported_operations(&message.ops_dir)?))
+            Ok(Some(self.create_supported_operations(&message.ops_dir)?))
         } else {
             Ok(None)
         }
@@ -933,25 +1129,6 @@ fn is_child_operation_path(path: &Path) -> bool {
     }
 }
 
-fn create_supported_operations(path: &Path) -> Result<Message, ConversionError> {
-    if is_child_operation_path(path) {
-        // operations for child
-        let child_id = get_child_id(&path.to_path_buf())?;
-        let stopic = format!("{SMARTREST_PUBLISH_TOPIC}/{}", child_id);
-
-        Ok(Message::new(
-            &Topic::new_unchecked(&stopic),
-            Operations::try_new(path)?.create_smartrest_ops_message()?,
-        ))
-    } else {
-        // operations for parent
-        Ok(Message::new(
-            &Topic::new_unchecked(SMARTREST_PUBLISH_TOPIC),
-            Operations::try_new(path)?.create_smartrest_ops_message()?,
-        ))
-    }
-}
-
 fn create_request_for_cloud_child_devices() -> Message {
     Message::new(&Topic::new_unchecked("c8y/s/us"), "105")
 }
@@ -967,13 +1144,6 @@ fn add_external_device_registration_message(
         return true;
     }
     false
-}
-
-fn external_device_registration_message(entity: &EntityMetadata) -> Option<Message> {
-    match entity.r#type {
-        EntityType::ChildDevice => Some(new_child_device_message(&entity.entity_id)),
-        _ => None,
-    }
 }
 
 fn create_inventory_fragments_message(
@@ -1000,7 +1170,15 @@ impl CumulocityConverter {
             Some(device) => {
                 let ops_dir = match device.r#type {
                     EntityType::MainDevice => self.ops_dir.clone(),
-                    EntityType::ChildDevice => self.ops_dir.clone().join(&device.entity_id),
+                    EntityType::ChildDevice => {
+                        let child_dir_name =
+                            if let Some(child_local_id) = target.default_device_name() {
+                                child_local_id
+                            } else {
+                                device.external_id.as_ref()
+                            };
+                        self.ops_dir.clone().join(child_dir_name)
+                    }
                     EntityType::Service => {
                         error!("Unsupported `restart` operation for a service: {target}");
                         return Ok(vec![]);
@@ -1009,7 +1187,7 @@ impl CumulocityConverter {
                 let ops_file = ops_dir.join("c8y_Restart");
                 create_directory_with_defaults(&ops_dir)?;
                 create_file_with_defaults(ops_file, None)?;
-                let device_operations = create_supported_operations(&ops_dir)?;
+                let device_operations = self.create_supported_operations(&ops_dir)?;
                 Ok(vec![device_operations])
             }
         }
@@ -1219,6 +1397,7 @@ pub fn check_tedge_agent_status(message: &Message) -> Result<bool, ConversionErr
 mod tests {
     use crate::Capabilities;
     use anyhow::Result;
+    use assert_json_diff::assert_json_eq;
     use assert_json_diff::assert_json_include;
     use assert_matches::assert_matches;
     use c8y_auth_proxy::url::ProxyUrlGenerator;
@@ -1230,12 +1409,14 @@ mod tests {
     use rand::SeedableRng;
     use serde_json::json;
     use std::collections::HashMap;
+    use std::str::FromStr;
     use tedge_actors::Builder;
     use tedge_actors::LoggingSender;
     use tedge_actors::MessageReceiver;
     use tedge_actors::Sender;
     use tedge_actors::SimpleMessageBox;
     use tedge_actors::SimpleMessageBoxBuilder;
+    use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_mqtt_ext::Message;
     use tedge_mqtt_ext::MqttMessage;
@@ -1256,7 +1437,12 @@ mod tests {
         "c8y_Command",
     ];
 
-    const EXPECTED_CHILD_DEVICES: &[&str] = &["child-0", "child-1", "child-2", "child-3"];
+    const EXPECTED_CHILD_DEVICES: &[&str] = &[
+        "test-device:device:child-0",
+        "test-device:device:child-1",
+        "test-device:device:child-2",
+        "test-device:device:child-3",
+    ];
 
     #[tokio::test]
     async fn test_sync_alarms() {
@@ -1324,16 +1510,26 @@ mod tests {
 
         // Child device creation messages are published.
         let device_creation_msgs = converter.convert(&alarm_message).await;
-        let first_msg = Message::new(
-            &Topic::new_unchecked("te/device/external_sensor//"),
-            r#"{ "@type":"child-device", "@id":"external_sensor"}"#,
-        )
-        .with_retain();
+        assert_eq!(
+            device_creation_msgs[0].topic.name,
+            "te/device/external_sensor//"
+        );
+        assert_json_eq!(
+            serde_json::from_str::<serde_json::Value>(
+                device_creation_msgs[0].payload_str().unwrap()
+            )
+            .unwrap(),
+            json!({
+                "@type":"child-device",
+                "@id":"test-device:device:external_sensor",
+                "name": "external_sensor"
+            })
+        );
+
         let second_msg = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,external_sensor,external_sensor,thin-edge.io-child",
+            "101,test-device:device:external_sensor,external_sensor,thin-edge.io-child",
         );
-        assert_eq!(device_creation_msgs[0], first_msg);
         assert_eq!(device_creation_msgs[1], second_msg);
 
         // During the sync phase, alarms are not converted immediately, but only cached to be synced later
@@ -1394,11 +1590,11 @@ mod tests {
 
         let expected_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,child1,child1,thin-edge.io-child",
+            "101,test-device:device:child1,child1,thin-edge.io-child",
         );
         let expected_c8y_json_message = Message::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
-            r#"{"externalSource":{"externalId":"child1","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"ThinEdgeMeasurement"}"#,
+            r#"{"externalSource":{"externalId":"test-device:device:child1","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"ThinEdgeMeasurement"}"#,
         );
 
         // Test the first output messages contains SmartREST and C8Y JSON.
@@ -1450,11 +1646,11 @@ mod tests {
             .collect();
         let expected_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,child1,child1,thin-edge.io-child",
+            "101,test-device:device:child1,child1,thin-edge.io-child",
         );
         let expected_c8y_json_message = Message::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
-            r#"{"externalSource":{"externalId":"child1","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"ThinEdgeMeasurement"}"#,
+            r#"{"externalSource":{"externalId":"test-device:device:child1","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"ThinEdgeMeasurement"}"#,
         );
         assert_eq!(
             out_second_messages,
@@ -1479,11 +1675,11 @@ mod tests {
             .collect();
         let expected_first_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,child1,child1,thin-edge.io-child",
+            "101,test-device:device:child1,child1,thin-edge.io-child",
         );
         let expected_first_c8y_json_message = Message::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
-            r#"{"externalSource":{"externalId":"child1","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"ThinEdgeMeasurement"}"#,
+            r#"{"externalSource":{"externalId":"test-device:device:child1","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"ThinEdgeMeasurement"}"#,
         );
         assert_eq!(
             out_first_messages,
@@ -1504,11 +1700,11 @@ mod tests {
             .collect();
         let expected_second_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,child2,child2,thin-edge.io-child",
+            "101,test-device:device:child2,child2,thin-edge.io-child",
         );
         let expected_second_c8y_json_message = Message::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
-            r#"{"externalSource":{"externalId":"child2","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"ThinEdgeMeasurement"}"#,
+            r#"{"externalSource":{"externalId":"test-device:device:child2","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"ThinEdgeMeasurement"}"#,
         );
         assert_eq!(
             out_second_messages,
@@ -1578,12 +1774,12 @@ mod tests {
 
         let expected_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,child,child,thin-edge.io-child",
+            "101,test-device:device:child,child,thin-edge.io-child",
         );
 
         let expected_c8y_json_message = Message::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
-            r#"{"externalSource":{"externalId":"child","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"test_type"}"#,
+            r#"{"externalSource":{"externalId":"test-device:device:child","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"test_type"}"#,
         );
 
         // Test the output messages contains SmartREST and C8Y JSON.
@@ -1612,12 +1808,12 @@ mod tests {
         let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
         let expected_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            "101,child2,child2,thin-edge.io-child",
+            "101,test-device:device:child2,child2,thin-edge.io-child",
         );
 
         let expected_c8y_json_message = Message::new(
             &Topic::new_unchecked("c8y/measurement/measurements/create"),
-            r#"{"externalSource":{"externalId":"child2","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"type_in_payload"}"#,
+            r#"{"externalSource":{"externalId":"test-device:device:child2","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"type_in_payload"}"#,
         );
 
         // Test the first output messages contains SmartREST and C8Y JSON.
@@ -1871,9 +2067,9 @@ mod tests {
         let payload1 = &result[0].payload_str().unwrap();
         let payload2 = &result[1].payload_str().unwrap();
 
-        assert!(payload1.contains("101,child1,child1,thin-edge.io-child"));
+        assert!(payload1.contains("101,test-device:device:child1,child1,thin-edge.io-child"));
         assert!(payload2 .contains(
-        r#"{"externalSource":{"externalId":"child1","type":"c8y_Serial"},"temperature0":{"temperature0":{"value":0.0}},"#
+        r#"{"externalSource":{"externalId":"test-device:device:child1","type":"c8y_Serial"},"temperature0":{"temperature0":{"value":0.0}},"#
     ));
         assert!(payload2.contains(r#""type":"ThinEdgeMeasurement""#));
     }
@@ -2024,7 +2220,7 @@ mod tests {
     ///     then supported operations will be published to the cloud and the device will be cached.
     #[test_case("106", EXPECTED_CHILD_DEVICES; "cloud representation is empty")]
     #[test_case("106,child-one,child-two", EXPECTED_CHILD_DEVICES; "cloud representation is completely different")]
-    #[test_case("106,child-3,child-one,child-1", &["child-0", "child-2"]; "cloud representation has some similar child devices")]
+    #[test_case("106,child-3,child-one,child-1", &["test-device:device:child-0", "test-device:device:child-2"]; "cloud representation has some similar child devices")]
     #[test_case("106,child-0,child-1,child-2,child-3", &[]; "cloud representation has seen all child devices")]
     #[tokio::test]
     async fn test_child_device_cache_is_updated(
@@ -2066,6 +2262,29 @@ mod tests {
 
         // no matter what, we expected 114 to happen for all 4 child devices.
         assert_eq!(supported_operations_counter, 4);
+    }
+
+    #[test_case("device/main//", "test-device")]
+    #[test_case(
+        "device/main/service/tedge-agent",
+        "test-device:device:main:service:tedge-agent"
+    )]
+    #[test_case("device/child1//", "test-device:device:child1")]
+    #[test_case(
+        "device/child1/service/collectd",
+        "test-device:device:child1:service:collectd"
+    )]
+    #[test_case("custom_name///", "test-device:custom_name")]
+    #[tokio::test]
+    async fn entity_topic_id_to_c8y_external_id_mapping(
+        entity_topic_id: &str,
+        c8y_external_id: &str,
+    ) {
+        let entity_topic_id = EntityTopicId::from_str(entity_topic_id).unwrap();
+        assert_eq!(
+            CumulocityConverter::map_to_c8y_external_id(&entity_topic_id, &"test-device".into()),
+            c8y_external_id.into()
+        );
     }
 
     async fn create_c8y_converter(

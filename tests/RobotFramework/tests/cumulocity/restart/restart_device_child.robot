@@ -61,13 +61,13 @@ Default restart timeout supports the default 60 second delay of the linux shutdo
 
 *** Keywords ***
 Setup Child Device
-    ThinEdgeIO.Set Device Context    ${CHILD_SN}
+    ThinEdgeIO.Set Device Context    ${CHILD_ID}
     Execute Command    sudo dpkg -i packages/tedge_*.deb
 
     Execute Command    sudo tedge config set mqtt.client.host ${PARENT_IP}
     Execute Command    sudo tedge config set mqtt.client.port 1883
     Execute Command    sudo tedge config set mqtt.topic_root te
-    Execute Command    sudo tedge config set mqtt.device_topic_id "device/${CHILD_SN}//"
+    Execute Command    sudo tedge config set mqtt.device_topic_id "device/${CHILD_ID}//"
 
     # Install plugin after the default settings have been updated to prevent it from starting up as the main plugin
     Execute Command    sudo dpkg -i packages/tedge-agent*.deb
@@ -100,8 +100,9 @@ Custom Setup
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 
     # Child
-    ${child_sn}=    Setup    skip_bootstrap=${True}
-    Set Suite Variable    $CHILD_SN    ${child_sn}
+    ${CHILD_ID}=    Setup    skip_bootstrap=${True}
+    Set Suite Variable    $CHILD_ID
+    Set Suite Variable    $CHILD_SN    ${PARENT_SN}:device:${CHILD_ID}
     Setup Child Device
     Cumulocity.Device Should Exist    ${CHILD_SN}
 

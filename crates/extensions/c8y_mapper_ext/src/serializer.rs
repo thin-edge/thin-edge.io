@@ -59,7 +59,7 @@ impl C8yJsonSerializer {
         json.write_open_obj();
 
         if entity.r#type == EntityType::ChildDevice {
-            let child_id = &entity.entity_id;
+            let child_id = &entity.external_id;
             // In case the measurement is addressed to a child-device use fragment
             // "externalSource" to tell c8Y identity API to use child-device
             // object referenced by "externalId", instead of root device object
@@ -67,7 +67,7 @@ impl C8yJsonSerializer {
             let _ = json.write_key("externalSource");
             json.write_open_obj();
             let _ = json.write_key("externalId");
-            let _ = json.write_str(child_id);
+            let _ = json.write_str(child_id.as_ref());
             let _ = json.write_key("type");
             let _ = json.write_str("c8y_Serial");
             json.write_close_obj();

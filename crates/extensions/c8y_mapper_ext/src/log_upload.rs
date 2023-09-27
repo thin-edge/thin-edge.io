@@ -9,7 +9,6 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
-use c8y_api::smartrest::topic::C8yTopic;
 use nanoid::nanoid;
 use tedge_api::entity_store::EntityType;
 use tedge_api::messages::CommandStatus;
@@ -51,11 +50,12 @@ impl CumulocityConverter {
         }
 
         let log_request = SmartRestLogRequest::from_smartrest(smartrest)?;
+        let device_external_id = log_request.device.into();
         let target = self
             .entity_store
-            .get_by_id(&log_request.device)
+            .get_by_external_id(&device_external_id)
             .ok_or_else(|| UnknownDevice {
-                device_id: log_request.device.to_string(),
+                device_id: device_external_id.into(),
             })?;
 
         let cmd_id = nanoid!();
@@ -67,7 +67,10 @@ impl CumulocityConverter {
 
         let tedge_url = format!(
             "http://{}/tedge/file-transfer/{}/log_upload/{}-{}",
-            &self.config.tedge_http_host, target.entity_id, log_request.log_type, cmd_id
+            &self.config.tedge_http_host,
+            target.external_id.as_ref(),
+            log_request.log_type,
+            cmd_id
         );
 
         let request = LogUploadCmdPayload {
@@ -105,10 +108,9 @@ impl CumulocityConverter {
                 topic_id: topic_id.to_string(),
             }
         })?;
-        let external_id = device.entity_id.to_string();
+        let external_id = &device.external_id;
 
-        let c8y_topic: C8yTopic = device.into();
-        let smartrest_topic = c8y_topic.to_topic()?;
+        let smartrest_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
 
         let payload = message.payload_str()?;
         let response = &LogUploadCmdPayload::from_json(payload)?;
@@ -125,7 +127,7 @@ impl CumulocityConverter {
                 let uploaded_file_path = self
                     .config
                     .file_transfer_dir
-                    .join(&device.entity_id)
+                    .join(device.external_id.as_ref())
                     .join("log_upload")
                     .join(format!("{}-{}", response.log_type, cmd_id));
                 let result = self
@@ -133,7 +135,7 @@ impl CumulocityConverter {
                     .upload_file(
                         uploaded_file_path.as_std_path(),
                         &response.log_type,
-                        external_id,
+                        external_id.as_ref().to_string(),
                     )
                     .await; // We need to get rid of this await, otherwise it blocks
 
@@ -201,7 +203,14 @@ impl CumulocityConverter {
         // Create a c8y_LogfileRequest operation file
         let dir_path = match device.r#type {
             EntityType::MainDevice => self.ops_dir.clone(),
-            EntityType::ChildDevice => self.ops_dir.join(&device.entity_id),
+            EntityType::ChildDevice => {
+                let child_dir_name = if let Some(child_local_id) = topic_id.default_device_name() {
+                    child_local_id
+                } else {
+                    device.external_id.as_ref()
+                };
+                self.ops_dir.clone().join(child_dir_name)
+            }
             EntityType::Service => {
                 // No support for service log management
                 return Ok(vec![]);
@@ -216,7 +225,7 @@ impl CumulocityConverter {
         let supported_log_types = types.join(",");
         let payload = format!("118,{supported_log_types}");
 
-        let c8y_topic: C8yTopic = device.into();
-        Ok(vec![MqttMessage::new(&c8y_topic.to_topic()?, payload)])
+        let c8y_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
+        Ok(vec![MqttMessage::new(&c8y_topic, payload)])
     }
 }

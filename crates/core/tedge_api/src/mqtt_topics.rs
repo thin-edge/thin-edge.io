@@ -271,6 +271,17 @@ impl EntityTopicId {
         format!("device/{child}/service/{service}").parse()
     }
 
+    /// Returns true if the current topic id matches the default topic scheme:
+    /// - device/<device-id>// : for devices
+    /// - device/<device-id>/service/<service-id> : for services
+    ///
+    /// Returns false otherwise
+    pub fn matches_default_topic_scheme(&self) -> bool {
+        self.default_device_name()
+            .or(self.default_service_name())
+            .is_some()
+    }
+
     /// Returns the device name when the entity topic identifier is using the `device/+/service/+` pattern.
     ///
     /// Returns None otherwise.
@@ -304,6 +315,11 @@ impl EntityTopicId {
             _ => None,
         }
         .map(|parent_id| EntityTopicId(format!("device/{parent_id}//")))
+    }
+
+    /// Returns true if the current topic identifier matches that of the main device
+    pub fn is_default_main_device(&self) -> bool {
+        self == &Self::default_main_device()
     }
 }
 
@@ -488,6 +504,8 @@ pub enum ChannelFilter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test_case::test_case;
+
     const MQTT_ROOT: &str = "test_te";
 
     #[test]
@@ -564,5 +582,25 @@ mod tests {
 
         assert!(entity_channel1.is_err());
         assert!(entity_channel2.is_err());
+    }
+
+    #[test_case("device/main//", true)]
+    #[test_case("device/child//", true)]
+    #[test_case("device/main/service/foo", true)]
+    #[test_case("device/child/service/foo", true)]
+    #[test_case("device/main//foo", false)]
+    #[test_case("custom///", false)]
+    #[test_case("custom/main//", false)]
+    #[test_case("custom/child//", false)]
+    #[test_case("custom/main/service/foo", false)]
+    #[test_case("custom/child/service/foo", false)]
+    #[test_case("device/main/custom_service/foo", false)]
+    fn default_topic_scheme_match(topic: &str, matches: bool) {
+        assert_eq!(
+            EntityTopicId::from_str(topic)
+                .unwrap()
+                .matches_default_topic_scheme(),
+            matches
+        )
     }
 }
