@@ -95,7 +95,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
 
         let http_config = HttpConfig::default()
-            .with_data_dir(ttd.utf8_path_buf())
+            .with_data_dir(ttd.utf8_path_buf().into())
             .with_port(4000);
 
         // Spawn HTTP file transfer server
@@ -146,7 +146,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
 
         let http_config = HttpConfig::default()
-            .with_data_dir(ttd.utf8_path_buf())
+            .with_data_dir(ttd.utf8_path_buf().into())
             .with_port(3746);
         let config_clone = http_config.clone();
 

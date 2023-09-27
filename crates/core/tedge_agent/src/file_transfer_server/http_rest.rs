@@ -11,8 +11,7 @@ use routerify::RouterService;
 use std::net::IpAddr;
 use std::net::SocketAddr;
 use tedge_actors::futures::StreamExt;
-use tedge_api::DEFAULT_DATA_PATH;
-use tedge_api::DEFAULT_FILE_TRANSFER_DIR_NAME;
+use tedge_api::path::DataDir;
 use tedge_utils::paths::create_directories;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
@@ -23,7 +22,7 @@ const HTTP_FILE_TRANSFER_PORT: u16 = 8000;
 pub struct HttpConfig {
     pub bind_address: SocketAddr,
     pub file_transfer_uri: String,
-    pub data_dir: Utf8PathBuf,
+    pub data_dir: DataDir,
 }
 
 impl Default for HttpConfig {
@@ -31,7 +30,7 @@ impl Default for HttpConfig {
         HttpConfig {
             bind_address: ([127, 0, 0, 1], HTTP_FILE_TRANSFER_PORT).into(),
             file_transfer_uri: "/tedge/".into(),
-            data_dir: DEFAULT_DATA_PATH.into(),
+            data_dir: DataDir::default(),
         }
     }
 }
@@ -44,7 +43,7 @@ impl HttpConfig {
         }
     }
 
-    pub fn with_data_dir(self, data_dir: Utf8PathBuf) -> HttpConfig {
+    pub fn with_data_dir(self, data_dir: DataDir) -> HttpConfig {
         Self { data_dir, ..self }
     }
 
@@ -59,10 +58,6 @@ impl HttpConfig {
 
     pub fn file_transfer_end_point(&self) -> String {
         format!("{}file-transfer/*", self.file_transfer_uri)
-    }
-
-    pub fn file_transfer_dir_as_string(&self) -> Utf8PathBuf {
-        self.data_dir.join(DEFAULT_FILE_TRANSFER_DIR_NAME)
     }
 
     /// Return the path of the file associated to the given `uri`
@@ -348,7 +343,7 @@ mod test {
         let ttd = TempTedgeDir::new();
         let tempdir_path = ttd.utf8_path_buf();
         let http_config = HttpConfig::default()
-            .with_data_dir(tempdir_path)
+            .with_data_dir(tempdir_path.into())
             .with_port(3333);
         let server = http_file_transfer_server(&http_config).unwrap();
         (ttd, server)

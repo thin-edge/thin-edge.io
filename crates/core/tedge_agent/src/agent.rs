@@ -20,6 +20,7 @@ use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::Runtime;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::path::DataDir;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
@@ -41,7 +42,7 @@ pub struct AgentConfig {
     pub run_dir: Utf8PathBuf,
     pub use_lock: bool,
     pub log_dir: Utf8PathBuf,
-    pub data_dir: Utf8PathBuf,
+    pub data_dir: DataDir,
     pub mqtt_device_topic_id: EntityTopicId,
     pub mqtt_topic_root: Arc<str>,
 }
@@ -75,7 +76,7 @@ impl AgentConfig {
             .with_session_name(mqtt_session_name);
 
         // HTTP config
-        let data_dir = tedge_config.data.path.clone();
+        let data_dir: DataDir = tedge_config.data.path.clone().into();
         let http_bind_address = tedge_config.http.bind.address;
         let http_port = tedge_config.http.bind.port;
 
@@ -140,7 +141,8 @@ impl Agent {
         create_directory_with_defaults(self.config.config_dir.join(".agent"))?;
         create_directory_with_defaults(self.config.log_dir.clone())?;
         create_directory_with_defaults(self.config.data_dir.clone())?;
-        create_directory_with_defaults(self.config.http_config.file_transfer_dir_as_string())?;
+        create_directory_with_defaults(self.config.http_config.data_dir.file_transfer_dir())?;
+        create_directory_with_defaults(self.config.http_config.data_dir.cache_dir())?;
 
         Ok(())
     }
