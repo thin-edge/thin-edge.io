@@ -21,9 +21,9 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
+use tedge_api::messages::CommandStatus;
+use tedge_api::messages::SoftwareListCommand;
 use tedge_api::OperationStatus;
-use tedge_api::SoftwareListRequest;
-use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareRequestResponse;
 use tedge_api::SoftwareType;
 use tedge_api::SoftwareUpdateRequest;
@@ -39,8 +39,8 @@ const SUDO: &str = "sudo";
 #[cfg(test)]
 const SUDO: &str = "echo";
 
-fan_in_message_type!(SoftwareRequest[SoftwareUpdateRequest, SoftwareListRequest] : Debug, Eq, PartialEq);
-fan_in_message_type!(SoftwareResponse[SoftwareUpdateResponse, SoftwareListResponse] : Debug, Eq, PartialEq);
+fan_in_message_type!(SoftwareRequest[SoftwareUpdateRequest, SoftwareListCommand] : Debug, Eq, PartialEq);
+fan_in_message_type!(SoftwareResponse[SoftwareUpdateResponse, SoftwareListCommand] : Debug, Eq, PartialEq);
 
 /// Actor which performs software operations.
 ///
@@ -159,9 +159,9 @@ impl SoftwareManagerActor {
                     error!("{:?}", err);
                 }
             }
-            SoftwareRequest::SoftwareListRequest(request) => {
+            SoftwareRequest::SoftwareListCommand(request) => {
                 if let Err(err) = self
-                    .handle_software_list_operation(&request, plugins, operation_logs)
+                    .handle_software_list_operation(request, plugins, operation_logs)
                     .await
                 {
                     error!("{:?}", err);
@@ -175,22 +175,21 @@ impl SoftwareManagerActor {
         let state: Result<State, _> = self.state_repository.load().await;
 
         if let Ok(State {
-            operation_id: Some(id),
+            operation_id: Some(cmd_id),
             operation: Some(operation),
         }) = state
         {
             match operation {
                 StateStatus::Software(SoftwareOperationVariants::Update) => {
-                    let response = SoftwareRequestResponse::new(&id, OperationStatus::Failed);
+                    let response = SoftwareRequestResponse::new(&cmd_id, OperationStatus::Failed);
                     self.output_sender
                         .send(SoftwareUpdateResponse { response }.into())
                         .await?;
                 }
                 StateStatus::Software(SoftwareOperationVariants::List) => {
-                    let response = SoftwareRequestResponse::new(&id, OperationStatus::Failed);
-                    self.output_sender
-                        .send(SoftwareListResponse { response }.into())
-                        .await?;
+                    let response = SoftwareListCommand::new_with_id(&self.config.device, cmd_id)
+                        .with_error("Software List request cancelled on agent restart".to_string());
+                    self.output_sender.send(response.into()).await?;
                 }
                 StateStatus::Restart(_) => {
                     error!("RestartOperation in store.");
@@ -200,6 +199,7 @@ impl SoftwareManagerActor {
                 }
             };
         }
+        let _state: State = self.state_repository.clear().await?;
         Ok(())
     }
 
@@ -245,28 +245,31 @@ impl SoftwareManagerActor {
 
     async fn handle_software_list_operation(
         &mut self,
-        request: &SoftwareListRequest,
+        request: SoftwareListCommand,
         plugins: &ExternalPlugins,
         operation_logs: &OperationLogs,
     ) -> Result<(), SoftwareManagerError> {
+        if request.status() != CommandStatus::Init {
+            // Handle only the init state
+            return Ok(());
+        }
+
         self.state_repository
             .store(&State {
-                operation_id: Some(request.id.clone()),
+                operation_id: Some(request.cmd_id.clone()),
                 operation: Some(StateStatus::Software(SoftwareOperationVariants::List)),
             })
             .await?;
 
         // Send 'executing'
-        let executing_response = SoftwareListResponse::new(request);
+        let executing_response = request.clone().with_status(CommandStatus::Executing);
         self.output_sender.send(executing_response.into()).await?;
 
         let response = match operation_logs.new_log_file(LogKind::SoftwareList).await {
             Ok(log_file) => plugins.list(request, log_file).await,
             Err(err) => {
                 error!("{}", err);
-                let mut failed_response = SoftwareListResponse::new(request);
-                failed_response.set_error(&format!("{}", err));
-                failed_response
+                request.with_error(format!("{}", err))
             }
         };
         self.output_sender.send(response.into()).await?;

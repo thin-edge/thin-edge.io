@@ -13,13 +13,12 @@ use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::messages::CommandStatus;
 use tedge_api::messages::RestartCommandPayload;
+use tedge_api::messages::SoftwareListCommand;
 use tedge_api::messages::SoftwareModuleAction;
 use tedge_api::messages::SoftwareModuleItem;
 use tedge_api::messages::SoftwareRequestResponseSoftwareList;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::RestartCommand;
-use tedge_api::SoftwareListRequest;
-use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareUpdateRequest;
 use tedge_api::SoftwareUpdateResponse;
 use tedge_mqtt_ext::MqttMessage;
@@ -35,16 +34,17 @@ async fn convert_incoming_software_list_request() -> Result<(), DynError> {
 
     // Simulate SoftwareList MQTT message received.
     let mqtt_message = MqttMessage::new(
-        &Topic::new_unchecked("tedge/commands/req/software/list"),
-        r#"{"id": "random"}"#,
+        &Topic::new_unchecked("te/device/main///cmd/software_list/some-cmd-id"),
+        r#"{ "status": "init" }"#,
     );
     mqtt_box.send(mqtt_message).await?;
 
-    // Assert SoftwareListRequest
+    // Assert SoftwareListCommand
     software_box
-        .assert_received([SoftwareListRequest {
-            id: "random".to_string(),
-        }])
+        .assert_received([SoftwareListCommand::new_with_id(
+            &EntityTopicId::default_main_device(),
+            "some-cmd-id".to_string(),
+        )])
         .await;
     Ok(())
 }
@@ -122,18 +122,22 @@ async fn convert_outgoing_software_list_response() -> Result<(), DynError> {
         spawn_mqtt_operation_converter("device/main//").await?;
 
     // Skip capabilities messages
-    mqtt_box.skip(1).await;
+    mqtt_box.skip(2).await;
 
     // Simulate SoftwareList response message received.
-    let software_list_request = SoftwareListRequest::new_with_id("1234");
-    let software_list_response = SoftwareListResponse::new(&software_list_request);
+    let software_list_request =
+        SoftwareListCommand::new_with_id(&EntityTopicId::default_main_device(), "1234".to_string());
+    let software_list_response = software_list_request
+        .clone()
+        .with_status(CommandStatus::Executing);
     software_box.send(software_list_response.into()).await?;
 
     mqtt_box
         .assert_received([MqttMessage::new(
-            &Topic::new_unchecked("tedge/commands/res/software/list"),
-            r#"{"id":"1234","status":"executing"}"#,
-        )])
+            &Topic::new_unchecked("te/device/main///cmd/software_list/1234"),
+            r#"{"status":"executing"}"#,
+        )
+        .with_retain()])
         .await;
 
     Ok(())
@@ -153,6 +157,14 @@ async fn publish_capabilities_on_start() -> Result<(), DynError> {
         .with_retain()])
         .await;
 
+    mqtt_box
+        .assert_received([MqttMessage::new(
+            &Topic::new_unchecked("te/device/child///cmd/software_list"),
+            "{}",
+        )
+        .with_retain()])
+        .await;
+
     Ok(())
 }
 
@@ -163,7 +175,7 @@ async fn convert_outgoing_software_update_response() -> Result<(), DynError> {
         spawn_mqtt_operation_converter("device/main//").await?;
 
     // Skip capabilities messages
-    mqtt_box.skip(1).await;
+    mqtt_box.skip(2).await;
 
     // Simulate SoftwareUpdate response message received.
     let software_update_request = SoftwareUpdateRequest::new_with_id("1234");
@@ -187,7 +199,7 @@ async fn convert_outgoing_restart_response() -> Result<(), DynError> {
         spawn_mqtt_operation_converter("device/main//").await?;
 
     // Skip capabilities messages
-    mqtt_box.skip(1).await;
+    mqtt_box.skip(2).await;
 
     // Simulate Restart response message received.
     let executing_response = RestartCommand {

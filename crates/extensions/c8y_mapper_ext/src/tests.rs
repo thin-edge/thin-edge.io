@@ -1545,10 +1545,7 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     // Expect smartrest message on `c8y/s/us` with expected payload "114,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3".
     assert_received_contains_str(
         &mut mqtt,
-        [(
-            "c8y/s/us",
-            "114,c8y_SoftwareUpdate,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3",
-        )],
+        [("c8y/s/us", "114,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3")],
     )
     .await;
 
@@ -1558,8 +1555,25 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     )
     .await
     .expect("Send failed");
+    mqtt.send(
+        MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/software_list"),
+            "{}",
+        )
+        .with_retain(),
+    )
+    .await
+    .expect("Send failed");
 
     // Expect an update list of capabilities with agent capabilities
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
+            "114,c8y_Restart,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3",
+        )],
+    )
+    .await;
     assert_received_contains_str(
         &mut mqtt,
         [(

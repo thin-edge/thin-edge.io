@@ -38,7 +38,7 @@ Agent gets the software list request once it comes up
     # wait till there is up status on tedge-agent health
     Should Have MQTT Messages    te/device/main/service/tedge-agent/status/health    message_contains=up    date_from=${timestamp}
     # now there should be a new list request
-    Should Have MQTT Messages    tedge/commands/req/software/list    message_contains=id    date_from=${timestamp}
+    Should Have MQTT Messages    te/device/main///cmd/software_list/+   message_contains=status    date_from=${timestamp}
    
 
 *** Keywords ***

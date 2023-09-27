@@ -22,8 +22,6 @@ pub use error::*;
 pub use messages::Jsonify;
 pub use messages::OperationStatus;
 pub use messages::RestartCommand;
-pub use messages::SoftwareListRequest;
-pub use messages::SoftwareListResponse;
 pub use messages::SoftwareRequestResponse;
 pub use messages::SoftwareUpdateRequest;
 pub use messages::SoftwareUpdateResponse;
@@ -32,8 +30,12 @@ pub use software::*;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::messages::CommandStatus;
+    use crate::messages::SoftwareListCommand;
     use crate::mqtt_topics::EntityTopicId;
     use crate::mqtt_topics::MqttSchema;
+    use mqtt_channel::Message;
+    use mqtt_channel::QoS;
     use mqtt_channel::Topic;
     use regex::Regex;
 
@@ -41,14 +43,10 @@ mod tests {
     fn topic_names() {
         // There are two topics for each kind of commands,
         // one for the metadata, the other for the command instances
-        assert_eq!(
-            SoftwareListRequest::topic(),
-            Topic::new_unchecked("tedge/commands/req/software/list")
-        );
-        assert_eq!(
-            SoftwareListResponse::topic(),
-            Topic::new_unchecked("tedge/commands/res/software/list")
-        );
+        let mqtt_schema = MqttSchema::default();
+        let device = EntityTopicId::default_main_device();
+        let cmd_id = "abc".to_string();
+
         assert_eq!(
             SoftwareUpdateRequest::topic(),
             Topic::new_unchecked("tedge/commands/req/software/update")
@@ -57,17 +55,26 @@ mod tests {
             SoftwareUpdateResponse::topic(),
             Topic::new_unchecked("tedge/commands/res/software/update")
         );
+
         assert_eq!(
-            RestartCommand::new(EntityTopicId::default_main_device())
-                .with_id("abc".to_string())
-                .command_message(&MqttSchema::default())
-                .topic,
-            Topic::new_unchecked("te/device/main///cmd/restart/abc")
+            SoftwareListCommand::capability_message(&mqtt_schema, &device).topic,
+            Topic::new_unchecked("te/device/main///cmd/software_list")
         );
         assert_eq!(
-            RestartCommand::new(EntityTopicId::default_main_device())
-                .with_id("abc".to_string())
-                .command_message(&MqttSchema::default())
+            SoftwareListCommand::new_with_id(&device, cmd_id.clone())
+                .command_message(&mqtt_schema)
+                .topic,
+            Topic::new_unchecked("te/device/main///cmd/software_list/abc")
+        );
+
+        assert_eq!(
+            RestartCommand::capability_message(&mqtt_schema, &device).topic,
+            Topic::new_unchecked("te/device/main///cmd/restart")
+        );
+        assert_eq!(
+            RestartCommand::new(device.clone())
+                .with_id(cmd_id.clone())
+                .command_message(&mqtt_schema)
                 .topic,
             Topic::new_unchecked("te/device/main///cmd/restart/abc")
         );
@@ -75,17 +82,25 @@ mod tests {
 
     #[test]
     fn creating_a_software_list_request() {
-        let request = SoftwareListRequest::new_with_id("1");
+        let mqtt_schema = MqttSchema::default();
+        let device = EntityTopicId::default_child_device("abc").unwrap();
+        let request = SoftwareListCommand::new_with_id(&device, "1".to_string());
 
-        let expected_json = r#"{"id":"1"}"#;
-        let actual_json = request.to_json();
-        assert_eq!(actual_json, expected_json);
+        let expected_msg = Message {
+            topic: Topic::new_unchecked("te/device/abc///cmd/software_list/1"),
+            payload: r#"{"status":"init"}"#.to_string().into(),
+            qos: QoS::AtLeastOnce,
+            retain: true,
+        };
+        let actual_msg = request.command_message(&mqtt_schema);
+        assert_eq!(actual_msg, expected_msg);
     }
 
     #[test]
     fn creating_a_software_list_request_with_generated_id() {
-        let request = SoftwareListRequest::default();
-        let generated_id = request.id;
+        let device = EntityTopicId::default_child_device("abc").unwrap();
+        let request = SoftwareListCommand::new(&device);
+        let generated_id = request.cmd_id;
 
         // The generated id is a nanoid of 21 characters from A-Za-z0-9_~
         let re = Regex::new(r"[A-Za-z0-9_~-]{21,21}").unwrap();
@@ -94,19 +109,38 @@ mod tests {
 
     #[test]
     fn using_a_software_list_request() {
-        let json_request = r#"{"id":"123"}"#;
-        let request = SoftwareListRequest::from_json(json_request).expect("Failed to deserialize");
+        let device = EntityTopicId::default_child_device("abc").unwrap();
+        let cmd_id = "123".to_string();
+        let json_request = r#"{ "status": "init" }"#.as_bytes();
+        let request = SoftwareListCommand::try_from(device, cmd_id, json_request);
 
-        assert_eq!(request.id, "123");
+        assert!(request.is_ok());
+        let request = request.unwrap();
+        assert!(request.is_some());
+        let request = request.unwrap();
+        assert_eq!(request.cmd_id, "123");
+        assert_eq!(request.status(), CommandStatus::Init);
+    }
+
+    #[test]
+    fn clearing_a_software_list_request() {
+        let device = EntityTopicId::default_child_device("abc").unwrap();
+        let cmd_id = "123".to_string();
+        let payload = "".as_bytes();
+        let request = SoftwareListCommand::try_from(device, cmd_id, payload);
+
+        assert!(request.is_ok());
+        assert!(request.unwrap().is_none());
     }
 
     #[test]
     fn creating_a_software_list_response() {
-        let request = SoftwareListRequest::new_with_id("1");
-        let mut response = SoftwareListResponse::new(&request);
+        let device = EntityTopicId::default_child_device("abc").unwrap();
+        let mut response = SoftwareListCommand::new_with_id(&device, "1".to_string())
+            .with_status(CommandStatus::Successful);
 
         response.add_modules(
-            "debian",
+            "debian".to_string(),
             vec![
                 SoftwareModule {
                     module_type: Some("debian".to_string()),
@@ -140,7 +174,7 @@ mod tests {
         );
 
         response.add_modules(
-            "apama",
+            "apama".to_string(),
             vec![SoftwareModule {
                 module_type: Some("apama".to_string()),
                 name: "m".to_string(),
@@ -150,8 +184,9 @@ mod tests {
             }],
         );
 
+        let message = response.command_message(&MqttSchema::default());
+
         let expected_json = r#"{
-            "id":"1",
             "status":"successful",
             "currentSoftwareList":[
                 {"type":"debian", "modules":[
@@ -164,14 +199,15 @@ mod tests {
                     {"name":"m","url":"https://foobar.io/m.epl"}
                 ]}
             ]}"#;
-        let actual_json = response.to_json();
+        let actual_json = message.payload_str().unwrap();
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
     #[test]
     fn using_a_software_list_response() {
+        let device = EntityTopicId::default_child_device("abc").unwrap();
+        let cmd_id = "123".to_string();
         let json_response = r#"{
-            "id": "123",
             "status": "successful",
             "currentSoftwareList":[
                 {"type":"debian", "modules":[
@@ -185,12 +221,13 @@ mod tests {
                 ]}
             ]}"#;
 
-        let response =
-            SoftwareListResponse::from_json(json_response).expect("Failed to deserialize");
-
-        assert_eq!(response.id(), "123");
-        assert_eq!(response.status(), OperationStatus::Successful);
-        assert_eq!(response.error(), None);
+        let response = SoftwareListCommand::try_from(device, cmd_id, json_response.as_bytes());
+        assert!(response.is_ok());
+        let response = response.unwrap();
+        assert!(response.is_some());
+        let response = response.unwrap();
+        assert_eq!(response.cmd_id, "123");
+        assert_eq!(response.status(), CommandStatus::Successful);
 
         // The mapper can use then the current list of modules
         assert_eq!(
@@ -237,34 +274,40 @@ mod tests {
 
     #[test]
     fn creating_a_software_list_error() {
-        let request = SoftwareListRequest::new_with_id("123");
-        let mut response = SoftwareListResponse::new(&request);
-
-        response.set_error("Request_timed-out");
+        let device = EntityTopicId::default_child_device("abc").unwrap();
+        let response = SoftwareListCommand::new_with_id(&device, "123".to_string());
+        let response = response.with_error("Request_timed-out".to_string());
+        let message = response.command_message(&MqttSchema::default());
 
         let expected_json = r#"{
-            "id": "123",
             "status": "failed",
             "reason": "Request_timed-out"
         }"#;
 
-        let actual_json = response.to_json();
+        let actual_json = message.payload_str().unwrap();
         assert_eq!(actual_json, remove_whitespace(expected_json));
     }
 
     #[test]
     fn using_a_software_list_error() {
+        let device = EntityTopicId::default_child_device("abc").unwrap();
+        let cmd_id = "123".to_string();
         let json_response = r#"{
-            "id": "123",
             "status": "failed",
             "reason": "Request timed-out"
         }"#;
-        let response =
-            SoftwareListResponse::from_json(json_response).expect("Failed to deserialize");
-
-        assert_eq!(response.id(), "123");
-        assert_eq!(response.status(), OperationStatus::Failed);
-        assert_eq!(response.error(), Some("Request timed-out".into()));
+        let response = SoftwareListCommand::try_from(device, cmd_id, json_response.as_bytes());
+        assert!(response.is_ok());
+        let response = response.unwrap();
+        assert!(response.is_some());
+        let response = response.unwrap();
+        assert_eq!(response.cmd_id, "123");
+        assert_eq!(
+            response.status(),
+            CommandStatus::Failed {
+                reason: "Request timed-out".to_string()
+            }
+        );
         assert_eq!(response.modules(), vec![]);
     }
 

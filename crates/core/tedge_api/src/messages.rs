@@ -14,8 +14,6 @@ use serde::Serialize;
 use time::OffsetDateTime;
 
 // TODO deprecate these consts
-pub const SOFTWARE_LIST_REQUEST_TOPIC: &str = "tedge/commands/req/software/list";
-pub const SOFTWARE_LIST_RESPONSE_TOPIC: &str = "tedge/commands/res/software/list";
 pub const SOFTWARE_UPDATE_REQUEST_TOPIC: &str = "tedge/commands/req/software/update";
 pub const SOFTWARE_UPDATE_RESPONSE_TOPIC: &str = "tedge/commands/res/software/update";
 
@@ -41,30 +39,173 @@ where
     }
 }
 
-/// Message payload definition for SoftwareList request.
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
-#[serde(deny_unknown_fields)]
+/// Command to request the list of software packages that are installed on a device
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct SoftwareListCommand {
+    pub target: EntityTopicId,
+    pub cmd_id: String,
+    pub payload: SoftwareListCommandPayload,
+}
+
+/// Payload of a [SoftwareListCommand]
+#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct SoftwareListRequest {
-    pub id: String,
+pub struct SoftwareListCommandPayload {
+    #[serde(flatten)]
+    pub status: CommandStatus,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub current_software_list: Vec<SoftwareList>,
 }
 
-impl<'a> Jsonify<'a> for SoftwareListRequest {}
+impl<'a> Jsonify<'a> for SoftwareListCommandPayload {}
 
-impl Default for SoftwareListRequest {
-    fn default() -> SoftwareListRequest {
-        let id = nanoid!();
-        SoftwareListRequest { id }
+impl Default for SoftwareListCommandPayload {
+    fn default() -> Self {
+        SoftwareListCommandPayload {
+            status: CommandStatus::Init,
+            current_software_list: Vec::new(),
+        }
     }
 }
 
-impl SoftwareListRequest {
-    pub fn new_with_id(id: &str) -> SoftwareListRequest {
-        SoftwareListRequest { id: id.to_string() }
+/// Sub list of modules grouped by plugin type.
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct SoftwareList {
+    #[serde(rename = "type")]
+    pub plugin_type: SoftwareType,
+    pub modules: Vec<SoftwareModuleItem>,
+}
+
+impl SoftwareListCommand {
+    /// Build a new software list request with a random id
+    pub fn new(target: &EntityTopicId) -> Self {
+        SoftwareListCommand {
+            target: target.clone(),
+            cmd_id: nanoid!(),
+            payload: Default::default(),
+        }
     }
 
-    pub fn topic() -> Topic {
-        Topic::new_unchecked(SOFTWARE_LIST_REQUEST_TOPIC)
+    /// Build a new software list request with a given id
+    pub fn new_with_id(target: &EntityTopicId, cmd_id: String) -> Self {
+        SoftwareListCommand {
+            target: target.clone(),
+            cmd_id,
+            payload: Default::default(),
+        }
+    }
+
+    /// Return the MQTT message to register `software-list` support
+    /// TODO: publish the list of supported software package types.
+    pub fn capability_message(schema: &MqttSchema, target: &EntityTopicId) -> Message {
+        let meta_topic = schema.capability_topic_for(target, OperationType::SoftwareList);
+        let payload = "{}";
+        Message::new(&meta_topic, payload)
+            .with_retain()
+            .with_qos(QoS::AtLeastOnce)
+    }
+
+    /// Return the SoftwareListCommand received on a topic
+    pub fn try_from(
+        target: EntityTopicId,
+        cmd_id: String,
+        bytes: &[u8],
+    ) -> Result<Option<Self>, serde_json::Error> {
+        if bytes.is_empty() {
+            Ok(None)
+        } else {
+            let payload = SoftwareListCommandPayload::from_slice(bytes)?;
+            Ok(Some(SoftwareListCommand {
+                target,
+                cmd_id,
+                payload,
+            }))
+        }
+    }
+
+    /// Set the status of the command
+    pub fn with_status(mut self, status: CommandStatus) -> Self {
+        self.payload.status = status;
+        self
+    }
+
+    /// Set the failure reason of the command
+    pub fn with_error(mut self, reason: String) -> Self {
+        self.payload.status = CommandStatus::Failed { reason };
+        self
+    }
+
+    /// Add a list of packages all of the same type
+    pub fn add_modules(&mut self, plugin_type: SoftwareType, modules: Vec<SoftwareModule>) {
+        let modules = modules.into_iter().map(|module| module.into()).collect();
+        self.payload.current_software_list.push(SoftwareList {
+            plugin_type,
+            modules,
+        });
+    }
+
+    /// List all the packages
+    pub fn modules(&self) -> Vec<SoftwareModule> {
+        self.payload
+            .current_software_list
+            .iter()
+            .flat_map(|list| {
+                let plugin_type = &list.plugin_type;
+                list.modules
+                    .clone()
+                    .into_iter()
+                    .map(|module| SoftwareModule {
+                        module_type: Some(plugin_type.clone()),
+                        name: module.name,
+                        version: module.version,
+                        url: module.url,
+                        file_path: None,
+                    })
+            })
+            .collect()
+    }
+
+    /// Return the current status of the command
+    pub fn status(&self) -> CommandStatus {
+        self.payload.status.clone()
+    }
+
+    /// Return the MQTT topic identifier of the target
+    fn topic_id(&self) -> &EntityTopicId {
+        &self.target
+    }
+
+    /// Return the MQTT channel for this command
+    fn channel(&self) -> Channel {
+        Channel::Command {
+            operation: OperationType::SoftwareList,
+            cmd_id: self.cmd_id.clone(),
+        }
+    }
+
+    /// Return the MQTT topic for this command
+    fn topic(&self, schema: &MqttSchema) -> Topic {
+        schema.topic_for(self.topic_id(), &self.channel())
+    }
+
+    /// Return the MQTT message for this command
+    pub fn command_message(&self, schema: &MqttSchema) -> Message {
+        let topic = self.topic(schema);
+        let payload = self.payload.to_bytes();
+        Message::new(&topic, payload)
+            .with_qos(QoS::AtLeastOnce)
+            .with_retain()
+    }
+
+    /// Return the MQTT message to clear this command
+    pub fn clearing_message(&self, schema: &MqttSchema) -> Message {
+        let topic = self.topic(schema);
+        Message::new(&topic, vec![])
+            .with_qos(QoS::AtLeastOnce)
+            .with_retain()
     }
 }
 
@@ -192,58 +333,6 @@ pub enum OperationStatus {
     Successful,
     Failed,
     Executing,
-}
-
-/// Message payload definition for SoftwareList response.
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
-pub struct SoftwareListResponse {
-    #[serde(flatten)]
-    pub response: SoftwareRequestResponse,
-}
-
-impl<'a> Jsonify<'a> for SoftwareListResponse {}
-
-impl SoftwareListResponse {
-    pub fn new(req: &SoftwareListRequest) -> SoftwareListResponse {
-        SoftwareListResponse {
-            response: SoftwareRequestResponse::new(&req.id, OperationStatus::Executing),
-        }
-    }
-
-    pub fn topic() -> Topic {
-        Topic::new_unchecked(SOFTWARE_LIST_RESPONSE_TOPIC)
-    }
-
-    pub fn add_modules(&mut self, plugin_type: &str, modules: Vec<SoftwareModule>) {
-        self.response.add_modules(
-            plugin_type.to_string(),
-            modules
-                .into_iter()
-                .map(|module| module.into())
-                .collect::<Vec<SoftwareModuleItem>>(),
-        );
-    }
-
-    pub fn set_error(&mut self, reason: &str) {
-        self.response.status = OperationStatus::Failed;
-        self.response.reason = Some(reason.into());
-    }
-
-    pub fn id(&self) -> &str {
-        &self.response.id
-    }
-
-    pub fn status(&self) -> OperationStatus {
-        self.response.status
-    }
-
-    pub fn error(&self) -> Option<String> {
-        self.response.reason.clone()
-    }
-
-    pub fn modules(&self) -> Vec<SoftwareModule> {
-        self.response.modules()
-    }
 }
 
 /// Message payload definition for SoftwareUpdate response.
@@ -553,12 +642,7 @@ impl RestartCommand {
 
     /// Return the MQTT message to register `restart` as a supported command on a given target device
     pub fn capability_message(schema: &MqttSchema, target: &EntityTopicId) -> Message {
-        let meta_topic = schema.topic_for(
-            target,
-            &Channel::CommandMetadata {
-                operation: OperationType::Restart,
-            },
-        );
+        let meta_topic = schema.capability_topic_for(target, OperationType::Restart);
         let payload = "{}";
         Message::new(&meta_topic, payload)
             .with_retain()
@@ -730,17 +814,18 @@ mod tests {
 
     #[test]
     fn serde_software_request_list() {
-        let request = SoftwareListRequest {
-            id: "1234".to_string(),
+        let request = SoftwareListCommandPayload {
+            status: CommandStatus::Init,
+            current_software_list: vec![],
         };
-        let expected_json = r#"{"id":"1234"}"#;
+        let expected_json = r#"{"status":"init"}"#;
 
         let actual_json = request.to_json();
 
         assert_eq!(actual_json, expected_json);
 
-        let de_request =
-            SoftwareListRequest::from_json(actual_json.as_str()).expect("failed to deserialize");
+        let de_request = SoftwareListCommandPayload::from_json(actual_json.as_str())
+            .expect("failed to deserialize");
         assert_eq!(request, de_request);
     }
 

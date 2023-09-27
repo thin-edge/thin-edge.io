@@ -73,21 +73,20 @@ impl TedgeOperationConverterBuilder {
         }
     }
 
+    pub fn capabilities() -> Vec<OperationType> {
+        vec![OperationType::Restart, OperationType::SoftwareList]
+    }
+
     pub fn subscriptions(mqtt_schema: &MqttSchema, device_topic_id: &EntityTopicId) -> TopicFilter {
-        let mut topics: TopicFilter = [mqtt_schema.topics(
-            EntityFilter::Entity(device_topic_id),
-            Command(OperationType::Restart),
-        )]
-        .into_iter()
-        .collect();
+        let mut topics: TopicFilter = Self::capabilities()
+            .into_iter()
+            .map(|cmd| mqtt_schema.topics(EntityFilter::Entity(device_topic_id), Command(cmd)))
+            .collect();
 
         topics.add_all(
-            vec![
-                "tedge/commands/req/software/list",
-                "tedge/commands/req/software/update",
-            ]
-            .try_into()
-            .expect("Infallible"),
+            vec!["tedge/commands/req/software/update"]
+                .try_into()
+                .expect("Infallible"),
         );
 
         topics

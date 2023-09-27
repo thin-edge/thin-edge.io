@@ -13,12 +13,13 @@ use tedge_actors::Sender;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::messages::CommandStatus;
+use tedge_api::messages::SoftwareListCommand;
 use tedge_api::messages::SoftwareModuleAction;
 use tedge_api::messages::SoftwareModuleItem;
 use tedge_api::messages::SoftwareRequestResponseSoftwareList;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::OperationStatus;
-use tedge_api::SoftwareListRequest;
-use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareRequestResponse;
 use tedge_api::SoftwareUpdateRequest;
 use tedge_api::SoftwareUpdateResponse;
@@ -81,8 +82,8 @@ async fn test_new_software_update_operation() -> Result<(), DynError> {
         SoftwareResponse::SoftwareUpdateResponse(res) => {
             assert_eq!(res.response.status, OperationStatus::Executing);
         }
-        SoftwareResponse::SoftwareListResponse(_) => {
-            panic!("Received SoftwareListResponse")
+        SoftwareResponse::SoftwareListCommand(_) => {
+            panic!("Received SoftwareListCommand")
         }
     }
 
@@ -100,11 +101,11 @@ async fn test_pending_software_list_operation() -> Result<(), DynError> {
 
     let mut converter_box = spawn_software_manager(&temp_dir).await?;
 
-    let software_request_response = SoftwareRequestResponse::new("1234", OperationStatus::Failed);
+    let software_request_response =
+        SoftwareListCommand::new_with_id(&EntityTopicId::default_main_device(), "1234".to_string())
+            .with_error("Software List request cancelled on agent restart".to_string());
     converter_box
-        .assert_received([SoftwareListResponse {
-            response: software_request_response,
-        }])
+        .assert_received([software_request_response])
         .await;
 
     Ok(())
@@ -118,28 +119,16 @@ async fn test_new_software_list_operation() -> Result<(), DynError> {
 
     let mut converter_box = spawn_software_manager(&temp_dir).await?;
 
-    converter_box
-        .send(
-            SoftwareListRequest {
-                id: "1234".to_string(),
-            }
-            .into(),
-        )
-        .await?;
+    let command =
+        SoftwareListCommand::new_with_id(&EntityTopicId::default_main_device(), "1234".to_string());
+    converter_box.send(command.clone().into()).await?;
 
-    let executing_response = SoftwareRequestResponse::new("1234", OperationStatus::Executing);
-    let mut successful_response = SoftwareRequestResponse::new("1234", OperationStatus::Successful);
+    let executing_response = command.clone().with_status(CommandStatus::Executing);
+    let mut successful_response = command.clone().with_status(CommandStatus::Successful);
     successful_response.add_modules("".to_string(), vec![]);
 
     converter_box
-        .assert_received([
-            SoftwareListResponse {
-                response: executing_response,
-            },
-            SoftwareListResponse {
-                response: successful_response,
-            },
-        ])
+        .assert_received([executing_response, successful_response])
         .await;
 
     Ok(())
@@ -152,6 +141,7 @@ async fn spawn_software_manager(
         SimpleMessageBoxBuilder::new("Converter", 5);
 
     let config = SoftwareManagerConfig::new(
+        &EntityTopicId::default_main_device(),
         &tmp_dir.utf8_path_buf(),
         &tmp_dir.utf8_path_buf(),
         &tmp_dir.utf8_path_buf(),

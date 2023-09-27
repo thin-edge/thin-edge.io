@@ -2,6 +2,7 @@
 //!
 //! See https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/
 
+use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use std::convert::Infallible;
 use std::fmt::Display;
@@ -163,6 +164,11 @@ impl MqttSchema {
         };
 
         TopicFilter::new_unchecked(&format!("{}/{entity}{channel}", self.root))
+    }
+
+    /// Return the topic to publish an operation capability for a device
+    pub fn capability_topic_for(&self, target: &EntityTopicId, operation: OperationType) -> Topic {
+        self.topic_for(target, &Channel::CommandMetadata { operation })
     }
 }
 
