@@ -2312,7 +2312,7 @@ mod tests {
         let config = C8yMapperConfig::new(
             tmp_dir.to_path_buf(),
             tmp_dir.utf8_path_buf(),
-            tmp_dir.utf8_path_buf(),
+            tmp_dir.utf8_path_buf().into(),
             device_id,
             device_type,
             service_type,
