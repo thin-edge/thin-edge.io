@@ -10,6 +10,7 @@ pub mod measurement;
 pub mod messages;
 pub mod mqtt_topics;
 pub mod parser;
+pub mod path;
 pub mod serialize;
 mod software;
 pub mod topic;
