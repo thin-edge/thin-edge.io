@@ -714,8 +714,8 @@ async fn spawn_firmware_manager(
         device_id.to_string(),
         tedge_host,
         TEDGE_HTTP_PORT,
-        tmp_dir.to_path_buf(),
-        tmp_dir.to_path_buf(),
+        tmp_dir.utf8_path_buf(),
+        tmp_dir.utf8_path_buf().into(),
         timeout_sec,
         C8Y_HOST.into(),
     );

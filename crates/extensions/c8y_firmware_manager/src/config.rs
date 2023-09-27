@@ -3,11 +3,12 @@ use crate::error::FirmwareManagementError;
 
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::smartrest::topic::C8yTopic;
+use camino::Utf8PathBuf;
 use std::net::IpAddr;
 use std::path::Path;
-use std::path::PathBuf;
 use std::time::Duration;
 use tedge_api::health::health_check_topics;
+use tedge_api::path::DataDir;
 use tedge_config::TEdgeConfig;
 use tedge_mqtt_ext::TopicFilter;
 
@@ -19,11 +20,11 @@ const FIRMWARE_UPDATE_RESPONSE_TOPICS: &str = "tedge/+/commands/res/firmware_upd
 pub struct FirmwareManagerConfig {
     pub tedge_device_id: String,
     pub local_http_host: String,
-    pub tmp_dir: PathBuf,
-    pub data_dir: PathBuf,
-    pub cache_dir: PathBuf,
-    pub file_transfer_dir: PathBuf,
-    pub firmware_dir: PathBuf,
+    pub tmp_dir: Utf8PathBuf,
+    pub data_dir: DataDir,
+    pub cache_dir: Utf8PathBuf,
+    pub file_transfer_dir: Utf8PathBuf,
+    pub firmware_dir: Utf8PathBuf,
     pub c8y_request_topics: TopicFilter,
     pub health_check_topics: TopicFilter,
     pub firmware_update_response_topics: TopicFilter,
@@ -36,16 +37,16 @@ impl FirmwareManagerConfig {
         tedge_device_id: String,
         local_http_address: IpAddr,
         local_http_port: u16,
-        tmp_dir: PathBuf,
-        data_dir: PathBuf,
+        tmp_dir: Utf8PathBuf,
+        data_dir: DataDir,
         timeout_sec: Duration,
         c8y_url: String,
     ) -> Self {
         let local_http_host = format!("{}:{}", local_http_address, local_http_port);
 
-        let cache_dir = data_dir.join("cache");
-        let file_transfer_dir = data_dir.join("file-transfer");
-        let firmware_dir = data_dir.join("firmware");
+        let cache_dir = data_dir.cache_dir();
+        let file_transfer_dir = data_dir.file_transfer_dir();
+        let firmware_dir = data_dir.firmware_dir();
 
         let c8y_request_topics = C8yTopic::SmartRestRequest.into();
         let health_check_topics = health_check_topics(PLUGIN_SERVICE_NAME);
@@ -76,8 +77,8 @@ impl FirmwareManagerConfig {
         let tedge_device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let local_http_address = tedge_config.http.bind.address;
         let local_http_port = tedge_config.http.bind.port;
-        let tmp_dir = tedge_config.tmp.path.as_std_path().to_path_buf();
-        let data_dir = tedge_config.data.path.as_std_path().to_path_buf();
+        let tmp_dir = tedge_config.tmp.path.clone();
+        let data_dir = tedge_config.data.path.clone().into();
         let timeout_sec = tedge_config.firmware.child.update.timeout.duration();
 
         let c8y_url = tedge_config.c8y.http.or_config_not_set()?.to_string();
@@ -94,7 +95,7 @@ impl FirmwareManagerConfig {
     }
 
     // It checks the directory exists in the system
-    pub fn validate_and_get_cache_dir_path(&self) -> Result<PathBuf, FirmwareManagementError> {
+    pub fn validate_and_get_cache_dir_path(&self) -> Result<Utf8PathBuf, FirmwareManagementError> {
         validate_dir_exists(self.cache_dir.as_path())?;
         Ok(self.cache_dir.clone())
     }
@@ -102,24 +103,26 @@ impl FirmwareManagerConfig {
     // It checks the directory exists in the system
     pub fn validate_and_get_file_transfer_dir_path(
         &self,
-    ) -> Result<PathBuf, FirmwareManagementError> {
+    ) -> Result<Utf8PathBuf, FirmwareManagementError> {
         validate_dir_exists(self.file_transfer_dir.as_path())?;
         Ok(self.file_transfer_dir.clone())
     }
 
     // It checks the directory exists in the system
-    pub fn validate_and_get_firmware_dir_path(&self) -> Result<PathBuf, FirmwareManagementError> {
+    pub fn validate_and_get_firmware_dir_path(
+        &self,
+    ) -> Result<Utf8PathBuf, FirmwareManagementError> {
         validate_dir_exists(self.firmware_dir.as_path())?;
         Ok(self.firmware_dir.clone())
     }
 }
 
-fn validate_dir_exists(dir_path: &Path) -> Result<(), FirmwareManagementError> {
-    if dir_path.is_dir() {
+fn validate_dir_exists(dir_path: impl AsRef<Path>) -> Result<(), FirmwareManagementError> {
+    if dir_path.as_ref().is_dir() {
         Ok(())
     } else {
         Err(FirmwareManagementError::DirectoryNotFound {
-            path: dir_path.to_path_buf(),
+            path: dir_path.as_ref().to_path_buf(),
         })
     }
 }

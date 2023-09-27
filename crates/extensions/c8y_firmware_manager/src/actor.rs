@@ -6,6 +6,7 @@ use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::smartrest_serializer::TryIntoOperationStatusMessage;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::credentials::JwtRetriever;
+use camino::Utf8PathBuf;
 use log::error;
 use log::info;
 use log::warn;
@@ -16,7 +17,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::os::unix::fs as unix_fs;
 use std::path::Path;
-use std::path::PathBuf;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::DynSender;
@@ -230,7 +230,7 @@ impl FirmwareManagerActor {
         if cache_file_path.is_file() {
             info!(
                 "Hit the file cache={}. File download is skipped.",
-                cache_file_path.display()
+                cache_file_path.as_str()
             );
             // Publish a firmware update request to child device.
             self.handle_firmware_update_request_with_downloaded_file(
@@ -253,13 +253,13 @@ impl FirmwareManagerActor {
                 .is_some()
             {
                 if let Ok(token) = self.message_box.jwt_retriever.await_response(()).await? {
-                    DownloadRequest::new(firmware_url, &cache_file_path)
+                    DownloadRequest::new(firmware_url, cache_file_path.as_std_path())
                         .with_auth(Auth::new_bearer(&token))
                 } else {
                     return Err(FirmwareManagementError::NoJwtToken);
                 }
             } else {
-                DownloadRequest::new(firmware_url, &cache_file_path)
+                DownloadRequest::new(firmware_url, cache_file_path.as_std_path())
             };
 
             self.message_box
@@ -320,7 +320,7 @@ impl FirmwareManagerActor {
         &mut self,
         smartrest_request: SmartRestFirmwareRequest,
         operation_id: &str,
-        downloaded_firmware: &Path,
+        downloaded_firmware: impl AsRef<Path>,
     ) -> Result<(), FirmwareManagementError> {
         let child_id = smartrest_request.device.as_str();
         let firmware_url = smartrest_request.url.as_str();
@@ -329,7 +329,7 @@ impl FirmwareManagerActor {
         let cache_file_path = cache_dir_path.join(&file_cache_key);
 
         // If the downloaded firmware is not already in the cache, move it there
-        if !downloaded_firmware.starts_with(&cache_dir_path) {
+        if !downloaded_firmware.as_ref().starts_with(&cache_dir_path) {
             move_file(
                 &downloaded_firmware,
                 &cache_file_path,
@@ -537,14 +537,14 @@ impl FirmwareManagerActor {
                     }
                     Err(err) => {
                         warn!("Error: {err} while reading the contents of persistent store directory {}",
-                            firmware_dir_path.display());
+                            firmware_dir_path.as_str());
                         continue;
                     }
                 },
                 Err(err) => {
                     warn!(
                         "Error: {err} while reading the contents of persistent store directory {}",
-                        firmware_dir_path.display()
+                        firmware_dir_path.as_str()
                     );
                     continue;
                 }
@@ -714,8 +714,8 @@ impl FirmwareManagerActor {
         &self,
         child_id: &str,
         file_cache_key: &str,
-        original_file_path: &Path,
-    ) -> Result<PathBuf, FirmwareManagementError> {
+        original_file_path: impl AsRef<Path>,
+    ) -> Result<Utf8PathBuf, FirmwareManagementError> {
         let file_transfer_dir_path = self.config.validate_and_get_file_transfer_dir_path()?;
 
         let symlink_dir_path = file_transfer_dir_path

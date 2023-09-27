@@ -31,9 +31,6 @@ pub use messages::SoftwareUpdateRequest;
 pub use messages::SoftwareUpdateResponse;
 pub use software::*;
 
-pub const DEFAULT_DATA_PATH: &str = "/var/tedge";
-pub const DEFAULT_FILE_TRANSFER_DIR_NAME: &str = "file-transfer";
-
 #[cfg(test)]
 mod tests {
     use super::*;

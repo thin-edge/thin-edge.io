@@ -683,6 +683,7 @@ dependencies = [
  "async-trait",
  "c8y_api",
  "c8y_http_proxy",
+ "camino",
  "log",
  "mockall",
  "nanoid",

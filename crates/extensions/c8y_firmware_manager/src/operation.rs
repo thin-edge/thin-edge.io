@@ -19,15 +19,21 @@ pub struct FirmwareOperationEntry {
 }
 
 impl FirmwareOperationEntry {
-    pub fn create_status_file(&self, firmware_dir: &Path) -> Result<(), FirmwareManagementError> {
-        let path = firmware_dir.join(&self.operation_id);
+    pub fn create_status_file(
+        &self,
+        firmware_dir: impl AsRef<Path>,
+    ) -> Result<(), FirmwareManagementError> {
+        let path = firmware_dir.as_ref().join(&self.operation_id);
         let content = serde_json::to_string(self)?;
         create_file_with_mode(path, Some(content.as_str()), 0o644)
             .map_err(FirmwareManagementError::FromFileError)
     }
 
-    pub fn overwrite_file(&self, firmware_dir: &Path) -> Result<(), FirmwareManagementError> {
-        let path = firmware_dir.join(&self.operation_id);
+    pub fn overwrite_file(
+        &self,
+        firmware_dir: impl AsRef<Path>,
+    ) -> Result<(), FirmwareManagementError> {
+        let path = firmware_dir.as_ref().join(&self.operation_id);
         let content = serde_json::to_string(self)?;
         overwrite_file(&path, &content).map_err(FirmwareManagementError::FromFileError)
     }
@@ -39,7 +45,7 @@ impl FirmwareOperationEntry {
         }
     }
 
-    pub fn read_from_file(path: &Path) -> Result<Self, FirmwareManagementError> {
+    pub fn read_from_file(path: impl AsRef<Path>) -> Result<Self, FirmwareManagementError> {
         let bytes = fs::read(path)?;
         serde_json::from_slice(&bytes).map_err(FirmwareManagementError::FromSerdeJsonError)
     }
@@ -91,7 +97,7 @@ mod tests {
         ttd.dir("firmware").file(op_id).with_raw_content(&content);
         let file_path = ttd.path().join("firmware").join(op_id);
 
-        let entry = FirmwareOperationEntry::read_from_file(&file_path).unwrap();
+        let entry = FirmwareOperationEntry::read_from_file(file_path).unwrap();
         let expected_entry = FirmwareOperationEntry {
             operation_id: "op-id".to_string(),
             child_id: "child-id".to_string(),
