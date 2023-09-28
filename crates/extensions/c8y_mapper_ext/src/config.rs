@@ -11,8 +11,8 @@ use tedge_api::mqtt_topics::ChannelFilter::CommandMetadata;
 use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::path::DataDir;
 use tedge_api::topic::ResponseTopic;
-use tedge_api::DEFAULT_FILE_TRANSFER_DIR_NAME;
 use tedge_config::ConfigNotSet;
 use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
@@ -24,7 +24,7 @@ pub const MQTT_MESSAGE_SIZE_THRESHOLD: usize = 16184;
 pub struct C8yMapperConfig {
     pub config_dir: PathBuf,
     pub logs_path: Utf8PathBuf,
-    pub data_dir: Utf8PathBuf,
+    pub data_dir: DataDir,
     pub device_id: String,
     pub device_type: String,
     pub service_type: String,
@@ -43,7 +43,7 @@ impl C8yMapperConfig {
     pub fn new(
         config_dir: PathBuf,
         logs_path: Utf8PathBuf,
-        data_dir: Utf8PathBuf,
+        data_dir: DataDir,
         device_id: String,
         device_type: String,
         service_type: String,
@@ -55,7 +55,7 @@ impl C8yMapperConfig {
         auth_proxy_port: u16,
     ) -> Self {
         let ops_dir = config_dir.join("operations").join("c8y");
-        let file_transfer_dir = data_dir.join(DEFAULT_FILE_TRANSFER_DIR_NAME);
+        let file_transfer_dir = data_dir.file_transfer_dir();
 
         Self {
             config_dir,
@@ -82,7 +82,7 @@ impl C8yMapperConfig {
         let config_dir: PathBuf = config_dir.as_ref().into();
 
         let logs_path = tedge_config.logs.path.clone();
-        let data_dir = tedge_config.data.path.clone();
+        let data_dir: DataDir = tedge_config.data.path.clone().into();
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let device_type = tedge_config.device.ty.clone();
         let service_type = tedge_config.service.ty.clone();

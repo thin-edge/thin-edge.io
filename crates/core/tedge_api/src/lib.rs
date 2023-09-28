@@ -10,6 +10,7 @@ pub mod measurement;
 pub mod messages;
 pub mod mqtt_topics;
 pub mod parser;
+pub mod path;
 pub mod serialize;
 mod software;
 pub mod topic;
@@ -29,9 +30,6 @@ pub use messages::SoftwareRequestResponse;
 pub use messages::SoftwareUpdateRequest;
 pub use messages::SoftwareUpdateResponse;
 pub use software::*;
-
-pub const DEFAULT_DATA_PATH: &str = "/var/tedge";
-pub const DEFAULT_FILE_TRANSFER_DIR_NAME: &str = "file-transfer";
 
 #[cfg(test)]
 mod tests {

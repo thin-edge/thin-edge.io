@@ -4,7 +4,7 @@ use c8y_api::smartrest::topic::C8yTopic;
 use std::net::IpAddr;
 use std::path::Path;
 use std::path::PathBuf;
-use tedge_api::DEFAULT_FILE_TRANSFER_DIR_NAME;
+use tedge_api::path::DataDir;
 use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
 use tedge_mqtt_ext::TopicFilter;
@@ -36,7 +36,7 @@ impl ConfigManagerConfig {
     pub fn new(
         config_dir: PathBuf,
         tmp_dir: PathBuf,
-        data_dir: PathBuf,
+        data_dir: DataDir,
         device_id: String,
         mqtt_host: String,
         mqtt_port: u16,
@@ -49,7 +49,7 @@ impl ConfigManagerConfig {
         let plugin_config_dir = config_dir.join(DEFAULT_OPERATION_DIR_NAME);
         let plugin_config_path = plugin_config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
 
-        let file_transfer_dir = data_dir.join(DEFAULT_FILE_TRANSFER_DIR_NAME);
+        let file_transfer_dir = data_dir.file_transfer_dir().into();
 
         let c8y_request_topics: TopicFilter = C8yTopic::SmartRestRequest.into();
         let config_snapshot_response_topics: TopicFilter =
@@ -78,10 +78,10 @@ impl ConfigManagerConfig {
         config_dir: impl AsRef<Path>,
         tedge_config: &TEdgeConfig,
     ) -> Result<ConfigManagerConfig, ReadError> {
-        let config_dir: PathBuf = config_dir.as_ref().into();
+        let config_dir = config_dir.as_ref().into();
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let tmp_dir = tedge_config.tmp.path.as_std_path().to_path_buf();
-        let data_dir = tedge_config.data.path.as_std_path().to_path_buf();
+        let data_dir = tedge_config.data.path.clone().into();
         let mqtt_host = tedge_config.mqtt.client.host.clone();
         let mqtt_port = tedge_config.mqtt.client.port.get();
         let tedge_http_address = tedge_config.http.bind.address;

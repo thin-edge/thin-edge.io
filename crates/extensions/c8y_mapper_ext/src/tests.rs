@@ -2103,7 +2103,7 @@ async fn spawn_c8y_mapper_actor(
     let config = C8yMapperConfig::new(
         config_dir.to_path_buf(),
         config_dir.utf8_path_buf(),
-        config_dir.utf8_path_buf(),
+        config_dir.utf8_path_buf().into(),
         device_name,
         device_type,
         service_type,

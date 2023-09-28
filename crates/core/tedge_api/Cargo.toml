@@ -9,6 +9,7 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+camino = { workspace = true }
 clock = { workspace = true }
 csv = { workspace = true }
 download = { workspace = true }
