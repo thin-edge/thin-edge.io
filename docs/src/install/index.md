@@ -12,7 +12,9 @@ Systemd is still the default init system (aka. service manager), however if you 
 
 ## Install/update
 
-The easiest way to get started with thin-edge.io is to use the installation script which will auto detect the installation method appropriate for your Linux distribution. The script will configure the package manager and install thin-edge.io and its dependencies (e.g. mosquitto). If your distribution does not have one of the supported package managers, then the tarball will be used to install thin-edge.io.
+The easiest way to explore thin-edge.io is using the docker based [demo container setup](https://github.com/thin-edge/tedge-demo-container) that showcase thin-edge.io and all its features.
+
+To install thin-edge.io on a Linux based system, you can use the installation script which will auto detect the installation method appropriate for your Linux distribution. The script will configure the package manager and install thin-edge.io and its dependencies (e.g. mosquitto). If your distribution does not have one of the supported package managers, then the tarball will be used to install thin-edge.io.
 
 To install or update to the latest version, run the following command:
 
