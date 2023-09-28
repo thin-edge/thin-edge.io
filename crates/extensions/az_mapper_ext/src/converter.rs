@@ -2,15 +2,17 @@ use crate::error::ConversionError;
 use crate::size_threshold::SizeThreshold;
 use clock::Clock;
 use log::error;
+use serde_json::Map;
+use serde_json::Value;
 use std::convert::Infallible;
 use tedge_actors::Converter;
 use tedge_api::health::is_bridge_health;
-use tedge_api::serialize::ThinEdgeJsonSerializer;
+use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 
 const AZ_MQTT_THRESHOLD: usize = 1024 * 128;
-
 #[derive(Debug)]
 pub struct MapperConfig {
     pub out_topic: Topic,
@@ -22,6 +24,7 @@ pub struct AzureConverter {
     pub(crate) clock: Box<dyn Clock>,
     pub(crate) size_threshold: SizeThreshold,
     pub(crate) mapper_config: MapperConfig,
+    pub mqtt_schema: MqttSchema,
 }
 
 impl AzureConverter {
@@ -30,13 +33,13 @@ impl AzureConverter {
             out_topic: Topic::new_unchecked("az/messages/events/"),
             errors_topic: Topic::new_unchecked("tedge/errors"),
         };
-
         let size_threshold = SizeThreshold(AZ_MQTT_THRESHOLD);
         AzureConverter {
             add_timestamp,
             clock,
             size_threshold,
             mapper_config,
+            mqtt_schema: MqttSchema::default(),
         }
     }
 
@@ -48,24 +51,64 @@ impl AzureConverter {
     }
 
     fn try_convert(&mut self, input: &MqttMessage) -> Result<Vec<MqttMessage>, ConversionError> {
-        let default_timestamp = self.add_timestamp.then(|| self.clock.now());
         if is_bridge_health(&input.topic.name) {
             Ok(vec![])
-        } else if input.topic.name.starts_with("tedge/health") {
+        } else {
+            match self.mqtt_schema.entity_channel_of(&input.topic) {
+                Ok((_source, channel)) => self.try_convert_te_topics(input, channel),
+                Err(_) => self.try_convert_tedge_health_topics(input),
+            }
+        }
+    }
+
+    fn try_convert_tedge_health_topics(
+        &mut self,
+        input: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if input.topic.name.starts_with("tedge/health") {
             let mut input_msg = input.clone();
             input_msg.topic = self.mapper_config.out_topic.clone();
             Ok(vec![input_msg])
         } else {
-            self.size_threshold.validate(input)?;
-
-            let mut serializer = ThinEdgeJsonSerializer::new_with_timestamp(default_timestamp);
-            tedge_api::parser::parse_str(input.payload_str()?, &mut serializer)?;
-
-            let payload = serializer.into_string()?;
-            Ok(vec![
-                (MqttMessage::new(&self.mapper_config.out_topic, payload)),
-            ])
+            Ok(vec![])
         }
+    }
+
+    // Todo: The device-id,telemetry kind (Meausrement/event/alarm) and telemetry type from the te topic has to be
+    // used to push the telemetry messages on to specific azure topic.
+    // For now all the messages will be sent over az/messages/events/ topic as this is the default mqtt topic for
+    // sending the telemetry on to the azure iot hub.
+    fn try_convert_te_topics(
+        &mut self,
+        input: &MqttMessage,
+        channel: Channel,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        self.size_threshold.validate(input)?;
+
+        match &channel {
+            Channel::Measurement { .. } | Channel::Event { .. } | Channel::Alarm { .. } => {
+                let payload = self.with_timestamp(input)?;
+                let output = MqttMessage::new(&self.mapper_config.out_topic, payload);
+                self.size_threshold.validate(&output)?;
+                Ok(vec![output])
+            }
+            _ => Ok(vec![]),
+        }
+    }
+
+    fn with_timestamp(&mut self, input: &MqttMessage) -> Result<String, ConversionError> {
+        let default_timestamp = self.add_timestamp.then(|| self.clock.now());
+        let mut payload_json: Map<String, Value> =
+            serde_json::from_slice(input.payload.as_bytes())?;
+
+        if let Some(timestamp) = default_timestamp {
+            let timestamp = timestamp
+                .format(&time::format_description::well_known::Rfc3339)?
+                .as_str()
+                .into();
+            payload_json.entry("time").or_insert(timestamp);
+        }
+        Ok(serde_json::to_string(&payload_json)?)
     }
 
     fn wrap_errors(
@@ -95,9 +138,11 @@ impl Converter for AzureConverter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::ConversionError::FromSerdeJson;
     use assert_json_diff::*;
     use assert_matches::*;
     use serde_json::json;
+    use test_case::test_case;
     use time::macros::datetime;
 
     struct TestClock;
@@ -109,7 +154,7 @@ mod tests {
     }
 
     fn new_tedge_message(input: &str) -> MqttMessage {
-        MqttMessage::new(&Topic::new_unchecked("tedge/measurements"), input)
+        MqttMessage::new(&Topic::new_unchecked("te/device/main///m/"), input)
     }
 
     fn extract_first_message_payload(mut messages: Vec<MqttMessage>) -> String {
@@ -127,7 +172,7 @@ mod tests {
         assert_eq!(output.first().unwrap().topic.name, "tedge/errors");
         assert_eq!(
             extract_first_message_payload(output),
-            "Invalid JSON: expected value at line 1 column 1: `Invalid JSON\n`"
+            "expected value at line 1 column 1"
         );
     }
 
@@ -138,7 +183,7 @@ mod tests {
         let input = "This is not Thin Edge JSON";
         let result = converter.try_convert(&new_tedge_message(input));
 
-        assert_matches!(result, Err(ConversionError::FromThinEdgeJsonParser(_)))
+        assert_matches!(result, Err(FromSerdeJson(_)))
     }
 
     #[test]
@@ -146,15 +191,16 @@ mod tests {
         let mut converter =
             AzureConverter::new(false, Box::new(TestClock)).with_threshold(SizeThreshold(1));
 
-        let _topic = "tedge/measurements".to_string();
-        let input = "ABC";
+        let _topic = "te/device/main///m/".to_string();
+        let input = r#"{
+            "temperature": 23.0
+         }"#;
         let result = converter.try_convert(&new_tedge_message(input));
-
         assert_matches!(
             result,
             Err(ConversionError::SizeThresholdExceeded {
                 topic: _topic,
-                actual_size: 3,
+                actual_size: 44,
                 threshold: 1
             })
         );
@@ -193,7 +239,7 @@ mod tests {
         }"#;
 
         let expected_output = json!({
-            "time" : "2013-06-22T17:03:14+02:00",
+            "time" : "2013-06-22T17:03:14.000+02:00",
             "temperature": 23.0
         });
 
@@ -217,7 +263,7 @@ mod tests {
         }"#;
 
         let expected_output = json!({
-            "time" : "2013-06-22T17:03:14+02:00",
+            "time" : "2013-06-22T17:03:14.000+02:00",
             "temperature": 23.0
         });
 
@@ -251,6 +297,88 @@ mod tests {
                 .unwrap(),
             expected_output
         );
+    }
+
+    #[test_case(
+        "te/device/main///m/m_type",
+        "az/messages/events/",
+        r#"{"temperature":23.0,"time":"2021-04-08T00:00:00+05:00"}"#        
+        ; "main device measurement"
+    )]
+    #[test_case(
+        "te/device/child///m/m_type",
+        "az/messages/events/",        
+        r#"{"temperature":23.0,"time":"2021-04-08T00:00:00+05:00"}"#
+        ; "child device measurement"
+    )]
+    #[test_case(
+        "te/device/main/service/m_service/m/m_type",
+        "az/messages/events/",
+        r#"{"temperature":23.0,"time":"2021-04-08T00:00:00+05:00"}"#        
+        ; "main device service measurement"
+    )]
+    #[test_case(
+        "te/device/child/service/c_service/m/m_type",
+        "az/messages/events/",        
+        r#"{"temperature":23.0,"time":"2021-04-08T00:00:00+05:00"}"#
+        ; "child device service measurement"
+    )]
+    #[test_case(
+        "te/device/main///e/e_type",
+        "az/messages/events/",
+        r#"{"text":"someone logged-in","time":"2021-04-08T00:00:00+05:00"}"#        
+        ; "main device event"
+    )]
+    #[test_case(
+        "te/device/child///e/e_type",
+        "az/messages/events/",        
+        r#"{"text":"someone logged-in","time":"2021-04-08T00:00:00+05:00"}"#
+        ; "child device event"
+    )]
+    #[test_case(
+        "te/device/main/service/m_service/e/e_type",
+        "az/messages/events/",
+        r#"{"text":"someone logged-in","time":"2021-04-08T00:00:00+05:00"}"#        
+        ; "main device service event"
+    )]
+    #[test_case(
+        "te/device/child/service/c_service/e/e_type",
+        "az/messages/events/",        
+        r#"{"text":"someone logged-in","time":"2021-04-08T00:00:00+05:00"}"#
+        ; "child device service event"
+    )]
+    #[test_case(
+        "te/device/main///a/a_type",
+        "az/messages/events/",
+        r#"{"severity":"critical","time":"2021-04-08T00:00:00+05:00"}"#        
+        ; "main device alarm"
+    )]
+    #[test_case(
+        "te/device/child///a/a_type",
+        "az/messages/events/",        
+        r#"{"severity":"critical","time":"2021-04-08T00:00:00+05:00"}"#
+        ; "child device alarm"
+    )]
+    #[test_case(
+        "te/device/main/service/m_service/a/a_type",
+        "az/messages/events/",
+        r#"{"severity":"critical","time":"2021-04-08T00:00:00+05:00"}"#        
+        ; "main device service alarm"
+    )]
+    #[test_case(
+        "te/device/child/service/c_service/a/a_type",
+        "az/messages/events/",        
+        r#"{"severity":"critical","time":"2021-04-08T00:00:00+05:00"}"#
+        ; "child device service alarm"
+    )]
+    fn converting_az_telemetry(input_topic: &str, output_topic: &str, input: &str) {
+        let mut converter = AzureConverter::new(true, Box::new(TestClock));
+        let input_message = MqttMessage::new(&Topic::new_unchecked(input_topic), input);
+
+        let output = converter.convert(&input_message).unwrap();
+
+        assert_eq!(output[0].payload_str().unwrap(), input);
+        assert_eq!(output[0].topic.name, output_topic);
     }
 
     #[test]

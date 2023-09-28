@@ -28,5 +28,6 @@ assert_matches = { workspace = true }
 rand = { workspace = true }
 serde  = { workspace = true }
 serde_json = { workspace = true }
+test-case = { workspace = true }
 time = { workspace = true, features = ["macros"] }
 tokio = { workspace = true, features = ["time"] }

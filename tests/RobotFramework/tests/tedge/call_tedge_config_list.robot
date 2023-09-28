@@ -129,7 +129,7 @@ set/unset az.topics
     ${unset}    Execute Command    tedge config list
     Should Contain
     ...    ${unset}
-    ...    az.topics=["tedge/measurements", "tedge/measurements/+", "tedge/health/+", "tedge/health/+/+"]
+    ...    az.topics=["te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "tedge/health/+", "tedge/health/+/+"]
 
 set/unset aws.topics
     Execute Command    sudo tedge config set aws.topics topic1,topic2    # Changing aws.topics
