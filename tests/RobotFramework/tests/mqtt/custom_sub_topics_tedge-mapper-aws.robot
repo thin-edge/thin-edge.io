@@ -37,8 +37,8 @@ Publish service measurements to te measurement topic with measurement type
     Execute Command    sudo tedge config set aws.topics "te/+/+/+/+/m/+"
     Execute Command    sudo systemctl restart tedge-mapper-aws.service
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-aws
-    Execute Command    tedge mqtt pub te/device/main/service//m/test-type '{"temperature": 10}'
-    Should Have MQTT Messages    aws/td/device:main/m/test-type   message_contains="temperature"    date_from=${timestamp}   minimum=1    maximum=1
+    Execute Command    tedge mqtt pub te/device/main/service/test_service/m/test-type '{"temperature": 10}'
+    Should Have MQTT Messages    aws/td/device:main:service:test_service/m/test-type   message_contains="temperature"    date_from=${timestamp}   minimum=1    maximum=1
 
 Publish child measurements to te measurement topic with measurement type
     ${timestamp}=        Get Unix Timestamp
