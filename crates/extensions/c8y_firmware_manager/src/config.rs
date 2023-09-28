@@ -22,9 +22,6 @@ pub struct FirmwareManagerConfig {
     pub local_http_host: String,
     pub tmp_dir: Utf8PathBuf,
     pub data_dir: DataDir,
-    pub cache_dir: Utf8PathBuf,
-    pub file_transfer_dir: Utf8PathBuf,
-    pub firmware_dir: Utf8PathBuf,
     pub c8y_request_topics: TopicFilter,
     pub health_check_topics: TopicFilter,
     pub firmware_update_response_topics: TopicFilter,
@@ -44,10 +41,6 @@ impl FirmwareManagerConfig {
     ) -> Self {
         let local_http_host = format!("{}:{}", local_http_address, local_http_port);
 
-        let cache_dir = data_dir.cache_dir();
-        let file_transfer_dir = data_dir.file_transfer_dir();
-        let firmware_dir = data_dir.firmware_dir();
-
         let c8y_request_topics = C8yTopic::SmartRestRequest.into();
         let health_check_topics = health_check_topics(PLUGIN_SERVICE_NAME);
         let firmware_update_response_topics =
@@ -60,9 +53,6 @@ impl FirmwareManagerConfig {
             local_http_host,
             tmp_dir,
             data_dir,
-            cache_dir,
-            file_transfer_dir,
-            firmware_dir,
             c8y_request_topics,
             health_check_topics,
             firmware_update_response_topics,
@@ -96,24 +86,24 @@ impl FirmwareManagerConfig {
 
     // It checks the directory exists in the system
     pub fn validate_and_get_cache_dir_path(&self) -> Result<Utf8PathBuf, FirmwareManagementError> {
-        validate_dir_exists(self.cache_dir.as_path())?;
-        Ok(self.cache_dir.clone())
+        validate_dir_exists(self.data_dir.cache_dir().as_path())?;
+        Ok(self.data_dir.cache_dir().clone())
     }
 
     // It checks the directory exists in the system
     pub fn validate_and_get_file_transfer_dir_path(
         &self,
     ) -> Result<Utf8PathBuf, FirmwareManagementError> {
-        validate_dir_exists(self.file_transfer_dir.as_path())?;
-        Ok(self.file_transfer_dir.clone())
+        validate_dir_exists(self.data_dir.file_transfer_dir().as_path())?;
+        Ok(self.data_dir.file_transfer_dir().clone())
     }
 
     // It checks the directory exists in the system
     pub fn validate_and_get_firmware_dir_path(
         &self,
     ) -> Result<Utf8PathBuf, FirmwareManagementError> {
-        validate_dir_exists(self.firmware_dir.as_path())?;
-        Ok(self.firmware_dir.clone())
+        validate_dir_exists(self.data_dir.firmware_dir().as_path())?;
+        Ok(self.data_dir.firmware_dir().clone())
     }
 }
 

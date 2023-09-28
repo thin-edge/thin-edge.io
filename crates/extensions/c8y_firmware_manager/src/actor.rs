@@ -358,7 +358,7 @@ impl FirmwareManagerActor {
             attempt: 1,
         };
 
-        operation_entry.create_status_file(&self.config.firmware_dir)?;
+        operation_entry.create_status_file(self.config.data_dir.firmware_dir())?;
 
         self.publish_firmware_update_request(operation_entry)
             .await?;
@@ -440,7 +440,7 @@ impl FirmwareManagerActor {
 
         match received_status {
             OperationStatus::Successful => {
-                let status_file_path = self.config.firmware_dir.join(operation_id);
+                let status_file_path = self.config.data_dir.firmware_dir().join(operation_id);
                 let operation_entry =
                     FirmwareOperationEntry::read_from_file(status_file_path.as_path())?;
 
@@ -577,7 +577,7 @@ impl FirmwareManagerActor {
     }
 
     async fn resend_operations_to_child_device(&mut self) -> Result<(), FirmwareManagementError> {
-        let firmware_dir_path = self.config.firmware_dir.clone();
+        let firmware_dir_path = self.config.data_dir.firmware_dir().clone();
         if !firmware_dir_path.is_dir() {
             // Do nothing if the persistent store directory does not exist yet.
             return Ok(());

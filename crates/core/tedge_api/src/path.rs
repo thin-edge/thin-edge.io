@@ -6,7 +6,7 @@ use std::path::Path;
 /// Default is /var/tedge.
 /// All directories under the root data directory must be listed here.
 #[derive(Debug, Clone)]
-pub struct DataDir(pub Utf8PathBuf);
+pub struct DataDir(Utf8PathBuf);
 
 impl Default for DataDir {
     fn default() -> Self {
@@ -17,6 +17,12 @@ impl Default for DataDir {
 impl From<Utf8PathBuf> for DataDir {
     fn from(path: Utf8PathBuf) -> Self {
         DataDir(path)
+    }
+}
+
+impl From<DataDir> for Utf8PathBuf {
+    fn from(value: DataDir) -> Self {
+        value.0
     }
 }
 
@@ -44,11 +50,6 @@ impl DataDir {
     /// ```
     pub fn join(&self, path: impl AsRef<Utf8Path>) -> Utf8PathBuf {
         self.0.join(path.as_ref().to_path_buf())
-    }
-
-    /// Return `Utf8PathBuf` of the given `DataDir`.
-    pub fn utf8_path_buf(&self) -> Utf8PathBuf {
-        self.0.clone()
     }
 
     /// Return `Utf8PathBuf` to ThinEdge file transfer repository.

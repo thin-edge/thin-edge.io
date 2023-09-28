@@ -49,7 +49,7 @@ impl ConfigManagerConfig {
         let plugin_config_dir = config_dir.join(DEFAULT_OPERATION_DIR_NAME);
         let plugin_config_path = plugin_config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
 
-        let file_transfer_dir = data_dir.file_transfer_dir().as_std_path().to_path_buf();
+        let file_transfer_dir = data_dir.file_transfer_dir().into();
 
         let c8y_request_topics: TopicFilter = C8yTopic::SmartRestRequest.into();
         let config_snapshot_response_topics: TopicFilter =
