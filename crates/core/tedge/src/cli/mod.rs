@@ -80,6 +80,11 @@ pub enum TEdgeOpt {
         /// The group who will own the directories created
         #[clap(long, default_value = "tedge")]
         group: String,
+
+        /// Create symlinks to the tedge binary using a relative path
+        /// (e.g. ./tedge) instead of an absolute path (e.g. /usr/bin/tedge)
+        #[clap(long)]
+        relative_links: bool,
     },
 
     /// Create and manage device certificate
@@ -148,7 +153,16 @@ fn styles() -> clap::builder::Styles {
 impl BuildCommand for TEdgeOpt {
     fn build_command(self, context: BuildContext) -> Result<Box<dyn Command>, crate::ConfigError> {
         match self {
-            TEdgeOpt::Init { user, group } => Ok(Box::new(TEdgeInitCmd::new(user, group, context))),
+            TEdgeOpt::Init {
+                user,
+                group,
+                relative_links,
+            } => Ok(Box::new(TEdgeInitCmd::new(
+                user,
+                group,
+                relative_links,
+                context,
+            ))),
             TEdgeOpt::Cert(opt) => opt.build_command(context),
             TEdgeOpt::Config(opt) => opt.build_command(context),
             TEdgeOpt::Connect(opt) => opt.build_command(context),

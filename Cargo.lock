@@ -3511,6 +3511,7 @@ dependencies = [
  "hyper",
  "mockito",
  "mqtt_tests",
+ "nix",
  "pad",
  "pem",
  "predicates 2.1.5",

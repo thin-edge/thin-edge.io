@@ -15,7 +15,7 @@ use tedge_config::system_services::set_log_level;
 fn main() -> anyhow::Result<()> {
     let executable_name = executable_name();
 
-    if executable_name.as_deref() == Some("apt") {
+    if matches!(executable_name.as_deref(), Some("apt" | "tedge-apt-plugin")) {
         let try_opt = AptCli::try_parse();
         tedge_apt_plugin::run_and_exit(try_opt);
     }
