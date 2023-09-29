@@ -2,6 +2,8 @@ use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use async_trait::async_trait;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
@@ -29,6 +31,9 @@ use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityType;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::OperationType;
+use tedge_downloader_ext::DownloadRequest;
+use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
@@ -43,7 +48,11 @@ const SYNC_WINDOW: Duration = Duration::from_secs(3);
 pub type SyncStart = SetTimeout<()>;
 pub type SyncComplete = Timeout<()>;
 
-fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete] : Debug);
+pub(crate) type CmdId = String;
+pub(crate) type IdDownloadResult = (CmdId, DownloadResult);
+pub(crate) type IdDownloadRequest = (CmdId, DownloadRequest);
+
+fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete, IdDownloadResult] : Debug);
 type C8yMapperOutput = MqttMessage;
 
 pub struct C8yMapperActor {
@@ -80,6 +89,9 @@ impl Actor for C8yMapperActor {
                 }
                 C8yMapperInput::SyncComplete(_) => {
                     self.process_sync_timeout().await?;
+                }
+                C8yMapperInput::IdDownloadResult((cmd_id, result)) => {
+                    self.process_download_result(cmd_id, result).await?;
                 }
             }
         }
@@ -203,6 +215,44 @@ impl C8yMapperActor {
 
         Ok(())
     }
+
+    async fn process_download_result(
+        &mut self,
+        cmd_id: CmdId,
+        result: DownloadResult,
+    ) -> Result<(), RuntimeError> {
+        match self.converter.pending_operations.remove(&cmd_id) {
+            None => error!("Received a download result for the unknown command ID: {cmd_id}"),
+            Some((op_type, smartrest)) => {
+                let result = match op_type {
+                    OperationType::ConfigUpdate => {
+                        self.converter
+                            .process_download_result_for_config_update(
+                                cmd_id.into(),
+                                &SmartRestConfigDownloadRequest::from_smartrest(&smartrest)
+                                    .expect("Must be valid SmartREST"),
+                                result,
+                            )
+                            .await
+                    }
+                    _other_types => return Ok(()), // unsupported
+                };
+
+                match result {
+                    Ok(converted_messages) => {
+                        for converted_message in converted_messages.into_iter() {
+                            self.mqtt_publisher.send(converted_message).await?
+                        }
+                    }
+                    Err(err) => {
+                        error!("Error occurred while processing a download result. {err}")
+                    }
+                }
+            }
+        };
+
+        Ok(())
+    }
 }
 
 pub struct C8yMapperBuilder {
@@ -211,6 +261,7 @@ pub struct C8yMapperBuilder {
     mqtt_publisher: DynSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
     timer_sender: DynSender<SyncStart>,
+    download_sender: DynSender<IdDownloadRequest>,
     auth_proxy: ProxyUrlGenerator,
 }
 
@@ -220,6 +271,7 @@ impl C8yMapperBuilder {
         mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
         http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
         timer: &mut impl ServiceProvider<SyncStart, SyncComplete, NoConfig>,
+        downloader: &mut impl ServiceProvider<IdDownloadRequest, IdDownloadResult, NoConfig>,
         fs_watcher: &mut impl MessageSource<FsWatchEvent, PathBuf>,
     ) -> Result<Self, FileError> {
         Self::init(&config)?;
@@ -230,6 +282,8 @@ impl C8yMapperBuilder {
             mqtt.connect_consumer(config.topics.clone(), adapt(&box_builder.get_sender()));
         let http_proxy = C8YHttpProxy::new("C8yMapper => C8YHttpProxy", http);
         let timer_sender = timer.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
+        let download_sender =
+            downloader.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
         fs_watcher.register_peer(config.ops_dir.clone(), adapt(&box_builder.get_sender()));
         let auth_proxy = ProxyUrlGenerator::new(config.auth_proxy_addr, config.auth_proxy_port);
 
@@ -239,6 +293,7 @@ impl C8yMapperBuilder {
             mqtt_publisher,
             http_proxy,
             timer_sender,
+            download_sender,
             auth_proxy,
         })
     }
@@ -264,12 +319,15 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
     fn try_build(self) -> Result<C8yMapperActor, Self::Error> {
         let mqtt_publisher = LoggingSender::new("C8yMapper => Mqtt".into(), self.mqtt_publisher);
         let timer_sender = LoggingSender::new("C8yMapper => Timer".into(), self.timer_sender);
+        let downloader_sender =
+            LoggingSender::new("C8yMapper => Downloader".into(), self.download_sender);
 
         let converter = CumulocityConverter::new(
             self.config,
             mqtt_publisher.clone(),
             self.http_proxy,
             self.auth_proxy,
+            downloader_sender.clone(),
         )
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
 

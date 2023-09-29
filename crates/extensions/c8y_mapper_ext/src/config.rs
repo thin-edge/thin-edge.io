@@ -94,6 +94,8 @@ impl C8yMapperConfig {
 
         let capabilities = Capabilities {
             log_management: tedge_config.c8y.enable.log_management,
+            config_snapshot: true, // fix later
+            config_update: true,
         };
 
         let mut topics = Self::default_internal_topic_filter(&config_dir)?;
@@ -103,6 +105,12 @@ impl C8yMapperConfig {
         topics.add_all(mqtt_schema.topics(AnyEntity, CommandMetadata(OperationType::Restart)));
         if capabilities.log_management {
             topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
+        }
+        if capabilities.config_snapshot {
+            crate::config_operations::config_snapshot_topic_filter(&mqtt_schema);
+        }
+        if capabilities.config_update {
+            crate::config_operations::config_update_topic_filter(&mqtt_schema);
         }
 
         // Add user configurable external topic filters

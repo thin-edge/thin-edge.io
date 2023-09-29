@@ -193,4 +193,7 @@ pub enum CumulocityMapperError {
 
     #[error(transparent)]
     FromC8YRestError(#[from] C8YRestError),
+
+    #[error(transparent)]
+    ChannelError(#[from] tedge_actors::ChannelError),
 }

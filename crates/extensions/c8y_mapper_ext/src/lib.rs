@@ -1,6 +1,7 @@
 pub mod actor;
 pub mod alarm_converter;
 pub mod config;
+mod config_operations;
 pub mod converter;
 pub mod dynamic_discovery;
 pub mod error;
@@ -15,12 +16,16 @@ mod tests;
 #[derive(Debug, serde::Deserialize)]
 pub struct Capabilities {
     log_management: bool,
+    config_snapshot: bool,
+    config_update: bool,
 }
 
 impl Default for Capabilities {
     fn default() -> Self {
         Capabilities {
             log_management: true,
+            config_snapshot: true,
+            config_update: true,
         }
     }
 }

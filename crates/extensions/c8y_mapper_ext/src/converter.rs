@@ -5,6 +5,8 @@ use super::error::CumulocityMapperError;
 use super::fragments::C8yAgentFragment;
 use super::fragments::C8yDeviceDataFragment;
 use super::service_monitor;
+use crate::actor::CmdId;
+use crate::actor::IdDownloadRequest;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
@@ -164,6 +166,8 @@ impl CumulocityConverter {
     }
 }
 
+pub(crate) type SmartRest = String;
+
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
     pub config: C8yMapperConfig,
@@ -183,6 +187,8 @@ pub struct CumulocityConverter {
     pub mqtt_schema: MqttSchema,
     pub entity_store: EntityStore,
     pub auth_proxy: ProxyUrlGenerator,
+    pub downloader_sender: LoggingSender<IdDownloadRequest>,
+    pub pending_operations: HashMap<CmdId, (OperationType, SmartRest)>,
 }
 
 impl CumulocityConverter {
@@ -191,6 +197,7 @@ impl CumulocityConverter {
         mqtt_publisher: LoggingSender<MqttMessage>,
         http_proxy: C8YHttpProxy,
         auth_proxy: ProxyUrlGenerator,
+        downloader_sender: LoggingSender<IdDownloadRequest>,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
         let device_type = config.device_type.clone();
@@ -243,6 +250,8 @@ impl CumulocityConverter {
             mqtt_schema: MqttSchema::default(),
             entity_store,
             auth_proxy,
+            downloader_sender,
+            pending_operations: HashMap::new(),
         })
     }
 
@@ -554,6 +563,8 @@ impl CumulocityConverter {
             Some(device_id) => {
                 match get_smartrest_template_id(payload).as_str() {
                     "522" => self.convert_log_upload_request(payload),
+                    "524" => self.convert_config_update_request(payload).await,
+                    "526" => self.convert_config_snapshot_request(payload),
                     "528" if device_id == self.device_name => {
                         self.forward_software_request(payload).await
                     }
@@ -935,6 +946,28 @@ impl CumulocityConverter {
                 cmd_id,
             } => {
                 self.handle_log_upload_state_change(&source, cmd_id, message)
+                    .await?
+            }
+
+            Channel::CommandMetadata {
+                operation: OperationType::ConfigSnapshot,
+            } => self.convert_config_snapshot_metadata(&source, message)?,
+            Channel::Command {
+                operation: OperationType::ConfigSnapshot,
+                cmd_id,
+            } => {
+                self.handle_config_snapshot_state_change(&source, cmd_id, message)
+                    .await?
+            }
+
+            Channel::CommandMetadata {
+                operation: OperationType::ConfigUpdate,
+            } => self.convert_config_update_metadata(&source, message)?,
+            Channel::Command {
+                operation: OperationType::ConfigUpdate,
+                cmd_id,
+            } => {
+                self.handle_config_update_state_change(&source, cmd_id, message)
                     .await?
             }
 
@@ -1444,6 +1477,8 @@ pub fn check_tedge_agent_status(message: &Message) -> Result<bool, ConversionErr
 
 #[cfg(test)]
 mod tests {
+    use crate::actor::IdDownloadRequest;
+    use crate::actor::IdDownloadResult;
     use crate::Capabilities;
     use anyhow::Result;
     use assert_json_diff::assert_json_eq;
@@ -2442,8 +2477,19 @@ mod tests {
         let http_proxy = C8YHttpProxy::new("C8Y", &mut c8y_proxy_builder);
         let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port);
 
-        let converter =
-            CumulocityConverter::new(config, mqtt_publisher, http_proxy, auth_proxy).unwrap();
+        let downloader_builder: SimpleMessageBoxBuilder<IdDownloadResult, IdDownloadRequest> =
+            SimpleMessageBoxBuilder::new("MQTT", 5);
+        let downloader_sender =
+            LoggingSender::new("DL".into(), downloader_builder.build().sender_clone());
+
+        let converter = CumulocityConverter::new(
+            config,
+            mqtt_publisher,
+            http_proxy,
+            auth_proxy,
+            downloader_sender,
+        )
+        .unwrap();
 
         (converter, c8y_proxy_builder.build())
     }
