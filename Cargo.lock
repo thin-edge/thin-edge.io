@@ -3625,6 +3625,7 @@ dependencies = [
  "anyhow",
  "clap",
  "tedge_actors",
+ "tedge_api",
  "tedge_config",
  "tedge_file_system_ext",
  "tedge_health_ext",
