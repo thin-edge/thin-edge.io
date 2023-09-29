@@ -235,12 +235,12 @@ impl FromStr for EntityTopicId {
     fn from_str(entity_id: &str) -> Result<Self, Self::Err> {
         const ENTITY_ID_SEGMENTS: usize = 4;
 
-        let entity_id_segments = entity_id.matches('/').count();
+        let entity_id_segments = entity_id.matches('/').count() + 1;
         if entity_id_segments > ENTITY_ID_SEGMENTS {
             return Err(TopicIdError::TooLong);
         }
 
-        let missing_slashes = ENTITY_ID_SEGMENTS - entity_id_segments - 1;
+        let missing_slashes = ENTITY_ID_SEGMENTS - entity_id_segments;
         let topic_id = format!("{entity_id}{:/<1$}", "", missing_slashes);
         if mqtt_channel::Topic::new(&topic_id).is_err() {
             return Err(TopicIdError::InvalidMqttTopic);
@@ -602,5 +602,18 @@ mod tests {
                 .matches_default_topic_scheme(),
             matches
         )
+    }
+
+    #[test]
+    fn rejects_invalid_entity_topic_ids() {
+        assert_eq!(
+            "device/too/many/segments/".parse::<EntityTopicId>(),
+            Err(TopicIdError::TooLong)
+        );
+
+        assert_eq!(
+            "invalid/+/mqtttopic/#".parse::<EntityTopicId>(),
+            Err(TopicIdError::InvalidMqttTopic)
+        );
     }
 }
