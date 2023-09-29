@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::path::PathBuf;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
@@ -21,7 +20,6 @@ pub struct LogManagerConfig {
     pub plugin_config_path: PathBuf,
     pub logtype_reload_topic: Topic,
     pub logfile_request_topic: TopicFilter,
-    pub current_operations: HashSet<String>,
 }
 
 pub struct LogManagerOptions {
@@ -51,15 +49,12 @@ impl LogManagerConfig {
             ChannelFilter::Command(OperationType::LogUpload),
         );
 
-        let current_operations = HashSet::new();
-
         Ok(Self {
             config_dir,
             plugin_config_dir,
             plugin_config_path,
             logtype_reload_topic,
             logfile_request_topic,
-            current_operations,
         })
     }
 }

@@ -3,7 +3,6 @@ use crate::LogManagerConfig;
 use crate::Topic;
 use filetime::set_file_mtime;
 use filetime::FileTime;
-use std::collections::HashSet;
 use std::path::Path;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
@@ -95,7 +94,6 @@ fn new_log_manager_builder(
         plugin_config_path: temp_dir.join("tedge-log-plugin.toml"),
         logtype_reload_topic: Topic::new_unchecked("te/device/main///cmd/log_upload"),
         logfile_request_topic: TopicFilter::new_unchecked("te/device/main///cmd/log_upload/+"),
-        current_operations: HashSet::new(),
     };
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
