@@ -188,7 +188,7 @@ impl Agent {
 
         // Health actor
         // TODO: take a user-configurable service topic id
-        let service_topic_id = self.config.mqtt_device_topic_id.to_service_topic_id("tedge-agent")
+        let service_topic_id = self.config.mqtt_device_topic_id.to_default_service_topic_id("tedge-agent")
             .with_context(|| format!("Device topic id {} currently needs default scheme, e.g: 'device/DEVICE_NAME//'", self.config.mqtt_device_topic_id))?;
         let service = Service {
             service_topic_id,

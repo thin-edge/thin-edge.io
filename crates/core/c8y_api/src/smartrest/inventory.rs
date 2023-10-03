@@ -6,6 +6,7 @@ use mqtt_channel::Message;
 /// Create a SmartREST message for creating a child device under the given ancestors.
 /// The provided ancestors list must contain all the parents of the given device
 /// starting from its immediate parent device.
+// XXX: if any arguments contain commas, output will be wrong
 pub fn child_device_creation_message(
     child_id: &str,
     device_name: Option<&str>,
@@ -26,6 +27,7 @@ pub fn child_device_creation_message(
 /// Create a SmartREST message for creating a service on device.
 /// The provided ancestors list must contain all the parents of the given service
 /// starting from its immediate parent device.
+// XXX: if any arguments contain commas, output will be wrong
 pub fn service_creation_message(
     service_id: &str,
     service_name: &str,

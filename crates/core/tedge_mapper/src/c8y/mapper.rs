@@ -6,7 +6,6 @@ use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use c8y_mapper_ext::actor::C8yMapperBuilder;
 use c8y_mapper_ext::config::C8yMapperConfig;
-use c8y_mapper_ext::service_monitor::service_monitor_status_message;
 use mqtt_channel::Config;
 use std::path::Path;
 use tedge_config::TEdgeConfig;
@@ -80,15 +79,22 @@ pub fn service_monitor_client_config(tedge_config: &TEdgeConfig) -> Result<Confi
     let device_name = tedge_config.device.id.try_read(tedge_config)?.to_string();
     let service_type = tedge_config.service.ty.clone();
 
+    // from this level we don't have access to the entity store and registered main device so best
+    // we can do for now is just guess it
+    // TODO: fix this, preferably use a HealthMonitorActor
+    let service_external_id = format!("{device_name}:service:tedge-mapper-c8y");
+
+    let last_will_message = c8y_api::smartrest::inventory::service_creation_message(
+        service_external_id.as_str(),
+        "tedge-mapper-c8y",
+        service_type.as_str(),
+        "down",
+        &[],
+    );
+
     let mqtt_config = tedge_config
         .mqtt_config()?
         .with_session_name("last_will_c8y_mapper")
-        .with_last_will_message(service_monitor_status_message(
-            &device_name,
-            CUMULOCITY_MAPPER_NAME,
-            "down",
-            &service_type,
-            None,
-        ));
+        .with_last_will_message(last_will_message);
     Ok(mqtt_config)
 }

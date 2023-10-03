@@ -494,12 +494,13 @@ impl CumulocityConverter {
             mqtt_messages.push(create_get_software_list_message()?);
         }
 
-        let mut message = convert_health_status_message(
-            entity,
-            message,
-            self.device_name.clone(),
-            self.service_type.clone(),
-        );
+        let entity_metadata = self
+            .entity_store
+            .get(entity)
+            .expect("entity was registered");
+
+        let mut message =
+            convert_health_status_message(&self.entity_store, entity_metadata, message);
 
         mqtt_messages.append(&mut message);
         Ok(mqtt_messages)
@@ -1302,7 +1303,7 @@ impl CumulocityConverter {
     pub fn is_message_tedge_agent_up(&self, message: &Message) -> Result<bool, ConversionError> {
         let main_device_topic_id = self.entity_store.main_device();
         let tedge_agent_topic_id = main_device_topic_id
-            .to_service_topic_id("tedge-agent")
+            .to_default_service_topic_id("tedge-agent")
             .expect("main device topic needs to fit default MQTT scheme");
         let tedge_agent_health_topic = self
             .mqtt_schema

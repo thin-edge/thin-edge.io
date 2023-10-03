@@ -283,7 +283,7 @@ impl EntityTopicId {
             .is_some()
     }
 
-    /// Returns `true` if it's the topic identifier of the child device.
+    /// Returns `true` if it's the topic identifier of the child device in default topic scheme.
     pub fn is_default_child_device(&self) -> bool {
         matches!(self.segments(), ["device", device_name, "", ""] if device_name != "main" && !device_name.is_empty())
     }
@@ -333,7 +333,7 @@ impl EntityTopicId {
     ///
     /// The device topic id must be in a format: "device/DEVICE_NAME//"; if not,
     /// `None` will be returned.
-    pub fn to_service_topic_id(&self, service_name: &str) -> Option<ServiceTopicId> {
+    pub fn to_default_service_topic_id(&self, service_name: &str) -> Option<ServiceTopicId> {
         if let ["device", device_name, "", ""] = self.0.split('/').collect::<Vec<&str>>()[..] {
             return Some(ServiceTopicId(EntityTopicId(format!(
                 "device/{device_name}/service/{service_name}"
