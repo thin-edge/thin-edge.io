@@ -3713,6 +3713,7 @@ dependencies = [
  "csv",
  "download",
  "json-writer",
+ "log",
  "maplit",
  "mockall",
  "mqtt_channel",

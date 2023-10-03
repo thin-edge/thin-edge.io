@@ -204,11 +204,7 @@ impl CumulocityConverter {
         let dir_path = match device.r#type {
             EntityType::MainDevice => self.ops_dir.clone(),
             EntityType::ChildDevice => {
-                let child_dir_name = if let Some(child_local_id) = topic_id.default_device_name() {
-                    child_local_id
-                } else {
-                    device.external_id.as_ref()
-                };
+                let child_dir_name = device.external_id.as_ref();
                 self.ops_dir.clone().join(child_dir_name)
             }
             EntityType::Service => {

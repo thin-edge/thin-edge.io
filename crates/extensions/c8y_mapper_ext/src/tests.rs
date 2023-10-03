@@ -70,6 +70,7 @@ async fn mapper_publishes_init_messages_on_startup() {
                 &json!({"type":"test-device-type"}).to_string(),
             ),
             ("c8y/s/us", "500"),
+            ("c8y/s/us", "105"),
         ],
     )
     .await;
@@ -1020,10 +1021,7 @@ async fn mapper_publishes_child_device_create_message() {
     // Expect smartrest message on `c8y/s/us` with expected payload "101,child1,child1,thin-edge.io-child".
     assert_received_contains_str(
         &mut mqtt,
-        [(
-            "c8y/s/us",
-            "101,test-device:device:child1,child1,thin-edge.io-child",
-        )],
+        [("c8y/s/us", "101,child1,child1,thin-edge.io-child")],
     )
     .await;
 }
@@ -1042,7 +1040,7 @@ async fn mapper_publishes_supported_operations_for_child_device() {
 
     let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    mqtt.skip(6).await; //Skip all init messages
+    skip_init_messages(&mut mqtt).await;
 
     mqtt.send(MqttMessage::new(
         &C8yTopic::downstream_topic(),
@@ -1056,7 +1054,7 @@ async fn mapper_publishes_supported_operations_for_child_device() {
         &mut mqtt,
         [(
             "te/device/child1//",
-            json!({"@type":"child-device", "name": "child1"}),
+            json!({"@type":"child-device", "@id": "child1", "name": "child1"}),
         )],
     )
     .await;
@@ -1065,17 +1063,54 @@ async fn mapper_publishes_supported_operations_for_child_device() {
     assert_received_contains_str(
         &mut mqtt,
         [
-            (
-                "c8y/s/us",
-                "101,test-device:device:child1,child1,thin-edge.io-child",
-            ),
-            (
-                "c8y/s/us/test-device:device:child1",
-                "114,c8y_ChildTestOp1,c8y_ChildTestOp2\n",
-            ),
+            ("c8y/s/us", "101,child1,child1,thin-edge.io-child"),
+            ("c8y/s/us/child1", "114,c8y_ChildTestOp1,c8y_ChildTestOp2\n"),
         ],
     )
     .await;
+}
+
+#[tokio::test]
+async fn mapping_child_device_dirs_with_forbidden_characters() {
+    let cfg_dir = TempTedgeDir::new();
+    create_thin_edge_child_operations(&cfg_dir, "my#complex+child", vec!["c8y_ChildTestOp1"]);
+    create_thin_edge_child_operations(&cfg_dir, "simple_child", vec!["c8y_ChildTestOp2"]);
+
+    let (mqtt, _http, _fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    skip_init_messages(&mut mqtt).await;
+
+    mqtt.send(MqttMessage::new(
+        &C8yTopic::downstream_topic(),
+        "106", // Empty child list from cloud, to trigger child dirs registration
+    ))
+    .await
+    .expect("Send failed");
+
+    // Expect auto-registration message for child2
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "te/device/simple_child//",
+            json!({"@type":"child-device", "@id": "simple_child", "name": "simple_child"}),
+        )],
+    )
+    .await;
+
+    // Expect smartrest messages for child 2
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            (
+                "c8y/s/us",
+                "101,simple_child,simple_child,thin-edge.io-child",
+            ),
+            ("c8y/s/us/simple_child", "114,c8y_ChildTestOp2\n"),
+        ],
+    )
+    .await;
+
+    assert!(mqtt.recv().await.is_none()); // No more messages as my#complex+child is ignored
 }
 
 #[tokio::test]
@@ -1148,13 +1183,13 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     let cfg_dir = TempTedgeDir::new();
     create_thin_edge_child_operations(
         &cfg_dir,
-        "child1",
+        "test-device:device:child1",
         vec!["c8y_ChildTestOp1", "c8y_ChildTestOp2"],
     );
 
     let (mqtt, _http, mut fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    mqtt.skip(6).await; //Skip all init messages
+    skip_init_messages(&mut mqtt).await;
 
     // Add a new operation for the child device
     // Simulate FsEvent for the creation of a new operation file
@@ -1162,7 +1197,7 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
         cfg_dir
             .dir("operations")
             .dir("c8y")
-            .dir("child1")
+            .dir("test-device:device:child1")
             .file("c8y_ChildTestOp3")
             .to_path_buf(),
     ))
@@ -1190,30 +1225,142 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     .await
     .expect("Send failed");
 
-    // Being new, the child device is first registered on the bus
-    let child_metadata = mqtt.recv().await.unwrap();
-    assert_eq!(child_metadata.topic.name, "te/device/child1//");
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(child_metadata.payload_str().unwrap()).unwrap(),
-        json!({
-            "@type":"child-device",
-            "@id":"test-device:device:child1",
-            "name": "child1"
-        })
-    );
-    let child_c8y_registration = mqtt.recv().await.unwrap();
-    assert_eq!(child_c8y_registration.topic.name, "c8y/s/us");
-    assert_eq!(
-        child_c8y_registration.payload_str().unwrap(),
-        "101,test-device:device:child1,child1,thin-edge.io-child"
-    );
+    // Expect auto-registration message
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "te/device/child1//",
+            json!({"@type":"child-device", "@id": "test-device:device:child1", "name": "child1"}),
+        )],
+    )
+    .await;
 
     // Expect an update list of capabilities with agent capabilities
     assert_received_contains_str(
         &mut mqtt,
+        [
+            (
+                "c8y/s/us",
+                "101,test-device:device:child1,child1,thin-edge.io-child",
+            ),
+            (
+                "c8y/s/us/test-device:device:child1",
+                "114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3,c8y_Restart",
+            ),
+        ],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn mapping_dynamically_added_child_device_dir() {
+    let cfg_dir = TempTedgeDir::new();
+    let (mqtt, _http, mut fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    skip_init_messages(&mut mqtt).await;
+    let ops_dir = cfg_dir.dir("operations").dir("c8y");
+
+    // Simulate FsEvent for the creation of a new child device following default naming scheme
+    fs.send(FsWatchEvent::DirectoryCreated(
+        ops_dir.dir("child").to_path_buf(),
+    ))
+    .await
+    .expect("Send failed");
+
+    // Expect auto-registration message
+    assert_received_includes_json(
+        &mut mqtt,
         [(
-            "c8y/s/us/test-device:device:child1",
-            "114,c8y_ChildTestOp1,c8y_ChildTestOp2,c8y_ChildTestOp3,c8y_Restart",
+            "te/device/child//",
+            json!({"@type":"child-device", "@id": "child", "name": "child"}),
+        )],
+    )
+    .await;
+
+    // ...and the corresponding SmartREST registration message
+    assert_received_contains_str(
+        &mut mqtt,
+        [("c8y/s/us", "101,child,child,thin-edge.io-child")],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn mapping_dynamically_added_child_device_dir_with_default_external_id_naming_scheme() {
+    let cfg_dir = TempTedgeDir::new();
+    let (mqtt, _http, mut fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    skip_init_messages(&mut mqtt).await;
+    let ops_dir = cfg_dir.dir("operations").dir("c8y");
+
+    // Simulate FsEvent for the creation of a new child device following default naming scheme
+    fs.send(FsWatchEvent::DirectoryCreated(
+        ops_dir.dir("test-device:device:child").to_path_buf(),
+    ))
+    .await
+    .expect("Send failed");
+
+    // Expect auto-registration message
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "te/device/child//",
+            json!({"@type":"child-device", "@id": "test-device:device:child", "name": "child"}),
+        )],
+    )
+    .await;
+
+    // ...and the corresponding SmartREST registration message
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
+            "101,test-device:device:child,child,thin-edge.io-child",
+        )],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn mapping_dynamically_added_child_device_dir_with_forbidden_characters() {
+    let cfg_dir = TempTedgeDir::new();
+    let ops_dir = cfg_dir.dir("operations").dir("c8y");
+    let (mqtt, _http, mut fs, _timer) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    skip_init_messages(&mut mqtt).await;
+
+    // Simulate FsEvent for the creation of a new child device with a dir name containing forbidden chars
+    let child_dir = ops_dir.dir("my#complex+child");
+    fs.send(FsWatchEvent::DirectoryCreated(child_dir.to_path_buf()))
+        .await
+        .expect("Send failed");
+
+    // No mapped messages as my#complex+child is ignored
+    assert!(mqtt.recv().await.is_none());
+
+    // Validate that further directory creation events are still processed
+    fs.send(FsWatchEvent::DirectoryCreated(
+        ops_dir.dir("simple_child").to_path_buf(),
+    ))
+    .await
+    .expect("Send failed");
+
+    // Expect auto-registration message
+    assert_received_includes_json(
+        &mut mqtt,
+        [(
+            "te/device/simple_child//",
+            json!({"@type":"child-device", "@id": "simple_child", "name": "simple_child"}),
+        )],
+    )
+    .await;
+
+    // ...and the corresponding SmartREST registration message
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
+            "101,simple_child,simple_child,thin-edge.io-child",
         )],
     )
     .await;
@@ -1643,20 +1790,20 @@ async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_child_devic
 
     mqtt.skip(6).await; //Skip all init messages
 
-    // The child device must be registered first
+    // Simulate log_upload cmd metadata message
     mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/DeviceSerial//"),
-        r#"{ "@type":"child-device", "@id":"DeviceSerial" }"#,
+        &Topic::new_unchecked("te/device/DeviceSerial///cmd/log_upload"),
+        r#"{"types" : [ "typeA", "typeB", "typeC" ]}"#,
     ))
     .await
-    .expect("fail to register the child-device");
+    .expect("Send failed");
 
-    mqtt.skip(6).await; // Skip the mapped child device registration message
+    mqtt.skip(3).await; //Skip entity registration, mapping and supported log types messages
 
     // Simulate c8y_LogfileRequest SmartREST request
     mqtt.send(MqttMessage::new(
         &C8yTopic::downstream_topic(),
-        "522,DeviceSerial,logfileA,2013-06-22T17:03:14.123+02:00,2013-06-23T18:03:14.123+02:00,ERROR,1000",
+        "522,test-device:device:DeviceSerial,logfileA,2013-06-22T17:03:14.123+02:00,2013-06-23T18:03:14.123+02:00,ERROR,1000",
     ))
     .await
     .expect("Send failed");
@@ -1691,7 +1838,7 @@ async fn mapper_converts_smartrest_logfile_req_to_log_upload_cmd_for_child_devic
         // Validate the payload JSON
         let expected_json = json!({
             "status": "init",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/DeviceSerial/log_upload/logfileA-{cmd_id}"),
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device:device:DeviceSerial/log_upload/logfileA-{cmd_id}"),
             "type": "logfileA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -1776,7 +1923,7 @@ async fn mapper_converts_log_upload_cmd_to_supported_op_and_types_for_child_devi
     // Validate if the supported operation file is created
     assert!(ttd
         .path()
-        .join("operations/c8y/child1/c8y_LogfileRequest")
+        .join("operations/c8y/test-device:device:child1/c8y_LogfileRequest")
         .exists());
 }
 
@@ -2142,6 +2289,24 @@ async fn spawn_c8y_mapper_actor(
         fs_watcher_builder.build(),
         timer_builder.build(),
     )
+}
+
+async fn skip_init_messages(mqtt: &mut impl MessageReceiver<MqttMessage>) {
+    //Skip all the init messages by still doing loose assertions
+    assert_received_contains_str(
+        mqtt,
+        [
+            ("c8y/inventory/managedObjects/update/test-device", "{"),
+            ("c8y/s/us", "114"),
+            (
+                "c8y/inventory/managedObjects/update/test-device",
+                &json!({"type":"test-device-type"}).to_string(),
+            ),
+            ("c8y/s/us", "500"),
+            ("c8y/s/us", "105"),
+        ],
+    )
+    .await;
 }
 
 fn spawn_dummy_c8y_http_proxy(mut http: SimpleMessageBox<C8YRestRequest, C8YRestResult>) {

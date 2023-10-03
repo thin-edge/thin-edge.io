@@ -89,7 +89,7 @@ Restart Firmware plugin
     ThinEdgeIO.Restart Service    c8y-firmware-plugin.service
 
 Child device delete firmware file
-    Set Device Context    ${CHILD_ID}
+    Set Device Context    ${CHILD_SN}
     Execute Command    sudo rm -f firmware1
 
 Create child device
@@ -98,9 +98,9 @@ Create child device
     ...    If the order is opposite, the child device name will start with "MQTT Device".
     Set Device Context    ${PARENT_SN}
     Sleep    3s
-    Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_ID}
+    Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_SN}
     Sleep    3s
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y_Firmware    /etc/tedge/operations/c8y/${CHILD_ID}/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y_Firmware    /etc/tedge/operations/c8y/${CHILD_SN}/
     Cumulocity.Device Should Exist    ${CHILD_SN}
 
 Validate child Name
@@ -152,7 +152,7 @@ Validate firmware update request
     Set Suite Variable    $cache_key    ${cache_key[0]}
 
 Child device response on update request
-    Set Device Context    ${CHILD_ID}
+    Set Device Context    ${CHILD_SN}
     Set Test Variable    $topic_res    tedge/${CHILD_SN}/commands/res/firmware_update
 
     Execute Command    mosquitto_pub -h ${PARENT_IP} -t ${topic_res} -m '{"id":"${op_id}", "status":"executing"}'
@@ -172,6 +172,5 @@ Custom Setup
     Set Suite Variable    $PARENT_IP    ${parent_ip}
 
     # Child
-    ${child_id}=    Setup    skip_bootstrap=True
-    Set Suite Variable    $CHILD_ID    ${child_id}
-    Set Suite Variable    $CHILD_SN    ${PARENT_SN}:device:${CHILD_ID}
+    ${child_sn}=    Setup    skip_bootstrap=True
+    Set Suite Variable    $CHILD_SN    ${child_sn}

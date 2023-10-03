@@ -5,6 +5,7 @@ use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_http_proxy::messages::C8YRestError;
 use plugin_sm::operation_logs::OperationLogsError;
 use std::path::PathBuf;
+use tedge_api::entity_store::InvalidExternalIdError;
 use tedge_api::serialize::ThinEdgeJsonSerializationError;
 use tedge_config::TEdgeConfigError;
 use tedge_mqtt_ext::MqttError;
@@ -121,6 +122,9 @@ pub enum ConversionError {
 
     #[error(transparent)]
     FromEntityStoreError(#[from] tedge_api::entity_store::Error),
+
+    #[error(transparent)]
+    InvalidExternalIdError(#[from] InvalidExternalIdError),
 }
 
 #[derive(thiserror::Error, Debug)]

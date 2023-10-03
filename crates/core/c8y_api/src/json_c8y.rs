@@ -413,10 +413,12 @@ mod tests {
     use mqtt_channel::Message;
     use mqtt_channel::Topic;
     use serde_json::json;
+    use std::collections::HashSet;
     use tedge_api::alarm::ThinEdgeAlarm;
     use tedge_api::alarm::ThinEdgeAlarmData;
     use tedge_api::entity_store::EntityExternalId;
     use tedge_api::entity_store::EntityRegistrationMessage;
+    use tedge_api::entity_store::InvalidExternalIdError;
     use tedge_api::event::ThinEdgeEventData;
     use tedge_api::mqtt_topics::EntityTopicId;
     use test_case::test_case;
@@ -775,8 +777,12 @@ mod tests {
     )]
     fn check_alarm_translation(tedge_alarm: ThinEdgeAlarm, expected_c8y_alarm: C8yAlarm) {
         let main_device = EntityRegistrationMessage::main_device("test-main".into());
-        let mut entity_store =
-            EntityStore::with_main_device(main_device, dummy_external_id_mapper).unwrap();
+        let mut entity_store = EntityStore::with_main_device(
+            main_device,
+            dummy_external_id_mapper,
+            dummy_external_id_validator,
+        )
+        .unwrap();
 
         let child_registration = EntityRegistrationMessage::new(&Message::new(
             &Topic::new_unchecked("te/device/external_source//"),
@@ -803,8 +809,12 @@ mod tests {
         };
 
         let main_device = EntityRegistrationMessage::main_device("test-main".into());
-        let entity_store =
-            EntityStore::with_main_device(main_device, dummy_external_id_mapper).unwrap();
+        let entity_store = EntityStore::with_main_device(
+            main_device,
+            dummy_external_id_mapper,
+            dummy_external_id_validator,
+        )
+        .unwrap();
 
         match C8yAlarm::try_from(&tedge_alarm, &entity_store).unwrap() {
             C8yAlarm::Create(value) => {
@@ -823,5 +833,18 @@ mod tests {
             .trim_end_matches('/')
             .replace('/', ":")
             .into()
+    }
+
+    fn dummy_external_id_validator(id: &str) -> Result<EntityExternalId, InvalidExternalIdError> {
+        let forbidden_chars = HashSet::from(['/', '+', '#']);
+        for c in id.chars() {
+            if forbidden_chars.contains(&c) {
+                return Err(InvalidExternalIdError {
+                    external_id: id.into(),
+                    invalid_char: c,
+                });
+            }
+        }
+        Ok(id.into())
     }
 }

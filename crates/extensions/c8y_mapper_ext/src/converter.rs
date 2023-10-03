@@ -51,6 +51,7 @@ use serde_json::Map;
 use serde_json::Value;
 use service_monitor::convert_health_status_message;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
@@ -63,6 +64,7 @@ use tedge_api::entity_store::EntityExternalId;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityType;
 use tedge_api::entity_store::Error;
+use tedge_api::entity_store::InvalidExternalIdError;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::messages::CommandStatus;
@@ -104,6 +106,7 @@ const TEDGE_AGENT_LOG_DIR: &str = "tedge/agent";
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
 const TEDGE_AGENT_HEALTH_TOPIC: &str = "tedge/health/tedge-agent";
 const DEFAULT_EVENT_TYPE: &str = "ThinEdgeEvent";
+const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
 
 #[derive(Debug)]
 pub struct MapperConfig {
@@ -214,8 +217,12 @@ impl CumulocityConverter {
         };
 
         let main_device = entity_store::EntityRegistrationMessage::main_device(device_id.clone());
-        let entity_store =
-            EntityStore::with_main_device(main_device, Self::map_to_c8y_external_id).unwrap();
+        let entity_store = EntityStore::with_main_device(
+            main_device,
+            Self::map_to_c8y_external_id,
+            Self::validate_external_id,
+        )
+        .unwrap();
 
         Ok(CumulocityConverter {
             size_threshold,
@@ -335,6 +342,34 @@ impl CumulocityConverter {
             )
             .into()
         }
+    }
+
+    /// Returns the `device_name` from the `EntityExternalId`
+    /// if it follows the default naming scheme `MAIN_DEVICE_COMMON_NAME:device:device_name`,
+    /// else returns its `String` representation
+    pub fn default_device_name_from_external_id(&self, external_id: &EntityExternalId) -> String {
+        let _main_device_id = &self.device_name;
+        match external_id.as_ref().split(':').collect::<Vec<&str>>()[..] {
+            [_main_device_id, "device", device_id, "service", _] => device_id.into(),
+            [_main_device_id, "device", device_id] => device_id.into(),
+            _ => external_id.into(),
+        }
+    }
+
+    /// Validates if the provided id contains any invalid characters and
+    /// returns a valid EntityExternalId if the validation passes,
+    /// else returns InvalidExternalIdError
+    pub fn validate_external_id(id: &str) -> Result<EntityExternalId, InvalidExternalIdError> {
+        let forbidden_chars = HashSet::from(FORBIDDEN_ID_CHARS);
+        for c in id.chars() {
+            if forbidden_chars.contains(&c) {
+                return Err(InvalidExternalIdError {
+                    external_id: id.into(),
+                    invalid_char: c,
+                });
+            }
+        }
+        Ok(id.into())
     }
 
     fn try_convert_measurement(
@@ -734,13 +769,24 @@ impl CumulocityConverter {
 
         for child_id in difference {
             // here we register new child devices, sending the 101 code
-            let child_topic_id = EntityTopicId::default_child_device(child_id).unwrap();
+            let child_external_id = match CumulocityConverter::validate_external_id(child_id) {
+                Ok(name) => name,
+                Err(err) => {
+                    error!(
+                        "Child device directory: {} ignored due to {}",
+                        &child_id, err
+                    );
+                    continue;
+                }
+            };
+            let child_topic_id =
+                EntityTopicId::default_child_device(child_external_id.as_ref()).unwrap();
             let child_device_reg_msg = EntityRegistrationMessage {
                 topic_id: child_topic_id,
-                external_id: None,
+                external_id: Some(child_external_id.clone()),
                 r#type: EntityType::ChildDevice,
                 parent: None,
-                other: json!({ "name": child_id }),
+                other: json!({ "name": child_external_id.as_ref() }),
             };
             let mut reg_messages = self
                 .register_and_convert_entity(&child_device_reg_msg)
@@ -750,17 +796,22 @@ impl CumulocityConverter {
         }
         // loop over all local child devices and update the operations
         for child_id in local_child_devices {
+            let child_external_id = match CumulocityConverter::validate_external_id(&child_id) {
+                Ok(name) => name,
+                Err(err) => {
+                    error!(
+                        "Supported operations of child device directory: {} ignored due to {}",
+                        &child_id, err
+                    );
+                    continue;
+                }
+            };
             // update the children cache with the operations supported
             let ops = Operations::try_new(path_to_child_devices.join(&child_id))?;
-            let child_topic_id = EntityTopicId::default_child_device(&child_id).unwrap();
-            let child_external_id =
-                Self::map_to_c8y_external_id(&child_topic_id, &self.device_name.as_str().into());
-
             self.children
-                .insert(child_external_id.as_ref().into(), ops.clone());
+                .insert(child_external_id.clone().into(), ops.clone());
             let ops_msg = ops.create_smartrest_ops_message()?;
-            let topic_str = format!("{SMARTREST_PUBLISH_TOPIC}/{}", child_external_id.as_ref());
-            let topic = Topic::new_unchecked(&topic_str);
+            let topic = C8yTopic::ChildSmartRestResponse(child_external_id.into()).to_topic()?;
             messages_vec.push(Message::new(&topic, ops_msg));
         }
         Ok(messages_vec)
@@ -1025,13 +1076,11 @@ impl CumulocityConverter {
         if is_child_operation_path(path) {
             // operations for child
             let child_id = get_child_id(&path.to_path_buf())?;
-            let child_topic_id = EntityTopicId::default_child_device(&child_id).unwrap();
-            let child_external_id =
-                Self::map_to_c8y_external_id(&child_topic_id, &self.device_name.as_str().into());
-            let stopic = format!("{SMARTREST_PUBLISH_TOPIC}/{}", child_external_id.as_ref());
+            let child_external_id = Self::validate_external_id(&child_id)?;
 
+            let topic = C8yTopic::ChildSmartRestResponse(child_external_id.into()).to_topic()?;
             Ok(Message::new(
-                &Topic::new_unchecked(&stopic),
+                &topic,
                 Operations::try_new(path)?.create_smartrest_ops_message()?,
             ))
         } else {
@@ -1176,12 +1225,7 @@ impl CumulocityConverter {
                 let ops_dir = match device.r#type {
                     EntityType::MainDevice => self.ops_dir.clone(),
                     EntityType::ChildDevice => {
-                        let child_dir_name =
-                            if let Some(child_local_id) = target.default_device_name() {
-                                child_local_id
-                            } else {
-                                device.external_id.as_ref()
-                            };
+                        let child_dir_name = device.external_id.as_ref();
                         self.ops_dir.clone().join(child_dir_name)
                     }
                     EntityType::Service => {
@@ -1422,6 +1466,7 @@ mod tests {
     use tedge_actors::SimpleMessageBox;
     use tedge_actors::SimpleMessageBoxBuilder;
     use tedge_api::entity_store::EntityRegistrationMessage;
+    use tedge_api::entity_store::InvalidExternalIdError;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_mqtt_ext::Message;
@@ -1443,12 +1488,7 @@ mod tests {
         "c8y_Command",
     ];
 
-    const EXPECTED_CHILD_DEVICES: &[&str] = &[
-        "test-device:device:child-0",
-        "test-device:device:child-1",
-        "test-device:device:child-2",
-        "test-device:device:child-3",
-    ];
+    const EXPECTED_CHILD_DEVICES: &[&str] = &["child-0", "child-1", "child-2", "child-3"];
 
     #[tokio::test]
     async fn test_sync_alarms() {
@@ -2226,7 +2266,7 @@ mod tests {
     ///     then supported operations will be published to the cloud and the device will be cached.
     #[test_case("106", EXPECTED_CHILD_DEVICES; "cloud representation is empty")]
     #[test_case("106,child-one,child-two", EXPECTED_CHILD_DEVICES; "cloud representation is completely different")]
-    #[test_case("106,child-3,child-one,child-1", &["test-device:device:child-0", "test-device:device:child-2"]; "cloud representation has some similar child devices")]
+    #[test_case("106,child-3,child-one,child-1", &["child-0", "child-2"]; "cloud representation has some similar child devices")]
     #[test_case("106,child-0,child-1,child-2,child-3", &[]; "cloud representation has seen all child devices")]
     #[tokio::test]
     async fn test_child_device_cache_is_updated(
@@ -2290,6 +2330,37 @@ mod tests {
         assert_eq!(
             CumulocityConverter::map_to_c8y_external_id(&entity_topic_id, &"test-device".into()),
             c8y_external_id.into()
+        );
+    }
+
+    #[test_case("bad+name1", '+')]
+    #[test_case("bad/name2", '/')]
+    #[test_case("bad#name3", '#')]
+    #[test_case("my/very#bad+name", '/')]
+    fn sanitize_c8y_external_id(input_id: &str, invalid_char: char) {
+        assert_eq!(
+            CumulocityConverter::validate_external_id(input_id),
+            Err(InvalidExternalIdError {
+                external_id: input_id.into(),
+                invalid_char
+            })
+        );
+    }
+
+    #[test_case("test-device:device:main", "main")]
+    #[test_case("test-device:device:child", "child")]
+    #[test_case("test-device:device:child:service:foo", "child")]
+    #[test_case("test-device:device:child:foo:bar", "test-device:device:child:foo:bar")]
+    #[test_case("a:very:long:and:complex:name", "a:very:long:and:complex:name")]
+    #[test_case("non_default_name", "non_default_name")]
+    #[tokio::test]
+    async fn default_device_name_from_external_id(external_id: &str, device_name: &str) {
+        let tmp_dir = TempTedgeDir::new();
+        let (converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        assert_eq!(
+            converter.default_device_name_from_external_id(&external_id.into()),
+            device_name
         );
     }
 

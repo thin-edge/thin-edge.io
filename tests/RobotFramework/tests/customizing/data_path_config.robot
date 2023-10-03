@@ -38,8 +38,7 @@ Validate updated data path used by c8y-firmware-plugin
 Custom Setup
     ${PARENT_SN}=    Setup
     Set Suite Variable    $PARENT_SN
-    Set Suite Variable    $CHILD_ID    ${PARENT_SN}_child
-    Set Suite Variable    $CHILD_SN    ${PARENT_SN}:device:${CHILD_ID}
+    Set Suite Variable    $CHILD_SN    ${PARENT_SN}_child
     Execute Command    sudo mkdir /var/test
     Execute Command    sudo chown tedge:tedge /var/test
     Execute Command    sudo tedge config set data.path /var/test
@@ -50,9 +49,9 @@ Custom Teardown
     Get Logs
 
 Bootstrap child device with firmware operation support
-    Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_ID}
+    Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_SN}
     Sleep    3s
-    Execute Command    touch /etc/tedge/operations/c8y/${CHILD_ID}/c8y_Firmware
+    Execute Command    touch /etc/tedge/operations/c8y/${CHILD_SN}/c8y_Firmware
     Sleep    3s
     Cumulocity.Device Should Exist    ${CHILD_SN}
 

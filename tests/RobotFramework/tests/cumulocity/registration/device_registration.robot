@@ -18,30 +18,30 @@ Main device registration
 
 
 Child device registration
-    Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_ID}
+    Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_SN}
     Restart Service    tedge-mapper-c8y
 
     # Check registration
     ${child_mo}=    Device Should Exist        ${CHILD_SN}
-    ${child_mo}=    Cumulocity.Device Should Have Fragment Values    name\=${CHILD_ID}
+    ${child_mo}=    Cumulocity.Device Should Have Fragment Values    name\=${CHILD_SN}
     Should Be Equal    ${child_mo["owner"]}    device_${DEVICE_SN}    # The parent is the owner of the child
-    Should Be Equal    ${child_mo["name"]}     ${CHILD_ID}
+    Should Be Equal    ${child_mo["name"]}     ${CHILD_SN}
 
     # Check child device relationship
     Cumulocity.Set Device    ${DEVICE_SN}
     Cumulocity.Should Be A Child Device Of Device    ${CHILD_SN}
 
 Register child device with defaults via MQTT
-    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_ID}//' '{"@type":"child-device"}'
-    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${CHILD_SN}    child_name=${CHILD_SN}    child_type=thin-edge.io-child
+    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device"}'
+    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${CHILD_XID}    child_name=${CHILD_XID}    child_type=thin-edge.io-child
 
 Register child device with custom name and type via MQTT
-    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_ID}//' '{"@type":"child-device","name":"${CHILD_ID}","type":"linux-device-Aböut"}'
-    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${CHILD_SN}    child_name=${CHILD_ID}    child_type=linux-device-Aböut
+    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device","name":"${CHILD_SN}","type":"linux-device-Aböut"}'
+    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${CHILD_XID}    child_name=${CHILD_SN}    child_type=linux-device-Aböut
 
 Register child device with custom id via MQTT
-    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_ID}//' '{"@type":"child-device","@id":"custom-${CHILD_SN}","name":"custom-${CHILD_ID}"}'
-    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=custom-${CHILD_SN}    child_name=custom-${CHILD_ID}    child_type=thin-edge.io-child
+    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device","@id":"custom-${CHILD_XID}","name":"custom-${CHILD_SN}"}'
+    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=custom-${CHILD_XID}    child_name=custom-${CHILD_SN}    child_type=thin-edge.io-child
 
 Register nested child device using default topic schema via MQTT
     ${child_level1}=    Get Random Name
@@ -65,14 +65,14 @@ Register nested child device using default topic schema via MQTT
 
 
 Register service on a child device via MQTT
-    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_ID}//' '{"@type":"child-device","name":"${CHILD_ID}","type":"linux-device-Aböut"}'
-    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_ID}/service/custom-app' '{"@type":"service","@parent":"device/${CHILD_ID}//","name":"custom-app","type":"custom-type"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}//' '{"@type":"child-device","name":"${CHILD_SN}","type":"linux-device-Aböut"}'
+    Execute Command    tedge mqtt pub --retain 'te/device/${CHILD_SN}/service/custom-app' '{"@type":"service","@parent":"device/${CHILD_SN}//","name":"custom-app","type":"custom-type"}'
 
     # Check child registration
-    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${CHILD_SN}    child_name=${CHILD_ID}    child_type=linux-device-Aböut
+    Check Child Device    parent_sn=${DEVICE_SN}    child_sn=${CHILD_XID}    child_name=${CHILD_SN}    child_type=linux-device-Aböut
 
     # Check service registration
-    Check Service    child_sn=${CHILD_SN}    service_sn=${CHILD_SN}:service:custom-app    service_name=custom-app    service_type=custom-type    service_status=up
+    Check Service    child_sn=${CHILD_XID}    service_sn=${CHILD_XID}:service:custom-app    service_name=custom-app    service_type=custom-type    service_status=up
 
 
 Register devices using custom MQTT schema
@@ -133,9 +133,9 @@ Check Service
 
 
 Test Setup
-    ${CHILD_ID}=    Get Random Name
-    Set Test Variable    $CHILD_ID
-    Set Test Variable    $CHILD_SN    ${DEVICE_SN}:device:${CHILD_ID}
+    ${CHILD_SN}=    Get Random Name
+    Set Test Variable    $CHILD_SN
+    Set Test Variable    $CHILD_XID    ${DEVICE_SN}:device:${CHILD_SN}
 
     ThinEdgeIO.Set Device Context    ${DEVICE_SN}
 

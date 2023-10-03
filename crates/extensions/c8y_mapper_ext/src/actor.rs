@@ -36,6 +36,7 @@ use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::FileError;
+use tracing::error;
 
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 
@@ -127,18 +128,46 @@ impl C8yMapperActor {
         match file_event.clone() {
             FsWatchEvent::DirectoryCreated(path) => {
                 if let Some(directory_name) = path.file_name() {
-                    let child_id = directory_name.to_string_lossy().to_string();
-                    let child_topic_id = EntityTopicId::default_child_device(&child_id).unwrap();
+                    let dir_name = directory_name.to_string_lossy().to_string();
+                    let child_external_id =
+                        match CumulocityConverter::validate_external_id(&dir_name) {
+                            Ok(name) => name,
+                            Err(err) => {
+                                error!(
+                                    "Child device directory: {} ignored due to {}",
+                                    &dir_name, err
+                                );
+                                return Ok(());
+                            }
+                        };
+
+                    let child_name = self
+                        .converter
+                        .default_device_name_from_external_id(&child_external_id);
+                    let child_topic_id = EntityTopicId::default_child_device(&child_name).unwrap();
                     let child_device_reg_msg = EntityRegistrationMessage {
                         topic_id: child_topic_id,
-                        external_id: None,
+                        external_id: Some(child_external_id),
                         r#type: EntityType::ChildDevice,
                         parent: None,
-                        other: json!({ "name": child_id }),
+                        other: json!({ "name": child_name }),
                     };
-                    self.converter
+                    match self
+                        .converter
                         .register_and_convert_entity(&child_device_reg_msg)
-                        .unwrap();
+                    {
+                        Ok(messages) => {
+                            for message in messages {
+                                self.mqtt_publisher.send(message).await?;
+                            }
+                        }
+                        Err(err) => {
+                            error!(
+                                "Processing dynamic child device directory creation failed with {}",
+                                err
+                            );
+                        }
+                    }
                 }
             }
             FsWatchEvent::FileCreated(path)
