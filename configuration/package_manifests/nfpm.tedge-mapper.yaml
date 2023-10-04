@@ -32,10 +32,6 @@ deb:
     - tedge_mapper (<= 0.8.1)
 
 contents:
-  # binary
-  - src: .build/tedge-mapper
-    dst: /usr/bin/
-
   # service definitions
   - src: ./configuration/init/systemd/tedge-mapper-aws.service
     dst: /lib/systemd/system/tedge-mapper-aws.service

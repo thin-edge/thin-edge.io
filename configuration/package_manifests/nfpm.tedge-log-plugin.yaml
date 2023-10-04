@@ -14,6 +14,8 @@ vendor: "thin-edge.io"
 homepage: "https://thin-edge.io"
 license: "Apache-2.0"
 
+depends:
+  - tedge
 replaces:
   - c8y_log_plugin
   - c8y-log-plugin
@@ -31,10 +33,6 @@ deb:
     - c8y-log-plugin
 
 contents:
-  # binary
-  - src: .build/tedge-log-plugin
-    dst: /usr/bin/
-
   # service definitions
   - src: ./configuration/init/systemd/tedge-log-plugin.service
     dst: /lib/systemd/system/

@@ -21,17 +21,7 @@ deb:
   compression: xz
 
 depends:
-  # Requires tedge user to create the supported operation file.
-  # The tedge user is created by the tedge package
-  # so it must be run before this package's postinst.
-  # Debian seems to work without this depends, however the rpm package
-  # seems to use another sorting order if the dependency is not defined.
   - tedge
-
-contents:
-  # binary
-  - src: .build/c8y-remote-access-plugin
-    dst: /usr/bin/
 
 overrides:
   apk:

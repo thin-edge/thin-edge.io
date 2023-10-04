@@ -227,15 +227,16 @@ build_tarball() {
         tar_type="bsdtar"
     fi
 
+    # Only include the tedge binary as it is a multi-call binary
     case "$tar_type" in
         bsdtar)
             # bsd tar requires different options to prevent adding extra "AppleDouble" files, e.g. `._` files, to the archive
             echo "Using bsdtar, but please consider using gnu-tar instead. Install via: brew install gnu-tar"
-            COPYFILE_DISABLE=1 tar cfz "$TAR_FILE" --no-xattrs --no-mac-metadata -C "$source_dir" --files-from <(printf "%s\n" "${PACKAGES[@]}")
+            COPYFILE_DISABLE=1 tar cfz "$TAR_FILE" --no-xattrs --no-mac-metadata -C "$source_dir" --files-from <(printf "%s\n" "tedge")
             ;;
         *)
             # Default to gnu tar (as this is generally the default)
-            "$tar_cmd" cfz "$TAR_FILE" --no-xattrs --owner=0 --group=0 --mode='0755' -C "$source_dir" --files-from <(printf "%s\n" "${PACKAGES[@]}")
+            "$tar_cmd" cfz "$TAR_FILE" --no-xattrs --owner=0 --group=0 --mode='0755' -C "$source_dir" --files-from <(printf "%s\n" "tedge")
             ;;
     esac
 

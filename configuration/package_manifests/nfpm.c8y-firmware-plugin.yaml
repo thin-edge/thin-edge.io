@@ -14,6 +14,9 @@ vendor: "thin-edge.io"
 homepage: "https://thin-edge.io"
 license: "Apache-2.0"
 
+depends:
+  - tedge
+
 deb:
   fields:
     Vcs-Browser: ${CI_PROJECT_URL}
@@ -21,10 +24,6 @@ deb:
   compression: xz
 
 contents:
-  # binary
-  - src: .build/c8y-firmware-plugin
-    dst: /usr/bin/
-
   # service definitions
   - src: ./configuration/init/systemd/c8y-firmware-plugin.service
     dst: /lib/systemd/system/

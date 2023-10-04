@@ -14,6 +14,8 @@ vendor: "thin-edge.io"
 homepage: "https://thin-edge.io"
 license: "Apache-2.0"
 
+depends:
+  - tedge
 replaces:
   - tedge_agent
 provides:
@@ -30,10 +32,6 @@ deb:
     - tedge_agent (<= 0.8.1)
 
 contents:
-  # binary
-  - src: .build/tedge-agent
-    dst: /usr/bin/
-
   # service definitions
   - src: ./configuration/init/systemd/tedge-agent.service
     dst: /lib/systemd/system/tedge-agent.service
