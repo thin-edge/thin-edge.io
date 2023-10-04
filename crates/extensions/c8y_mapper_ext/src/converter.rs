@@ -244,8 +244,8 @@ impl CumulocityConverter {
         input: &EntityRegistrationMessage,
     ) -> Result<Vec<Message>, ConversionError> {
         // Parse the optional fields
-        let display_name = input.payload.get("name").and_then(|v| v.as_str());
-        let display_type = input.payload.get("type").and_then(|v| v.as_str());
+        let display_name = input.other.get("name").and_then(|v| v.as_str());
+        let display_type = input.other.get("type").and_then(|v| v.as_str());
 
         let entity_topic_id = &input.topic_id;
         let external_id = self
@@ -740,7 +740,7 @@ impl CumulocityConverter {
                 external_id: None,
                 r#type: EntityType::ChildDevice,
                 parent: None,
-                payload: json!({ "name": child_id }),
+                other: json!({ "name": child_id }),
             };
             let mut reg_messages = self
                 .register_and_convert_entity(&child_device_reg_msg)
@@ -818,12 +818,17 @@ impl CumulocityConverter {
         match &channel {
             Channel::EntityMetadata => {
                 if let Ok(register_message) = EntityRegistrationMessage::try_from(message) {
-                    if let Err(e) = self.entity_store.update(register_message.clone()) {
-                        error!("Could not update device registration: {e}");
+                    match self.entity_store.update(register_message.clone()) {
+                        Err(e) => {
+                            error!("Entity registration failed: {e}");
+                        }
+                        Ok(affected_entities) if !affected_entities.is_empty() => {
+                            let mut c8y_message =
+                                self.try_convert_entity_registration(&register_message)?;
+                            registration_messages.append(&mut c8y_message);
+                        }
+                        Ok(_) => {}
                     }
-                    let mut c8y_message =
-                        self.try_convert_entity_registration(&register_message)?;
-                    registration_messages.append(&mut c8y_message);
                 }
             }
             _ => {
@@ -935,7 +940,7 @@ impl CumulocityConverter {
             register_payload.insert("@parent".into(), Value::String(parent_id.to_string()));
         }
 
-        if let Value::Object(other_keys) = value.payload.clone() {
+        if let Value::Object(other_keys) = value.other.clone() {
             register_payload.extend(other_keys)
         }
 
@@ -1416,6 +1421,7 @@ mod tests {
     use tedge_actors::Sender;
     use tedge_actors::SimpleMessageBox;
     use tedge_actors::SimpleMessageBoxBuilder;
+    use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_mqtt_ext::Message;
@@ -2285,6 +2291,38 @@ mod tests {
             CumulocityConverter::map_to_c8y_external_id(&entity_topic_id, &"test-device".into()),
             c8y_external_id.into()
         );
+    }
+
+    #[tokio::test]
+    async fn duplicate_registration_messages_not_mapped_2311() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let measurement_message = Message::new(
+            &Topic::new_unchecked("te/device/main/service/my_measurement_service/m/my_type"),
+            r#"{"temperature": 21.37}"#,
+        );
+
+        // when auto-registered, local and cloud registration messages should be produced
+        let mapped_messages = converter.convert(&measurement_message).await;
+
+        let local_registration_message = mapped_messages
+            .iter()
+            .find(|m| EntityRegistrationMessage::new(m).is_some())
+            .unwrap();
+
+        // check if cloud registration message
+        assert!(mapped_messages
+            .iter()
+            .any(|m| m.topic.name == "c8y/s/us" && m.payload_str().unwrap().starts_with("102")));
+
+        // when converting a registration message the same as the previous one, no additional registration messages should be produced
+        let mapped_messages = converter.convert(local_registration_message).await;
+
+        let second_registration_message_mapped = mapped_messages.into_iter().any(|m| {
+            m.topic.name.starts_with("c8y/s/us") && m.payload_str().unwrap().starts_with("102")
+        });
+        assert!(!second_registration_message_mapped);
     }
 
     async fn create_c8y_converter(
