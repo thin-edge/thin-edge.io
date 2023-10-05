@@ -134,7 +134,7 @@ impl C8yMapperActor {
                         external_id: None,
                         r#type: EntityType::ChildDevice,
                         parent: None,
-                        payload: json!({ "name": child_id }),
+                        other: json!({ "name": child_id }),
                     };
                     self.converter
                         .register_and_convert_entity(&child_device_reg_msg)

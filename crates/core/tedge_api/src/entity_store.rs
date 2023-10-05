@@ -7,6 +7,7 @@
 
 // TODO: move entity business logic to its own module
 
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use crate::entity_store;
@@ -14,6 +15,8 @@ use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::TopicIdError;
 use mqtt_channel::Message;
 use serde_json::json;
+
+use serde_json::Value as JsonValue;
 
 /// Represents an "Entity topic identifier" portion of the MQTT topic
 ///
@@ -115,7 +118,7 @@ impl EntityStore {
             external_id: entity_id.clone(),
             r#type: main_device.r#type,
             parent: None,
-            other: main_device.payload,
+            other: main_device.other,
         };
 
         Some(EntityStore {
@@ -264,18 +267,26 @@ impl EntityStore {
             r#type: message.r#type,
             external_id: external_id.clone(),
             parent,
-            other: message.payload,
+            other: message.other,
         };
 
         // device is affected if it was previously registered and was updated
-        let previous = self
-            .entities
-            .insert(entity_metadata.topic_id.clone(), entity_metadata);
+        // (i.e. EntityMetadata has changed)
+        let previous = self.entities.entry(topic_id.clone());
+        match previous {
+            Entry::Occupied(mut occupied) => {
+                // if there is no change, no entities were affected
+                if *occupied.get() == entity_metadata {
+                    return Ok(vec![]);
+                }
 
-        if previous.is_some() {
-            affected_entities.push(topic_id);
-        } else {
-            self.entity_id_index.insert(external_id, topic_id);
+                occupied.insert(entity_metadata);
+                affected_entities.push(topic_id);
+            }
+            Entry::Vacant(vacant) => {
+                vacant.insert(entity_metadata);
+                self.entity_id_index.insert(external_id, topic_id);
+            }
         }
 
         Ok(affected_entities)
@@ -320,7 +331,7 @@ impl EntityStore {
                     external_id: Some(device_external_id),
                     r#type: EntityType::ChildDevice,
                     parent: None,
-                    payload: json!({ "name": device_local_id }),
+                    other: json!({ "name": device_local_id }),
                 };
                 register_messages.push(device_register_message.clone());
                 self.update(device_register_message)?;
@@ -336,7 +347,7 @@ impl EntityStore {
                     external_id: Some(service_external_id),
                     r#type: EntityType::Service,
                     parent: Some(parent_device_id),
-                    payload: json!({ "name": service_id,  "type": "systemd" }),
+                    other: json!({ "name": service_id,  "type": "systemd" }),
                 };
                 register_messages.push(service_register_message.clone());
                 self.update(service_register_message)?;
@@ -355,7 +366,7 @@ pub struct EntityMetadata {
     pub parent: Option<EntityTopicId>,
     pub r#type: EntityType,
     pub external_id: EntityExternalId,
-    pub other: serde_json::Value,
+    pub other: JsonValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -411,11 +422,16 @@ pub enum Error {
 /// An object representing a valid entity registration message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityRegistrationMessage {
+    // fields used by thin-edge locally
     pub topic_id: EntityTopicId,
     pub external_id: Option<EntityExternalId>,
     pub r#type: EntityType,
     pub parent: Option<EntityTopicId>,
-    pub payload: serde_json::Value,
+
+    // other properties, usually cloud-specific
+    // TODO: replace with `Map` and use type wrapper that forbids fields `@id`,
+    // `@parent`, etc.
+    pub other: JsonValue,
 }
 
 impl EntityRegistrationMessage {
@@ -424,14 +440,21 @@ impl EntityRegistrationMessage {
     /// MQTT message is an entity registration message if
     /// - published on a prefix of `te/+/+/+/+`
     /// - its payload contains a registration message.
+    // TODO: replace option with proper error handling
+    // TODO: this is basically manual Deserialize implementation, better impl
+    // Serialize/Deserialize.
     #[must_use]
     pub fn new(message: &Message) -> Option<Self> {
         let payload = parse_entity_register_payload(message.payload_bytes())?;
 
-        let r#type = payload
-            .get("@type")
-            .and_then(|t| t.as_str())
-            .map(|t| t.to_owned())?;
+        let JsonValue::Object(mut properties) = payload else {
+            return None;
+        };
+
+        let Some(JsonValue::String(r#type)) = properties.remove("@type") else {
+            return None;
+        };
+
         let r#type = match r#type.as_str() {
             "device" => EntityType::MainDevice,
             "child-device" => EntityType::ChildDevice,
@@ -439,19 +462,34 @@ impl EntityRegistrationMessage {
             _ => return None,
         };
 
-        let parent = if r#type == EntityType::ChildDevice || r#type == EntityType::Service {
-            payload
-                .get("@parent")
-                .and_then(|p| p.as_str())
-                .and_then(|p| p.parse().ok())
+        let parent = properties.remove("@parent");
+        let parent = if let Some(parent) = parent {
+            let JsonValue::String(parent) = parent else {
+                return None;
+            };
+            let Ok(parent) = parent.parse() else {
+                return None;
+            };
+            Some(parent)
         } else {
             None
         };
 
-        let entity_id = payload
-            .get("@id")
-            .and_then(|id| id.as_str())
-            .map(|id| id.into());
+        let parent = if r#type == EntityType::ChildDevice || r#type == EntityType::Service {
+            parent
+        } else {
+            None
+        };
+
+        let entity_id = properties.remove("@id");
+        let entity_id = if let Some(entity_id) = entity_id {
+            let JsonValue::String(entity_id) = entity_id else {
+                return None;
+            };
+            Some(entity_id.into())
+        } else {
+            None
+        };
 
         let topic_id = message
             .topic
@@ -459,12 +497,18 @@ impl EntityRegistrationMessage {
             .strip_prefix(MQTT_ROOT)
             .and_then(|s| s.strip_prefix('/'))?;
 
+        let other = JsonValue::Object(properties);
+
+        assert_eq!(other.get("@id"), None);
+        assert_eq!(other.get("@type"), None);
+        assert_eq!(other.get("@parent"), None);
+
         Some(Self {
             topic_id: topic_id.parse().ok()?,
             external_id: entity_id,
             r#type,
             parent,
-            payload,
+            other,
         })
     }
 
@@ -475,7 +519,7 @@ impl EntityRegistrationMessage {
             external_id: Some(main_device_id.into()),
             r#type: EntityType::MainDevice,
             parent: None,
-            payload: serde_json::json!({}),
+            other: serde_json::json!({}),
         }
     }
 }
@@ -492,8 +536,8 @@ impl TryFrom<&Message> for EntityRegistrationMessage {
 ///
 /// Returns `Some(register_payload)` if a payload is valid JSON and is a
 /// registration payload, or `None` otherwise.
-fn parse_entity_register_payload(payload: &[u8]) -> Option<serde_json::Value> {
-    let payload = serde_json::from_slice::<serde_json::Value>(payload).ok()?;
+fn parse_entity_register_payload(payload: &[u8]) -> Option<JsonValue> {
+    let payload = serde_json::from_slice::<JsonValue>(payload).ok()?;
 
     if payload.get("@type").is_some() {
         Some(payload)
@@ -531,7 +575,7 @@ mod tests {
                 external_id: Some("test-device".into()),
                 r#type: EntityType::MainDevice,
                 parent: None,
-                payload: json!({"@type": "device"}),
+                other: json!({}),
             },
             dummy_external_id_mapper,
         )
@@ -549,7 +593,7 @@ mod tests {
                 external_id: Some("test-device".into()),
                 r#type: EntityType::MainDevice,
                 parent: None,
-                payload: json!({"@type": "device"}),
+                other: json!({}),
             },
             dummy_external_id_mapper,
         )
@@ -596,7 +640,7 @@ mod tests {
                 external_id: Some("test-device".into()),
                 topic_id: EntityTopicId::default_main_device(),
                 parent: None,
-                payload: json!({}),
+                other: json!({}),
             },
             dummy_external_id_mapper,
         )
@@ -609,7 +653,7 @@ mod tests {
                 external_id: None,
                 topic_id: EntityTopicId::default_main_service("service1").unwrap(),
                 parent: None,
-                payload: json!({}),
+                other: json!({}),
             })
             .unwrap();
 
@@ -625,7 +669,7 @@ mod tests {
                 external_id: None,
                 topic_id: EntityTopicId::default_main_service("service2").unwrap(),
                 parent: None,
-                payload: json!({}),
+                other: json!({}),
             })
             .unwrap();
 
@@ -647,7 +691,7 @@ mod tests {
                 external_id: Some("test-device".into()),
                 r#type: EntityType::MainDevice,
                 parent: None,
-                payload: json!({}),
+                other: json!({}),
             },
             dummy_external_id_mapper,
         )
@@ -658,7 +702,7 @@ mod tests {
             external_id: None,
             r#type: EntityType::ChildDevice,
             parent: Some(EntityTopicId::default_child_device("myawesomeparent").unwrap()),
-            payload: json!({}),
+            other: json!({}),
         });
 
         assert!(matches!(res, Err(Error::NoParent(_))));
@@ -672,7 +716,7 @@ mod tests {
                 external_id: Some("test-device".into()),
                 r#type: EntityType::MainDevice,
                 parent: None,
-                payload: json!({"@type": "device"}),
+                other: json!({}),
             },
             dummy_external_id_mapper,
         )
@@ -788,7 +832,7 @@ mod tests {
                 external_id: Some("test-device".into()),
                 r#type: EntityType::MainDevice,
                 parent: None,
-                payload: json!({"@type": "device"}),
+                other: json!({}),
             },
             dummy_external_id_mapper,
         )
@@ -908,7 +952,7 @@ mod tests {
                 r#type: EntityType::MainDevice,
                 external_id: Some("test-device".into()),
                 parent: None,
-                payload: json!({}),
+                other: json!({}),
             },
             dummy_external_id_mapper,
         )
@@ -924,14 +968,14 @@ mod tests {
                     r#type: EntityType::ChildDevice,
                     external_id: Some("device:child1".into()),
                     parent: None,
-                    payload: json!({ "name": "child1" }),
+                    other: json!({ "name": "child1" }),
                 },
                 EntityRegistrationMessage {
                     topic_id: EntityTopicId::from_str("device/child1/service/service1").unwrap(),
                     r#type: EntityType::Service,
                     external_id: Some("device:child1:service:service1".into()),
                     parent: Some(EntityTopicId::from_str("device/child1//").unwrap()),
-                    payload: json!({ "name": "service1",  "type": "systemd" }),
+                    other: json!({ "name": "service1",  "type": "systemd" }),
                 }
             ]
         );
@@ -945,7 +989,7 @@ mod tests {
                 r#type: EntityType::MainDevice,
                 external_id: Some("test-device".into()),
                 parent: None,
-                payload: json!({}),
+                other: json!({}),
             },
             dummy_external_id_mapper,
         )
@@ -961,7 +1005,7 @@ mod tests {
                 r#type: EntityType::ChildDevice,
                 external_id: Some("device:child2".into()),
                 parent: None,
-                payload: json!({ "name": "child2" }),
+                other: json!({ "name": "child2" }),
             },]
         );
     }
@@ -974,7 +1018,7 @@ mod tests {
                 r#type: EntityType::MainDevice,
                 external_id: Some("test-device".into()),
                 parent: None,
-                payload: json!({}),
+                other: json!({}),
             },
             dummy_external_id_mapper,
         )
@@ -993,7 +1037,7 @@ mod tests {
                 r#type: EntityType::MainDevice,
                 external_id: Some("test-device".into()),
                 parent: None,
-                payload: json!({}),
+                other: json!({}),
             },
             dummy_external_id_mapper,
         )
@@ -1007,7 +1051,7 @@ mod tests {
                 r#type: EntityType::MainDevice,
                 external_id: None,
                 parent: None,
-                payload: json!({}),
+                other: json!({}),
             })
             .unwrap();
 
@@ -1036,7 +1080,7 @@ mod tests {
                 r#type: EntityType::Service,
                 external_id: None,
                 parent: Some(main_topic_id.clone()),
-                payload: json!({}),
+                other: json!({}),
             })
             .unwrap();
 
