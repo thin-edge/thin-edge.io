@@ -26,7 +26,7 @@ and need to be secured, configured and updated at scale.
 ## How to start
 
 The easiest way to get started is either to install the docker based [demo container](https://github.com/thin-edge/tedge-demo-container)
-that showcase thin-edge.io and all its features or with the [beginner-friendly tutorial](start/getting-started.md)
+that showcases thin-edge.io and all its features or with the [beginner-friendly tutorial](start/getting-started.md)
 that introduces `thin-edge.io` and guides you on how to install it on a Raspberry Pi.
 After the installation you can directly connect your device to [Cumulocity IoT](https://www.cumulocity.com/guides/concepts/introduction/),
 and then monitor it from the cloud.
