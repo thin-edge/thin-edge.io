@@ -97,6 +97,7 @@ use tokio::time::Duration;
 use tracing::debug;
 use tracing::info;
 use tracing::log::error;
+use tracing::trace;
 
 const C8Y_CLOUD: &str = "c8y";
 const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
@@ -221,8 +222,9 @@ impl CumulocityConverter {
         };
 
         let main_device = entity_store::EntityRegistrationMessage::main_device(device_id.clone());
-        let entity_store = EntityStore::with_main_device(
+        let entity_store = EntityStore::with_main_device_and_default_service_type(
             main_device,
+            service_type.clone(),
             Self::map_to_c8y_external_id,
             Self::validate_external_id,
         )
@@ -293,7 +295,7 @@ impl CumulocityConverter {
                             .default_service_name()
                             .unwrap_or(external_id.as_ref())
                     }),
-                    display_type.unwrap_or("service"),
+                    display_type.unwrap_or(&self.service_type),
                     "up",
                     &ancestors_external_ids,
                 );
@@ -499,8 +501,9 @@ impl CumulocityConverter {
             .get(entity)
             .expect("entity was registered");
 
+        let ancestors_external_ids = self.entity_store.ancestors_external_ids(entity)?;
         let mut message =
-            convert_health_status_message(&self.entity_store, entity_metadata, message);
+            convert_health_status_message(entity_metadata, &ancestors_external_ids, message);
 
         mqtt_messages.append(&mut message);
         Ok(mqtt_messages)
@@ -843,6 +846,8 @@ impl CumulocityConverter {
         &mut self,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
+        debug!("Mapping message on topic: {}", message.topic.name);
+        trace!("Message content: {:?}", message.payload_str());
         match self.mqtt_schema.entity_channel_of(&message.topic) {
             Ok((source, channel)) => self.try_convert_te_topics(source, channel, message).await,
             Err(_) => self.try_convert_tedge_topics(message).await,
@@ -2159,7 +2164,7 @@ mod tests {
 
         let expected_service_monitor_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us/test-device:device:child1"),
-            r#"102,test-device:device:child1:service:child-service-c8y,systemd,child-service-c8y,up"#,
+            r#"102,test-device:device:child1:service:child-service-c8y,service,child-service-c8y,up"#,
         );
 
         let out_messages = converter.convert(&in_message).await;
@@ -2210,7 +2215,7 @@ mod tests {
 
         let expected_service_monitor_smart_rest_message = Message::new(
             &Topic::new_unchecked("c8y/s/us"),
-            r#"102,test-device:device:main:service:test-tedge-mapper-c8y,systemd,test-tedge-mapper-c8y,up"#,
+            r#"102,test-device:device:main:service:test-tedge-mapper-c8y,service,test-tedge-mapper-c8y,up"#,
         );
 
         // Test the output messages contains SmartREST and C8Y JSON.

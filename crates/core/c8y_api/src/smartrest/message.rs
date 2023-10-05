@@ -32,6 +32,8 @@ pub fn get_smartrest_template_id(payload: &str) -> String {
 /// - Remove all control characters except for `\n`, `\t`, `\r`.
 /// - Double quote is escaped as `\"\"`.
 /// - Strip the input according to `max_size`.
+// TODO: make this return Result
+// TODO: make a variant which assumes `max_size = MAX_PAYLOAD_LIMIT_IN_BYTES`
 pub fn sanitize_for_smartrest(input: Vec<u8>, max_size: usize) -> String {
     String::from_utf8(input)
         .unwrap_or_else(|err| {

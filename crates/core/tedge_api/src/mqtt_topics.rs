@@ -376,6 +376,10 @@ pub struct Service {
 pub struct ServiceTopicId(EntityTopicId);
 
 impl ServiceTopicId {
+    pub fn new(entity_topic_id: EntityTopicId) -> Self {
+        Self(entity_topic_id)
+    }
+
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }

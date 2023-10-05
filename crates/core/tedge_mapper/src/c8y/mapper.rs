@@ -82,7 +82,7 @@ pub fn service_monitor_client_config(tedge_config: &TEdgeConfig) -> Result<Confi
     // from this level we don't have access to the entity store and registered main device so best
     // we can do for now is just guess it
     // TODO: fix this, preferably use a HealthMonitorActor
-    let service_external_id = format!("{device_name}:service:tedge-mapper-c8y");
+    let service_external_id = format!("{device_name}:device:main:service:tedge-mapper-c8y");
 
     let last_will_message = c8y_api::smartrest::inventory::service_creation_message(
         service_external_id.as_str(),

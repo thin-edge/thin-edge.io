@@ -57,7 +57,7 @@ Test if all c8y services using default service type when service type configured
 Check health status of tedge-mapper-c8y service on broker stop start
     Custom Test Setup
 
-    Device Should Exist                      ${DEVICE_SN}_tedge-mapper-c8y    show_info=False
+    Device Should Exist                      ${DEVICE_SN}:device:main:service:tedge-mapper-c8y    show_info=False
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up
     Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
     Should Be Equal    ${SERVICE["status"]}    up
@@ -65,7 +65,7 @@ Check health status of tedge-mapper-c8y service on broker stop start
     ThinEdgeIO.Stop Service    mosquitto.service
     ThinEdgeIO.Service Should Be Stopped  mosquitto.service
 
-    Device Should Exist                      ${DEVICE_SN}_tedge-mapper-c8y    show_info=False
+    Device Should Exist                      ${DEVICE_SN}:device:main:service:tedge-mapper-c8y    show_info=False
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=down
     Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
     Should Be Equal    ${SERVICE["status"]}    down
@@ -83,7 +83,7 @@ Check health status of tedge-mapper-c8y service on broker restart
     [Documentation]    Test tedge-mapper-c8y on mqtt broker restart
     Custom Test Setup
 
-    Device Should Exist                      ${DEVICE_SN}_tedge-mapper-c8y    show_info=False
+    Device Should Exist                      ${DEVICE_SN}:device:main:service:tedge-mapper-c8y    show_info=False
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up    timeout=${TIMEOUT}
     Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
     Should Be Equal    ${SERVICE["status"]}    up
@@ -92,7 +92,7 @@ Check health status of tedge-mapper-c8y service on broker restart
     ThinEdgeIO.Service Should Be Running  mosquitto.service
 
     Sleep    5s    reason=Wait for any potential status changes to be sent to Cumulocity IoT
-    Device Should Exist                      ${DEVICE_SN}_tedge-mapper-c8y    show_info=False
+    Device Should Exist                      ${DEVICE_SN}:device:main:service:tedge-mapper-c8y    show_info=False
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up    timeout=${TIMEOUT}
     Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
     Should Be Equal    ${SERVICE["status"]}    up
@@ -103,17 +103,18 @@ Check health status of child device service
     [Documentation]    Test service status of child device services
     # Create the child device by sending the service status on tedge/health/<child-id>/<service-id
     # Verify if the service status is updated
-    Set Device    ${DEVICE_SN}
-    Set Suite Variable    $CHILD_SN    ${DEVICE_SN}_external-sensor
-    Execute Command    tedge mqtt pub 'tedge/health/${CHILD_SN}/childservice' '{"type":"systemd","status":"unknown"}'
+    Set Device         ${DEVICE_SN}
+    ${child_sn}=       Set Variable    ${DEVICE_SN}:device:external-sensor
+    ${child_name}=     Set Variable    external-sensor
+    Execute Command    tedge mqtt pub 'tedge/health/${child_name}/childservice' '{"status":"unknown"}'
 
-    Should Be A Child Device Of Device    ${CHILD_SN}
+    Should Be A Child Device Of Device    ${child_sn}
 
     # Check created service entries
-    Device Should Exist                      ${DEVICE_SN}_${CHILD_SN}_childservice    show_info=False
+    Device Should Exist                      ${child_sn}:service:childservice    show_info=False
     ${SERVICE}=    Device Should Have Fragment Values    status\=unknown
     Should Be Equal    ${SERVICE["name"]}    childservice
-    Should Be Equal    ${SERVICE["serviceType"]}    systemd
+    Should Be Equal    ${SERVICE["serviceType"]}    service
     Should Be Equal    ${SERVICE["status"]}    unknown
     Should Be Equal    ${SERVICE["type"]}    c8y_Service
 
@@ -142,7 +143,7 @@ Check if a service is up
     ThinEdgeIO.Start Service    ${service_name}
     ThinEdgeIO.Service Should Be Running    ${service_name}
 
-    Device Should Exist                      ${DEVICE_SN}_${service_name}    show_info=False
+    Device Should Exist                      ${DEVICE_SN}:device:main:service:${service_name}    show_info=False
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up        timeout=${TIMEOUT}
 
     Should Be Equal    ${SERVICE["name"]}    ${service_name}
@@ -157,11 +158,11 @@ Check if a service is down
     [Arguments]    ${service_name}
     Custom Test Setup
     ThinEdgeIO.Start Service    ${service_name}
-    Device Should Exist                      ${DEVICE_SN}_${service_name}    show_info=False
+    Device Should Exist                      ${DEVICE_SN}:device:main:service:${service_name}    show_info=False
     ThinEdgeIO.Stop Service    ${service_name}
     ThinEdgeIO.Service Should Be Stopped  ${service_name}
 
-    Device Should Exist                      ${DEVICE_SN}_${service_name}    show_info=False
+    Device Should Exist                      ${DEVICE_SN}:device:main:service:${service_name}    show_info=False
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=down
 
     Should Be Equal    ${SERVICE["name"]}    ${service_name}
@@ -176,7 +177,7 @@ Check if a service using configured service type
     Execute Command    tedge config set service.type thinedge
     Custom Test Setup
     ThinEdgeIO.Restart Service    ${service_name}
-    Device Should Exist                      ${DEVICE_SN}_${service_name}    show_info=False
+    Device Should Exist                      ${DEVICE_SN}:device:main:service:${service_name}    show_info=False
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up    serviceType\=thinedge        timeout=${TIMEOUT}
 
     Should Be Equal    ${SERVICE["name"]}    ${service_name}
@@ -191,7 +192,7 @@ Check if a service using configured service type as empty
     Execute Command    tedge config set service.type ""
     Custom Test Setup
     ThinEdgeIO.Restart Service    ${service_name}
-    Device Should Exist                      ${DEVICE_SN}_${service_name}    show_info=False
+    Device Should Exist                      ${DEVICE_SN}:device:main:service:${service_name}    show_info=False
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up        serviceType\=service        timeout=${TIMEOUT}
 
     Should Be Equal    ${SERVICE["name"]}    ${service_name}

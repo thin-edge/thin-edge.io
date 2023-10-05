@@ -30,8 +30,10 @@ use thiserror::Error;
 const MQTT_ROOT: &str = "te";
 
 /// Represents externally provided unique ID of an entity.
+///
 /// Although this struct doesn't enforce any restrictions for the values,
 /// the consumers may impose restrictions on the accepted values.
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct EntityExternalId(String);
 
@@ -41,6 +43,10 @@ impl AsRef<str> for EntityExternalId {
     }
 }
 
+// XXX: As `EntityExternalId` is used as a part of cloudbound MQTT topic, it
+// can't contain characters invalid in topics, i.e. `+` and `#`. ([MQTT-4.7]).
+// If it's derived from a MQTT topic, this holds, but if created from a string,
+// this isn't checked, which is invalid!
 impl From<&str> for EntityExternalId {
     fn from(val: &str) -> Self {
         Self(val.to_string())
@@ -121,6 +127,8 @@ pub struct EntityStore {
     entity_id_index: HashMap<EntityExternalId, EntityTopicId>,
     external_id_mapper: ExternalIdMapperFn,
     external_id_validator_fn: ExternalIdValidatorFn,
+    // TODO: this is a c8y cloud specific concern and it'd be better to put it somewhere else.
+    default_service_type: String,
 }
 
 impl EntityStore {
@@ -128,6 +136,27 @@ impl EntityStore {
     #[must_use]
     pub fn with_main_device<MF, SF>(
         main_device: EntityRegistrationMessage,
+        external_id_mapper_fn: MF,
+        external_id_validator_fn: SF,
+    ) -> Option<Self>
+    where
+        MF: Fn(&EntityTopicId, &EntityExternalId) -> EntityExternalId,
+        MF: 'static + Send + Sync,
+        SF: Fn(&str) -> Result<EntityExternalId, InvalidExternalIdError>,
+        SF: 'static + Send + Sync,
+    {
+        Self::with_main_device_and_default_service_type(
+            main_device,
+            "service".to_string(),
+            external_id_mapper_fn,
+            external_id_validator_fn,
+        )
+    }
+
+    #[must_use]
+    pub fn with_main_device_and_default_service_type<MF, SF>(
+        main_device: EntityRegistrationMessage,
+        default_service_type: String,
         external_id_mapper_fn: MF,
         external_id_validator_fn: SF,
     ) -> Option<Self>
@@ -156,6 +185,7 @@ impl EntityStore {
             entity_id_index: HashMap::from([(entity_id, main_device.topic_id)]),
             external_id_mapper: Box::new(external_id_mapper_fn),
             external_id_validator_fn: Box::new(external_id_validator_fn),
+            default_service_type,
         })
     }
 
@@ -314,12 +344,22 @@ impl EntityStore {
                 }
             }
         };
+
+        let JsonValue::Object(mut other) = message.other else {
+            return Err(Error::EntityRegistrationOtherNotMap);
+        };
+
+        // XXX: this is c8y-specific, entity store shouldn't do this!
+        other
+            .entry("type".to_string())
+            .or_insert(JsonValue::String(self.default_service_type.clone()));
+
         let entity_metadata = EntityMetadata {
             topic_id: topic_id.clone(),
             r#type: message.r#type,
             external_id: external_id.clone(),
             parent,
-            other: message.other,
+            other: JsonValue::Object(other),
         };
 
         // device is affected if it was previously registered and was updated
@@ -401,7 +441,7 @@ impl EntityStore {
                     external_id: Some(service_external_id),
                     r#type: EntityType::Service,
                     parent: Some(parent_device_id),
-                    other: json!({ "name": service_id,  "type": "systemd" }),
+                    other: json!({ "name": service_id, "type": self.default_service_type }),
                 };
                 register_messages.push(service_register_message.clone());
                 self.update(service_register_message)?;
@@ -420,6 +460,9 @@ pub struct EntityMetadata {
     pub parent: Option<EntityTopicId>,
     pub r#type: EntityType,
     pub external_id: EntityExternalId,
+
+    // TODO: use a dedicated struct for cloud-specific fields, have `EntityMetadata` be generic over
+    // cloud we're currently connected to
     pub other: JsonValue,
 }
 
@@ -474,6 +517,11 @@ pub enum Error {
 
     #[error(transparent)]
     InvalidExternalIdError(#[from] InvalidExternalIdError),
+
+    // In practice won't be thrown because usually it is a map
+    // TODO: remove this error variant when `EntityRegistrationMessage` is changed
+    #[error("`EntityRegistrationMessage::other` field needs to be a Map")]
+    EntityRegistrationOtherNotMap,
 }
 
 /// An object representing a valid entity registration message.
@@ -974,7 +1022,7 @@ mod tests {
                     r#type: EntityType::Service,
                     external_id: Some("device:child1:service:service1".into()),
                     parent: Some(EntityTopicId::from_str("device/child1//").unwrap()),
-                    other: json!({ "name": "service1",  "type": "systemd" }),
+                    other: json!({ "name": "service1",  "type": "service" }),
                 }
             ]
         );
@@ -1029,7 +1077,7 @@ mod tests {
             parent: None,
             r#type: EntityType::MainDevice,
             external_id: "test-device".into(),
-            other: json!({}),
+            other: json!({"type": "service"}),
         };
         // Assert main device registered with custom topic scheme
         assert_eq!(
@@ -1058,7 +1106,7 @@ mod tests {
             parent: Some(main_topic_id),
             r#type: EntityType::Service,
             external_id: "custom:main:service:collectd".into(),
-            other: json!({}),
+            other: json!({"type": "service"}),
         };
         // Assert service registered under main device with custom topic scheme
         assert_eq!(

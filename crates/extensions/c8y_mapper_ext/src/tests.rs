@@ -1756,7 +1756,7 @@ async fn inventory_registers_unknown_entity_once() {
             .expect("Service register message payload must be JSON");
     assert_json_include!(
         actual: service_register_payload,
-        expected: json!({"@type": "service", "type": "systemd"})
+        expected: json!({"@type": "service", "type": "service"})
     );
 
     assert!(
