@@ -711,6 +711,7 @@ dependencies = [
  "c8y_api",
  "download",
  "http",
+ "hyper",
  "log",
  "mockito",
  "mqtt_channel",
