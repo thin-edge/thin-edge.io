@@ -28,10 +28,6 @@ deb:
     - c8y_configuration_plugin (<= 0.8.1)
 
 contents:
-  # binary
-  - src: .build/c8y-configuration-plugin
-    dst: /usr/bin/
-
   # service definitions
   - src: ./configuration/init/systemd/c8y-configuration-plugin.service
     dst: /lib/systemd/system/
