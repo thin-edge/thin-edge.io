@@ -13,7 +13,6 @@ use std::net::SocketAddr;
 use tedge_actors::futures::StreamExt;
 use tedge_api::path::DataDir;
 use tedge_utils::paths::create_directories;
-use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
 const HTTP_FILE_TRANSFER_PORT: u16 = 8000;
@@ -144,14 +143,9 @@ async fn get(
         return Ok(response);
     }
 
-    let mut file = tokio::fs::File::open(full_path).await?;
+    let contents = tokio::fs::read(full_path).await?;
 
-    let mut contents = vec![];
-    file.read_to_end(&mut contents).await?;
-
-    let output = String::from_utf8(contents)?;
-
-    Ok(Response::new(Body::from(output)))
+    Ok(Response::new(Body::from(contents)))
 }
 
 async fn delete(

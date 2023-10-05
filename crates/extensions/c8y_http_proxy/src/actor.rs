@@ -370,7 +370,8 @@ impl C8YHttpProxyActor {
         let device_id = request.device_id;
         // TODO: Upload the file as a multi-part stream
         // read the config file contents
-        let file_content = std::fs::read_to_string(request.file_path)
+        let file_content = tokio::fs::read(&request.file_path)
+            .await
             .map_err(<std::io::Error as Into<SMCumulocityMapperError>>::into)?;
 
         let create_event = |internal_id: String| -> C8yCreateEvent {
@@ -393,8 +394,8 @@ impl C8YHttpProxyActor {
                 end_point.get_url_for_event_binary_upload(&event_response_id);
             Ok(HttpRequestBuilder::post(&binary_upload_event_url)
                 .header("Accept", "application/json")
-                .header("Content-Type", "text/plain")
-                .body(file_content.to_string()))
+                .header("Content-Type", "application/octet-stream")
+                .body(file_content.clone()))
         };
         info!(target: self.name(), "Uploading file to URL: {}", self.end_point
         .get_url_for_event_binary_upload(&event_response_id));
