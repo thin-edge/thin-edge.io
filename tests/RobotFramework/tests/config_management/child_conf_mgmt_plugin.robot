@@ -145,8 +145,9 @@ Child device response on snapshot request
     Set Device Context    ${CHILD_SN}
     Execute Command    mosquitto_pub -h ${PARENT_IP} -t "tedge/${CHILD_SN}${topic_snap} -m ${payl_exec}
 
+    Transfer To Device    ${CURDIR}/config.txt.tar.gz    /home/pi/config1
     Execute Command
-    ...    curl -X PUT --data-binary @/home/pi/config1 http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/config_snapshot/config1
+    ...    curl -f -X PUT --data-binary @/home/pi/config1 http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/config_snapshot/config1
 
     Sleep    5s
     Execute Command    mosquitto_pub -h ${PARENT_IP} -t "tedge/${CHILD_SN}${topic_snap} -m ${payl_succ}
@@ -157,7 +158,7 @@ Child device response on snapshot request
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}
 
 Send configuration to device
-    ${file_url}=    Create Inventory Binary    test-config.toml    config1    contents=Dummy config
+    ${file_url}=    Create Inventory Binary    test-config.toml    config1    file=${CURDIR}/config.txt.tar.gz
     ${operation}=    Set Configuration
     ...    config1
     ...    ${file_url}
@@ -178,7 +179,7 @@ Child device response on update request
     Execute Command    mosquitto_pub -h ${PARENT_IP} -t "tedge/${CHILD_SN}${topic_upd} -m ${payl_exec}
 
     Execute Command
-    ...    curl http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/config_update/config1 --output config1
+    ...    curl -f http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/config_update/config1 --output config1
 
     # Sleep    5s    #Enable if tests starts to fail
     Execute Command    mosquitto_pub -h ${PARENT_IP} -t "tedge/${CHILD_SN}${topic_upd} -m ${payl_succ}
