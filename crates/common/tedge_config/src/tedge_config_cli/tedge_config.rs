@@ -411,8 +411,8 @@ define_tedge_config! {
         },
 
         /// Set of MQTT topics the Azure IoT mapper should subscribe to
-        #[tedge_config(example = "tedge/measurements,tedge/measurements/+")]
-        #[tedge_config(default(value = "tedge/measurements,tedge/measurements/+,tedge/health/+,tedge/health/+/+"))]
+        #[tedge_config(example = "te/+/+/+/+/a/+,te/+/+/+/+/m/+,te/+/+/+/+/e/+")]
+        #[tedge_config(default(value = "te/+/+/+/+/m/+,te/+/+/+/+/e/+,te/+/+/+/+/a/+,tedge/health/+,tedge/health/+/+"))]
         topics: TemplatesSet,
     },
 

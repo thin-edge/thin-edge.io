@@ -357,6 +357,7 @@ dependencies = [
  "tedge_actors",
  "tedge_api",
  "tedge_mqtt_ext",
+ "test-case",
  "thiserror",
  "time",
  "tokio",
