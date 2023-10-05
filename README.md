@@ -87,7 +87,7 @@ Distributed under the Apache 2.0 License. See [LICENSE](LICENSE.txt) for more in
 <!-- CONTACT -->
 # Contact
 
-Discord - [Join the thin-edge.io community now!](https://discord.com/invite/SvqWp6nrsK)
+Discord - [Join the thin-edge.io community now!](https://discord.gg/BXkVCbZk4a)
 
 Twitter - [@thin_edge_io](https://twitter.com/thin_edge_io)
 
