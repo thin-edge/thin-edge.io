@@ -15,9 +15,9 @@ use tedge_config_manager::ConfigManagerOptions;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_health_ext::HealthMonitorBuilder;
-use tedge_http_ext::HttpActor;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_signal_ext::SignalActor;
+use tedge_uploader_ext::UploaderActor;
 
 const AFTER_HELP_TEXT: &str = r#"On start, `tedge-configuration-plugin` notifies of its 
 managed configuration files and sends this list via MQTT.
@@ -100,9 +100,9 @@ async fn run_with(
 
     let health_actor = HealthMonitorBuilder::new(TEDGE_CONFIGURATION_PLUGIN, &mut mqtt_actor);
 
-    let mut http_actor = HttpActor::new().builder();
-
     let mut downloader_actor = DownloaderActor::new().builder();
+
+    let mut uploader_actor = UploaderActor::new().builder();
 
     // Instantiate config manager actor
     let manager_config = ConfigManagerConfig::from_options(ConfigManagerOptions {
@@ -114,9 +114,9 @@ async fn run_with(
     let config_actor = ConfigManagerBuilder::try_new(
         manager_config,
         &mut mqtt_actor,
-        &mut http_actor,
         &mut fs_watch_actor,
         &mut downloader_actor,
+        &mut uploader_actor,
     )?;
 
     // Shutdown on SIGINT
@@ -124,8 +124,8 @@ async fn run_with(
 
     // Run the actors
     runtime.spawn(mqtt_actor).await?;
-    runtime.spawn(http_actor).await?;
     runtime.spawn(downloader_actor).await?;
+    runtime.spawn(uploader_actor).await?;
     runtime.spawn(fs_watch_actor).await?;
     runtime.spawn(config_actor).await?;
     runtime.spawn(signal_actor).await?;

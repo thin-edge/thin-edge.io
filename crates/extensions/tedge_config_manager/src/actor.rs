@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use http::status::StatusCode;
+use camino::Utf8Path;
 use log::debug;
 use log::error;
 use log::info;
@@ -9,7 +9,6 @@ use std::path::Path;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
-use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
@@ -23,13 +22,10 @@ use tedge_api::Jsonify;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
-use tedge_http_ext::HttpError;
-use tedge_http_ext::HttpRequest;
-use tedge_http_ext::HttpRequestBuilder;
-use tedge_http_ext::HttpResponseExt;
-use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
+use tedge_uploader_ext::UploadRequest;
+use tedge_uploader_ext::UploadResult;
 
 use super::config::PluginConfig;
 use super::error::ConfigManagementError;
@@ -37,20 +33,24 @@ use super::ConfigManagerConfig;
 use super::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
 
 type MqttTopic = String;
-pub type ConfigDownloadResult = (MqttTopic, DownloadResult);
-pub type ConfigDownloadRequest = (MqttTopic, DownloadRequest);
 
-fan_in_message_type!(ConfigInput[MqttMessage, FsWatchEvent, ConfigDownloadResult] : Debug);
-fan_in_message_type!(ConfigOutput[MqttMessage, ConfigDownloadRequest]: Debug);
+pub type ConfigDownloadRequest = (MqttTopic, DownloadRequest);
+pub type ConfigDownloadResult = (MqttTopic, DownloadResult);
+
+pub type ConfigUploadRequest = (MqttTopic, UploadRequest);
+pub type ConfigUploadResult = (MqttTopic, UploadResult);
+
+fan_in_message_type!(ConfigInput[MqttMessage, FsWatchEvent, ConfigDownloadResult, ConfigUploadResult] : Debug);
+fan_in_message_type!(ConfigOutput[MqttMessage, ConfigDownloadRequest, ConfigUploadRequest]: Debug);
 
 pub struct ConfigManagerActor {
     config: ConfigManagerConfig,
     plugin_config: PluginConfig,
-    pending_downloads: HashMap<String, ConfigUpdateCmdPayload>,
+    pending_operations: HashMap<String, ConfigOperation>,
     input_receiver: LoggingReceiver<ConfigInput>,
     mqtt_publisher: LoggingSender<MqttMessage>,
-    http_proxy: ClientMessageBox<HttpRequest, HttpResult>,
     download_sender: DynSender<ConfigDownloadRequest>,
+    upload_sender: DynSender<ConfigUploadRequest>,
 }
 
 #[async_trait]
@@ -69,6 +69,9 @@ impl Actor for ConfigManagerActor {
                 ConfigInput::ConfigDownloadResult((topic, result)) => {
                     self.process_downloaded_config(&topic, result).await
                 }
+                ConfigInput::ConfigUploadResult((topic, result)) => {
+                    self.process_uploaded_config(&topic, result).await
+                }
             };
 
             if let Err(err) = result {
@@ -86,17 +89,17 @@ impl ConfigManagerActor {
         plugin_config: PluginConfig,
         input_receiver: LoggingReceiver<ConfigInput>,
         mqtt_publisher: LoggingSender<MqttMessage>,
-        http_proxy: ClientMessageBox<HttpRequest, HttpResult>,
         download_sender: DynSender<ConfigDownloadRequest>,
+        upload_sender: DynSender<ConfigUploadRequest>,
     ) -> Self {
         ConfigManagerActor {
             config,
             plugin_config,
-            pending_downloads: HashMap::new(),
+            pending_operations: HashMap::new(),
             input_receiver,
             mqtt_publisher,
-            http_proxy,
             download_sender,
+            upload_sender,
         }
     }
 
@@ -169,15 +172,10 @@ impl ConfigManagerActor {
         topic: &Topic,
         mut request: ConfigSnapshotCmdPayload,
     ) -> Result<(), ChannelError> {
-        match self.execute_config_snapshot_request(&request).await {
-            Ok(path) => {
-                request.successful(path);
-                info!(
-                    "Config snapshot request processed for config type: {}.",
-                    request.config_type
-                );
-                self.publish_command_status(topic, &ConfigOperation::Snapshot(request))
-                    .await?;
+        match self.execute_config_snapshot_request(topic, &request).await {
+            Ok(_) => {
+                self.pending_operations
+                    .insert(topic.name.clone(), ConfigOperation::Snapshot(request));
             }
             Err(error) => {
                 let error_message = format!("Handling of operation failed with {}", error);
@@ -192,45 +190,55 @@ impl ConfigManagerActor {
 
     async fn execute_config_snapshot_request(
         &mut self,
+        topic: &Topic,
         request: &ConfigSnapshotCmdPayload,
-    ) -> Result<String, ConfigManagementError> {
+    ) -> Result<(), ConfigManagementError> {
         let file_entry = self
             .plugin_config
             .get_file_entry_from_type(&request.config_type)?;
 
-        let config_content = std::fs::read_to_string(&file_entry.path)?;
-
-        self.upload_config_file(&request.tedge_url, config_content)
-            .await?;
+        let upload_request =
+            UploadRequest::new(&request.tedge_url, Utf8Path::new(&file_entry.path));
 
         info!(
-            "The configuration upload for '{}' is successful.",
-            request.config_type
+            "Awaiting upload of config type: {} to url: {}",
+            request.config_type, request.tedge_url
         );
 
-        Ok(file_entry.path)
+        self.upload_sender
+            .send((topic.name.clone(), upload_request))
+            .await?;
+
+        Ok(())
     }
 
-    async fn upload_config_file(
+    async fn process_uploaded_config(
         &mut self,
-        upload_url: &str,
-        config_content: String,
-    ) -> Result<(), ConfigManagementError> {
-        let req_builder = HttpRequestBuilder::put(upload_url)
-            .header("Content-Type", "text/plain")
-            .body(config_content);
-
-        let request = req_builder.build()?;
-
-        let http_result = match self.http_proxy.await_response(request).await? {
-            Ok(response) => match response.status() {
-                StatusCode::OK | StatusCode::CREATED => Ok(response),
-                code => Err(HttpError::HttpStatusError(code)),
-            },
-            Err(err) => Err(err),
-        };
-
-        let _ = http_result.error_for_status()?;
+        topic: &str,
+        result: UploadResult,
+    ) -> Result<(), ChannelError> {
+        if let Some(ConfigOperation::Snapshot(mut request)) = self.pending_operations.remove(topic)
+        {
+            let topic = Topic::new_unchecked(topic);
+            match result {
+                Ok(response) => {
+                    request.successful(response.file_path.as_str());
+                    info!(
+                        "Config Snapshot request processed for config type: {}.",
+                        request.config_type
+                    );
+                    self.publish_command_status(&topic, &ConfigOperation::Snapshot(request))
+                        .await?;
+                }
+                Err(err) => {
+                    let error_message = format!("Handling of operation failed with {}", err);
+                    request.failed(&error_message);
+                    error!("{}", error_message);
+                    self.publish_command_status(&topic, &ConfigOperation::Snapshot(request))
+                        .await?;
+                }
+            }
+        }
 
         Ok(())
     }
@@ -242,7 +250,8 @@ impl ConfigManagerActor {
     ) -> Result<(), ChannelError> {
         match self.execute_config_update_request(topic, &request).await {
             Ok(_) => {
-                self.pending_downloads.insert(topic.name.clone(), request);
+                self.pending_operations
+                    .insert(topic.name.clone(), ConfigOperation::Update(request));
             }
             Err(error) => {
                 let error_message = format!("Handling of operation failed with {}", error);
@@ -285,13 +294,13 @@ impl ConfigManagerActor {
         topic: &str,
         result: DownloadResult,
     ) -> Result<(), ChannelError> {
-        if let Some(mut request) = self.pending_downloads.remove(topic) {
+        if let Some(ConfigOperation::Update(mut request)) = self.pending_operations.remove(topic) {
             let topic = Topic::new_unchecked(topic);
             match result {
                 Ok(response) => {
-                    request.successful(response.file_path.as_path().to_str().unwrap_or_default());
+                    request.successful(response.file_path.as_path().to_str().unwrap());
                     info!(
-                        "Config update request processed for config type: {}.",
+                        "Config Update request processed for config type: {}.",
                         request.config_type
                     );
                     self.publish_command_status(&topic, &ConfigOperation::Update(request))
