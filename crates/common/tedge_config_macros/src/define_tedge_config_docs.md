@@ -24,22 +24,24 @@ This macro outputs a few different types:
 
 # Attributes
 ## `#[tedge_config(...)]` attributes
-| Attribute                                     | Supported for                                 | Summary                                                                   |
-| --------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------- |
-| [`rename`](#rename)                           | fields/groups                                 | Renames a field or group in serde and the `tedge config` key              |
-| [`deprecated_name`](#dep-name)                | fields/groups                                 | Adds an alias for a field or group in serde/`tedge config`                |
-| [`deprecated_key`](#dep-key)                  | fields                                        | Adds an alias for the field or group in serde/`tedge config`              |
-| **Doc comments**                              | [fields](#docs-fields)/[groups](#docs-groups) | Adds a description of a key in `tedge config` docs                        |
-| [`example`](#examples)                        | fields                                        | Adds an example value to `tedge config` docs                              |
-| [`note`](#notes)                              | fields                                        | Adds a highlighted note to `tedge config` docs                            |
-| [`reader(skip)`](#reader-skip)                | groups                                        | Omits a group from the reader struct entirely                             |
-| [`reader(private)`](#reader-priv)             | fields/groups                                 | Stops the field from the reader struct being marked with `pub`            |
-| [`default(value)`](#default-lit)              | fields                                        | Sets the default value for a field from a literal                         |
-| [`default(variable)`](#default-var)           | fields                                        | Sets the default value for a field from a variable                        |
-| [`default(from_key)`](#from-key)              | fields                                        | Sets the default value for a field to the value of another field          |
-| [`default(from_optional_key)`](#from-opt-key) | fields                                        | Sets the default value for a field to the value of another field          |
-| [`default(function)`](#default-fn)            | fields                                        | Specifies a function that will be used to compute a field's default value |
-| [`readonly(...)`](#readonly)                  | fields                                        | Marks a field as read-only                                                |
+
+| Attribute                                     | Supported for                                 | Summary                                                                      |
+|-----------------------------------------------|-----------------------------------------------|------------------------------------------------------------------------------|
+| [`rename`](#rename)                           | fields/groups                                 | Renames a field or group in serde and the `tedge config` key                 |
+| [`deprecated_name`](#dep-name)                | fields/groups                                 | Adds an alias for a field or group in serde/`tedge config`                   |
+| [`deprecated_key`](#dep-key)                  | fields                                        | Adds an alias for the field or group in serde/`tedge config`                 |
+| **Doc comments**                              | [fields](#docs-fields)/[groups](#docs-groups) | Adds a description of a key in `tedge config` docs                           |
+| [`example`](#examples)                        | fields                                        | Adds an example value to `tedge config` docs                                 |
+| [`note`](#notes)                              | fields                                        | Adds a highlighted note to `tedge config` docs                               |
+| [`reader(skip)`](#reader-skip)                | groups                                        | Omits a group from the reader struct entirely                                |
+| [`reader(private)`](#reader-priv)             | fields/groups                                 | Stops the field from the reader struct being marked with `pub`               |
+| [`default(value)`](#default-lit)              | fields                                        | Sets the default value for a field from a literal                            |
+| [`default(variable)`](#default-var)           | fields                                        | Sets the default value for a field from a variable                           |
+| [`default(from_key)`](#from-key)              | fields                                        | Sets the default value for a field to the value of another field             |
+| [`default(from_optional_key)`](#from-opt-key) | fields                                        | Sets the default value for a field to the value of another field             |
+| [`default(function)`](#default-fn)            | fields                                        | Specifies a function that will be used to compute a field's default value    |
+| [`readonly(...)`](#readonly)                  | fields                                        | Marks a field as read-only                                                   |
+| [`from(ty)`](#from-ty)                        | fields                                        | Provides an intermediate type that implements [`FromStr`](std::str::FromStr) |
 
 ## Other attributes
 ### `#[doku(as = "...")]`
@@ -329,7 +331,7 @@ println!("{}", tedge_config::reader.config.version); // compile error! The field
 ```
 
 Occasionally, you may want to add custom logic, such as
-[`all_or_nothing`](`crate::all_or_nothing::all_or_nothing`) to field accesses.
+[`all_or_nothing`](`crate::all_or_nothing::all_or_nothing()`) to field accesses.
 This attribute prevents the relevant `Reader` struct field from being marked
 with `pub`, which prevents other crates from accessing the value directly. The
 value is still exposed via `tedge config` to read from and write to.
@@ -575,3 +577,25 @@ fn try_read_device_id(_reader: &TEdgeConfigReader) -> Result<String, ReadError> 
 The `function` sub attribute is more restrictive than
 [`default(function)`](#default-fn). The function must be passed in by name, and
 must have a single argument of type `&TEdgeConfigReader`.
+
+## <a name="from-ty"></a> Intermediate parsing types: `#[tedge_config(from(ty))]`
+
+If the type you are providing doesn't directly implement [`FromStr`](std::str::FromStr), you can use this attribute to
+provide an intermediate type that is used to parse input to `tedge config set`.
+
+Thanks to some magic implemented directly in the macro, you shouldn't need this for `Arc<str>`, it should just work.
+However, as an example, this option could be used with `Arc<str>` as follows:
+
+```rust
+use tedge_config_macros::*;
+use std::sync::Arc;
+
+pub enum ReadError {}
+
+define_tedge_config! {
+  device: {
+    #[tedge_config(from = "String", example = "thin-edge.io", default(value = "thin-edge.io"))]
+    ty: Arc<str>,
+  }
+}
+```

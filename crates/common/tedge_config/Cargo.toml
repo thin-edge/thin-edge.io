@@ -15,7 +15,7 @@ doku = { workspace = true }
 figment = { workspace = true, features = ["env", "toml"] }
 mqtt_channel = { workspace = true }
 once_cell = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["rc"] }
 serde_ignored = { workspace = true }
 strum_macros = { workspace = true }
 tedge_config_macros = { workspace = true }

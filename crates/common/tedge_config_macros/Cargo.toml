@@ -17,3 +17,6 @@ tedge_config_macros-macro = { path = "macro" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
+
+[dev-dependencies]
+serde = { workspace = true, features = ["rc"] }

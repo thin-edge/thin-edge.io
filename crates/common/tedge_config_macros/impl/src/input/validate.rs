@@ -4,6 +4,7 @@ use darling::export::NestedMeta;
 use darling::util::SpannedValue;
 use heck::ToUpperCamelCase;
 use quote::format_ident;
+use syn::parse_quote;
 use syn::parse_quote_spanned;
 use syn::spanned::Spanned;
 
@@ -159,6 +160,7 @@ pub struct ReadOnlyField {
     pub reader: ReaderSettings,
     pub ident: syn::Ident,
     pub ty: syn::Type,
+    pub from: Option<syn::Type>,
 }
 
 impl ReadOnlyField {
@@ -193,6 +195,7 @@ pub struct ReadWriteField {
     pub ident: syn::Ident,
     pub ty: syn::Type,
     pub default: FieldDefault,
+    pub from: Option<syn::Type>,
 }
 
 impl ConfigurableField {
@@ -277,6 +280,14 @@ impl ConfigurableField {
         };
         keys.iter().map(|key| key.as_str())
     }
+
+    pub fn from(&self) -> Option<&syn::Type> {
+        match self {
+            Self::ReadOnly(field) => &field.from,
+            Self::ReadWrite(field) => &field.from,
+        }
+        .as_ref()
+    }
 }
 
 impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
@@ -351,6 +362,18 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
             value.attrs.push(tedge_note_to_doku_meta(&note));
         }
 
+        let string_like: [syn::Type; 5] = [
+            parse_quote!(Arc<str>),
+            parse_quote!(::std::sync::Arc<str>),
+            parse_quote!(std::sync::Arc<str>),
+            parse_quote!(core::sync::Arc<str>),
+            parse_quote!(sync::Arc<str>),
+        ];
+
+        if value.from.is_none() && string_like.contains(&value.ty) {
+            value.from = Some(parse_quote!(::std::string::String));
+        }
+
         custom_errors.try_throw()?;
 
         if let Some(readonly) = value.readonly {
@@ -363,6 +386,7 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
                 ty: value.ty,
                 dto: value.dto,
                 reader: value.reader,
+                from: value.from,
             }))
         } else {
             Ok(Self::ReadWrite(ReadWriteField {
@@ -375,6 +399,7 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
                 dto: value.dto,
                 reader: value.reader,
                 default: value.default.unwrap_or(FieldDefault::None),
+                from: value.from,
             }))
         }
     }
