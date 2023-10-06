@@ -88,9 +88,6 @@ impl LogManagerActor {
                 Ok(Some(request)) => match request.status {
                     CommandStatus::Init => {
                         info!("Log request received: {request:?}");
-                        self.config
-                            .current_operations
-                            .insert(message.topic.name.clone());
                         self.start_executing_logfile_request(&message.topic, request)
                             .await?;
                     }
@@ -99,9 +96,7 @@ impl LogManagerActor {
                         self.handle_logfile_request_operation(&message.topic, request)
                             .await?;
                     }
-                    CommandStatus::Successful | CommandStatus::Failed { .. } => {
-                        self.config.current_operations.remove(&message.topic.name);
-                    }
+                    CommandStatus::Successful | CommandStatus::Failed { .. } => {}
                 },
                 Ok(None) => {}
                 Err(err) => {

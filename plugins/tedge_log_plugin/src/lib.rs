@@ -2,6 +2,7 @@ use clap::Parser;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tedge_actors::Runtime;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::TEdgeConfig;
@@ -99,8 +100,8 @@ async fn run_with(
     // Instantiate log manager actor
     let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
         config_dir: cliopts.config_dir,
-        mqtt_device_topic_id,
-        mqtt_topic_root,
+        mqtt_schema: MqttSchema::with_root(mqtt_topic_root.to_string()),
+        mqtt_device_topic_id: mqtt_device_topic_id.to_string().parse()?,
     })?;
     let log_actor = LogManagerBuilder::try_new(
         log_manager_config,
