@@ -14,6 +14,7 @@ async-trait = { workspace = true }
 c8y_api = { workspace = true }
 download = { workspace = true }
 http = { workspace = true }
+hyper = { workspace = true }
 log = { workspace = true }
 mqtt_channel = { workspace = true }
 tedge_actors = { workspace = true }

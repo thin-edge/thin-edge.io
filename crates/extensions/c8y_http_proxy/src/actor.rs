@@ -29,6 +29,8 @@ use log::debug;
 use log::error;
 use log::info;
 use std::collections::HashMap;
+use std::future::ready;
+use std::future::Future;
 use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
@@ -219,13 +221,14 @@ impl C8YHttpProxyActor {
         Ok(internal_id)
     }
 
-    async fn execute(
+    async fn execute<Fut: Future<Output = Result<HttpRequestBuilder, C8YRestError>>>(
         &mut self,
         device_id: String,
-        build_request: impl Fn(&C8yEndPoint) -> Result<HttpRequestBuilder, C8YRestError>,
+        build_request: impl Fn(&C8yEndPoint) -> Fut,
     ) -> Result<HttpResult, C8YRestError> {
         let request_builder = build_request(&self.end_point);
-        let request = request_builder?
+        let request = request_builder
+            .await?
             .bearer_auth(self.end_point.token.clone().unwrap_or_default())
             .build()?;
 
@@ -254,31 +257,37 @@ impl C8YHttpProxyActor {
         self.get_and_set_jwt_token().await
     }
 
-    async fn try_request_with_fresh_token(
+    async fn try_request_with_fresh_token<
+        Fut: Future<Output = Result<HttpRequestBuilder, C8YRestError>>,
+    >(
         &mut self,
-        build_request: impl Fn(&C8yEndPoint) -> Result<HttpRequestBuilder, C8YRestError>,
+        build_request: impl Fn(&C8yEndPoint) -> Fut,
     ) -> Result<HttpResult, C8YRestError> {
         // get new token not the cached one
         self.get_fresh_token().await?;
         // build the request
         let request_builder = build_request(&self.end_point);
-        let request = request_builder?
+        let request = request_builder
+            .await?
             .bearer_auth(self.end_point.token.clone().unwrap_or_default())
             .build()?;
         // retry the request
         Ok(self.peers.http.await_response(request).await?)
     }
 
-    async fn try_request_with_fresh_internal_id(
+    async fn try_request_with_fresh_internal_id<
+        Fut: Future<Output = Result<HttpRequestBuilder, C8YRestError>>,
+    >(
         &mut self,
         device_id: String,
-        build_request: impl Fn(&C8yEndPoint) -> Result<HttpRequestBuilder, C8YRestError>,
+        build_request: impl Fn(&C8yEndPoint) -> Fut,
     ) -> Result<HttpResult, C8YRestError> {
         // get new internal id not the cached one
         self.get_and_set_internal_id(device_id).await?;
 
         let request_builder = build_request(&self.end_point);
-        let request = request_builder?
+        let request = request_builder
+            .await?
             .bearer_auth(self.end_point.token.clone().unwrap_or_default())
             .build()?;
         Ok(self.peers.http.await_response(request).await?)
@@ -312,19 +321,23 @@ impl C8YHttpProxyActor {
         software_list: SoftwareListResponse,
     ) -> Result<Unit, C8YRestError> {
         let device_id = software_list.device_id;
-        let build_request = |end_point: &C8yEndPoint| -> Result<HttpRequestBuilder, C8YRestError> {
+        let build_request = |end_point: &C8yEndPoint| {
             let internal_id = end_point
                 .get_internal_id(device_id.clone())
-                .map_err(|e| C8YRestError::CustomError(e.to_string()))?;
-            let url = end_point.get_url_for_sw_list(internal_id);
-            Ok(HttpRequestBuilder::put(url)
-                .header("Accept", "application/json")
-                .header("Content-Type", "application/json")
-                .json(&software_list.c8y_software_list))
+                .map_err(|e| C8YRestError::CustomError(e.to_string()));
+            let url = internal_id.map(|id| end_point.get_url_for_sw_list(id));
+            async {
+                Ok::<_, C8YRestError>(
+                    HttpRequestBuilder::put(url?)
+                        .header("Accept", "application/json")
+                        .header("Content-Type", "application/json")
+                        .json(&software_list.c8y_software_list),
+                )
+            }
         };
 
         let http_result = self.execute(device_id.clone(), build_request).await?;
-        let _ = http_result.error_for_status()?;
+        http_result.error_for_status()?;
         Ok(())
     }
 
@@ -346,13 +359,15 @@ impl C8YHttpProxyActor {
             .send_event_internal(device_id.clone(), create_event)
             .await?;
 
-        let build_request = |end_point: &C8yEndPoint| -> Result<HttpRequestBuilder, C8YRestError> {
+        let build_request = |end_point: &C8yEndPoint| {
             let binary_upload_event_url =
                 end_point.get_url_for_event_binary_upload(&event_response_id);
-            Ok(HttpRequestBuilder::post(&binary_upload_event_url)
-                .header("Accept", "application/json")
-                .header("Content-Type", "text/plain")
-                .body(request.log_content.clone()))
+            ready(Ok::<_, C8YRestError>(
+                HttpRequestBuilder::post(&binary_upload_event_url)
+                    .header("Accept", "application/json")
+                    .header("Content-Type", "text/plain")
+                    .body(request.log_content.clone()),
+            ))
         };
 
         let http_result = self.execute(device_id.clone(), build_request).await??;
@@ -368,10 +383,6 @@ impl C8YHttpProxyActor {
 
     async fn upload_file(&mut self, request: UploadFile) -> Result<Url, C8YRestError> {
         let device_id = request.device_id;
-        // TODO: Upload the file as a multi-part stream
-        // read the config file contents
-        let file_content = std::fs::read_to_string(request.file_path)
-            .map_err(<std::io::Error as Into<SMCumulocityMapperError>>::into)?;
 
         let create_event = |internal_id: String| -> C8yCreateEvent {
             C8yCreateEvent {
@@ -388,13 +399,28 @@ impl C8YHttpProxyActor {
             .await?;
         debug!(target: self.name(), "File event created with id: {:?}", event_response_id);
 
-        let build_request = |end_point: &C8yEndPoint| -> Result<HttpRequestBuilder, C8YRestError> {
+        let build_request = |end_point: &C8yEndPoint| {
             let binary_upload_event_url =
                 end_point.get_url_for_event_binary_upload(&event_response_id);
-            Ok(HttpRequestBuilder::post(&binary_upload_event_url)
-                .header("Accept", "application/json")
-                .header("Content-Type", "text/plain")
-                .body(file_content.to_string()))
+
+            async {
+                // TODO: Upload the file as a multi-part stream
+                let file_content = tokio::fs::read(&request.file_path)
+                    .await
+                    .map_err(SMCumulocityMapperError::from)?;
+
+                let (content_type, body) = match String::from_utf8(file_content) {
+                    Ok(text) => ("text/plain", hyper::Body::from(text)),
+                    Err(not_text) => ("application/octet-stream", not_text.into_bytes().into()),
+                };
+
+                Ok::<_, C8YRestError>(
+                    HttpRequestBuilder::post(binary_upload_event_url)
+                        .header("Accept", "application/json")
+                        .header("Content-Type", content_type)
+                        .body(body),
+                )
+            }
         };
         info!(target: self.name(), "Uploading file to URL: {}", self.end_point
         .get_url_for_event_binary_upload(&event_response_id));
@@ -453,17 +479,22 @@ impl C8YHttpProxyActor {
             self.get_and_set_internal_id(device_id.clone()).await?;
         }
 
-        let build_request = |end_point: &C8yEndPoint| -> Result<HttpRequestBuilder, C8YRestError> {
+        let build_request = |end_point: &C8yEndPoint| {
             let create_event_url = end_point.get_url_for_create_event();
             let internal_id = end_point
                 .get_internal_id(device_id.clone())
-                .map_err(|e| C8YRestError::CustomError(e.to_string()))?;
-            let updated_c8y_event = create_event(internal_id);
+                .map_err(|e| C8YRestError::CustomError(e.to_string()));
 
-            Ok(HttpRequestBuilder::post(&create_event_url)
-                .header("Accept", "application/json")
-                .header("Content-Type", "application/json")
-                .json(&updated_c8y_event))
+            async {
+                let updated_c8y_event = create_event(internal_id?);
+
+                Ok::<_, C8YRestError>(
+                    HttpRequestBuilder::post(create_event_url)
+                        .header("Accept", "application/json")
+                        .header("Content-Type", "application/json")
+                        .json(&updated_c8y_event),
+                )
+            }
         };
 
         let http_result = self.execute(device_id.clone(), build_request).await?;

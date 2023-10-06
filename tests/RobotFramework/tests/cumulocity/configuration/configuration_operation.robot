@@ -27,6 +27,17 @@ Set configuration when file exists
     # Note: File permission will not change if the file already exists
     Should Be Equal    ${FILE_MODE_OWNERSHIP}    644 root:root
 
+Set binary configuration
+    [Tags]    \#2318
+    ${config_url}=    Cumulocity.Create Inventory Binary    binary-config1    CONFIG1_BINARY    file=${CURDIR}/binary-config1.tar.gz
+    ${operation}=    Cumulocity.Set Configuration    CONFIG1_BINARY    url=${config_url}
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+    ${target_checksum}=    Execute Command    md5sum /etc/binary-config1.tar.gz | cut -d' ' -f1    strip=${True}
+    Should Be Equal    ${target_checksum}    27e57d7f840592dd683138a609e72fac
+    ${FILE_MODE_OWNERSHIP}=    Execute Command    stat -c '%a %U:%G' /etc/binary-config1.tar.gz    strip=${True}
+    # Note: File permission will not change if the file already exists
+    Should Be Equal    ${FILE_MODE_OWNERSHIP}    644 root:root
+
 Set configuration when file does not exist
     Execute Command    rm -f /etc/config1.json
     ${config_url}=    Cumulocity.Create Inventory Binary    config1    CONFIG1    file=${CURDIR}/config1-version2.json
@@ -52,6 +63,13 @@ Get configuration
     Should Be Equal    ${target_contents}    ${uploaded_contents.decode("utf8")}
     Should Be Equal    ${target_contents}    {"name":"configuration1"}
 
+Get binary configuration
+    [Tags]    \#2318
+    ${operation}=    Cumulocity.Get Configuration    CONFIG1_BINARY
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+    ${events}=    Cumulocity.Device Should Have Event/s    minimum=1    maximum=1    type=CONFIG1_BINARY
+    ${uploaded_contents}=    Cumulocity.Event Should Have An Attachment    ${events[0]["id"]}    expected_md5=27e57d7f840592dd683138a609e72fac
+
 Get non existent configuration file
     Execute Command    rm -f /etc/config1.json
     File Should Not Exist    /etc/config1.json
@@ -63,29 +81,29 @@ Get non existent configuration type
     Operation Should Be FAILED    ${operation}    failure_reason=.*requested config_type unknown_config is not defined in the plugin configuration file.*
 
 Update configuration plugin config via cloud
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1
+    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
     ${config_url}=    Cumulocity.Create Inventory Binary    c8y-configuration-plugin    ${DEFAULT_CONFIG}    file=${CURDIR}/c8y-configuration-plugin-updated.toml
     ${operation}=    Cumulocity.Set Configuration    ${DEFAULT_CONFIG}    url=${config_url}
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
 
 Modify configuration plugin config via local filesystem modify inplace
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1
+    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
     Execute Command    sed -i 's/CONFIG1/CONFIG3/g' /etc/tedge/c8y/c8y-configuration-plugin.toml
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG3
+    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG3    CONFIG3_BINARY
     ${operation}=    Cumulocity.Get Configuration    CONFIG3
     Operation Should Be SUCCESSFUL    ${operation}
 
 Modify configuration plugin config via local filesystem overwrite
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1
+    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
     ${NEW_CONFIG}=    Execute Command    sed 's/CONFIG1/CONFIG3/g' /etc/tedge/c8y/c8y-configuration-plugin.toml
     Execute Command    echo "${NEW_CONFIG}" > /etc/tedge/c8y/c8y-configuration-plugin.toml
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG3
+    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG3    CONFIG3_BINARY
     ${operation}=    Cumulocity.Get Configuration    CONFIG3
     Operation Should Be SUCCESSFUL    ${operation}
 
 Update configuration plugin config via local filesystem copy
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1
+    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
     Transfer To Device    ${CURDIR}/c8y-configuration-plugin-updated.toml    /etc/tedge/c8y/
     Execute Command    cp /etc/tedge/c8y/c8y-configuration-plugin-updated.toml /etc/tedge/c8y/c8y-configuration-plugin.toml
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
@@ -93,7 +111,7 @@ Update configuration plugin config via local filesystem copy
     Operation Should Be SUCCESSFUL    ${operation}
 
 Update configuration plugin config via local filesystem move (different directory)
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1
+    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
     Transfer To Device    ${CURDIR}/c8y-configuration-plugin-updated.toml    /etc/
     Execute Command    mv /etc/c8y-configuration-plugin-updated.toml /etc/tedge/c8y/c8y-configuration-plugin.toml
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
@@ -101,7 +119,7 @@ Update configuration plugin config via local filesystem move (different director
     Operation Should Be SUCCESSFUL    ${operation}
 
 Update configuration plugin config via local filesystem move (same directory)
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1
+    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
     Transfer To Device    ${CURDIR}/c8y-configuration-plugin-updated.toml    /etc/tedge/c8y/
     Execute Command    mv /etc/tedge/c8y/c8y-configuration-plugin-updated.toml /etc/tedge/c8y/c8y-configuration-plugin.toml
     Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
@@ -114,6 +132,7 @@ Test Setup
     ThinEdgeIO.Transfer To Device    ${CURDIR}/c8y-configuration-plugin.toml    /etc/tedge/c8y/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/config1.json         /etc/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/config2.json         /etc/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/binary-config1.tar.gz         /etc/
     Execute Command    chown root:root /etc/tedge/c8y/c8y-configuration-plugin.toml /etc/config1.json
     ThinEdgeIO.Service Health Status Should Be Up    c8y-configuration-plugin
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
