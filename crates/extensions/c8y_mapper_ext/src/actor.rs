@@ -62,7 +62,7 @@ impl Actor for C8yMapperActor {
     async fn run(&mut self) -> Result<(), RuntimeError> {
         let init_messages = self.converter.init_messages();
         for init_message in init_messages.into_iter() {
-            let _ = self.mqtt_publisher.send(init_message).await?;
+            self.mqtt_publisher.send(init_message).await?;
         }
 
         // Start the sync phase
@@ -106,7 +106,7 @@ impl C8yMapperActor {
         let converted_messages = self.converter.convert(&message).await;
 
         for converted_message in converted_messages.into_iter() {
-            let _ = self.mqtt_publisher.send(converted_message).await;
+            self.mqtt_publisher.send(converted_message).await?;
         }
 
         Ok(())

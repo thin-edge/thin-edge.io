@@ -126,6 +126,14 @@ pub struct MqttMessageBox {
     peer_senders: Vec<(TopicFilter, LoggingSender<MqttMessage>)>,
 }
 
+pub struct FromPeers<'a> {
+    input_receiver: &'a mut LoggingReceiver<MqttMessage>,
+}
+
+pub struct ToPeers<'a> {
+    peer_senders: &'a mut Vec<(TopicFilter, LoggingSender<MqttMessage>)>,
+}
+
 impl MqttMessageBox {
     fn new(
         input_receiver: LoggingReceiver<MqttMessage>,
@@ -135,6 +143,43 @@ impl MqttMessageBox {
             input_receiver,
             peer_senders,
         }
+    }
+
+    fn split(&mut self) -> (FromPeers<'_>, ToPeers<'_>) {
+        (
+            FromPeers {
+                input_receiver: &mut self.input_receiver,
+            },
+            ToPeers {
+                peer_senders: &mut self.peer_senders,
+            },
+        )
+    }
+}
+
+impl<'a> FromPeers<'a> {
+    async fn relay_messages_to(
+        &mut self,
+        outgoing_mqtt: &mut mpsc::UnboundedSender<MqttMessage>,
+    ) -> Result<(), RuntimeError> {
+        loop {
+            match self.try_recv().await {
+                Ok(Some(message)) => outgoing_mqtt.send(message).await.map_err(Box::new)?,
+                Ok(None) | Err(RuntimeRequest::Shutdown) => break Ok(()),
+            }
+        }
+    }
+}
+
+impl<'a> ToPeers<'a> {
+    async fn relay_messages_from(
+        mut self,
+        incoming_mqtt: &mut mpsc::UnboundedReceiver<MqttMessage>,
+    ) -> Result<(), RuntimeError> {
+        while let Some(message) = incoming_mqtt.next().await {
+            self.send(message).await?;
+        }
+        Ok(())
     }
 
     async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
@@ -148,7 +193,7 @@ impl MqttMessageBox {
 }
 
 #[async_trait]
-impl MessageReceiver<MqttMessage> for MqttMessageBox {
+impl<'a> MessageReceiver<MqttMessage> for FromPeers<'a> {
     async fn try_recv(&mut self) -> Result<Option<MqttMessage>, RuntimeRequest> {
         self.input_receiver.try_recv().await
     }
@@ -187,36 +232,22 @@ impl Actor for MqttActor {
     }
 
     async fn run(&mut self) -> Result<(), RuntimeError> {
+        let (mut from_peers, to_peers) = self.messages.split();
+
         let mut mqtt_client = tokio::select! {
             connection = mqtt_channel::Connection::new(&self.mqtt_config) => {
                 connection.map_err(Box::new)?
             }
-            Some(RuntimeRequest::Shutdown) = self.messages.recv_signal() => {
+            Some(RuntimeRequest::Shutdown) = from_peers.recv_signal() => {
                 // Shutdown requested even before the connection has been established
                 return Ok(())
             }
         };
 
-        loop {
-            tokio::select! {
-                message_or_signal = self.messages.try_recv() => {
-                    match message_or_signal {
-                        Ok(Some(message)) => {
-                            mqtt_client
-                                .published
-                                .send(message)
-                                .await
-                                .map_err(Box::new)?
-                        }
-                        Ok(None) | Err(RuntimeRequest::Shutdown) => break,
-                    }
-                }
-                Some(message) = mqtt_client.received.next() => {
-                    self.messages.send(message).await?
-                },
-                else => break,
-            }
-        }
-        Ok(())
+        tedge_utils::futures::select(
+            from_peers.relay_messages_to(&mut mqtt_client.published),
+            to_peers.relay_messages_from(&mut mqtt_client.received),
+        )
+        .await
     }
 }

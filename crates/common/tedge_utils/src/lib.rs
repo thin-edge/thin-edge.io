@@ -5,5 +5,6 @@ pub mod signals;
 pub mod size_threshold;
 pub mod timers;
 
+pub mod futures;
 #[cfg(feature = "fs-notify")]
 pub mod notify;
