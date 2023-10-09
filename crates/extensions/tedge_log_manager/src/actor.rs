@@ -1,45 +1,51 @@
+use std::collections::HashMap;
+
 use async_trait::async_trait;
-use http::status::StatusCode;
+use camino::Utf8Path;
 use log::debug;
 use log::error;
 use log::info;
+use log::warn;
 use log_manager::LogPluginConfig;
 use serde_json::json;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
-use tedge_actors::ClientMessageBox;
+use tedge_actors::DynSender;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::NoMessage;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
+use tedge_api::messages::CommandStatus;
+use tedge_api::messages::LogUploadCmdPayload;
 use tedge_api::Jsonify;
 use tedge_file_system_ext::FsWatchEvent;
-use tedge_http_ext::HttpError;
-use tedge_http_ext::HttpRequest;
-use tedge_http_ext::HttpRequestBuilder;
-use tedge_http_ext::HttpResponseExt;
-use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
+use tedge_uploader_ext::UploadRequest;
+use tedge_uploader_ext::UploadResult;
 
 use super::error::LogManagementError;
 use super::LogManagerConfig;
 use super::DEFAULT_PLUGIN_CONFIG_FILE_NAME;
-use tedge_api::messages::CommandStatus;
-use tedge_api::messages::LogUploadCmdPayload;
 
-fan_in_message_type!(LogInput[MqttMessage, FsWatchEvent] : Debug);
-fan_in_message_type!(LogOutput[MqttMessage]: Debug);
+type MqttTopic = String;
+
+pub type LogUploadRequest = (MqttTopic, UploadRequest);
+pub type LogUploadResult = (MqttTopic, UploadResult);
+
+fan_in_message_type!(LogInput[MqttMessage, FsWatchEvent, LogUploadResult] : Debug);
+fan_in_message_type!(LogOutput[MqttMessage, LogUploadRequest]: Debug);
 
 pub struct LogManagerActor {
     config: LogManagerConfig,
     plugin_config: LogPluginConfig,
-    mqtt_publisher: LoggingSender<MqttMessage>,
+    pending_operations: HashMap<String, LogUploadCmdPayload>,
     messages: SimpleMessageBox<LogInput, NoMessage>,
-    http_proxy: ClientMessageBox<HttpRequest, HttpResult>,
+    mqtt_publisher: LoggingSender<MqttMessage>,
+    upload_sender: DynSender<LogUploadRequest>,
 }
 
 #[async_trait]
@@ -59,6 +65,9 @@ impl Actor for LogManagerActor {
                 LogInput::FsWatchEvent(event) => {
                     self.process_file_watch_events(event).await?;
                 }
+                LogInput::LogUploadResult((topic, result)) => {
+                    self.process_uploaded_log(&topic, result).await?;
+                }
             }
         }
         Ok(())
@@ -71,14 +80,15 @@ impl LogManagerActor {
         plugin_config: LogPluginConfig,
         mqtt_publisher: LoggingSender<MqttMessage>,
         messages: SimpleMessageBox<LogInput, NoMessage>,
-        http_proxy: ClientMessageBox<HttpRequest, HttpResult>,
+        upload_sender: DynSender<LogUploadRequest>,
     ) -> Self {
         Self {
             config,
             plugin_config,
+            pending_operations: HashMap::new(),
             mqtt_publisher,
             messages,
-            http_proxy,
+            upload_sender,
         }
     }
 
@@ -127,7 +137,10 @@ impl LogManagerActor {
         topic: &Topic,
         mut request: LogUploadCmdPayload,
     ) -> Result<(), ChannelError> {
-        match self.execute_logfile_request_operation(&request).await {
+        match self
+            .execute_logfile_request_operation(topic, &request)
+            .await
+        {
             Ok(()) => {
                 request.successful();
                 self.publish_command_status(topic, &request).await?;
@@ -151,9 +164,10 @@ impl LogManagerActor {
     /// - sends request successful (mqtt)
     async fn execute_logfile_request_operation(
         &mut self,
+        topic: &Topic,
         request: &LogUploadCmdPayload,
     ) -> Result<(), LogManagementError> {
-        let log_content = log_manager::new_read_logs(
+        let log_path = log_manager::new_read_logs(
             &self.plugin_config.files,
             &request.log_type,
             request.date_from,
@@ -161,36 +175,56 @@ impl LogManagerActor {
             &request.search_text,
         )?;
 
-        self.send_log_file_http(log_content, request.tedge_url.clone())
+        let upload_request = UploadRequest::new(
+            &request.tedge_url,
+            Utf8Path::from_path(log_path.as_path()).unwrap(),
+        );
+
+        info!(
+            "Awaiting upload of log type: {} to url: {}",
+            request.log_type, request.tedge_url
+        );
+
+        self.upload_sender
+            .send((topic.name.clone(), upload_request))
             .await?;
 
         Ok(())
     }
 
-    async fn send_log_file_http(
+    async fn process_uploaded_log(
         &mut self,
-        log_content: String,
-        url: String,
+        topic: &str,
+        result: UploadResult,
     ) -> Result<(), LogManagementError> {
-        let req_builder = HttpRequestBuilder::put(&url)
-            .header("Content-Type", "text/plain")
-            .body(log_content);
+        if let Some(mut request) = self.pending_operations.remove(topic) {
+            let topic = Topic::new_unchecked(topic);
+            match result {
+                Ok(response) => {
+                    request.successful();
 
-        let request = req_builder.build()?;
+                    info!("Log request processed for log type: {}.", request.log_type);
 
-        let http_result = match self.http_proxy.await_response(request).await? {
-            Ok(response) => match response.status() {
-                StatusCode::OK | StatusCode::CREATED => Ok(response),
-                code => Err(HttpError::HttpStatusError(code)),
-            },
-            Err(err) => Err(err),
-        };
+                    if let Err(err) = std::fs::remove_file(&response.file_path) {
+                        warn!(
+                            "Failed to remove temporary file {}: {}",
+                            response.file_path, err
+                        )
+                    }
 
-        let _ = http_result.error_for_status()?;
-        info!("Logfile uploaded to: {}", url);
+                    self.publish_command_status(&topic, &request).await?;
+                }
+                Err(err) => {
+                    let error_message = format!("Handling of operation failed with {}", err);
+                    request.failed(&error_message);
+                    error!("{}", error_message);
+                    self.publish_command_status(&topic, &request).await?;
+                }
+            }
+        }
+
         Ok(())
     }
-
     async fn process_file_watch_events(&mut self, event: FsWatchEvent) -> Result<(), ChannelError> {
         let path = match event {
             FsWatchEvent::Modified(path) => path,

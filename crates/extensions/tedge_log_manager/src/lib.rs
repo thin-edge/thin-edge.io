@@ -11,7 +11,6 @@ use log_manager::LogPluginConfig;
 use std::path::PathBuf;
 use tedge_actors::adapt;
 use tedge_actors::Builder;
-use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingSender;
@@ -24,8 +23,6 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_file_system_ext::FsWatchEvent;
-use tedge_http_ext::HttpRequest;
-use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::*;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
@@ -37,21 +34,20 @@ pub struct LogManagerBuilder {
     plugin_config: LogPluginConfig,
     box_builder: SimpleMessageBoxBuilder<LogInput, NoMessage>,
     mqtt_publisher: DynSender<MqttMessage>,
-    http_proxy: ClientMessageBox<HttpRequest, HttpResult>,
+    upload_sender: DynSender<LogUploadRequest>,
 }
 
 impl LogManagerBuilder {
     pub fn try_new(
         config: LogManagerConfig,
         mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
-        http: &mut impl ServiceProvider<HttpRequest, HttpResult, NoConfig>,
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
+        uploader_actor: &mut impl ServiceProvider<LogUploadRequest, LogUploadResult, NoConfig>,
     ) -> Result<Self, FileError> {
         Self::init(&config)?;
         let plugin_config = LogPluginConfig::new(&config.plugin_config_path);
 
         let box_builder = SimpleMessageBoxBuilder::new("Log Manager", 16);
-        let http_proxy = ClientMessageBox::new("LogManager => FileTransfer", http);
         let mqtt_publisher = mqtt.connect_consumer(
             Self::subscriptions(&config),
             adapt(&box_builder.get_sender()),
@@ -61,12 +57,15 @@ impl LogManagerBuilder {
             adapt(&box_builder.get_sender()),
         );
 
+        let upload_sender =
+            uploader_actor.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
+
         Ok(Self {
             config,
             plugin_config,
             box_builder,
             mqtt_publisher,
-            http_proxy,
+            upload_sender,
         })
     }
 
@@ -115,7 +114,7 @@ impl Builder<LogManagerActor> for LogManagerBuilder {
             self.plugin_config,
             mqtt_publisher,
             message_box,
-            self.http_proxy,
+            self.upload_sender,
         ))
     }
 }

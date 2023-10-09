@@ -1,5 +1,7 @@
 use crate::LogManagerBuilder;
 use crate::LogManagerConfig;
+use crate::LogUploadRequest;
+use crate::LogUploadResult;
 use crate::Topic;
 use filetime::set_file_mtime;
 use filetime::FileTime;
@@ -15,16 +17,13 @@ use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_file_system_ext::FsWatchEvent;
-use tedge_http_ext::test_helpers::assert_request_eq;
-use tedge_http_ext::test_helpers::HttpResponseBuilder;
-use tedge_http_ext::HttpRequest;
-use tedge_http_ext::HttpRequestBuilder;
-use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::TempTedgeDir;
+use tedge_uploader_ext::UploadResponse;
 
 type MqttMessageBox = TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>;
+type UploaderMessageBox = TimedMessageBox<SimpleMessageBox<LogUploadRequest, LogUploadResult>>;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
@@ -85,8 +84,8 @@ fn new_log_manager_builder(
 ) -> (
     LogManagerBuilder,
     TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
-    SimpleMessageBox<HttpRequest, HttpResult>,
     SimpleMessageBox<NoMessage, FsWatchEvent>,
+    UploaderMessageBox,
 ) {
     let config = LogManagerConfig {
         config_dir: temp_dir.to_path_buf(),
@@ -98,24 +97,24 @@ fn new_log_manager_builder(
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
-    let mut http_builder: SimpleMessageBoxBuilder<HttpRequest, HttpResult> =
-        SimpleMessageBoxBuilder::new("HTTP", 1);
     let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
         SimpleMessageBoxBuilder::new("FS", 5);
+    let mut uploader_builder: SimpleMessageBoxBuilder<LogUploadRequest, LogUploadResult> =
+        SimpleMessageBoxBuilder::new("Uploader", 5);
 
     let log_builder = LogManagerBuilder::try_new(
         config,
         &mut mqtt_builder,
-        &mut http_builder,
         &mut fs_watcher_builder,
+        &mut uploader_builder,
     )
     .unwrap();
 
     (
         log_builder,
         mqtt_builder.build().with_timeout(TEST_TIMEOUT_MS),
-        http_builder.build(),
         fs_watcher_builder.build(),
+        uploader_builder.build().with_timeout(TEST_TIMEOUT_MS),
     )
 }
 
@@ -124,19 +123,19 @@ fn spawn_log_manager_actor(
     temp_dir: &Path,
 ) -> (
     MqttMessageBox,
-    SimpleMessageBox<HttpRequest, HttpResult>,
     SimpleMessageBox<NoMessage, FsWatchEvent>,
+    UploaderMessageBox,
 ) {
-    let (actor_builder, mqtt, http, fs) = new_log_manager_builder(temp_dir);
+    let (actor_builder, mqtt, fs, uploader) = new_log_manager_builder(temp_dir);
     let mut actor = actor_builder.build();
     tokio::spawn(async move { actor.run().await });
-    (mqtt, http, fs)
+    (mqtt, fs, uploader)
 }
 
 #[tokio::test]
 async fn log_manager_reloads_log_types() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _http, _fs) = spawn_log_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path());
 
     let log_reload_topic = Topic::new_unchecked("te/device/main///cmd/log_upload");
 
@@ -157,7 +156,7 @@ async fn log_manager_reloads_log_types() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn log_manager_upload_log_files_on_request() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, mut http, _fs) = spawn_log_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, mut uploader) = spawn_log_manager_actor(tempdir.path());
 
     let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/1234");
 
@@ -189,22 +188,22 @@ async fn log_manager_upload_log_files_on_request() -> Result<(), anyhow::Error> 
     // This message being published over MQTT is also received by the log-manager itself
     mqtt.send(executing_message.unwrap()).await?;
 
-    // Then uploads the requested content over HTTP
-    let actual_request = http.recv().await;
-    let expected_request = Some(
-        HttpRequestBuilder::put(
-            "http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_two-1234",
-        )
-        .header("Content-Type", "text/plain")
-        .body("filename: file_c\nSome content\n".to_string())
-        .build()
-        .unwrap(),
-    );
-    assert_request_eq(actual_request, expected_request);
+    // Assert log upload request.
+    let (topic, upload_request) = uploader.recv().await.unwrap();
 
-    // File transfer responds with 200 OK
-    let response = HttpResponseBuilder::new().status(201).build().unwrap();
-    http.send(Ok(response)).await?;
+    assert_eq!(Topic::new_unchecked(&topic), logfile_topic);
+
+    assert_eq!(
+        upload_request.url,
+        "http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_two-1234"
+    );
+    assert_eq!(upload_request.file_path, tempdir.path().join("file_c.tmp"));
+
+    assert_eq!(upload_request.auth, None);
+
+    // Simulate upload is completed.
+    let upload_response = UploadResponse::new(&upload_request.url, upload_request.file_path);
+    uploader.send((topic, Ok(upload_response))).await?;
 
     // Finally, the log manager notifies that request was successfully processed
     assert_eq!(
@@ -221,7 +220,7 @@ async fn log_manager_upload_log_files_on_request() -> Result<(), anyhow::Error> 
 #[tokio::test]
 async fn request_logtype_that_does_not_exist() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _http, _fs) = spawn_log_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path());
 
     let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/1234");
 
@@ -266,60 +265,6 @@ async fn request_logtype_that_does_not_exist() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
-async fn put_logfiles_without_permissions() -> Result<(), anyhow::Error> {
-    let tempdir = prepare()?;
-    let (mut mqtt, mut http, _fs) = spawn_log_manager_actor(tempdir.path());
-
-    let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/1234");
-
-    // Let's ignore the init message sent on start
-    mqtt.skip(1).await;
-
-    // When a log request is received
-    let log_request = r#"
-        {
-            "status": "init",
-            "tedgeUrl": "http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_two-1234",
-            "type": "type_two",
-            "dateFrom": "1970-01-01T00:00:00+00:00",
-            "dateTo": "1970-01-01T00:00:30+00:00",
-            "lines": 1000
-        }"#;
-    mqtt.send(MqttMessage::new(&logfile_topic, log_request).with_retain())
-        .await?;
-
-    // The log manager notifies that the request has been received and is processed
-    let executing_message = mqtt.recv().await;
-    assert_eq!(
-        executing_message,
-            Some(MqttMessage::new(
-                &logfile_topic,
-                r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_two-1234","type":"type_two","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
-            ).with_retain())
-        );
-    // This message being published over MQTT is also received by the log-manager itself
-    mqtt.send(executing_message.unwrap()).await?;
-
-    // Then uploads the requested content over HTTP
-    assert!(http.recv().await.is_some());
-
-    // File transfer responds with error code
-    let response = HttpResponseBuilder::new().status(403).build().unwrap();
-    http.send(Ok(response)).await?;
-
-    // Finally, the log manager notifies that given log manager could not upload logfiles via HTTP
-    assert_eq!(
-            mqtt.recv().await,
-            Some(MqttMessage::new(
-                &logfile_topic,
-                r#"{"status":"failed","reason":"Handling of operation failed with Failed with HTTP error status 403 Forbidden","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/log_upload/type_two-1234","type":"type_two","dateFrom":"1970-01-01T00:00:00Z","dateTo":"1970-01-01T00:00:30Z","lines":1000}"#
-            ).with_retain())
-        );
-
-    Ok(())
-}
-
-#[tokio::test]
 async fn ignore_topic_for_another_device() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
     let (mut mqtt, _http, _fs) = spawn_log_manager_actor(tempdir.path());
@@ -352,7 +297,7 @@ async fn ignore_topic_for_another_device() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn send_incorrect_payload() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _http, _fs) = spawn_log_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path());
 
     let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/1234");
 
@@ -381,7 +326,7 @@ async fn send_incorrect_payload() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn read_log_from_file_that_does_not_exist() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _http, _fs) = spawn_log_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path());
 
     let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/1234");
 
