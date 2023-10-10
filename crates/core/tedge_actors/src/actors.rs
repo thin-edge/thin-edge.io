@@ -16,7 +16,7 @@ use async_trait::async_trait;
 ///   - sending responses for requests, possibly deferring some responses,
 ///   - acting as a source of messages ...
 #[async_trait]
-pub trait Actor: 'static + Send + Sync {
+pub trait Actor: 'static + Send + Sync + ActorBoxed {
     /// Return the actor instance name
     fn name(&self) -> &str;
 
@@ -25,7 +25,24 @@ pub trait Actor: 'static + Send + Sync {
     /// Processing input messages,
     /// updating internal state,
     /// and sending messages to peers.
-    async fn run(&mut self) -> Result<(), RuntimeError>;
+    async fn run(self) -> Result<(), RuntimeError>;
+}
+
+// The following madness comes from
+// https://users.rust-lang.org/t/call-consuming-method-for-dyn-trait-object/69596/8
+#[async_trait]
+pub trait ActorBoxed {
+    async fn run_boxed(self: Box<Self>) -> Result<(), RuntimeError>;
+}
+
+#[async_trait]
+impl<A> ActorBoxed for A
+where
+    A: Actor,
+{
+    async fn run_boxed(self: Box<Self>) -> Result<(), RuntimeError> {
+        (*self).run().await
+    }
 }
 
 #[cfg(test)]
@@ -48,7 +65,7 @@ pub mod tests {
             "Echo"
         }
 
-        async fn run(&mut self) -> Result<(), RuntimeError> {
+        async fn run(mut self) -> Result<(), RuntimeError> {
             while let Some(message) = self.messages.recv().await {
                 self.messages.send(message).await?
             }
@@ -62,7 +79,7 @@ pub mod tests {
         let mut box_builder = SimpleMessageBoxBuilder::new("test", 16);
         let mut client_message_box = box_builder.new_client_box(NoConfig);
         let actor_message_box = box_builder.build();
-        let mut actor = Echo {
+        let actor = Echo {
             messages: actor_message_box,
         };
         let actor_task = spawn(async move { actor.run().await });
@@ -93,7 +110,7 @@ pub mod tests {
         let (output_sender, mut output_receiver) = mpsc::channel(10);
 
         let (input_sender, message_box) = SpecificMessageBox::new_box(10, output_sender.into());
-        let mut actor = ActorWithSpecificMessageBox {
+        let actor = ActorWithSpecificMessageBox {
             messages: message_box,
         };
         let actor_task = spawn(async move { actor.run().await });
@@ -139,7 +156,7 @@ pub mod tests {
             "ActorWithSpecificMessageBox"
         }
 
-        async fn run(&mut self) -> Result<(), RuntimeError> {
+        async fn run(mut self) -> Result<(), RuntimeError> {
             while let Some(message) = self.messages.next().await {
                 if message.contains("this") {
                     self.messages.do_this(message.to_string()).await?

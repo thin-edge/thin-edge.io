@@ -1014,7 +1014,7 @@ async fn spawn_config_manager(
     let c8y_proxy_message_box = c8y_proxy_builder.build();
     let timer_message_box = timer_builder.build();
 
-    let mut actor = config_manager_builder.build();
+    let actor = config_manager_builder.build();
     let _join_handle = tokio::spawn(async move { actor.run().await });
 
     Ok((mqtt_message_box, c8y_proxy_message_box, timer_message_box))

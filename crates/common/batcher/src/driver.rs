@@ -67,7 +67,7 @@ impl<B: Batchable> Actor for BatchDriver<B> {
     }
 
     /// Start the batching - runs until receiving a Flush message
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         loop {
             let message = match self.time_to_next_timer() {
                 TimeTo::Unbounded => self.recv(None),
@@ -259,7 +259,7 @@ mod tests {
         let test_box = box_builder.new_client_box(NoConfig);
         let driver_box = box_builder.build();
 
-        let mut driver = BatchDriver::new(batcher, driver_box);
+        let driver = BatchDriver::new(batcher, driver_box);
         tokio::spawn(async move { driver.run().await });
 
         test_box

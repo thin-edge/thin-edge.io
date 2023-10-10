@@ -178,7 +178,7 @@ async fn retry_internal_id_on_expired_jwt_with_mock() {
         tmp_dir: tmp_dir.into(),
     };
     let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor, &mut jwt);
-    let mut jwt_actor = ServerActor::new(DynamicJwtRetriever { count: 0 }, jwt.build());
+    let jwt_actor = ServerActor::new(DynamicJwtRetriever { count: 0 }, jwt.build());
 
     tokio::spawn(async move { http_actor.run().await });
     tokio::spawn(async move { jwt_actor.run().await });
@@ -242,7 +242,7 @@ async fn retry_create_event_on_expired_jwt_with_mock() {
         tmp_dir: tmp_dir.into(),
     };
     let c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http_actor, &mut jwt);
-    let mut jwt_actor = ServerActor::new(DynamicJwtRetriever { count: 1 }, jwt.build());
+    let jwt_actor = ServerActor::new(DynamicJwtRetriever { count: 1 }, jwt.build());
 
     tokio::spawn(async move { http_actor.run().await });
     tokio::spawn(async move { jwt_actor.run().await });
@@ -468,7 +468,7 @@ async fn spawn_c8y_http_proxy(
     let mut c8y_proxy_actor = C8YHttpProxyBuilder::new(config, &mut http, &mut jwt);
     let proxy = C8YHttpProxy::new("C8Y", &mut c8y_proxy_actor);
 
-    let mut jwt_actor = ServerActor::new(
+    let jwt_actor = ServerActor::new(
         ConstJwtRetriever {
             token: token.to_string(),
         },
@@ -477,7 +477,7 @@ async fn spawn_c8y_http_proxy(
 
     tokio::spawn(async move { jwt_actor.run().await });
     tokio::spawn(async move {
-        let mut actor = c8y_proxy_actor.build();
+        let actor = c8y_proxy_actor.build();
         let _ = actor.run().await;
     });
 

@@ -131,7 +131,7 @@ impl<C: Converter> Actor for ConvertingActor<C> {
         &self.name
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         let init_messages = self.init_messages()?;
         self.send(init_messages).await?;
 

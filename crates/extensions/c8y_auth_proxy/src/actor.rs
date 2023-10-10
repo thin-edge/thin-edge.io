@@ -86,7 +86,7 @@ impl Actor for C8yAuthProxy {
         "C8yAuthProxy"
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         let server = Server::try_init(self.app_state.clone(), self.bind_address, self.bind_port)
             .map_err(BoxError::from)?
             .wait();

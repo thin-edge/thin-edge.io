@@ -66,7 +66,7 @@
 //!     /// However, there are no constraints on the behavior of an actor.
 //!     /// A more sophisticated actor might send output messages independently of any request
 //!     /// or process concurrently several requests.
-//!     async fn run(&mut self)-> Result<(), RuntimeError>  {
+//!     async fn run(mut self)-> Result<(), RuntimeError>  {
 //!         while let Some(op) = self.messages.recv().await {
 //!             // Process in turn each input message
 //!             let from = self.state;
@@ -286,7 +286,7 @@
 //!         todo!()
 //!     }
 //!
-//!     async fn run(&mut self) -> Result<(), RuntimeError> {
+//!     async fn run(mut self) -> Result<(), RuntimeError> {
 //!         todo!()
 //!     }
 //! }

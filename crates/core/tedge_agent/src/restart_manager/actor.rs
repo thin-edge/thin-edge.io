@@ -46,7 +46,7 @@ impl Actor for RestartManagerActor {
         "RestartManagerActor"
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         if let Some(response) = self.process_pending_restart_operation().await {
             self.message_box.send(response).await?;
         }

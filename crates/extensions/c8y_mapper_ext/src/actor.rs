@@ -66,7 +66,7 @@ impl Actor for C8yMapperActor {
         "CumulocityMapper"
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         let init_messages = self.converter.init_messages();
         for init_message in init_messages.into_iter() {
             self.mqtt_publisher.send(init_message).await?;

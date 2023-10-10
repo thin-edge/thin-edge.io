@@ -434,7 +434,7 @@ pub trait ServiceConsumer<Request: Message, Response: Message, Config> {
 ///         "My Actor"
 ///     }
 ///
-///     async fn run(&mut self) -> Result<(), RuntimeError> {
+///     async fn run(mut self) -> Result<(), RuntimeError> {
 ///         while let Some(input) = self.messages.recv().await {
 ///             let output = input * 2;
 ///             self.messages.send(output).await?;

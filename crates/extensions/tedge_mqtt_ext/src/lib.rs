@@ -62,9 +62,8 @@ impl MqttActorBuilder {
             combined_topic_filter.add_all(topic_filter.to_owned());
         }
         let mqtt_config = self.mqtt_config.with_subscriptions(combined_topic_filter);
-        let mqtt_message_box = MqttMessageBox::new(self.input_receiver, self.subscriber_addresses);
 
-        MqttActor::new(mqtt_config, mqtt_message_box)
+        MqttActor::new(mqtt_config, self.input_receiver, self.subscriber_addresses)
     }
 }
 
@@ -121,43 +120,15 @@ impl Builder<MqttActor> for MqttActorBuilder {
     }
 }
 
-pub struct MqttMessageBox {
+pub struct FromPeers {
     input_receiver: LoggingReceiver<MqttMessage>,
+}
+
+pub struct ToPeers {
     peer_senders: Vec<(TopicFilter, LoggingSender<MqttMessage>)>,
 }
 
-pub struct FromPeers<'a> {
-    input_receiver: &'a mut LoggingReceiver<MqttMessage>,
-}
-
-pub struct ToPeers<'a> {
-    peer_senders: &'a mut Vec<(TopicFilter, LoggingSender<MqttMessage>)>,
-}
-
-impl MqttMessageBox {
-    fn new(
-        input_receiver: LoggingReceiver<MqttMessage>,
-        peer_senders: Vec<(TopicFilter, LoggingSender<MqttMessage>)>,
-    ) -> Self {
-        MqttMessageBox {
-            input_receiver,
-            peer_senders,
-        }
-    }
-
-    fn split(&mut self) -> (FromPeers<'_>, ToPeers<'_>) {
-        (
-            FromPeers {
-                input_receiver: &mut self.input_receiver,
-            },
-            ToPeers {
-                peer_senders: &mut self.peer_senders,
-            },
-        )
-    }
-}
-
-impl<'a> FromPeers<'a> {
+impl FromPeers {
     async fn relay_messages_to(
         &mut self,
         outgoing_mqtt: &mut mpsc::UnboundedSender<MqttMessage>,
@@ -171,7 +142,7 @@ impl<'a> FromPeers<'a> {
     }
 }
 
-impl<'a> ToPeers<'a> {
+impl ToPeers {
     async fn relay_messages_from(
         mut self,
         incoming_mqtt: &mut mpsc::UnboundedReceiver<MqttMessage>,
@@ -193,7 +164,7 @@ impl<'a> ToPeers<'a> {
 }
 
 #[async_trait]
-impl<'a> MessageReceiver<MqttMessage> for FromPeers<'a> {
+impl MessageReceiver<MqttMessage> for FromPeers {
     async fn try_recv(&mut self) -> Result<Option<MqttMessage>, RuntimeRequest> {
         self.input_receiver.try_recv().await
     }
@@ -213,14 +184,20 @@ impl<'a> MessageReceiver<MqttMessage> for FromPeers<'a> {
 
 pub struct MqttActor {
     mqtt_config: mqtt_channel::Config,
-    messages: MqttMessageBox,
+    from_peers: FromPeers,
+    to_peers: ToPeers,
 }
 
 impl MqttActor {
-    fn new(mqtt_config: mqtt_channel::Config, messages: MqttMessageBox) -> Self {
+    fn new(
+        mqtt_config: mqtt_channel::Config,
+        input_receiver: LoggingReceiver<MqttMessage>,
+        peer_senders: Vec<(TopicFilter, LoggingSender<MqttMessage>)>,
+    ) -> Self {
         MqttActor {
             mqtt_config,
-            messages,
+            from_peers: FromPeers { input_receiver },
+            to_peers: ToPeers { peer_senders },
         }
     }
 }
@@ -231,22 +208,21 @@ impl Actor for MqttActor {
         "MQTT"
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
-        let (mut from_peers, to_peers) = self.messages.split();
-
+    async fn run(mut self) -> Result<(), RuntimeError> {
         let mut mqtt_client = tokio::select! {
             connection = mqtt_channel::Connection::new(&self.mqtt_config) => {
                 connection.map_err(Box::new)?
             }
-            Some(RuntimeRequest::Shutdown) = from_peers.recv_signal() => {
+            Some(RuntimeRequest::Shutdown) = self.from_peers.recv_signal() => {
                 // Shutdown requested even before the connection has been established
                 return Ok(())
             }
         };
 
         tedge_utils::futures::select(
-            from_peers.relay_messages_to(&mut mqtt_client.published),
-            to_peers.relay_messages_from(&mut mqtt_client.received),
+            self.from_peers
+                .relay_messages_to(&mut mqtt_client.published),
+            self.to_peers.relay_messages_from(&mut mqtt_client.received),
         )
         .await
     }

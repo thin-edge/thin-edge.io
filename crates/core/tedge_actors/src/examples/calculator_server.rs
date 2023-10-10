@@ -54,7 +54,7 @@ impl Actor for Player {
         &self.name
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         // Send a first identity `Operation` to see where we are.
         self.messages.send(Operation::Add(0)).await?;
 

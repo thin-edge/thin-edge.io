@@ -75,7 +75,7 @@ impl Actor for SoftwareManagerActor {
         "SoftwareManagerActor"
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         let operation_logs = OperationLogs::try_new(self.config.log_dir.clone().into())
             .map_err(SoftwareManagerError::FromOperationsLogs)?;
 

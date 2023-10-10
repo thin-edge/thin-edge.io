@@ -120,7 +120,7 @@ fn spawn_config_manager_actor(
     UploaderMessageBox,
 ) {
     let (actor_builder, mqtt, fs, downloader, uploader) = new_config_manager_builder(temp_dir);
-    let mut actor = actor_builder.build();
+    let actor = actor_builder.build();
     tokio::spawn(async move { actor.run().await });
     (mqtt, fs, downloader, uploader)
 }

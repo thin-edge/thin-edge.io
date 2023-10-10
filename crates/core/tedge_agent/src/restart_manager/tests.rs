@@ -138,7 +138,7 @@ async fn spawn_restart_manager(
 
     let converter_box = converter_builder.build().with_timeout(TEST_TIMEOUT_MS);
 
-    let mut restart_actor = restart_actor_builder.build();
+    let restart_actor = restart_actor_builder.build();
     tokio::spawn(async move { restart_actor.run().await });
 
     Ok(converter_box)

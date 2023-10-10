@@ -59,7 +59,7 @@ impl Actor for ConfigManagerActor {
         "ConfigManager"
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         self.reload_supported_config_types().await?;
 
         while let Some(event) = self.input_receiver.recv().await {

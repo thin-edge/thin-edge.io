@@ -54,7 +54,7 @@ impl Actor for LogManagerActor {
         "LogManager"
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         self.reload_supported_log_types().await?;
 
         while let Some(event) = self.messages.recv().await {

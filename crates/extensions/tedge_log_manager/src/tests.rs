@@ -127,7 +127,7 @@ fn spawn_log_manager_actor(
     UploaderMessageBox,
 ) {
     let (actor_builder, mqtt, fs, uploader) = new_log_manager_builder(temp_dir);
-    let mut actor = actor_builder.build();
+    let actor = actor_builder.build();
     tokio::spawn(async move { actor.run().await });
     (mqtt, fs, uploader)
 }
