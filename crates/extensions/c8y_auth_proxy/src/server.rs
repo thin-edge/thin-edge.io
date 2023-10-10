@@ -138,9 +138,23 @@ async fn respond_to(
 
     let client = reqwest::Client::new();
     let (body, body_clone) = small_body.try_clone();
+    if body_clone.is_none() {
+        let destination = format!("{host}/tenant/currentTenant");
+        let response = client
+            .head(&destination)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .into_diagnostic()
+            .wrap_err_with(|| format!("making HEAD request to {destination}"))?;
+        if response.status() == StatusCode::UNAUTHORIZED {
+            token = retrieve_token.not_matching(Some(&token)).await;
+        }
+    }
+
     let send_request = |body, token| {
         client
-            .request(method.to_owned(), destination.clone())
+            .request(method.to_owned(), &destination)
             .headers(headers.clone())
             .bearer_auth(&token)
             .body(body)
@@ -232,6 +246,18 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn responds_with_bad_gateway_on_connection_error() {
+        let _ = env_logger::try_init();
+
+        let port = start_server_at_url(Arc::from("127.0.0.1:0"), vec!["test-token"]);
+
+        let res = reqwest::get(format!("http://localhost:{port}/c8y/not-a-known-url"))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), 502);
+    }
+
+    #[tokio::test]
     async fn sends_query_string_from_original_request() {
         let _ = env_logger::try_init();
         let mut server = mockito::Server::new();
@@ -285,6 +311,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn regenerates_token_proactively_if_the_request_cannot_be_retried() {
+        let _ = env_logger::try_init();
+        let mut server = mockito::Server::new();
+        let head_request = server
+            .mock("HEAD", "/tenant/currentTenant")
+            .match_header("Authorization", "Bearer old-token")
+            .with_status(401)
+            .create();
+        let _mock = server
+            .mock("PUT", "/hello")
+            .match_header("Authorization", "Bearer test-token")
+            .match_body("A body")
+            .with_body("Some response")
+            .with_status(200)
+            .create();
+
+        let port = start_server(&server, vec!["old-token", "test-token"]);
+
+        let client = reqwest::Client::new();
+        let body = "A body";
+        let res = client
+            .put(format!("http://localhost:{port}/c8y/hello"))
+            .body(reqwest::Body::wrap_stream(futures::stream::once(
+                futures::future::ready(Ok::<_, std::convert::Infallible>(body)),
+            )))
+            .send()
+            .await
+            .unwrap();
+
+        head_request.assert();
+        assert_eq!(res.status(), 200);
+        assert_eq!(res.bytes().await.unwrap(), Bytes::from("Some response"));
+    }
+
+    #[tokio::test]
     async fn retries_get_request_on_401() {
         let _ = env_logger::try_init();
         let mut server = mockito::Server::new();
@@ -311,10 +372,17 @@ mod tests {
     }
 
     fn start_server(server: &mockito::Server, tokens: Vec<impl Into<Cow<'static, str>>>) -> u16 {
+        start_server_at_url(server.url().into(), tokens)
+    }
+
+    fn start_server_at_url(
+        target_host: Arc<str>,
+        tokens: Vec<impl Into<Cow<'static, str>>>,
+    ) -> u16 {
         let mut retriever = IterJwtRetriever::builder(tokens);
         for port in 3000..3100 {
             let state = AppState {
-                target_host: server.url().into(),
+                target_host: target_host.clone(),
                 token_manager: TokenManager::new(JwtRetriever::new("TEST => JWT", &mut retriever))
                     .shared(),
             };
