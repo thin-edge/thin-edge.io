@@ -7,16 +7,16 @@
 
 // TODO: move entity business logic to its own module
 
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
-
 use crate::entity_store;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::TopicIdError;
+use log::debug;
 use mqtt_channel::Message;
 use serde_json::json;
-
 use serde_json::Value as JsonValue;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+use thiserror::Error;
 
 /// Represents an "Entity topic identifier" portion of the MQTT topic
 ///
@@ -47,6 +47,12 @@ impl From<&str> for EntityExternalId {
     }
 }
 
+impl From<&String> for EntityExternalId {
+    fn from(val: &String) -> Self {
+        Self(val.to_string())
+    }
+}
+
 impl From<String> for EntityExternalId {
     fn from(val: String) -> Self {
         Self(val)
@@ -59,8 +65,23 @@ impl From<EntityExternalId> for String {
     }
 }
 
+impl From<&EntityExternalId> for String {
+    fn from(value: &EntityExternalId) -> Self {
+        value.0.clone()
+    }
+}
+
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+#[error("Invalid external ID: {external_id} contains invalid character: {invalid_char}")]
+pub struct InvalidExternalIdError {
+    pub external_id: String,
+    pub invalid_char: char,
+}
+
 type ExternalIdMapperFn =
     Box<dyn Fn(&EntityTopicId, &EntityExternalId) -> EntityExternalId + Send + Sync + 'static>;
+type ExternalIdValidatorFn =
+    Box<dyn Fn(&str) -> Result<EntityExternalId, InvalidExternalIdError> + Send + Sync + 'static>;
 
 /// A store for topic-based entity metadata lookup.
 ///
@@ -88,25 +109,33 @@ type ExternalIdMapperFn =
 /// );
 /// let registration_message = EntityRegistrationMessage::try_from(&mqtt_message).unwrap();
 ///
-/// let mut entity_store = EntityStore::with_main_device(registration_message, |tid, xid| tid.to_string().into());
+/// let mut entity_store = EntityStore::with_main_device(
+///     registration_message,
+///     |tid, xid| tid.to_string().into(),
+///     |xid| Ok(xid.into()),
+/// );
 /// ```
 pub struct EntityStore {
     main_device: EntityTopicId,
     entities: HashMap<EntityTopicId, EntityMetadata>,
     entity_id_index: HashMap<EntityExternalId, EntityTopicId>,
     external_id_mapper: ExternalIdMapperFn,
+    external_id_validator_fn: ExternalIdValidatorFn,
 }
 
 impl EntityStore {
     /// Creates a new entity store with a given main device.
     #[must_use]
-    pub fn with_main_device<F>(
+    pub fn with_main_device<MF, SF>(
         main_device: EntityRegistrationMessage,
-        external_id_mapper: F,
+        external_id_mapper_fn: MF,
+        external_id_validator_fn: SF,
     ) -> Option<Self>
     where
-        F: Fn(&EntityTopicId, &EntityExternalId) -> EntityExternalId,
-        F: 'static + Send + Sync,
+        MF: Fn(&EntityTopicId, &EntityExternalId) -> EntityExternalId,
+        MF: 'static + Send + Sync,
+        SF: Fn(&str) -> Result<EntityExternalId, InvalidExternalIdError>,
+        SF: 'static + Send + Sync,
     {
         if main_device.r#type != EntityType::MainDevice {
             return None;
@@ -125,7 +154,8 @@ impl EntityStore {
             main_device: main_device.topic_id.clone(),
             entities: HashMap::from([(main_device.topic_id.clone(), metadata)]),
             entity_id_index: HashMap::from([(entity_id, main_device.topic_id)]),
-            external_id_mapper: Box::new(external_id_mapper),
+            external_id_mapper: Box::new(external_id_mapper_fn),
+            external_id_validator_fn: Box::new(external_id_validator_fn),
         })
     }
 
@@ -234,6 +264,7 @@ impl EntityStore {
         &mut self,
         message: EntityRegistrationMessage,
     ) -> Result<Vec<EntityTopicId>, Error> {
+        debug!("Processing entity registration message, {:?}", message);
         let topic_id = message.topic_id;
 
         let mut affected_entities = vec![];
@@ -258,9 +289,13 @@ impl EntityStore {
 
         let external_id = match message.r#type {
             EntityType::MainDevice => self.main_device_external_id(),
-            _ => message.external_id.unwrap_or_else(|| {
-                (self.external_id_mapper)(&topic_id, &self.main_device_external_id())
-            }),
+            _ => {
+                if let Some(id) = message.external_id {
+                    (self.external_id_validator_fn)(id.as_ref())?
+                } else {
+                    (self.external_id_mapper)(&topic_id, &self.main_device_external_id())
+                }
+            }
         };
         let entity_metadata = EntityMetadata {
             topic_id: topic_id.clone(),
@@ -288,6 +323,8 @@ impl EntityStore {
                 self.entity_id_index.insert(external_id, topic_id);
             }
         }
+        debug!("Updated entity map: {:?}", self.entities);
+        debug!("Updated external id map: {:?}", self.entity_id_index);
 
         Ok(affected_entities)
     }
@@ -417,6 +454,9 @@ pub enum Error {
 
     #[error("The specified topic id {0} does not match the default topic scheme: 'device/<device-id>/service/<service-id>'")]
     NonDefaultTopicScheme(EntityTopicId),
+
+    #[error(transparent)]
+    InvalidExternalIdError(#[from] InvalidExternalIdError),
 }
 
 /// An object representing a valid entity registration message.
@@ -548,13 +588,12 @@ fn parse_entity_register_payload(payload: &[u8]) -> Option<JsonValue> {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
+    use super::*;
     use assert_matches::assert_matches;
     use mqtt_channel::Topic;
     use serde_json::json;
-
-    use super::*;
+    use std::collections::HashSet;
+    use std::str::FromStr;
 
     fn dummy_external_id_mapper(
         entity_topic_id: &EntityTopicId,
@@ -567,19 +606,22 @@ mod tests {
             .into()
     }
 
+    fn dummy_external_id_sanitizer(id: &str) -> Result<EntityExternalId, InvalidExternalIdError> {
+        let forbidden_chars = HashSet::from(['/', '+', '#']);
+        for c in id.chars() {
+            if forbidden_chars.contains(&c) {
+                return Err(InvalidExternalIdError {
+                    external_id: id.into(),
+                    invalid_char: c,
+                });
+            }
+        }
+        Ok(id.into())
+    }
+
     #[test]
     fn registers_main_device() {
-        let store = EntityStore::with_main_device(
-            EntityRegistrationMessage {
-                topic_id: EntityTopicId::default_main_device(),
-                external_id: Some("test-device".into()),
-                r#type: EntityType::MainDevice,
-                parent: None,
-                other: json!({}),
-            },
-            dummy_external_id_mapper,
-        )
-        .unwrap();
+        let store = new_entity_store();
 
         assert_eq!(store.main_device(), &EntityTopicId::default_main_device());
         assert!(store.get(&EntityTopicId::default_main_device()).is_some());
@@ -587,17 +629,7 @@ mod tests {
 
     #[test]
     fn lists_child_devices() {
-        let mut store = EntityStore::with_main_device(
-            EntityRegistrationMessage {
-                topic_id: EntityTopicId::default_main_device(),
-                external_id: Some("test-device".into()),
-                r#type: EntityType::MainDevice,
-                parent: None,
-                other: json!({}),
-            },
-            dummy_external_id_mapper,
-        )
-        .unwrap();
+        let mut store = new_entity_store();
 
         // If the @parent info is not provided, it is assumed to be an immediate
         // child of the main device.
@@ -634,17 +666,7 @@ mod tests {
 
     #[test]
     fn lists_services() {
-        let mut store = EntityStore::with_main_device(
-            EntityRegistrationMessage {
-                r#type: EntityType::MainDevice,
-                external_id: Some("test-device".into()),
-                topic_id: EntityTopicId::default_main_device(),
-                parent: None,
-                other: json!({}),
-            },
-            dummy_external_id_mapper,
-        )
-        .unwrap();
+        let mut store = new_entity_store();
 
         // Services are namespaced under devices, so `parent` is not necessary
         let updated_entities = store
@@ -685,17 +707,7 @@ mod tests {
 
     #[test]
     fn forbids_nonexistent_parents() {
-        let mut store = EntityStore::with_main_device(
-            EntityRegistrationMessage {
-                topic_id: EntityTopicId::default_main_device(),
-                external_id: Some("test-device".into()),
-                r#type: EntityType::MainDevice,
-                parent: None,
-                other: json!({}),
-            },
-            dummy_external_id_mapper,
-        )
-        .unwrap();
+        let mut store = new_entity_store();
 
         let res = store.update(EntityRegistrationMessage {
             topic_id: EntityTopicId::default_main_device(),
@@ -710,17 +722,7 @@ mod tests {
 
     #[test]
     fn list_ancestors() {
-        let mut store = EntityStore::with_main_device(
-            EntityRegistrationMessage {
-                topic_id: EntityTopicId::default_main_device(),
-                external_id: Some("test-device".into()),
-                r#type: EntityType::MainDevice,
-                parent: None,
-                other: json!({}),
-            },
-            dummy_external_id_mapper,
-        )
-        .unwrap();
+        let mut store = new_entity_store();
 
         // Assert no ancestors of main device
         assert!(store
@@ -826,17 +828,7 @@ mod tests {
 
     #[test]
     fn list_ancestors_external_ids() {
-        let mut store = EntityStore::with_main_device(
-            EntityRegistrationMessage {
-                topic_id: EntityTopicId::default_main_device(),
-                external_id: Some("test-device".into()),
-                r#type: EntityType::MainDevice,
-                parent: None,
-                other: json!({}),
-            },
-            dummy_external_id_mapper,
-        )
-        .unwrap();
+        let mut store = new_entity_store();
 
         // Assert ancestor external ids of main device
         assert!(store
@@ -946,17 +938,7 @@ mod tests {
 
     #[test]
     fn auto_register_service() {
-        let mut store = EntityStore::with_main_device(
-            EntityRegistrationMessage {
-                topic_id: EntityTopicId::default_main_device(),
-                r#type: EntityType::MainDevice,
-                external_id: Some("test-device".into()),
-                parent: None,
-                other: json!({}),
-            },
-            dummy_external_id_mapper,
-        )
-        .unwrap();
+        let mut store = new_entity_store();
 
         let service_topic_id = EntityTopicId::default_child_service("child1", "service1").unwrap();
         let res = store.auto_register_entity(&service_topic_id).unwrap();
@@ -983,17 +965,7 @@ mod tests {
 
     #[test]
     fn auto_register_child_device() {
-        let mut store = EntityStore::with_main_device(
-            EntityRegistrationMessage {
-                topic_id: EntityTopicId::default_main_device(),
-                r#type: EntityType::MainDevice,
-                external_id: Some("test-device".into()),
-                parent: None,
-                other: json!({}),
-            },
-            dummy_external_id_mapper,
-        )
-        .unwrap();
+        let mut store = new_entity_store();
 
         let child_topic_id = EntityTopicId::default_child_device("child2").unwrap();
         let res = store.auto_register_entity(&child_topic_id).unwrap();
@@ -1012,17 +984,7 @@ mod tests {
 
     #[test]
     fn auto_register_custom_topic_scheme_not_supported() {
-        let mut store = EntityStore::with_main_device(
-            EntityRegistrationMessage {
-                topic_id: EntityTopicId::default_main_device(),
-                r#type: EntityType::MainDevice,
-                external_id: Some("test-device".into()),
-                parent: None,
-                other: json!({}),
-            },
-            dummy_external_id_mapper,
-        )
-        .unwrap();
+        let mut store = new_entity_store();
         assert_matches!(
             store.auto_register_entity(&EntityTopicId::from_str("custom/child2//").unwrap()),
             Err(Error::NonDefaultTopicScheme(_))
@@ -1031,17 +993,7 @@ mod tests {
 
     #[test]
     fn register_main_device_custom_scheme() {
-        let mut store = EntityStore::with_main_device(
-            EntityRegistrationMessage {
-                topic_id: EntityTopicId::default_main_device(),
-                r#type: EntityType::MainDevice,
-                external_id: Some("test-device".into()),
-                parent: None,
-                other: json!({}),
-            },
-            dummy_external_id_mapper,
-        )
-        .unwrap();
+        let mut store = new_entity_store();
 
         // Register main device with custom topic scheme
         let main_topic_id = EntityTopicId::from_str("custom/main//").unwrap();
@@ -1102,5 +1054,43 @@ mod tests {
                 .unwrap(),
             &expected_entity_metadata
         );
+    }
+
+    #[test]
+    fn external_id_validation() {
+        let mut store = new_entity_store();
+
+        let entity_topic_id = EntityTopicId::default_child_device("child1").unwrap();
+        let res = store.update(EntityRegistrationMessage {
+            topic_id: entity_topic_id.clone(),
+            r#type: EntityType::ChildDevice,
+            external_id: Some("bad+id".into()),
+            parent: None,
+            other: json!({}),
+        });
+
+        // Assert service registered under main device with custom topic scheme
+        assert_eq!(
+            res,
+            Err(Error::InvalidExternalIdError(InvalidExternalIdError {
+                external_id: "bad+id".into(),
+                invalid_char: '+'
+            }))
+        );
+    }
+
+    fn new_entity_store() -> EntityStore {
+        EntityStore::with_main_device(
+            EntityRegistrationMessage {
+                topic_id: EntityTopicId::default_main_device(),
+                external_id: Some("test-device".into()),
+                r#type: EntityType::MainDevice,
+                parent: None,
+                other: json!({}),
+            },
+            dummy_external_id_mapper,
+            dummy_external_id_sanitizer,
+        )
+        .unwrap()
     }
 }

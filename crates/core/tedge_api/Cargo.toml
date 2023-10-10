@@ -14,6 +14,7 @@ clock = { workspace = true }
 csv = { workspace = true }
 download = { workspace = true }
 json-writer = { workspace = true }
+log = { workspace = true }
 mqtt_channel = { workspace = true }
 nanoid = { workspace = true }
 serde = { workspace = true }

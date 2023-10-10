@@ -42,6 +42,7 @@ use std::str::FromStr;
 ///     topic.name
 /// );
 /// ```
+#[derive(Clone)]
 pub struct MqttSchema {
     pub root: String,
 }

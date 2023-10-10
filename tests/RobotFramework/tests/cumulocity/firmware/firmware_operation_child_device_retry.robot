@@ -30,9 +30,8 @@ Firmware plugin supports restart via service manager #1932
 Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
-    Set Suite Variable    $CHILD_ID    ${DEVICE_SN}_child1
-    Set Suite Variable    $CHILD_SN    ${DEVICE_SN}:device:${CHILD_ID}
-    Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_ID}
+    Set Suite Variable    $CHILD_SN    ${DEVICE_SN}_child1
+    Execute Command    mkdir -p /etc/tedge/operations/c8y/${CHILD_SN}
     Restart Service    tedge-mapper-c8y
     Device Should Exist                      ${DEVICE_SN}
     Device Should Exist                      ${CHILD_SN}
