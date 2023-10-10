@@ -114,8 +114,14 @@ fn spawn_broker() -> u16 {
             break port;
         }
 
-        match broker_thread.join().unwrap() {
-            Ok(()) => unreachable!("`broker.start()` does not terminate"),
+        match broker_thread.join() {
+            Ok(Ok(())) => unreachable!("`broker.start()` does not terminate"),
+            Ok(Err(err)) => {
+                eprintln!(
+                    "MQTT-TEST ERROR: fail to start the test MQTT broker: {:?}",
+                    err
+                );
+            }
             Err(err) => {
                 eprintln!(
                     "MQTT-TEST ERROR: fail to start the test MQTT broker: {:?}",
