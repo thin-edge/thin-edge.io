@@ -3830,6 +3830,7 @@ dependencies = [
  "tedge_test_utils",
  "tedge_utils",
  "tokio",
+ "uzers",
  "whoami",
 ]
 
@@ -3982,6 +3983,7 @@ dependencies = [
  "mqtt_channel",
  "nix",
  "notify",
+ "once_cell",
  "strum_macros",
  "tedge_test_utils",
  "tempfile",

@@ -84,10 +84,13 @@ async fn download_with_permission() {
     let target_path = ttd.path().join("downloaded_file");
     let server_url = server.url();
     let user = whoami::username();
+    let group = uzers::get_current_groupname()
+        .unwrap()
+        .into_string()
+        .unwrap();
 
-    let download_request = DownloadRequest::new(&server_url, &target_path).with_permission(
-        PermissionEntry::new(Some(user.clone()), Some(user), Some(0o775)),
-    );
+    let download_request = DownloadRequest::new(&server_url, &target_path)
+        .with_permission(PermissionEntry::new(Some(user), Some(group), Some(0o775)));
 
     let mut requester = spawn_downloader_actor().await;
 

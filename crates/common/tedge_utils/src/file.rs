@@ -484,17 +484,25 @@ pub fn has_write_access(path: &Path) -> Result<(), FileError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use once_cell::sync::Lazy;
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
     use tempfile::TempDir;
+
+    static USER: Lazy<String> = Lazy::new(whoami::username);
+    static GROUP: Lazy<String> = Lazy::new(|| {
+        uzers::get_current_groupname()
+            .unwrap()
+            .into_string()
+            .unwrap()
+    });
 
     #[test]
     fn create_file_correct_user_group() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
 
-        let user = whoami::username();
-        create_file_with_user_group(&file_path, &user, &user, 0o644, None).unwrap();
+        create_file_with_user_group(&file_path, &USER, &GROUP, 0o644, None).unwrap();
         assert!(Path::new(file_path.as_str()).exists());
         let meta = std::fs::metadata(file_path.as_str()).unwrap();
         let perm = meta.permissions();
@@ -506,7 +514,6 @@ mod tests {
     fn create_file_with_default_content() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
-        let user = whoami::username();
 
         let example_config = r#"# Add the configurations to be managed by c8y-configuration-plugin
         files = [
@@ -514,7 +521,8 @@ mod tests {
         ]"#;
 
         // Create a new file with default content
-        create_file_with_user_group(&file_path, &user, &user, 0o775, Some(example_config)).unwrap();
+        create_file_with_user_group(&file_path, &USER, &GROUP, 0o775, Some(example_config))
+            .unwrap();
 
         let content = fs::read(file_path).unwrap();
         assert_eq!(example_config.as_bytes(), content);
@@ -525,8 +533,8 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
 
-        let user = whoami::username();
-        let err = create_file_with_user_group(file_path, "test", &user, 0o775, None).unwrap_err();
+        let err = create_file_with_user_group(file_path, "nonexistent_user", &GROUP, 0o775, None)
+            .unwrap_err();
 
         assert!(err.to_string().contains("User not found"));
     }
@@ -536,8 +544,8 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
 
-        let user = whoami::username();
-        let err = create_file_with_user_group(&file_path, &user, "test", 0o775, None).unwrap_err();
+        let err = create_file_with_user_group(&file_path, &USER, "nonexistent_group", 0o775, None)
+            .unwrap_err();
 
         assert!(err.to_string().contains("Group not found"));
         fs::remove_file(file_path.as_str()).unwrap();
@@ -548,8 +556,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("dir").display().to_string();
 
-        let user = whoami::username();
-        create_directory_with_user_group(&dir_path, &user, &user, 0o775).unwrap();
+        create_directory_with_user_group(&dir_path, &USER, &GROUP, 0o775).unwrap();
 
         assert!(Path::new(dir_path.as_str()).exists());
         let meta = fs::metadata(dir_path.as_str()).unwrap();
@@ -563,9 +570,8 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("dir").display().to_string();
 
-        let user = whoami::username();
-
-        let err = create_directory_with_user_group(dir_path, "test", &user, 0o775).unwrap_err();
+        let err = create_directory_with_user_group(dir_path, "nonexistent_user", &GROUP, 0o775)
+            .unwrap_err();
 
         assert!(err.to_string().contains("User not found"));
     }
@@ -575,9 +581,8 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("dir").display().to_string();
 
-        let user = whoami::username();
-
-        let err = create_directory_with_user_group(dir_path, &user, "test", 0o775).unwrap_err();
+        let err = create_directory_with_user_group(dir_path, &USER, "nonexistent_group", 0o775)
+            .unwrap_err();
 
         assert!(err.to_string().contains("Group not found"));
     }
@@ -587,8 +592,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
 
-        let user = whoami::username();
-        create_file_with_user_group(&file_path, &user, &user, 0o644, None).unwrap();
+        create_file_with_user_group(&file_path, &USER, &GROUP, 0o644, None).unwrap();
         assert!(Path::new(file_path.as_str()).exists());
 
         let meta = fs::metadata(file_path.as_str()).unwrap();
@@ -616,8 +620,7 @@ mod tests {
     fn overwrite_file_content() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file");
-        let user = whoami::username();
-        create_file_with_user_group(&file_path, &user, &user, 0o775, None).unwrap();
+        create_file_with_user_group(&file_path, &USER, &GROUP, 0o775, None).unwrap();
 
         let new_content = "abc";
         overwrite_file(file_path.as_path(), new_content).unwrap();
@@ -629,14 +632,14 @@ mod tests {
     #[test]
     fn get_uid_of_users() {
         assert_eq!(get_uid_by_name("root").unwrap(), 0);
-        let err = get_uid_by_name("test").unwrap_err();
+        let err = get_uid_by_name("nonexistent_user").unwrap_err();
         assert!(err.to_string().contains("User not found"));
     }
 
     #[test]
     fn get_gid_of_groups() {
         assert_eq!(get_gid_by_name("root").unwrap(), 0);
-        let err = get_gid_by_name("test").unwrap_err();
+        let err = get_gid_by_name("nonexistent_group").unwrap_err();
         assert!(err.to_string().contains("Group not found"));
     }
 
@@ -644,8 +647,7 @@ mod tests {
     async fn move_file_to_different_filesystem() {
         let file_dir = TempDir::new().unwrap();
         let file_path = file_dir.path().join("file");
-        let user = whoami::username();
-        create_file_with_user_group(&file_path, &user, &user, 0o775, Some("test")).unwrap();
+        create_file_with_user_group(&file_path, &USER, &GROUP, 0o775, Some("test")).unwrap();
 
         let dest_dir = TempDir::new_in(".").unwrap();
         let dest_path = dest_dir.path().join("another-file");
