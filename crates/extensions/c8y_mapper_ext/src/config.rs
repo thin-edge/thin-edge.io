@@ -94,8 +94,8 @@ impl C8yMapperConfig {
 
         let capabilities = Capabilities {
             log_management: tedge_config.c8y.enable.log_management,
-            config_snapshot: true, // fix later
-            config_update: true,
+            config_snapshot: tedge_config.c8y.enable.config_snapshot,
+            config_update: tedge_config.c8y.enable.config_update,
         };
 
         let mut topics = Self::default_internal_topic_filter(&config_dir)?;
