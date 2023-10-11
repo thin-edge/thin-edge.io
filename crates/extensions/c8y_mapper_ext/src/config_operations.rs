@@ -89,9 +89,13 @@ impl CumulocityConverter {
         let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
         let external_id: String = target.external_id.clone().into();
 
+        // Replace '/' with ':' to avoid creating unexpected directories in file transfer repo
         let tedge_url = format!(
             "http://{}/tedge/file-transfer/{}/config_snapshot/{}-{}",
-            &self.config.tedge_http_host, external_id, snapshot_request.config_type, cmd_id
+            &self.config.tedge_http_host,
+            external_id,
+            snapshot_request.config_type.replace('/', ":"),
+            cmd_id
         );
 
         let request = ConfigSnapshotCmdPayload {
@@ -148,7 +152,11 @@ impl CumulocityConverter {
                     .file_transfer_dir()
                     .join(device.external_id.as_ref())
                     .join("config_snapshot")
-                    .join(format!("{}-{}", response.config_type, cmd_id));
+                    .join(format!(
+                        "{}-{}",
+                        response.config_type.replace('/', ":"),
+                        cmd_id
+                    ));
 
                 let result = self
                     .http_proxy
@@ -476,9 +484,13 @@ impl CumulocityConverter {
         let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
         let external_id: String = target.external_id.clone().into();
 
+        // Replace '/' with ':' to avoid creating unexpected directories in file transfer repo
         let tedge_url = format!(
             "http://{}/tedge/file-transfer/{}/config_update/{}-{}",
-            &self.config.tedge_http_host, external_id, smartrest.config_type, cmd_id
+            &self.config.tedge_http_host,
+            external_id,
+            smartrest.config_type.replace('/', ":"),
+            cmd_id
         );
 
         let request = ConfigUpdateCmdPayload {
@@ -506,7 +518,8 @@ impl CumulocityConverter {
             .file_transfer_dir()
             .join(entity.external_id.as_ref())
             .join("config_update");
-        let symlink_path = symlink_dir_path.join(format!("{config_type}-{cmd_id}"));
+        let symlink_path =
+            symlink_dir_path.join(format!("{}-{cmd_id}", config_type.replace('/', ":")));
 
         if !symlink_path.is_symlink() {
             fs::create_dir_all(symlink_dir_path)?;
@@ -528,7 +541,8 @@ impl CumulocityConverter {
             .file_transfer_dir()
             .join(entity.external_id.as_ref())
             .join("config_update");
-        let symlink_path = symlink_dir_path.join(format!("{config_type}-{cmd_id}"));
+        let symlink_path =
+            symlink_dir_path.join(format!("{}-{cmd_id}", config_type.replace('/', ":")));
 
         if symlink_path.exists() {
             fs::remove_file(symlink_path)?
@@ -674,7 +688,7 @@ mod tests {
         // Simulate c8y_UploadConfigFile SmartREST request
         mqtt.send(MqttMessage::new(
             &C8yTopic::downstream_topic(),
-            "526,test-device,configA",
+            "526,test-device,path/config/A",
         ))
         .await
         .expect("Send failed");
@@ -703,8 +717,8 @@ mod tests {
             // Validate the payload JSON
             let expected_json = json!({
                 "status": "init",
-                "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/configA-{cmd_id}"),
-                "type": "configA",
+                "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/path:config:A-{cmd_id}"),
+                "type": "path/config/A",
             });
             assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
         } else {
@@ -893,15 +907,15 @@ mod tests {
         ttd.dir("file-transfer")
             .dir("test-device")
             .dir("config_snapshot")
-            .file("typeA-1234");
+            .file("path:type:A-1234");
 
         // Simulate config_snapshot command with "executing" state
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/typeA-1234",
-            "type": "typeA",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/path:type:A-1234",
+            "type": "path/type/A",
         })
                 .to_string(),
         ))
@@ -976,7 +990,7 @@ mod tests {
         // Simulate c8y_DownloadConfigFile SmartREST request
         mqtt.send(MqttMessage::new(
             &C8yTopic::downstream_topic(),
-            "524,test-device,http://www.my.url,configA",
+            "524,test-device,http://www.my.url,path/config/A",
         ))
         .await
         .expect("Send failed");
@@ -1021,15 +1035,15 @@ mod tests {
             assert!(ttd
                 .path()
                 .join(format!(
-                    "file-transfer/test-device/config_update/configA-{cmd_id}"
+                    "file-transfer/test-device/config_update/path:config:A-{cmd_id}"
                 ))
                 .is_symlink());
 
             // Validate the payload JSON
             let expected_json = json!({
                 "status": "init",
-                "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device/config_update/configA-{cmd_id}"),
-                "type": "configA",
+                "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device/config_update/path:config:A-{cmd_id}"),
+                "type": "path/config/A",
             });
             assert_json_diff::assert_json_include!(actual: received_json, expected: expected_json);
         } else {
@@ -1171,9 +1185,7 @@ mod tests {
         // Assert symlink is removed
         assert!(!ttd
             .path()
-            .join(format!(
-                "file-transfer/test-device/config_update/typeA-1234"
-            ))
+            .join("file-transfer/test-device/config_update/typeA-1234")
             .exists());
     }
 
@@ -1254,10 +1266,10 @@ mod tests {
         ttd.dir("file-transfer")
             .dir("test-device")
             .dir("config_update")
-            .file("typeA-1234");
+            .file("path:type:A-1234");
         assert!(ttd
             .path()
-            .join("file-transfer/test-device/config_update/typeA-1234")
+            .join("file-transfer/test-device/config_update/path:type:A-1234")
             .exists());
 
         // Simulate config_update command with "executing" state
@@ -1265,9 +1277,9 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/config_update/1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/typeA-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/path:type:A-1234",
             "remoteUrl": "http://www.my.url",
-            "type": "typeA",
+            "type": "path/type/A",
         })
                 .to_string(),
         ))
@@ -1280,9 +1292,7 @@ mod tests {
         // Assert symlink is removed
         assert!(!ttd
             .path()
-            .join(format!(
-                "file-transfer/test-device/config_update/typeA-1234"
-            ))
+            .join("file-transfer/test-device/config_update/path:type:A-1234")
             .exists());
     }
 
