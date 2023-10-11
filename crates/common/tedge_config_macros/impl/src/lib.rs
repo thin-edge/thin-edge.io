@@ -39,7 +39,7 @@ pub fn generate_configuration(tokens: TokenStream) -> Result<TokenStream, syn::E
         .iter()
         .filter_map(|(key, field)| Some((key, field.read_write()?)))
         .flat_map(|(key, field)| {
-            let ty = &field.ty;
+            let ty = field.from.as_ref().unwrap_or(&field.ty);
             field.examples.iter().enumerate().map(move |(n, example)| {
                 let name = quote::format_ident!(
                     "example_value_can_be_deserialized_for_{}_example_{n}",

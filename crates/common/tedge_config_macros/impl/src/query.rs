@@ -1,13 +1,14 @@
+use crate::error::extract_type_from_result;
+use crate::input::ConfigurableField;
+use crate::input::FieldOrGroup;
 use heck::ToUpperCamelCase;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::quote_spanned;
 use std::collections::VecDeque;
 use syn::parse_quote;
-
-use crate::error::extract_type_from_result;
-use crate::input::ConfigurableField;
-use crate::input::FieldOrGroup;
+use syn::parse_quote_spanned;
+use syn::spanned::Spanned;
 
 pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     let paths = configuration_paths_from(items);
@@ -344,17 +345,30 @@ fn generate_string_writers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
         .zip(variant_names)
         .map(|(path, variant_name)| {
             let segments = path.iter().map(|thing| thing.ident()).collect::<Vec<_>>();
+            let field = path
+                .iter()
+                .filter_map(|thing| thing.field())
+                .next()
+                .unwrap();
+
+            let ty = field.ty();
+            let parse_as = field.from().unwrap_or(field.ty());
+            let parse = quote_spanned! {parse_as.span()=> parse::<#parse_as>() };
+            let convert_to_field_ty = quote_spanned! {ty.span()=> map(<#ty>::from)};
 
             (
-                // TODO this should probably be spanned to the field type
-                parse_quote! {
-                    WritableKey::#variant_name => self.#(#segments).* = Some(value.parse().map_err(|e| WriteError::ParseValue(Box::new(e)))?),
+                parse_quote_spanned! {ty.span()=>
+                    WritableKey::#variant_name => self.#(#segments).* = Some(value
+                        .#parse
+                        .#convert_to_field_ty
+                        .map_err(|e| WriteError::ParseValue(Box::new(e)))?),
                 },
-                parse_quote! {
+                parse_quote_spanned! {ty.span()=>
                     WritableKey::#variant_name => self.#(#segments).* = None,
-                }
+                },
             )
-        }).unzip();
+        })
+        .unzip();
     quote! {
         impl TEdgeConfigDto {
             pub fn try_update_str(&mut self, key: WritableKey, value: &str) -> Result<(), WriteError> {

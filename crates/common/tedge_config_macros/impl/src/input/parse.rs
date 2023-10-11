@@ -126,6 +126,8 @@ pub struct ConfigurableField {
     pub examples: Vec<SpannedValue<String>>,
     pub ident: Option<syn::Ident>,
     pub ty: syn::Type,
+    #[darling(default)]
+    pub from: Option<syn::Type>,
 }
 
 #[derive(Debug, FromMeta, PartialEq, Eq)]
