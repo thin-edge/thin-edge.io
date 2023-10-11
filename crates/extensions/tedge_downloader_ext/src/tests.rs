@@ -34,7 +34,6 @@ async fn download_without_auth() -> Result<(), DynError> {
     .expect("timeout");
 
     assert_eq!(id.as_str(), "id");
-    assert!(response.is_ok());
     assert_eq!(response.as_ref().unwrap().file_path, target_path.as_path());
     assert_eq!(response.as_ref().unwrap().url, server_url);
 
@@ -68,7 +67,6 @@ async fn download_with_auth() -> Result<(), DynError> {
     .expect("timeout");
 
     assert_eq!(id.as_str(), "id");
-    assert!(response.is_ok());
     assert_eq!(response.as_ref().unwrap().file_path, target_path.as_path());
     assert_eq!(response.as_ref().unwrap().url, server_url);
 
@@ -104,7 +102,6 @@ async fn download_with_permission() -> Result<(), DynError> {
     .expect("timeout");
 
     assert_eq!(id.as_str(), "id");
-    assert!(response.is_ok());
     assert_eq!(response.as_ref().unwrap().file_path, target_path.as_path());
     assert_eq!(response.as_ref().unwrap().url, server_url);
 
@@ -150,7 +147,6 @@ async fn download_if_download_key_is_struct() -> Result<(), DynError> {
     .expect("timeout");
 
     assert_eq!(return_key, request_key);
-    assert!(response.is_ok());
     assert_eq!(response.as_ref().unwrap().file_path, target_path.as_path());
     assert_eq!(response.as_ref().unwrap().url, server_url);
 
