@@ -152,6 +152,69 @@ Thin-edge device supports sending inventory data via tedge topic to root fragmen
     Should Be Equal    ${mo["subtype"]}    LinuxDeviceA
     Should Be Equal    ${mo["type"]}    thin-edge.io
     Should Be Equal    ${mo["name"]}    ${DEVICE_SN}
+#
+# Services
+#
+# measurements
+Send measurements to an unregistered service
+    Execute Command    tedge mqtt pub te/device/main/service/app1/m/service_type001 '{"temperature": 30.1}'
+    Cumulocity.Device Should Exist    ${DEVICE_SN}
+    Cumulocity.Should Have Services    min_count=1    max_count=1    name=app1
+
+    Cumulocity.Device Should Exist    ${DEVICE_SN}:device:main:service:app1
+    ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=service_type001
+    Should Be Equal    ${measurements[0]["type"]}    service_type001
+    Should Be Equal As Numbers    ${measurements[0]["temperature"]["temperature"]["value"]}    30.1
+
+Send measurements to a registered service
+    Execute Command    tedge mqtt pub --retain te/device/main/service/app2 '{"@type":"service","@parent":"device/main//"}'
+    Cumulocity.Device Should Exist    ${DEVICE_SN}
+    Cumulocity.Should Have Services    name=app2    min_count=1    max_count=1
+    
+    Execute Command    tedge mqtt pub te/device/main/service/app2/m/service_type002 '{"temperature": 30.1}'
+    Cumulocity.Device Should Exist    ${DEVICE_SN}:device:main:service:app2
+    ${measurements}=    Device Should Have Measurements    minimum=1    maximum=1    type=service_type002
+    Should Be Equal    ${measurements[0]["type"]}    service_type002
+    Should Be Equal As Numbers    ${measurements[0]["temperature"]["temperature"]["value"]}    30.1
+
+# alarms
+Send alarms to an unregistered service
+    Execute Command    tedge mqtt pub te/device/main/service/app3/a/alarm_001 '{"text": "test alarm","severity":"major"}'
+    Cumulocity.Device Should Exist    ${DEVICE_SN}
+    Cumulocity.Should Have Services    min_count=1    max_count=1    name=app3
+
+    Cumulocity.Device Should Exist    ${DEVICE_SN}:device:main:service:app3
+    ${alarms}=    Device Should Have Alarm/s    expected_text=test alarm    type=alarm_001    minimum=1    maximum=1
+    Should Be Equal    ${alarms[0]["type"]}    alarm_001
+    Should Be Equal    ${alarms[0]["severity"]}    MAJOR
+
+Send alarms to a registered service
+    Execute Command    tedge mqtt pub --retain te/device/main/service/app4 '{"@type":"service","@parent":"device/main//"}'
+    Cumulocity.Device Should Exist    ${DEVICE_SN}
+    Cumulocity.Should Have Services    name=app4    min_count=1    max_count=1
+
+    Execute Command    tedge mqtt pub te/device/main/service/app4/a/alarm_002 '{"text": "test alarm"}'
+    Cumulocity.Device Should Exist    ${DEVICE_SN}:device:main:service:app4
+    ${alarms}=    Device Should Have Alarm/s    expected_text=test alarm    type=alarm_002    minimum=1    maximum=1
+    Should Be Equal    ${alarms[0]["type"]}    alarm_002
+
+# events
+Send events to an unregistered service
+    Execute Command    tedge mqtt pub te/device/main/service/app5/e/event_001 '{"text": "test event"}'
+    Cumulocity.Device Should Exist    ${DEVICE_SN}
+    Cumulocity.Should Have Services    name=app5    min_count=1    max_count=1
+
+    Cumulocity.Device Should Exist    ${DEVICE_SN}:device:main:service:app5
+    Device Should Have Event/s    expected_text=test event    type=event_001    minimum=1    maximum=1
+
+Send events to a registered service
+    Execute Command    tedge mqtt pub --retain te/device/main/service/app6 '{"@type":"service","@parent":"device/main//"}'
+    Cumulocity.Device Should Exist    ${DEVICE_SN}
+    Cumulocity.Should Have Services    name=app6    min_count=1    max_count=1
+
+    Cumulocity.Device Should Exist    ${DEVICE_SN}:device:main:service:app6
+    Execute Command    tedge mqtt pub te/device/main/service/app6/e/event_002 '{"text": "test event"}'
+    Device Should Have Event/s    expected_text=test event    type=event_002    minimum=1    maximum=1
 
 *** Keywords ***
 
