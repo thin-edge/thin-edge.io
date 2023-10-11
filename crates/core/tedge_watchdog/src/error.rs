@@ -1,3 +1,5 @@
+use time::error::Parse;
+
 use mqtt_channel::MqttError;
 
 use tedge_config::CertificateError;
@@ -39,4 +41,10 @@ pub enum WatchdogError {
 
     #[error(transparent)]
     FromCertificateError(#[from] CertificateError),
+
+    #[error(transparent)]
+    FromTimeFormatError(#[from] time::error::Format),
+
+    #[error(transparent)]
+    ParseError(#[from] Parse),
 }
