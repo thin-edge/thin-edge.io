@@ -46,6 +46,7 @@ Stop watchdog service
 
 Remove entry from service file
     Execute Command    sudo sed -i '10d' /lib/systemd/system/tedge-mapper-collectd.service
+    Execute Command    sudo systemctl daemon-reload
 
 tedge-collectd-mapper health status
     Execute Command    sudo systemctl start tedge-mapper-collectd.service
@@ -53,6 +54,6 @@ tedge-collectd-mapper health status
     Sleep    5s     reason=It fails without this! It needs a better way of queuing requests
     ${pid}=    Execute Command    pgrep -f '^/usr/bin/tedge-mapper collectd'    strip=${True}
     Execute Command    sudo tedge mqtt pub 'tedge/health-check/tedge-mapper-collectd' ''
-    ${messages}=    Should Have MQTT Messages    tedge/health/tedge-mapper-collectd    minimum=1    maximum=2
+    ${messages}=    Should Have MQTT Messages    te/device/main/service/tedge-mapper-collectd/status/health    minimum=1    maximum=2
     Should Contain    ${messages[0]}    "pid":${pid}
     Should Contain    ${messages[0]}    "status":"up"

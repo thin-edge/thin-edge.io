@@ -48,6 +48,7 @@ pub struct AgentConfig {
     pub data_dir: DataDir,
     pub mqtt_device_topic_id: EntityTopicId,
     pub mqtt_topic_root: Arc<str>,
+    pub service_type: String,
 }
 
 impl AgentConfig {
@@ -114,6 +115,7 @@ impl AgentConfig {
             log_dir,
             mqtt_topic_root,
             mqtt_device_topic_id,
+            service_type: tedge_config.service.ty.clone(),
         })
     }
 }
@@ -199,6 +201,7 @@ impl Agent {
             service,
             &mut mqtt_actor_builder,
             &mqtt_schema,
+            self.config.service_type.clone(),
         );
 
         // Tedge to Te topic converter

@@ -94,7 +94,12 @@ impl MqttSchema {
     /// );
     /// ```
     pub fn topic_for(&self, entity: &EntityTopicId, channel: &Channel) -> mqtt_channel::Topic {
-        let topic = format!("{}/{}/{}", self.root, entity, channel);
+        let channel = channel.to_string();
+        let topic = if channel.is_empty() {
+            format!("{}/{entity}", self.root)
+        } else {
+            format!("{}/{entity}/{channel}", self.root)
+        };
         mqtt_channel::Topic::new(&topic).unwrap()
     }
 
@@ -272,6 +277,16 @@ impl EntityTopicId {
         format!("device/{child}/service/{service}").parse()
     }
 
+    /// Assuming `self` is a device in default MQTT scheme, create an
+    /// `EntityTopicId` for a service on that device.
+    ///
+    /// Returns `None` if `self` is not in default MQTT scheme or if `service`
+    /// is an invalid service name.
+    pub fn default_service_for_device(&self, service: &str) -> Option<Self> {
+        let device_name = self.default_device_name()?;
+        Self::default_child_service(device_name, service).ok()
+    }
+
     /// Returns true if the current topic id matches the default topic scheme:
     /// - device/<device-id>// : for devices
     /// - device/<device-id>/service/<service-id> : for services
@@ -334,12 +349,8 @@ impl EntityTopicId {
     /// The device topic id must be in a format: "device/DEVICE_NAME//"; if not,
     /// `None` will be returned.
     pub fn to_default_service_topic_id(&self, service_name: &str) -> Option<ServiceTopicId> {
-        if let ["device", device_name, "", ""] = self.0.split('/').collect::<Vec<&str>>()[..] {
-            return Some(ServiceTopicId(EntityTopicId(format!(
-                "device/{device_name}/service/{service_name}"
-            ))));
-        }
-        None
+        self.default_service_for_device(service_name)
+            .map(ServiceTopicId)
     }
 
     /// Returns an array of all segments of this entity topic.
@@ -387,16 +398,11 @@ impl ServiceTopicId {
     pub fn entity(&self) -> &EntityTopicId {
         &self.0
     }
+}
 
-    /// If in a default MQTT scheme, returns a device topic id of this service.
-    pub fn to_device_topic_id(&self) -> Option<DeviceTopicId> {
-        if let ["device", device_name, "service", _] = self.0.segments() {
-            Some(DeviceTopicId(EntityTopicId(format!(
-                "device/{device_name}//"
-            ))))
-        } else {
-            None
-        }
+impl From<EntityTopicId> for ServiceTopicId {
+    fn from(value: EntityTopicId) -> Self {
+        Self::new(value)
     }
 }
 
@@ -424,6 +430,12 @@ impl DeviceTopicId {
 
     pub fn entity(&self) -> &EntityTopicId {
         &self.0
+    }
+}
+
+impl From<EntityTopicId> for DeviceTopicId {
+    fn from(value: EntityTopicId) -> Self {
+        Self::new(value)
     }
 }
 
@@ -723,6 +735,98 @@ mod tests {
         assert_eq!(
             "invalid/+/mqtttopic/#".parse::<EntityTopicId>(),
             Err(TopicIdError::InvalidMqttTopic)
+        );
+    }
+
+    // TODO: we can forgot to update the test when adding variants, figure out a
+    // way to use type system to fail if not all values checked
+    #[test]
+    fn topic_for() {
+        let mqtt_schema = MqttSchema::new();
+
+        let device: EntityTopicId = "device/main//".parse().unwrap();
+
+        assert_eq!(
+            mqtt_schema.topic_for(&device, &Channel::EntityMetadata),
+            mqtt_channel::Topic::new_unchecked("te/device/main//")
+        );
+        assert_eq!(
+            mqtt_schema.topic_for(
+                &device,
+                &Channel::Measurement {
+                    measurement_type: "type".to_string()
+                }
+            ),
+            mqtt_channel::Topic::new_unchecked("te/device/main///m/type")
+        );
+        assert_eq!(
+            mqtt_schema.topic_for(
+                &device,
+                &Channel::MeasurementMetadata {
+                    measurement_type: "type".to_string()
+                }
+            ),
+            mqtt_channel::Topic::new_unchecked("te/device/main///m/type/meta")
+        );
+
+        assert_eq!(
+            mqtt_schema.topic_for(
+                &device,
+                &Channel::Event {
+                    event_type: "type".to_string()
+                }
+            ),
+            mqtt_channel::Topic::new_unchecked("te/device/main///e/type")
+        );
+        assert_eq!(
+            mqtt_schema.topic_for(
+                &device,
+                &Channel::EventMetadata {
+                    event_type: "type".to_string()
+                }
+            ),
+            mqtt_channel::Topic::new_unchecked("te/device/main///e/type/meta")
+        );
+        assert_eq!(
+            mqtt_schema.topic_for(
+                &device,
+                &Channel::Alarm {
+                    alarm_type: "type".to_string()
+                }
+            ),
+            mqtt_channel::Topic::new_unchecked("te/device/main///a/type")
+        );
+        assert_eq!(
+            mqtt_schema.topic_for(
+                &device,
+                &Channel::AlarmMetadata {
+                    alarm_type: "type".to_string()
+                }
+            ),
+            mqtt_channel::Topic::new_unchecked("te/device/main///a/type/meta")
+        );
+        assert_eq!(
+            mqtt_schema.topic_for(
+                &device,
+                &Channel::Command {
+                    operation: OperationType::Health,
+                    cmd_id: "check".to_string()
+                }
+            ),
+            mqtt_channel::Topic::new_unchecked("te/device/main///cmd/health/check")
+        );
+        assert_eq!(
+            mqtt_schema.topic_for(
+                &device,
+                &Channel::CommandMetadata {
+                    operation: OperationType::LogUpload
+                }
+            ),
+            mqtt_channel::Topic::new_unchecked("te/device/main///cmd/log_upload")
+        );
+        assert_eq!(
+            mqtt_schema.topic_for(&device, &Channel::Health),
+            mqtt_channel::Topic::new_unchecked("te/device/main///status/health")
         );
     }
 }

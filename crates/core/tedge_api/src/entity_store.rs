@@ -8,7 +8,9 @@
 // TODO: move entity business logic to its own module
 
 use crate::entity_store;
+use crate::mqtt_topics::Channel;
 use crate::mqtt_topics::EntityTopicId;
+use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::TopicIdError;
 use log::debug;
 use mqtt_channel::Message;
@@ -16,6 +18,7 @@ use serde_json::json;
 use serde_json::Value as JsonValue;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::fmt::Display;
 use thiserror::Error;
 
 /// Represents an "Entity topic identifier" portion of the MQTT topic
@@ -473,6 +476,16 @@ pub enum EntityType {
     Service,
 }
 
+impl Display for EntityType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EntityType::MainDevice => write!(f, "device"),
+            EntityType::ChildDevice => write!(f, "child-device"),
+            EntityType::Service => write!(f, "service"),
+        }
+    }
+}
+
 impl EntityMetadata {
     /// Creates a entity metadata for the main device.
     pub fn main_device(device_id: String) -> Self {
@@ -550,6 +563,12 @@ impl EntityRegistrationMessage {
     // Serialize/Deserialize.
     #[must_use]
     pub fn new(message: &Message) -> Option<Self> {
+        let topic_id = message
+            .topic
+            .name
+            .strip_prefix(MQTT_ROOT)
+            .and_then(|s| s.strip_prefix('/'))?;
+
         let payload = parse_entity_register_payload(message.payload_bytes())?;
 
         let JsonValue::Object(mut properties) = payload else {
@@ -596,12 +615,6 @@ impl EntityRegistrationMessage {
             None
         };
 
-        let topic_id = message
-            .topic
-            .name
-            .strip_prefix(MQTT_ROOT)
-            .and_then(|s| s.strip_prefix('/'))?;
-
         let other = JsonValue::Object(properties);
 
         assert_eq!(other.get("@id"), None);
@@ -626,6 +639,28 @@ impl EntityRegistrationMessage {
             parent: None,
             other: serde_json::json!({}),
         }
+    }
+
+    // TODO: manual serialize impl
+    pub fn to_mqtt_message(mut self, mqtt_schema: &MqttSchema) -> Message {
+        let mut props = serde_json::Map::new();
+
+        props.insert("@type".to_string(), self.r#type.to_string().into());
+
+        if let Some(external_id) = self.external_id {
+            props.insert("@id".to_string(), external_id.as_ref().to_string().into());
+        }
+
+        if let Some(parent) = self.parent {
+            props.insert("@parent".to_string(), parent.to_string().into());
+        }
+
+        props.append(self.other.as_object_mut().unwrap());
+
+        let message = serde_json::to_string(&props).unwrap();
+
+        let message_topic = mqtt_schema.topic_for(&self.topic_id, &Channel::EntityMetadata);
+        Message::new(&message_topic, message).with_retain()
     }
 }
 

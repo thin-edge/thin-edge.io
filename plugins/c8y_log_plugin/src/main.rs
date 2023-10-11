@@ -1,3 +1,4 @@
+use anyhow::Context;
 use anyhow::Result;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
@@ -7,6 +8,10 @@ use clap::Parser;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::Runtime;
+use tedge_api::mqtt_topics::DeviceTopicId;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::Service;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::CertificateError;
@@ -27,7 +32,7 @@ const AFTER_HELP_TEXT: &str = r#"On start, `c8y-log-plugin` notifies the cloud t
 The thin-edge `CONFIG_DIR` is used to store:
   * c8y-log-plugin.toml - the configuration file that specifies which logs to be retrieved"#;
 
-const C8Y_LOG_PLUGIN: &str = "c8y-log-plugin";
+const PLUGIN_NAME: &str = "c8y-log-plugin";
 
 #[derive(Debug, clap::Parser, Clone)]
 #[clap(
@@ -91,12 +96,38 @@ async fn run(config_dir: impl AsRef<Path>, tedge_config: TEdgeConfig) -> Result<
     let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
     let base_mqtt_config = mqtt_config(&tedge_config)?;
-    let mqtt_config = base_mqtt_config.clone().with_session_name(C8Y_LOG_PLUGIN);
+    let mqtt_config = base_mqtt_config.clone().with_session_name(PLUGIN_NAME);
 
     let c8y_http_config = (&tedge_config).try_into()?;
 
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config);
-    let health_actor = HealthMonitorBuilder::new(C8Y_LOG_PLUGIN, &mut mqtt_actor);
+
+    // TODO: take a user-configurable service topic id
+    let mqtt_device_topic_id = &tedge_config
+        .mqtt
+        .device_topic_id
+        .parse::<EntityTopicId>()
+        .unwrap();
+
+    let service_topic_id = mqtt_device_topic_id
+        .to_default_service_topic_id(PLUGIN_NAME)
+        .with_context(|| {
+            format!(
+                "Device topic id {mqtt_device_topic_id} currently needs default scheme, e.g: 'device/DEVICE_NAME//'",
+            )
+        })?;
+    let service = Service {
+        service_topic_id,
+        device_topic_id: DeviceTopicId::new(mqtt_device_topic_id.clone()),
+    };
+    let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.to_string());
+    let health_actor = HealthMonitorBuilder::from_service_topic_id(
+        service,
+        &mut mqtt_actor,
+        &mqtt_schema,
+        tedge_config.service.ty.clone(),
+    );
+
     let mut jwt_actor = C8YJwtRetriever::builder(base_mqtt_config);
     let mut http_actor = HttpActor::new().builder();
     let mut c8y_http_proxy_actor =

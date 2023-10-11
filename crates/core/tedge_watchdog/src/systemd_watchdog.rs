@@ -18,6 +18,9 @@ use std::time::Instant;
 use tedge_api::health::health_status_down_message;
 use tedge_api::health::health_status_up_message;
 use tedge_api::health::send_health_status;
+use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::TEdgeConfigLocation;
 use time::format_description;
 use time::OffsetDateTime;
@@ -26,6 +29,7 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
+// TODO: extract to common module
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HealthStatus {
     status: String,
@@ -71,6 +75,24 @@ async fn start_watchdog_for_self() -> Result<(), WatchdogError> {
 }
 
 async fn start_watchdog_for_tedge_services(tedge_config_dir: PathBuf) {
+    // let tedge_config_location = tedge_config::TEdgeConfigLocation::from_custom_root(&config_dir);
+    let tedge_config_location =
+        tedge_config::TEdgeConfigLocation::from_custom_root(tedge_config_dir.clone());
+    let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone());
+    let tedge_config = config_repository.load().expect("Could not load config");
+
+    let mqtt_topic_root = tedge_config.mqtt.topic_root.clone();
+    let mqtt_schema = MqttSchema::with_root(mqtt_topic_root);
+
+    // TODO: now that we have entity registration, instead of hardcoding, the watchdog can see all
+    // running services by looking at registration messages
+    let device_topic_id = tedge_config
+        .mqtt
+        .device_topic_id
+        .parse::<EntityTopicId>()
+        .expect("Services not in default scheme unsupported");
+
+    // let device_topic_id = tedge_config_dir
     let tedge_services = vec![
         "tedge-mapper-c8y",
         "tedge-mapper-az",
@@ -80,24 +102,31 @@ async fn start_watchdog_for_tedge_services(tedge_config_dir: PathBuf) {
         "tedge-log-plugin",
         "c8y-configuration-plugin",
         "c8y-firmware-plugin",
-    ];
+    ]
+    .into_iter()
+    .map(|s| {
+        device_topic_id
+            .default_service_for_device(s)
+            .expect("Services not in default scheme unsupported")
+    })
+    .collect::<Vec<_>>();
 
     let watchdog_tasks = FuturesUnordered::new();
 
     for service in tedge_services {
-        match get_watchdog_sec(&format!("/lib/systemd/system/{service}.service")) {
+        let service_name = service.default_service_name().unwrap();
+        match get_watchdog_sec(&format!("/lib/systemd/system/{service_name}.service")) {
             Ok(interval) => {
-                let req_topic = format!("tedge/health-check/{service}");
-                let res_topic = format!("tedge/health/{service}");
-                let tedge_config_location =
-                    tedge_config::TEdgeConfigLocation::from_custom_root(tedge_config_dir.clone());
+                let req_topic = format!("tedge/health-check/{service_name}");
+                let res_topic = mqtt_schema.topic_for(&service, &Channel::Health);
 
+                let tedge_config_location = tedge_config_location.clone();
                 watchdog_tasks.push(tokio::spawn(async move {
                     monitor_tedge_service(
                         tedge_config_location,
-                        service,
+                        service.as_str(),
                         &req_topic,
-                        &res_topic,
+                        res_topic,
                         interval / 4,
                     )
                     .await
@@ -117,7 +146,7 @@ async fn monitor_tedge_service(
     tedge_config_location: TEdgeConfigLocation,
     name: &str,
     req_topic: &str,
-    res_topic: &str,
+    res_topic: Topic,
     interval: u64,
 ) -> Result<(), WatchdogError> {
     let client_id: &str = &format!("{}_{}", name, nanoid!());
@@ -126,7 +155,7 @@ async fn monitor_tedge_service(
     let mqtt_config = tedge_config
         .mqtt_config()?
         .with_session_name(client_id)
-        .with_subscriptions(res_topic.try_into()?)
+        .with_subscriptions(res_topic.into())
         .with_initial_message(|| health_status_up_message("tedge-watchdog"))
         .with_last_will_message(health_status_down_message("tedge-watchdog"));
     let client = mqtt_channel::Connection::new(&mqtt_config).await?;

@@ -30,8 +30,12 @@ pub async fn start_basic_actors(
         device_topic_id: DeviceTopicId::new("device/main//".parse::<EntityTopicId>().unwrap()),
     };
     let mqtt_schema = MqttSchema::with_root(config.mqtt.topic_root.clone());
-    let health_actor =
-        HealthMonitorBuilder::from_service_topic_id(service, &mut mqtt_actor, &mqtt_schema);
+    let health_actor = HealthMonitorBuilder::from_service_topic_id(
+        service,
+        &mut mqtt_actor,
+        &mqtt_schema,
+        config.service.ty.clone(),
+    );
 
     // Shutdown on SIGINT
     let signal_actor = SignalActor::builder(&runtime.get_handle());

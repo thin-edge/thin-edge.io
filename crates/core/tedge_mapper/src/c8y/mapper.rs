@@ -1,13 +1,17 @@
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
+use anyhow::Context;
 use async_trait::async_trait;
 use c8y_auth_proxy::actor::C8yAuthProxyBuilder;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use c8y_mapper_ext::actor::C8yMapperBuilder;
 use c8y_mapper_ext::config::C8yMapperConfig;
+use c8y_mapper_ext::converter::CumulocityConverter;
 use mqtt_channel::Config;
 use std::path::Path;
+use tedge_api::entity_store::EntityExternalId;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
@@ -76,17 +80,30 @@ impl TEdgeComponent for CumulocityMapper {
 }
 
 pub fn service_monitor_client_config(tedge_config: &TEdgeConfig) -> Result<Config, anyhow::Error> {
-    let device_name = tedge_config.device.id.try_read(tedge_config)?.to_string();
+    let main_device_xid: EntityExternalId = tedge_config.device.id.try_read(tedge_config)?.into();
     let service_type = tedge_config.service.ty.clone();
 
-    // from this level we don't have access to the entity store and registered main device so best
-    // we can do for now is just guess it
-    // TODO: fix this, preferably use a HealthMonitorActor
-    let service_external_id = format!("{device_name}:device:main:service:tedge-mapper-c8y");
+    // FIXME: this will not work if `mqtt.device_topic_id` is not in default scheme
+
+    // there is one mapper instance per cloud per thin-edge instance, perhaps we should use some
+    // predefined topic id instead of trying to derive it from current device?
+    let entity_topic_id: EntityTopicId = tedge_config
+        .mqtt
+        .device_topic_id
+        .clone()
+        .parse()
+        .context("Invalid device_topic_id")?;
+
+    let mapper_service_topic_id = entity_topic_id
+        .default_service_for_device(CUMULOCITY_MAPPER_NAME)
+        .context("Can't derive service name if device topic id not in default scheme")?;
+
+    let mapper_service_external_id =
+        CumulocityConverter::map_to_c8y_external_id(&mapper_service_topic_id, &main_device_xid);
 
     let last_will_message = c8y_api::smartrest::inventory::service_creation_message(
-        service_external_id.as_str(),
-        "tedge-mapper-c8y",
+        mapper_service_external_id.as_ref(),
+        CUMULOCITY_MAPPER_NAME,
         service_type.as_str(),
         "down",
         &[],
