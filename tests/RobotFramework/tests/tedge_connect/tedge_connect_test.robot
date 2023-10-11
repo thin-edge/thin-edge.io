@@ -16,6 +16,13 @@ tedge_connect_test_positive
     ${output}=    Execute Command    sudo tedge connect c8y --test
     Should Contain    ${output}    Connection check to c8y cloud is successful.
 
+Non-root users should be able to read the mosquitto configuration files #2154
+    [Tags]    \#2154
+    Execute Command    sudo tedge connect c8y || true
+    Should Have File Permissions    /etc/tedge/mosquitto-conf/tedge-mosquitto.conf    644 root:root
+    Should Have File Permissions    /etc/tedge/mosquitto-conf/c8y-bridge.conf    644 root:root
+
+
 tedge_connect_test_negative
     Execute Command    sudo tedge disconnect c8y
     ${output}=    Execute Command    sudo tedge connect c8y --test    exp_exit_code=1    stdout=${False}    stderr=${True}
@@ -32,3 +39,10 @@ tedge_disconnect_test_sm_services
     Should Contain    ${output}    Cumulocity Bridge successfully disconnected!
     Should Contain    ${output}    tedge-agent service successfully stopped and disabled!
     Should Contain    ${output}    tedge-mapper-c8y service successfully stopped and disabled!
+
+*** Keywords ***
+
+Should Have File Permissions
+    [Arguments]    ${file}    ${expected_permissions}
+    ${FILE_MODE_OWNERSHIP}=    Execute Command    stat -c '%a %U:%G' ${file}    strip=${True}
+    Should Be Equal    ${FILE_MODE_OWNERSHIP}    ${expected_permissions}    msg=Unexpected file permissions/ownership of ${file}
