@@ -5,7 +5,7 @@
 #
 # Device management
 enable tedge-log-plugin.service
-enable c8y-configuration-plugin.service
+enable tedge-configuration-plugin.service
 enable c8y-firmware-plugin.service
 
 # Agent

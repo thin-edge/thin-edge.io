@@ -27,7 +27,7 @@ ${CHILD_SN}
 
 ${topic_snap}       /commands/res/config_snapshot"
 ${topic_upd}        /commands/res/config_update"
-${payl_notify}      '{"status": null,    "path": "", "type":"c8y-configuration-plugin", "reason": null}'
+${payl_notify}      '{"status": null,    "path": "", "type":"tedge-configuration-plugin", "reason": null}'
 ${payl_exec}        '{"status": "executing", "path": "/home/pi/config1", "type": "config1", "reason": null}'
 ${payl_succ}        '{"status": "successful", "path": "/home/pi/config1", "type": "config1", "reason": null}'
 
@@ -49,7 +49,7 @@ Prerequisite Parent
 
     Sleep    3s
     Execute Command    sudo tedge connect c8y
-    Restart Configuration plugin    #Stop and Start c8y-configuration-plugin
+    Restart Configuration plugin    #Stop and Start tedge-configuration-plugin
     Cumulocity.Log Device Info
 
 Prerequisite Child
@@ -87,7 +87,7 @@ Check for child related content
 
 Delete child related content
     Execute Command    sudo rm -rf /etc/tedge/operations/c8y/TST*    #if folder exists, child device will be created
-    Execute Command    sudo rm -f c8y-configuration-plugin.toml
+    Execute Command    sudo rm -f tedge-configuration-plugin.toml
     Execute Command    sudo rm -rf /etc/tedge/c8y/TST*    #if folder exists, child device will be created
     Execute Command    sudo rm -rf /var/tedge/*
 
@@ -100,14 +100,14 @@ Reconnect c8y
     Execute Command    sudo tedge connect c8y
 
 Restart Configuration plugin
-    Restart Service    c8y-configuration-plugin.service
-    # Execute Command    sudo systemctl stop c8y-configuration-plugin.service
-    # Execute Command    sudo systemctl start c8y-configuration-plugin.service
+    Restart Service    tedge-configuration-plugin.service
+    # Execute Command    sudo systemctl stop tedge-configuration-plugin.service
+    # Execute Command    sudo systemctl start tedge-configuration-plugin.service
 
 Child device delete configuration files
     Set Device Context    ${CHILD_SN}
     Execute Command    sudo rm -f config1
-    Execute Command    sudo rm -f c8y-configuration-plugin
+    Execute Command    sudo rm -f tedge-configuration-plugin
 
 Validate child Name
     Device Should Exist    ${CHILD_SN}
@@ -117,10 +117,10 @@ Validate child Name
 Startup child device
     Sleep    5s    reason=The registration of child devices is flakey
     Set Device Context    ${CHILD_SN}
-    Execute Command    printf ${config} > c8y-configuration-plugin
+    Execute Command    printf ${config} > tedge-configuration-plugin
 
     Execute Command
-    ...    curl -X PUT http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/c8y-configuration-plugin --data-binary "${CHILD_CONFIG}"
+    ...    curl -X PUT http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/tedge-configuration-plugin --data-binary "${CHILD_CONFIG}"
 
     Sleep    5s    reason=The registration of child devices is flakey
 

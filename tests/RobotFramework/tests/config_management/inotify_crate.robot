@@ -24,14 +24,14 @@ ${toml}    SEPARATOR=\n
 Configuration types should be detected on file change (without restarting service)
     ${DEVICE_SN}=    Setup    skip_bootstrap=True
     Execute Command    /setup/bootstrap.sh 2>&1
-    Execute Command    sudo systemctl restart c8y-configuration-plugin.service
+    Execute Command    sudo systemctl restart tedge-configuration-plugin.service
     Device Should Exist    ${DEVICE_SN}
 
-    ${supported_configs}=    Should Support Configurations    c8y-configuration-plugin    includes=True
+    ${supported_configs}=    Should Support Configurations    tedge-configuration-plugin    includes=True
     Should Not Contain    ${supported_configs}    example
     
-    Execute Command    sudo rm -f /etc/tedge/c8y/c8y-configuration-plugin.toml
-    Execute Command    sudo printf '%s' "${toml}" > c8y-configuration-plugin.toml
-    Execute Command    sudo mv c8y-configuration-plugin.toml /etc/tedge/c8y/
+    Execute Command    sudo rm -f /etc/tedge/plugins/tedge-configuration-plugin.toml
+    Execute Command    sudo printf '%s' "${toml}" > tedge-configuration-plugin.toml
+    Execute Command    sudo mv tedge-configuration-plugin.toml /etc/tedge/plugins/
 
-    ${supported_configs}=    Should Support Configurations    c8y-bridge.conf    c8y-configuration-plugin    mosquitto.conf    tedge-mosquitto.conf    tedge.toml    example
+    ${supported_configs}=    Should Support Configurations    c8y-bridge.conf    tedge-configuration-plugin    mosquitto.conf    tedge-mosquitto.conf    tedge.toml    example
