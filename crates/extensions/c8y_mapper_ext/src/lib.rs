@@ -15,7 +15,7 @@ mod tests;
 
 #[derive(Debug, serde::Deserialize)]
 pub struct Capabilities {
-    log_management: bool,
+    log_upload: bool,
     config_snapshot: bool,
     config_update: bool,
 }
@@ -23,7 +23,7 @@ pub struct Capabilities {
 impl Default for Capabilities {
     fn default() -> Self {
         Capabilities {
-            log_management: true,
+            log_upload: true,
             config_snapshot: true,
             config_update: true,
         }

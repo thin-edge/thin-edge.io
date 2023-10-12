@@ -553,14 +553,15 @@ Where the command segments are describe as follows:
 
 The following table details some example command types which are supported by thin-edge.
 
-|Command Type|Example Topic|
-|------|---|
-|software_list|`te/<identifier>/cmd/software_list/<cmd_id>`|
-|software_update|`te/<identifier>/cmd/software_update/<cmd_id>`|
-|config_snapshot|`te/<identifier>/cmd/config_snapshot/<cmd_id>`|
-|config_update|`te/<identifier>/cmd/config_update/<cmd_id>`|
-|firmware_update|`te/<identifier>/cmd/firmware_update/<cmd_id>`|
-|restart|`te/<identifier>/cmd/restart/<cmd_id>`|
+| Command Type    | Example Topic                                  |
+|-----------------|------------------------------------------------|
+| software_list   | `te/<identifier>/cmd/software_list/<cmd_id>`   |
+| software_update | `te/<identifier>/cmd/software_update/<cmd_id>` |
+| config_snapshot | `te/<identifier>/cmd/config_snapshot/<cmd_id>` |
+| config_update   | `te/<identifier>/cmd/config_update/<cmd_id>`   |
+| firmware_update | `te/<identifier>/cmd/firmware_update/<cmd_id>` |
+| restart         | `te/<identifier>/cmd/restart/<cmd_id>`         |
+| log_upload      | `te/<identifier>/cmd/log_upload/<cmd_id>`      |
 
 The command would be interpreted differently based on the target entity.
 For example, the `restart` could mean either a device restart or a service restart based on the target entity.

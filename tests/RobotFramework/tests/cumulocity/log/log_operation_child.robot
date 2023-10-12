@@ -49,7 +49,7 @@ Custom Setup
 
     ${parent_ip}=    Get IP Address
     Set Suite Variable    $PARENT_IP    ${parent_ip}
-    Execute Command    sudo tedge config set c8y.enable.log_management true
+    Execute Command    sudo tedge config set c8y.enable.log_upload true
     Execute Command    sudo tedge config set mqtt.external.bind.address ${PARENT_IP}
     Execute Command    sudo tedge config set mqtt.external.bind.port 1883
 

@@ -27,6 +27,7 @@ use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
+use tracing::log::warn;
 
 pub fn log_upload_topic_filter(mqtt_schema: &MqttSchema) -> TopicFilter {
     [
@@ -43,8 +44,10 @@ impl CumulocityConverter {
         &self,
         smartrest: &str,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
-        if !self.config.capabilities.log_management {
-            // Log_management is disabled
+        if !self.config.capabilities.log_upload {
+            warn!(
+                "Received a c8y_LogfileRequest operation, however, log_upload feature is disabled"
+            );
             return Ok(vec![]);
         }
 
@@ -93,8 +96,8 @@ impl CumulocityConverter {
         cmd_id: &str,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        if !self.config.capabilities.log_management {
-            // Log_management is disabled
+        if !self.config.capabilities.log_upload {
+            warn!("Received a log_upload command, however, log_upload feature is disabled");
             return Ok(vec![]);
         }
 
@@ -175,8 +178,8 @@ impl CumulocityConverter {
         topic_id: &EntityTopicId,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        if !self.config.capabilities.log_management {
-            // Log_management is disabled
+        if !self.config.capabilities.log_upload {
+            warn!("Received log_upload metadata, however, log_upload feature is disabled");
             return Ok(vec![]);
         }
 
