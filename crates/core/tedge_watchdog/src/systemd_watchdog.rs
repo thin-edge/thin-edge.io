@@ -102,7 +102,7 @@ async fn start_watchdog_for_tedge_services(tedge_config_dir: PathBuf) {
         "tedge-mapper-collectd",
         "tedge-agent",
         "tedge-log-plugin",
-        "c8y-configuration-plugin",
+        "tedge-configuration-plugin",
         "c8y-firmware-plugin",
     ]
     .into_iter()
