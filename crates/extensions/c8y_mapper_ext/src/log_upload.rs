@@ -126,7 +126,8 @@ impl CumulocityConverter {
             CommandStatus::Successful => {
                 let uploaded_file_path = self
                     .config
-                    .file_transfer_dir
+                    .data_dir
+                    .file_transfer_dir()
                     .join(device.external_id.as_ref())
                     .join("log_upload")
                     .join(format!("{}-{}", response.log_type, cmd_id));

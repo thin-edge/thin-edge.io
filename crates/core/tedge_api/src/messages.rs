@@ -660,6 +660,14 @@ impl LogUploadCmdPayload {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigMetadata {
+    pub types: Vec<String>,
+}
+
+impl<'a> Jsonify<'a> for ConfigMetadata {}
+
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigSnapshotCmdPayload {

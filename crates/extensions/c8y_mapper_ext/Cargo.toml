@@ -22,9 +22,11 @@ nanoid = { workspace = true }
 plugin_sm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha256 = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }
+tedge_downloader_ext = { workspace = true }
 tedge_file_system_ext = { workspace = true }
 tedge_http_ext = { workspace = true }
 tedge_mqtt_ext = { workspace = true }

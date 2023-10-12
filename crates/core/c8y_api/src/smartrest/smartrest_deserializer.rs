@@ -228,8 +228,14 @@ pub trait SmartRestRequestGeneric {
     }
 }
 
-pub enum SmartRestVariant {
-    SmartRestLogRequest,
+#[derive(Debug)]
+pub enum SmartRestOperationVariant {
+    Restart(SmartRestRestartRequest),
+    SoftwareUpdate(SmartRestUpdateSoftware),
+    LogfileRequest(SmartRestLogRequest),
+    UploadConfigFile(SmartRestConfigUploadRequest),
+    DownloadConfigFile(SmartRestConfigDownloadRequest),
+    Firmware(SmartRestFirmwareRequest),
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]

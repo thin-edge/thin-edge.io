@@ -29,7 +29,6 @@ pub struct C8yMapperConfig {
     pub device_type: String,
     pub service_type: String,
     pub ops_dir: PathBuf,
-    pub file_transfer_dir: Utf8PathBuf,
     pub c8y_host: String,
     pub tedge_http_host: String,
     pub topics: TopicFilter,
@@ -55,7 +54,6 @@ impl C8yMapperConfig {
         auth_proxy_port: u16,
     ) -> Self {
         let ops_dir = config_dir.join("operations").join("c8y");
-        let file_transfer_dir = data_dir.file_transfer_dir();
 
         Self {
             config_dir,
@@ -65,7 +63,6 @@ impl C8yMapperConfig {
             device_type,
             service_type,
             ops_dir,
-            file_transfer_dir,
             c8y_host,
             tedge_http_host,
             topics,
@@ -97,6 +94,8 @@ impl C8yMapperConfig {
 
         let capabilities = Capabilities {
             log_management: tedge_config.c8y.enable.log_management,
+            config_snapshot: tedge_config.c8y.enable.config_snapshot,
+            config_update: tedge_config.c8y.enable.config_update,
         };
 
         let mut topics = Self::default_internal_topic_filter(&config_dir)?;
@@ -106,6 +105,16 @@ impl C8yMapperConfig {
         topics.add_all(mqtt_schema.topics(AnyEntity, CommandMetadata(OperationType::Restart)));
         if capabilities.log_management {
             topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
+        }
+        if capabilities.config_snapshot {
+            topics.add_all(crate::config_operations::config_snapshot_topic_filter(
+                &mqtt_schema,
+            ));
+        }
+        if capabilities.config_update {
+            topics.add_all(crate::config_operations::config_update_topic_filter(
+                &mqtt_schema,
+            ));
         }
 
         // Add user configurable external topic filters
