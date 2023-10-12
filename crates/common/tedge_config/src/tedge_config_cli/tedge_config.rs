@@ -378,11 +378,11 @@ define_tedge_config! {
             log_upload: bool,
 
             /// Enable config_snapshot feature
-            #[tedge_config(example = "true", default(value = false))]
+            #[tedge_config(example = "true", default(value = true))]
             config_snapshot: bool,
 
             /// Enable config_update feature
-            #[tedge_config(example = "true", default(value = false))]
+            #[tedge_config(example = "true", default(value = true))]
             config_update: bool,
         },
 
