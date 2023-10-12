@@ -164,7 +164,8 @@ impl EntityStore {
         self.entities.get(entity_topic_id)
     }
 
-    /// Tries to get information about an entity under a given MQTT entity topic identifier.
+    /// Tries to get information about an entity using its `EntityTopicId`,
+    /// returning an error if the entity is not registered.
     pub fn try_get(&self, entity_topic_id: &EntityTopicId) -> Result<&EntityMetadata, Error> {
         self.get(entity_topic_id)
             .ok_or_else(|| Error::UnknownEntity(entity_topic_id.to_string()))
@@ -176,7 +177,8 @@ impl EntityStore {
         self.get(topic_id)
     }
 
-    /// Tries to get information for an entity under a given device/service id.
+    /// Tries to get information about an entity using its `EntityExternalId`,
+    /// returning an error if the entity is not registered.
     pub fn try_get_by_external_id(
         &self,
         external_id: &EntityExternalId,

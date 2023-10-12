@@ -1,7 +1,6 @@
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
-use crate::error::CumulocityMapperError::UnknownDevice;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
@@ -77,10 +76,7 @@ impl CumulocityConverter {
         let snapshot_request = SmartRestConfigUploadRequest::from_smartrest(smartrest)?;
         let target = self
             .entity_store
-            .get_by_external_id(&snapshot_request.device.clone().into())
-            .ok_or_else(|| UnknownDevice {
-                device_id: snapshot_request.device.to_string(),
-            })?;
+            .try_get_by_external_id(&snapshot_request.device.clone().into())?;
 
         let cmd_id = nanoid!();
         let channel = Channel::Command {
@@ -88,13 +84,12 @@ impl CumulocityConverter {
             cmd_id: cmd_id.clone(),
         };
         let topic = self.mqtt_schema.topic_for(&target.topic_id, &channel);
-        let external_id: String = target.external_id.clone().into();
 
         // Replace '/' with ':' to avoid creating unexpected directories in file transfer repo
         let tedge_url = format!(
             "http://{}/tedge/file-transfer/{}/config_snapshot/{}-{}",
             &self.config.tedge_http_host,
-            external_id,
+            target.external_id.as_ref(),
             snapshot_request.config_type.replace('/', ":"),
             cmd_id
         );
@@ -127,13 +122,7 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        // get the device metadata from its id
-        let device = self.entity_store.get(topic_id).ok_or_else(|| {
-            CumulocityMapperError::UnregisteredDevice {
-                topic_id: topic_id.to_string(),
-            }
-        })?;
-        let external_id = &device.external_id;
+        let external_id = self.entity_store.try_get(topic_id)?.external_id.as_ref();
         let smartrest_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
         let payload = message.payload_str()?;
         let response = &ConfigSnapshotCmdPayload::from_json(payload)?;
@@ -151,7 +140,7 @@ impl CumulocityConverter {
                     .config
                     .data_dir
                     .file_transfer_dir()
-                    .join(device.external_id.as_ref())
+                    .join(external_id)
                     .join("config_snapshot")
                     .join(format!(
                         "{}-{}",
@@ -164,7 +153,7 @@ impl CumulocityConverter {
                     .upload_file(
                         uploaded_file_path.as_std_path(),
                         &response.config_type,
-                        external_id.as_ref().to_string(),
+                        external_id.to_string(),
                     )
                     .await; // We need to get rid of this await, otherwise it blocks
 
@@ -239,12 +228,9 @@ impl CumulocityConverter {
         }
 
         let smartrest = SmartRestConfigDownloadRequest::from_smartrest(smartrest)?;
-        let entity = self
+        let target = self
             .entity_store
-            .get_by_external_id(&smartrest.device.clone().into())
-            .ok_or_else(|| UnknownDevice {
-                device_id: smartrest.device.clone(),
-            })?;
+            .try_get_by_external_id(&smartrest.device.clone().into())?;
 
         let cmd_id = nanoid!();
         let remote_url = smartrest.url.as_str();
@@ -255,13 +241,13 @@ impl CumulocityConverter {
             // No download. Create a symlink and config_update command.
             info!("Hit the file cache={file_cache_path}. Create a symlink to the file");
             self.create_symlink_for_config_update(
-                entity,
+                target,
                 &smartrest.config_type,
                 &cmd_id,
                 file_cache_path,
             )?;
 
-            let message = self.create_config_update_cmd(cmd_id.into(), &smartrest, entity);
+            let message = self.create_config_update_cmd(cmd_id.into(), &smartrest, target);
             Ok(message)
         } else {
             // Require file download
@@ -300,26 +286,23 @@ impl CumulocityConverter {
         smartrest: &SmartRestConfigDownloadRequest,
         download_result: DownloadResult,
     ) -> Result<Vec<Message>, ConversionError> {
-        let device = self
+        let target = self
             .entity_store
-            .get_by_external_id(&smartrest.device.clone().into())
-            .ok_or_else(|| UnknownDevice {
-                device_id: smartrest.device.to_string(),
-            })?;
+            .try_get_by_external_id(&smartrest.device.clone().into())?;
 
         match download_result {
             Ok(download_response) => {
                 self.create_symlink_for_config_update(
-                    device,
+                    target,
                     &smartrest.config_type,
                     &cmd_id,
                     download_response.file_path,
                 )?;
-                let message = self.create_config_update_cmd(cmd_id, smartrest, device);
+                let message = self.create_config_update_cmd(cmd_id, smartrest, target);
                 Ok(message)
             }
             Err(download_err) => {
-                let sm_topic = self.smartrest_publish_topic_for_entity(&device.topic_id)?;
+                let sm_topic = self.smartrest_publish_topic_for_entity(&target.topic_id)?;
                 let smartrest_executing = SmartRestSetOperationToExecuting::new(
                     CumulocitySupportedOperations::C8yDownloadConfigFile,
                 )
@@ -357,11 +340,7 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        let device = self.entity_store.get(topic_id).ok_or_else(|| {
-            CumulocityMapperError::UnregisteredDevice {
-                topic_id: topic_id.to_string(),
-            }
-        })?;
+        let target = self.entity_store.try_get(topic_id)?;
         let sm_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
         let payload = message.payload_str()?;
         let response = &ConfigUpdateCmdPayload::from_json(payload)?;
@@ -384,7 +363,7 @@ impl CumulocityConverter {
                     .with_retain()
                     .with_qos(QoS::AtLeastOnce);
 
-                self.delete_symlink_for_config_update(device, &response.config_type, cmd_id)?;
+                self.delete_symlink_for_config_update(target, &response.config_type, cmd_id)?;
 
                 vec![c8y_notification, clear_local_cmd]
             }
@@ -399,7 +378,7 @@ impl CumulocityConverter {
                     .with_retain()
                     .with_qos(QoS::AtLeastOnce);
 
-                self.delete_symlink_for_config_update(device, &response.config_type, cmd_id)?;
+                self.delete_symlink_for_config_update(target, &response.config_type, cmd_id)?;
 
                 vec![c8y_notification, clear_local_cmd]
             }
@@ -435,20 +414,16 @@ impl CumulocityConverter {
         let metadata = ConfigMetadata::from_json(message.payload_str()?)?;
 
         // get the device metadata from its id
-        let device = self.entity_store.get(topic_id).ok_or_else(|| {
-            CumulocityMapperError::UnregisteredDevice {
-                topic_id: topic_id.to_string(),
-            }
-        })?;
+        let target = self.entity_store.try_get(topic_id)?;
 
         // Create a c8y operation file
-        let dir_path = match device.r#type {
+        let dir_path = match target.r#type {
             EntityType::MainDevice => self.ops_dir.clone(),
             EntityType::ChildDevice => {
-                match &device.parent {
+                match &target.parent {
                     Some(parent) if parent.is_default_main_device() => {
                         // Support only first level child devices due to the limitation of our file system supported operations scheme.
-                        self.ops_dir.join(device.external_id.as_ref())
+                        self.ops_dir.join(target.external_id.as_ref())
                     }
                     _ => {
                         warn!("config_snapshot and config_update features for nested child devices are currently unsupported");
@@ -510,7 +485,7 @@ impl CumulocityConverter {
 
     fn create_symlink_for_config_update(
         &self,
-        entity: &EntityMetadata,
+        target: &EntityMetadata,
         config_type: &str,
         cmd_id: &str,
         original: impl AsRef<Path>,
@@ -519,7 +494,7 @@ impl CumulocityConverter {
             .config
             .data_dir
             .file_transfer_dir()
-            .join(entity.external_id.as_ref())
+            .join(target.external_id.as_ref())
             .join("config_update");
         let symlink_path =
             symlink_dir_path.join(format!("{}-{cmd_id}", config_type.replace('/', ":")));
@@ -534,7 +509,7 @@ impl CumulocityConverter {
 
     fn delete_symlink_for_config_update(
         &self,
-        entity: &EntityMetadata,
+        target: &EntityMetadata,
         config_type: &str,
         cmd_id: &str,
     ) -> Result<(), io::Error> {
@@ -542,7 +517,7 @@ impl CumulocityConverter {
             .config
             .data_dir
             .file_transfer_dir()
-            .join(entity.external_id.as_ref())
+            .join(target.external_id.as_ref())
             .join("config_update");
         let symlink_path =
             symlink_dir_path.join(format!("{}-{cmd_id}", config_type.replace('/', ":")));

@@ -310,11 +310,7 @@ impl CumulocityConverter {
         &self,
         entity_topic_id: &EntityTopicId,
     ) -> Result<Topic, ConversionError> {
-        let entity = self.entity_store.get(entity_topic_id).ok_or_else(|| {
-            CumulocityMapperError::UnregisteredDevice {
-                topic_id: entity_topic_id.to_string(),
-            }
-        })?;
+        let entity = self.entity_store.try_get(entity_topic_id)?;
 
         let mut ancestors_external_ids =
             self.entity_store.ancestors_external_ids(entity_topic_id)?;
@@ -633,12 +629,7 @@ impl CumulocityConverter {
     ) -> Result<Vec<Message>, CumulocityMapperError> {
         let request = SmartRestRestartRequest::from_smartrest(smartrest)?;
         let device_id = &request.device.into();
-        let target = self
-            .entity_store
-            .get_by_external_id(device_id)
-            .ok_or_else(|| CumulocityMapperError::UnknownDevice {
-                device_id: device_id.as_ref().to_string(),
-            })?;
+        let target = self.entity_store.try_get_by_external_id(device_id)?;
         let command = RestartCommand::new(target.topic_id.clone());
         let message = command.command_message(&self.mqtt_schema);
         Ok(vec![message])
@@ -1295,9 +1286,7 @@ impl CumulocityConverter {
             .entity_store
             .get(target)
             .and_then(C8yTopic::smartrest_response_topic)
-            .ok_or_else(|| CumulocityMapperError::UnregisteredDevice {
-                topic_id: target.to_string(),
-            })?;
+            .ok_or_else(|| Error::UnknownEntity(target.to_string()))?;
 
         match command.status() {
             CommandStatus::Executing => {
