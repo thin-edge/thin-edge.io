@@ -4,6 +4,7 @@ use crate::error::CumulocityMapperError;
 use crate::error::CumulocityMapperError::UnknownDevice;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
@@ -237,16 +238,16 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        let smartrest_request = SmartRestConfigDownloadRequest::from_smartrest(smartrest)?;
+        let smartrest = SmartRestConfigDownloadRequest::from_smartrest(smartrest)?;
         let entity = self
             .entity_store
-            .get_by_external_id(&smartrest_request.device.clone().into())
+            .get_by_external_id(&smartrest.device.clone().into())
             .ok_or_else(|| UnknownDevice {
-                device_id: smartrest_request.device.clone(),
+                device_id: smartrest.device.clone(),
             })?;
 
         let cmd_id = nanoid!();
-        let remote_url = smartrest_request.url.as_str();
+        let remote_url = smartrest.url.as_str();
         let file_cache_key = digest(remote_url);
         let file_cache_path = self.config.data_dir.cache_dir().join(file_cache_key);
 
@@ -255,12 +256,12 @@ impl CumulocityConverter {
             info!("Hit the file cache={file_cache_path}. Create a symlink to the file");
             self.create_symlink_for_config_update(
                 entity,
-                &smartrest_request.config_type,
+                &smartrest.config_type,
                 &cmd_id,
                 file_cache_path,
             )?;
 
-            let message = self.create_config_update_cmd(cmd_id.into(), &smartrest_request, entity);
+            let message = self.create_config_update_cmd(cmd_id.into(), &smartrest, entity);
             Ok(message)
         } else {
             // Require file download
@@ -280,8 +281,10 @@ impl CumulocityConverter {
                 .await?;
             info!("Awaiting config download for cmd_id: {cmd_id} from url: {remote_url}");
 
-            self.pending_operations
-                .insert(cmd_id, (OperationType::ConfigUpdate, smartrest.to_string()));
+            self.pending_operations.insert(
+                cmd_id,
+                SmartRestOperationVariant::DownloadConfigFile(smartrest),
+            );
 
             Ok(vec![])
         }

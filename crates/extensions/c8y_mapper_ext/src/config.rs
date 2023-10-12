@@ -107,10 +107,14 @@ impl C8yMapperConfig {
             topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
         }
         if capabilities.config_snapshot {
-            crate::config_operations::config_snapshot_topic_filter(&mqtt_schema);
+            topics.add_all(crate::config_operations::config_snapshot_topic_filter(
+                &mqtt_schema,
+            ));
         }
         if capabilities.config_update {
-            crate::config_operations::config_update_topic_filter(&mqtt_schema);
+            topics.add_all(crate::config_operations::config_update_topic_filter(
+                &mqtt_schema,
+            ));
         }
 
         // Add user configurable external topic filters

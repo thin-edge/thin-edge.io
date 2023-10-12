@@ -2,8 +2,7 @@ use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use async_trait::async_trait;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
-use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
@@ -31,7 +30,6 @@ use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityType;
 use tedge_api::mqtt_topics::EntityTopicId;
-use tedge_api::mqtt_topics::OperationType;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
@@ -223,14 +221,13 @@ impl C8yMapperActor {
     ) -> Result<(), RuntimeError> {
         match self.converter.pending_operations.remove(&cmd_id) {
             None => error!("Received a download result for the unknown command ID: {cmd_id}"),
-            Some((op_type, smartrest)) => {
-                let result = match op_type {
-                    OperationType::ConfigUpdate => {
+            Some(operation) => {
+                let result = match operation {
+                    SmartRestOperationVariant::DownloadConfigFile(smartrest) => {
                         self.converter
                             .process_download_result_for_config_update(
                                 cmd_id.into(),
-                                &SmartRestConfigDownloadRequest::from_smartrest(&smartrest)
-                                    .expect("Must be valid SmartREST"),
+                                &smartrest,
                                 result,
                             )
                             .await

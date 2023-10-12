@@ -27,6 +27,7 @@ use c8y_api::smartrest::operations::get_child_ops;
 use c8y_api::smartrest::operations::get_operations;
 use c8y_api::smartrest::operations::Operations;
 use c8y_api::smartrest::smartrest_deserializer::AvailableChildDevices;
+use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRestartRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestUpdateSoftware;
@@ -166,8 +167,6 @@ impl CumulocityConverter {
     }
 }
 
-pub(crate) type SmartRest = String;
-
 pub struct CumulocityConverter {
     pub(crate) size_threshold: SizeThreshold,
     pub config: C8yMapperConfig,
@@ -188,7 +187,7 @@ pub struct CumulocityConverter {
     pub entity_store: EntityStore,
     pub auth_proxy: ProxyUrlGenerator,
     pub downloader_sender: LoggingSender<IdDownloadRequest>,
-    pub pending_operations: HashMap<CmdId, (OperationType, SmartRest)>,
+    pub pending_operations: HashMap<CmdId, SmartRestOperationVariant>,
 }
 
 impl CumulocityConverter {
