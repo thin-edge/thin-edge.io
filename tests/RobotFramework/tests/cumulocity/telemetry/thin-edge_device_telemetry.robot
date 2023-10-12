@@ -144,12 +144,14 @@ Thin-edge device support sending inventory data via tedge topic
 
 
 Thin-edge device supports sending inventory data via tedge topic to root fragments
-    Execute Command    tedge mqtt pub "te/device/main///twin/subtype" "LinuxDeviceA"
-    Execute Command    tedge mqtt pub "te/device/main///twin/type" "ShouldBeIgnored"
+    Execute Command    tedge mqtt pub "te/device/main///twin/subtype" '"LinuxDeviceA"'
+    Execute Command    tedge mqtt pub "te/device/main///twin/type" '"ShouldBeIgnored"'
+    Execute Command    tedge mqtt pub "te/device/main///twin/name" '"ShouldBeIgnored"'
     Cumulocity.Set Device    ${DEVICE_SN}
     ${mo}=    Device Should Have Fragments    subtype
     Should Be Equal    ${mo["subtype"]}    LinuxDeviceA
     Should Be Equal    ${mo["type"]}    thin-edge.io
+    Should Be Equal    ${mo["name"]}    ${DEVICE_SN}
 
 *** Keywords ***
 

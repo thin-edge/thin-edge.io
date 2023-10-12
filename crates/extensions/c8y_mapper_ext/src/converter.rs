@@ -102,7 +102,7 @@ use tracing::trace;
 const C8Y_CLOUD: &str = "c8y";
 const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
 const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
-const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "c8y/inventory/managedObjects/update";
+pub const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "c8y/inventory/managedObjects/update";
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "c8y/event/events/create";
 const TEDGE_AGENT_LOG_DIR: &str = "tedge/agent";
@@ -893,6 +893,10 @@ impl CumulocityConverter {
         }
 
         let mut messages = match &channel {
+            Channel::EntityTwinData { fragment_key } => {
+                self.try_convert_entity_twin_data(&source, message, fragment_key)?
+            }
+
             Channel::Measurement { measurement_type } => {
                 self.try_convert_measurement(&source, message, measurement_type)?
             }
@@ -1451,7 +1455,7 @@ pub struct HealthStatus {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::CumulocityConverter;
     use crate::actor::IdDownloadRequest;
     use crate::actor::IdDownloadResult;
@@ -2458,7 +2462,7 @@ mod tests {
         assert!(!second_registration_message_mapped);
     }
 
-    async fn create_c8y_converter(
+    pub(crate) async fn create_c8y_converter(
         tmp_dir: &TempTedgeDir,
     ) -> (
         CumulocityConverter,

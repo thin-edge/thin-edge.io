@@ -166,6 +166,7 @@ impl C8yMapperConfig {
     pub fn default_external_topic_filter() -> TopicFilter {
         vec![
             "te/+/+/+/+",
+            "te/+/+/+/+/twin/+",
             "te/+/+/+/+/m/+",
             "te/+/+/+/+/e/+",
             "te/+/+/+/+/a/+",

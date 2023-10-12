@@ -84,12 +84,14 @@ Child devices support sending inventory data via tedge topic with type
 
 
 Child devices supports sending inventory data via tedge topic to root fragments
-    Execute Command    tedge mqtt pub "te/device/${CHILD_SN}///twin/subtype" "LinuxDeviceA"
-    Execute Command    tedge mqtt pub "te/device/${CHILD_SN}///twin/type" "ShouldBeIgnored"
+    Execute Command    tedge mqtt pub "te/device/${CHILD_SN}///twin/subtype" '"LinuxDeviceA"'
+    Execute Command    tedge mqtt pub "te/device/${CHILD_SN}///twin/type" '"ShouldBeIgnored"'
+    Execute Command    tedge mqtt pub "te/device/${CHILD_SN}///twin/name" '"ShouldBeIgnored"'
     Cumulocity.Set Device    ${CHILD_SN}
     ${mo}=    Device Should Have Fragments    subtype
     Should Be Equal    ${mo["subtype"]}    LinuxDeviceA
-    Should Be Equal    ${mo["type"]}    thin-edge.io
+    Should Be Equal    ${mo["type"]}    thin-edge.io-child
+    Should Be Equal    ${mo["name"]}    ${CHILD_SN}
 
 
 Child device supports sending custom child device measurements directly to c8y
@@ -99,6 +101,24 @@ Child device supports sending custom child device measurements directly to c8y
     Should Be Equal As Numbers    ${measurements[0]["environment"]["temperature"]["value"]}    29.9
     Should Be Equal    ${measurements[0]["meta"]["sensorLocation"]}    Brisbane, Australia
     Should Be Equal    ${measurements[0]["type"]}    10min_average
+
+Nested child devices support sending inventory data via tedge topic
+    ${nested_child}=    Get Random Name
+    Execute Command    tedge mqtt pub --retain 'te/device/${nested_child}//' '{"@type":"child-device","@parent":"device/${CHILD_SN}//","@id":"${nested_child}"}'
+
+    Execute Command    tedge mqtt pub "te/device/${nested_child}///twin/device_OS" '{"family":"Debian","version":11}'
+    Execute Command    tedge mqtt pub "te/device/${nested_child}///twin/subtype" '"LinuxDeviceB"'
+    Execute Command    tedge mqtt pub "te/device/${nested_child}///twin/type" '"ShouldBeIgnored"'
+    Execute Command    tedge mqtt pub "te/device/${nested_child}///twin/name" '"ShouldBeIgnored"'
+
+    Cumulocity.Set Device    ${nested_child}
+    ${mo}=    Device Should Have Fragments    device_OS
+    Should Be Equal    ${mo["device_OS"]["family"]}    Debian
+    Should Be Equal As Integers    ${mo["device_OS"]["version"]}    11
+    ${mo}=    Device Should Have Fragments    subtype
+    Should Be Equal    ${mo["subtype"]}    LinuxDeviceB
+    Should Be Equal    ${mo["type"]}    thin-edge.io-child
+    Should Be Equal    ${mo["name"]}    ${nested_child}
 
 
 *** Keywords ***

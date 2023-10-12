@@ -6,6 +6,7 @@ pub mod converter;
 pub mod dynamic_discovery;
 pub mod error;
 mod fragments;
+mod inventory;
 pub mod json;
 mod log_upload;
 mod serializer;
