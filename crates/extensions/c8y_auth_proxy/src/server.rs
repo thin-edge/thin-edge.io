@@ -122,6 +122,12 @@ async fn respond_to(
         Some(Path(p)) => p.as_str(),
         None => "",
     };
+    let auth: fn(reqwest::RequestBuilder, &str) -> reqwest::RequestBuilder =
+        if headers.contains_key("Authorization") {
+            |req, _token| req
+        } else {
+            |req, token| req.bearer_auth(token)
+        };
 
     // Cumulocity revokes the device token if we access parts of the frontend UI,
     // so deny requests to these proactively
@@ -152,15 +158,17 @@ async fn respond_to(
         }
     }
 
-    let send_request = |body, token| {
-        client
-            .request(method.to_owned(), &destination)
-            .headers(headers.clone())
-            .bearer_auth(&token)
-            .body(body)
-            .send()
+    let send_request = |body, token: &str| {
+        auth(
+            client
+                .request(method.to_owned(), &destination)
+                .headers(headers.clone()),
+            token,
+        )
+        .body(body)
+        .send()
     };
-    let mut res = send_request(body, token.clone())
+    let mut res = send_request(body, &token)
         .await
         .into_diagnostic()
         .wrap_err_with(|| format!("making proxied request to {destination}"))?;
@@ -168,7 +176,7 @@ async fn respond_to(
     if res.status() == StatusCode::UNAUTHORIZED {
         token = retrieve_token.not_matching(Some(&token)).await;
         if let Some(body) = body_clone {
-            res = send_request(Body::from(body), token.clone())
+            res = send_request(Body::from(body), &token)
                 .await
                 .into_diagnostic()
                 .wrap_err_with(|| format!("making proxied request to {destination}"))?;
@@ -274,6 +282,30 @@ mod tests {
         ))
         .await
         .unwrap();
+        assert_eq!(res.status(), 200);
+    }
+
+    #[tokio::test]
+    async fn uses_authorization_header_passed_by_user_if_one_is_provided() {
+        let _ = env_logger::try_init();
+        let mut server = mockito::Server::new();
+        let _mock = server
+            .mock("GET", "/inventory/managedObjects")
+            .match_header("authorization", "Basic dGVzdDp0ZXN0")
+            .with_status(200)
+            .create();
+
+        let port = start_server(&server, vec!["test-token"]);
+
+        let client = reqwest::Client::new();
+        let res = client
+            .get(format!(
+                "http://localhost:{port}/c8y/inventory/managedObjects"
+            ))
+            .basic_auth("test", Some("test"))
+            .send()
+            .await
+            .unwrap();
         assert_eq!(res.status(), 200);
     }
 
