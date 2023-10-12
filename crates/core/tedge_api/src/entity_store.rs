@@ -164,10 +164,25 @@ impl EntityStore {
         self.entities.get(entity_topic_id)
     }
 
-    /// Returns information for an entity under a given device/service id .
+    /// Tries to get information about an entity under a given MQTT entity topic identifier.
+    pub fn try_get(&self, entity_topic_id: &EntityTopicId) -> Result<&EntityMetadata, Error> {
+        self.get(entity_topic_id)
+            .ok_or_else(|| Error::UnknownEntity(entity_topic_id.to_string()))
+    }
+
+    /// Returns information for an entity under a given device/service id.
     pub fn get_by_external_id(&self, external_id: &EntityExternalId) -> Option<&EntityMetadata> {
         let topic_id = self.entity_id_index.get(external_id)?;
         self.get(topic_id)
+    }
+
+    /// Tries to get information for an entity under a given device/service id.
+    pub fn try_get_by_external_id(
+        &self,
+        external_id: &EntityExternalId,
+    ) -> Result<&EntityMetadata, Error> {
+        self.get_by_external_id(external_id)
+            .ok_or_else(|| Error::UnknownEntity(external_id.into()))
     }
 
     /// Returns the MQTT identifier of the main device.
