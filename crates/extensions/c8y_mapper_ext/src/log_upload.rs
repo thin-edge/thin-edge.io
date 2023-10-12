@@ -1,7 +1,6 @@
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
-use crate::error::CumulocityMapperError::UnknownDevice;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
@@ -53,10 +52,7 @@ impl CumulocityConverter {
         let device_external_id = log_request.device.into();
         let target = self
             .entity_store
-            .get_by_external_id(&device_external_id)
-            .ok_or_else(|| UnknownDevice {
-                device_id: device_external_id.into(),
-            })?;
+            .try_get_by_external_id(&device_external_id)?;
 
         let cmd_id = nanoid!();
         let channel = Channel::Command {
@@ -102,16 +98,8 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        // get the device metadata from its id
-        let device = self.entity_store.get(topic_id).ok_or_else(|| {
-            CumulocityMapperError::UnregisteredDevice {
-                topic_id: topic_id.to_string(),
-            }
-        })?;
-        let external_id = &device.external_id;
-
+        let external_id = self.entity_store.try_get(topic_id)?.external_id.as_ref();
         let smartrest_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
-
         let payload = message.payload_str()?;
         let response = &LogUploadCmdPayload::from_json(payload)?;
 
@@ -128,7 +116,7 @@ impl CumulocityConverter {
                     .config
                     .data_dir
                     .file_transfer_dir()
-                    .join(device.external_id.as_ref())
+                    .join(external_id)
                     .join("log_upload")
                     .join(format!("{}-{}", response.log_type, cmd_id));
                 let result = self
@@ -136,7 +124,7 @@ impl CumulocityConverter {
                     .upload_file(
                         uploaded_file_path.as_std_path(),
                         &response.log_type,
-                        external_id.as_ref().to_string(),
+                        external_id.to_string(),
                     )
                     .await; // We need to get rid of this await, otherwise it blocks
 
@@ -195,17 +183,13 @@ impl CumulocityConverter {
         let metadata = LogMetadata::from_json(message.payload_str()?)?;
 
         // get the device metadata from its id
-        let device = self.entity_store.get(topic_id).ok_or_else(|| {
-            CumulocityMapperError::UnregisteredDevice {
-                topic_id: topic_id.to_string(),
-            }
-        })?;
+        let target = self.entity_store.try_get(topic_id)?;
 
         // Create a c8y_LogfileRequest operation file
-        let dir_path = match device.r#type {
+        let dir_path = match target.r#type {
             EntityType::MainDevice => self.ops_dir.clone(),
             EntityType::ChildDevice => {
-                let child_dir_name = device.external_id.as_ref();
+                let child_dir_name = target.external_id.as_ref();
                 self.ops_dir.clone().join(child_dir_name)
             }
             EntityType::Service => {
