@@ -2,7 +2,6 @@ use super::*;
 use download::Auth;
 use std::time::Duration;
 use tedge_actors::ClientMessageBox;
-use tedge_actors::DynError;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_utils::file::PermissionEntry;
 use tokio::time::timeout;
@@ -10,7 +9,7 @@ use tokio::time::timeout;
 const TEST_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[tokio::test]
-async fn download_without_auth() -> Result<(), DynError> {
+async fn download_without_auth() {
     let ttd = TempTedgeDir::new();
     let mut server = mockito::Server::new();
     let _mock = server
@@ -30,19 +29,17 @@ async fn download_without_auth() -> Result<(), DynError> {
         TEST_TIMEOUT,
         requester.await_response(("id".to_string(), download_request)),
     )
-    .await?
-    .expect("timeout");
+    .await
+    .expect("timeout")
+    .expect("channel error");
 
     assert_eq!(id.as_str(), "id");
-    assert!(response.is_ok());
     assert_eq!(response.as_ref().unwrap().file_path, target_path.as_path());
     assert_eq!(response.as_ref().unwrap().url, server_url);
-
-    Ok(())
 }
 
 #[tokio::test]
-async fn download_with_auth() -> Result<(), DynError> {
+async fn download_with_auth() {
     let ttd = TempTedgeDir::new();
     let mut server = mockito::Server::new();
     let _mock = server
@@ -64,19 +61,17 @@ async fn download_with_auth() -> Result<(), DynError> {
         TEST_TIMEOUT,
         requester.await_response(("id".to_string(), download_request)),
     )
-    .await?
-    .expect("timeout");
+    .await
+    .expect("timeout")
+    .expect("channel error");
 
     assert_eq!(id.as_str(), "id");
-    assert!(response.is_ok());
     assert_eq!(response.as_ref().unwrap().file_path, target_path.as_path());
     assert_eq!(response.as_ref().unwrap().url, server_url);
-
-    Ok(())
 }
 
 #[tokio::test]
-async fn download_with_permission() -> Result<(), DynError> {
+async fn download_with_permission() {
     let ttd = TempTedgeDir::new();
     let mut server = mockito::Server::new();
     let _mock = server
@@ -100,15 +95,13 @@ async fn download_with_permission() -> Result<(), DynError> {
         TEST_TIMEOUT,
         requester.await_response(("id".to_string(), download_request)),
     )
-    .await?
-    .expect("timeout");
+    .await
+    .expect("timeout")
+    .expect("channel error");
 
     assert_eq!(id.as_str(), "id");
-    assert!(response.is_ok());
     assert_eq!(response.as_ref().unwrap().file_path, target_path.as_path());
     assert_eq!(response.as_ref().unwrap().url, server_url);
-
-    Ok(())
 }
 
 async fn spawn_downloader_actor(
@@ -122,7 +115,7 @@ async fn spawn_downloader_actor(
 }
 
 #[tokio::test]
-async fn download_if_download_key_is_struct() -> Result<(), DynError> {
+async fn download_if_download_key_is_struct() {
     let ttd = TempTedgeDir::new();
     let mut server = mockito::Server::new();
     let _mock = server
@@ -146,15 +139,13 @@ async fn download_if_download_key_is_struct() -> Result<(), DynError> {
         TEST_TIMEOUT,
         requester.await_response((request_key.clone(), download_request)),
     )
-    .await?
-    .expect("timeout");
+    .await
+    .expect("timeout")
+    .expect("channel error");
 
     assert_eq!(return_key, request_key);
-    assert!(response.is_ok());
     assert_eq!(response.as_ref().unwrap().file_path, target_path.as_path());
     assert_eq!(response.as_ref().unwrap().url, server_url);
-
-    Ok(())
 }
 
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
