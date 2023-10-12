@@ -571,7 +571,7 @@ fn write_bridge_config_to_file(
     common_draft.persist()?;
 
     let config_path = get_bridge_config_file_path(config_location, bridge_config);
-    let mut config_draft = DraftFile::new(config_path)?;
+    let mut config_draft = DraftFile::new(config_path)?.with_mode(0o644);
     bridge_config.serialize(&mut config_draft)?;
     config_draft.persist()?;
 
