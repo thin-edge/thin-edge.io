@@ -3910,6 +3910,7 @@ version = "0.12.0"
 dependencies = [
  "assert-json-diff",
  "async-trait",
+ "futures",
  "mqtt_channel",
  "mqtt_tests",
  "serde_json",

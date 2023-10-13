@@ -24,4 +24,5 @@ tedge_utils = { workspace = true }
 tokio = { workspace = true, default_features = false, features = ["macros"] }
 
 [dev-dependencies]
+futures = { workspace = true }
 mqtt_tests = { path = "../../tests/mqtt_tests" }
