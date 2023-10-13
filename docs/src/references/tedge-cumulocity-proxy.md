@@ -17,8 +17,9 @@ configuration
 
 For example, you can access the current tenant information
 at [http://127.0.0.1:8001/c8y/tenant/currentTenant](http://127.0.0.1:8001/c8y/tenant/currentTenant)
-from the machine running `tedge-mapper`. The server supports all possible request methods (
-e.g. `HEAD`/`GET`/`PUT`/`PATCH`/`DELETE`).
+from the machine running `tedge-mapper`.
+The server supports all public REST APIs of Cumulocity, and all possible request methods
+(e.g. `HEAD`/`GET`/`PUT`/`PATCH`/`DELETE`).
 There is no need to provide an `Authorization` header (or any other authentication method) when accessing the API.
 If an `Authorization` header is provided, this will be used to authenticate the request instead of the device JWT.
 
