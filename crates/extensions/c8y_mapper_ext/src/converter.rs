@@ -1465,8 +1465,11 @@ pub fn check_tedge_agent_status(message: &Message) -> Result<bool, ConversionErr
 
 #[cfg(test)]
 mod tests {
+    use super::CumulocityConverter;
     use crate::actor::IdDownloadRequest;
     use crate::actor::IdDownloadResult;
+    use crate::config::C8yMapperConfig;
+    use crate::error::ConversionError;
     use crate::Capabilities;
     use anyhow::Result;
     use assert_json_diff::assert_json_eq;
@@ -1492,17 +1495,14 @@ mod tests {
     use tedge_api::entity_store::InvalidExternalIdError;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
+    use tedge_mqtt_ext::test_helpers::assert_messages_contains_str;
+    use tedge_mqtt_ext::test_helpers::assert_messages_includes_json;
     use tedge_mqtt_ext::Message;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
     use tedge_utils::size_threshold::SizeThresholdExceededError;
     use test_case::test_case;
-
-    use crate::config::C8yMapperConfig;
-    use crate::error::ConversionError;
-
-    use super::CumulocityConverter;
 
     const OPERATIONS: &[&str] = &[
         "c8y_DownloadConfigFile",
@@ -1653,37 +1653,54 @@ mod tests {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
-        let in_topic = "te/device/child1///m/";
-        let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
-        let in_message = Message::new(&Topic::new_unchecked(in_topic), in_payload);
-
-        let expected_smart_rest_message = Message::new(
-            &Topic::new_unchecked("c8y/s/us"),
-            "101,test-device:device:child1,child1,thin-edge.io-child",
-        );
-        let expected_c8y_json_message = Message::new(
-            &Topic::new_unchecked("c8y/measurement/measurements/create"),
-            r#"{"externalSource":{"externalId":"test-device:device:child1","type":"c8y_Serial"},"temp":{"temp":{"value":1.0}},"time":"2021-11-16T17:45:40.571760714+01:00","type":"ThinEdgeMeasurement"}"#,
+        let in_message = Message::new(
+            &Topic::new_unchecked("te/device/child1///m/"),
+            json!({
+                "temp": 1,
+                "time": "2021-11-16T17:45:40.571760714+01:00"
+            })
+            .to_string(),
         );
 
-        // Test the first output messages contains SmartREST and C8Y JSON.
-        let out_first_messages: Vec<_> = converter
-            .convert(&in_message)
-            .await
-            .into_iter()
-            .filter(|m| m.topic.name.starts_with("c8y"))
-            .collect();
-        assert_eq!(
-            out_first_messages,
-            vec![
-                expected_smart_rest_message,
-                expected_c8y_json_message.clone()
-            ]
-        );
+        let mut messages = converter.convert(&in_message).await;
 
-        // Test the second output messages doesn't contain SmartREST child device creation.
-        let out_second_messages = converter.convert(&in_message).await;
-        assert_eq!(out_second_messages, vec![expected_c8y_json_message]);
+        assert_messages_includes_json(
+            &mut messages,
+            [(
+                "te/device/child1//",
+                json!({
+                    "@type":"child-device",
+                    "@id":"test-device:device:child1",
+                    "name":"child1"
+                }),
+            )],
+        );
+        assert_messages_contains_str(
+            &mut messages,
+            [(
+                "c8y/s/us",
+                "101,test-device:device:child1,child1,thin-edge.io-child",
+            )],
+        );
+        assert_messages_includes_json(
+            &mut messages,
+            [(
+                "c8y/measurement/measurements/create",
+                json!({
+                    "externalSource":{
+                        "externalId":"test-device:device:child1",
+                        "type":"c8y_Serial"
+                    },
+                    "temp":{
+                        "temp":{
+                            "value":1.0
+                        }
+                    },
+                    "time":"2021-11-16T17:45:40.571760714+01:00",
+                    "type":"ThinEdgeMeasurement"
+                }),
+            )],
+        );
     }
 
     #[tokio::test]
