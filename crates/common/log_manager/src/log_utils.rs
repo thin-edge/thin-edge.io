@@ -1,8 +1,12 @@
 use easy_reader::EasyReader;
 use glob::glob;
 use std::collections::VecDeque;
+use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use tedge_utils::file::FileError;
+use tedge_utils::paths::PathsError;
 use time::OffsetDateTime;
 
 use super::config::FileEntry;
@@ -15,18 +19,20 @@ pub fn new_read_logs(
     date_from: OffsetDateTime,
     lines: usize,
     search_text: &Option<String>,
-) -> Result<String, LogRetrievalError> {
-    let mut output = String::new();
+) -> Result<PathBuf, LogRetrievalError> {
     // first filter logs on type
     let mut logfiles_to_read = filter_logs_on_type(files, log_type)?;
     logfiles_to_read = filter_logs_path_on_metadata(log_type, date_from, logfiles_to_read)?;
+
+    let temp_path = temp_file_at(logfiles_to_read.first().unwrap())?; //safe because filters return error on empty vector
+    let mut temp_file = File::create(&temp_path)?;
 
     let mut line_counter = 0usize;
     for logfile in logfiles_to_read {
         match read_log_content(logfile.as_path(), line_counter, lines, search_text) {
             Ok((lines, file_content)) => {
                 line_counter = lines;
-                output.push_str(&file_content);
+                temp_file.write_all(file_content.as_bytes())?;
             }
             Err(_error @ LogRetrievalError::MaxLines) => {
                 break;
@@ -37,7 +43,7 @@ pub fn new_read_logs(
         };
     }
 
-    Ok(output)
+    Ok(temp_path)
 }
 
 pub fn read_log_content(
@@ -151,6 +157,26 @@ pub fn filter_logs_path_on_metadata(
     } else {
         Ok(out)
     }
+}
+
+fn temp_file_at(path: &Path) -> Result<PathBuf, LogRetrievalError> {
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| FileError::InvalidName {
+            path: path.to_path_buf(),
+        })?
+        .to_str()
+        .ok_or_else(|| FileError::InvalidUnicode {
+            path: path.to_path_buf(),
+        })?;
+
+    let parent_path = path.parent().ok_or_else(|| PathsError::ParentDirNotFound {
+        path: path.as_os_str().into(),
+    })?;
+
+    let temp_file_path = parent_path.join(format!("{file_name}.tmp"));
+
+    Ok(temp_file_path)
 }
 
 #[cfg(test)]
@@ -351,7 +377,7 @@ mod tests {
             let new_mtime = FileTime::from_unix_time(m_time, 0);
             set_file_mtime(file_path, new_mtime).unwrap();
         }
-        let result = new_read_logs(
+        let temp_path = new_read_logs(
             &files,
             "type_one",
             datetime!(1970-01-01 00:00:03 +00:00),
@@ -359,6 +385,8 @@ mod tests {
             &None,
         )
         .unwrap();
+
+        let result = std::fs::read_to_string(temp_path).unwrap();
 
         assert_eq!(result, String::from("filename: file_d\nthis is the first line of file_d.\nthis is the second line of file_d.\nthis is the third line of file_d.\nthis is the forth line of file_d.\nthis is the fifth line of file_d.\nfilename: file_b\nthis is the forth line of file_b.\nthis is the fifth line of file_b.\n"))
     }

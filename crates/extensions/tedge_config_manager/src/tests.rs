@@ -11,18 +11,16 @@ use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_file_system_ext::FsWatchEvent;
-use tedge_http_ext::test_helpers::assert_request_eq;
-use tedge_http_ext::test_helpers::HttpResponseBuilder;
-use tedge_http_ext::HttpRequest;
-use tedge_http_ext::HttpRequestBuilder;
-use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::TempTedgeDir;
+use tedge_uploader_ext::UploadResponse;
 
 use crate::actor::ConfigDownloadRequest;
 use crate::actor::ConfigDownloadResult;
+use crate::actor::ConfigUploadRequest;
+use crate::actor::ConfigUploadResult;
 use crate::ConfigManagerBuilder;
 use crate::ConfigManagerConfig;
 
@@ -31,6 +29,8 @@ const TEST_TIMEOUT_MS: Duration = Duration::from_secs(5);
 type MqttMessageBox = TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>;
 type DownloaderMessageBox =
     TimedMessageBox<SimpleMessageBox<ConfigDownloadRequest, ConfigDownloadResult>>;
+type UploaderMessageBox =
+    TimedMessageBox<SimpleMessageBox<ConfigUploadRequest, ConfigUploadResult>>;
 
 fn prepare() -> Result<TempTedgeDir, anyhow::Error> {
     let tempdir = TempTedgeDir::new();
@@ -64,9 +64,9 @@ fn new_config_manager_builder(
 ) -> (
     ConfigManagerBuilder,
     MqttMessageBox,
-    SimpleMessageBox<HttpRequest, HttpResult>,
     SimpleMessageBox<NoMessage, FsWatchEvent>,
     DownloaderMessageBox,
+    UploaderMessageBox,
 ) {
     let config = ConfigManagerConfig {
         config_dir: temp_dir.to_path_buf(),
@@ -84,30 +84,30 @@ fn new_config_manager_builder(
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
-    let mut http_builder: SimpleMessageBoxBuilder<HttpRequest, HttpResult> =
-        SimpleMessageBoxBuilder::new("HTTP", 1);
     let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
         SimpleMessageBoxBuilder::new("FS", 5);
     let mut downloader_builder: SimpleMessageBoxBuilder<
         ConfigDownloadRequest,
         ConfigDownloadResult,
     > = SimpleMessageBoxBuilder::new("Downloader", 5);
+    let mut uploader_builder: SimpleMessageBoxBuilder<ConfigUploadRequest, ConfigUploadResult> =
+        SimpleMessageBoxBuilder::new("Uploader", 5);
 
     let config_builder = ConfigManagerBuilder::try_new(
         config,
         &mut mqtt_builder,
-        &mut http_builder,
         &mut fs_watcher_builder,
         &mut downloader_builder,
+        &mut uploader_builder,
     )
     .unwrap();
 
     (
         config_builder,
         mqtt_builder.build().with_timeout(TEST_TIMEOUT_MS),
-        http_builder.build(),
         fs_watcher_builder.build(),
         downloader_builder.build().with_timeout(TEST_TIMEOUT_MS),
+        uploader_builder.build().with_timeout(TEST_TIMEOUT_MS),
     )
 }
 
@@ -115,20 +115,20 @@ fn spawn_config_manager_actor(
     temp_dir: &Path,
 ) -> (
     MqttMessageBox,
-    SimpleMessageBox<HttpRequest, HttpResult>,
     SimpleMessageBox<NoMessage, FsWatchEvent>,
     DownloaderMessageBox,
+    UploaderMessageBox,
 ) {
-    let (actor_builder, mqtt, http, fs, downloader) = new_config_manager_builder(temp_dir);
+    let (actor_builder, mqtt, fs, downloader, uploader) = new_config_manager_builder(temp_dir);
     let mut actor = actor_builder.build();
     tokio::spawn(async move { actor.run().await });
-    (mqtt, http, fs, downloader)
+    (mqtt, fs, downloader, uploader)
 }
 
 #[tokio::test]
 async fn config_manager_reloads_config_types() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _http, _fs, _downloader) = spawn_config_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path());
 
     let config_snapshot_reload_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot");
     let config_update_reload_topic = Topic::new_unchecked("te/device/main///cmd/config_update");
@@ -161,7 +161,7 @@ async fn config_manager_reloads_config_types() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn config_manager_uploads_snapshot() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, mut http, _fs, _downloader) = spawn_config_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _downloader, mut uploader) = spawn_config_manager_actor(tempdir.path());
 
     let config_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234");
 
@@ -192,22 +192,22 @@ async fn config_manager_uploads_snapshot() -> Result<(), anyhow::Error> {
     // This message being published over MQTT is also received by the config-manager itself
     mqtt.send(executing_message.unwrap()).await?;
 
-    // Then uploads the requested content over HTTP
-    let actual_request = http.recv().await;
-    let expected_request = Some(
-        HttpRequestBuilder::put(
-            "http://127.0.0.1:3000/tedge/file-transfer/main/config-snapshot/type_two-1234",
-        )
-        .header("Content-Type", "text/plain")
-        .body("filename: file_b\nSome content\n".to_string())
-        .build()
-        .unwrap(),
-    );
-    assert_request_eq(actual_request, expected_request);
+    // Assert config upload request.
+    let (topic, upload_request) = uploader.recv().await.unwrap();
 
-    // File transfer responds with 201
-    let response = HttpResponseBuilder::new().status(201).build().unwrap();
-    http.send(Ok(response)).await?;
+    assert_eq!(Topic::new_unchecked(&topic), config_topic);
+
+    assert_eq!(
+        upload_request.url,
+        "http://127.0.0.1:3000/tedge/file-transfer/main/config-snapshot/type_two-1234"
+    );
+    assert_eq!(upload_request.file_path, tempdir.path().join("file_b"));
+
+    assert_eq!(upload_request.auth, None);
+
+    // Simulate upload file completion
+    let upload_response = UploadResponse::new(&upload_request.url, upload_request.file_path);
+    uploader.send((topic, Ok(upload_response))).await?;
 
     // Finally, the config manager notifies that request was successfully processed
     assert_eq!(
@@ -224,7 +224,7 @@ async fn config_manager_uploads_snapshot() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn config_manager_download_update() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _http, _fs, mut downloader) = spawn_config_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, mut downloader, _uploader) = spawn_config_manager_actor(tempdir.path());
 
     let config_topic = Topic::new_unchecked("te/device/main///cmd/config_update/1234");
 
@@ -289,7 +289,7 @@ async fn config_manager_download_update() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn request_config_snapshot_that_does_not_exist() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _http, _fs, _downloader) = spawn_config_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path());
 
     let config_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234");
 
@@ -333,62 +333,9 @@ async fn request_config_snapshot_that_does_not_exist() -> Result<(), anyhow::Err
 }
 
 #[tokio::test]
-async fn put_config_snapshot_without_permissions() -> Result<(), anyhow::Error> {
-    let tempdir = prepare()?;
-    let (mut mqtt, mut http, _fs, _downloader) = spawn_config_manager_actor(tempdir.path());
-
-    let config_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234");
-
-    // Let's ignore the init message sent on start
-    mqtt.skip(2).await;
-
-    // When a config snapshot request is received
-    let snapshot_request = r#"
-        {
-            "status": "init",
-            "tedgeUrl": "http://127.0.0.1:3000/tedge/file-transfer/main/config-snapshot/type_two-1234",
-            "type": "type_two"
-        }"#;
-
-    mqtt.send(MqttMessage::new(&config_topic, snapshot_request).with_retain())
-        .await?;
-
-    let executing_message = mqtt.recv().await;
-    // The config manager notifies that the request has been received and is processed
-    assert_eq!(
-            executing_message,
-            Some(MqttMessage::new(
-                &config_topic,
-                r#"{"status":"executing","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/config-snapshot/type_two-1234","type":"type_two"}"#
-            ).with_retain())
-        );
-
-    // This message being published over MQTT is also received by the config-manager itself
-    mqtt.send(executing_message.unwrap()).await?;
-
-    // Then uploads the requested content over HTTP
-    assert!(http.recv().await.is_some());
-
-    // File transfer responds with error code
-    let response = HttpResponseBuilder::new().status(403).build().unwrap();
-    http.send(Ok(response)).await?;
-
-    // Finally, the config manager notifies that could not upload config snapshot via HTTP
-    assert_eq!(
-            mqtt.recv().await,
-            Some(MqttMessage::new(
-                &config_topic,
-                r#"{"status":"failed","reason":"Handling of operation failed with Failed with HTTP error status 403 Forbidden","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/config-snapshot/type_two-1234","type":"type_two"}"#
-            ).with_retain())
-        );
-
-    Ok(())
-}
-
-#[tokio::test]
 async fn ignore_topic_for_another_device() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _http, _fs, _downloader) = spawn_config_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path());
 
     // Check for child device topic
     let another_device_topic = Topic::new_unchecked("te/device/child01///cmd/config-snapshot/1234");
@@ -416,7 +363,7 @@ async fn ignore_topic_for_another_device() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn send_incorrect_payload() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _http, _fs, _downloader) = spawn_config_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path());
 
     let config_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234");
 

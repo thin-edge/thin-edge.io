@@ -1860,6 +1860,7 @@ dependencies = [
  "log",
  "serde",
  "tedge_test_utils",
+ "tedge_utils",
  "thiserror",
  "time",
  "toml 0.7.6",
@@ -3607,9 +3608,9 @@ dependencies = [
  "tedge_downloader_ext",
  "tedge_file_system_ext",
  "tedge_health_ext",
- "tedge_http_ext",
  "tedge_mqtt_ext",
  "tedge_signal_ext",
+ "tedge_uploader_ext",
  "tokio",
  "tracing",
 ]
@@ -3633,10 +3634,10 @@ dependencies = [
  "tedge_config",
  "tedge_file_system_ext",
  "tedge_health_ext",
- "tedge_http_ext",
  "tedge_log_manager",
  "tedge_mqtt_ext",
  "tedge_signal_ext",
+ "tedge_uploader_ext",
  "tokio",
  "tracing",
 ]
@@ -3798,6 +3799,7 @@ version = "0.12.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "camino",
  "http",
  "log",
  "serde",
@@ -3807,9 +3809,9 @@ dependencies = [
  "tedge_config",
  "tedge_downloader_ext",
  "tedge_file_system_ext",
- "tedge_http_ext",
  "tedge_mqtt_ext",
  "tedge_test_utils",
+ "tedge_uploader_ext",
  "tedge_utils",
  "thiserror",
  "tokio",
@@ -3884,8 +3886,8 @@ dependencies = [
  "anyhow",
  "assert-json-diff",
  "async-trait",
+ "camino",
  "filetime",
- "http",
  "log",
  "log_manager",
  "serde_json",
@@ -3893,9 +3895,9 @@ dependencies = [
  "tedge_api",
  "tedge_config",
  "tedge_file_system_ext",
- "tedge_http_ext",
  "tedge_mqtt_ext",
  "tedge_test_utils",
+ "tedge_uploader_ext",
  "tedge_utils",
  "thiserror",
  "tokio",
@@ -3953,6 +3955,20 @@ dependencies = [
  "async-trait",
  "tedge_actors",
  "tokio",
+]
+
+[[package]]
+name = "tedge_uploader_ext"
+version = "0.12.0"
+dependencies = [
+ "async-trait",
+ "camino",
+ "log",
+ "mockito",
+ "tedge_actors",
+ "tedge_test_utils",
+ "tokio",
+ "upload",
 ]
 
 [[package]]
@@ -4420,6 +4436,22 @@ name = "untrusted"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
+
+[[package]]
+name = "upload"
+version = "0.12.0"
+dependencies = [
+ "backoff",
+ "camino",
+ "log",
+ "mockito",
+ "reqwest",
+ "tedge_test_utils",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+]
 
 [[package]]
 name = "url"

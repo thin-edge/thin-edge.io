@@ -47,6 +47,12 @@ pub enum FileError {
         source: anyhow::Error,
     },
 
+    #[error("The Path is not valid unicode. {path:?}")]
+    InvalidUnicode { path: PathBuf },
+
+    #[error("The Path does not name a valid file. {path:?}")]
+    InvalidName { path: PathBuf },
+
     #[error(transparent)]
     FromIoError(#[from] std::io::Error),
 

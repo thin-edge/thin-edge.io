@@ -18,9 +18,9 @@ tedge_api = { workspace = true }
 tedge_config = { workspace = true }
 tedge_file_system_ext = { workspace = true }
 tedge_health_ext = { workspace = true }
-tedge_http_ext = { workspace = true }
 tedge_log_manager = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
 tedge_signal_ext = { workspace = true }
+tedge_uploader_ext = { workspace = true }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
 tracing = { workspace = true }

@@ -1,5 +1,6 @@
 [package]
-name = "log_manager"
+name = "upload"
+description = "upload manager"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
@@ -9,16 +10,15 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-easy_reader = { workspace = true }
-glob = { workspace = true }
+backoff = { workspace = true }
+camino = { workspace = true }
 log = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-tedge_utils = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
 thiserror = { workspace = true }
-time = { workspace = true, features = ["formatting"] }
-toml = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
+tokio-util = { workspace = true, features = ["codec"] }
 
 [dev-dependencies]
-filetime = { workspace = true }
+mockito = { workspace = true }
 tedge_test_utils = { workspace = true }
-time = { workspace = true, features = ["macros"] }
+tempfile = { workspace = true }

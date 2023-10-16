@@ -116,13 +116,15 @@ impl LogManagerActor {
         let executing = LogfileRequest::executing()?;
         self.mqtt_publisher.send(executing).await?;
 
-        let log_content = log_manager::new_read_logs(
+        let log_path = log_manager::new_read_logs(
             &self.plugin_config.files,
             &smartrest_request.log_type,
             smartrest_request.date_from,
             smartrest_request.lines,
             &smartrest_request.search_text,
         )?;
+
+        let log_content = std::fs::read_to_string(&log_path)?;
 
         let upload_event_url = self
             .http_proxy
@@ -135,6 +137,8 @@ impl LogManagerActor {
 
         let successful = LogfileRequest::successful(Some(upload_event_url))?;
         self.mqtt_publisher.send(successful).await?;
+
+        std::fs::remove_file(log_path)?;
 
         info!("Log request processed.");
         Ok(())

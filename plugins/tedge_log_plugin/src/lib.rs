@@ -11,12 +11,12 @@ use tedge_config::TEdgeConfigRepository;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_health_ext::HealthMonitorBuilder;
-use tedge_http_ext::HttpActor;
 use tedge_log_manager::LogManagerBuilder;
 use tedge_log_manager::LogManagerConfig;
 use tedge_log_manager::LogManagerOptions;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_signal_ext::SignalActor;
+use tedge_uploader_ext::UploaderActor;
 use tracing::info;
 
 const AFTER_HELP_TEXT: &str = r#"The thin-edge `CONFIG_DIR` is used:
@@ -95,7 +95,7 @@ async fn run_with(
 
     let health_actor = HealthMonitorBuilder::new(TEDGE_LOG_PLUGIN, &mut mqtt_actor);
 
-    let mut http_actor = HttpActor::new().builder();
+    let mut uploader_actor = UploaderActor::new().builder();
 
     // Instantiate log manager actor
     let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
@@ -106,8 +106,8 @@ async fn run_with(
     let log_actor = LogManagerBuilder::try_new(
         log_manager_config,
         &mut mqtt_actor,
-        &mut http_actor,
         &mut fs_watch_actor,
+        &mut uploader_actor,
     )?;
 
     // Shutdown on SIGINT
@@ -115,9 +115,9 @@ async fn run_with(
 
     // Run the actors
     runtime.spawn(mqtt_actor).await?;
-    runtime.spawn(http_actor).await?;
     runtime.spawn(fs_watch_actor).await?;
     runtime.spawn(log_actor).await?;
+    runtime.spawn(uploader_actor).await?;
     runtime.spawn(signal_actor).await?;
     runtime.spawn(health_actor).await?;
 

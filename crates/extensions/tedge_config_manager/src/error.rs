@@ -9,12 +9,6 @@ pub enum ConfigManagementError {
     FromSerdeJsonError(#[from] serde_json::Error),
 
     #[error(transparent)]
-    FromHttpError(#[from] tedge_http_ext::HttpError),
-
-    #[error(transparent)]
-    FromDownloadError(#[from] tedge_api::DownloadError),
-
-    #[error(transparent)]
     FromChannelError(#[from] tedge_actors::ChannelError),
 
     #[error(transparent)]

@@ -3,13 +3,13 @@
 
 pub enum LogManagementError {
     #[error(transparent)]
+    FromStdIoError(#[from] std::io::Error),
+
+    #[error(transparent)]
     FromMqttError(#[from] tedge_mqtt_ext::MqttError),
 
     #[error("Failed to parse response with: {0}")]
     FromSerdeJsonError(#[from] serde_json::Error),
-
-    #[error(transparent)]
-    FromHttpError(#[from] tedge_http_ext::HttpError),
 
     #[error(transparent)]
     FromChannelError(#[from] tedge_actors::ChannelError),

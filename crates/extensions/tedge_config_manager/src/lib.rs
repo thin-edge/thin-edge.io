@@ -7,23 +7,19 @@ mod tests;
 
 use actor::*;
 pub use config::*;
-use tedge_actors::futures::channel::mpsc;
-use tedge_actors::RuntimeRequest;
-use tedge_actors::RuntimeRequestSink;
-
 use std::path::PathBuf;
+use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
-use tedge_actors::ClientMessageBox;
 use tedge_actors::DynSender;
 use tedge_actors::LinkError;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
+use tedge_actors::RuntimeRequest;
+use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceProvider;
 use tedge_file_system_ext::FsWatchEvent;
-use tedge_http_ext::HttpRequest;
-use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file::create_directory_with_defaults;
@@ -38,8 +34,8 @@ pub struct ConfigManagerBuilder {
     plugin_config: PluginConfig,
     receiver: LoggingReceiver<ConfigInput>,
     mqtt_publisher: DynSender<MqttMessage>,
-    http_proxy: ClientMessageBox<HttpRequest, HttpResult>,
     download_sender: DynSender<ConfigDownloadRequest>,
+    upload_sender: DynSender<ConfigUploadRequest>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
 }
 
@@ -47,13 +43,13 @@ impl ConfigManagerBuilder {
     pub fn try_new(
         config: ConfigManagerConfig,
         mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
-        http: &mut impl ServiceProvider<HttpRequest, HttpResult, NoConfig>,
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
         downloader_actor: &mut impl ServiceProvider<
             ConfigDownloadRequest,
             ConfigDownloadResult,
             NoConfig,
         >,
+        uploader_actor: &mut impl ServiceProvider<ConfigUploadRequest, ConfigUploadResult, NoConfig>,
     ) -> Result<Self, FileError> {
         Self::init(&config)?;
 
@@ -70,10 +66,10 @@ impl ConfigManagerBuilder {
         let mqtt_publisher =
             mqtt.connect_consumer(Self::subscriptions(&config), events_sender.clone().into());
 
-        let http_proxy = ClientMessageBox::new("ConfigManager => FileTransfer", http);
-
         let download_sender =
             downloader_actor.connect_consumer(NoConfig, events_sender.clone().into());
+
+        let upload_sender = uploader_actor.connect_consumer(NoConfig, events_sender.clone().into());
 
         fs_notify.register_peer(
             ConfigManagerBuilder::watched_directory(&config),
@@ -85,8 +81,8 @@ impl ConfigManagerBuilder {
             plugin_config,
             receiver,
             mqtt_publisher,
-            http_proxy,
             download_sender,
+            upload_sender,
             signal_sender,
         })
     }
@@ -140,8 +136,8 @@ impl Builder<ConfigManagerActor> for ConfigManagerBuilder {
             self.plugin_config,
             self.receiver,
             mqtt_publisher,
-            self.http_proxy,
             self.download_sender,
+            self.upload_sender,
         ))
     }
 }
