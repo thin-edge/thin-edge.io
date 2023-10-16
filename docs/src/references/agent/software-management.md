@@ -10,7 +10,7 @@ which give the ability to manage software packages of different types on the sam
 - `software_list` is used to fetch a pertinent subset of the software packages installed on a device.
 - `software_update` let the user install, update and remove software packages on a device.
 
-## `software_list` MQTT API
+## software_list MQTT API
 
 The `software_list` operation API follows the [generic thin-edge rules for operations](device-management-api.md):
 - The `te/<device-topic-id>/cmd/software_list` topic is used to publish the type of software packages
@@ -34,7 +34,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/software_list' '{
 }'
 ```
 
-### `init` state
+### init state
 
 A `software_list` command has nothing to provide beyond a `status` field.
 This empty message stands for a request of the list of software currently installed.
@@ -45,14 +45,14 @@ tedge mqtt pub --retain 'te/device/child001///cmd/software_list/c8y-2023-09-25T1
 }'
 ```
 
-### `executing` state
+### executing state
 
 Just before starting the command execution, the agent marks the command as executing
 by publishing a retained message that repeats the former command except that:
 
 - the `status` is set to `executing`
 
-### `successful` state
+### successful state
 
 The payload for a successful `software_list` command has two fields:
 
@@ -109,7 +109,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/software_list/c8y-2023-09-25T1
 }'
 ```
 
-### `failed` state
+### failed state
 
 The payload for a failed `software_list` is made of two fields:
 
@@ -123,7 +123,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/software_list/c8y-2023-09-25T1
 }'
 ```
 
-## `software_update` MQTT API
+## software_update MQTT API
 
 The `software_update` operation API follows the [generic thin-edge rules for operations](device-management-api.md):
 - The `te/<device-topic-id>/cmd/software_update` topic is used to publish the type of software packages
@@ -148,7 +148,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/software_update' '{
 }'
 ```
 
-### `init` state
+### init state
 
 A `software_update` command is defined by an `"updateList"` array giving the packages to install, update or remove.
 
@@ -217,14 +217,14 @@ tedge mqtt pub --retain 'te/device/child001///cmd/software_update/c8y-2023-09-25
 }'
 ```
 
-### `executing` state
+### executing state
 
 Just before starting the command execution, the agent marks the command as executing
 by publishing a retained message that repeats the former command except that:
 
 - the `status` is set to `executing`
 
-### `successful` state
+### successful state
 
 The payload for a successful `software_update` command
 repeats the same content as the former request except that:
@@ -272,7 +272,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/software_update/c8y-2023-09-25
 }'
 ```
 
-### `failed` state
+### failed state
 
 The payload for a failed `software_update` command
 repeats the same content as the former request except that:
@@ -345,7 +345,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/software_update/c8y-2023-09-25
 }'
 ```
 
-## `tedge-agent` implementation
+## tedge-agent implementation
 
 ### Software management plugins
 

@@ -23,7 +23,7 @@ The `restart` operation API follows the [generic thin-edge rules for operations]
   where all the subsequent states of the restart command are published during its execution.
 - The workflow is [generic with `"init"`, `"executing"`, `"successful"` and `"failed"` statuses](references/agent/device-management-api.md/#operation-workflow).
 
-### `restart` registration
+### restart registration
 
 The registration message of the `restart` operation on a device is an empty JSON object `{}`.
 
@@ -31,7 +31,7 @@ The registration message of the `restart` operation on a device is an empty JSON
 tedge mqtt pub --retain 'te/device/child001///cmd/restart' '{}'
 ```
 
-### `init` state
+### init state
 
 To trigger a restart operation on a device, the requester has no information to provide.
 It only has to create a new `restart` command instance topic.
@@ -42,7 +42,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/restart/c8y-2023-09-08T18:13:0
 }'
 ```
 
-### `executing` state
+### executing state
 
 When ready, but before actually restarting the device,
 the agent or the `restart` plugin publishes the new state of the command.
@@ -53,7 +53,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/restart/c8y-2023-09-08T18:13:0
 }'
 ```
 
-### `successful` state
+### successful state
 
 After a successful reboot,
 the agent or the `restart` plugin publishes the new state of the command.
@@ -64,7 +64,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/restart/c8y-2023-09-08T18:13:0
 }'
 ```
 
-### `failed` state
+### failed state
 
 In case the reboot failed for some reason,
 the agent or the `restart` plugin publishes the new state of the command,
