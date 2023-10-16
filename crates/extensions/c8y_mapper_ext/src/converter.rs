@@ -1495,8 +1495,7 @@ mod tests {
     use tedge_api::entity_store::InvalidExternalIdError;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
-    use tedge_mqtt_ext::test_helpers::assert_messages_contains_str;
-    use tedge_mqtt_ext::test_helpers::assert_messages_includes_json;
+    use tedge_mqtt_ext::test_helpers::assert_messages_matching;
     use tedge_mqtt_ext::Message;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
@@ -1662,44 +1661,42 @@ mod tests {
             .to_string(),
         );
 
-        let mut messages = converter.convert(&in_message).await;
+        let messages = converter.convert(&in_message).await;
 
-        assert_messages_includes_json(
-            &mut messages,
-            [(
-                "te/device/child1//",
-                json!({
-                    "@type":"child-device",
-                    "@id":"test-device:device:child1",
-                    "name":"child1"
-                }),
-            )],
-        );
-        assert_messages_contains_str(
-            &mut messages,
-            [(
-                "c8y/s/us",
-                "101,test-device:device:child1,child1,thin-edge.io-child",
-            )],
-        );
-        assert_messages_includes_json(
-            &mut messages,
-            [(
-                "c8y/measurement/measurements/create",
-                json!({
-                    "externalSource":{
-                        "externalId":"test-device:device:child1",
-                        "type":"c8y_Serial"
-                    },
-                    "temp":{
+        assert_messages_matching(
+            &messages,
+            [
+                (
+                    "te/device/child1//",
+                    json!({
+                        "@type":"child-device",
+                        "@id":"test-device:device:child1",
+                        "name":"child1"
+                    })
+                    .into(),
+                ),
+                (
+                    "c8y/s/us",
+                    "101,test-device:device:child1,child1,thin-edge.io-child".into(),
+                ),
+                (
+                    "c8y/measurement/measurements/create",
+                    json!({
+                        "externalSource":{
+                            "externalId":"test-device:device:child1",
+                            "type":"c8y_Serial"
+                        },
                         "temp":{
-                            "value":1.0
-                        }
-                    },
-                    "time":"2021-11-16T17:45:40.571760714+01:00",
-                    "type":"ThinEdgeMeasurement"
-                }),
-            )],
+                            "temp":{
+                                "value":1.0
+                            }
+                        },
+                        "time":"2021-11-16T17:45:40.571760714+01:00",
+                        "type":"ThinEdgeMeasurement"
+                    })
+                    .into(),
+                ),
+            ],
         );
     }
 
