@@ -373,9 +373,9 @@ define_tedge_config! {
         topics: TemplatesSet,
 
         enable: {
-            /// Enable log management
-            #[tedge_config(example = "true", default(value = true))]
-            log_management: bool,
+            /// Enable log_upload feature
+            #[tedge_config(example = "true", default(value = true), deprecated_name = "log_management")]
+            log_upload: bool,
 
             /// Enable config_snapshot feature
             #[tedge_config(example = "true", default(value = false))]

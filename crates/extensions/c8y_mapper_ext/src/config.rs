@@ -93,7 +93,7 @@ impl C8yMapperConfig {
         let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port);
 
         let capabilities = Capabilities {
-            log_management: tedge_config.c8y.enable.log_management,
+            log_upload: tedge_config.c8y.enable.log_upload,
             config_snapshot: tedge_config.c8y.enable.config_snapshot,
             config_update: tedge_config.c8y.enable.config_update,
         };
@@ -103,7 +103,7 @@ impl C8yMapperConfig {
         // Add feature topic filters
         topics.add_all(mqtt_schema.topics(AnyEntity, Command(OperationType::Restart)));
         topics.add_all(mqtt_schema.topics(AnyEntity, CommandMetadata(OperationType::Restart)));
-        if capabilities.log_management {
+        if capabilities.log_upload {
             topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
         }
         if capabilities.config_snapshot {
