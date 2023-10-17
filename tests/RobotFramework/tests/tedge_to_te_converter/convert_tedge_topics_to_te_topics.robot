@@ -84,34 +84,6 @@ Convert empty alarm message
     ${messages}=    Should Have MQTT Messages    te/device/child///a/test_alarm    minimum=1     maximum=1
     ${message}=    Convert String To Json    ${messages[0]}
     Should Be Equal    ${message["severity"]}    major
-   
-
-Convert main device service health topic
-    Execute Command    tedge mqtt pub tedge/health/main-service '{"pid":1234,"status":"up"}' -q 2 -r
-    ${messages_tedge}=    Should Have MQTT Messages    tedge/health/main-service    minimum=1    maximum=1
-    ${messages_te}=    Should Have MQTT Messages    te/device/main/service/main-service/status/health    minimum=1    maximum=1
-    Should Be Equal    ${messages_tedge}  ${messages_te}
-    
-Convert child device service health topic
-    Execute Command    tedge mqtt pub tedge/health/child/child-service '{"pid":1234,"status":"up"}' -q 2 -r
-    ${messages_tedge}=    Should Have MQTT Messages    tedge/health/child/child-service    minimum=1    maximum=1
-    ${messages_te}=    Should Have MQTT Messages     te/device/child/service/child-service/status/health      minimum=1    maximum=1
-    Should Be Equal    ${messages_tedge}  ${messages_te}
-    ${messages}=    Should Have MQTT Messages    te/device/child/service/child-service/status/health    minimum=1     maximum=1
-    ${message}=    Convert String To Json    ${messages[0]}
-    Should Be Equal As Numbers    ${message["pid"]}    1234
-    Should Be Equal    ${message["status"]}    up
-
-Convert main device service health topic and retain
-    Execute Command    tedge mqtt pub tedge/health/main-service '{"pid":1234,"status":"up"}' -q 2 -r
-    ${messages}=    Should Have MQTT Messages    te/device/main/service/main-service/status/health    minimum=1     maximum=1
-    ${message}=    Convert String To Json    ${messages[0]}
-    Should Be Equal As Numbers    ${message["pid"]}    1234
-    Should Be Equal    ${message["status"]}    up
-    # Check if the retained message received with new client or not
-    ${result}=    Execute Command    tedge mqtt sub te/device/main/service/main-service/status/health & sleep 2s; kill $!
-    Should Contain    ${result}    "pid":1234
-    Should Contain    ${result}    "status":"up"
 
 *** Keywords ***
 Custom Setup

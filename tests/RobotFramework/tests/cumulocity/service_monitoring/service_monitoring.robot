@@ -101,12 +101,13 @@ Check health status of tedge-mapper-c8y service on broker restart
 
 Check health status of child device service
     [Documentation]    Test service status of child device services
-    # Create the child device by sending the service status on tedge/health/<child-id>/<service-id
+    # Create the child device by sending the service status on te/device/<child-id>/service/<service-id
+    # and relying on auto-registration mechanism to register the entity on the cloud
     # Verify if the service status is updated
     Set Device         ${DEVICE_SN}
     ${child_sn}=       Set Variable    ${DEVICE_SN}:device:external-sensor
     ${child_name}=     Set Variable    external-sensor
-    Execute Command    tedge mqtt pub 'tedge/health/${child_name}/childservice' '{"status":"unknown"}'
+    Execute Command    tedge mqtt pub 'te/device/${child_name}/service/childservice/status/health' '{"status":"unknown"}'
 
     Should Be A Child Device Of Device    ${child_sn}
 
