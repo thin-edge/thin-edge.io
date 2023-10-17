@@ -20,4 +20,5 @@ tedge_utils = { workspace = true }
 mockito = { workspace = true }
 tedge_test_utils = { workspace = true }
 tokio = { workspace = true, default_features = false, features = ["time"] }
+uzers = { workspace = true }
 whoami = { workspace = true }

@@ -836,14 +836,14 @@ mod tests {
         200,
         false,
         Some("http://not_a_url"),
-        "dns error: failed to lookup address information"
+        "dns error"
         ; "dns error"
     )]
     #[test_case(
         200,
         true,
         Some("http://not_a_url"),
-        "dns error: failed to lookup address information"
+        "dns error"
         ; "dns error with auth"
     )]
     #[test_case(

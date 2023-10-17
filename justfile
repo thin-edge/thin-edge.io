@@ -25,7 +25,7 @@ default:
 # Install necessary tools
 install-tools:
     rustup component add rustfmt --toolchain nightly
-    cargo install cargo-sort
+    cargo install cargo-sort cargo-nextest
 
 # Check if necessary tools are installed
 [private]
@@ -62,7 +62,8 @@ release *ARGS:
 
 # Run unit tests
 test:
-    cargo test --no-fail-fast --all-features --all-targets
+    cargo nextest run --no-fail-fast --all-features --all-targets
+    cargo test --doc --no-fail-fast --all-features
 
 # Install integration test dependencies
 setup-integration-test *ARGS:

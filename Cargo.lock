@@ -3830,6 +3830,7 @@ dependencies = [
  "tedge_test_utils",
  "tedge_utils",
  "tokio",
+ "uzers",
  "whoami",
 ]
 
@@ -3909,6 +3910,7 @@ version = "0.12.0"
 dependencies = [
  "assert-json-diff",
  "async-trait",
+ "futures",
  "mqtt_channel",
  "mqtt_tests",
  "serde_json",
@@ -3982,6 +3984,7 @@ dependencies = [
  "mqtt_channel",
  "nix",
  "notify",
+ "once_cell",
  "strum_macros",
  "tedge_test_utils",
  "tempfile",
