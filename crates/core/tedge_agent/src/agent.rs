@@ -246,8 +246,6 @@ pub fn create_tedge_to_te_converter(
         "tedge/events/+/+",
         "tedge/alarms/+/+",
         "tedge/alarms/+/+/+",
-        "tedge/health/+",
-        "tedge/health/+/+",
     ]
     .try_into()?;
 

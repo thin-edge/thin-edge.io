@@ -1,7 +1,7 @@
 *** Settings ***
 Resource    ../../../resources/common.resource
 Library    Cumulocity
-Library    ThinEdgeIO 
+Library    ThinEdgeIO
 
 Test Tags    theme:c8y    theme:tokens
 Test Setup    Custom Setup
@@ -9,8 +9,8 @@ Test Teardown    Get Logs
 
 *** Test Cases ***
 Retrieve a JWT tokens
-    ${start_time}=    Get Unix Timestamp    
-    Execute Command    tedge mqtt pub c8y/s/uat ''    
+    ${start_time}=    Get Unix Timestamp
+    Execute Command    tedge mqtt pub c8y/s/uat ''
     ${messages}=    Should Have MQTT Messages    c8y/s/dat    maximum=1    date_from=${start_time}
     Should Contain    ${messages[0]}    71
 
@@ -23,5 +23,5 @@ Custom Setup
     Stop Service    tedge-agent
     Stop Service    c8y-configuration-plugin
     Stop Service    tedge-log-plugin
-    Should Have MQTT Messages    tedge/health/mosquitto-c8y-bridge
-    Sleep    1s    wait just in case that the server responds to already sent messages 
+    Should Have MQTT Messages    te/device/main/service/mosquitto-c8y-bridge/status/health
+    Sleep    1s    wait just in case that the server responds to already sent messages

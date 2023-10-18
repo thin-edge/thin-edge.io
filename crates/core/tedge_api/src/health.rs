@@ -1,16 +1,14 @@
-use clock::Clock;
-use clock::WallClock;
-use std::process;
-use std::sync::Arc;
-
 use crate::mqtt_topics::Channel;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::ServiceTopicId;
+use clock::Clock;
+use clock::WallClock;
 use mqtt_channel::Message;
-use mqtt_channel::PubChannel;
 use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use serde_json::json;
+use std::process;
+use std::sync::Arc;
 
 /// Encodes a valid health topic.
 ///
@@ -28,20 +26,6 @@ impl ServiceHealthTopic {
     pub fn from_new_topic(service_topic_id: &ServiceTopicId, mqtt_schema: &MqttSchema) -> Self {
         let health_topic = mqtt_schema.topic_for(service_topic_id.entity(), &Channel::Health);
         Self(health_topic.name.into())
-    }
-
-    /// Create a new `ServiceHealthTopic` from a topic in an old topic scheme.
-    ///
-    /// The argument has to fit old topic scheme, i.e. contain either "tedge/health/SERVICE_NAME" or
-    /// "tedge/health/CHILD_ID/SERVICE_NAME"
-    pub fn from_old_topic(topic: String) -> Result<Self, HealthTopicError> {
-        match topic.split('/').collect::<Vec<&str>>()[..] {
-            ["tedge", "health", _service_name] => {}
-            ["tedge", "health", _child_id, _service_name] => {}
-            _ => return Err(HealthTopicError),
-        }
-
-        Ok(Self(Arc::from(topic)))
     }
 
     pub fn as_str(&self) -> &str {
@@ -105,54 +89,6 @@ pub fn health_check_topics(daemon_name: &str) -> TopicFilter {
     .expect("Invalid topic filter")
 }
 
-pub async fn send_health_status(responses: &mut impl PubChannel, daemon_name: &str) {
-    let health_message = health_status_up_message(daemon_name);
-    let _ = responses.send(health_message).await;
-}
-
-pub fn health_status_down_message(daemon_name: &str) -> Message {
-    Message {
-        topic: Topic::new_unchecked(&format!("tedge/health/{daemon_name}")),
-        payload: json!({
-            "status": "down",
-            "pid": process::id()})
-        .to_string()
-        .into(),
-        qos: mqtt_channel::QoS::AtLeastOnce,
-        retain: true,
-    }
-}
-
-pub fn health_status_up_message(daemon_name: &str) -> Message {
-    let clock = Box::new(WallClock);
-    let timestamp = clock
-        .now()
-        .format(&time::format_description::well_known::Rfc3339);
-    match timestamp {
-        Ok(time_stamp) => {
-            let health_status = json!({
-                "status": "up",
-                "pid": process::id(),
-                "time": time_stamp,
-            })
-            .to_string();
-            let response_topic_health =
-                Topic::new_unchecked(format!("tedge/health/{daemon_name}").as_str());
-
-            Message::new(&response_topic_health, health_status)
-                .with_qos(mqtt_channel::QoS::AtLeastOnce)
-                .with_retain()
-        }
-        Err(e) => {
-            let error_topic = Topic::new_unchecked("tedge/errors");
-            let error_msg = format!(
-                "Health message: Failed to convert timestamp to Rfc3339 format due to: {e}"
-            );
-            Message::new(&error_topic, error_msg).with_qos(mqtt_channel::QoS::AtLeastOnce)
-        }
-    }
-}
-
 pub fn is_bridge_health(topic: &str) -> bool {
     if topic.starts_with("tedge/health") {
         let substrings: Vec<String> = topic.split('/').map(String::from).collect();
@@ -169,12 +105,16 @@ pub fn is_bridge_health(topic: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use serde_json::Value;
 
-    use super::health_status_up_message;
     #[test]
     fn is_rfc3339_timestamp() {
-        let msg = health_status_up_message("test_daemon");
+        let health_topic = ServiceHealthTopic(Arc::from(
+            "te/device/main/service/test_daemon/status/health",
+        ));
+        let msg = health_topic.up_message();
+
         let health_msg_str = msg.payload_str().unwrap();
         let deserialized_value: Value =
             serde_json::from_str(health_msg_str).expect("Failed to parse JSON");

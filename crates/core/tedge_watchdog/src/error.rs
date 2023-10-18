@@ -47,4 +47,7 @@ pub enum WatchdogError {
 
     #[error(transparent)]
     ParseError(#[from] Parse),
+
+    #[error(transparent)]
+    CustomError(#[from] anyhow::Error),
 }
