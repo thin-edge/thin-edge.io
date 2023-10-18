@@ -27,6 +27,7 @@ use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_actors::WrappedInput;
 use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::SoftwareUpdateResponse;
@@ -65,6 +66,15 @@ async fn mapper_publishes_init_messages_on_startup() {
             (
                 "c8y/inventory/managedObjects/update/test-device",
                 default_fragment_content.as_str(),
+            ),
+            (
+                "te/device/main///twin/c8y_Agent",
+                &json!({
+                    "name": "thin-edge.io",
+                    "url": "https://thin-edge.io",
+                    "version": version
+                })
+                .to_string(),
             ),
             ("c8y/s/us", "114"),
             (
@@ -1022,7 +1032,7 @@ async fn mapper_publishes_supported_operations() {
     let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, false).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-    mqtt.skip(1).await;
+    mqtt.skip(2).await;
 
     // Expect smartrest message on `c8y/s/us` with expected payload "114,c8y_TestOp1,c8y_TestOp2"
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114,c8y_TestOp1,c8y_TestOp2")]).await;
@@ -1417,7 +1427,10 @@ async fn mapper_updating_the_inventory_fragments_from_file() {
     let cfg_dir = TempTedgeDir::new();
 
     let version = env!("CARGO_PKG_VERSION");
-    let custom_fragment_content = &json!({
+    let custom_fragment_content = json!({
+        "boolean_key": true,
+        "numeric_key": 10,
+        "string_key": "value",
         "c8y_Agent": {
             "name": "thin-edge.io",
             "url": "https://thin-edge.io",
@@ -1428,19 +1441,95 @@ async fn mapper_updating_the_inventory_fragments_from_file() {
             "url": "31aab9856861b1a587e2094690c2f6e272712cb1",
             "version": "1.20140107-1"
         }
-    })
-    .to_string();
-    create_inventroy_json_file_with_content(&cfg_dir, custom_fragment_content);
+    });
+    create_inventroy_json_file_with_content(&cfg_dir, &custom_fragment_content.to_string());
 
     let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-    assert_received_contains_str(
+    assert_received_includes_json(
         &mut mqtt,
-        [(
-            "c8y/inventory/managedObjects/update/test-device",
-            custom_fragment_content.as_str(),
-        )],
+        [
+            (
+                "c8y/inventory/managedObjects/update/test-device",
+                custom_fragment_content,
+            ),
+            ("te/device/main///twin/boolean_key", json!(true)),
+            (
+                "te/device/main///twin/c8y_Agent",
+                json!({
+                    "name": "thin-edge.io",
+                    "url": "https://thin-edge.io",
+                    "version": version
+                }),
+            ),
+            (
+                "te/device/main///twin/c8y_Firmware",
+                json!({
+                    "name": "raspberrypi-bootloader",
+                    "url": "31aab9856861b1a587e2094690c2f6e272712cb1",
+                    "version": "1.20140107-1"
+                }),
+            ),
+            ("te/device/main///twin/numeric_key", json!(10)),
+            ("te/device/main///twin/string_key", json!("value")),
+        ],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn forbidden_keys_in_inventory_fragments_file_ignored() {
+    // The test Creates an inventory file in (Temp_base_Dir)/device/inventory.json
+    // The tedge-mapper parses the inventory fragment file and publishes on c8y/inventory/managedObjects/update/test-device
+    // Verify the fragment message that is published
+    let cfg_dir = TempTedgeDir::new();
+
+    let version = env!("CARGO_PKG_VERSION");
+    let custom_fragment_content = json!({
+        "name": "new-name",
+        "type": "new-name",
+        "c8y_Firmware": {
+            "name": "raspberrypi-bootloader",
+            "url": "31aab9856861b1a587e2094690c2f6e272712cb1",
+            "version": "1.20140107-1"
+        }
+    });
+    create_inventroy_json_file_with_content(&cfg_dir, &custom_fragment_content.to_string());
+
+    let (mqtt, _http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    assert_received_includes_json(
+        &mut mqtt,
+        [
+            (
+                "c8y/inventory/managedObjects/update/test-device",
+                json!({
+                    "c8y_Firmware": {
+                        "name": "raspberrypi-bootloader",
+                        "url": "31aab9856861b1a587e2094690c2f6e272712cb1",
+                        "version": "1.20140107-1"
+                    }
+                }),
+            ),
+            (
+                "te/device/main///twin/c8y_Agent",
+                json!({
+                    "name": "thin-edge.io",
+                    "url": "https://thin-edge.io",
+                    "version": version
+                }),
+            ),
+            (
+                "te/device/main///twin/c8y_Firmware",
+                json!({
+                    "name": "raspberrypi-bootloader",
+                    "url": "31aab9856861b1a587e2094690c2f6e272712cb1",
+                    "version": "1.20140107-1"
+                }),
+            ),
+        ],
     )
     .await;
 }
@@ -2285,6 +2374,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     }
 
     let device_name = "test-device".into();
+    let device_topic_id = EntityTopicId::default_main_device();
     let device_type = "test-device-type".into();
     let service_type = "service".into();
     let c8y_host = "test.c8y.io".into();
@@ -2307,6 +2397,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         config_dir.utf8_path_buf(),
         config_dir.utf8_path_buf().into(),
         device_name,
+        device_topic_id,
         device_type,
         service_type,
         c8y_host,
@@ -2356,6 +2447,7 @@ pub(crate) async fn skip_init_messages(mqtt: &mut impl MessageReceiver<MqttMessa
         mqtt,
         [
             ("c8y/inventory/managedObjects/update/test-device", "{"),
+            ("te/device/main///twin/c8y_Agent", "{"),
             ("c8y/s/us", "114"),
             (
                 "c8y/inventory/managedObjects/update/test-device",

@@ -2,8 +2,6 @@ use super::alarm_converter::AlarmConverter;
 use super::config::C8yMapperConfig;
 use super::config::MQTT_MESSAGE_SIZE_THRESHOLD;
 use super::error::CumulocityMapperError;
-use super::fragments::C8yAgentFragment;
-use super::fragments::C8yDeviceDataFragment;
 use super::service_monitor;
 use crate::actor::CmdId;
 use crate::actor::IdDownloadRequest;
@@ -55,8 +53,6 @@ use service_monitor::convert_health_status_message;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
-use std::fs::File;
-use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::LoggingSender;
@@ -95,14 +91,11 @@ use thiserror::Error;
 use time::format_description::well_known::Rfc3339;
 use tokio::time::Duration;
 use tracing::debug;
-use tracing::info;
 use tracing::log::error;
 use tracing::trace;
 
 const C8Y_CLOUD: &str = "c8y";
-const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
 const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
-pub const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "c8y/inventory/managedObjects/update";
 const INTERNAL_ALARMS_TOPIC: &str = "c8y-internal/alarms/";
 const C8Y_JSON_MQTT_EVENTS_TOPIC: &str = "c8y/event/events/create";
 const TEDGE_AGENT_LOG_DIR: &str = "tedge/agent";
@@ -171,7 +164,8 @@ pub struct CumulocityConverter {
     pub config: C8yMapperConfig,
     pub(crate) mapper_config: MapperConfig,
     pub device_name: String,
-    device_type: String,
+    pub(crate) device_topic_id: EntityTopicId,
+    pub(crate) device_type: String,
     alarm_converter: AlarmConverter,
     pub operations: Operations,
     operation_logs: OperationLogs,
@@ -187,6 +181,7 @@ pub struct CumulocityConverter {
     pub auth_proxy: ProxyUrlGenerator,
     pub downloader_sender: LoggingSender<IdDownloadRequest>,
     pub pending_operations: HashMap<CmdId, SmartRestOperationVariant>,
+    pub inventory_model: Value, // Holds a live view of aggregated inventory, derived from various twin data
 }
 
 impl CumulocityConverter {
@@ -198,6 +193,7 @@ impl CumulocityConverter {
         downloader_sender: LoggingSender<IdDownloadRequest>,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
+        let device_topic_id = config.device_topic_id.clone();
         let device_type = config.device_type.clone();
         let service_type = config.service_type.clone();
         let c8y_host = config.c8y_host.clone();
@@ -230,11 +226,17 @@ impl CumulocityConverter {
         )
         .unwrap();
 
+        let inventory_model = json!({
+            "name": device_id.clone(),
+            "type": device_type.clone(),
+        });
+
         Ok(CumulocityConverter {
             size_threshold,
             config,
             mapper_config,
             device_name: device_id,
+            device_topic_id,
             device_type,
             alarm_converter,
             operations,
@@ -251,6 +253,7 @@ impl CumulocityConverter {
             auth_proxy,
             downloader_sender,
             pending_operations: HashMap::new(),
+            inventory_model,
         })
     }
 
@@ -1064,31 +1067,24 @@ impl CumulocityConverter {
     }
 
     fn try_init_messages(&mut self) -> Result<Vec<Message>, ConversionError> {
-        let inventory_fragments_message = self.wrap_error(create_inventory_fragments_message(
-            &self.device_name,
-            &self.cfg_dir,
-        ));
+        let mut messages = self.parse_base_inventory_file()?;
 
-        let supported_operations_message = self.wrap_error(
-            self.create_supported_operations(&self.cfg_dir.join("operations").join("c8y")),
-        );
+        let supported_operations_message =
+            self.create_supported_operations(&self.cfg_dir.join("operations").join("c8y"))?;
+
+        let device_data_message = self.inventory_device_type_update_message()?;
+
+        let pending_operations_message = create_get_pending_operations_message()?;
 
         let cloud_child_devices_message = create_request_for_cloud_child_devices();
 
-        let device_data_message = self.wrap_error(create_device_data_fragments(
-            &self.device_name,
-            &self.device_type,
-        ));
-
-        let pending_operations_message = self.wrap_error(create_get_pending_operations_message());
-
-        Ok(vec![
-            inventory_fragments_message,
+        messages.append(&mut vec![
             supported_operations_message,
             device_data_message,
             pending_operations_message,
             cloud_child_devices_message,
-        ])
+        ]);
+        Ok(messages)
     }
 
     fn create_supported_operations(&self, path: &Path) -> Result<Message, ConversionError> {
@@ -1163,17 +1159,6 @@ fn get_child_id(dir_path: &PathBuf) -> Result<String, ConversionError> {
     }
 }
 
-fn create_device_data_fragments(
-    device_name: &str,
-    device_type: &str,
-) -> Result<Message, ConversionError> {
-    let device_data = C8yDeviceDataFragment::from_type(device_type)?;
-    let ops_msg = device_data.to_json()?;
-
-    let topic = Topic::new_unchecked(&format!("{INVENTORY_MANAGED_OBJECTS_TOPIC}/{device_name}",));
-    Ok(Message::new(&topic, ops_msg.to_string()))
-}
-
 fn create_get_software_list_message() -> Result<Message, ConversionError> {
     let request = SoftwareListRequest::default();
     let topic = Topic::new(RequestTopic::SoftwareListRequest.as_str())?;
@@ -1204,17 +1189,6 @@ fn is_child_operation_path(path: &Path) -> bool {
 
 fn create_request_for_cloud_child_devices() -> Message {
     Message::new(&Topic::new_unchecked("c8y/s/us"), "105")
-}
-
-fn create_inventory_fragments_message(
-    device_name: &str,
-    cfg_dir: &Path,
-) -> Result<Message, ConversionError> {
-    let inventory_file_path = format!("{}/{INVENTORY_FRAGMENTS_FILE_LOCATION}", cfg_dir.display());
-    let ops_msg = get_inventory_fragments(&inventory_file_path)?;
-
-    let topic = Topic::new_unchecked(&format!("{INVENTORY_MANAGED_OBJECTS_TOPIC}/{device_name}"));
-    Ok(Message::new(&topic, ops_msg.to_string()))
 }
 
 impl CumulocityConverter {
@@ -1397,48 +1371,6 @@ pub fn get_local_child_devices_list(
         .filter(|path| path.is_dir())
         .map(|entry| entry.file_name().unwrap().to_string_lossy().to_string()) // safe unwrap
         .collect::<std::collections::HashSet<String>>())
-}
-
-/// reads a json file to serde_json::Value
-fn read_json_from_file(file_path: &str) -> Result<serde_json::Value, ConversionError> {
-    let mut file = File::open(Path::new(file_path))?;
-    let mut data = String::new();
-    file.read_to_string(&mut data)?;
-    let json: serde_json::Value = serde_json::from_str(&data)?;
-    info!("Read the fragments from {file_path} file");
-    Ok(json)
-}
-
-/// gets a serde_json::Value of inventory
-fn get_inventory_fragments(
-    inventory_file_path: &str,
-) -> Result<serde_json::Value, ConversionError> {
-    let agent_fragment = C8yAgentFragment::new()?;
-    let json_fragment = agent_fragment.to_json()?;
-
-    match read_json_from_file(inventory_file_path) {
-        Ok(mut json) => {
-            json.as_object_mut()
-                .ok_or(ConversionError::FromOptionError)?
-                .insert(
-                    "c8y_Agent".to_string(),
-                    json_fragment
-                        .get("c8y_Agent")
-                        .ok_or(ConversionError::FromOptionError)?
-                        .to_owned(),
-                );
-            Ok(json)
-        }
-        Err(ConversionError::FromStdIo(_)) => {
-            info!("Could not read inventory fragments from file {inventory_file_path}");
-            Ok(json_fragment)
-        }
-        Err(ConversionError::FromSerdeJson(e)) => {
-            info!("Could not parse the {inventory_file_path} file due to: {e}");
-            Ok(json_fragment)
-        }
-        Err(_) => Ok(json_fragment),
-    }
 }
 
 async fn create_tedge_agent_supported_ops(ops_dir: &Path) -> Result<(), ConversionError> {
@@ -2472,6 +2404,7 @@ pub(crate) mod tests {
         tmp_dir.dir("tedge").dir("agent");
 
         let device_id = "test-device".into();
+        let device_topic_id = EntityTopicId::default_main_device();
         let device_type = "test-device-type".into();
         let service_type = "service".into();
         let c8y_host = "test.c8y.io".into();
@@ -2489,6 +2422,7 @@ pub(crate) mod tests {
             tmp_dir.utf8_path_buf(),
             tmp_dir.utf8_path_buf().into(),
             device_id,
+            device_topic_id,
             device_type,
             service_type,
             c8y_host,
