@@ -34,6 +34,7 @@ tedge_http_ext = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
 tedge_signal_ext = { workspace = true }
 tedge_timer_ext = { workspace = true }
+tedge_uploader_ext = { workspace = true }
 tedge_utils = { workspace = true, features = ["logging"] }
 tokio = { workspace = true, features = [
     "process",

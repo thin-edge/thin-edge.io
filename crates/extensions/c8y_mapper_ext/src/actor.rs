@@ -37,6 +37,8 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
+use tedge_uploader_ext::UploadRequest;
+use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::FileError;
 use tracing::error;
@@ -47,10 +49,12 @@ pub type SyncStart = SetTimeout<()>;
 pub type SyncComplete = Timeout<()>;
 
 pub(crate) type CmdId = String;
+pub(crate) type IdUploadRequest = (CmdId, UploadRequest);
+pub(crate) type IdUploadResult = (CmdId, UploadResult);
 pub(crate) type IdDownloadResult = (CmdId, DownloadResult);
 pub(crate) type IdDownloadRequest = (CmdId, DownloadRequest);
 
-fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete, IdDownloadResult] : Debug);
+fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent, SyncComplete, IdUploadResult, IdDownloadResult] : Debug);
 type C8yMapperOutput = MqttMessage;
 
 pub struct C8yMapperActor {
@@ -87,6 +91,9 @@ impl Actor for C8yMapperActor {
                 }
                 C8yMapperInput::SyncComplete(_) => {
                     self.process_sync_timeout().await?;
+                }
+                C8yMapperInput::IdUploadResult((cmd_id, result)) => {
+                    unimplemented!()
                 }
                 C8yMapperInput::IdDownloadResult((cmd_id, result)) => {
                     self.process_download_result(cmd_id, result).await?;
@@ -261,6 +268,7 @@ pub struct C8yMapperBuilder {
     mqtt_publisher: DynSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
     timer_sender: DynSender<SyncStart>,
+    upload_sender: DynSender<IdUploadRequest>,
     download_sender: DynSender<IdDownloadRequest>,
     auth_proxy: ProxyUrlGenerator,
 }
@@ -271,6 +279,7 @@ impl C8yMapperBuilder {
         mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
         http: &mut impl ServiceProvider<C8YRestRequest, C8YRestResult, NoConfig>,
         timer: &mut impl ServiceProvider<SyncStart, SyncComplete, NoConfig>,
+        uploader: &mut impl ServiceProvider<IdUploadRequest, IdUploadResult, NoConfig>,
         downloader: &mut impl ServiceProvider<IdDownloadRequest, IdDownloadResult, NoConfig>,
         fs_watcher: &mut impl MessageSource<FsWatchEvent, PathBuf>,
     ) -> Result<Self, FileError> {
@@ -282,6 +291,7 @@ impl C8yMapperBuilder {
             mqtt.connect_consumer(config.topics.clone(), adapt(&box_builder.get_sender()));
         let http_proxy = C8YHttpProxy::new("C8yMapper => C8YHttpProxy", http);
         let timer_sender = timer.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
+        let upload_sender = uploader.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
         let download_sender =
             downloader.connect_consumer(NoConfig, adapt(&box_builder.get_sender()));
         fs_watcher.register_peer(config.ops_dir.clone(), adapt(&box_builder.get_sender()));
@@ -293,6 +303,7 @@ impl C8yMapperBuilder {
             mqtt_publisher,
             http_proxy,
             timer_sender,
+            upload_sender,
             download_sender,
             auth_proxy,
         })
@@ -319,6 +330,8 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
     fn try_build(self) -> Result<C8yMapperActor, Self::Error> {
         let mqtt_publisher = LoggingSender::new("C8yMapper => Mqtt".into(), self.mqtt_publisher);
         let timer_sender = LoggingSender::new("C8yMapper => Timer".into(), self.timer_sender);
+        let uploader_sender =
+            LoggingSender::new("C8yMapper => Uploader".into(), self.upload_sender);
         let downloader_sender =
             LoggingSender::new("C8yMapper => Downloader".into(), self.download_sender);
 
@@ -327,6 +340,7 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             mqtt_publisher.clone(),
             self.http_proxy,
             self.auth_proxy,
+            uploader_sender.clone(),
             downloader_sender.clone(),
         )
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
