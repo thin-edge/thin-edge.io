@@ -38,8 +38,8 @@ impl RunActor {
         self.actor.name()
     }
 
-    pub async fn run(mut self) -> Result<(), RuntimeError> {
-        self.actor.run().await
+    pub async fn run(self) -> Result<(), RuntimeError> {
+        self.actor.run_boxed().await
     }
 }
 

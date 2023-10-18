@@ -76,7 +76,7 @@ impl Actor for FirmwareManagerActor {
     // 2. Operation timeouts from the TimerActor for requests for which the child devices don't respond within the timeout window
     // 3. Download results from the DownloaderActor for firmware download requests
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         self.resend_operations_to_child_device().await?;
         // TODO: We need a dedicated actor to publish 500 later.
         self.get_pending_operations_from_cloud().await?;

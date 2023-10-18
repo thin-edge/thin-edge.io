@@ -165,7 +165,7 @@ async fn spawn_software_manager(
 
     let converter_box = converter_builder.build().with_timeout(TEST_TIMEOUT_MS);
 
-    let mut software_actor = software_actor_builder.build();
+    let software_actor = software_actor_builder.build();
     tokio::spawn(async move { software_actor.run().await });
 
     Ok(converter_box)

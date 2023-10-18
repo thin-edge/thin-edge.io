@@ -183,6 +183,6 @@ async fn communicate_over_mqtt() {
 }
 
 async fn mqtt_actor(builder: MqttActorBuilder) {
-    let mut mqtt_actor = builder.build();
+    let mqtt_actor = builder.build();
     mqtt_actor.run().await.unwrap()
 }

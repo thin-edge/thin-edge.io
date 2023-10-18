@@ -30,7 +30,7 @@ impl Actor for CollectdActor {
         "collectd"
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         while let Some(message) = self.messages.recv().await {
             match CollectdMessage::parse_from(&message) {
                 Ok(collectd_message) => {

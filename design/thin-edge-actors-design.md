@@ -138,7 +138,7 @@ Furthermore, Actix has a bias towards a request / response model of communicatio
 To conclude, we decided to design thin-edge actors on top of tokio without using actix.
 - Tokio provides the key building blocks: asynchronous tasks and in-memory channels.
 - By comparison with actor life-cycles defined and controlled by a framework,
-  we prefer the simplicity and generality of actors which behaviors are freely defined as `async fn run(&mut self)` methods.
+  we prefer the simplicity and generality of actors which behaviors are freely defined as `async fn run(self)` methods.
 - We need the flexibility to connect actors along various communication patterns,
   with no restrictions on the type nor the number of messages sent as a reaction to a former message,
   not even on the targets and the reaction time window.
@@ -160,7 +160,7 @@ the design focus is set on how to build and connect actors.
     * The channel receivers are owned by the actor instances that consume and process the messages.
     * The channel senders are freely cloned and given by the recipients to the actors that produce the messages.
 1. Enforce no constraint on the actor behaviors.
-   * An actor behavior is simply defined by an `async fn run(&mut self)` method, with no extra context or runtime.
+    * An actor behavior is simply defined by an `async fn run(self)` method, with no extra context or runtime.
     * Therefore, an actor instance has to be given, along its state, any channel required to send and receive messages.
     But, the actor implementation is free to organize its event loop.
        * Messages can be processed in turn or concurrently.
@@ -363,13 +363,13 @@ pub struct MyActor {
 }
 ```
 
-The behavior of an actor is simply defined by an `async fn run(&mut self)` method.
+The behavior of an actor is simply defined by an `async fn run(self)` method.
 Note that no extra context, runtime or peer information are passed to the actor event loop.
 
 ```rust
 impl MyActor {
   /// The actor event loop
-  pub async fn run(&mut self) -> Result<(), RuntimeError> {
+  pub async fn run(mut self) -> Result<(), RuntimeError> {
     // - consume messages received on `self.input_box`
     // - update `self.state`
     // - send messages/errors to peers over `self.peer_x` senders
@@ -399,7 +399,7 @@ struct ActorA {
 
 impl ActorA {
   /// The actor processes then all the messages in turn accordingly to their kind
-  pub async fn run(&mut self) -> Result<(), RuntimeError> {
+  pub async fn run(mut self) -> Result<(), RuntimeError> {
     while let Some(message) = self.messages.recv().await {
       match message {
         DoThis(arg) => self.do_this(arg),
@@ -430,11 +430,11 @@ struct ActorAHandle {
 }
 
 impl ActorAHandle {
-  pub async fn do_this(&mut self, arg: ThisArg) -> Result<(), ChannelError> {
+  pub async fn do_this(mut self, arg: ThisArg) -> Result<(), ChannelError> {
     self.sender.send(arg).await
   }
 
-  pub async fn do_that(&mut self, arg: ThatArg) -> Result<(), ChannelError> {
+  pub async fn do_that(mut self, arg: ThatArg) -> Result<(), ChannelError> {
     self.sender.send(arg).await
   }
 }
@@ -451,7 +451,7 @@ struct MyActor {
 }
 
 impl ActorA {
-  pub async fn run(&mut self) -> Result<(), RuntimeError> {
+  pub async fn run(mut self) -> Result<(), RuntimeError> {
     // interact with the peer through its handle
     self.peer_a.do_this(this_arg).await?;
     self.peer_a.do_that(that_arg).await?;

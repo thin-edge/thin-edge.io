@@ -39,7 +39,7 @@ impl Actor for TedgeOperationConverterActor {
         "TedgeOperationConverter"
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         self.publish_operation_capabilities().await?;
 
         while let Some(input) = self.input_receiver.recv().await {

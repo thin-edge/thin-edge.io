@@ -28,7 +28,7 @@ impl<S: Server> Actor for ServerActor<S> {
         self.server.name()
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         let server = &mut self.server;
         while let Some((client_id, request)) = self.messages.recv().await {
             tokio::select! {
@@ -66,7 +66,7 @@ impl<S: Server + Clone> Actor for ConcurrentServerActor<S> {
         self.server.name()
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         while let Some((client_id, request)) = self.messages.recv().await {
             // Spawn the request
             let mut server = self.server.clone();

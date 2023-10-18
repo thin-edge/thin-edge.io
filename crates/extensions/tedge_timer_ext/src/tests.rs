@@ -149,7 +149,7 @@ async fn spawn_timer_actor<T: Message>(
     let signal_sender = builder.get_signal_sender();
 
     tokio::spawn(async move {
-        let mut actor = builder.build();
+        let actor = builder.build();
         let _ = actor.run().await;
     });
 

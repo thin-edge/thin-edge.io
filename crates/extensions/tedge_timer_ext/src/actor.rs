@@ -196,7 +196,7 @@ impl Actor for TimerActor {
     ///
     /// When an explicit [RuntimeRequest::Shutdown] is received,
     /// all the pending timers are simply aborted.
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         loop {
             if let Some(current) = self.current_timer.take() {
                 let time_elapsed = current.sleep;

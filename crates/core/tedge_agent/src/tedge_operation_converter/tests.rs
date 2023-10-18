@@ -239,7 +239,7 @@ async fn spawn_mqtt_operation_converter(
     let restart_box = restart_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let mqtt_message_box = mqtt_builder.build().with_timeout(TEST_TIMEOUT_MS);
 
-    let mut converter_actor = converter_actor_builder.build();
+    let converter_actor = converter_actor_builder.build();
     tokio::spawn(async move { converter_actor.run().await });
 
     Ok((software_box, restart_box, mqtt_message_box))

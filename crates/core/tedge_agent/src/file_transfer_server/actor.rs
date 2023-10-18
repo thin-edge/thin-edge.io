@@ -25,7 +25,7 @@ impl Actor for FileTransferServerActor {
         "HttpFileTransferServer"
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         let http_config = self.config.clone();
         let server = http_file_transfer_server(&http_config)?;
 
@@ -100,7 +100,7 @@ mod tests {
 
         // Spawn HTTP file transfer server
         let builder = FileTransferServerBuilder::new(http_config);
-        let mut actor = builder.build();
+        let actor = builder.build();
         tokio::spawn(async move { actor.run().await });
 
         // Create PUT request to file transfer service

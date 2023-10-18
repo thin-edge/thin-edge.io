@@ -37,7 +37,7 @@ impl Actor for HealthMonitorActor {
         "HealthMonitorActor"
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         self.messages.send(self.up_health_status()).await?;
         while let Some(_message) = self.messages.recv().await {
             {

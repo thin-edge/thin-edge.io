@@ -2337,7 +2337,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
     )
     .unwrap();
 
-    let mut actor = c8y_mapper_builder.build();
+    let actor = c8y_mapper_builder.build();
     tokio::spawn(async move { actor.run().await });
 
     (

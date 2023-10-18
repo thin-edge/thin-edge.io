@@ -78,7 +78,7 @@ impl Actor for C8YHttpProxyActor {
         "C8Y-REST"
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         self.init().await.map_err(Box::new)?;
 
         while let Some((client_id, request)) = self.peers.clients.recv().await {

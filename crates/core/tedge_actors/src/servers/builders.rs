@@ -153,7 +153,7 @@ impl<S: Server, K> ServerActorBuilder<S, K> {
 impl<S: Server> ServerActorBuilder<S, Sequential> {
     pub async fn run(self) -> Result<(), RuntimeError> {
         let messages = self.box_builder.build();
-        let mut actor = ServerActor::new(self.server, messages);
+        let actor = ServerActor::new(self.server, messages);
 
         actor.run().await
     }
@@ -162,7 +162,7 @@ impl<S: Server> ServerActorBuilder<S, Sequential> {
 impl<S: Server + Clone> ServerActorBuilder<S, Concurrent> {
     pub async fn run(self) -> Result<(), RuntimeError> {
         let messages = self.box_builder.build();
-        let mut actor = ConcurrentServerActor::new(self.server, messages);
+        let actor = ConcurrentServerActor::new(self.server, messages);
 
         actor.run().await
     }

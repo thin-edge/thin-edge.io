@@ -39,7 +39,7 @@ impl Actor for Calculator {
         "Calculator"
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         while let Some(op) = self.messages.recv().await {
             // Process in turn each input message
             let from = self.state;

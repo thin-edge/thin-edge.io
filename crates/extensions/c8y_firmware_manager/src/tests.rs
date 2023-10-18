@@ -744,7 +744,7 @@ async fn spawn_firmware_manager(
     let timer_message_box = timer_builder.build();
     let downloader_message_box = downloader_builder.build().with_timeout(TEST_TIMEOUT_MS);
 
-    let mut firmware_manager_actor = firmware_manager_builder.build();
+    let firmware_manager_actor = firmware_manager_builder.build();
     let handle = tokio::spawn(async move { firmware_manager_actor.run().await });
 
     Ok((

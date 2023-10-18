@@ -32,7 +32,7 @@ async fn spawn_sleep_service() -> SimpleMessageBox<(ClientId, u64), (ClientId, u
     let mut box_builder = SimpleMessageBoxBuilder::new("test", 16);
     let handle = box_builder.new_client_box(NoConfig);
     let messages = box_builder.build();
-    let mut actor = ServerActor::new(service, messages);
+    let actor = ServerActor::new(service, messages);
 
     tokio::spawn(async move { actor.run().await });
 
@@ -49,7 +49,7 @@ async fn spawn_concurrent_sleep_service(
 
     let handle = handle_builder.build();
     let messages = ConcurrentServerMessageBox::new(max_concurrency, box_builder.build());
-    let mut actor = ConcurrentServerActor::new(service, messages);
+    let actor = ConcurrentServerActor::new(service, messages);
 
     tokio::spawn(async move { actor.run().await });
 

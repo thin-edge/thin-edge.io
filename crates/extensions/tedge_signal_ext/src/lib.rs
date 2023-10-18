@@ -69,7 +69,7 @@ impl Actor for SignalActor {
         "Signal-Handler"
     }
 
-    async fn run(&mut self) -> Result<(), RuntimeError> {
+    async fn run(mut self) -> Result<(), RuntimeError> {
         let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT]).unwrap(); // FIXME
         loop {
             tokio::select! {

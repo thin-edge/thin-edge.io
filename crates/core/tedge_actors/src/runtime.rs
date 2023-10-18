@@ -309,7 +309,7 @@ mod tests {
             "Echo"
         }
 
-        async fn run(&mut self) -> Result<(), RuntimeError> {
+        async fn run(mut self) -> Result<(), RuntimeError> {
             while let Some(message) = self.messages.recv().await {
                 match message {
                     EchoMessage::String(message) => {
@@ -338,7 +338,7 @@ mod tests {
             "Ending"
         }
 
-        async fn run(&mut self) -> Result<(), RuntimeError> {
+        async fn run(self) -> Result<(), RuntimeError> {
             Ok(())
         }
     }
@@ -357,7 +357,7 @@ mod tests {
             "Panic"
         }
 
-        async fn run(&mut self) -> Result<(), RuntimeError> {
+        async fn run(self) -> Result<(), RuntimeError> {
             panic!("Oh dear");
         }
     }
