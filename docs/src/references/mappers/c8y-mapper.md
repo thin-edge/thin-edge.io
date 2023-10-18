@@ -924,60 +924,6 @@ c8y/inventory/managedObjects/update
 ```
 
 
-#### Data - Deleting a root fragment
-
-When deleting the root fragments on the `/twin/` topic, the mapper will have to keep track of the previously published value before the delete request is published. All the properties should have their values set to `null` and included in the published.
-
-For the example mapping, it assumes that the following message was already published before the deletion message was received.
-
-```text title="Topic (retain=true)"
-te/device/child01/service/tedge-agent/twin/
-```
-
-```json5 title="Payload"
-<<empty>>
-{
-  "subtype": "foo",
-  "other": "bar"
-}
-```
-
-<div class="code-indent-left">
-
-**Thin Edge (input)**
-
-```text title="Topic (retain=true)"
-te/device/child01/service/tedge-agent/twin/
-```
-
-```json5 title="Payload"
-<<empty>>
-{
-  "subtype": null,
-  "other": null
-}
-```
-
-</div>
-
-<div class="code-indent-right">
-
-**Cumulocity IoT (output)**
-
-```text title="Topic"
-c8y/inventory/managedObjects/update/<main-device-id>:device:child01:service:tedge-agent
-```
-
-```json5 title="Payload"
-{
-  "subtype": null,
-  "other": null
-}
-```
-
-</div>
-
-
 ## Operations/Commands
 
 Operations from Cumulocity are mapped to their equivalent commands in Thin Edge format.

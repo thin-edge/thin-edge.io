@@ -89,13 +89,18 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        let payload = serde_json::from_slice::<JsonValue>(message.payload_bytes())?;
-        let existing = self.inventory_model.get(fragment_key);
-        if existing.is_some_and(|v| payload.eq(v)) {
-            return Ok(vec![]);
-        }
+        let payload = if message.payload_bytes().is_empty() {
+            JsonValue::Null
+        } else {
+            let payload = serde_json::from_slice::<JsonValue>(message.payload_bytes())?;
+            let existing = self.inventory_model.get(fragment_key);
+            if existing.is_some_and(|v| payload.eq(v)) {
+                return Ok(vec![]);
+            }
 
-        self.update_inventory_model(fragment_key.into(), payload.clone());
+            self.update_inventory_model(fragment_key.into(), payload.clone());
+            payload
+        };
 
         let mapped_json = json!({ fragment_key: payload });
         let mapped_message = self.inventory_update_message(source, mapped_json)?;
@@ -303,6 +308,26 @@ mod tests {
             inventory_messages.is_empty(),
             "Expected no converted messages, but received {:?}",
             &inventory_messages
+        );
+    }
+
+    #[tokio::test]
+    async fn clear_inventory_fragment() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let twin_message = Message::new(&Topic::new_unchecked("te/device/main///twin/foo"), "");
+        let inventory_messages = converter.convert(&twin_message).await;
+
+        assert_messages_matching(
+            &inventory_messages,
+            [(
+                "c8y/inventory/managedObjects/update/test-device",
+                json!({
+                    "foo": null
+                })
+                .into(),
+            )],
         );
     }
 
