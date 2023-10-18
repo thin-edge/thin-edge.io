@@ -1168,7 +1168,7 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     // Simulate tedge-agent health status message
     mqtt.send(
         MqttMessage::new(
-            &Topic::new_unchecked("tedge/health/tedge-agent"),
+            &Topic::new_unchecked("te/device/main/service/tedge-agent/status/health"),
             "{\"status\":\"up\"}",
         )
         .with_retain(),
@@ -1176,7 +1176,8 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     .await
     .expect("Send failed");
 
-    mqtt.skip(2).await; // Skip tedge-agent health status mapping and software list request
+    // Skip tedge-agent registration, health status mapping, and software list request
+    mqtt.skip(4).await;
 
     // Simulate FsEvent for the creation of a new operation file
     fs.send(FsWatchEvent::FileCreated(
@@ -1755,7 +1756,7 @@ async fn inventory_registers_unknown_entity_once() {
             .expect("Service register message payload must be JSON");
     assert_json_include!(
         actual: service_register_payload,
-        expected: json!({"@type": "service", "type": "systemd"})
+        expected: json!({"@type": "service", "type": "service"})
     );
 
     assert!(

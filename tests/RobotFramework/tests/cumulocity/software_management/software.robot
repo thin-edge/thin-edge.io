@@ -40,12 +40,12 @@ Custom Setup
     ${DEVICE_SN}=                            Setup
     Device Should Exist                      ${DEVICE_SN}
     Set Test Variable    $DEVICE_SN
-    Should Have MQTT Messages    tedge/health/tedge-mapper-c8y
+    Should Have MQTT Messages    te/device/main/service/tedge-mapper-c8y/status/health
     Execute Command    sudo start-http-server.sh
     [Documentation]    WORKAROUND: #1731 The tedge-mapper-c8y is restarted due to a suspected race condition between the mapper and tedge-agent which results in the software list message being lost
     ${timestamp}=        Get Unix Timestamp
     Restart Service    tedge-mapper-c8y
-    Should Have MQTT Messages    tedge/health/tedge-mapper-c8y    date_from=${timestamp}
+    Should Have MQTT Messages    te/device/main/service/tedge-mapper-c8y/status/health    date_from=${timestamp}
 
 Stop tedge-agent
     [Timeout]                                5 seconds

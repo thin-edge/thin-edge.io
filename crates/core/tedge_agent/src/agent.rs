@@ -19,7 +19,10 @@ use tedge_actors::ConvertingActorBuilder;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::Runtime;
+use tedge_api::mqtt_topics::DeviceTopicId;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::Service;
 use tedge_api::path::DataDir;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
@@ -45,6 +48,7 @@ pub struct AgentConfig {
     pub data_dir: DataDir,
     pub mqtt_device_topic_id: EntityTopicId,
     pub mqtt_topic_root: Arc<str>,
+    pub service_type: String,
 }
 
 impl AgentConfig {
@@ -111,6 +115,7 @@ impl AgentConfig {
             log_dir,
             mqtt_topic_root,
             mqtt_device_topic_id,
+            service_type: tedge_config.service.ty.clone(),
         })
     }
 }
@@ -184,7 +189,20 @@ impl Agent {
         let signal_actor_builder = SignalActor::builder(&runtime.get_handle());
 
         // Health actor
-        let health_actor = HealthMonitorBuilder::new(TEDGE_AGENT, &mut mqtt_actor_builder);
+        // TODO: take a user-configurable service topic id
+        let service_topic_id = self.config.mqtt_device_topic_id.to_default_service_topic_id("tedge-agent")
+            .with_context(|| format!("Device topic id {} currently needs default scheme, e.g: 'device/DEVICE_NAME//'", self.config.mqtt_device_topic_id))?;
+        let service = Service {
+            service_topic_id,
+            device_topic_id: DeviceTopicId::new(self.config.mqtt_device_topic_id.clone()),
+        };
+        let mqtt_schema = MqttSchema::with_root(self.config.mqtt_topic_root.to_string());
+        let health_actor = HealthMonitorBuilder::from_service_topic_id(
+            service,
+            &mut mqtt_actor_builder,
+            &mqtt_schema,
+            self.config.service_type.clone(),
+        );
 
         // Tedge to Te topic converter
         let tedge_to_te_converter = create_tedge_to_te_converter(&mut mqtt_actor_builder)?;
@@ -220,6 +238,7 @@ pub fn create_tedge_to_te_converter(
     mqtt_actor_builder: &mut MqttActorBuilder,
 ) -> Result<ConvertingActorBuilder<TedgetoTeConverter, TopicFilter>, anyhow::Error> {
     let tedge_to_te_converter = TedgetoTeConverter::new();
+
     let subscriptions: TopicFilter = vec![
         "tedge/measurements",
         "tedge/measurements/+",

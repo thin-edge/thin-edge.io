@@ -1,8 +1,12 @@
+use anyhow::Context;
 use clap::Parser;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tedge_actors::Runtime;
+use tedge_api::mqtt_topics::DeviceTopicId;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::Service;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::TEdgeConfig;
@@ -30,7 +34,7 @@ The thin-edge `CONFIG_DIR` is used:
   ** `mqtt.topic_root` and `mqtt.device_topic_id`: for the MQTT topics to publish to and subscribe from
 * to find/store the `tedge-configuration-plugin.toml`: the plugin configuration file"#;
 
-const TEDGE_CONFIGURATION_PLUGIN: &str = "tedge-configuration-plugin";
+const PLUGIN_NAME: &str = "tedge-configuration-plugin";
 
 #[derive(Debug, Parser, Clone)]
 #[clap(
@@ -93,12 +97,32 @@ async fn run_with(
 
     let mqtt_config = tedge_config.mqtt_config()?;
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(format!(
-        "{TEDGE_CONFIGURATION_PLUGIN}#{mqtt_topic_root}/{mqtt_device_topic_id}",
+        "{PLUGIN_NAME}#{mqtt_topic_root}/{mqtt_device_topic_id}",
     )));
 
     let mut fs_watch_actor = FsWatchActorBuilder::new();
 
-    let health_actor = HealthMonitorBuilder::new(TEDGE_CONFIGURATION_PLUGIN, &mut mqtt_actor);
+    // TODO: take a user-configurable service topic id
+    let mqtt_device_topic_id = mqtt_device_topic_id.parse::<EntityTopicId>().unwrap();
+
+    let service_topic_id = mqtt_device_topic_id
+        .to_default_service_topic_id(PLUGIN_NAME)
+        .with_context(|| {
+            format!(
+                "Device topic id {mqtt_device_topic_id} currently needs default scheme, e.g: 'device/DEVICE_NAME//'",
+            )
+        })?;
+    let service = Service {
+        service_topic_id,
+        device_topic_id: DeviceTopicId::new(mqtt_device_topic_id.clone()),
+    };
+    let mqtt_schema = MqttSchema::with_root(mqtt_topic_root.to_string());
+    let health_actor = HealthMonitorBuilder::from_service_topic_id(
+        service,
+        &mut mqtt_actor,
+        &mqtt_schema,
+        tedge_config.service.ty.clone(),
+    );
 
     let mut downloader_actor = DownloaderActor::new().builder();
 

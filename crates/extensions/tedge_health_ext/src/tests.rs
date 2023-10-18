@@ -1,6 +1,7 @@
 use crate::HealthMonitorBuilder;
 use crate::TopicFilter;
 use std::time::Duration;
+use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
@@ -9,6 +10,9 @@ use tedge_actors::Sender;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::Service;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -24,8 +28,15 @@ async fn send_health_check_message_to_generic_topic() -> Result<(), anyhow::Erro
     let health_check_request = MqttMessage::new(&Topic::new_unchecked("tedge/health-check"), "");
     mqtt_message_box.send(health_check_request).await.unwrap();
 
+    // skip registration message
+    mqtt_message_box.skip(1).await;
+
     if let Some(message) = timeout(TEST_TIMEOUT, mqtt_message_box.recv()).await? {
-        assert!(message.payload_str()?.contains("up"))
+        assert!(
+            message.payload_str()?.contains("up"),
+            "{} doesn't contain \"up\"",
+            message.payload_str().unwrap()
+        )
     }
 
     Ok(())
@@ -40,8 +51,15 @@ async fn send_health_check_message_to_service_specific_topic() -> Result<(), any
         MqttMessage::new(&Topic::new_unchecked("tedge/health-check/health-test"), "");
     mqtt_message_box.send(health_check_request).await.unwrap();
 
+    // skip registration message
+    mqtt_message_box.skip(1).await;
+
     if let Some(message) = timeout(TEST_TIMEOUT, mqtt_message_box.recv()).await? {
-        assert!(message.payload_str()?.contains("up"))
+        assert!(
+            message.payload_str()?.contains("up"),
+            "{} doesn't contain \"up\"",
+            message.payload_str().unwrap()
+        )
     }
 
     Ok(())
@@ -53,7 +71,7 @@ async fn health_check_set_init_and_last_will_message() -> Result<(), anyhow::Err
     let _ = spawn_a_health_check_actor("test", &mut mqtt_config).await;
 
     let expected_last_will = MqttMessage::new(
-        &Topic::new_unchecked("tedge/health/test"),
+        &Topic::new_unchecked("te/device/main/service/test/status/health"),
         format!(r#"{{"pid":{},"status":"down"}}"#, std::process::id()),
     );
     let expected_last_will = expected_last_will.with_retain();
@@ -68,7 +86,20 @@ async fn spawn_a_health_check_actor(
 ) -> SimpleMessageBox<MqttMessage, MqttMessage> {
     let mut health_mqtt_builder = MqttActorBuilder::new(mqtt_config);
 
-    let health_actor = HealthMonitorBuilder::new(service_to_be_monitored, &mut health_mqtt_builder);
+    let mqtt_schema = MqttSchema::new();
+    let service = Service {
+        service_topic_id: EntityTopicId::default_main_service(service_to_be_monitored)
+            .unwrap()
+            .into(),
+        device_topic_id: EntityTopicId::default_main_device().into(),
+    };
+
+    let health_actor = HealthMonitorBuilder::from_service_topic_id(
+        service,
+        &mut health_mqtt_builder,
+        &mqtt_schema,
+        "service".to_string(),
+    );
 
     let actor = health_actor.build();
     tokio::spawn(async move { actor.run().await });

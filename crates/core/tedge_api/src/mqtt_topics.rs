@@ -8,6 +8,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
+const ENTITY_ID_SEGMENTS: usize = 4;
+
 /// The MQTT topics are represented by three distinct groups:
 /// - a root prefix, used by all the topics
 /// - an entity topic identifier of the source or target of the messages
@@ -92,7 +94,12 @@ impl MqttSchema {
     /// );
     /// ```
     pub fn topic_for(&self, entity: &EntityTopicId, channel: &Channel) -> mqtt_channel::Topic {
-        let topic = format!("{}/{}/{}", self.root, entity, channel);
+        let channel = channel.to_string();
+        let topic = if channel.is_empty() {
+            format!("{}/{entity}", self.root)
+        } else {
+            format!("{}/{entity}/{channel}", self.root)
+        };
         mqtt_channel::Topic::new(&topic).unwrap()
     }
 
@@ -234,8 +241,6 @@ impl FromStr for EntityTopicId {
     type Err = TopicIdError;
 
     fn from_str(entity_id: &str) -> Result<Self, Self::Err> {
-        const ENTITY_ID_SEGMENTS: usize = 4;
-
         let entity_id_segments = entity_id.matches('/').count() + 1;
         if entity_id_segments > ENTITY_ID_SEGMENTS {
             return Err(TopicIdError::TooLong);
@@ -272,6 +277,16 @@ impl EntityTopicId {
         format!("device/{child}/service/{service}").parse()
     }
 
+    /// Assuming `self` is a device in default MQTT scheme, create an
+    /// `EntityTopicId` for a service on that device.
+    ///
+    /// Returns `None` if `self` is not in default MQTT scheme or if `service`
+    /// is an invalid service name.
+    pub fn default_service_for_device(&self, service: &str) -> Option<Self> {
+        let device_name = self.default_device_name()?;
+        Self::default_child_service(device_name, service).ok()
+    }
+
     /// Returns true if the current topic id matches the default topic scheme:
     /// - device/<device-id>// : for devices
     /// - device/<device-id>/service/<service-id> : for services
@@ -281,6 +296,11 @@ impl EntityTopicId {
         self.default_device_name()
             .or(self.default_service_name())
             .is_some()
+    }
+
+    /// Returns `true` if it's the topic identifier of the child device in default topic scheme.
+    pub fn is_default_child_device(&self) -> bool {
+        matches!(self.segments(), ["device", device_name, "", ""] if device_name != "main" && !device_name.is_empty())
     }
 
     /// Returns the device name when the entity topic identifier is using the `device/+/service/+` pattern.
@@ -321,6 +341,101 @@ impl EntityTopicId {
     /// Returns true if the current topic identifier matches that of the main device
     pub fn is_default_main_device(&self) -> bool {
         self == &Self::default_main_device()
+    }
+
+    /// If `self` is a device topic id, return a service topic id under this
+    /// device.
+    ///
+    /// The device topic id must be in a format: "device/DEVICE_NAME//"; if not,
+    /// `None` will be returned.
+    pub fn to_default_service_topic_id(&self, service_name: &str) -> Option<ServiceTopicId> {
+        self.default_service_for_device(service_name)
+            .map(ServiceTopicId)
+    }
+
+    /// Returns an array of all segments of this entity topic.
+    fn segments(&self) -> [&str; ENTITY_ID_SEGMENTS] {
+        let mut segments = self.0.split('/');
+        let seg1 = segments.next().unwrap();
+        let seg2 = segments.next().unwrap();
+        let seg3 = segments.next().unwrap();
+        let seg4 = segments.next().unwrap();
+        [seg1, seg2, seg3, seg4]
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+/// Contains a topic id of the service itself and the associated device.
+pub struct Service {
+    pub service_topic_id: ServiceTopicId,
+    pub device_topic_id: DeviceTopicId,
+}
+
+/// Represents an entity topic identifier known to be a service.
+///
+/// It's most often in a format `device/DEVICE_NAME/service/SERVICE_NAME`, but
+/// it doesn't have to be. Thus in order to know whether or not a particular
+/// [`EntityTopicId`] is a service, one has to check the
+/// [`EntityStore`](super::entity_store::EntityStore), but some functions do not
+/// have any way to access it. As such, functions can use this type to tell the
+/// caller that they expect passed [`EntityTopicId`] to be a service, and that
+/// it is the responsibility of the caller to verify it first.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct ServiceTopicId(EntityTopicId);
+
+impl ServiceTopicId {
+    pub fn new(entity_topic_id: EntityTopicId) -> Self {
+        Self(entity_topic_id)
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    pub fn entity(&self) -> &EntityTopicId {
+        &self.0
+    }
+}
+
+impl From<EntityTopicId> for ServiceTopicId {
+    fn from(value: EntityTopicId) -> Self {
+        Self::new(value)
+    }
+}
+
+impl Display for ServiceTopicId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Represents an entity topic identifier known to be a device.
+///
+/// It's most often in a format `device/DEVICE_NAME//`, but it doesn't have to
+/// be. Thus in order to know whether or not a particular [`EntityTopicId`] is a
+/// service, one has to check the
+/// [`EntityStore`](super::entity_store::EntityStore), but some functions do not
+/// have any way to access it. As such, functions can use this type to tell the
+/// caller that they expect passed [`EntityTopicId`] to be a device, and that
+/// it is the responsibility of the caller to verify it first.
+pub struct DeviceTopicId(EntityTopicId);
+
+impl DeviceTopicId {
+    pub fn new(device_topic_id: EntityTopicId) -> Self {
+        Self(device_topic_id)
+    }
+
+    pub fn entity(&self) -> &EntityTopicId {
+        &self.0
+    }
+}
+
+impl From<EntityTopicId> for DeviceTopicId {
+    fn from(value: EntityTopicId) -> Self {
+        Self::new(value)
     }
 }
 
@@ -364,6 +479,7 @@ pub enum Channel {
     CommandMetadata {
         operation: OperationType,
     },
+    Health,
 }
 
 impl FromStr for Channel {
@@ -401,6 +517,7 @@ impl FromStr for Channel {
                 operation: operation.parse().unwrap(), // Infallible
                 cmd_id: cmd_id.to_string(),
             }),
+            ["status", "health"] => Ok(Channel::Health),
 
             _ => Err(ChannelError::InvalidCategory(channel.to_string())),
         }
@@ -425,6 +542,7 @@ impl Display for Channel {
 
             Channel::Command { operation, cmd_id } => write!(f, "cmd/{operation}/{cmd_id}"),
             Channel::CommandMetadata { operation } => write!(f, "cmd/{operation}"),
+            Channel::Health => write!(f, "status/health"),
         }
     }
 }
@@ -443,6 +561,7 @@ pub enum OperationType {
     LogUpload,
     ConfigSnapshot,
     ConfigUpdate,
+    Health,
     Custom(String),
 }
 
@@ -471,6 +590,7 @@ impl Display for OperationType {
             OperationType::LogUpload => write!(f, "log_upload"),
             OperationType::ConfigSnapshot => write!(f, "config_snapshot"),
             OperationType::ConfigUpdate => write!(f, "config_update"),
+            OperationType::Health => write!(f, "health"),
             OperationType::Custom(operation) => write!(f, "{operation}"),
         }
     }
@@ -615,6 +735,98 @@ mod tests {
         assert_eq!(
             "invalid/+/mqtttopic/#".parse::<EntityTopicId>(),
             Err(TopicIdError::InvalidMqttTopic)
+        );
+    }
+
+    // TODO: we can forgot to update the test when adding variants, figure out a
+    // way to use type system to fail if not all values checked
+    #[test]
+    fn topic_for() {
+        let mqtt_schema = MqttSchema::new();
+
+        let device: EntityTopicId = "device/main//".parse().unwrap();
+
+        assert_eq!(
+            mqtt_schema.topic_for(&device, &Channel::EntityMetadata),
+            mqtt_channel::Topic::new_unchecked("te/device/main//")
+        );
+        assert_eq!(
+            mqtt_schema.topic_for(
+                &device,
+                &Channel::Measurement {
+                    measurement_type: "type".to_string()
+                }
+            ),
+            mqtt_channel::Topic::new_unchecked("te/device/main///m/type")
+        );
+        assert_eq!(
+            mqtt_schema.topic_for(
+                &device,
+                &Channel::MeasurementMetadata {
+                    measurement_type: "type".to_string()
+                }
+            ),
+            mqtt_channel::Topic::new_unchecked("te/device/main///m/type/meta")
+        );
+
+        assert_eq!(
+            mqtt_schema.topic_for(
+                &device,
+                &Channel::Event {
+                    event_type: "type".to_string()
+                }
+            ),
+            mqtt_channel::Topic::new_unchecked("te/device/main///e/type")
+        );
+        assert_eq!(
+            mqtt_schema.topic_for(
+                &device,
+                &Channel::EventMetadata {
+                    event_type: "type".to_string()
+                }
+            ),
+            mqtt_channel::Topic::new_unchecked("te/device/main///e/type/meta")
+        );
+        assert_eq!(
+            mqtt_schema.topic_for(
+                &device,
+                &Channel::Alarm {
+                    alarm_type: "type".to_string()
+                }
+            ),
+            mqtt_channel::Topic::new_unchecked("te/device/main///a/type")
+        );
+        assert_eq!(
+            mqtt_schema.topic_for(
+                &device,
+                &Channel::AlarmMetadata {
+                    alarm_type: "type".to_string()
+                }
+            ),
+            mqtt_channel::Topic::new_unchecked("te/device/main///a/type/meta")
+        );
+        assert_eq!(
+            mqtt_schema.topic_for(
+                &device,
+                &Channel::Command {
+                    operation: OperationType::Health,
+                    cmd_id: "check".to_string()
+                }
+            ),
+            mqtt_channel::Topic::new_unchecked("te/device/main///cmd/health/check")
+        );
+        assert_eq!(
+            mqtt_schema.topic_for(
+                &device,
+                &Channel::CommandMetadata {
+                    operation: OperationType::LogUpload
+                }
+            ),
+            mqtt_channel::Topic::new_unchecked("te/device/main///cmd/log_upload")
+        );
+        assert_eq!(
+            mqtt_schema.topic_for(&device, &Channel::Health),
+            mqtt_channel::Topic::new_unchecked("te/device/main///status/health")
         );
     }
 }

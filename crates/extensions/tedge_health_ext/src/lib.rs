@@ -13,23 +13,37 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBoxBuilder;
-use tedge_api::health::health_status_down_message;
-use tedge_api::health::health_status_up_message;
+use tedge_api::entity_store::EntityRegistrationMessage;
+use tedge_api::entity_store::EntityType;
+use tedge_api::health::ServiceHealthTopic;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::Service;
+use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 
 pub struct HealthMonitorBuilder {
-    service_name: String,
+    registration_message: Option<Message>,
+    health_topic: ServiceHealthTopic,
     box_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
 }
 
 impl HealthMonitorBuilder {
-    pub fn new(
-        service_name: &str,
+    /// Creates a HealthMonitorBuilder that creates a HealthMonitorActor with
+    /// a new topic scheme.
+    pub fn from_service_topic_id(
+        service: Service,
         mqtt: &mut (impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter> + AsMut<MqttConfig>),
+        // TODO: pass it less annoying way
+        mqtt_schema: &MqttSchema,
+        service_type: String,
     ) -> Self {
-        // Connect this actor to MQTT
+        let service_topic_id = &service.service_topic_id;
+
+        let mut box_builder = SimpleMessageBoxBuilder::new(service_topic_id.as_str(), 16);
+
+        let service_name = service_topic_id.entity().default_service_name().unwrap();
         let subscriptions = vec![
             "tedge/health-check",
             &format!("tedge/health-check/{service_name}"),
@@ -37,26 +51,42 @@ impl HealthMonitorBuilder {
         .try_into()
         .expect("Failed to create the HealthMonitorActor topic filter");
 
-        let mut box_builder = SimpleMessageBoxBuilder::new(service_name, 16);
         box_builder
             .set_request_sender(mqtt.connect_consumer(subscriptions, box_builder.get_sender()));
 
+        let registration_message = EntityRegistrationMessage {
+            topic_id: service_topic_id.entity().clone(),
+            external_id: None,
+            r#type: EntityType::Service,
+            parent: Some(service.device_topic_id.entity().clone()),
+            other: serde_json::json!({"type": service_type}),
+        };
+        let registration_message = registration_message.to_mqtt_message(mqtt_schema);
+
+        let health_topic = ServiceHealthTopic::from_new_topic(service_topic_id, mqtt_schema);
+
         let builder = HealthMonitorBuilder {
-            service_name: service_name.to_owned(),
+            health_topic,
+            registration_message: Some(registration_message),
             box_builder,
         };
 
         // Update the MQTT config
+
+        // XXX: if the same MqttActorBuilder is used in different actors, then
+        // this will override init messages that may have been set by other
+        // actors!
         *mqtt.as_mut() = builder.set_init_and_last_will(mqtt.as_mut().clone());
 
         builder
     }
 
     fn set_init_and_last_will(&self, config: MqttConfig) -> MqttConfig {
-        let name = self.service_name.to_owned();
+        let name = self.health_topic.to_owned();
+        let _name = name.clone();
         config
-            .with_initial_message(move || health_status_up_message(&name))
-            .with_last_will_message(health_status_down_message(&self.service_name))
+            .with_initial_message(move || _name.up_message())
+            .with_last_will_message(name.down_message())
     }
 }
 
@@ -71,7 +101,9 @@ impl Builder<HealthMonitorActor> for HealthMonitorBuilder {
 
     fn try_build(self) -> Result<HealthMonitorActor, Self::Error> {
         let message_box = self.box_builder.build();
-        let actor = HealthMonitorActor::new(self.service_name, message_box);
+
+        let actor =
+            HealthMonitorActor::new(self.registration_message, self.health_topic, message_box);
 
         Ok(actor)
     }

@@ -30,9 +30,6 @@ impl TedgetoTeConverter {
             }
             topic if topic.name.starts_with("tedge/events") => self.convert_event(message),
             topic if topic.name.starts_with("tedge/alarms") => self.convert_alarm(message),
-            topic if topic.name.starts_with("tedge/health") => {
-                self.convert_health_status_message(message)
-            }
             _ => vec![],
         }
     }
@@ -99,23 +96,6 @@ impl TedgetoTeConverter {
         };
 
         message.topic = topic;
-        vec![message]
-    }
-
-    // tedge/health/service-name -> te/device/main/service/<service-name>/status/health
-    // tedge/health/child/service-name -> te/device/child/service/<service-name>/status/health
-    fn convert_health_status_message(&mut self, mut message: MqttMessage) -> Vec<MqttMessage> {
-        let topic = match message.topic.name.split('/').collect::<Vec<_>>()[..] {
-            ["tedge", "health", service_name] => Topic::new_unchecked(
-                format!("te/device/main/service/{service_name}/status/health").as_str(),
-            ),
-            ["tedge", "health", cid, service_name] => Topic::new_unchecked(
-                format!("te/device/{cid}/service/{service_name}/status/health").as_str(),
-            ),
-            _ => return vec![],
-        };
-        message.topic = topic;
-        message.retain = true;
         vec![message]
     }
 }

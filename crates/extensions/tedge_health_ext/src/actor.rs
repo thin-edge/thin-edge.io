@@ -4,30 +4,36 @@ use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
+use tedge_api::health::ServiceHealthTopic;
+use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
 
-use tedge_api::health::health_status_down_message;
-use tedge_api::health::health_status_up_message;
-
 pub struct HealthMonitorActor {
-    daemon_name: String,
+    // TODO(marcel): move this
+    service_registration_message: Option<Message>,
+    health_topic: ServiceHealthTopic,
     messages: SimpleMessageBox<MqttMessage, MqttMessage>,
 }
 
 impl HealthMonitorActor {
-    pub fn new(daemon_name: String, messages: SimpleMessageBox<MqttMessage, MqttMessage>) -> Self {
+    pub fn new(
+        service_registration_message: Option<Message>,
+        health_topic: ServiceHealthTopic,
+        messages: SimpleMessageBox<MqttMessage, MqttMessage>,
+    ) -> Self {
         Self {
-            daemon_name,
+            service_registration_message,
+            health_topic,
             messages,
         }
     }
 
     pub fn up_health_status(&self) -> MqttMessage {
-        health_status_up_message(&self.daemon_name)
+        self.health_topic.up_message()
     }
 
     pub fn down_health_status(&self) -> MqttMessage {
-        health_status_down_message(&self.daemon_name)
+        self.health_topic.down_message()
     }
 }
 
@@ -38,11 +44,14 @@ impl Actor for HealthMonitorActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
+        if let Some(registration_message) = &self.service_registration_message {
+            self.messages.send(registration_message.clone()).await?;
+        }
+
         self.messages.send(self.up_health_status()).await?;
+
         while let Some(_message) = self.messages.recv().await {
-            {
-                self.messages.send(self.up_health_status()).await?;
-            }
+            self.messages.send(self.up_health_status()).await?;
         }
         Ok(())
     }

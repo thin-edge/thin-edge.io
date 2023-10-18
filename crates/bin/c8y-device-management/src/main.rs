@@ -1,3 +1,4 @@
+use anyhow::Context;
 use c8y_config_manager::ConfigManagerBuilder;
 use c8y_config_manager::ConfigManagerConfig;
 use c8y_firmware_manager::FirmwareManagerBuilder;
@@ -9,6 +10,10 @@ use c8y_log_manager::LogManagerConfig;
 use clap::Parser;
 use std::path::PathBuf;
 use tedge_actors::Runtime;
+use tedge_api::mqtt_topics::DeviceTopicId;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::Service;
 use tedge_config::TEdgeConfigLocation;
 use tedge_config::TEdgeConfigRepository;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
@@ -92,7 +97,31 @@ async fn main() -> anyhow::Result<()> {
     )?;
 
     // Instantiate health monitor actor
-    let health_actor = HealthMonitorBuilder::new(PLUGIN_NAME, &mut mqtt_actor);
+    // TODO: take a user-configurable service topic id
+    let mqtt_device_topic_id = &tedge_config
+        .mqtt
+        .device_topic_id
+        .parse::<EntityTopicId>()
+        .unwrap();
+
+    let service_topic_id = mqtt_device_topic_id
+        .to_default_service_topic_id(PLUGIN_NAME)
+        .with_context(|| {
+            format!(
+                "Device topic id {mqtt_device_topic_id} currently needs default scheme, e.g: 'device/DEVICE_NAME//'",
+            )
+        })?;
+    let service = Service {
+        service_topic_id,
+        device_topic_id: DeviceTopicId::new(mqtt_device_topic_id.clone()),
+    };
+    let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.to_string());
+    let health_actor = HealthMonitorBuilder::from_service_topic_id(
+        service,
+        &mut mqtt_actor,
+        &mqtt_schema,
+        tedge_config.service.ty.clone(),
+    );
 
     // Shutdown on SIGINT
     let signal_actor = SignalActor::builder(&runtime.get_handle());

@@ -1,3 +1,4 @@
+use anyhow::Context;
 use c8y_config_manager::ConfigManagerBuilder;
 use c8y_config_manager::ConfigManagerConfig;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
@@ -5,6 +6,10 @@ use c8y_http_proxy::C8YHttpProxyBuilder;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_actors::Runtime;
+use tedge_api::mqtt_topics::DeviceTopicId;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::Service;
 use tedge_config::system_services::get_log_level;
 use tedge_config::system_services::set_log_level;
 use tedge_config::CertificateError;
@@ -97,7 +102,31 @@ async fn run_with(
     let mut mqtt_actor = MqttActorBuilder::new(mqtt_config.clone().with_session_name(PLUGIN_NAME));
 
     // Instantiate health monitor actor
-    let health_actor = HealthMonitorBuilder::new(PLUGIN_NAME, &mut mqtt_actor);
+    // TODO: take a user-configurable service topic id
+    let mqtt_device_topic_id = &tedge_config
+        .mqtt
+        .device_topic_id
+        .parse::<EntityTopicId>()
+        .unwrap();
+
+    let service_topic_id = mqtt_device_topic_id
+        .to_default_service_topic_id(PLUGIN_NAME)
+        .with_context(|| {
+            format!(
+                "Device topic id {mqtt_device_topic_id} currently needs default scheme, e.g: 'device/DEVICE_NAME//'",
+            )
+        })?;
+    let service = Service {
+        service_topic_id,
+        device_topic_id: DeviceTopicId::new(mqtt_device_topic_id.clone()),
+    };
+    let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.to_string());
+    let health_actor = HealthMonitorBuilder::from_service_topic_id(
+        service,
+        &mut mqtt_actor,
+        &mqtt_schema,
+        tedge_config.service.ty.clone(),
+    );
 
     // Instantiate config manager actor
     let config_manager_config = ConfigManagerConfig::from_tedge_config(config_dir, &tedge_config)?;

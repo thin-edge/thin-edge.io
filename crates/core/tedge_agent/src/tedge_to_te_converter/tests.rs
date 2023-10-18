@@ -311,58 +311,6 @@ async fn convert_incoming_child_device_event_topic() -> Result<(), DynError> {
     Ok(())
 }
 
-// tedge/health/service-name -> te/device/main/service/<service-name>/status/health
-// tedge/health/child/service-name -> te/device/child/service/<service-name>/status/health
-#[tokio::test]
-async fn convert_incoming_main_device_service_health_status() -> Result<(), DynError> {
-    // Spawn incoming mqtt message converter
-    let mut mqtt_box = spawn_tedge_to_te_converter().await?;
-
-    // Simulate health status of main device service MQTT message received.
-    let mqtt_message = MqttMessage::new(
-        &Topic::new_unchecked("tedge/health/myservice"),
-        r#"{""pid":1234,"status":"up","time":1674739912}"#,
-    )
-    .with_retain();
-
-    let expected_mqtt_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/main/service/myservice/status/health"),
-        r#"{""pid":1234,"status":"up","time":1674739912}"#,
-    )
-    .with_retain();
-
-    mqtt_box.send(mqtt_message).await?;
-
-    // Assert health status message
-    mqtt_box.assert_received([expected_mqtt_message]).await;
-    Ok(())
-}
-
-#[tokio::test]
-async fn convert_incoming_child_device_service_health_status() -> Result<(), DynError> {
-    // Spawn incoming mqtt message converter
-    let mut mqtt_box = spawn_tedge_to_te_converter().await?;
-
-    // Simulate child device service health status MQTT message received.
-    let mqtt_message = MqttMessage::new(
-        &Topic::new_unchecked("tedge/health/child/myservice"),
-        r#"{""pid":1234,"status":"up","time":1674739912}"#,
-    )
-    .with_retain();
-
-    let expected_mqtt_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/child/service/myservice/status/health"),
-        r#"{""pid":1234,"status":"up","time":1674739912}"#,
-    )
-    .with_retain();
-
-    mqtt_box.send(mqtt_message).await?;
-
-    // Assert health status mqtt message
-    mqtt_box.assert_received([expected_mqtt_message]).await;
-    Ok(())
-}
-
 async fn spawn_tedge_to_te_converter(
 ) -> Result<TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>, DynError> {
     // Tedge to Te topic converter
@@ -374,8 +322,6 @@ async fn spawn_tedge_to_te_converter(
         "tedge/events/+/+",
         "tedge/alarms/+/+",
         "tedge/alarms/+/+/+",
-        "tedge/health/+",
-        "tedge/health/+/+",
     ]
     .try_into()?;
 

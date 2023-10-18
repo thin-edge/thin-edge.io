@@ -1,6 +1,11 @@
 #[cfg(test)]
 use std::result::Result::Ok;
 use tedge_actors::Runtime;
+use tedge_api::mqtt_topics::DeviceTopicId;
+use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::Service;
+use tedge_api::mqtt_topics::ServiceTopicId;
 use tedge_config::TEdgeConfig;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
@@ -16,7 +21,21 @@ pub async fn start_basic_actors(
     let mut mqtt_actor = get_mqtt_actor(mapper_name, config).await?;
 
     //Instantiate health monitor actor
-    let health_actor = HealthMonitorBuilder::new(mapper_name, &mut mqtt_actor);
+    let service = Service {
+        service_topic_id: ServiceTopicId::new(
+            format!("device/main/service/{mapper_name}")
+                .parse::<EntityTopicId>()
+                .unwrap(),
+        ),
+        device_topic_id: DeviceTopicId::new("device/main//".parse::<EntityTopicId>().unwrap()),
+    };
+    let mqtt_schema = MqttSchema::with_root(config.mqtt.topic_root.clone());
+    let health_actor = HealthMonitorBuilder::from_service_topic_id(
+        service,
+        &mut mqtt_actor,
+        &mqtt_schema,
+        config.service.ty.clone(),
+    );
 
     // Shutdown on SIGINT
     let signal_actor = SignalActor::builder(&runtime.get_handle());
