@@ -454,6 +454,9 @@ pub enum TopicIdError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Channel {
     EntityMetadata,
+    EntityTwinData {
+        fragment_key: String,
+    },
     Measurement {
         measurement_type: String,
     },
@@ -488,7 +491,9 @@ impl FromStr for Channel {
     fn from_str(channel: &str) -> Result<Self, ChannelError> {
         match channel.split('/').collect::<Vec<&str>>()[..] {
             [""] => Ok(Channel::EntityMetadata),
-
+            ["twin", fragment_key] => Ok(Channel::EntityTwinData {
+                fragment_key: fragment_key.to_string(),
+            }),
             ["m", measurement_type] => Ok(Channel::Measurement {
                 measurement_type: measurement_type.to_string(),
             }),
@@ -528,6 +533,7 @@ impl Display for Channel {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Channel::EntityMetadata => Ok(()),
+            Channel::EntityTwinData { fragment_key } => write!(f, "twin/{fragment_key}"),
 
             Channel::Measurement { measurement_type } => write!(f, "m/{measurement_type}"),
             Channel::MeasurementMetadata { measurement_type } => {

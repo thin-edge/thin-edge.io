@@ -130,6 +130,29 @@ Thin-edge device support sending inventory data via c8y topic
     Should Be Equal    ${mo["subType"]}    customType
 
 
+Thin-edge device support sending inventory data via tedge topic
+    Execute Command    tedge mqtt pub "te/device/main///twin/device_OS" '{"family":"Debian","version":11,"complex":[1,"2",3],"object":{"foo":"bar"}}'
+    Cumulocity.Set Device    ${DEVICE_SN}
+    ${mo}=    Device Should Have Fragments    device_OS
+    Should Be Equal    ${mo["device_OS"]["family"]}    Debian
+    Should Be Equal As Integers    ${mo["device_OS"]["version"]}    11
+
+    Should Be Equal As Integers    ${mo["device_OS"]["complex"][0]}    1
+    Should Be Equal As Strings    ${mo["device_OS"]["complex"][1]}    2
+    Should Be Equal As Integers    ${mo["device_OS"]["complex"][2]}    3
+    Should Be Equal    ${mo["device_OS"]["object"]["foo"]}    bar
+
+
+Thin-edge device supports sending inventory data via tedge topic to root fragments
+    Execute Command    tedge mqtt pub "te/device/main///twin/subtype" '"LinuxDeviceA"'
+    Execute Command    tedge mqtt pub "te/device/main///twin/type" '"ShouldBeIgnored"'
+    Execute Command    tedge mqtt pub "te/device/main///twin/name" '"ShouldBeIgnored"'
+    Cumulocity.Set Device    ${DEVICE_SN}
+    ${mo}=    Device Should Have Fragments    subtype
+    Should Be Equal    ${mo["subtype"]}    LinuxDeviceA
+    Should Be Equal    ${mo["type"]}    thin-edge.io
+    Should Be Equal    ${mo["name"]}    ${DEVICE_SN}
+
 *** Keywords ***
 
 Custom Setup

@@ -6,11 +6,14 @@ use camino::Utf8PathBuf;
 use std::net::IpAddr;
 use std::path::Path;
 use std::path::PathBuf;
+use std::str::FromStr;
 use tedge_api::mqtt_topics::ChannelFilter::Command;
 use tedge_api::mqtt_topics::ChannelFilter::CommandMetadata;
 use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::mqtt_topics::TopicIdError;
 use tedge_api::path::DataDir;
 use tedge_api::topic::ResponseTopic;
 use tedge_config::ConfigNotSet;
@@ -26,6 +29,7 @@ pub struct C8yMapperConfig {
     pub logs_path: Utf8PathBuf,
     pub data_dir: DataDir,
     pub device_id: String,
+    pub device_topic_id: EntityTopicId,
     pub device_type: String,
     pub service_type: String,
     pub ops_dir: PathBuf,
@@ -44,6 +48,7 @@ impl C8yMapperConfig {
         logs_path: Utf8PathBuf,
         data_dir: DataDir,
         device_id: String,
+        device_topic_id: EntityTopicId,
         device_type: String,
         service_type: String,
         c8y_host: String,
@@ -60,6 +65,7 @@ impl C8yMapperConfig {
             logs_path,
             data_dir,
             device_id,
+            device_topic_id,
             device_type,
             service_type,
             ops_dir,
@@ -82,6 +88,7 @@ impl C8yMapperConfig {
         let data_dir: DataDir = tedge_config.data.path.clone().into();
         let device_id = tedge_config.device.id.try_read(tedge_config)?.to_string();
         let device_type = tedge_config.device.ty.clone();
+        let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
         let service_type = tedge_config.service.ty.clone();
         let c8y_host = tedge_config.c8y.http.or_config_not_set()?.to_string();
         let tedge_http_address = tedge_config.http.bind.address;
@@ -129,6 +136,7 @@ impl C8yMapperConfig {
             logs_path,
             data_dir,
             device_id,
+            device_topic_id,
             device_type,
             service_type,
             c8y_host,
@@ -166,6 +174,7 @@ impl C8yMapperConfig {
     pub fn default_external_topic_filter() -> TopicFilter {
         vec![
             "te/+/+/+/+",
+            "te/+/+/+/+/twin/+",
             "te/+/+/+/+/m/+",
             "te/+/+/+/+/e/+",
             "te/+/+/+/+/a/+",
@@ -186,6 +195,9 @@ pub enum C8yMapperConfigBuildError {
 
     #[error(transparent)]
     FromC8yMapperConfigError(#[from] C8yMapperConfigError),
+
+    #[error(transparent)]
+    FromTopicIdError(#[from] TopicIdError),
 }
 
 #[derive(thiserror::Error, Debug)]

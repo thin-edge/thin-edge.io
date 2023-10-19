@@ -248,6 +248,7 @@ The following is an overview of the channel categories which are available.
 |e|Events|
 |a|Alarms|
 |cmd|Commands|
+|twin|Entity twin metadata|
 
 
 ## Entity registration
@@ -435,6 +436,7 @@ so that it can process them.
 |Measurements|`te/<identifier>/m/<measurement-type>`|
 |Events|`te/<identifier>/e/<event-type>`|
 |Alarms|`te/<identifier>/a/<alarm-type>`|
+|Twin|`te/<identifier>/twin/<data-type>`|
 
 ### Examples: With default device/service topic semantics
 
@@ -514,6 +516,23 @@ tedge mqtt pub -r te/device/main///m/battery_reading/meta '{
 ```
 
 The metadata fields supported by each data type will be defined in detail later.
+
+## Twin metadata
+
+The `twin` metadata type can be used to store additional information about entities (devices and services).
+Such information could included: operation system name/version, communication statistics, device status, 
+or any other information that is not suited to be measurements, events or alarms.
+
+```text title="Topic (retain=true)"
+te/device/main///twin/device_OS
+```
+
+```json5 title="Payload"
+{
+  "family": "Debian",
+  "version": "11"
+}
+```
 
 ## Commands
 
