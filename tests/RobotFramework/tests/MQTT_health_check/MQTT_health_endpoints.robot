@@ -16,17 +16,17 @@ tedge-log-plugin health status
 
     Sleep    5s    reason=It fails without this! It needs a better way of queuing requests
     ${pid}=    Execute Command    pgrep -f '^/usr/bin/tedge-log-plugin'    strip=${True}
-    Execute Command    sudo tedge mqtt pub 'tedge/health-check/tedge-log-plugin' ''
+    Execute Command    sudo tedge mqtt pub 'te/device/main/service/tedge-log-plugin/cmd/health/check' ''
     ${messages}=    Should Have MQTT Messages    te/device/main/service/tedge-log-plugin/status/health    minimum=1    maximum=2
     Should Contain    ${messages[0]}    "pid":${pid}
     Should Contain    ${messages[0]}    "status":"up"
 
 c8y-configuration-plugin health status
     Execute Command    sudo systemctl start c8y-configuration-plugin.service
-   
-    Sleep    5s     reason=It fails without this! It needs a better way of queuing requests
-    ${pid}=    Execute Command    pgrep -f '^/usr/bin/c8y[_-]configuration[_-]plugin'    strip=${True}
-    Execute Command    sudo tedge mqtt pub 'tedge/health-check/c8y-configuration-plugin' ''
-    ${messages}=    Should Have MQTT Messages    te/device/main/service/c8y-configuration-plugin/status/health    minimum=1    maximum=2
+
+    Sleep             5s                 reason=It fails without this! It needs a better way of queuing requests
+    ${pid}=           Execute Command    pgrep -f '^/usr/bin/c8y[_-]configuration[_-]plugin'    strip=${True}
+    Execute Command   sudo tedge mqtt pub 'te/device/main/service/c8y-configuration-plugin/cmd/health/check' ''
+    ${messages}=      Should Have MQTT Messages    te/device/main/service/c8y-configuration-plugin/status/health    minimum=1    maximum=2
     Should Contain    ${messages[0]}    "pid":${pid}
     Should Contain    ${messages[0]}    "status":"up"

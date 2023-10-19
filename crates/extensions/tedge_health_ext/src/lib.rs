@@ -16,7 +16,9 @@ use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityType;
 use tedge_api::health::ServiceHealthTopic;
+use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::OperationType;
 use tedge_api::mqtt_topics::Service;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttConfig;
@@ -43,13 +45,28 @@ impl HealthMonitorBuilder {
 
         let mut box_builder = SimpleMessageBoxBuilder::new(service_topic_id.as_str(), 16);
 
-        let service_name = service_topic_id.entity().default_service_name().unwrap();
-        let subscriptions = vec![
-            "tedge/health-check",
-            &format!("tedge/health-check/{service_name}"),
+        let subscriptions: TopicFilter = [
+            mqtt_schema
+                .topic_for(
+                    service.service_topic_id.entity(),
+                    &Channel::Command {
+                        operation: OperationType::Health,
+                        cmd_id: "check".to_string(),
+                    },
+                )
+                .into(),
+            mqtt_schema
+                .topic_for(
+                    service.device_topic_id.entity(),
+                    &Channel::Command {
+                        operation: OperationType::Health,
+                        cmd_id: "check".to_string(),
+                    },
+                )
+                .into(),
         ]
-        .try_into()
-        .expect("Failed to create the HealthMonitorActor topic filter");
+        .into_iter()
+        .collect();
 
         box_builder
             .set_request_sender(mqtt.connect_consumer(subscriptions, box_builder.get_sender()));

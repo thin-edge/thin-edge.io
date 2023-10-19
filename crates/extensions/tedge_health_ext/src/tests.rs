@@ -6,7 +6,6 @@ use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
 use tedge_actors::MessageReceiver;
-use tedge_actors::Sender;
 use tedge_actors::ServiceProvider;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
@@ -25,10 +24,8 @@ async fn send_health_check_message_to_generic_topic() -> Result<(), anyhow::Erro
     let mut mqtt_config = MqttConfig::default();
     let mut mqtt_message_box =
         spawn_a_health_check_actor("health-check-service-1", &mut mqtt_config).await;
-    let health_check_request = MqttMessage::new(&Topic::new_unchecked("tedge/health-check"), "");
-    mqtt_message_box.send(health_check_request).await.unwrap();
-
     // skip registration message
+
     mqtt_message_box.skip(1).await;
 
     if let Some(message) = timeout(TEST_TIMEOUT, mqtt_message_box.recv()).await? {
@@ -47,9 +44,6 @@ async fn send_health_check_message_to_service_specific_topic() -> Result<(), any
     let mut mqtt_config = MqttConfig::default();
     let mut mqtt_message_box =
         spawn_a_health_check_actor("health-check-service-2", &mut mqtt_config).await;
-    let health_check_request =
-        MqttMessage::new(&Topic::new_unchecked("tedge/health-check/health-test"), "");
-    mqtt_message_box.send(health_check_request).await.unwrap();
 
     // skip registration message
     mqtt_message_box.skip(1).await;
