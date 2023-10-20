@@ -4,6 +4,8 @@ use tedge_config::HostPort;
 use tedge_config::TemplatesSet;
 use tedge_config::MQTT_TLS_PORT;
 
+const C8Y_BRIDGE_HEALTH_TOPIC: &str = "te/device/main/service/mosquitto-c8y-bridge/status/health";
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfigC8yParams {
     pub mqtt_host: HostPort<MQTT_TLS_PORT>,
@@ -95,7 +97,9 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             local_clean_session: false,
             notifications: true,
             notifications_local_only: true,
-            notification_topic: "tedge/health/mosquitto-c8y-bridge".into(),
+
+            // FIXME: doesn't account for custom topic root, use MQTT scheme API here
+            notification_topic: C8Y_BRIDGE_HEALTH_TOPIC.into(),
             bridge_attempt_unsubscribe: false,
             topics,
         }
@@ -171,7 +175,7 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
         local_clean_session: false,
         notifications: true,
         notifications_local_only: true,
-        notification_topic: "tedge/health/mosquitto-c8y-bridge".into(),
+        notification_topic: C8Y_BRIDGE_HEALTH_TOPIC.into(),
         bridge_attempt_unsubscribe: false,
     };
 

@@ -419,7 +419,8 @@ mod tests {
         let (mut mqtt, _http, mut fs) = spawn_log_manager_actor(tempdir.path());
 
         let c8y_s_us = Topic::new_unchecked("c8y/s/us");
-        let bridge = Topic::new_unchecked("tedge/health/mosquitto-c8y-bridge");
+        let bridge =
+            Topic::new_unchecked("te/device/main/service/mosquitto-c8y-bridge/status/health");
 
         assert_eq!(
             mqtt.recv().await,

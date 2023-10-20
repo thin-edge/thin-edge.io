@@ -2,7 +2,9 @@ pub mod bridge {
 
     use mqtt_channel::Message;
 
-    pub const C8Y_BRIDGE_HEALTH_TOPIC: &str = "tedge/health/mosquitto-c8y-bridge";
+    // FIXME: doesn't account for custom topic root, use MQTT scheme API here
+    pub const C8Y_BRIDGE_HEALTH_TOPIC: &str =
+        "te/device/main/service/mosquitto-c8y-bridge/status/health";
     const C8Y_BRIDGE_UP_PAYLOAD: &str = "1";
 
     pub fn is_c8y_bridge_up(message: &Message) -> bool {

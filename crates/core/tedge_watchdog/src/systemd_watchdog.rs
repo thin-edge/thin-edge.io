@@ -1,23 +1,22 @@
 use crate::error::WatchdogError;
+use anyhow::Context;
 use freedesktop_entry_parser::parse_entry;
 use futures::channel::mpsc;
 use futures::stream::FuturesUnordered;
+use futures::SinkExt;
 use futures::StreamExt;
 use mqtt_channel::Message;
 use mqtt_channel::PubChannel;
 use mqtt_channel::Topic;
-use nanoid::nanoid;
 use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
+use std::process;
 use std::process::Command;
 use std::process::ExitStatus;
 use std::process::Stdio;
-use std::process::{self};
 use std::time::Instant;
-use tedge_api::health::health_status_down_message;
-use tedge_api::health::health_status_up_message;
-use tedge_api::health::send_health_status;
+use tedge_api::health::ServiceHealthTopic;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
@@ -28,6 +27,8 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
+
+const SERVICE_NAME: &str = "tedge-watchdog";
 
 // TODO: extract to common module
 #[derive(Debug, Serialize, Deserialize)]
@@ -149,23 +150,49 @@ async fn monitor_tedge_service(
     res_topic: Topic,
     interval: u64,
 ) -> Result<(), WatchdogError> {
-    let client_id: &str = &format!("{}_{}", name, nanoid!());
     let config_repository = tedge_config::TEdgeConfigRepository::new(tedge_config_location);
     let tedge_config = config_repository.load()?;
+
+    let mqtt_device_topic_id: EntityTopicId = tedge_config
+        .mqtt
+        .device_topic_id
+        .parse()
+        .context("Can't parse as device topic id")?;
+
+    let mqtt_topic_root = &tedge_config.mqtt.topic_root;
+
+    let mqtt_session_name = format!("{SERVICE_NAME}#{mqtt_topic_root}/{mqtt_device_topic_id}");
+
+    let mqtt_schema = MqttSchema::with_root(mqtt_topic_root.clone());
+
+    let service_topic_id = mqtt_device_topic_id
+        .default_service_for_device(SERVICE_NAME)
+        .unwrap();
+    let service_health_topic =
+        ServiceHealthTopic::from_new_topic(&service_topic_id.into(), &mqtt_schema);
+
+    let _service_health_topic = service_health_topic.clone();
+
     let mqtt_config = tedge_config
         .mqtt_config()?
-        .with_session_name(client_id)
+        .with_session_name(mqtt_session_name)
         .with_subscriptions(res_topic.into())
-        .with_initial_message(|| health_status_up_message("tedge-watchdog"))
-        .with_last_will_message(health_status_down_message("tedge-watchdog"));
+        .with_initial_message(move || _service_health_topic.clone().up_message())
+        .with_last_will_message(service_health_topic.down_message());
+
     let client = mqtt_channel::Connection::new(&mqtt_config).await?;
+
     let mut received = client.received;
     let mut publisher = client.published;
 
     info!("Starting watchdog for {} service", name);
 
     // Now the systemd watchdog is done with the initialization and ready for processing the messages
-    send_health_status(&mut publisher, "tedge-watchdog").await;
+    let health_status_message = service_health_topic.up_message();
+    publisher
+        .send(health_status_message)
+        .await
+        .context("Could not send initial health status message")?;
 
     loop {
         let message = Message::new(&Topic::new(req_topic)?, "");
@@ -288,7 +315,8 @@ mod tests {
     #[tokio::test]
     async fn test_get_latest_health_status_message() -> Result<()> {
         let (mut sender, mut receiver) = mpsc::unbounded::<Message>();
-        let health_topic = Topic::new("tedge/health/test-service").expect("Valid topic");
+        let health_topic =
+            Topic::new("te/device/main/service/test-service/status/health").expect("Valid topic");
         let base_timestamp = OffsetDateTime::now_utc();
 
         for x in 1..5u64 {
