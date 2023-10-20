@@ -142,6 +142,10 @@ Thin-edge device support sending inventory data via tedge topic
     Should Be Equal As Integers    ${mo["device_OS"]["complex"][2]}    3
     Should Be Equal    ${mo["device_OS"]["object"]["foo"]}    bar
 
+    # Validate clearing of fragements
+    Execute Command    tedge mqtt pub "te/device/main///twin/device_OS" ''
+    Managed Object Should Not Have Fragments    device_OS
+
 
 Thin-edge device supports sending inventory data via tedge topic to root fragments
     Execute Command    tedge mqtt pub "te/device/main///twin/subtype" '"LinuxDeviceA"'
@@ -150,6 +154,17 @@ Thin-edge device supports sending inventory data via tedge topic to root fragmen
     Cumulocity.Set Device    ${DEVICE_SN}
     ${mo}=    Device Should Have Fragments    subtype
     Should Be Equal    ${mo["subtype"]}    LinuxDeviceA
+    Should Be Equal    ${mo["type"]}    thin-edge.io
+    Should Be Equal    ${mo["name"]}    ${DEVICE_SN}
+
+    # Validate clearing of fragements
+    Execute Command    tedge mqtt pub "te/device/main///twin/subtype" ''
+    Managed Object Should Not Have Fragments    subtype
+
+    # Validate `name` and `type` can't be cleared
+    Execute Command    tedge mqtt pub "te/device/main///twin/type" ''
+    Execute Command    tedge mqtt pub "te/device/main///twin/name" ''
+    ${mo}=    Device Should Have Fragments    type
     Should Be Equal    ${mo["type"]}    thin-edge.io
     Should Be Equal    ${mo["name"]}    ${DEVICE_SN}
 
