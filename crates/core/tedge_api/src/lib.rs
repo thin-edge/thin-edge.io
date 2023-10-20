@@ -72,8 +72,7 @@ mod tests {
             Topic::new_unchecked("te/device/main///cmd/restart")
         );
         assert_eq!(
-            RestartCommand::new(device.clone())
-                .with_id(cmd_id.clone())
+            RestartCommand::new_with_id(&device, cmd_id.clone())
                 .command_message(&mqtt_schema)
                 .topic,
             Topic::new_unchecked("te/device/main///cmd/restart/abc")

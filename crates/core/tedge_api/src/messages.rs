@@ -17,6 +17,143 @@ use time::OffsetDateTime;
 pub const SOFTWARE_UPDATE_REQUEST_TOPIC: &str = "tedge/commands/req/software/update";
 pub const SOFTWARE_UPDATE_RESPONSE_TOPIC: &str = "tedge/commands/res/software/update";
 
+/// A command instance with its target and its current state of execution
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Command<Payload> {
+    pub target: EntityTopicId,
+    pub cmd_id: String,
+    pub payload: Payload,
+}
+
+impl<Payload> Command<Payload>
+where
+    Payload: Default,
+{
+    /// Build a new command with a random id
+    pub fn new(target: &EntityTopicId) -> Self {
+        Command {
+            target: target.clone(),
+            cmd_id: nanoid!(),
+            payload: Default::default(),
+        }
+    }
+
+    /// Build a new command with a given id
+    pub fn new_with_id(target: &EntityTopicId, cmd_id: String) -> Self {
+        Command {
+            target: target.clone(),
+            cmd_id,
+            payload: Default::default(),
+        }
+    }
+}
+
+impl<Payload> Command<Payload>
+where
+    Payload: CommandPayload,
+{
+    /// Return the MQTT topic identifier of the target
+    fn topic_id(&self) -> &EntityTopicId {
+        &self.target
+    }
+
+    /// Return the MQTT channel for this command
+    fn channel(&self) -> Channel {
+        Channel::Command {
+            operation: Payload::operation_type(),
+            cmd_id: self.cmd_id.clone(),
+        }
+    }
+
+    /// Return the MQTT topic for this command
+    fn topic(&self, schema: &MqttSchema) -> Topic {
+        schema.topic_for(self.topic_id(), &self.channel())
+    }
+
+    /// Return the current status of the command
+    pub fn status(&self) -> CommandStatus {
+        self.payload.status()
+    }
+
+    /// Set the status of the command
+    pub fn with_status(mut self, status: CommandStatus) -> Self {
+        self.payload.set_status(status);
+        self
+    }
+
+    /// Set the failure reason of the command
+    pub fn with_error(mut self, reason: String) -> Self {
+        self.payload.set_error(reason);
+        self
+    }
+
+    /// Return the MQTT message to register support for this types of command
+    pub fn capability_message(schema: &MqttSchema, target: &EntityTopicId) -> Message {
+        let meta_topic = schema.capability_topic_for(target, Payload::operation_type());
+        let payload = "{}";
+        Message::new(&meta_topic, payload)
+            .with_retain()
+            .with_qos(QoS::AtLeastOnce)
+    }
+}
+
+impl<'a, Payload> Command<Payload>
+where
+    Payload: Jsonify<'a> + CommandPayload,
+{
+    /// Return the Command received on a topic
+    pub fn try_from(
+        target: EntityTopicId,
+        cmd_id: String,
+        bytes: &'a [u8],
+    ) -> Result<Option<Self>, serde_json::Error> {
+        if bytes.is_empty() {
+            Ok(None)
+        } else {
+            let payload = Payload::from_slice(bytes)?;
+            Ok(Some(Command {
+                target,
+                cmd_id,
+                payload,
+            }))
+        }
+    }
+
+    /// Return the MQTT message for this command
+    pub fn command_message(&self, schema: &MqttSchema) -> Message {
+        let topic = self.topic(schema);
+        let payload = self.payload.to_bytes();
+        Message::new(&topic, payload)
+            .with_qos(QoS::AtLeastOnce)
+            .with_retain()
+    }
+
+    /// Return the MQTT message to clear this command
+    pub fn clearing_message(&self, schema: &MqttSchema) -> Message {
+        let topic = self.topic(schema);
+        Message::new(&topic, vec![])
+            .with_qos(QoS::AtLeastOnce)
+            .with_retain()
+    }
+}
+
+/// A command payload describing the current state of a command
+pub trait CommandPayload {
+    /// Return the operation type shared by all these commands
+    fn operation_type() -> OperationType;
+
+    /// Return the current status of the command
+    fn status(&self) -> CommandStatus;
+
+    /// Set the status of the command
+    fn set_status(&mut self, status: CommandStatus);
+
+    /// Set the failure reason of the command
+    fn set_error(&mut self, reason: String) {
+        self.set_status(CommandStatus::Failed { reason });
+    }
+}
+
 /// All the messages are serialized using json.
 pub trait Jsonify<'a>
 where
@@ -40,15 +177,10 @@ where
 }
 
 /// Command to request the list of software packages that are installed on a device
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SoftwareListCommand {
-    pub target: EntityTopicId,
-    pub cmd_id: String,
-    pub payload: SoftwareListCommandPayload,
-}
+pub type SoftwareListCommand = Command<SoftwareListCommandPayload>;
 
 /// Payload of a [SoftwareListCommand]
-#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SoftwareListCommandPayload {
     #[serde(flatten)]
@@ -60,12 +192,17 @@ pub struct SoftwareListCommandPayload {
 
 impl<'a> Jsonify<'a> for SoftwareListCommandPayload {}
 
-impl Default for SoftwareListCommandPayload {
-    fn default() -> Self {
-        SoftwareListCommandPayload {
-            status: CommandStatus::Init,
-            current_software_list: Vec::new(),
-        }
+impl CommandPayload for SoftwareListCommandPayload {
+    fn operation_type() -> OperationType {
+        OperationType::SoftwareList
+    }
+
+    fn status(&self) -> CommandStatus {
+        self.status.clone()
+    }
+
+    fn set_status(&mut self, status: CommandStatus) {
+        self.status = status
     }
 }
 
@@ -80,64 +217,6 @@ pub struct SoftwareList {
 }
 
 impl SoftwareListCommand {
-    /// Build a new software list request with a random id
-    pub fn new(target: &EntityTopicId) -> Self {
-        SoftwareListCommand {
-            target: target.clone(),
-            cmd_id: nanoid!(),
-            payload: Default::default(),
-        }
-    }
-
-    /// Build a new software list request with a given id
-    pub fn new_with_id(target: &EntityTopicId, cmd_id: String) -> Self {
-        SoftwareListCommand {
-            target: target.clone(),
-            cmd_id,
-            payload: Default::default(),
-        }
-    }
-
-    /// Return the MQTT message to register `software-list` support
-    /// TODO: publish the list of supported software package types.
-    pub fn capability_message(schema: &MqttSchema, target: &EntityTopicId) -> Message {
-        let meta_topic = schema.capability_topic_for(target, OperationType::SoftwareList);
-        let payload = "{}";
-        Message::new(&meta_topic, payload)
-            .with_retain()
-            .with_qos(QoS::AtLeastOnce)
-    }
-
-    /// Return the SoftwareListCommand received on a topic
-    pub fn try_from(
-        target: EntityTopicId,
-        cmd_id: String,
-        bytes: &[u8],
-    ) -> Result<Option<Self>, serde_json::Error> {
-        if bytes.is_empty() {
-            Ok(None)
-        } else {
-            let payload = SoftwareListCommandPayload::from_slice(bytes)?;
-            Ok(Some(SoftwareListCommand {
-                target,
-                cmd_id,
-                payload,
-            }))
-        }
-    }
-
-    /// Set the status of the command
-    pub fn with_status(mut self, status: CommandStatus) -> Self {
-        self.payload.status = status;
-        self
-    }
-
-    /// Set the failure reason of the command
-    pub fn with_error(mut self, reason: String) -> Self {
-        self.payload.status = CommandStatus::Failed { reason };
-        self
-    }
-
     /// Add a list of packages all of the same type
     pub fn add_modules(&mut self, plugin_type: SoftwareType, modules: Vec<SoftwareModule>) {
         let modules = modules.into_iter().map(|module| module.into()).collect();
@@ -166,46 +245,6 @@ impl SoftwareListCommand {
                     })
             })
             .collect()
-    }
-
-    /// Return the current status of the command
-    pub fn status(&self) -> CommandStatus {
-        self.payload.status.clone()
-    }
-
-    /// Return the MQTT topic identifier of the target
-    fn topic_id(&self) -> &EntityTopicId {
-        &self.target
-    }
-
-    /// Return the MQTT channel for this command
-    fn channel(&self) -> Channel {
-        Channel::Command {
-            operation: OperationType::SoftwareList,
-            cmd_id: self.cmd_id.clone(),
-        }
-    }
-
-    /// Return the MQTT topic for this command
-    fn topic(&self, schema: &MqttSchema) -> Topic {
-        schema.topic_for(self.topic_id(), &self.channel())
-    }
-
-    /// Return the MQTT message for this command
-    pub fn command_message(&self, schema: &MqttSchema) -> Message {
-        let topic = self.topic(schema);
-        let payload = self.payload.to_bytes();
-        Message::new(&topic, payload)
-            .with_qos(QoS::AtLeastOnce)
-            .with_retain()
-    }
-
-    /// Return the MQTT message to clear this command
-    pub fn clearing_message(&self, schema: &MqttSchema) -> Message {
-        let topic = self.topic(schema);
-        Message::new(&topic, vec![])
-            .with_qos(QoS::AtLeastOnce)
-            .with_retain()
     }
 }
 
@@ -560,115 +599,10 @@ impl From<SoftwareError> for Option<SoftwareModuleItem> {
 }
 
 /// Command to restart a device
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct RestartCommand {
-    pub target: EntityTopicId,
-    pub cmd_id: String,
-    pub payload: RestartCommandPayload,
-}
-
-impl RestartCommand {
-    /// Create a [RestartCommand] to restart a target device.
-    ///
-    /// - use a fresh cmd id
-    /// - set the status to [CommandStatus::Init]
-    pub fn new(target: EntityTopicId) -> Self {
-        let cmd_id = nanoid!();
-        let payload = RestartCommandPayload::default();
-        RestartCommand {
-            target,
-            cmd_id,
-            payload,
-        }
-    }
-
-    /// A new command with a given cmd id
-    pub fn with_id(self, cmd_id: String) -> Self {
-        Self { cmd_id, ..self }
-    }
-
-    /// Return the RestartCommand received on a topic
-    pub fn try_from(
-        target: EntityTopicId,
-        cmd_id: String,
-        bytes: &[u8],
-    ) -> Result<Option<Self>, serde_json::Error> {
-        if bytes.is_empty() {
-            Ok(None)
-        } else {
-            let payload = RestartCommandPayload::from_slice(bytes)?;
-            Ok(Some(RestartCommand {
-                target,
-                cmd_id,
-                payload,
-            }))
-        }
-    }
-
-    /// Return the current status of the command
-    pub fn status(&self) -> CommandStatus {
-        self.payload.status.clone()
-    }
-
-    /// Set the status of the command
-    pub fn with_status(mut self, status: CommandStatus) -> Self {
-        self.payload.status = status;
-        self
-    }
-
-    /// Set the failure reason of the command
-    pub fn with_error(mut self, reason: String) -> Self {
-        self.payload.status = CommandStatus::Failed { reason };
-        self
-    }
-
-    /// Return the MQTT topic identifier of the target
-    fn topic_id(&self) -> &EntityTopicId {
-        &self.target
-    }
-
-    /// Return the MQTT channel for this command
-    fn channel(&self) -> Channel {
-        Channel::Command {
-            operation: OperationType::Restart,
-            cmd_id: self.cmd_id.clone(),
-        }
-    }
-
-    /// Return the MQTT topic for this command
-    fn topic(&self, schema: &MqttSchema) -> Topic {
-        schema.topic_for(self.topic_id(), &self.channel())
-    }
-
-    /// Return the MQTT message to register `restart` as a supported command on a given target device
-    pub fn capability_message(schema: &MqttSchema, target: &EntityTopicId) -> Message {
-        let meta_topic = schema.capability_topic_for(target, OperationType::Restart);
-        let payload = "{}";
-        Message::new(&meta_topic, payload)
-            .with_retain()
-            .with_qos(QoS::AtLeastOnce)
-    }
-
-    /// Return the MQTT message for this command
-    pub fn command_message(&self, schema: &MqttSchema) -> Message {
-        let topic = self.topic(schema);
-        let payload = self.payload.to_bytes();
-        Message::new(&topic, payload)
-            .with_qos(QoS::AtLeastOnce)
-            .with_retain()
-    }
-
-    /// Return the MQTT message to clear this command
-    pub fn clearing_message(&self, schema: &MqttSchema) -> Message {
-        let topic = self.topic(schema);
-        Message::new(&topic, vec![])
-            .with_qos(QoS::AtLeastOnce)
-            .with_retain()
-    }
-}
+pub type RestartCommand = Command<RestartCommandPayload>;
 
 /// Command to restart a device
-#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RestartCommandPayload {
     #[serde(flatten)]
@@ -677,21 +611,30 @@ pub struct RestartCommandPayload {
 
 impl<'a> Jsonify<'a> for RestartCommandPayload {}
 
-impl Default for RestartCommandPayload {
-    fn default() -> Self {
-        RestartCommandPayload {
-            status: CommandStatus::Init,
-        }
+impl CommandPayload for RestartCommandPayload {
+    fn operation_type() -> OperationType {
+        OperationType::Restart
+    }
+
+    fn status(&self) -> CommandStatus {
+        self.status.clone()
+    }
+
+    fn set_status(&mut self, status: CommandStatus) {
+        self.status = status
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Default, Deserialize, Serialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase", tag = "status")]
 pub enum CommandStatus {
+    #[default]
     Init,
     Executing,
     Successful,
-    Failed { reason: String },
+    Failed {
+        reason: String,
+    },
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]

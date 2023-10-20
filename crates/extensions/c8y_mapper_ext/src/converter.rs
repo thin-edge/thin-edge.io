@@ -616,7 +616,7 @@ impl CumulocityConverter {
         let request = SmartRestRestartRequest::from_smartrest(smartrest)?;
         let device_id = &request.device.into();
         let target = self.entity_store.try_get_by_external_id(device_id)?;
-        let command = RestartCommand::new(target.topic_id.clone());
+        let command = RestartCommand::new(&target.topic_id);
         let message = command.command_message(&self.mqtt_schema);
         Ok(vec![message])
     }
