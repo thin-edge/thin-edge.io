@@ -248,39 +248,40 @@ impl SoftwareListCommand {
     }
 }
 
-/// Message payload definition for SoftwareUpdate request.
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
-#[serde(deny_unknown_fields)]
+/// Command to install/remove software packages on a device
+pub type SoftwareUpdateCommand = Command<SoftwareUpdateCommandPayload>;
+
+/// Payload of a [SoftwareListCommand]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct SoftwareUpdateRequest {
-    pub id: String,
+pub struct SoftwareUpdateCommandPayload {
+    #[serde(flatten)]
+    pub status: CommandStatus,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub update_list: Vec<SoftwareRequestResponseSoftwareList>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub failures: Vec<SoftwareRequestResponseSoftwareList>,
 }
 
-impl<'a> Jsonify<'a> for SoftwareUpdateRequest {}
+impl<'a> Jsonify<'a> for SoftwareUpdateCommandPayload {}
 
-impl Default for SoftwareUpdateRequest {
-    fn default() -> SoftwareUpdateRequest {
-        let id = nanoid!();
-        SoftwareUpdateRequest {
-            id,
-            update_list: vec![],
-        }
+impl CommandPayload for SoftwareUpdateCommandPayload {
+    fn operation_type() -> OperationType {
+        OperationType::SoftwareUpdate
+    }
+
+    fn status(&self) -> CommandStatus {
+        self.status.clone()
+    }
+
+    fn set_status(&mut self, status: CommandStatus) {
+        self.status = status
     }
 }
 
-impl SoftwareUpdateRequest {
-    pub fn new_with_id(id: &str) -> SoftwareUpdateRequest {
-        SoftwareUpdateRequest {
-            id: id.to_string(),
-            update_list: vec![],
-        }
-    }
-
-    pub fn topic() -> Topic {
-        Topic::new_unchecked(SOFTWARE_UPDATE_REQUEST_TOPIC)
-    }
-
+impl SoftwareUpdateCommand {
     pub fn add_update(&mut self, mut update: SoftwareModuleUpdate) {
         update.normalize();
         let plugin_type = update
@@ -290,33 +291,38 @@ impl SoftwareUpdateRequest {
             .unwrap_or_else(SoftwareModule::default_type);
 
         if let Some(list) = self
+            .payload
             .update_list
             .iter_mut()
             .find(|list| list.plugin_type == plugin_type)
         {
             list.modules.push(update.into());
         } else {
-            self.update_list.push(SoftwareRequestResponseSoftwareList {
-                plugin_type,
-                modules: vec![update.into()],
-            });
+            self.payload
+                .update_list
+                .push(SoftwareRequestResponseSoftwareList {
+                    plugin_type,
+                    modules: vec![update.into()],
+                });
         }
     }
 
     pub fn add_updates(&mut self, plugin_type: &str, updates: Vec<SoftwareModuleUpdate>) {
-        self.update_list.push(SoftwareRequestResponseSoftwareList {
-            plugin_type: plugin_type.to_string(),
-            modules: updates
-                .into_iter()
-                .map(|update| update.into())
-                .collect::<Vec<SoftwareModuleItem>>(),
-        })
+        self.payload
+            .update_list
+            .push(SoftwareRequestResponseSoftwareList {
+                plugin_type: plugin_type.to_string(),
+                modules: updates
+                    .into_iter()
+                    .map(|update| update.into())
+                    .collect::<Vec<SoftwareModuleItem>>(),
+            })
     }
 
     pub fn modules_types(&self) -> Vec<SoftwareType> {
         let mut modules_types = vec![];
 
-        for updates_per_type in self.update_list.iter() {
+        for updates_per_type in self.payload.update_list.iter() {
             modules_types.push(updates_per_type.plugin_type.clone())
         }
 
@@ -327,6 +333,7 @@ impl SoftwareUpdateRequest {
         let mut updates = vec![];
 
         if let Some(items) = self
+            .payload
             .update_list
             .iter()
             .find(|&items| items.plugin_type == module_type)
@@ -353,6 +360,18 @@ impl SoftwareUpdateRequest {
 
         updates
     }
+
+    pub fn add_errors(&mut self, plugin_type: &str, errors: Vec<SoftwareError>) {
+        self.payload
+            .failures
+            .push(SoftwareRequestResponseSoftwareList {
+                plugin_type: plugin_type.to_string(),
+                modules: errors
+                    .into_iter()
+                    .filter_map(|update| update.into())
+                    .collect::<Vec<SoftwareModuleItem>>(),
+            })
+    }
 }
 
 /// Sub list of modules grouped by plugin type.
@@ -363,77 +382,6 @@ pub struct SoftwareRequestResponseSoftwareList {
     #[serde(rename = "type")]
     pub plugin_type: SoftwareType,
     pub modules: Vec<SoftwareModuleItem>,
-}
-
-/// Possible statuses for result of Software operation.
-#[derive(Debug, Deserialize, Serialize, PartialEq, Copy, Eq, Clone)]
-#[serde(rename_all = "camelCase")]
-pub enum OperationStatus {
-    Successful,
-    Failed,
-    Executing,
-}
-
-/// Message payload definition for SoftwareUpdate response.
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
-pub struct SoftwareUpdateResponse {
-    #[serde(flatten)]
-    pub response: SoftwareRequestResponse,
-}
-
-impl<'a> Jsonify<'a> for SoftwareUpdateResponse {}
-
-impl SoftwareUpdateResponse {
-    pub fn new(req: &SoftwareUpdateRequest) -> SoftwareUpdateResponse {
-        SoftwareUpdateResponse {
-            response: SoftwareRequestResponse::new(&req.id, OperationStatus::Executing),
-        }
-    }
-
-    pub fn topic() -> Topic {
-        Topic::new_unchecked(SOFTWARE_UPDATE_RESPONSE_TOPIC)
-    }
-
-    pub fn add_modules(&mut self, plugin_type: &str, modules: Vec<SoftwareModule>) {
-        self.response.add_modules(
-            plugin_type.to_string(),
-            modules
-                .into_iter()
-                .map(|module| module.into())
-                .collect::<Vec<SoftwareModuleItem>>(),
-        );
-    }
-
-    pub fn add_errors(&mut self, plugin_type: &str, errors: Vec<SoftwareError>) {
-        self.response.add_errors(
-            plugin_type.to_string(),
-            errors
-                .into_iter()
-                .filter_map(|module| module.into())
-                .collect::<Vec<SoftwareModuleItem>>(),
-        );
-    }
-
-    pub fn set_error(&mut self, reason: &str) {
-        self.response.status = OperationStatus::Failed;
-        self.response.reason = Some(reason.into());
-    }
-
-    pub fn id(&self) -> &str {
-        &self.response.id
-    }
-
-    pub fn status(&self) -> OperationStatus {
-        self.response.status
-    }
-
-    pub fn error(&self) -> Option<String> {
-        self.response.reason.clone()
-    }
-
-    pub fn modules(&self) -> Vec<SoftwareModule> {
-        self.response.modules()
-    }
 }
 
 /// Variants represent Software Operations Supported actions.
@@ -463,84 +411,6 @@ pub struct SoftwareModuleItem {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
-}
-
-/// Software Operation Response payload format.
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SoftwareRequestResponse {
-    pub id: String,
-    pub status: OperationStatus,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<String>,
-
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub current_software_list: Option<Vec<SoftwareRequestResponseSoftwareList>>,
-
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub failures: Vec<SoftwareRequestResponseSoftwareList>,
-}
-
-impl<'a> Jsonify<'a> for SoftwareRequestResponse {}
-
-impl SoftwareRequestResponse {
-    pub fn new(id: &str, status: OperationStatus) -> Self {
-        SoftwareRequestResponse {
-            id: id.to_string(),
-            status,
-            current_software_list: None,
-            reason: None,
-            failures: vec![],
-        }
-    }
-
-    pub fn add_modules(&mut self, plugin_type: SoftwareType, modules: Vec<SoftwareModuleItem>) {
-        if self.failures.is_empty() {
-            self.status = OperationStatus::Successful;
-        }
-
-        if self.current_software_list.is_none() {
-            self.current_software_list = Some(vec![]);
-        }
-
-        if let Some(list) = self.current_software_list.as_mut() {
-            list.push(SoftwareRequestResponseSoftwareList {
-                plugin_type,
-                modules,
-            })
-        }
-    }
-
-    pub fn add_errors(&mut self, plugin_type: SoftwareType, modules: Vec<SoftwareModuleItem>) {
-        self.status = OperationStatus::Failed;
-
-        self.failures.push(SoftwareRequestResponseSoftwareList {
-            plugin_type,
-            modules,
-        })
-    }
-
-    pub fn modules(&self) -> Vec<SoftwareModule> {
-        let mut modules = vec![];
-
-        if let Some(list) = &self.current_software_list {
-            for module_per_plugin in list.iter() {
-                let module_type = &module_per_plugin.plugin_type;
-                for module in module_per_plugin.modules.iter() {
-                    modules.push(SoftwareModule {
-                        module_type: Some(module_type.clone()),
-                        name: module.name.clone(),
-                        version: module.version.clone(),
-                        url: module.url.clone(),
-                        file_path: None,
-                    });
-                }
-            }
-        }
-
-        modules
-    }
 }
 
 impl From<SoftwareModule> for SoftwareModuleItem {
@@ -808,70 +678,18 @@ mod tests {
             modules: vec![docker_module1],
         };
 
-        let request = SoftwareUpdateRequest {
-            id: "1234".to_string(),
+        let request = SoftwareUpdateCommandPayload {
+            status: CommandStatus::Init,
             update_list: vec![debian_list, docker_list],
-        };
-
-        let expected_json = r#"{"id":"1234","updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"},{"name":"debian2","version":"0.0.2","action":"install"}]},{"type":"docker","modules":[{"name":"docker1","version":"0.0.1","url":"test.com","action":"remove"}]}]}"#;
-
-        let actual_json = request.to_json();
-        assert_eq!(actual_json, expected_json);
-
-        let parsed_request =
-            SoftwareUpdateRequest::from_json(&actual_json).expect("Fail to parse the json request");
-        assert_eq!(parsed_request, request);
-    }
-
-    #[test]
-    fn serde_software_list_empty_successful() {
-        let request = SoftwareRequestResponse {
-            id: "1234".to_string(),
-            status: OperationStatus::Successful,
-            reason: None,
-            current_software_list: Some(vec![]),
             failures: vec![],
         };
 
-        let expected_json = r#"{"id":"1234","status":"successful","currentSoftwareList":[]}"#;
+        let expected_json = r#"{"status":"init","updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"},{"name":"debian2","version":"0.0.2","action":"install"}]},{"type":"docker","modules":[{"name":"docker1","version":"0.0.1","url":"test.com","action":"remove"}]}]}"#;
 
         let actual_json = request.to_json();
         assert_eq!(actual_json, expected_json);
 
-        let parsed_request = SoftwareRequestResponse::from_json(&actual_json)
-            .expect("Fail to parse the json request");
-        assert_eq!(parsed_request, request);
-    }
-
-    #[test]
-    fn serde_software_list_some_modules_successful() {
-        let module1 = SoftwareModuleItem {
-            name: "debian1".into(),
-            version: Some("0.0.1".into()),
-            action: None,
-            url: None,
-            reason: None,
-        };
-
-        let docker_module1 = SoftwareRequestResponseSoftwareList {
-            plugin_type: "debian".into(),
-            modules: vec![module1],
-        };
-
-        let request = SoftwareRequestResponse {
-            id: "1234".to_string(),
-            status: OperationStatus::Successful,
-            reason: None,
-            current_software_list: Some(vec![docker_module1]),
-            failures: vec![],
-        };
-
-        let expected_json = r#"{"id":"1234","status":"successful","currentSoftwareList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1"}]}]}"#;
-
-        let actual_json = request.to_json();
-        assert_eq!(actual_json, expected_json);
-
-        let parsed_request = SoftwareRequestResponse::from_json(&actual_json)
+        let parsed_request = SoftwareUpdateCommandPayload::from_json(&actual_json)
             .expect("Fail to parse the json request");
         assert_eq!(parsed_request, request);
     }
