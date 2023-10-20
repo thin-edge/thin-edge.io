@@ -142,7 +142,7 @@ Thin-edge device support sending inventory data via tedge topic
     Should Be Equal As Integers    ${mo["device_OS"]["complex"][2]}    3
     Should Be Equal    ${mo["device_OS"]["object"]["foo"]}    bar
 
-    # Validate clearing of fragements
+    # Validate clearing of fragments
     Execute Command    tedge mqtt pub "te/device/main///twin/device_OS" ''
     Managed Object Should Not Have Fragments    device_OS
 
@@ -157,7 +157,7 @@ Thin-edge device supports sending inventory data via tedge topic to root fragmen
     Should Be Equal    ${mo["type"]}    thin-edge.io
     Should Be Equal    ${mo["name"]}    ${DEVICE_SN}
 
-    # Validate clearing of fragements
+    # Validate clearing of fragments
     Execute Command    tedge mqtt pub "te/device/main///twin/subtype" ''
     Managed Object Should Not Have Fragments    subtype
 
