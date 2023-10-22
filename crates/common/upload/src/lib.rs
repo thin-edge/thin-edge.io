@@ -39,5 +39,6 @@ mod upload;
 
 pub use crate::error::UploadError;
 pub use crate::upload::Auth;
+pub use crate::upload::ContentType;
 pub use crate::upload::UploadInfo;
 pub use crate::upload::Uploader;

@@ -26,6 +26,7 @@ use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_uploader_ext::ContentType;
 use tedge_uploader_ext::UploadRequest;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
@@ -144,7 +145,9 @@ impl CumulocityConverter {
                 let upload_request = UploadRequest::new(
                     self.auth_proxy.proxy_url(binary_upload_event_url).as_str(),
                     &uploaded_file_path,
-                );
+                )
+                .with_content_type(ContentType::TextPlain);
+
                 self.uploader_sender
                     .send((cmd_id.into(), upload_request))
                     .await
