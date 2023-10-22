@@ -3,6 +3,10 @@ use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use async_trait::async_trait;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
+use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
+use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::C8YRestRequest;
@@ -33,7 +37,9 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
+use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_timer_ext::SetTimeout;
 use tedge_timer_ext::Timeout;
@@ -93,7 +99,7 @@ impl Actor for C8yMapperActor {
                     self.process_sync_timeout().await?;
                 }
                 C8yMapperInput::IdUploadResult((cmd_id, result)) => {
-                    unimplemented!()
+                    self.process_upload_result(cmd_id, result).await?;
                 }
                 C8yMapperInput::IdDownloadResult((cmd_id, result)) => {
                     self.process_download_result(cmd_id, result).await?;
@@ -220,6 +226,50 @@ impl C8yMapperActor {
         for message in sync_messages {
             self.process_mqtt_message(message).await?;
         }
+
+        Ok(())
+    }
+
+    async fn process_upload_result(
+        &mut self,
+        cmd_id: CmdId,
+        upload_result: UploadResult,
+    ) -> Result<(), RuntimeError> {
+        match self.converter.pending_upload_operations.remove(&cmd_id) {
+            None => error!("Received an upload result for the unknown command ID: {cmd_id}"),
+            Some((smartrest_topic, clear_cmd_topic, operation)) => {
+                let result = match operation {
+                    CumulocitySupportedOperations::C8yLogFileRequest => match upload_result {
+                        Ok(response) => SmartRestSetOperationToSuccessful::new(
+                            CumulocitySupportedOperations::C8yLogFileRequest,
+                        )
+                        .with_response_parameter(&response.url)
+                        .to_smartrest(),
+                        Err(err) => SmartRestSetOperationToFailed::new(
+                            CumulocitySupportedOperations::C8yLogFileRequest,
+                            format!("Upload failed with {}", err),
+                        )
+                        .to_smartrest(),
+                    },
+                    _other_types => return Ok(()), // unsupported
+                };
+
+                match result {
+                    Ok(sm_payload) => {
+                        let c8y_notification = Message::new(&smartrest_topic, sm_payload);
+                        let clear_local_cmd = Message::new(&clear_cmd_topic, "")
+                            .with_retain()
+                            .with_qos(QoS::AtLeastOnce);
+                        for converted_message in [c8y_notification, clear_local_cmd] {
+                            self.mqtt_publisher.send(converted_message).await?
+                        }
+                    }
+                    Err(err) => {
+                        error!("Error occurred while processing an upload result. {err}")
+                    }
+                }
+            }
+        };
 
         Ok(())
     }

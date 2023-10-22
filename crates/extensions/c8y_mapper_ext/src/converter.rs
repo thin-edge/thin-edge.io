@@ -182,6 +182,8 @@ pub struct CumulocityConverter {
     pub auth_proxy: ProxyUrlGenerator,
     pub uploader_sender: LoggingSender<IdUploadRequest>,
     pub downloader_sender: LoggingSender<IdDownloadRequest>,
+    // todo: maybe there's a better way which arguments to take
+    pub pending_upload_operations: HashMap<CmdId, (Topic, Topic, CumulocitySupportedOperations)>,
     pub pending_operations: HashMap<CmdId, SmartRestOperationVariant>,
     pub command_id: IdGenerator,
 }
@@ -261,6 +263,7 @@ impl CumulocityConverter {
             auth_proxy,
             uploader_sender,
             downloader_sender,
+            pending_upload_operations: HashMap::new(),
             pending_operations: HashMap::new(),
             command_id,
         })
