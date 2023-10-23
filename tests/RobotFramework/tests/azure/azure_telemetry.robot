@@ -74,7 +74,6 @@ Publish health status message for main device service
 *** Keywords ***
 Custom Setup
     Setup
-    # Execute Command    sudo tedge config set az.topics "te/+/+/+/+/m/+,te/+/+/+/+/e/+,te/+/+/+/+/a/+"
     Execute Command    sudo systemctl restart tedge-mapper-az.service
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-az
 

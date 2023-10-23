@@ -62,7 +62,6 @@ Publish health status message for main device service
 *** Keywords ***
 Custom Setup
     Setup
-    # Execute Command    sudo tedge config set aws.topics "te/+/+/+/+/m/+,te/+/+/+/+/e/+,te/+/+/+/+/a/+"
     Execute Command    sudo systemctl start tedge-mapper-aws.service
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-aws
 

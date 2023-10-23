@@ -7,12 +7,10 @@ use camino::Utf8PathBuf;
 use std::net::IpAddr;
 use std::path::Path;
 use std::time::Duration;
-use tedge_api::health::health_check_topics;
 use tedge_api::path::DataDir;
 use tedge_config::TEdgeConfig;
 use tedge_mqtt_ext::TopicFilter;
 
-const PLUGIN_SERVICE_NAME: &str = "c8y-firmware-plugin";
 const FIRMWARE_UPDATE_RESPONSE_TOPICS: &str = "tedge/+/commands/res/firmware_update";
 
 /// Configuration of the Firmware Manager
@@ -23,7 +21,6 @@ pub struct FirmwareManagerConfig {
     pub tmp_dir: Utf8PathBuf,
     pub data_dir: DataDir,
     pub c8y_request_topics: TopicFilter,
-    pub health_check_topics: TopicFilter,
     pub firmware_update_response_topics: TopicFilter,
     pub timeout_sec: Duration,
     pub c8y_end_point: C8yEndPoint,
@@ -42,7 +39,6 @@ impl FirmwareManagerConfig {
         let local_http_host = format!("{}:{}", local_http_address, local_http_port);
 
         let c8y_request_topics = C8yTopic::SmartRestRequest.into();
-        let health_check_topics = health_check_topics(PLUGIN_SERVICE_NAME);
         let firmware_update_response_topics =
             TopicFilter::new_unchecked(FIRMWARE_UPDATE_RESPONSE_TOPICS);
 
@@ -54,7 +50,6 @@ impl FirmwareManagerConfig {
             tmp_dir,
             data_dir,
             c8y_request_topics,
-            health_check_topics,
             firmware_update_response_topics,
             timeout_sec,
             c8y_end_point,

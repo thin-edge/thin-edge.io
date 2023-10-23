@@ -53,10 +53,16 @@ impl AzureConverter {
     }
 
     fn try_convert(&mut self, input: &MqttMessage) -> Result<Vec<MqttMessage>, ConversionError> {
-        match self.mqtt_schema.entity_channel_of(&input.topic) {
+        let messages = match self.mqtt_schema.entity_channel_of(&input.topic) {
             Ok((entity, channel)) => self.try_convert_te_topics(input, &entity, channel),
             Err(_) => Ok(Vec::new()),
+        }?;
+
+        for message in &messages {
+            self.size_threshold.validate(message)?;
         }
+
+        Ok(messages)
     }
 
     // Todo: The device-id,telemetry kind (Meausrement/event/alarm) and telemetry type from the te topic has to be
@@ -75,8 +81,6 @@ impl AzureConverter {
             return Ok(vec![]);
         }
 
-        self.size_threshold.validate(input)?;
-
         match &channel {
             Channel::Measurement { .. }
             | Channel::Event { .. }
@@ -84,7 +88,6 @@ impl AzureConverter {
             | Channel::Health => {
                 let payload = self.with_timestamp(input)?;
                 let output = MqttMessage::new(&self.mapper_config.out_topic, payload);
-                self.size_threshold.validate(&output)?;
                 Ok(vec![output])
             }
             _ => Ok(vec![]),
@@ -126,6 +129,7 @@ impl Converter for AzureConverter {
 
     fn convert(&mut self, input: &Self::Input) -> Result<Vec<Self::Output>, Self::Error> {
         let messages_or_err = self.try_convert(input);
+
         Ok(self.wrap_errors(messages_or_err))
     }
 }
@@ -186,7 +190,7 @@ mod tests {
         let mut converter =
             AzureConverter::new(false, Box::new(TestClock)).with_threshold(SizeThreshold(1));
 
-        let _topic = "te/device/main///m/".to_string();
+        let _topic = "az/messages/events/".to_string();
         let input = r#"{
             "temperature": 23.0
          }"#;
@@ -195,7 +199,7 @@ mod tests {
             result,
             Err(ConversionError::SizeThresholdExceeded {
                 topic: _topic,
-                actual_size: 44,
+                actual_size: _,
                 threshold: 1
             })
         );

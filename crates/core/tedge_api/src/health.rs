@@ -5,7 +5,6 @@ use clock::Clock;
 use clock::WallClock;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
-use mqtt_channel::TopicFilter;
 use serde_json::json;
 use std::process;
 use std::sync::Arc;
@@ -77,17 +76,6 @@ impl ServiceHealthTopic {
 
 #[derive(Debug)]
 pub struct HealthTopicError;
-
-// TODO: remove below functions once components moved to new health topics
-
-pub fn health_check_topics(daemon_name: &str) -> TopicFilter {
-    vec![
-        "tedge/health-check".into(),
-        format!("tedge/health-check/{daemon_name}"),
-    ]
-    .try_into()
-    .expect("Invalid topic filter")
-}
 
 #[cfg(test)]
 mod tests {
