@@ -89,20 +89,6 @@ pub fn health_check_topics(daemon_name: &str) -> TopicFilter {
     .expect("Invalid topic filter")
 }
 
-pub fn is_bridge_health(topic: &str) -> bool {
-    if topic.starts_with("tedge/health") {
-        let substrings: Vec<String> = topic.split('/').map(String::from).collect();
-        if substrings.len() > 2 {
-            let bridge_splits: Vec<&str> = substrings[2].split('-').collect();
-            matches!(bridge_splits[..], ["mosquitto", _, "bridge"])
-        } else {
-            false
-        }
-    } else {
-        false
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

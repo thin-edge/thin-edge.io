@@ -4,7 +4,6 @@ use serde_json::Map;
 use serde_json::Value;
 use std::convert::Infallible;
 use tedge_actors::Converter;
-use tedge_api::health::is_bridge_health;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
@@ -15,6 +14,7 @@ use crate::error::ConversionError;
 use crate::size_threshold::SizeThreshold;
 
 const AWS_MQTT_THRESHOLD: usize = 1024 * 255;
+const MOSQUITTO_BRIDGE_TOPIC_ID: &str = "device/main/service/mosquitto-aws-bridge";
 
 pub struct AwsConverter {
     pub(crate) add_timestamp: bool,
@@ -42,35 +42,16 @@ impl AwsConverter {
     }
 
     fn try_convert(&mut self, input: &MqttMessage) -> Result<Vec<MqttMessage>, ConversionError> {
-        if is_bridge_health(&input.topic.name) {
-            Ok(vec![])
-        } else {
-            match self.mqtt_schema.entity_channel_of(&input.topic) {
-                Ok((source, channel)) => self.try_convert_te_topics(source, channel, input),
-                Err(_) => self.try_convert_tedge_topics(input),
-            }
-        }
-    }
+        let messages = match self.mqtt_schema.entity_channel_of(&input.topic) {
+            Ok((source, channel)) => self.try_convert_te_topics(source, channel, input),
+            Err(_) => Ok(vec![]),
+        }?;
 
-    fn try_convert_tedge_topics(
-        &mut self,
-        input: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        // serialize with ThinEdgeJson for health, just add the timestamp
-        if input.topic.name.starts_with("tedge/health") {
-            let payload = self.with_time_stamp(input)?;
-            let topic_suffix = match input.topic.name.split_once('/') {
-                Some((_, topic_suffix)) => topic_suffix,
-                None => return Ok(vec![]),
-            };
-            let out_topic = Topic::new(&format!("aws/td/{topic_suffix}"))?;
-
-            let output = MqttMessage::new(&out_topic, payload);
-            self.size_threshold.validate(&output)?;
-            Ok(vec![(output)])
-        } else {
-            Ok(vec![])
+        for message in &messages {
+            self.size_threshold.validate(message)?;
         }
+
+        Ok(messages)
     }
 
     fn try_convert_te_topics(
@@ -79,23 +60,57 @@ impl AwsConverter {
         channel: Channel,
         input: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let mea_type = match &channel {
-            Channel::Measurement { measurement_type } => measurement_type,
-            Channel::Event { event_type } => event_type,
-            Channel::Alarm { alarm_type } => alarm_type,
-            _ => return Ok(vec![]),
-        };
-        self.convert_message(input, source, mea_type)
+        // don't convert mosquitto bridge notification topic
+        // https://github.com/thin-edge/thin-edge.io/issues/2236
+        if source.as_str() == MOSQUITTO_BRIDGE_TOPIC_ID {
+            return Ok(vec![]);
+        }
+
+        match channel {
+            Channel::Measurement {
+                measurement_type: type_name,
+            }
+            | Channel::Event {
+                event_type: type_name,
+            }
+            | Channel::Alarm {
+                alarm_type: type_name,
+            } => self.convert_telemetry_message(input, source, &type_name),
+
+            Channel::Health => self.convert_health_message(&source, &channel, input),
+
+            _ => Ok(vec![]),
+        }
     }
 
-    fn convert_message(
+    fn convert_health_message(
+        &self,
+        source: &EntityTopicId,
+        channel: &Channel,
+        input: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        match channel {
+            Channel::Health => (),
+            _ => panic!("Not a health message"),
+        }
+
+        let source = normalize_name(source);
+        let out_topic = format!("aws/td/{source}/status/health");
+        let payload = self.with_time_stamp(input)?;
+        let output = MqttMessage::new(&Topic::new(&out_topic).unwrap(), payload);
+
+        Ok(vec![output])
+    }
+
+    fn convert_telemetry_message(
         &mut self,
         input: &MqttMessage,
         source: EntityTopicId,
         telemetry_type: &String,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let payload = self.with_time_stamp(input)?;
-        let source = normalize_name(source);
+        let source = normalize_name(&source);
+        // XXX: should match on `Channel` instead
         let out_topic = match input.topic.name.split('/').collect::<Vec<_>>()[..] {
             [_, _, _, _, _, "m", _] => {
                 Topic::new_unchecked(&format!("aws/td/{source}/m/{telemetry_type}"))
@@ -114,7 +129,7 @@ impl AwsConverter {
         Ok(vec![output])
     }
 
-    fn with_time_stamp(&mut self, input: &MqttMessage) -> Result<String, ConversionError> {
+    fn with_time_stamp(&self, input: &MqttMessage) -> Result<String, ConversionError> {
         let default_timestamp = self.add_timestamp.then(|| self.clock.now());
         let mut payload_json: Map<String, Value> =
             serde_json::from_slice(input.payload.as_bytes())?;
@@ -142,9 +157,13 @@ impl AwsConverter {
     }
 }
 
-fn normalize_name(source: EntityTopicId) -> String {
-    let parts = source.to_string();
-    let parts: Vec<&str> = parts.split('/').collect();
+// We need to reduce the number of levels in the topic because AWS IoT only supports topics with 7
+// slashes (`/`)
+//
+// Ref: https://docs.aws.amazon.com/general/latest/gr/iot-core.html -> "Maximum number of slashes in
+// topic and topic filter"
+fn normalize_name(source: &EntityTopicId) -> String {
+    let parts: Vec<&str> = source.as_str().split('/').collect();
     parts
         .iter()
         .filter(|&&part| !part.is_empty())
@@ -440,7 +459,7 @@ mod tests {
 
         let input = "0";
         let result = converter.try_convert(&MqttMessage::new(
-            &Topic::new_unchecked("tedge/health/mosquitto-aws-bridge"),
+            &Topic::new_unchecked("te/device/main/service/mosquitto-aws-bridge/status/health"),
             input,
         ));
         let res = result.unwrap();
@@ -689,5 +708,41 @@ mod tests {
                 .unwrap(),
             expected_output
         );
+    }
+
+    #[test]
+    fn converting_service_health_status_up_message() {
+        let mut converter = AwsConverter::new(false, Box::new(TestClock));
+
+        let input = r#"{"pid":1234,"status":"up"}"#;
+        let result = converter.try_convert(&MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/test-service/status/health"),
+            input,
+        ));
+
+        let expected_msg = MqttMessage::new(
+            &Topic::new_unchecked("aws/td/device:main:service:test-service/status/health"),
+            input,
+        );
+        let res = result.unwrap();
+        assert_eq!(res[0], expected_msg);
+    }
+
+    #[test]
+    fn converting_service_health_status_down_message() {
+        let mut converter = AwsConverter::new(false, Box::new(TestClock));
+
+        let input = r#"{"pid":1234,"status":"up"}"#;
+        let result = converter.try_convert(&MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/test-service/status/health"),
+            input,
+        ));
+
+        let expected_msg = MqttMessage::new(
+            &Topic::new_unchecked("aws/td/device:main:service:test-service/status/health"),
+            input,
+        );
+        let res = result.unwrap();
+        assert_eq!(res[0], expected_msg);
     }
 }

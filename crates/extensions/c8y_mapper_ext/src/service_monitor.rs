@@ -28,6 +28,8 @@ pub fn convert_health_status_message(
     let mut mqtt_messages: Vec<Message> = Vec::new();
 
     // If not Bridge health status
+    // FIXME: can also match "device/bridge//" or "/device/main/service/my_custom_bridge"
+    // should match ONLY the single mapper bridge
     if entity.topic_id.as_str().contains("bridge") {
         return mqtt_messages;
     }

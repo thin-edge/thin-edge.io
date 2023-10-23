@@ -6,13 +6,15 @@ use serde_json::Map;
 use serde_json::Value;
 use std::convert::Infallible;
 use tedge_actors::Converter;
-use tedge_api::health::is_bridge_health;
 use tedge_api::mqtt_topics::Channel;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 
 const AZ_MQTT_THRESHOLD: usize = 1024 * 128;
+const MOSQUITTO_BRIDGE_TOPIC_ID: &str = "device/main/service/mosquitto-az-bridge";
+
 #[derive(Debug)]
 pub struct MapperConfig {
     pub out_topic: Topic,
@@ -51,26 +53,9 @@ impl AzureConverter {
     }
 
     fn try_convert(&mut self, input: &MqttMessage) -> Result<Vec<MqttMessage>, ConversionError> {
-        if is_bridge_health(&input.topic.name) {
-            Ok(vec![])
-        } else {
-            match self.mqtt_schema.entity_channel_of(&input.topic) {
-                Ok((_source, channel)) => self.try_convert_te_topics(input, channel),
-                Err(_) => self.try_convert_tedge_health_topics(input),
-            }
-        }
-    }
-
-    fn try_convert_tedge_health_topics(
-        &mut self,
-        input: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if input.topic.name.starts_with("tedge/health") {
-            let mut input_msg = input.clone();
-            input_msg.topic = self.mapper_config.out_topic.clone();
-            Ok(vec![input_msg])
-        } else {
-            Ok(vec![])
+        match self.mqtt_schema.entity_channel_of(&input.topic) {
+            Ok((entity, channel)) => self.try_convert_te_topics(input, &entity, channel),
+            Err(_) => Ok(Vec::new()),
         }
     }
 
@@ -81,12 +66,22 @@ impl AzureConverter {
     fn try_convert_te_topics(
         &mut self,
         input: &MqttMessage,
+        entity: &EntityTopicId,
         channel: Channel,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
+        // don't convert mosquitto bridge notification topic
+        // https://github.com/thin-edge/thin-edge.io/issues/2236
+        if entity.as_str() == MOSQUITTO_BRIDGE_TOPIC_ID {
+            return Ok(vec![]);
+        }
+
         self.size_threshold.validate(input)?;
 
         match &channel {
-            Channel::Measurement { .. } | Channel::Event { .. } | Channel::Alarm { .. } => {
+            Channel::Measurement { .. }
+            | Channel::Event { .. }
+            | Channel::Alarm { .. }
+            | Channel::Health => {
                 let payload = self.with_timestamp(input)?;
                 let output = MqttMessage::new(&self.mapper_config.out_topic, payload);
                 self.size_threshold.validate(&output)?;
@@ -302,72 +297,72 @@ mod tests {
     #[test_case(
         "te/device/main///m/m_type",
         "az/messages/events/",
-        r#"{"temperature":23.0,"time":"2021-04-08T00:00:00+05:00"}"#        
+        r#"{"temperature":23.0,"time":"2021-04-08T00:00:00+05:00"}"#
         ; "main device measurement"
     )]
     #[test_case(
         "te/device/child///m/m_type",
-        "az/messages/events/",        
+        "az/messages/events/",
         r#"{"temperature":23.0,"time":"2021-04-08T00:00:00+05:00"}"#
         ; "child device measurement"
     )]
     #[test_case(
         "te/device/main/service/m_service/m/m_type",
         "az/messages/events/",
-        r#"{"temperature":23.0,"time":"2021-04-08T00:00:00+05:00"}"#        
+        r#"{"temperature":23.0,"time":"2021-04-08T00:00:00+05:00"}"#
         ; "main device service measurement"
     )]
     #[test_case(
         "te/device/child/service/c_service/m/m_type",
-        "az/messages/events/",        
+        "az/messages/events/",
         r#"{"temperature":23.0,"time":"2021-04-08T00:00:00+05:00"}"#
         ; "child device service measurement"
     )]
     #[test_case(
         "te/device/main///e/e_type",
         "az/messages/events/",
-        r#"{"text":"someone logged-in","time":"2021-04-08T00:00:00+05:00"}"#        
+        r#"{"text":"someone logged-in","time":"2021-04-08T00:00:00+05:00"}"#
         ; "main device event"
     )]
     #[test_case(
         "te/device/child///e/e_type",
-        "az/messages/events/",        
+        "az/messages/events/",
         r#"{"text":"someone logged-in","time":"2021-04-08T00:00:00+05:00"}"#
         ; "child device event"
     )]
     #[test_case(
         "te/device/main/service/m_service/e/e_type",
         "az/messages/events/",
-        r#"{"text":"someone logged-in","time":"2021-04-08T00:00:00+05:00"}"#        
+        r#"{"text":"someone logged-in","time":"2021-04-08T00:00:00+05:00"}"#
         ; "main device service event"
     )]
     #[test_case(
         "te/device/child/service/c_service/e/e_type",
-        "az/messages/events/",        
+        "az/messages/events/",
         r#"{"text":"someone logged-in","time":"2021-04-08T00:00:00+05:00"}"#
         ; "child device service event"
     )]
     #[test_case(
         "te/device/main///a/a_type",
         "az/messages/events/",
-        r#"{"severity":"critical","time":"2021-04-08T00:00:00+05:00"}"#        
+        r#"{"severity":"critical","time":"2021-04-08T00:00:00+05:00"}"#
         ; "main device alarm"
     )]
     #[test_case(
         "te/device/child///a/a_type",
-        "az/messages/events/",        
+        "az/messages/events/",
         r#"{"severity":"critical","time":"2021-04-08T00:00:00+05:00"}"#
         ; "child device alarm"
     )]
     #[test_case(
         "te/device/main/service/m_service/a/a_type",
         "az/messages/events/",
-        r#"{"severity":"critical","time":"2021-04-08T00:00:00+05:00"}"#        
+        r#"{"severity":"critical","time":"2021-04-08T00:00:00+05:00"}"#
         ; "main device service alarm"
     )]
     #[test_case(
         "te/device/child/service/c_service/a/a_type",
-        "az/messages/events/",        
+        "az/messages/events/",
         r#"{"severity":"critical","time":"2021-04-08T00:00:00+05:00"}"#
         ; "child device service alarm"
     )]
@@ -387,7 +382,7 @@ mod tests {
 
         let input = "0";
         let result = converter.try_convert(&MqttMessage::new(
-            &Topic::new_unchecked("tedge/health/mosquitto-az-bridge"),
+            &Topic::new_unchecked("te/device/main/service/mosquitto-az-bridge/status/health"),
             input,
         ));
         let res = result.unwrap();
@@ -400,7 +395,7 @@ mod tests {
 
         let input = r#"{"pid":1234,"status":"up","time":1694586060}"#;
         let result = converter.try_convert(&MqttMessage::new(
-            &Topic::new_unchecked("tedge/health/tedge-mapper-az"),
+            &Topic::new_unchecked("te/device/main/service/tedge-mapper-az/status/health"),
             input,
         ));
 
@@ -415,7 +410,7 @@ mod tests {
 
         let input = r#"{"pid":1234,"status":"up"}"#;
         let result = converter.try_convert(&MqttMessage::new(
-            &Topic::new_unchecked("tedge/health/tedge-mapper-az"),
+            &Topic::new_unchecked("te/device/main/service/tedge-mapper-az/status/health"),
             input,
         ));
 
