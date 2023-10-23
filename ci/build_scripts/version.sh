@@ -71,10 +71,6 @@ next_base_version() {
     echo "${major}.${minor}.${patch}"
 }
 
-parse_version() {
-    git describe --always --tags --abbrev=7 2>/dev/null || true
-}
-
 set_version_variables() {
 
     BUILD_COMMITS_SINCE=
@@ -84,9 +80,23 @@ set_version_variables() {
 
     if [ -z "$GIT_SEMVER" ]; then
         GIT_DESCRIBE_RAW=$(git describe --always --tags --abbrev=7 2>/dev/null || true)
-        BASE_VERSION=$(echo "$GIT_DESCRIBE_RAW" | cut -d- -f1)
-        BUILD_COMMITS_SINCE=$(echo "$GIT_DESCRIBE_RAW" | cut -d- -f2)
-        BUILD_COMMIT_HASH=$(echo "$GIT_DESCRIBE_RAW" | cut -d- -f3)
+
+        if [[ "$GIT_DESCRIBE_RAW" =~ ^[a-z0-9]+$ ]]; then
+            # Note: Sometimes git describe only prints out the git hash when run on a PR branch
+            # from someone else. In such instances this causes the version to be incompatible with
+            # linux package types. For instance, debian versions must start with a digit.
+            # When this situation is detected, git describe is run on the main branch however the
+            # git hash is replaced with the current git hash of the current branch.
+            echo "Using git describe from origin/main as detec" >&2
+            BUILD_COMMIT_HASH="g$GIT_DESCRIBE_RAW"
+            GIT_DESCRIBE_RAW=$(git describe --always --tags --abbrev=7 origin/main 2>/dev/null || true)
+            BASE_VERSION=$(echo "$GIT_DESCRIBE_RAW" | cut -d- -f1)
+            BUILD_COMMITS_SINCE=$(echo "$GIT_DESCRIBE_RAW" | cut -d- -f2)
+        else
+            BASE_VERSION=$(echo "$GIT_DESCRIBE_RAW" | cut -d- -f1)
+            BUILD_COMMITS_SINCE=$(echo "$GIT_DESCRIBE_RAW" | cut -d- -f2)
+            BUILD_COMMIT_HASH=$(echo "$GIT_DESCRIBE_RAW" | cut -d- -f3)
+        fi
         BUMP_VERSION=1
     else
         echo "Using version set by user: $GIT_SEMVER" >&2
