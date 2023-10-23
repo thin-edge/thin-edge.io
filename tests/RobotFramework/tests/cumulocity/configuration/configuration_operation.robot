@@ -1,144 +1,285 @@
 *** Settings ***
-Resource    ../../../resources/common.resource
-Library    Cumulocity
-Library    ThinEdgeIO
+Resource            ../../../resources/common.resource
+Library             ThinEdgeIO
+Library             Cumulocity
+Library             OperatingSystem
 
-Test Tags    theme:c8y    theme:configuration
-Suite Setup    Custom Setup
-Test Teardown    Get Logs
-Test Setup    Test Setup
+Suite Setup         Suite Setup
+Suite Teardown      Get Logs    name=${PARENT_SN}
+Test Setup          Test Setup
 
-# Note: Use larger timeout (120s instead of 30s default) for operation
-# assertions to allow for cases where the c8y jwt token request times out
-# as the retry mechanism will wait 60 seconds before requesting a new jwt
+Test Tags          theme:configuration    theme:childdevices
 
 *** Variables ***
-${DEFAULT_CONFIG}    tedge-configuration-plugin
+${PARENT_SN}
+${CHILD_SN}
 
-*** Test Cases ***
 
-Set configuration when file exists
-    ${config_url}=    Cumulocity.Create Inventory Binary    config1    CONFIG1    file=${CURDIR}/config1-version2.json
-    ${operation}=    Cumulocity.Set Configuration    CONFIG1    url=${config_url}
-    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
-    ${target_contents}=    Execute Command    cat /etc/config1.json
-    Should Be Equal    ${target_contents}    {"name":"configuration1","version":2}
-    ${FILE_MODE_OWNERSHIP}=    Execute Command    stat -c '%a %U:%G' /etc/config1.json    strip=${True}
-    # Note: File permission will not change if the file already exists
-    Should Be Equal    ${FILE_MODE_OWNERSHIP}    644 root:root
+*** Test Cases ***                DEVICE        EXTERNALID                        CONFIG_TYPE       DEVICE_FILE                  FILE                                PERMISSION    OWNERSHIP
 
-Set binary configuration
+#
+# Set configuration
+#
+Set Configuration when file does not exist
     [Tags]    \#2318
-    ${config_url}=    Cumulocity.Create Inventory Binary    binary-config1    CONFIG1_BINARY    file=${CURDIR}/binary-config1.tar.gz
-    ${operation}=    Cumulocity.Set Configuration    CONFIG1_BINARY    url=${config_url}
-    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
-    ${target_checksum}=    Execute Command    md5sum /etc/binary-config1.tar.gz | cut -d' ' -f1    strip=${True}
-    Should Be Equal    ${target_checksum}    27e57d7f840592dd683138a609e72fac
-    ${FILE_MODE_OWNERSHIP}=    Execute Command    stat -c '%a %U:%G' /etc/binary-config1.tar.gz    strip=${True}
-    # Note: File permission will not change if the file already exists
-    Should Be Equal    ${FILE_MODE_OWNERSHIP}    644 root:root
+    [Template]    Set Configuration from Device
+    Text file (Main Device)       ${PARENT_SN}  ${PARENT_SN}                      CONFIG1           /etc/config1.json            ${CURDIR}/config1-version2.json     640           tedge:tedge      delete_file_before=${true}
+    Binary file (Main Device)     ${PARENT_SN}  ${PARENT_SN}                      CONFIG1_BINARY    /etc/binary-config1.tar.gz   ${CURDIR}/binary-config1.tar.gz     640           tedge:tedge    delete_file_before=${true}
+    Text file (Child Device)      ${CHILD_SN}   ${PARENT_SN}:device:${CHILD_SN}   CONFIG1           /etc/config1.json            ${CURDIR}/config1-version2.json     640           tedge:tedge      delete_file_before=${true}
+    Binary file (Child Device)    ${CHILD_SN}   ${PARENT_SN}:device:${CHILD_SN}   CONFIG1_BINARY    /etc/binary-config1.tar.gz   ${CURDIR}/binary-config1.tar.gz     640           tedge:tedge    delete_file_before=${true}
 
-Set configuration when file does not exist
-    Execute Command    rm -f /etc/config1.json
-    ${config_url}=    Cumulocity.Create Inventory Binary    config1    CONFIG1    file=${CURDIR}/config1-version2.json
-    ${operation}=    Cumulocity.Set Configuration    CONFIG1    url=${config_url}
-    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
-    ${target_contents}=    Execute Command    cat /etc/config1.json
-    Should Be Equal    ${target_contents}    {"name":"configuration1","version":2}
-    ${FILE_MODE_OWNERSHIP}=    Execute Command    stat -c '%a %U:%G' /etc/config1.json    strip=${True}
-    Should Be Equal    ${FILE_MODE_OWNERSHIP}    640 tedge:tedge
+Set Configuration when file exists
+    [Template]    Set Configuration from Device
+    # Note: File permission will not change if the file already exists
+    Text file (Main Device)       ${PARENT_SN}  ${PARENT_SN}                      CONFIG1           /etc/config1.json            ${CURDIR}/config1-version2.json     644           root:root      delete_file_before=${false}
+    Binary file (Main Device)     ${PARENT_SN}  ${PARENT_SN}                      CONFIG1_BINARY    /etc/binary-config1.tar.gz   ${CURDIR}/binary-config1.tar.gz     644           root:root    delete_file_before=${false}
+    Text file (Child Device)      ${CHILD_SN}   ${PARENT_SN}:device:${CHILD_SN}   CONFIG1           /etc/config1.json            ${CURDIR}/config1-version2.json     644           root:root      delete_file_before=${false}
+    Binary file (Child Device)    ${CHILD_SN}   ${PARENT_SN}:device:${CHILD_SN}   CONFIG1_BINARY    /etc/binary-config1.tar.gz   ${CURDIR}/binary-config1.tar.gz     644           root:root    delete_file_before=${false}
 
 Set configuration with broken url
-    ${operation}=    Cumulocity.Set Configuration    CONFIG1    url=invalid://hellö.zip
-    ${operation}=    Operation Should Be FAILED    ${operation}    timeout=120
-    ${target_contents}=    Execute Command    cat /etc/config1.json
-    Should Be Equal    ${target_contents}    {"name":"configuration1"}
+    [Template]    Set Configuration from URL
+    Main Device    ${PARENT_SN}    ${PARENT_SN}                      CONFIG1    /etc/config1.json    invalid://hellö.zip
+    Child Device    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}   CONFIG1    /etc/config1.json    invalid://hellö.zip
 
-Get configuration
-    ${operation}=    Cumulocity.Get Configuration    CONFIG1
-    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
-    ${events}=    Cumulocity.Device Should Have Event/s    minimum=1    maximum=1    type=CONFIG1
-    ${uploaded_contents}=    Cumulocity.Event Should Have An Attachment    ${events[0]["id"]}
-    ${target_contents}=    Execute Command    cat /etc/config1.json
-    Should Be Equal    ${target_contents}    ${uploaded_contents.decode("utf8")}
-    Should Be Equal    ${target_contents}    {"name":"configuration1"}
 
-Get binary configuration
+#
+# Get configuration
+#
+Get Configuration from Main Device
+    [Template]    Get Configuration from Device
+    Text file      device=${PARENT_SN}    external_id=${PARENT_SN}    config_type=CONFIG1    device_file=/etc/config1.json
+    Binary file    device=${PARENT_SN}    external_id=${PARENT_SN}    config_type=CONFIG1_BINARY    device_file=/etc/binary-config1.tar.gz
+
+Get Configuration from Child Device
     [Tags]    \#2318
-    ${operation}=    Cumulocity.Get Configuration    CONFIG1_BINARY
-    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
-    ${events}=    Cumulocity.Device Should Have Event/s    minimum=1    maximum=1    type=CONFIG1_BINARY
-    ${uploaded_contents}=    Cumulocity.Event Should Have An Attachment    ${events[0]["id"]}    expected_md5=27e57d7f840592dd683138a609e72fac
+    [Template]    Get Configuration from Device
+    Text file      device=${CHILD_SN}    external_id=${PARENT_SN}:device:${CHILD_SN}    config_type=CONFIG1    device_file=/etc/config1.json
+    Binary file    device=${CHILD_SN}    external_id=${PARENT_SN}:device:${CHILD_SN}    config_type=CONFIG1_BINARY    device_file=/etc/binary-config1.tar.gz
 
-Get non existent configuration file
-    Execute Command    rm -f /etc/config1.json
-    File Should Not Exist    /etc/config1.json
-    ${operation}=    Cumulocity.Get Configuration    CONFIG1
-    Operation Should Be FAILED    ${operation}    failure_reason=.*No such file or directory.*
+Get Unknown Configuration Type From Device
+    [Template]    Get Unknown Configuration Type From Device
+    Main Device    ${PARENT_SN}    unknown_type
+    Child Device    ${PARENT_SN}:device:${CHILD_SN}    unknown_type
 
-Get non existent configuration type
-    ${operation}=    Cumulocity.Get Configuration    unknown_config
-    Operation Should Be FAILED    ${operation}    failure_reason=.*requested config_type unknown_config is not defined in the plugin configuration file.*
+Get non existent configuration file From Device
+    [Template]    Get non existent configuration file From Device
+    Main Device     ${PARENT_SN}    ${PARENT_SN}                      CONFIG1    /etc/config1.json
+    Child Device    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json
 
+#
+# Configuration Types
+#
 Update configuration plugin config via cloud
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
-    ${config_url}=    Cumulocity.Create Inventory Binary    tedge-configuration-plugin    ${DEFAULT_CONFIG}    file=${CURDIR}/tedge-configuration-plugin-updated.toml
-    ${operation}=    Cumulocity.Set Configuration    ${DEFAULT_CONFIG}    url=${config_url}
-    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
+    [Template]    Update configuration plugin config via cloud
+    Main Device     ${PARENT_SN}
+    Child Device    ${PARENT_SN}:device:${CHILD_SN}
 
 Modify configuration plugin config via local filesystem modify inplace
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
-    Execute Command    sed -i 's/CONFIG1/CONFIG3/g' /etc/tedge/plugins/tedge-configuration-plugin.toml
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG3    CONFIG3_BINARY
+    [Template]    Modify configuration plugin config via local filesystem modify inplace
+    Main Device     ${PARENT_SN}   ${PARENT_SN}
+    Child Device    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}
+
+Modify configuration plugin config via local filesystem overwrite
+    [Template]    Modify configuration plugin config via local filesystem overwrite
+    Main Device     ${PARENT_SN}   ${PARENT_SN}
+    Child Device    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}
+
+Update configuration plugin config via local filesystem copy
+    [Template]    Update configuration plugin config via local filesystem copy
+    Main Device     ${PARENT_SN}   ${PARENT_SN}
+    Child Device    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}
+
+Update configuration plugin config via local filesystem move (different directory)
+    [Template]    Update configuration plugin config via local filesystem move (different directory)
+    Main Device     ${PARENT_SN}   ${PARENT_SN}
+    Child Device    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}
+
+Update configuration plugin config via local filesystem move (same directory)
+    [Template]    Update configuration plugin config via local filesystem move (same directory)
+    Main Device     ${PARENT_SN}   ${PARENT_SN}
+    Child Device    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}
+
+*** Keywords ***
+
+Set Configuration from Device
+    [Arguments]    ${test_desc}    ${device}    ${external_id}    ${config_type}    ${device_file}    ${file}    ${permission}    ${ownership}    ${delete_file_before}=${true}
+
+    IF    ${delete_file_before}
+        ThinEdgeIO.Set Device Context    ${device}
+        Execute Command    rm -f ${device_file}
+    END
+
+    Cumulocity.Set Device    ${external_id}
+    ${config_url}=    Cumulocity.Create Inventory Binary    temp_file    ${config_type}    file=${file}
+    ${operation}=    Cumulocity.Set Configuration    ${config_type}    url=${config_url}
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+
+    ThinEdgeIO.Set Device Context    ${device}
+    File Checksum Should Be Equal    ${device_file}    ${file}
+    Path Should Have Permissions    ${device_file}    ${permission}    ${ownership}
+
+
+Set Configuration from URL
+    [Arguments]    ${test_desc}    ${device}    ${external_id}    ${config_type}    ${device_file}    ${config_url}
+
+    ThinEdgeIO.Set Device Context    ${device}
+    ${hash_before}=    Execute Command    md5sum ${device_file}
+    ${stat_before}=    Execute Command    stat ${device_file}
+
+    Cumulocity.Set Device    ${external_id}
+    ${operation}=    Cumulocity.Set Configuration    ${config_type}    url=${config_url}
+    ${operation}=    Operation Should Be FAILED    ${operation}    timeout=120
+
+    ${hash_after}=    Execute Command    md5sum ${device_file}
+    ${stat_after}=    Execute Command    stat ${device_file}
+    Should Be Equal    ${hash_before}    ${hash_after}
+    Should Be Equal    ${stat_before}    ${stat_after}
+
+Get Unknown Configuration Type From Device
+    [Arguments]    ${test_desc}    ${external_id}    ${config_type}
+    Cumulocity.Set Device    ${external_id}
+    ${operation}=    Cumulocity.Get Configuration    ${config_type}
+    Operation Should Be FAILED    ${operation}    failure_reason=.*requested config_type ${config_type} is not defined in the plugin configuration file.*
+
+Get non existent configuration file From Device
+    [Arguments]    ${test_desc}    ${device}    ${external_id}    ${config_type}    ${device_file}
+    ThinEdgeIO.Set Device Context    ${device}
+    ThinEdgeIO.Execute Command    rm -f ${device_file}
+    Cumulocity.Set Device    ${external_id}
+    ${operation}=    Cumulocity.Get Configuration    ${config_type}
+    Operation Should Be FAILED    ${operation}    failure_reason=.*No such file or directory.*
+
+Get Configuration from Device
+    [Arguments]    ${test_name}    ${device}    ${external_id}    ${config_type}    ${device_file}
+    Cumulocity.Set Device    ${external_id}
+    ${operation}=    Cumulocity.Get Configuration    ${config_type}
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+
+    ThinEdgeIO.Set Device Context    ${device}
+    ${expected_checksum}=    Execute Command    md5sum '${device_file}' | cut -d' ' -f1    strip=${True}
+    ${events}=    Cumulocity.Device Should Have Event/s    minimum=1    maximum=1    type=${config_type}    with_attachment=${True}
+    ${contents}=    Cumulocity.Event Should Have An Attachment    ${events[0]["id"]}    expected_md5=${expected_checksum}
+    RETURN    ${contents}
+
+#
+# Configuration Types
+#
+Update configuration plugin config via cloud
+    [Arguments]    ${test_desc}    ${external_id}
+    Cumulocity.Set Device    ${external_id}
+    Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
+    ${config_url}=    Cumulocity.Create Inventory Binary    tedge-configuration-plugin    tedge-configuration-plugin    file=${CURDIR}/tedge-configuration-plugin-updated.toml
+    ${operation}=    Cumulocity.Set Configuration    tedge-configuration-plugin    url=${config_url}
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}
+    Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
+
+Modify configuration plugin config via local filesystem modify inplace
+    [Arguments]    ${test_desc}    ${device}    ${external_id}
+    Cumulocity.Set Device    ${external_id}
+    Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
+    ThinEdgeIO.Set Device Context    ${device}
+    ThinEdgeIO.Execute Command    sed -i 's/CONFIG1/CONFIG3/g' /etc/tedge/plugins/tedge-configuration-plugin.toml
+    Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG3    CONFIG3_BINARY
     ${operation}=    Cumulocity.Get Configuration    CONFIG3
     Operation Should Be SUCCESSFUL    ${operation}
 
 Modify configuration plugin config via local filesystem overwrite
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
-    ${NEW_CONFIG}=    Execute Command    sed 's/CONFIG1/CONFIG3/g' /etc/tedge/plugins/tedge-configuration-plugin.toml
-    Execute Command    echo "${NEW_CONFIG}" > /etc/tedge/plugins/tedge-configuration-plugin.toml
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG3    CONFIG3_BINARY
+    [Arguments]    ${test_desc}    ${device}    ${external_id}
+    ThinEdgeIO.Set Device Context    ${device}
+    Cumulocity.Set Device    ${external_id}
+    Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
+    ${NEW_CONFIG}=    ThinEdgeIO.Execute Command    sed 's/CONFIG1/CONFIG3/g' /etc/tedge/plugins/tedge-configuration-plugin.toml
+    ThinEdgeIO.Execute Command    echo "${NEW_CONFIG}" > /etc/tedge/plugins/tedge-configuration-plugin.toml
+    Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG3    CONFIG3_BINARY
     ${operation}=    Cumulocity.Get Configuration    CONFIG3
     Operation Should Be SUCCESSFUL    ${operation}
 
 Update configuration plugin config via local filesystem copy
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
+    [Arguments]    ${test_desc}    ${device}    ${external_id}
+    ThinEdgeIO.Set Device Context    ${device}
+    Cumulocity.Set Device    ${external_id}
+    Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
     Transfer To Device    ${CURDIR}/tedge-configuration-plugin-updated.toml    /etc/tedge/plugins/
     Execute Command    cp /etc/tedge/plugins/tedge-configuration-plugin-updated.toml /etc/tedge/plugins/tedge-configuration-plugin.toml
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
+    Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
     ${operation}=    Cumulocity.Get Configuration    Config@2.0.0
     Operation Should Be SUCCESSFUL    ${operation}
 
 Update configuration plugin config via local filesystem move (different directory)
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
+    [Arguments]    ${test_desc}    ${device}    ${external_id}
+    ThinEdgeIO.Set Device Context    ${device}
+    Cumulocity.Set Device    ${external_id}
+    Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
     Transfer To Device    ${CURDIR}/tedge-configuration-plugin-updated.toml    /etc/
     Execute Command    mv /etc/tedge-configuration-plugin-updated.toml /etc/tedge/plugins/tedge-configuration-plugin.toml
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
+    Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
     ${operation}=    Cumulocity.Get Configuration    Config@2.0.0
     Operation Should Be SUCCESSFUL    ${operation}
 
 Update configuration plugin config via local filesystem move (same directory)
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
+    [Arguments]    ${test_desc}    ${device}    ${external_id}
+    ThinEdgeIO.Set Device Context    ${device}
+    Cumulocity.Set Device    ${external_id}
+    Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG1    CONFIG1_BINARY
     Transfer To Device    ${CURDIR}/tedge-configuration-plugin-updated.toml    /etc/tedge/plugins/
     Execute Command    mv /etc/tedge/plugins/tedge-configuration-plugin-updated.toml /etc/tedge/plugins/tedge-configuration-plugin.toml
-    Cumulocity.Should Support Configurations    ${DEFAULT_CONFIG}    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
+    Cumulocity.Should Support Configurations    tedge-configuration-plugin    /etc/tedge/tedge.toml    system.toml    CONFIG1    Config@2.0.0
     ${operation}=    Cumulocity.Get Configuration    Config@2.0.0
     Operation Should Be SUCCESSFUL    ${operation}
 
-*** Keywords ***
+#
+# Setup
+#
+Suite Setup
+    # Parent
+    ${parent_sn}=    Setup    skip_bootstrap=${False}
+    Set Suite Variable    $PARENT_SN    ${parent_sn}
+
+    ${parent_ip}=    Get IP Address
+    Set Suite Variable    $PARENT_IP    ${parent_ip}
+    Execute Command    sudo tedge config set mqtt.external.bind.address ${parent_ip}
+    Execute Command    sudo tedge config set mqtt.external.bind.port 1883
+
+    ThinEdgeIO.Disconnect Then Connect Mapper    c8y
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
+
+    # Child
+    Setup Child Device    parent_ip=${parent_ip}    install_package=tedge-configuration-plugin
+
+Setup Child Device
+    [Arguments]    ${parent_ip}    ${install_package}
+    ${child_sn}=    Setup    skip_bootstrap=${True}
+    Set Suite Variable    $CHILD_SN    ${child_sn}
+
+    Set Device Context    ${CHILD_SN}
+    Execute Command    sudo dpkg -i packages/tedge_*.deb
+
+    Execute Command    sudo tedge config set mqtt.client.host ${parent_ip}
+    Execute Command    sudo tedge config set mqtt.client.port 1883
+    Execute Command    sudo tedge config set mqtt.topic_root te
+    Execute Command    sudo tedge config set mqtt.device_topic_id device/${child_sn}//
+
+    # Install plugin after the default settings have been updated to prevent it from starting up as the main plugin
+    Execute Command    sudo dpkg -i packages/${install_package}*.deb
+    Execute Command    sudo systemctl enable ${install_package}
+    Execute Command    sudo systemctl start ${install_package}
+
+    Copy Configuration Files    ${child_sn}
+
+    RETURN    ${child_sn}
 
 Test Setup
+    Copy Configuration Files    ${PARENT_SN}
+    Copy Configuration Files    ${CHILD_SN}
+
+Copy Configuration Files
+    [Arguments]    ${device}
+    ThinEdgeIO.Set Device Context    ${device}
     ThinEdgeIO.Transfer To Device    ${CURDIR}/tedge-configuration-plugin.toml    /etc/tedge/plugins/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/config1.json         /etc/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/config2.json         /etc/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/binary-config1.tar.gz         /etc/
-    Execute Command    chown root:root /etc/tedge/plugins/tedge-configuration-plugin.toml /etc/config1.json
-    ThinEdgeIO.Service Health Status Should Be Up    tedge-configuration-plugin
-    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
-    ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 
-Custom Setup
-    ${DEVICE_SN}=    Setup
-    Set Suite Variable    $DEVICE_SN
-    Device Should Exist                      ${DEVICE_SN}
+    # Execute Command    chown root:root /etc/tedge/plugins/tedge-configuration-plugin.toml /etc/config1.json
+    # Uncomment once https://github.com/thin-edge/thin-edge.io/issues/2253 is resolved
+    # ThinEdgeIO.Service Health Status Should Be Up    tedge-configuration-plugin    device=child1
