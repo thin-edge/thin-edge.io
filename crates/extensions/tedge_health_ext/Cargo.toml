@@ -22,3 +22,4 @@ tokio = { workspace = true, features = ["macros"] }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+tedge_actors = { workspace = true, features = ["test-helpers"] }

@@ -20,6 +20,7 @@ use tedge_api::health::ServiceHealthTopic;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::mqtt_topics::OperationType;
 use tedge_config::TEdgeConfigLocation;
 use time::format_description;
 use time::OffsetDateTime;
@@ -118,7 +119,13 @@ async fn start_watchdog_for_tedge_services(tedge_config_dir: PathBuf) {
         let service_name = service.default_service_name().unwrap();
         match get_watchdog_sec(&format!("/lib/systemd/system/{service_name}.service")) {
             Ok(interval) => {
-                let req_topic = format!("tedge/health-check/{service_name}");
+                let req_topic = mqtt_schema.topic_for(
+                    &service,
+                    &Channel::Command {
+                        operation: OperationType::Health,
+                        cmd_id: "check".to_string(),
+                    },
+                );
                 let res_topic = mqtt_schema.topic_for(&service, &Channel::Health);
 
                 let tedge_config_location = tedge_config_location.clone();
@@ -126,7 +133,7 @@ async fn start_watchdog_for_tedge_services(tedge_config_dir: PathBuf) {
                     monitor_tedge_service(
                         tedge_config_location,
                         service.as_str(),
-                        &req_topic,
+                        req_topic,
                         res_topic,
                         interval / 4,
                     )
@@ -146,7 +153,7 @@ async fn start_watchdog_for_tedge_services(tedge_config_dir: PathBuf) {
 async fn monitor_tedge_service(
     tedge_config_location: TEdgeConfigLocation,
     name: &str,
-    req_topic: &str,
+    req_topic: Topic,
     res_topic: Topic,
     interval: u64,
 ) -> Result<(), WatchdogError> {
@@ -195,7 +202,7 @@ async fn monitor_tedge_service(
         .context("Could not send initial health status message")?;
 
     loop {
-        let message = Message::new(&Topic::new(req_topic)?, "");
+        let message = Message::new(&req_topic, "");
         let _ = publisher
             .publish(message)
             .await
