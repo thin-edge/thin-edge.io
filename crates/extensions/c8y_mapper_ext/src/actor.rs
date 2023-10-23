@@ -251,6 +251,18 @@ impl C8yMapperActor {
                         )
                         .to_smartrest(),
                     },
+                    CumulocitySupportedOperations::C8yUploadConfigFile => match upload_result {
+                        Ok(response) => SmartRestSetOperationToSuccessful::new(
+                            CumulocitySupportedOperations::C8yUploadConfigFile,
+                        )
+                        .with_response_parameter(&response.url)
+                        .to_smartrest(),
+                        Err(err) => SmartRestSetOperationToFailed::new(
+                            CumulocitySupportedOperations::C8yUploadConfigFile,
+                            format!("Upload failed with {}", err),
+                        )
+                        .to_smartrest(),
+                    }, // fix me: code duplication
                     _other_types => return Ok(()), // unsupported
                 };
 

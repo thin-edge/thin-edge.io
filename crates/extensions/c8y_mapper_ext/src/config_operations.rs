@@ -1,6 +1,7 @@
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
+use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
@@ -11,6 +12,7 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use sha256::digest;
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::os::unix::fs as unix_fs;
@@ -37,8 +39,10 @@ use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_uploader_ext::UploadRequest;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
+use time::OffsetDateTime;
 use tracing::log::info;
 use tracing::log::warn;
 
@@ -121,7 +125,7 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        let external_id = self.entity_store.try_get(topic_id)?.external_id.as_ref();
+        let target = self.entity_store.try_get(topic_id)?;
         let smartrest_topic = self.smartrest_publish_topic_for_entity(topic_id)?;
         let payload = message.payload_str()?;
         let response = &ConfigSnapshotCmdPayload::from_json(payload)?;
@@ -135,11 +139,22 @@ impl CumulocityConverter {
                 vec![Message::new(&smartrest_topic, smartrest_operation_status)]
             }
             CommandStatus::Successful => {
+                // Create an event in c8y
+                let c8y_event = C8yCreateEvent::new_from_entity(
+                    target,
+                    &response.config_type,
+                    OffsetDateTime::now_utc(),
+                    &response.config_type,
+                    HashMap::new(),
+                );
+                let event_response_id = self.http_proxy.send_event(c8y_event).await?;
+
+                // Send a request to the Uploader to upload the file asynchronously.
                 let uploaded_file_path = self
                     .config
                     .data_dir
                     .file_transfer_dir()
-                    .join(external_id)
+                    .join(target.external_id.as_ref())
                     .join("config_snapshot")
                     .join(format!(
                         "{}-{}",
@@ -147,33 +162,30 @@ impl CumulocityConverter {
                         cmd_id
                     ));
 
-                let result = self
-                    .http_proxy
-                    .upload_file(
-                        uploaded_file_path.as_std_path(),
-                        &response.config_type,
-                        external_id.to_string(),
-                    )
-                    .await; // We need to get rid of this await, otherwise it blocks
+                let binary_upload_event_url = self
+                    .c8y_endpoint
+                    .try_get_url_for_event_binary_upload(&event_response_id);
 
-                let smartrest_operation_status = match result {
-                    Ok(url) => SmartRestSetOperationToSuccessful::new(
-                        CumulocitySupportedOperations::C8yUploadConfigFile,
-                    )
-                    .with_response_parameter(&url)
-                    .to_smartrest()?,
-                    Err(err) => SmartRestSetOperationToFailed::new(
-                        CumulocitySupportedOperations::C8yUploadConfigFile,
-                        format!("Upload failed with {}", err),
-                    )
-                    .to_smartrest()?,
-                };
+                let upload_request = UploadRequest::new(
+                    self.auth_proxy.proxy_url(binary_upload_event_url).as_str(),
+                    &uploaded_file_path,
+                );
 
-                let c8y_notification = Message::new(&smartrest_topic, smartrest_operation_status);
-                let clear_local_cmd = Message::new(&message.topic, "")
-                    .with_retain()
-                    .with_qos(QoS::AtLeastOnce);
-                vec![c8y_notification, clear_local_cmd]
+                self.uploader_sender
+                    .send((cmd_id.into(), upload_request))
+                    .await
+                    .map_err(CumulocityMapperError::ChannelError)?;
+
+                self.pending_upload_operations.insert(
+                    cmd_id.into(),
+                    (
+                        smartrest_topic,
+                        message.topic.clone(),
+                        CumulocitySupportedOperations::C8yUploadConfigFile,
+                    ),
+                );
+
+                vec![] // No mqtt message can be published in this state
             }
             CommandStatus::Failed { ref reason } => {
                 let smartrest_operation_status = SmartRestSetOperationToFailed::new(
@@ -547,6 +559,7 @@ mod tests {
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
+    use tedge_uploader_ext::UploadResponse;
 
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
@@ -872,19 +885,21 @@ mod tests {
     #[tokio::test]
     async fn handle_config_snapshot_successful_cmd_for_main_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let (mqtt, http, _fs, _timer, ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
         spawn_dummy_c8y_http_proxy(http);
-        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+        let mut ul = ul.with_timeout(TEST_TIMEOUT_MS);
         skip_init_messages(&mut mqtt).await;
 
         // Simulate a config file is uploaded to the file transfer repository
-        ttd.dir("file-transfer")
+        let uploaded_file = ttd
+            .dir("file-transfer")
             .dir("test-device")
             .dir("config_snapshot")
             .file("path:type:A-c8y-mapper-1234");
 
-        // Simulate config_snapshot command with "executing" state
+        // Simulate config_snapshot command with "successful" state
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
@@ -897,10 +912,30 @@ mod tests {
             .await
             .expect("Send failed");
 
+        // Uploader gets a download request and assert them
+        let request = ul.recv().await.expect("timeout");
+        assert_eq!(request.0, "1234");
+        assert_eq!(
+            request.1.url,
+            "http://127.0.0.1:8001/c8y/event/events/dummy-event-id-1234/binaries"
+        );
+        assert_eq!(request.1.file_path, uploaded_file.utf8_path());
+
+        // Simulate Uploader returns a result
+        ul.send((
+            request.0,
+            Ok(UploadResponse {
+                url: request.1.url,
+                file_path: request.1.file_path,
+            }),
+        ))
+        .await
+        .unwrap();
+
         // Expect `503` smartrest message on `c8y/s/us`.
         assert_received_contains_str(
             &mut mqtt,
-            [("c8y/s/us", "503,c8y_UploadConfigFile,http://c8y-binary.url")],
+            [("c8y/s/us", "503,c8y_UploadConfigFile,http://127.0.0.1:8001/c8y/event/events/dummy-event-id-1234/binaries")],
         )
         .await;
     }
@@ -908,10 +943,11 @@ mod tests {
     #[tokio::test]
     async fn handle_config_snapshot_successful_cmd_for_child_device() {
         let ttd = TempTedgeDir::new();
-        let (mqtt, http, _fs, _timer, _ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
+        let (mqtt, http, _fs, _timer, ul, _dl) = spawn_c8y_mapper_actor(&ttd, true).await;
         spawn_dummy_c8y_http_proxy(http);
-        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+        let mut ul = ul.with_timeout(TEST_TIMEOUT_MS);
         skip_init_messages(&mut mqtt).await;
 
         // The child device must be registered first
@@ -925,12 +961,13 @@ mod tests {
         mqtt.skip(2).await; // Skip child device registration messages
 
         // Simulate a config file is uploaded to the file transfer repository
-        ttd.dir("file-transfer")
+        let uploaded_file = ttd
+            .dir("file-transfer")
             .dir("child1")
             .dir("config_snapshot")
             .file("typeA-c8y-mapper-1234");
 
-        // Simulate config_snapshot command with "executing" state
+        // Simulate config_snapshot command with "successful" state
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
@@ -943,12 +980,32 @@ mod tests {
             .await
             .expect("Send failed");
 
+        // Uploader gets a download request and assert them
+        let request = ul.recv().await.expect("timeout");
+        assert_eq!(request.0, "1234");
+        assert_eq!(
+            request.1.url,
+            "http://127.0.0.1:8001/c8y/event/events/dummy-event-id-1234/binaries"
+        );
+        assert_eq!(request.1.file_path, uploaded_file.utf8_path());
+
+        // Simulate Uploader returns a result
+        ul.send((
+            request.0,
+            Ok(UploadResponse {
+                url: request.1.url,
+                file_path: request.1.file_path,
+            }),
+        ))
+        .await
+        .unwrap();
+
         // Expect `503` smartrest message on child topic.
         assert_received_contains_str(
             &mut mqtt,
             [(
                 "c8y/s/us/child1",
-                "503,c8y_UploadConfigFile,http://c8y-binary.url",
+                "503,c8y_UploadConfigFile,http://127.0.0.1:8001/c8y/event/events/dummy-event-id-1234/binaries",
             )],
         )
         .await;
