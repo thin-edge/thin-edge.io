@@ -5,6 +5,9 @@ set -e
 # Prevent purge from deleting files related to the package
 rm -f /var/lib/dpkg/info/tedge_agent.postrm
 
+# Remove older prerm maintainer scripts which would stop the tedge-agent service during an OTA
+rm -f /var/lib/dpkg/info/tedge_agent.prerm
+
 # Automatically added by thin-edge.io
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
 	if deb-systemd-helper debian-installed tedge-agent.service; then

@@ -20,16 +20,18 @@ replaces:
   - tedge_agent
 provides:
   - tedge_agent
-conflicts:
-  - tedge_agent (<= 0.8.1)
+
+# WARNING: Don't use conflicts or breaks as this causes the old packages prerm script to be executed
+# which stops the tedge-agent thus causing the OTA to be stuck in EXECUTING.
+# One disadvantage is that the tedge_agent package needs to be manually removed after upgrading. The new
+# tedge-agent package removes the legacy tedge_agent.prerm script to prevent the new service from being
+# stopped as well.
 
 deb:
   fields:
     Vcs-Browser: ${CI_PROJECT_URL}
     Vcs-Git: ${CI_PROJECT_URL}
   compression: xz
-  breaks:
-    - tedge_agent (<= 0.8.1)
 
 contents:
   # service definitions
