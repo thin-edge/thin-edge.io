@@ -31,6 +31,11 @@ Update tedge version from previous using Cumulocity
     ${OPERATION}=    Install Software    tedge,${NEW_VERSION}    tedge-mapper,${NEW_VERSION}    tedge-agent,${NEW_VERSION}    tedge-watchdog,${NEW_VERSION}    tedge-log-plugin,${NEW_VERSION}    tedge-configuration-plugin,${NEW_VERSION}    tedge-apt-plugin,${NEW_VERSION}
     Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=180
 
+    # Software list reported by the former agent, which is still running
+    Device Should Have Installed Software    tedge,${NEW_VERSION_ESCAPED}::apt    tedge-mapper,${NEW_VERSION_ESCAPED}::apt    tedge-agent,${NEW_VERSION_ESCAPED}::apt    tedge-watchdog,${NEW_VERSION_ESCAPED}::apt    tedge-configuration-plugin,${NEW_VERSION_ESCAPED}::apt    tedge-log-plugin,${NEW_VERSION_ESCAPED}::apt    tedge-apt-plugin,${NEW_VERSION_ESCAPED}::apt
+
+    # Software list reported by the new agent
+    Restart Service    tedge-agent
     Device Should Have Installed Software    tedge,${NEW_VERSION_ESCAPED}::apt    tedge-mapper,${NEW_VERSION_ESCAPED}::apt    tedge-agent,${NEW_VERSION_ESCAPED}::apt    tedge-watchdog,${NEW_VERSION_ESCAPED}::apt    tedge-configuration-plugin,${NEW_VERSION_ESCAPED}::apt    tedge-log-plugin,${NEW_VERSION_ESCAPED}::apt    tedge-apt-plugin,${NEW_VERSION_ESCAPED}::apt
 
     # Check if services are still stopped and disabled
