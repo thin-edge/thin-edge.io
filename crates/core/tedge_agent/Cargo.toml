@@ -40,5 +40,6 @@ which = { workspace = true }
 [dev-dependencies]
 serial_test = { workspace = true }
 tedge_actors = { workspace = true, features = ["test-helpers"] }
+tedge_mqtt_ext = { workspace = true, features = ["test-helpers"] }
 tedge_test_utils = { workspace = true }
 test-case = { workspace = true }

@@ -13,10 +13,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use time::OffsetDateTime;
 
-// TODO deprecate these consts
-pub const SOFTWARE_UPDATE_REQUEST_TOPIC: &str = "tedge/commands/req/software/update";
-pub const SOFTWARE_UPDATE_RESPONSE_TOPIC: &str = "tedge/commands/res/software/update";
-
 /// A command instance with its target and its current state of execution
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Command<Payload> {
@@ -505,6 +501,15 @@ pub enum CommandStatus {
     Failed {
         reason: String,
     },
+}
+
+/// TODO: Deprecate OperationStatus
+#[derive(Debug, Deserialize, Serialize, PartialEq, Copy, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub enum OperationStatus {
+    Successful,
+    Failed,
+    Executing,
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]

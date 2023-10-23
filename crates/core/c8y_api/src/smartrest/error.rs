@@ -1,15 +1,11 @@
 use std::io;
 use std::path::PathBuf;
-use tedge_api::SoftwareUpdateResponse;
 
 // allowing large size difference between variants warning,
 // because the enum `SmartRestSerializerError` is already Boxed
 // in `SMCumulocityMapperError`
 #[derive(thiserror::Error, Debug)]
 pub enum SmartRestSerializerError {
-    #[error("The operation status is not supported. {response:?}")]
-    UnsupportedOperationStatus { response: SoftwareUpdateResponse },
-
     #[error("Failed to serialize SmartREST.")]
     InvalidCsv(#[from] csv::Error),
 

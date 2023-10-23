@@ -1,5 +1,4 @@
-use crate::software_manager::actor::SoftwareRequest;
-use crate::software_manager::actor::SoftwareResponse;
+use crate::software_manager::actor::SoftwareCommand;
 use crate::tedge_operation_converter::actor::AgentInput;
 use crate::tedge_operation_converter::actor::TedgeOperationConverterActor;
 use tedge_actors::futures::channel::mpsc;
@@ -25,7 +24,7 @@ pub struct TedgeOperationConverterBuilder {
     mqtt_schema: MqttSchema,
     device_topic_id: EntityTopicId,
     input_receiver: LoggingReceiver<AgentInput>,
-    software_sender: LoggingSender<SoftwareRequest>,
+    software_sender: LoggingSender<SoftwareCommand>,
     restart_sender: LoggingSender<RestartCommand>,
     mqtt_publisher: LoggingSender<MqttMessage>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
@@ -35,7 +34,7 @@ impl TedgeOperationConverterBuilder {
     pub fn new(
         mqtt_topic_root: &str,
         device_topic_id: EntityTopicId,
-        software_actor: &mut impl ServiceProvider<SoftwareRequest, SoftwareResponse, NoConfig>,
+        software_actor: &mut impl ServiceProvider<SoftwareCommand, SoftwareCommand, NoConfig>,
         restart_actor: &mut impl ServiceProvider<RestartCommand, RestartCommand, NoConfig>,
         mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
     ) -> Self {
@@ -74,22 +73,18 @@ impl TedgeOperationConverterBuilder {
     }
 
     pub fn capabilities() -> Vec<OperationType> {
-        vec![OperationType::Restart, OperationType::SoftwareList]
+        vec![
+            OperationType::Restart,
+            OperationType::SoftwareList,
+            OperationType::SoftwareUpdate,
+        ]
     }
 
     pub fn subscriptions(mqtt_schema: &MqttSchema, device_topic_id: &EntityTopicId) -> TopicFilter {
-        let mut topics: TopicFilter = Self::capabilities()
+        Self::capabilities()
             .into_iter()
             .map(|cmd| mqtt_schema.topics(EntityFilter::Entity(device_topic_id), Command(cmd)))
-            .collect();
-
-        topics.add_all(
-            vec!["tedge/commands/req/software/update"]
-                .try_into()
-                .expect("Infallible"),
-        );
-
-        topics
+            .collect()
     }
 }
 

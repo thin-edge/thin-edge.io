@@ -1,5 +1,4 @@
-use crate::software_manager::actor::SoftwareRequest;
-use crate::software_manager::actor::SoftwareResponse;
+use crate::software_manager::actor::SoftwareCommand;
 use crate::software_manager::builder::SoftwareManagerBuilder;
 use crate::software_manager::config::SoftwareManagerConfig;
 use std::time::Duration;
@@ -18,11 +17,9 @@ use tedge_api::messages::SoftwareListCommand;
 use tedge_api::messages::SoftwareModuleAction;
 use tedge_api::messages::SoftwareModuleItem;
 use tedge_api::messages::SoftwareRequestResponseSoftwareList;
+use tedge_api::messages::SoftwareUpdateCommand;
+use tedge_api::messages::SoftwareUpdateCommandPayload;
 use tedge_api::mqtt_topics::EntityTopicId;
-use tedge_api::OperationStatus;
-use tedge_api::SoftwareRequestResponse;
-use tedge_api::SoftwareUpdateRequest;
-use tedge_api::SoftwareUpdateResponse;
 use tedge_config::TEdgeConfigLocation;
 use tedge_test_utils::fs::TempTedgeDir;
 
@@ -39,11 +36,14 @@ async fn test_pending_software_update_operation() -> Result<(), DynError> {
 
     let mut converter_box = spawn_software_manager(&temp_dir).await?;
 
-    let software_request_response = SoftwareRequestResponse::new("1234", OperationStatus::Failed);
+    let software_request_response = SoftwareUpdateCommand {
+        target: EntityTopicId::default_main_device(),
+        cmd_id: "1234".to_string(),
+        payload: SoftwareUpdateCommandPayload::default(),
+    }
+    .with_error("Software Update command cancelled on agent restart".to_string());
     converter_box
-        .assert_received([SoftwareUpdateResponse {
-            response: software_request_response,
-        }])
+        .assert_received([software_request_response])
         .await;
 
     Ok(())
@@ -68,21 +68,23 @@ async fn test_new_software_update_operation() -> Result<(), DynError> {
         modules: vec![debian_module1],
     };
 
-    converter_box
-        .send(
-            SoftwareUpdateRequest {
-                id: "random".to_string(),
-                update_list: vec![debian_list],
-            }
-            .into(),
-        )
-        .await?;
+    let command = SoftwareUpdateCommand {
+        target: EntityTopicId::default_main_device(),
+        cmd_id: "random".to_string(),
+        payload: SoftwareUpdateCommandPayload {
+            status: Default::default(),
+            update_list: vec![debian_list],
+            failures: vec![],
+        },
+    };
+    converter_box.send(command.into()).await?;
 
     match converter_box.recv().await.unwrap() {
-        SoftwareResponse::SoftwareUpdateResponse(res) => {
-            assert_eq!(res.response.status, OperationStatus::Executing);
+        SoftwareCommand::SoftwareUpdateCommand(res) => {
+            assert_eq!(res.cmd_id, "random");
+            assert_eq!(res.status(), CommandStatus::Executing);
         }
-        SoftwareResponse::SoftwareListCommand(_) => {
+        SoftwareCommand::SoftwareListCommand(_) => {
             panic!("Received SoftwareListCommand")
         }
     }
@@ -136,8 +138,8 @@ async fn test_new_software_list_operation() -> Result<(), DynError> {
 
 async fn spawn_software_manager(
     tmp_dir: &TempTedgeDir,
-) -> Result<TimedMessageBox<SimpleMessageBox<SoftwareResponse, SoftwareRequest>>, DynError> {
-    let mut converter_builder: SimpleMessageBoxBuilder<SoftwareResponse, SoftwareRequest> =
+) -> Result<TimedMessageBox<SimpleMessageBox<SoftwareCommand, SoftwareCommand>>, DynError> {
+    let mut converter_builder: SimpleMessageBoxBuilder<SoftwareCommand, SoftwareCommand> =
         SimpleMessageBoxBuilder::new("Converter", 5);
 
     let config = SoftwareManagerConfig::new(

@@ -18,9 +18,9 @@ Mapper recovers and processes output of ongoing software update request
     ${timestamp}=        Get Unix Timestamp
     ThinEdgeIO.Service Should Be Running    tedge-mapper-c8y    
     ${OPERATION}=    Install Software    rolldice,1.0.0::dummy
-    Should Have MQTT Messages    tedge/commands/res/software/update    message_contains=executing    date_from=${timestamp}
+    Should Have MQTT Messages    te/device/main///cmd/software_update/+    message_contains=executing    date_from=${timestamp}
     ThinEdgeIO.Stop Service    tedge-mapper-c8y    
-    Should Have MQTT Messages    tedge/commands/res/software/update    message_contains=successful    date_from=${timestamp}
+    Should Have MQTT Messages    te/device/main///cmd/software_update/+    message_contains=successful    date_from=${timestamp}
     ThinEdgeIO.Start Service    tedge-mapper-c8y
     ThinEdgeIO.Service Should Be Running    tedge-mapper-c8y
     Operation Should Be SUCCESSFUL           ${OPERATION}    timeout=60

@@ -21,6 +21,7 @@ pub use entity_store::EntityStore;
 pub use error::*;
 pub use messages::CommandStatus;
 pub use messages::Jsonify;
+pub use messages::OperationStatus;
 pub use messages::RestartCommand;
 pub use messages::SoftwareListCommand;
 pub use messages::SoftwareUpdateCommand;

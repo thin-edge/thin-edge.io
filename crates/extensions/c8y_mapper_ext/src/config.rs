@@ -7,7 +7,6 @@ use std::net::IpAddr;
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
-use tedge_api::messages::SOFTWARE_UPDATE_RESPONSE_TOPIC;
 use tedge_api::mqtt_topics::ChannelFilter::Command;
 use tedge_api::mqtt_topics::ChannelFilter::CommandMetadata;
 use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
@@ -108,10 +107,15 @@ impl C8yMapperConfig {
         let mut topics = Self::default_internal_topic_filter(&config_dir)?;
 
         // Add feature topic filters
-        topics.add_all(mqtt_schema.topics(AnyEntity, Command(OperationType::SoftwareList)));
-        topics.add_all(mqtt_schema.topics(AnyEntity, CommandMetadata(OperationType::SoftwareList)));
-        topics.add_all(mqtt_schema.topics(AnyEntity, Command(OperationType::Restart)));
-        topics.add_all(mqtt_schema.topics(AnyEntity, CommandMetadata(OperationType::Restart)));
+        for cmd in [
+            OperationType::Restart,
+            OperationType::SoftwareList,
+            OperationType::SoftwareUpdate,
+        ] {
+            topics.add_all(mqtt_schema.topics(AnyEntity, Command(cmd.clone())));
+            topics.add_all(mqtt_schema.topics(AnyEntity, CommandMetadata(cmd)));
+        }
+
         if capabilities.log_upload {
             topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
         }
@@ -156,7 +160,6 @@ impl C8yMapperConfig {
         let mut topic_filter: TopicFilter = vec![
             "c8y-internal/alarms/+/+/+/+/+/a/+",
             C8yTopic::SmartRestRequest.to_string().as_str(),
-            SOFTWARE_UPDATE_RESPONSE_TOPIC,
         ]
         .try_into()
         .expect("topics that mapper should subscribe to");

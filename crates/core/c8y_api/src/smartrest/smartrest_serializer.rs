@@ -6,8 +6,6 @@ use mqtt_channel::Message;
 use serde::Deserialize;
 use serde::Serialize;
 use serde::Serializer;
-use tedge_api::OperationStatus;
-use tedge_api::SoftwareUpdateResponse;
 
 pub type SmartRest = String;
 
@@ -114,17 +112,6 @@ impl SmartRestSetOperationToExecuting {
             operation: operation.into(),
         }
     }
-
-    pub fn from_thin_edge_json(
-        response: SoftwareUpdateResponse,
-    ) -> Result<Self, SmartRestSerializerError> {
-        match response.status() {
-            OperationStatus::Executing => {
-                Ok(Self::new(CumulocitySupportedOperations::C8ySoftwareUpdate))
-            }
-            _ => Err(SmartRestSerializerError::UnsupportedOperationStatus { response }),
-        }
-    }
 }
 
 impl<'a> SmartRestSerializer<'a> for SmartRestSetOperationToExecuting {}
@@ -151,17 +138,6 @@ impl SmartRestSetOperationToSuccessful {
             ..self
         }
     }
-
-    pub fn from_thin_edge_json(
-        response: SoftwareUpdateResponse,
-    ) -> Result<Self, SmartRestSerializerError> {
-        match response.status() {
-            OperationStatus::Successful => {
-                Ok(Self::new(CumulocitySupportedOperations::C8ySoftwareUpdate))
-            }
-            _ => Err(SmartRestSerializerError::UnsupportedOperationStatus { response }),
-        }
-    }
 }
 
 impl<'a> SmartRestSerializer<'a> for SmartRestSetOperationToSuccessful {}
@@ -180,18 +156,6 @@ impl SmartRestSetOperationToFailed {
             message_id: "502",
             operation: operation.into(),
             reason,
-        }
-    }
-
-    pub fn from_thin_edge_json(
-        response: SoftwareUpdateResponse,
-    ) -> Result<Self, SmartRestSerializerError> {
-        match &response.status() {
-            OperationStatus::Failed => Ok(Self::new(
-                CumulocitySupportedOperations::C8ySoftwareUpdate,
-                response.error().unwrap_or_default(),
-            )),
-            _ => Err(SmartRestSerializerError::UnsupportedOperationStatus { response }),
         }
     }
 }
@@ -252,7 +216,6 @@ pub trait TryIntoOperationStatusMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tedge_api::*;
 
     #[test]
     fn serialize_smartrest_supported_operations() {
@@ -281,23 +244,6 @@ mod tests {
     }
 
     #[test]
-    fn from_thin_edge_json_to_smartrest_set_operation_to_executing() {
-        let json_response = r#"{
-            "id": "123",
-            "status": "executing"
-        }"#;
-        let response = SoftwareUpdateResponse::from_json(json_response).unwrap();
-        let smartrest_obj =
-            SmartRestSetOperationToExecuting::from_thin_edge_json(response).unwrap();
-
-        let expected_smartrest_obj = SmartRestSetOperationToExecuting {
-            message_id: "501",
-            operation: "c8y_SoftwareUpdate",
-        };
-        assert_eq!(smartrest_obj, expected_smartrest_obj);
-    }
-
-    #[test]
     fn serialize_smartrest_set_operation_to_successful() {
         let smartrest = SmartRestSetOperationToSuccessful::new(
             CumulocitySupportedOperations::C8ySoftwareUpdate,
@@ -305,25 +251,6 @@ mod tests {
         .to_smartrest()
         .unwrap();
         assert_eq!(smartrest, "503,c8y_SoftwareUpdate,\n");
-    }
-
-    #[test]
-    fn from_thin_edge_json_to_smartrest_set_operation_to_successful() {
-        let json_response = r#"{
-            "id":"1",
-            "status":"successful",
-            "currentSoftwareList":[]
-            }"#;
-        let response = SoftwareUpdateResponse::from_json(json_response).unwrap();
-        let smartrest_obj =
-            SmartRestSetOperationToSuccessful::from_thin_edge_json(response).unwrap();
-
-        let expected_smartrest_obj = SmartRestSetOperationToSuccessful {
-            message_id: "503",
-            operation: "c8y_SoftwareUpdate",
-            operation_parameter: None,
-        };
-        assert_eq!(smartrest_obj, expected_smartrest_obj);
     }
 
     #[test]
@@ -363,53 +290,5 @@ mod tests {
         .to_smartrest()
         .unwrap();
         assert_eq!(smartrest, "502,c8y_SoftwareUpdate,\"\"\n");
-    }
-
-    #[test]
-    fn from_thin_edge_json_to_smartrest_set_operation_to_failed() {
-        let json_response = r#"{
-            "id": "123",
-            "status":"failed",
-            "reason":"2 errors: fail to install [ collectd ] fail to remove [ mongodb ]",
-            "currentSoftwareList": [],
-            "failures": []
-        }"#;
-        let response = SoftwareUpdateResponse::from_json(json_response).unwrap();
-
-        let smartrest_obj = SmartRestSetOperationToFailed::new(
-            CumulocitySupportedOperations::C8ySoftwareUpdate,
-            response.error().unwrap(),
-        );
-
-        let expected_smartrest_obj = SmartRestSetOperationToFailed {
-            message_id: "502",
-            operation: "c8y_SoftwareUpdate",
-            reason: "2 errors: fail to install [ collectd ] fail to remove [ mongodb ]".to_string(),
-        };
-        assert_eq!(smartrest_obj, expected_smartrest_obj);
-    }
-
-    #[test]
-    fn from_thin_edge_json_to_smartrest_set_operation_to_failed_with_empty_reason() {
-        let json_response = r#"{
-            "id": "123",
-            "status":"failed",
-            "reason":"",
-            "currentSoftwareList": [],
-            "failures": []
-        }"#;
-        let response = SoftwareUpdateResponse::from_json(json_response).unwrap();
-
-        let smartrest_obj = SmartRestSetOperationToFailed::new(
-            CumulocitySupportedOperations::C8ySoftwareUpdate,
-            response.error().unwrap(),
-        );
-
-        let expected_smartrest_obj = SmartRestSetOperationToFailed {
-            message_id: "502",
-            operation: "c8y_SoftwareUpdate",
-            reason: "".to_string(),
-        };
-        assert_eq!(smartrest_obj, expected_smartrest_obj);
     }
 }
