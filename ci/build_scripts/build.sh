@@ -171,7 +171,7 @@ case "$ARCH" in
         ;;
 esac
 
-# Load the release package list as $RELEASE_PACKAGES and $TEST_PACKAGES
+# Load the release package list as $RELEASE_PACKAGES, $DEPRECATED_PACKAGES and $TEST_PACKAGES
 # shellcheck disable=SC1091
 source ./ci/package_list.sh
 
@@ -190,7 +190,9 @@ if [ -d "target/$ARCH/debian" ]; then
     rm -rf "target/$ARCH/debian"
 fi
 
-./ci/build_scripts/package.sh build "$ARCH" "${RELEASE_PACKAGES[@]}" --version "$GIT_SEMVER" --output "$OUTPUT_DIR"
+# build/package both the release and deprecated packages
+PACKAGES=( "${RELEASE_PACKAGES[@]}" "${DEPRECATED_PACKAGES[@]}" )
+./ci/build_scripts/package.sh build "$ARCH" "${PACKAGES[@]}" --version "$GIT_SEMVER" --output "$OUTPUT_DIR"
 
 if [ "$BUILD" = 1 ]; then
     # Strip and build for test artifacts
