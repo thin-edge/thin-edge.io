@@ -219,6 +219,13 @@ Custom Setup
     # Parent
     ${parent_sn}=    Setup    skip_bootstrap=False
     Set Suite Variable    $PARENT_SN    ${parent_sn}
+    # Disable new generic handling
+    Execute Command    sudo tedge config set c8y.enable.config_snapshot false
+    Execute Command    sudo tedge config set c8y.enable.config_update false
+
+    # Use deprecated c8y-configuration-plugin over tedge-configuration-plugin
+    Execute Command    cmd=sudo apt-get remove -y tedge-configuration-plugin
+    Execute Command    find . -type f -name "c8y-configuration-plugin_*.deb" -exec dpkg -i {} \\;
 
     ${parent_ip}=    Get IP Address
     Set Suite Variable    $PARENT_IP    ${parent_ip}
