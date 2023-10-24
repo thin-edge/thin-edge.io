@@ -51,7 +51,7 @@ jobs:
           repository: thin-edge/thin-edge.io
           path: thin-edge.io
 
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
           node-version: 18
           cache: yarn
