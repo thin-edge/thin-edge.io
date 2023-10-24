@@ -197,8 +197,8 @@ impl ConfigManagerActor {
             .plugin_config
             .get_file_entry_from_type(&request.config_type)?;
 
-            let upload_request =
-                UploadRequest::new(&request.tedge_url, Utf8Path::new(&file_entry.path));
+        let upload_request =
+            UploadRequest::new(&request.tedge_url, Utf8Path::new(&file_entry.path));
 
         info!(
             "Awaiting upload of config type: {} to url: {}",

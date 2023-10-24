@@ -76,7 +76,7 @@ impl HealthMonitorBuilder {
             external_id: None,
             r#type: EntityType::Service,
             parent: Some(service.device_topic_id.entity().clone()),
-            other: serde_json::json!({"type": service_type}),
+            other: serde_json::json!({ "type": service_type }),
         };
         let registration_message = registration_message.to_mqtt_message(mqtt_schema);
 
