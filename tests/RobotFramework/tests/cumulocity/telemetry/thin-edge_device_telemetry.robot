@@ -131,7 +131,7 @@ Thin-edge device support sending inventory data via c8y topic
 
 
 Thin-edge device support sending inventory data via tedge topic
-    Execute Command    tedge mqtt pub "te/device/main///twin/device_OS" '{"family":"Debian","version":11,"complex":[1,"2",3],"object":{"foo":"bar"}}'
+    Execute Command    tedge mqtt pub --retain "te/device/main///twin/device_OS" '{"family":"Debian","version":11,"complex":[1,"2",3],"object":{"foo":"bar"}}'
     Cumulocity.Set Device    ${DEVICE_SN}
     ${mo}=    Device Should Have Fragments    device_OS
     Should Be Equal    ${mo["device_OS"]["family"]}    Debian
@@ -142,11 +142,15 @@ Thin-edge device support sending inventory data via tedge topic
     Should Be Equal As Integers    ${mo["device_OS"]["complex"][2]}    3
     Should Be Equal    ${mo["device_OS"]["object"]["foo"]}    bar
 
+    # Validate clearing of fragments
+    Execute Command    tedge mqtt pub --retain "te/device/main///twin/device_OS" ''
+    Managed Object Should Not Have Fragments    device_OS
+
 
 Thin-edge device supports sending inventory data via tedge topic to root fragments
-    Execute Command    tedge mqtt pub "te/device/main///twin/subtype" '"LinuxDeviceA"'
-    Execute Command    tedge mqtt pub "te/device/main///twin/type" '"ShouldBeIgnored"'
-    Execute Command    tedge mqtt pub "te/device/main///twin/name" '"ShouldBeIgnored"'
+    Execute Command    tedge mqtt pub --retain "te/device/main///twin/subtype" '"LinuxDeviceA"'
+    Execute Command    tedge mqtt pub --retain "te/device/main///twin/type" '"ShouldBeIgnored"'
+    Execute Command    tedge mqtt pub --retain "te/device/main///twin/name" '"ShouldBeIgnored"'
     Cumulocity.Set Device    ${DEVICE_SN}
     ${mo}=    Device Should Have Fragments    subtype
     Should Be Equal    ${mo["subtype"]}    LinuxDeviceA
@@ -215,6 +219,17 @@ Send events to a registered service
     Cumulocity.Device Should Exist    ${DEVICE_SN}:device:main:service:app6
     Execute Command    tedge mqtt pub te/device/main/service/app6/e/event_002 '{"text": "test event"}'
     Device Should Have Event/s    expected_text=test event    type=event_002    minimum=1    maximum=1
+
+    # Validate clearing of fragments
+    Execute Command    tedge mqtt pub --retain "te/device/main///twin/subtype" ''
+    Managed Object Should Not Have Fragments    subtype
+
+    # Validate `name` and `type` can't be cleared
+    Execute Command    tedge mqtt pub --retain "te/device/main///twin/type" ''
+    Execute Command    tedge mqtt pub --retain "te/device/main///twin/name" ''
+    ${mo}=    Device Should Have Fragments    type
+    Should Be Equal    ${mo["type"]}    thin-edge.io
+    Should Be Equal    ${mo["name"]}    ${DEVICE_SN}
 
 *** Keywords ***
 
