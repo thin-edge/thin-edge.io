@@ -325,7 +325,7 @@ async fn request_config_snapshot_that_does_not_exist() -> Result<(), anyhow::Err
         mqtt.recv().await,
         Some(MqttMessage::new(
             &config_topic,
-            r#"{"status":"failed","reason":"Handling of operation failed with The requested config_type type_five is not defined in the plugin configuration file.","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/config-snapshot/type_five-1234","type":"type_five"}"#
+            r#"{"status":"failed","reason":"Handling of operation failed with: The requested config_type type_five is not defined in the plugin configuration file.","tedgeUrl":"http://127.0.0.1:3000/tedge/file-transfer/main/config-snapshot/type_five-1234","type":"type_five"}"#
         ).with_retain())
     );
 

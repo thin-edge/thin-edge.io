@@ -1,6 +1,6 @@
 #[derive(Debug, thiserror::Error)]
 pub enum UploadError {
-    #[error("{context}")]
+    #[error("{context} {source}")]
     Io {
         context: String,
         source: std::io::Error,
