@@ -178,7 +178,7 @@ impl ConfigManagerActor {
                     .insert(topic.name.clone(), ConfigOperation::Snapshot(request));
             }
             Err(error) => {
-                let error_message = format!("Handling of operation failed with {}", error);
+                let error_message = format!("Handling of operation failed with: {}", error);
                 request.failed(&error_message);
                 error!("{}", error_message);
                 self.publish_command_status(topic, &ConfigOperation::Snapshot(request))
@@ -231,7 +231,7 @@ impl ConfigManagerActor {
                         .await?;
                 }
                 Err(err) => {
-                    let error_message = format!("Handling of operation failed with {}", err);
+                    let error_message = format!("Handling of operation failed with: {}", err);
                     request.failed(&error_message);
                     error!("{}", error_message);
                     self.publish_command_status(&topic, &ConfigOperation::Snapshot(request))
@@ -254,7 +254,7 @@ impl ConfigManagerActor {
                     .insert(topic.name.clone(), ConfigOperation::Update(request));
             }
             Err(error) => {
-                let error_message = format!("Handling of operation failed with {}", error);
+                let error_message = format!("Handling of operation failed with: {}", error);
                 request.failed(&error_message);
                 error!("{}", error_message);
                 self.publish_command_status(topic, &ConfigOperation::Update(request))
@@ -307,7 +307,7 @@ impl ConfigManagerActor {
                         .await?;
                 }
                 Err(err) => {
-                    let error_message = format!("Handling of operation failed with {}", err);
+                    let error_message = format!("Handling of operation failed with: {}", err);
                     request.failed(&error_message);
                     error!("{}", error_message);
                     self.publish_command_status(&topic, &ConfigOperation::Update(request))
