@@ -62,14 +62,15 @@ sudo systemctl enable tedge-watchdog
 sudo systemctl start tedge-watchdog
 ``` 
 
-Once started, the `tedge-watchdog` service will keep checking the health of the monitored tedge services
-by periodically sending health check messages to them within their configured `WatchdogSec` interval.
+Once started, the `tedge-watchdog` service will keep checking the health of the monitored tedge services by periodically
+sending health check messages to them within their configured `WatchdogSec` interval.
 
-The health check request for service is published to `tedge/health-check/<service-name>` topic and
-the health status response from that service is expected on `tedge/health/<service-name>` topic.
+The health check request for service is published to `te/device/main/service/<service-name>/cmd/health/check` topic and
+the health status response from that service is expected on `te/device/main/service/<service-name>/status/health` topic.
 
-Once the health status response is received from a particular service,
-the `tedge-watchdog` service will send the [systemd notification](https://www.freedesktop.org/software/systemd/man/sd_notify.html#) to systemd on behalf of that monitored service.
+Once the health status response is received from a particular service, the `tedge-watchdog` service will send the
+[systemd notification](https://www.freedesktop.org/software/systemd/man/sd_notify.html#) to systemd on behalf of that
+monitored service.
 
 :::note
 If none of the `thin-edge` services are enabled with the watchdog feature, then the `tedge-watchdog` service will stop with an `inactive` state.
@@ -84,11 +85,11 @@ by subscribing to the following topics:
 
 
 ```sh te2mqtt
-tedge mqtt sub 'tedge/health/#'
+tedge mqtt sub 'te/+/+/+/+/status/health'
 ```
 
 ```sh te2mqtt
-tedge mqtt sub 'tedge/health-check/#'
+tedge mqtt sub 'te/+/+/+/+/cmd/health/check'
 ```
 
 Check out the [Monitor tedge health](../troubleshooting/monitor_tedge_health.md) for more details about the health endpoint.

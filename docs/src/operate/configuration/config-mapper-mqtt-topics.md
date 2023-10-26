@@ -31,24 +31,24 @@ tedge config get c8y.topics
 ```
 
 ```sh title="Output"
-["tedge/measurements", "tedge/measurements/+", "tedge/alarms/+/+", "tedge/alarms/+/+/+", "tedge/events/+", "tedge/events/+/+", "tedge/health/+", "tedge/health/+/+"]
+["te/+/+/+/+", "te/+/+/+/+/twin/+", "te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
 ```
 
 ## Set the desired new MQTT topics
 
 If you want to change the subscribed MQTT topics, use `tedge config set`.
-For example, if you want the Cumulocity IoT mapper to subscribe only `tedge/measurements` and `tedge/measurements/+` topics,
+For example, if you want the Cumulocity IoT mapper to subscribe only to `te/+/+/+/+/m/+` and `te/+/+/+/+/a/+` topic,
 the command to run should be as below.
 
 ```sh
-sudo tedge config set c8y.topics tedge/measurements,tedge/measurements/+
+sudo tedge config set c8y.topics te/+/+/+/+/m/+,te/+/+/+/+/a/+
 ```
 
 Alternatively, the same setting can be controlled via environment variables.
 The environment variable settings will override any values set by the tedge config command.
 
 ```sh
-export TEDGE_C8Y_TOPICS=tedge/measurements,tedge/measurements/+
+export TEDGE_C8Y_TOPICS=te/+/+/+/+/m/+,te/+/+/+/+/a/+
 ```
 
 :::note
