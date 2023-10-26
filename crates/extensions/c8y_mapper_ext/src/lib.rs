@@ -1,5 +1,6 @@
 pub mod actor;
 pub mod alarm_converter;
+pub mod compatibility_adapter;
 pub mod config;
 mod config_operations;
 pub mod converter;
