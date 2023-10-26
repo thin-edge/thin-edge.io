@@ -46,11 +46,11 @@ graph LR
 
 Where the groups are described as follows:
 
-|Group|Description|
-|----|----|
-|root|Base topic to group the identifier and channel under one common namespace|
-|identifier|A descriptor which represents which device/service the channel data is related to|
-|channel|Represents the information, such as telemetry data and commands, related to the **identifier**. Each channel type defines its own sub topic structure and corresponding payload format.|
+| Group      | Description                                                                                                                                                                             |
+|------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| root       | Base topic to group the identifier and channel under one common namespace                                                                                                               |
+| identifier | A descriptor which represents which device/service the channel data is related to                                                                                                       |
+| channel    | Represents the information, such as telemetry data and commands, related to the **identifier**. Each channel type defines its own sub topic structure and corresponding payload format. |
 
 The specifics of each group are detailed in the following sections.
 
@@ -89,12 +89,12 @@ graph LR
 
 Each segment is described as follows:
 
-|Segment|Description|Required|
-|--|--|--|
-|device|A literal string, "device", indicating that the information is related to a device|Yes|
-|&lt;device_id&gt;|id/name of the device. A value of `main` is used to represent the main device and any other value represents the device id of a child device. e.g. `child01`, `mycustomdevice`|Yes|
-|service| A literal string, "service", indicating that the information is related to a service|No|
-|&lt;service_id&gt;|Service id/name which the information is related to|No|
+| Segment            | Description                                                                                                                                                                    | Required |
+|--------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
+| device             | A literal string, "device", indicating that the information is related to a device                                                                                             | Yes      |
+| &lt;device_id&gt;  | id/name of the device. A value of `main` is used to represent the main device and any other value represents the device id of a child device. e.g. `child01`, `mycustomdevice` | Yes      |
+| service            | A literal string, "service", indicating that the information is related to a service                                                                                           | No       |
+| &lt;service_id&gt; | Service id/name which the information is related to                                                                                                                            | No       |
 
 :::info
 An empty segment value is used to represent "not applicable".
@@ -231,24 +231,25 @@ graph LR
 
 The individual **categories** dictate the subsequent topic structure and payload schema, however the MQTT topic schema strives to keep some consistency amongst the different categories by applying similar concepts where possible.
 
-|Segment|Description|
-|-------|-----------|
-|&lt;category&gt;|Category of data (telemetry or commands) which is related to the **identifier**. A fixed list of categories is used to represent data types such as; measurements, alarms, events, commands etc.|
-|&lt;type&gt;|A unique type/name used to identify the information being pushed or received. Types allow users to filter/subscribe to data which interests them. For example, a measurement could be published under a type called "flow_rate", then other clients interested in the flow rate can subscribe to that single typed topic.|
-|`...`|Additional channel specific topic segments. Each **category** is responsible for defining the number and meaning of the remaining topic segments.|
+| Segment          | Description                                                                                                                                                                                                                                                                                                               |
+|------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| &lt;category&gt; | Category of data (telemetry or commands) which is related to the **identifier**. A fixed list of categories is used to represent data types such as; measurements, alarms, events, commands etc.                                                                                                                          |
+| &lt;type&gt;     | A unique type/name used to identify the information being pushed or received. Types allow users to filter/subscribe to data which interests them. For example, a measurement could be published under a type called "flow_rate", then other clients interested in the flow rate can subscribe to that single typed topic. |
+| `...`            | Additional channel specific topic segments. Each **category** is responsible for defining the number and meaning of the remaining topic segments.                                                                                                                                                                         |
 
 
 #### Categories
 
 The following is an overview of the channel categories which are available.
 
-|Category|Description|
-|--------|-------|
-|m|Measurements|
-|e|Events|
-|a|Alarms|
-|cmd|Commands|
-|twin|Entity twin metadata|
+| Category | Description          |
+|----------|----------------------|
+| m        | Measurements         |
+| e        | Events               |
+| a        | Alarms               |
+| cmd      | Commands             |
+| twin     | Entity twin metadata |
+| status   | Service status       |
 
 
 ## Entity registration
@@ -431,12 +432,13 @@ so that it can process them.
 
 ## Telemetry data
 
-|Type|Topic scheme|
-|------|-------|
-|Measurements|`te/<identifier>/m/<measurement-type>`|
-|Events|`te/<identifier>/e/<event-type>`|
-|Alarms|`te/<identifier>/a/<alarm-type>`|
-|Twin|`te/<identifier>/twin/<data-type>`|
+| Type          | Topic scheme                           |
+|---------------|----------------------------------------|
+| Measurements  | `te/<identifier>/m/<measurement-type>` |
+| Events        | `te/<identifier>/e/<event-type>`       |
+| Alarms        | `te/<identifier>/a/<alarm-type>`       |
+| Twin          | `te/<identifier>/twin/<data-type>`     |
+| Health status | `te/<identifier>/status/health`        |
 
 ### Examples: With default device/service topic semantics
 
@@ -562,11 +564,11 @@ graph LR
 
 Where the command segments are describe as follows:
 
-|Segment|Description|
-|---|----|
-|&lt;identifier&gt;|The [identifier](#group-identifier) (e.g. device/service) associated with the command.|
-|&lt;cmd_type&gt;|Command type. Each command can define its own payload schema to allow commands to have parameters related to the command's function.|
-|&lt;cmd_id&gt;|Unique command id which is unique for the command instance. e.g. `123456`, `d511a86cab95be81` etc.|
+| Segment            | Description                                                                                                                          |
+|--------------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| &lt;identifier&gt; | The [identifier](#group-identifier) (e.g. device/service) associated with the command.                                               |
+| &lt;cmd_type&gt;   | Command type. Each command can define its own payload schema to allow commands to have parameters related to the command's function. |
+| &lt;cmd_id&gt;     | Unique command id which is unique for the command instance. e.g. `123456`, `d511a86cab95be81` etc.                                   |
 
 ### Command examples
 
@@ -581,6 +583,7 @@ The following table details some example command types which are supported by th
 | firmware_update | `te/<identifier>/cmd/firmware_update/<cmd_id>` |
 | restart         | `te/<identifier>/cmd/restart/<cmd_id>`         |
 | log_upload      | `te/<identifier>/cmd/log_upload/<cmd_id>`      |
+| health          | `te/<identifier>/cmd/health/check`             |
 
 The command would be interpreted differently based on the target entity.
 For example, the `restart` could mean either a device restart or a service restart based on the target entity.
@@ -779,6 +782,28 @@ The alarm severity should be set in the payload.
   </td>
 </tr>
 
+<!-- Health status -->
+<tr>
+  <td>Health status</td>
+  <td>
+    <p>Legacy</p>
+
+```sh
+tedge/health/<service_name>
+```
+
+  <p>New</p>
+
+```sh
+te/<service_topic_id>/status/health
+```
+
+  </td>
+  <td>
+    <code>type</code> property removed from the payload.
+  </td>
+</tr>
+
 </table>
 
 
@@ -863,6 +888,28 @@ The alarm severity should be set in the payload.
 }
 ```
 
+  </td>
+</tr>
+
+<!-- Health status -->
+<tr>
+  <td>Health status</td>
+  <td>
+    <p>Legacy</p>
+
+```sh
+tedge/health/<child_id>/<service_name>
+```
+
+  <p>New</p>
+
+```sh
+te/<service_topic_id>/status/health
+```
+
+  </td>
+  <td>
+    <code>type</code> property removed from the payload.
   </td>
 </tr>
 

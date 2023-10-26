@@ -29,7 +29,7 @@ If the response is not received then most likely the service is down, or not res
 For example, `tedge-mapper-c8y` publishes a message on topic `te/device/main/service/tedge-mapper-c8y/status/health` when it starts:
 
 ```json
-{ "pid": 290854, "status": "up", "time": 1674739912 }
+{ "pid": 290854, "status": "up", "time": "2023-04-02T21:37:12.345678901Z" }
 ```
 
 <!-- TODO: this should be in a reference about health status messages -->
@@ -38,7 +38,7 @@ For example, `tedge-mapper-c8y` publishes a message on topic `te/device/main/ser
 |----------|----------------------------------------------------|
 | `pid`    | Process ID of the service                          |
 | `status` | Service status. Possible values are `up` or `down` |
-| `time`   | Unix timestamp in seconds                          |
+| `time`   | Timestamp in RFC3339 format                        |
 
 If the tedge service gets stopped, crashed, or killed, then a `down` message will be published on health status topic
 and this will be retained until the service is restarted.
@@ -53,7 +53,7 @@ tedge mqtt sub 'te/+/+/+/+/status/health'
 INFO: Connected
 [te/device/main/service/mosquitto-c8y-bridge/status/health] 1
 [te/device/main/service/tedge-mapper-c8y/status/health] {"pid":51367,"status":"down"}
-[te/device/main/service/tedge-agent/status/health] {"pid":13280,"status":"up","time":1675330667}
+[te/device/main/service/tedge-agent/status/health] {"pid":13280,"status":"up","time":"2023-02-02T09:37:47+00:00"}
 ```
 ## Supported MQTT health endpoint topics
 

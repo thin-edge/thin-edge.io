@@ -14,8 +14,6 @@ or on the `child` device can be monitored from the **Cumulocity IoT** by sending
 A health status message can be published for any service on a `status/health` channel. The health message has to contain
 at least the `status` of the service.
 
-**TODO: Link to the Health Status Message reference!**
-
 :::note
 The `status` here can be `up or down` or any other string. For example, `unknown`.
 :::
@@ -42,14 +40,15 @@ auto-registration, it will be auto-registered as described [in the Auto Registra
 section](https://thin-edge.github.io/thin-edge.io/next/references/mqtt-api/#auto-registration).
 
 For example, assuming a service `device/child1/service/service1`, running on a device `device/child1//`, which is a
-child device of thin-edge.io device `device/main//` with an ID of `TE_DEVICE`, the resulting topic mapping looks like this:
+child device of thin-edge.io device `device/main//` with an ID of `TE_DEVICE`, the resulting topic mapping looks like
+this:
 
 <div class="code-indent-left">
 
 **Thin-edge.io health status message**
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub te/device/child/service/service1/status/health '{"status":"up"}' -q 2 -r
+tedge mqtt pub te/device/child1/service/service1/status/health '{"status":"up"}' -q 2 -r
 ```
 
 </div>
@@ -59,7 +58,7 @@ tedge mqtt pub te/device/child/service/service1/status/health '{"status":"up"}' 
 **Cumulocity IoT (output)**
 
 ```text title="Topic"
-c8y/s/us/TE_DEVICE/TE_DEVICE:device:child/TE_DEVICE:device:child:service:service1
+c8y/s/us/<device-id>:device:child/<device-id>:device:child:service:service1
 ```
 
 ```text title="Payload"
