@@ -111,7 +111,7 @@ te/device/nested_child01
 ```json5 title="Payload"
 {
   "@type": "child-device",
-  "@parent": "te/device/child01",
+  "@parent": "device/child01//",
   "name": "nested_child01",
   "type": "BatterySensor"
 }

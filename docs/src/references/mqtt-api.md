@@ -274,7 +274,7 @@ Here are a few examples of how various entities can be registered.
 #### Register a device
 
 ```sh te2mqtt formats="v1"
-tedge mqtt pub -r 'te/device/main' '{
+tedge mqtt pub -r 'te/device/main//' '{
   "@type": "device",
   "type": "Gateway"
 }'
@@ -283,7 +283,7 @@ tedge mqtt pub -r 'te/device/main' '{
 Or the device can be registered using an explicit id:
 
 ```sh te2mqtt formats="v1"
-tedge mqtt pub -r 'te/device/main' '{
+tedge mqtt pub -r 'te/device/main//' '{
   "@type": "device",
   "@id": "tedge001",
   "type": "Gateway"
@@ -308,7 +308,7 @@ if the parent can not be derived from the topic directly:
 ```sh te2mqtt formats="v1"
 tedge mqtt pub -r 'te/component_namespace/service/nodered/instance-1' '{
   "@type": "service",
-  "@parent": "te/device/main",
+  "@parent": "device/main//",
   "name": "nodered",
   "type": "systemd"
 }'
@@ -317,7 +317,7 @@ tedge mqtt pub -r 'te/component_namespace/service/nodered/instance-1' '{
 #### Register a child device
 
 ```sh te2mqtt formats="v1"
-tedge mqtt pub -r 'te/device/child01' '{
+tedge mqtt pub -r 'te/device/child01//' '{
   "@type": "child-device",
   "name": "child01",
   "type": "SmartHomeHub"
@@ -331,9 +331,9 @@ If the `@parent` info is not provided, it is assumed to be an immediate child of
 Nested child devices are registered in a similar fashion as an immediate child device, however the registration message requires the additional `@parent` property to be set, indicating which parent the child device should be related to.
 
 ```sh te2mqtt formats="v1"
-tedge mqtt pub -r 'te/device/nested_child01' '{
+tedge mqtt pub -r 'te/device/nested_child01//' '{
   "@type": "child-device",
-  "@parent": "te/device/child01",
+  "@parent": "device/child01//",
   "name": "nested_child01"
 }'
 ```
@@ -347,7 +347,7 @@ But, it is advised to declare it explicitly as follows:
 ```sh te2mqtt formats="v1"
 tedge mqtt pub -r 'te/device/child01/service/nodered' '{
   "@type": "service",
-  "@parent": "te/device/child01",
+  "@parent": "device/child01//",
   "name": "nodered",
   "type": "systemd"
 }'
@@ -364,7 +364,7 @@ For example, a linux service runs on a device as it relies on physical hardware 
 ```sh te2mqtt formats="v1"
 tedge mqtt pub -r 'te/device/nested_child01/service/nodered' '{
   "@type": "service",
-  "@parent": "te/device/nested_child01",
+  "@parent": "device/nested_child01//",
   "name": "nodered",
   "type": "systemd"
 }'
@@ -414,7 +414,7 @@ For example, a mapper component can get info about all the registered entities w
 for all possible entity identification topic levels as follows:
 
 ```sh
-mosquitto_sub -t 'te/+' -t 'te/+/+' -t 'te/+/+/+' -t 'te/+/+/+/+'
+mosquitto_sub -t 'te/+/+/+/+'
 ```
 
 :::note
