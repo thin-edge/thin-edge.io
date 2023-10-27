@@ -9,9 +9,10 @@ use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::SoftwareModule;
 use tedge_api::SoftwareModuleUpdate;
-use tedge_api::SoftwareUpdateRequest;
+use tedge_api::SoftwareUpdateCommand;
 use time::format_description;
 use time::OffsetDateTime;
 
@@ -63,7 +64,7 @@ impl Default for SmartRestUpdateSoftware {
 }
 
 impl SmartRestUpdateSoftware {
-    pub fn from_smartrest(&self, smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
+    pub fn from_smartrest(smartrest: &str) -> Result<Self, SmartRestDeserializerError> {
         let mut message_id = smartrest.to_string();
         message_id.truncate(3);
 
@@ -80,19 +81,19 @@ impl SmartRestUpdateSoftware {
         Ok(record)
     }
 
-    pub fn to_thin_edge_json(&self) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
-        let request = self.map_to_software_update_request(SoftwareUpdateRequest::default())?;
-        Ok(request)
-    }
-
     pub fn modules(&self) -> &Vec<SmartRestUpdateSoftwareModule> {
         &self.update_list
     }
 
-    fn map_to_software_update_request(
+    pub fn into_software_update_command(
         &self,
-        mut request: SoftwareUpdateRequest,
-    ) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
+        target: &EntityTopicId,
+        cmd_id: Option<&str>,
+    ) -> Result<SoftwareUpdateCommand, SmartRestDeserializerError> {
+        let mut request = match cmd_id {
+            None => SoftwareUpdateCommand::new(target),
+            Some(cmd_id) => SoftwareUpdateCommand::new_with_id(target, cmd_id.to_string()),
+        };
         for module in self.modules() {
             match module.action.clone().try_into()? {
                 CumulocitySoftwareUpdateActions::Install => {
@@ -367,17 +368,6 @@ mod tests {
     use tedge_api::*;
     use test_case::test_case;
 
-    // To avoid using an ID randomly generated, which is not convenient for testing.
-    impl SmartRestUpdateSoftware {
-        fn to_thin_edge_json_with_id(
-            &self,
-            id: &str,
-        ) -> Result<SoftwareUpdateRequest, SmartRestDeserializerError> {
-            let request = SoftwareUpdateRequest::new_with_id(id);
-            self.map_to_software_update_request(request)
-        }
-    }
-
     #[test]
     fn jwt_token_create_new() {
         let jwt = SmartRestJwtResponse::default();
@@ -451,9 +441,7 @@ mod tests {
     fn deserialize_smartrest_update_software() {
         let smartrest =
             String::from("528,external_id,software1,version1,url1,install,software2,,,delete");
-        let update_software = SmartRestUpdateSoftware::default()
-            .from_smartrest(&smartrest)
-            .unwrap();
+        let update_software = SmartRestUpdateSoftware::from_smartrest(&smartrest).unwrap();
 
         let expected_update_software = SmartRestUpdateSoftware {
             message_id: "528".into(),
@@ -480,19 +468,17 @@ mod tests {
     #[test]
     fn deserialize_incorrect_smartrest_message_id() {
         let smartrest = String::from("516,external_id");
-        assert!(SmartRestUpdateSoftware::default()
-            .from_smartrest(&smartrest)
-            .is_err());
+        assert!(SmartRestUpdateSoftware::from_smartrest(&smartrest).is_err());
     }
 
     #[test]
     fn deserialize_incorrect_smartrest_action() {
+        let device = EntityTopicId::default_main_device();
         let smartrest =
             String::from("528,external_id,software1,version1,url1,action,software2,,,remove");
-        assert!(SmartRestUpdateSoftware::default()
-            .from_smartrest(&smartrest)
+        assert!(SmartRestUpdateSoftware::from_smartrest(&smartrest)
             .unwrap()
-            .to_thin_edge_json()
+            .into_software_update_command(&device, Some("123"))
             .is_err());
     }
 
@@ -516,9 +502,13 @@ mod tests {
                 },
             ],
         };
-        let thin_edge_json = smartrest_obj.to_thin_edge_json_with_id("123").unwrap();
+        let device = EntityTopicId::default_main_device();
+        let thin_edge_json = smartrest_obj
+            .into_software_update_command(&device, Some("123"))
+            .unwrap();
 
-        let mut expected_thin_edge_json = SoftwareUpdateRequest::new_with_id("123");
+        let mut expected_thin_edge_json =
+            SoftwareUpdateCommand::new_with_id(&device, "123".to_string());
         expected_thin_edge_json.add_update(SoftwareModuleUpdate::install(SoftwareModule {
             module_type: Some("debian".to_string()),
             name: "software1".to_string(),
@@ -543,15 +533,15 @@ mod tests {
             String::from("528,external_id,nodered,1.0.0::debian,,install,\
             collectd,5.7::debian,https://collectd.org/download/collectd-tarballs/collectd-5.12.0.tar.bz2,install,\
             nginx,1.21.0::docker,,install,mongodb,4.4.6::docker,,delete");
-        let update_software = SmartRestUpdateSoftware::default();
-        let software_update_request = update_software
-            .from_smartrest(&smartrest)
+        let software_update_request = SmartRestUpdateSoftware::from_smartrest(&smartrest)
             .unwrap()
-            .to_thin_edge_json_with_id("123");
-        let output_json = software_update_request.unwrap().to_json();
+            .into_software_update_command(&EntityTopicId::default_main_device(), Some("123"))
+            .unwrap();
+
+        let output_json = software_update_request.payload.to_json();
 
         let expected_json = json!({
-            "id": "123",
+            "status": "init",
             "updateList": [
                 {
                     "type": "debian",
@@ -596,8 +586,7 @@ mod tests {
     fn access_smartrest_update_modules() {
         let smartrest =
             String::from("528,external_id,software1,version1,url1,install,software2,,,delete");
-        let update_software = SmartRestUpdateSoftware::default();
-        let update_software = update_software.from_smartrest(&smartrest).unwrap();
+        let update_software = SmartRestUpdateSoftware::from_smartrest(&smartrest).unwrap();
 
         let expected_vec = vec![
             SmartRestUpdateSoftwareModule {

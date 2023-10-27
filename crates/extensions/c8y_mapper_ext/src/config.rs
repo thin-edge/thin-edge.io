@@ -15,7 +15,6 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::mqtt_topics::TopicIdError;
 use tedge_api::path::DataDir;
-use tedge_api::topic::ResponseTopic;
 use tedge_config::ConfigNotSet;
 use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
@@ -108,8 +107,15 @@ impl C8yMapperConfig {
         let mut topics = Self::default_internal_topic_filter(&config_dir)?;
 
         // Add feature topic filters
-        topics.add_all(mqtt_schema.topics(AnyEntity, Command(OperationType::Restart)));
-        topics.add_all(mqtt_schema.topics(AnyEntity, CommandMetadata(OperationType::Restart)));
+        for cmd in [
+            OperationType::Restart,
+            OperationType::SoftwareList,
+            OperationType::SoftwareUpdate,
+        ] {
+            topics.add_all(mqtt_schema.topics(AnyEntity, Command(cmd.clone())));
+            topics.add_all(mqtt_schema.topics(AnyEntity, CommandMetadata(cmd)));
+        }
+
         if capabilities.log_upload {
             topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
         }
@@ -154,8 +160,6 @@ impl C8yMapperConfig {
         let mut topic_filter: TopicFilter = vec![
             "c8y-internal/alarms/+/+/+/+/+/a/+",
             C8yTopic::SmartRestRequest.to_string().as_str(),
-            ResponseTopic::SoftwareListResponse.as_str(),
-            ResponseTopic::SoftwareUpdateResponse.as_str(),
         ]
         .try_into()
         .expect("topics that mapper should subscribe to");

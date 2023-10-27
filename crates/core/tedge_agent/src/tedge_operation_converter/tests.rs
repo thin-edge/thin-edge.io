@@ -1,5 +1,4 @@
-use crate::software_manager::actor::SoftwareRequest;
-use crate::software_manager::actor::SoftwareResponse;
+use crate::software_manager::actor::SoftwareCommand;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
@@ -13,15 +12,15 @@ use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::messages::CommandStatus;
 use tedge_api::messages::RestartCommandPayload;
+use tedge_api::messages::SoftwareListCommand;
 use tedge_api::messages::SoftwareModuleAction;
 use tedge_api::messages::SoftwareModuleItem;
 use tedge_api::messages::SoftwareRequestResponseSoftwareList;
+use tedge_api::messages::SoftwareUpdateCommandPayload;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::RestartCommand;
-use tedge_api::SoftwareListRequest;
-use tedge_api::SoftwareListResponse;
-use tedge_api::SoftwareUpdateRequest;
-use tedge_api::SoftwareUpdateResponse;
+use tedge_api::SoftwareUpdateCommand;
+use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 
@@ -35,16 +34,17 @@ async fn convert_incoming_software_list_request() -> Result<(), DynError> {
 
     // Simulate SoftwareList MQTT message received.
     let mqtt_message = MqttMessage::new(
-        &Topic::new_unchecked("tedge/commands/req/software/list"),
-        r#"{"id": "random"}"#,
+        &Topic::new_unchecked("te/device/main///cmd/software_list/some-cmd-id"),
+        r#"{ "status": "init" }"#,
     );
     mqtt_box.send(mqtt_message).await?;
 
-    // Assert SoftwareListRequest
+    // Assert SoftwareListCommand
     software_box
-        .assert_received([SoftwareListRequest {
-            id: "random".to_string(),
-        }])
+        .assert_received([SoftwareListCommand::new_with_id(
+            &EntityTopicId::default_main_device(),
+            "some-cmd-id".to_string(),
+        )])
         .await;
     Ok(())
 }
@@ -57,8 +57,8 @@ async fn convert_incoming_software_update_request() -> Result<(), DynError> {
 
     // Simulate SoftwareUpdate MQTT message received.
     let mqtt_message = MqttMessage::new(
-        &Topic::new_unchecked("tedge/commands/req/software/update"),
-        r#"{"id":"1234","updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"}]}]}"#,
+        &Topic::new_unchecked("te/device/child001///cmd/software_update/1234"),
+        r#"{"status":"init","updateList":[{"type":"debian","modules":[{"name":"debian1","version":"0.0.1","action":"install"}]}]}"#,
     );
     mqtt_box.send(mqtt_message).await?;
 
@@ -75,11 +75,16 @@ async fn convert_incoming_software_update_request() -> Result<(), DynError> {
         modules: vec![debian_module1],
     };
 
-    // The output of converter => SoftwareUpdateRequest
+    // The output of converter => SoftwareUpdateCommand
     software_box
-        .assert_received([SoftwareUpdateRequest {
-            id: "1234".to_string(),
-            update_list: vec![debian_list],
+        .assert_received([SoftwareUpdateCommand {
+            target: EntityTopicId::default_child_device("child001").unwrap(),
+            cmd_id: "1234".to_string(),
+            payload: SoftwareUpdateCommandPayload {
+                status: CommandStatus::Init,
+                update_list: vec![debian_list],
+                failures: vec![],
+            },
         }])
         .await;
 
@@ -121,19 +126,22 @@ async fn convert_outgoing_software_list_response() -> Result<(), DynError> {
     let (mut software_box, _restart_box, mut mqtt_box) =
         spawn_mqtt_operation_converter("device/main//").await?;
 
-    // Skip capabilities messages
-    mqtt_box.skip(1).await;
+    skip_capability_messages(&mut mqtt_box, "device/main//").await;
 
     // Simulate SoftwareList response message received.
-    let software_list_request = SoftwareListRequest::new_with_id("1234");
-    let software_list_response = SoftwareListResponse::new(&software_list_request);
+    let software_list_request =
+        SoftwareListCommand::new_with_id(&EntityTopicId::default_main_device(), "1234".to_string());
+    let software_list_response = software_list_request
+        .clone()
+        .with_status(CommandStatus::Executing);
     software_box.send(software_list_response.into()).await?;
 
     mqtt_box
         .assert_received([MqttMessage::new(
-            &Topic::new_unchecked("tedge/commands/res/software/list"),
-            r#"{"id":"1234","status":"executing"}"#,
-        )])
+            &Topic::new_unchecked("te/device/main///cmd/software_list/1234"),
+            r#"{"status":"executing"}"#,
+        )
+        .with_retain()])
         .await;
 
     Ok(())
@@ -153,6 +161,22 @@ async fn publish_capabilities_on_start() -> Result<(), DynError> {
         .with_retain()])
         .await;
 
+    mqtt_box
+        .assert_received([MqttMessage::new(
+            &Topic::new_unchecked("te/device/child///cmd/software_list"),
+            "{}",
+        )
+        .with_retain()])
+        .await;
+
+    mqtt_box
+        .assert_received([MqttMessage::new(
+            &Topic::new_unchecked("te/device/child///cmd/software_update"),
+            "{}",
+        )
+        .with_retain()])
+        .await;
+
     Ok(())
 }
 
@@ -162,19 +186,22 @@ async fn convert_outgoing_software_update_response() -> Result<(), DynError> {
     let (mut software_box, _restart_box, mut mqtt_box) =
         spawn_mqtt_operation_converter("device/main//").await?;
 
-    // Skip capabilities messages
-    mqtt_box.skip(1).await;
+    skip_capability_messages(&mut mqtt_box, "device/main//").await;
 
     // Simulate SoftwareUpdate response message received.
-    let software_update_request = SoftwareUpdateRequest::new_with_id("1234");
-    let software_update_response = SoftwareUpdateResponse::new(&software_update_request);
+    let software_update_request = SoftwareUpdateCommand::new_with_id(
+        &EntityTopicId::default_main_device(),
+        "1234".to_string(),
+    );
+    let software_update_response = software_update_request.with_status(CommandStatus::Executing);
     software_box.send(software_update_response.into()).await?;
 
     mqtt_box
         .assert_received([MqttMessage::new(
-            &Topic::new_unchecked("tedge/commands/res/software/update"),
-            r#"{"id":"1234","status":"executing"}"#,
-        )])
+            &Topic::new_unchecked("te/device/main///cmd/software_update/1234"),
+            r#"{"status":"executing"}"#,
+        )
+        .with_retain()])
         .await;
 
     Ok(())
@@ -186,8 +213,7 @@ async fn convert_outgoing_restart_response() -> Result<(), DynError> {
     let (_software_box, mut restart_box, mut mqtt_box) =
         spawn_mqtt_operation_converter("device/main//").await?;
 
-    // Skip capabilities messages
-    mqtt_box.skip(1).await;
+    skip_capability_messages(&mut mqtt_box, "device/main//").await;
 
     // Simulate Restart response message received.
     let executing_response = RestartCommand {
@@ -214,13 +240,13 @@ async fn spawn_mqtt_operation_converter(
     device_topic_id: &str,
 ) -> Result<
     (
-        TimedMessageBox<SimpleMessageBox<SoftwareRequest, SoftwareResponse>>,
+        TimedMessageBox<SimpleMessageBox<SoftwareCommand, SoftwareCommand>>,
         TimedMessageBox<SimpleMessageBox<RestartCommand, RestartCommand>>,
         TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
     ),
     DynError,
 > {
-    let mut software_builder: SimpleMessageBoxBuilder<SoftwareRequest, SoftwareResponse> =
+    let mut software_builder: SimpleMessageBoxBuilder<SoftwareCommand, SoftwareCommand> =
         SimpleMessageBoxBuilder::new("Software", 5);
     let mut restart_builder: SimpleMessageBoxBuilder<RestartCommand, RestartCommand> =
         SimpleMessageBoxBuilder::new("Restart", 5);
@@ -243,4 +269,17 @@ async fn spawn_mqtt_operation_converter(
     tokio::spawn(async move { converter_actor.run().await });
 
     Ok((software_box, restart_box, mqtt_message_box))
+}
+
+async fn skip_capability_messages(mqtt: &mut impl MessageReceiver<MqttMessage>, device: &str) {
+    //Skip all the init messages by still doing loose assertions
+    assert_received_contains_str(
+        mqtt,
+        [
+            (format!("te/{}/cmd/restart", device).as_ref(), "{}"),
+            (format!("te/{}/cmd/software_list", device).as_ref(), "{}"),
+            (format!("te/{}/cmd/software_update", device).as_ref(), "{}"),
+        ],
+    )
+    .await;
 }

@@ -6,6 +6,7 @@ use c8y_auth_proxy::actor::C8yAuthProxyBuilder;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
 use c8y_http_proxy::C8YHttpProxyBuilder;
 use c8y_mapper_ext::actor::C8yMapperBuilder;
+use c8y_mapper_ext::compatibility_adapter::OldAgentAdapter;
 use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
 use mqtt_channel::Config;
@@ -57,6 +58,10 @@ impl TEdgeComponent for CumulocityMapper {
             &mut fs_watch_actor,
         )?;
 
+        // Adaptor translating commands sent on te/device/main///cmd/+/+ into requests on tedge/commands/req/+/+
+        // and translating the responses received on tedge/commands/res/+/+ to te/device/main///cmd/+/+
+        let old_to_new_agent_adaptator = OldAgentAdapter::builder(&mut mqtt_actor);
+
         // MQTT client dedicated to set service down status on shutdown, using a last-will message
         // A separate MQTT actor/client is required as the last will message of the main MQTT actor
         // is used to send down status to health topic
@@ -73,6 +78,7 @@ impl TEdgeComponent for CumulocityMapper {
         runtime.spawn(c8y_mapper_actor).await?;
         runtime.spawn(service_monitor_actor).await?;
         runtime.spawn(downloader_actor).await?;
+        runtime.spawn(old_to_new_agent_adaptator).await?;
         runtime.run_to_completion().await?;
 
         Ok(())

@@ -30,7 +30,8 @@ use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::SoftwareUpdateResponse;
+use tedge_api::CommandStatus;
+use tedge_api::SoftwareUpdateCommand;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
@@ -280,7 +281,7 @@ async fn service_registration_mapping() {
 #[tokio::test]
 async fn mapper_publishes_software_update_request() {
     // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
-    // and converts it to thin-edge json message published on `tedge/commands/req/software/update`.
+    // and converts it to thin-edge json message published on `te/device/main///cmd/software_update/+`.
     let cfg_dir = TempTedgeDir::new();
     let (mqtt, http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
     spawn_dummy_c8y_http_proxy(http);
@@ -300,8 +301,9 @@ async fn mapper_publishes_software_update_request() {
     assert_received_includes_json(
         &mut mqtt,
         [(
-            "tedge/commands/req/software/update",
+            "te/device/main///cmd/software_update/+",
             json!({
+                "status": "init",
                 "updateList": [
                     {
                         "type": "debian",
@@ -321,41 +323,8 @@ async fn mapper_publishes_software_update_request() {
 }
 
 #[tokio::test]
-async fn mapper_publishes_software_update_request_with_new_token() {
-    // The test assures SM Mapper correctly receives software update request smartrest message on `c8y/s/ds`
-    // and converts it to thin-edge json message published on `tedge/commands/req/software/update` with new JWT token.
-    let cfg_dir = TempTedgeDir::new();
-    let (mqtt, http, _fs, _timer, _dl) = spawn_c8y_mapper_actor(&cfg_dir, true).await;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
-
-    // Simulate c8y_SoftwareUpdate SmartREST request
-    mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(),
-        "528,test-device,test-very-large-software,2.0,https://test.c8y.io,install",
-    ))
-    .await
-    .expect("Send failed");
-    let first_request = mqtt.recv().await.unwrap();
-    // Simulate c8y_SoftwareUpdate SmartREST request
-    mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(),
-        "528,test-device,test-very-large-software,2.0,https://test.c8y.io,install",
-    ))
-    .await
-    .expect("Send failed");
-    let second_request = mqtt.recv().await.unwrap();
-
-    // Both software update requests will have different tokens in it. So, they are not equal.
-    assert_ne!(first_request, second_request);
-}
-
-#[tokio::test]
 async fn mapper_publishes_software_update_status_onto_c8y_topic() {
-    // The test assures SM Mapper correctly receives software update response message on `tedge/commands/res/software/update`
+    // The test assures SM Mapper correctly receives software update response message on `te/device/main///cmd/software_update/123`
     // and publishes status of the operation `501` on `c8y/s/us`
 
     // Start SM Mapper
@@ -366,46 +335,43 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
     skip_init_messages(&mut mqtt).await;
 
-    // Prepare and publish a software update status response message `executing` on `tedge/commands/res/software/update`.
-    mqtt.send(MqttMessage::new(
-        &SoftwareUpdateResponse::topic(),
-        json!({
-            "id": "123",
-            "status": "executing"
-        })
-        .to_string(),
-    ))
-    .await
-    .expect("Send failed");
+    // Prepare and publish a software update status response message `executing` on `te/device/main///cmd/software_update/123`.
+    let mqtt_schema = MqttSchema::default();
+    let device = EntityTopicId::default_main_device();
+    let request = SoftwareUpdateCommand::new_with_id(&device, "123".to_string());
+    let response = request.with_status(CommandStatus::Executing);
+    mqtt.send(response.command_message(&mqtt_schema))
+        .await
+        .expect("Send failed");
 
     // Expect `501` smartrest message on `c8y/s/us`.
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_SoftwareUpdate")]).await;
 
     // Prepare and publish a software update response `successful`.
-    mqtt.send(MqttMessage::new(
-        &SoftwareUpdateResponse::topic(),
-        json!({
-            "id":"123",
-            "status":"successful",
-            "currentSoftwareList":[
-                {
-                    "type":"apt",
-                    "modules":[
-                        {
-                            "name":"m",
-                            "url":"https://foobar.io/m.epl"
-                        }
-                    ]
-                }
-            ]
-        })
-        .to_string(),
-    ))
-    .await
-    .expect("Send failed");
+    let response = response.with_status(CommandStatus::Successful);
+    mqtt.send(response.command_message(&mqtt_schema))
+        .await
+        .expect("Send failed");
 
     // Expect `503` messages with correct payload have been received on `c8y/s/us`, if no msg received for the timeout the test fails.
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "503,c8y_SoftwareUpdate")]).await;
+
+    // The successful state is cleared
+    assert_received_contains_str(
+        &mut mqtt,
+        [("te/device/main///cmd/software_update/123", "")],
+    )
+    .await;
+
+    // An updated list of software is requested
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "te/device/main///cmd/software_list/+",
+            r#"{"status":"init"}"#,
+        )],
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -418,31 +384,13 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     skip_init_messages(&mut mqtt).await;
 
     // The agent publish an error
-    let json_response = r#"
-        {
-            "id": "123",
-            "status":"failed",
-            "reason":"Partial failure: Couldn't install collectd and nginx",
-            "currentSoftwareList": [
-                {
-                    "type": "docker",
-                    "modules": [
-                        {
-                            "name": "nginx",
-                            "version": "1.21.0"
-                        }
-                    ]
-                }
-            ],
-            "failures":[]
-        }"#;
-
-    mqtt.send(MqttMessage::new(
-        &SoftwareUpdateResponse::topic(),
-        json_response,
-    ))
-    .await
-    .expect("Send failed");
+    let mqtt_schema = MqttSchema::default();
+    let device = EntityTopicId::default_main_device();
+    let response = SoftwareUpdateCommand::new_with_id(&device, "123".to_string())
+        .with_error("Partial failure: Couldn't install collectd and nginx".to_string());
+    mqtt.send(response.command_message(&mqtt_schema))
+        .await
+        .expect("Send failed");
 
     // `502` messages with correct payload have been received on `c8y/s/us`, if no msg received for the timeout the test fails.
     assert_received_contains_str(
@@ -450,6 +398,23 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
         [(
             "c8y/s/us",
             "502,c8y_SoftwareUpdate,\"Partial failure: Couldn\'t install collectd and nginx\"\n",
+        )],
+    )
+    .await;
+
+    // The failed state is cleared
+    assert_received_contains_str(
+        &mut mqtt,
+        [("te/device/main///cmd/software_update/123", "")],
+    )
+    .await;
+
+    // An updated list of software is requested
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "te/device/main///cmd/software_list/+",
+            r#"{"status":"init"}"#,
         )],
     )
     .await;
@@ -1325,8 +1290,9 @@ async fn mapper_handles_multiline_sm_requests() {
         &mut mqtt,
         [
             (
-                "tedge/commands/req/software/update",
+                "te/device/main///cmd/software_update/+",
                 json!({
+                    "status": "init",
                     "updateList": [
                         {
                             "type": "debian",
@@ -1342,8 +1308,9 @@ async fn mapper_handles_multiline_sm_requests() {
                 }),
             ),
             (
-                "tedge/commands/req/software/update",
+                "te/device/main///cmd/software_update/+",
                 json!({
+                    "status": "init",
                     "updateList": [
                         {
                             "type": "debian",
@@ -1545,10 +1512,7 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     // Expect smartrest message on `c8y/s/us` with expected payload "114,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3".
     assert_received_contains_str(
         &mut mqtt,
-        [(
-            "c8y/s/us",
-            "114,c8y_SoftwareUpdate,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3",
-        )],
+        [("c8y/s/us", "114,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3")],
     )
     .await;
 
@@ -1558,8 +1522,25 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     )
     .await
     .expect("Send failed");
+    mqtt.send(
+        MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/software_update"),
+            "{}",
+        )
+        .with_retain(),
+    )
+    .await
+    .expect("Send failed");
 
     // Expect an update list of capabilities with agent capabilities
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
+            "114,c8y_Restart,c8y_TestOp1,c8y_TestOp2,c8y_TestOp3",
+        )],
+    )
+    .await;
     assert_received_contains_str(
         &mut mqtt,
         [(

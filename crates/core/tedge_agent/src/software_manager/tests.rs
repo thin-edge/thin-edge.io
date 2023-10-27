@@ -1,5 +1,4 @@
-use crate::software_manager::actor::SoftwareRequest;
-use crate::software_manager::actor::SoftwareResponse;
+use crate::software_manager::actor::SoftwareCommand;
 use crate::software_manager::builder::SoftwareManagerBuilder;
 use crate::software_manager::config::SoftwareManagerConfig;
 use std::time::Duration;
@@ -13,15 +12,14 @@ use tedge_actors::Sender;
 use tedge_actors::ServiceConsumer;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::messages::CommandStatus;
+use tedge_api::messages::SoftwareListCommand;
 use tedge_api::messages::SoftwareModuleAction;
 use tedge_api::messages::SoftwareModuleItem;
 use tedge_api::messages::SoftwareRequestResponseSoftwareList;
-use tedge_api::OperationStatus;
-use tedge_api::SoftwareListRequest;
-use tedge_api::SoftwareListResponse;
-use tedge_api::SoftwareRequestResponse;
-use tedge_api::SoftwareUpdateRequest;
-use tedge_api::SoftwareUpdateResponse;
+use tedge_api::messages::SoftwareUpdateCommand;
+use tedge_api::messages::SoftwareUpdateCommandPayload;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::TEdgeConfigLocation;
 use tedge_test_utils::fs::TempTedgeDir;
 
@@ -38,11 +36,14 @@ async fn test_pending_software_update_operation() -> Result<(), DynError> {
 
     let mut converter_box = spawn_software_manager(&temp_dir).await?;
 
-    let software_request_response = SoftwareRequestResponse::new("1234", OperationStatus::Failed);
+    let software_request_response = SoftwareUpdateCommand {
+        target: EntityTopicId::default_main_device(),
+        cmd_id: "1234".to_string(),
+        payload: SoftwareUpdateCommandPayload::default(),
+    }
+    .with_error("Software Update command cancelled on agent restart".to_string());
     converter_box
-        .assert_received([SoftwareUpdateResponse {
-            response: software_request_response,
-        }])
+        .assert_received([software_request_response])
         .await;
 
     Ok(())
@@ -67,22 +68,24 @@ async fn test_new_software_update_operation() -> Result<(), DynError> {
         modules: vec![debian_module1],
     };
 
-    converter_box
-        .send(
-            SoftwareUpdateRequest {
-                id: "random".to_string(),
-                update_list: vec![debian_list],
-            }
-            .into(),
-        )
-        .await?;
+    let command = SoftwareUpdateCommand {
+        target: EntityTopicId::default_main_device(),
+        cmd_id: "random".to_string(),
+        payload: SoftwareUpdateCommandPayload {
+            status: Default::default(),
+            update_list: vec![debian_list],
+            failures: vec![],
+        },
+    };
+    converter_box.send(command.into()).await?;
 
     match converter_box.recv().await.unwrap() {
-        SoftwareResponse::SoftwareUpdateResponse(res) => {
-            assert_eq!(res.response.status, OperationStatus::Executing);
+        SoftwareCommand::SoftwareUpdateCommand(res) => {
+            assert_eq!(res.cmd_id, "random");
+            assert_eq!(res.status(), CommandStatus::Executing);
         }
-        SoftwareResponse::SoftwareListResponse(_) => {
-            panic!("Received SoftwareListResponse")
+        SoftwareCommand::SoftwareListCommand(_) => {
+            panic!("Received SoftwareListCommand")
         }
     }
 
@@ -100,11 +103,11 @@ async fn test_pending_software_list_operation() -> Result<(), DynError> {
 
     let mut converter_box = spawn_software_manager(&temp_dir).await?;
 
-    let software_request_response = SoftwareRequestResponse::new("1234", OperationStatus::Failed);
+    let software_request_response =
+        SoftwareListCommand::new_with_id(&EntityTopicId::default_main_device(), "1234".to_string())
+            .with_error("Software List request cancelled on agent restart".to_string());
     converter_box
-        .assert_received([SoftwareListResponse {
-            response: software_request_response,
-        }])
+        .assert_received([software_request_response])
         .await;
 
     Ok(())
@@ -118,28 +121,16 @@ async fn test_new_software_list_operation() -> Result<(), DynError> {
 
     let mut converter_box = spawn_software_manager(&temp_dir).await?;
 
-    converter_box
-        .send(
-            SoftwareListRequest {
-                id: "1234".to_string(),
-            }
-            .into(),
-        )
-        .await?;
+    let command =
+        SoftwareListCommand::new_with_id(&EntityTopicId::default_main_device(), "1234".to_string());
+    converter_box.send(command.clone().into()).await?;
 
-    let executing_response = SoftwareRequestResponse::new("1234", OperationStatus::Executing);
-    let mut successful_response = SoftwareRequestResponse::new("1234", OperationStatus::Successful);
+    let executing_response = command.clone().with_status(CommandStatus::Executing);
+    let mut successful_response = command.clone().with_status(CommandStatus::Successful);
     successful_response.add_modules("".to_string(), vec![]);
 
     converter_box
-        .assert_received([
-            SoftwareListResponse {
-                response: executing_response,
-            },
-            SoftwareListResponse {
-                response: successful_response,
-            },
-        ])
+        .assert_received([executing_response, successful_response])
         .await;
 
     Ok(())
@@ -147,11 +138,12 @@ async fn test_new_software_list_operation() -> Result<(), DynError> {
 
 async fn spawn_software_manager(
     tmp_dir: &TempTedgeDir,
-) -> Result<TimedMessageBox<SimpleMessageBox<SoftwareResponse, SoftwareRequest>>, DynError> {
-    let mut converter_builder: SimpleMessageBoxBuilder<SoftwareResponse, SoftwareRequest> =
+) -> Result<TimedMessageBox<SimpleMessageBox<SoftwareCommand, SoftwareCommand>>, DynError> {
+    let mut converter_builder: SimpleMessageBoxBuilder<SoftwareCommand, SoftwareCommand> =
         SimpleMessageBoxBuilder::new("Converter", 5);
 
     let config = SoftwareManagerConfig::new(
+        &EntityTopicId::default_main_device(),
         &tmp_dir.utf8_path_buf(),
         &tmp_dir.utf8_path_buf(),
         &tmp_dir.utf8_path_buf(),

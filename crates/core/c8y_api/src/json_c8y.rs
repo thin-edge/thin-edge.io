@@ -9,9 +9,9 @@ use tedge_api::alarm::ThinEdgeAlarmData;
 use tedge_api::entity_store::EntityMetadata;
 use tedge_api::entity_store::EntityType;
 use tedge_api::event::ThinEdgeEvent;
+use tedge_api::messages::SoftwareListCommand;
 use tedge_api::EntityStore;
 use tedge_api::Jsonify;
-use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareModule;
 use tedge_api::SoftwareType;
 use tedge_api::SoftwareVersion;
@@ -111,8 +111,8 @@ pub struct C8yUpdateSoftwareListResponse {
 
 impl<'a> Jsonify<'a> for C8yUpdateSoftwareListResponse {}
 
-impl From<&SoftwareListResponse> for C8yUpdateSoftwareListResponse {
-    fn from(list: &SoftwareListResponse) -> Self {
+impl From<&SoftwareListCommand> for C8yUpdateSoftwareListResponse {
+    fn from(list: &SoftwareListCommand) -> Self {
         let mut new_list: Vec<C8ySoftwareModuleItem> = Vec::new();
         list.modules().into_iter().for_each(|software_module| {
             let c8y_software_module: C8ySoftwareModuleItem = software_module.into();
@@ -420,6 +420,7 @@ mod tests {
     use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::entity_store::InvalidExternalIdError;
     use tedge_api::event::ThinEdgeEventData;
+    use tedge_api::messages::SoftwareListCommandPayload;
     use tedge_api::mqtt_topics::EntityTopicId;
     use test_case::test_case;
     use time::macros::datetime;
@@ -464,9 +465,13 @@ mod tests {
                 ]}
             ]}"#;
 
-        let json_obj = &SoftwareListResponse::from_json(input_json).unwrap();
+        let command = SoftwareListCommand {
+            target: EntityTopicId::default_main_device(),
+            cmd_id: "1".to_string(),
+            payload: SoftwareListCommandPayload::from_json(input_json).unwrap(),
+        };
 
-        let c8y_software_list: C8yUpdateSoftwareListResponse = json_obj.into();
+        let c8y_software_list: C8yUpdateSoftwareListResponse = (&command).into();
 
         let expected_struct = C8yUpdateSoftwareListResponse {
             c8y_software_list: Some(vec![
@@ -512,8 +517,13 @@ mod tests {
             "currentSoftwareList":[]
             }"#;
 
-        let json_obj = &SoftwareListResponse::from_json(input_json).unwrap();
-        let c8y_software_list: C8yUpdateSoftwareListResponse = json_obj.into();
+        let command = &SoftwareListCommand {
+            target: EntityTopicId::default_main_device(),
+            cmd_id: "1".to_string(),
+            payload: SoftwareListCommandPayload::from_json(input_json).unwrap(),
+        };
+
+        let c8y_software_list: C8yUpdateSoftwareListResponse = command.into();
 
         let expected_struct = C8yUpdateSoftwareListResponse {
             c8y_software_list: Some(vec![]),

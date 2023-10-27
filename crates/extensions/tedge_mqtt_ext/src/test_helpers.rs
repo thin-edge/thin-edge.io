@@ -1,7 +1,7 @@
 use crate::MqttMessage;
 use assert_json_diff::assert_json_include;
 use mqtt_channel::Message;
-use mqtt_channel::Topic;
+use mqtt_channel::TopicFilter;
 use std::fmt::Debug;
 use tedge_actors::MessageReceiver;
 
@@ -39,9 +39,8 @@ pub async fn assert_received_includes_json<I, S>(
 pub fn assert_message_contains_str(message: &Message, expected: (&str, &str)) {
     let expected_topic = expected.0;
     let expected_payload = expected.1;
-    assert_eq!(
-        message.topic,
-        Topic::new_unchecked(expected_topic),
+    assert!(
+        TopicFilter::new_unchecked(expected_topic).accept(message),
         "\nReceived unexpected message: {:?}",
         message
     );
@@ -58,7 +57,11 @@ pub fn assert_message_includes_json<S>(message: &Message, expected: (S, serde_js
 where
     S: AsRef<str>,
 {
-    assert_eq!(message.topic, Topic::new_unchecked(expected.0.as_ref()));
+    assert!(
+        TopicFilter::new_unchecked(expected.0.as_ref()).accept(message),
+        "\nReceived unexpected message: {:?}",
+        message
+    );
     let payload = serde_json::from_str::<serde_json::Value>(
         message.payload_str().expect("non UTF-8 payload"),
     )

@@ -321,6 +321,14 @@ impl C8YHttpProxyActor {
         software_list: SoftwareListResponse,
     ) -> Result<Unit, C8YRestError> {
         let device_id = software_list.device_id;
+
+        // Get and set child device internal id
+        if device_id.ne(&self.end_point.device_id)
+            && self.end_point.get_internal_id(device_id.clone()).is_err()
+        {
+            self.get_and_set_internal_id(device_id.clone()).await?;
+        }
+
         let build_request = |end_point: &C8yEndPoint| {
             let internal_id = end_point
                 .get_internal_id(device_id.clone())

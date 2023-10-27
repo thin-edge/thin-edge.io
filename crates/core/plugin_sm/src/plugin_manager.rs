@@ -10,12 +10,11 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
+use tedge_api::messages::CommandStatus;
+use tedge_api::messages::SoftwareListCommand;
+use tedge_api::messages::SoftwareUpdateCommand;
 use tedge_api::SoftwareError;
-use tedge_api::SoftwareListRequest;
-use tedge_api::SoftwareListResponse;
 use tedge_api::SoftwareType;
-use tedge_api::SoftwareUpdateRequest;
-use tedge_api::SoftwareUpdateResponse;
 use tedge_api::DEFAULT;
 use tedge_config::TEdgeConfigLocation;
 use tracing::error;
@@ -223,19 +222,18 @@ impl ExternalPlugins {
 
     pub async fn list(
         &self,
-        request: &SoftwareListRequest,
+        mut response: SoftwareListCommand,
         mut log_file: LogFile,
-    ) -> SoftwareListResponse {
-        let mut response = SoftwareListResponse::new(request);
+    ) -> SoftwareListCommand {
         let logger = log_file.buffer();
         let mut error_count = 0;
 
         if self.plugin_map.is_empty() {
-            response.add_modules("", vec![]);
+            response.add_modules("".into(), vec![]);
         } else {
             for (software_type, plugin) in self.plugin_map.iter() {
                 match plugin.list(logger).await {
-                    Ok(software_list) => response.add_modules(software_type, software_list),
+                    Ok(software_list) => response.add_modules(software_type.clone(), software_list),
                     Err(_) => {
                         error_count += 1;
                     }
@@ -244,19 +242,19 @@ impl ExternalPlugins {
         }
 
         if let Some(reason) = ExternalPlugins::error_message(log_file.path(), error_count) {
-            response.set_error(&reason);
+            response.with_error(reason)
+        } else {
+            response.with_status(CommandStatus::Successful)
         }
-
-        response
     }
 
     pub async fn process(
         &self,
-        request: &SoftwareUpdateRequest,
+        request: SoftwareUpdateCommand,
         mut log_file: LogFile,
         download_path: &Path,
-    ) -> SoftwareUpdateResponse {
-        let mut response = SoftwareUpdateResponse::new(request);
+    ) -> SoftwareUpdateCommand {
+        let mut response = request.clone().with_status(CommandStatus::Executing);
         let logger = log_file.buffer();
         let mut error_count = 0;
 
@@ -276,21 +274,11 @@ impl ExternalPlugins {
             }
         }
 
-        for (software_type, plugin) in self.plugin_map.iter() {
-            match plugin.list(logger).await {
-                Ok(software_list) => response.add_modules(software_type, software_list),
-                Err(err) => {
-                    error_count += 1;
-                    response.add_errors(software_type, vec![err])
-                }
-            }
-        }
-
         if let Some(reason) = ExternalPlugins::error_message(log_file.path(), error_count) {
-            response.set_error(&reason);
+            response.with_error(reason)
+        } else {
+            response.with_status(CommandStatus::Successful)
         }
-
-        response
     }
 
     fn error_message(log_file: &Path, error_count: i32) -> Option<String> {

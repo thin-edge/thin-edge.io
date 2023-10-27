@@ -37,7 +37,6 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
 use c8y_api::smartrest::topic::publish_topic_from_ancestors;
 use c8y_api::smartrest::topic::C8yTopic;
-use c8y_api::smartrest::topic::MapperSubscribeTopic;
 use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
 use c8y_auth_proxy::url::ProxyUrlGenerator;
 use c8y_http_proxy::handle::C8YHttpProxy;
@@ -59,6 +58,7 @@ use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityExternalId;
+use tedge_api::entity_store::EntityMetadata;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityType;
 use tedge_api::entity_store::Error;
@@ -66,20 +66,15 @@ use tedge_api::entity_store::InvalidExternalIdError;
 use tedge_api::event::error::ThinEdgeJsonDeserializerError;
 use tedge_api::event::ThinEdgeEvent;
 use tedge_api::messages::CommandStatus;
+use tedge_api::messages::RestartCommand;
+use tedge_api::messages::SoftwareListCommand;
+use tedge_api::messages::SoftwareUpdateCommand;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::topic::RequestTopic;
-use tedge_api::topic::ResponseTopic;
 use tedge_api::DownloadInfo;
 use tedge_api::EntityStore;
-use tedge_api::Jsonify;
-use tedge_api::OperationStatus;
-use tedge_api::RestartCommand;
-use tedge_api::SoftwareListRequest;
-use tedge_api::SoftwareListResponse;
-use tedge_api::SoftwareUpdateResponse;
 use tedge_config::TEdgeConfigError;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
@@ -491,25 +486,17 @@ impl CumulocityConverter {
         entity: &EntityTopicId,
         message: &Message,
     ) -> Result<Vec<Message>, ConversionError> {
-        let mut mqtt_messages: Vec<Message> = Vec::new();
-
-        // Send the init messages
-        if self.is_message_tedge_agent_up(message)? {
-            create_tedge_agent_supported_ops(&self.ops_dir).await?;
-            mqtt_messages.push(create_get_software_list_message()?);
-        }
-
         let entity_metadata = self
             .entity_store
             .get(entity)
             .expect("entity was registered");
 
         let ancestors_external_ids = self.entity_store.ancestors_external_ids(entity)?;
-        let mut message =
-            convert_health_status_message(entity_metadata, &ancestors_external_ids, message);
-
-        mqtt_messages.append(&mut message);
-        Ok(mqtt_messages)
+        Ok(convert_health_status_message(
+            entity_metadata,
+            &ancestors_external_ids,
+            message,
+        ))
     }
 
     async fn parse_c8y_topics(
@@ -555,9 +542,7 @@ impl CumulocityConverter {
                     "522" => self.convert_log_upload_request(payload),
                     "524" => self.convert_config_update_request(payload).await,
                     "526" => self.convert_config_snapshot_request(payload),
-                    "528" if device_id == self.device_name => {
-                        self.forward_software_request(payload).await
-                    }
+                    "528" => self.forward_software_request(payload).await,
                     "510" => self.forward_restart_request(payload),
                     template if device_id == self.device_name => {
                         self.forward_operation_request(payload, template).await
@@ -589,33 +574,27 @@ impl CumulocityConverter {
         &mut self,
         smartrest: &str,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
-        let topic = Topic::new(RequestTopic::SoftwareUpdateRequest.as_str())?;
-        let update_software = SmartRestUpdateSoftware::default();
-        let mut software_update_request = update_software
-            .from_smartrest(smartrest)?
-            .to_thin_edge_json()?;
+        let update_software = SmartRestUpdateSoftware::from_smartrest(smartrest)?;
+        let device_id = &update_software.external_id.clone().into();
+        let target = self.entity_store.try_get_by_external_id(device_id)?;
+        let mut command = update_software.into_software_update_command(&target.topic_id, None)?;
 
-        software_update_request
-            .update_list
-            .iter_mut()
-            .for_each(|modules| {
-                modules.modules.iter_mut().for_each(|module| {
-                    if let Some(url) = &mut module.url {
-                        *url = if let Some(cumulocity_url) =
-                            self.c8y_endpoint.maybe_tenant_url(url.url())
-                        {
-                            DownloadInfo::new(self.auth_proxy.proxy_url(cumulocity_url).as_ref())
-                        } else {
-                            DownloadInfo::new(url.url())
-                        };
-                    }
-                });
+        command.payload.update_list.iter_mut().for_each(|modules| {
+            modules.modules.iter_mut().for_each(|module| {
+                if let Some(url) = &mut module.url {
+                    *url = if let Some(cumulocity_url) =
+                        self.c8y_endpoint.maybe_tenant_url(url.url())
+                    {
+                        DownloadInfo::new(self.auth_proxy.proxy_url(cumulocity_url).as_ref())
+                    } else {
+                        DownloadInfo::new(url.url())
+                    };
+                }
             });
+        });
 
-        Ok(vec![Message::new(
-            &topic,
-            software_update_request.to_json(),
-        )])
+        let message = command.command_message(&self.mqtt_schema);
+        Ok(vec![message])
     }
 
     fn forward_restart_request(
@@ -625,9 +604,14 @@ impl CumulocityConverter {
         let request = SmartRestRestartRequest::from_smartrest(smartrest)?;
         let device_id = &request.device.into();
         let target = self.entity_store.try_get_by_external_id(device_id)?;
-        let command = RestartCommand::new(target.topic_id.clone());
+        let command = RestartCommand::new(&target.topic_id);
         let message = command.command_message(&self.mqtt_schema);
         Ok(vec![message])
+    }
+
+    fn request_software_list(&self, target: &EntityTopicId) -> Message {
+        let request = SoftwareListCommand::new(target);
+        request.command_message(&self.mqtt_schema)
     }
 
     async fn forward_operation_request(
@@ -885,7 +869,6 @@ impl CumulocityConverter {
                 if self.entity_store.get(&source).is_none() {
                     let auto_registration_messages =
                         self.entity_store.auto_register_entity(&source)?;
-
                     for auto_registration_message in &auto_registration_messages {
                         registration_messages.append(
                             &mut self.register_and_convert_entity(auto_registration_message)?,
@@ -925,6 +908,25 @@ impl CumulocityConverter {
                 cmd_id,
             } => {
                 self.publish_restart_operation_status(&source, cmd_id, message)
+                    .await?
+            }
+
+            Channel::CommandMetadata {
+                operation: OperationType::SoftwareList,
+            } => self.register_software_list_operation(&source).await?,
+            Channel::Command {
+                operation: OperationType::SoftwareList,
+                cmd_id,
+            } => self.publish_software_list(&source, cmd_id, message).await?,
+
+            Channel::CommandMetadata {
+                operation: OperationType::SoftwareUpdate,
+            } => self.register_software_update_operation(&source).await?,
+            Channel::Command {
+                operation: OperationType::SoftwareUpdate,
+                cmd_id,
+            } => {
+                self.publish_software_update_status(&source, cmd_id, message)
                     .await?
             }
 
@@ -1036,31 +1038,11 @@ impl CumulocityConverter {
                 self.alarm_converter.process_internal_alarm(message);
                 Ok(vec![])
             }
-            topic => match topic.clone().try_into() {
-                Ok(MapperSubscribeTopic::ResponseTopic(ResponseTopic::SoftwareListResponse)) => {
-                    debug!("Software list");
-                    Ok(validate_and_publish_software_list(
-                        message.payload_str()?,
-                        &mut self.http_proxy,
-                        self.device_name.clone(), //derive from topic, when supported for child device also.
-                    )
-                    .await?)
-                }
-                Ok(MapperSubscribeTopic::ResponseTopic(ResponseTopic::SoftwareUpdateResponse)) => {
-                    debug!("Software update");
-                    Ok(publish_operation_status(
-                        message.payload_str()?,
-                        &mut self.http_proxy,
-                        self.device_name.clone(),
-                    )
-                    .await?)
-                }
-                Ok(MapperSubscribeTopic::C8yTopic(_)) => self.parse_c8y_topics(message).await,
-                _ => {
-                    error!("Unsupported topic: {}", message.topic.name);
-                    Ok(vec![])
-                }
-            },
+            topic if C8yTopic::accept(topic) => self.parse_c8y_topics(message).await,
+            _ => {
+                error!("Unsupported topic: {}", message.topic.name);
+                Ok(vec![])
+            }
         }?;
 
         Ok(messages)
@@ -1159,13 +1141,6 @@ fn get_child_id(dir_path: &PathBuf) -> Result<String, ConversionError> {
     }
 }
 
-fn create_get_software_list_message() -> Result<Message, ConversionError> {
-    let request = SoftwareListRequest::default();
-    let topic = Topic::new(RequestTopic::SoftwareListRequest.as_str())?;
-    let payload = request.to_json();
-    Ok(Message::new(&topic, payload))
-}
-
 fn create_get_pending_operations_message() -> Result<Message, ConversionError> {
     let data = SmartRestGetPendingOperations::default();
     let topic = C8yTopic::SmartRestResponse.to_topic()?;
@@ -1192,6 +1167,31 @@ fn create_request_for_cloud_child_devices() -> Message {
 }
 
 impl CumulocityConverter {
+    /// Register on C8y an operation capability for a device.
+    fn register_operation(
+        &self,
+        device: &EntityMetadata,
+        c8y_operation_name: &str,
+    ) -> Result<Vec<Message>, ConversionError> {
+        let ops_dir = match device.r#type {
+            EntityType::MainDevice => self.ops_dir.clone(),
+            EntityType::ChildDevice => {
+                let child_dir_name = device.external_id.as_ref();
+                self.ops_dir.clone().join(child_dir_name)
+            }
+            EntityType::Service => {
+                let target = &device.topic_id;
+                error!("Unsupported {c8y_operation_name} operation for a service: {target}");
+                return Ok(vec![]);
+            }
+        };
+        let ops_file = ops_dir.join(c8y_operation_name);
+        create_directory_with_defaults(&ops_dir)?;
+        create_file_with_defaults(ops_file, None)?;
+        let device_operations = self.create_supported_operations(&ops_dir)?;
+        Ok(vec![device_operations])
+    }
+
     async fn register_restart_operation(
         &self,
         target: &EntityTopicId,
@@ -1201,24 +1201,7 @@ impl CumulocityConverter {
                 error!("Fail to register `restart` operation for unknown device: {target}");
                 Ok(vec![])
             }
-            Some(device) => {
-                let ops_dir = match device.r#type {
-                    EntityType::MainDevice => self.ops_dir.clone(),
-                    EntityType::ChildDevice => {
-                        let child_dir_name = device.external_id.as_ref();
-                        self.ops_dir.clone().join(child_dir_name)
-                    }
-                    EntityType::Service => {
-                        error!("Unsupported `restart` operation for a service: {target}");
-                        return Ok(vec![]);
-                    }
-                };
-                let ops_file = ops_dir.join("c8y_Restart");
-                create_directory_with_defaults(&ops_dir)?;
-                create_file_with_defaults(ops_file, None)?;
-                let device_operations = self.create_supported_operations(&ops_dir)?;
-                Ok(vec![device_operations])
-            }
+            Some(device) => self.register_operation(device, "c8y_Restart"),
         }
     }
 
@@ -1283,75 +1266,137 @@ impl CumulocityConverter {
         }
     }
 
-    pub fn is_message_tedge_agent_up(&self, message: &Message) -> Result<bool, ConversionError> {
-        let main_device_topic_id = self.entity_store.main_device();
-        let tedge_agent_topic_id = main_device_topic_id
-            .to_default_service_topic_id("tedge-agent")
-            .expect("main device topic needs to fit default MQTT scheme");
-        let tedge_agent_health_topic = self
-            .mqtt_schema
-            .topic_for(tedge_agent_topic_id.entity(), &Channel::Health);
-
-        if message.topic == tedge_agent_health_topic {
-            let status: HealthStatus = serde_json::from_str(message.payload_str()?)?;
-            return Ok(status.status.eq("up"));
-        }
-        Ok(false)
-    }
-}
-
-async fn publish_operation_status(
-    json_response: &str,
-    http_proxy: &mut C8YHttpProxy,
-    device_id: String,
-) -> Result<Vec<Message>, CumulocityMapperError> {
-    let response = SoftwareUpdateResponse::from_json(json_response)?;
-    let topic = C8yTopic::SmartRestResponse.to_topic()?;
-    match response.status() {
-        OperationStatus::Executing => {
-            let smartrest_set_operation_status =
-                SmartRestSetOperationToExecuting::from_thin_edge_json(response)?.to_smartrest()?;
-            Ok(vec![Message::new(&topic, smartrest_set_operation_status)])
-        }
-        OperationStatus::Successful => {
-            let smartrest_set_operation =
-                SmartRestSetOperationToSuccessful::from_thin_edge_json(response)?.to_smartrest()?;
-
-            validate_and_publish_software_list(json_response, http_proxy, device_id).await?;
-            Ok(vec![Message::new(&topic, smartrest_set_operation)])
-        }
-        OperationStatus::Failed => {
-            let smartrest_set_operation =
-                SmartRestSetOperationToFailed::from_thin_edge_json(response)?.to_smartrest()?;
-            validate_and_publish_software_list(json_response, http_proxy, device_id).await?;
-            Ok(vec![Message::new(&topic, smartrest_set_operation)])
-        }
-    }
-}
-
-async fn validate_and_publish_software_list(
-    payload: &str,
-    http_proxy: &mut C8YHttpProxy,
-    device_id: String,
-) -> Result<Vec<Message>, CumulocityMapperError> {
-    let response = &SoftwareListResponse::from_json(payload)?;
-
-    match response.status() {
-        OperationStatus::Successful => {
-            let c8y_software_list: C8yUpdateSoftwareListResponse = response.into();
-            http_proxy
-                .send_software_list_http(c8y_software_list, device_id)
-                .await?;
-        }
-
-        OperationStatus::Failed => {
-            error!("Received a failed software response: {payload}");
-        }
-
-        OperationStatus::Executing => {} // C8Y doesn't expect any message to be published
+    async fn register_software_list_operation(
+        &self,
+        _target: &EntityTopicId,
+    ) -> Result<Vec<Message>, ConversionError> {
+        // On c8y, "software list" is implied by "software update"
+        Ok(vec![])
     }
 
-    Ok(vec![])
+    async fn register_software_update_operation(
+        &self,
+        target: &EntityTopicId,
+    ) -> Result<Vec<Message>, ConversionError> {
+        match self.entity_store.get(target) {
+            None => {
+                error!("Fail to register `software-list` operation for unknown device: {target}");
+                Ok(vec![])
+            }
+            Some(device) => {
+                let mut registration = self.register_operation(device, "c8y_SoftwareUpdate")?;
+                registration.push(self.request_software_list(target));
+                Ok(registration)
+            }
+        }
+    }
+
+    async fn publish_software_update_status(
+        &self,
+        target: &EntityTopicId,
+        cmd_id: &str,
+        message: &Message,
+    ) -> Result<Vec<Message>, CumulocityMapperError> {
+        let response = match SoftwareUpdateCommand::try_from(
+            target.clone(),
+            cmd_id.to_string(),
+            message.payload_bytes(),
+        )? {
+            Some(command) => command,
+            None => {
+                // The command has been fully processed
+                return Ok(vec![]);
+            }
+        };
+
+        let topic = self
+            .entity_store
+            .get(target)
+            .and_then(C8yTopic::smartrest_response_topic)
+            .ok_or_else(|| Error::UnknownEntity(target.to_string()))?;
+
+        match response.status() {
+            CommandStatus::Init => {
+                // The command has not been processed yet
+                Ok(vec![])
+            }
+            CommandStatus::Executing => {
+                let smartrest_set_operation_status = SmartRestSetOperationToExecuting::new(
+                    CumulocitySupportedOperations::C8ySoftwareUpdate,
+                )
+                .to_smartrest()?;
+                Ok(vec![Message::new(&topic, smartrest_set_operation_status)])
+            }
+            CommandStatus::Successful => {
+                let smartrest_set_operation = SmartRestSetOperationToSuccessful::new(
+                    CumulocitySupportedOperations::C8ySoftwareUpdate,
+                )
+                .to_smartrest()?;
+
+                Ok(vec![
+                    Message::new(&topic, smartrest_set_operation),
+                    response.clearing_message(&self.mqtt_schema),
+                    self.request_software_list(target),
+                ])
+            }
+            CommandStatus::Failed { reason } => {
+                let smartrest_set_operation = SmartRestSetOperationToFailed::new(
+                    CumulocitySupportedOperations::C8ySoftwareUpdate,
+                    reason,
+                )
+                .to_smartrest()?;
+                Ok(vec![
+                    Message::new(&topic, smartrest_set_operation),
+                    response.clearing_message(&self.mqtt_schema),
+                    self.request_software_list(target),
+                ])
+            }
+        }
+    }
+
+    async fn publish_software_list(
+        &mut self,
+        target: &EntityTopicId,
+        cmd_id: &str,
+        message: &Message,
+    ) -> Result<Vec<Message>, CumulocityMapperError> {
+        let response = match SoftwareListCommand::try_from(
+            target.clone(),
+            cmd_id.to_owned(),
+            message.payload_bytes(),
+        )? {
+            Some(command) => command,
+            None => {
+                // The command has been fully processed
+                return Ok(Vec::new());
+            }
+        };
+
+        match response.status() {
+            CommandStatus::Successful => {
+                if let Some(device) = self.entity_store.get(target) {
+                    let c8y_software_list: C8yUpdateSoftwareListResponse = (&response).into();
+                    self.http_proxy
+                        .send_software_list_http(
+                            c8y_software_list,
+                            device.external_id.as_ref().to_string(),
+                        )
+                        .await?;
+                }
+                Ok(vec![response.clearing_message(&self.mqtt_schema)])
+            }
+
+            CommandStatus::Failed { reason } => {
+                error!("Fail to list installed software packages: {reason}");
+                Ok(vec![response.clearing_message(&self.mqtt_schema)])
+            }
+
+            CommandStatus::Init | CommandStatus::Executing => {
+                // C8Y doesn't expect any message to be published
+                Ok(Vec::new())
+            }
+        }
+    }
 }
 
 /// Lists all the locally available child devices linked to this parent device.
@@ -1371,12 +1416,6 @@ pub fn get_local_child_devices_list(
         .filter(|path| path.is_dir())
         .map(|entry| entry.file_name().unwrap().to_string_lossy().to_string()) // safe unwrap
         .collect::<std::collections::HashSet<String>>())
-}
-
-async fn create_tedge_agent_supported_ops(ops_dir: &Path) -> Result<(), ConversionError> {
-    create_file_with_defaults(ops_dir.join("c8y_SoftwareUpdate"), None)?;
-
-    Ok(())
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -1406,6 +1445,7 @@ pub(crate) mod tests {
     use rand::seq::SliceRandom;
     use rand::SeedableRng;
     use serde_json::json;
+    use serde_json::Value;
     use std::collections::HashMap;
     use std::str::FromStr;
     use tedge_actors::Builder;
@@ -1417,8 +1457,12 @@ pub(crate) mod tests {
     use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::entity_store::EntityType;
     use tedge_api::entity_store::InvalidExternalIdError;
+    use tedge_api::mqtt_topics::ChannelFilter;
+    use tedge_api::mqtt_topics::EntityFilter;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
+    use tedge_api::mqtt_topics::OperationType;
+    use tedge_api::SoftwareUpdateCommand;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
     use tedge_mqtt_ext::Message;
     use tedge_mqtt_ext::MqttMessage;
@@ -2434,15 +2478,56 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
-    async fn ignore_operations_for_child_device() {
+    async fn handle_operations_for_child_device() {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
-        let output = converter
-            .process_smartrest("528,childId,software_a,version_a,url_a,install")
+        // The child has first to declare its capabilities
+        let mqtt_schema = MqttSchema::default();
+        let child = EntityTopicId::default_child_device("childId").unwrap();
+        let child_capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &child);
+        let registrations = converter.try_convert(&child_capability).await.unwrap();
+
+        // the first message should be auto-registration of chidlId
+        let registration = registrations.get(0).unwrap().clone();
+        assert_eq!(
+            registration,
+            Message::new(
+                &Topic::new_unchecked("te/device/childId//"),
+                r#"{"@id":"test-device:device:childId","@type":"child-device","name":"childId"}"#
+            )
+            .with_retain()
+        );
+
+        // the auto-registration message is produced & processed by the mapper
+        converter.try_convert(&registration).await.unwrap();
+
+        // A request to a child is forwarded to that child using its registered mapping: external id <=> topic identifier
+        let device_cmd_channel = mqtt_schema.topics(
+            EntityFilter::Entity(&child),
+            ChannelFilter::Command(OperationType::SoftwareUpdate),
+        );
+        let command = converter
+            .process_smartrest("528,test-device:device:childId,software_a,version_a,url_a,install")
             .await
-            .unwrap();
-        assert_eq!(output, vec![]);
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .clone();
+
+        assert!(device_cmd_channel.accept(&command));
+        assert_eq!(
+            serde_json::from_slice::<Value>(command.payload_bytes()).unwrap(),
+            json!({
+                "status":"init",
+                "updateList":[
+                    { "type":"default",
+                      "modules":[
+                        {"name":"software_a","version":"version_a","url":"url_a","action":"install"}
+                      ]}
+                ]
+            })
+        );
     }
 
     /// Creates `n` child devices named "child-n".
