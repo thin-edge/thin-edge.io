@@ -169,6 +169,23 @@ Thin-edge device supports sending inventory data via tedge topic to root fragmen
     Should Be Equal    ${mo["type"]}    thin-edge.io
     Should Be Equal    ${mo["name"]}    ${DEVICE_SN}
 
+
+Previously cleared property should be sent to cloud when set again #2365
+    [Tags]    \#2365
+    Cumulocity.Set Device    ${DEVICE_SN}
+
+    # set initial value
+    Execute Command    tedge mqtt pub --retain "te/device/main///twin/subtype" '"LinuxDeviceA"'
+    Device Should Have Fragment Values    subtype\=LinuxDeviceA
+
+    # Clear
+    Execute Command    tedge mqtt pub --retain "te/device/main///twin/subtype" ''
+    Managed Object Should Not Have Fragments    subtype
+
+    # Set to same value prior to clearing it
+    Execute Command    tedge mqtt pub --retain "te/device/main///twin/subtype" '"LinuxDeviceA"'
+    Device Should Have Fragment Values    subtype\=LinuxDeviceA
+
 #
 # Services
 #

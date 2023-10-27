@@ -176,7 +176,6 @@ pub struct CumulocityConverter {
     pub auth_proxy: ProxyUrlGenerator,
     pub downloader_sender: LoggingSender<IdDownloadRequest>,
     pub pending_operations: HashMap<CmdId, SmartRestOperationVariant>,
-    pub inventory_model: Value, // Holds a live view of aggregated inventory, derived from various twin data
 }
 
 impl CumulocityConverter {
@@ -221,11 +220,6 @@ impl CumulocityConverter {
         )
         .unwrap();
 
-        let inventory_model = json!({
-            "name": device_id.clone(),
-            "type": device_type.clone(),
-        });
-
         Ok(CumulocityConverter {
             size_threshold,
             config,
@@ -248,7 +242,6 @@ impl CumulocityConverter {
             auth_proxy,
             downloader_sender,
             pending_operations: HashMap::new(),
-            inventory_model,
         })
     }
 
@@ -766,7 +759,10 @@ impl CumulocityConverter {
                 external_id: Some(child_external_id.clone()),
                 r#type: EntityType::ChildDevice,
                 parent: None,
-                other: json!({ "name": child_external_id.as_ref() }),
+                other: json!({ "name": child_external_id.as_ref() })
+                    .as_object()
+                    .unwrap()
+                    .to_owned(),
             };
             let mut reg_messages = self
                 .register_and_convert_entity(&child_device_reg_msg)
@@ -1018,9 +1014,7 @@ impl CumulocityConverter {
             register_payload.insert("@parent".into(), Value::String(parent_id.to_string()));
         }
 
-        if let Value::Object(other_keys) = value.other.clone() {
-            register_payload.extend(other_keys)
-        }
+        register_payload.extend(value.other.clone());
 
         Message::new(
             &Topic::new(&format!("{}/{entity_topic_id}", self.mqtt_schema.root)).unwrap(),
