@@ -72,6 +72,7 @@ use tedge_api::messages::SoftwareListCommand;
 use tedge_api::messages::SoftwareUpdateCommand;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::DownloadInfo;
@@ -98,6 +99,7 @@ const TEDGE_AGENT_LOG_DIR: &str = "tedge/agent";
 const CREATE_EVENT_SMARTREST_CODE: u16 = 400;
 const DEFAULT_EVENT_TYPE: &str = "ThinEdgeEvent";
 const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
+const REQUESTER_NAME: &str = "c8y-mapper";
 
 #[derive(Debug)]
 pub struct MapperConfig {
@@ -177,6 +179,7 @@ pub struct CumulocityConverter {
     pub auth_proxy: ProxyUrlGenerator,
     pub downloader_sender: LoggingSender<IdDownloadRequest>,
     pub pending_operations: HashMap<CmdId, SmartRestOperationVariant>,
+    pub command_id: IdGenerator,
 }
 
 impl CumulocityConverter {
@@ -229,6 +232,8 @@ impl CumulocityConverter {
         )
         .unwrap();
 
+        let command_id = IdGenerator::new(REQUESTER_NAME);
+
         Ok(CumulocityConverter {
             size_threshold,
             config,
@@ -251,6 +256,7 @@ impl CumulocityConverter {
             auth_proxy,
             downloader_sender,
             pending_operations: HashMap::new(),
+            command_id,
         })
     }
 
@@ -954,7 +960,7 @@ impl CumulocityConverter {
             Channel::Command {
                 operation: OperationType::LogUpload,
                 cmd_id,
-            } => {
+            } if self.command_id.is_generator_of(cmd_id) => {
                 self.handle_log_upload_state_change(&source, cmd_id, message)
                     .await?
             }
@@ -965,7 +971,7 @@ impl CumulocityConverter {
             Channel::Command {
                 operation: OperationType::ConfigSnapshot,
                 cmd_id,
-            } => {
+            } if self.command_id.is_generator_of(cmd_id) => {
                 self.handle_config_snapshot_state_change(&source, cmd_id, message)
                     .await?
             }
@@ -976,7 +982,7 @@ impl CumulocityConverter {
             Channel::Command {
                 operation: OperationType::ConfigUpdate,
                 cmd_id,
-            } => {
+            } if self.command_id.is_generator_of(cmd_id) => {
                 self.handle_config_update_state_change(&source, cmd_id, message)
                     .await?
             }

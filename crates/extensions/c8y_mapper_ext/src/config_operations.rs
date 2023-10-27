@@ -10,7 +10,6 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
-use nanoid::nanoid;
 use sha256::digest;
 use std::fs;
 use std::io;
@@ -78,7 +77,7 @@ impl CumulocityConverter {
             .entity_store
             .try_get_by_external_id(&snapshot_request.device.clone().into())?;
 
-        let cmd_id = nanoid!();
+        let cmd_id = self.command_id.new_id();
         let channel = Channel::Command {
             operation: OperationType::ConfigSnapshot,
             cmd_id: cmd_id.clone(),
@@ -232,7 +231,7 @@ impl CumulocityConverter {
             .entity_store
             .try_get_by_external_id(&smartrest.device.clone().into())?;
 
-        let cmd_id = nanoid!();
+        let cmd_id = self.command_id.new_id();
         let remote_url = smartrest.url.as_str();
         let file_cache_key = digest(remote_url);
         let file_cache_path = self.config.data_dir.cache_dir().join(file_cache_key);
@@ -773,10 +772,10 @@ mod tests {
 
         // Simulate config_snapshot command with "executing" state
         mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234"),
+            &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "executing",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/typeA-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/typeA-c8y-mapper-1234",
             "type": "typeA",
         })
                 .to_string(),
@@ -789,10 +788,10 @@ mod tests {
 
         // Simulate config_snapshot command with "failed" state
         mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234"),
+            &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/typeA-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/typeA-c8y-mapper-1234",
             "type": "typeA",
             "reason": "Something went wrong"
         })
@@ -832,10 +831,10 @@ mod tests {
 
         // Simulate config_snapshot command with "executing" state
         mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/child1///cmd/config_snapshot/1234"),
+            &Topic::new_unchecked("te/device/child1///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "executing",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/config_snapshot/typeA-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/config_snapshot/typeA-c8y-mapper-1234",
             "type": "typeA",
         })
                 .to_string(),
@@ -849,10 +848,10 @@ mod tests {
 
         // Simulate config_snapshot command with "failed" state
         mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/child1///cmd/config_snapshot/1234"),
+            &Topic::new_unchecked("te/device/child1///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/child1/config_snapshot/typeA-1234"),
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/child1/config_snapshot/typeA-c8y-mapper-1234"),
             "type": "typeA",
             "reason": "Something went wrong"
         })
@@ -885,14 +884,14 @@ mod tests {
         ttd.dir("file-transfer")
             .dir("test-device")
             .dir("config_snapshot")
-            .file("path:type:A-1234");
+            .file("path:type:A-c8y-mapper-1234");
 
         // Simulate config_snapshot command with "executing" state
         mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234"),
+            &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/path:type:A-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_snapshot/path:type:A-c8y-mapper-1234",
             "type": "path/type/A",
         })
                 .to_string(),
@@ -931,14 +930,14 @@ mod tests {
         ttd.dir("file-transfer")
             .dir("child1")
             .dir("config_snapshot")
-            .file("typeA-1234");
+            .file("typeA-c8y-mapper-1234");
 
         // Simulate config_snapshot command with "executing" state
         mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/child1///cmd/config_snapshot/1234"),
+            &Topic::new_unchecked("te/device/child1///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/config_snapshot/typeA-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/config_snapshot/typeA-c8y-mapper-1234",
             "type": "typeA",
         })
                 .to_string(),
@@ -1112,18 +1111,18 @@ mod tests {
         ttd.dir("file-transfer")
             .dir("test-device")
             .dir("config_update")
-            .file("typeA-1234");
+            .file("typeA-c8y-mapper-1234");
         assert!(ttd
             .path()
-            .join("file-transfer/test-device/config_update/typeA-1234")
+            .join("file-transfer/test-device/config_update/typeA-c8y-mapper-1234")
             .exists());
 
         // Simulate config_snapshot command with "executing" state
         mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/main///cmd/config_update/1234"),
+            &Topic::new_unchecked("te/device/main///cmd/config_update/c8y-mapper-1234"),
             json!({
             "status": "executing",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/typeA-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
             "type": "typeA",
         })
@@ -1137,10 +1136,10 @@ mod tests {
 
         // Simulate config_update command with "failed" state
         mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/main///cmd/config_update/1234"),
+            &Topic::new_unchecked("te/device/main///cmd/config_update/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/typeA-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
             "type": "typeA",
             "reason": "Something went wrong"
@@ -1163,7 +1162,7 @@ mod tests {
         // Assert symlink is removed
         assert!(!ttd
             .path()
-            .join("file-transfer/test-device/config_update/typeA-1234")
+            .join("file-transfer/test-device/config_update/typeA-c8y-mapper-1234")
             .exists());
     }
 
@@ -1187,10 +1186,10 @@ mod tests {
 
         // Simulate config_snapshot command with "executing" state
         mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/child1///cmd/config_update/1234"),
+            &Topic::new_unchecked("te/device/child1///cmd/config_update/c8y-mapper-1234"),
             json!({
             "status": "executing",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/config_update/typeA-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
             "type": "typeA",
         })
@@ -1208,10 +1207,10 @@ mod tests {
 
         // Simulate config_update command with "failed" state
         mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/child1///cmd/config_update/1234"),
+            &Topic::new_unchecked("te/device/child1///cmd/config_update/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/config_update/typeA-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
             "type": "typeA",
             "reason": "Something went wrong"
@@ -1244,18 +1243,18 @@ mod tests {
         ttd.dir("file-transfer")
             .dir("test-device")
             .dir("config_update")
-            .file("path:type:A-1234");
+            .file("path:type:A-c8y-mapper-1234");
         assert!(ttd
             .path()
-            .join("file-transfer/test-device/config_update/path:type:A-1234")
+            .join("file-transfer/test-device/config_update/path:type:A-c8y-mapper-1234")
             .exists());
 
         // Simulate config_update command with "executing" state
         mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/main///cmd/config_update/1234"),
+            &Topic::new_unchecked("te/device/main///cmd/config_update/c8y-mapper-1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/path:type:A-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/config_update/path:type:A-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
             "type": "path/type/A",
         })
@@ -1294,10 +1293,10 @@ mod tests {
 
         // Simulate config_update command with "executing" state
         mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/child1///cmd/config_update/1234"),
+            &Topic::new_unchecked("te/device/child1///cmd/config_update/c8y-mapper-1234"),
             json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/config_update/typeA-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/child1/config_update/typeA-c8y-mapper-1234",
             "remoteUrl": "http://www.my.url",
             "type": "typeA",
         })

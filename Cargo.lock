@@ -769,7 +769,6 @@ dependencies = [
  "clock",
  "json-writer",
  "logged_command",
- "nanoid",
  "plugin_sm",
  "proptest",
  "rand",

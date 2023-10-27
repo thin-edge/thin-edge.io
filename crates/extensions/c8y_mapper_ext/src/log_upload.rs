@@ -8,7 +8,6 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
-use nanoid::nanoid;
 use tedge_api::entity_store::EntityType;
 use tedge_api::messages::CommandStatus;
 use tedge_api::messages::LogMetadata;
@@ -57,7 +56,7 @@ impl CumulocityConverter {
             .entity_store
             .try_get_by_external_id(&device_external_id)?;
 
-        let cmd_id = nanoid!();
+        let cmd_id = self.command_id.new_id();
         let channel = Channel::Command {
             operation: OperationType::LogUpload,
             cmd_id: cmd_id.clone(),

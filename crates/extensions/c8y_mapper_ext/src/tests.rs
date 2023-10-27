@@ -2431,10 +2431,10 @@ async fn handle_log_upload_executing_and_failed_cmd_for_main_device() {
 
     // Simulate log_upload command with "executing" state
     mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///cmd/log_upload/1234"),
+        &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
         json!({
             "status": "executing",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/main/log_upload/typeA-1234"),
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/main/log_upload/typeA-c8y-mapper-1234"),
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -2451,10 +2451,10 @@ async fn handle_log_upload_executing_and_failed_cmd_for_main_device() {
 
     // Simulate log_upload command with "failed" state
     mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///cmd/log_upload/1234"),
+        &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
         json!({
             "status": "failed",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/main/log_upload/typeA-1234"),
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/main/log_upload/typeA-c8y-mapper-1234"),
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -2488,10 +2488,10 @@ async fn handle_log_upload_executing_and_failed_cmd_for_child_device() {
 
     // Simulate log_upload command with "executing" state
     mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1///cmd/log_upload/1234"),
+        &Topic::new_unchecked("te/device/child1///cmd/log_upload/c8y-mapper-1234"),
         json!({
             "status": "executing",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/child1/log_upload/typeA-1234"),
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/child1/log_upload/typeA-c8y-mapper-1234"),
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -2534,10 +2534,10 @@ async fn handle_log_upload_executing_and_failed_cmd_for_child_device() {
 
     // Simulate log_upload command with "failed" state
     mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1///cmd/log_upload/1234"),
+        &Topic::new_unchecked("te/device/child1///cmd/log_upload/c8y-mapper-1234"),
         json!({
             "status": "failed",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/child1/log_upload/typeA-1234"),
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/child1/log_upload/typeA-c8y-mapper-1234"),
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -2579,10 +2579,10 @@ async fn handle_log_upload_successful_cmd_for_main_device() {
 
     // Simulate log_upload command with "executing" state
     mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///cmd/log_upload/1234"),
+        &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
         json!({
             "status": "successful",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/main/log_upload/typeA-1234"),
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/main/log_upload/typeA-c8y-mapper-1234"),
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -2620,10 +2620,10 @@ async fn handle_log_upload_successful_cmd_for_child_device() {
 
     // Simulate log_upload command with "executing" state
     mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1///cmd/log_upload/1234"),
+        &Topic::new_unchecked("te/device/child1///cmd/log_upload/c8y-mapper-1234"),
         json!({
             "status": "successful",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/child1/log_upload/typeA-1234"),
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/child1/log_upload/typeA-c8y-mapper-1234"),
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
