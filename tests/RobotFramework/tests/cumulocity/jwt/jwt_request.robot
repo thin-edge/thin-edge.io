@@ -21,7 +21,7 @@ Custom Setup
     Device Should Exist    ${DEVICE_SN}
     Stop Service    tedge-mapper-c8y
     Stop Service    tedge-agent
-    Stop Service    c8y-configuration-plugin
+    Stop Service    tedge-configuration-plugin
     Stop Service    tedge-log-plugin
     Should Have MQTT Messages    te/device/main/service/mosquitto-c8y-bridge/status/health
     Sleep    1s    wait just in case that the server responds to already sent messages

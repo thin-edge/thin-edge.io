@@ -323,10 +323,7 @@ mod tests {
             &inventory_messages,
             [(
                 "c8y/inventory/managedObjects/update/test-device",
-                json!({
-                    "foo": null
-                })
-                .into(),
+                json!({ "foo": null }).into(),
             )],
         );
     }

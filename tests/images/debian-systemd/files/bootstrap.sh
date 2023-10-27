@@ -489,7 +489,7 @@ install_via_apt() {
             tedge-mapper="$VERSION" \
             tedge-agent="$VERSION" \
             tedge-apt-plugin="$VERSION" \
-            c8y-configuration-plugin="$VERSION" \
+            tedge-configuration-plugin="$VERSION" \
             tedge-log-plugin="$VERSION" \
             c8y-firmware-plugin="$VERSION" \
             c8y-remote-access-plugin="$VERSION" \
@@ -501,7 +501,7 @@ install_via_apt() {
             tedge-mapper \
             tedge-agent \
             tedge-apt-plugin \
-            c8y-configuration-plugin \
+            tedge-configuration-plugin \
             tedge-log-plugin \
             c8y-firmware-plugin \
             c8y-remote-access-plugin \
@@ -543,7 +543,7 @@ install_via_local_files() {
     find_then_install_deb "$INSTALL_SOURCEDIR" "tedge[_-]mapper_*_$ARCH.deb"
     find_then_install_deb "$INSTALL_SOURCEDIR" "tedge[_-]agent_*_$ARCH.deb"
     find_then_install_deb "$INSTALL_SOURCEDIR" "tedge[_-]apt[_-]plugin_*_$ARCH.deb"
-    find_then_install_deb "$INSTALL_SOURCEDIR" "c8y[_-]configuration[_-]plugin_*_$ARCH.deb"
+    find_then_install_deb "$INSTALL_SOURCEDIR" "tedge-configuration-plugin_*_$ARCH.deb"
     find_then_install_deb "$INSTALL_SOURCEDIR" "tedge[_-]log[_-]plugin_*_$ARCH.deb"
     find_then_install_deb "$INSTALL_SOURCEDIR" "c8y-firmware-plugin_*_$ARCH.deb"
     find_then_install_deb "$INSTALL_SOURCEDIR" "tedge[_-]watchdog_*_$ARCH.deb"
@@ -595,8 +595,8 @@ install_tedge() {
 
     # Check if any packages are incompatible, if so remove the previous version first
     # Use new and old packages names, and check each of them one by one
-    packages="tedge tedge-mapper tedge-agent tedge-log-plugin c8y-configuration-plugin c8y-remote-access-plugin"
-    packages="$packages tedge tedge_mapper tedge_agent c8y_log_plugin c8y-log-plugin c8y_configuration_plugin"
+    packages="tedge tedge-mapper tedge-agent tedge-log-plugin tedge-configuration-plugin c8y-remote-access-plugin"
+    packages="$packages tedge tedge_mapper tedge_agent c8y_log_plugin c8y-log-plugin c8y_configuration_plugin c8y-configuration-plugin"
     REMOVE_BEFORE_INSTALL=0
 
     for package in $packages; do

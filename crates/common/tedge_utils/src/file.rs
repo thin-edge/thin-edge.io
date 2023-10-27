@@ -515,7 +515,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
 
-        let example_config = r#"# Add the configurations to be managed by c8y-configuration-plugin
+        let example_config = r#"# Add the configurations to be managed by tedge-configuration-plugin
         files = [
         #    { path = '/etc/tedge/tedge.toml' },
         ]"#;

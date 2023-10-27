@@ -40,7 +40,7 @@ Install then uninstall latest tedge via script (from main branch)
     Execute Command    dpkg -s tedge-mapper
     Execute Command    dpkg -s tedge-agent
     Execute Command    dpkg -s tedge-log-plugin
-    Execute Command    dpkg -s c8y-configuration-plugin
+    Execute Command    dpkg -s tedge-configuration-plugin
     Execute Command    dpkg -s c8y-firmware-plugin
     Execute Command    dpkg -s c8y-remote-access-plugin
 
@@ -75,7 +75,7 @@ Tedge Should Not Be Installed
     Execute Command    dpkg -s tedge-mapper    exp_exit_code=!0
     Execute Command    dpkg -s tedge-agent    exp_exit_code=!0
     Execute Command    dpkg -s c8y-log-plugin    exp_exit_code=!0
-    Execute Command    dpkg -s c8y-configuration-plugin    exp_exit_code=!0
+    Execute Command    dpkg -s tedge-configuration-plugin    exp_exit_code=!0
     Execute Command    dpkg -s c8y-firmware-plugin    exp_exit_code=!0
     Execute Command    dpkg -s c8y-remote-access-plugin    exp_exit_code=!0
 

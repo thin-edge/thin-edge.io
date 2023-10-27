@@ -93,7 +93,7 @@ curl -1sLf \
         tedge-mapper \
         tedge-agent \
         tedge-watchdog \
-        c8y-configuration-plugin \
+        tedge-configuration-plugin \
         tedge-apt-plugin \
         c8y-firmware-plugin \
         c8y-remote-access-plugin \

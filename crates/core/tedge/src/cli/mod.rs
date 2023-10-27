@@ -4,12 +4,12 @@ pub use self::certificate::*;
 use crate::command::BuildCommand;
 use crate::command::BuildContext;
 use crate::command::Command;
-use c8y_configuration_plugin::ConfigPluginOpt;
 use c8y_firmware_plugin::FirmwarePluginOpt;
 use c8y_remote_access_plugin::C8yRemoteAccessPluginOpt;
 pub use connect::*;
 use tedge_agent::AgentOpt;
 use tedge_config::DEFAULT_TEDGE_CONFIG_PATH;
+use tedge_configuration_plugin::ConfigPluginOpt;
 use tedge_log_plugin::LogfilePluginOpt;
 use tedge_mapper::MapperOpt;
 use tedge_watchdog::WatchdogOpt;
@@ -55,7 +55,7 @@ pub enum Component {
 
     TedgeLogPlugin(LogfilePluginOpt),
 
-    C8yConfigurationPlugin(ConfigPluginOpt),
+    TedgeConfigurationPlugin(ConfigPluginOpt),
 
     C8yFirmwarePlugin(FirmwarePluginOpt),
 

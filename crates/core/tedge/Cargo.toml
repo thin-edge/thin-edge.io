@@ -14,7 +14,6 @@ readme = "README.md"
 anstyle = { workspace = true }
 anyhow = { workspace = true }
 base64 = { workspace = true }
-c8y-configuration-plugin = { workspace = true }
 c8y-firmware-plugin = { workspace = true }
 c8y-remote-access-plugin = { workspace = true }
 camino = { workspace = true }
@@ -37,6 +36,7 @@ serde_json = { workspace = true }
 strum_macros = { workspace = true }
 tedge-agent = { workspace = true }
 tedge-apt-plugin = { workspace = true }
+tedge-configuration-plugin = { workspace = true }
 tedge-log-plugin = { workspace = true }
 tedge-mapper = { workspace = true }
 tedge-watchdog = { workspace = true }

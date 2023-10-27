@@ -21,15 +21,15 @@ Force Tags          theme:configuration    theme:childdevices
 ${PARENT_IP}
 ${HTTP_PORT}        8000
 
-${config}           "files = [\n\t { path = '/home/pi/config1', type = 'config1' },\n ]\n"
+${config}           files = [\n\t { path = '/home/pi/config1', type = 'config1' },\n ]\n
 ${PARENT_SN}
 ${CHILD_SN}
 
-${topic_snap}       /commands/res/config_snapshot"
-${topic_upd}        /commands/res/config_update"
-${payl_notify}      '{"status": null,    "path": "", "type":"c8y-configuration-plugin", "reason": null}'
-${payl_exec}        '{"status": "executing", "path": "/home/pi/config1", "type": "config1", "reason": null}'
-${payl_succ}        '{"status": "successful", "path": "/home/pi/config1", "type": "config1", "reason": null}'
+${topic_snap}       /commands/res/config_snapshot
+${topic_upd}        /commands/res/config_update
+${payl_notify}      {"status": null,    "path": "", "type":"c8y-configuration-plugin", "reason": null}
+${payl_exec}        {"status": "executing", "path": "/home/pi/config1", "type": "config1", "reason": null}
+${payl_succ}        {"status": "successful", "path": "/home/pi/config1", "type": "config1", "reason": null}
 
 ${CHILD_CONFIG}=    SEPARATOR=\n
 ...                 files = [
@@ -101,8 +101,6 @@ Reconnect c8y
 
 Restart Configuration plugin
     Restart Service    c8y-configuration-plugin.service
-    # Execute Command    sudo systemctl stop c8y-configuration-plugin.service
-    # Execute Command    sudo systemctl start c8y-configuration-plugin.service
 
 Child device delete configuration files
     Set Device Context    ${CHILD_SN}
@@ -117,7 +115,7 @@ Validate child Name
 Startup child device
     Sleep    5s    reason=The registration of child devices is flakey
     Set Device Context    ${CHILD_SN}
-    Execute Command    printf ${config} > c8y-configuration-plugin
+    Execute Command    printf "${config}" > c8y-configuration-plugin
 
     Execute Command
     ...    curl -X PUT http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/c8y-configuration-plugin --data-binary "${CHILD_CONFIG}"
@@ -125,7 +123,7 @@ Startup child device
     Sleep    5s    reason=The registration of child devices is flakey
 
     Execute Command    sudo apt-get install mosquitto-clients -y
-    Execute Command    mosquitto_pub -h ${PARENT_IP} -t "tedge/${CHILD_SN}${topic_snap} -m ${payl_notify} -q 1
+    Execute Command    mosquitto_pub -h ${PARENT_IP} -t "tedge/${CHILD_SN}${topic_snap}" -m '${payl_notify}' -q 1
 
 Request snapshot from child device
     Cumulocity.Set Device    ${CHILD_SN}
@@ -143,14 +141,14 @@ Request snapshot from child device
 
 Child device response on snapshot request
     Set Device Context    ${CHILD_SN}
-    Execute Command    mosquitto_pub -h ${PARENT_IP} -t "tedge/${CHILD_SN}${topic_snap} -m ${payl_exec}
+    Execute Command    mosquitto_pub -h ${PARENT_IP} -t "tedge/${CHILD_SN}${topic_snap}" -m '${payl_exec}'
 
     Transfer To Device    ${CURDIR}/config.txt.tar.gz    /home/pi/config1
     Execute Command
     ...    curl -f -X PUT --data-binary @/home/pi/config1 http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/config_snapshot/config1
 
     Sleep    5s
-    Execute Command    mosquitto_pub -h ${PARENT_IP} -t "tedge/${CHILD_SN}${topic_snap} -m ${payl_succ}
+    Execute Command    mosquitto_pub -h ${PARENT_IP} -t "tedge/${CHILD_SN}${topic_snap}" -m '${payl_succ}'
 
     Sleep    2s
 
@@ -176,13 +174,13 @@ Send configuration to device
 
 Child device response on update request
     Set Device Context    ${CHILD_SN}
-    Execute Command    mosquitto_pub -h ${PARENT_IP} -t "tedge/${CHILD_SN}${topic_upd} -m ${payl_exec}
+    Execute Command    mosquitto_pub -h ${PARENT_IP} -t "tedge/${CHILD_SN}${topic_upd}" -m '${payl_exec}'
 
     Execute Command
     ...    curl -f http://${PARENT_IP}:${HTTP_PORT}/tedge/file-transfer/${CHILD_SN}/config_update/config1 --output config1
 
     # Sleep    5s    #Enable if tests starts to fail
-    Execute Command    mosquitto_pub -h ${PARENT_IP} -t "tedge/${CHILD_SN}${topic_upd} -m ${payl_succ}
+    Execute Command    mosquitto_pub -h ${PARENT_IP} -t "tedge/${CHILD_SN}${topic_upd}" -m '${payl_succ}'
 
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}
 
@@ -221,6 +219,13 @@ Custom Setup
     # Parent
     ${parent_sn}=    Setup    skip_bootstrap=False
     Set Suite Variable    $PARENT_SN    ${parent_sn}
+    # Disable new generic handling
+    Execute Command    sudo tedge config set c8y.enable.config_snapshot false
+    Execute Command    sudo tedge config set c8y.enable.config_update false
+
+    # Use deprecated c8y-configuration-plugin over tedge-configuration-plugin
+    Execute Command    cmd=sudo apt-get remove -y tedge-configuration-plugin
+    Execute Command    find . -type f -name "c8y-configuration-plugin_*.deb" -exec dpkg -i {} \\;
 
     ${parent_ip}=    Get IP Address
     Set Suite Variable    $PARENT_IP    ${parent_ip}

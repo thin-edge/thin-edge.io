@@ -21,8 +21,8 @@ thin-edge components support a custom config-dir location via flags
     Should Not Contain Default Path    ${CONFIG_DIR}    tedge-log-plugin --config-dir ${CONFIG_DIR}
     ThinEdgeIO.File Should Exist       ${CONFIG_DIR}/plugins/tedge-log-plugin.toml
 
-    Should Not Contain Default Path    ${CONFIG_DIR}    c8y-configuration-plugin --config-dir ${CONFIG_DIR}
-    ThinEdgeIO.File Should Exist       ${CONFIG_DIR}/c8y/c8y-configuration-plugin.toml
+    Should Not Contain Default Path    ${CONFIG_DIR}    tedge-configuration-plugin --config-dir ${CONFIG_DIR}
+    ThinEdgeIO.File Should Exist       ${CONFIG_DIR}/plugins/tedge-configuration-plugin.toml
 
 *** Keywords ***
 
@@ -31,7 +31,7 @@ Custom Suite Setup
     Execute Command    test -f ./bootstrap.sh && ./bootstrap.sh --no-bootstrap --no-connect || true
     Stop Service    tedge-agent
     Stop Service    tedge-mapper-c8y
-    Stop Service    c8y-configuration-plugin
+    Stop Service    tedge-configuration-plugin
     Stop Service    tedge-log-plugin
     Stop Service    c8y-firmware-plugin
 

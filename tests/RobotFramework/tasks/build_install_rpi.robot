@@ -99,8 +99,8 @@ Install tedge apt plugin
 Install Tedge logfile request plugin
    ${rc}=    Execute Command    sudo dpkg -i ./tedge-log-plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
-Install C8y configuration plugin
-    ${rc}=    Execute Command    sudo dpkg -i ./c8y-configuration-plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
+Install Tedge configuration plugin
+    ${rc}=    Execute Command    sudo dpkg -i ./tedge-configuration-plugin_${Version}_arm*.deb    return_stdout=False    return_rc=True
     Should Be Equal    ${rc}    ${0}
 Install Watchdog
     ${rc}=    Execute Command    sudo dpkg -i ./tedge-watchdog_${Version}_arm*.deb    return_stdout=False    return_rc=True
