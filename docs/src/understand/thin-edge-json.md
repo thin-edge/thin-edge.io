@@ -25,7 +25,7 @@ Other processes running on the thin-edge device can subscribe to this topic to p
 
 If the messages published to any of the telemetry topics are not well-formed Thin Edge JSON,
 then these messages won’t be processed by `thin-edge.io`, not even partially,
-and an appropriate error message on why the validation failed will be published to a dedicated `tedge/errors` topic.
+and an appropriate error message on why the validation failed will be published to a dedicated `te/errors` topic.
 The messages published to this topic will be highly verbose error messages and can be used for any debugging during development.
 You should not rely on the structure of these error messages to automate any actions as they are purely textual data
 and bound to change from time-to-time.
@@ -38,7 +38,7 @@ Here is the complete list of topics reserved by `thin-edge.io` for its internal 
 | `te/<identifier>/m/<type>`                  | Measurements                                                           |
 | `te/<identifier>/e/<type>`                  | Events                                                                 |
 | `te/<identifier>/a/<type>`                  | Alarms                                                                 |
-| `tedge/errors`                              | Error messages emitted by `thin-edge.io` while processing measurements |
+| `te/errors`                                 | Error messages emitted by `thin-edge.io` while processing measurements |
 
 ### Sending Telemetry Data to the cloud
 

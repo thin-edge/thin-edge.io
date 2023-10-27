@@ -103,12 +103,12 @@ and the measurement is recorded in `Measurements` of the `child1` device.
 ## Error detection
 
 If the data published to the measurements topic are not valid Thin Edge JSON measurements, those won't be
-sent to the cloud but instead you'll get a feedback on the `tedge/errors` topic, if you subscribe to it.
+sent to the cloud but instead you'll get a feedback on the `te/errors` topic, if you subscribe to it.
 The error messages published to this topic will be highly verbose and may change in the future.
 So, use it only for debugging purposes during the development phase and it should **NOT** be used for any automation.
 
 You can subscribe to the error topic as follows:
 
 ```sh te2mqtt
-tedge mqtt sub tedge/errors
+tedge mqtt sub te/errors
 ```

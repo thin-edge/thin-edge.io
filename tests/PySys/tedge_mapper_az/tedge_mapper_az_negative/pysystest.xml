@@ -2,7 +2,7 @@
 <pysystest type="auto">
 	<description>
 		<title>
-			Validate the Azure Mapper that publishes an error message on tedge/errors
+			Validate the Azure Mapper that publishes an error message on te/errors
 			when it receives an invalid JSON message on tedge/measurements.
 		</title>
 		<purpose>
