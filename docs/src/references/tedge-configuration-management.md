@@ -1,8 +1,7 @@
 ---
-title: New Configuration Management
+title: Configuration Management
 tags: [Reference, Configuration]
-sidebar_position: 7
-draft: true
+sidebar_position: 8
 ---
 
 # Configuration Management Plugin
@@ -97,7 +96,7 @@ with the set of `type`s listed in that configuration file
 (implicitly adding the `tedge-configuration-plugin` type also to that set).
 The message can be observed over the MQTT bus of the thin-edge device.
 
-Given that `root.topic` and `device.topic` are set to `te` and `device/main//` for the main device,
+Given that `mqtt.topic_root` and `mqtt.device_topic_id` are set to `te` and `device/main//` for the main device,
 the message to declare the supported configuration types is as follows.
 
 ```sh te2mqtt
@@ -126,8 +125,8 @@ by the configuration of thin-edge:
 
 * `tedge config get mqtt.bind.address`: the address of the local MQTT bus.
 * `tedge config get mqtt.bind.port`: the TCP port of the local MQTT bus.
-* `tedge config get root.topic`: the root of the [MQTT topic scheme](mqtt-api.md) to publish and subscribe.
-* `tedge config get device.topic`: the identifier of the [MQTT topic scheme](mqtt-api.md) to publish and subscribe.
+* `tedge config get mqtt.topic_root`: the root of the [MQTT topic scheme](mqtt-api.md) to publish and subscribe.
+* `tedge config get mqtt.device_topic_id`: the identifier of the [MQTT topic scheme](mqtt-api.md) to publish and subscribe.
 
 ## Handling config snapshot commands
 
@@ -273,36 +272,28 @@ tedge-configuration-plugin --help
 ```
 
 ```run command="tedge-configuration-plugin --help" lang="text" title="Output"
-Thin-edge device configuration manager
+Thin-edge device configuration management
 
-USAGE:
-    tedge-configuration-plugin [OPTIONS]
+Usage: tedge-configuration-plugin [OPTIONS]
 
-OPTIONS:
-        --config-dir <CONFIG_DIR>
-            [default: /etc/tedge]
+Options:
+      --debug                                        Turn-on the debug log level
+      --config-dir <CONFIG_DIR>                      [default: /etc/tedge]
+      --mqtt-topic-root <MQTT_TOPIC_ROOT>            
+      --mqtt-device-topic-id <MQTT_DEVICE_TOPIC_ID>  
+  -h, --help                                         Print help (see more with '--help')
+  -V, --version                                      Print version
 
-        --debug
-            Turn-on the debug log level.
-
-            If off only reports ERROR, WARN, and INFO If on also reports DEBUG
-
-    -h, --help
-            Print help information
-
-    -V, --version
-            Print version information
-
-On start, `tedge-configuration-plugin` notifies of its managed configuration files and
-sends this list via MQTT.
+On start, `tedge-configuration-plugin` notifies of its 
+managed configuration files and sends this list via MQTT.
 `tedge-configuration-plugin` subscribes to the topics for the commands `config_snapshot`
 and `config_update`.
 
 The thin-edge `CONFIG_DIR` is used:
-  * to find the `tedge.toml` where the following configs are defined:
-    ** `mqtt.bind.address` and `mqtt.bind.port` to connect to the tedge MQTT broker
-    ** `root.topic` and `device.topic`: for the MQTT topics to publish to and subscribe from
-  * to find/store the `tedge-configuration-plugin.toml`: the plugin configuration file
+* to find the `tedge.toml` where the following configs are defined:
+  ** `mqtt.bind.address` and `mqtt.bind.port` to connect to the tedge MQTT broker
+  ** `mqtt.topic_root` and `mqtt.device_topic_id`: for the MQTT topics to publish to and subscribe from
+* to find/store the `tedge-configuration-plugin.toml`: the plugin configuration file
 ```
 
 ## Logging
