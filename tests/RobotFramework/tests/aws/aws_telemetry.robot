@@ -55,11 +55,13 @@ Publish child device alarm to te alarm topic with alarm type
     Execute Command    tedge mqtt pub te/device/child///a/alarm-type '{"severity":"major","text": "someone logged-in"}'
     Should Have MQTT Messages    aws/td/device:child/a/alarm-type   message_contains="major"    date_from=${timestamp}   minimum=1    maximum=1
 
+Publish health status message for main device service
+    Execute Command    tedge mqtt pub te/device/main/service/test-service/status/health '{"status":"up"}'
+    Should Have MQTT Messages    aws/td/device:main:service:test-service/status/health    message_contains="status":"up"
 
 *** Keywords ***
 Custom Setup
     Setup
-    Execute Command    sudo tedge config set aws.topics "te/+/+/+/+/m/+,te/+/+/+/+/e/+,te/+/+/+/+/a/+"
     Execute Command    sudo systemctl start tedge-mapper-aws.service
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-aws
 

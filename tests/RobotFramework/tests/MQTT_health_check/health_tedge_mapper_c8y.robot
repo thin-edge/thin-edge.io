@@ -46,3 +46,20 @@ Stop watchdog service
 
 Remove entry from service file
     Execute Command    sudo sed -i '10d' /lib/systemd/system/tedge-mapper-c8y.service
+
+Watchdog does not kill mapper if it responds
+    # Set the watchdog interval low so we don't have to wait long
+    Execute Command    sudo systemctl stop tedge-mapper-c8y.service
+    Execute Command    sudo systemctl stop tedge-watchdog.service
+    Execute Command    cmd=sudo sed -i '10iWatchdogSec=5' /lib/systemd/system/tedge-mapper-c8y.service
+    Execute Command    sudo systemctl daemon-reload
+    Execute Command    sudo systemctl start tedge-mapper-c8y.service
+    Execute Command    sudo systemctl start tedge-watchdog.service
+
+    ${pid_before_healthcheck}=    Execute Command    pgrep -f '^/usr/bin/tedge-mapper c8y'    strip=${True}
+    # The watchdog should send a health check command while we wait
+    Sleep    10s
+    ${pid_after_healthcheck}=     Execute Command    pgrep -f '^/usr/bin/tedge-mapper c8y'    strip=${True}
+
+    Should Have MQTT Messages     topic=te/device/main/service/tedge-mapper-c8y/cmd/health/check    minimum=1
+    Should Be Equal               ${pid_before_healthcheck}    ${pid_after_healthcheck}

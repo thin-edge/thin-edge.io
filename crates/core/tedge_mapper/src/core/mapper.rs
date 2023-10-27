@@ -23,11 +23,9 @@ pub async fn start_basic_actors(
     //Instantiate health monitor actor
     let service = Service {
         service_topic_id: ServiceTopicId::new(
-            format!("device/main/service/{mapper_name}")
-                .parse::<EntityTopicId>()
-                .unwrap(),
+            EntityTopicId::default_main_service(mapper_name).unwrap(),
         ),
-        device_topic_id: DeviceTopicId::new("device/main//".parse::<EntityTopicId>().unwrap()),
+        device_topic_id: DeviceTopicId::new(EntityTopicId::default_main_device()),
     };
     let mqtt_schema = MqttSchema::with_root(config.mqtt.topic_root.clone());
     let health_actor = HealthMonitorBuilder::from_service_topic_id(

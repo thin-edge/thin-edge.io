@@ -2,6 +2,8 @@ use crate::cli::connect::BridgeConfig;
 use camino::Utf8PathBuf;
 use tedge_config::ConnectUrl;
 
+const MOSQUITTO_BRIDGE_TOPIC: &str = "te/device/main/service/mosquitto-aws-bridge/status/health";
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfigAwsParams {
     pub connect_url: ConnectUrl,
@@ -62,7 +64,7 @@ impl From<BridgeConfigAwsParams> for BridgeConfig {
             local_clean_session: false,
             notifications: true,
             notifications_local_only: true,
-            notification_topic: "tedge/health/mosquitto-aws-bridge".into(),
+            notification_topic: MOSQUITTO_BRIDGE_TOPIC.into(),
             bridge_attempt_unsubscribe: false,
             topics: vec![
                 pub_msg_topic,
@@ -117,7 +119,7 @@ fn test_bridge_config_from_aws_params() -> anyhow::Result<()> {
         local_clean_session: false,
         notifications: true,
         notifications_local_only: true,
-        notification_topic: "tedge/health/mosquitto-aws-bridge".into(),
+        notification_topic: MOSQUITTO_BRIDGE_TOPIC.into(),
         bridge_attempt_unsubscribe: false,
     };
 

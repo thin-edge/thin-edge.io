@@ -2,6 +2,8 @@ use crate::cli::connect::BridgeConfig;
 use camino::Utf8PathBuf;
 use tedge_config::ConnectUrl;
 
+const MOSQUITTO_BRIDGE_TOPIC: &str = "te/device/main/service/mosquitto-az-bridge/status/health";
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct BridgeConfigAzureParams {
     pub connect_url: ConnectUrl,
@@ -54,7 +56,7 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             local_clean_session: false,
             notifications: true,
             notifications_local_only: true,
-            notification_topic: "tedge/health/mosquitto-az-bridge".into(),
+            notification_topic: MOSQUITTO_BRIDGE_TOPIC.into(),
             bridge_attempt_unsubscribe: false,
             topics: vec![
                 // See Azure IoT Hub documentation for detailed explanation on the topics
@@ -117,7 +119,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         local_clean_session: false,
         notifications: true,
         notifications_local_only: true,
-        notification_topic: "tedge/health/mosquitto-az-bridge".into(),
+        notification_topic: MOSQUITTO_BRIDGE_TOPIC.into(),
         bridge_attempt_unsubscribe: false,
     };
 
