@@ -34,7 +34,7 @@ files = [
 * `type` is a unique alias for each file entry which will be used to represent that file in Cumulocity UI.
 * `user`, `group` and `mode` are UNIX file permission settings to be used to create a configuration file. If not provided, the files will be created with `root` user. If the file exists already, its ownership will be retained.
 
-For more details on this configuration file format, refer to the [reference guide](../../references/c8y-configuration-management.md#configuration).
+For more details on this configuration file format, refer to the [reference guide](../../references/agent/tedge-configuration-management.md#configuration).
 
 :::note
 You can also configure the `c8y-configuration-plugin.toml` from the cloud later.
@@ -78,11 +78,4 @@ You can choose the file that you uploaded from the **AVAILABLE SUPPORTED CONFIGU
 After the operation created gets marked SUCCESSFUL, reload the page.
 Then you can find new supported configuration types as you defined.
 
-:::note
-All configuration updates are notified over `tedge/configuration_change/<config-type>` MQTT topic, giving the opportunity to software components installed on the device or a child device to react to these updates.
-For more details, refer to the [Notifications section of the specification](../../references/c8y-configuration-management.md#notifications).
-:::
-
-To get to know more about the `c8y-configuration-plugin`, refer to [Specifications of Device Configuration Management using Cumulocity](../../references/c8y-configuration-management.md).
-
-
+To get to know more about the `tedge-configuration-plugin`, refer to [Specifications of Device Configuration Management using Cumulocity](../../references/agent/tedge-configuration-management.md).
