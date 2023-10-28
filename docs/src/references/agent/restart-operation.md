@@ -8,7 +8,7 @@ sidebar_position: 4
 
 Thin-edge defines a `restart` operation to restart a device, being the main device or a child device.
 
-- A restart is typically triggered by a [mapper](../mappers) on behalf of a cloud operator.
+- A restart is typically triggered by a [mapper](../mappers/index.md) on behalf of a cloud operator.
 - A restart can also be triggered from another operation (as a software update)
   or service (detecting for instance some anomalies requesting a reboot).
 - `tedge-agent` is the reference implementation of the `restart` operation.
@@ -16,12 +16,12 @@ Thin-edge defines a `restart` operation to restart a device, being the main devi
 
 ## MQTT API
 
-The `restart` operation API follows the [generic thin-edge rules for operations](device-management-api.md):
+The `restart` operation API follows the [generic thin-edge rules for operations](./device-management-api.md):
 
 - The `te/<device-topic-id>/cmd/restart` topic is used to tell the device `<device-topic-id>` can be restarted.
 - Each `restart` request is given a `<command-id>` and a dedicated topic  `te/<device-topic-id>/cmd/restart/<command-id>`,
   where all the subsequent states of the restart command are published during its execution.
-- The workflow is [generic with `"init"`, `"executing"`, `"successful"` and `"failed"` statuses](references/agent/device-management-api.md/#operation-workflow).
+- The workflow is [generic with `"init"`, `"executing"`, `"successful"` and `"failed"` statuses](./device-management-api.md#operation-workflow).
 
 ### restart registration
 

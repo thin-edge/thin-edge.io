@@ -21,7 +21,7 @@ The following table captures the paths that can be changed, with their default l
 
 The following daemons also need to be re-started after `data.path` is updated:
 
-* `c8y-configuration-plugin`
+* `tedge-configuration-plugin`
 * `c8y-firmware-plugin`
 
 ## Example: Set a custom temporary directory path

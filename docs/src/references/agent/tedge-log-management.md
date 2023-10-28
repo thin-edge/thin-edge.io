@@ -28,7 +28,7 @@ Thin-edge provides an operation plugin to fetch log files from the device.
 As part of this plugin installation:
 * On systemd-enabled devices, the service definition file for this `tedge-log-plugin` daemon is also installed.
 
-Once installed, the `tedge-log-plugin` runs as a daemon on the device, listening to log update commands on the [`<root>/<identifier>/cmd/log_upload/+` MQTT topic](mqtt-api.md).
+Once installed, the `tedge-log-plugin` runs as a daemon on the device, listening to log update commands on the [`<root>/<identifier>/cmd/log_upload/+` MQTT topic](../mqtt-api.md).
 
 ## Configuration
 
@@ -68,7 +68,7 @@ then a JSON message with an empty array for the `types` field is sent, indicatin
 
 ## Handling log upload commands
 
-The plugin subscribes to log upload commands on the [`<root>/<identifier>/cmd/log_upload/+` MQTT topic](mqtt-api.md).
+The plugin subscribes to log upload commands on the [`<root>/<identifier>/cmd/log_upload/+` MQTT topic](../mqtt-api.md).
 For example, it subscribes to the following topic for the main device.
 
 ```sh te2mqtt

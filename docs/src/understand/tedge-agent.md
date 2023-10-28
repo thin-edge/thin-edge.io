@@ -20,7 +20,7 @@ In the current version of thin-edge, the agent features are not implemented by a
 but by a set of executables:
 
 - `tedge-agent`
-- `c8y-configuration-plugin`
+- `tedge-configuration-plugin`
 - `c8y-firmware-plugin`
 - `tedge-log-plugin`
 - `c8y-remote-access-plugin`

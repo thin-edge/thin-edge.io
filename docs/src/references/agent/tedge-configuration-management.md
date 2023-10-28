@@ -10,7 +10,7 @@ Thin-edge provides an operation plugin to manage device configuration files.
 
 * This management is bi-directional:
   * A device can act as a reference,
-    with all the managed files being uploaded to the [tedge file transfer repository](tedge-file-transfer-service.md)
+    with all the managed files being uploaded to the [tedge file transfer repository](../tedge-file-transfer-service.md)
     and stored there as a configuration snapshot.
   * A configuration update can be pushed from the tedge file transfer repository to any devices of the same type,
     i.e. supporting the same kind of configuration files.
@@ -60,12 +60,12 @@ As part of this plugin installation:
 * On systemd-enabled devices, the service definition file for this plugin is also installed.
 
 Once installed, the `tedge-configuration-plugin` runs as a daemon on the device,
-listening to configuration snapshot commands on the `<root>/<identifier>/cmd/config_snapshot/+` [MQTT topic](mqtt-api.md#command-examples) 
-and to configuration update commands on the `<root>/<identifier>/cmd/config_update/+` [MQTT topic](mqtt-api.md#command-examples).
+listening to configuration snapshot commands on the `<root>/<identifier>/cmd/config_snapshot/+` [MQTT topic](../mqtt-api.md#command-examples) 
+and to configuration update commands on the `<root>/<identifier>/cmd/config_update/+` [MQTT topic](../mqtt-api.md#command-examples).
 
 ## Configuration
 
-The `c8y-configuration-plugin` configuration is stored by default under `/etc/tedge/plugins/tedge-configuration-plugin.toml`
+The `tedge-configuration-plugin` configuration is stored by default under `/etc/tedge/plugins/tedge-configuration-plugin.toml`
 
 This [TOML](https://toml.io/en/) file defines the list of files to be managed by the plugin.
 Each configuration file is defined by a record with:
@@ -125,8 +125,8 @@ by the configuration of thin-edge:
 
 * `tedge config get mqtt.bind.address`: the address of the local MQTT bus.
 * `tedge config get mqtt.bind.port`: the TCP port of the local MQTT bus.
-* `tedge config get mqtt.topic_root`: the root of the [MQTT topic scheme](mqtt-api.md) to publish and subscribe.
-* `tedge config get mqtt.device_topic_id`: the identifier of the [MQTT topic scheme](mqtt-api.md) to publish and subscribe.
+* `tedge config get mqtt.topic_root`: the root of the [MQTT topic scheme](../mqtt-api.md) to publish and subscribe.
+* `tedge config get mqtt.device_topic_id`: the identifier of the [MQTT topic scheme](../mqtt-api.md) to publish and subscribe.
 
 ## Handling config snapshot commands
 

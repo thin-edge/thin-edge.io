@@ -388,7 +388,7 @@ This functionality is directly installed with the initial script. However, it is
 
 As an example you can copy the following content to add some new configuration files which can be retrieved or applied to the device:
 
-```toml title="file: /etc/tedge/c8y/c8y-configuration-plugin.toml"
+```toml title="file: /etc/tedge/plugins/tedge-configuration-plugin.toml"
 files = [
     { path = '/etc/tedge/tedge.toml' },
     { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge.conf' },
@@ -405,11 +405,11 @@ Where:
 If the configuration plugin service has not ready started, then you can configure the service to start automatically on boot, and start it now using (if you are using `systemd` on your device):
 
 ```sh
-sudo systemctl enable c8y-configuration-plugin
-sudo systemctl start c8y-configuration-plugin
+sudo systemctl enable tedge-configuration-plugin
+sudo systemctl start tedge-configuration-plugin
 ```
 
-Then navigate to  Cumulocity IoT Device Management and the desired device. Open its Configuration tab. You can find c8y-configuration-plugin and more are listed as supported configuration types, as declared in the plugin configuration file. Here you can save the configuration files into the repository or download them.
+Then navigate to  Cumulocity IoT Device Management and the desired device. Open its Configuration tab. You can find tedge-configuration-plugin and more are listed as supported configuration types, as declared in the plugin configuration file. Here you can save the configuration files into the repository or download them.
 
 
 ### Change configuration files via Cumulocity IoT.
@@ -450,7 +450,7 @@ To change the collectd metrics of the device, which are displayed in Cumulocity 
 
 1. Add a new entry to the `files` section of the plugin's configuration file
 
-    ```toml title="file: /etc/tedge/c8y/c8y-configuration-plugin.toml"
+    ```toml title="file: /etc/tedge/plugins/tedge-configuration-plugin.toml"
     files = [
       # ...
       {path = '/etc/collectd/collectd.conf', type = 'collectd.conf'},
@@ -510,7 +510,7 @@ To see the content of the log files in Cumulocity IoT, take the following steps:
 
 ![Request Log file](./images/RequestLogfile.png)
 
-If `tedge-log-plugin.toml` is added to the `c8y-configuration-plugin.toml` it is possible to do the administration from there.
+If `tedge-log-plugin.toml` is added to the `tedge-configuration-plugin.toml` it is possible to do the administration from there.
 
 <!-- TODO: Check if restarting the tedge-log-plugin is required each time the log file is edited -->
 
