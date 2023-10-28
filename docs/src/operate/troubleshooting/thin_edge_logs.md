@@ -142,7 +142,7 @@ tedge-mapper = "trace"
 tedge-agent = "info"
 tedge-watchdog = "debug"
 tedge-log-plugin = "warn"
-c8y-configuration-plugin = "error"
+tedge-configuration-plugin = "error"
 ```
 
 :::note

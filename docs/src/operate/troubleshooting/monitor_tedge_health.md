@@ -63,7 +63,7 @@ The following endpoints are currently supported:
 * `tedge/health/tedge-mapper-aws`
 * `tedge/health/tedge-mapper-collectd`
 * `tedge/health/tedge-log-plugin`
-* `tedge/health/c8y-configuration-plugin`
+* `tedge/health/tedge-configuration-plugin`
 
 All future tedge services will also follow the same topic naming scheme convention.
 

@@ -11,16 +11,16 @@ With `thin-edge.io`, you can manage config files on a device by using the [Cumul
 If you are new to the Cumulocity **Configuration Management** feature,
 we recommend you to read [the Cumulocity user guide](https://cumulocity.com/guides/users-guide/device-management/#managing-configurations) along with this how-to guide.
 
-The configuration management functionality is provided by the `c8y-configuration-plugin` package which is installed by default. If it is not installed then please install the components again following the [install guide](../../install/index.md).
+The configuration management functionality is provided by the `tedge-configuration-plugin` package which is installed by default. If it is not installed then please install the components again following the [install guide](../../install/index.md).
 
 ## Getting started
 
 Before starting anything, make sure [your device is connected to Cumulocity](../../start/connect-c8y.md).
 
 **Step 1**
-Open the file `/etc/tedge/c8y/c8y-configuration-plugin.toml` and add entries for the configuration files that you'd like to manage from Cumulocity cloud in the following format:
+Open the file `/etc/tedge/plugins/tedge-configuration-plugin.toml` and add entries for the configuration files that you'd like to manage from Cumulocity cloud in the following format:
 
-```toml title="file: /etc/tedge/c8y/c8y-configuration-plugin.toml"
+```toml title="file: /etc/tedge/plugins/tedge-configuration-plugin.toml"
 files = [
   { path = '/etc/tedge/tedge.toml', type = 'tedge.toml'},
   { path = '/etc/tedge/mosquitto-conf/c8y-bridge.conf', type = 'c8y-bridge.conf' },
@@ -37,36 +37,36 @@ files = [
 For more details on this configuration file format, refer to the [reference guide](../../references/agent/tedge-configuration-management.md#configuration).
 
 :::note
-You can also configure the `c8y-configuration-plugin.toml` from the cloud later.
+You can also configure the `tedge-configuration-plugin.toml` from the cloud later.
 :::
 
 **Step 2**
 Start the configuration plugin process and enable it on boot by `systemctl` (recommended).
 
 ```sh
-sudo systemctl enable c8y-configuration-plugin
-sudo systemctl start c8y-configuration-plugin
+sudo systemctl enable tedge-configuration-plugin
+sudo systemctl start tedge-configuration-plugin
 ```
 
 Alternatively, you can run the process directly.
 
 ```sh
-sudo c8y-configuration-plugin
+sudo tedge-configuration-plugin
 ```
 
 **Step 3**
 Navigate to your Cumulocity Device Management and the desired device. Open its **Configuration** tab.
-You can find `c8y-configuration-plugin` and more are listed as supported configuration types, as declared in the plugin configuration file in step 1.
+You can find `tedge-configuration-plugin` and more are listed as supported configuration types, as declared in the plugin configuration file in step 1.
 
 ![Cumulocity Configuration Management Upload](../../images/c8y-config-plugin-upload.png)
 
-This is the configuration file of `c8y-configuration-plugin`, where you can add file entries that you want to manage with Cumulocity.
+This is the configuration file of `tedge-configuration-plugin`, where you can add file entries that you want to manage with Cumulocity.
 
-## Update c8y-configuration-plugin from Cumulocity
+## Update tedge-configuration-plugin from Cumulocity
 
 To update any configuration file, create a local copy of that config file and then upload that file to the [Cumulocity configuration repository](https://cumulocity.com/guides/users-guide/device-management/#to-add-a-configuration-snapshot) with the appropriate configuration type.
 
-The `c8y-configuration-plugin.toml` file can also be updated from the cloud in a similar manner to add/remove further configuration file entries. The updated TOML file has to be uploaded with the configuration type:  **c8y-configuration-plugin**.
+The `tedge-configuration-plugin.toml` file can also be updated from the cloud in a similar manner to add/remove further configuration file entries. The updated TOML file has to be uploaded with the configuration type:  **tedge-configuration-plugin**.
 
 Then, go back to the **Configuration** tab of your desired device in Cumulocity.
 

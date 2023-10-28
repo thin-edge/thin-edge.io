@@ -65,7 +65,7 @@ and to configuration update commands on the `<root>/<identifier>/cmd/config_upda
 
 ## Configuration
 
-The `c8y-configuration-plugin` configuration is stored by default under `/etc/tedge/plugins/tedge-configuration-plugin.toml`
+The `tedge-configuration-plugin` configuration is stored by default under `/etc/tedge/plugins/tedge-configuration-plugin.toml`
 
 This [TOML](https://toml.io/en/) file defines the list of files to be managed by the plugin.
 Each configuration file is defined by a record with:
