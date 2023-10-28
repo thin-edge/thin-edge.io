@@ -25,7 +25,7 @@ An alarm can be raised on thin-edge.io by sending an MQTT message in Thin Edge J
 The scheme of the topic to publish the alarm data is as follows:
 
 ```text title="Topic"
-tedge/alarms/<severity>/<alarm-type>
+te/<identifier>/a/<alarm-type>
 ```
 
 The payload format must be as follows:
@@ -33,6 +33,7 @@ The payload format must be as follows:
 ```json title="Payload"
 {
   "text": "<alarm text>",
+  "severity": "major",
   "time": "<Timestamp in ISO-8601 format>"
 }
 ```
@@ -47,15 +48,13 @@ If multiple messages are sent to the same alarm topic, the last alarm is conside
 
 Here is a sample alarm raised for `temperature_high` alarm type with `critical` severity:
 
-```text title="Topic"
-tedge/alarms/critical/temperature_high
-```
-
-```json title="Payload"
+```te2mqtt formats="v1"
+tedge mqtt pub te/device/main///a/temperature_high '
 {
   "text": "Temperature is very high",
+  "severity": "critical",
   "time": "2021-01-01T05:30:45+00:00"
-}
+}'
 ```
 
 :::note
@@ -66,7 +65,7 @@ When you want to skip both fields, use an empty json fragment `{}` as the payloa
 An empty message can't be used for the same, as empty messages are used to clear alarms, which is discussed in the next section.
 :::
 
-The `<severity>` value in the MQTT topic can only be one of the following values:
+The `<severity>` value in the MQTT payload can only be one of the following values:
 
 1. critical
 2. major
@@ -81,10 +80,10 @@ Thin-edge.io doesn't keep any history of all alarms raised on an alarm topic.
 
 An already raised alarm can be cleared by sending an empty message with retained flag enabled to the same alarm topic on which the original alarm was raised.
 
-For example `temperature_alarm` will be cleared by publishing an empty payload message as below:
+For example `temperature_high` will be cleared by publishing an empty payload message as below:
 
 ```sh te2mqtt
-tedge mqtt pub tedge/alarms/critical/temperature_alarm "" -q 2 -r
+tedge mqtt pub te/device/main///a/temperature_high "" -q 2 -r
 ```
 
 :::note
@@ -95,7 +94,7 @@ If alarms of different severities exist for a given alarm type, they must all be
 
 ### Raising alarms from child devices
 
-Alarms for child devices can be raised by publishing the alarm payload to `tedge/alarms/<severity>/<alarm-type>/<child-device-id>` topic,
+Alarms for child devices can be raised by publishing the alarm payload to `te/device/<child-device-id>///a/<alarm-type>` topic,
 where the `child-device-id` is the unique device id of the child device.
 The alarm payload structure is the same, as described in the previous section.
 

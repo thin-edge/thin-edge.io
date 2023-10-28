@@ -17,7 +17,7 @@ These specific mappers are launched by the respective `tedge connect` command.
 For instance, `tedge connect c8y` establishes a bridge to Cumulocity and launches a Cumulocity mapper
 that translates the messages in the background.
 
-A mapper subscribes to the reserved MQTT topic `tedge/measurements` with the QoS level 1 (at least once).
+A mapper subscribes to the reserved MQTT topic `te/+/+/+/+/m/+` with the QoS level 1 (at least once).
 The messages that arrive in the mapper should be formed in the [Thin Edge JSON](thin-edge-json.md) format.
 The mapper verifies whether the arrived messages are correctly formatted,
 in case the verification fails, the mapper publishes a corresponded error message
@@ -62,8 +62,7 @@ You can see the Cumulocity mapper added the three things which are not defined b
 String `temperature` is used as fragment and series.
 
 (1) The `type` is a mandatory field in the Cumulocity's JSON via MQTT manner,
-therefore, the Cumulocity mapper always adds `ThinEdgeMeasurement` as a type.
-This value is not configurable by users.
+therefore, the Cumulocity mapper uses the user provided type from the topic, and if it is empty then it uses a default value of `ThinEdgeMeasurement`.
 
 (2) `time` will be added by the mapper **only when it is not specified in a received Thin Edge JSON message**.
 In this case, the mapper uses the device's local timezone. If you want another timezone, specify the time filed in Thin Edge JSON.
@@ -77,18 +76,18 @@ the message will be transferred to the topic `measurement/measurements/create` b
 ### For child devices
 
 The Cumulocity mapper collects measurements not only from the main device but also from child devices.
-These measurements are collected under the `tedge/measurements/<child-id>` topics and forwarded to Cumulocity to corresponding child devices created under the `thin-edge.io` parent device.
+These measurements are collected under the `te/device/<child-id>///m/+` topics and forwarded to Cumulocity to corresponding child devices created under the `thin-edge.io` parent device.
 (`<child-id>` is your desired child device ID.)
 
 The mapper works in the following steps.
 
-1. When the mapper receives a Thin Edge JSON message on the `tedge/measurements/<child-id>` topic,
+1. When the mapper receives a Thin Edge JSON message on the `te/device/<child-id>///m/+` topic,
    the mapper sends a request to create a child device under the `thin-edge.io` parent device.
    The child device is named after the `<child-id>` topic name, and the type is `thin-edge.io-child`.
 2. Publish corresponded Cumulocity JSON measurements messages over MQTT.
 3. The child device is created on receipt of the very first measurement for that child device.
 
-If the incoming Thin Edge JSON message (published on `tedge/measurements/child1`) is as follows,
+If the incoming Thin Edge JSON message (published on `te/device/child1///m/`) is as follows,
 
 ```json
 {
@@ -172,11 +171,11 @@ This mapper is launched by the `tedge connect aws` command, and stopped by the `
 When some error occurs in a mapper process, the mapper publishes a corresponded error message
 on the topic `tedge/errors` with the QoS level 1 (at least once).
 
-Here is an example if you publish invalid Thin Edge JSON messages on `tedge/measurements`:
+Here is an example if you publish invalid Thin Edge JSON messages on `te/+/+/+/+/m/+`:
 
 ```sh
-tedge mqtt pub tedge/measurements '{"temperature": 23,"pressure": 220'
-tedge mqtt pub tedge/measurements '{"temperature": 23,"time": 220}'
+tedge mqtt pub te/device/main///m/ '{"temperature": 23,"pressure": 220'
+tedge mqtt pub te/device/main///m/ '{"temperature": 23,"time": 220}'
 ```
 
 Then, you'll receive error messages from the mapper on the topic `tedge/errors`:
@@ -193,8 +192,7 @@ tedge mqtt sub tedge/errors
 ## Topics used by tedge-mapper
 
 - Incoming topics
-  - `tedge/measurements`
-  - `tedge/measurements/<child-id>` (for Cumulocity)
+  - `te/+/+/+/+/m/+`
 
 - Outgoing topics
   - `tedge/errors` (for errors)

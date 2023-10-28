@@ -18,12 +18,12 @@ to exchange data between themselves as well as to get some data forwarded to the
 
 ### Sending Telemetry Data to thin-edge.io
 
-All topics with the prefix `tedge/` are reserved by `thin-edge.io` for this purpose.
+All topics with the prefix `te/` are reserved by `thin-edge.io` for this purpose.
 To send measurements to `thin-edge.io`, the measurements represented in Thin Edge JSON format can be published
-to the `tedge/measurements` topic.
+to the `te/+/+/+/+/m/+` topic.
 Other processes running on the thin-edge device can subscribe to this topic to process these measurements.
 
-If the messages published to this `tedge/measurements` topic is not a well-formed Thin Edge JSON,
+If the messages published to any of the telemetry topics are not well-formed Thin Edge JSON,
 then these messages won’t be processed by `thin-edge.io`, not even partially,
 and an appropriate error message on why the validation failed will be published to a dedicated `tedge/errors` topic.
 The messages published to this topic will be highly verbose error messages and can be used for any debugging during development.
@@ -32,23 +32,20 @@ and bound to change from time-to-time.
 
 Here is the complete list of topics reserved by `thin-edge.io` for its internal working:
 
-| Topic                                                | Description                                                            |
-|------------------------------------------------------|------------------------------------------------------------------------|
-| `tedge/`                                             | Reserved root topic of `thin-edge.io`                                  |
-| `tedge/measurements`                                 | Measurements related to the main device                                |
-| `tedge/measurements/${child-id}`                     | Measurements related to the child device named `${child-id}`           |
-| `tedge/events/${event-type}`                         | Events related to the main device                                      |
-| `tedge/events/${event-type/${child-id}`              | Events related to the child device named `${child-id}`                 |
-| `tedge/alarms/${severity}/${alarm-type}`             | Alarms related to the main device                                      |
-| `tedge/alarms/${severity}/${alarm-type}/${child-id}` | Alarms related to the child device named `${child-id}`                 |
-| `tedge/errors`                                       | Error messages emitted by `thin-edge.io` while processing measurements |
+| Topic                                       | Description                                                            |
+|---------------------------------------------|------------------------------------------------------------------------|
+| `te/`                                       | Reserved root topic of `thin-edge.io`                                  |
+| `te/<identifier>/m/<type>`                  | Measurements                                                           |
+| `te/<identifier>/e/<type>`                  | Events                                                                 |
+| `te/<identifier>/a/<type>`                  | Alarms                                                                 |
+| `tedge/errors`                              | Error messages emitted by `thin-edge.io` while processing measurements |
 
 ### Sending Telemetry Data to the cloud
 
 The `thin-edge.io` framework allows users forward telemetry data generated and published to one of the
-`tedge/#` MQTT topics from the thin-edge device to any IoT cloud provider that it is connected to,
+`te/#` MQTT topics from the thin-edge device to any IoT cloud provider that it is connected to,
 with the help of a *mapper* component designed for that cloud.
-The responsibility of a mapper is to subscribe to the `tedge/#` topic to receive all incoming data
+The responsibility of a mapper is to subscribe to the `te/#` topic to receive all incoming data
 represented in the cloud vendor neutral Thin Edge JSON format, to a format that the connected cloud understands.
 Refer to [Cloud Message Mapper Architecture](./tedge-mapper.md) for more details on the mapper component.
 
@@ -67,8 +64,8 @@ or a combination of both along with some auxiliary data like the timestamp at wh
 
 Simple single-valued measurements like temperature or pressure can be expressed as follows:
 
-```sh te2mqtt
-tedge mqtt pub tedge/measurements '{
+```sh te2mqtt formats="v1"
+tedge mqtt pub te/device/main///m/environment '{
   "temperature": 25
 }'
 ```
@@ -84,8 +81,8 @@ Like the name suggests, a multi-valued measurement is allowed to contain more th
 Here is the representation of a `three_phase_current` measurement that consists of `L1`, `L2` and `L3` values,
 representing the current on each phase:
 
-```sh te2mqtt
-tedge mqtt pub tedge/measurements '{
+```sh te2mqtt formats="v1"
+tedge mqtt pub te/device/main///m/electrical '{
   "three_phase_current": {
     "L1": 9.5,
     "L2": 10.3,
@@ -100,8 +97,8 @@ Only one level of nesting is allowed, meaning the values of the measurement keys
 
 **❌ Example: Invalid measurement due to nesting > 2 levels**
 
-```sh te2mqtt
-tedge mqtt pub tedge/measurements '{
+```sh te2mqtt formats="v1"
+tedge mqtt pub te/device/main///m/example '{
   "three_phase_current": {
     "phase1": {
       "L1": 9.5
@@ -121,7 +118,7 @@ tedge mqtt pub tedge/measurements '{
 Multiple single-valued and multi-valued measurements can be grouped into a single Thin Edge JSON message as follows:
 
 ```sh te2mqtt
-tedge mqtt pub tedge/measurements '{
+tedge mqtt pub te/device/main///m/example '{
   "temperature": 25,
   "three_phase_current": {
     "L1": 9.5,
@@ -141,8 +138,8 @@ If the user doesn't want to rely on `thin-edge.io` generated timestamps,
 an explicit timestamp can be provided in the measurement message itself by adding the time value as a string 
 in ISO 8601 format using `time` as the key name, as follows:
 
-```sh te2mqtt
-tedge mqtt pub tedge/measurements '{
+```sh te2mqtt formats="v1"
+tedge mqtt pub te/device/main///m/example '{
   "time": "2020-10-15T05:30:47+00:00",
   "temperature": 25,
   "location": {
@@ -165,8 +162,6 @@ and hence must not be used as measurement keys:
 | Key | Description |
 | --- | --- |
 | time | Timestamp in ISO 8601 string format |
-| type | Internal to `thin-edge.io` |
-
 
 ## Events
 
@@ -176,8 +171,8 @@ For instance:
 - a process started
 - a user has started an ssh session
 
-```sh te2mqtt
-tedge mqtt pub tedge/events/login '{
+```sh te2mqtt formats="v1"
+tedge mqtt pub te/device/main///e/login '{
   "text": "A user just logged in",
   "time": "2021-01-01T05:30:45+00:00",
   "someOtherCustomFragment": {
@@ -203,9 +198,10 @@ For instance:
 - a process that crashed
 - free disk space going critically low
 
-```sh te2mqtt
-tedge mqtt pub tedge/alarms/warning/temperature_high '{
+```sh te2mqtt formats="v1"
+tedge mqtt pub te/device/main///a/temperature_high '{
   "text": "Temperature is very high",
+  "severity": "warning",
   "time": "2021-01-01T05:30:45+00:00",
   "someOtherCustomFragment": {
     "nested": {
@@ -218,7 +214,7 @@ tedge mqtt pub tedge/alarms/warning/temperature_high '{
 | Reference    | Description                                                                                                                                                        |
 |--------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `alarm_type` | Uniquely identifies the alarm in the context of the device; part of the MQTT topic                                                                                 |
-| `severity`   | Severity of the alarm; must be `critical`, `major`, `minor` or `warning`; part of the MQTT topic                                                                   |
+| `severity`   | Severity of the alarm; must be `critical`, `major`, `minor` or `warning`                                                                                           |
 | `text`       | Text description of the alarm; must be UTF-8 encoded                                                                                                               |
 | `timestamp`  | Optional time that indicates when the alarm has occurred, in ISO 8601 string format; when not provided, thin-edge.io uses the current system time                  |
 | `*`          | Additional fields are handled as custom specific information; if the connected cloud supports custom fragments its mapper transfers those accordingly to the cloud |

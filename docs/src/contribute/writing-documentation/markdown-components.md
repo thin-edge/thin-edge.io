@@ -211,14 +211,14 @@ The following shows how to document how to publish a single MQTT message.
 
 ````markdown title="Markdown"
 ```sh te2mqtt
-tedge mqtt pub tedge/measurements '{"temperature": 21.3}'
+tedge mqtt pub te/device/main///m/ '{"temperature": 21.3}'
 ```
 ````
 
 **Output**
 
 ```sh te2mqtt
-tedge mqtt pub tedge/measurements '{"temperature": 21.3}'
+tedge mqtt pub te/device/main///m/ '{"temperature": 21.3}'
 ```
 
 ### Example: Use legacy MQTT api
@@ -297,14 +297,14 @@ tedge mqtt pub te/device/child01///a/temp_hi_hi '{"text": "Temperature Hi Hi", "
 
 ````markdown title="Markdown"
 ```sh te2mqtt
-tedge mqtt sub 'tedge/#'
+tedge mqtt sub 'te/#'
 ```
 ````
 
 **Output**
 
 ```sh te2mqtt
-tedge mqtt sub 'tedge/#'
+tedge mqtt sub 'te/#'
 ```
 
 ### Example: Subscribe to MQTT messages and redirect the output
@@ -313,14 +313,14 @@ Any additional arguments will be automatically preserved when translating the co
 
 ````markdown title="Markdown"
 ```sh te2mqtt
-tedge mqtt sub 'tedge/#' > logged.tedge.messages.txt
+tedge mqtt sub 'te/#' > logged.tedge.messages.txt
 ```
 ````
 
 **Output**
 
 ```sh te2mqtt
-tedge mqtt sub 'tedge/#' > logged.tedge.messages.txt
+tedge mqtt sub 'te/#' > logged.tedge.messages.txt
 ```
 
 ## Proposal Banner

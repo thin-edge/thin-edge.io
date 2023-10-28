@@ -22,7 +22,7 @@ An event can be triggered on thin-edge.io by sending an MQTT message in Thin Edg
 The scheme of the topic to publish the event data is as follows:
 
 ```text title="Topic"
-tedge/events/<event-type>
+te/+/+/+/+/e/<event-type>
 ```
 
 The payload format must be as follows:
@@ -37,7 +37,7 @@ The payload format must be as follows:
 Here is a sample event triggered for a `login_event` event type:
 
 ```sh te2mqtt
-tedge mqtt pub tedge/events/login_event '
+tedge mqtt pub te/device/main///e/login_event '
 {
   "text": "A user just logged in",
   "time": "2021-01-01T05:30:45+00:00"
@@ -48,14 +48,14 @@ tedge mqtt pub tedge/events/login_event '
 Both the `text` field and the `time` field are optional.
 :::
 
-When the `message` field is not provided, the `event-type` from the MQTT topic will be used as the message as well if the connected cloud mandates one.
+When the `text` field is not provided, the `event-type` from the MQTT topic will be used as the message as well if the connected cloud mandates one.
 When the `time` field is not provided, thin-edge.io will use the current system time as the `time` of the event.
 When you want to skip both fields, use an empty payload to indicate the same.
 There are no such restrictions on the `<event-type>` value.
 
 ### Sending events from child devices
 
-Events for child devices can be sent by publishing the event payload to `tedge/events/<event-type>/<child-device-id>` topic,
+Events for child devices can be sent by publishing the event payload to `te/device/<child-device-id>///e/<event-type>` topic,
 where the `child-device-id` is the unique device id of the child device.
 The event payload structure is the same, as described in the previous section.
 
@@ -110,14 +110,13 @@ An event for a child/external device can be triggered on thin-edge.io by sending
 The scheme of the topic to publish the event data is as follows:
 
 ```sh title="Topic"
-tedge/events/<event-type>/<child-device-id>
+te/device/<child-device-id>///e/<event-type>
 ```
 
 The payload format must be as follows:
 
 ```json title="Payload"
 {
-  "type":"<event type>",
   "text": "<event text>",
   "time": "<Timestamp in ISO-8601 format>"
 }
@@ -128,8 +127,7 @@ Here is a sample event triggered for a `login_event` event type for the `externa
 Command to send the event from a external device as below:
 
 ```sh te2mqtt
-tedge mqtt pub tedge/events/login_event/external_sensor '{
-  "type":"login_event",
+tedge mqtt pub te/device/external_sensor///e/login_event '{
   "text":"A user just logged in",
   "time":"2021-01-01T05:30:45+00:00"
 }'

@@ -121,7 +121,7 @@ In-line code blocks are not easy for users to copy the text from. Use a full cod
 **Topic**
    
 ```text
-tedge/{child-d}/commands/res/config_snapshot
+te/device/{child}///cmd/config_snapshot/1
 ```
 ````
 
@@ -130,7 +130,7 @@ tedge/{child-d}/commands/res/config_snapshot
 ````md
 **Topic**
    
-   `tedge/{child-d}/commands/res/config_snapshot`
+   `te/device/{child}///cmd/config_snapshot/1`
 ````
 
 ### Systemd/journald service commands

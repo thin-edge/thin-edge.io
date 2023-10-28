@@ -36,31 +36,50 @@ Thin-edge agent acts as a device connector:
 
 ## Operation MQTT topics
 
-Operation requests are published by the requesters on operation specific topics:
+Operation requests are published by the requesters on operation specific topics. The topic scheme for commands can be visualized using the diagram below.
 
-```text
-tedge/commands/req/{operation-type}/{operation-action}
+<p align="center">
+
+```mermaid
+graph LR
+  te --/--- identifier --/--- cmd
+  subgraph root
+    te
+  end
+
+  subgraph identifier
+    identifier2["&lt;identifier&gt;"]
+  end
+
+  subgraph command
+    direction LR
+    cmd --/--- cmd_type["&lt;cmd_type&gt;"] --/--- cmd_id["&lt;cmd_id&gt;"]
+  end
+
 ```
 
-Where the combination of `operation-type` and `operation-action` is the well-known name of the operation request, such as:
-* `software/update`
-* `control/restart`
+</p>
 
-The corresponding operation responses are published to associated topics:
+Where the command segments are describe as follows:
 
-```text
-tedge/commands/res/${operation-type}/${operation-action}
-```
+|Segment|Description|
+|---|----|
+|&lt;identifier&gt;|The [identifier](../references/mqtt-api.md#group-identifier) (e.g. device/service) associated with the command.|
+|&lt;cmd_type&gt;|Command type. Each command can define its own payload schema to allow commands to have parameters related to the command's function.|
+|&lt;cmd_id&gt;|Unique command id which is unique for the command instance. e.g. `123456`, `d511a86cab95be81` etc.|
 
-Here are the topics used by the device management operations
+### Command examples
 
-| Operation          | Request Topic                         | Response Topic                         |
-| ------------------ |---------------------------------------|----------------------------------------|
-| Get Software List  | `tedge/commands/req/software/list`    | `tedge/commands/res/software/list`     |
-| Software Update    | `tedge/commands/req/software/update`  | `tedge/commands/res/software/update`   |
-| Get Configuration  | `tedge/commands/req/config_snapshot`  | `tedge/commands/res/config_snapshot`   |
-| Set Configuration  | `tedge/commands/req/config_update`    | `tedge/commands/res/config_update`     |
-| Get Log            | `tedge/commands/req/log/get`          | `tedge/commands/res/log/get`           |
-| Restart  device    | `tedge/commands/req/control/restart`  | `tedge/commands/res/control/restart`   |
-| Remote  connect    | `tedge/commands/req/control/connect`  | `tedge/commands/res/control/connect`   |
+The following table details some example command types which are supported by thin-edge.
 
+| Command Type    | Description | Example Topic                                  |
+|-----------------|-------------|------------------------------------------------|
+| software_list   | Get the list of installed software | `te/<identifier>/cmd/software_list/<cmd_id>`   |
+| software_update | Install/remove software | `te/<identifier>/cmd/software_update/<cmd_id>` |
+| config_snapshot | Get configuration | `te/<identifier>/cmd/config_snapshot/<cmd_id>` |
+| config_update   | Set/update configuration | `te/<identifier>/cmd/config_update/<cmd_id>`   |
+| restart         | Restart device | `te/<identifier>/cmd/restart/<cmd_id>`         |
+| log_upload      | Upload log file/s | `te/<identifier>/cmd/log_upload/<cmd_id>`      |
+
+The command would be interpreted differently based on the target entity.
+For example, the `restart` could mean either a device restart or a service restart based on the target entity.

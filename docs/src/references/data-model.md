@@ -19,7 +19,7 @@ Any malicious access to the broker can hazard **thin-edge** and all connected de
 
 ### Telemetry Data on MQTT
 
-All telemetry data (**Measurements**, **Events**, **Alarms**) are reflected with MQTT topics, where each has its specific subtopic (e.g. `tedge/measurements`, `tedge/events`, `tedge/alarms` etc.).
+All telemetry data (**Measurements**, **Events**, **Alarms**) are reflected with MQTT topics, where each has its specific subtopic (e.g. `te/+/+/+/+/m/+`, `te/+/+/+/+/e/+`, `te/+/+/+/+/a/+` etc.).
 
   * each provider of a **measurement**, **event** or **alarm** sends the occurring data to **thin-edge's** MQTT broker
     * a provider can be the domain application[^1], other SW components / 3rd parties
@@ -38,17 +38,19 @@ Therefore the `child-id` of the **child-device** is can be appended to the MQTT 
 or no `child-id` is appended, if the message is meant for the **main-device**.
 
 MQTT topics for the **main-device**:
+
 ```
-tedge/measurements
-tedge/events/<event-type>
-tedge/alarms/<severity>/<alarm-type>
+te/device/main///m/<measurement-type>
+te/device/main///e/<event-type>
+te/device/main///a/<alarm-type>
 ```
 
 MQTT topics for a **child-device**, including the **child-device's** specific `child-id`:
+
 ```
-tedge/measurements/<child-id>
-tedge/events/<event-type>/<child-id>
-tedge/alarms/<severity>/<alarm-type>/<child-id>
+te/device/<child-id>///m/<measurement-type>
+te/device/<child-id>///e/<event-type>
+te/device/<child-id>///a/<alarm-type>
 ```
 
 
@@ -63,9 +65,9 @@ e.g. voltage and current of an electricity meter, or current state of the manufa
 #### MQTT topics for measurements
 
 ```
-tedge/measurements
+te/device/main///m/<measurement-type>
 
-tedge/measurements/<child-id>
+te/device/<child-id>///m/<measurement-type>
 ```
 
 #### MQTT payload for measurements
@@ -114,10 +116,11 @@ One MQTT message can contain a mixture of more than one single-value and multi-v
 e.g. a sensor[^1] detected something like a door has been closed, or a system notification that e.g. a user has started an ssh session
 
 #### MQTT topics for events
-```
-tedge/events/<event-type>
 
-tedge/events/<event-type>/<child-id>
+```
+te/device/main///e/<event-type>
+
+te/device/<child-id>///e/<event-type>
 ```
 
 #### MQTT payload for events
@@ -154,9 +157,9 @@ e.g. when a temperature sensor detects a temperature went out of its valid range
 #### MQTT topics for alarms
 
 ```
-tedge/alarms/<severity>/<alarm-type>
+te/device/main///a/<alarm-type>
 
-tedge/alarms/<severity>/<alarm-type>/<child-id>
+te/device/<child-id>///a/<alarm-type>
 ```
 
 #### MQTT payload for alarms
@@ -166,6 +169,7 @@ tedge/alarms/<severity>/<alarm-type>/<child-id>
   // example for an alarm
   "text": "Temperature is very high",  // 'text' message of that alarm
   "time": "2021-01-01T05:30:45+00:00", // optional 'timestamp' of that alarm
+  "severity": "major",                 // optional 'severity' of the alarm
   "someOtherCustomFragment": {         // optional 'custom fragments'
     "nested": {
       "value": "extra info"
@@ -177,7 +181,7 @@ tedge/alarms/<severity>/<alarm-type>/<child-id>
 |Reference           |Description|
 | ------------------ | --------- |
 |`alarm-type`        |a string part of the MQTT topic, that identifies the alarm uniquely in context of the device|
-|`severity`          |a string part of the MQTT topic, that indicates the severity of the alarm; must be `critical`, `major`, `minor` or `warning`|
+|`severity`          |a string part of the MQTT payload, that indicates the severity of the alarm; must be `critical`, `major`, `minor` or `warning`|
 |`text`              |carries a human readable alarm-text; must be UTF-8 encoded|
 |`timestamp`         |optional time that indicates when the alarm has occurred; when not provided, thin-edge.io uses the current system time as the time of the alarm; when provided must be conform to ISO 8601|
 |`custom fragments`  |additional fields are handled as custom specific information; if the connected cloud supports custom fragments its mapper transfers those accordingly to the cloud|

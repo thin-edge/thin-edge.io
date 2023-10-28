@@ -177,7 +177,7 @@ Below shows some examples on how to publish an MQTT message via the command line
 tedge mqtt pub '{{TOPIC}}' '{{PAYLOAD}}'
 ```
 
-thin-edge.io comes with a tedge-mapper daemon. This process collects the data from the `tedge/#` topics and translates them to the tedge payloads on the `c8y/#` topics which are mapped directly to Cumulocity IoT. The mapper translates simple JSON to the desired target payload for Cumulocity IoT.
+thin-edge.io comes with a tedge-mapper daemon. This process collects the data from the `te/#` topics and translates them to the tedge payloads on the `c8y/#` topics which are mapped directly to Cumulocity IoT. The mapper translates simple JSON to the desired target payload for Cumulocity IoT.
 
 ### Sending measurements
 
@@ -192,13 +192,13 @@ A simple single-valued measurement like a temperature measurement can be represe
 With the key-value pair representing the measurement type and the numeric value of the measurement. The endpoint that is supervised by the tedge-mapper for measurements is:
 
 ```sh
-tedge/measurements
+te/+/+/+/+/m/+
 ```
 
 The temperature measurement described above can be sent as follows:
 
-```sh te2mqtt
-tedge mqtt pub tedge/measurements '{"temperature": 25}'
+```sh te2mqtt formats="v1"
+tedge mqtt pub te/device/main///m/ '{"temperature": 25}'
 ```
 
 ### Sending events
@@ -217,13 +217,13 @@ A simple event can be represented in Thin Edge JSON as follows:
 The endpoint that is supervised by the tedge-mapper for events is:
 
 ```sh
-tedge/events/{event-type}
+te/+/+/+/+/e/+
 ```
 
 So the door open event described above can be sent as follows:
 
-```sh te2mqtt
-tedge mqtt pub tedge/events/door '{"text": "A door was closed","time": "2022-06-10T05:30:45+00:00"}'
+```sh te2mqtt formats="v1"
+tedge mqtt pub te/device/main///e/door '{"text": "A door was closed","time": "2022-06-10T05:30:45+00:00"}'
 ```
 
 When you go to events (`Device management` &rarr; `your device` &rarr; `events`), you should see this:

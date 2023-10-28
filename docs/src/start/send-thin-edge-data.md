@@ -24,21 +24,21 @@ A simple single-valued measurement like a temperature measurement, can be repres
 
 with the key-value pair representing the measurement type and the numeric value of the measurement.
 
-This measurement can be sent from the Thin Edge device to the cloud by publishing this message to the `tedge/measurements` MQTT topic.
+This measurement can be sent from the Thin Edge device to the cloud by publishing this message to the `te/+/+/+/+/m/+` MQTT topic.
 Processes running on the Thin Edge device can publish messages to the local MQTT broker using any MQTT client or library.
 In this tutorial, we'll be using the `tedge mqtt pub` command line utility for demonstration purposes.
 
 The temperature measurement described above can be sent using the `tedge mqtt pub` command as follows:
 
-```sh te2mqtt
-tedge mqtt pub tedge/measurements '{"temperature": 25}'
+```sh te2mqtt formats="v1"
+tedge mqtt pub te/device/main///m/environment '{"temperature": 25}'
 ```
 
 The first argument to the `tedge mqtt pub` command is the topic to which the measurements must be published to.
 The second argument is the Thin Edge JSON representation of the measurement itself.
 
 When connected to a cloud provider, a message mapper component for that cloud provider would be running as a daemon, 
-listening to any measurements published to `tedge/measurements`.
+listening to any measurements published to `te/+/+/+/+/m/+`.
 The mapper, on receipt of these Thin Edge JSON measurements, will map those measurements to their equivalent
 cloud provider native representation and send it to that cloud.
 
@@ -88,13 +88,13 @@ data that can be represented in Thin Edge JSON format and the reserved fields li
 
 ## Sending measurements to child devices
 
-If valid Thin Edge JSON measurements are published to the `tedge/measurements/<child-id>` topic,
+If valid Thin Edge JSON measurements are published to the `te/device/<child-id>///m/+` topic,
 the measurements are recorded under a child device of your thin-edge.io device.
 
-Given your desired child device ID is `child1`, publish a Thin Edge JSON message to the `tedge/measurements/child1` topic:
+Given your desired child device ID is `child1`, publish a Thin Edge JSON message to the following topic:
 
 ```sh te2mqtt
-tedge mqtt pub tedge/measurements/child1 '{"temperature": 25}'
+tedge mqtt pub te/device/child1///m/environment '{"temperature": 25}'
 ```
 
 Then, you will see a child device with the name `child1` is created in your Cumulocity IoT tenant,
@@ -102,7 +102,7 @@ and the measurement is recorded in `Measurements` of the `child1` device.
 
 ## Error detection
 
-If the data published to the `tedge/measurements` topic are not valid Thin Edge JSON measurements, those won't be
+If the data published to the measurements topic are not valid Thin Edge JSON measurements, those won't be
 sent to the cloud but instead you'll get a feedback on the `tedge/errors` topic, if you subscribe to it.
 The error messages published to this topic will be highly verbose and may change in the future.
 So, use it only for debugging purposes during the development phase and it should **NOT** be used for any automation.
