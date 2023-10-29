@@ -89,10 +89,7 @@ impl C8yEndPoint {
         url_event_binary
     }
 
-    // fix me later
-    // I'd rather change the return type of get_url_for_event_binary_upload from String to Result<Url, Err>
-    // But it causes unrelated refactoring, so candidate to do in a separated PR.
-    pub fn try_get_url_for_event_binary_upload(&self, event_id: &str) -> Url {
+    pub fn get_url_for_event_binary_upload_unchecked(&self, event_id: &str) -> Url {
         let url = self.get_url_for_event_binary_upload(event_id);
         Url::parse(&url).unwrap()
     }

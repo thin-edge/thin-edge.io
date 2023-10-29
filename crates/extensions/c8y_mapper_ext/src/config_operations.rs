@@ -1,7 +1,7 @@
 use crate::converter::CumulocityConverter;
+use crate::converter::UploadOperationData;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
-use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigDownloadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestConfigUploadRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
@@ -11,6 +11,7 @@ use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
+use c8y_http_proxy::messages::CreateEvent;
 use sha256::digest;
 use std::collections::HashMap;
 use std::fs;
@@ -140,14 +141,14 @@ impl CumulocityConverter {
             }
             CommandStatus::Successful => {
                 // Create an event in c8y
-                let c8y_event = C8yCreateEvent::new_from_entity(
-                    target,
-                    &response.config_type,
-                    OffsetDateTime::now_utc(),
-                    &response.config_type,
-                    HashMap::new(),
-                );
-                let event_response_id = self.http_proxy.send_event(c8y_event).await?;
+                let create_event = CreateEvent {
+                    event_type: response.config_type.clone(),
+                    time: OffsetDateTime::now_utc(),
+                    text: response.config_type.clone(),
+                    extras: HashMap::new(),
+                    device_id: target.external_id.as_ref().to_string(),
+                };
+                let event_response_id = self.http_proxy.send_event(create_event).await?;
 
                 // Send a request to the Uploader to upload the file asynchronously.
                 let uploaded_file_path = self
@@ -164,10 +165,12 @@ impl CumulocityConverter {
 
                 let binary_upload_event_url = self
                     .c8y_endpoint
-                    .try_get_url_for_event_binary_upload(&event_response_id);
+                    .get_url_for_event_binary_upload_unchecked(&event_response_id);
 
                 let upload_request = UploadRequest::new(
-                    self.auth_proxy.proxy_url(binary_upload_event_url).as_str(),
+                    self.auth_proxy
+                        .proxy_url(binary_upload_event_url.clone())
+                        .as_str(),
                     &uploaded_file_path,
                 );
 
@@ -178,11 +181,12 @@ impl CumulocityConverter {
 
                 self.pending_upload_operations.insert(
                     cmd_id.into(),
-                    (
+                    UploadOperationData {
                         smartrest_topic,
-                        message.topic.clone(),
-                        CumulocitySupportedOperations::C8yUploadConfigFile,
-                    ),
+                        clear_cmd_topic: message.topic.clone(),
+                        c8y_binary_url: binary_upload_event_url.to_string(),
+                        operation: CumulocitySupportedOperations::C8yUploadConfigFile,
+                    },
                 );
 
                 vec![] // No mqtt message can be published in this state
@@ -278,7 +282,7 @@ impl CumulocityConverter {
                 .await?;
             info!("Awaiting config download for cmd_id: {cmd_id} from url: {remote_url}");
 
-            self.pending_operations.insert(
+            self.pending_download_operations.insert(
                 cmd_id,
                 SmartRestOperationVariant::DownloadConfigFile(smartrest),
             );
@@ -914,7 +918,7 @@ mod tests {
 
         // Uploader gets a download request and assert them
         let request = ul.recv().await.expect("timeout");
-        assert_eq!(request.0, "1234");
+        assert_eq!(request.0, "c8y-mapper-1234"); // Command ID
         assert_eq!(
             request.1.url,
             "http://127.0.0.1:8001/c8y/event/events/dummy-event-id-1234/binaries"
@@ -935,7 +939,7 @@ mod tests {
         // Expect `503` smartrest message on `c8y/s/us`.
         assert_received_contains_str(
             &mut mqtt,
-            [("c8y/s/us", "503,c8y_UploadConfigFile,http://127.0.0.1:8001/c8y/event/events/dummy-event-id-1234/binaries")],
+            [("c8y/s/us", "503,c8y_UploadConfigFile,https://test.c8y.io/event/events/dummy-event-id-1234/binaries")],
         )
         .await;
     }
@@ -982,7 +986,7 @@ mod tests {
 
         // Uploader gets a download request and assert them
         let request = ul.recv().await.expect("timeout");
-        assert_eq!(request.0, "1234");
+        assert_eq!(request.0, "c8y-mapper-1234"); // Command ID
         assert_eq!(
             request.1.url,
             "http://127.0.0.1:8001/c8y/event/events/dummy-event-id-1234/binaries"
@@ -1005,7 +1009,7 @@ mod tests {
             &mut mqtt,
             [(
                 "c8y/s/us/child1",
-                "503,c8y_UploadConfigFile,http://127.0.0.1:8001/c8y/event/events/dummy-event-id-1234/binaries",
+                "503,c8y_UploadConfigFile,https://test.c8y.io/event/events/dummy-event-id-1234/binaries",
             )],
         )
         .await;

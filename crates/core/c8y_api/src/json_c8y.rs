@@ -125,29 +125,6 @@ impl From<&SoftwareListCommand> for C8yUpdateSoftwareListResponse {
     }
 }
 
-impl C8yCreateEvent {
-    pub fn new_from_entity(
-        target: &EntityMetadata,
-        event_type: &str,
-        time: OffsetDateTime,
-        text: &str,
-        mut extras: HashMap<String, Value>,
-    ) -> Self {
-        // If the target is child device, external ID needs to be added to extras
-        if let Some(xid) = target.parent.as_ref().map(|_| target.external_id.clone()) {
-            update_the_external_source_event(&mut extras, xid.as_ref());
-        }
-
-        Self {
-            source: None,
-            event_type: event_type.to_string(),
-            time,
-            text: text.to_string(),
-            extras,
-        }
-    }
-}
-
 impl From<ThinEdgeEvent> for C8yCreateEvent {
     fn from(event: ThinEdgeEvent) -> Self {
         let mut extras = HashMap::new();

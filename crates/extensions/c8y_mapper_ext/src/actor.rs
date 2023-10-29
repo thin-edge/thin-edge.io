@@ -2,8 +2,10 @@ use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use async_trait::async_trait;
+use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestOperationVariant;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use c8y_api::smartrest::smartrest_serializer::SmartRest;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToSuccessful;
@@ -48,6 +50,7 @@ use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::FileError;
 use tracing::error;
+use tracing::warn;
 
 const SYNC_WINDOW: Duration = Duration::from_secs(3);
 
@@ -237,39 +240,26 @@ impl C8yMapperActor {
     ) -> Result<(), RuntimeError> {
         match self.converter.pending_upload_operations.remove(&cmd_id) {
             None => error!("Received an upload result for the unknown command ID: {cmd_id}"),
-            Some((smartrest_topic, clear_cmd_topic, operation)) => {
-                let result = match operation {
-                    CumulocitySupportedOperations::C8yLogFileRequest => match upload_result {
-                        Ok(response) => SmartRestSetOperationToSuccessful::new(
-                            CumulocitySupportedOperations::C8yLogFileRequest,
-                        )
-                        .with_response_parameter(&response.url)
-                        .to_smartrest(),
-                        Err(err) => SmartRestSetOperationToFailed::new(
-                            CumulocitySupportedOperations::C8yLogFileRequest,
-                            format!("Upload failed with {}", err),
-                        )
-                        .to_smartrest(),
-                    },
-                    CumulocitySupportedOperations::C8yUploadConfigFile => match upload_result {
-                        Ok(response) => SmartRestSetOperationToSuccessful::new(
-                            CumulocitySupportedOperations::C8yUploadConfigFile,
-                        )
-                        .with_response_parameter(&response.url)
-                        .to_smartrest(),
-                        Err(err) => SmartRestSetOperationToFailed::new(
-                            CumulocitySupportedOperations::C8yUploadConfigFile,
-                            format!("Upload failed with {}", err),
-                        )
-                        .to_smartrest(),
-                    }, // fix me: code duplication
-                    _other_types => return Ok(()), // unsupported
+            Some(queued_data) => {
+                let serialize_result = match queued_data.operation {
+                    CumulocitySupportedOperations::C8yLogFileRequest
+                    | CumulocitySupportedOperations::C8yUploadConfigFile => self
+                        .get_smartrest_response_for_upload_result(
+                            upload_result,
+                            queued_data.c8y_binary_url,
+                            queued_data.operation,
+                        ),
+                    other_type => {
+                        warn!("Received unsupported operation {other_type:?} for uploading a file");
+                        return Ok(());
+                    }
                 };
 
-                match result {
-                    Ok(sm_payload) => {
-                        let c8y_notification = Message::new(&smartrest_topic, sm_payload);
-                        let clear_local_cmd = Message::new(&clear_cmd_topic, "")
+                match serialize_result {
+                    Ok(sr_payload) => {
+                        let c8y_notification =
+                            Message::new(&queued_data.smartrest_topic, sr_payload);
+                        let clear_local_cmd = Message::new(&queued_data.clear_cmd_topic, "")
                             .with_retain()
                             .with_qos(QoS::AtLeastOnce);
                         for converted_message in [c8y_notification, clear_local_cmd] {
@@ -286,12 +276,29 @@ impl C8yMapperActor {
         Ok(())
     }
 
+    fn get_smartrest_response_for_upload_result(
+        &self,
+        upload_result: UploadResult,
+        binary_url: String,
+        operation: CumulocitySupportedOperations,
+    ) -> Result<SmartRest, SmartRestSerializerError> {
+        match upload_result {
+            Ok(_) => SmartRestSetOperationToSuccessful::new(operation)
+                .with_response_parameter(&binary_url)
+                .to_smartrest(),
+            Err(err) => {
+                SmartRestSetOperationToFailed::new(operation, format!("Upload failed with {}", err))
+                    .to_smartrest()
+            }
+        }
+    }
+
     async fn process_download_result(
         &mut self,
         cmd_id: CmdId,
         result: DownloadResult,
     ) -> Result<(), RuntimeError> {
-        match self.converter.pending_operations.remove(&cmd_id) {
+        match self.converter.pending_download_operations.remove(&cmd_id) {
             None => error!("Received a download result for the unknown command ID: {cmd_id}"),
             Some(operation) => {
                 let result = match operation {

@@ -1,13 +1,14 @@
 use crate::converter::CumulocityConverter;
+use crate::converter::UploadOperationData;
 use crate::error::ConversionError;
 use crate::error::CumulocityMapperError;
-use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestLogRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSerializer;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToExecuting;
 use c8y_api::smartrest::smartrest_serializer::SmartRestSetOperationToFailed;
+use c8y_http_proxy::messages::CreateEvent;
 use std::collections::HashMap;
 use tedge_actors::Sender;
 use tedge_api::entity_store::EntityType;
@@ -93,7 +94,7 @@ impl CumulocityConverter {
     /// Address a received log_upload command. If its status is
     /// - "executing", it converts the message to SmartREST "Executing".
     /// - "successful", it creates an event in c8y, then creates an UploadRequest for the uploader actor.
-    /// - "failed", it converts the message to SmartREST "Failed".
+    /// - "failed", it converts the message to SmartREST "Failed" with that event URL.
     pub async fn handle_log_upload_state_change(
         &mut self,
         topic_id: &EntityTopicId,
@@ -120,14 +121,14 @@ impl CumulocityConverter {
             }
             CommandStatus::Successful => {
                 // Create an event in c8y
-                let c8y_event = C8yCreateEvent::new_from_entity(
-                    target,
-                    &response.log_type,
-                    OffsetDateTime::now_utc(),
-                    &response.log_type,
-                    HashMap::new(),
-                );
-                let event_response_id = self.http_proxy.send_event(c8y_event).await?;
+                let create_event = CreateEvent {
+                    event_type: response.log_type.clone(),
+                    time: OffsetDateTime::now_utc(),
+                    text: response.log_type.clone(),
+                    extras: HashMap::new(),
+                    device_id: target.external_id.as_ref().to_string(),
+                };
+                let event_response_id = self.http_proxy.send_event(create_event).await?;
 
                 // Send a request to the Uploader to upload the file asynchronously.
                 let uploaded_file_path = self
@@ -140,10 +141,12 @@ impl CumulocityConverter {
 
                 let binary_upload_event_url = self
                     .c8y_endpoint
-                    .try_get_url_for_event_binary_upload(&event_response_id);
+                    .get_url_for_event_binary_upload_unchecked(&event_response_id);
 
                 let upload_request = UploadRequest::new(
-                    self.auth_proxy.proxy_url(binary_upload_event_url).as_str(),
+                    self.auth_proxy
+                        .proxy_url(binary_upload_event_url.clone())
+                        .as_str(),
                     &uploaded_file_path,
                 )
                 .with_content_type(ContentType::TextPlain);
@@ -155,11 +158,12 @@ impl CumulocityConverter {
 
                 self.pending_upload_operations.insert(
                     cmd_id.into(),
-                    (
+                    UploadOperationData {
                         smartrest_topic,
-                        message.topic.clone(),
-                        CumulocitySupportedOperations::C8yLogFileRequest,
-                    ),
+                        clear_cmd_topic: message.topic.clone(),
+                        c8y_binary_url: binary_upload_event_url.to_string(),
+                        operation: CumulocitySupportedOperations::C8yLogFileRequest,
+                    },
                 );
 
                 vec![] // No mqtt message can be published in this state

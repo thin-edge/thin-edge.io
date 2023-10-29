@@ -2436,7 +2436,7 @@ async fn handle_log_upload_executing_and_failed_cmd_for_main_device() {
         &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
         json!({
             "status": "executing",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/main/log_upload/typeA-c8y-mapper-1234"),
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device/log_upload/typeA-c8y-mapper-1234"),
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -2456,7 +2456,7 @@ async fn handle_log_upload_executing_and_failed_cmd_for_main_device() {
         &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
         json!({
             "status": "failed",
-            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/main/log_upload/typeA-c8y-mapper-1234"),
+            "tedgeUrl": format!("http://localhost:8888/tedge/file-transfer/test-device/log_upload/typeA-c8y-mapper-1234"),
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -2585,7 +2585,7 @@ async fn handle_log_upload_successful_cmd_for_main_device() {
         &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
         json!({
             "status": "successful",
-            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/main/log_upload/typeA-c8y-mapper-1234",
+            "tedgeUrl": "http://localhost:8888/tedge/file-transfer/test-device/log_upload/typeA-c8y-mapper-1234",
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -2597,7 +2597,7 @@ async fn handle_log_upload_successful_cmd_for_main_device() {
     .await
     .expect("Send failed");
 
-    // Uploader gets a download request and assert them
+    // Uploader gets a upload request and assert that
     let request = ul.recv().await.expect("timeout");
     assert_eq!(request.0, "c8y-mapper-1234"); // Command ID
     assert_eq!(
@@ -2620,7 +2620,10 @@ async fn handle_log_upload_successful_cmd_for_main_device() {
     // Expect `503` smartrest message on `c8y/s/us`.
     assert_received_contains_str(
         &mut mqtt,
-        [("c8y/s/us", "503,c8y_LogfileRequest,http://127.0.0.1:8001/c8y/event/events/dummy-event-id-1234/binaries")],
+        [(
+            "c8y/s/us",
+            "503,c8y_LogfileRequest,https://test.c8y.io/event/events/dummy-event-id-1234/binaries",
+        )],
     )
     .await;
 }
@@ -2661,7 +2664,7 @@ async fn handle_log_upload_successful_cmd_for_child_device() {
 
     mqtt.skip(2).await; // Skip child device registration messages
 
-    // Uploader gets a download request and assert them
+    // Uploader gets a upload request and assert that
     let request = ul.recv().await.expect("timeout");
     assert_eq!(request.0, "c8y-mapper-1234"); // Command ID
     assert_eq!(
@@ -2686,7 +2689,7 @@ async fn handle_log_upload_successful_cmd_for_child_device() {
         &mut mqtt,
         [(
             "c8y/s/us/test-device:device:child1",
-            "503,c8y_LogfileRequest,http://127.0.0.1:8001/c8y/event/events/dummy-event-id-1234/binaries",
+            "503,c8y_LogfileRequest,https://test.c8y.io/event/events/dummy-event-id-1234/binaries",
         )],
     )
     .await;
@@ -3154,7 +3157,7 @@ pub(crate) fn spawn_dummy_c8y_http_proxy(
                         .send(Ok(c8y_http_proxy::messages::C8YRestResponse::Unit(())))
                         .await;
                 }
-                Some(C8YRestRequest::C8yCreateEvent(_)) => {
+                Some(C8YRestRequest::CreateEvent(_)) => {
                     let _ = http
                         .send(Ok(c8y_http_proxy::messages::C8YRestResponse::EventId(
                             "dummy-event-id-1234".to_string(),
