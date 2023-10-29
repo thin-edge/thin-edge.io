@@ -21,13 +21,13 @@ The `software_list` operation API follows the [generic thin-edge rules for opera
 ### Operation registration
 
 The registration message of the `software_list` operation on a device:
-- must provide a `supportedTypes` list of the types of software package that can be installed on this device (e.g. `["apt", "docker"]`)
+- must provide a `types` list of the types of software package that can be installed on this device (e.g. `["apt", "docker"]`)
 - can provide a description of the operation and of each supported package type.
 
 ```sh te2mqtt formats="v1"
 tedge mqtt pub --retain 'te/device/child001///cmd/software_list' '{
     "description": "List software packages installed on the device",
-    "supportedTypes": [
+    "types": [
       "apt",
       "docker"
     ]
@@ -135,13 +135,13 @@ The `software_update` operation API follows the [generic thin-edge rules for ope
 ### Operation registration
 
 The registration message of the `software_update` operation on a device:
-- must provide a `supportedTypes` list of the types of software package that can be installed on this device (e.g. `["apt", "docker"]`)
+- must provide a `types` list of the types of software package that can be installed on this device (e.g. `["apt", "docker"]`)
 - can provide a description of the operation and of each supported package type.
 
 ```sh te2mqtt formats="v1"
 tedge mqtt pub --retain 'te/device/child001///cmd/software_update' '{
     "description": "Install, update and remove software packages",
-    "supportedTypes": [
+    "types": [
       "apt",
       "docker"
     ]

@@ -643,7 +643,7 @@ For example, the supported configuration list of the main device can be declared
 ```sh te2mqtt formats="v1"
 tedge mqtt pub -r te/device/main///cmd/config_snapshot '{
   "description": "Upload a configuration from the device",
-  "supportedTypes": ["mosquitto", "tedge", "collectd"]
+  "types": ["mosquitto", "tedge", "collectd"]
 }'
 ```
 
