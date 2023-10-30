@@ -19,15 +19,6 @@ const INVENTORY_FRAGMENTS_FILE_LOCATION: &str = "device/inventory.json";
 const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "c8y/inventory/managedObjects/update";
 
 impl CumulocityConverter {
-    /// Update the live `inventory_model` of this converter with the provided fragment data
-    fn update_inventory_model(&mut self, key: String, value: JsonValue) {
-        if let JsonValue::Object(map) = &mut self.inventory_model {
-            map.insert(key, value);
-        } else {
-            panic!("This can't happen as the inventory_model is always a map");
-        }
-    }
-
     /// Creates the inventory update message with fragments from inventory.json file
     /// while also updating the live `inventory_model` of this converter
     pub(crate) fn parse_base_inventory_file(&mut self) -> Result<Vec<Message>, ConversionError> {
@@ -50,12 +41,14 @@ impl CumulocityConverter {
 
         if let JsonValue::Object(map) = inventory_base {
             for (key, value) in map {
-                self.update_inventory_model(key.clone(), value.clone());
-                let mapped_message = self.register_twin_data_message(
-                    &EntityTopicId::default_main_device(),
+                let main_device_tid = self.entity_store.main_device().clone();
+                let _ = self.entity_store.update_twin_data(
+                    &main_device_tid,
                     key.clone(),
                     value.clone(),
-                );
+                )?;
+                let mapped_message =
+                    self.entity_twin_data_message(&main_device_tid, key.clone(), value.clone());
                 messages.push(mapped_message);
             }
         }
@@ -64,7 +57,7 @@ impl CumulocityConverter {
     }
 
     /// Create an entity twin data message with the provided fragment
-    fn register_twin_data_message(
+    fn entity_twin_data_message(
         &self,
         entity: &EntityTopicId,
         fragment_key: String,
@@ -89,20 +82,22 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        let payload = if message.payload_bytes().is_empty() {
+        let fragment_value = if message.payload_bytes().is_empty() {
             JsonValue::Null
         } else {
-            let payload = serde_json::from_slice::<JsonValue>(message.payload_bytes())?;
-            let existing = self.inventory_model.get(fragment_key);
-            if existing.is_some_and(|v| payload.eq(v)) {
-                return Ok(vec![]);
-            }
-
-            self.update_inventory_model(fragment_key.into(), payload.clone());
-            payload
+            serde_json::from_slice::<JsonValue>(message.payload_bytes())?
         };
 
-        let mapped_json = json!({ fragment_key: payload });
+        let updated = self.entity_store.update_twin_data(
+            source,
+            fragment_key.into(),
+            fragment_value.clone(),
+        )?;
+        if !updated {
+            return Ok(vec![]);
+        }
+
+        let mapped_json = json!({ fragment_key: fragment_value });
         let mapped_message = self.inventory_update_message(source, mapped_json)?;
         Ok(vec![mapped_message])
     }
@@ -316,6 +311,14 @@ mod tests {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
 
+        // Register a twin data fragment first
+        let twin_message = Message::new(
+            &Topic::new_unchecked("te/device/main///twin/foo"),
+            "\"bar\"",
+        );
+        let _ = converter.convert(&twin_message).await;
+
+        // Clear that fragment
         let twin_message = Message::new(&Topic::new_unchecked("te/device/main///twin/foo"), "");
         let inventory_messages = converter.convert(&twin_message).await;
 
@@ -375,5 +378,40 @@ mod tests {
             "Expected no converted messages, but received {:?}",
             &inventory_messages
         );
+    }
+
+    #[tokio::test]
+    async fn convert_entity_twin_data_with_duplicate_fragment_after_clearing_it() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir).await;
+
+        let twin_topic = "te/device/main///twin/device_os";
+        let twin_payload = json!({
+          "family": "Debian",
+          "version": "11"
+        });
+        let twin_message =
+            Message::new(&Topic::new_unchecked(twin_topic), twin_payload.to_string());
+        let inventory_messages = converter.convert(&twin_message).await;
+
+        let expected_message = (
+            "c8y/inventory/managedObjects/update/test-device",
+            json!({
+                "device_os": {
+                    "family": "Debian",
+                    "version": "11"
+                }
+            })
+            .into(),
+        );
+        assert_messages_matching(&inventory_messages, [expected_message.clone()]);
+
+        let clear_message =
+            Message::new(&Topic::new_unchecked("te/device/main///twin/device_os"), "");
+        let _ = converter.convert(&clear_message).await;
+
+        // Assert duplicate payload converted after it was cleared
+        let inventory_messages = converter.convert(&twin_message).await;
+        assert_messages_matching(&inventory_messages, [expected_message]);
     }
 }

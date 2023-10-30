@@ -150,7 +150,7 @@ mod tests {
             external_id: None,
             r#type: EntityType::Service,
             parent: None,
-            other: serde_json::json!({}),
+            other: serde_json::Map::new(),
         };
 
         entity_store

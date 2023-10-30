@@ -15,6 +15,7 @@ use crate::mqtt_topics::TopicIdError;
 use log::debug;
 use mqtt_channel::Message;
 use serde_json::json;
+use serde_json::Map;
 use serde_json::Value as JsonValue;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -180,6 +181,7 @@ impl EntityStore {
             r#type: main_device.r#type,
             parent: None,
             other: main_device.other,
+            twin_data: Map::new(),
         };
 
         Some(EntityStore {
@@ -197,10 +199,25 @@ impl EntityStore {
         self.entities.get(entity_topic_id)
     }
 
+    /// Returns a mutable reference to the `EntityMetadata` for the given `EntityTopicId`.
+    fn get_mut(&mut self, entity_topic_id: &EntityTopicId) -> Option<&mut EntityMetadata> {
+        self.entities.get_mut(entity_topic_id)
+    }
+
     /// Tries to get information about an entity using its `EntityTopicId`,
     /// returning an error if the entity is not registered.
     pub fn try_get(&self, entity_topic_id: &EntityTopicId) -> Result<&EntityMetadata, Error> {
         self.get(entity_topic_id)
+            .ok_or_else(|| Error::UnknownEntity(entity_topic_id.to_string()))
+    }
+
+    /// Tries to get a mutable reference to the `EntityMetadata` for the given `EntityTopicId`,
+    /// returning an error if the entity is not registered.
+    fn try_get_mut(
+        &mut self,
+        entity_topic_id: &EntityTopicId,
+    ) -> Result<&mut EntityMetadata, Error> {
+        self.get_mut(entity_topic_id)
             .ok_or_else(|| Error::UnknownEntity(entity_topic_id.to_string()))
     }
 
@@ -348,21 +365,21 @@ impl EntityStore {
             }
         };
 
-        let JsonValue::Object(mut other) = message.other else {
-            return Err(Error::EntityRegistrationOtherNotMap);
-        };
+        let mut other = message.other;
 
-        // XXX: this is c8y-specific, entity store shouldn't do this!
-        other
-            .entry("type".to_string())
-            .or_insert(JsonValue::String(self.default_service_type.clone()));
+        if message.r#type == EntityType::Service {
+            other
+                .entry("type".to_string())
+                .or_insert(JsonValue::String(self.default_service_type.clone()));
+        }
 
         let entity_metadata = EntityMetadata {
             topic_id: topic_id.clone(),
             r#type: message.r#type,
             external_id: external_id.clone(),
             parent,
-            other: JsonValue::Object(other),
+            other,
+            twin_data: Map::new(),
         };
 
         // device is affected if it was previously registered and was updated
@@ -371,11 +388,19 @@ impl EntityStore {
         match previous {
             Entry::Occupied(mut occupied) => {
                 // if there is no change, no entities were affected
-                if *occupied.get() == entity_metadata {
+                let mut existing_entity = occupied.get().clone();
+                if existing_entity == entity_metadata {
                     return Ok(vec![]);
                 }
 
-                occupied.insert(entity_metadata);
+                existing_entity.other.extend(entity_metadata.other.clone());
+                let merged_entity = EntityMetadata {
+                    twin_data: existing_entity.twin_data,
+                    other: existing_entity.other,
+                    ..entity_metadata
+                };
+
+                occupied.insert(merged_entity);
                 affected_entities.push(topic_id);
             }
             Entry::Vacant(vacant) => {
@@ -428,7 +453,10 @@ impl EntityStore {
                     external_id: Some(device_external_id),
                     r#type: EntityType::ChildDevice,
                     parent: None,
-                    other: json!({ "name": device_local_id }),
+                    other: json!({ "name": device_local_id })
+                        .as_object()
+                        .unwrap()
+                        .to_owned(),
                 };
                 register_messages.push(device_register_message.clone());
                 self.update(device_register_message)?;
@@ -444,7 +472,10 @@ impl EntityStore {
                     external_id: Some(service_external_id),
                     r#type: EntityType::Service,
                     parent: Some(parent_device_id),
-                    other: json!({ "name": service_id, "type": self.default_service_type }),
+                    other: json!({ "name": service_id, "type": self.default_service_type })
+                        .as_object()
+                        .unwrap()
+                        .to_owned(),
                 };
                 register_messages.push(service_register_message.clone());
                 self.update(service_register_message)?;
@@ -454,6 +485,33 @@ impl EntityStore {
         } else {
             Err(Error::NonDefaultTopicScheme(entity_topic_id.clone()))
         }
+    }
+
+    /// Updates the entity twin data with the provided fragment data.
+    /// Returns `true`, if the twin data got updated with the new fragment value.
+    /// If the provided fragment already existed, `false` is returned.
+    pub fn update_twin_data(
+        &mut self,
+        entity_topic_id: &EntityTopicId,
+        fragment_key: String,
+        fragment_value: JsonValue,
+    ) -> Result<bool, entity_store::Error> {
+        let entity = self.try_get_mut(entity_topic_id)?;
+        if fragment_value.is_null() {
+            let existing = entity.twin_data.remove(&fragment_key);
+            if existing.is_none() {
+                return Ok(false);
+            }
+        } else {
+            let existing = entity
+                .twin_data
+                .insert(fragment_key, fragment_value.clone());
+            if existing.is_some_and(|v| v.eq(&fragment_value)) {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
     }
 }
 
@@ -466,7 +524,8 @@ pub struct EntityMetadata {
 
     // TODO: use a dedicated struct for cloud-specific fields, have `EntityMetadata` be generic over
     // cloud we're currently connected to
-    pub other: JsonValue,
+    pub other: Map<String, JsonValue>,
+    pub twin_data: Map<String, JsonValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -494,7 +553,8 @@ impl EntityMetadata {
             external_id: device_id.into(),
             r#type: EntityType::MainDevice,
             parent: None,
-            other: serde_json::json!({}),
+            other: Map::new(),
+            twin_data: Map::new(),
         }
     }
 
@@ -505,7 +565,8 @@ impl EntityMetadata {
             external_id: child_device_id.into(),
             r#type: EntityType::ChildDevice,
             parent: Some(EntityTopicId::default_main_device()),
-            other: serde_json::json!({}),
+            other: Map::new(),
+            twin_data: Map::new(),
         })
     }
 }
@@ -549,7 +610,7 @@ pub struct EntityRegistrationMessage {
     // other properties, usually cloud-specific
     // TODO: replace with `Map` and use type wrapper that forbids fields `@id`,
     // `@parent`, etc.
-    pub other: JsonValue,
+    pub other: Map<String, JsonValue>,
 }
 
 impl EntityRegistrationMessage {
@@ -615,7 +676,7 @@ impl EntityRegistrationMessage {
             None
         };
 
-        let other = JsonValue::Object(properties);
+        let other = properties;
 
         assert_eq!(other.get("@id"), None);
         assert_eq!(other.get("@type"), None);
@@ -637,7 +698,7 @@ impl EntityRegistrationMessage {
             external_id: Some(main_device_id.into()),
             r#type: EntityType::MainDevice,
             parent: None,
-            other: serde_json::json!({}),
+            other: Map::new(),
         }
     }
 
@@ -655,7 +716,7 @@ impl EntityRegistrationMessage {
             props.insert("@parent".to_string(), parent.to_string().into());
         }
 
-        props.append(self.other.as_object_mut().unwrap());
+        props.append(&mut self.other);
 
         let message = serde_json::to_string(&props).unwrap();
 
@@ -720,6 +781,32 @@ mod tests {
     }
 
     #[test]
+    fn parse_entity_registration_message() {
+        let message = Message::new(
+            &Topic::new("te/device/child1//").unwrap(),
+            json!({
+                "@type" : "child-device",
+                "name": "child1",
+                "type": "RPi",
+                "version": "5",
+                "complex": {
+                    "foo" : "bar"
+                }
+            })
+            .to_string(),
+        );
+        let parsed = EntityRegistrationMessage::new(&message).unwrap();
+        assert_eq!(parsed.r#type, EntityType::ChildDevice);
+        assert_eq!(parsed.other.get("name").unwrap(), "child1");
+        assert_eq!(parsed.other.get("type").unwrap(), "RPi");
+        assert_eq!(parsed.other.get("version").unwrap(), "5");
+        assert_eq!(
+            parsed.other.get("complex").unwrap().get("foo").unwrap(),
+            "bar"
+        );
+    }
+
+    #[test]
     fn registers_main_device() {
         let store = new_entity_store();
 
@@ -775,7 +862,7 @@ mod tests {
                 external_id: None,
                 topic_id: EntityTopicId::default_main_service("service1").unwrap(),
                 parent: None,
-                other: json!({}),
+                other: Map::new(),
             })
             .unwrap();
 
@@ -791,7 +878,7 @@ mod tests {
                 external_id: None,
                 topic_id: EntityTopicId::default_main_service("service2").unwrap(),
                 parent: None,
-                other: json!({}),
+                other: Map::new(),
             })
             .unwrap();
 
@@ -814,7 +901,7 @@ mod tests {
             external_id: None,
             r#type: EntityType::ChildDevice,
             parent: Some(EntityTopicId::default_child_device("myawesomeparent").unwrap()),
-            other: json!({}),
+            other: Map::new(),
         });
 
         assert!(matches!(res, Err(Error::NoParent(_))));
@@ -1050,14 +1137,17 @@ mod tests {
                     r#type: EntityType::ChildDevice,
                     external_id: Some("device:child1".into()),
                     parent: None,
-                    other: json!({ "name": "child1" }),
+                    other: json!({ "name": "child1" }).as_object().unwrap().to_owned(),
                 },
                 EntityRegistrationMessage {
                     topic_id: EntityTopicId::from_str("device/child1/service/service1").unwrap(),
                     r#type: EntityType::Service,
                     external_id: Some("device:child1:service:service1".into()),
                     parent: Some(EntityTopicId::from_str("device/child1//").unwrap()),
-                    other: json!({ "name": "service1",  "type": "service" }),
+                    other: json!({ "name": "service1",  "type": "service" })
+                        .as_object()
+                        .unwrap()
+                        .to_owned(),
                 }
             ]
         );
@@ -1077,7 +1167,7 @@ mod tests {
                 r#type: EntityType::ChildDevice,
                 external_id: Some("device:child2".into()),
                 parent: None,
-                other: json!({ "name": "child2" }),
+                other: json!({ "name": "child2" }).as_object().unwrap().to_owned(),
             },]
         );
     }
@@ -1103,7 +1193,7 @@ mod tests {
                 r#type: EntityType::MainDevice,
                 external_id: None,
                 parent: None,
-                other: json!({}),
+                other: json!({}).as_object().unwrap().to_owned(),
             })
             .unwrap();
 
@@ -1112,7 +1202,8 @@ mod tests {
             parent: None,
             r#type: EntityType::MainDevice,
             external_id: "test-device".into(),
-            other: json!({"type": "service"}),
+            other: json!({}).as_object().unwrap().to_owned(),
+            twin_data: Map::new(),
         };
         // Assert main device registered with custom topic scheme
         assert_eq!(
@@ -1132,7 +1223,7 @@ mod tests {
                 r#type: EntityType::Service,
                 external_id: None,
                 parent: Some(main_topic_id.clone()),
-                other: json!({}),
+                other: json!({}).as_object().unwrap().to_owned(),
             })
             .unwrap();
 
@@ -1141,7 +1232,8 @@ mod tests {
             parent: Some(main_topic_id),
             r#type: EntityType::Service,
             external_id: "custom:main:service:collectd".into(),
-            other: json!({"type": "service"}),
+            other: json!({"type": "service"}).as_object().unwrap().to_owned(),
+            twin_data: Map::new(),
         };
         // Assert service registered under main device with custom topic scheme
         assert_eq!(
@@ -1166,7 +1258,7 @@ mod tests {
             r#type: EntityType::ChildDevice,
             external_id: Some("bad+id".into()),
             parent: None,
-            other: json!({}),
+            other: Map::new(),
         });
 
         // Assert service registered under main device with custom topic scheme
@@ -1179,6 +1271,129 @@ mod tests {
         );
     }
 
+    #[test]
+    fn update_twin_data_new_fragment() {
+        let mut store = new_entity_store();
+
+        let topic_id = EntityTopicId::default_main_device();
+        let updated = store
+            .update_twin_data(&topic_id, "hardware".into(), json!({ "version": 5 }))
+            .unwrap();
+        assert!(
+            updated,
+            "Inserting new key should have resulted in an update"
+        );
+
+        let entity_metadata = store.get(&topic_id).unwrap();
+        assert_eq!(
+            entity_metadata.twin_data.get("hardware").unwrap(),
+            &json!({ "version": 5 })
+        );
+    }
+
+    #[test]
+    fn update_twin_data_update_existing_fragment() {
+        let mut store = new_entity_store();
+
+        let topic_id = EntityTopicId::default_main_device();
+        let _ = store
+            .update_twin_data(&topic_id, "hardware".into(), json!({ "version": 5 }))
+            .unwrap();
+
+        let updated = store
+            .update_twin_data(&topic_id, "hardware".into(), json!({ "version": 6 }))
+            .unwrap();
+        assert!(
+            updated,
+            "Updating an existing key should have resulted in an update"
+        );
+
+        let entity_metadata = store.get(&topic_id).unwrap();
+        assert_eq!(
+            entity_metadata.twin_data.get("hardware").unwrap(),
+            &json!({ "version": 6 })
+        );
+    }
+
+    #[test]
+    fn update_twin_data_remove_fragment() {
+        let mut store = new_entity_store();
+
+        let topic_id = EntityTopicId::default_main_device();
+
+        let _ = store
+            .update_twin_data(&topic_id, "foo".into(), json!("bar"))
+            .unwrap();
+
+        let updated = store
+            .update_twin_data(&topic_id, "foo".into(), json!(null))
+            .unwrap();
+        assert!(
+            updated,
+            "Removing an existing key should have resulted in an update"
+        );
+
+        let entity_metadata = store.get(&topic_id).unwrap();
+        assert!(entity_metadata.twin_data.get("foo").is_none());
+    }
+
+    #[test]
+    fn updated_registration_message_after_twin_updates() {
+        // Create an entity store with main device having an explicit `name` fragment
+        let topic_id = EntityTopicId::default_main_device();
+        let mut store = EntityStore::with_main_device(
+            EntityRegistrationMessage {
+                topic_id: topic_id.clone(),
+                external_id: Some("test-device".into()),
+                r#type: EntityType::MainDevice,
+                parent: None,
+                other: json!({ "name" : "test-name", "type": "test-type" })
+                    .as_object()
+                    .unwrap()
+                    .to_owned(),
+            },
+            dummy_external_id_mapper,
+            dummy_external_id_sanitizer,
+        )
+        .unwrap();
+
+        // Add some additional fragments to the device twin data
+        let _ = store
+            .update_twin_data(&topic_id, "hardware".into(), json!({ "version": 5 }))
+            .unwrap();
+
+        // Update the name of the device with
+        let new_reg = EntityRegistrationMessage {
+            topic_id: EntityTopicId::default_main_device(),
+            external_id: Some("test-device".into()),
+            r#type: EntityType::MainDevice,
+            parent: None,
+            other: json!({ "name" : "new-test-device" })
+                .as_object()
+                .unwrap()
+                .to_owned(),
+        };
+        store.update(new_reg).unwrap();
+
+        // Assert that the old and new twin data are merged
+        let entity_metadata = store.get(&topic_id).unwrap();
+        assert_eq!(
+            entity_metadata.other.get("name").unwrap(),
+            &json!("new-test-device"),
+            "Expected new name in twin data"
+        );
+        assert_eq!(
+            entity_metadata.other.get("type").unwrap(),
+            &json!("test-type"),
+            "Expected old type in twin data"
+        );
+        assert_eq!(
+            entity_metadata.twin_data.get("hardware").unwrap(),
+            &json!({ "version": 5 }),
+            "Expected old hardware fragment in twin data"
+        );
+    }
+
     fn new_entity_store() -> EntityStore {
         EntityStore::with_main_device(
             EntityRegistrationMessage {
@@ -1186,7 +1401,7 @@ mod tests {
                 external_id: Some("test-device".into()),
                 r#type: EntityType::MainDevice,
                 parent: None,
-                other: json!({}),
+                other: Map::new(),
             },
             dummy_external_id_mapper,
             dummy_external_id_sanitizer,

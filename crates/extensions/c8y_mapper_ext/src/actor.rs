@@ -160,7 +160,10 @@ impl C8yMapperActor {
                         external_id: Some(child_external_id),
                         r#type: EntityType::ChildDevice,
                         parent: None,
-                        other: json!({ "name": child_name }),
+                        other: json!({ "name": child_name })
+                            .as_object()
+                            .unwrap()
+                            .to_owned(),
                     };
                     match self
                         .converter

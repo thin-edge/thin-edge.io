@@ -72,7 +72,7 @@ where
     );
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MessagePayloadMatcher {
     StringMessage(&'static str),
     JsonMessage(serde_json::Value),
