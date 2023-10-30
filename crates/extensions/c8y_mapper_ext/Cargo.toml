@@ -10,6 +10,7 @@ homepage = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+anyhow = { workspace = true }
 async-trait = { workspace = true }
 c8y_api = { workspace = true }
 c8y_auth_proxy = { workspace = true }
@@ -45,7 +46,6 @@ toml = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-anyhow = { workspace = true }
 assert-json-diff = { workspace = true }
 assert_matches = { workspace = true }
 proptest = { workspace = true }

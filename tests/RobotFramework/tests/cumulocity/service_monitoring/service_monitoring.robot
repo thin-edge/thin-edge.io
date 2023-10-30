@@ -190,7 +190,6 @@ Check if a service using configured service type
 
 Check if a service using configured service type as empty
     [Arguments]    ${service_name}
-    Skip    msg=Skipping due to bug #2383
     Execute Command    tedge config set service.type ""
     Custom Test Setup
     ThinEdgeIO.Restart Service    ${service_name}

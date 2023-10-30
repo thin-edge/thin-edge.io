@@ -87,7 +87,12 @@ impl TEdgeComponent for CumulocityMapper {
 
 pub fn service_monitor_client_config(tedge_config: &TEdgeConfig) -> Result<Config, anyhow::Error> {
     let main_device_xid: EntityExternalId = tedge_config.device.id.try_read(tedge_config)?.into();
-    let service_type = tedge_config.service.ty.clone();
+    let service_type = &tedge_config.service.ty;
+    let service_type = if service_type.is_empty() {
+        "service".to_string()
+    } else {
+        service_type.to_string()
+    };
 
     // FIXME: this will not work if `mqtt.device_topic_id` is not in default scheme
 
@@ -113,7 +118,7 @@ pub fn service_monitor_client_config(tedge_config: &TEdgeConfig) -> Result<Confi
         service_type.as_str(),
         "down",
         &[],
-    );
+    )?;
 
     let mqtt_config = tedge_config
         .mqtt_config()?

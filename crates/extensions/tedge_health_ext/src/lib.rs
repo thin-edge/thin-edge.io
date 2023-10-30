@@ -39,7 +39,7 @@ impl HealthMonitorBuilder {
         mqtt: &mut (impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter> + AsMut<MqttConfig>),
         // TODO: pass it less annoying way
         mqtt_schema: &MqttSchema,
-        service_type: String,
+        mut service_type: String,
     ) -> Self {
         let service_topic_id = &service.service_topic_id;
 
@@ -70,6 +70,10 @@ impl HealthMonitorBuilder {
 
         box_builder
             .set_request_sender(mqtt.connect_consumer(subscriptions, box_builder.get_sender()));
+
+        if service_type.is_empty() {
+            service_type = "service".to_string()
+        }
 
         let registration_message = EntityRegistrationMessage {
             topic_id: service_topic_id.entity().clone(),
