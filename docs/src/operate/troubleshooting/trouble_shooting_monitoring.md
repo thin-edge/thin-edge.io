@@ -47,8 +47,8 @@ sudo systemctl start tedge-mapper-collectd
 
 ## Are the collectd metrics published in Thin Edge JSON format?
 
-```sh te2mqtt
-tedge mqtt sub 'tedge/measurements'
+```sh te2mqtt formats="v1"
+tedge mqtt sub 'te/device/main///m/+'
 ```
 
 ## Are the collectd metrics published to Cumulocity IoT?

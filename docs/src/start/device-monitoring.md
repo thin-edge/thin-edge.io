@@ -134,7 +134,7 @@ sudo systemctl start tedge-mapper-collectd
 ```
 
 This process subscribes to the `collectd/#` topics to read the monitoring metrics published by collectd
-and emits the translated measurements in thin-edge.io JSON format to the `tedge/measurements` topic.
+and emits the translated measurements in thin-edge.io JSON format to the **measurements** topic.
 You can inspect the collected and translated metrics, by subscribing to these topics:
 
 The metrics collected by `collectd` are emitted to subtopics named after the collectd plugin and the metric name:
@@ -155,12 +155,12 @@ The `tedge-mapper-collectd` translates these collectd measurements into the [thi
 [grouping the measurements](../references/mqtt-topics.md#collectd-topics) emitted by each plugin:
 
 ```sh te2mqtt
-tedge mqtt sub 'tedge/measurements'
+tedge mqtt sub 'te/+/+/+/+/m/+'
 ```
 
 ```log title="Output"
-[tedge/measurements] {"time":"2021-06-07T15:38:59.154895598+01:00","cpu":{"percent-active":0.50251256281407},"memory":{"percent-used":1.11893578135189}}
-[tedge/measurements] {"time":"2021-06-07T15:39:00.154967388+01:00","cpu":{"percent-active":0},"df-root":{"percent_bytes-used":71.3110656738281},"memory":{"percent-used":1.12107875001658}}
+[te/device/main///m/] {"time":"2021-06-07T15:38:59.154895598+01:00","cpu":{"percent-active":0.50251256281407},"memory":{"percent-used":1.11893578135189}}
+[te/device/main///m/] {"time":"2021-06-07T15:39:00.154967388+01:00","cpu":{"percent-active":0},"df-root":{"percent_bytes-used":71.3110656738281},"memory":{"percent-used":1.12107875001658}}
 ```
 
 From there, if the device is actually connected to a cloud platform like Cumulocity,

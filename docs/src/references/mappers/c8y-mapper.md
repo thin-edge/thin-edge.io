@@ -941,9 +941,9 @@ If that subscription returns the following messages:
 
 ``` text title="Output"
 [te/device/main///cmd/restart] {}
-[te/device/main///cmd/log_upload] { "supportedTypes": ["tedge-agent", "mosquitto"] }
-[te/device/child01///cmd/config_snapshot] { "supportedTypes": ["mosquitto", "tedge", "collectd"] }
-[te/device/child01///cmd/config_update] { "supportedTypes": ["mosquitto", "tedge", "collectd"] }
+[te/device/main///cmd/log_upload] { "types": ["tedge-agent", "mosquitto"] }
+[te/device/child01///cmd/config_snapshot] { "types": ["mosquitto", "tedge", "collectd"] }
+[te/device/child01///cmd/config_update] { "types": ["mosquitto", "tedge", "collectd"] }
 ```
 
 The `cmd` metadata registered for both the `main` device and the child device `child01`
@@ -954,7 +954,7 @@ are mapped to the following supported operations messages:
 [c8y/s/us/<main-device-id>:device:child01] 114,c8y_UploadConfigFile,c8y_DownloadConfigFile
 ```
 
-The operation specific metadata like `supportedTypes` for `log_upload`, `config_snapshot` and `config_update`
+The operation specific metadata like `types` for `log_upload`, `config_snapshot` and `config_update`
 are also mapped to their corresponding _supported logs_ and _supported configs_ messages as follows:
 
 ```text

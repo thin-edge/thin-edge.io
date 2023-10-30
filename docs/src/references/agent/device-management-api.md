@@ -190,7 +190,7 @@ On start, a service that implements an operation for a device must:
 - know the MQTT root prefix (per default: `te`),
 - know the entity topic identifier of the target device (e.g. `device/child001//`),
 - know the well-known name of the operation (e.g. `software_update`),
-- forge a capability message describing the operation support (e.g. `{ "supportedTypes": ["apt", "docker"] }`)
+- forge a capability message describing the operation support (e.g. `{ "types": ["apt", "docker"] }`)
 - publish this capability message, with a retained flag, on the target command metadata topic (e.g. `te/device/child001///cmd/software_update`)
 
 ### Command execution
@@ -225,7 +225,7 @@ When launched on the child device `device/child001//`,
 ```sh te2mqtt formats="v1"
 tedge mqtt pub --retain 'te/device/child001///cmd/software_update' '{
     "description": "Install, update and remove software packages",
-    "supportedTypes": [
+    "types": [
       "apt",
       "docker",
     ]
