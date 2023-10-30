@@ -214,7 +214,7 @@ tedge mqtt pub te/device/main///a/temperature_high '{
 | Reference    | Description                                                                                                                                                        |
 |--------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `alarm_type` | Uniquely identifies the alarm in the context of the device; part of the MQTT topic                                                                                 |
-| `severity`   | Severity of the alarm; must be `critical`, `major`, `minor` or `warning`                                                                                           |
+| `severity`   | Severity of the alarm; recommended to be `critical`, `major`, `minor` or `warning`                                                                                           |
 | `text`       | Text description of the alarm; must be UTF-8 encoded                                                                                                               |
 | `timestamp`  | Optional time that indicates when the alarm has occurred, in ISO 8601 string format; when not provided, thin-edge.io uses the current system time                  |
 | `*`          | Additional fields are handled as custom specific information; if the connected cloud supports custom fragments its mapper transfers those accordingly to the cloud |
