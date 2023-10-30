@@ -65,7 +65,7 @@ When you want to skip both fields, use an empty json fragment `{}` as the payloa
 An empty message can't be used for the same, as empty messages are used to clear alarms, which is discussed in the next section.
 :::
 
-The `<severity>` value in the MQTT payload can only be one of the following values:
+The `<severity>` value in the MQTT payload is recommended to be one of the following values:
 
 1. critical
 2. major
