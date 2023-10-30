@@ -88,10 +88,10 @@ data that can be represented in Thin Edge JSON format and the reserved fields li
 
 ## Sending measurements to child devices
 
-If valid Thin Edge JSON measurements are published to the `te/device/<child-id>///m/+` topic,
+If valid Thin Edge JSON measurements are published to the `te/device/<child-id>///m/<measurement-type>` topic,
 the measurements are recorded under a child device of your thin-edge.io device.
 
-Given your desired child device ID is `child1`, publish a Thin Edge JSON message to the following topic:
+Given your desired child device ID is `child1`, publish a Thin Edge JSON message to the following topic where the measurement type is set to `environment`:
 
 ```sh te2mqtt
 tedge mqtt pub te/device/child1///m/environment '{"temperature": 25}'
