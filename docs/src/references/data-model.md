@@ -181,7 +181,7 @@ te/device/<child-id>///a/<alarm-type>
 |Reference           |Description|
 | ------------------ | --------- |
 |`alarm-type`        |a string part of the MQTT topic, that identifies the alarm uniquely in context of the device|
-|`severity`          |a string part of the MQTT payload, that indicates the severity of the alarm; must be `critical`, `major`, `minor` or `warning`|
+|`severity`          |a string part of the MQTT payload, that indicates the severity of the alarm; recommended to be `critical`, `major`, `minor` or `warning`|
 |`text`              |carries a human readable alarm-text; must be UTF-8 encoded|
 |`timestamp`         |optional time that indicates when the alarm has occurred; when not provided, thin-edge.io uses the current system time as the time of the alarm; when provided must be conform to ISO 8601|
 |`custom fragments`  |additional fields are handled as custom specific information; if the connected cloud supports custom fragments its mapper transfers those accordingly to the cloud|
