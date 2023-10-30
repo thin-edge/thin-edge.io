@@ -148,6 +148,10 @@ tedge mqtt pub --retain 'te/device/child001///cmd/software_update' '{
 }'
 ```
 
+:::info
+The software types are currently not sent to the cloud (e.g. Cumulocity IoT), however this is planned in a future release.
+:::
+
 ### init state
 
 A `software_update` command is defined by an `"updateList"` array giving the packages to install, update or remove.
