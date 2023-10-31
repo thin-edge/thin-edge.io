@@ -38,6 +38,7 @@ pub struct C8yMapperConfig {
     pub capabilities: Capabilities,
     pub auth_proxy_addr: IpAddr,
     pub auth_proxy_port: u16,
+    pub mqtt_schema: MqttSchema,
 }
 
 impl C8yMapperConfig {
@@ -56,6 +57,7 @@ impl C8yMapperConfig {
         capabilities: Capabilities,
         auth_proxy_addr: IpAddr,
         auth_proxy_port: u16,
+        mqtt_schema: MqttSchema,
     ) -> Self {
         let ops_dir = config_dir.join("operations").join("c8y");
 
@@ -74,6 +76,7 @@ impl C8yMapperConfig {
             capabilities,
             auth_proxy_addr,
             auth_proxy_port,
+            mqtt_schema,
         }
     }
 
@@ -92,7 +95,7 @@ impl C8yMapperConfig {
         let c8y_host = tedge_config.c8y.http.or_config_not_set()?.to_string();
         let tedge_http_address = tedge_config.http.bind.address;
         let tedge_http_port = tedge_config.http.bind.port;
-        let mqtt_schema = MqttSchema::default(); // later get the value from tedge config
+        let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
         let auth_proxy_addr = tedge_config.c8y.proxy.bind.address;
         let auth_proxy_port = tedge_config.c8y.proxy.bind.port;
 
@@ -151,6 +154,7 @@ impl C8yMapperConfig {
             capabilities,
             auth_proxy_addr,
             auth_proxy_port,
+            mqtt_schema,
         ))
     }
 

@@ -77,8 +77,6 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::DownloadInfo;
 use tedge_api::EntityStore;
 use tedge_config::TEdgeConfigError;
-use tedge_config::TEdgeConfigLocation;
-use tedge_config::TEdgeConfigRepository;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -201,10 +199,6 @@ impl CumulocityConverter {
 
         let c8y_host = config.c8y_host.clone();
         let cfg_dir = config.config_dir.clone();
-        let tedge_config_location = TEdgeConfigLocation::from_custom_root(&cfg_dir);
-        let config_repository = TEdgeConfigRepository::new(tedge_config_location);
-        let tedge_config = config_repository.load()?;
-        let topic_root = tedge_config.mqtt.topic_root.to_string();
 
         let size_threshold = SizeThreshold(MQTT_MESSAGE_SIZE_THRESHOLD);
 
@@ -218,7 +212,9 @@ impl CumulocityConverter {
         let operation_logs = OperationLogs::try_new(log_dir.into())?;
 
         let c8y_endpoint = C8yEndPoint::new(&c8y_host, &device_id);
-        let mqtt_schema = MqttSchema::with_root(topic_root);
+
+        let mqtt_schema = config.mqtt_schema.clone();
+
         let mapper_config = MapperConfig {
             out_topic: Topic::new_unchecked("c8y/measurement/measurements/create"),
             errors_topic: mqtt_schema.error_topic(),
@@ -2791,9 +2787,9 @@ pub(crate) mod tests {
             Capabilities::default(),
             auth_proxy_addr,
             auth_proxy_port,
+            MqttSchema::default(),
         )
     }
-
     fn create_c8y_converter_from_config(
         config: C8yMapperConfig,
     ) -> (

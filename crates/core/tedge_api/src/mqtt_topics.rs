@@ -170,8 +170,8 @@ impl MqttSchema {
     pub fn capability_topic_for(&self, target: &EntityTopicId, operation: OperationType) -> Topic {
         self.topic_for(target, &Channel::CommandMetadata { operation })
     }
-    
-    /// Build a new schema using the given root prefix for errors topic.
+
+    /// Build a new error topic using the given schema for the root prefix.
     /// ```
     /// use mqtt_channel::Topic;
     /// let te = tedge_api::mqtt_topics::MqttSchema::with_root("thin-edge".to_string());
