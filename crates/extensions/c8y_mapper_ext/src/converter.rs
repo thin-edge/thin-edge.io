@@ -754,7 +754,16 @@ impl CumulocityConverter {
             };
 
             let child_name = self.default_device_name_from_external_id(&child_external_id);
-            let child_topic_id = EntityTopicId::default_child_device(&child_name).unwrap();
+            let child_topic_id = match EntityTopicId::default_child_device(&child_name) {
+                Ok(topic_id) => topic_id,
+                Err(err) => {
+                    error!(
+                        "Child device directory: {} ignored due to {}",
+                        &child_name, err
+                    );
+                    continue;
+                }
+            };
             let child_device_reg_msg = EntityRegistrationMessage {
                 topic_id: child_topic_id,
                 external_id: Some(child_external_id.clone()),
