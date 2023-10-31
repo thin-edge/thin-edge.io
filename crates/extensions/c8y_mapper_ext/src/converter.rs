@@ -752,14 +752,15 @@ impl CumulocityConverter {
                     continue;
                 }
             };
-            let child_topic_id =
-                EntityTopicId::default_child_device(child_external_id.as_ref()).unwrap();
+
+            let child_name = self.default_device_name_from_external_id(&child_external_id);
+            let child_topic_id = EntityTopicId::default_child_device(&child_name).unwrap();
             let child_device_reg_msg = EntityRegistrationMessage {
                 topic_id: child_topic_id,
                 external_id: Some(child_external_id.clone()),
                 r#type: EntityType::ChildDevice,
                 parent: None,
-                other: json!({ "name": child_external_id.as_ref() })
+                other: json!({ "name": child_name })
                     .as_object()
                     .unwrap()
                     .to_owned(),
