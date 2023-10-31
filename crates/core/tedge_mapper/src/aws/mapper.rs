@@ -9,6 +9,7 @@ use tedge_actors::ConvertingActor;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::TEdgeConfig;
 use tracing::warn;
 
@@ -30,11 +31,9 @@ impl TEdgeComponent for AwsMapper {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(self.session_name(), &tedge_config).await?;
         let clock = Box::new(WallClock);
-        let aws_converter = AwsConverter::new(
-            tedge_config.aws.mapper.timestamp,
-            clock,
-            &tedge_config.mqtt.topic_root,
-        );
+        let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
+        let aws_converter =
+            AwsConverter::new(tedge_config.aws.mapper.timestamp, clock, mqtt_schema);
         let mut aws_converting_actor = ConvertingActor::builder(
             "AwsConverter",
             aws_converter,
