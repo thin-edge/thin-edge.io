@@ -8,6 +8,8 @@ use std::convert::Infallible;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
+use time::format_description;
+use time::OffsetDateTime;
 
 const ENTITY_ID_SEGMENTS: usize = 4;
 
@@ -642,6 +644,32 @@ pub enum ChannelFilter {
     EventMetadata,
     AlarmMetadata,
     CommandMetadata(OperationType),
+}
+
+pub struct IdGenerator {
+    prefix: String,
+}
+
+impl IdGenerator {
+    pub fn new(prefix: &str) -> Self {
+        IdGenerator {
+            prefix: prefix.into(),
+        }
+    }
+
+    pub fn new_id(&self) -> String {
+        format!(
+            "{}-{}",
+            self.prefix,
+            OffsetDateTime::now_utc()
+                .format(&format_description::well_known::Rfc3339)
+                .unwrap(),
+        )
+    }
+
+    pub fn is_generator_of(&self, cmd_id: &str) -> bool {
+        cmd_id.contains(&self.prefix)
+    }
 }
 
 #[cfg(test)]
