@@ -45,7 +45,7 @@ By default the mqtt message will be published with retain flag set to false.
 Command [`tedge mqtt sub`](../../references/cli/tedge-mqtt.md) can be used to ease debugging of of MQTT communication on local bridge. You can subscribe to topic of your choosing:
 
 ```sh te2mqtt
-tedge mqtt sub tedge/errors
+tedge mqtt sub te/errors
 ```
 
 Or you can subscribe to any topic on the server using wildcard (`#`) topic:

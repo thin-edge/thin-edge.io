@@ -9,6 +9,7 @@ use tedge_actors::ConvertingActor;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
+use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::TEdgeConfig;
 use tracing::warn;
 
@@ -29,9 +30,12 @@ impl TEdgeComponent for AzureMapper {
     ) -> Result<(), anyhow::Error> {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(self.session_name(), &tedge_config).await?;
-
-        let az_converter =
-            AzureConverter::new(tedge_config.az.mapper.timestamp, Box::new(WallClock));
+        let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
+        let az_converter = AzureConverter::new(
+            tedge_config.az.mapper.timestamp,
+            Box::new(WallClock),
+            mqtt_schema,
+        );
         let mut az_converting_actor =
             ConvertingActor::builder("AzConverter", az_converter, get_topic_filter(&tedge_config));
         az_converting_actor.add_input(&mut mqtt_actor);

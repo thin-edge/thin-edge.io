@@ -4,7 +4,7 @@ import time
 
 """
 Validate message size that is published on tedge/measurements,
-by subscribing for error message on tedge/errors by tedge-mapper c8y
+by subscribing for error message on te/errors by tedge-mapper c8y
 
 Given a configured system
 When we start the tedge-mapper-c8y systemctl service
@@ -34,7 +34,7 @@ class TedgeMapperC8yThresholdPacketSize(BaseTest):
     def execute(self):
         sub = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "sub", "--no-topic", "tedge/errors"],
+            arguments=[self.tedge, "mqtt", "sub", "--no-topic", "te/errors"],
             stdouterr="tedge_sub",
             background=True,
         )

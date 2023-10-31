@@ -184,7 +184,7 @@ async fn monitor_tedge_service(
         .mqtt_config()?
         .with_session_name(mqtt_session_name)
         .with_subscriptions(res_topic.into())
-        .with_initial_message(move || _service_health_topic.clone().up_message())
+        .with_initial_message(move || _service_health_topic.up_message())
         .with_last_will_message(service_health_topic.down_message());
 
     let client = mqtt_channel::Connection::new(&mqtt_config).await?;

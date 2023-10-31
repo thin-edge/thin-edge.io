@@ -4,7 +4,7 @@ import time
 
 """
 Validate an invalid JSON message that is published
-on tedge/errors by tedge-mapper az
+on te/errors by tedge-mapper az
 
 Given a configured system
 When we start the tedge-mapper-az systemctl service
@@ -33,7 +33,7 @@ class TedgeMapperAzError(BaseTest):
     def execute(self):
         sub = self.startProcess(
             command=self.sudo,
-            arguments=[self.tedge, "mqtt", "sub", "--no-topic", "tedge/errors"],
+            arguments=[self.tedge, "mqtt", "sub", "--no-topic", "te/errors"],
             stdouterr="tedge_sub",
             background=True,
         )

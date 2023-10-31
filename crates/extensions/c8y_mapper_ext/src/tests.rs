@@ -1266,7 +1266,7 @@ async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
     .unwrap();
 
     // Expect converted alarm SmartREST message
-    assert_received_contains_str(&mut mqtt, [("tedge/errors", "Parsing of alarm message for the type: complex_text_alarm failed due to error: invalid")]).await;
+    assert_received_contains_str(&mut mqtt, [("te/errors", "Parsing of alarm message for the type: complex_text_alarm failed due to error: invalid")]).await;
 }
 
 #[tokio::test]
@@ -3024,6 +3024,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(
         Capabilities::default(),
         auth_proxy_addr,
         auth_proxy_port,
+        MqttSchema::default(),
     );
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =

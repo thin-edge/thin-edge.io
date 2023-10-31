@@ -213,9 +213,11 @@ impl CumulocityConverter {
 
         let c8y_endpoint = C8yEndPoint::new(&c8y_host, &device_id);
 
+        let mqtt_schema = config.mqtt_schema.clone();
+
         let mapper_config = MapperConfig {
             out_topic: Topic::new_unchecked("c8y/measurement/measurements/create"),
-            errors_topic: Topic::new_unchecked("tedge/errors"),
+            errors_topic: mqtt_schema.error_topic(),
         };
 
         let main_device = entity_store::EntityRegistrationMessage::main_device(device_id.clone());
@@ -244,7 +246,7 @@ impl CumulocityConverter {
             mqtt_publisher,
             service_type,
             c8y_endpoint,
-            mqtt_schema: MqttSchema::default(),
+            mqtt_schema,
             entity_store,
             auth_proxy,
             downloader_sender,
@@ -1926,7 +1928,7 @@ pub(crate) mod tests {
         // First convert invalid Thin Edge JSON message.
         let out_first_messages = converter.convert(&in_first_message).await;
         let expected_error_message = Message::new(
-            &Topic::new_unchecked("tedge/errors"),
+            &Topic::new_unchecked("te/errors"),
             "Invalid JSON: expected value at line 1 column 10: `invalid}\n`",
         );
         assert_eq!(out_first_messages, vec![expected_error_message]);
@@ -2795,9 +2797,9 @@ pub(crate) mod tests {
             Capabilities::default(),
             auth_proxy_addr,
             auth_proxy_port,
+            MqttSchema::default(),
         )
     }
-
     fn create_c8y_converter_from_config(
         config: C8yMapperConfig,
     ) -> (

@@ -21,7 +21,7 @@ A mapper subscribes to the reserved MQTT topic `te/+/+/+/+/m/+` with the QoS lev
 The messages that arrive in the mapper should be formed in the [Thin Edge JSON](thin-edge-json.md) format.
 The mapper verifies whether the arrived messages are correctly formatted,
 in case the verification fails, the mapper publishes a corresponded error message
-on the topic `tedge/errors` with the QoS level 1 (at least once).
+on the topic `te/errors` with the QoS level 1 (at least once).
 
 When the mapper receives a correctly formatted message,
 the message will be translated into a cloud-specific format.
@@ -169,7 +169,7 @@ This mapper is launched by the `tedge connect aws` command, and stopped by the `
 ## Error cases
 
 When some error occurs in a mapper process, the mapper publishes a corresponded error message
-on the topic `tedge/errors` with the QoS level 1 (at least once).
+on the topic `te/errors` with the QoS level 1 (at least once).
 
 Here is an example if you publish invalid Thin Edge JSON messages on `te/+/+/+/+/m/+`:
 
@@ -178,15 +178,15 @@ tedge mqtt pub te/device/main///m/ '{"temperature": 23,"pressure": 220'
 tedge mqtt pub te/device/main///m/ '{"temperature": 23,"time": 220}'
 ```
 
-Then, you'll receive error messages from the mapper on the topic `tedge/errors`:
+Then, you'll receive error messages from the mapper on the topic `te/errors`:
 
 ```sh te2mqtt
-tedge mqtt sub tedge/errors
+tedge mqtt sub te/errors
 ```
 
 ```log title="Output"
-[tedge/errors] Invalid JSON: Unexpected end of JSON: {"temperature":23,"pressure":220
-[tedge/errors] Not a timestamp: the time value must be an ISO8601 timestamp string in the YYYY-MM-DDThh:mm:ss.sss.±hh:mm format, not a number.
+[te/errors] Invalid JSON: Unexpected end of JSON: {"temperature":23,"pressure":220
+[te/errors] Not a timestamp: the time value must be an ISO8601 timestamp string in the YYYY-MM-DDThh:mm:ss.sss.±hh:mm format, not a number.
 ```
 
 ## Topics used by tedge-mapper
@@ -195,6 +195,6 @@ tedge mqtt sub tedge/errors
   - `te/+/+/+/+/m/+`
 
 - Outgoing topics
-  - `tedge/errors` (for errors)
+  - `te/errors` (for errors)
   - `c8y/measurement/measurements/create` (for Cumulocity)
   - `az/messages/events/` (for Azure IoT Hub)

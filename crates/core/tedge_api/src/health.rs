@@ -3,6 +3,7 @@ use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::ServiceTopicId;
 use clock::Clock;
 use clock::WallClock;
+use log::error;
 use mqtt_channel::Message;
 use mqtt_channel::Topic;
 use serde_json::json;
@@ -45,32 +46,28 @@ impl ServiceHealthTopic {
     }
 
     pub fn up_message(&self) -> Message {
-        let timestamp = WallClock
-            .now()
-            .format(&time::format_description::well_known::Rfc3339);
-        match timestamp {
-            Ok(timestamp) => {
-                let health_status = json!({
-                    "status": "up",
-                    "pid": process::id(),
-                    "time": timestamp
-                })
-                .to_string();
-
-                let response_topic_health = Topic::new_unchecked(self.as_str());
-
-                Message::new(&response_topic_health, health_status)
-                    .with_qos(mqtt_channel::QoS::AtLeastOnce)
-                    .with_retain()
-            }
-            Err(e) => {
-                let error_topic = Topic::new_unchecked("tedge/errors");
-                let error_msg = format!(
-                    "Health message: Failed to convert timestamp to Rfc3339 format due to: {e}"
+        let now = WallClock.now();
+        let timestamp = now
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap_or_else(|err| {
+                error!(
+                    "Health message: Failed to convert timestamp to Rfc3339 format due to: {err}"
                 );
-                Message::new(&error_topic, error_msg).with_qos(mqtt_channel::QoS::AtLeastOnce)
-            }
-        }
+                format!("{}", now)
+            });
+
+        let health_status = json!({
+            "status": "up",
+            "pid": process::id(),
+            "time": timestamp
+        })
+        .to_string();
+
+        let response_topic_health = Topic::new_unchecked(self.as_str());
+
+        Message::new(&response_topic_health, health_status)
+            .with_qos(mqtt_channel::QoS::AtLeastOnce)
+            .with_retain()
     }
 }
 
