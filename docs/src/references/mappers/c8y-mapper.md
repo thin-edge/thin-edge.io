@@ -564,6 +564,40 @@ c8y/alarm/alarms/create
 
 </div>
 
+### Health status
+
+<div class="code-indent-left">
+
+**Thin Edge (input)**
+
+```text title="Topic"
+te/device/main/service/my-service/status/health
+```
+
+```json5 title="Payload"
+{
+  "status": "up",
+  "pid": "21037"
+}
+```
+
+</div>
+
+<div class="code-indent-right">
+
+**Cumulocity IoT (output)**
+
+```text title="Topic"
+c8y/s/us/<device-id>:device:main:service:my-service
+```
+
+```text title="Payload"
+104,up
+```
+
+</div>
+
+
 ## Twin
 
 The `twin` metadata is mapped to [inventory data](https://cumulocity.com/guides/concepts/domain-model/#inventory) in Cumulocity.
