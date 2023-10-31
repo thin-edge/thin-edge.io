@@ -12,13 +12,13 @@ These services expose MQTT health endpoints which you can query to check if the 
 To get the last known health status of a service you can subscribe to the following topic
 
 ```text
-te/+/+/+/+/status/health
+te/<service-topic-id>/status/health
 ```
 
 To refresh the health status of the service, publish an empty message on the topic below.
 
 ```text
-te/+/+/+/+/cmd/health/check
+te/<service-topic-id>/cmd/health/check
 ```
 
 :::note
@@ -84,6 +84,5 @@ Here are the health endpoints of currently supported clouds, bridged with mosqui
 | Azure      | `te/device/main/service/mosquitto-az-bridge/status/health`  |
 | AWS        | `te/device/main/service/mosquitto-aws-bridge/status/health` |
 
-Explicit health check requests via `te/+/+/+/+/cmd/health/check` topics is not supported by these bridge clients. Since
-the health status messages are sent as retained messages, just subscribing to these health topics is sufficient to get
-the latest status.
+Explicit health check requests via `te/<bridge-service-topic-id>/cmd/health/check` topics is not supported by these bridge clients.
+Since the health status messages are sent as retained messages, just subscribing to these health topics is sufficient to get the latest status.

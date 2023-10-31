@@ -434,7 +434,7 @@ so that it can process them.
 | Events        | `te/<identifier>/e/<event-type>`       |
 | Alarms        | `te/<identifier>/a/<alarm-type>`       |
 | Twin          | `te/<identifier>/twin/<data-type>`     |
-| Health status | `te/<identifier>/status/health`        |
+| Status        | `te/<identifier>/status/<target-type>` |
 
 ### Examples: With default device/service topic semantics
 

@@ -588,7 +588,7 @@ te/device/main/service/my-service/status/health
 **Cumulocity IoT (output)**
 
 ```text title="Topic"
-c8y/s/us/<device-id>:device:main:service:my-service
+c8y/s/us/<service-external-id>
 ```
 
 ```text title="Payload"
