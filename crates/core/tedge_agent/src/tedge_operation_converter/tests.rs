@@ -1,5 +1,7 @@
-use crate::software_manager::actor::SoftwareCommand;
+use crate::software_manager::actor::SoftwareRequest;
+use crate::software_manager::actor::SoftwareResponse;
 use crate::tedge_operation_converter::builder::TedgeOperationConverterBuilder;
+use reqwest::Identity;
 use std::time::Duration;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
@@ -18,6 +20,7 @@ use tedge_api::messages::SoftwareModuleItem;
 use tedge_api::messages::SoftwareRequestResponseSoftwareList;
 use tedge_api::messages::SoftwareUpdateCommandPayload;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::IdentityInjector;
 use tedge_api::RestartCommand;
 use tedge_api::SoftwareUpdateCommand;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
@@ -238,18 +241,29 @@ async fn spawn_mqtt_operation_converter(
     device_topic_id: &str,
 ) -> Result<
     (
-        TimedMessageBox<SimpleMessageBox<SoftwareCommand, SoftwareCommand>>,
+        TimedMessageBox<SimpleMessageBox<SoftwareRequest, SoftwareResponse>>,
         TimedMessageBox<SimpleMessageBox<RestartCommand, RestartCommand>>,
         TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
     ),
     DynError,
 > {
-    let mut software_builder: SimpleMessageBoxBuilder<SoftwareCommand, SoftwareCommand> =
+    let mut software_builder: SimpleMessageBoxBuilder<SoftwareRequest, SoftwareResponse> =
         SimpleMessageBoxBuilder::new("Software", 5);
     let mut restart_builder: SimpleMessageBoxBuilder<RestartCommand, RestartCommand> =
         SimpleMessageBoxBuilder::new("Restart", 5);
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
+    let cert = rcgen::generate_simple_self_signed(["my-device".to_owned()]).unwrap();
+    let dummy_identity = Identity::from_pem(
+        format!(
+            "{}\n{}",
+            cert.serialize_private_key_pem(),
+            cert.serialize_pem().unwrap()
+        )
+        .as_bytes(),
+    )
+    .unwrap();
+    let identity_injector = IdentityInjector::from(dummy_identity);
 
     let converter_actor_builder = TedgeOperationConverterBuilder::new(
         "te",
@@ -257,6 +271,7 @@ async fn spawn_mqtt_operation_converter(
         &mut software_builder,
         &mut restart_builder,
         &mut mqtt_builder,
+        identity_injector,
     );
 
     let software_box = software_builder.build().with_timeout(TEST_TIMEOUT_MS);

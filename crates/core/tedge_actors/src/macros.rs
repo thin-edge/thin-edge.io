@@ -27,7 +27,7 @@
 /// ```
 #[macro_export]
 macro_rules! fan_in_message_type {
-    ( $t:ident [ $( $x:ident ),* ] : $( $d:ident ),*) => {
+    ( $t:ident [ $( $x:ident $(< $x_gen:ident >)? ),* ] : $( $d:ident ),*) => {
         #[derive(
             $(
                 $d,
@@ -35,12 +35,12 @@ macro_rules! fan_in_message_type {
         )]
         pub enum $t {
             $(
-                $x($x),
+                $x($x $(<$x_gen>)? ),
             )*
         }
         $(
-            impl From<$x> for $t {
-                fn from(m: $x) -> $t {
+            impl From<$x $(<$x_gen>)?> for $t {
+                fn from(m: $x $(<$x_gen>)?) -> $t {
                     $t::$x(m)
                 }
             }

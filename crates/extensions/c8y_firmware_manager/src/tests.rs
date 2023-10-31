@@ -18,7 +18,7 @@ use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
-use tedge_api::Auth;
+use tedge_api::ClientAuth;
 use tedge_api::DownloadError;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_mqtt_ext::Topic;
@@ -325,7 +325,7 @@ async fn create_download_request_with_c8y_auth() -> Result<(), DynError> {
     );
     assert_eq!(
         download_request.auth,
-        Some(Auth::Bearer(String::from(token)))
+        Some(ClientAuth::Bearer(String::from(token)))
     );
 
     Ok(())

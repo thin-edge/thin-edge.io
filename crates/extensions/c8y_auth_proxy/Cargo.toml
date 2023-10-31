@@ -11,18 +11,29 @@ repository = { workspace = true }
 
 [dependencies]
 axum = { workspace = true, features = ["macros"] }
+axum-server = { version = "0.5.1", features = ["tls-rustls"] }
 c8y_http_proxy = { workspace = true }
+camino = { workspace = true }
 futures = { workspace = true }
 hyper = { workspace = true }
 miette = { workspace = true }
+rcgen = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
+ring = { workspace = true }
+rustls = { workspace = true }
+rustls-pemfile = "1.0.3"
 tedge_actors = { workspace = true }
 tedge_config = { workspace = true }
+tedge_config_macros = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process", "io-util"] }
+tokio-rustls = "0.24.1"
+tower = "0.4.13"
 tracing = { workspace = true }
 url = { workspace = true }
+x509-parser = { workspace = true }
 
 [dev-dependencies]
+assert_matches = { workspace = true }
 env_logger = { workspace = true }
 mockito = { workspace = true }
 tedge_http_ext = { workspace = true, features = ["test_helpers" ] }

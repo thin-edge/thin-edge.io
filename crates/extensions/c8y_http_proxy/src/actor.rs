@@ -21,7 +21,7 @@ use c8y_api::json_c8y::C8yManagedObject;
 use c8y_api::json_c8y::InternalIdResponse;
 use c8y_api::smartrest::error::SMCumulocityMapperError;
 use c8y_api::OffsetDateTime;
-use download::Auth;
+use download::ClientAuth;
 use download::DownloadInfo;
 use download::Downloader;
 use http::status::StatusCode;
@@ -458,7 +458,7 @@ impl C8YHttpProxyActor {
     }
 
     async fn download_file(&mut self, request: DownloadFile) -> Result<Unit, C8YRestError> {
-        let mut download_info: DownloadInfo = request.download_url.as_str().into();
+        let mut download_info: DownloadInfo<ClientAuth> = request.download_url.as_str().into();
         // If the provided url is c8y, add auth
         if self
             .end_point
@@ -466,7 +466,7 @@ impl C8YHttpProxyActor {
             .is_some()
         {
             let token = self.get_and_set_jwt_token().await?;
-            download_info.auth = Some(Auth::new_bearer(token.as_str()));
+            download_info.auth = Some(ClientAuth::Bearer(token));
         }
 
         info!(target: self.name(), "Downloading from: {:?}", download_info.url());

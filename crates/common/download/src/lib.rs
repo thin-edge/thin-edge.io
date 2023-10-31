@@ -45,7 +45,11 @@
 mod download;
 mod error;
 
-pub use crate::download::Auth;
+pub use crate::download::AnonymisedAuth;
+pub use crate::download::ClientAuth;
 pub use crate::download::DownloadInfo;
 pub use crate::download::Downloader;
+pub use crate::download::IdentityInjector;
+pub use crate::download::NeverAuth;
+pub use crate::download::RequiredAuth;
 pub use crate::error::DownloadError;

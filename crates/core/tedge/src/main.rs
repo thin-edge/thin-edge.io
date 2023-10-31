@@ -23,7 +23,11 @@ fn main() -> anyhow::Result<()> {
     let opt = parse_multicall_if_known(&executable_name);
     match opt {
         TEdgeOptMulticall::Component(Component::TedgeMapper(mapper_opt)) => {
-            block_on(tedge_mapper::run(mapper_opt))
+            if let Err(err) = block_on(tedge_mapper::run(mapper_opt)) {
+                eprintln!("Error running tedge-mapper:\n{err:?}");
+                std::process::exit(101);
+            }
+            Ok(())
         }
         TEdgeOptMulticall::Component(Component::TedgeAgent(opt)) => block_on(tedge_agent::run(opt)),
         TEdgeOptMulticall::Component(Component::TedgeLogPlugin(opt)) => {

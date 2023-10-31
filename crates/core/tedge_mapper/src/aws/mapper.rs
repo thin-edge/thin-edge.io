@@ -27,7 +27,7 @@ impl TEdgeComponent for AwsMapper {
         &self,
         tedge_config: TEdgeConfig,
         _config_dir: &Path,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), miette::Error> {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(self.session_name(), &tedge_config).await?;
         let clock = Box::new(WallClock);

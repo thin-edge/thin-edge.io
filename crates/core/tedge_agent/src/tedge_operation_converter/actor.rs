@@ -1,4 +1,5 @@
-use crate::software_manager::actor::SoftwareCommand;
+use crate::software_manager::actor::SoftwareRequest;
+use crate::software_manager::actor::SoftwareResponse;
 use async_trait::async_trait;
 use log::error;
 use tedge_actors::fan_in_message_type;
@@ -15,17 +16,21 @@ use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::AnonymisedAuth;
+use tedge_api::IdentityInjector;
+use tedge_api::NeverAuth;
 use tedge_mqtt_ext::MqttMessage;
 
-fan_in_message_type!(AgentInput[MqttMessage, SoftwareCommand, RestartCommand] : Debug);
+fan_in_message_type!(AgentInput[MqttMessage, SoftwareResponse, RestartCommand] : Debug);
 
 pub struct TedgeOperationConverterActor {
     mqtt_schema: MqttSchema,
     device_topic_id: EntityTopicId,
     input_receiver: LoggingReceiver<AgentInput>,
-    software_sender: LoggingSender<SoftwareCommand>,
+    software_sender: LoggingSender<SoftwareRequest>,
     restart_sender: LoggingSender<RestartCommand>,
     mqtt_publisher: LoggingSender<MqttMessage>,
+    identity_injector: IdentityInjector,
 }
 
 #[async_trait]
@@ -42,10 +47,10 @@ impl Actor for TedgeOperationConverterActor {
                 AgentInput::MqttMessage(message) => {
                     self.process_mqtt_message(message).await?;
                 }
-                AgentInput::SoftwareCommand(SoftwareCommand::SoftwareListCommand(res)) => {
+                AgentInput::SoftwareResponse(SoftwareResponse::SoftwareListCommand(res)) => {
                     self.process_software_list_response(res).await?;
                 }
-                AgentInput::SoftwareCommand(SoftwareCommand::SoftwareUpdateCommand(res)) => {
+                AgentInput::SoftwareResponse(SoftwareResponse::SoftwareUpdateCommand(res)) => {
                     self.process_software_update_response(res).await?;
                 }
                 AgentInput::RestartCommand(cmd) => {
@@ -62,9 +67,10 @@ impl TedgeOperationConverterActor {
         mqtt_schema: MqttSchema,
         device_topic_id: EntityTopicId,
         input_receiver: LoggingReceiver<AgentInput>,
-        software_sender: LoggingSender<SoftwareCommand>,
+        software_sender: LoggingSender<SoftwareRequest>,
         restart_sender: LoggingSender<RestartCommand>,
         mqtt_publisher: LoggingSender<MqttMessage>,
+        identity_injector: IdentityInjector,
     ) -> Self {
         Self {
             mqtt_schema,
@@ -73,6 +79,7 @@ impl TedgeOperationConverterActor {
             software_sender,
             restart_sender,
             mqtt_publisher,
+            identity_injector,
         }
     }
 
@@ -80,7 +87,10 @@ impl TedgeOperationConverterActor {
         let capabilities = [
             RestartCommand::capability_message(&self.mqtt_schema, &self.device_topic_id),
             SoftwareListCommand::capability_message(&self.mqtt_schema, &self.device_topic_id),
-            SoftwareUpdateCommand::capability_message(&self.mqtt_schema, &self.device_topic_id),
+            SoftwareUpdateCommand::<NeverAuth>::capability_message(
+                &self.mqtt_schema,
+                &self.device_topic_id,
+            ),
         ];
         for capability in capabilities {
             self.mqtt_publisher.send(capability).await?
@@ -116,6 +126,7 @@ impl TedgeOperationConverterActor {
                 },
             )) => match SoftwareUpdateCommand::try_from(target, cmd_id, message.payload_bytes()) {
                 Ok(Some(cmd)) => {
+                    let cmd = cmd.convert_auth_with(&self.identity_injector);
                     self.software_sender.send(cmd.into()).await?;
                 }
                 Ok(None) => {
@@ -160,7 +171,7 @@ impl TedgeOperationConverterActor {
 
     async fn process_software_update_response(
         &mut self,
-        response: SoftwareUpdateCommand,
+        response: SoftwareUpdateCommand<AnonymisedAuth>,
     ) -> Result<(), RuntimeError> {
         let message = response.command_message(&self.mqtt_schema);
         self.mqtt_publisher.send(message).await?;

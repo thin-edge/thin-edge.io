@@ -11,6 +11,7 @@ repository = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
+async-trait = { workspace = true }
 backoff = { workspace = true }
 log = { workspace = true }
 nix = { workspace = true }
@@ -19,6 +20,7 @@ reqwest = { workspace = true, features = [
 ] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+tedge_actors = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }

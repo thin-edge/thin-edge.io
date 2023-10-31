@@ -1,4 +1,5 @@
-use crate::software_manager::actor::SoftwareCommand;
+use crate::software_manager::actor::SoftwareRequest;
+use crate::software_manager::actor::SoftwareResponse;
 use crate::tedge_operation_converter::actor::AgentInput;
 use crate::tedge_operation_converter::actor::TedgeOperationConverterActor;
 use tedge_actors::futures::channel::mpsc;
@@ -16,6 +17,7 @@ use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::IdentityInjector;
 use tedge_api::RestartCommand;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
@@ -24,19 +26,21 @@ pub struct TedgeOperationConverterBuilder {
     mqtt_schema: MqttSchema,
     device_topic_id: EntityTopicId,
     input_receiver: LoggingReceiver<AgentInput>,
-    software_sender: LoggingSender<SoftwareCommand>,
+    software_sender: LoggingSender<SoftwareRequest>,
     restart_sender: LoggingSender<RestartCommand>,
     mqtt_publisher: LoggingSender<MqttMessage>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
+    identity_injector: IdentityInjector,
 }
 
 impl TedgeOperationConverterBuilder {
     pub fn new(
         mqtt_topic_root: &str,
         device_topic_id: EntityTopicId,
-        software_actor: &mut impl ServiceProvider<SoftwareCommand, SoftwareCommand, NoConfig>,
+        software_actor: &mut impl ServiceProvider<SoftwareRequest, SoftwareResponse, NoConfig>,
         restart_actor: &mut impl ServiceProvider<RestartCommand, RestartCommand, NoConfig>,
         mqtt_actor: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
+        identity_injector: IdentityInjector,
     ) -> Self {
         let mqtt_schema = MqttSchema::with_root(mqtt_topic_root.to_string());
         let (input_sender, input_receiver) = mpsc::channel(10);
@@ -69,6 +73,7 @@ impl TedgeOperationConverterBuilder {
             restart_sender,
             mqtt_publisher,
             signal_sender,
+            identity_injector,
         }
     }
 
@@ -109,6 +114,7 @@ impl Builder<TedgeOperationConverterActor> for TedgeOperationConverterBuilder {
             self.software_sender,
             self.restart_sender,
             self.mqtt_publisher,
+            self.identity_injector,
         )
     }
 }

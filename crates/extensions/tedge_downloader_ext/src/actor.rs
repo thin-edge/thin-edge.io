@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use download::Auth;
+use download::ClientAuth;
 use download::DownloadError;
 use download::DownloadInfo;
 use download::Downloader;
@@ -17,7 +17,7 @@ use tedge_utils::file::PermissionEntry;
 pub struct DownloadRequest {
     pub url: String,
     pub file_path: PathBuf,
-    pub auth: Option<Auth>,
+    pub auth: Option<ClientAuth>,
     pub permission: Option<PermissionEntry>,
 }
 
@@ -31,7 +31,7 @@ impl DownloadRequest {
         }
     }
 
-    pub fn with_auth(self, auth: Auth) -> Self {
+    pub fn with_auth(self, auth: ClientAuth) -> Self {
         Self {
             auth: Some(auth),
             ..self

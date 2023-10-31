@@ -27,7 +27,7 @@ impl TEdgeComponent for AzureMapper {
         &self,
         tedge_config: TEdgeConfig,
         _config_dir: &Path,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), miette::Error> {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(self.session_name(), &tedge_config).await?;
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());

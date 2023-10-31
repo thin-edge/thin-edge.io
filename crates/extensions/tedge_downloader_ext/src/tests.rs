@@ -1,5 +1,5 @@
 use super::*;
-use download::Auth;
+use download::ClientAuth;
 use std::time::Duration;
 use tedge_actors::ClientMessageBox;
 use tedge_test_utils::fs::TempTedgeDir;
@@ -52,8 +52,8 @@ async fn download_with_auth() {
 
     let target_path = ttd.path().join("downloaded_file");
     let server_url = server.url();
-    let download_request =
-        DownloadRequest::new(&server_url, &target_path).with_auth(Auth::Bearer("token".into()));
+    let download_request = DownloadRequest::new(&server_url, &target_path)
+        .with_auth(ClientAuth::Bearer("token".into()));
 
     let mut requester = spawn_downloader_actor().await;
 

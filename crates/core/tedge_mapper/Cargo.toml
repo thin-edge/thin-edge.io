@@ -23,6 +23,7 @@ clap = { workspace = true }
 clock = { workspace = true }
 collectd_ext = { workspace = true }
 flockfile = { workspace = true }
+miette = { workspace = true }
 mqtt_channel = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_api = { workspace = true }

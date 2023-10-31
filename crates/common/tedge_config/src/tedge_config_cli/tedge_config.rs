@@ -395,7 +395,16 @@ define_tedge_config! {
                 /// The port used for the local Cumulocity HTTP proxy
                 #[tedge_config(example = "8001", default(value = 8001u16))]
                 port: u16,
-            }
+            },
+
+            /// The certificate file which is used by proxy listener
+            #[tedge_config(default(from_optional_key="mqtt.external.cert_file"))]
+            #[doku(as = "PathBuf")]
+            cert_file: Utf8PathBuf,
+
+            #[tedge_config(default(from_optional_key="mqtt.external.key_file"))]
+            #[doku(as = "PathBuf")]
+            key_file: Utf8PathBuf,
         }
     },
 

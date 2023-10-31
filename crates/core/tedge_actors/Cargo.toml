@@ -18,6 +18,7 @@ test-helpers = []
 async-trait = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
+miette = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, default_features = false, features = [
     "sync",

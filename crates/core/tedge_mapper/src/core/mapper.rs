@@ -1,3 +1,4 @@
+use miette::IntoDiagnostic;
 #[cfg(test)]
 use std::result::Result::Ok;
 use tedge_actors::Runtime;
@@ -14,7 +15,7 @@ use tedge_signal_ext::SignalActor;
 pub async fn start_basic_actors(
     mapper_name: &str,
     config: &TEdgeConfig,
-) -> Result<(Runtime, MqttActorBuilder), anyhow::Error> {
+) -> Result<(Runtime, MqttActorBuilder), miette::Error> {
     let runtime_events_logger = None;
     let mut runtime = Runtime::try_new(runtime_events_logger).await?;
 
@@ -46,8 +47,8 @@ pub async fn start_basic_actors(
 async fn get_mqtt_actor(
     session_name: &str,
     tedge_config: &TEdgeConfig,
-) -> Result<MqttActorBuilder, anyhow::Error> {
-    let mqtt_config = tedge_config.mqtt_config()?;
+) -> Result<MqttActorBuilder, miette::Error> {
+    let mqtt_config = tedge_config.mqtt_config().into_diagnostic()?;
 
     Ok(MqttActorBuilder::new(
         mqtt_config.with_session_name(session_name),

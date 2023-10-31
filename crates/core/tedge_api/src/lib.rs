@@ -58,11 +58,11 @@ mod tests {
         );
 
         assert_eq!(
-            SoftwareUpdateCommand::capability_message(&mqtt_schema, &device).topic,
+            SoftwareUpdateCommand::<NeverAuth>::capability_message(&mqtt_schema, &device).topic,
             Topic::new_unchecked("te/device/main///cmd/software_update")
         );
         assert_eq!(
-            SoftwareUpdateCommand::new(&device, cmd_id.clone())
+            SoftwareUpdateCommand::<RequiredAuth>::new(&device, cmd_id.clone())
                 .command_message(&mqtt_schema)
                 .topic,
             Topic::new_unchecked("te/device/main///cmd/software_update/abc")
@@ -304,7 +304,7 @@ mod tests {
     fn creating_a_software_update_request() {
         let device = EntityTopicId::default_child_device("abc").unwrap();
         let cmd_id = "123".to_string();
-        let mut request = SoftwareUpdateCommand::new(&device, cmd_id);
+        let mut request = SoftwareUpdateCommand::<RequiredAuth>::new(&device, cmd_id);
 
         request.add_updates(
             "debian",
@@ -393,7 +393,7 @@ mod tests {
     fn creating_a_software_update_request_grouping_updates_per_plugin() {
         let device = EntityTopicId::default_child_device("abc").unwrap();
         let cmd_id = "123".to_string();
-        let mut request = SoftwareUpdateCommand::new(&device, cmd_id);
+        let mut request = SoftwareUpdateCommand::<RequiredAuth>::new(&device, cmd_id);
 
         request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
             module_type: Some("debian".to_string()),
@@ -470,7 +470,7 @@ mod tests {
     fn creating_a_software_update_request_grouping_updates_per_plugin_using_default() {
         let device = EntityTopicId::default_child_device("abc").unwrap();
         let cmd_id = "123".to_string();
-        let mut request = SoftwareUpdateCommand::new(&device, cmd_id);
+        let mut request = SoftwareUpdateCommand::<RequiredAuth>::new(&device, cmd_id);
 
         request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
             module_type: None, // I.e. default
@@ -588,10 +588,13 @@ mod tests {
                 cmd_id: "123".to_string()
             }
         );
-        let request =
-            SoftwareUpdateCommand::try_from(device, "123".to_string(), json_request.as_bytes())
-                .expect("Failed to deserialize")
-                .expect("Some command");
+        let request = SoftwareUpdateCommand::<RequiredAuth>::try_from(
+            device,
+            "123".to_string(),
+            json_request.as_bytes(),
+        )
+        .expect("Failed to deserialize")
+        .expect("Some command");
 
         assert_eq!(
             request.modules_types(),
@@ -646,7 +649,7 @@ mod tests {
     fn creating_a_software_update_response() {
         let device = EntityTopicId::default_child_device("abc").unwrap();
         let cmd_id = "123".to_string();
-        let request = SoftwareUpdateCommand::new(&device, cmd_id);
+        let request = SoftwareUpdateCommand::<RequiredAuth>::new(&device, cmd_id);
 
         let response = request.with_status(CommandStatus::Executing);
 
@@ -665,9 +668,13 @@ mod tests {
         let json_response = r#"{
                 "status": "executing"
             }"#;
-        let response = SoftwareUpdateCommand::try_from(device, cmd_id, json_response.as_bytes())
-            .expect("Failed to deserialize")
-            .expect("some command");
+        let response = SoftwareUpdateCommand::<RequiredAuth>::try_from(
+            device,
+            cmd_id,
+            json_response.as_bytes(),
+        )
+        .expect("Failed to deserialize")
+        .expect("some command");
         assert_eq!(response.cmd_id, "123".to_string());
         assert_eq!(response.status(), CommandStatus::Executing);
     }
@@ -712,9 +719,13 @@ mod tests {
                 }
             ]
         }"#;
-        let request = SoftwareUpdateCommand::try_from(device, cmd_id, json_request.as_bytes())
-            .expect("Failed to deserialize")
-            .expect("Some command");
+        let request = SoftwareUpdateCommand::<RequiredAuth>::try_from(
+            device,
+            cmd_id,
+            json_request.as_bytes(),
+        )
+        .expect("Failed to deserialize")
+        .expect("Some command");
         let response = request.with_status(CommandStatus::Successful);
 
         let expected_json = r#"{

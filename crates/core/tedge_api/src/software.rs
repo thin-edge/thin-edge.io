@@ -2,6 +2,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
 
+use download::AnonymisedAuth;
 use download::DownloadInfo;
 
 pub type SoftwareType = String;
@@ -11,16 +12,17 @@ pub type SoftwareVersion = String;
 pub const DEFAULT: &str = "default";
 
 #[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
-pub struct SoftwareModule {
+#[serde(bound(deserialize = "Auth: Deserialize<'de>"))]
+pub struct SoftwareModule<Auth> {
     #[serde(default)]
     pub module_type: Option<SoftwareType>,
     pub name: SoftwareName,
     pub version: Option<SoftwareVersion>,
-    pub url: Option<DownloadInfo>,
+    pub url: Option<DownloadInfo<Auth>>,
     pub file_path: Option<PathBuf>,
 }
 
-impl SoftwareModule {
+impl<Auth> SoftwareModule<Auth> {
     pub fn default_type() -> SoftwareType {
         DEFAULT.to_string()
     }
@@ -33,9 +35,9 @@ impl SoftwareModule {
         module_type: Option<SoftwareType>,
         name: SoftwareName,
         version: Option<SoftwareVersion>,
-        url: Option<DownloadInfo>,
+        url: Option<DownloadInfo<Auth>>,
         file_path: Option<PathBuf>,
-    ) -> SoftwareModule {
+    ) -> Self {
         let mut module = SoftwareModule {
             module_type,
             name,
@@ -49,9 +51,7 @@ impl SoftwareModule {
 
     pub fn normalize(&mut self) {
         match &self.module_type {
-            Some(module_type) if SoftwareModule::is_default_type(module_type) => {
-                self.module_type = None
-            }
+            Some(module_type) if Self::is_default_type(module_type) => self.module_type = None,
             _ => {}
         };
 
@@ -62,22 +62,37 @@ impl SoftwareModule {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
-pub enum SoftwareModuleUpdate {
-    Install { module: SoftwareModule },
-    Remove { module: SoftwareModule },
+impl<Auth> SoftwareModule<Auth>
+where
+    for<'a> &'a Auth: Into<AnonymisedAuth>,
+{
+    pub fn clone_anonymise_auth(&self) -> SoftwareModule<AnonymisedAuth> {
+        SoftwareModule {
+            module_type: self.module_type.clone(),
+            name: self.name.clone(),
+            version: self.version.clone(),
+            url: self.url.as_ref().map(|di| di.clone_anonymise_auth()),
+            file_path: self.file_path.clone(),
+        }
+    }
 }
 
-impl SoftwareModuleUpdate {
-    pub fn install(module: SoftwareModule) -> SoftwareModuleUpdate {
+#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
+pub enum SoftwareModuleUpdate<Auth> {
+    Install { module: SoftwareModule<Auth> },
+    Remove { module: SoftwareModule<Auth> },
+}
+
+impl<Auth> SoftwareModuleUpdate<Auth> {
+    pub fn install(module: SoftwareModule<Auth>) -> Self {
         SoftwareModuleUpdate::Install { module }
     }
 
-    pub fn remove(module: SoftwareModule) -> SoftwareModuleUpdate {
+    pub fn remove(module: SoftwareModule<Auth>) -> Self {
         SoftwareModuleUpdate::Remove { module }
     }
 
-    pub fn module(&self) -> &SoftwareModule {
+    pub fn module(&self) -> &SoftwareModule<Auth> {
         match self {
             SoftwareModuleUpdate::Install { module } | SoftwareModuleUpdate::Remove { module } => {
                 module

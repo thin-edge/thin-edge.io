@@ -1,4 +1,5 @@
 mod partial_response;
+
 use crate::error::DownloadError;
 use crate::error::ErrContext;
 use anyhow::anyhow;
@@ -10,6 +11,7 @@ use log::warn;
 use nix::sys::statvfs;
 pub use partial_response::InvalidResponseError;
 use reqwest::header;
+use reqwest::Identity;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fs;
@@ -29,6 +31,8 @@ use tedge_utils::file::PermissionEntry;
 use nix::fcntl::fallocate;
 #[cfg(target_os = "linux")]
 use nix::fcntl::FallocateFlags;
+use reqwest::header::HeaderName;
+use reqwest::header::HeaderValue;
 
 fn default_backoff() -> ExponentialBackoff {
     // Default retry is an exponential retry with a limit of 15 minutes total.
@@ -45,19 +49,19 @@ fn default_backoff() -> ExponentialBackoff {
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-pub struct DownloadInfo {
+pub struct DownloadInfo<Auth> {
     pub url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub auth: Option<Auth>,
 }
 
-impl From<&str> for DownloadInfo {
+impl<Auth> From<&str> for DownloadInfo<Auth> {
     fn from(url: &str) -> Self {
         Self::new(url)
     }
 }
 
-impl DownloadInfo {
+impl<Auth> DownloadInfo<Auth> {
     /// Creates new [`DownloadInfo`] from a URL.
     pub fn new(url: &str) -> Self {
         Self {
@@ -79,16 +83,115 @@ impl DownloadInfo {
     }
 }
 
+impl<Auth> DownloadInfo<Auth>
+where
+    for<'a> &'a Auth: Into<AnonymisedAuth>,
+{
+    pub fn clone_anonymise_auth(&self) -> DownloadInfo<AnonymisedAuth> {
+        DownloadInfo {
+            url: self.url.clone(),
+            auth: self.auth.as_ref().map(|auth| auth.into()),
+        }
+    }
+}
+
 /// Possible authentication schemes
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-pub enum Auth {
+pub enum RequiredAuth {
     /// HTTP Bearer authentication
     Bearer(String),
+    /// TLS certificate authentication
+    Certificate,
 }
 
-impl Auth {
+impl From<&RequiredAuth> for AnonymisedAuth {
+    fn from(value: &RequiredAuth) -> Self {
+        match value {
+            RequiredAuth::Bearer(_) => Self::Bearer,
+            RequiredAuth::Certificate => Self::Certificate,
+        }
+    }
+}
+
+/// Possible authentication schemes
+#[derive(Debug, Clone)]
+pub enum ClientAuth {
+    /// HTTP Bearer authentication
+    Bearer(String),
+    /// TLS certificate authentication
+    Certificate(Identity),
+}
+
+impl PartialEq for ClientAuth {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Bearer(b), Self::Bearer(b2)) => b == b2,
+            // One instance of the agent will always use the same certificate,
+            // so we can assume these match
+            // Also, at the time of writing, we only use this in tests, so it doesn't really matter
+            (Self::Certificate(_), Self::Certificate(_)) => true,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for ClientAuth {}
+
+impl From<&ClientAuth> for AnonymisedAuth {
+    fn from(value: &ClientAuth) -> Self {
+        match value {
+            ClientAuth::Bearer(_) => Self::Bearer,
+            ClientAuth::Certificate(_) => Self::Certificate,
+        }
+    }
+}
+
+pub struct IdentityInjector {
+    identity: Identity,
+}
+
+impl From<Identity> for IdentityInjector {
+    fn from(identity: Identity) -> Self {
+        Self { identity }
+    }
+}
+
+impl IdentityInjector {
+    pub fn convert_auth(&self, request: RequiredAuth) -> ClientAuth {
+        match request {
+            RequiredAuth::Bearer(token) => ClientAuth::Bearer(token),
+            RequiredAuth::Certificate => ClientAuth::Certificate(self.identity.clone()),
+        }
+    }
+
+    pub fn convert(&self, request: DownloadInfo<RequiredAuth>) -> DownloadInfo<ClientAuth> {
+        DownloadInfo {
+            url: request.url,
+            auth: request.auth.map(|auth| self.convert_auth(auth)),
+        }
+    }
+}
+
+/// Authentication schemes with the actual secret information removed
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub enum NeverAuth {}
+
+/// Authentication schemes with the actual secret information removed
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub enum AnonymisedAuth {
+    /// HTTP Bearer authentication
+    Bearer,
+    /// TLS certificate authentication
+    Certificate,
+}
+
+impl RequiredAuth {
     pub fn new_bearer(token: &str) -> Self {
         Self::Bearer(token.into())
     }
@@ -151,7 +254,7 @@ impl Downloader {
     ///
     /// Requests partial ranges if a transient error happened while downloading
     /// and the server response included `Accept-Ranges` header.
-    pub async fn download(&self, url: &DownloadInfo) -> Result<(), DownloadError> {
+    pub async fn download(&self, url: &DownloadInfo<ClientAuth>) -> Result<(), DownloadError> {
         let tmp_target_path = self.temp_filename().await?;
         let target_file_path = self.target_filename.as_path();
 
@@ -217,7 +320,7 @@ impl Downloader {
     /// [`retry`](Downloader::retry) is used instead.
     async fn download_remaining(
         &self,
-        url: &DownloadInfo,
+        url: &DownloadInfo<ClientAuth>,
         file: &mut File,
     ) -> Result<(), DownloadError> {
         loop {
@@ -259,7 +362,11 @@ impl Downloader {
     /// Retries initial request and downloads the entire file once again. If
     /// upon the initial request server signaled support for range requests,
     /// [`download_remaining`](Downloader::download_remaining) is used instead.
-    async fn retry(&self, url: &DownloadInfo, file: &mut File) -> Result<(), DownloadError> {
+    async fn retry(
+        &self,
+        url: &DownloadInfo<ClientAuth>,
+        file: &mut File,
+    ) -> Result<(), DownloadError> {
         loop {
             info!("Could not resume download, restarting");
             let mut response = self.request_range_from(url, 0).await?;
@@ -380,16 +487,27 @@ impl Downloader {
     /// mechanism in case of network failures.
     async fn request_range_from(
         &self,
-        url: &DownloadInfo,
+        url: &DownloadInfo<ClientAuth>,
         range_start: u64,
     ) -> Result<reqwest::Response, reqwest::Error> {
         let backoff = self.backoff.clone();
 
         let operation = || async {
-            let mut client = reqwest::Client::new().get(url.url());
-            if let Some(Auth::Bearer(token)) = &url.auth {
-                client = client.bearer_auth(token)
+            let client = reqwest::Client::builder();
+            let mut client = match &url.auth {
+                Some(ClientAuth::Bearer(token)) => client.default_headers(
+                    [(
+                        HeaderName::from_static("authorization"),
+                        HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+                    )]
+                    .into_iter()
+                    .collect(),
+                ),
+                Some(ClientAuth::Certificate(identity)) => client.identity(identity.clone()),
+                None => client,
             }
+            .build()?
+            .get(url.url());
 
             if range_start != 0 {
                 client = client.header("Range", format!("bytes={range_start}-"));
@@ -900,7 +1018,7 @@ mod tests {
         // applying token if `with_token` = true
         let url = {
             if with_token {
-                url.with_auth(Auth::Bearer(String::from("token")))
+                url.with_auth(ClientAuth::Bearer(String::from("token")))
             } else {
                 url
             }

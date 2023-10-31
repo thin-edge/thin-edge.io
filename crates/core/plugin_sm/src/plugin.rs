@@ -18,19 +18,19 @@ pub trait Plugin {
 
     async fn install(
         &self,
-        module: &SoftwareModule,
+        module: &SoftwareModule<ClientAuth>,
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError>;
 
     async fn remove(
         &self,
-        module: &SoftwareModule,
+        module: &SoftwareModule<ClientAuth>,
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError>;
 
     async fn update_list(
         &self,
-        modules: &[SoftwareModuleUpdate],
+        modules: &[SoftwareModuleUpdate<ClientAuth>],
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError>;
 
@@ -39,17 +39,17 @@ pub trait Plugin {
     async fn list(
         &self,
         logger: &mut BufWriter<File>,
-    ) -> Result<Vec<SoftwareModule>, SoftwareError>;
+    ) -> Result<Vec<SoftwareModule<NeverAuth>>, SoftwareError>;
 
     async fn version(
         &self,
-        module: &SoftwareModule,
+        module: &SoftwareModule<ClientAuth>,
         logger: &mut BufWriter<File>,
     ) -> Result<Option<String>, SoftwareError>;
 
     async fn apply(
         &self,
-        update: &SoftwareModuleUpdate,
+        update: &SoftwareModuleUpdate<ClientAuth>,
         logger: &mut BufWriter<File>,
         download_path: &Path,
     ) -> Result<(), SoftwareError> {
@@ -72,7 +72,7 @@ pub trait Plugin {
 
     async fn apply_all(
         &self,
-        mut updates: Vec<SoftwareModuleUpdate>,
+        mut updates: Vec<SoftwareModuleUpdate<ClientAuth>>,
         logger: &mut BufWriter<File>,
         download_path: &Path,
     ) -> Vec<SoftwareError> {
@@ -135,8 +135,8 @@ pub trait Plugin {
 
     async fn install_from_url(
         &self,
-        module: &mut SoftwareModule,
-        url: &DownloadInfo,
+        module: &mut SoftwareModule<ClientAuth>,
+        url: &DownloadInfo<ClientAuth>,
         logger: &mut BufWriter<File>,
         download_path: &Path,
     ) -> Result<(), SoftwareError> {
@@ -148,8 +148,8 @@ pub trait Plugin {
     }
 
     async fn download_from_url(
-        module: &mut SoftwareModule,
-        url: &DownloadInfo,
+        module: &mut SoftwareModule<ClientAuth>,
+        url: &DownloadInfo<ClientAuth>,
         logger: &mut BufWriter<File>,
         download_path: &Path,
     ) -> Result<Downloader, SoftwareError> {
@@ -243,7 +243,7 @@ impl ExternalPluginCommand {
     pub fn command(
         &self,
         action: &str,
-        maybe_module: Option<&SoftwareModule>,
+        maybe_module: Option<&SoftwareModule<ClientAuth>>,
     ) -> Result<LoggedCommand, SoftwareError> {
         let mut command = if let Some(sudo) = &self.sudo {
             let mut command = LoggedCommand::new(sudo);
@@ -295,7 +295,10 @@ impl ExternalPluginCommand {
     }
 
     /// This test validates if an incoming module can be handled by it, by matching the module type with the plugin type
-    pub fn check_module_type(&self, module: &SoftwareModule) -> Result<(), SoftwareError> {
+    pub fn check_module_type(
+        &self,
+        module: &SoftwareModule<ClientAuth>,
+    ) -> Result<(), SoftwareError> {
         match &module.module_type {
             Some(name) if name == &self.name.clone() => Ok(()),
             Some(name) if name == DEFAULT => Ok(()),
@@ -334,7 +337,7 @@ impl Plugin for ExternalPluginCommand {
 
     async fn install(
         &self,
-        module: &SoftwareModule,
+        module: &SoftwareModule<ClientAuth>,
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError> {
         let command = self.command(INSTALL, Some(module))?;
@@ -344,7 +347,7 @@ impl Plugin for ExternalPluginCommand {
             Ok(())
         } else {
             Err(SoftwareError::Install {
-                module: Box::new(module.clone()),
+                module: Box::new(module.clone_anonymise_auth()),
                 reason: self.content(output.stderr)?,
             })
         }
@@ -352,7 +355,7 @@ impl Plugin for ExternalPluginCommand {
 
     async fn remove(
         &self,
-        module: &SoftwareModule,
+        module: &SoftwareModule<ClientAuth>,
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError> {
         let command = self.command(REMOVE, Some(module))?;
@@ -362,7 +365,7 @@ impl Plugin for ExternalPluginCommand {
             Ok(())
         } else {
             Err(SoftwareError::Remove {
-                module: Box::new(module.clone()),
+                module: Box::new(module.clone_anonymise_auth()),
                 reason: self.content(output.stderr)?,
             })
         }
@@ -370,7 +373,7 @@ impl Plugin for ExternalPluginCommand {
 
     async fn update_list(
         &self,
-        updates: &[SoftwareModuleUpdate],
+        updates: &[SoftwareModuleUpdate<ClientAuth>],
         logger: &mut BufWriter<File>,
     ) -> Result<(), SoftwareError> {
         let mut command = self.command(UPDATE_LIST, None)?;
@@ -442,7 +445,7 @@ impl Plugin for ExternalPluginCommand {
     async fn list(
         &self,
         logger: &mut BufWriter<File>,
-    ) -> Result<Vec<SoftwareModule>, SoftwareError> {
+    ) -> Result<Vec<SoftwareModule<NeverAuth>>, SoftwareError> {
         let command = self.command(LIST, None)?;
         let output = self.execute(command, logger).await?;
         if output.status.success() {
@@ -478,7 +481,7 @@ impl Plugin for ExternalPluginCommand {
 
     async fn version(
         &self,
-        module: &SoftwareModule,
+        module: &SoftwareModule<ClientAuth>,
         logger: &mut BufWriter<File>,
     ) -> Result<Option<String>, SoftwareError> {
         let command = self.command(VERSION, Some(module))?;
@@ -503,7 +506,7 @@ impl Plugin for ExternalPluginCommand {
 pub fn deserialize_module_info(
     module_type: String,
     input: impl std::io::Read,
-) -> Result<Vec<SoftwareModule>, SoftwareError> {
+) -> Result<Vec<SoftwareModule<NeverAuth>>, SoftwareError> {
     let mut records = ReaderBuilder::new()
         .has_headers(false)
         .delimiter(b'\t')

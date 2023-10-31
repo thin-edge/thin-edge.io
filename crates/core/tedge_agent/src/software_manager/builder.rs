@@ -1,5 +1,6 @@
-use crate::software_manager::actor::SoftwareCommand;
 use crate::software_manager::actor::SoftwareManagerActor;
+use crate::software_manager::actor::SoftwareRequest;
+use crate::software_manager::actor::SoftwareResponse;
 use crate::software_manager::config::SoftwareManagerConfig;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
@@ -12,7 +13,7 @@ use tedge_actors::SimpleMessageBoxBuilder;
 
 pub struct SoftwareManagerBuilder {
     config: SoftwareManagerConfig,
-    message_box: SimpleMessageBoxBuilder<SoftwareCommand, SoftwareCommand>,
+    message_box: SimpleMessageBoxBuilder<SoftwareRequest, SoftwareResponse>,
 }
 
 impl SoftwareManagerBuilder {
@@ -26,12 +27,12 @@ impl SoftwareManagerBuilder {
     }
 }
 
-impl ServiceProvider<SoftwareCommand, SoftwareCommand, NoConfig> for SoftwareManagerBuilder {
+impl ServiceProvider<SoftwareRequest, SoftwareResponse, NoConfig> for SoftwareManagerBuilder {
     fn connect_consumer(
         &mut self,
         config: NoConfig,
-        response_sender: DynSender<SoftwareCommand>,
-    ) -> DynSender<SoftwareCommand> {
+        response_sender: DynSender<SoftwareResponse>,
+    ) -> DynSender<SoftwareRequest> {
         self.message_box.connect_consumer(config, response_sender)
     }
 }

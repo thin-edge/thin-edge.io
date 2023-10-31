@@ -173,6 +173,7 @@ mod tests {
     use crate::converter::tests::create_c8y_converter;
     use serde_json::json;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
+    use tedge_mqtt_ext::test_helpers::MessagePayloadMatcher;
     use tedge_mqtt_ext::Message;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
@@ -394,7 +395,7 @@ mod tests {
             Message::new(&Topic::new_unchecked(twin_topic), twin_payload.to_string());
         let inventory_messages = converter.convert(&twin_message).await;
 
-        let expected_message = (
+        let expected_message: (&'static str, MessagePayloadMatcher) = (
             "c8y/inventory/managedObjects/update/test-device",
             json!({
                 "device_os": {

@@ -77,6 +77,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::DownloadInfo;
 use tedge_api::EntityStore;
+use tedge_api::RequiredAuth;
 use tedge_config::TEdgeConfigError;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
@@ -1323,7 +1324,7 @@ impl CumulocityConverter {
         cmd_id: &str,
         message: &Message,
     ) -> Result<Vec<Message>, CumulocityMapperError> {
-        let response = match SoftwareUpdateCommand::try_from(
+        let response = match SoftwareUpdateCommand::<RequiredAuth>::try_from(
             target.clone(),
             cmd_id.to_string(),
             message.payload_bytes(),
@@ -1401,7 +1402,7 @@ impl CumulocityConverter {
         match response.status() {
             CommandStatus::Successful => {
                 if let Some(device) = self.entity_store.get(target) {
-                    let c8y_software_list: C8yUpdateSoftwareListResponse = (&response).into();
+                    let c8y_software_list = C8yUpdateSoftwareListResponse::from(&response);
                     self.http_proxy
                         .send_software_list_http(
                             c8y_software_list,
@@ -1489,6 +1490,7 @@ pub(crate) mod tests {
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_api::mqtt_topics::OperationType;
+    use tedge_api::NeverAuth;
     use tedge_api::SoftwareUpdateCommand;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
     use tedge_mqtt_ext::Message;
@@ -2512,7 +2514,8 @@ pub(crate) mod tests {
         // The child has first to declare its capabilities
         let mqtt_schema = MqttSchema::default();
         let child = EntityTopicId::default_child_device("childId").unwrap();
-        let child_capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &child);
+        let child_capability =
+            SoftwareUpdateCommand::<NeverAuth>::capability_message(&mqtt_schema, &child);
         let registrations = converter.try_convert(&child_capability).await.unwrap();
 
         // the first message should be auto-registration of chidlId

@@ -24,6 +24,8 @@ use tedge_actors::SimpleMessageBox;
 use tedge_api::messages::CommandStatus;
 use tedge_api::messages::SoftwareListCommand;
 use tedge_api::messages::SoftwareUpdateCommand;
+use tedge_api::AnonymisedAuth;
+use tedge_api::ClientAuth;
 use tedge_api::SoftwareType;
 use tedge_config::TEdgeConfigError;
 use tracing::error;
@@ -36,7 +38,8 @@ const SUDO: &str = "sudo";
 #[cfg(test)]
 const SUDO: &str = "echo";
 
-fan_in_message_type!(SoftwareCommand[SoftwareUpdateCommand, SoftwareListCommand] : Debug, Eq, PartialEq);
+fan_in_message_type!(SoftwareRequest[SoftwareUpdateCommand<ClientAuth>, SoftwareListCommand] : Debug, Eq, PartialEq);
+fan_in_message_type!(SoftwareResponse[SoftwareUpdateCommand<AnonymisedAuth>, SoftwareListCommand] : Debug, Eq, PartialEq);
 
 /// Actor which performs software operations.
 ///
@@ -61,8 +64,8 @@ pub struct SoftwareManagerActor {
     // freely move out the receiver and get rid of the Option.
     //
     // https://github.com/thin-edge/thin-edge.io/pull/2049#discussion_r1243296392
-    input_receiver: Option<LoggingReceiver<SoftwareCommand>>,
-    output_sender: LoggingSender<SoftwareCommand>,
+    input_receiver: Option<LoggingReceiver<SoftwareRequest>>,
+    output_sender: LoggingSender<SoftwareResponse>,
 }
 
 #[async_trait]
@@ -123,7 +126,7 @@ impl Actor for SoftwareManagerActor {
 impl SoftwareManagerActor {
     pub fn new(
         config: SoftwareManagerConfig,
-        message_box: SimpleMessageBox<SoftwareCommand, SoftwareCommand>,
+        message_box: SimpleMessageBox<SoftwareRequest, SoftwareResponse>,
     ) -> Self {
         let state_repository = AgentStateRepository::new_with_file_name(
             config.config_dir.clone(),
@@ -142,12 +145,12 @@ impl SoftwareManagerActor {
 
     async fn handle_request(
         &mut self,
-        request: SoftwareCommand,
+        request: SoftwareRequest,
         plugins: &mut ExternalPlugins,
         operation_logs: &OperationLogs,
     ) -> Result<(), SoftwareManagerError> {
         match request {
-            SoftwareCommand::SoftwareUpdateCommand(request) => {
+            SoftwareRequest::SoftwareUpdateCommand(request) => {
                 if let Err(err) = self
                     .handle_software_update_operation(request, plugins, operation_logs)
                     .await
@@ -155,7 +158,7 @@ impl SoftwareManagerActor {
                     error!("{:?}", err);
                 }
             }
-            SoftwareCommand::SoftwareListCommand(request) => {
+            SoftwareRequest::SoftwareListCommand(request) => {
                 if let Err(err) = self
                     .handle_software_list_operation(request, plugins, operation_logs)
                     .await
@@ -202,7 +205,7 @@ impl SoftwareManagerActor {
 
     async fn handle_software_update_operation(
         &mut self,
-        request: SoftwareUpdateCommand,
+        request: SoftwareUpdateCommand<ClientAuth>,
         plugins: &mut ExternalPlugins,
         operation_logs: &OperationLogs,
     ) -> Result<(), SoftwareManagerError> {
@@ -222,7 +225,9 @@ impl SoftwareManagerActor {
             .await?;
 
         // Send 'executing'
-        let executing_response = request.clone().with_status(CommandStatus::Executing);
+        let executing_response = request
+            .clone_anonymise_auth()
+            .with_status(CommandStatus::Executing);
         self.output_sender.send(executing_response.into()).await?;
 
         let response = match operation_logs.new_log_file(LogKind::SoftwareUpdate).await {
@@ -233,7 +238,9 @@ impl SoftwareManagerActor {
             }
             Err(err) => {
                 error!("{}", err);
-                request.with_error(format!("{}", err))
+                request
+                    .clone_anonymise_auth()
+                    .with_error(format!("{}", err))
             }
         };
         self.output_sender.send(response.into()).await?;

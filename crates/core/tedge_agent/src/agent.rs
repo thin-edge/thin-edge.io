@@ -12,7 +12,10 @@ use camino::Utf8PathBuf;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
 use flockfile::FlockfileError;
+use reqwest::Identity;
 use std::fmt::Debug;
+use std::fs::File;
+use std::io::Read;
 use std::sync::Arc;
 use tedge_actors::ConvertingActor;
 use tedge_actors::ConvertingActorBuilder;
@@ -24,6 +27,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_api::path::DataDir;
+use tedge_api::IdentityInjector;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
@@ -49,6 +53,7 @@ pub struct AgentConfig {
     pub mqtt_device_topic_id: EntityTopicId,
     pub mqtt_topic_root: Arc<str>,
     pub service_type: String,
+    pub identity: Identity,
 }
 
 impl AgentConfig {
@@ -103,6 +108,25 @@ impl AgentConfig {
         // For agent specific
         let log_dir = tedge_config.logs.path.join("tedge").join("agent");
 
+        let identity = tedge_config
+            .mqtt_client_auth_config()
+            .client
+            .map(|config| {
+                let cert_file = &config.cert_file;
+                let key_file = &config.key_file;
+                let mut pem =
+                    std::fs::read(key_file).with_context(|| format!("opening {key_file:?}"))?;
+                pem.push(b'\n');
+                File::open(cert_file)
+                    .with_context(|| format!("opening {cert_file:?}"))?
+                    .read_to_end(&mut pem)
+                    .with_context(|| format!("reading {cert_file:?}"))?;
+                Identity::from_pem(&pem)
+                    .context("creating identity from configured client certificate and private key")
+            })
+            .transpose()?
+            .unwrap();
+
         Ok(Self {
             mqtt_config,
             http_config,
@@ -116,6 +140,7 @@ impl AgentConfig {
             mqtt_topic_root,
             mqtt_device_topic_id,
             service_type: tedge_config.service.ty.clone(),
+            identity,
         })
     }
 }
@@ -183,6 +208,7 @@ impl Agent {
             &mut software_update_builder,
             &mut restart_actor_builder,
             &mut mqtt_actor_builder,
+            IdentityInjector::from(self.config.identity.clone()),
         );
 
         // Shutdown on SIGINT

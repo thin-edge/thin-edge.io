@@ -1,4 +1,5 @@
 use download::DownloadInfo;
+use download::NeverAuth;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -73,18 +74,18 @@ impl InternalIdResponse {
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
-pub struct C8ySoftwareModuleItem {
+pub struct C8ySoftwareModuleItem<Auth> {
     pub name: String,
     pub version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(flatten)]
-    pub url: Option<DownloadInfo>,
+    pub url: Option<DownloadInfo<Auth>>,
 }
 
-impl<'a> Jsonify<'a> for C8ySoftwareModuleItem {}
+impl<'a, Auth: Deserialize<'a> + Serialize> Jsonify<'a> for C8ySoftwareModuleItem<Auth> {}
 
-impl From<SoftwareModule> for C8ySoftwareModuleItem {
-    fn from(module: SoftwareModule) -> Self {
+impl<Auth> From<SoftwareModule<Auth>> for C8ySoftwareModuleItem<Auth> {
+    fn from(module: SoftwareModule<Auth>) -> Self {
         let url = if module.url.is_none() {
             Some(EMPTY_STRING.into())
         } else {
@@ -106,17 +107,16 @@ impl From<SoftwareModule> for C8ySoftwareModuleItem {
 #[serde(rename_all = "camelCase")]
 pub struct C8yUpdateSoftwareListResponse {
     #[serde(rename = "c8y_SoftwareList")]
-    c8y_software_list: Option<Vec<C8ySoftwareModuleItem>>,
+    c8y_software_list: Option<Vec<C8ySoftwareModuleItem<NeverAuth>>>,
 }
 
 impl<'a> Jsonify<'a> for C8yUpdateSoftwareListResponse {}
 
 impl From<&SoftwareListCommand> for C8yUpdateSoftwareListResponse {
     fn from(list: &SoftwareListCommand) -> Self {
-        let mut new_list: Vec<C8ySoftwareModuleItem> = Vec::new();
+        let mut new_list = Vec::new();
         list.modules().into_iter().for_each(|software_module| {
-            let c8y_software_module: C8ySoftwareModuleItem = software_module.into();
-            new_list.push(c8y_software_module);
+            new_list.push(software_module.into());
         });
 
         Self {
@@ -410,6 +410,7 @@ mod tests {
     use crate::json_c8y::AlarmSeverity;
     use anyhow::Result;
     use assert_matches::assert_matches;
+    use download::RequiredAuth;
     use mqtt_channel::Message;
     use mqtt_channel::Topic;
     use serde_json::json;
@@ -443,7 +444,7 @@ mod tests {
             url: Some("".into()),
         };
 
-        let converted: C8ySoftwareModuleItem = software_module.into();
+        let converted: C8ySoftwareModuleItem<RequiredAuth> = software_module.into();
 
         assert_eq!(converted, expected_c8y_item);
     }
@@ -471,7 +472,7 @@ mod tests {
             payload: SoftwareListCommandPayload::from_json(input_json).unwrap(),
         };
 
-        let c8y_software_list: C8yUpdateSoftwareListResponse = (&command).into();
+        let c8y_software_list = C8yUpdateSoftwareListResponse::from(&command);
 
         let expected_struct = C8yUpdateSoftwareListResponse {
             c8y_software_list: Some(vec![

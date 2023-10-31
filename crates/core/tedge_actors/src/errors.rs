@@ -17,7 +17,7 @@ pub enum ChannelError {
 }
 
 /// Error raised during runtime by actors as well as the runtime
-#[derive(Error, Debug)]
+#[derive(Error, Debug, miette::Diagnostic)]
 pub enum RuntimeError {
     #[error(transparent)]
     ActorError(#[from] DynError),

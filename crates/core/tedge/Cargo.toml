@@ -21,6 +21,7 @@ certificate = { workspace = true }
 clap = { workspace = true, features = ["cargo", "derive", "string", "unstable-styles"] }
 doku = { workspace = true }
 hyper = { workspace = true, default-features = false }
+miette = { workspace = true, features = ["fancy"] }
 nix = { workspace = true }
 pad = { workspace = true }
 reqwest = { workspace = true, features = [

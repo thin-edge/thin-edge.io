@@ -2,6 +2,8 @@ use crate::log_file::LogFile;
 use crate::plugin::ExternalPluginCommand;
 use crate::plugin::Plugin;
 use crate::plugin::LIST;
+use download::AnonymisedAuth;
+use download::ClientAuth;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::ErrorKind;
@@ -250,11 +252,13 @@ impl ExternalPlugins {
 
     pub async fn process(
         &self,
-        request: SoftwareUpdateCommand,
+        request: SoftwareUpdateCommand<ClientAuth>,
         mut log_file: LogFile,
         download_path: &Path,
-    ) -> SoftwareUpdateCommand {
-        let mut response = request.clone().with_status(CommandStatus::Executing);
+    ) -> SoftwareUpdateCommand<AnonymisedAuth> {
+        let mut response: SoftwareUpdateCommand<AnonymisedAuth> = request
+            .clone_anonymise_auth()
+            .with_status(CommandStatus::Executing);
         let logger = log_file.buffer();
         let mut error_count = 0;
 

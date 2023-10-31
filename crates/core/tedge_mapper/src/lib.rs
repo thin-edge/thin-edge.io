@@ -5,6 +5,7 @@ use crate::collectd::mapper::CollectdMapper;
 use crate::core::component::TEdgeComponent;
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
+use miette::IntoDiagnostic;
 use std::fmt;
 use std::path::PathBuf;
 use tedge_config::system_services::get_log_level;
@@ -80,12 +81,14 @@ impl fmt::Display for MapperName {
     }
 }
 
-pub async fn run(mapper_opt: MapperOpt) -> anyhow::Result<()> {
+pub async fn run(mapper_opt: MapperOpt) -> miette::Result<()> {
     let component = lookup_component(&mapper_opt.name);
 
     let tedge_config_location =
         tedge_config::TEdgeConfigLocation::from_custom_root(&mapper_opt.config_dir);
-    let config = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone()).load()?;
+    let config = tedge_config::TEdgeConfigRepository::new(tedge_config_location.clone())
+        .load()
+        .into_diagnostic()?;
 
     let log_level = if mapper_opt.debug {
         tracing::Level::DEBUG
@@ -93,7 +96,8 @@ pub async fn run(mapper_opt: MapperOpt) -> anyhow::Result<()> {
         get_log_level(
             "tedge-mapper",
             &tedge_config_location.tedge_config_root_path,
-        )?
+        )
+        .into_diagnostic()?
     };
     set_log_level(log_level);
 

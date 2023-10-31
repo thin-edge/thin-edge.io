@@ -1,6 +1,5 @@
 use crate::core::component::TEdgeComponent;
 use crate::core::mapper::start_basic_actors;
-use anyhow::Context;
 use async_trait::async_trait;
 use c8y_auth_proxy::actor::C8yAuthProxyBuilder;
 use c8y_http_proxy::credentials::C8YJwtRetriever;
@@ -9,6 +8,9 @@ use c8y_mapper_ext::actor::C8yMapperBuilder;
 use c8y_mapper_ext::compatibility_adapter::OldAgentAdapter;
 use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
+use miette::miette;
+use miette::Context;
+use miette::IntoDiagnostic;
 use mqtt_channel::Config;
 use std::path::Path;
 use tedge_api::entity_store::EntityExternalId;
@@ -30,14 +32,14 @@ impl TEdgeComponent for CumulocityMapper {
         CUMULOCITY_MAPPER_NAME
     }
 
-    async fn start(&self, tedge_config: TEdgeConfig, cfg_dir: &Path) -> Result<(), anyhow::Error> {
+    async fn start(&self, tedge_config: TEdgeConfig, cfg_dir: &Path) -> Result<(), miette::Error> {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(self.session_name(), &tedge_config).await?;
 
-        let mqtt_config = tedge_config.mqtt_config()?;
+        let mqtt_config = tedge_config.mqtt_config().into_diagnostic()?;
         let mut jwt_actor = C8YJwtRetriever::builder(mqtt_config.clone());
         let mut http_actor = HttpActor::new().builder();
-        let c8y_http_config = (&tedge_config).try_into()?;
+        let c8y_http_config = (&tedge_config).try_into().into_diagnostic()?;
         let mut c8y_http_proxy_actor =
             C8YHttpProxyBuilder::new(c8y_http_config, &mut http_actor, &mut jwt_actor);
         let c8y_auth_proxy_actor =
@@ -48,7 +50,8 @@ impl TEdgeComponent for CumulocityMapper {
 
         let mut downloader_actor = DownloaderActor::new().builder();
 
-        let c8y_mapper_config = C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config)?;
+        let c8y_mapper_config =
+            C8yMapperConfig::from_tedge_config(cfg_dir, &tedge_config).into_diagnostic()?;
         let c8y_mapper_actor = C8yMapperBuilder::try_new(
             c8y_mapper_config,
             &mut mqtt_actor,
@@ -56,7 +59,8 @@ impl TEdgeComponent for CumulocityMapper {
             &mut timer_actor,
             &mut downloader_actor,
             &mut fs_watch_actor,
-        )?;
+        )
+        .into_diagnostic()?;
 
         // Adaptor translating commands sent on te/device/main///cmd/+/+ into requests on tedge/commands/req/+/+
         // and translating the responses received on tedge/commands/res/+/+ to te/device/main///cmd/+/+
@@ -85,13 +89,18 @@ impl TEdgeComponent for CumulocityMapper {
     }
 }
 
-pub fn service_monitor_client_config(tedge_config: &TEdgeConfig) -> Result<Config, anyhow::Error> {
-    let main_device_xid: EntityExternalId = tedge_config.device.id.try_read(tedge_config)?.into();
+pub fn service_monitor_client_config(tedge_config: &TEdgeConfig) -> miette::Result<Config> {
+    let main_device_xid: EntityExternalId = tedge_config
+        .device
+        .id
+        .try_read(tedge_config)
+        .into_diagnostic()?
+        .into();
     let service_type = &tedge_config.service.ty;
     let service_type = if service_type.is_empty() {
-        "service".to_string()
+        "service".to_owned()
     } else {
-        service_type.to_string()
+        service_type.clone()
     };
 
     // FIXME: this will not work if `mqtt.device_topic_id` is not in default scheme
@@ -103,11 +112,14 @@ pub fn service_monitor_client_config(tedge_config: &TEdgeConfig) -> Result<Confi
         .device_topic_id
         .clone()
         .parse()
+        .into_diagnostic()
         .context("Invalid device_topic_id")?;
 
     let mapper_service_topic_id = entity_topic_id
         .default_service_for_device(CUMULOCITY_MAPPER_NAME)
-        .context("Can't derive service name if device topic id not in default scheme")?;
+        .ok_or_else(|| {
+            miette!("Can't derive service name if device topic id not in default scheme")
+        })?;
 
     let mapper_service_external_id =
         CumulocityConverter::map_to_c8y_external_id(&mapper_service_topic_id, &main_device_xid);
@@ -118,10 +130,12 @@ pub fn service_monitor_client_config(tedge_config: &TEdgeConfig) -> Result<Confi
         service_type.as_str(),
         "down",
         &[],
-    )?;
+    )
+    .into_diagnostic()?;
 
     let mqtt_config = tedge_config
-        .mqtt_config()?
+        .mqtt_config()
+        .into_diagnostic()?
         .with_session_name("last_will_c8y_mapper")
         .with_last_will_message(last_will_message);
     Ok(mqtt_config)

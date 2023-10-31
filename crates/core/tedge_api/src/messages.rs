@@ -4,7 +4,12 @@ use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::OperationType;
 use crate::software::*;
+use download::AnonymisedAuth;
+use download::ClientAuth;
 use download::DownloadInfo;
+use download::IdentityInjector;
+use download::NeverAuth;
+use download::RequiredAuth;
 use mqtt_channel::Message;
 use mqtt_channel::QoS;
 use mqtt_channel::Topic;
@@ -199,12 +204,16 @@ impl CommandPayload for SoftwareListCommandPayload {
 pub struct SoftwareList {
     #[serde(rename = "type")]
     pub plugin_type: SoftwareType,
-    pub modules: Vec<SoftwareModuleItem>,
+    pub modules: Vec<SoftwareModuleItem<NeverAuth>>,
 }
 
 impl SoftwareListCommand {
     /// Add a list of packages all of the same type
-    pub fn add_modules(&mut self, plugin_type: SoftwareType, modules: Vec<SoftwareModule>) {
+    pub fn add_modules(
+        &mut self,
+        plugin_type: SoftwareType,
+        modules: Vec<SoftwareModule<NeverAuth>>,
+    ) {
         let modules = modules.into_iter().map(|module| module.into()).collect();
         self.payload.current_software_list.push(SoftwareList {
             plugin_type,
@@ -213,7 +222,7 @@ impl SoftwareListCommand {
     }
 
     /// List all the packages
-    pub fn modules(&self) -> Vec<SoftwareModule> {
+    pub fn modules(&self) -> Vec<SoftwareModule<NeverAuth>> {
         self.payload
             .current_software_list
             .iter()
@@ -235,25 +244,100 @@ impl SoftwareListCommand {
 }
 
 /// Command to install/remove software packages on a device
-pub type SoftwareUpdateCommand = Command<SoftwareUpdateCommandPayload>;
+pub type SoftwareUpdateCommand<Auth> = Command<SoftwareUpdateCommandPayload<Auth>>;
+
+impl<Auth> SoftwareUpdateCommand<Auth>
+where
+    for<'a> &'a Auth: Into<AnonymisedAuth>,
+{
+    pub fn clone_anonymise_auth(&self) -> SoftwareUpdateCommand<AnonymisedAuth> {
+        Command {
+            cmd_id: self.cmd_id.clone(),
+            payload: SoftwareUpdateCommandPayload {
+                status: self.payload.status.clone(),
+                update_list: self
+                    .payload
+                    .update_list
+                    .iter()
+                    .map(|up| up.clone_anonymise_auth())
+                    .collect(),
+                failures: self
+                    .payload
+                    .failures
+                    .iter()
+                    .map(|up| up.clone_anonymise_auth())
+                    .collect(),
+            },
+            target: self.target.clone(),
+        }
+    }
+}
+
+impl SoftwareUpdateCommand<RequiredAuth> {
+    pub fn convert_auth_with(
+        self,
+        injector: &IdentityInjector,
+    ) -> SoftwareUpdateCommand<ClientAuth> {
+        Command {
+            cmd_id: self.cmd_id,
+            payload: self.payload.convert_auth_with(injector),
+            target: self.target,
+        }
+    }
+}
 
 /// Payload of a [SoftwareListCommand]
-#[derive(Debug, Clone, Default, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(bound(deserialize = "Auth: Deserialize<'de>"))]
 #[serde(rename_all = "camelCase")]
-pub struct SoftwareUpdateCommandPayload {
+pub struct SoftwareUpdateCommandPayload<Auth> {
     #[serde(flatten)]
     pub status: CommandStatus,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub update_list: Vec<SoftwareRequestResponseSoftwareList>,
+    pub update_list: Vec<SoftwareRequestResponseSoftwareList<Auth>>,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub failures: Vec<SoftwareRequestResponseSoftwareList>,
+    pub failures: Vec<SoftwareRequestResponseSoftwareList<Auth>>,
 }
 
-impl<'a> Jsonify<'a> for SoftwareUpdateCommandPayload {}
+impl SoftwareUpdateCommandPayload<RequiredAuth> {
+    pub fn convert_auth_with(
+        self,
+        injector: &IdentityInjector,
+    ) -> SoftwareUpdateCommandPayload<ClientAuth> {
+        SoftwareUpdateCommandPayload {
+            status: self.status,
+            update_list: self
+                .update_list
+                .into_iter()
+                .map(|value| value.convert_auth_with(injector))
+                .collect(),
+            failures: self
+                .failures
+                .into_iter()
+                .map(|value| value.convert_auth_with(injector))
+                .collect(),
+        }
+    }
+}
 
-impl CommandPayload for SoftwareUpdateCommandPayload {
+impl<Auth> Default for SoftwareUpdateCommandPayload<Auth> {
+    fn default() -> Self {
+        SoftwareUpdateCommandPayload {
+            status: CommandStatus::default(),
+            update_list: vec![],
+            failures: vec![],
+        }
+    }
+}
+
+impl<'a, Auth: Serialize + Deserialize<'a> + Sized> Jsonify<'a>
+    for SoftwareUpdateCommandPayload<Auth>
+{
+}
+
+impl<Auth> CommandPayload for SoftwareUpdateCommandPayload<Auth> {
     fn operation_type() -> OperationType {
         OperationType::SoftwareUpdate
     }
@@ -267,14 +351,14 @@ impl CommandPayload for SoftwareUpdateCommandPayload {
     }
 }
 
-impl SoftwareUpdateCommand {
-    pub fn add_update(&mut self, mut update: SoftwareModuleUpdate) {
+impl<Auth: Clone> SoftwareUpdateCommand<Auth> {
+    pub fn add_update(&mut self, mut update: SoftwareModuleUpdate<Auth>) {
         update.normalize();
         let plugin_type = update
             .module()
             .module_type
             .clone()
-            .unwrap_or_else(SoftwareModule::default_type);
+            .unwrap_or_else(SoftwareModule::<Auth>::default_type);
 
         if let Some(list) = self
             .payload
@@ -293,7 +377,7 @@ impl SoftwareUpdateCommand {
         }
     }
 
-    pub fn add_updates(&mut self, plugin_type: &str, updates: Vec<SoftwareModuleUpdate>) {
+    pub fn add_updates(&mut self, plugin_type: &str, updates: Vec<SoftwareModuleUpdate<Auth>>) {
         self.payload
             .update_list
             .push(SoftwareRequestResponseSoftwareList {
@@ -301,7 +385,7 @@ impl SoftwareUpdateCommand {
                 modules: updates
                     .into_iter()
                     .map(|update| update.into())
-                    .collect::<Vec<SoftwareModuleItem>>(),
+                    .collect::<Vec<SoftwareModuleItem<_>>>(),
             })
     }
 
@@ -315,7 +399,7 @@ impl SoftwareUpdateCommand {
         modules_types
     }
 
-    pub fn updates_for(&self, module_type: &str) -> Vec<SoftwareModuleUpdate> {
+    pub fn updates_for(&self, module_type: &str) -> Vec<SoftwareModuleUpdate<Auth>> {
         let mut updates = vec![];
 
         if let Some(items) = self
@@ -346,7 +430,9 @@ impl SoftwareUpdateCommand {
 
         updates
     }
+}
 
+impl SoftwareUpdateCommand<AnonymisedAuth> {
     pub fn add_errors(&mut self, plugin_type: &str, errors: Vec<SoftwareError>) {
         self.payload
             .failures
@@ -355,7 +441,7 @@ impl SoftwareUpdateCommand {
                 modules: errors
                     .into_iter()
                     .filter_map(|update| update.into())
-                    .collect::<Vec<SoftwareModuleItem>>(),
+                    .collect::<Vec<SoftwareModuleItem<AnonymisedAuth>>>(),
             })
     }
 }
@@ -364,10 +450,42 @@ impl SoftwareUpdateCommand {
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-pub struct SoftwareRequestResponseSoftwareList {
+pub struct SoftwareRequestResponseSoftwareList<Auth> {
     #[serde(rename = "type")]
     pub plugin_type: SoftwareType,
-    pub modules: Vec<SoftwareModuleItem>,
+    pub modules: Vec<SoftwareModuleItem<Auth>>,
+}
+
+impl SoftwareRequestResponseSoftwareList<RequiredAuth> {
+    pub fn convert_auth_with(
+        self,
+        injector: &IdentityInjector,
+    ) -> SoftwareRequestResponseSoftwareList<ClientAuth> {
+        SoftwareRequestResponseSoftwareList {
+            plugin_type: self.plugin_type,
+            modules: self
+                .modules
+                .into_iter()
+                .map(|value| value.convert_auth_with(injector))
+                .collect(),
+        }
+    }
+}
+
+impl<Auth> SoftwareRequestResponseSoftwareList<Auth>
+where
+    for<'a> &'a Auth: Into<AnonymisedAuth>,
+{
+    fn clone_anonymise_auth(&self) -> SoftwareRequestResponseSoftwareList<AnonymisedAuth> {
+        SoftwareRequestResponseSoftwareList {
+            plugin_type: self.plugin_type.clone(),
+            modules: self
+                .modules
+                .iter()
+                .map(|module| module.clone_anonymise_auth())
+                .collect(),
+        }
+    }
 }
 
 /// Variants represent Software Operations Supported actions.
@@ -380,9 +498,10 @@ pub enum SoftwareModuleAction {
 
 /// Software module payload definition.
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(bound(deserialize = "Auth: Deserialize<'de>"))]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-pub struct SoftwareModuleItem {
+pub struct SoftwareModuleItem<Auth> {
     pub name: SoftwareName,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -390,7 +509,7 @@ pub struct SoftwareModuleItem {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(flatten)]
-    pub url: Option<DownloadInfo>,
+    pub url: Option<DownloadInfo<Auth>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub action: Option<SoftwareModuleAction>,
@@ -399,8 +518,34 @@ pub struct SoftwareModuleItem {
     pub reason: Option<String>,
 }
 
-impl From<SoftwareModule> for SoftwareModuleItem {
-    fn from(module: SoftwareModule) -> Self {
+impl SoftwareModuleItem<RequiredAuth> {
+    pub fn convert_auth_with(self, injector: &IdentityInjector) -> SoftwareModuleItem<ClientAuth> {
+        SoftwareModuleItem {
+            name: self.name,
+            version: self.version,
+            url: self.url.map(|url| injector.convert(url)),
+            action: self.action,
+            reason: self.reason,
+        }
+    }
+}
+impl<Auth> SoftwareModuleItem<Auth>
+where
+    for<'a> &'a Auth: Into<AnonymisedAuth>,
+{
+    fn clone_anonymise_auth(&self) -> SoftwareModuleItem<AnonymisedAuth> {
+        SoftwareModuleItem {
+            name: self.name.clone(),
+            version: self.version.clone(),
+            url: self.url.as_ref().map(|url| url.clone_anonymise_auth()),
+            action: self.action.clone(),
+            reason: self.reason.clone(),
+        }
+    }
+}
+
+impl<Auth> From<SoftwareModule<Auth>> for SoftwareModuleItem<Auth> {
+    fn from(module: SoftwareModule<Auth>) -> Self {
         SoftwareModuleItem {
             name: module.name,
             version: module.version,
@@ -411,8 +556,8 @@ impl From<SoftwareModule> for SoftwareModuleItem {
     }
 }
 
-impl From<SoftwareModuleUpdate> for SoftwareModuleItem {
-    fn from(update: SoftwareModuleUpdate) -> Self {
+impl<Auth> From<SoftwareModuleUpdate<Auth>> for SoftwareModuleItem<Auth> {
+    fn from(update: SoftwareModuleUpdate<Auth>) -> Self {
         match update {
             SoftwareModuleUpdate::Install { module } => SoftwareModuleItem {
                 name: module.name,
@@ -432,7 +577,7 @@ impl From<SoftwareModuleUpdate> for SoftwareModuleItem {
     }
 }
 
-impl From<SoftwareError> for Option<SoftwareModuleItem> {
+impl From<SoftwareError> for Option<SoftwareModuleItem<AnonymisedAuth>> {
     fn from(error: SoftwareError) -> Self {
         match error {
             SoftwareError::Install { module, reason } => Some(SoftwareModuleItem {
@@ -639,7 +784,7 @@ mod tests {
 
     #[test]
     fn serde_software_request_update() {
-        let debian_module1 = SoftwareModuleItem {
+        let debian_module1 = SoftwareModuleItem::<RequiredAuth> {
             name: "debian1".into(),
             version: Some("0.0.1".into()),
             action: Some(SoftwareModuleAction::Install),

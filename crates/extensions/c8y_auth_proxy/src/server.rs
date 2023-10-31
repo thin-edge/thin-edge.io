@@ -1,3 +1,4 @@
+use crate::tls::get_ssl_config;
 use crate::tokens::*;
 use axum::body::Body;
 use axum::body::BoxBody;
@@ -10,36 +11,42 @@ use axum::http::HeaderValue;
 use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::routing::get;
-use axum::routing::IntoMakeService;
 use axum::Router;
+use camino::Utf8PathBuf;
 use futures::future::BoxFuture;
 use futures::FutureExt;
-use hyper::server::conn::AddrIncoming;
 use hyper::HeaderMap;
 use miette::Context;
 use miette::IntoDiagnostic;
 use reqwest::Method;
 use reqwest::StatusCode;
 use std::fmt;
+use std::future::Future;
 use std::net::IpAddr;
+use std::net::TcpListener;
 use std::sync::Arc;
 use tracing::error;
 use tracing::info;
 
-type AxumServer = hyper::Server<AddrIncoming, IntoMakeService<Router>>;
-
 pub struct Server {
-    fut: BoxFuture<'static, hyper::Result<()>>,
+    fut: BoxFuture<'static, std::io::Result<()>>,
 }
 
 impl Server {
-    pub(crate) fn try_init(state: AppState, address: IpAddr, port: u16) -> miette::Result<Self> {
+    pub(crate) fn try_init(
+        state: AppState,
+        address: IpAddr,
+        port: u16,
+        certificate_der: Vec<Vec<u8>>,
+        key_der: Vec<u8>,
+        ca_dir: Option<Utf8PathBuf>,
+    ) -> miette::Result<Self> {
         Ok(Server {
-            fut: try_run_server(address, port, state)?.boxed(),
+            fut: try_run_server(address, port, state, certificate_der, key_der, ca_dir)?.boxed(),
         })
     }
 
-    pub fn wait(self) -> BoxFuture<'static, hyper::Result<()>> {
+    pub fn wait(self) -> BoxFuture<'static, std::io::Result<()>> {
         self.fut
     }
 }
@@ -63,7 +70,14 @@ impl IntoResponse for ProxyError {
     }
 }
 
-fn try_run_server(address: IpAddr, port: u16, state: AppState) -> miette::Result<AxumServer> {
+fn try_run_server(
+    address: IpAddr,
+    port: u16,
+    state: AppState,
+    certificate_der: Vec<Vec<u8>>,
+    key_der: Vec<u8>,
+    ca_dir: Option<Utf8PathBuf>,
+) -> miette::Result<impl Future<Output = std::io::Result<()>>> {
     info!("Launching on port {port}");
     let handle = get(respond_to)
         .post(respond_to)
@@ -76,9 +90,12 @@ fn try_run_server(address: IpAddr, port: u16, state: AppState) -> miette::Result
         .route("/c8y/", handle.clone())
         .route("/c8y/*path", handle)
         .with_state(state);
-    Ok(axum::Server::try_bind(&(address, port).into())
+    let listener = TcpListener::bind((address, port))
         .into_diagnostic()
-        .wrap_err_with(|| format!("binding to port {port}"))?
+        .wrap_err_with(|| format!("binding to port {port}"))?;
+    let config = get_ssl_config(certificate_der, key_der, ca_dir)?;
+    Ok(axum_server::from_tcp(listener)
+        .acceptor(crate::tls::Acceptor::new(config))
         .serve(app.into_make_service()))
 }
 
@@ -209,7 +226,9 @@ mod tests {
     use c8y_http_proxy::credentials::JwtRequest;
     use c8y_http_proxy::credentials::JwtResult;
     use c8y_http_proxy::credentials::JwtRetriever;
+    use reqwest::Identity;
     use std::borrow::Cow;
+    use std::error::Error;
     use std::net::Ipv4Addr;
     use tedge_actors::Sequential;
     use tedge_actors::Server;
@@ -230,10 +249,86 @@ mod tests {
 
         let port = start_server(&server, vec!["test-token"]);
 
-        let res = reqwest::get(format!("http://localhost:{port}/c8y/hello"))
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
+        let res = client
+            .get(format!("https://localhost:{port}/c8y/hello"))
+            .send()
             .await
             .unwrap();
         assert_eq!(res.status(), 204);
+    }
+
+    #[tokio::test]
+    async fn uses_configured_server_certificate() {
+        let _ = env_logger::try_init();
+
+        let certificate = rcgen::generate_simple_self_signed(["localhost".to_owned()]).unwrap();
+        let cert_der = certificate.serialize_der().unwrap();
+
+        let mut server = mockito::Server::new();
+        let _mock = server
+            .mock("GET", "/hello")
+            .match_header("Authorization", "Bearer test-token")
+            .with_status(204)
+            .create();
+
+        let port = start_server_with_certificate(&server, vec!["test-token"], certificate, None);
+
+        let client = reqwest::Client::builder()
+            .add_root_certificate(reqwest::tls::Certificate::from_der(&cert_der).unwrap())
+            .build()
+            .unwrap();
+        let res = client
+            .get(format!("https://localhost:{port}/c8y/hello"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), 204);
+    }
+
+    #[tokio::test]
+    async fn rejects_unknown_client_certificates() {
+        let _ = env_logger::try_init();
+
+        let certificate = rcgen::generate_simple_self_signed(["localhost".to_owned()]).unwrap();
+        let cert_der = certificate.serialize_der().unwrap();
+
+        let mut server = mockito::Server::new();
+        let _mock = server
+            .mock("GET", "/hello")
+            .match_header("Authorization", "Bearer test-token")
+            .with_status(204)
+            .create();
+
+        std::fs::create_dir_all("/tmp/test").unwrap();
+        let port = start_server_with_certificate(
+            &server,
+            vec!["test-token"],
+            certificate,
+            Some("/tmp/test".into()),
+        );
+
+        let client_cert = rcgen::generate_simple_self_signed(["not-authorized".into()]).unwrap();
+        let mut pem = client_cert.serialize_private_key_pem().into_bytes();
+        pem.append(&mut client_cert.serialize_pem().unwrap().into_bytes());
+        let identity = Identity::from_pem(&pem).unwrap();
+        let client = reqwest::Client::builder()
+            .add_root_certificate(reqwest::tls::Certificate::from_der(&cert_der).unwrap())
+            .identity(identity)
+            .build()
+            .unwrap();
+        let err = client
+            .get(format!("https://localhost:{port}/c8y/hello"))
+            .send()
+            .await
+            .unwrap_err();
+        assert_matches::assert_matches!(
+            rustls_error_from_reqwest(&err),
+            rustls::Error::AlertReceived(rustls::AlertDescription::UnknownCA)
+        );
     }
 
     #[tokio::test]
@@ -247,7 +342,13 @@ mod tests {
 
         let port = start_server(&server, vec!["test-token"]);
 
-        let res = reqwest::get(format!("http://localhost:{port}/c8y/not-a-known-url"))
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
+        let res = client
+            .get(format!("https://localhost:{port}/c8y/not-a-known-url"))
+            .send()
             .await
             .unwrap();
         assert_eq!(res.status(), 404);
@@ -257,9 +358,21 @@ mod tests {
     async fn responds_with_bad_gateway_on_connection_error() {
         let _ = env_logger::try_init();
 
-        let port = start_server_at_url(Arc::from("127.0.0.1:0"), vec!["test-token"]);
+        // TODO worth introducing a builder here?
+        let port = start_server_at_url(
+            Arc::from("127.0.0.1:0"),
+            vec!["test-token"],
+            rcgen::generate_simple_self_signed(["localhost".to_owned()]).unwrap(),
+            None,
+        );
 
-        let res = reqwest::get(format!("http://localhost:{port}/c8y/not-a-known-url"))
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
+        let res = client
+            .get(format!("https://localhost:{port}/c8y/not-a-known-url"))
+            .send()
             .await
             .unwrap();
         assert_eq!(res.status(), 502);
@@ -277,11 +390,17 @@ mod tests {
 
         let port = start_server(&server, vec!["test-token"]);
 
-        let res = reqwest::get(format!(
-            "http://localhost:{port}/c8y/inventory/managedObjects?pageSize=100"
-        ))
-        .await
-        .unwrap();
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
+        let res = client
+            .get(format!(
+                "https://localhost:{port}/c8y/inventory/managedObjects?pageSize=100"
+            ))
+            .send()
+            .await
+            .unwrap();
         assert_eq!(res.status(), 200);
     }
 
@@ -297,10 +416,13 @@ mod tests {
 
         let port = start_server(&server, vec!["test-token"]);
 
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
         let res = client
             .get(format!(
-                "http://localhost:{port}/c8y/inventory/managedObjects"
+                "https://localhost:{port}/c8y/inventory/managedObjects"
             ))
             .basic_auth("test", Some("test"))
             .send()
@@ -328,10 +450,13 @@ mod tests {
 
         let port = start_server(&server, vec!["old-token", "test-token"]);
 
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
         let body = "A body";
         let res = client
-            .put(format!("http://localhost:{port}/c8y/hello"))
+            .put(format!("https://localhost:{port}/c8y/hello"))
             .header("Content-Length", body.bytes().len())
             .body(body)
             .send()
@@ -361,10 +486,13 @@ mod tests {
 
         let port = start_server(&server, vec!["old-token", "test-token"]);
 
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
         let body = "A body";
         let res = client
-            .put(format!("http://localhost:{port}/c8y/hello"))
+            .put(format!("https://localhost:{port}/c8y/hello"))
             .body(reqwest::Body::wrap_stream(futures::stream::once(
                 futures::future::ready(Ok::<_, std::convert::Infallible>(body)),
             )))
@@ -396,7 +524,13 @@ mod tests {
 
         let port = start_server(&server, vec!["stale-token", "test-token"]);
 
-        let res = reqwest::get(format!("http://localhost:{port}/c8y/hello"))
+        let client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
+        let res = client
+            .get(format!("https://localhost:{port}/c8y/hello"))
+            .send()
             .await
             .unwrap();
         assert_eq!(res.status(), 200);
@@ -404,28 +538,71 @@ mod tests {
     }
 
     fn start_server(server: &mockito::Server, tokens: Vec<impl Into<Cow<'static, str>>>) -> u16 {
-        start_server_at_url(server.url().into(), tokens)
+        start_server_at_url(
+            server.url().into(),
+            tokens,
+            rcgen::generate_simple_self_signed(["localhost".to_owned()]).unwrap(),
+            None,
+        )
+    }
+
+    fn start_server_with_certificate(
+        server: &mockito::Server,
+        tokens: Vec<impl Into<Cow<'static, str>>>,
+        certificate: rcgen::Certificate,
+        ca_dir: Option<Utf8PathBuf>,
+    ) -> u16 {
+        start_server_at_url(server.url().into(), tokens, certificate, ca_dir)
     }
 
     fn start_server_at_url(
         target_host: Arc<str>,
         tokens: Vec<impl Into<Cow<'static, str>>>,
+        certificate: rcgen::Certificate,
+        ca_dir: Option<Utf8PathBuf>,
     ) -> u16 {
         let mut retriever = IterJwtRetriever::builder(tokens);
+        let mut last_error = None;
         for port in 3000..3100 {
             let state = AppState {
                 target_host: target_host.clone(),
                 token_manager: TokenManager::new(JwtRetriever::new("TEST => JWT", &mut retriever))
                     .shared(),
             };
-            if let Ok(server) = try_run_server(Ipv4Addr::LOCALHOST.into(), port, state) {
-                tokio::spawn(server);
-                tokio::spawn(retriever.run());
-                return port;
+            let res = try_run_server(
+                Ipv4Addr::LOCALHOST.into(),
+                port,
+                state,
+                vec![certificate.serialize_der().unwrap()],
+                certificate.serialize_private_key_der(),
+                ca_dir.clone(),
+            );
+            match res {
+                Ok(server) => {
+                    tokio::spawn(server);
+                    tokio::spawn(retriever.run());
+                    return port;
+                }
+                Err(e) => last_error = Some(e),
             }
         }
 
-        panic!("Failed to bind to any port");
+        panic!("Failed to bind to any port: {}", last_error.unwrap());
+    }
+
+    fn rustls_error_from_reqwest(err: &reqwest::Error) -> &rustls::Error {
+        err.source()
+            .unwrap()
+            .downcast_ref::<hyper::Error>()
+            .unwrap()
+            .source()
+            .unwrap()
+            .downcast_ref::<std::io::Error>()
+            .unwrap()
+            .get_ref()
+            .unwrap()
+            .downcast_ref::<rustls::Error>()
+            .unwrap()
     }
 
     /// A JwtRetriever that returns a sequence of JWT tokens

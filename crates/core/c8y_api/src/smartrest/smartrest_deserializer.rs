@@ -1,6 +1,7 @@
 use crate::smartrest::error::SmartRestDeserializerError;
 use csv::ReaderBuilder;
 use download::DownloadInfo;
+use download::RequiredAuth;
 use serde::de::Error;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -89,7 +90,7 @@ impl SmartRestUpdateSoftware {
         &self,
         target: &EntityTopicId,
         cmd_id: String,
-    ) -> Result<SoftwareUpdateCommand, SmartRestDeserializerError> {
+    ) -> Result<SoftwareUpdateCommand<RequiredAuth>, SmartRestDeserializerError> {
         let mut request = SoftwareUpdateCommand::new(target, cmd_id);
         for module in self.modules() {
             match module.action.clone().try_into()? {
@@ -156,7 +157,7 @@ impl SmartRestUpdateSoftwareModule {
         }
     }
 
-    fn get_url(&self) -> Option<DownloadInfo> {
+    fn get_url<Auth>(&self) -> Option<DownloadInfo<Auth>> {
         match &self.url {
             Some(url) if url.trim().is_empty() => None,
             Some(url) => Some(DownloadInfo::new(url.as_str())),

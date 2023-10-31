@@ -1,3 +1,4 @@
+use miette::Diagnostic;
 use nix::errno::Errno::EACCES;
 use nix::errno::Errno::EAGAIN;
 use nix::fcntl::flock;
@@ -18,7 +19,7 @@ use tracing::warn;
 
 const LOCK_CHILD_DIRECTORY: &str = "lock/";
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, Diagnostic)]
 pub enum FlockfileError {
     #[error("Couldn't create file lock.")]
     FromIo {

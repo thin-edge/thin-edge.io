@@ -4,6 +4,7 @@ use crate::software::SoftwareType;
 use crate::software::SoftwareVersion;
 use csv;
 
+use download::AnonymisedAuth;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -13,6 +14,7 @@ pub enum TopicError {
     UnknownTopic { topic: String },
 }
 
+// TODO this probably should actually have auth information removed
 #[derive(thiserror::Error, Debug, Clone, Deserialize, Serialize, Eq, PartialEq)]
 pub enum SoftwareError {
     #[error("DownloadError error: {reason:?} for {url:?}")]
@@ -30,7 +32,7 @@ pub enum SoftwareError {
 
     #[error("Failed to install {module:?}")]
     Install {
-        module: Box<SoftwareModule>,
+        module: Box<SoftwareModule<AnonymisedAuth>>,
         reason: String,
     },
 
@@ -57,7 +59,7 @@ pub enum SoftwareError {
 
     #[error("Failed to uninstall {module:?}")]
     Remove {
-        module: Box<SoftwareModule>,
+        module: Box<SoftwareModule<AnonymisedAuth>>,
         reason: String,
     },
 

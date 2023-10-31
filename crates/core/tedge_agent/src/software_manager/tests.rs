@@ -1,4 +1,5 @@
-use crate::software_manager::actor::SoftwareCommand;
+use crate::software_manager::actor::SoftwareRequest;
+use crate::software_manager::actor::SoftwareResponse;
 use crate::software_manager::builder::SoftwareManagerBuilder;
 use crate::software_manager::config::SoftwareManagerConfig;
 use std::time::Duration;
@@ -80,11 +81,11 @@ async fn test_new_software_update_operation() -> Result<(), DynError> {
     converter_box.send(command.into()).await?;
 
     match converter_box.recv().await.unwrap() {
-        SoftwareCommand::SoftwareUpdateCommand(res) => {
+        SoftwareResponse::SoftwareUpdateCommand(res) => {
             assert_eq!(res.cmd_id, "random");
             assert_eq!(res.status(), CommandStatus::Executing);
         }
-        SoftwareCommand::SoftwareListCommand(_) => {
+        SoftwareResponse::SoftwareListCommand(_) => {
             panic!("Received SoftwareListCommand")
         }
     }
@@ -138,8 +139,8 @@ async fn test_new_software_list_operation() -> Result<(), DynError> {
 
 async fn spawn_software_manager(
     tmp_dir: &TempTedgeDir,
-) -> Result<TimedMessageBox<SimpleMessageBox<SoftwareCommand, SoftwareCommand>>, DynError> {
-    let mut converter_builder: SimpleMessageBoxBuilder<SoftwareCommand, SoftwareCommand> =
+) -> Result<TimedMessageBox<SimpleMessageBox<SoftwareResponse, SoftwareRequest>>, DynError> {
+    let mut converter_builder: SimpleMessageBoxBuilder<_, _> =
         SimpleMessageBoxBuilder::new("Converter", 5);
 
     let config = SoftwareManagerConfig::new(
