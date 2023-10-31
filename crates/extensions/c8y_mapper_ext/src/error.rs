@@ -125,6 +125,9 @@ pub enum ConversionError {
 
     #[error(transparent)]
     InvalidExternalIdError(#[from] InvalidExternalIdError),
+
+    #[error("Unexpected error")]
+    UnexpectedError(#[from] anyhow::Error),
 }
 
 #[derive(thiserror::Error, Debug)]

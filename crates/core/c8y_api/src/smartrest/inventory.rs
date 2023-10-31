@@ -22,8 +22,27 @@ pub fn child_device_creation_message(
     device_name: Option<&str>,
     device_type: Option<&str>,
     ancestors: &[String],
-) -> Message {
-    Message::new(
+) -> Result<Message, InvalidValueError> {
+    if child_id.is_empty() {
+        return Err(InvalidValueError {
+            field_name: "child_id".to_string(),
+            value: child_id.to_string(),
+        });
+    }
+    if let Some("") = device_name {
+        return Err(InvalidValueError {
+            field_name: "device_name".to_string(),
+            value: "".to_string(),
+        });
+    }
+    if let Some("") = device_type {
+        return Err(InvalidValueError {
+            field_name: "device_type".to_string(),
+            value: "".to_string(),
+        });
+    }
+
+    Ok(Message::new(
         &publish_topic_from_ancestors(ancestors),
         // XXX: if any arguments contain commas, output will be wrong
         format!(
@@ -32,7 +51,7 @@ pub fn child_device_creation_message(
             device_name.unwrap_or(child_id),
             device_type.unwrap_or("thin-edge.io-child")
         ),
-    )
+    ))
 }
 
 /// Create a SmartREST message for creating a service on device.
@@ -44,15 +63,41 @@ pub fn service_creation_message(
     service_type: &str,
     service_status: &str,
     ancestors: &[String],
-) -> Message {
-    Message::new(
+) -> Result<Message, InvalidValueError> {
+    // TODO: most of this noise can be eliminated by implementing `Serialize`/`Deserialize` for smartrest format
+    if service_id.is_empty() {
+        return Err(InvalidValueError {
+            field_name: "service_id".to_string(),
+            value: service_id.to_string(),
+        });
+    }
+    if service_name.is_empty() {
+        return Err(InvalidValueError {
+            field_name: "service_name".to_string(),
+            value: service_name.to_string(),
+        });
+    }
+    if service_type.is_empty() {
+        return Err(InvalidValueError {
+            field_name: "service_type".to_string(),
+            value: service_type.to_string(),
+        });
+    }
+    if service_status.is_empty() {
+        return Err(InvalidValueError {
+            field_name: "service_status".to_string(),
+            value: service_status.to_string(),
+        });
+    }
+
+    Ok(Message::new(
         &publish_topic_from_ancestors(ancestors),
         // XXX: if any arguments contain commas, output will be wrong
         format!(
             "102,{},{},{},{}",
             service_id, service_type, service_name, service_status
         ),
-    )
+    ))
 }
 
 /// Create a SmartREST message for updating service status.
@@ -80,4 +125,11 @@ pub fn service_status_update_message(external_ids: &[String], service_status: &s
     let payload = format!("104,{service_status}");
 
     Message::new(&topic, payload)
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("Field `{field_name}` contains invalid value: {value:?}")]
+pub struct InvalidValueError {
+    field_name: String,
+    value: String,
 }

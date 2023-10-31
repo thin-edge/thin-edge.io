@@ -8,6 +8,7 @@ use crate::actor::IdDownloadRequest;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::error::ConversionError;
 use crate::json;
+use anyhow::Context;
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y::C8yUpdateSoftwareListResponse;
@@ -189,7 +190,13 @@ impl CumulocityConverter {
         let device_id = config.device_id.clone();
         let device_topic_id = config.device_topic_id.clone();
         let device_type = config.device_type.clone();
-        let service_type = config.service_type.clone();
+
+        let service_type = if config.service_type.is_empty() {
+            "service".to_string()
+        } else {
+            config.service_type.clone()
+        };
+
         let c8y_host = config.c8y_host.clone();
         let cfg_dir = config.config_dir.clone();
 
@@ -272,7 +279,8 @@ impl CumulocityConverter {
                     display_name,
                     display_type,
                     &ancestors_external_ids,
-                );
+                )
+                .context("Could not create device creation message")?;
                 Ok(vec![child_creation_message])
             }
             EntityType::Service => {
@@ -289,7 +297,8 @@ impl CumulocityConverter {
                     display_type.unwrap_or(&self.service_type),
                     "up",
                     &ancestors_external_ids,
-                );
+                )
+                .context("Could not create service creation message")?;
                 Ok(vec![service_creation_message])
             }
         }
@@ -1431,6 +1440,7 @@ pub(crate) mod tests {
     use assert_json_diff::assert_json_eq;
     use assert_json_diff::assert_json_include;
     use assert_matches::assert_matches;
+    use c8y_api::smartrest::topic::SMARTREST_PUBLISH_TOPIC;
     use c8y_auth_proxy::url::ProxyUrlGenerator;
     use c8y_http_proxy::handle::C8YHttpProxy;
     use c8y_http_proxy::messages::C8YRestRequest;
@@ -2702,12 +2712,48 @@ pub(crate) mod tests {
         assert!(!second_registration_message_mapped);
     }
 
+    #[tokio::test]
+    async fn handles_empty_service_type_2383() {
+        let tmp_dir = TempTedgeDir::new();
+        let mut config = c8y_converter_config(&tmp_dir);
+        config.service_type = String::new();
+
+        let (mut converter, _) = create_c8y_converter_from_config(config);
+
+        let service_health_message = Message::new(
+            &Topic::new_unchecked("te/device/main/service/service1/status/health"),
+            serde_json::to_string(&json!({"status": "up"})).unwrap(),
+        );
+
+        let output = converter.convert(&service_health_message).await;
+        let service_creation_message = output
+            .into_iter()
+            .find(|m| m.topic.name == SMARTREST_PUBLISH_TOPIC)
+            .expect("service creation message should be present");
+
+        let mut smartrest_fields = service_creation_message.payload_str().unwrap().split(',');
+
+        assert_eq!(smartrest_fields.next().unwrap(), "102");
+        assert_eq!(
+            smartrest_fields.next().unwrap(),
+            format!("{}:device:main:service:service1", converter.device_name)
+        );
+        assert_eq!(smartrest_fields.next().unwrap(), "service");
+        assert_eq!(smartrest_fields.next().unwrap(), "service1");
+        assert_eq!(smartrest_fields.next().unwrap(), "up");
+    }
+
     pub(crate) async fn create_c8y_converter(
         tmp_dir: &TempTedgeDir,
     ) -> (
         CumulocityConverter,
         SimpleMessageBox<C8YRestRequest, C8YRestResult>,
     ) {
+        let config = c8y_converter_config(tmp_dir);
+        create_c8y_converter_from_config(config)
+    }
+
+    fn c8y_converter_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         tmp_dir.dir("operations").dir("c8y");
         tmp_dir.dir("tedge").dir("agent");
 
@@ -2725,7 +2771,7 @@ pub(crate) mod tests {
         topics.add_all(crate::log_upload::log_upload_topic_filter(&mqtt_schema));
         topics.add_all(C8yMapperConfig::default_external_topic_filter());
 
-        let config = C8yMapperConfig::new(
+        C8yMapperConfig::new(
             tmp_dir.to_path_buf(),
             tmp_dir.utf8_path_buf(),
             tmp_dir.utf8_path_buf().into(),
@@ -2739,8 +2785,15 @@ pub(crate) mod tests {
             Capabilities::default(),
             auth_proxy_addr,
             auth_proxy_port,
-        );
+        )
+    }
 
+    fn create_c8y_converter_from_config(
+        config: C8yMapperConfig,
+    ) -> (
+        CumulocityConverter,
+        SimpleMessageBox<C8YRestRequest, C8YRestResult>,
+    ) {
         let mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
             SimpleMessageBoxBuilder::new("MQTT", 5);
         let mqtt_publisher = LoggingSender::new("MQTT".into(), mqtt_builder.build().sender_clone());
@@ -2748,6 +2801,9 @@ pub(crate) mod tests {
         let mut c8y_proxy_builder: SimpleMessageBoxBuilder<C8YRestRequest, C8YRestResult> =
             SimpleMessageBoxBuilder::new("C8Y", 1);
         let http_proxy = C8YHttpProxy::new("C8Y", &mut c8y_proxy_builder);
+
+        let auth_proxy_addr = config.auth_proxy_addr;
+        let auth_proxy_port = config.auth_proxy_port;
         let auth_proxy = ProxyUrlGenerator::new(auth_proxy_addr, auth_proxy_port);
 
         let downloader_builder: SimpleMessageBoxBuilder<IdDownloadResult, IdDownloadRequest> =
