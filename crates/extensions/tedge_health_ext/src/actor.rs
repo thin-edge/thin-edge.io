@@ -5,7 +5,6 @@ use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_api::health::ServiceHealthTopic;
-use tedge_api::mqtt_topics::MqttSchema;
 use tedge_mqtt_ext::Message;
 use tedge_mqtt_ext::MqttMessage;
 
@@ -14,7 +13,6 @@ pub struct HealthMonitorActor {
     service_registration_message: Option<Message>,
     health_topic: ServiceHealthTopic,
     messages: SimpleMessageBox<MqttMessage, MqttMessage>,
-    mqtt_schema: MqttSchema,
 }
 
 impl HealthMonitorActor {
@@ -22,18 +20,16 @@ impl HealthMonitorActor {
         service_registration_message: Option<Message>,
         health_topic: ServiceHealthTopic,
         messages: SimpleMessageBox<MqttMessage, MqttMessage>,
-        mqtt_schema: MqttSchema,
     ) -> Self {
         Self {
             service_registration_message,
             health_topic,
             messages,
-            mqtt_schema,
         }
     }
 
     pub fn up_health_status(&self) -> MqttMessage {
-        self.health_topic.up_message(&self.mqtt_schema)
+        self.health_topic.up_message()
     }
 
     pub fn down_health_status(&self) -> MqttMessage {

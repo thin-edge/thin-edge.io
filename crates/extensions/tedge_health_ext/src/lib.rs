@@ -29,7 +29,6 @@ pub struct HealthMonitorBuilder {
     registration_message: Option<Message>,
     health_topic: ServiceHealthTopic,
     box_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
-    mqtt_schema: MqttSchema,
 }
 
 impl HealthMonitorBuilder {
@@ -94,7 +93,6 @@ impl HealthMonitorBuilder {
             health_topic,
             registration_message: Some(registration_message),
             box_builder,
-            mqtt_schema: mqtt_schema.clone(),
         };
 
         // Update the MQTT config
@@ -110,9 +108,8 @@ impl HealthMonitorBuilder {
     fn set_init_and_last_will(&self, config: MqttConfig) -> MqttConfig {
         let name = self.health_topic.to_owned();
         let _name = name.clone();
-        let mqtt_schema = self.mqtt_schema.clone();
         config
-            .with_initial_message(move || _name.up_message(&mqtt_schema))
+            .with_initial_message(move || _name.up_message())
             .with_last_will_message(name.down_message())
     }
 }
@@ -129,12 +126,8 @@ impl Builder<HealthMonitorActor> for HealthMonitorBuilder {
     fn try_build(self) -> Result<HealthMonitorActor, Self::Error> {
         let message_box = self.box_builder.build();
 
-        let actor = HealthMonitorActor::new(
-            self.registration_message,
-            self.health_topic,
-            message_box,
-            self.mqtt_schema,
-        );
+        let actor =
+            HealthMonitorActor::new(self.registration_message, self.health_topic, message_box);
 
         Ok(actor)
     }

@@ -184,11 +184,7 @@ async fn monitor_tedge_service(
         .mqtt_config()?
         .with_session_name(mqtt_session_name)
         .with_subscriptions(res_topic.into())
-        .with_initial_message(move || {
-            _service_health_topic
-                .clone()
-                .up_message(&mqtt_schema.clone())
-        })
+        .with_initial_message(move || _service_health_topic.up_message())
         .with_last_will_message(service_health_topic.down_message());
 
     let client = mqtt_channel::Connection::new(&mqtt_config).await?;
@@ -199,8 +195,7 @@ async fn monitor_tedge_service(
     info!("Starting watchdog for {} service", name);
 
     // Now the systemd watchdog is done with the initialization and ready for processing the messages
-    let health_status_message =
-        service_health_topic.up_message(&MqttSchema::with_root(mqtt_topic_root.clone()));
+    let health_status_message = service_health_topic.up_message();
     publisher
         .send(health_status_message)
         .await
