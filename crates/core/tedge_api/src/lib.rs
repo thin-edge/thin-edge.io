@@ -37,7 +37,6 @@ mod tests {
     use mqtt_channel::Message;
     use mqtt_channel::QoS;
     use mqtt_channel::Topic;
-    use regex::Regex;
 
     #[test]
     fn topic_names() {
@@ -52,7 +51,7 @@ mod tests {
             Topic::new_unchecked("te/device/main///cmd/software_list")
         );
         assert_eq!(
-            SoftwareListCommand::new_with_id(&device, cmd_id.clone())
+            SoftwareListCommand::new(&device, cmd_id.clone())
                 .command_message(&mqtt_schema)
                 .topic,
             Topic::new_unchecked("te/device/main///cmd/software_list/abc")
@@ -63,7 +62,7 @@ mod tests {
             Topic::new_unchecked("te/device/main///cmd/software_update")
         );
         assert_eq!(
-            SoftwareUpdateCommand::new_with_id(&device, cmd_id.clone())
+            SoftwareUpdateCommand::new(&device, cmd_id.clone())
                 .command_message(&mqtt_schema)
                 .topic,
             Topic::new_unchecked("te/device/main///cmd/software_update/abc")
@@ -74,7 +73,7 @@ mod tests {
             Topic::new_unchecked("te/device/main///cmd/restart")
         );
         assert_eq!(
-            RestartCommand::new_with_id(&device, cmd_id.clone())
+            RestartCommand::new(&device, cmd_id.clone())
                 .command_message(&mqtt_schema)
                 .topic,
             Topic::new_unchecked("te/device/main///cmd/restart/abc")
@@ -85,7 +84,7 @@ mod tests {
     fn creating_a_software_list_request() {
         let mqtt_schema = MqttSchema::default();
         let device = EntityTopicId::default_child_device("abc").unwrap();
-        let request = SoftwareListCommand::new_with_id(&device, "1".to_string());
+        let request = SoftwareListCommand::new(&device, "1".to_string());
 
         let expected_msg = Message {
             topic: Topic::new_unchecked("te/device/abc///cmd/software_list/1"),
@@ -95,17 +94,6 @@ mod tests {
         };
         let actual_msg = request.command_message(&mqtt_schema);
         assert_eq!(actual_msg, expected_msg);
-    }
-
-    #[test]
-    fn creating_a_software_list_request_with_generated_id() {
-        let device = EntityTopicId::default_child_device("abc").unwrap();
-        let request = SoftwareListCommand::new(&device);
-        let generated_id = request.cmd_id;
-
-        // The generated id is a nanoid of 21 characters from A-Za-z0-9_~
-        let re = Regex::new(r"[A-Za-z0-9_~-]{21,21}").unwrap();
-        assert!(re.is_match(&generated_id));
     }
 
     #[test]
@@ -137,7 +125,7 @@ mod tests {
     #[test]
     fn creating_a_software_list_response() {
         let device = EntityTopicId::default_child_device("abc").unwrap();
-        let mut response = SoftwareListCommand::new_with_id(&device, "1".to_string())
+        let mut response = SoftwareListCommand::new(&device, "1".to_string())
             .with_status(CommandStatus::Successful);
 
         response.add_modules(
@@ -276,7 +264,7 @@ mod tests {
     #[test]
     fn creating_a_software_list_error() {
         let device = EntityTopicId::default_child_device("abc").unwrap();
-        let response = SoftwareListCommand::new_with_id(&device, "123".to_string());
+        let response = SoftwareListCommand::new(&device, "123".to_string());
         let response = response.with_error("Request_timed-out".to_string());
         let message = response.command_message(&MqttSchema::default());
 
@@ -316,7 +304,7 @@ mod tests {
     fn creating_a_software_update_request() {
         let device = EntityTopicId::default_child_device("abc").unwrap();
         let cmd_id = "123".to_string();
-        let mut request = SoftwareUpdateCommand::new_with_id(&device, cmd_id);
+        let mut request = SoftwareUpdateCommand::new(&device, cmd_id);
 
         request.add_updates(
             "debian",
@@ -405,7 +393,7 @@ mod tests {
     fn creating_a_software_update_request_grouping_updates_per_plugin() {
         let device = EntityTopicId::default_child_device("abc").unwrap();
         let cmd_id = "123".to_string();
-        let mut request = SoftwareUpdateCommand::new_with_id(&device, cmd_id);
+        let mut request = SoftwareUpdateCommand::new(&device, cmd_id);
 
         request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
             module_type: Some("debian".to_string()),
@@ -482,7 +470,7 @@ mod tests {
     fn creating_a_software_update_request_grouping_updates_per_plugin_using_default() {
         let device = EntityTopicId::default_child_device("abc").unwrap();
         let cmd_id = "123".to_string();
-        let mut request = SoftwareUpdateCommand::new_with_id(&device, cmd_id);
+        let mut request = SoftwareUpdateCommand::new(&device, cmd_id);
 
         request.add_update(SoftwareModuleUpdate::install(SoftwareModule {
             module_type: None, // I.e. default
@@ -550,17 +538,6 @@ mod tests {
         }"#;
         let actual_json = request.payload.to_json();
         assert_eq!(actual_json, remove_whitespace(expected_json));
-    }
-
-    #[test]
-    fn creating_a_software_update_request_with_generated_id() {
-        let device = EntityTopicId::default_child_device("abc").unwrap();
-        let request = SoftwareUpdateCommand::new(&device);
-        let generated_id = request.cmd_id;
-
-        // The generated id is a nanoid of 21 characters from A-Za-z0-9_~
-        let re = Regex::new(r"[A-Za-z0-9_~-]{21,21}").unwrap();
-        assert!(re.is_match(&generated_id));
     }
 
     #[test]
@@ -669,7 +646,7 @@ mod tests {
     fn creating_a_software_update_response() {
         let device = EntityTopicId::default_child_device("abc").unwrap();
         let cmd_id = "123".to_string();
-        let request = SoftwareUpdateCommand::new_with_id(&device, cmd_id);
+        let request = SoftwareUpdateCommand::new(&device, cmd_id);
 
         let response = request.with_status(CommandStatus::Executing);
 

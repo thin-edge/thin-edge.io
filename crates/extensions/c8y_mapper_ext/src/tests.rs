@@ -338,7 +338,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     // Prepare and publish a software update status response message `executing` on `te/device/main///cmd/software_update/123`.
     let mqtt_schema = MqttSchema::default();
     let device = EntityTopicId::default_main_device();
-    let request = SoftwareUpdateCommand::new_with_id(&device, "123".to_string());
+    let request = SoftwareUpdateCommand::new(&device, "c8y-mapper-123".to_string());
     let response = request.with_status(CommandStatus::Executing);
     mqtt.send(response.command_message(&mqtt_schema))
         .await
@@ -359,7 +359,7 @@ async fn mapper_publishes_software_update_status_onto_c8y_topic() {
     // The successful state is cleared
     assert_received_contains_str(
         &mut mqtt,
-        [("te/device/main///cmd/software_update/123", "")],
+        [("te/device/main///cmd/software_update/c8y-mapper-123", "")],
     )
     .await;
 
@@ -386,7 +386,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     // The agent publish an error
     let mqtt_schema = MqttSchema::default();
     let device = EntityTopicId::default_main_device();
-    let response = SoftwareUpdateCommand::new_with_id(&device, "123".to_string())
+    let response = SoftwareUpdateCommand::new(&device, "c8y-mapper-123".to_string())
         .with_error("Partial failure: Couldn't install collectd and nginx".to_string());
     mqtt.send(response.command_message(&mqtt_schema))
         .await
@@ -405,7 +405,7 @@ async fn mapper_publishes_software_update_failed_status_onto_c8y_topic() {
     // The failed state is cleared
     assert_received_contains_str(
         &mut mqtt,
-        [("te/device/main///cmd/software_update/123", "")],
+        [("te/device/main///cmd/software_update/c8y-mapper-123", "")],
     )
     .await;
 

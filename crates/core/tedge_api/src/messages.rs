@@ -8,7 +8,6 @@ use download::DownloadInfo;
 use mqtt_channel::Message;
 use mqtt_channel::QoS;
 use mqtt_channel::Topic;
-use nanoid::nanoid;
 use serde::Deserialize;
 use serde::Serialize;
 use time::OffsetDateTime;
@@ -25,17 +24,8 @@ impl<Payload> Command<Payload>
 where
     Payload: Default,
 {
-    /// Build a new command with a random id
-    pub fn new(target: &EntityTopicId) -> Self {
-        Command {
-            target: target.clone(),
-            cmd_id: nanoid!(),
-            payload: Default::default(),
-        }
-    }
-
     /// Build a new command with a given id
-    pub fn new_with_id(target: &EntityTopicId, cmd_id: String) -> Self {
+    pub fn new(target: &EntityTopicId, cmd_id: String) -> Self {
         Command {
             target: target.clone(),
             cmd_id,

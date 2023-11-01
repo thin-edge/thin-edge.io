@@ -88,12 +88,9 @@ impl SmartRestUpdateSoftware {
     pub fn into_software_update_command(
         &self,
         target: &EntityTopicId,
-        cmd_id: Option<&str>,
+        cmd_id: String,
     ) -> Result<SoftwareUpdateCommand, SmartRestDeserializerError> {
-        let mut request = match cmd_id {
-            None => SoftwareUpdateCommand::new(target),
-            Some(cmd_id) => SoftwareUpdateCommand::new_with_id(target, cmd_id.to_string()),
-        };
+        let mut request = SoftwareUpdateCommand::new(target, cmd_id);
         for module in self.modules() {
             match module.action.clone().try_into()? {
                 CumulocitySoftwareUpdateActions::Install => {
@@ -478,7 +475,7 @@ mod tests {
             String::from("528,external_id,software1,version1,url1,action,software2,,,remove");
         assert!(SmartRestUpdateSoftware::from_smartrest(&smartrest)
             .unwrap()
-            .into_software_update_command(&device, Some("123"))
+            .into_software_update_command(&device, "123".to_string())
             .is_err());
     }
 
@@ -504,11 +501,10 @@ mod tests {
         };
         let device = EntityTopicId::default_main_device();
         let thin_edge_json = smartrest_obj
-            .into_software_update_command(&device, Some("123"))
+            .into_software_update_command(&device, "123".to_string())
             .unwrap();
 
-        let mut expected_thin_edge_json =
-            SoftwareUpdateCommand::new_with_id(&device, "123".to_string());
+        let mut expected_thin_edge_json = SoftwareUpdateCommand::new(&device, "123".to_string());
         expected_thin_edge_json.add_update(SoftwareModuleUpdate::install(SoftwareModule {
             module_type: Some("debian".to_string()),
             name: "software1".to_string(),
@@ -535,7 +531,7 @@ mod tests {
             nginx,1.21.0::docker,,install,mongodb,4.4.6::docker,,delete");
         let software_update_request = SmartRestUpdateSoftware::from_smartrest(&smartrest)
             .unwrap()
-            .into_software_update_command(&EntityTopicId::default_main_device(), Some("123"))
+            .into_software_update_command(&EntityTopicId::default_main_device(), "123".to_string())
             .unwrap();
 
         let output_json = software_update_request.payload.to_json();
