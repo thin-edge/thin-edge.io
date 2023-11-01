@@ -99,6 +99,24 @@ Update configuration plugin config via local filesystem move (same directory)
     Main Device     ${PARENT_SN}   ${PARENT_SN}
     Child Device    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}
 
+Manual config_snapshot operation request
+    Set Device Context    ${PARENT_SN}
+    Publish and Verify Local Command
+    ...    topic=te/device/main///cmd/config_snapshot/local-1111
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_snapshot/local-1111","type":"tedge-configuration-plugin"}
+    ...    expected_status=successful
+    ...    c8y_fragment=c8y_UploadConfigFile
+
+Manual config_update operation request
+    Set Device Context    ${PARENT_SN}
+    # Don't worry about the command failing, that is expected since the tedgeUrl path does not exist
+    Publish and Verify Local Command
+    ...    topic=te/device/main///cmd/config_update/local-2222
+    ...    payload={"status":"init","tedgeUrl":"http://${PARENT_IP}:8000/tedge/file-transfer/${PARENT_SN}/config_update/local-2222","remoteUrl":"","type":"tedge-configuration-plugin"}
+    ...    expected_status=failed
+    ...    c8y_fragment=c8y_DownloadConfigFile
+
+
 *** Keywords ***
 
 Set Configuration from Device
@@ -283,3 +301,18 @@ Copy Configuration Files
     # Execute Command    chown root:root /etc/tedge/plugins/tedge-configuration-plugin.toml /etc/config1.json
     # Uncomment once https://github.com/thin-edge/thin-edge.io/issues/2253 is resolved
     # ThinEdgeIO.Service Health Status Should Be Up    tedge-configuration-plugin    device=child1
+
+Publish and Verify Local Command
+    [Arguments]    ${topic}    ${payload}    ${expected_status}=successful    ${c8y_fragment}=
+    [Teardown]    Execute Command    tedge mqtt pub --retain '${topic}' ''
+    Execute Command    tedge mqtt pub --retain '${topic}' '${payload}'
+    ${messages}=    Should Have MQTT Messages    ${topic}    minimum=1    maximum=1    message_contains="status":"${expected_status}"
+
+    Sleep    5s    reason=Given mapper a chance to react, if it does not react with 5 seconds it never will
+    ${retained_message}    Execute Command    timeout 1 tedge mqtt sub --no-topic '${topic}'    ignore_exit_code=${True}    strip=${True}
+    Should Be Equal    ${messages[0]}    ${retained_message}    msg=MQTT message should be unchanged
+
+    IF    "${c8y_fragment}"
+        # There should not be any c8y related operation transition messages sent: https://cumulocity.com/guides/reference/smartrest-two/#updating-operations
+        Should Have MQTT Messages    c8y/s/ds    message_pattern=^(501|502|503),${c8y_fragment}.*    minimum=0    maximum=0
+    END

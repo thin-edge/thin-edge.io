@@ -21,6 +21,15 @@ Supports restarting the device without sudo and running as root
     ${operation}=    Cumulocity.Restart Device
     Operation Should Be SUCCESSFUL    ${operation}    timeout=180
 
+# Note: Sending an actual local restart operation to trigger a restart (e.g. status=init) is not feasible
+# as the assertion would fail due to the device/container being unresponsive during the actual restart.
+# Just checking that the messages do not trigger any c8y messages and does not clear the retained message
+tedge-mapper-c8y does not react to local restart operations transitions
+    [Template]    Publish and Verify Local Command
+    topic=te/device/main///cmd/restart/local-1111    payload={"status":"executing"}     expected_status=executing     c8y_fragment=c8y_Restart
+    topic=te/device/main///cmd/restart/local-2222    payload={"status":"failed"}        expected_status=failed        c8y_fragment=c8y_Restart
+    topic=te/device/main///cmd/restart/local-3333    payload={"status":"successful"}    expected_status=successful    c8y_fragment=c8y_Restart
+
 
 *** Keywords ***
 
@@ -45,3 +54,18 @@ Custom Teardown
     # Restore sudo in case if the tests are run on a device (and not in a container)
     Execute Command    [ -f /usr/bin/sudo.bak ] && mv /usr/bin/sudo.bak /usr/bin/sudo || true
     Get Logs
+
+Publish and Verify Local Command
+    [Arguments]    ${topic}    ${payload}    ${expected_status}=successful    ${c8y_fragment}=
+    [Teardown]    Execute Command    tedge mqtt pub --retain '${topic}' ''
+    Execute Command    tedge mqtt pub --retain '${topic}' '${payload}'
+    ${messages}=    Should Have MQTT Messages    ${topic}    minimum=1    maximum=1    message_contains="status":"${expected_status}"
+
+    Sleep    2s    reason=Given mapper a chance to react, if it does not react with 2 seconds it never will
+    ${retained_message}    Execute Command    timeout 1 tedge mqtt sub --no-topic '${topic}'    ignore_exit_code=${True}    strip=${True}
+    Should Be Equal    ${messages[0]}    ${retained_message}    msg=MQTT message should be unchanged
+
+    IF    "${c8y_fragment}"
+        # There should not be any c8y related operation transition messages sent: https://cumulocity.com/guides/reference/smartrest-two/#updating-operations
+        Should Have MQTT Messages    c8y/s/ds    message_pattern=^(501|502|503),${c8y_fragment}.*    minimum=0    maximum=0
+    END
