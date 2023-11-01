@@ -15,7 +15,6 @@ clap = { workspace = true }
 freedesktop_entry_parser = { workspace = true }
 futures = { workspace = true }
 mqtt_channel = { workspace = true }
-nanoid = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tedge_api = { workspace = true }

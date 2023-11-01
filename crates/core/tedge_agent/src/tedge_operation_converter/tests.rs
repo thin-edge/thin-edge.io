@@ -41,7 +41,7 @@ async fn convert_incoming_software_list_request() -> Result<(), DynError> {
 
     // Assert SoftwareListCommand
     software_box
-        .assert_received([SoftwareListCommand::new_with_id(
+        .assert_received([SoftwareListCommand::new(
             &EntityTopicId::default_main_device(),
             "some-cmd-id".to_string(),
         )])
@@ -130,7 +130,7 @@ async fn convert_outgoing_software_list_response() -> Result<(), DynError> {
 
     // Simulate SoftwareList response message received.
     let software_list_request =
-        SoftwareListCommand::new_with_id(&EntityTopicId::default_main_device(), "1234".to_string());
+        SoftwareListCommand::new(&EntityTopicId::default_main_device(), "1234".to_string());
     let software_list_response = software_list_request
         .clone()
         .with_status(CommandStatus::Executing);
@@ -189,10 +189,8 @@ async fn convert_outgoing_software_update_response() -> Result<(), DynError> {
     skip_capability_messages(&mut mqtt_box, "device/main//").await;
 
     // Simulate SoftwareUpdate response message received.
-    let software_update_request = SoftwareUpdateCommand::new_with_id(
-        &EntityTopicId::default_main_device(),
-        "1234".to_string(),
-    );
+    let software_update_request =
+        SoftwareUpdateCommand::new(&EntityTopicId::default_main_device(), "1234".to_string());
     let software_update_response = software_update_request.with_status(CommandStatus::Executing);
     software_box.send(software_update_response.into()).await?;
 

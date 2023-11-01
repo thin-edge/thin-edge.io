@@ -177,14 +177,14 @@ impl SoftwareManagerActor {
         {
             match operation {
                 StateStatus::Software(SoftwareOperationVariants::Update) => {
-                    let response = SoftwareUpdateCommand::new_with_id(&self.config.device, cmd_id)
+                    let response = SoftwareUpdateCommand::new(&self.config.device, cmd_id)
                         .with_error(
                             "Software Update command cancelled on agent restart".to_string(),
                         );
                     self.output_sender.send(response.into()).await?;
                 }
                 StateStatus::Software(SoftwareOperationVariants::List) => {
-                    let response = SoftwareListCommand::new_with_id(&self.config.device, cmd_id)
+                    let response = SoftwareListCommand::new(&self.config.device, cmd_id)
                         .with_error("Software List request cancelled on agent restart".to_string());
                     self.output_sender.send(response.into()).await?;
                 }

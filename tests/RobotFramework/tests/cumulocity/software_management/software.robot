@@ -34,6 +34,22 @@ Software list should only show currently installed software and not candidates
     ${VERSION}=    Regexp Escape    ${EXPECTED_VERSION}
     Device Should Have Installed Software    tedge,^${VERSION}::apt$        timeout=120
 
+Manual software_list operation request
+    # Note: There isn't a Cumulocity IoT operation related to getting the software list, so no need to check for operation transitions
+    Publish and Verify Local Command
+    ...    topic=te/device/main///cmd/software_list/local-1111
+    ...    payload={"status":"init"}
+    ...    expected_status=successful
+
+Manual software_update operation request
+    # Don't worry about the command failing, that is expected since the package to be installed does not exist
+    Publish and Verify Local Command
+    ...    topic=te/device/main///cmd/software_update/local-2222
+    ...    payload={"status":"init","updateList":[{"type":"apt","modules":[{"name":"package-does-not-exist","version":"latest","action":"install"}]}]}
+    ...    expected_status=failed
+    ...    c8y_fragment=c8y_SoftwareUpdate
+
+
 *** Keywords ***
 
 Custom Setup
@@ -50,3 +66,18 @@ Stop tedge-agent
 Custom Teardown
     Execute Command    sudo stop-http-server.sh
     Get Logs
+
+Publish and Verify Local Command
+    [Arguments]    ${topic}    ${payload}    ${expected_status}=successful    ${c8y_fragment}=
+    [Teardown]    Execute Command    tedge mqtt pub --retain '${topic}' ''
+    Execute Command    tedge mqtt pub --retain '${topic}' '${payload}'
+    ${messages}=    Should Have MQTT Messages    ${topic}    minimum=1    maximum=1    message_contains="status":"${expected_status}"
+
+    Sleep    5s    reason=Given mapper a chance to react, if it does not react with 5 seconds it never will
+    ${retained_message}    Execute Command    timeout 1 tedge mqtt sub --no-topic '${topic}'    ignore_exit_code=${True}    strip=${True}
+    Should Be Equal    ${messages[0]}    ${retained_message}    msg=MQTT message should be unchanged
+
+    IF    "${c8y_fragment}"
+        # There should not be any c8y related operation transition messages sent: https://cumulocity.com/guides/reference/smartrest-two/#updating-operations
+        Should Have MQTT Messages    c8y/s/ds    message_pattern=^(501|502|503),${c8y_fragment}.*    minimum=0    maximum=0
+    END

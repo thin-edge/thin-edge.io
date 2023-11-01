@@ -104,7 +104,7 @@ async fn test_pending_software_list_operation() -> Result<(), DynError> {
     let mut converter_box = spawn_software_manager(&temp_dir).await?;
 
     let software_request_response =
-        SoftwareListCommand::new_with_id(&EntityTopicId::default_main_device(), "1234".to_string())
+        SoftwareListCommand::new(&EntityTopicId::default_main_device(), "1234".to_string())
             .with_error("Software List request cancelled on agent restart".to_string());
     converter_box
         .assert_received([software_request_response])
@@ -122,7 +122,7 @@ async fn test_new_software_list_operation() -> Result<(), DynError> {
     let mut converter_box = spawn_software_manager(&temp_dir).await?;
 
     let command =
-        SoftwareListCommand::new_with_id(&EntityTopicId::default_main_device(), "1234".to_string());
+        SoftwareListCommand::new(&EntityTopicId::default_main_device(), "1234".to_string());
     converter_box.send(command.clone().into()).await?;
 
     let executing_response = command.clone().with_status(CommandStatus::Executing);
