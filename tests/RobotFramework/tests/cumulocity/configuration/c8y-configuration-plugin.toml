@@ -1,0 +1,3 @@
+files = [
+    { path = '/etc/config1.json', type = 'TEST_CONFIG', user = 'tedge', group = 'tedge', mode = 0o640 },
+]

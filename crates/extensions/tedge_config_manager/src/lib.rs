@@ -7,6 +7,7 @@ mod tests;
 
 use actor::*;
 pub use config::*;
+use std::fs::rename;
 use std::path::PathBuf;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
@@ -88,8 +89,21 @@ impl ConfigManagerBuilder {
     }
 
     pub fn init(config: &ConfigManagerConfig) -> Result<(), FileError> {
+        if config.plugin_config_path.exists() {
+            return Ok(());
+        }
+
         // creating plugin config parent dir
         create_directory_with_defaults(&config.plugin_config_dir)?;
+
+        let legacy_plugin_config = config
+            .config_dir
+            .join("c8y")
+            .join("c8y-configuration-plugin.toml");
+        if legacy_plugin_config.exists() {
+            rename(legacy_plugin_config, &config.plugin_config_path)?;
+            return Ok(());
+        }
 
         // create tedge-configuration-plugin.toml
         let example_config = r#"# Add the configurations to be managed by tedge-configuration-plugin

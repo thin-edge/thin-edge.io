@@ -8,6 +8,7 @@ mod tests;
 pub use actor::*;
 pub use config::*;
 use log_manager::LogPluginConfig;
+use std::fs::rename;
 use std::path::PathBuf;
 use tedge_actors::adapt;
 use tedge_actors::Builder;
@@ -70,8 +71,18 @@ impl LogManagerBuilder {
     }
 
     pub fn init(config: &LogManagerConfig) -> Result<(), FileError> {
+        if config.plugin_config_path.exists() {
+            return Ok(());
+        }
+
         // creating plugin config parent dir
         create_directory_with_defaults(&config.plugin_config_dir)?;
+
+        let legacy_plugin_config = config.config_dir.join("c8y").join("c8y-log-plugin.toml");
+        if legacy_plugin_config.exists() {
+            rename(legacy_plugin_config, &config.plugin_config_path)?;
+            return Ok(());
+        }
 
         // creating tedge-log-plugin.toml
         let example_config = r#"# Add the list of log files that should be managed by tedge-log-plugin
