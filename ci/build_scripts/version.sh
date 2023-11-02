@@ -81,7 +81,10 @@ set_version_variables() {
     if [ -z "$GIT_SEMVER" ]; then
         GIT_DESCRIBE_RAW=$(git describe --always --tags --abbrev=7 2>/dev/null || true)
 
-        if [[ "$GIT_DESCRIBE_RAW" =~ ^[a-z0-9]+$ ]]; then
+        if [[ "$GIT_DESCRIBE_RAW" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            # Tagged release
+            BASE_VERSION="$GIT_DESCRIBE_RAW"
+        elif [[ "$GIT_DESCRIBE_RAW" =~ ^[a-z0-9]+$ ]]; then
             # Note: Sometimes git describe only prints out the git hash when run on a PR branch
             # from someone else. In such instances this causes the version to be incompatible with
             # linux package types. For instance, debian versions must start with a digit.
