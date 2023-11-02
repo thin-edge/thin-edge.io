@@ -172,7 +172,7 @@ jobs:
           invoke test \
             --processes "${{ inputs.processes || '' }}" \
             --include "${{ inputs.include || '' }}" \
-            --exclude "test:on_demand" \
+            --exclude "test:on_demand OR theme:benchmarks" \
             --outputdir output
 
       - name: Upload test results

@@ -3,7 +3,7 @@ Resource    ../../../resources/common.resource
 Library    Cumulocity
 Library    ThinEdgeIO
 
-Test Tags    theme:c8y    theme:benchmarks    \#2326
+Force Tags    theme:c8y    theme:benchmarks    \#2326
 Suite Setup    Suite Setup
 Test Setup    Test Setup
 
