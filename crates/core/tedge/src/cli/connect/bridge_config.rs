@@ -20,6 +20,7 @@ pub struct BridgeConfig {
     pub try_private: bool,
     pub start_type: String,
     pub clean_session: bool,
+    pub include_local_clean_session: bool,
     pub local_clean_session: bool,
     pub notifications: bool,
     pub notifications_local_only: bool,
@@ -53,7 +54,9 @@ impl BridgeConfig {
         writeln!(writer, "try_private {}", self.try_private)?;
         writeln!(writer, "start_type {}", self.start_type)?;
         writeln!(writer, "cleansession {}", self.clean_session)?;
-        writeln!(writer, "local_cleansession {}", self.local_clean_session)?;
+        if self.include_local_clean_session {
+            writeln!(writer, "local_cleansession {}", self.local_clean_session)?;
+        }
         writeln!(writer, "notifications {}", self.notifications)?;
         writeln!(
             writer,
@@ -125,6 +128,7 @@ mod test {
             try_private: false,
             start_type: "automatic".into(),
             clean_session: true,
+            include_local_clean_session: true,
             local_clean_session: true,
             notifications: false,
             notifications_local_only: false,
@@ -189,6 +193,7 @@ bridge_attempt_unsubscribe false
             try_private: false,
             start_type: "automatic".into(),
             clean_session: true,
+            include_local_clean_session: true,
             local_clean_session: true,
             notifications: false,
             notifications_local_only: false,
@@ -255,6 +260,7 @@ bridge_attempt_unsubscribe false
             try_private: false,
             start_type: "automatic".into(),
             clean_session: true,
+            include_local_clean_session: true,
             local_clean_session: true,
             notifications: false,
             notifications_local_only: false,
@@ -390,6 +396,7 @@ bridge_attempt_unsubscribe false
             try_private: false,
             start_type: "automatic".into(),
             clean_session: true,
+            include_local_clean_session: true,
             local_clean_session: true,
             notifications: false,
             notifications_local_only: false,

@@ -1,8 +1,11 @@
 use crate::cli::connect::BridgeConfig;
 use camino::Utf8PathBuf;
+use std::process::Command;
+use tedge_config::AutoFlag;
 use tedge_config::HostPort;
 use tedge_config::TemplatesSet;
 use tedge_config::MQTT_TLS_PORT;
+use which::which;
 
 const C8Y_BRIDGE_HEALTH_TOPIC: &str = "te/device/main/service/mosquitto-c8y-bridge/status/health";
 
@@ -15,6 +18,7 @@ pub struct BridgeConfigC8yParams {
     pub bridge_certfile: Utf8PathBuf,
     pub bridge_keyfile: Utf8PathBuf,
     pub smartrest_templates: TemplatesSet,
+    pub include_local_clean_session: AutoFlag,
 }
 
 impl From<BridgeConfigC8yParams> for BridgeConfig {
@@ -27,6 +31,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             bridge_certfile,
             bridge_keyfile,
             smartrest_templates,
+            include_local_clean_session,
         } = params;
 
         let mut topics: Vec<String> = vec![
@@ -74,6 +79,12 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             .collect::<Vec<String>>();
         topics.extend(templates_set);
 
+        let include_local_clean_session = match include_local_clean_session {
+            AutoFlag::True => true,
+            AutoFlag::False => false,
+            AutoFlag::Auto => is_mosquitto_version_above_2(),
+        };
+
         Self {
             cloud_name: "c8y".into(),
             config_file,
@@ -94,6 +105,7 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             try_private: false,
             start_type: "automatic".into(),
             clean_session: true,
+            include_local_clean_session,
             local_clean_session: false,
             notifications: true,
             notifications_local_only: true,
@@ -104,6 +116,33 @@ impl From<BridgeConfigC8yParams> for BridgeConfig {
             topics,
         }
     }
+}
+
+/// Return whether or not mosquitto version is >= 2.0.0
+///
+/// As mosquitto doesn't provide a `--version` flag, this is a guess.
+///
+/// The main requirement is to ensure there is no false positive,
+/// as this used to generate configuration files
+/// with recent mosquitto properties (such as `local_cleansession`)
+/// which make crash old versions (< 2.0.0).
+pub fn is_mosquitto_version_above_2() -> bool {
+    if let Ok(mosquitto) = which("mosquitto") {
+        if let Ok(mosquitto_help) = Command::new(mosquitto).args(["--help"]).output() {
+            if let Ok(help_content) = String::from_utf8(mosquitto_help.stdout) {
+                let is_above_2 = help_content.starts_with("mosquitto version 2");
+                if is_above_2 {
+                    eprintln!("Detected mosquitto version >= 2.0.0");
+                } else {
+                    eprintln!("Detected mosquitto version < 2.0.0");
+                }
+                return is_above_2;
+            }
+        }
+    }
+
+    eprintln!("Failed to detect mosquitto version: assuming mosquitto version < 2.0.0");
+    false
 }
 
 #[test]
@@ -117,6 +156,7 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
         bridge_certfile: "./test-certificate.pem".into(),
         bridge_keyfile: "./test-private-key.pem".into(),
         smartrest_templates: TemplatesSet::try_from(vec!["abc", "def"])?,
+        include_local_clean_session: AutoFlag::False,
     };
 
     let bridge = BridgeConfig::from(params);
@@ -172,6 +212,7 @@ fn test_bridge_config_from_c8y_params() -> anyhow::Result<()> {
         try_private: false,
         start_type: "automatic".into(),
         clean_session: true,
+        include_local_clean_session: false,
         local_clean_session: false,
         notifications: true,
         notifications_local_only: true,

@@ -53,6 +53,7 @@ impl From<BridgeConfigAzureParams> for BridgeConfig {
             try_private: false,
             start_type: "automatic".into(),
             clean_session: false,
+            include_local_clean_session: false, // local_clean_session being equal to clean_session, the former is useless and safer to ignore
             local_clean_session: false,
             notifications: true,
             notifications_local_only: true,
@@ -116,6 +117,7 @@ fn test_bridge_config_from_azure_params() -> anyhow::Result<()> {
         try_private: false,
         start_type: "automatic".into(),
         clean_session: false,
+        include_local_clean_session: false,
         local_clean_session: false,
         notifications: true,
         notifications_local_only: true,
