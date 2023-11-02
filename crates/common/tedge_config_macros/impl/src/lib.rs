@@ -202,4 +202,18 @@ mod tests {
         })
         .unwrap();
     }
+
+    #[test]
+    fn error_message_suggests_fix_in_case_of_invalid_value() {
+        assert_eq!(generate_configuration(quote! {
+            http: {
+                #[tedge_config(default(value = Ipv4Addr::LOCALHOST))]
+                address: Ipv4Addr,
+            },
+        })
+                       .unwrap_err()
+                       .to_string(),
+                   "Unexpected expression, `default(value = ...)` expects a literal.\n\
+            Perhaps you want to use `#[tedge_config(default(variable = \"Ipv4Addr::LOCALHOST\"))]`?");
+    }
 }
