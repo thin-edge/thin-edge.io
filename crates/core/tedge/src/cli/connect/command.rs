@@ -195,6 +195,12 @@ impl ConnectCommand {
                     bridge_certfile: config.device.cert_path.clone(),
                     bridge_keyfile: config.device.key_path.clone(),
                     smartrest_templates: config.c8y.smartrest.templates.clone(),
+                    include_local_clean_session: config
+                        .c8y
+                        .bridge
+                        .include
+                        .local_cleansession
+                        .clone(),
                 };
 
                 Ok(BridgeConfig::from(params))

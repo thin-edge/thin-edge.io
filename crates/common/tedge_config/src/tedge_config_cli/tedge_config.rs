@@ -1,3 +1,4 @@
+use crate::AutoFlag;
 use crate::ConnectUrl;
 use crate::HostPort;
 use crate::Seconds;
@@ -396,7 +397,16 @@ define_tedge_config! {
                 #[tedge_config(example = "8001", default(value = 8001u16))]
                 port: u16,
             }
-        }
+        },
+
+        bridge: {
+            include: {
+                /// Set the bridge local clean session flag (this requires mosquitto >= 2.0.0)
+                #[tedge_config(note = "If set to 'auto', this cleans the local session accordingly the detected version of mosquitto.")]
+                #[tedge_config(example = "auto", default(value = "auto"))]
+                local_cleansession: AutoFlag,
+            }
+        },
     },
 
     #[tedge_config(deprecated_name = "azure")] // for 0.1.0 compatibility
