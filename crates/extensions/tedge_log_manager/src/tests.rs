@@ -79,7 +79,7 @@ fn prepare() -> Result<TempTedgeDir, anyhow::Error> {
 /// Create a log manager actor builder
 /// along two boxes to exchange MQTT and HTTP messages with the log actor
 #[allow(clippy::type_complexity)]
-fn new_log_manager_builder(
+async fn new_log_manager_builder(
     temp_dir: &Path,
 ) -> (
     LogManagerBuilder,
@@ -108,6 +108,7 @@ fn new_log_manager_builder(
         &mut fs_watcher_builder,
         &mut uploader_builder,
     )
+    .await
     .unwrap();
 
     (
@@ -119,14 +120,14 @@ fn new_log_manager_builder(
 }
 
 /// Spawn a log manager actor and return 2 boxes to exchange MQTT and HTTP messages with it
-fn spawn_log_manager_actor(
+async fn spawn_log_manager_actor(
     temp_dir: &Path,
 ) -> (
     MqttMessageBox,
     SimpleMessageBox<NoMessage, FsWatchEvent>,
     UploaderMessageBox,
 ) {
-    let (actor_builder, mqtt, fs, uploader) = new_log_manager_builder(temp_dir);
+    let (actor_builder, mqtt, fs, uploader) = new_log_manager_builder(temp_dir).await;
     let actor = actor_builder.build();
     tokio::spawn(async move { actor.run().await });
     (mqtt, fs, uploader)
@@ -135,7 +136,7 @@ fn spawn_log_manager_actor(
 #[tokio::test]
 async fn log_manager_reloads_log_types() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
 
     let log_reload_topic = Topic::new_unchecked("te/device/main///cmd/log_upload");
 
@@ -156,7 +157,7 @@ async fn log_manager_reloads_log_types() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn log_manager_upload_log_files_on_request() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, mut uploader) = spawn_log_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, mut uploader) = spawn_log_manager_actor(tempdir.path()).await;
 
     let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/1234");
 
@@ -220,7 +221,7 @@ async fn log_manager_upload_log_files_on_request() -> Result<(), anyhow::Error> 
 #[tokio::test]
 async fn request_logtype_that_does_not_exist() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
 
     let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/1234");
 
@@ -267,7 +268,7 @@ async fn request_logtype_that_does_not_exist() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn ignore_topic_for_another_device() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _http, _fs) = spawn_log_manager_actor(tempdir.path());
+    let (mut mqtt, _http, _fs) = spawn_log_manager_actor(tempdir.path()).await;
 
     // Check for child device topic
     let another_device_topic = Topic::new_unchecked("te/device/child01///cmd/log_upload/1234");
@@ -297,7 +298,7 @@ async fn ignore_topic_for_another_device() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn send_incorrect_payload() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
 
     let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/1234");
 
@@ -326,7 +327,7 @@ async fn send_incorrect_payload() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn read_log_from_file_that_does_not_exist() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
 
     let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/1234");
 

@@ -8,7 +8,6 @@ mod tests;
 pub use actor::*;
 pub use config::*;
 use log_manager::LogPluginConfig;
-use std::fs::rename;
 use std::path::PathBuf;
 use tedge_actors::adapt;
 use tedge_actors::Builder;
@@ -27,7 +26,9 @@ use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::*;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
+use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
+use tedge_utils::file::PermissionEntry;
 
 /// This is an actor builder.
 pub struct LogManagerBuilder {
@@ -39,13 +40,13 @@ pub struct LogManagerBuilder {
 }
 
 impl LogManagerBuilder {
-    pub fn try_new(
+    pub async fn try_new(
         config: LogManagerConfig,
         mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
         uploader_actor: &mut impl ServiceProvider<LogUploadRequest, LogUploadResult, NoConfig>,
     ) -> Result<Self, FileError> {
-        Self::init(&config)?;
+        Self::init(&config).await?;
         let plugin_config = LogPluginConfig::new(&config.plugin_config_path);
 
         let box_builder = SimpleMessageBoxBuilder::new("Log Manager", 16);
@@ -70,7 +71,7 @@ impl LogManagerBuilder {
         })
     }
 
-    pub fn init(config: &LogManagerConfig) -> Result<(), FileError> {
+    pub async fn init(config: &LogManagerConfig) -> Result<(), FileError> {
         if config.plugin_config_path.exists() {
             return Ok(());
         }
@@ -80,7 +81,12 @@ impl LogManagerBuilder {
 
         let legacy_plugin_config = config.config_dir.join("c8y").join("c8y-log-plugin.toml");
         if legacy_plugin_config.exists() {
-            rename(legacy_plugin_config, &config.plugin_config_path)?;
+            move_file(
+                legacy_plugin_config,
+                &config.plugin_config_path,
+                PermissionEntry::default(),
+            )
+            .await?;
             return Ok(());
         }
 

@@ -7,7 +7,6 @@ mod tests;
 
 use actor::*;
 pub use config::*;
-use std::fs::rename;
 use std::path::PathBuf;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::Builder;
@@ -25,7 +24,9 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::create_file_with_defaults;
+use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
+use tedge_utils::file::PermissionEntry;
 
 /// An instance of the config manager
 ///
@@ -41,7 +42,7 @@ pub struct ConfigManagerBuilder {
 }
 
 impl ConfigManagerBuilder {
-    pub fn try_new(
+    pub async fn try_new(
         config: ConfigManagerConfig,
         mqtt: &mut impl ServiceProvider<MqttMessage, MqttMessage, TopicFilter>,
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
@@ -52,7 +53,7 @@ impl ConfigManagerBuilder {
         >,
         uploader_actor: &mut impl ServiceProvider<ConfigUploadRequest, ConfigUploadResult, NoConfig>,
     ) -> Result<Self, FileError> {
-        Self::init(&config)?;
+        Self::init(&config).await?;
 
         let plugin_config = PluginConfig::new(config.plugin_config_path.as_path());
 
@@ -88,7 +89,7 @@ impl ConfigManagerBuilder {
         })
     }
 
-    pub fn init(config: &ConfigManagerConfig) -> Result<(), FileError> {
+    pub async fn init(config: &ConfigManagerConfig) -> Result<(), FileError> {
         if config.plugin_config_path.exists() {
             return Ok(());
         }
@@ -101,7 +102,12 @@ impl ConfigManagerBuilder {
             .join("c8y")
             .join("c8y-configuration-plugin.toml");
         if legacy_plugin_config.exists() {
-            rename(legacy_plugin_config, &config.plugin_config_path)?;
+            move_file(
+                legacy_plugin_config,
+                &config.plugin_config_path,
+                PermissionEntry::default(),
+            )
+            .await?;
             return Ok(());
         }
 
