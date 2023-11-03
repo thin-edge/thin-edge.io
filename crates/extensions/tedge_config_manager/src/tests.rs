@@ -59,7 +59,7 @@ fn prepare() -> Result<TempTedgeDir, anyhow::Error> {
 }
 
 #[allow(clippy::type_complexity)]
-fn new_config_manager_builder(
+async fn new_config_manager_builder(
     temp_dir: &Path,
 ) -> (
     ConfigManagerBuilder,
@@ -100,6 +100,7 @@ fn new_config_manager_builder(
         &mut downloader_builder,
         &mut uploader_builder,
     )
+    .await
     .unwrap();
 
     (
@@ -111,7 +112,7 @@ fn new_config_manager_builder(
     )
 }
 
-fn spawn_config_manager_actor(
+async fn spawn_config_manager_actor(
     temp_dir: &Path,
 ) -> (
     MqttMessageBox,
@@ -119,7 +120,8 @@ fn spawn_config_manager_actor(
     DownloaderMessageBox,
     UploaderMessageBox,
 ) {
-    let (actor_builder, mqtt, fs, downloader, uploader) = new_config_manager_builder(temp_dir);
+    let (actor_builder, mqtt, fs, downloader, uploader) =
+        new_config_manager_builder(temp_dir).await;
     let actor = actor_builder.build();
     tokio::spawn(async move { actor.run().await });
     (mqtt, fs, downloader, uploader)
@@ -128,7 +130,7 @@ fn spawn_config_manager_actor(
 #[tokio::test]
 async fn config_manager_reloads_config_types() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path()).await;
 
     let config_snapshot_reload_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot");
     let config_update_reload_topic = Topic::new_unchecked("te/device/main///cmd/config_update");
@@ -161,7 +163,8 @@ async fn config_manager_reloads_config_types() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn config_manager_uploads_snapshot() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _downloader, mut uploader) = spawn_config_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _downloader, mut uploader) =
+        spawn_config_manager_actor(tempdir.path()).await;
 
     let config_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234");
 
@@ -224,7 +227,8 @@ async fn config_manager_uploads_snapshot() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn config_manager_download_update() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, mut downloader, _uploader) = spawn_config_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, mut downloader, _uploader) =
+        spawn_config_manager_actor(tempdir.path()).await;
 
     let config_topic = Topic::new_unchecked("te/device/main///cmd/config_update/1234");
 
@@ -289,7 +293,7 @@ async fn config_manager_download_update() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn request_config_snapshot_that_does_not_exist() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path()).await;
 
     let config_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234");
 
@@ -335,7 +339,7 @@ async fn request_config_snapshot_that_does_not_exist() -> Result<(), anyhow::Err
 #[tokio::test]
 async fn ignore_topic_for_another_device() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path()).await;
 
     // Check for child device topic
     let another_device_topic = Topic::new_unchecked("te/device/child01///cmd/config-snapshot/1234");
@@ -363,7 +367,7 @@ async fn ignore_topic_for_another_device() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn send_incorrect_payload() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path());
+    let (mut mqtt, _fs, _downloader, _uploader) = spawn_config_manager_actor(tempdir.path()).await;
 
     let config_topic = Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234");
 
