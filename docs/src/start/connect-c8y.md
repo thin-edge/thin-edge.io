@@ -200,7 +200,7 @@ Any messages sent to one of these topics will be forwarded to Cumulocity.
 The messages are expected to have a format specific to each topic.
 Here, we use `tedge mqtt pub` a raw Cumulocity SmartRest message to be understood as a temperature of 20°C.
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub c8y/s/us 211,20
 ```
 

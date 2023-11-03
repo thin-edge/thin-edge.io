@@ -24,7 +24,7 @@ The registration message of the `software_list` operation on a device:
 - must provide a `types` list of the types of software package that can be installed on this device (e.g. `["apt", "docker"]`)
 - can provide a description of the operation and of each supported package type.
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/software_list' '{
     "description": "List software packages installed on the device",
     "types": [
@@ -39,7 +39,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/software_list' '{
 A `software_list` command has nothing to provide beyond a `status` field.
 This empty message stands for a request of the list of software currently installed.
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/software_list/c8y-2023-09-25T14:34:00' '{
     "status": "init"
 }'
@@ -79,7 +79,7 @@ The payload for a successful `software_list` command has two fields:
 
 As an example, here is a (simplified) status message for a successful `software_list` command on a child device:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/software_list/c8y-2023-09-25T14:34:00' '{
     "status": "successful",
     "currentSoftwareList": [
@@ -116,7 +116,7 @@ The payload for a failed `software_list` is made of two fields:
 - the `status` is set to `failed`
 - a `reason` text field is added with the root cause of the failure
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/software_list/c8y-2023-09-25T14:34:00' '{
     "status": "failed",  
     "reason": "Permission denied",
@@ -138,7 +138,7 @@ The registration message of the `software_update` operation on a device:
 - must provide a `types` list of the types of software package that can be installed on this device (e.g. `["apt", "docker"]`)
 - can provide a description of the operation and of each supported package type.
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/software_update' '{
     "description": "Install, update and remove software packages",
     "types": [
@@ -182,7 +182,7 @@ A `software_update` command is defined by an `"updateList"` array giving the pac
 
 As an example, here is a message requesting a `software_update` on a child device:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/software_update/c8y-2023-09-25T14:53:00' '{
     "status": "init",
     "updateList": [
@@ -237,7 +237,7 @@ repeats the same content as the former request except that:
 
 As an example, here is a status message for a successful `software_update` command on a child device:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/software_update/c8y-2023-09-25T14:53:00' '{
     "status": "successful",  
     "updateList": [
@@ -285,7 +285,7 @@ repeats the same content as the former request except that:
 - a `reason` text field is added with the root cause of the failure
 - a `failures` array field might be added to list the errors for all the failing actions.
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/software_update/c8y-2023-09-25T14:53:00' '{
     "status": "failed",  
     "reason": "Partial failure: Could not install collectd and nginx",

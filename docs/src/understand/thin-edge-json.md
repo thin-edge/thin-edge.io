@@ -64,7 +64,7 @@ or a combination of both along with some auxiliary data like the timestamp at wh
 
 Simple single-valued measurements like temperature or pressure can be expressed as follows:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///m/environment '{
   "temperature": 25
 }'
@@ -81,7 +81,7 @@ Like the name suggests, a multi-valued measurement is allowed to contain more th
 Here is the representation of a `three_phase_current` measurement that consists of `L1`, `L2` and `L3` values,
 representing the current on each phase:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///m/electrical '{
   "three_phase_current": {
     "L1": 9.5,
@@ -97,7 +97,7 @@ Only one level of nesting is allowed, meaning the values of the measurement keys
 
 **❌ Example: Invalid measurement due to nesting > 2 levels**
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///m/example '{
   "three_phase_current": {
     "phase1": {
@@ -117,7 +117,7 @@ tedge mqtt pub te/device/main///m/example '{
 
 Multiple single-valued and multi-valued measurements can be grouped into a single Thin Edge JSON message as follows:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///m/example '{
   "temperature": 25,
   "three_phase_current": {
@@ -138,7 +138,7 @@ If the user doesn't want to rely on `thin-edge.io` generated timestamps,
 an explicit timestamp can be provided in the measurement message itself by adding the time value as a string 
 in ISO 8601 format using `time` as the key name, as follows:
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///m/example '{
   "time": "2020-10-15T05:30:47+00:00",
   "temperature": 25,
@@ -171,7 +171,7 @@ For instance:
 - a process started
 - a user has started an ssh session
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///e/login '{
   "text": "A user just logged in",
   "time": "2021-01-01T05:30:45+00:00",
@@ -198,7 +198,7 @@ For instance:
 - a process that crashed
 - free disk space going critically low
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///a/temperature_high '{
   "text": "Temperature is very high",
   "severity": "warning",

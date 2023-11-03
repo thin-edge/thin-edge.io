@@ -52,7 +52,7 @@ and sends the supported log types message to the MQTT local broker on the `<root
 Given that `root.topic` and `device.topic` are set to `te` and `device/main//` for the main device,
 the message to declare the supported log types is as follows.
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/log_upload' '{
   "types" : [ "mosquitto", "software-management", "c8y_CustomOperation" ]
 }'
@@ -71,13 +71,13 @@ then a JSON message with an empty array for the `types` field is sent, indicatin
 The plugin subscribes to log upload commands on the [`<root>/<identifier>/cmd/log_upload/+` MQTT topic](../mqtt-api.md).
 For example, it subscribes to the following topic for the main device.
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/device/main///cmd/log_upload/+'
 ```
 
 A new log file upload command with the ID "1234" is published for the device named "example" by another component as below.
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/log_upload/1234' '{
   "status": "init",
   "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/example/log_upload/mosquitto-1234",
@@ -106,7 +106,7 @@ If any unexpected error occurs, the plugin updates the status to `failed` with a
 
 Thus, the operation status update message for the above example looks like below.
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/log_upload/1234' '{
   "status": "failed",
   "reason": "The target log file for 'mosquitto' does not exist.",

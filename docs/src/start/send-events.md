@@ -36,7 +36,7 @@ The payload format must be as follows:
 
 Here is a sample event triggered for a `login_event` event type:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///e/login_event '
 {
   "text": "A user just logged in",
@@ -126,7 +126,7 @@ Here is a sample event triggered for a `login_event` event type for the `externa
 
 Command to send the event from a external device as below:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/external_sensor///e/login_event '{
   "text":"A user just logged in",
   "time":"2021-01-01T05:30:45+00:00"

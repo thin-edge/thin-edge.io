@@ -27,7 +27,7 @@ The `restart` operation API follows the [generic thin-edge rules for operations]
 
 The registration message of the `restart` operation on a device is an empty JSON object `{}`.
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/restart' '{}'
 ```
 
@@ -36,7 +36,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/restart' '{}'
 To trigger a restart operation on a device, the requester has no information to provide.
 It only has to create a new `restart` command instance topic.
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/restart/c8y-2023-09-08T18:13:00' '{
     "status": "init"
 }'
@@ -47,7 +47,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/restart/c8y-2023-09-08T18:13:0
 When ready, but before actually restarting the device,
 the agent or the `restart` plugin publishes the new state of the command.
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/restart/c8y-2023-09-08T18:13:00' '{
     "status": "executing"
 }'
@@ -58,7 +58,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/restart/c8y-2023-09-08T18:13:0
 After a successful reboot,
 the agent or the `restart` plugin publishes the new state of the command.
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/restart/c8y-2023-09-08T18:13:00' '{
     "status": "successful"
 }'
@@ -70,7 +70,7 @@ In case the reboot failed for some reason,
 the agent or the `restart` plugin publishes the new state of the command,
 adding a `reason` text field with the error. 
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/restart/c8y-2023-09-08T18:13:00' '{
     "status": "failed",
     "reason": "The device has not restarted within 5 minutes"
@@ -82,7 +82,7 @@ tedge mqtt pub --retain 'te/device/child001///cmd/restart/c8y-2023-09-08T18:13:0
 As for all commands, the responsibility of closing a `restart` is on the requester.
 This is done by publishing an empty retained message on the command topic.
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/child001///cmd/restart/c8y-2023-09-08T18:13:00' ''
 ```
 

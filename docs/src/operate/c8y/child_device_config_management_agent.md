@@ -75,7 +75,7 @@ to the URL: `http://{tedge-ip}:8000/tedge/file-transfer/{child-id}/c8y-configura
 
 Once the upload is complete, the agent should notify thin-edge about the upload by sending the following MQTT message:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub 'tedge/{child-d}/commands/res/config_snapshot' '{"type": "c8y-configuration-plugin", "path": "/child/local/fs/path"}'
 ```
 
@@ -107,7 +107,7 @@ The `url` value is what the child device agent must use to upload the requested 
 
 On receipt of the request, the agent must send an "executing" MQTT status message as follows:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub tedge/{child-d}/commands/res/config_snapshot '{
   "status": "executing",
   "type": "{config-type}",

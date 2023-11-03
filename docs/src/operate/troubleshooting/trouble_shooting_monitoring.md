@@ -23,7 +23,7 @@ sudo systemctl start collectd
 
 ## Is collectd publishing MQTT messages?
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'collectd/#'
 ```
 
@@ -47,13 +47,13 @@ sudo systemctl start tedge-mapper-collectd
 
 ## Are the collectd metrics published in Thin Edge JSON format?
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/device/main///m/+'
 ```
 
 ## Are the collectd metrics published to Cumulocity IoT?
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'c8y/#'
 ```
 
@@ -61,7 +61,7 @@ If not see how to [connect a device to Cumulocity IoT](../../start/connect-c8y.m
 
 ## Are the collectd metrics published to Azure IoT?
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'az/#'
 ```
 

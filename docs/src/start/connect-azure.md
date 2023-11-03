@@ -156,13 +156,13 @@ Sending data to Azure is done using MQTT over topics prefixed with `az`.
 Any messages sent on the topic will be forwarded to Azure.
 Here, we publish a json message to Azure via the tedge mqtt topic.
 
-```sh te2mqtt formats="v1"
+```sh te2mqtt formats=v1
 tedge mqtt pub te/device/main///m/environment '{"temperature": 21.3}'
 ```
 
 Alternatively, post your own custom messages on `az/messages/events/#` topic:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub az/messages/events/ '{"text": "My message"}'
 ```
 

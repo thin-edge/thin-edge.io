@@ -99,13 +99,13 @@ The message can be observed over the MQTT bus of the thin-edge device.
 Given that `mqtt.topic_root` and `mqtt.device_topic_id` are set to `te` and `device/main//` for the main device,
 the message to declare the supported configuration types is as follows.
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/config_snapshot' '{
   "types": ["tedge-configuration-plugin", "tedge.toml", "/etc/tedge/mosquitto-conf/c8y-bridge.conf", "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf", "mosquitto"]
 }'
 ```
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/config_update' '{
   "types": ["tedge-configuration-plugin", "tedge.toml", "/etc/tedge/mosquitto-conf/c8y-bridge.conf", "/etc/tedge/mosquitto-conf/tedge-mosquitto.conf", "mosquitto"]
 }'
@@ -135,13 +135,13 @@ During a config snapshot operation, the plugin uploads a requested configuration
 The plugin subscribes to config snapshot commands on the `<root>/<identifier>/cmd/config_snapshot/+` MQTT topics.
 For example, it subscribes to the following topic for the main device.
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/device/main///cmd/config_snapshot/+'
 ```
 
 To start a new config snapshot with the ID "1234" on the device named "example", a component has to publish the following message over MQTT:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/config_snapshot/1234' '{
   "status": "init",
   "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/example/config_snapshot/mosquitto-1234",
@@ -166,7 +166,7 @@ providing a comprehensive `reason` for the failure.
 
 As a result, the operation status update message for the example above looks like this:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/config_snapshot/1234' '{
   "status": "successful",
   "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/example/config_snapshot/mosquitto-1234",
@@ -202,13 +202,13 @@ from the tedge file transfer repository and moves it to the target path.
 The plugin subscribes to config update commands on the `<root>/<identifier>/cmd/config_update/+` MQTT topics.
 For example, it subscribes to the following topic for the main device.
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt sub 'te/device/main///cmd/config_update/+'
 ```
 
 To start a new config update with the ID "1234" on the device named "example", a component has to publish the following message over MQTT:
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/config_update/1234' '{
   "status": "init",
   "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/example/config_update/mosquitto-1234",
@@ -234,7 +234,7 @@ the plugin updates the status to `failed` along with a comprehensive `reason` fo
 
 As a result, the operation status update message for the example above looks like this.
 
-```sh te2mqtt
+```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main///cmd/config_update/1234' '{
   "status": "successful",
   "tedgeUrl": "http://127.0.0.1:8000/tedge/file-transfer/example/config_update/mosquitto-1234",

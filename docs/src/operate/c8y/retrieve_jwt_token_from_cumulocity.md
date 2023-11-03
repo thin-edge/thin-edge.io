@@ -17,13 +17,13 @@ Follow the below steps in order to retrieve the token from the Cumulocity cloud 
 
 1. Subscribe to token topic
 
-    ```sh te2mqtt
+    ```sh te2mqtt formats=v1
     tedge mqtt sub c8y/s/dat --no-topic
     ```
 
 2. Publish an empty message on `c8y/s/uat` topic
 
-    ```sh te2mqtt
+    ```sh te2mqtt formats=v1
     tedge mqtt pub c8y/s/uat ''
     ```
 
