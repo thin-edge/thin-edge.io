@@ -257,6 +257,7 @@ Suite Setup
     Set Suite Variable    $PARENT_IP    ${parent_ip}
     Execute Command    sudo tedge config set mqtt.external.bind.address ${parent_ip}
     Execute Command    sudo tedge config set mqtt.external.bind.port 1883
+    Execute Command    sudo tedge config set http.client.host ${parent_ip}
 
     ThinEdgeIO.Disconnect Then Connect Mapper    c8y
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
@@ -274,6 +275,7 @@ Setup Child Device
 
     Execute Command    sudo tedge config set mqtt.client.host ${parent_ip}
     Execute Command    sudo tedge config set mqtt.client.port 1883
+    Execute Command    sudo tedge config set http.client.host ${parent_ip}
     Execute Command    sudo tedge config set mqtt.topic_root te
     Execute Command    sudo tedge config set mqtt.device_topic_id device/${child_sn}//
 

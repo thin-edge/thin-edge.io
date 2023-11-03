@@ -7,6 +7,7 @@ use std::net::IpAddr;
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 use tedge_api::mqtt_topics::ChannelFilter::Command;
 use tedge_api::mqtt_topics::ChannelFilter::CommandMetadata;
 use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
@@ -33,7 +34,7 @@ pub struct C8yMapperConfig {
     pub service_type: String,
     pub ops_dir: PathBuf,
     pub c8y_host: String,
-    pub tedge_http_host: String,
+    pub tedge_http_host: Arc<str>,
     pub topics: TopicFilter,
     pub capabilities: Capabilities,
     pub auth_proxy_addr: IpAddr,
@@ -52,7 +53,7 @@ impl C8yMapperConfig {
         device_type: String,
         service_type: String,
         c8y_host: String,
-        tedge_http_host: String,
+        tedge_http_host: Arc<str>,
         topics: TopicFilter,
         capabilities: Capabilities,
         auth_proxy_addr: IpAddr,
@@ -93,13 +94,13 @@ impl C8yMapperConfig {
         let device_topic_id = EntityTopicId::from_str(&tedge_config.mqtt.device_topic_id)?;
         let service_type = tedge_config.service.ty.clone();
         let c8y_host = tedge_config.c8y.http.or_config_not_set()?.to_string();
-        let tedge_http_address = tedge_config.http.bind.address;
-        let tedge_http_port = tedge_config.http.bind.port;
+        let tedge_http_address = tedge_config.http.client.host.clone();
+        let tedge_http_port = tedge_config.http.client.port;
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
         let auth_proxy_addr = tedge_config.c8y.proxy.bind.address;
         let auth_proxy_port = tedge_config.c8y.proxy.bind.port;
 
-        let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port);
+        let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port).into();
 
         let capabilities = Capabilities {
             log_upload: tedge_config.c8y.enable.log_upload,

@@ -3,6 +3,7 @@ Resource            ../../../resources/common.resource
 Library             Cumulocity
 Library             DateTime
 Library             ThinEdgeIO
+Library    ../../../.venv/lib/python3.9/site-packages/robot/libraries/Collections.py
 
 Suite Setup         Custom Setup
 Test Teardown       Get Logs
@@ -39,6 +40,34 @@ Manual log_upload operation request
     ...    topic=te/device/main///cmd/log_upload/example-1234
     ...    payload={"status":"init","tedgeUrl":"http://127.0.0.1:8000/tedge/file-transfer/${DEVICE_SN}/log_upload/example-1234","type":"example","dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","searchText":"first","lines":10}
     ...    c8y_fragment=c8y_DownloadConfigFile
+
+Log operation uses correct tedgeUrl when file transfer service on different host
+    ${parent_ip}=    Get IP Address
+
+    ${CHILD_SN}=    Setup    skip_bootstrap=True
+    Set Device Context    ${CHILD_SN}
+    
+    # Set up a child device with only tedge-agent and connect both devices' MQTT broker and HTTP file transfer server
+    Execute Command    dpkg -i packages/tedge_*.deb packages/tedge-agent_*.deb
+    Execute Command    tedge config set http.bind.address 0.0.0.0
+    Execute Command    tedge config set mqtt.client.host ${parent_ip}
+    Restart Service    tedge-agent
+    ${child_ip}=       Get IP Address
+
+    Set Device Context    ${DEVICE_SN}
+    Execute Command    tedge config set mqtt.bind.address 0.0.0.0
+    Execute Command    tedge config set http.client.host ${child_ip}
+    Execute Command    tedge reconnect c8y
+    Stop Service       tedge-agent
+
+
+    ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${operation}=     Cumulocity.Create Operation
+    ...    description=Log file request
+    ...    fragments={"c8y_LogfileRequest":{"dateFrom":"${start_timestamp}","dateTo":"${end_timestamp}","logFile":"example","searchText":"first","maximumLines":10}}
+    Should Have MQTT Messages    te/device/main///cmd/log_upload/+    message_contains=tedgeUrl":"http://${child_ip}
+
 
 
 *** Keywords ***

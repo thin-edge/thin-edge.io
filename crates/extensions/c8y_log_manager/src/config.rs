@@ -1,6 +1,6 @@
-use std::net::IpAddr;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tedge_config::ReadError;
 use tedge_config::TEdgeConfig;
 
@@ -16,7 +16,7 @@ pub struct LogManagerConfig {
     pub device_id: String,
     pub mqtt_host: String,
     pub mqtt_port: u16,
-    pub tedge_http_host: IpAddr,
+    pub tedge_http_host: Arc<str>,
     pub tedge_http_port: u16,
     pub ops_dir: PathBuf,
     pub plugin_config_dir: PathBuf,
@@ -35,8 +35,8 @@ impl LogManagerConfig {
         let mqtt_host = tedge_config.mqtt.client.host.clone();
         let mqtt_port = u16::from(tedge_config.mqtt.client.port);
 
-        let tedge_http_host = tedge_config.http.bind.address;
-        let tedge_http_port = tedge_config.http.bind.port;
+        let tedge_http_host = tedge_config.http.client.host.clone();
+        let tedge_http_port = tedge_config.http.client.port;
 
         let ops_dir = config_dir.join("operations/c8y");
 

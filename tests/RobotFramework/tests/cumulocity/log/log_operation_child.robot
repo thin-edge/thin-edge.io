@@ -28,6 +28,7 @@ Setup Child Device
 
     Execute Command    sudo tedge config set mqtt.client.host ${PARENT_IP}
     Execute Command    sudo tedge config set mqtt.client.port 1883
+    Execute Command    sudo tedge config set http.client.host ${PARENT_IP}
     Execute Command    sudo tedge config set mqtt.topic_root te
     Execute Command    sudo tedge config set mqtt.device_topic_id "device/${CHILD_SN}//"
 
@@ -52,6 +53,7 @@ Custom Setup
     Execute Command    sudo tedge config set c8y.enable.log_upload true
     Execute Command    sudo tedge config set mqtt.external.bind.address ${PARENT_IP}
     Execute Command    sudo tedge config set mqtt.external.bind.port 1883
+    Execute Command    sudo tedge config set http.client.host ${PARENT_IP}
 
     ThinEdgeIO.Connect Mapper    c8y
     ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
